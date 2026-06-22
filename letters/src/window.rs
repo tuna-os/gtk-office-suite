@@ -12,15 +12,21 @@ impl LettersWindow {
         let header = suite_common::make_header_bar();
         let toolbar = suite_common::make_toolbar();
 
-        // Tabs
+        // Style dropdown
+        let styles = gtk::DropDown::from_strings(&["Paragraph", "Heading 1", "Heading 2", "Heading 3", "Code", "Quote"]);
+        toolbar.append(&styles);
+
+        // Table insert button
+        let table_btn = gtk::Button::with_label("Table");
+        toolbar.append(&table_btn);
+
         let notebook = gtk::Notebook::new();
-        let tab1 = gtk::Label::new(Some("📄 Tab 1"));
+        let tab1 = gtk::Label::new(Some("📄 Document 1"));
         let editor = gtk::TextView::new();
         editor.set_monospace(true); editor.set_wrap_mode(gtk::WrapMode::Word);
         let s = gtk::ScrolledWindow::new(); s.set_child(Some(&editor)); s.set_vexpand(true);
         notebook.append_page(&s, Some(&tab1));
 
-        // Word count status bar
         let status = gtk::Label::new(Some("0 words"));
         status.set_halign(gtk::Align::End);
 
