@@ -2,6 +2,7 @@
 use calamine::{open_workbook_auto, Reader};
 use std::path::Path;
 
+#[derive(Clone)]
 pub struct Spreadsheet {
     pub cells: Vec<Vec<String>>,
     pub rows: usize,

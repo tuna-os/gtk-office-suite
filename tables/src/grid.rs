@@ -124,7 +124,7 @@ impl CellGrid {
                 65363 => { c += 1; }              // Right
                 65362 => { if r > 0 { r -= 1; } } // Up
                 65364 => { r += 1; }              // Down
-                _ => return gtk::Inhibit(false),
+                _ => return gtk::glib::Propagation::Proceed,
             }
             // Scroll if needed
             if c < ox as usize { ox = c as f64; }
@@ -134,7 +134,7 @@ impl CellGrid {
             sr.set((r, c));
             so.set((ox, oy));
             drawing_area.queue_draw();
-            gtk::Inhibit(false)
+            gtk::glib::Propagation::Proceed
         });
         drawing_area.add_controller(key);
 
