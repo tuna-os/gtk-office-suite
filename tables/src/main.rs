@@ -1,5 +1,6 @@
 // main.rs — Tables spreadsheet, pure Rust + gtk4-rs + suite-common.
 use gtk4::prelude::*;
+mod engine;
 mod window;
 
 fn main() {
