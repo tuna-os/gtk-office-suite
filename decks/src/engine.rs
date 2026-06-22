@@ -12,3 +12,10 @@ impl Deck {
 
 pub fn read_pptx(path: &Path) -> Result<Deck, String> { Err(format!("ppt-rs read: {} — call ppt_rs::read", path.display())) }
 pub fn write_pptx(path: &Path, _deck: &Deck) -> Result<(), String> { Err(format!("ppt-rs write: {}", path.display())) }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[test] fn test_add_slide() { let mut d = Deck::new(); d.add_slide(); assert_eq!(d.slides.len(), 2); }
+    #[test] fn test_delete_slide() { let mut d = Deck::new(); d.add_slide(); d.delete_slide(1); assert_eq!(d.slides.len(), 1); }
+}

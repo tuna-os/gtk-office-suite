@@ -12,3 +12,10 @@ pub fn markdown_to_html(md: &str) -> String {
     html::push_html(&mut buf, parser);
     buf
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[test] fn test_word_count() { let d = Document { text: "hello world rust".into() }; assert_eq!(d.word_count(), 3); }
+    #[test] fn test_empty() { let d = Document::new(); assert_eq!(d.word_count(), 0); }
+}
