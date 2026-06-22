@@ -10,22 +10,57 @@ jobs:
       options: --privileged
     steps:
       - uses: actions/checkout@v4
+      
       - name: Install Rust
         run: |
-          curl --proto =https --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
+          curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
           echo "$HOME/.cargo/bin" >> $GITHUB_PATH
+          
       - name: Set pkg-config path
         run: |
           export PKG_CONFIG_PATH=/usr/lib/x86_64-linux-gnu/pkgconfig:/usr/lib/pkgconfig
           echo "PKG_CONFIG_PATH=/usr/lib/x86_64-linux-gnu/pkgconfig:/usr/lib/pkgconfig" >> $GITHUB_ENV
           pkg-config --modversion gtk4
-      - name: Build
-        run: cargo build --release
-      - name: Test
+          
+      - name: Rust Cache
+        uses: swatinem/rust-cache@v2
+
+          
+      - name: Check Formatting
+        run: cargo fmt --all -- --check
+        
+      - name: Check Code Quality (Clippy)
+        run: cargo clippy --workspace --all-targets -- -D warnings
+        
+      - name: Run Unit Tests
         run: cargo test
+        
+      - name: Verify Tables Flatpak manifest builds
+        run: flatpak-builder --force-clean --nodeps --user build-dir flatpak/org.tunaos.tables-rust.json
+        
+      - name: Verify Decks Flatpak manifest builds
+        run: flatpak-builder --force-clean --nodeps --user build-dir flatpak/org.tunaos.decks-rust.json
+        
+      - name: Verify Letters Flatpak manifest builds
+        run: flatpak-builder --force-clean --nodeps --user build-dir flatpak/org.tunaos.letters-rust.json
 
   gui-test:
     runs-on: ubuntu-latest
     needs: test
     steps:
-      - run: echo "GUI tests require Flatpak runtime (run on himachal)"
+      - uses: actions/checkout@v4
+      
+      - name: Install X11 and Dogtail dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y xvfb dbus-x11 python3-dogtail at-spi2-core libgtk-4-dev libadwaita-1-dev pkg-config
+          
+      - name: Rust Cache
+        uses: swatinem/rust-cache@v2
+
+          
+      - name: Run Headless GUI Tests
+        run: |
+          chmod +x tests/gui/run_gui_tests.sh
+          xvfb-run -a dbus-run-session ./tests/gui/run_gui_tests.sh
+

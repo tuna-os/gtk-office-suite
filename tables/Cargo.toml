@@ -5,7 +5,7 @@ edition = "2021"
 
 [dependencies]
 gtk4 = { version = "0.9", package = "gtk4" }
-libadwaita = "0.7"
+libadwaita = { version = "0.7", features = ["v1_6"] }
 cairo-rs = { version = "0.20", features = ["png"] }
 suite-common = { path = "../suite-common" }
 calamine = "0.26"

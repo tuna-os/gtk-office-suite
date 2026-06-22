@@ -4,7 +4,7 @@ version = "0.1.0"
 edition = "2021"
 [dependencies]
 gtk4 = { version = "0.9", package = "gtk4" }
-libadwaita = "0.7"
+libadwaita = { version = "0.7", features = ["v1_6"] }
 [lib]
 name = "suite_common"
 path = "src/lib.rs"

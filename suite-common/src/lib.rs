@@ -1,18 +1,59 @@
-use libadwaita as adw;
 use gtk4::prelude::*;
-pub fn make_app(id: &str) -> gtk4::Application {
-    gtk4::Application::new(Some(id), gtk4::gio::ApplicationFlags::empty())
+use libadwaita as adw;
+pub fn make_app(id: &str) -> adw::Application {
+    adw::Application::new(Some(id), gtk4::gio::ApplicationFlags::empty())
 }
-pub fn make_header_bar() -> adw::HeaderBar {
+pub fn make_header_bar(title: &str) -> adw::HeaderBar {
     let h = adw::HeaderBar::new();
-    h.pack_start(&gtk4::Button::with_label("Open"));
-    h.pack_end(&gtk4::Button::with_label("Save"));
+    h.set_centering_policy(adw::CenteringPolicy::Strict);
+    let title_widget = adw::WindowTitle::new(title, "");
+    h.set_title_widget(Some(&title_widget));
+
+    // Open button
+    let open_btn = gtk4::Button::builder()
+        .icon_name("document-open-symbolic")
+        .tooltip_text("Open")
+        .css_classes(vec!["flat".to_string()])
+        .build();
+    open_btn.set_widget_name("open");
+    h.pack_start(&open_btn);
+
+    // Save button
+    let save_btn = gtk4::Button::builder()
+        .icon_name("document-save-symbolic")
+        .tooltip_text("Save")
+        .css_classes(vec!["flat".to_string()])
+        .build();
+    save_btn.set_widget_name("save");
+    h.pack_end(&save_btn);
+
     h
 }
+
 pub fn make_toolbar() -> gtk4::Box {
-    let t = gtk4::Box::new(gtk4::Orientation::Horizontal, 4);
+    let t = gtk4::Box::new(gtk4::Orientation::Horizontal, 0);
     t.set_halign(gtk4::Align::Center);
     t.add_css_class("toolbar");
-    for l in &["B","I","U"] { t.append(&gtk4::ToggleButton::with_label(l)); }
+    t.add_css_class("linked");
+
+    let b = gtk4::ToggleButton::builder()
+        .icon_name("format-text-bold-symbolic")
+        .tooltip_text("Bold")
+        .css_classes(vec!["flat".to_string()])
+        .build();
+    let i = gtk4::ToggleButton::builder()
+        .icon_name("format-text-italic-symbolic")
+        .tooltip_text("Italic")
+        .css_classes(vec!["flat".to_string()])
+        .build();
+    let u = gtk4::ToggleButton::builder()
+        .icon_name("format-text-underline-symbolic")
+        .tooltip_text("Underline")
+        .css_classes(vec!["flat".to_string()])
+        .build();
+
+    t.append(&b);
+    t.append(&i);
+    t.append(&u);
     t
 }
