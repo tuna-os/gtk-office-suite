@@ -110,7 +110,8 @@ pub fn eval_formula(formula: &str, sheet: &Spreadsheet) -> Result<String, String
         }
     }
     // Try simple eval
-    if let Ok(v) = meval::eval_str(&result) {
+    // try parse as number
+    if let Ok(v) = result.parse::<f64>() {
         return Ok(v.to_string());
     }
     Ok(result)

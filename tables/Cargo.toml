@@ -8,7 +8,6 @@ gtk4 = { version = "0.9", package = "gtk4" }
 libadwaita = "0.7"
 suite-common = { path = "../suite-common" }
 calamine = "0.26"
-meval = "0.6"
 rust_xlsxwriter = "0.80"
 
 [[bin]]
