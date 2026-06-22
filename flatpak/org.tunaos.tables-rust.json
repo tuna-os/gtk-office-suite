@@ -18,10 +18,10 @@
       "install -Dm755 target/release/tables /app/bin/tables"
     ],
     "sources": [
-      { "type": "dir", "path": "suite-common", "dest": "suite-common" },
-      { "type": "dir", "path": "tables", "dest": "tables" },
-      { "type": "file", "path": "Cargo.toml" },
-      { "type": "file", "path": "Cargo.lock" }
+      { "type": "dir", "path": "../suite-common", "dest": "suite-common" },
+      { "type": "dir", "path": "../tables", "dest": "tables" },
+      { "type": "file", "path": "../Cargo.toml" },
+      { "type": "file", "path": "../Cargo.lock" }
     ]
   }]
 }
