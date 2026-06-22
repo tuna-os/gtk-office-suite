@@ -18,10 +18,7 @@
       "install -Dm755 target/release/letters /app/bin/letters"
     ],
     "sources": [
-      { "type": "dir", "path": "../suite-common", "dest": "suite-common" },
-      { "type": "dir", "path": "../letters", "dest": "letters" },
-      { "type": "file", "path": "../Cargo.toml" },
-      { "type": "file", "path": "../Cargo.lock" }
+      { "type": "dir", "path": "..", "dest": "." }
     ]
   }]
 }

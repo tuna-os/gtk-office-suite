@@ -18,10 +18,7 @@
       "install -Dm755 target/release/decks /app/bin/decks"
     ],
     "sources": [
-      { "type": "dir", "path": "../suite-common", "dest": "suite-common" },
-      { "type": "dir", "path": "../decks", "dest": "decks" },
-      { "type": "file", "path": "../Cargo.toml" },
-      { "type": "file", "path": "../Cargo.lock" }
+      { "type": "dir", "path": "..", "dest": "." }
     ]
   }]
 }
