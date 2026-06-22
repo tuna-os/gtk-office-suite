@@ -5,7 +5,7 @@
   "sdk": "org.gnome.Sdk",
   "sdk-extensions": ["org.freedesktop.Sdk.Extension.rust-stable"],
   "command": "decks",
-  "finish-args": ["--share=ipc", "--socket=fallback-x11", "--socket=wayland", "--device=dri"],
+  "finish-args": ["--share=ipc", "--socket=fallback-x11", "--socket=wayland", "--device=dri", "--filesystem=home"],
   "build-options": {
     "append-path": "/usr/lib/sdk/rust-stable/bin",
     "build-args": ["--share=network"]
@@ -15,7 +15,8 @@
     "buildsystem": "simple",
     "build-commands": [
       "cargo build --release -p decks",
-      "install -Dm755 target/release/decks /app/bin/decks"
+      "install -Dm755 target/release/decks /app/bin/decks",
+      "install -Dm644 flatpak/org.tunaos.decks-rust.metainfo.xml /app/share/metainfo/org.tunaos.decks-rust.metainfo.xml"
     ],
     "sources": [
       { "type": "dir", "path": "..", "dest": "." }

@@ -1,0 +1,89 @@
+name: Publish Flatpak — Tables (Rust)
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  build-oci:
+    name: Build Flatpak OCI
+    runs-on: ubuntu-latest
+    container:
+      image: ghcr.io/flathub-infra/flatpak-github-actions:gnome-50
+      options: --privileged
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust SDK extension (pre-cache)
+        run: flatpak install --noninteractive flathub org.freedesktop.Sdk.Extension.rust-stable//24.08 || true
+
+      - name: Build Flatpak
+        uses: flatpak/flatpak-github-actions/flatpak-builder@v6
+        with:
+          manifest-path: flatpak/org.tunaos.tables-rust.json
+          cache-key: flatpak-builder-tables-rust-${{ github.sha }}
+          build-bundle: false
+          upload-artifact: false
+
+      - name: Export OCI
+        run: |
+          flatpak build-bundle --oci --arch=x86_64 repo tables-rust.oci org.tunaos.tables-rust
+
+      - name: Upload OCI artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: tables-rust-oci
+          path: tables-rust.oci/
+          retention-days: 1
+
+  publish:
+    name: Publish to GHCR + update docs index
+    needs: build-oci
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: tables-rust-oci
+          path: tables-rust.oci
+
+      - name: Push OCI image to GHCR
+        run: |
+          echo "${{ secrets.GITHUB_TOKEN }}" | skopeo login ghcr.io -u "${{ github.actor }}" --password-stdin
+          skopeo copy oci:tables-rust.oci docker://ghcr.io/hanthor/tables-rust:latest
+          if [[ "${{ github.ref }}" == refs/tags/v* ]]; then
+            TAG="${{ github.ref_name }}"
+            skopeo copy oci:tables-rust.oci docker://ghcr.io/hanthor/tables-rust:${TAG}
+          fi
+
+      - name: Update central index (tuna-os/docs)
+        env:
+          FLATPAK_INDEX_TOKEN: ${{ secrets.FLATPAK_INDEX_TOKEN }}
+        run: |
+          git clone --depth 1 https://x-access-token:${FLATPAK_INDEX_TOKEN}@github.com/tuna-os/docs.git index-repo
+          pip install --quiet requests
+          python3 .github/scripts/update-index.py \
+            --oci-dir tables-rust.oci \
+            --index-file index-repo/static/flatpak/index/static \
+            --repo-name hanthor/tables-rust \
+            --tags latest
+          cd index-repo
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add static/flatpak/index/static
+          if git diff --cached --quiet; then
+            echo "No index changes to commit"
+          else
+            git commit -m "chore(flatpak): update Tables Rust OCI index [${{ github.ref_name }}]"
+            git push origin main
+          fi

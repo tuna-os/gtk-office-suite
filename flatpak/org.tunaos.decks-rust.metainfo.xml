@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<component type="desktop-application">
+  <id>org.tunaos.decks-rust</id>
+  <name>Decks (Rust)</name>
+  <summary>Presentation app for GNOME — pure Rust, native GTK4</summary>
+  <description>
+    <p>
+      A native GTK4/libadwaita presentation application written in Rust.
+      Lightweight slide editor designed for the GNOME desktop.
+    </p>
+  </description>
+  <metadata_license>MIT</metadata_license>
+  <project_license>GPL-3.0-or-later</project_license>
+  <url type="homepage">https://github.com/tuna-os/hanthor-rust</url>
+  <url type="bugtracker">https://github.com/tuna-os/hanthor-rust/issues</url>
+  <categories>
+    <category>Office</category>
+    <category>Presentation</category>
+  </categories>
+  <provides>
+    <binary>decks</binary>
+  </provides>
+  <releases>
+    <release version="0.1.0" date="2026-06-22"/>
+  </releases>
+  <content_rating type="oars-1.1"/>
+</component>

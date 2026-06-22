@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<component type="desktop-application">
+  <id>org.tunaos.letters-rust</id>
+  <name>Letters (Rust)</name>
+  <summary>Word processor for GNOME — pure Rust, native GTK4</summary>
+  <description>
+    <p>
+      A native GTK4/libadwaita word processor written in Rust.
+      Minimalist document editor designed for the GNOME desktop.
+    </p>
+  </description>
+  <metadata_license>MIT</metadata_license>
+  <project_license>GPL-3.0-or-later</project_license>
+  <url type="homepage">https://github.com/tuna-os/hanthor-rust</url>
+  <url type="bugtracker">https://github.com/tuna-os/hanthor-rust/issues</url>
+  <categories>
+    <category>Office</category>
+    <category>WordProcessor</category>
+  </categories>
+  <provides>
+    <binary>letters</binary>
+  </provides>
+  <releases>
+    <release version="0.1.0" date="2026-06-22"/>
+  </releases>
+  <content_rating type="oars-1.1"/>
+</component>
