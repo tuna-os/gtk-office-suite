@@ -121,9 +121,9 @@ impl CellGrid {
             let (mut ox, mut oy) = so.get();
             match keyval {
                 65361 => { if c > 0 { c -= 1; } gtk::glib::Propagation::Proceed } // Left
-                65363 => { c += 1; gtk::glib::Propagation::Proceed; } // Right
+                65363 => { c += 1; gtk::glib::Propagation::Proceed } // Right
                 65362 => { if r > 0 { r -= 1; } gtk::glib::Propagation::Proceed } // Up
-                65364 => { r += 1; gtk::glib::Propagation::Proceed; } // Down
+                65364 => { r += 1; gtk::glib::Propagation::Proceed } // Down
                 _ => return gtk::glib::Propagation::Proceed,
             }
             // Scroll if needed
