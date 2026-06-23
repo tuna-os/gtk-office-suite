@@ -4,7 +4,7 @@
 
 use libadwaita as adw;
 use adw::prelude::*;
-use gtk4::prelude::*;
+use gtk4::{gio, prelude::*};
 
 const FORMAT_NAMES: &[&str] = &["ODT (OpenDocument)", "DOCX (Office Open XML)",
     "Markdown", "HTML", "Plain Text", "RTF (Rich Text)"];
@@ -14,7 +14,7 @@ pub struct LettersPreferences {
 }
 
 impl LettersPreferences {
-    pub fn new() -> Self {
+    pub fn new(settings: &gio::Settings) -> Self {
         let prefs = suite_common::make_preferences_window();
 
         // ── General page ─────────────────────────────────────────────────
@@ -52,8 +52,15 @@ impl LettersPreferences {
         let spell_row = adw::SwitchRow::builder()
             .title("Spell Checking")
             .subtitle("Enable built-in spell checking")
-            .active(true)
+            .active(settings.boolean("spell-check-enabled"))
             .build();
+        {
+            let s = settings.clone();
+            spell_row.connect_active_notify(move |row| {
+                s.set_boolean("spell-check-enabled", row.is_active())
+                    .unwrap_or_else(|e| eprintln!("GSettings write failed: {}", e));
+            });
+        }
         tools_group.add(&spell_row);
 
         let auto_save_row = adw::SpinRow::builder()

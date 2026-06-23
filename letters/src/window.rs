@@ -9,6 +9,8 @@ use std::cell::RefCell;
 use std::path::PathBuf;
 use std::rc::Rc;
 
+use crate::page_container::PageContainer;
+
 // ── Per-tab state via widget Qdata ─────────────────────────────────────
 
 #[derive(Clone)]
@@ -22,7 +24,7 @@ fn tab_data_get(w: &gtk::Widget) -> Option<TabData> { unsafe { w.data::<TabData>
 
 // ── Make a tab's document widget ──────────────────────────────────────
 
-fn make_doc_widget() -> (gtk::ScrolledWindow, gtk::TextBuffer) {
+fn make_doc_widget(settings: Option<&gio::Settings>) -> (PageContainer, gtk::TextBuffer) {
     let buffer = gtk::TextBuffer::new(None);
     register_formatting_tags(&buffer);
     let editor = gtk::TextView::with_buffer(&buffer);
@@ -32,6 +34,12 @@ fn make_doc_widget() -> (gtk::ScrolledWindow, gtk::TextBuffer) {
     editor.set_left_margin(24); editor.set_right_margin(24);
     editor.set_top_margin(16); editor.set_bottom_margin(16);
     editor.set_vexpand(true); editor.set_hexpand(true);
+    // Spell-check via zspell (hunspell-compatible, pure Rust).
+    // Applies red wavy underline to misspelled words, re-checks on edits.
+    let spell_enabled = settings.map(|s| s.boolean("spell-check-enabled")).unwrap_or(true);
+    if spell_enabled {
+        crate::spell::SpellChecker::new(&buffer).start();
+    }
     // Drag-and-drop for images from file manager
     {
         let buf = buffer.clone();
@@ -56,7 +64,13 @@ fn make_doc_widget() -> (gtk::ScrolledWindow, gtk::TextBuffer) {
     let scroll = gtk::ScrolledWindow::new();
     scroll.set_child(Some(&editor));
     scroll.set_vexpand(true); scroll.set_hexpand(true);
-    (scroll, buffer)
+    let container = PageContainer::new();
+    if let Some(s) = settings {
+        container.load_from_settings(s);
+    }
+    scroll.set_parent(&container);
+    container.set_vexpand(true); container.set_hexpand(true);
+    (container, buffer)
 }
 
 // ── LettersWindow ───────────────────────────────────────────────────────
@@ -66,10 +80,11 @@ pub struct LettersWindow {
     tab_view: adw::TabView,
     stack: gtk4::Stack,
     word_count_label: gtk4::Label,
+    settings: gio::Settings,
 }
 
 impl LettersWindow {
-    pub fn new(app: &adw::Application) -> Self {
+    pub fn new(app: &adw::Application, settings: gio::Settings) -> Self {
         let tab_view = adw::TabView::new();
         tab_view.set_menu_model(Some(&make_tab_menu()));
         let tab_bar = adw::TabBar::new();
@@ -153,6 +168,51 @@ impl LettersWindow {
         suite_win.set_content(&toast_overlay);
         suite_win.add_bottom_bar(&status_bar);
 
+        // ── Ruler ──────────────────────────────────────────────────
+        let ruler_widget = crate::ruler::Ruler::new();
+        ruler_widget.load_from_settings(&settings);
+        {
+            let s = settings.clone();
+            let rw = ruler_widget.downgrade();
+            ruler_widget.connect_changed(move || {
+                if let Some(r) = rw.upgrade() {
+                    let _ = s.set_double("page-margin-left", r.margin_left());
+                    let _ = s.set_double("page-margin-right", r.margin_right());
+                }
+            });
+        }
+        suite_win.add_top_bar(&ruler_widget);
+
+        // ── Style dropdown ────────────────────────────────────────
+        let style_sheet = std::rc::Rc::new(std::cell::RefCell::new(
+            crate::styles::StyleSheet::default_styles()
+        ));
+        let all_names: Vec<&str> = crate::styles::style_names();
+        let style_model = gtk4::StringList::new(&all_names);
+        let model = style_model.clone();
+        let style_dropdown = gtk4::DropDown::new(Some(style_model), None::<&gtk4::Expression>);
+        {
+            let tv = tab_view.clone();
+            let ss = style_sheet.clone();
+            style_dropdown.connect_selected_notify(move |dd| {
+                let idx = dd.selected();
+                if idx != gtk4::INVALID_LIST_POSITION {
+                    if let Some(obj) = model.item(idx) {
+                        if let Ok(so) = obj.downcast::<gtk4::StringObject>() {
+                            let name = so.string();
+                            if let Some(buf) = active_buffer(&tv) {
+                                if let Ok(sheet) = ss.try_borrow() {
+                                    crate::styles::ensure_tags_synced(&sheet, &buf.tag_table());
+                                    crate::styles::apply_style(&buf, &sheet, &name);
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+        }
+        suite_win.add_top_bar(&style_dropdown);
+
         let win = suite_win.window.clone();
 
         // ── Tab: selected-page ──────────────────────────────────────
@@ -202,9 +262,10 @@ impl LettersWindow {
         // ── Tab: create-window (drag to new window) ────────────────
         {
             let app_weak = app.downgrade();
+            let s = settings.clone();
             tab_view.connect_create_window(move |_| {
                 app_weak.upgrade().map(|app| {
-                    let nw = LettersWindow::new(&app);
+                    let nw = LettersWindow::new(&app, s.clone());
                     nw.present();
                     nw.tab_view
                 })
@@ -264,8 +325,75 @@ impl LettersWindow {
         app.add_action(&a);
         app.set_accels_for_action("app.find", &["<Primary>f"]);
 
+        // ── Page Setup action ─────────────────────────────────────
+        {
+            let w = win.clone();
+            let s = settings.clone();
+            let tv = tab_view.clone();
+            let a = gtk::gio::SimpleAction::new("page-setup", None);
+            a.connect_activate(move |_, _| {
+                let dialog = gtk::PageSetupUnixDialog::new(Some("Page Setup"), Some(&w));
+                // Load current page setup from GSettings
+                if let Some(ps) = load_page_setup_from_settings(&s) {
+                    dialog.set_page_setup(&ps);
+                }
+                let s2 = s.clone();
+                let tv2 = tv.clone();
+                dialog.connect_response(move |dlg, _response| {
+                    let ps = dlg.page_setup();
+                    save_page_setup_to_settings(&s2, &ps);
+                    for i in 0..tv2.n_pages() {
+                        let page = tv2.nth_page(i);
+                        if let Some(pc) = page.child().first_child()
+                            .and_then(|c| c.downcast::<crate::page_container::PageContainer>().ok())
+                        {
+                            pc.reload_settings(&s2);
+                        }
+                    }
+                    dlg.close();
+                });
+                dialog.show();
+            });
+            app.add_action(&a);
+            app.set_accels_for_action("app.page-setup", &["<Primary><Shift>p"]);
+        }
+
         // ── Actions ────────────────────────────────────────────────
-        Self::register_actions(&tab_view, &stack, &word_count_label, &win, app);
+        Self::register_actions(&tab_view, &stack, &word_count_label, &win, app, &settings);
+
+        // ── Print action ──────────────────────────────────────────
+        {
+            let tv = tab_view.clone();
+            let w = win.clone();
+            let s = settings.clone();
+            let a = gtk::gio::SimpleAction::new("print", None);
+            a.connect_activate(move |_, _| {
+                if let Some(buf) = active_buffer(&tv) {
+                    let op = gtk::PrintOperation::new();
+                    let buf_clone = buf.clone();
+                    let s2 = s.clone();
+                    op.connect_draw_page(move |_op, ctx, _nth| {
+                        let cr = ctx.cairo_context();
+                        let text = buf_clone.text(&buf_clone.start_iter(), &buf_clone.end_iter(), false);
+                        let layout = pangocairo::functions::create_layout(&cr);
+                        layout.set_text(&text);
+                        // Read page size and margins from GSettings
+                        let pw = s2.double("page-width-pt");
+                        let ml = s2.double("page-margin-left");
+                        let mr = s2.double("page-margin-right");
+                        let mt = s2.double("page-margin-top");
+                        let content_w = (pw - ml - mr).max(10.0);
+                        layout.set_width((content_w * (pango::SCALE as f64)) as i32);
+                        cr.move_to(ml, mt);
+                        pangocairo::functions::show_layout(&cr, &layout);
+                    });
+                    op.set_export_filename("output.pdf");
+                    let _ = op.run(gtk::PrintOperationAction::PrintDialog, Some(&w));
+                }
+            });
+            app.add_action(&a);
+            app.set_accels_for_action("app.print", &["<Primary>p"]);
+        }
 
         // ── Formatting actions ────────────────────────────────────
         Self::register_formatting_actions(&tab_view, app);
@@ -384,24 +512,71 @@ impl LettersWindow {
             app.add_action(&a);
         }
 
-        LettersWindow { window: suite_win.window, tab_view, stack, word_count_label }
+        // ── Page layout setting listeners ────────────────────────
+        {
+            let r = ruler_widget.clone();
+            let tv = tab_view.clone();
+            let s = settings.clone();
+            let keys: &[&str] = &["page-width-pt", "page-height-pt",
+                "page-margin-top", "page-margin-bottom",
+                "page-margin-left", "page-margin-right", "ruler-metric"];
+            for key in keys {
+                let r = r.clone();
+                let tv = tv.clone();
+                let s = s.clone();
+                s.connect_changed(Some(key), move |settings, _k| {
+                    r.set_page_width(settings.double("page-width-pt"));
+                    r.set_margins(
+                        settings.double("page-margin-left"),
+                        settings.double("page-margin-right"),
+                    );
+                    r.set_indents(
+                        settings.double("page-margin-left"),
+                        settings.double("page-margin-left"),
+                    );
+                    r.set_metric(settings.boolean("ruler-metric"));
+                    // Update all page containers too
+                    for i in 0..tv.n_pages() {
+                        let page = tv.nth_page(i);
+                        if let Some(pc) = page.child().first_child()
+                            .and_then(|c| c.downcast::<crate::page_container::PageContainer>().ok())
+                        {
+                            pc.reload_settings(settings);
+                        }
+                    }
+                });
+            }
+        }
+
+        // ── Spell-check setting listener ──────────────────────────
+        // zspell runs per-buffer; toggle takes effect on new documents.
+        {
+            let s = settings.clone();
+            s.connect_changed(Some("spell-check-enabled"), move |settings, _key| {
+                let _enabled = settings.boolean("spell-check-enabled");
+                // Existing documents keep their current state.
+                // New documents will respect the setting when created.
+            });
+        }
+
+        LettersWindow { window: suite_win.window, tab_view, stack, word_count_label, settings }
     }
 
     pub fn present(&self) { self.window.present(); }
 
-    fn register_actions(tv: &adw::TabView, st: &gtk4::Stack, wc: &gtk4::Label, win: &adw::ApplicationWindow, app: &adw::Application) {
+    fn register_actions(tv: &adw::TabView, st: &gtk4::Stack, wc: &gtk4::Label, win: &adw::ApplicationWindow, app: &adw::Application, settings: &gio::Settings) {
         // New document
         {
-            let tv = tv.clone(); let st = st.clone();
+            let tv = tv.clone(); let st = st.clone(); let s = settings.clone();
             let a = gtk::gio::SimpleAction::new("new-document", None);
             a.connect_activate(move |_, _| {
-                let (scroll, buf) = make_doc_widget();
-                let page = tv.append(&scroll);
+                let (container, buf) = make_doc_widget(Some(&s));
+                let page = tv.append(&container);
                 page.set_title("Untitled Document");
                 page.set_needs_attention(false);
                 st.set_visible_child_name("editor");
-                tab_data_set(&scroll, TabData::new());
-                let p = tv.page(&scroll);
+                tab_data_set(&container, TabData::new());
+                let p = tv.page(&container);
                 buf.connect_modified_changed(move |b| { p.set_needs_attention(b.is_modified()); });
             });
             app.add_action(&a);
@@ -409,10 +584,10 @@ impl LettersWindow {
 
         // Open file
         {
-            let tv = tv.clone(); let st = st.clone(); let w = win.clone();
+            let tv = tv.clone(); let st = st.clone(); let w = win.clone(); let s = settings.clone();
             let a = gtk::gio::SimpleAction::new("open-file", None);
             a.connect_activate(move |_, _| {
-                let tv = tv.clone(); let st = st.clone(); let w = w.clone();
+                let tv = tv.clone(); let st = st.clone(); let w = w.clone(); let s = s.clone();
                 let dlg = gtk::FileDialog::new();
                 let f = gtk::FileFilter::new();
                 f.add_pattern("*.md"); f.add_pattern("*.txt"); f.add_pattern("*.html"); f.add_pattern("*.docx");
@@ -424,19 +599,26 @@ impl LettersWindow {
                     move |result: Result<gio::File, glib::Error>| {
                         if let Ok(file) = result {
                             let path = file.path().unwrap_or_default();
-                            let content = std::fs::read_to_string(&path).unwrap_or_default();
                             let name = file.basename().map(|p| p.display().to_string()).unwrap_or_default();
-                            let (scroll, buf) = make_doc_widget();
-                            buf.set_text(&content);
+                            let (container, buf) = make_doc_widget(Some(&s));
+                            let is_docx = path.extension().and_then(|e| e.to_str()).map(|e| e == "docx").unwrap_or(false);
+                            if is_docx {
+                                // Use docx_bridge for formatting-preserving DOCX import
+                                let path_str = path.to_string_lossy().to_string();
+                                let _ = crate::docx_bridge::read_docx_to_buffer(&path_str, &buf);
+                            } else {
+                                let content = std::fs::read_to_string(&path).unwrap_or_default();
+                                buf.set_text(&content);
+                            }
                             let td = TabData::new();
                             td.0.borrow_mut().file = Some(path);
-                            tab_data_set(&scroll, td);
-                            let page = tv.append(&scroll);
+                            tab_data_set(&container, td);
+                            let page = tv.append(&container);
                             page.set_title(&name);
                             page.set_tooltip(&name);
                             page.set_needs_attention(false);
                             st.set_visible_child_name("editor");
-                            let p = tv.page(&scroll);
+                            let p = tv.page(&container);
                             buf.connect_modified_changed(move |b| { p.set_needs_attention(b.is_modified()); });
                         }
                     },
@@ -472,14 +654,18 @@ impl LettersWindow {
                             if let Some(path) = file.path() {
                                 if let Some(page) = tv.selected_page() {
                                     let child = page.child();
-                                    let buf = child.first_child()
-                                        .and_then(|c| c.downcast::<gtk::TextView>().ok())
-                                        .and_then(|tv| Some(tv.buffer()));
+                                    let buf = get_textview(&child)
+                                        .map(|tv| tv.buffer());
                                     if let Some(buf) = buf {
-                                        let text = buf.text(&buf.start_iter(), &buf.end_iter(), false);
                                         let path_str = path.to_string_lossy().to_string();
-                                        let doc = crate::engine::Document::from_text(&text);
-                                        let _ = crate::engine::write(&path_str, &doc);
+                                        let is_docx = path.extension().and_then(|e| e.to_str()).map(|e| e == "docx").unwrap_or(false);
+                                        if is_docx {
+                                            let _ = crate::docx_bridge::write_buffer_to_docx(&path_str, &buf);
+                                        } else {
+                                            let text = buf.text(&buf.start_iter(), &buf.end_iter(), false);
+                                            let doc = crate::engine::Document::from_text(&text);
+                                            let _ = crate::engine::write(&path_str, &doc);
+                                        }
                                     }
                                     page.set_needs_attention(false);
                                     if let Some(name) = file.basename() { page.set_title(&name.display().to_string()); }
@@ -502,12 +688,52 @@ impl LettersWindow {
 
 // ── Active buffer helper ─────────────────────────────────────────────
 
+/// Walk from a TabPage child through PageContainer → ScrolledWindow → TextView.
+fn get_textview(widget: &impl IsA<gtk::Widget>) -> Option<gtk::TextView> {
+    widget.as_ref()
+        .first_child()                                          // PageContainer
+        .and_then(|pc| pc.first_child())                        // ScrolledWindow
+        .and_then(|sw| sw.first_child())                        // TextView
+        .and_then(|tv| tv.downcast::<gtk::TextView>().ok())
+}
+
+// ── Page setup helpers ────────────────────────────────────────────────
+
+fn load_page_setup_from_settings(settings: &gio::Settings) -> Option<gtk::PageSetup> {
+    let ps = gtk::PageSetup::new();
+    let pw = settings.double("page-width-pt");
+    let ph = settings.double("page-height-pt");
+    let mt = settings.double("page-margin-top");
+    let mb = settings.double("page-margin-bottom");
+    let ml = settings.double("page-margin-left");
+    let mr = settings.double("page-margin-right");
+    if pw > 0.0 && ph > 0.0 {
+        let paper_size = gtk::PaperSize::new_custom("custom", "Custom", pw, ph, gtk::Unit::Points);
+        ps.set_paper_size_and_default_margins(&paper_size);
+        ps.set_top_margin(mt, gtk::Unit::Points);
+        ps.set_bottom_margin(mb, gtk::Unit::Points);
+        ps.set_left_margin(ml, gtk::Unit::Points);
+        ps.set_right_margin(mr, gtk::Unit::Points);
+        Some(ps)
+    } else {
+        None
+    }
+}
+
+fn save_page_setup_to_settings(settings: &gio::Settings, ps: &gtk::PageSetup) {
+    let paper = ps.paper_size();
+    let _ = settings.set_double("page-width-pt", paper.width(gtk::Unit::Points));
+    let _ = settings.set_double("page-height-pt", paper.height(gtk::Unit::Points));
+    let _ = settings.set_double("page-margin-top", ps.top_margin(gtk::Unit::Points));
+    let _ = settings.set_double("page-margin-bottom", ps.bottom_margin(gtk::Unit::Points));
+    let _ = settings.set_double("page-margin-left", ps.left_margin(gtk::Unit::Points));
+    let _ = settings.set_double("page-margin-right", ps.right_margin(gtk::Unit::Points));
+}
+
 fn active_buffer(tv: &adw::TabView) -> Option<gtk::TextBuffer> {
-    tv.selected_page().and_then(|p| {
-        p.child().first_child()
-            .and_then(|c| c.downcast::<gtk::TextView>().ok())
-            .map(|tv| tv.buffer())
-    })
+    tv.selected_page()
+        .and_then(|p| get_textview(&p.child()))
+        .map(|tv| tv.buffer())
 }
 
 /// Apply a named GtkTextTag to the current selection or cursor position.
@@ -688,15 +914,19 @@ fn do_save(tv: &adw::TabView, _stack: &gtk4::Stack) {
         if let Some(td) = tab_data_get(&child) {
             let path = td.0.borrow().file.clone();
             if let Some(path) = path {
-                let buf = child.first_child()
-                    .and_then(|c| c.downcast::<gtk::TextView>().ok())
-                    .map(|tv| tv.buffer());
+                let buf = get_textview(&child).map(|tv| tv.buffer());
                 if let Some(buf) = buf {
-                    let text = buf.text(&buf.start_iter(), &buf.end_iter(), false);
-                    // Use engine for format-aware writing
                     let path_str = path.to_string_lossy().to_string();
-                    let doc = crate::engine::Document::from_text(&text);
-                    let _ = crate::engine::write(&path_str, &doc);
+                    let is_docx = path.extension().and_then(|e| e.to_str()).map(|e| e == "docx").unwrap_or(false);
+                    if is_docx {
+                        // Use docx_bridge for formatting-preserving DOCX save
+                        // If saving to an existing file, preserve its styles
+                        let _ = crate::docx_bridge::write_buffer_to_docx_preserving_styles(&path_str, &buf, &path_str);
+                    } else {
+                        let text = buf.text(&buf.start_iter(), &buf.end_iter(), false);
+                        let doc = crate::engine::Document::from_text(&text);
+                        let _ = crate::engine::write(&path_str, &doc);
+                    }
                 }
                 page.set_needs_attention(false);
                 if let Some(name) = path.file_name().and_then(|s| s.to_str()) {
@@ -1004,9 +1234,7 @@ fn navigate_match(tv: &adw::TabView, state: &RefCell<FindState>, ml: &gtk::Label
 
 fn scroll_to_cursor(tv: &adw::TabView) {
     if let Some(page) = tv.selected_page() {
-        if let Some(textview) = page.child().first_child()
-            .and_then(|c| c.downcast::<gtk::TextView>().ok())
-        {
+        if let Some(textview) = get_textview(&page.child()) {
             let buf = textview.buffer();
             let mark = buf.get_insert();
             textview.scroll_to_mark(&mark, 0.0, true, 0.0, 0.0);
@@ -1030,6 +1258,9 @@ pub fn register_formatting_tags(buffer: &gtk::TextBuffer) {
     add!(gtk::TextTag::builder().name("h4").scale(1.0).weight(700).build());
     add!(gtk::TextTag::builder().name("h5").scale(0.83).weight(700).build());
     add!(gtk::TextTag::builder().name("h6").scale(0.67).weight(700).build());
+    add!(gtk::TextTag::builder().name("h-title").scale(2.36).weight(700).build());
+    add!(gtk::TextTag::builder().name("h-subtitle").scale(1.36).weight(400).foreground("#666666").build());
+    add!(gtk::TextTag::builder().name("normal").build());
     add!(gtk::TextTag::builder().name("code").family("Monospace").background("#F0F0F0").foreground("#333333").build());
     add!(gtk::TextTag::builder().name("blockquote").left_margin(40).style(gtk4::pango::Style::Italic).foreground("#666666").build());
     // Alignment tags

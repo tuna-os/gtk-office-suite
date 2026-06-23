@@ -4,14 +4,23 @@ use gtk4::{gio, prelude::*};
 mod window;
 mod engine;
 mod preferences;
+mod page_container;
+mod ruler;
+mod spell;
+mod docx_bridge;
+mod styles;
 
 fn main() {
     let suite = suite_common::SuiteApp::new("org.tunaos.letters-rust");
 
+    // Store settings so we can pass to preferences
+    let settings = gio::Settings::new("org.tunaos.letters-rust");
+
     // Register the "show-preferences" action
+    let s = settings.clone();
     let act_prefs = gtk4::gio::SimpleAction::new("show-preferences", None);
-    act_prefs.connect_activate(|_, _| {
-        let prefs_win = preferences::LettersPreferences::new();
+    act_prefs.connect_activate(move |_, _| {
+        let prefs_win = preferences::LettersPreferences::new(&s);
         prefs_win.window.present(Option::<&gtk4::Window>::None);
     });
     suite.app.add_action(&act_prefs);
@@ -63,27 +72,22 @@ fn main() {
     suite.app.add_action(&act_shortcuts);
     suite.app.set_accels_for_action("app.show-shortcuts", &["<Primary>question"]);
 
-    // Register export-pdf / print actions
+    // Register export-pdf action
     suite.app.add_action(&{
         let a = gtk4::gio::SimpleAction::new("export-pdf", None);
         a.connect_activate(|_, _| {});
         a
     });
     suite.app.set_accels_for_action("app.export-pdf", &["<Primary><Shift>e"]);
-    suite.app.add_action(&{
-        let a = gtk4::gio::SimpleAction::new("print", None);
-        a.connect_activate(|_, _| {});
-        a
-    });
 
+    let s = settings.clone();
     suite.app.connect_activate(move |gtk_app| {
         // Restore dark mode after GTK init
-        let settings = gio::Settings::new("org.tunaos.letters-rust");
-        if settings.boolean("dark-mode") {
+        if s.boolean("dark-mode") {
             let sm = adw::StyleManager::default();
             sm.set_color_scheme(adw::ColorScheme::ForceDark);
         }
-        let w = window::LettersWindow::new(gtk_app);
+        let w = window::LettersWindow::new(gtk_app, s.clone());
         w.present();
     });
     suite.run();

@@ -7,7 +7,13 @@ edition = "2021"
 gtk4 = { version = "0.11", features = ["gnome_44", "v4_14"] }
 libadwaita = { version = "0.9", features = ["v1_6"] }
 pulldown-cmark = "0.12"
+cairo-rs = { version = "0.22", features = ["use_glib"] }
+pango = "0.22"
+pangocairo = "0.22"
+zspell = { version = "0.5", features = ["unstable-suggestions"] }
 suite-common = { path = "../suite-common" }
+rdocx = "0.1.2"
+rdocx-oxml = "0.1.2"
 
 [[bin]]
 name = "letters"

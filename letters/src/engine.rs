@@ -6,9 +6,13 @@
 //   read()   — load from file path, detect format
 //   write()  — save to file path with format conversion
 //   Export PDF via Typst CLI (see export.rs)
+//
+// DOCX read/write now uses native rdocx crate (no pandoc dependency).
+// For formatting-preserving DOCX I/O, use docx_bridge directly on GtkTextBuffer.
 
 use std::fs;
 use std::path::Path;
+use rdocx::Document as RDocxDoc;
 
 /// A document represented as Markdown text.
 pub struct Document {
@@ -29,7 +33,7 @@ impl Document {
 
 /// Read a file into a Document. Supports:
 /// - `.md`, `.txt`, `.html` — read as-is (Markdown or raw text)
-/// - `.docx` — converts via pandoc CLI if available (fallback to error)
+/// - `.docx` — extracts plain text via rdocx (native, no pandoc)
 pub fn read(path: &str) -> Result<Document, String> {
     let p = Path::new(path);
     let ext = p.extension().and_then(|e| e.to_str()).unwrap_or("").to_lowercase();
@@ -41,15 +45,13 @@ pub fn read(path: &str) -> Result<Document, String> {
             Ok(Document::from_text(&text))
         }
         "docx" => {
-            // Try pandoc CLI first
-            let out = std::process::Command::new("pandoc")
-                .args([path, "-t", "markdown", "--wrap=none"])
-                .output()
-                .map_err(|e| format!("pandoc not found (install pandoc to open .docx files): {}", e))?;
-            if !out.status.success() {
-                return Err(format!("pandoc conversion failed: {}", String::from_utf8_lossy(&out.stderr)));
+            let doc = RDocxDoc::open(path)
+                .map_err(|e| format!("Cannot open .docx {}: {}", path, e))?;
+            let mut text = String::new();
+            for p in doc.paragraphs() {
+                if !text.is_empty() { text.push('\n'); }
+                text.push_str(&p.text());
             }
-            let text = String::from_utf8_lossy(&out.stdout).to_string();
             Ok(Document::from_text(&text))
         }
         _ => Err(format!("Unsupported file format: .{}", ext)),
@@ -62,7 +64,7 @@ pub fn read(path: &str) -> Result<Document, String> {
 /// - `.md` — Markdown (canonical)
 /// - `.txt` — plain text
 /// - `.html` — HTML
-/// - `.docx` — converts via pandoc CLI
+/// - `.docx` — creates via rdocx (native, no pandoc)
 pub fn write(path: &str, doc: &Document) -> Result<(), String> {
     let p = Path::new(path);
     let ext = p.extension().and_then(|e| e.to_str()).unwrap_or("md").to_lowercase();
@@ -73,7 +75,6 @@ pub fn write(path: &str, doc: &Document) -> Result<(), String> {
             fs::write(path, text).map_err(|e| format!("Cannot write {}: {}", path, e))
         }
         "html" | "htm" => {
-            // Convert Markdown to HTML via pulldown-cmark
             use pulldown_cmark::{Parser, html};
             let parser = Parser::new(text);
             let mut html_buf = String::new();
@@ -84,8 +85,15 @@ pub fn write(path: &str, doc: &Document) -> Result<(), String> {
             );
             fs::write(path, &full).map_err(|e| format!("Cannot write {}: {}", path, e))
         }
-        "docx" | "odt" | "rtf" => {
-            // Use pandoc CLI
+        "docx" => {
+            let mut docx = RDocxDoc::new();
+            for line in text.lines() {
+                docx.add_paragraph(line);
+            }
+            docx.save(path).map_err(|e| format!("Cannot save .docx {}: {}", path, e))
+        }
+        "odt" | "rtf" => {
+            // Use pandoc CLI (optional fallback)
             let out = std::process::Command::new("pandoc")
                 .args(["-f", "markdown", "-t", &ext, "-o", path, "--wrap=none"])
                 .stdin(std::process::Stdio::piped())

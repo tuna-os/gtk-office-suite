@@ -4,9 +4,17 @@
 // Provides GNOME-compliant window chrome, toolbar, menus, and application plumbing.
 //
 // Architecture:
-//   SuiteApp        — wraps adw::Application with common Gio actions, shortcuts, dark mode
-//   SuiteWindow     — helper to assemble AdwApplicationWindow + ToolbarView + HeaderBar
-//   SuiteToolbar    — responsive formatting toolbar (primary/extended/more pattern)
+//   SuiteApp          — wraps adw::Application with common Gio actions, shortcuts, dark mode
+//   SuiteWindow       — helper to assemble AdwApplicationWindow + ToolbarView + HeaderBar
+//   SuiteToolbar      — responsive formatting toolbar (primary/extended/more pattern)
+//   FileDialogHelper  — shared open/save/export file dialogs with office format filters
+//   ToastManager      — toast notification system for save/error feedback
+
+pub mod file_dialogs;
+pub mod toast_manager;
+
+pub use file_dialogs::FileDialogHelper;
+pub use toast_manager::ToastManager;
 
 // The crate is named `libadwaita` in Cargo.toml; imported as `adw` for conciseness.
 use libadwaita as adw;
@@ -394,6 +402,8 @@ pub fn make_header_bar() -> adw::HeaderBar {
     file_section.append(Some("_Open\u{2026}"), Some("app.open"));
     file_section.append(Some("_Save"), Some("app.save"));
     file_section.append(Some("Save _As\u{2026}"), Some("app.save-as"));
+    file_section.append(Some("Page Set_up\u{2026}"), Some("app.page-setup"));
+    file_section.append(Some("_Print\u{2026}"), Some("app.print"));
     menu.append_section(Some("File"), &file_section);
 
     let edit_section = gio::Menu::new();
