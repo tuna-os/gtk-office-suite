@@ -1,1 +1,23 @@
-<?xml version='1.0' encoding='UTF-8'?><component type='desktop'><id>org.tunaos.letters-rust</id><name>Tables (Rust)</name></component>
+<?xml version="1.0" encoding="UTF-8"?>
+<component type="desktop-application">
+  <id>org.tunaos.letters-rust</id>
+  <name>Letters</name>
+  <summary>Word processor for the GNOME desktop</summary>
+  <developer_name>Hanthor Contributors</developer_name>
+  <metadata_license>CC0-1.0</metadata_license>
+  <project_license>GPL-3.0-or-later</project_license>
+  <description>
+    <p>Letters is a word processor for the GNOME desktop, part of the Hanthor Office Suite.</p>
+    <p>Features include rich text formatting, Markdown editing, document import/export, and tabbed documents.</p>
+  </description>
+  <url type="homepage">https://github.com/tuna-os/hanthor-rust</url>
+  <url type="bugtracker">https://github.com/tuna-os/hanthor-rust/issues</url>
+  <categories>
+    <category>Office</category>
+    <category>WordProcessor</category>
+  </categories>
+  <releases>
+    <release version="0.1.0" date="2026-06-23"/>
+  </releases>
+  <content_rating type="oars-1.1"/>
+</component>

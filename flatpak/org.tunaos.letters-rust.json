@@ -18,7 +18,9 @@
       "install -Dm755 target/release/letters /app/bin/letters",
       "install -Dm644 flatpak/org.tunaos.letters-rust.desktop /app/share/applications/org.tunaos.letters-rust.desktop",
       "install -Dm644 flatpak/org.tunaos.letters-rust.gschema.xml /app/share/glib-2.0/schemas/org.tunaos.letters-rust.gschema.xml",
-      "glib-compile-schemas /app/share/glib-2.0/schemas/"
+      "glib-compile-schemas /app/share/glib-2.0/schemas/",
+      "install -Dm644 flatpak/icons/org.tunaos.letters-rust.svg /app/share/icons/hicolor/scalable/apps/org.tunaos.letters-rust.svg",
+      "install -Dm644 flatpak/org.tunaos.letters-rust.metainfo.xml /app/share/metainfo/org.tunaos.letters-rust.metainfo.xml"
     ],
     "sources": [{"type": "dir", "path": "..", "dest": "."}]
   }]

@@ -1,1 +1,23 @@
-<?xml version='1.0' encoding='UTF-8'?><component type='desktop'><id>org.tunaos.decks-rust</id><name>Tables (Rust)</name></component>
+<?xml version="1.0" encoding="UTF-8"?>
+<component type="desktop-application">
+  <id>org.tunaos.decks-rust</id>
+  <name>Decks</name>
+  <summary>Presentation creator for the GNOME desktop</summary>
+  <developer_name>Hanthor Contributors</developer_name>
+  <metadata_license>CC0-1.0</metadata_license>
+  <project_license>GPL-3.0-or-later</project_license>
+  <description>
+    <p>Decks is a presentation application for the GNOME desktop, part of the Hanthor Office Suite.</p>
+    <p>Features include slide creation, shapes, image insertion, and fullscreen presentation mode.</p>
+  </description>
+  <url type="homepage">https://github.com/tuna-os/hanthor-rust</url>
+  <url type="bugtracker">https://github.com/tuna-os/hanthor-rust/issues</url>
+  <categories>
+    <category>Office</category>
+    <category>Presentation</category>
+  </categories>
+  <releases>
+    <release version="0.1.0" date="2026-06-23"/>
+  </releases>
+  <content_rating type="oars-1.1"/>
+</component>

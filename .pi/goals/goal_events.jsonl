@@ -1,3 +1,7 @@
 {"type":"goal_created","goalId":"mqqi1jwm-5ohz96","objective":"Ship v1.0 of the hanthor-rust GTK4 office suite (Letters, Tables, Decks) as Flatpaks published to the tuna-os repo, with each app minimally viable per the agreed scope.","sisyphus":true,"autoContinue":true,"at":"2026-06-23T10:26:16.966Z"}
 {"type":"task_list_set","goalId":"mqqi1jwm-5ohz96","taskCount":7,"blockCompletion":false,"at":"2026-06-23T10:26:17.068Z"}
 {"type":"task_complete","goalId":"mqqi1jwm-5ohz96","taskId":"letters-polish","evidence":"Letters polish: auto-save (glib timer), spell-check toggle, page layout margins — all wired to GSettings","at":"2026-06-23T10:26:29.211Z"}
+{"type":"task_complete","goalId":"mqqi1jwm-5ohz96","taskId":"tables-multisheet","evidence":"Tables: multi-sheet + XLSX I/O via calamine/xlsxwriter — committed in 55780ec","at":"2026-06-23T10:52:06.900Z"}
+{"type":"task_complete","goalId":"mqqi1jwm-5ohz96","taskId":"tables-xlsx-io","evidence":"Tables file I/O: calamine import + rust_xlsxwriter export committed in 55780ec","at":"2026-06-23T10:52:13.239Z"}
+{"type":"task_complete","goalId":"mqqi1jwm-5ohz96","taskId":"decks-canvas-shapes","evidence":"Decks MVP: shapes, images, present mode — committed in d3f8e42","at":"2026-06-23T10:52:18.362Z"}
+{"type":"task_complete","goalId":"mqqi1jwm-5ohz96","taskId":"decks-fileio","evidence":"Decks file I/O implemented via zip + OpenXML for basic PPTX roundtrip","at":"2026-06-23T10:52:51.680Z"}

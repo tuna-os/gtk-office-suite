@@ -19,6 +19,8 @@
       "install -Dm644 flatpak/org.tunaos.decks-rust.desktop /app/share/applications/org.tunaos.decks-rust.desktop",
       "install -Dm644 flatpak/org.tunaos.decks-rust.gschema.xml /app/share/glib-2.0/schemas/org.tunaos.decks-rust.gschema.xml",
       "glib-compile-schemas /app/share/glib-2.0/schemas/"
+      "install -Dm644 flatpak/icons/org.tunaos.decks-rust.svg /app/share/icons/hicolor/scalable/apps/org.tunaos.decks-rust.svg",
+      "install -Dm644 flatpak/org.tunaos.decks-rust.metainfo.xml /app/share/metainfo/org.tunaos.decks-rust.metainfo.xml"
     ],
     "sources": [{"type": "dir", "path": "..", "dest": "."}]
   }]
