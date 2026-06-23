@@ -14,7 +14,7 @@
     "name": "decks-rust",
     "buildsystem": "simple",
     "build-commands": [
-      "cargo build --release -p decks",
+      "cargo clean && cargo build --release -p decks",
       "install -Dm755 target/release/decks /app/bin/decks",
       "install -Dm644 flatpak/org.tunaos.decks-rust.desktop /app/share/applications/org.tunaos.decks-rust.desktop"
     ],
