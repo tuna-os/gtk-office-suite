@@ -5,7 +5,7 @@
   "sdk": "org.gnome.Sdk",
   "sdk-extensions": ["org.freedesktop.Sdk.Extension.rust-stable"],
   "command": "letters",
-  "finish-args": ["--share=ipc", "--socket=fallback-x11", "--socket=wayland", "--device=dri"],
+  "finish-args": ["--share=ipc", "--socket=fallback-x11", "--socket=wayland", "--device=dri", "--filesystem=host:ro"],
   "build-options": {
     "append-path": "/usr/lib/sdk/rust-stable/bin",
     "build-args": ["--share=network"]
@@ -15,8 +15,9 @@
     "buildsystem": "simple",
     "build-commands": [
       "cargo build --release -p letters",
-      "install -Dm755 target/release/letters /app/bin/letters"
+      "install -Dm755 target/release/letters /app/bin/letters",
       "install -Dm644 flatpak/org.tunaos.letters-rust.desktop /app/share/applications/org.tunaos.letters-rust.desktop",
+      "install -Dm644 flatpak/org.tunaos.letters-rust.metainfo.xml /app/share/metainfo/org.tunaos.letters-rust.metainfo.xml"
     ],
     "sources": [
       { "type": "dir", "path": "..", "dest": "." }
