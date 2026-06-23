@@ -59,11 +59,11 @@ jobs:
 
       - name: Push OCI image to GHCR
         run: |
-          echo "${{ secrets.GITHUB_TOKEN }}" | skopeo login ghcr.io -u "${{ github.actor }}" --password-stdin
-          skopeo copy oci:decks-rust.oci docker://ghcr.io/tuna-os/decks-rust:latest
+          echo "${{ secrets.GITHUB_TOKEN }}" | echo "${{ secrets.DOCKERHUB_TOKEN }}" | skopeo login docker.io -u tunaos --password-stdin
+          skopeo copy oci:decks-rust.oci docker://docker.io/tunaos/decks-rust:latest
           if [[ "${{ github.ref }}" == refs/tags/v* ]]; then
             TAG="${{ github.ref_name }}"
-            skopeo copy oci:decks-rust.oci docker://ghcr.io/tuna-os/decks-rust:${TAG}
+            skopeo copy oci:decks-rust.oci docker://docker.io/tunaos/decks-rust:${TAG}
           fi
 
       - name: Update flatpak-index (tuna-os/flatpak-index)
@@ -75,7 +75,7 @@ jobs:
           python3 .github/scripts/update-index.py \
             --oci-dir decks-rust.oci \
             --index-file index-repo/index/static \
-            --repo-name tuna-os/decks-rust \
+            --repo-name tunaos/decks-rust \
             --tags latest
           cd index-repo
           git config user.name "github-actions[bot]"
