@@ -28,12 +28,11 @@ pub fn read_docx_to_buffer(path: &str, buf: &gtk::TextBuffer) -> Result<(), Stri
     let mut first = true;
 
     for p in &paragraphs {
-        // Check for page break before this paragraph
-        let has_page_break = p.text().lines().next().map(|_| false).unwrap_or(false);
-        // rdocx 0.1.2 limitation: page_break_before not exposed on ParagraphRef.
-        // As best-effort: detect via rdocx_oxml CT_PPr properties.
-        // Use the inner CT_P structure from rdocx_oxml if accessible.
-        // For now, page breaks on import are not supported (rdocx limitation, tracked in #39).
+        // Insert page break if set on this paragraph
+        if p.is_page_break_before() && !first {
+            let mut end = buf.end_iter();
+            buf.insert(&mut end, "\n");
+        }
 
         if !first {
             let mut end = buf.end_iter();
@@ -265,12 +264,7 @@ fn apply_run_tags(buf: &gtk::TextBuffer, start: &gtk::TextIter, end: &gtk::TextI
     if run.is_strike() {
         if let Some(tag) = buf.tag_table().lookup("strikethrough") { buf.apply_tag(&tag, start, end); }
     }
-    // Underline detection via rdocx_oxml (rdocx 0.1.2 doesn't expose is_underline on RunRef)
-    // Access CT_RPr.underline through the internal CT_R struct
-    // Note: CT_R.inner is pub(crate), but RunRef is in rdocx which re-exports from rdocx_oxml.
-    // We need to access it indirectly. Since rdocx::RunRef is a wrapper around CT_R,
-    // and CT_RPr.underline is available in rdocx_oxml, we try via the properties.
-    // Actually RunRef.inner is pub(crate) — inaccessible. This is a known rdocx 0.1.2 limitation.
-    // For now: if an underline tag exists, apply it based on the run's text content.
-    // Full fix requires rdocx >= 0.2 or patching the crate.
+    if run.is_underline() {
+        if let Some(tag) = buf.tag_table().lookup("underline") { buf.apply_tag(&tag, start, end); }
+    }
 }

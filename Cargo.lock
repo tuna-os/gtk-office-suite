@@ -1246,7 +1246,7 @@ dependencies = [
  "pangocairo",
  "pulldown-cmark",
  "rdocx",
- "rdocx-oxml",
+ "rdocx-oxml 0.1.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "suite-common",
  "zspell",
 ]
@@ -1677,13 +1677,11 @@ dependencies = [
 [[package]]
 name = "rdocx"
 version = "0.1.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f95247a34b31fcd322d88abb3d3ddb599d3fa288006ffc2e95ffa524aec2ec5d"
 dependencies = [
  "rdocx-html",
  "rdocx-layout",
  "rdocx-opc",
- "rdocx-oxml",
+ "rdocx-oxml 0.1.2",
  "rdocx-pdf",
  "regex",
  "thiserror 2.0.18",
@@ -1692,20 +1690,16 @@ dependencies = [
 [[package]]
 name = "rdocx-html"
 version = "0.1.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3a8d3824727731cea641662c27f89c6aa706185d60bc270f7a12e686ca6c6d4b"
 dependencies = [
- "rdocx-oxml",
+ "rdocx-oxml 0.1.2",
 ]
 
 [[package]]
 name = "rdocx-layout"
 version = "0.1.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4997e43196b038b38a1256a7d668e86cec2e737db8890e7c4fab82d994c74139"
 dependencies = [
  "fontdb",
- "rdocx-oxml",
+ "rdocx-oxml 0.1.2",
  "rustybuzz",
  "thiserror 2.0.18",
  "ttf-parser",
@@ -1715,12 +1709,20 @@ dependencies = [
 [[package]]
 name = "rdocx-opc"
 version = "0.1.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7b9b7be0413d963265874deadf878c2f8761d4302b70e9cb6c57b378191a24c5"
 dependencies = [
  "quick-xml 0.37.5",
  "thiserror 2.0.18",
  "zip 8.6.0",
+]
+
+[[package]]
+name = "rdocx-oxml"
+version = "0.1.2"
+dependencies = [
+ "itoa",
+ "quick-xml 0.37.5",
+ "regex",
+ "thiserror 2.0.18",
 ]
 
 [[package]]
@@ -1738,8 +1740,6 @@ dependencies = [
 [[package]]
 name = "rdocx-pdf"
 version = "0.1.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "fed21e4b3af2713374119aad5603643a7a2ffdaa1b8c20934b0d0de1bc0bfb17"
 dependencies = [
  "miniz_oxide",
  "pdf-writer",

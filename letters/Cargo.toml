@@ -12,7 +12,7 @@ pango = "0.22"
 pangocairo = "0.22"
 zspell = { version = "0.5", features = ["unstable-suggestions"] }
 suite-common = { path = "../suite-common" }
-rdocx = "0.1.2"
+rdocx = { path = "../../../rdocx/crates/rdocx" }
 rdocx-oxml = "0.1.2"
 
 [[bin]]
