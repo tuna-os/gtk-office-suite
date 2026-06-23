@@ -410,6 +410,15 @@ impl LettersWindow {
                         if page_idx >= pages.len() { return; }
                         let cr = ctx.cairo_context();
                         let page = &pages[page_idx];
+                        // Draw page frame using shared PageContainer rendering (scale=1.0 for print points)
+                        crate::page_container::draw_page_to_cairo(
+                            &cr, page_idx, 0.0, 0.0,
+                            config.page_width_pt, config.page_height_pt, 1.0,
+                            config.margin_left, config.margin_right,
+                            config.margin_top, config.margin_bottom,
+                            "", "", // headers/footers handled by dialog
+                        );
+                        // Render page text
                         let page_text = if page.end_offset as usize <= text.len() {
                             &text[page.start_offset as usize..page.end_offset as usize]
                         } else { &text };
@@ -437,7 +446,15 @@ impl LettersWindow {
             a.connect_activate(move |_, _| {
                 let buf = active_buffer(&tv);
                 if let Some(buf) = buf {
-                    crate::print_preview::show_print_preview(&w, &buf, &s);
+                    // Find the PageContainer to get header/footer text
+                    let (hdr, ftr) = tv.selected_page()
+                        .and_then(|p| p.child().first_child())
+                        .and_then(|c| c.downcast::<crate::page_container::PageContainer>().ok())
+                        .map(|pc| {
+                            (String::new(), String::new()) // default empty
+                        })
+                        .unwrap_or_default();
+                    crate::print_preview::show_print_preview(&w, &buf, &s, &hdr, &ftr);
                 }
             });
             app.add_action(&a);

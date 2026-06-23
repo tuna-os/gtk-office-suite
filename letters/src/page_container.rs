@@ -277,6 +277,84 @@ impl Default for PageContainer {
     fn default() -> Self { Self::new() }
 }
 
+/// Draw a single page to a Cairo context. Shared by PageContainer snapshot and print preview.
+pub fn draw_page_to_cairo(
+    cr: &cairo::Context,
+    page_idx: usize,
+    page_x: f64, page_y: f64, page_w: f64, page_h: f64,
+    scale: f64,
+    margin_left: f64, margin_right: f64, margin_top: f64, margin_bottom: f64,
+    header_text: &str, footer_text: &str,
+) {
+    let ml = margin_left * scale;
+    let mr = margin_right * scale;
+    let mt = margin_top * scale;
+    let mb = margin_bottom * scale;
+
+    // Drop shadow
+    cr.save().unwrap();
+    cr.set_source_rgba(0.0, 0.0, 0.0, 0.10);
+    draw_rounded_rect(cr, page_x + 2.0, page_y + 2.0, page_w, page_h, 2.0);
+    cr.fill().unwrap();
+    cr.restore().unwrap();
+
+    // White page
+    cr.set_source_rgb(1.0, 1.0, 1.0);
+    draw_rounded_rect(cr, page_x, page_y, page_w, page_h, 2.0);
+    cr.fill().unwrap();
+
+    // Page border
+    cr.set_source_rgba(0.85, 0.85, 0.85, 0.8);
+    cr.set_line_width(0.5);
+    draw_rounded_rect(cr, page_x, page_y, page_w, page_h, 2.0);
+    cr.stroke().unwrap();
+
+    // Margin lines (dashed)
+    cr.save().unwrap();
+    cr.set_source_rgba(0.85, 0.85, 0.85, 0.5);
+    cr.set_line_width(0.5);
+    cr.set_dash(&[4.0, 4.0], 0.0);
+    cr.move_to(page_x + ml, page_y);
+    cr.line_to(page_x + ml, page_y + page_h);
+    cr.stroke().unwrap();
+    cr.move_to(page_x + page_w - mr, page_y);
+    cr.line_to(page_x + page_w - mr, page_y + page_h);
+    cr.stroke().unwrap();
+    cr.move_to(page_x, page_y + mt);
+    cr.line_to(page_x + page_w, page_y + mt);
+    cr.stroke().unwrap();
+    cr.move_to(page_x, page_y + page_h - mb);
+    cr.line_to(page_x + page_w, page_y + page_h - mb);
+    cr.stroke().unwrap();
+    cr.restore().unwrap();
+
+    // Header text
+    if !header_text.is_empty() {
+        cr.save().unwrap();
+        cr.set_source_rgba(0.5, 0.5, 0.5, 0.7);
+        cr.set_font_size(9.0);
+        let hdr = header_text.replace("{page}", &(page_idx + 1).to_string());
+        let ext = cr.text_extents(&hdr).ok();
+        let hw = ext.map(|e| e.width()).unwrap_or(50.0);
+        cr.move_to(page_x + (page_w - hw) / 2.0, page_y + mt - 8.0);
+        let _ = cr.show_text(&hdr);
+        cr.restore().unwrap();
+    }
+
+    // Footer text
+    if !footer_text.is_empty() {
+        cr.save().unwrap();
+        cr.set_source_rgba(0.5, 0.5, 0.5, 0.7);
+        cr.set_font_size(9.0);
+        let ftr = footer_text.replace("{page}", &(page_idx + 1).to_string());
+        let fext = cr.text_extents(&ftr).ok();
+        let fw = fext.map(|e| e.width()).unwrap_or(50.0);
+        cr.move_to(page_x + (page_w - fw) / 2.0, page_y + page_h - mb + 12.0);
+        let _ = cr.show_text(&ftr);
+        cr.restore().unwrap();
+    }
+}
+
 fn draw_rounded_rect(cr: &cairo::Context, x: f64, y: f64, w: f64, h: f64, r: f64) {
     cr.new_sub_path();
     let r = r.min(w / 2.0).min(h / 2.0);
