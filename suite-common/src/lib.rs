@@ -438,6 +438,62 @@ pub fn make_empty_state(
 // ---------------------------------------------------------------------------
 // Tests
 // ---------------------------------------------------------------------------
+// SuiteStatusBar — bottom status bar with word count
+// ---------------------------------------------------------------------------
+
+/// Build a status bar widget with a word count label (left) and other info.
+pub fn make_status_bar() -> (gtk::Box, gtk::Label) {
+    let word_count = gtk::Label::new(Some("0 words"));
+    word_count.set_halign(gtk::Align::End);
+    word_count.set_margin_start(6);
+    word_count.set_margin_end(6);
+    word_count.add_css_class("caption");
+
+    let box_ = gtk::Box::new(gtk::Orientation::Horizontal, 0);
+    box_.add_css_class("toolbar");
+    box_.append(&word_count);
+    (box_, word_count)
+}
+
+// ---------------------------------------------------------------------------
+// SuiteTabView — tabbed documents
+// ---------------------------------------------------------------------------
+
+/// A simple wrapper around AdwTabView for tabbed document support.
+pub struct SuiteTabView {
+    pub tab_view: adw::TabView,
+    pub tab_bar: adw::TabBar,
+}
+
+impl SuiteTabView {
+    pub fn new() -> Self {
+        let tab_view = adw::TabView::new();
+        let tab_bar = adw::TabBar::new();
+        tab_bar.set_view(Some(&tab_view));
+        SuiteTabView { tab_view, tab_bar }
+    }
+
+    /// Append a page with a title and return the page handle.
+    pub fn append_page(&self, child: &impl IsA<gtk::Widget>, title: &str) -> adw::TabPage {
+        let page = self.tab_view.append(child);
+        page.set_title(title);
+        page
+    }
+
+    /// Get the selected page.
+    pub fn selected_page(&self) -> Option<adw::TabPage> {
+        self.tab_view.selected_page()
+    }
+
+    /// Number of pages.
+    pub fn n_pages(&self) -> i32 {
+        self.tab_view.n_pages()
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Tests
+// ---------------------------------------------------------------------------
 
 #[cfg(test)]
 mod tests {
