@@ -16,7 +16,9 @@
     "build-commands": [
       "cargo clean && cargo build --release -p decks",
       "install -Dm755 target/release/decks /app/bin/decks",
-      "install -Dm644 flatpak/org.tunaos.decks-rust.desktop /app/share/applications/org.tunaos.decks-rust.desktop"
+      "install -Dm644 flatpak/org.tunaos.decks-rust.desktop /app/share/applications/org.tunaos.decks-rust.desktop",
+      "install -Dm644 flatpak/org.tunaos.decks-rust.gschema.xml /app/share/glib-2.0/schemas/org.tunaos.decks-rust.gschema.xml",
+      "glib-compile-schemas /app/share/glib-2.0/schemas/"
     ],
     "sources": [{"type": "dir", "path": "..", "dest": "."}]
   }]

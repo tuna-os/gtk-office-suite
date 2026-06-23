@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<schemalist>
+  <schema id="org.tunaos.tables-rust" path="/org/tunaos/tables-rust/">
+    <key name="dark-mode" type="b">
+      <default>false</default>
+      <summary>Dark mode</summary>
+    </key>
+    <key name="window-width" type="i">
+      <default>960</default>
+      <summary>Window width</summary>
+    </key>
+    <key name="window-height" type="i">
+      <default>680</default>
+      <summary>Window height</summary>
+    </key>
+    <key name="window-maximized" type="b">
+      <default>false</default>
+      <summary>Window maximized</summary>
+    </key>
+    <key name="default-rows" type="i">
+      <default>100</default>
+      <range min="1" max="10000"/>
+      <summary>Default number of rows</summary>
+    </key>
+    <key name="default-cols" type="i">
+      <default>26</default>
+      <range min="1" max="1000"/>
+      <summary>Default number of columns</summary>
+    </key>
+    <key name="show-formula-bar" type="b">
+      <default>true</default>
+      <summary>Show formula bar</summary>
+    </key>
+    <key name="show-gridlines" type="b">
+      <default>true</default>
+      <summary>Show gridlines</summary>
+    </key>
+  </schema>
+</schemalist>

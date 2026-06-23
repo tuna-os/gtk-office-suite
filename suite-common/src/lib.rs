@@ -88,8 +88,11 @@ impl SuiteApp {
         app.add_action(&act_about);
 
         let act_shortcuts = gio::SimpleAction::new("shortcuts", None);
+        let app_weak = app.downgrade();
         act_shortcuts.connect_activate(move |_, _| {
-            // Each app provides its own shortcuts dialog
+            if let Some(app) = app_weak.upgrade() {
+                app.activate_action("show-shortcuts", None);
+            }
         });
         app.add_action(&act_shortcuts);
 
@@ -128,6 +131,24 @@ impl SuiteApp {
     /// Run the application (calls `app.run()`).
     pub fn run(&self) -> glib::ExitCode {
         self.app.run()
+    }
+
+    /// Create a Gio::Settings handle for this app's schema.
+    /// The schema XML must be installed (e.g., via Flatpak manifest).
+    /// Panics if the schema doesn't exist — catch at development time.
+    pub fn settings(&self) -> gio::Settings {
+        let schema_id = self.app.application_id().unwrap_or_default();
+        gio::Settings::new(&schema_id)
+    }
+
+    /// Restore dark mode from GSettings on startup.
+    pub fn restore_dark_mode(&self) {
+        let settings = self.settings();
+        let dark = settings.boolean("dark-mode");
+        let sm = adw::StyleManager::default();
+        if dark {
+            sm.set_color_scheme(adw::ColorScheme::ForceDark);
+        }
     }
 }
 
@@ -379,6 +400,41 @@ pub fn make_header_bar() -> adw::HeaderBar {
 // ---------------------------------------------------------------------------
 // Preference helpers
 // ---------------------------------------------------------------------------
+
+// ---------------------------------------------------------------------------
+// Keyboard Shortcuts Dialog
+// ---------------------------------------------------------------------------
+
+/// Build and show a keyboard shortcuts dialog.
+/// `shortcuts` — list of (group_title, [(shortcut_title, accelerator), ...]).
+pub fn show_shortcuts_dialog(
+    shortcuts: &[(&str, &[(&str, &str)])],
+) {
+    let win = gtk::ShortcutsWindow::builder()
+        .modal(true)
+        .build();
+
+    let section = gtk::ShortcutsSection::builder()
+        .section_name("main")
+        .visible(true)
+        .build();
+
+    for (group_title, items) in shortcuts {
+        let group = gtk::ShortcutsGroup::builder().title(*group_title).build();
+        for (title, accel) in *items {
+            group.add_shortcut(
+                &gtk::ShortcutsShortcut::builder()
+                    .title(*title)
+                    .accelerator(*accel)
+                    .build(),
+            );
+        }
+        section.add_group(&group);
+    }
+
+    win.add_section(&section);
+    win.set_visible(true);
+}
 
 /// Helper to build a simple preferences dialog.
 pub fn make_preferences_window() -> adw::PreferencesDialog {

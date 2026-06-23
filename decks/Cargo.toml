@@ -4,7 +4,7 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-gtk4 = "0.11"
+gtk4 = { version = "0.11", features = ["v4_14"] }
 libadwaita = { version = "0.9", features = ["v1_6"] }
 suite-common = { path = "../suite-common" }
 

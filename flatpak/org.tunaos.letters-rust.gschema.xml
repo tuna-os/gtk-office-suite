@@ -1,0 +1,48 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<schemalist>
+  <schema id="org.tunaos.letters-rust" path="/org/tunaos/letters-rust/">
+    <key name="dark-mode" type="b">
+      <default>false</default>
+      <summary>Dark mode</summary>
+      <description>Whether dark mode is enabled</description>
+    </key>
+    <key name="window-width" type="i">
+      <default>960</default>
+      <summary>Window width</summary>
+    </key>
+    <key name="window-height" type="i">
+      <default>680</default>
+      <summary>Window height</summary>
+    </key>
+    <key name="window-maximized" type="b">
+      <default>false</default>
+      <summary>Window maximized</summary>
+    </key>
+    <key name="font" type="s">
+      <default>'Sans 12'</default>
+      <summary>Font family</summary>
+    </key>
+    <key name="editor-margin" type="d">
+      <default>16.0</default>
+      <range min="0" max="50"/>
+      <summary>Editor margin percentage</summary>
+    </key>
+    <key name="spell-check-enabled" type="b">
+      <default>true</default>
+      <summary>Spell checking</summary>
+    </key>
+    <key name="auto-save-interval" type="i">
+      <default>0</default>
+      <range min="0" max="3600"/>
+      <summary>Auto-save interval in seconds</summary>
+    </key>
+    <key name="show-toolbar" type="b">
+      <default>true</default>
+      <summary>Show formatting toolbar</summary>
+    </key>
+    <key name="default-format" type="s">
+      <default>'odt'</default>
+      <summary>Default save format</summary>
+    </key>
+  </schema>
+</schemalist>
