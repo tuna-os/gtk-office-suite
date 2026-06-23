@@ -303,3 +303,33 @@ widget inventories for 34 GNOME apps. Key files for our features:
 - `/tmp/gnome-gui-spec/skills/toast-feedback/SKILL.md` — AdwToast pattern
 - `/tmp/gnome-gui-spec/skills/sidebar-navigation/SKILL.md` — AdwOverlaySplitView
 - `/tmp/gnome-gui-spec/skills/preferences-dialog/SKILL.md` — Preferences pattern
+
+---
+
+### 12. Velotype — Block-based Markdown Editor (gpui, not GTK)
+
+**Repo:** `/tmp/velotype/` (cloned from https://github.com/manyougz/velotype)
+
+**Architecture uses gpui (Zed editor framework), not gtk4-rs.** UI patterns not portable.
+However, the **Markdown parsing and block-model architecture** is useful:
+
+| Module | What it does | Use for Letters |
+|--------|-------------|-----------------|
+| `editor/document.rs` | Markdown → editor tree deserialization | Markdown import pipeline |
+| `editor/render.rs` | Block rendering with Pango layout | Not portable (gpui) |
+| `editor/events.rs` | Block-level event handling (split, merge, delete, indent) | Rich text editing commands |
+| `editor/history.rs` | Undo/redo stack | Reference for custom undo stack if GtkTextBuffer built-in is insufficient |
+| `editor/selection.rs` | Cursor + range selection model | Selection handling pattern |
+| `editor/export.rs` | Export to PDF/HTML | PDF export pipeline reference |
+| `editor/persistence.rs` | Auto-save + file I/O | Auto-save timer pattern |
+| `editor/table_edit.rs` | Inline table editing | Table insert/edit UI pattern |
+| `components/block/element.rs` | Block element types (P, H1-H6, code, table, image) | Block-level style model |
+| `components/markdown/inline.rs` | Inline markdown parsing (**bold**, *italic*, `code`, [links]) | Markdown macros reference |
+
+**Key reference function — inline markdown parsing:**
+`/tmp/velotype/src/components/markdown/inline.rs` has regex-based inline markdown parser that handles bold, italic, code, links, images, strikethrough, footnotes.
+
+**Key reference — table insertion:**
+`/tmp/velotype/src/components/block/runtime/table.rs` has table creation + cell navigation logic.
+
+**Note:** Velotype's AST-based approach (parse markdown → block tree → render) is more sophisticated than what we need for Phase 1-2. It's a v2/v3 target for a more powerful Letters engine.

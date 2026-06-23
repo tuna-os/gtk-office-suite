@@ -165,6 +165,21 @@ impl LettersWindow {
             });
         }
 
+        // ── Find/Replace revealer ──────────────────────────────────
+        let (find_revealer, find_entry) = make_find_replace_widget(&tab_view);
+        suite_win.add_top_bar(&find_revealer);
+
+        // ── Find/Replace actions ────────────────────────────────────
+        let fe = find_entry.clone();
+        let fr = find_revealer.clone();
+        let a = gtk::gio::SimpleAction::new("find", None);
+        a.connect_activate(move |_, _| {
+            fr.set_reveal_child(true);
+            fe.grab_focus();
+        });
+        app.add_action(&a);
+        app.set_accels_for_action("app.find", &["<Primary>f"]);
+
         // ── Actions ────────────────────────────────────────────────
         Self::register_actions(&tab_view, &stack, &word_count_label, &win, app);
 
@@ -511,6 +526,295 @@ fn make_tab_menu() -> gio::Menu {
     m
 }
 
+// ── Find & Replace overlay ──────────────────────────────────────────
+
+struct FindState {
+    matches: Vec<(gtk::TextIter, gtk::TextIter)>,
+    current: usize,
+}
+
+/// Build the find/replace revealer that slides down from the top.
+fn make_find_replace_widget(tv: &adw::TabView) -> (gtk::Revealer, gtk::SearchEntry) {
+    let tv = tv.clone();
+
+    let search_entry = gtk::SearchEntry::new();
+    search_entry.set_placeholder_text(Some("Find\u{2026}"));
+    search_entry.set_hexpand(true);
+
+    let replace_entry = gtk::Entry::new();
+    replace_entry.set_placeholder_text(Some("Replace\u{2026}"));
+
+    let match_label = gtk::Label::new(Some(""));
+    match_label.add_css_class("dim-label");
+    match_label.set_margin_start(4);
+    match_label.set_margin_end(4);
+
+    let find_prev = gtk::Button::new();
+    find_prev.set_icon_name("go-up-symbolic");
+    find_prev.set_tooltip_text(Some("Previous match (Shift+Enter)"));
+    find_prev.add_css_class("flat");
+
+    let find_next = gtk::Button::new();
+    find_next.set_icon_name("go-down-symbolic");
+    find_next.set_tooltip_text(Some("Next match (Enter)"));
+    find_next.add_css_class("flat");
+
+    let replace_btn = gtk::Button::with_label("Replace");
+    replace_btn.set_tooltip_text(Some("Replace current match"));
+    replace_btn.add_css_class("flat");
+
+    let replace_all_btn = gtk::Button::with_label("All");
+    replace_all_btn.set_tooltip_text(Some("Replace all matches"));
+    replace_all_btn.add_css_class("flat");
+
+    let case_toggle = gtk::ToggleButton::builder()
+        .label("Aa")
+        .tooltip_text("Case sensitive")
+        .build();
+    case_toggle.add_css_class("flat");
+
+    let close_btn = gtk::Button::builder()
+        .icon_name("window-close-symbolic")
+        .tooltip_text("Close (Escape)")
+        .build();
+    close_btn.add_css_class("flat");
+
+    // Shared search state
+    let state = Rc::new(RefCell::new(FindState { matches: Vec::new(), current: 0 }));
+
+    // Shared widgets for closures
+    let search_data = Rc::new((search_entry.clone(), match_label.clone(), case_toggle.clone()));
+
+    // ── Helper: run search, populate matches, highlight ─────
+    let run_search: Rc<Box<dyn Fn()>> = {
+        let tv = tv.clone();
+        let state = state.clone();
+        let sd = search_data.clone();
+        Rc::new(Box::new(move || {
+            let query = sd.0.text().to_string();
+            let ml = &sd.1;
+            let ct = &sd.2;
+            if query.is_empty() {
+                ml.set_label("");
+                state.borrow_mut().matches.clear();
+                state.borrow_mut().current = 0;
+                if let Some(buf) = active_buffer(&tv) {
+                    for tag_name in &["search-match", "search-current"] {
+                        if let Some(tag) = buf.tag_table().lookup(tag_name) {
+                            buf.remove_tag(&tag, &buf.start_iter(), &buf.end_iter());
+                        }
+                    }
+                }
+                return;
+            }
+            if let Some(buf) = active_buffer(&tv) {
+                let flags = if ct.is_active() {
+                    gtk::TextSearchFlags::TEXT_ONLY
+                } else {
+                    gtk::TextSearchFlags::CASE_INSENSITIVE
+                };
+                // Clear previous highlights
+                for tag_name in &["search-match", "search-current"] {
+                    if let Some(tag) = buf.tag_table().lookup(tag_name) {
+                        buf.remove_tag(&tag, &buf.start_iter(), &buf.end_iter());
+                    }
+                }
+                // Find all matches
+                let mut matches = Vec::new();
+                let mut iter = buf.start_iter();
+                while let Some((start, end)) = iter.forward_search(&query, flags, None) {
+                    matches.push((start.clone(), end.clone()));
+                    iter = end;
+                }
+                let count = matches.len();
+                state.borrow_mut().matches = matches;
+                state.borrow_mut().current = 0;
+                ml.set_label(&format!("{}/{}", if count > 0 { 1 } else { 0 }, count));
+                // Highlight all matches
+                if let Some(tag) = buf.tag_table().lookup("search-match") {
+                    for (s, e) in state.borrow().matches.iter() {
+                        buf.apply_tag(&tag, s, e);
+                    }
+                }
+                // Highlight current match
+                if let Some(tag) = buf.tag_table().lookup("search-current") {
+                    if let Some((s, e)) = state.borrow().matches.get(0) {
+                        buf.apply_tag(&tag, s, e);
+                        buf.select_range(s, e);
+                        scroll_to_cursor(&tv);
+                    }
+                }
+            }
+        }))
+    };
+
+    // ── On each keystroke ────────────────────────────────────
+    {
+        let rs = run_search.clone();
+        search_entry.connect_search_changed(move |_| {
+            rs();
+        });
+    }
+
+    // ── Case toggle ──────────────────────────────────────────
+    {
+        let rs = run_search.clone();
+        case_toggle.connect_toggled(move |_| {
+            rs();
+        });
+    }
+
+    // ── Find Next ────────────────────────────────────────────
+    {
+        let tv = tv.clone();
+        let state = state.clone();
+        let ml = match_label.clone();
+        find_next.connect_clicked(move |_| {
+            navigate_match(&tv, &state, &ml, 1);
+        });
+    }
+
+    // ── Find Previous ────────────────────────────────────────
+    {
+        let tv = tv.clone();
+        let state = state.clone();
+        let ml = match_label.clone();
+        find_prev.connect_clicked(move |_| {
+            navigate_match(&tv, &state, &ml, -1);
+        });
+    }
+
+    // ── Replace current match ────────────────────────────────
+    {
+        let tv = tv.clone();
+        let state = state.clone();
+        let re = replace_entry.clone();
+        let rs = run_search.clone();
+        replace_btn.connect_clicked(move |_| {
+            let replacement = re.text().to_string();
+            let st = state.borrow();
+            if st.matches.is_empty() { return; }
+            if let Some((start, end)) = st.matches.get(st.current) {
+                if let Some(buf) = active_buffer(&tv) {
+                    let mut s = start.clone();
+                    let mut e = end.clone();
+                    buf.begin_user_action();
+                    buf.delete(&mut s, &mut e);
+                    buf.insert(&mut s, &replacement);
+                    buf.end_user_action();
+                }
+            }
+            drop(st);
+            rs();
+        });
+    }
+
+    // ── Replace All ──────────────────────────────────────────
+    {
+        let tv = tv.clone();
+        let state = state.clone();
+        let re = replace_entry.clone();
+        let rs = run_search.clone();
+        replace_all_btn.connect_clicked(move |_| {
+            let replacement = re.text().to_string();
+            let st = state.borrow();
+            let matches = st.matches.clone();
+            drop(st);
+            if matches.is_empty() { return; }
+            if let Some(buf) = active_buffer(&tv) {
+                buf.begin_user_action();
+                for (s, e) in matches.into_iter().rev() {
+                    let mut start = s;
+                    let mut end = e;
+                    buf.delete(&mut start, &mut end);
+                    buf.insert(&mut start, &replacement);
+                }
+                buf.end_user_action();
+            }
+            rs();
+        });
+    }
+
+    // ── Close button ─────────────────────────────────────────
+    let rev = Rc::new(RefCell::new(None::<gtk::Revealer>));
+
+    // ── Layout ───────────────────────────────────────────────
+    let hbox = gtk::Box::new(gtk::Orientation::Horizontal, 4);
+    hbox.set_margin_start(6);
+    hbox.set_margin_end(6);
+    hbox.set_margin_top(2);
+    hbox.set_margin_bottom(2);
+    hbox.append(&search_entry);
+    hbox.append(&replace_entry);
+    hbox.append(&match_label);
+    hbox.append(&find_prev);
+    hbox.append(&find_next);
+    hbox.append(&replace_btn);
+    hbox.append(&replace_all_btn);
+    hbox.append(&case_toggle);
+    hbox.append(&close_btn);
+
+    let revealer = gtk::Revealer::new();
+    revealer.set_child(Some(&hbox));
+    revealer.set_transition_type(gtk::RevealerTransitionType::SlideDown);
+    revealer.set_reveal_child(false);
+
+    // Wire close (after revealer is created)
+    {
+        let rev = rev.clone();
+        let r2 = revealer.clone();
+        close_btn.connect_clicked(move |_| {
+            r2.set_reveal_child(false);
+        });
+    }
+
+    // Escape in search entry closes
+    {
+        let r = revealer.clone();
+        search_entry.connect_activate(move |_| {
+            // Enter in search = find next
+            find_next.activate();
+        });
+    }
+
+    (revealer, search_entry)
+}
+
+/// Scroll the active text view so the cursor is visible.
+/// Navigate to the next/previous match and update highlights.
+fn navigate_match(tv: &adw::TabView, state: &RefCell<FindState>, ml: &gtk::Label, direction: i32) {
+    let mut st = state.borrow_mut();
+    if st.matches.is_empty() { return; }
+    let n = st.matches.len() as i32;
+    let new_idx = ((st.current as i32 + direction).rem_euclid(n)) as usize;
+    st.current = new_idx;
+    let m = st.matches[new_idx].clone();
+    drop(st);
+    if let Some(buf) = active_buffer(tv) {
+        if let Some(tag) = buf.tag_table().lookup("search-current") {
+            buf.remove_tag(&tag, &buf.start_iter(), &buf.end_iter());
+        }
+        if let Some(tag) = buf.tag_table().lookup("search-current") {
+            buf.apply_tag(&tag, &m.0, &m.1);
+        }
+        buf.select_range(&m.0, &m.1);
+        scroll_to_cursor(tv);
+    }
+    ml.set_label(&format!("{}/{}", new_idx + 1, n));
+}
+
+fn scroll_to_cursor(tv: &adw::TabView) {
+    if let Some(page) = tv.selected_page() {
+        if let Some(textview) = page.child().first_child()
+            .and_then(|c| c.downcast::<gtk::TextView>().ok())
+        {
+            let buf = textview.buffer();
+            let mark = buf.get_insert();
+            textview.scroll_to_mark(&mark, 0.0, true, 0.0, 0.0);
+        }
+    }
+}
+
 // ── TextTag registration ────────────────────────────────────────────────
 
 pub fn register_formatting_tags(buffer: &gtk::TextBuffer) {
@@ -537,4 +841,7 @@ pub fn register_formatting_tags(buffer: &gtk::TextBuffer) {
     // Font size tags
     add!(gtk::TextTag::builder().name("font-larger").scale(1.2).build());
     add!(gtk::TextTag::builder().name("font-smaller").scale(0.833).build());
+    // Search highlight tags
+    add!(gtk::TextTag::builder().name("search-match").background("#FFFF00").build());
+    add!(gtk::TextTag::builder().name("search-current").background("#FF9800").build());
 }
