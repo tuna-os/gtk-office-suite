@@ -6,6 +6,7 @@ mod window;
 
 fn main() {
     let app = suite_common::make_app("org.tunaos.tables");
+    suite_common::apply_dark_mode();
     app.connect_activate(|app| {
         init_dark_mode(app);
         let win = window::TablesWindow::new(app);

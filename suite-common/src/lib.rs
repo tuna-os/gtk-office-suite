@@ -57,3 +57,16 @@ pub fn make_toolbar() -> gtk4::Box {
     t.append(&u);
     t
 }
+
+/// Apply system dark mode preference.
+pub fn apply_dark_mode() {
+    let style = libadwaita::StyleManager::default();
+    let dark = style.is_dark();
+    if dark {
+        // GTK4 handles dark mode via the theme, but web/app content needs explicit CSS
+        if let Some(display) = gtk4::gdk::Display::default() {
+            let settings = gtk4::Settings::default();
+            settings.set_gtk_application_prefer_dark_theme(true);
+        }
+    }
+}
