@@ -3,7 +3,6 @@ use adw::prelude::AdwDialogExt;
 use gtk4::prelude::*;
 mod window;
 mod engine;
-mod export;
 mod preferences;
 
 fn main() {
@@ -73,11 +72,19 @@ fn main() {
     // Wire the existing app.shortcuts action to show-shortcuts
     app.set_accels_for_action("app.show-shortcuts", &["<Primary>question"]);
 
-    // Register save/save-as/print/export actions
-    for name in &["save-file", "save-file-as", "export-pdf", "print"] {
-        let act = gtk4::gio::SimpleAction::new(name, None);
-        act.connect_activate(|_, _| {});
-        app.add_action(&act);
+    // Register export-pdf action
+    {
+        let a = gtk4::gio::SimpleAction::new("export-pdf", None);
+        a.connect_activate(|_, _| {});
+        app.add_action(&a);
+    }
+    app.set_accels_for_action("app.export-pdf", &["<Primary><Shift>e"]);
+
+    // Register print action
+    {
+        let a = gtk4::gio::SimpleAction::new("print", None);
+        a.connect_activate(|_, _| {});
+        app.add_action(&a);
     }
 
     suite.app.connect_activate(|app| {

@@ -299,7 +299,9 @@ impl LettersWindow {
                                         .and_then(|tv| Some(tv.buffer()));
                                     if let Some(buf) = buf {
                                         let text = buf.text(&buf.start_iter(), &buf.end_iter(), false);
-                                        let _ = std::fs::write(&path, text.as_str());
+                                        let path_str = path.to_string_lossy().to_string();
+                                        let doc = crate::engine::Document::from_text(&text);
+                                        let _ = crate::engine::write(&path_str, &doc);
                                     }
                                     page.set_needs_attention(false);
                                     if let Some(name) = file.basename() { page.set_title(&name.display().to_string()); }
@@ -494,10 +496,13 @@ fn do_save(tv: &adw::TabView, _stack: &gtk4::Stack) {
             if let Some(path) = path {
                 let buf = child.first_child()
                     .and_then(|c| c.downcast::<gtk::TextView>().ok())
-                    .and_then(|tv| Some(tv.buffer()));
+                    .map(|tv| tv.buffer());
                 if let Some(buf) = buf {
                     let text = buf.text(&buf.start_iter(), &buf.end_iter(), false);
-                    let _ = std::fs::write(&path, text.as_str());
+                    // Use engine for format-aware writing
+                    let path_str = path.to_string_lossy().to_string();
+                    let doc = crate::engine::Document::from_text(&text);
+                    let _ = crate::engine::write(&path_str, &doc);
                 }
                 page.set_needs_attention(false);
                 if let Some(name) = path.file_name().and_then(|s| s.to_str()) {
