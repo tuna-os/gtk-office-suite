@@ -31,6 +31,7 @@
 | P2 | #26 Insert Image/Link/Table/List | Letters | **Pending** — action stubs exist, no dialogs or insertion logic | 2d |
 | P2 | #28 Markdown Macros | Letters | **Pending** — needs insert-text signal handler | 1.5d |
 | P2 | #38 Auto-Save Timer | Letters | **Pending** — no timer infrastructure | 0.5d |
+| P2 | #39 Page Layout & Print View | Letters | **Pending** — page layout visualization, margins, rulers, line spacing | 2.0d |
 
 ## Phase 3 — Tables [7 open issues]
 

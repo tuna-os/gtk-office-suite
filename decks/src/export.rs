@@ -10,6 +10,8 @@ pub fn to_typst(slides: &[crate::engine::Slide]) -> String {
             match obj {
                 TextBox { text, .. } => out.push_str(&format!("{}\n\n", text)),
                 Rect { .. } => out.push_str("#rect(width: 100%, height: 100%)\n"),
+                Circle { .. } => out.push_str("#circle(radius: 50%)\n"),
+                Image { path, .. } => out.push_str(&format!("#image(\"{}\")\n", path)),
             }
         }
     }

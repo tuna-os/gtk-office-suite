@@ -11,34 +11,7 @@ use std::cell::{Cell, RefCell};
 use std::rc::Rc;
 use suite_common::SuiteWindow;
 
-// ── Slide data model ─────────────────────────────────────────────────────
-
-#[derive(Clone)]
-pub struct SlideData {
-    pub title: String,
-    pub background: String,
-    pub objects: Vec<SlideObjectData>,
-    pub image_data: Vec<String>, // base64-encoded image paths or data
-}
-
-#[derive(Clone)]
-pub enum SlideObjectData {
-    TextBox { text: String, x: f64, y: f64, w: f64, h: f64 },
-    Rect { x: f64, y: f64, w: f64, h: f64 },
-    Circle { x: f64, y: f64, r: f64 },
-    Image { path: String, x: f64, y: f64, w: f64, h: f64 },
-}
-
-impl SlideData {
-    pub fn new(title: &str) -> Self {
-        SlideData {
-            title: title.to_string(),
-            background: "#ffffff".into(),
-            objects: vec![],
-            image_data: vec![],
-        }
-    }
-}
+use crate::engine::{Slide, SlideObject, Deck, read_pptx, write_pptx};
 
 // ── DecksWindow ──────────────────────────────────────────────────────────
 
@@ -47,16 +20,21 @@ pub struct DecksWindow {
     split_view: adw::OverlaySplitView,
     slide_list: gtk::ListBox,
     canvas: gtk::DrawingArea,
-    slides: Rc<RefCell<Vec<SlideData>>>,
+    slides: Rc<RefCell<Vec<Slide>>>,
     current_slide: Rc<Cell<usize>>,
     selected_object: Rc<Cell<Option<usize>>>,
 }
 
 impl DecksWindow {
     pub fn new(app: &adw::Application) -> Self {
-        let slides = Rc::new(RefCell::new(vec![SlideData::new("Slide 1")]));
+        let slides = Rc::new(RefCell::new(vec![Slide {
+            title: "Slide 1".into(),
+            background: "#ffffff".into(),
+            objects: vec![],
+        }]));
         let current_slide = Rc::new(Cell::new(0usize));
         let selected_object = Rc::new(Cell::new(None));
+        let file_path = Rc::new(RefCell::new(None::<String>));
 
         // ── Canvas ────────────────────────────────────────────────────────
         let canvas = gtk::DrawingArea::new();
@@ -183,7 +161,11 @@ impl DecksWindow {
             let cs_stack = content_stack.clone();
             add_btn.connect_clicked(move |_| {
                 let idx = ss.borrow().len();
-                ss.borrow_mut().push(SlideData::new(&format!("Slide {}", idx + 1)));
+                ss.borrow_mut().push(Slide {
+                    title: format!("Slide {}", idx + 1),
+                    background: "#ffffff".into(),
+                    objects: vec![],
+                });
                 rebuild_slide_list(&sl, &ss.borrow(), idx);
                 cs_ref.set(idx);
                 cs.queue_draw();
@@ -257,7 +239,7 @@ impl DecksWindow {
                     let idx = cs_ref.get();
                     let mut slides = ss.borrow_mut();
                     if idx < slides.len() {
-                        slides[idx].objects.push(SlideObjectData::TextBox {
+                        slides[idx].objects.push(SlideObject::TextBox {
                             text: "Text".into(), x: 200.0, y: 150.0, w: 200.0, h: 40.0,
                         });
                         cs.queue_draw();
@@ -281,11 +263,11 @@ impl DecksWindow {
                         let count = shape_count.get();
                         shape_count.set(count + 1);
                         if count % 2 == 0 {
-                            slides[idx].objects.push(SlideObjectData::Rect {
+                            slides[idx].objects.push(SlideObject::Rect {
                                 x: 200.0, y: 200.0, w: 200.0, h: 150.0,
                             });
                         } else {
-                            slides[idx].objects.push(SlideObjectData::Circle {
+                            slides[idx].objects.push(SlideObject::Circle {
                                 x: 300.0, y: 250.0, r: 80.0,
                             });
                         }
@@ -321,7 +303,7 @@ impl DecksWindow {
                                     let mut slides = ss.borrow_mut();
                                     if idx < slides.len() {
                                         let p = path.to_string_lossy().to_string();
-                                        slides[idx].objects.push(SlideObjectData::Image {
+                                        slides[idx].objects.push(SlideObject::Image {
                                             path: p, x: 200.0, y: 200.0, w: 200.0, h: 150.0,
                                         });
                                         cs.queue_draw();
@@ -361,17 +343,17 @@ impl DecksWindow {
                 let mut found = None;
                 for (oi, obj) in objs.iter().enumerate().rev() {
                     match obj {
-                        SlideObjectData::TextBox { x: ox, y: oy, w: ow, h: oh, .. } |
-                        SlideObjectData::Rect { x: ox, y: oy, w: ow, h: oh } => {
+                        SlideObject::TextBox { x: ox, y: oy, w: ow, h: oh, .. } |
+                        SlideObject::Rect { x: ox, y: oy, w: ow, h: oh } => {
                             if x >= *ox && x <= *ox + *ow && y >= *oy && y <= *oy + *oh {
                                 found = Some(oi); break;
                             }
                         }
-                        SlideObjectData::Circle { x: cx, y: cy, r } => {
+                        SlideObject::Circle { x: cx, y: cy, r } => {
                             let dx = x - *cx; let dy = y - *cy;
                             if dx*dx + dy*dy <= *r * *r { found = Some(oi); break; }
                         }
-                        SlideObjectData::Image { x: ox, y: oy, w: ow, h: oh, .. } => {
+                        SlideObject::Image { x: ox, y: oy, w: ow, h: oh, .. } => {
                             if x >= *ox && x <= *ox + *ow && y >= *oy && y <= *oy + *oh {
                                 found = Some(oi); break;
                             }
@@ -458,12 +440,21 @@ impl DecksWindow {
             let cs = content_stack.clone();
             let sl = slide_list.clone();
             let ss = slides.clone();
+            let cs_scroll = canvas_scroll.clone();
+            let path_ref = file_path.clone();
             let act = gtk::gio::SimpleAction::new("new-document", None);
             act.connect_activate(move |_, _| {
-                cs.add_titled(&canvas_scroll, Some("editor"), "Editor");
+                if cs.child_by_name("editor").is_none() {
+                    cs.add_titled(&cs_scroll, Some("editor"), "Editor");
+                }
                 cs.set_visible_child_name("editor");
                 let mut slides = ss.borrow_mut();
-                *slides = vec![SlideData::new("Slide 1")];
+                *slides = vec![Slide {
+                    title: "Slide 1".into(),
+                    background: "#ffffff".into(),
+                    objects: vec![],
+                }];
+                *path_ref.borrow_mut() = None;
                 rebuild_slide_list(&sl, &slides, 0);
                 cs.queue_draw();
             });
@@ -472,11 +463,141 @@ impl DecksWindow {
 
         {
             let cs = content_stack.clone();
+            let sl = slide_list.clone();
+            let ss = slides.clone();
+            let cs_ref = current_slide.clone();
+            let so = selected_object.clone();
+            let da = canvas.clone();
+            let w = suite_win.window.clone();
+            let cs_scroll = canvas_scroll.clone();
+            let path_ref = file_path.clone();
+
             let act = gtk::gio::SimpleAction::new("open-file", None);
             act.connect_activate(move |_, _| {
-                cs.set_visible_child_name("editor");
+                let dlg = gtk::FileDialog::new();
+                let f = gtk::FileFilter::new();
+                f.add_pattern("*.pptx");
+                f.set_name(Some("PowerPoint Presentations (.pptx)"));
+                let fl = gio::ListStore::new::<gtk::FileFilter>();
+                fl.append(&f);
+                dlg.set_filters(Some(&fl));
+
+                let cs = cs.clone();
+                let sl = sl.clone();
+                let ss = ss.clone();
+                let cs_ref = cs_ref.clone();
+                let so = so.clone();
+                let da = da.clone();
+                let w2 = w.clone();
+                let cs_scroll = cs_scroll.clone();
+                let path_ref = path_ref.clone();
+
+                dlg.open(Some(&w), None::<&gio::Cancellable>,
+                    move |result: Result<gio::File, glib::Error>| {
+                        if let Ok(file) = result {
+                            if let Some(path) = file.path() {
+                                let path_str = path.to_string_lossy().to_string();
+                                match read_pptx(&path_str) {
+                                    Ok(deck) => {
+                                        *ss.borrow_mut() = deck.slides;
+                                        cs_ref.set(0);
+                                        so.set(None);
+                                        *path_ref.borrow_mut() = Some(path_str);
+                                        if cs.child_by_name("editor").is_none() {
+                                            cs.add_titled(&cs_scroll, Some("editor"), "Editor");
+                                        }
+                                        cs.set_visible_child_name("editor");
+                                        rebuild_slide_list(&sl, &ss.borrow(), 0);
+                                        da.queue_draw();
+                                    }
+                                    Err(e) => {
+                                        let err = adw::AlertDialog::builder()
+                                            .heading("Error opening presentation")
+                                            .body(&e)
+                                            .build();
+                                        err.add_response("ok", "OK");
+                                        err.set_default_response(Some("ok"));
+                                        err.present(Some(&w2));
+                                    }
+                                }
+                            }
+                        }
+                    },
+                );
             });
             app.add_action(&act);
+        }
+
+        // Save actions
+        {
+            let ss = slides.clone();
+            let w = suite_win.window.clone();
+            let path_ref = file_path.clone();
+
+            let act_save = gtk::gio::SimpleAction::new("save-file", None);
+            let ss_clone = ss.clone();
+            let w_clone = w.clone();
+            let path_clone = path_ref.clone();
+            act_save.connect_activate(move |_, _| {
+                let current_path = path_clone.borrow().clone();
+                if let Some(path_str) = current_path {
+                    let deck = Deck { slides: ss_clone.borrow().clone() };
+                    if let Err(e) = write_pptx(&path_str, &deck) {
+                        let err = adw::AlertDialog::builder()
+                            .heading("Error saving presentation")
+                            .body(&e)
+                            .build();
+                        err.add_response("ok", "OK");
+                        err.set_default_response(Some("ok"));
+                        err.present(Some(&w_clone));
+                    }
+                } else {
+                    let _ = gtk4::prelude::WidgetExt::activate_action(&w_clone, "app.save-file-as", None);
+                }
+            });
+            app.add_action(&act_save);
+
+            let act_save_as = gtk::gio::SimpleAction::new("save-file-as", None);
+            act_save_as.connect_activate(move |_, _| {
+                let dlg = gtk::FileDialog::new();
+                let f = gtk::FileFilter::new();
+                f.add_pattern("*.pptx");
+                f.set_name(Some("PowerPoint Presentations (.pptx)"));
+                let fl = gio::ListStore::new::<gtk::FileFilter>();
+                fl.append(&f);
+                dlg.set_filters(Some(&fl));
+                dlg.set_initial_name(Some("Untitled.pptx"));
+
+                let ss = ss.clone();
+                let w2 = w.clone();
+                let path_ref = path_ref.clone();
+
+                dlg.save(Some(&w), None::<&gio::Cancellable>,
+                    move |result: Result<gio::File, glib::Error>| {
+                        if let Ok(file) = result {
+                            if let Some(path) = file.path() {
+                                let path_str = path.to_string_lossy().to_string();
+                                let deck = Deck { slides: ss.borrow().clone() };
+                                match write_pptx(&path_str, &deck) {
+                                    Ok(()) => {
+                                        *path_ref.borrow_mut() = Some(path_str);
+                                    }
+                                    Err(e) => {
+                                        let err = adw::AlertDialog::builder()
+                                            .heading("Error saving presentation")
+                                            .body(&e)
+                                            .build();
+                                        err.add_response("ok", "OK");
+                                        err.set_default_response(Some("ok"));
+                                        err.present(Some(&w2));
+                                    }
+                                }
+                            }
+                        }
+                    },
+                );
+            });
+            app.add_action(&act_save_as);
         }
 
         // ── Add breakpoint to window ──────────────────────────────────────
@@ -498,7 +619,7 @@ impl DecksWindow {
 
 // ── Helper: rebuild the slide list widget ────────────────────────────────
 
-fn rebuild_slide_list(list: &gtk::ListBox, slides: &[SlideData], selected: usize) {
+fn rebuild_slide_list(list: &gtk::ListBox, slides: &[Slide], selected: usize) {
     while let Some(child) = list.first_child() {
         list.remove(&child);
     }
@@ -587,7 +708,7 @@ fn build_decks_toolbar() -> gtk::Box {
 
 fn draw_slide(
     cr: &cairo::Context, width: f64, height: f64,
-    slides: &[SlideData], current_slide: usize, selected: Option<usize>,
+    slides: &[Slide], current_slide: usize, selected: Option<usize>,
 ) {
     cr.set_source_rgb(0.86, 0.86, 0.86);
     cr.paint().unwrap();
@@ -628,7 +749,7 @@ fn draw_slide(
         for (oi, obj) in slides[current_slide].objects.iter().enumerate() {
             let is_selected = selected == Some(oi);
             match obj {
-                SlideObjectData::TextBox { text, x, y, w, h } => {
+                SlideObject::TextBox { text, x, y, w, h } => {
                     let sx = ox + (x / 960.0) * slide_w;
                     let sy = oy + (y / 540.0) * slide_h;
                     let sw = (w / 960.0) * slide_w;
@@ -647,7 +768,7 @@ fn draw_slide(
                     let display = if text.len() > 20 { &text[..20] } else { text.as_str() };
                     cr.show_text(display).unwrap();
                 }
-                SlideObjectData::Rect { x, y, w, h } => {
+                SlideObject::Rect { x, y, w, h } => {
                     let sx = ox + (x / 960.0) * slide_w;
                     let sy = oy + (y / 540.0) * slide_h;
                     let sw = (w / 960.0) * slide_w;
@@ -662,7 +783,7 @@ fn draw_slide(
                     cr.rectangle(sx, sy, sw, sh);
                     cr.fill().unwrap();
                 }
-                SlideObjectData::Circle { x, y, r } => {
+                SlideObject::Circle { x, y, r } => {
                     let cx = ox + (x / 960.0) * slide_w;
                     let cy = oy + (y / 540.0) * slide_h;
                     let radius = (r / 540.0) * slide_h;
@@ -676,7 +797,7 @@ fn draw_slide(
                     cr.arc(cx, cy, radius, 0.0, 2.0 * std::f64::consts::PI);
                     cr.fill().unwrap();
                 }
-                SlideObjectData::Image { path, x, y, w, h } => {
+                SlideObject::Image { path: _, x, y, w, h } => {
                     let sx = ox + (x / 960.0) * slide_w;
                     let sy = oy + (y / 540.0) * slide_h;
                     let sw = (w / 960.0) * slide_w;

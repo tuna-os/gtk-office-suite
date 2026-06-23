@@ -92,7 +92,63 @@ impl LettersWindow {
         toast_overlay.set_child(Some(&stack));
         let (status_bar, word_count_label) = suite_common::make_status_bar();
 
-        let suite_win = suite_common::SuiteWindow::new(app, "Letters", vec![], vec![]);
+        let app_clone = app.clone();
+        let primary_toolbar: Vec<(&'static str, &'static str, Box<dyn Fn(bool) + 'static>)> = vec![
+            ("format-text-bold-symbolic", "Bold (<Control>b)", Box::new({
+                let app = app_clone.clone();
+                move |_| { app.activate_action("bold", None); }
+            })),
+            ("format-text-italic-symbolic", "Italic (<Control>i)", Box::new({
+                let app = app_clone.clone();
+                move |_| { app.activate_action("italic", None); }
+            })),
+            ("format-text-underline-symbolic", "Underline (<Control>u)", Box::new({
+                let app = app_clone.clone();
+                move |_| { app.activate_action("underline", None); }
+            })),
+        ];
+
+        let app_clone = app.clone();
+        let extended_toolbar: Vec<(&'static str, &'static str, Box<dyn Fn() + 'static>)> = vec![
+            ("format-text-strikethrough-symbolic", "Strikethrough (<Control><Shift>s)", Box::new({
+                let app = app_clone.clone();
+                move || { app.activate_action("strikethrough", None); }
+            })),
+            ("format-text-highlight-symbolic", "Highlight (<Control><Shift>h)", Box::new({
+                let app = app_clone.clone();
+                move || { app.activate_action("highlight", None); }
+            })),
+            ("format-list-bullet-symbolic", "Bullet List (<Control><Shift>8)", Box::new({
+                let app = app_clone.clone();
+                move || { app.activate_action("bullet-list", None); }
+            })),
+            ("format-list-ordered-symbolic", "Numbered List (<Control><Shift>7)", Box::new({
+                let app = app_clone.clone();
+                move || { app.activate_action("numbered-list", None); }
+            })),
+            ("format-justify-left-symbolic", "Align Left (<Control>l)", Box::new({
+                let app = app_clone.clone();
+                move || { app.activate_action("align-left", None); }
+            })),
+            ("format-justify-center-symbolic", "Align Center (<Control>e)", Box::new({
+                let app = app_clone.clone();
+                move || { app.activate_action("align-center", None); }
+            })),
+            ("format-justify-right-symbolic", "Align Right (<Control>r)", Box::new({
+                let app = app_clone.clone();
+                move || { app.activate_action("align-right", None); }
+            })),
+            ("format-justify-fill-symbolic", "Justify (<Control>j)", Box::new({
+                let app = app_clone.clone();
+                move || { app.activate_action("align-justify", None); }
+            })),
+            ("insert-link-symbolic", "Insert Link (<Control>k)", Box::new({
+                let app = app_clone.clone();
+                move || { app.activate_action("insertlink", None); }
+            })),
+        ];
+
+        let suite_win = suite_common::SuiteWindow::new(app, "Letters", primary_toolbar, extended_toolbar);
         suite_win.add_top_bar(&tab_bar);
         suite_win.set_content(&toast_overlay);
         suite_win.add_bottom_bar(&status_bar);
@@ -158,8 +214,11 @@ impl LettersWindow {
         // ── Window: close-request with dirty check ──────────────────
         {
             let tv = tab_view.clone();
-            let w = win.clone();
+            let force_close = std::rc::Rc::new(std::cell::Cell::new(false));
             win.connect_close_request(move |win| {
+                if force_close.get() {
+                    return glib::Propagation::Proceed;
+                }
                 let n = tv.n_pages();
                 let mut dirty: Vec<String> = Vec::new();
                 for i in 0..n {
@@ -175,11 +234,13 @@ impl LettersWindow {
                 dialog.add_responses(&[("cancel", "_Cancel"), ("discard", "_Discard All")]);
                 dialog.set_close_response("cancel");
                 dialog.set_default_response(Some("cancel"));
-                dialog.set_response_appearance("cancel", adw::ResponseAppearance::Destructive);
+                dialog.set_response_appearance("discard", adw::ResponseAppearance::Destructive);
                 let win_weak = win.downgrade();
+                let force_close_clone = force_close.clone();
                 dialog.choose(Some(win), None::<&gio::Cancellable>,
                     move |response: glib::GString| {
                         if response == "discard" {
+                            force_close_clone.set(true);
                             if let Some(w) = win_weak.upgrade() { w.close(); }
                         }
                     },

@@ -182,4 +182,27 @@ mod tests {
         assert!(typst.contains("*bold*"));
         assert!(typst.contains("_italic_"));
     }
+
+    #[test]
+    fn test_docx_roundtrip() {
+        let text = "# Test Title\n\nHello from Antigravity test.";
+        let doc = Document::from_text(text);
+        
+        let temp_dir = std::env::temp_dir();
+        let path = temp_dir.join("test_doc.docx");
+        let path_str = path.to_string_lossy();
+        
+        // Write docx
+        let write_res = write(&path_str, &doc);
+        assert!(write_res.is_ok(), "Write docx failed: {:?}", write_res.err());
+        
+        // Read docx
+        let read_res = read(&path_str);
+        assert!(read_res.is_ok(), "Read docx failed: {:?}", read_res.err());
+        
+        let read_doc = read_res.unwrap();
+        assert!(read_doc.text.contains("Hello from Antigravity test"));
+        
+        let _ = std::fs::remove_file(&path);
+    }
 }

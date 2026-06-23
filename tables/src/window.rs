@@ -40,6 +40,7 @@ fn col_label(c: usize) -> String {
 }
 
 // ── Per-sheet display model (Cairo rendering cache) ────────────────────
+#[derive(Clone)]
 pub struct SheetModel {
     pub name: String,
     pub data: Vec<Vec<String>>,
@@ -483,8 +484,141 @@ impl TablesWindow {
         stack.add_titled(&scroll_grid, Some("editor"), "Editor");
         stack.set_visible_child_name("empty");
 
-        // ── Window chrome ───────────────────────────────────────────────
-        let mut suite_win = suite_common::SuiteWindow::new(app, "Tables", vec![], vec![]);
+        // Actions for toolbars
+        let s_bar = state.clone();
+        let show_bar_chart = Box::new({
+            let s = s_bar.clone();
+            move || {
+                let st = s.borrow();
+                let active = st.active_sheet;
+                let sheet = st.sheets[active].borrow();
+                let col = sheet.selected_col;
+                let mut data = Vec::new();
+                for r in 0..sheet.rows {
+                    let label = sheet.data[r][0].clone();
+                    let val_str = &sheet.data[r][col];
+                    if let Ok(val) = val_str.parse::<f64>() {
+                        let lbl = if label.is_empty() { format!("Row {}", r + 1) } else { label };
+                        data.push((lbl, val));
+                    }
+                }
+                if data.is_empty() {
+                    return;
+                }
+                let win = gtk4::Window::builder()
+                    .title("Bar Chart Preview")
+                    .default_width(600)
+                    .default_height(400)
+                    .modal(true)
+                    .build();
+                let surface = crate::charts::render_chart(&data, crate::charts::ChartType::Bar, 600, 400);
+                let drawing_area = gtk4::DrawingArea::new();
+                drawing_area.set_draw_func(move |_, cr, _, _| {
+                    cr.set_source_surface(&surface, 0.0, 0.0).unwrap();
+                    cr.paint().unwrap();
+                });
+                win.set_child(Some(&drawing_area));
+                win.present();
+            }
+        });
+
+        let s_pie = state.clone();
+        let show_pie_chart = Box::new({
+            let s = s_pie.clone();
+            move || {
+                let st = s.borrow();
+                let active = st.active_sheet;
+                let sheet = st.sheets[active].borrow();
+                let col = sheet.selected_col;
+                let mut data = Vec::new();
+                for r in 0..sheet.rows {
+                    let label = sheet.data[r][0].clone();
+                    let val_str = &sheet.data[r][col];
+                    if let Ok(val) = val_str.parse::<f64>() {
+                        let lbl = if label.is_empty() { format!("Row {}", r + 1) } else { label };
+                        data.push((lbl, val));
+                    }
+                }
+                if data.is_empty() {
+                    return;
+                }
+                let win = gtk4::Window::builder()
+                    .title("Pie Chart Preview")
+                    .default_width(600)
+                    .default_height(400)
+                    .modal(true)
+                    .build();
+                let surface = crate::charts::render_chart(&data, crate::charts::ChartType::Pie, 600, 400);
+                let drawing_area = gtk4::DrawingArea::new();
+                drawing_area.set_draw_func(move |_, cr, _, _| {
+                    cr.set_source_surface(&surface, 0.0, 0.0).unwrap();
+                    cr.paint().unwrap();
+                });
+                win.set_child(Some(&drawing_area));
+                win.present();
+            }
+        });
+
+        let s_pdf = state.clone();
+        let win_ref = Rc::new(RefCell::new(None));
+        let export_pdf = Box::new({
+            let s = s_pdf.clone();
+            let wr = win_ref.clone();
+            move || {
+                let parent_win = wr.borrow().clone();
+                let s2 = s.clone();
+                let dlg = gtk4::FileDialog::new();
+                let f = gtk4::FileFilter::new();
+                f.add_pattern("*.pdf");
+                f.set_name(Some("PDF Documents"));
+                let fl = gio::ListStore::new::<gtk4::FileFilter>();
+                fl.append(&f);
+                dlg.set_filters(Some(&fl));
+                dlg.set_initial_name(Some("Spreadsheet.pdf"));
+                
+                let wr2 = wr.clone();
+                dlg.save(parent_win.as_ref(), None::<&gio::Cancellable>,
+                    move |result: Result<gio::File, glib::Error>| {
+                        if let Ok(file) = result {
+                            if let Some(path) = file.path() {
+                                let path_str = path.to_string_lossy().to_string();
+                                let mut st = s2.borrow_mut();
+                                // Sync sheet data to engine first
+                                let active = st.active_sheet;
+                                let sheet_model = st.sheets[active].borrow().clone();
+                                for r in 0..sheet_model.rows {
+                                    for c in 0..sheet_model.cols {
+                                        st.engine.set_cell_text(r, c, &sheet_model.data[r][c]);
+                                    }
+                                }
+                                st.engine.evaluate();
+                                let parent_win = wr2.borrow().clone();
+                                if let Err(err_msg) = crate::export::to_pdf(&st.engine, &path_str) {
+                                    let alert = adw::AlertDialog::builder()
+                                        .heading("Export Failed")
+                                        .body(&err_msg)
+                                        .build();
+                                    alert.add_response("ok", "OK");
+                                    alert.present(parent_win.as_ref());
+                                } else {
+                                    println!("PDF exported successfully to {}", path_str);
+                                }
+                            }
+                        }
+                    },
+                );
+            }
+        });
+
+        let extended_toolbar: Vec<(&'static str, &'static str, Box<dyn Fn() + 'static>)> = vec![
+            ("insert-object-symbolic", "Show Bar Chart", show_bar_chart),
+            ("insert-image-symbolic", "Show Pie Chart", show_pie_chart),
+            ("document-send-symbolic", "Export PDF", export_pdf),
+        ];
+
+        let suite_win = suite_common::SuiteWindow::new(app, "Tables", vec![], extended_toolbar);
+        *win_ref.borrow_mut() = Some(suite_win.window.clone());
+
         suite_win.add_top_bar(&fx_bar);
         suite_win.set_content(&stack);
         suite_win.add_bottom_bar(&sheet_bar);

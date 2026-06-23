@@ -193,11 +193,27 @@ impl SuiteToolbar {
         container.set_margin_start(6);
         container.set_margin_end(6);
 
+        let is_empty = primary.is_empty() && extended.is_empty();
+        println!("SuiteToolbar::new: primary len = {}, extended len = {}, is_empty = {}", primary.len(), extended.len(), is_empty);
+        if is_empty {
+            println!("SuiteToolbar::new: setting container visible to false");
+            container.set_visible(false);
+        } else {
+            println!("SuiteToolbar::new: container remains visible (true)");
+        }
+
         // ---- Primary section (always visible) ----
         let primary_box = gtk::Box::new(gtk::Orientation::Horizontal, 0);
         primary_box.add_css_class("linked");
         for (label, tooltip, cb) in primary {
-            let btn = gtk::ToggleButton::with_label(label);
+            let btn = if label.ends_with("-symbolic") {
+                let b = gtk::ToggleButton::new();
+                b.set_icon_name(label);
+                b.set_label(&label.replace("-symbolic", "").replace("format-text-", "").replace("format-justify-", "").replace("format-list-", "").replace("insert-", ""));
+                b
+            } else {
+                gtk::ToggleButton::with_label(label)
+            };
             btn.set_tooltip_text(Some(tooltip));
             let cb = cb;
             btn.connect_toggled(move |b| {
@@ -211,7 +227,14 @@ impl SuiteToolbar {
         let extended_box = gtk::Box::new(gtk::Orientation::Horizontal, 0);
         extended_box.add_css_class("linked");
         for (label, tooltip, cb) in extended {
-            let btn = gtk::Button::with_label(label);
+            let btn = if label.ends_with("-symbolic") {
+                let b = gtk::Button::new();
+                b.set_icon_name(label);
+                b.set_label(&label.replace("-symbolic", "").replace("format-text-", "").replace("format-justify-", "").replace("format-list-", "").replace("insert-", ""));
+                b
+            } else {
+                gtk::Button::with_label(label)
+            };
             btn.set_tooltip_text(Some(tooltip));
             btn.connect_clicked(move |_| cb());
             extended_box.append(&btn);
@@ -344,11 +367,9 @@ pub fn make_header_bar() -> adw::HeaderBar {
     let new_btn = gtk::Button::builder()
         .icon_name("document-new-symbolic")
         .tooltip_text("New Document")
+        .action_name("app.new")
         .build();
     new_btn.add_css_class("flat");
-    new_btn.connect_clicked(|_| {
-        // Each app provides `app.new-document`
-    });
 
     // ---- End: Dark mode toggle ----
     let dark_btn = gtk::ToggleButton::builder()
