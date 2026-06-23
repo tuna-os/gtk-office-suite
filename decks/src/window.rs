@@ -9,7 +9,7 @@ impl DecksWindow {
         win.set_title(Some("Decks"));
         win.set_default_size(960, 600);
 
-        let header = suite_common::make_header_bar();
+        let header = suite_common::build_chrome();
         let toolbar = gtk::Box::new(gtk::Orientation::Horizontal, 4);
         toolbar.set_halign(gtk::Align::Center);
         toolbar.add_css_class("toolbar");

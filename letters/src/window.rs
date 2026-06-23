@@ -9,7 +9,7 @@ impl LettersWindow {
         win.set_title(Some("Letters"));
         win.set_default_size(800, 600);
 
-        let header = suite_common::make_header_bar();
+        let header = suite_common::build_chrome();
         let toolbar = suite_common::make_toolbar();
 
         // Style dropdown
