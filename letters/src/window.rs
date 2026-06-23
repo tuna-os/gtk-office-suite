@@ -76,6 +76,8 @@ fn make_doc_widget(settings: Option<&gio::Settings>) -> (PageContainer, gtk::Tex
         let pc = container.clone();
         let ed = editor.clone();
         let timer = std::rc::Rc::new(std::cell::RefCell::new(None::<glib::SourceId>));
+        let pages_store = std::rc::Rc::new(std::cell::RefCell::new(Vec::<crate::layout::Page>::new()));
+        let ps = pages_store.clone();
         let t = timer.clone();
         let b2 = buffer.clone();
         buffer.connect_changed(move |_| {
@@ -85,10 +87,12 @@ fn make_doc_widget(settings: Option<&gio::Settings>) -> (PageContainer, gtk::Tex
             let ed = ed.clone();
             let s = s.clone();
             let t2 = t.clone();
+            let ps2 = ps.clone();
             let id = glib::timeout_add_local(std::time::Duration::from_millis(500), move || {
                 let config = crate::layout::LayoutConfig::from_settings(&s);
                 let pages = crate::layout::paginate(&buf, &config, &ed.pango_context());
                 pc.set_page_count(pages.len());
+                ps2.borrow_mut().clone_from(&pages);
                 t2.borrow_mut().take();
                 glib::ControlFlow::Break
             });
@@ -394,22 +398,26 @@ impl LettersWindow {
             let a = gtk::gio::SimpleAction::new("print", None);
             a.connect_activate(move |_, _| {
                 if let Some(buf) = active_buffer(&tv) {
+                    let config = crate::layout::LayoutConfig::from_settings(&s);
+                    let ctx = gtk4::pango::Context::new();
+                    let pages = crate::layout::paginate(&buf, &config, &ctx);
+                    let text = buf.text(&buf.start_iter(), &buf.end_iter(), false).to_string();
+
                     let op = gtk::PrintOperation::new();
-                    let buf_clone = buf.clone();
-                    let s2 = s.clone();
-                    op.connect_draw_page(move |_op, ctx, _nth| {
+                    op.set_n_pages(pages.len() as i32);
+                    op.connect_draw_page(move |_op, ctx, nth| {
+                        let page_idx = nth as usize;
+                        if page_idx >= pages.len() { return; }
                         let cr = ctx.cairo_context();
-                        let text = buf_clone.text(&buf_clone.start_iter(), &buf_clone.end_iter(), false);
+                        let page = &pages[page_idx];
+                        let page_text = if page.end_offset as usize <= text.len() {
+                            &text[page.start_offset as usize..page.end_offset as usize]
+                        } else { &text };
                         let layout = pangocairo::functions::create_layout(&cr);
-                        layout.set_text(&text);
-                        // Read page size and margins from GSettings
-                        let pw = s2.double("page-width-pt");
-                        let ml = s2.double("page-margin-left");
-                        let mr = s2.double("page-margin-right");
-                        let mt = s2.double("page-margin-top");
-                        let content_w = (pw - ml - mr).max(10.0);
+                        layout.set_text(page_text);
+                        let content_w = (config.page_width_pt - config.margin_left - config.margin_right).max(10.0);
                         layout.set_width((content_w * (pango::SCALE as f64)) as i32);
-                        cr.move_to(ml, mt);
+                        cr.move_to(config.margin_left, config.margin_top);
                         pangocairo::functions::show_layout(&cr, &layout);
                     });
                     op.set_export_filename("output.pdf");
@@ -436,8 +444,24 @@ impl LettersWindow {
             app.set_accels_for_action("app.print-preview", &["<Primary><Shift>p"]);
         }
 
-        // ── Formatting actions ────────────────────────────────────
-        Self::register_formatting_actions(&tab_view, app);
+        // Header/Footer edit dialog action
+    {
+        let tv = tab_view.clone();
+        let a = gtk::gio::SimpleAction::new("edit-headers", None);
+        a.connect_activate(move |_, _| {
+            if let Some(buf) = active_buffer(&tv) {
+                // Find the PageContainer and show an edit dialog
+                let page = tv.selected_page();
+                if let Some(page) = page {
+                    let child = page.child();
+                    if let Some(pc) = child.first_child().and_then(|c| c.downcast::<crate::page_container::PageContainer>().ok()) {
+                        show_header_footer_dialog(&pc);
+                    }
+                }
+            }
+        });
+        app.add_action(&a);
+    }
 
         // Undo/Redo (GtkTextBuffer built-in)
         {
@@ -948,6 +972,39 @@ impl LettersWindow {
 
 // ── Save logic ───────────────────────────────────────────────────────
 
+// ── Save logic ───────────────────────────────────────────────────────
+
+fn show_header_footer_dialog(pc: &crate::page_container::PageContainer) {
+    let dialog = adw::AlertDialog::new(
+        Some("Headers & Footers"),
+        Some("Use {page} for automatic page numbering."),
+    );
+    // Build a custom content with header and footer entries
+    let content = gtk4::Box::new(gtk4::Orientation::Vertical, 12);
+    content.set_margin_top(12); content.set_margin_bottom(12);
+    content.set_margin_start(12); content.set_margin_end(12);
+
+    let hdr_entry = gtk4::Entry::builder().placeholder_text("Header text").build();
+    let ftr_entry = gtk4::Entry::builder().placeholder_text("Footer text").build();
+    content.append(&gtk4::Label::new(Some("Header:")));
+    content.append(&hdr_entry);
+    content.append(&gtk4::Label::new(Some("Footer:")));
+    content.append(&ftr_entry);
+    dialog.set_extra_child(Some(&content));
+
+    dialog.add_responses(&[("cancel", "_Cancel"), ("apply", "_Apply")]);
+    dialog.set_default_response(Some("apply"));
+    dialog.set_response_appearance("apply", adw::ResponseAppearance::Suggested);
+
+    let pc = pc.clone();
+    dialog.choose(None::<&gtk4::Window>, None::<&gtk4::gio::Cancellable>, move |response| {
+        if response.as_str() == "apply" {
+            pc.set_header_text(&hdr_entry.text());
+            pc.set_footer_text(&ftr_entry.text());
+        }
+    });
+}
+
 fn do_save(tv: &adw::TabView, _stack: &gtk4::Stack) {
     if let Some(page) = tv.selected_page() {
         if !page.needs_attention() { return; }
@@ -960,9 +1017,21 @@ fn do_save(tv: &adw::TabView, _stack: &gtk4::Stack) {
                     let path_str = path.to_string_lossy().to_string();
                     let is_docx = path.extension().and_then(|e| e.to_str()).map(|e| e == "docx").unwrap_or(false);
                     if is_docx {
-                        // Use docx_bridge for formatting-preserving DOCX save
-                        // If saving to an existing file, preserve its styles
-                        let _ = crate::docx_bridge::write_buffer_to_docx_preserving_styles(&path_str, &buf, &path_str);
+                        // Paginate buffer to get page break positions
+                        let config = crate::layout::LayoutConfig::from_settings(
+                            &gtk4::gio::Settings::new("org.tunaos.letters-rust")
+                        );
+                        let ctx = gtk4::pango::Context::new();
+                        let pages = crate::layout::paginate(&buf, &config, &ctx);
+                        let page_breaks: Vec<usize> = pages.iter().skip(1).map(|p| {
+                            // Count paragraphs up to the page start offset
+                            let text = buf.text(&buf.start_iter(), &buf.end_iter(), false).to_string();
+                            text[..p.start_offset as usize].lines().count()
+                        }).collect();
+                        // Use docx_bridge with page break preservation
+                        let _ = crate::docx_bridge::write_buffer_to_docx_with_layout(
+                            &path_str, &buf, Some(&path_str), &page_breaks
+                        );
                     } else {
                         let text = buf.text(&buf.start_iter(), &buf.end_iter(), false);
                         let doc = crate::engine::Document::from_text(&text);
