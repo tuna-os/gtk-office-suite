@@ -235,6 +235,14 @@ impl LettersWindow {
                 let app = app_clone.clone();
                 move || { app.activate_action("insertlink", None); }
             })),
+            ("format-line-spacing-symbolic", "Line Spacing", Box::new({
+                let app = app_clone.clone();
+                move || { app.activate_action("cycle-line-spacing", None); }
+            })),
+            ("view-columns-symbolic", "Columns (1-3)", Box::new({
+                let app = app_clone.clone();
+                move || { app.activate_action("cycle-columns", None); }
+            })),
         ];
 
         let suite_win = suite_common::SuiteWindow::new(app, "Letters", primary_toolbar, extended_toolbar);

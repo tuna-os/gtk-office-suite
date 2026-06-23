@@ -30,6 +30,7 @@ mod imp {
         pub header_text: std::cell::RefCell<String>,
         pub footer_text: std::cell::RefCell<String>,
         pub zoom_level: Cell<f64>,
+        pub column_count: Cell<u32>,
     }
 
     #[glib::object_subclass]
@@ -54,6 +55,7 @@ mod imp {
             self.margin_right.set(DEFAULT_MARGIN_LR);
             self.page_count.set(1);
             self.zoom_level.set(100.0);
+            self.column_count.set(1);
         }
         fn dispose(&self) {
             let obj = self.obj();
@@ -141,6 +143,20 @@ mod imp {
                 cr.move_to(px, page_y + sh - mb);
                 cr.line_to(px + sw, page_y + sh - mb);
                 cr.stroke().unwrap();
+
+                // Column separators
+                let cols = self.column_count.get();
+                if cols > 1 {
+                    let content_w = sw - ml - mr;
+                    let col_w = content_w / cols as f64;
+                    for c in 1..cols {
+                        let cx = px + ml + c as f64 * col_w;
+                        cr.move_to(cx, page_y + mt);
+                        cr.line_to(cx, page_y + sh - mb);
+                        cr.stroke().unwrap();
+                    }
+                }
+                cr.restore().unwrap();
 
                 // ── Header text ──
                 let header = self.header_text.borrow();
@@ -280,6 +296,12 @@ impl PageContainer {
         self.imp().zoom_level.get()
     }
 
+    /// Set column count for multi-column rendering.
+    pub fn set_column_count(&self, count: u32) {
+        self.imp().column_count.set(count.max(1));
+        self.queue_draw();
+    }
+
     pub fn load_from_settings(&self, settings: &gio::Settings) {
         let pw = settings.double("page-width-pt");
         let ph = settings.double("page-height-pt");
@@ -290,6 +312,7 @@ impl PageContainer {
             settings.double("page-margin-left"),
             settings.double("page-margin-right"),
         );
+        self.set_column_count(settings.int("column-count").max(1) as u32);
     }
 
     pub fn reload_settings(&self, settings: &gio::Settings) {

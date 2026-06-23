@@ -242,9 +242,9 @@ impl Ruler {
         {
             let click = gtk::GestureClick::new();
             let ruler_weak = obj.downgrade();
-            click.connect_pressed(move |gesture, _n_press, x, y| {
+            click.connect_pressed(move |gesture, n_press, x, y| {
                 let ruler = ruler_weak.upgrade().unwrap();
-                ruler.handle_press(gesture, x, y);
+                ruler.handle_press(gesture, x, y, n_press);
             });
             obj.add_controller(click);
         }
@@ -377,7 +377,7 @@ impl Ruler {
         (x / scale) + ml
     }
 
-    fn handle_press(&self, _gesture: &gtk::GestureClick, x: f64, y: f64) {
+    fn handle_press(&self, _gesture: &gtk::GestureClick, x: f64, y: f64, n_press: i32) {
         let imp = self.imp();
         let h = self.height() as f64;
         let pt = self.x_to_pt(x);
@@ -419,10 +419,22 @@ impl Ruler {
             return;
         }
 
-        // Check tab stops
+        // Check tab stops — double-click to cycle type
         for (i, ts) in imp.tab_stops.borrow().iter().enumerate() {
             let tx = self.pt_to_x(ts.position_pt);
             if y > h - 16.0 && (x - tx).abs() < 6.0 {
+                if n_press >= 2 {
+                    // Double-click: cycle tab type
+                    let mut tabs = imp.tab_stops.borrow_mut();
+                    tabs[i].alignment = match ts.alignment {
+                        TabAlignment::Left => TabAlignment::Center,
+                        TabAlignment::Center => TabAlignment::Right,
+                        TabAlignment::Right => TabAlignment::Decimal,
+                        TabAlignment::Decimal => TabAlignment::Left,
+                    };
+                    self.queue_draw();
+                    return;
+                }
                 imp.dragging.set(Some(DragTarget::TabStop(i)));
                 imp.last_x.set(pt);
                 return;
