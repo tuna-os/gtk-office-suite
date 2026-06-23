@@ -1,6 +1,6 @@
 [Desktop Entry]
-Name=tables (Rust)
-Comment=tables — TunaOS office suite (Rust)
+Name=Tables (Rust)
+Comment=Spreadsheet — TunaOS office suite (Rust)
 Exec=tables
 Icon=org.tunaos.tables-rust
 Terminal=false

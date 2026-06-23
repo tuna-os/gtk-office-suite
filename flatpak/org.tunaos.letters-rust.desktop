@@ -1,6 +1,6 @@
 [Desktop Entry]
-Name=letters (Rust)
-Comment=letters — TunaOS office suite (Rust)
+Name=Letters (Rust)
+Comment=Word processor — TunaOS office suite (Rust)
 Exec=letters
 Icon=org.tunaos.letters-rust
 Terminal=false
