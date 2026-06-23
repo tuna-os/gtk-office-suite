@@ -2,7 +2,7 @@ use libadwaita as adw;
 use gtk4::prelude::*;
 
 pub fn make_app(id: &str) -> gtk4::Application {
-    gtk4::Application::new(Some(id))
+    gtk4::Application::new(Some(id), gtk4::gio::ApplicationFlags::empty())
 }
 
 pub fn apply_dark_mode() {
