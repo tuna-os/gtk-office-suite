@@ -31,6 +31,27 @@ fn make_doc_widget() -> (gtk::ScrolledWindow, gtk::TextBuffer) {
     editor.set_left_margin(24); editor.set_right_margin(24);
     editor.set_top_margin(16); editor.set_bottom_margin(16);
     editor.set_vexpand(true); editor.set_hexpand(true);
+    // Drag-and-drop for images from file manager
+    {
+        let buf = buffer.clone();
+        let drop = gtk::DropTarget::new(gio::File::static_type(), gdk::DragAction::COPY);
+        drop.connect_drop(move |_target, value, _x, _y| {
+            if let Ok(file) = value.get::<gio::File>() {
+                if let Some(path) = file.path() {
+                    let name = path.file_name()
+                        .and_then(|n| n.to_str()).unwrap_or("image");
+                    let path_str = path.to_string_lossy();
+                    let md = format!("![{}]({})", name, path_str);
+                    let ins = buf.selection_bounds()
+                        .map(|(i,_)| i).unwrap_or_else(|| buf.start_iter());
+                    let mut pos = ins;
+                    buf.insert(&mut pos, &md);
+                }
+            }
+            true
+        });
+        editor.add_controller(drop);
+    }
     let scroll = gtk::ScrolledWindow::new();
     scroll.set_child(Some(&editor));
     scroll.set_vexpand(true); scroll.set_hexpand(true);
@@ -205,6 +226,100 @@ impl LettersWindow {
             });
             app.add_action(&a);
             app.set_accels_for_action("app.redo", &["<Primary>y", "<Primary><Shift>z"]);
+        }
+
+        // ── Insert actions ────────────────────────────────────────────
+        // Insert Image
+        {
+            let tv = tab_view.clone();
+            let w = win.clone();
+            let a = gtk::gio::SimpleAction::new("insertimage", None);
+            a.connect_activate(move |_, _| {
+                let tv = tv.clone();
+                let dlg = gtk::FileDialog::new();
+                let f = gtk::FileFilter::new();
+                f.add_mime_type("image/*");
+                f.set_name(Some("Images"));
+                let fl = gio::ListStore::new::<gtk::FileFilter>();
+                fl.append(&f);
+                dlg.set_filters(Some(&fl));
+                dlg.open(Some(&w), None::<&gio::Cancellable>,
+                    move |result: Result<gio::File, glib::Error>| {
+                        if let Ok(file) = result {
+                            if let Some(path) = file.path() {
+                                if let Some(buf) = active_buffer(&tv) {
+                                    let path_str = path.to_string_lossy();
+                                    let name = path.file_name()
+                                        .and_then(|n| n.to_str()).unwrap_or("image");
+                                    let md = format!("![{}]({})", name, path_str);
+                                    let ins = buf.selection_bounds()
+                                        .map(|(i,_)| i).unwrap_or_else(|| buf.start_iter());
+                                    let mut pos = ins;
+                                    buf.insert(&mut pos, &md);
+                                }
+                            }
+                        }
+                    },
+                );
+            });
+            app.add_action(&a);
+        }
+
+        // Insert Link
+        {
+            let tv = tab_view.clone();
+            let a = gtk::gio::SimpleAction::new("insertlink", None);
+            a.connect_activate(move |_, _| {
+                if let Some(buf) = active_buffer(&tv) {
+                    let sel = buf.selection_bounds();
+                    let selected_text = sel.as_ref()
+                        .map(|(s,e)| buf.text(s, e, false).to_string())
+                        .unwrap_or_default();
+                    let placeholder = if selected_text.is_empty() { "url" } else { &selected_text };
+                    let md = format!("[{}]({})", selected_text, placeholder);
+                    if let Some((start, end)) = sel {
+                        buf.delete(&mut start.clone(), &mut end.clone());
+                    }
+                    let ins = buf.selection_bounds()
+                        .map(|(i,_)| i).unwrap_or_else(|| buf.start_iter());
+                    let mut pos = ins;
+                    buf.insert(&mut pos, &md);
+                }
+            });
+            app.add_action(&a);
+            app.set_accels_for_action("app.insertlink", &["<Primary>k"]);
+        }
+
+        // Insert Table
+        {
+            let tv = tab_view.clone();
+            let a = gtk::gio::SimpleAction::new("insert-table", None);
+            a.connect_activate(move |_, _| {
+                if let Some(buf) = active_buffer(&tv) {
+                    let rows = 3;
+                    let cols = 3;
+                    let mut md = String::new();
+                    // Header row
+                    md.push('|');
+                    for c in 0..cols { md.push_str(&format!(" Header {} |", c+1)); }
+                    md.push('\n');
+                    // Separator
+                    md.push('|');
+                    for _ in 0..cols { md.push_str(" --- |"); }
+                    md.push('\n');
+                    // Data rows
+                    for r in 0..rows {
+                        md.push('|');
+                        for c in 0..cols { md.push_str(&format!(" Cell {}.{} |", r+1, c+1)); }
+                        md.push('\n');
+                    }
+                    let ins = buf.selection_bounds()
+                        .map(|(i,_)| i).unwrap_or_else(|| buf.start_iter());
+                    let mut pos = ins;
+                    buf.insert(&mut pos, &md);
+                }
+            });
+            app.add_action(&a);
         }
 
         LettersWindow { window: suite_win.window, tab_view, stack, word_count_label }

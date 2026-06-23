@@ -4,7 +4,7 @@
 // GNOME GUI spec: AdwApplicationWindow + AdwToolbarView + AdwBreakpoint.
 
 use gtk4::cairo::{self, Context};
-use gtk4::prelude::*;
+use gtk4::{self as gtk, gio, prelude::*};
 use libadwaita as adw;
 use std::cell::RefCell;
 use std::rc::Rc;
@@ -307,6 +307,64 @@ impl TablesWindow {
         let act = gtk4::gio::SimpleAction::new("new-document", None);
         act.connect_activate(move |_, _| st.set_visible_child_name("editor"));
         app.add_action(&act);
+
+        // ── Copy/Paste TSV clipboard (cross-app table exchange) ──
+        {
+            let ss = state.clone();
+            let g = drawing_area.clone();
+            let a = gtk4::gio::SimpleAction::new("copy", None);
+            a.connect_activate(move |_, _| {
+                let app_state = ss.borrow();
+                let sheet = app_state.sheets[app_state.active_sheet].borrow();
+                // Copy currently visible range (full grid for now)
+                let mut tsv = String::new();
+                for r in 0..sheet.rows {
+                    for c in 0..sheet.cols {
+                        if c > 0 { tsv.push('\t'); }
+                        tsv.push_str(sheet.cell(r, c));
+                    }
+                    tsv.push('\n');
+                }
+                if let Some(display) = gtk4::gdk::Display::default() {
+                    display.clipboard().set_text(&tsv);
+                }
+            });
+            app.add_action(&a);
+            app.set_accels_for_action("app.copy", &["<Primary>c"]);
+        }
+
+        {
+            let ss = state.clone();
+            let g = drawing_area.clone();
+            let a = gtk4::gio::SimpleAction::new("paste", None);
+            a.connect_activate(move |_, _| {
+                if let Some(display) = gtk4::gdk::Display::default() {
+                    let ss = ss.clone();
+                    let g = g.clone();
+                    display.clipboard().read_text_async(
+                        None::<&gtk4::gio::Cancellable>,
+                        move |result| {
+                            if let Ok(Some(text)) = result {
+                                let mut app_state = ss.borrow_mut();
+                                let sheet = app_state.sheets[app_state.active_sheet].clone();
+                                drop(app_state);
+                                let mut sh = sheet.borrow_mut();
+                                for (dr, line) in text.lines().enumerate() {
+                                    for (dc, cell_val) in line.split('\t').enumerate() {
+                                        let r = dr;
+                                        let c = dc;
+                                        sh.set_cell(r, c, cell_val.to_string());
+                                    }
+                                }
+                                g.queue_draw();
+                            }
+                        },
+                    );
+                }
+            });
+            app.add_action(&a);
+            app.set_accels_for_action("app.paste", &["<Primary>v"]);
+        }
 
         Self { window: suite_win.window, drawing_area, h_adj, v_adj, fx_entry, stack }
     }
