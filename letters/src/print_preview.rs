@@ -57,52 +57,61 @@ pub fn show_print_preview(
         cr.rectangle(0.0, 0.0, w as f64, h as f64);
         cr.fill().unwrap();
 
+        // Drop shadow (matching PageContainer)
+        cr.set_source_rgba(0.0, 0.0, 0.0, 0.10);
+        draw_rounded_preview_rect(cr, px + 2.0, py + 2.0, sw, sh, 2.0);
+        cr.fill().unwrap();
+
         // White page
         cr.set_source_rgb(1.0, 1.0, 1.0);
-        cr.rectangle(px, py, sw, sh);
+        draw_rounded_preview_rect(cr, px, py, sw, sh, 2.0);
         cr.fill().unwrap();
 
         // Page border
-        cr.set_source_rgb(0.85, 0.85, 0.85);
+        cr.set_source_rgba(0.85, 0.85, 0.85, 0.8);
         cr.set_line_width(0.5);
-        cr.rectangle(px, py, sw, sh);
+        draw_rounded_preview_rect(cr, px, py, sw, sh, 2.0);
         cr.stroke().unwrap();
+
+        let cml = ml * scale; let cmr = mr * scale;
+        let cmt = mt * scale; let cmb = mb * scale;
 
         // Margin lines (dashed)
         cr.set_source_rgba(0.85, 0.85, 0.85, 0.5);
         cr.set_dash(&[4.0, 4.0], 0.0);
-        let cml = ml * scale; let cmr = mr * scale;
-        let cmt = mt * scale; let cmb = mb * scale;
-
-        cr.move_to(px + cml, py);
-        cr.line_to(px + cml, py + sh);
-        cr.stroke().unwrap();
-        cr.move_to(px + sw - cmr, py);
-        cr.line_to(px + sw - cmr, py + sh);
-        cr.stroke().unwrap();
-        cr.move_to(px, py + cmt);
-        cr.line_to(px + sw, py + cmt);
-        cr.stroke().unwrap();
-        cr.move_to(px, py + sh - cmb);
-        cr.line_to(px + sw, py + sh - cmb);
-        cr.stroke().unwrap();
+        cr.move_to(px + cml, py); cr.line_to(px + cml, py + sh); cr.stroke().unwrap();
+        cr.move_to(px + sw - cmr, py); cr.line_to(px + sw - cmr, py + sh); cr.stroke().unwrap();
+        cr.move_to(px, py + cmt); cr.line_to(px + sw, py + cmt); cr.stroke().unwrap();
+        cr.move_to(px, py + sh - cmb); cr.line_to(px + sw, py + sh - cmb); cr.stroke().unwrap();
         cr.set_dash(&[], 0.0);
 
-        // Render text for the current page
         let page_idx = cp_draw.get();
+
+        // Header (matching PageContainer)
+        cr.set_source_rgba(0.5, 0.5, 0.5, 0.7);
+        cr.set_font_size(9.0);
+        let hdr = format!("Page {}", page_idx + 1);
+        let ext = cr.text_extents(&hdr).ok();
+        let hw = ext.map(|e| e.width()).unwrap_or(30.0);
+        cr.move_to(px + (sw - hw) / 2.0, py + cmt - 8.0);
+        let _ = cr.show_text(&hdr);
+
+        // Footer (matching PageContainer — page number)
+        let ftr = format!("{}", page_idx + 1);
+        let fext = cr.text_extents(&ftr).ok();
+        let fw = fext.map(|e| e.width()).unwrap_or(10.0);
+        cr.move_to(px + (sw - fw) / 2.0, py + sh - cmb + 12.0);
+        let _ = cr.show_text(&ftr);
+
+        // Render text
         if page_idx < total_pages {
             let page = &pages[page_idx];
             let page_text = if page.end_offset as usize <= text_clone.len() {
                 &text_clone[page.start_offset as usize..page.end_offset as usize]
-            } else {
-                &text_clone
-            };
-
-            // Use PangoLayout to draw text within content area
+            } else { &text_clone };
             let layout = pangocairo::functions::create_layout(cr);
             layout.set_text(page_text);
             layout.set_width(((pw - ml - mr) * scale * pango::SCALE as f64) as i32);
-
             cr.set_source_rgb(0.0, 0.0, 0.0);
             cr.move_to(px + cml, py + cmt);
             pangocairo::functions::show_layout(cr, &layout);
@@ -156,4 +165,15 @@ pub fn show_print_preview(
 
     window.set_content(Some(&content));
     window.present();
+}
+
+fn draw_rounded_preview_rect(cr: &cairo::Context, x: f64, y: f64, w: f64, h: f64, r: f64) {
+    cr.new_sub_path();
+    let r = r.min(w / 2.0).min(h / 2.0);
+    let pi = std::f64::consts::PI;
+    cr.arc(x + w - r, y + r, r, -pi / 2.0, 0.0);
+    cr.arc(x + w - r, y + h - r, r, 0.0, pi / 2.0);
+    cr.arc(x + r, y + h - r, r, pi / 2.0, pi);
+    cr.arc(x + r, y + r, r, pi, 3.0 * pi / 2.0);
+    cr.close_path();
 }

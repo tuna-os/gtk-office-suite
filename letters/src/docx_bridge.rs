@@ -28,13 +28,19 @@ pub fn read_docx_to_buffer(path: &str, buf: &gtk::TextBuffer) -> Result<(), Stri
     let mut first = true;
 
     for p in &paragraphs {
+        // Check for page break before this paragraph
+        let has_page_break = p.text().lines().next().map(|_| false).unwrap_or(false);
+        // rdocx 0.1.2 limitation: page_break_before not exposed on ParagraphRef.
+        // As best-effort: detect via rdocx_oxml CT_PPr properties.
+        // Use the inner CT_P structure from rdocx_oxml if accessible.
+        // For now, page breaks on import are not supported (rdocx limitation, tracked in #39).
+
         if !first {
             let mut end = buf.end_iter();
             buf.insert(&mut end, "\n");
         }
         first = false;
 
-        // Determine paragraph-level style tag
         let para_style_tag = p.style_id()
             .and_then(|id| style_map.get(id).cloned())
             .unwrap_or_else(|| map_style_id_to_tag(p.style_id().unwrap_or("Normal")));
@@ -46,12 +52,9 @@ pub fn read_docx_to_buffer(path: &str, buf: &gtk::TextBuffer) -> Result<(), Stri
             let start = buf.end_iter();
             let mut end = start.clone();
             buf.insert(&mut end, &text);
-
-            // Apply run-level formatting tags
             apply_run_tags(buf, &start, &end, &r);
         }
 
-        // Apply paragraph-level style tag
         if !para_style_tag.is_empty() {
             let para_end = buf.end_iter();
             if let Some(tag) = buf.tag_table().lookup(&para_style_tag) {
