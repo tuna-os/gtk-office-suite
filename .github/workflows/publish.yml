@@ -69,7 +69,7 @@ jobs:
         with: { name: decks-rust-oci, path: decks-rust.oci/, retention-days: 1 }
 
   publish:
-    name: Publish to GHCR + gh-pages
+    name: Publish to GHCR + update index
     needs: [build-tables, build-letters, build-decks]
     runs-on: ubuntu-latest
     steps:
@@ -82,61 +82,35 @@ jobs:
       - uses: actions/download-artifact@v4
         with: { name: decks-rust-oci, path: decks-rust.oci }
 
-      - name: Log in to GHCR
-        run: echo "${{ secrets.GITHUB_TOKEN }}" | skopeo login ghcr.io -u "${{ github.actor }}" --password-stdin
-
       - name: Push OCI images to GHCR
         run: |
-          REPO_LOWER=$(echo "${{ github.repository }}" | tr '[:upper:]' '[:lower:]')
+          echo "${{ secrets.GITHUB_TOKEN }}" | skopeo login ghcr.io -u "${{ github.actor }}" --password-stdin
           for app in tables-rust letters-rust decks-rust; do
             echo "Pushing ${app}..."
-            skopeo copy oci:${app}.oci docker://ghcr.io/${REPO_LOWER}:${app}
+            skopeo copy oci:${app}.oci docker://ghcr.io/tuna-os/${app}:latest
             if [[ "${{ github.ref }}" == refs/tags/v* ]]; then
-              skopeo copy oci:${app}.oci docker://ghcr.io/${REPO_LOWER}:${app}-${{ github.ref_name }}
+              skopeo copy oci:${app}.oci docker://ghcr.io/tuna-os/${app}:${{ github.ref_name }}
             fi
           done
 
-      - name: Checkout gh-pages
-        uses: actions/checkout@v4
-        with: { ref: gh-pages, path: pages }
-        continue-on-error: true
-
-      - name: Update flatpak index
+      - name: Update centralized flatpak-index
+        env:
+          FLATPAK_INDEX_TOKEN: ${{ secrets.FLATPAK_INDEX_TOKEN }}
         run: |
-          REPO_LOWER=$(echo "${{ github.repository }}" | tr '[:upper:]' '[:lower:]')
-
-          if [ ! -d "pages" ]; then
-            mkdir pages && cd pages && git init && git checkout -b gh-pages
-            git remote add origin "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git"
-            cd ..
-          fi
-
+          git clone --depth 1 https://x-access-token:${FLATPAK_INDEX_TOKEN}@github.com/tuna-os/flatpak-index.git index-repo
           for app in tables-rust letters-rust decks-rust; do
-            python3 scripts/update-index.py \
+            python3 .github/scripts/update-index.py \
               --oci-dir ${app}.oci \
-              --index-file pages/index/static \
-              --repo-name ${REPO_LOWER}
+              --index-file index-repo/index/static \
+              --repo-name tuna-os/${app}
           done
-
-          cat <<EOF > pages/hanthor-rust.flatpakrepo
-          [Flatpak Repo]
-          Title=TunaOS Flatpaks (Rust)
-          Url=oci+https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}
-          Homepage=https://tunaos.org/office
-          Comment=TunaOS Rust Flatpak repository
-          Description=GNOME office suite — Tables, Letters, Decks (pure Rust, no WebKit)
-          Icon=https://avatars.githubusercontent.com/u/196050174
-          EOF
-
-      - name: Commit and push gh-pages
-        run: |
-          cd pages
+          cd index-repo
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add index/static hanthor-rust.flatpakrepo
+          git add index/static
           if git diff --cached --quiet; then
             echo "No index changes"
           else
-            git commit -m "chore(flatpak): update OCI index [skip ci]"
-            git push -u origin HEAD:gh-pages
+            git commit -m "chore(flatpak): update Rust OCI index"
+            git push origin main
           fi
