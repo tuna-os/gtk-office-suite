@@ -3,29 +3,20 @@ name: CI
 on: [push, pull_request]
 
 jobs:
-  test:
+  flatpak:
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        app: [letters-rust, tables-rust, decks-rust]
     container:
       image: ghcr.io/flathub-infra/flatpak-github-actions:gnome-50
       options: --privileged
     steps:
       - uses: actions/checkout@v4
-      - name: Install Rust
-        run: |
-          curl --proto =https --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
-          echo "$HOME/.cargo/bin" >> $GITHUB_PATH
-      - name: Set pkg-config path
-        run: |
-          export PKG_CONFIG_PATH=/usr/lib/x86_64-linux-gnu/pkgconfig:/usr/lib/pkgconfig
-          echo "PKG_CONFIG_PATH=/usr/lib/x86_64-linux-gnu/pkgconfig:/usr/lib/pkgconfig" >> $GITHUB_ENV
-          pkg-config --modversion gtk4
-      - name: Build
-        run: cargo build --release
-      - name: Test
-        run: cargo test
 
-  gui-test:
-    runs-on: ubuntu-latest
-    needs: test
-    steps:
-      - run: echo "GUI tests require Flatpak runtime (run on himachal)"
+      - name: Build Flatpak — org.tunaos.${{ matrix.app }}
+        uses: flatpak/flatpak-github-actions/flatpak-builder@v6
+        with:
+          bundle: ${{ matrix.app }}.flatpak
+          manifest-path: flatpak/org.tunaos.${{ matrix.app }}.json
+          cache-key: flatpak-${{ matrix.app }}-${{ github.sha }}
