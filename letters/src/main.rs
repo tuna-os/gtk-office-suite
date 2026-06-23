@@ -1,6 +1,6 @@
 use libadwaita as adw;
 use adw::prelude::AdwDialogExt;
-use gtk4::prelude::*;
+use gtk4::{gio, prelude::*};
 mod window;
 mod engine;
 mod preferences;
@@ -8,20 +8,13 @@ mod preferences;
 fn main() {
     let suite = suite_common::SuiteApp::new("org.tunaos.letters-rust");
 
-    // Restore dark mode from GSettings
-    suite.restore_dark_mode();
-
-    let app = &suite.app;
-
     // Register the "show-preferences" action
     let act_prefs = gtk4::gio::SimpleAction::new("show-preferences", None);
     act_prefs.connect_activate(|_, _| {
         let prefs_win = preferences::LettersPreferences::new();
-        // AdwPreferencesDialog.present() takes a parent GtkWindow
-        // AdwPreferencesDialog is an AdwDialog; use AdwDialogExt::present(parent)
         prefs_win.window.present(Option::<&gtk4::Window>::None);
     });
-    app.add_action(&act_prefs);
+    suite.app.add_action(&act_prefs);
 
     // Wire the keyboard shortcuts action
     let act_shortcuts = gtk4::gio::SimpleAction::new("show-shortcuts", None);
@@ -67,28 +60,30 @@ fn main() {
             ],
         );
     });
-    app.add_action(&act_shortcuts);
+    suite.app.add_action(&act_shortcuts);
+    suite.app.set_accels_for_action("app.show-shortcuts", &["<Primary>question"]);
 
-    // Wire the existing app.shortcuts action to show-shortcuts
-    app.set_accels_for_action("app.show-shortcuts", &["<Primary>question"]);
-
-    // Register export-pdf action
-    {
+    // Register export-pdf / print actions
+    suite.app.add_action(&{
         let a = gtk4::gio::SimpleAction::new("export-pdf", None);
         a.connect_activate(|_, _| {});
-        app.add_action(&a);
-    }
-    app.set_accels_for_action("app.export-pdf", &["<Primary><Shift>e"]);
-
-    // Register print action
-    {
+        a
+    });
+    suite.app.set_accels_for_action("app.export-pdf", &["<Primary><Shift>e"]);
+    suite.app.add_action(&{
         let a = gtk4::gio::SimpleAction::new("print", None);
         a.connect_activate(|_, _| {});
-        app.add_action(&a);
-    }
+        a
+    });
 
-    suite.app.connect_activate(|app| {
-        let w = window::LettersWindow::new(app);
+    suite.app.connect_activate(move |gtk_app| {
+        // Restore dark mode after GTK init
+        let settings = gio::Settings::new("org.tunaos.letters-rust");
+        if settings.boolean("dark-mode") {
+            let sm = adw::StyleManager::default();
+            sm.set_color_scheme(adw::ColorScheme::ForceDark);
+        }
+        let w = window::LettersWindow::new(gtk_app);
         w.present();
     });
     suite.run();

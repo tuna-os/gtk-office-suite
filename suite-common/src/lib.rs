@@ -33,8 +33,6 @@ impl SuiteApp {
             .application_id(app_id)
             .build();
 
-        let sm = adw::StyleManager::default();
-
         // ---- Register actions (using closure captures) ----
         let act_new = gio::SimpleAction::new("new", None);
         let app_weak = app.downgrade();
@@ -98,6 +96,7 @@ impl SuiteApp {
 
         let act_dark = gio::SimpleAction::new("toggle-dark-mode", None);
         act_dark.connect_activate(move |_, _| {
+            let sm = adw::StyleManager::default();
             let is_dark = sm.is_dark();
             sm.set_color_scheme(if is_dark {
                 adw::ColorScheme::ForceLight
@@ -142,6 +141,7 @@ impl SuiteApp {
     }
 
     /// Restore dark mode from GSettings on startup.
+    /// Must be called after GTK initialization (e.g. in connect_activate).
     pub fn restore_dark_mode(&self) {
         let settings = self.settings();
         let dark = settings.boolean("dark-mode");
