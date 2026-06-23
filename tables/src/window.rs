@@ -16,6 +16,7 @@ const ROW_HEIGHT: f64 = 28.0;
 const COL_WIDTH: f64 = 90.0;
 const ROW_HEADER_WIDTH: f64 = 50.0;
 const COL_HEADER_HEIGHT: f64 = 26.0;
+const COL_HEADER_MIN_WIDTH: f64 = 25.0;
 const HEADER_BG: (f64, f64, f64) = (0.95, 0.95, 0.95);
 const HEADER_BG_DARK: (f64, f64, f64) = (0.25, 0.25, 0.25);
 const SELECTION_COLOR: (f64, f64, f64) = (0.21, 0.52, 0.89);
@@ -29,6 +30,7 @@ pub struct SheetModel {
     pub cols: usize,
     pub selected_row: usize,
     pub selected_col: usize,
+    pub col_widths: Vec<f64>,
 }
 
 impl SheetModel {
@@ -40,6 +42,7 @@ impl SheetModel {
             cols,
             selected_row: 0,
             selected_col: 0,
+            col_widths: vec![COL_WIDTH; cols],
         }
     }
 
@@ -50,6 +53,48 @@ impl SheetModel {
     pub fn set_cell(&mut self, r: usize, c: usize, val: String) {
         if r < self.rows && c < self.cols { self.data[r][c] = val; }
     }
+
+    pub fn col_width(&self, c: usize) -> f64 {
+        if c < self.col_widths.len() { self.col_widths[c] } else { COL_WIDTH }
+    }
+
+    pub fn set_col_width(&mut self, c: usize, w: f64) {
+        let w = w.max(30.0).min(500.0); // clamp
+        if c < self.col_widths.len() { self.col_widths[c] = w; }
+    }
+
+    /// Calculate content width for a column by measuring text.
+    pub fn auto_fit_col(&mut self, c: usize, cr: &Context) {
+        let mut max_w = COL_HEADER_MIN_WIDTH; // header minimum
+        let header = col_label(c);
+        let layout = pangocairo::functions::create_layout(cr);
+        layout.set_text(Some(&header));
+        let (tw, _) = layout.pixel_size();
+        max_w = max_w.max(tw as f64 + 10.0);
+
+        for r in 0..self.rows {
+            let val = self.cell(r, c);
+            if val.is_empty() { continue; }
+            layout.set_text(Some(val));
+            let (tw, _) = layout.pixel_size();
+            max_w = max_w.max(tw as f64 + 10.0);
+        }
+        self.set_col_width(c, max_w);
+    }
+}
+
+/// Column label: A, B, ..., Z, AA, AB...
+fn col_label(c: usize) -> String {
+    let mut n = c;
+    let mut s = String::new();
+    loop {
+        let d = (n % 26) as u8;
+        s.insert(0, (b'A' + d) as char);
+        n /= 26;
+        if n == 0 { break; }
+        n -= 1;
+    }
+    s
 }
 
 /// Shared mutable state for the window.

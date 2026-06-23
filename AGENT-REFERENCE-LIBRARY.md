@@ -434,3 +434,117 @@ fn insert_markdown(&self, iter: &mut gtk::TextIter, markdown: &str) {
 **NOTE:** Marko Editor does NOT implement live markdown macros (`**bold**` → bold as you type).
 Formatting is done via keyboard shortcuts (Ctrl+B, Ctrl+I) and toolbar buttons.
 The `insert-text` signal auto-formatting would need to be implemented on top of this.
+
+### 15. Formualizer — Rust Spreadsheet Formula Engine
+
+**Repo:** https://github.com/PSU3D0/formualizer
+**Docs:** https://www.formualizer.dev/
+
+**Stack:** Pure Rust + Apache Arrow storage
+
+**Capabilities:**
+- 400+ Excel-compatible functions
+- Apache Arrow columnar storage (fast cell access)
+- Incremental dependency tracking (only recalculate dirty cells)
+- Undo/redo with automatic action grouping
+- Load/save XLSX, CSV, JSON
+- Deterministic mode for reproducible evaluation
+- Rust, Python, and WASM APIs
+
+**Usage pattern:**
+```rust
+use formualizer_workbook::*;
+let mut wb = Workbook::new();
+let mut sheet = wb.new_sheet("Sheet1");
+sheet.set_cell_value("A1", "Hello");
+sheet.set_cell_formula("B1", "SUM(A1:A10)");
+let val = sheet.evaluate("A1"); // "Hello"
+let val2 = sheet.evaluate("B1"); // computed value
+wb.save_xlsx("output.xlsx")?;
+```
+
+**Relevance:** Dropping Formualizer into Tables would instantly give us formula evaluation, dependency tracking, undo/redo, and XLSX I/O. It's the single biggest effort multiplier for Phase 3.
+
+**Cargo.toml addition:**
+```toml
+formualizer-workbook = "0.3"  # check latest version at crates.io
+```
+
+### 16. GtkColumnView — GTK4 data grid widget
+
+**Location:** `/tmp/gtk4-rs/examples/column_view_datagrid/`
+
+**Pattern:** Use `GtkColumnView` + `SignalListItemFactory` + custom cell widgets for read-only/tabular data display. Not suitable for spreadsheet-like free-form grids (cell selection, merged cells, freeze panes are hard).
+
+**Best for:** Tables that display structured data (database query results, config tables).
+**Not best for:** Excel-like spreadsheet with arbitrary cell editing.
+
+**Our approach for Tables:** Continue with custom `GtkDrawingArea` + Cairo rendering (from parallel worker). This gives full control over:
+- Cell-level selection (click any cell)
+- Formula bar integration (fx entry updates on selection)
+- Grid line rendering (configurable color, width)
+- Column headers + row numbers with freeze support
+- Cell editing overlay (GtkEntry positioned over cell)
+- Merged cells, custom borders, number formatting
+
+**Reference implementation:** `/home/james/dev/hanthor/hanthor-rust/tables/src/window.rs` — the parallel worker already has the Cairo grid skeleton with selection and formula bar.
+
+### 17. IronCalc — Alternative Rust Spreadsheet Engine
+
+**Repo:** https://github.com/ironcalc/ironcalc
+**Status:** v0.7.1 (beta), 83 functions
+
+**Comparison vs Formualizer:**
+| Feature | Formualizer | IronCalc |
+|---------|-------------|----------|
+| Functions | 400+ | 83 |
+| Storage | Apache Arrow | Rust structs |
+| XLSX I/O | Built-in | Built-in |
+| License | Permissive | MIT/Apache 2.0 |
+| Maturity | Production (2026) | Beta |
+| API ergonomics | Cargo-idiomatic | Pythonic |
+
+**Verdict:** Formualizer is the better choice for Tables. It's more mature, has more functions, and the Arrow backend will scale better.
+
+### 18. Column Auto-Fit on Double-Click (Spreadsheet Pattern)
+
+**Implementation pattern for Cairo-based grids:**
+
+```rust
+/// Detect column divider hit (within DIVIDER_SENSITIVITY pixels)
+fn hit_col_divider(x: f64, scroll_x: f64, sheet: &SheetModel) -> Option<usize> {
+    let cx = x - ROW_HEADER_WIDTH + scroll_x;
+    if cx < 0.0 { return None; }
+    let mut accum = 0.0;
+    for c in 0..sheet.cols {
+        accum += sheet.col_width(c);
+        if (cx - accum).abs() < 5.0 { return Some(c); }
+    }
+    None
+}
+
+/// Auto-fit column width to content
+fn auto_fit_column(cr: &Context, sheet: &mut SheetModel, col: usize) {
+    let layout = pangocairo::functions::create_layout(cr);
+    let mut max_w = 25.0;
+    // Measure header
+    let label = col_label(col);
+    layout.set_text(Some(&label));
+    let (tw, _) = layout.pixel_size();
+    max_w = max_w.max(tw as f64 + 12.0);
+    // Measure cells
+    for r in 0..sheet.rows {
+        let val = sheet.cell(r, col);
+        if val.is_empty() { continue; }
+        layout.set_text(Some(val));
+        if let Ok((tw, _)) = layout.pixel_size() {
+            max_w = max_w.max(tw as f64 + 12.0);
+        }
+    }
+    sheet.set_col_width(col, max_w);
+}
+```
+
+**Key API:** `pangocairo::functions::create_layout(cr)` creates a PangoLayout from a Cairo context, allowing text measurement without rendering.
+
+**Reference:** LibreOffice, Excel, Google Sheets all implement this pattern identically.
