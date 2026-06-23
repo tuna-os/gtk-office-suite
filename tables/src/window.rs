@@ -23,6 +23,7 @@ impl TablesWindow {
         let main = gtk::Box::new(gtk::Orientation::Vertical, 2);
         main.append(&formula); main.append(&scroll);
         suite_common::build_chrome(&win, &toolbar);
+        self.window.set_content(None); // handled by build_chrome
         // Add content below toolbar
         if let Some(tv) = win.content().and_then(|c| c.downcast::<adw::ToolbarView>().ok()) {
             tv.set_content(Some(&main));

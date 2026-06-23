@@ -36,5 +36,5 @@ pub fn make_toolbar() -> gtk4::Box {
 
 /// Apply dark mode.
 pub fn apply_dark() {
-    adw::StyleManager::default().set_color_scheme(adw::ColorScheme::ForceDark);
+    adw::StyleManager::default().set_color_scheme(adw::ColorScheme::PreferDark);
 }

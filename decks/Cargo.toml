@@ -4,7 +4,7 @@ version = "0.1.0"
 edition = "2021"
 [dependencies]
 gtk4 = { version = "0.9", package = "gtk4" }
-libadwaita = "0.9"
+libadwaita = "0.7"
 ppt-rs = "0.2"
 cairo-rs = "0.20"
 suite-common = { path = "../suite-common" }

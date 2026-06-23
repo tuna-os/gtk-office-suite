@@ -5,7 +5,7 @@ edition = "2021"
 
 [dependencies]
 gtk4 = { version = "0.9", package = "gtk4" }
-libadwaita = "0.9"
+libadwaita = "0.7"
 suite-common = { path = "../suite-common" }
 calamine = "0.26"
 rust_xlsxwriter = "0.80"
