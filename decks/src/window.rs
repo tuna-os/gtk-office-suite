@@ -162,7 +162,10 @@ impl DecksWindow {
         let main_box = gtk::Box::new(gtk::Orientation::Vertical, 0);
         main_box.append(&split_view);
         main_box.append(&notes_expander);
-        suite_win.set_content(&main_box);
+        let toast_overlay = adw::ToastOverlay::new();
+        toast_overlay.set_child(Some(&main_box));
+        suite_win.set_content(&toast_overlay);
+        let toast_rc = Rc::new(toast_overlay);
 
         let toolbar = build_decks_toolbar();
         suite_win.add_top_bar(&toolbar);
@@ -789,7 +792,7 @@ impl DecksWindow {
                 let ss = ss.clone();
                 let w2 = w.clone();
                 let path_ref = path_ref.clone();
-
+                let t = toast_rc.clone();
                 dlg.save(Some(&w), None::<&gio::Cancellable>,
                     move |result: Result<gio::File, glib::Error>| {
                         if let Ok(file) = result {
@@ -799,6 +802,8 @@ impl DecksWindow {
                                 match write_pptx(&path_str, &deck) {
                                     Ok(()) => {
                                         *path_ref.borrow_mut() = Some(path_str);
+                                        let toast = adw::Toast::new("Presentation saved");
+                                        t.add_toast(toast);
                                     }
                                     Err(e) => {
                                         let err = adw::AlertDialog::builder()
