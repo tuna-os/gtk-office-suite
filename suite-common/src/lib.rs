@@ -13,6 +13,7 @@
 pub mod file_dialogs;
 pub mod toast_manager;
 pub mod undo;
+pub mod format;
 
 pub use file_dialogs::FileDialogHelper;
 pub use toast_manager::ToastManager;
