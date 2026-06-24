@@ -3,6 +3,9 @@ mod window;
 mod engine;
 mod export;
 mod undo;
+mod canvas;
+mod sidebar;
+mod toolbar;
 
 fn main() {
     let suite = suite_common::SuiteApp::new("org.tunaos.decks-rust");
