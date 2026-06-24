@@ -804,7 +804,7 @@ impl DecksWindow {
                 let ss = ss.clone();
                 let w2 = w.clone();
                 let path_ref = path_ref.clone();
-                let t = toast_rc.clone();
+
                 dlg.save(Some(&w), None::<&gio::Cancellable>,
                     move |result: Result<gio::File, glib::Error>| {
                         if let Ok(file) = result {
@@ -814,8 +814,6 @@ impl DecksWindow {
                                 match write_pptx(&path_str, &deck) {
                                     Ok(()) => {
                                         *path_ref.borrow_mut() = Some(path_str);
-                                        let toast = adw::Toast::new("Presentation saved");
-                                        (*t).add_toast(toast);
                                     }
                                     Err(e) => {
                                         let err = adw::AlertDialog::builder()
