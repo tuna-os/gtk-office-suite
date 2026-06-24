@@ -19,6 +19,7 @@ pub struct Slide {
     pub title: String,
     pub background: String,
     pub objects: Vec<SlideObject>,
+    pub notes: String,
 }
 
 #[derive(Clone, Debug)]
@@ -36,6 +37,7 @@ impl Deck {
                 title: "Slide 1".into(),
                 background: "#ffffff".into(),
                 objects: vec![],
+                notes: String::new(),
             }],
         }
     }
@@ -475,6 +477,7 @@ pub fn read_pptx(path: &str) -> Result<Deck, String> {
             title: format!("Slide {}", slide_index + 1),
             background: "#ffffff".into(),
             objects,
+            notes: String::new(),
         });
     }
 
@@ -483,6 +486,7 @@ pub fn read_pptx(path: &str) -> Result<Deck, String> {
             title: "Slide 1".into(),
             background: "#ffffff".into(),
             objects: vec![],
+            notes: String::new(),
         });
     }
 

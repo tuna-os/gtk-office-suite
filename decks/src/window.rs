@@ -39,6 +39,7 @@ impl DecksWindow {
             title: "Slide 1".into(),
             background: "#ffffff".into(),
             objects: vec![],
+            notes: String::new(),
         }]));
         let current_slide = Rc::new(Cell::new(0usize));
         let selected_object = Rc::new(Cell::new(None));
@@ -148,7 +149,20 @@ impl DecksWindow {
 
         // ── SuiteWindow chrome ────────────────────────────────────────────
         let suite_win = SuiteWindow::new(app, "Decks", vec![], vec![]);
-        suite_win.set_content(&split_view);
+
+        // Speaker notes pane (collapsible, below the canvas)
+        let notes_expander = gtk::Expander::new(Some("Speaker Notes"));
+        let notes_buffer = gtk::TextBuffer::new(None);
+        let notes_view = gtk::TextView::with_buffer(&notes_buffer);
+        notes_view.set_wrap_mode(gtk::WrapMode::Word);
+        notes_view.set_size_request(-1, 80);
+        notes_view.set_vexpand(false);
+        notes_expander.set_child(Some(&notes_view));
+
+        let main_box = gtk::Box::new(gtk::Orientation::Vertical, 0);
+        main_box.append(&split_view);
+        main_box.append(&notes_expander);
+        suite_win.set_content(&main_box);
 
         let toolbar = build_decks_toolbar();
         suite_win.add_top_bar(&toolbar);
@@ -158,15 +172,38 @@ impl DecksWindow {
         let cs = canvas.clone();
         let cs_ref = current_slide.clone();
         let ss = slides.clone();
+        let notes_skip = Rc::new(Cell::new(false));
+        let notes_skip2 = notes_skip.clone();
+        let nb = notes_buffer.clone();
         slide_list.connect_row_selected(move |list, row| {
             if let Some(r) = row {
                 let idx = r.index() as usize;
                 if idx < ss.borrow().len() {
                     cs_ref.set(idx);
                     cs.queue_draw();
+                    let slides = ss.borrow();
+                    if let Some(slide) = slides.get(idx) {
+                        notes_skip2.set(true);
+                        nb.set_text(&slide.notes);
+                    }
                 }
             }
         });
+
+        // Save speaker notes on text change
+        {
+            let ss = slides.clone();
+            let cs_ref = current_slide.clone();
+            let skip = notes_skip.clone();
+            notes_buffer.connect_changed(move |buf| {
+                if skip.get() { skip.set(false); return; }
+                let idx = cs_ref.get();
+                let mut slides = ss.borrow_mut();
+                if let Some(slide) = slides.get_mut(idx) {
+                    slide.notes = buf.text(&buf.start_iter(), &buf.end_iter(), false).to_string();
+                }
+            });
+        }
 
         // Add slide
         {
@@ -182,6 +219,7 @@ impl DecksWindow {
                     title: format!("Slide {}", idx + 1),
                     background: "#ffffff".into(),
                     objects: vec![],
+                    notes: String::new(),
                 };
                 undo.borrow_mut().execute(Box::new(AddSlideCmd {
                     index: idx,
@@ -632,6 +670,7 @@ impl DecksWindow {
                     title: "Slide 1".into(),
                     background: "#ffffff".into(),
                     objects: vec![],
+                    notes: String::new(),
                 }];
                 *path_ref.borrow_mut() = None;
                 rebuild_slide_list(&sl, &slides, 0);
