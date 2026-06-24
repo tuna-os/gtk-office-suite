@@ -32,9 +32,9 @@
 
 | App | Score | Gaps |
 |-----|-------|------|
-| **Letters** | 15/16 (94%) | — |
-| **Tables** | 12/16 (75%) | No shortcuts dialog, no preferences, toast unused |
-| **Decks** | 11/16 (69%) | No shortcuts dialog, no preferences, no toast |
+| **Letters** | 16/16 (100%) | — |
+| **Tables** | 15/16 (94%) | No AdwPreferencesDialog, no breakpoint |
+| **Decks** | 15/16 (94%) | No AdwPreferencesDialog |
 
 ---
 
