@@ -35,5 +35,18 @@
       <default>true</default>
       <summary>Show gridlines</summary>
     </key>
+    <key name="auto-save" type="b">
+      <default>true</default>
+      <summary>Enable automatic save</summary>
+    </key>
+    <key name="auto-save-interval" type="i">
+      <default>60</default>
+      <range min="10" max="3600"/>
+      <summary>Auto-save interval in seconds</summary>
+    </key>
+    <key name="grid-color" type="s">
+      <default>'#D9D9D9'</default>
+      <summary>Grid line color (hex)</summary>
+    </key>
   </schema>
 </schemalist>

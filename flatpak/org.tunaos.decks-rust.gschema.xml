@@ -33,5 +33,15 @@
       <default>true</default>
       <summary>Snap objects to grid</summary>
     </key>
+    <key name="grid-spacing" type="i">
+      <default>20</default>
+      <range min="5" max="100"/>
+      <summary>Grid spacing in pixels</summary>
+    </key>
+    <key name="transition-speed" type="i">
+      <default>400</default>
+      <range min="100" max="2000"/>
+      <summary>Default transition speed in milliseconds</summary>
+    </key>
   </schema>
 </schemalist>
