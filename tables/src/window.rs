@@ -26,6 +26,9 @@ const SELECTION_COLOR: (f64, f64, f64) = (0.21, 0.52, 0.89);
 const ACTIVE_CELL_BORDER: (f64, f64, f64) = (0.0, 0.6, 0.0);
 const GRID_LINE: (f64, f64, f64) = (0.85, 0.85, 0.85);
 
+#[derive(Clone, Copy, PartialEq)]
+pub enum SortDirection { Ascending, Descending }
+
 // ── Column divider hit test ─────────────────────────────────────────
 
 fn hit_col_divider(x: f64, y: f64, scroll_x: f64, sheet: &SheetModel) -> Option<usize> {
@@ -91,6 +94,7 @@ pub struct SheetModel {
     pub col_widths: Vec<f64>,
     pub formulas: Vec<Vec<bool>>,
     pub formats: Vec<Vec<NumberFormat>>,
+    pub sorted_col: Option<(usize, SortDirection)>,
     engine_idx: usize,
 }
 
@@ -104,6 +108,7 @@ impl SheetModel {
             col_widths: vec![COL_WIDTH; cols],
             formulas: vec![vec![false; cols]; rows],
             formats: vec![vec![NumberFormat::default(); cols]; rows],
+            sorted_col: None,
             engine_idx,
         }
     }
@@ -126,6 +131,55 @@ impl SheetModel {
 
     pub fn set_col_width(&mut self, c: usize, w: f64) {
         if c < self.col_widths.len() { self.col_widths[c] = w.max(30.0).min(500.0); }
+    }
+
+    /// Sort rows by column. Cycles: None → Ascending → Descending → None.
+    pub fn toggle_sort(&mut self, col: usize) {
+        let new_dir = match self.sorted_col {
+            Some((c, SortDirection::Ascending)) if c == col => SortDirection::Descending,
+            Some((c, SortDirection::Descending)) if c == col => {
+                self.sorted_col = None;
+                return;
+            }
+            _ => SortDirection::Ascending,
+        };
+        self.sorted_col = Some((col, new_dir));
+        // Gather row indices
+        let mut indices: Vec<usize> = (0..self.rows).collect();
+        match new_dir {
+            SortDirection::Ascending => {
+                indices.sort_by(|a, b| {
+                    let va = &self.data[*a][col];
+                    let vb = &self.data[*b][col];
+                    // Numeric sort if both parse as numbers
+                    if let (Ok(na), Ok(nb)) = (va.parse::<f64>(), vb.parse::<f64>()) {
+                        na.partial_cmp(&nb).unwrap_or(std::cmp::Ordering::Equal)
+                    } else {
+                        va.cmp(vb)
+                    }
+                });
+            }
+            SortDirection::Descending => {
+                indices.sort_by(|a, b| {
+                    let va = &self.data[*a][col];
+                    let vb = &self.data[*b][col];
+                    if let (Ok(na), Ok(nb)) = (va.parse::<f64>(), vb.parse::<f64>()) {
+                        nb.partial_cmp(&na).unwrap_or(std::cmp::Ordering::Equal)
+                    } else {
+                        vb.cmp(va)
+                    }
+                });
+            }
+        }
+        // Reorder data, formulas, and formats by index
+        let old_data = self.data.clone();
+        let old_formulas = self.formulas.clone();
+        let old_formats = self.formats.clone();
+        for (new_row, &old_row) in indices.iter().enumerate() {
+            self.data[new_row] = old_data[old_row].clone();
+            self.formulas[new_row] = old_formulas[old_row].clone();
+            self.formats[new_row] = old_formats[old_row].clone();
+        }
     }
 
     /// Sync display data from the given IronCalc engine.
@@ -374,6 +428,23 @@ impl TablesWindow {
                 let wy = y + v.value();
                 let st = s.borrow();
                 let sh = st.sheet();
+                // Check if click is in column header zone
+                if wy < COL_HEADER_HEIGHT && wx > ROW_HEADER_WIDTH {
+                    // Find which column was clicked
+                    let mut cx = ROW_HEADER_WIDTH;
+                    let mut clicked_col = None;
+                    for c in 0..sh.cols {
+                        cx += sh.col_width(c);
+                        if wx < cx { clicked_col = Some(c); break; }
+                    }
+                    if let Some(col) = clicked_col {
+                        drop(sh); drop(st);
+                        let mut st = s.borrow_mut();
+                        st.sheet_mut().toggle_sort(col);
+                        da.queue_draw();
+                        return;
+                    }
+                }
                 if let Some((col, row)) = xy_to_cell(wx, wy, h.value(), &*sh) {
                     drop(sh); drop(st);
                     let mut st = s.borrow_mut();
@@ -436,9 +507,12 @@ impl TablesWindow {
             motion.connect_motion(move |_m, x, y| {
                 let st = s.borrow();
                 let sh = st.sheet();
-                let over = hit_col_divider(x as f64, y as f64, h.value(), &*sh).is_some();
-                if over {
+                let over_div = hit_col_divider(x as f64, y as f64, h.value(), &*sh).is_some();
+                let over_head = (y as f64) < COL_HEADER_HEIGHT && (x as f64) > ROW_HEADER_WIDTH;
+                if over_div {
                     da.set_cursor_from_name(Some("col-resize"));
+                } else if over_head {
+                    da.set_cursor_from_name(Some("pointer"));
                 } else {
                     da.set_cursor_from_name(Some("default"));
                 }
@@ -988,6 +1062,14 @@ fn draw_grid(cr: &Context, state: &Rc<RefCell<AppState>>, width: f64, height: f6
         let label = col_label(c);
         cr.move_to(x + 6.0, COL_HEADER_HEIGHT - 7.0);
         cr.show_text(&label).unwrap();
+        // Sort indicator
+        if let Some((sc, dir)) = sh.sorted_col {
+            if sc == c {
+                cr.move_to(x + cw - 20.0, COL_HEADER_HEIGHT - 7.0);
+                let arrow = match dir { SortDirection::Ascending => "▲", SortDirection::Descending => "▼" };
+                cr.show_text(arrow).unwrap();
+            }
+        }
         // Divider at right edge of this column
         let div_x = x + cw;
         cr.set_source_rgb(0.7, 0.7, 0.7);
