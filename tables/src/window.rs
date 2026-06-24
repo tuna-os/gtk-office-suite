@@ -124,6 +124,8 @@ pub struct SheetModel {
     pub formats: Vec<Vec<NumberFormat>>,
     pub sorted_col: Option<(usize, SortDirection)>,
     pub borders: Vec<Vec<CellBorder>>,
+    pub frozen_rows: usize,
+    pub frozen_cols: usize,
     engine_idx: usize,
 }
 
@@ -139,6 +141,8 @@ impl SheetModel {
             formats: vec![vec![NumberFormat::default(); cols]; rows],
             sorted_col: None,
             borders: vec![vec![CellBorder::none(); cols]; rows],
+            frozen_rows: 0,
+            frozen_cols: 0,
             engine_idx,
         }
     }
@@ -1118,6 +1122,71 @@ fn xy_to_cell(x: f64, y: f64, scroll_x: f64, sheet: &SheetModel) -> Option<(usiz
 // ── Cairo grid rendering ────────────────────────────────────────────────
 
 fn draw_grid(cr: &Context, state: &Rc<RefCell<AppState>>, width: f64, height: f64,
+             scroll_x: f64, scroll_y: f64) {
+    let st = state.borrow();
+    let sh = st.sheet();
+    let fr = sh.frozen_rows;
+    let fc = sh.frozen_cols;
+
+    // Compute freeze boundary in canvas coords
+    let freeze_x = if fc > 0 {
+        ROW_HEADER_WIDTH + (0..fc).map(|c| sh.col_width(c)).sum::<f64>()
+    } else { 0.0 };
+    let freeze_y = if fr > 0 {
+        COL_HEADER_HEIGHT + fr as f64 * ROW_HEIGHT
+    } else { 0.0 };
+
+    // If no freeze panes, render normally in one pass
+    if fr == 0 && fc == 0 {
+        draw_grid_region(cr, state, width, height, scroll_x, scroll_y);
+        return;
+    }
+
+    // 5-zone freeze rendering
+    // Zone 1: Top-left fixed corner (row+col headers + frozen cells)
+    cr.save().unwrap();
+    cr.rectangle(0.0, 0.0, freeze_x, freeze_y);
+    cr.clip();
+    draw_grid_region(cr, state, width, height, 0.0, 0.0);
+    cr.restore().unwrap();
+
+    // Zone 2: Top scrollable band (frozen rows, scrollable columns)
+    if freeze_x < width && freeze_y > 0.0 {
+        cr.save().unwrap();
+        cr.rectangle(freeze_x, 0.0, width - freeze_x, freeze_y);
+        cr.clip();
+        draw_grid_region(cr, state, width, height, scroll_x, 0.0);
+        cr.restore().unwrap();
+    }
+
+    // Zone 3: Left fixed band (scrollable rows, frozen columns)
+    if freeze_x > 0.0 && freeze_y < height {
+        cr.save().unwrap();
+        cr.rectangle(0.0, freeze_y, freeze_x, height - freeze_y);
+        cr.clip();
+        draw_grid_region(cr, state, width, height, 0.0, scroll_y);
+        cr.restore().unwrap();
+    }
+
+    // Zone 4: Scrollable main area
+    cr.save().unwrap();
+    cr.rectangle(freeze_x, freeze_y, width - freeze_x, height - freeze_y);
+    cr.clip();
+    draw_grid_region(cr, state, width, height, scroll_x, scroll_y);
+    cr.restore().unwrap();
+
+    // Zone 5: Freeze boundary lines (darker, thicker)
+    cr.set_source_rgb(0.25, 0.25, 0.25);
+    cr.set_line_width(2.5);
+    if fr > 0 {
+        cr.move_to(0.0, freeze_y); cr.line_to(width, freeze_y); cr.stroke().unwrap();
+    }
+    if fc > 0 {
+        cr.move_to(freeze_x, 0.0); cr.line_to(freeze_x, height); cr.stroke().unwrap();
+    }
+}
+
+fn draw_grid_region(cr: &Context, state: &Rc<RefCell<AppState>>, width: f64, height: f64,
              scroll_x: f64, scroll_y: f64) {
     let st = state.borrow();
     let sh = st.sheet();
