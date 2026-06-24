@@ -6,7 +6,6 @@
 // support. Used by Letters (document search), Tables (find in sheet),
 // and Decks (find across slides).
 
-use std::collections::VecDeque;
 
 /// Search query configuration.
 #[derive(Clone, Debug)]

@@ -9,6 +9,8 @@ libadwaita = { version = "0.9", features = ["v1_5"] }
 suite-common = { path = "../suite-common" }
 cairo-rs = { version = "0.22", features = ["png"] }
 image = "0.25"
+pangocairo = "0.22"
+pango = "0.22"
 zip = "2.0"
 quick-xml = "0.31"
 pulldown-cmark = "0.12"

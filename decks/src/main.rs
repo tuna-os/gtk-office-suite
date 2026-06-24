@@ -15,21 +15,21 @@ fn main() {
     let suite = suite_common::SuiteApp::new("org.tunaos.decks-rust");
     let shortcuts: &[(&str, &[(&str, &str)])] = &[
         ("Editing", &[
-            ("<Control>z", "Undo"),
-            ("<Control><Shift>z", "Redo"),
-            ("Delete", "Delete selected object"),
+            ("Undo", "<Control>z"),
+            ("Redo", "<Control><Shift>z"),
+            ("Delete selected object", "Delete"),
         ]),
         ("Navigation", &[
-            ("Escape", "Exit fullscreen"),
-            ("Left / Up", "Previous slide"),
-            ("Right / Down / Space", "Next slide"),
-            ("Home", "First slide"),
-            ("End", "Last slide"),
+            ("Exit fullscreen", "Escape"),
+            ("Previous slide", "Left / Up"),
+            ("Next slide", "Right / Down / Space"),
+            ("First slide", "Home"),
+            ("Last slide", "End"),
         ]),
         ("File", &[
-            ("<Control>s", "Save"),
-            ("<Control>o", "Open"),
-            ("<Control>n", "New presentation"),
+            ("Save", "<Control>s"),
+            ("Open", "<Control>o"),
+            ("New presentation", "<Control>n"),
         ]),
     ];
     let act_shortcuts = gtk4::gio::SimpleAction::new("show-shortcuts", None);

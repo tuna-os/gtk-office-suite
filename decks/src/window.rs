@@ -57,6 +57,7 @@ impl DecksWindow {
 
         // ── Canvas ────────────────────────────────────────────────────────
         let canvas = gtk::DrawingArea::new();
+        canvas.set_accessible_role(gtk::AccessibleRole::Canvas);
         canvas.set_vexpand(true);
         canvas.set_hexpand(true);
         canvas.set_content_width(960);

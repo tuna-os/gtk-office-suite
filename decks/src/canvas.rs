@@ -192,11 +192,16 @@ pub fn draw_slide(
                         cr.stroke().unwrap();
                     }
                     cr.set_source_rgb(0.1, 0.1, 0.1);
-                    cr.select_font_face("Sans", cairo::FontSlant::Normal, cairo::FontWeight::Normal);
-                    cr.set_font_size(16.0);
-                    cr.move_to(sx + 4.0, sy + 20.0);
-                    let display = if text.len() > 20 { &text[..20] } else { text.as_str() };
-                    cr.show_text(display).unwrap();
+                    // Render with markdown macro support
+                    if text.contains("**") || text.contains('*') || text.contains('#') || text.contains('`') {
+                        crate::markdown::render_markdown(cr, text, sx + 4.0, sy + 4.0, sw - 8.0, 14.0);
+                    } else {
+                        cr.select_font_face("Sans", cairo::FontSlant::Normal, cairo::FontWeight::Normal);
+                        cr.set_font_size(16.0);
+                        cr.move_to(sx + 4.0, sy + 20.0);
+                        let display = if text.len() > 20 { &text[..20] } else { text.as_str() };
+                        cr.show_text(display).unwrap();
+                    }
                 }
                 SlideObject::Rect { x, y, w, h } => {
                     let sx = ox + (x / 960.0) * slide_w;

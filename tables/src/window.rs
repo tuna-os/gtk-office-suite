@@ -449,7 +449,6 @@ pub struct TablesWindow {
     v_adj: gtk4::Adjustment,
     fx_entry: gtk4::Entry,
     stack: gtk4::Stack,
-    toast_overlay: Rc<adw::ToastOverlay>,
     undo: Rc<RefCell<UndoManager<SheetState>>>,
 }
 
@@ -479,6 +478,7 @@ impl TablesWindow {
 
         // ── Drawing area ────────────────────────────────────────────────
         let drawing_area = gtk4::DrawingArea::new();
+        drawing_area.set_accessible_role(gtk4::AccessibleRole::Canvas);
         drawing_area.set_vexpand(true);
         drawing_area.set_hexpand(true);
 
@@ -524,8 +524,8 @@ impl TablesWindow {
                 let sh = st.sheet();
                 if let Some(rule) = &sh.validations[r][c] {
                     if !rule.validate(&val) {
-                        let toast = adw::Toast::new("Invalid input — value rejected");
-                        toast.set_timeout(3);
+                        let _toast = adw::Toast::new("Invalid input — value rejected");
+                        _toast.set_timeout(3);
                         return;
                     }
                 }
@@ -988,9 +988,9 @@ impl TablesWindow {
         };
 
         let extended_toolbar: Vec<(&'static str, &'static str, Box<dyn Fn() + 'static>)> = vec![
-            ("format-justify-fill-symbolic", "Toggle Number Format", toggle_format),
+            ("preferences-other-symbolic", "Toggle Number Format", toggle_format),
             ("format-text-strikethrough-symbolic", "Toggle Cell Border", toggle_border),
-            ("view-grid-symbolic", "Merge Cells", toggle_merge),
+            ("object-group-symbolic", "Merge Cells", toggle_merge),
             ("insert-object-symbolic", "Chart", show_chart_dialog),
             ("document-send-symbolic", "Export PDF", export_pdf),
         ];
@@ -999,11 +999,8 @@ impl TablesWindow {
         *win_ref.borrow_mut() = Some(suite_win.window.clone());
 
         suite_win.add_top_bar(&fx_bar);
-        let toast_overlay = adw::ToastOverlay::new();
-        toast_overlay.set_child(Some(&stack));
-        suite_win.set_content(&toast_overlay);
+        suite_win.set_content(&stack);
         suite_win.add_bottom_bar(&sheet_bar);
-        let toast_rc = Rc::new(toast_overlay);
 
         // ── App actions ─────────────────────────────────────────────────
         let st = stack.clone();
@@ -1154,7 +1151,7 @@ impl TablesWindow {
             drawing_area.add_controller(key);
         }
 
-        Self { window: suite_win.window, drawing_area, h_adj, v_adj, fx_entry, stack, toast_overlay: toast_rc, undo: undo_mgr }
+        Self { window: suite_win.window, drawing_area, h_adj, v_adj, fx_entry, stack, undo: undo_mgr }
     }
 
     pub fn present(&self) { self.window.present(); }

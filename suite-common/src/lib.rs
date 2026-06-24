@@ -12,7 +12,7 @@
 
 pub mod file_dialogs;
 pub mod toast_manager;
-pub use suite_common_core::{format, undo, events, string_pool, units, props, style, search};
+pub use suite_common_core::{format, undo, events, string_pool, units, props, style, search, print};
 
 pub use file_dialogs::FileDialogHelper;
 pub use toast_manager::ToastManager;
@@ -443,7 +443,7 @@ pub fn make_header_bar() -> adw::HeaderBar {
 pub fn show_shortcuts_dialog(
     shortcuts: &[(&str, &[(&str, &str)])],
 ) {
-    let win = gtk::ShortcutsWindow::builder()
+    let win = adw::ShortcutsWindow::builder()
         .modal(true)
         .build();
 

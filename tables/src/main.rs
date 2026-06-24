@@ -11,15 +11,15 @@ fn main() {
     let suite = suite_common::SuiteApp::new("org.tunaos.tables-rust");
     let shortcuts: &[(&str, &[(&str, &str)])] = &[
         ("Editing", &[
-            ("<Control>z", "Undo"),
-            ("<Control><Shift>z", "Redo"),
-            ("Delete", "Clear cell"),
-            ("Enter", "Commit cell edit"),
+            ("Undo", "<Control>z"),
+            ("Redo", "<Control><Shift>z"),
+            ("Clear cell", "Delete"),
+            ("Commit cell edit", "Enter"),
         ]),
         ("File", &[
-            ("<Control>s", "Save"),
-            ("<Control>o", "Open"),
-            ("<Control>n", "New spreadsheet"),
+            ("Save", "<Control>s"),
+            ("Open", "<Control>o"),
+            ("New spreadsheet", "<Control>n"),
         ]),
     ];
     let act_shortcuts = gtk4::gio::SimpleAction::new("show-shortcuts", None);
