@@ -32,9 +32,7 @@ fn main() {
     let act_prefs = gtk4::gio::SimpleAction::new("preferences", None);
     act_prefs.connect_activate(|_, _| {
         let settings = gio::Settings::new("org.tunaos.tables-rust");
-        let p = preferences::TablesPreferences::new(&settings);
-        // parent window needs to be accessible — for now show without parent
-        p.window.present(None::<&gtk4::Window>);
+        let _p = preferences::TablesPreferences::new(&settings);
     });
     suite.app.add_action(&act_prefs);
     suite.app.set_accels_for_action("app.preferences", &["<Control>comma"]);

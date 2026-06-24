@@ -42,8 +42,7 @@ fn main() {
     let act_prefs = gtk4::gio::SimpleAction::new("preferences", None);
     act_prefs.connect_activate(|_, _| {
         let settings = gio::Settings::new("org.tunaos.decks-rust");
-        let p = preferences::DecksPreferences::new(&settings);
-        p.window.present(None::<&gtk4::Window>);
+        let _p = preferences::DecksPreferences::new(&settings);
     });
     suite.app.add_action(&act_prefs);
     suite.app.set_accels_for_action("app.preferences", &["<Control>comma"]);
