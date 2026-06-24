@@ -815,7 +815,7 @@ impl DecksWindow {
                                     Ok(()) => {
                                         *path_ref.borrow_mut() = Some(path_str);
                                         let toast = adw::Toast::new("Presentation saved");
-                                        t.add_toast(toast);
+                                        (&*t).add_toast(toast);
                                     }
                                     Err(e) => {
                                         let err = adw::AlertDialog::builder()
