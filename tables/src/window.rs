@@ -515,7 +515,6 @@ impl TablesWindow {
             let s = state.clone();
             let da = drawing_area.clone();
             let fx = fx_entry.clone();
-            let t = toast_rc.clone();
             fx_entry.connect_activate(move |_| {
                 let val = fx.text().to_string();
                 let mut st = s.borrow_mut();
@@ -527,7 +526,6 @@ impl TablesWindow {
                     if !rule.validate(&val) {
                         let toast = adw::Toast::new("Invalid input — value rejected");
                         toast.set_timeout(3);
-                        t.add_toast(toast);
                         return;
                     }
                 }

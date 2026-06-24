@@ -510,7 +510,7 @@ pub fn read_pptx(path: &str) -> Result<Deck, String> {
         });
     }
 
-    Ok(Deck { slides })
+    Ok(Deck { slides, masters: vec![] })
 }
 
 fn resolve_and_extract_picture(
