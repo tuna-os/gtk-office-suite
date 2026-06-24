@@ -7,7 +7,7 @@ use gtk4::cairo::{self, Context};
 use gtk4::{self as gtk, gio, glib, prelude::*};
 use libadwaita as adw;
 use adw::prelude::{AdwDialogExt, AlertDialogExt};
-use std::cell::RefCell;
+use std::cell::{Cell, RefCell};
 use std::rc::Rc;
 
 use crate::engine::TablesEngine;
@@ -24,6 +24,45 @@ const HEADER_BG_DARK: (f64, f64, f64) = (0.25, 0.25, 0.25);
 const SELECTION_COLOR: (f64, f64, f64) = (0.21, 0.52, 0.89);
 const ACTIVE_CELL_BORDER: (f64, f64, f64) = (0.0, 0.6, 0.0);
 const GRID_LINE: (f64, f64, f64) = (0.85, 0.85, 0.85);
+
+// ── Column divider hit test ─────────────────────────────────────────
+
+fn hit_col_divider(x: f64, y: f64, scroll_x: f64, sheet: &SheetModel) -> Option<usize> {
+    // Only active in the column header zone
+    if y < 0.0 || y > COL_HEADER_HEIGHT { return None; }
+    let cx = x - ROW_HEADER_WIDTH + scroll_x;
+    if cx < 0.0 { return None; }
+    let mut accum = 0.0;
+    for c in 0..sheet.cols {
+        accum += sheet.col_width(c);
+        if (cx - accum).abs() < 5.0 {
+            return Some(c);
+        }
+    }
+    None
+}
+
+/// Auto-fit column width to content using PangoLayout text measurement.
+fn auto_fit_column(cr: &Context, sheet: &mut SheetModel, col: usize, scroll_x: f64) {
+    let layout = pangocairo::functions::create_layout(cr);
+    let mut max_w: f64 = 30.0;
+    // Measure header label
+    let label = col_label(col);
+    layout.set_text(&label);
+    let (tw, _) = layout.pixel_size();
+    max_w = max_w.max(tw as f64 + 16.0);
+    // Measure visible cells in this column
+    let start_row = 0usize;
+    let end_row = sheet.rows;
+    for r in start_row..end_row {
+        let val = sheet.cell(r, col);
+        if val.is_empty() { continue; }
+        layout.set_text(val);
+        let (tw, _) = layout.pixel_size();
+        max_w = max_w.max(tw as f64 + 12.0);
+    }
+    sheet.set_col_width(col, max_w.clamp(30.0, 500.0));
+}
 
 // ── Column label helper ────────────────────────────────────────────────
 fn col_label(c: usize) -> String {
@@ -330,18 +369,19 @@ impl TablesWindow {
             click.connect_pressed(move |_g, _n, x, y| {
                 let wx = x + h.value();
                 let wy = y + v.value();
-                if let Some((col, row)) = xy_to_cell(wx, wy) {
+                let st = s.borrow();
+                let sh = st.sheet();
+                if let Some((col, row)) = xy_to_cell(wx, wy, h.value(), &*sh) {
+                    drop(sh); drop(st);
                     let mut st = s.borrow_mut();
                     let mut sh = st.sheet_mut();
                     sh.selected_row = row;
                     sh.selected_col = col;
-                    // Show cell content in formula bar
-                    let val = &sh.data[row][col];
+                    let val = sh.data[row][col].clone();
                     if sh.is_formula(row, col) {
-                        // For formulas, we'd need to retrieve the formula string
-                        fx.set_text(val);
+                        fx.set_text(&val);
                     } else {
-                        fx.set_text(val);
+                        fx.set_text(&val);
                     }
                     da.queue_draw();
                 }
@@ -349,7 +389,61 @@ impl TablesWindow {
             drawing_area.add_controller(click);
         }
 
-        // ── Double-click: inline edit ───────────────────────────────────
+        // ── Column resize: drag divider in header ───────────────────────
+        {
+            let s = state.clone();
+            let da = drawing_area.clone();
+            let h = h_adj.clone();
+            let drag_col = Rc::new(Cell::new(None::<(usize, f64)>));
+            let drag = gtk4::GestureDrag::new();
+            drag.set_button(1);
+            let dc2 = drag_col.clone();
+            let dc3 = drag_col.clone();
+            let s2 = s.clone();
+            let h2 = h.clone();
+            drag.connect_drag_begin(move |_g, x, y| {
+                let st = s.borrow();
+                let sh = st.sheet();
+                if let Some(col) = hit_col_divider(x as f64, y as f64, h.value(), &*sh) {
+                    dc2.set(Some((col, sh.col_width(col))));
+                }
+            });
+            drag.connect_drag_update(move |_g, dx, _dy| {
+                if let Some((col, start_w)) = drag_col.get() {
+                    let new_w = (start_w + dx as f64).clamp(30.0, 500.0);
+                    let mut st = s2.borrow_mut();
+                    let mut sh = st.sheet_mut();
+                    sh.set_col_width(col, new_w);
+                    drop(sh); drop(st);
+                    da.queue_draw();
+                }
+            });
+            drag.connect_drag_end(move |_g, _dx, _dy| {
+                dc3.set(None);
+            });
+            drawing_area.add_controller(drag);
+        }
+
+        // ── Cursor feedback: col-resize over divider ────────────────────
+        {
+            let s = state.clone();
+            let da = drawing_area.clone();
+            let h = h_adj.clone();
+            let motion = gtk4::EventControllerMotion::new();
+            motion.connect_motion(move |_m, x, y| {
+                let st = s.borrow();
+                let sh = st.sheet();
+                let over = hit_col_divider(x as f64, y as f64, h.value(), &*sh).is_some();
+                if over {
+                    da.set_cursor_from_name(Some("col-resize"));
+                } else {
+                    da.set_cursor_from_name(Some("default"));
+                }
+            });
+            drawing_area.add_controller(motion);
+        }
+
+        // ── Double-click: inline edit or auto-fit column ────────────────
         {
             let s = state.clone();
             let da = drawing_area.clone();
@@ -362,16 +456,50 @@ impl TablesWindow {
                 if n < 2 { return; }
                 let wx = x + h.value();
                 let wy = y + v.value();
-                if let Some((col, row)) = xy_to_cell(wx, wy) {
+                // Check for divider double-click first (auto-fit)
+                {
+                    let st = s.borrow();
+                    let sh = st.sheet();
+                    if let Some(col) = hit_col_divider(wx, wy, h.value(), &*sh) {
+                        drop(sh); drop(st);
+                        // Auto-fit by temporarily setting draw func to measure
+                        let s2 = s.clone();
+                        let h2 = h.clone();
+                        let v2 = v.clone();
+                        let da2 = da.clone();
+                        da.set_draw_func(move |_area, cr, width, height| {
+                            let mut st = s2.borrow_mut();
+                            let mut sh = st.sheet_mut();
+                            auto_fit_column(cr, &mut *sh, col, h2.value());
+                            drop(sh);
+                            draw_grid(cr, &s2, width as f64, height as f64, h2.value(), v2.value());
+                            // Restore normal draw func
+                            let s3 = s2.clone();
+                            let h3 = h2.clone();
+                            let v3 = v2.clone();
+                            da2.set_draw_func(move |_, cr, w, h| {
+                                draw_grid(cr, &s3, w as f64, h as f64, h3.value(), v3.value());
+                            });
+                        });
+                        da.queue_draw();
+                        return;
+                    }
+                }
+                let st = s.borrow();
+                let sh = st.sheet();
+                if let Some((col, row)) = xy_to_cell(wx, wy, h.value(), &*sh) {
                     let mut st = s.borrow_mut();
                     let val = st.sheet().data[row][col].clone();
+                    // Compute cell x-offset using per-column widths
+                    let cell_x = ROW_HEADER_WIDTH + (0..col).map(|cc| st.sheet().col_width(cc)).sum::<f64>();
+                    let cell_w = st.sheet().col_width(col);
                     drop(st);
                     // Position entry overlay at cell
-                    let sx = ROW_HEADER_WIDTH + col as f64 * COL_WIDTH - h.value();
+                    let sx = cell_x - h.value();
                     let sy = COL_HEADER_HEIGHT + row as f64 * ROW_HEIGHT - v.value();
                     let entry = gtk4::Entry::new();
                     entry.set_text(&val);
-                    entry.set_size_request(COL_WIDTH as i32 - 4, ROW_HEIGHT as i32 - 2);
+                    entry.set_size_request(cell_w as i32 - 4, ROW_HEIGHT as i32 - 2);
                     let overlay = gtk4::Fixed::new();
                     overlay.put(&entry, sx, sy);
                     entry.grab_focus();
@@ -769,11 +897,19 @@ impl TablesWindow {
 }
 
 // ── Coordinate conversion ─────────────────────────────────────────────
-fn xy_to_cell(x: f64, y: f64) -> Option<(usize, usize)> {
+fn xy_to_cell(x: f64, y: f64, scroll_x: f64, sheet: &SheetModel) -> Option<(usize, usize)> {
     if x < ROW_HEADER_WIDTH || y < COL_HEADER_HEIGHT { return None; }
-    let col = ((x - ROW_HEADER_WIDTH) / COL_WIDTH) as usize;
-    let row = ((y - COL_HEADER_HEIGHT) / ROW_HEIGHT) as usize;
-    Some((col, row))
+    // Convert x offset into per-column width accumulation
+    let cx = x - ROW_HEADER_WIDTH + scroll_x;
+    let mut accum = 0.0;
+    for c in 0..sheet.cols {
+        accum += sheet.col_width(c);
+        if cx < accum {
+            let row = ((y - COL_HEADER_HEIGHT) / ROW_HEIGHT) as usize;
+            return Some((c, row));
+        }
+    }
+    None
 }
 
 // ── Cairo grid rendering ────────────────────────────────────────────────
@@ -794,21 +930,43 @@ fn draw_grid(cr: &Context, state: &Rc<RefCell<AppState>>, width: f64, height: f6
     cr.rectangle(ROW_HEADER_WIDTH, 0.0, width - ROW_HEADER_WIDTH, COL_HEADER_HEIGHT);
     cr.fill().unwrap();
 
-    // Column headers
-    let start_col = (scroll_x / COL_WIDTH) as usize;
-    let end_col = ((scroll_x + width) / COL_WIDTH) as usize + 1;
-    for col in start_col..end_col.min(sh.cols) {
-        let x = ROW_HEADER_WIDTH + col as f64 * COL_WIDTH - scroll_x;
+    // Column headers (using per-column widths)
+    // Find visible column range by accumulating widths
+    let mut col_acc = 0.0;
+    let mut start_col = 0usize;
+    for c in 0..sh.cols {
+        if col_acc + sh.col_width(c) > scroll_x {
+            start_col = c;
+            break;
+        }
+        col_acc += sh.col_width(c);
+    }
+    let mut end_col = sh.cols;
+    let mut end_acc = col_acc;
+    for c in start_col..sh.cols {
+        end_acc += sh.col_width(c);
+        if end_acc > scroll_x + width {
+            end_col = c + 1;
+            break;
+        }
+    }
+
+    let mut x_offset = ROW_HEADER_WIDTH;
+    for c in 0..sh.cols {
+        if c < start_col { x_offset += sh.col_width(c); continue; }
+        if c >= end_col { break; }
+        let cw = sh.col_width(c);
+        let x = x_offset - scroll_x;
         cr.set_source_rgb(0.3, 0.3, 0.3);
-        let label = col_label(col);
+        let label = col_label(c);
         cr.move_to(x + 6.0, COL_HEADER_HEIGHT - 7.0);
         cr.show_text(&label).unwrap();
-        // Divider
-        if col > start_col {
-            cr.set_source_rgb(0.7, 0.7, 0.7);
-            cr.set_line_width(0.5);
-            cr.move_to(x, 0.0); cr.line_to(x, COL_HEADER_HEIGHT); cr.stroke().unwrap();
-        }
+        // Divider at right edge of this column
+        let div_x = x + cw;
+        cr.set_source_rgb(0.7, 0.7, 0.7);
+        cr.set_line_width(0.5);
+        cr.move_to(div_x, 0.0); cr.line_to(div_x, COL_HEADER_HEIGHT); cr.stroke().unwrap();
+        x_offset += cw;
     }
 
     // Row header background
@@ -830,17 +988,21 @@ fn draw_grid(cr: &Context, state: &Rc<RefCell<AppState>>, width: f64, height: f6
         cr.move_to(0.0, y); cr.line_to(ROW_HEADER_WIDTH, y); cr.stroke().unwrap();
     }
 
-    // Cells
+    // Cells (using per-column widths)
     for row in start_row..end_row.min(sh.rows) {
         let y = COL_HEADER_HEIGHT + row as f64 * ROW_HEIGHT - scroll_y;
-        for col in start_col..end_col.min(sh.cols) {
-            let x = ROW_HEADER_WIDTH + col as f64 * COL_WIDTH - scroll_x;
+        let mut cell_x = ROW_HEADER_WIDTH;
+        for col in 0..sh.cols {
+            if col < start_col { cell_x += sh.col_width(col); continue; }
+            if col >= end_col.min(sh.cols) { break; }
+            let cw = sh.col_width(col);
+            let x = cell_x - scroll_x;
             let val = sh.cell(row, col);
 
             // Cell background for formula cells (light green tint)
             if sh.is_formula(row, col) {
                 cr.set_source_rgba(0.8, 1.0, 0.8, 0.3);
-                cr.rectangle(x, y, COL_WIDTH, ROW_HEIGHT);
+                cr.rectangle(x, y, cw, ROW_HEIGHT);
                 cr.fill().unwrap();
             }
 
@@ -855,19 +1017,27 @@ fn draw_grid(cr: &Context, state: &Rc<RefCell<AppState>>, width: f64, height: f6
             // Grid lines
             cr.set_source_rgb(GRID_LINE.0, GRID_LINE.1, GRID_LINE.2);
             cr.set_line_width(0.5);
-            cr.rectangle(x, y, COL_WIDTH, ROW_HEIGHT);
+            cr.rectangle(x, y, cw, ROW_HEIGHT);
             cr.stroke().unwrap();
+            cell_x += cw;
         }
     }
 
-    // Selection highlight
-    let sx = ROW_HEADER_WIDTH + sh.selected_col as f64 * COL_WIDTH - scroll_x;
+    // Selection highlight (using per-column widths)
+    let sx = {
+        let mut acc = ROW_HEADER_WIDTH;
+        for c in 0..sh.selected_col {
+            acc += sh.col_width(c);
+        }
+        acc - scroll_x
+    };
     let sy = COL_HEADER_HEIGHT + sh.selected_row as f64 * ROW_HEIGHT - scroll_y;
     cr.set_source_rgb(SELECTION_COLOR.0, SELECTION_COLOR.1, SELECTION_COLOR.2);
+    let sel_w = sh.col_width(sh.selected_col);
     cr.set_line_width(2.5);
-    cr.rectangle(sx, sy, COL_WIDTH, ROW_HEIGHT);
+    cr.rectangle(sx, sy, sel_w, ROW_HEIGHT);
     cr.stroke().unwrap();
     cr.set_source_rgba(SELECTION_COLOR.0, SELECTION_COLOR.1, SELECTION_COLOR.2, 0.15);
-    cr.rectangle(sx, sy, COL_WIDTH, ROW_HEIGHT);
+    cr.rectangle(sx, sy, sel_w, ROW_HEIGHT);
     cr.fill().unwrap();
 }
