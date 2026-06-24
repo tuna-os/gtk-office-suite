@@ -15,6 +15,7 @@ use crate::undo::{AddObjectCmd, DeleteObjectCmd, AddSlideCmd, DeleteSlideCmd, Re
 use crate::canvas::{draw_slide, canvas_to_slide, slide_to_canvas, hit_test_object, snap_to_grid, GRID_SPACING};
 use crate::sidebar::rebuild_slide_list;
 use crate::toolbar::{find_toolbar_child, build_decks_toolbar};
+use crate::transition::{TransitionState, TransitionType, draw_transition};
 
 use crate::engine::{Slide, SlideObject, Deck, read_pptx, write_pptx};
 
@@ -28,6 +29,7 @@ pub struct DecksWindow {
     slides: Rc<RefCell<Vec<Slide>>>,
     current_slide: Rc<Cell<usize>>,
     selected_object: Rc<Cell<Option<usize>>>,
+    transition: Rc<RefCell<TransitionState>>,
     undo: Rc<RefCell<UndoManager<Vec<Slide>>>>,
 }
 
@@ -42,6 +44,7 @@ impl DecksWindow {
         let selected_object = Rc::new(Cell::new(None));
         let file_path = Rc::new(RefCell::new(None::<String>));
         let undo = Rc::new(RefCell::new(UndoManager::new(slides.clone())));
+        let transition = Rc::new(RefCell::new(TransitionState::new()));
 
         // ── Canvas ────────────────────────────────────────────────────────
         let canvas = gtk::DrawingArea::new();
@@ -53,7 +56,13 @@ impl DecksWindow {
             let s = slides.clone();
             let c = current_slide.clone();
             let so = selected_object.clone();
+            let ts = transition.clone();
             canvas.set_draw_func(move |_area, cr, width, height| {
+                let t = ts.borrow();
+                if draw_transition(cr, &t, width as f64, height as f64) {
+                    return; // transition is active, skip normal rendering
+                }
+                drop(t);
                 draw_slide(cr, width as f64, height as f64, &s.borrow(), c.get(), so.get());
             });
         }
@@ -513,6 +522,7 @@ impl DecksWindow {
             let cs_ref = current_slide.clone();
             let so = selected_object.clone();
             let undo = undo.clone();
+            let ts = transition.clone();
             let key = gtk::EventControllerKey::new();
             key.connect_key_pressed(move |_, keyval, code, mods| {
                 // Ctrl+Z: undo
@@ -543,8 +553,13 @@ impl DecksWindow {
                     gtk::gdk::Key::Left | gtk::gdk::Key::Up => {
                         let idx = cs_ref.get();
                         if idx > 0 {
+                            let sls = ss.borrow();
+                            if idx < sls.len() && idx > 0 {
+                                ts.borrow_mut().start(TransitionType::PushLeft,
+                                    &sls[idx], &sls[idx - 1], &cs);
+                            }
                             cs_ref.set(idx - 1);
-                            rebuild_slide_list(&sl, &ss.borrow(), idx - 1);
+                            rebuild_slide_list(&sl, &sls, idx - 1);
                             cs.queue_draw();
                         }
                         glib::Propagation::Stop
@@ -553,6 +568,8 @@ impl DecksWindow {
                         let idx = cs_ref.get();
                         let slides = ss.borrow();
                         if idx + 1 < slides.len() {
+                            ts.borrow_mut().start(TransitionType::PushLeft,
+                                &slides[idx], &slides[idx + 1], &cs);
                             cs_ref.set(idx + 1);
                             rebuild_slide_list(&sl, &slides, idx + 1);
                             cs.queue_draw();
@@ -774,6 +791,7 @@ impl DecksWindow {
             slides,
             current_slide,
             selected_object,
+            transition,
             undo,
         }
     }
