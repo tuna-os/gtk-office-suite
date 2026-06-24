@@ -7,6 +7,8 @@ edition = "2021"
 gtk4 = { version = "0.11", features = ["v4_14"] }
 libadwaita = { version = "0.9", features = ["v1_6"] }
 suite-common = { path = "../suite-common" }
+cairo-rs = { version = "0.22", features = ["png"] }
+image = "0.25"
 zip = "2.0"
 quick-xml = "0.31"
 

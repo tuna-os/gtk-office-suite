@@ -749,6 +749,43 @@ fn build_decks_toolbar() -> gtk::Box {
     toolbar
 }
 
+// ── Image loading with cache ─────────────────────────────────────────
+
+thread_local! {
+    static IMAGE_CACHE: RefCell<std::collections::HashMap<String, cairo::ImageSurface>> =
+        RefCell::new(std::collections::HashMap::new());
+}
+
+fn load_image(path: &str) -> Option<cairo::ImageSurface> {
+    let cached = IMAGE_CACHE.with(|cache| cache.borrow().get(path).cloned());
+    if let Some(surf) = cached { return Some(surf); }
+    if path.ends_with(".png") {
+        if let Ok(mut file) = std::fs::File::open(path) {
+            if let Ok(surf) = cairo::ImageSurface::create_from_png(&mut file) {
+                IMAGE_CACHE.with(|c| { c.borrow_mut().insert(path.to_string(), surf.clone()); });
+                return Some(surf);
+            }
+        }
+    }
+    let img = image::open(path).ok()?;
+    let rgba = img.to_rgba8();
+    let (w, h) = rgba.dimensions();
+    let mut surface = cairo::ImageSurface::create(cairo::Format::ARgb32, w as i32, h as i32).ok()?;
+    {
+        let mut data = surface.data().ok()?;
+        for (i, pixel) in rgba.chunks(4).enumerate() {
+            let offset = i * 4;
+            data[offset] = pixel[2];
+            data[offset + 1] = pixel[1];
+            data[offset + 2] = pixel[0];
+            data[offset + 3] = pixel[3];
+        }
+    }
+    surface.flush();
+    IMAGE_CACHE.with(|cache| { cache.borrow_mut().insert(path.to_string(), surface.clone()); });
+    Some(surface)
+}
+
 // ── Cairo slide rendering ─────────────────────────────────────────────────
 
 fn draw_slide(
@@ -842,7 +879,7 @@ fn draw_slide(
                     cr.arc(cx, cy, radius, 0.0, 2.0 * std::f64::consts::PI);
                     cr.fill().unwrap();
                 }
-                SlideObject::Image { path: _, x, y, w, h } => {
+                SlideObject::Image { path, x, y, w, h } => {
                     let sx = ox + (x / 960.0) * slide_w;
                     let sy = oy + (y / 540.0) * slide_h;
                     let sw = (w / 960.0) * slide_w;
@@ -853,11 +890,34 @@ fn draw_slide(
                         cr.rectangle(sx - 2.0, sy - 2.0, sw + 4.0, sh + 4.0);
                         cr.stroke().unwrap();
                     }
-                    // Image rendering: API varies by cairo-rs version
-                    // For MVP, show a placeholder rectangle
-                    cr.set_source_rgb(0.9, 0.9, 0.9);
-                    cr.rectangle(sx, sy, sw, sh);
-                    cr.fill().unwrap();
+                    // Render actual image
+                    if let Some(img_surf) = load_image(path) {
+                        let iw = img_surf.width() as f64;
+                        let ih = img_surf.height() as f64;
+                        let scale_x = sw / iw;
+                        let scale_y = sh / ih;
+                        let scale = scale_x.min(scale_y);
+                        let dx = sx + (sw - iw * scale) / 2.0;
+                        let dy = sy + (sh - ih * scale) / 2.0;
+                        cr.save().unwrap();
+                        cr.translate(dx, dy);
+                        cr.scale(scale, scale);
+                        cr.set_source_surface(&img_surf, 0.0, 0.0).unwrap();
+                        cr.paint().unwrap();
+                        cr.restore().unwrap();
+                    } else {
+                        // Fallback placeholder for broken/missing images
+                        cr.set_source_rgb(0.92, 0.92, 0.92);
+                        cr.rectangle(sx, sy, sw, sh);
+                        cr.fill().unwrap();
+                        cr.set_source_rgb(0.6, 0.6, 0.6);
+                        cr.select_font_face("Sans", cairo::FontSlant::Normal, cairo::FontWeight::Normal);
+                        cr.set_font_size(11.0);
+                        let txt = "<image>";
+                        let ext = cr.text_extents(txt).unwrap();
+                        cr.move_to(sx + (sw - ext.width()) / 2.0, sy + (sh + ext.height()) / 2.0);
+                        cr.show_text(txt).unwrap();
+                    }
                 }
             }
         }
