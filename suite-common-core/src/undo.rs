@@ -19,11 +19,12 @@ pub struct UndoManager<T> {
     undo_stack: Vec<Box<dyn Command<T>>>,
     redo_stack: Vec<Box<dyn Command<T>>>,
     pub state: Rc<RefCell<T>>,
+    pub broadcaster: Option<Rc<crate::events::Broadcaster<crate::events::Hint>>>,
 }
 
 impl<T> UndoManager<T> {
     pub fn new(state: Rc<RefCell<T>>) -> Self {
-        UndoManager { undo_stack: Vec::new(), redo_stack: Vec::new(), state }
+        UndoManager { undo_stack: Vec::new(), redo_stack: Vec::new(), state, broadcaster: None }
     }
 
     /// Execute a command: apply it, push to undo stack, clear redo.
@@ -31,12 +32,14 @@ impl<T> UndoManager<T> {
         cmd.apply(&mut self.state.borrow_mut());
         self.undo_stack.push(cmd);
         self.redo_stack.clear();
+        self.notify();
     }
 
     pub fn undo(&mut self) -> bool {
         if let Some(cmd) = self.undo_stack.pop() {
             cmd.undo(&mut self.state.borrow_mut());
             self.redo_stack.push(cmd);
+            self.notify();
             true
         } else {
             false
@@ -47,9 +50,19 @@ impl<T> UndoManager<T> {
         if let Some(cmd) = self.redo_stack.pop() {
             cmd.apply(&mut self.state.borrow_mut());
             self.undo_stack.push(cmd);
+            self.notify();
             true
         } else {
             false
+        }
+    }
+
+    fn notify(&self) {
+        if let Some(ref bc) = self.broadcaster {
+            bc.broadcast(crate::events::Hint::UndoStateChanged {
+                can_undo: !self.undo_stack.is_empty(),
+                can_redo: !self.redo_stack.is_empty(),
+            });
         }
     }
 

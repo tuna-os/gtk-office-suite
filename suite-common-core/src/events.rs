@@ -42,14 +42,16 @@ impl<H> Default for Broadcaster<H> {
 
 #[derive(Clone, Debug)]
 pub enum Hint {
-    /// Undo/redo stack state changed.
     UndoStateChanged { can_undo: bool, can_redo: bool },
-    /// Active slide changed.
     SlideSwitched { from: usize, to: usize },
-    /// Cell selection moved.
     CellSelected { sheet: usize, row: usize, col: usize },
-    /// Document dirty flag toggled.
     DocumentModified { dirty: bool },
+    ViewChanged,
+    SelectionChanged,
+    ObjectAdded { slide_idx: usize },
+    ObjectRemoved { slide_idx: usize },
+    SheetAdded { index: usize },
+    SheetSwitched { from: usize, to: usize },
 }
 
 #[cfg(test)]
