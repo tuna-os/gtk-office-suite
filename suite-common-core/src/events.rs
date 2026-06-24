@@ -51,3 +51,32 @@ pub enum Hint {
     /// Document dirty flag toggled.
     DocumentModified { dirty: bool },
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::cell::Cell;
+
+    struct FlagListener { called: Rc<Cell<bool>> }
+    impl Listener<Hint> for FlagListener {
+        fn on_event(&self, _hint: &Hint) {
+            self.called.set(true);
+        }
+    }
+
+    #[test]
+    fn test_broadcast_reaches_listener() {
+        let bc = Broadcaster::new();
+        let flag = Rc::new(Cell::new(false));
+        let listener: Rc<dyn Listener<Hint>> = Rc::new(FlagListener { called: flag.clone() });
+        bc.listen(listener);
+        bc.broadcast(Hint::DocumentModified { dirty: true });
+        assert!(flag.get());
+    }
+
+    #[test]
+    fn test_broadcast_no_listeners_does_not_panic() {
+        let bc: Broadcaster<Hint> = Broadcaster::new();
+        bc.broadcast(Hint::UndoStateChanged { can_undo: true, can_redo: false });
+    }
+}

@@ -220,4 +220,48 @@ mod tests {
         let fmt = NumberFormat::new(NumberFormatKind::Scientific(2));
         assert_eq!(fmt.format("1234"), "1.23e3");
     }
+
+    #[test]
+    fn test_datetime() {
+        let fmt = NumberFormat::new(NumberFormatKind::DateTime("%Y-%m-%d %H:%M".into()));
+        // Non-numeric strings pass through
+        assert_eq!(fmt.format("hello"), "hello");
+    }
+
+    #[test]
+    fn test_text() {
+        let fmt = NumberFormat::new(NumberFormatKind::Text);
+        assert_eq!(fmt.format("1234"), "1234");
+        assert_eq!(fmt.format("hello"), "hello");
+    }
+
+    #[test]
+    fn test_number_zero() {
+        let fmt = NumberFormat::new(NumberFormatKind::Number(2));
+        assert_eq!(fmt.format("0"), "0.00");
+    }
+
+    #[test]
+    fn test_number_negative() {
+        let fmt = NumberFormat::new(NumberFormatKind::Number(2));
+        assert_eq!(fmt.format("-50"), "-50.00");
+    }
+
+    #[test]
+    fn test_currency_zero() {
+        let fmt = NumberFormat::new(NumberFormatKind::Currency("$".into(), 2));
+        assert_eq!(fmt.format("0"), "$0.00");
+    }
+
+    #[test]
+    fn test_percent_whole() {
+        let fmt = NumberFormat::new(NumberFormatKind::Percent(0));
+        assert_eq!(fmt.format("50"), "50%");
+    }
+
+    #[test]
+    fn test_invalid_number_passthrough() {
+        let fmt = NumberFormat::new(NumberFormatKind::Number(2));
+        assert_eq!(fmt.format("notanumber"), "notanumber");
+    }
 }
