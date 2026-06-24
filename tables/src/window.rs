@@ -449,6 +449,7 @@ pub struct TablesWindow {
     v_adj: gtk4::Adjustment,
     fx_entry: gtk4::Entry,
     stack: gtk4::Stack,
+    toast_overlay: Rc<adw::ToastOverlay>,
     undo: Rc<RefCell<UndoManager<SheetState>>>,
 }
 
@@ -514,6 +515,7 @@ impl TablesWindow {
             let s = state.clone();
             let da = drawing_area.clone();
             let fx = fx_entry.clone();
+            let t = toast_rc.clone();
             fx_entry.connect_activate(move |_| {
                 let val = fx.text().to_string();
                 let mut st = s.borrow_mut();
@@ -525,7 +527,7 @@ impl TablesWindow {
                     if !rule.validate(&val) {
                         let toast = adw::Toast::new("Invalid input — value rejected");
                         toast.set_timeout(3);
-                        // Toast via overlay (best effort)
+                        t.add_toast(toast);
                         return;
                     }
                 }
@@ -999,8 +1001,11 @@ impl TablesWindow {
         *win_ref.borrow_mut() = Some(suite_win.window.clone());
 
         suite_win.add_top_bar(&fx_bar);
-        suite_win.set_content(&stack);
+        let toast_overlay = adw::ToastOverlay::new();
+        toast_overlay.set_child(Some(&stack));
+        suite_win.set_content(&toast_overlay);
         suite_win.add_bottom_bar(&sheet_bar);
+        let toast_rc = Rc::new(toast_overlay);
 
         // ── App actions ─────────────────────────────────────────────────
         let st = stack.clone();
@@ -1081,6 +1086,7 @@ impl TablesWindow {
         {
             let s = state.clone();
             let w = suite_win.window.clone();
+            let t = toast_rc.clone();
             let act = gtk4::gio::SimpleAction::new("save-file-dialog", None);
             act.connect_activate(move |_, _| {
                 let dlg = gtk4::FileDialog::new();
@@ -1101,7 +1107,7 @@ impl TablesWindow {
                                 match save_engine_to_xlsx(&path_str, &ss) {
                                     Ok(()) => {
                                         let toast = adw::Toast::new("Spreadsheet saved");
-                                        // toast via overlay — suite_common doesn't expose it directly
+                                        t.add_toast(toast);
                                     }
                                     Err(e) => {
                                         let err = adw::AlertDialog::builder()
@@ -1152,7 +1158,7 @@ impl TablesWindow {
             drawing_area.add_controller(key);
         }
 
-        Self { window: suite_win.window, drawing_area, h_adj, v_adj, fx_entry, stack, undo: undo_mgr }
+        Self { window: suite_win.window, drawing_area, h_adj, v_adj, fx_entry, stack, toast_overlay: toast_rc, undo: undo_mgr }
     }
 
     pub fn present(&self) { self.window.present(); }

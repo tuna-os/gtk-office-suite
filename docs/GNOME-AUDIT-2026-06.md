@@ -79,6 +79,29 @@ No blocking issues with spacing.
 
 ---
 
+## GNOME GUI Spec Pattern Audit (10 Patterns)
+
+| # | Pattern | Letters | Tables | Decks |
+|---|---------|---------|--------|-------|
+| 1 | AdwTabView + AdwTabBar | ✅ | N/A | N/A |
+| 2 | AdwOverlaySplitView | N/A | N/A | ✅ |
+| 3 | AdwPreferencesDialog + GSettings | ✅ | ❌ | ❌ |
+| 4 | AdwStatusPage (empty state) | ✅ | ✅ | ✅ |
+| 5 | AdwToast + AdwToastOverlay | ✅ | ⚠️ | ❌ |
+| 6 | AdwShortcutsDialog | ✅ | ✅ (fixed) | ✅ (fixed) |
+| 7 | AdwAlertDialog | ✅ | ✅ | ✅ |
+| 8 | AdwAboutDialog | ✅ (shared) | ✅ (shared) | ✅ (shared) |
+| 9 | AdwBreakpoint (600sp) | ✅ (via suite) | ❌ | ✅ |
+| 10 | Undo with Toast button | ❌ | ❌ | ❌ |
+
+**Pattern 5 (Toast):** Tables creates `adw::Toast::new(...)` but never adds it to an overlay widget — the toast is invisible. Decks has no toast infrastructure. Fix: Add `AdwToastOverlay` to Tables and Decks window scaffolding.
+
+**Pattern 9 (Breakpoint):** Tables has no adaptive breakpoint. The toolbar doesn't collapse for narrow windows. Fix: Add `AdwBreakpoint` to Tables similar to Decks' implementation.
+
+**Pattern 10 (Undo Toast):** None implement the 'show toast with Undo button after destructive action' pattern from GNOME Text Editor. Fix: When user deletes an object or clear a cell, show a toast "Object deleted" with an "Undo" button that calls `undo()`.
+
+---
+
 ## Icon Audit
 
 All icons use `-symbolic` suffix from GNOME icon set. ✅
