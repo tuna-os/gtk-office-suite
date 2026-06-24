@@ -336,7 +336,7 @@ impl Ruler {
                 imp::TabAlignment::Right => gtk4::pango::TabAlign::Right,
                 imp::TabAlignment::Decimal => gtk4::pango::TabAlign::Left, // decimal not in pango
             };
-            arr.set_tab(i as i32, alignment, ts.position_pt as i32);
+            arr.set_tab(i as i32, alignment, ((ts.position_pt - imp.margin_left.get()) * (pango::SCALE as f64)) as i32);
         }
         Some(arr)
     }

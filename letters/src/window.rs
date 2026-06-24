@@ -40,6 +40,19 @@ fn make_doc_widget(settings: Option<&gio::Settings>) -> (PageContainer, gtk::Tex
     if spell_enabled {
         crate::spell::SpellChecker::new(&buffer).start();
     }
+    // Restore line spacing from GSettings
+    if let Some(s) = settings {
+        let ls = s.double("line-spacing");
+        let tag_name = if ls >= 1.8 { "line-spacing-2.0" }
+            else if ls >= 1.4 { "line-spacing-1.5" }
+            else if ls >= 1.1 { "line-spacing-1.15" }
+            else { "line-spacing-1.0" };
+        if let Some(tag) = buffer.tag_table().lookup(tag_name) {
+            let start = buffer.start_iter();
+            let end = buffer.end_iter();
+            buffer.apply_tag(&tag, &start, &end);
+        }
+    }
     // Drag-and-drop for images from file manager
     {
         let buf = buffer.clone();
