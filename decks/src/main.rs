@@ -2,6 +2,7 @@ use gtk4::prelude::*;
 mod window;
 mod engine;
 mod export;
+mod undo;
 
 fn main() {
     let suite = suite_common::SuiteApp::new("org.tunaos.decks-rust");

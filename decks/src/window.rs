@@ -9,7 +9,9 @@ use gtk4::cairo;
 use libadwaita as adw;
 use std::cell::{Cell, RefCell};
 use std::rc::Rc;
+use suite_common::undo::UndoManager;
 use suite_common::SuiteWindow;
+use crate::undo::{AddObjectCmd, DeleteObjectCmd, AddSlideCmd, DeleteSlideCmd, ReorderSlidesCmd};
 
 use crate::engine::{Slide, SlideObject, Deck, read_pptx, write_pptx};
 
@@ -23,6 +25,7 @@ pub struct DecksWindow {
     slides: Rc<RefCell<Vec<Slide>>>,
     current_slide: Rc<Cell<usize>>,
     selected_object: Rc<Cell<Option<usize>>>,
+    undo: Rc<RefCell<UndoManager<Vec<Slide>>>>,
 }
 
 impl DecksWindow {
@@ -35,6 +38,7 @@ impl DecksWindow {
         let current_slide = Rc::new(Cell::new(0usize));
         let selected_object = Rc::new(Cell::new(None));
         let file_path = Rc::new(RefCell::new(None::<String>));
+        let undo = Rc::new(RefCell::new(UndoManager::new(slides.clone())));
 
         // ── Canvas ────────────────────────────────────────────────────────
         let canvas = gtk::DrawingArea::new();
@@ -159,13 +163,18 @@ impl DecksWindow {
             let cs = canvas.clone();
             let cs_ref = current_slide.clone();
             let cs_stack = content_stack.clone();
+            let undo = undo.clone();
             add_btn.connect_clicked(move |_| {
                 let idx = ss.borrow().len();
-                ss.borrow_mut().push(Slide {
+                let new_slide = Slide {
                     title: format!("Slide {}", idx + 1),
                     background: "#ffffff".into(),
                     objects: vec![],
-                });
+                };
+                undo.borrow_mut().execute(Box::new(AddSlideCmd {
+                    index: idx,
+                    slide: new_slide.clone(),
+                }));
                 rebuild_slide_list(&sl, &ss.borrow(), idx);
                 cs_ref.set(idx);
                 cs.queue_draw();
@@ -179,12 +188,17 @@ impl DecksWindow {
             let ss = slides.clone();
             let cs = canvas.clone();
             let cs_ref = current_slide.clone();
+            let undo = undo.clone();
             del_btn.connect_clicked(move |_| {
                 let idx = cs_ref.get();
                 let mut slides = ss.borrow_mut();
                 if slides.len() > 1 && idx < slides.len() {
-                    slides.remove(idx);
-                    let new_idx = idx.min(slides.len().saturating_sub(1));
+                    let removed = slides[idx].clone();
+                    let new_idx = idx.min(slides.len().saturating_sub(2));
+                    undo.borrow_mut().execute(Box::new(DeleteSlideCmd {
+                        index: idx,
+                        slide: removed,
+                    }));
                     cs_ref.set(new_idx);
                     rebuild_slide_list(&sl, &slides, new_idx);
                     cs.queue_draw();
@@ -198,13 +212,15 @@ impl DecksWindow {
             let ss = slides.clone();
             let cs = canvas.clone();
             let cs_ref = current_slide.clone();
+            let undo = undo.clone();
             up_btn.connect_clicked(move |_| {
                 let idx = cs_ref.get();
                 if idx > 0 {
-                    let mut slides = ss.borrow_mut();
-                    slides.swap(idx, idx - 1);
+                    undo.borrow_mut().execute(Box::new(ReorderSlidesCmd {
+                        from: idx, to: idx - 1,
+                    }));
                     cs_ref.set(idx - 1);
-                    rebuild_slide_list(&sl, &slides, idx - 1);
+                    rebuild_slide_list(&sl, &ss.borrow(), idx - 1);
                     cs.queue_draw();
                 }
             });
@@ -214,12 +230,15 @@ impl DecksWindow {
             let ss = slides.clone();
             let cs = canvas.clone();
             let cs_ref = current_slide.clone();
+            let undo = undo.clone();
             down_btn.connect_clicked(move |_| {
                 let idx = cs_ref.get();
                 let slides = ss.borrow();
                 if idx + 1 < slides.len() {
                     drop(slides);
-                    ss.borrow_mut().swap(idx, idx + 1);
+                    undo.borrow_mut().execute(Box::new(ReorderSlidesCmd {
+                        from: idx, to: idx + 1,
+                    }));
                     cs_ref.set(idx + 1);
                     rebuild_slide_list(&sl, &ss.borrow(), idx + 1);
                     cs.queue_draw();
@@ -233,17 +252,16 @@ impl DecksWindow {
             let ss = slides.clone();
             let cs = canvas.clone();
             let cs_ref = current_slide.clone();
+            let undo = undo.clone();
             let tb = find_toolbar_child(&toolbar, "insert-text-symbolic");
             if let Some(btn) = tb {
                 btn.connect_clicked(move |_| {
                     let idx = cs_ref.get();
-                    let mut slides = ss.borrow_mut();
-                    if idx < slides.len() {
-                        slides[idx].objects.push(SlideObject::TextBox {
-                            text: "Text".into(), x: 200.0, y: 150.0, w: 200.0, h: 40.0,
-                        });
-                        cs.queue_draw();
-                    }
+                    let obj = SlideObject::TextBox {
+                        text: "Text".into(), x: 200.0, y: 150.0, w: 200.0, h: 40.0,
+                    };
+                    undo.borrow_mut().execute(Box::new(AddObjectCmd::new(idx, obj)));
+                    cs.queue_draw();
                 });
             }
         }
@@ -254,6 +272,7 @@ impl DecksWindow {
             let cs = canvas.clone();
             let cs_ref = current_slide.clone();
             let shape_count = Rc::new(Cell::new(0u32));
+            let undo = undo.clone();
             let tb = find_toolbar_child(&toolbar, "insert-object-symbolic");
             if let Some(btn) = tb {
                 btn.connect_clicked(move |_| {
@@ -283,6 +302,7 @@ impl DecksWindow {
             let cs = canvas.clone();
             let cs_ref = current_slide.clone();
             let w = suite_win.window.clone();
+            let undo = undo.clone();
             let tb = find_toolbar_child(&toolbar, "insert-image-symbolic");
             if let Some(btn) = tb {
                 btn.connect_clicked(move |_| {
@@ -295,19 +315,18 @@ impl DecksWindow {
                     dlg.set_filters(Some(&fl));
                     let ss = ss.clone(); let cs = cs.clone();
                     let cs_ref = cs_ref.clone(); let w2 = w.clone();
+                    let undo = undo.clone();
                     dlg.open(Some(&w), None::<&gio::Cancellable>,
                         move |result: Result<gio::File, glib::Error>| {
                             if let Ok(file) = result {
                                 if let Some(path) = file.path() {
                                     let idx = cs_ref.get();
-                                    let mut slides = ss.borrow_mut();
-                                    if idx < slides.len() {
-                                        let p = path.to_string_lossy().to_string();
-                                        slides[idx].objects.push(SlideObject::Image {
-                                            path: p, x: 200.0, y: 200.0, w: 200.0, h: 150.0,
-                                        });
-                                        cs.queue_draw();
-                                    }
+                                    let p = path.to_string_lossy().to_string();
+                                    let obj = SlideObject::Image {
+                                        path: p, x: 200.0, y: 200.0, w: 200.0, h: 150.0,
+                                    };
+                                    undo.borrow_mut().execute(Box::new(AddObjectCmd::new(idx, obj)));
+                                    cs.queue_draw();
                                 }
                             }
                         },
@@ -366,7 +385,7 @@ impl DecksWindow {
             canvas.add_controller(click);
         }
 
-        // ── Keyboard: Escape exits fullscreen, arrows navigate slides ────
+        // ── Keyboard: navigation, delete, undo/redo ─────────────────────
         {
             let w = suite_win.window.clone();
             let sl = slide_list.clone();
@@ -374,8 +393,29 @@ impl DecksWindow {
             let cs = canvas.clone();
             let cs_ref = current_slide.clone();
             let so = selected_object.clone();
+            let undo = undo.clone();
             let key = gtk::EventControllerKey::new();
-            key.connect_key_pressed(move |_, keyval, _code, _mod| {
+            key.connect_key_pressed(move |_, keyval, code, mods| {
+                // Ctrl+Z: undo
+                if mods.contains(gtk::gdk::ModifierType::CONTROL_MASK) && keyval == gtk::gdk::Key::z {
+                    let mut u = undo.borrow_mut();
+                    if u.undo() {
+                        cs.queue_draw();
+                        let slides = ss.borrow();
+                        rebuild_slide_list(&sl, &slides, cs_ref.get());
+                    }
+                    return glib::Propagation::Stop;
+                }
+                // Ctrl+Shift+Z: redo
+                if mods.contains(gtk::gdk::ModifierType::CONTROL_MASK | gtk::gdk::ModifierType::SHIFT_MASK) && keyval == gtk::gdk::Key::z {
+                    let mut u = undo.borrow_mut();
+                    if u.redo() {
+                        cs.queue_draw();
+                        let slides = ss.borrow();
+                        rebuild_slide_list(&sl, &slides, cs_ref.get());
+                    }
+                    return glib::Propagation::Stop;
+                }
                 match keyval {
                     gtk::gdk::Key::Escape => {
                         w.unfullscreen();
@@ -417,11 +457,15 @@ impl DecksWindow {
                     }
                     gtk::gdk::Key::Delete | gtk::gdk::Key::BackSpace => {
                         let idx = cs_ref.get();
-                        let mut slides = ss.borrow_mut();
+                        let slides = ss.borrow();
                         if idx < slides.len() {
                             if let Some(oi) = so.get() {
                                 if oi < slides[idx].objects.len() {
-                                    slides[idx].objects.remove(oi);
+                                    let obj = slides[idx].objects[oi].clone();
+                                    drop(slides);
+                                    undo.borrow_mut().execute(Box::new(
+                                        DeleteObjectCmd::new(idx, oi, obj)
+                                    ));
                                     so.set(None);
                                     cs.queue_draw();
                                 }
@@ -611,6 +655,7 @@ impl DecksWindow {
             slides,
             current_slide,
             selected_object,
+            undo,
         }
     }
 
