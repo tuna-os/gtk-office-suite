@@ -1,5 +1,42 @@
 # Changelog
 
+## v1.1.0 (2026-06-24)
+
+### Tables
+- Column resize via drag on header divider with col-resize cursor
+- Column auto-fit on double-click divider (PangoLayout text measurement)
+- Sort on column headers (click to cycle Ascending → Descending → None)
+- Number formatting: General, Number, Currency, Date, Percent, Scientific
+- Cell borders: Solid, Dashed, Dotted, Double with Cairo rendering
+- Freeze panes: 5-zone Cairo clip region rendering
+- Merge cells: span rendering with centered text
+- Data validation: List, WholeNumber, Decimal, TextLength, Regex rules
+- Charts dialog: AdwDialog with Bar/Line/Pie type selector and live preview
+- Undo/Redo: CellEdit, ColResize, Sort, Format, Border, Merge, Freeze commands
+
+### Decks
+- Canvas undo/redo via Command pattern (Ctrl+Z / Ctrl+Shift+Z)
+- Image loading and rendering (PNG/JPEG/WebP/GIF) on slide canvas
+- Inline text editing on slides (double-click TextBox → GtkTextView overlay)
+- Object drag with snap-to-grid (20px) via GestureDrag
+- Slide transitions: Fade, PushLeft, WipeLeft, CoverLeft, SplitHorizontal
+- Speaker notes pane (collapsible GtkExpander with auto-save)
+- Module refactor: canvas.rs, toolbar.rs, sidebar.rs extracted from window.rs
+
+### suite-common
+- Generic Command<T> + UndoManager<T> shared undo infrastructure
+- NumberFormat engine (General, Number, Currency, Date, Percent, Scientific)
+  with Excel serial date conversion
+- Event Broadcaster<H> + Listener<H> system
+- Maps to LibreOffice svl/ patterns: SfxUndoAction, SvNumberFormatter, SfxBroadcaster
+
+### Infrastructure
+- 15+ Rust crates leveraged (ironcalc_base, calamine, rust_xlsxwriter, num-format,
+  chrono, image, zip, quick-xml, pulldown-cmark, pangocairo, regex, cairo-rs, rdocx, zspell)
+- LibreOffice source at /var/home/james/dev/libreoffice-core/ used as architecture reference
+- 52 GitHub issues closed total
+- 10 remaining issues are v2 enhancements
+
 ## v1.0.0 (2026-06-23)
 
 First release of the Hanthor Rust Office Suite — a GNOME-native office suite
