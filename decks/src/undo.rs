@@ -21,6 +21,19 @@ fn offset_object(obj: &mut SlideObject, dx: f64, dy: f64) {
     }
 }
 
+/// Set absolute position of any object.
+pub fn set_obj_position(obj: &mut SlideObject, nx: f64, ny: f64) {
+    match obj {
+        SlideObject::TextBox { x, y, .. }
+        | SlideObject::Rect { x, y, .. }
+        | SlideObject::Image { x, y, .. }
+        | SlideObject::Circle { x, y, .. } => {
+            *x = nx;
+            *y = ny;
+        }
+    }
+}
+
 /// Get position of any object as (x, y).
 pub fn obj_position(obj: &SlideObject) -> (f64, f64) {
     match obj {

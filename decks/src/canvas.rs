@@ -43,6 +43,14 @@ pub fn load_image(path: &str) -> Option<cairo::ImageSurface> {
     Some(surface)
 }
 
+// ── Snap-to-grid ──────────────────────────────────────────────────────
+
+pub const GRID_SPACING: f64 = 20.0;
+
+pub fn snap_to_grid(value: f64, grid: f64) -> f64 {
+    (value / grid).round() * grid
+}
+
 // ── Coordinate conversion ────────────────────────────────────────────
 
 /// Convert canvas (x,y) to slide coordinates (960x540 at 16:9).

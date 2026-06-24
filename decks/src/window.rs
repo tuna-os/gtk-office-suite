@@ -11,8 +11,8 @@ use std::cell::{Cell, RefCell};
 use std::rc::Rc;
 use suite_common::undo::UndoManager;
 use suite_common::SuiteWindow;
-use crate::undo::{AddObjectCmd, DeleteObjectCmd, AddSlideCmd, DeleteSlideCmd, ReorderSlidesCmd};
-use crate::canvas::{draw_slide, canvas_to_slide, slide_to_canvas, hit_test_object};
+use crate::undo::{AddObjectCmd, DeleteObjectCmd, AddSlideCmd, DeleteSlideCmd, ReorderSlidesCmd, MoveObjectCmd, set_obj_position};
+use crate::canvas::{draw_slide, canvas_to_slide, slide_to_canvas, hit_test_object, snap_to_grid, GRID_SPACING};
 use crate::sidebar::rebuild_slide_list;
 use crate::toolbar::{find_toolbar_child, build_decks_toolbar};
 
@@ -365,6 +365,66 @@ impl DecksWindow {
                 cs.queue_draw();
             });
             canvas.add_controller(click);
+        }
+
+        // ── Object drag: move selected object on canvas ────────────────
+        {
+            let ss = slides.clone();
+            let cs = canvas.clone();
+            let cs_ref = current_slide.clone();
+            let so = selected_object.clone();
+            let undo = undo.clone();
+            let drag_state: Rc<Cell<Option<(usize, f64, f64)>>> = Rc::new(Cell::new(None));
+            let drag = gtk::GestureDrag::new();
+            drag.set_button(1);
+            let ds2 = drag_state.clone();
+            let ds3 = drag_state.clone();
+            let ds4 = drag_state.clone();
+            let ss2 = ss.clone();
+            let cs2 = cs.clone();
+            let cs_ref2 = cs_ref.clone();
+            let cs_ref3 = cs_ref.clone();
+            let cs_ref4 = cs_ref.clone();
+            let cs3 = cs.clone();
+            let so2 = so.clone();
+            drag.connect_drag_begin(move |_g, x, y| {
+                let idx = cs_ref2.get();
+                let sl = ss2.borrow();
+                if idx >= sl.len() { return; }
+                if let Some(oi) = hit_test_object(&sl[idx].objects, x, y) {
+                    let (ox, oy) = crate::undo::obj_position(&sl[idx].objects[oi]);
+                    so2.set(Some(oi));
+                    ds2.set(Some((oi, ox, oy)));
+                }
+            });
+            drag.connect_drag_update(move |_g, dx, dy| {
+                if let Some((oi, orig_x, orig_y)) = ds3.get() {
+                    let idx = cs_ref3.get();
+                    let mut sl = ss.borrow_mut();
+                    if idx < sl.len() && oi < sl[idx].objects.len() {
+                        let nx = snap_to_grid(orig_x + dx as f64, GRID_SPACING);
+                        let ny = snap_to_grid(orig_y + dy as f64, GRID_SPACING);
+                        set_obj_position(&mut sl[idx].objects[oi], nx, ny);
+                        cs3.queue_draw();
+                    }
+                }
+            });
+            drag.connect_drag_end(move |_g, dx, dy| {
+                if let Some((oi, _orig_x, _orig_y)) = ds4.get() {
+                    let net_dx = dx as f64;
+                    let net_dy = dy as f64;
+                    if net_dx != 0.0 || net_dy != 0.0 {
+                        undo.borrow_mut().execute(Box::new(
+                            MoveObjectCmd {
+                                slide_idx: cs_ref4.get(), index: oi,
+                                dx: net_dx, dy: net_dy,
+                            }
+                        ));
+                    }
+                }
+                ds4.set(None);
+            });
+            canvas.add_controller(drag);
         }
 
         // ── Double-click: inline text edit on TextBox ───────────────────
