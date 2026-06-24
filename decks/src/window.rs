@@ -791,6 +791,7 @@ impl DecksWindow {
             app.add_action(&act_save);
 
             let act_save_as = gtk::gio::SimpleAction::new("save-file-as", None);
+            let m_as = masters.clone();
             act_save_as.connect_activate(move |_, _| {
                 let dlg = gtk::FileDialog::new();
                 let f = gtk::FileFilter::new();
@@ -804,14 +805,13 @@ impl DecksWindow {
                 let ss = ss.clone();
                 let w2 = w.clone();
                 let path_ref = path_ref.clone();
-                let m = masters.clone();
-
+                let m_inner = m_as.clone();
                 dlg.save(Some(&w), None::<&gio::Cancellable>,
                     move |result: Result<gio::File, glib::Error>| {
                         if let Ok(file) = result {
                             if let Some(path) = file.path() {
                                 let path_str = path.to_string_lossy().to_string();
-                                let deck = Deck { slides: ss.borrow().clone(), masters: m.borrow().clone() };
+                                let deck = Deck { slides: ss.borrow().clone(), masters: m_inner.borrow().clone() };
                                 match write_pptx(&path_str, &deck) {
                                     Ok(()) => {
                                         *path_ref.borrow_mut() = Some(path_str);
