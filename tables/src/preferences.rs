@@ -25,7 +25,7 @@ impl TablesPreferences {
             .subtitle("Number of rows in new spreadsheets")
             .adjustment(&gtk4::Adjustment::new(100.0, 10.0, 10000.0, 10.0, 100.0, 0.0))
             .build();
-        settings.bind("default-rows", &rows_row, "value").build();
+        let _ = settings.bind("default-rows", &rows_row, "value").build();
         sheet_group.add(&rows_row);
 
         let cols_row = adw::SpinRow::builder()
@@ -33,7 +33,7 @@ impl TablesPreferences {
             .subtitle("Number of columns in new spreadsheets")
             .adjustment(&gtk4::Adjustment::new(26.0, 1.0, 702.0, 1.0, 5.0, 0.0))
             .build();
-        settings.bind("default-cols", &cols_row, "value").build();
+        let _ = settings.bind("default-cols", &cols_row, "value").build();
         sheet_group.add(&cols_row);
         general.add(&sheet_group);
 
@@ -41,7 +41,7 @@ impl TablesPreferences {
         let autosave_switch = adw::SwitchRow::builder()
             .title("Enable Auto-Save")
             .build();
-        settings.bind("auto-save", &autosave_switch, "active").build();
+        let _ = settings.bind("auto-save", &autosave_switch, "active").build();
         save_group.add(&autosave_switch);
 
         let interval_row = adw::SpinRow::builder()
@@ -49,7 +49,7 @@ impl TablesPreferences {
             .subtitle("Seconds between auto-saves")
             .adjustment(&gtk4::Adjustment::new(60.0, 10.0, 3600.0, 10.0, 60.0, 0.0))
             .build();
-        settings.bind("auto-save-interval", &interval_row, "value").build();
+        let _ = settings.bind("auto-save-interval", &interval_row, "value").build();
         save_group.add(&interval_row);
         general.add(&save_group);
 
