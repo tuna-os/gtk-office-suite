@@ -853,3 +853,4 @@ impl DecksWindow {
 }
 
 // ── Helper: rebuild the slide list widget ────────────────────────────────
+// force rebuild
