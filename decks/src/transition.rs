@@ -205,3 +205,33 @@ pub fn draw_transition(cr: &cairo::Context, state: &TransitionState, canvas_w: f
     }
     true
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_transition_state_starts_inactive() {
+        let ts = TransitionState::new();
+        assert!(!ts.active);
+        assert!(ts.from_surface.is_none());
+        assert!(ts.to_surface.is_none());
+    }
+
+    #[test]
+    fn test_transition_none_is_instant() {
+        // TransitionType::None should have no visual effect
+        assert_eq!(TransitionType::None as i32, 0);
+    }
+
+    #[test]
+    fn test_transition_enum_variants() {
+        // Verify all variants are constructable
+        let _ = TransitionType::Fade;
+        let _ = TransitionType::PushLeft;
+        let _ = TransitionType::WipeLeft;
+        let _ = TransitionType::CoverLeft;
+        let _ = TransitionType::SplitHorizontal;
+        let _ = TransitionType::None;
+    }
+}

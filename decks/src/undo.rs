@@ -304,4 +304,32 @@ mod tests {
         cmd.undo(&mut slides);
         assert_eq!(slides[0].title, "S1");
     }
+
+    #[test]
+    fn test_slide_notes_preserved() {
+        let slide = Slide { title: "S1".into(), background: "#fff".into(),
+            objects: vec![], notes: "My notes".into() };
+        assert_eq!(slide.notes, "My notes");
+        // Cloning preserves notes
+        assert_eq!(slide.clone().notes, "My notes");
+    }
+
+    #[test]
+    fn test_add_image_object() {
+        let mut slides = make_slides();
+        let img = SlideObject::Image { path: "/tmp/test.png".into(), x: 0.0, y: 0.0, w: 100.0, h: 100.0 };
+        let cmd = AddObjectCmd::new(0, img);
+        cmd.apply(&mut slides);
+        assert_eq!(slides[0].objects.len(), 1);
+        match &slides[0].objects[0] {
+            SlideObject::Image { path, x, y, w, h } => {
+                assert_eq!(path, "/tmp/test.png");
+                assert_eq!(*x, 0.0);
+                assert_eq!(*y, 0.0);
+            }
+            _ => panic!("Expected Image"),
+        }
+        cmd.undo(&mut slides);
+        assert_eq!(slides[0].objects.len(), 0);
+    }
 }

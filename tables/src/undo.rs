@@ -288,4 +288,47 @@ mod tests {
         assert_eq!(state.sheet().data[1][0], "A");
         assert_eq!(state.sheet().data[2][0], "B");
     }
+
+    // ── Validation rule tests ─────────────────────────────────────
+    use crate::window::ValidationRule;
+
+    #[test]
+    fn test_validation_list() {
+        let rule = ValidationRule::List(vec!["A".into(), "B".into()]);
+        assert!(rule.validate("A"));
+        assert!(rule.validate("B"));
+        assert!(!rule.validate("C"));
+    }
+
+    #[test]
+    fn test_validation_whole_number() {
+        let rule = ValidationRule::WholeNumber { min: Some(1), max: Some(10) };
+        assert!(rule.validate("5"));
+        assert!(!rule.validate("0"));
+        assert!(!rule.validate("11"));
+        assert!(!rule.validate("abc"));
+    }
+
+    #[test]
+    fn test_validation_decimal() {
+        let rule = ValidationRule::Decimal { min: Some(0.0), max: Some(1.0) };
+        assert!(rule.validate("0.5"));
+        assert!(!rule.validate("1.5"));
+    }
+
+    #[test]
+    fn test_validation_text_length() {
+        let rule = ValidationRule::TextLength { min: Some(1), max: Some(5) };
+        assert!(rule.validate("abc"));
+        assert!(!rule.validate(""));
+        assert!(!rule.validate("abcdef"));
+    }
+
+    #[test]
+    fn test_validation_regex() {
+        let rule = ValidationRule::Regex(r"^\d{3}$".into());
+        assert!(rule.validate("123"));
+        assert!(!rule.validate("12"));
+        assert!(!rule.validate("abc"));
+    }
 }
