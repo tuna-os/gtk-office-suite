@@ -1084,9 +1084,10 @@ impl TablesWindow {
         {
             let s = state.clone();
             let w = suite_win.window.clone();
-            let t = toast_rc.clone();
+            // no toast for now
             let act = gtk4::gio::SimpleAction::new("save-file-dialog", None);
             act.connect_activate(move |_, _| {
+                // no toast
                 let dlg = gtk4::FileDialog::new();
                 let f = gtk4::FileFilter::new();
                 f.add_suffix("xlsx");
@@ -1103,10 +1104,7 @@ impl TablesWindow {
                                 let path_str = path.to_string_lossy().to_string();
                                 let ss = s.borrow();
                                 match save_engine_to_xlsx(&path_str, &ss) {
-                                    Ok(()) => {
-                                        let toast = adw::Toast::new("Spreadsheet saved");
-                                        (&*t).add_toast(toast);
-                                    }
+                                    Ok(()) => {}
                                     Err(e) => {
                                         let err = adw::AlertDialog::builder()
                                             .heading("Error saving file")
