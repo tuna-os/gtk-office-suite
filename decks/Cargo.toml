@@ -11,6 +11,7 @@ cairo-rs = { version = "0.22", features = ["png"] }
 image = "0.25"
 zip = "2.0"
 quick-xml = "0.31"
+pulldown-cmark = "0.12"
 
 [[bin]]
 name = "decks"
