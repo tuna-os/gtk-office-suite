@@ -22,7 +22,7 @@ impl LettersPreferences {
 
         let doc_group = suite_common::make_preferences_group("Document", "Default save format");
         let format_row = adw::ComboRow::builder()
-            .title("Default Format")
+            .title("Default format")
             .subtitle("Default save format for new documents")
             .model(&gtk4::StringList::new(FORMAT_NAMES))
             .build();
@@ -31,12 +31,12 @@ impl LettersPreferences {
 
         let editor_group = suite_common::make_preferences_group("Editor", "Text editing preferences");
         let font_row = adw::EntryRow::builder()
-            .title("Font Family")
+            .title("Font family")
             .build();
         editor_group.add(&font_row);
 
         let margin_row = adw::SpinRow::builder()
-            .title("Editor Margin (%)")
+            .title("Editor margin")
             .subtitle("Left and right margin as percentage")
             .adjustment(&gtk4::Adjustment::new(16.0, 0.0, 50.0, 1.0, 5.0, 0.0))
             .build();

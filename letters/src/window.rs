@@ -1156,7 +1156,7 @@ impl LettersWindow {
 
 fn show_header_footer_dialog(pc: &crate::page_container::PageContainer) {
     let dialog = adw::AlertDialog::new(
-        Some("Headers & Footers"),
+        Some("Headers and footers"),
         Some("Use {page} for automatic page numbering."),
     );
     // Build a custom content with header and footer entries
@@ -1166,9 +1166,9 @@ fn show_header_footer_dialog(pc: &crate::page_container::PageContainer) {
 
     let hdr_entry = gtk4::Entry::builder().placeholder_text("Header text").build();
     let ftr_entry = gtk4::Entry::builder().placeholder_text("Footer text").build();
-    content.append(&gtk4::Label::new(Some("Header:")));
+    content.append(&gtk4::Label::new(Some("Header")));
     content.append(&hdr_entry);
-    content.append(&gtk4::Label::new(Some("Footer:")));
+    content.append(&gtk4::Label::new(Some("Footer")));
     content.append(&ftr_entry);
     dialog.set_extra_child(Some(&content));
 

@@ -38,14 +38,14 @@ fn main() {
         suite_common::show_shortcuts_dialog(
             &[
                 ("General", &[
-                    ("New Document", "<Primary>n"),
-                    ("Open File", "<Primary>o"),
+                    ("New document", "<Primary>n"),
+                    ("Open file", "<Primary>o"),
                     ("Save", "<Primary>s"),
-                    ("Save As", "<Primary><Shift>s"),
+                    ("Save as", "<Primary><Shift>s"),
                     ("Print", "<Primary>p"),
                     ("Export PDF", "<Primary><Shift>e"),
                     ("Preferences", "<Primary>comma"),
-                    ("Keyboard Shortcuts", "<Primary>question"),
+                    ("Keyboard shortcuts", "<Primary>question"),
                     ("Quit", "<Primary>q"),
                 ]),
                 ("Formatting", &[
@@ -56,20 +56,20 @@ fn main() {
                     ("Highlight", "<Primary><Shift>h"),
                 ]),
                 ("Alignment", &[
-                    ("Align Left", "<Primary>l"),
-                    ("Align Center", "<Primary>e"),
-                    ("Align Right", "<Primary>r"),
+                    ("Align left", "<Primary>l"),
+                    ("Align center", "<Primary>e"),
+                    ("Align right", "<Primary>r"),
                     ("Justify", "<Primary>j"),
                 ]),
                 ("Font", &[
-                    ("Increase Font Size", "<Primary><Shift>greater"),
-                    ("Decrease Font Size", "<Primary><Shift>less"),
+                    ("Increase font size", "<Primary><Shift>greater"),
+                    ("Decrease font size", "<Primary><Shift>less"),
                 ]),
                 ("Document", &[
-                    ("New Tab", "<Primary>t"),
-                    ("Close Tab", "<Primary>w"),
+                    ("New tab", "<Primary>t"),
+                    ("Close tab", "<Primary>w"),
                     ("Find", "<Primary>f"),
-                    ("Find and Replace", "<Primary>h"),
+                    ("Find and replace", "<Primary>h"),
                     ("Undo", "<Primary>z"),
                     ("Redo", "<Primary>y"),
                 ]),
