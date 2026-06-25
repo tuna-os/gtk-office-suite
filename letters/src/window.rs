@@ -256,11 +256,11 @@ impl LettersWindow {
                 let app = app_clone.clone();
                 move || { app.activate_action("insertlink", None); }
             })),
-            ("Line Spacing", "Line Spacing", Box::new({
+            ("view-continuous-symbolic", "Line Spacing", Box::new({
                 let app = app_clone.clone();
                 move || { app.activate_action("cycle-line-spacing", None); }
             })),
-            ("Columns (1-3)", "Columns (1-3)", Box::new({
+            ("view-dual-symbolic", "Columns (1-3)", Box::new({
                 let app = app_clone.clone();
                 move || { app.activate_action("cycle-columns", None); }
             })),
