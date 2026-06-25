@@ -31,6 +31,8 @@ jobs:
         app: [letters, decks, tables]
     steps:
       - uses: actions/checkout@v4
+      - name: Install GTK deps
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq libgtk-4-dev libadwaita-1-dev libpango1.0-dev libcairo2-dev
       - name: Build binary
         run: cargo build --bin ${{ matrix.app }}
       - name: Run GUI tests inside Xvfb
