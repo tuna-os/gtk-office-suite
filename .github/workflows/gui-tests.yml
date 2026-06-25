@@ -1,6 +1,8 @@
 name: GUI Tests
 
 on:
+  schedule:
+    - cron: '0 6 * * *'   # daily at 6am UTC
   push:
     branches: [main]
   pull_request:
