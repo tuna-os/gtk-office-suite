@@ -1,2 +1,5 @@
 .flatpak-cache/
 tests/gui/*.png
+
+# Agent runtime artifacts
+.pi/goals/
