@@ -69,6 +69,34 @@ class LettersFormattingSmoke(BaseGUITestCase):
         self.assertIsNone(self.process.poll(), "letters crashed during formatting")
 
 
+class LettersPaletteSmoke(BaseGUITestCase):
+    """Command palette coverage (DESIGN-UI.md): Ctrl+K opens a searchable
+    list of every parameterless app action; any action missing a label
+    renders as "unlabeled: app.x", so asserting that marker's absence
+    forces every new action to register a human name."""
+
+    app_name = "letters"
+
+    def test_palette_lists_labeled_actions(self):
+        from dogtail import rawinput
+
+        # Open a document first so the lazily registered formatting
+        # actions exist and must therefore be labeled.
+        self.app.child(name="New Document", roleName="push button").do_action(0)
+        time.sleep(1.5)
+        rawinput.keyCombo("<Control>k")
+        time.sleep(1.0)
+
+        labels = {c.name for c in self.app.findChildren(
+            lambda c: c.roleName == "label")}
+        self.assertIn("Bold", labels, "palette missing formatting action")
+        self.assertIn("Command Palette", labels, "palette dialog not shown")
+        unlabeled = sorted(l for l in labels if l.startswith("unlabeled:"))
+        self.assertEqual(unlabeled, [],
+                         "actions without registry labels: %s" % unlabeled)
+        self.assertIsNone(self.process.poll(), "letters crashed opening palette")
+
+
 class LettersFileRoundTripSmoke(BaseGUITestCase):
     """The full user journey: open a file from the CLI, edit through real
     input, Ctrl+S, and assert the bytes on disk. This is the GUI-level

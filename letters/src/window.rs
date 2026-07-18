@@ -235,6 +235,15 @@ impl LettersWindow {
             ("app.print-preview", "Print Preview"),
             ("app.export-pdf", "Export as PDF…"),
             ("app.edit-headers", "Edit Headers and Footers…"),
+            ("app.style_p", "Paragraph Style: Normal"),
+            ("app.style_h1", "Paragraph Style: Heading 1"),
+            ("app.style_h2", "Paragraph Style: Heading 2"),
+            ("app.style_h3", "Paragraph Style: Heading 3"),
+            ("app.style_h4", "Paragraph Style: Heading 4"),
+            ("app.style_h5", "Paragraph Style: Heading 5"),
+            ("app.style_h6", "Paragraph Style: Heading 6"),
+            ("app.style_code", "Paragraph Style: Code"),
+            ("app.style_quote", "Paragraph Style: Block Quote"),
         ]);
 
         let primary_toolbar: Vec<suite_common::ToolbarItem> = vec![
@@ -252,7 +261,7 @@ impl LettersWindow {
             ("format-justify-center-symbolic", "Align center (Ctrl+E)", "app.align-center"),
             ("format-justify-right-symbolic", "Align right (Ctrl+R)", "app.align-right"),
             ("format-justify-fill-symbolic", "Justify (Ctrl+J)", "app.align-justify"),
-            ("insert-link-symbolic", "Insert link (Ctrl+K)", "app.insertlink"),
+            ("insert-link-symbolic", "Insert link (Ctrl+Shift+K)", "app.insertlink"),
             ("view-continuous-symbolic", "Line spacing", "app.cycle-line-spacing"),
             ("view-dual-symbolic", "Column layout", "app.cycle-columns"),
         ];
@@ -485,6 +494,7 @@ impl LettersWindow {
 
         // ── Actions ────────────────────────────────────────────────
         Self::register_actions(&tab_view, &stack, &word_count_label, &win, app, &settings);
+        Self::register_formatting_actions(&tab_view, app);
 
         // ── Print action ──────────────────────────────────────────
         {
@@ -709,7 +719,8 @@ impl LettersWindow {
                 }
             });
             app.add_action(&a);
-            app.set_accels_for_action("app.insertlink", &["<Primary>k"]);
+            // Ctrl+K belongs to the command palette (DESIGN-UI.md).
+            app.set_accels_for_action("app.insertlink", &["<Primary><Shift>k"]);
         }
 
         // Insert Table

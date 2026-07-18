@@ -12,7 +12,7 @@
 
 pub mod file_dialogs;
 pub mod toast_manager;
-pub use suite_common_core::{actions, format, undo, events, string_pool, units, props, style, search, print};
+pub use suite_common_core::{actions, palette, format, undo, events, string_pool, units, props, style, search, print};
 
 pub use file_dialogs::FileDialogHelper;
 pub use toast_manager::ToastManager;
@@ -117,6 +117,15 @@ impl SuiteApp {
         });
         app.add_action(&act_dark);
 
+        let act_palette = gio::SimpleAction::new("command-palette", None);
+        let app_weak = app.downgrade();
+        act_palette.connect_activate(move |_, _| {
+            if let Some(app) = app_weak.upgrade() {
+                show_command_palette(&app);
+            }
+        });
+        app.add_action(&act_palette);
+
         let act_quit = gio::SimpleAction::new("quit", None);
         let app_weak = app.downgrade();
         act_quit.connect_activate(move |_, _| {
@@ -134,8 +143,10 @@ impl SuiteApp {
         app.set_accels_for_action("app.preferences", &["<Control>comma"]);
         app.set_accels_for_action("app.shortcuts",   &["<Control>question"]);
         app.set_accels_for_action("app.quit",        &["<Control>q"]);
+        app.set_accels_for_action("app.command-palette", &["<Control>k"]);
 
         actions::register_labels(&[
+            ("app.command-palette", "Command Palette"),
             ("app.new", "New Document"),
             ("app.open", "Open…"),
             ("app.save", "Save"),
@@ -474,6 +485,154 @@ pub fn show_shortcuts_dialog(
 
     win.add_section(&section);
     win.set_visible(true);
+}
+
+// ---------------------------------------------------------------------------
+// Command palette
+// ---------------------------------------------------------------------------
+
+/// Human-readable label for an accelerator string ("<Primary>b" → "Ctrl+B").
+fn accel_display(accel: &str) -> Option<String> {
+    gtk::accelerator_parse(accel).map(|(key, mods)| gtk::accelerator_get_label(key, mods).to_string())
+}
+
+/// Collect every parameterless app action as a palette entry. Actions
+/// without a registered label surface as "unlabeled: app.x" — the palette
+/// coverage test asserts none exist, which forces new actions to be named.
+fn collect_palette_entries(app: &adw::Application) -> Vec<palette::PaletteEntry> {
+    // SuiteApp's canonical actions (app.save, app.open, …) forward to these
+    // per-app implementation actions; listing both would duplicate rows.
+    const FORWARDING_TARGETS: &[&str] = &[
+        "save-file", "save-file-as", "open-file", "new-document",
+        "show-preferences", "show-shortcuts",
+    ];
+    let mut entries: Vec<palette::PaletteEntry> = app
+        .list_actions()
+        .into_iter()
+        .filter(|name| app.action_parameter_type(name).is_none())
+        .filter(|name| !FORWARDING_TARGETS.contains(&name.as_str()))
+        .map(|name| {
+            let full = format!("app.{name}");
+            let label = actions::label_for(&full)
+                .unwrap_or_else(|| format!("unlabeled: {full}"));
+            let accel = app.accels_for_action(&full).first().and_then(|a| accel_display(a));
+            palette::PaletteEntry { name: full, label, accel }
+        })
+        .collect();
+    entries.sort_by(|a, b| a.label.cmp(&b.label));
+    entries
+}
+
+/// Show the Ctrl+K command palette: a searchable list of every labeled
+/// action with its shortcut. DESIGN-UI.md §surfacing — the power ceiling.
+pub fn show_command_palette(app: &adw::Application) {
+    let entries = collect_palette_entries(app);
+
+    let search = gtk::SearchEntry::new();
+    search.set_placeholder_text(Some("Type a command…"));
+    search.set_margin_start(6);
+    search.set_margin_end(6);
+    search.set_margin_top(6);
+
+    let list = gtk::ListBox::new();
+    list.set_selection_mode(gtk::SelectionMode::Single);
+    list.add_css_class("boxed-list");
+    list.set_margin_start(6);
+    list.set_margin_end(6);
+    list.set_margin_bottom(6);
+    list.update_property(&[gtk4::accessible::Property::Label("Command list")]);
+
+    let scroll = gtk::ScrolledWindow::new();
+    scroll.set_child(Some(&list));
+    scroll.set_vexpand(true);
+    scroll.set_policy(gtk::PolicyType::Never, gtk::PolicyType::Automatic);
+
+    let content = gtk::Box::new(gtk::Orientation::Vertical, 6);
+    content.append(&search);
+    content.append(&scroll);
+
+    let dialog = adw::Dialog::builder()
+        .title("Command Palette")
+        .content_width(480)
+        .content_height(420)
+        .build();
+    let tv = adw::ToolbarView::new();
+    let hb = adw::HeaderBar::new();
+    tv.add_top_bar(&hb);
+    tv.set_content(Some(&content));
+    dialog.set_child(Some(&tv));
+
+    // (Re)populate rows for a query. Row widget: label left, accel right.
+    let populate = {
+        let list = list.clone();
+        let entries = entries.clone();
+        move |query: &str| {
+            while let Some(row) = list.row_at_index(0) {
+                list.remove(&row);
+            }
+            for e in palette::filter_entries(query, &entries) {
+                let row_box = gtk::Box::new(gtk::Orientation::Horizontal, 12);
+                row_box.set_margin_start(12);
+                row_box.set_margin_end(12);
+                row_box.set_margin_top(6);
+                row_box.set_margin_bottom(6);
+                let label = gtk::Label::new(Some(&e.label));
+                label.set_halign(gtk::Align::Start);
+                label.set_hexpand(true);
+                row_box.append(&label);
+                if let Some(accel) = &e.accel {
+                    let al = gtk::Label::new(Some(accel));
+                    al.add_css_class("dim-label");
+                    al.add_css_class("caption");
+                    row_box.append(&al);
+                }
+                let row = gtk::ListBoxRow::new();
+                row.set_child(Some(&row_box));
+                // Action name travels on the row for activation.
+                unsafe { row.set_data("action-name", e.name.clone()) };
+                list.append(&row);
+            }
+            if let Some(first) = list.row_at_index(0) {
+                list.select_row(Some(&first));
+            }
+        }
+    };
+    populate("");
+
+    {
+        let populate = populate.clone();
+        search.connect_search_changed(move |s| populate(&s.text()));
+    }
+
+    // Row activation → fire the action, close the palette.
+    {
+        let app = app.clone();
+        let dialog = dialog.clone();
+        list.connect_row_activated(move |_, row| {
+            let name: Option<String> =
+                unsafe { row.data::<String>("action-name").map(|p| p.as_ref().clone()) };
+            if let Some(full) = name {
+                dialog.close();
+                if let Some(short) = full.strip_prefix("app.") {
+                    app.activate_action(short, None);
+                }
+            }
+        });
+    }
+
+    // Enter in the search entry activates the selected (or first) row.
+    {
+        let list = list.clone();
+        search.connect_activate(move |_| {
+            if let Some(row) = list.selected_row().or_else(|| list.row_at_index(0)) {
+                row.activate();
+            }
+        });
+    }
+
+    let parent = app.active_window();
+    dialog.present(parent.as_ref());
+    search.grab_focus();
 }
 
 /// Show the keyboard-shortcuts dialog generated from the action label
