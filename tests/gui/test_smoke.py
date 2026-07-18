@@ -257,6 +257,31 @@ class TablesNameBoxSmoke(BaseGUITestCase):
         self.assertIsNone(self.process.poll(), "tables crashed during keyboard selection")
 
 
+class DecksSelectionSmoke(BaseGUITestCase):
+    """Object selection updates the canvas a11y description and the
+    inspector (fit-to-viewport geometry keeps coordinates stable)."""
+
+    app_name = "decks"
+
+    def test_click_selects_object(self):
+        from dogtail import rawinput
+        import subprocess
+
+        aid = "org.tunaos.decks-rust"
+        subprocess.run(["gapplication", "action", aid, "new-document"])
+        time.sleep(1.5)
+        subprocess.run(["gapplication", "action", aid, "add-shape"])
+        time.sleep(1.0)
+        # Default Rect is at slide (200,200,200x150); under the default
+        # 960x680 window this lands here on the fitted canvas.
+        rawinput.click(417, 372)
+        time.sleep(1.0)
+        canvas = self.app.child(name="Slide canvas")
+        self.assertIn("selected", canvas.description,
+                      f"canvas description: {canvas.description!r}")
+        self.assertIsNone(self.process.poll(), "decks crashed during selection")
+
+
 class DecksSmoke(BaseGUITestCase):
     app_name = "decks"
 

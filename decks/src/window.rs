@@ -61,8 +61,9 @@ impl DecksWindow {
         canvas.set_hexpand(true);
         canvas.set_accessible_role(gtk::AccessibleRole::Img);
         canvas.update_property(&[gtk::accessible::Property::Label("Slide canvas")]);
-        canvas.set_content_width(960);
-        canvas.set_content_height(540);
+        // No fixed content size: the canvas fills the viewport and the
+        // slide scales to fit (slide_geometry) — a fixed 960px minimum
+        // made the scrolled window clip the slide at narrow widths.
         {
             let s = slides.clone();
             let c = current_slide.clone();
@@ -103,6 +104,189 @@ impl DecksWindow {
         canvas_scroll.set_hexpand(true);
         canvas_scroll.set_min_content_width(400);
         canvas_scroll.set_min_content_height(300);
+
+        // ── Object inspector (right sidebar) ─────────────────────────────
+        // Visible twin of the a11y descriptions: position/size of the
+        // selected object, two-way bound to the model (DESIGN-UI §Decks).
+        let insp_grid = gtk::Grid::new();
+        insp_grid.set_row_spacing(6);
+        insp_grid.set_column_spacing(6);
+        let mk_spin = |label: &str, row: i32, grid: &gtk::Grid| -> gtk::SpinButton {
+            let l = gtk::Label::new(Some(label));
+            l.add_css_class("dim-label");
+            l.set_halign(gtk::Align::Start);
+            let sb = gtk::SpinButton::with_range(-2000.0, 4000.0, 1.0);
+            sb.set_hexpand(true);
+            sb.update_property(&[gtk::accessible::Property::Label(&format!("Object {label}"))]);
+            grid.attach(&l, 0, row, 1, 1);
+            grid.attach(&sb, 1, row, 1, 1);
+            sb
+        };
+        let spin_x = mk_spin("X", 0, &insp_grid);
+        let spin_y = mk_spin("Y", 1, &insp_grid);
+        let spin_w = mk_spin("W", 2, &insp_grid);
+        let spin_h = mk_spin("H", 3, &insp_grid);
+
+        let insp_title = gtk::Label::new(Some("Object"));
+        insp_title.add_css_class("heading");
+        insp_title.set_halign(gtk::Align::Start);
+        let insp_hint = gtk::Label::new(Some("Select an object on the slide"));
+        insp_hint.add_css_class("dim-label");
+        insp_hint.add_css_class("caption");
+        insp_hint.set_halign(gtk::Align::Start);
+        insp_hint.set_wrap(true);
+
+        let inspector = gtk::Box::new(gtk::Orientation::Vertical, 12);
+        inspector.set_margin_start(12);
+        inspector.set_margin_end(12);
+        inspector.set_margin_top(12);
+        inspector.set_margin_bottom(12);
+        inspector.append(&insp_title);
+        inspector.append(&insp_grid);
+        inspector.append(&insp_hint);
+        insp_grid.set_sensitive(false);
+
+        // Status readout: slide x/y + object count (same source as the
+        // a11y description).
+        let status_label = gtk::Label::new(None);
+        status_label.add_css_class("caption");
+        status_label.add_css_class("dim-label");
+
+        // Presenter pill: bottom-center prev / present / next.
+        let pill = gtk::Box::new(gtk::Orientation::Horizontal, 0);
+        pill.add_css_class("linked");
+        pill.add_css_class("osd");
+        pill.add_css_class("toolbar");
+        pill.set_halign(gtk::Align::Center);
+        pill.set_valign(gtk::Align::End);
+        pill.set_margin_bottom(12);
+        let prev_btn = gtk::Button::from_icon_name("go-previous-symbolic");
+        prev_btn.set_tooltip_text(Some("Previous slide"));
+        let present_btn = gtk::Button::from_icon_name("media-playback-start-symbolic");
+        present_btn.set_tooltip_text(Some("Present (F5)"));
+        present_btn.set_action_name(Some("app.present"));
+        let next_btn = gtk::Button::from_icon_name("go-next-symbolic");
+        next_btn.set_tooltip_text(Some("Next slide"));
+        pill.append(&prev_btn);
+        pill.append(&present_btn);
+        pill.append(&next_btn);
+
+        let canvas_overlay = gtk::Overlay::new();
+        canvas_overlay.set_child(Some(&canvas_scroll));
+        canvas_overlay.add_overlay(&pill);
+        status_label.set_halign(gtk::Align::End);
+        status_label.set_valign(gtk::Align::End);
+        status_label.set_margin_end(12);
+        status_label.set_margin_bottom(12);
+        canvas_overlay.add_overlay(&status_label);
+
+        let editor_split = adw::OverlaySplitView::new();
+        editor_split.set_sidebar_position(gtk::PackType::End);
+        editor_split.set_sidebar(Some(&inspector));
+        editor_split.set_content(Some(&canvas_overlay));
+        editor_split.set_min_sidebar_width(170.0);
+        editor_split.set_max_sidebar_width(220.0);
+
+        // Central HUD refresh: status text + inspector fields.
+        let insp_guard = Rc::new(Cell::new(false));
+        let refresh_hud: Rc<dyn Fn()> = {
+            let ss = slides.clone();
+            let cs_ref = current_slide.clone();
+            let so = selected_object.clone();
+            let (sx, sy, sw, sh) = (spin_x.clone(), spin_y.clone(), spin_w.clone(), spin_h.clone());
+            let grid = insp_grid.clone();
+            let status = status_label.clone();
+            let guard = insp_guard.clone();
+            Rc::new(move || {
+                let idx = cs_ref.get();
+                let slides = ss.borrow();
+                let n_objects = slides.get(idx).map(|s| s.objects.len()).unwrap_or(0);
+                status.set_text(&format!(
+                    "Slide {}/{}  ·  {} object{}",
+                    idx + 1,
+                    slides.len().max(1),
+                    n_objects,
+                    if n_objects == 1 { "" } else { "s" }
+                ));
+                let obj = so
+                    .get()
+                    .and_then(|oi| slides.get(idx).and_then(|s| s.objects.get(oi)));
+                match obj {
+                    Some(o) => {
+                        guard.set(true);
+                        let (x, y, w, h) = match o {
+                            SlideObject::TextBox { x, y, w, h, .. }
+                            | SlideObject::Rect { x, y, w, h }
+                            | SlideObject::Image { x, y, w, h, .. } => (*x, *y, *w, *h),
+                            SlideObject::Circle { x, y, r } => (*x, *y, r * 2.0, r * 2.0),
+                        };
+                        sx.set_value(x);
+                        sy.set_value(y);
+                        sw.set_value(w);
+                        sh.set_value(h);
+                        grid.set_sensitive(true);
+                        guard.set(false);
+                    }
+                    None => {
+                        guard.set(true);
+                        for sb in [&sx, &sy, &sw, &sh] {
+                            sb.set_value(0.0);
+                        }
+                        guard.set(false);
+                        grid.set_sensitive(false);
+                    }
+                }
+            })
+        };
+        refresh_hud();
+
+        // Inspector edits write back to the model.
+        {
+            enum Field { X, Y, W, H }
+            for (spin, field) in [
+                (&spin_x, Field::X),
+                (&spin_y, Field::Y),
+                (&spin_w, Field::W),
+                (&spin_h, Field::H),
+            ] {
+                let ss = slides.clone();
+                let cs_ref = current_slide.clone();
+                let so = selected_object.clone();
+                let da = canvas.clone();
+                let guard = insp_guard.clone();
+                spin.connect_value_changed(move |sb| {
+                    if guard.get() {
+                        return;
+                    }
+                    let Some(oi) = so.get() else { return };
+                    let idx = cs_ref.get();
+                    let mut slides = ss.borrow_mut();
+                    let Some(obj) = slides.get_mut(idx).and_then(|s| s.objects.get_mut(oi))
+                    else {
+                        return;
+                    };
+                    let v = sb.value();
+                    match obj {
+                        SlideObject::TextBox { x, y, w, h, .. }
+                        | SlideObject::Rect { x, y, w, h }
+                        | SlideObject::Image { x, y, w, h, .. } => match field {
+                            Field::X => *x = v,
+                            Field::Y => *y = v,
+                            Field::W => *w = v.max(1.0),
+                            Field::H => *h = v.max(1.0),
+                        },
+                        SlideObject::Circle { x, y, r } => match field {
+                            Field::X => *x = v,
+                            Field::Y => *y = v,
+                            Field::W | Field::H => *r = (v / 2.0).max(1.0),
+                        },
+                    }
+                    drop(slides);
+                    da.queue_draw();
+                });
+            }
+        }
+
 
         // ── Content stack ─────────────────────────────────────────────────
         let content_stack = gtk::Stack::new();
@@ -221,6 +405,37 @@ impl DecksWindow {
                 }
             }
         });
+
+        // Second row-selected handler: HUD follows slide switches.
+        {
+            let refresh = refresh_hud.clone();
+            let so = selected_object.clone();
+            slide_list.connect_row_selected(move |_, _| {
+                so.set(None);
+                refresh();
+            });
+        }
+
+        // Pill prev/next drive the slide-list selection (the single
+        // source of truth for the current slide).
+        {
+            let sl = slide_list.clone();
+            prev_btn.connect_clicked(move |_| {
+                let idx = sl.selected_row().map(|r| r.index()).unwrap_or(0);
+                if idx > 0 {
+                    if let Some(row) = sl.row_at_index(idx - 1) {
+                        sl.select_row(Some(&row));
+                    }
+                }
+            });
+            let sl = slide_list.clone();
+            next_btn.connect_clicked(move |_| {
+                let idx = sl.selected_row().map(|r| r.index()).unwrap_or(0);
+                if let Some(row) = sl.row_at_index(idx + 1) {
+                    sl.select_row(Some(&row));
+                }
+            });
+        }
 
         // Save speaker notes on text change
         {
@@ -353,6 +568,7 @@ impl DecksWindow {
             let cs = canvas.clone();
             let cs_ref = current_slide.clone();
             let undo = undo.clone();
+            let refresh = refresh_hud.clone();
             let act = gio::SimpleAction::new("add-text-box", None);
             act.connect_activate(move |_, _| {
                 let idx = cs_ref.get();
@@ -362,6 +578,7 @@ impl DecksWindow {
                 };
                 undo.borrow_mut().execute(Box::new(AddObjectCmd::new(idx, obj)));
                 cs.queue_draw();
+                refresh();
             });
             app.add_action(&act);
             if let Some(btn) = find_toolbar_child(&toolbar, "insert-text-symbolic") {
@@ -376,6 +593,7 @@ impl DecksWindow {
             let cs_ref = current_slide.clone();
             let shape_count = Rc::new(Cell::new(0u32));
             let undo = undo.clone();
+            let refresh = refresh_hud.clone();
             let act = gio::SimpleAction::new("add-shape", None);
             act.connect_activate(move |_, _| {
                 let idx = cs_ref.get();
@@ -391,6 +609,7 @@ impl DecksWindow {
                 drop(ss_snap);
                 undo.borrow_mut().execute(Box::new(AddObjectCmd::new(idx, obj)));
                 cs.queue_draw();
+                refresh();
             });
             app.add_action(&act);
             if let Some(btn) = find_toolbar_child(&toolbar, "insert-object-symbolic") {
@@ -404,6 +623,7 @@ impl DecksWindow {
             let cs_ref = current_slide.clone();
             let w = suite_win.window.clone();
             let undo = undo.clone();
+            let refresh = refresh_hud.clone();
             let act = gio::SimpleAction::new("add-image", None);
             act.connect_activate(move |_, _| {
                 let dlg = gtk::FileDialog::new();
@@ -416,6 +636,7 @@ impl DecksWindow {
                 let cs = cs.clone();
                 let cs_ref = cs_ref.clone();
                 let undo = undo.clone();
+                let refresh = refresh.clone();
                 dlg.open(Some(&w), None::<&gio::Cancellable>,
                     move |result: Result<gio::File, glib::Error>| {
                         if let Ok(file) = result {
@@ -456,14 +677,18 @@ impl DecksWindow {
             let cs = canvas.clone();
             let cs_ref = current_slide.clone();
             let so = selected_object.clone();
+            let refresh = refresh_hud.clone();
             let click = gtk::GestureClick::new();
             click.connect_pressed(move |_g, _n, x, y| {
                 let idx = cs_ref.get();
                 let slides = ss.borrow();
                 if idx >= slides.len() { return; }
-                let found = hit_test_object(&slides[idx].objects, x, y);
+                let (sx, sy) = canvas_to_slide(x, y, cs.width() as f64, cs.height() as f64);
+                let found = hit_test_object(&slides[idx].objects, sx, sy);
                 so.set(found);
+                drop(slides);
                 cs.queue_draw();
+                refresh();
             });
             canvas.add_controller(click);
         }
@@ -488,11 +713,15 @@ impl DecksWindow {
             let cs_ref4 = cs_ref.clone();
             let cs3 = cs.clone();
             let so2 = so.clone();
+            let cvb = cs.clone();
+            let cve = cs.clone();
             drag.connect_drag_begin(move |_g, x, y| {
                 let idx = cs_ref2.get();
                 let sl = ss2.borrow();
                 if idx >= sl.len() { return; }
-                if let Some(oi) = hit_test_object(&sl[idx].objects, x, y) {
+                let (sx, sy) =
+                    canvas_to_slide(x, y, cvb.width() as f64, cvb.height() as f64);
+                if let Some(oi) = hit_test_object(&sl[idx].objects, sx, sy) {
                     let (ox, oy) = decks_core::undo::obj_position(&sl[idx].objects[oi]);
                     so2.set(Some(oi));
                     ds2.set(Some((oi, ox, oy)));
@@ -503,8 +732,11 @@ impl DecksWindow {
                     let idx = cs_ref3.get();
                     let mut sl = ss.borrow_mut();
                     if idx < sl.len() && oi < sl[idx].objects.len() {
-                        let nx = snap_to_grid(orig_x + dx as f64, GRID_SPACING);
-                        let ny = snap_to_grid(orig_y + dy as f64, GRID_SPACING);
+                        let (_, _, sw, _) = crate::canvas::slide_geometry(
+                            cs3.width() as f64, cs3.height() as f64);
+                        let k = 960.0 / sw.max(1.0);
+                        let nx = snap_to_grid(orig_x + dx * k, GRID_SPACING);
+                        let ny = snap_to_grid(orig_y + dy * k, GRID_SPACING);
                         set_obj_position(&mut sl[idx].objects[oi], nx, ny);
                         cs3.queue_draw();
                     }
@@ -512,8 +744,11 @@ impl DecksWindow {
             });
             drag.connect_drag_end(move |_g, dx, dy| {
                 if let Some((oi, orig_x, orig_y)) = ds4.get() {
-                    let snapped_x = snap_to_grid(orig_x + dx as f64, GRID_SPACING);
-                    let snapped_y = snap_to_grid(orig_y + dy as f64, GRID_SPACING);
+                    let (_, _, sw, _) = crate::canvas::slide_geometry(
+                        cve.width() as f64, cve.height() as f64);
+                    let k = 960.0 / sw.max(1.0);
+                    let snapped_x = snap_to_grid(orig_x + dx * k, GRID_SPACING);
+                    let snapped_y = snap_to_grid(orig_y + dy * k, GRID_SPACING);
                     let net_dx = snapped_x - orig_x;
                     let net_dy = snapped_y - orig_y;
                     if net_dx != 0.0 || net_dy != 0.0 {
@@ -545,7 +780,9 @@ impl DecksWindow {
                 let idx = cs_ref.get();
                 let slides = ss.borrow();
                 if idx >= slides.len() { return; }
-                if let Some(oi) = hit_test_object(&slides[idx].objects, x, y) {
+                let (hx, hy) =
+                    canvas_to_slide(x, y, cs2.width() as f64, cs2.height() as f64);
+                if let Some(oi) = hit_test_object(&slides[idx].objects, hx, hy) {
                     let obj = slides[idx].objects[oi].clone();
                     if let SlideObject::TextBox { text, x: ox, y: oy, w: ow, h: oh, .. } = obj {
                         let old_text = text.clone();
@@ -715,8 +952,9 @@ impl DecksWindow {
             let cs = content_stack.clone();
             let sl = slide_list.clone();
             let ss = slides.clone();
-            let cs_scroll = canvas_scroll.clone();
+            let cs_scroll = editor_split.clone();
             let path_ref = file_path.clone();
+            let refresh = refresh_hud.clone();
             let act = gtk::gio::SimpleAction::new("new-document", None);
             act.connect_activate(move |_, _| {
                 if cs.child_by_name("editor").is_none() {
@@ -736,6 +974,7 @@ impl DecksWindow {
                 *path_ref.borrow_mut() = None;
                 rebuild_slide_list(&sl, &ss.borrow(), 0);
                 cs.queue_draw();
+                refresh();
             });
             app.add_action(&act);
         }
@@ -748,7 +987,7 @@ impl DecksWindow {
             let so = selected_object.clone();
             let da = canvas.clone();
             let w = suite_win.window.clone();
-            let cs_scroll = canvas_scroll.clone();
+            let cs_scroll = editor_split.clone();
             let path_ref = file_path.clone();
 
             let act = gtk::gio::SimpleAction::new("open-file", None);

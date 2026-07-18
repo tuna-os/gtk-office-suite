@@ -51,14 +51,24 @@ pub fn snap_to_grid(value: f64, grid: f64) -> f64 {
     (value / grid).round() * grid
 }
 
+// ── Slide geometry: fit-to-viewport ──────────────────────────────────
+
+/// Slide placement inside the canvas: scale 960x540 to fit the viewport
+/// (whichever axis binds), leave an 8% margin, center. Returns
+/// (origin_x, origin_y, slide_w, slide_h). Used identically by drawing,
+/// hit-testing, and coordinate conversion so they can never disagree.
+pub fn slide_geometry(canvas_w: f64, canvas_h: f64) -> (f64, f64, f64, f64) {
+    let scale = (canvas_w / 960.0).min(canvas_h / 540.0).max(0.05) * 0.92;
+    let slide_w = 960.0 * scale;
+    let slide_h = 540.0 * scale;
+    ((canvas_w - slide_w) / 2.0, (canvas_h - slide_h) / 2.0, slide_w, slide_h)
+}
+
 // ── Coordinate conversion ────────────────────────────────────────────
 
 /// Convert canvas (x,y) to slide coordinates (960x540 at 16:9).
 pub fn canvas_to_slide(x: f64, y: f64, canvas_w: f64, canvas_h: f64) -> (f64, f64) {
-    let slide_w = canvas_w * 0.85;
-    let slide_h = slide_w * 9.0 / 16.0;
-    let ox = (canvas_w - slide_w) / 2.0;
-    let oy = (canvas_h - slide_h) / 2.0;
+    let (ox, oy, slide_w, slide_h) = slide_geometry(canvas_w, canvas_h);
     let sx = (x - ox) / slide_w * 960.0;
     let sy = (y - oy) / slide_h * 540.0;
     (sx, sy)
@@ -66,10 +76,7 @@ pub fn canvas_to_slide(x: f64, y: f64, canvas_w: f64, canvas_h: f64) -> (f64, f6
 
 /// Convert slide coordinates to canvas position.
 pub fn slide_to_canvas(sx: f64, sy: f64, canvas_w: f64, canvas_h: f64) -> (f64, f64) {
-    let slide_w = canvas_w * 0.85;
-    let slide_h = slide_w * 9.0 / 16.0;
-    let ox = (canvas_w - slide_w) / 2.0;
-    let oy = (canvas_h - slide_h) / 2.0;
+    let (ox, oy, slide_w, slide_h) = slide_geometry(canvas_w, canvas_h);
     let x = ox + (sx / 960.0) * slide_w;
     let y = oy + (sy / 540.0) * slide_h;
     (x, y)
@@ -109,10 +116,7 @@ pub fn draw_slide(
     cr.set_source_rgb(0.86, 0.86, 0.86);
     cr.paint().unwrap();
 
-    let slide_w = width * 0.85;
-    let slide_h = slide_w * 9.0 / 16.0;
-    let ox = (width - slide_w) / 2.0;
-    let oy = (height - slide_h) / 2.0;
+    let (ox, oy, slide_w, slide_h) = slide_geometry(width, height);
 
     // Shadow
     cr.set_source_rgba(0.0, 0.0, 0.0, 0.15);
