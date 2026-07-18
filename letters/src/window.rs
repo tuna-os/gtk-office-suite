@@ -970,7 +970,7 @@ impl LettersWindow {
                 let sl = sl.clone();
                 let dlg = gtk::FileDialog::new();
                 let f = gtk::FileFilter::new();
-                f.add_pattern("*.md"); f.add_pattern("*.txt"); f.add_pattern("*.html"); f.add_pattern("*.docx");
+                f.add_pattern("*.md"); f.add_pattern("*.txt"); f.add_pattern("*.html"); f.add_pattern("*.docx"); f.add_pattern("*.odt");
                 f.set_name(Some("Documents"));
                 let fl = gio::ListStore::new::<gtk::FileFilter>();
                 fl.append(&f);
@@ -1020,7 +1020,7 @@ impl LettersWindow {
                 let tv = tv.clone(); let w = w.clone();
                 let dlg = gtk::FileDialog::new();
                 let f = gtk::FileFilter::new();
-                f.add_pattern("*.md"); f.add_pattern("*.txt"); f.add_pattern("*.docx");
+                f.add_pattern("*.md"); f.add_pattern("*.txt"); f.add_pattern("*.docx"); f.add_pattern("*.odt");
                 f.set_name(Some("Documents"));
                 let fl = gio::ListStore::new::<gtk::FileFilter>();
                 fl.append(&f);

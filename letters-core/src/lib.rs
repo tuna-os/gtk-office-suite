@@ -7,5 +7,6 @@ pub mod docx;
 pub mod fragment;
 pub mod markdown;
 pub mod model;
+pub mod odt;
 
 pub use model::{Alignment, Document, ListKind, Paragraph, ParaStyle, Run, RunStyle, StylePatch};

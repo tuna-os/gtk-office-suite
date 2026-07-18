@@ -56,7 +56,7 @@ anything interactive needs I5 or I6.
 | Page setup | breaks ✅ I2 round-trip; size/margins round-trip still open |
 | Block quotes | ✅ I1 + I3 (BlockQuotation style) + markdown quote round-trip |
 | Line spacing round-trip | I2 (model has it; docx mapping missing — red) |
-| ODT read/write | new I2 fixture corpus + I3/I4 via LO (its native format — oracle is authoritative) |
+| ODT read/write | ✅ I2 10-test round-trip (paras, h1–6, b/i/u/s, highlight, size, color, links, alignment, lists, page breaks, header/footer) + I3 oracle 7 tests: LO opens ours, we open LO's, bold survives LO odt→docx pass |
 
 ### Tier 3 — Advanced (each needs an explicit scope decision)
 

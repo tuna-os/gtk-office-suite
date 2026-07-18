@@ -256,6 +256,7 @@ pub fn load_file_to_buffer(path: &str, buf: &gtk::TextBuffer) -> Result<(), Stri
         .extension().and_then(|e| e.to_str()).unwrap_or("").to_lowercase();
     let doc = match ext.as_str() {
         "docx" => letters_core::docx::read(path)?,
+        "odt" => letters_core::odt::read(path)?,
         _ => {
             let text = std::fs::read_to_string(path).map_err(|e| format!("Cannot read {path}: {e}"))?;
             letters_core::markdown::parse(&text)
@@ -272,6 +273,7 @@ pub fn save_buffer_to_file(buf: &gtk::TextBuffer, path: &str) -> Result<(), Stri
         .extension().and_then(|e| e.to_str()).unwrap_or("").to_lowercase();
     match ext.as_str() {
         "docx" => letters_core::docx::write(&doc, path),
+        "odt" => letters_core::odt::write(&doc, path),
         _ => {
             let md = letters_core::markdown::serialize(&doc);
             std::fs::write(path, md).map_err(|e| format!("Cannot write {path}: {e}"))

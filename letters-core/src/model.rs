@@ -246,7 +246,7 @@ impl Document {
         text + self.paragraphs.len().saturating_sub(1)
     }
 
-    fn ensure_non_empty(&mut self) {
+    pub(crate) fn ensure_non_empty(&mut self) {
         if self.paragraphs.is_empty() {
             self.paragraphs.push(Paragraph::default());
         }

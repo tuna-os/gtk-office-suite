@@ -126,3 +126,113 @@ fn we_read_soffice_output() {
     let doc = docx::read(docx_path.to_str().unwrap()).expect("our engine failed on LO-authored docx");
     assert_eq!(norm(&doc.to_plain_text()), "alpha\nbeta\ngamma");
 }
+
+// ── ODT oracle (PARITY #20) ──────────────────────────────────────────
+
+fn oracle_odt_text_round_trip(doc: &Document) {
+    let Some(bin) = require_or_skip() else { return };
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("ours.odt");
+    letters_core::odt::write(doc, path.to_str().unwrap()).expect("write odt");
+
+    let extracted = soffice_convert(bin, &path, "txt:Text (encoded):UTF8")
+        .expect("LibreOffice could not open our .odt");
+    assert_eq!(
+        norm(&extracted),
+        norm(&doc.to_plain_text()),
+        "LibreOffice reads different text than we wrote (odt)"
+    );
+}
+
+#[test]
+fn odt_oracle_reads_plain_paragraphs() {
+    oracle_odt_text_round_trip(&Document::from_plain_text(
+        "first paragraph\nsecond paragraph\n\nfourth after blank",
+    ));
+}
+
+#[test]
+fn odt_oracle_reads_styled_text() {
+    let mut d = Document::from_plain_text("normal bold italic strike");
+    d.apply_run_style(7, 11, &StylePatch::set_bold(true));
+    d.apply_run_style(12, 18, &StylePatch::set_italic(true));
+    d.apply_run_style(19, 25, &StylePatch::set_strikethrough(true));
+    oracle_odt_text_round_trip(&d);
+}
+
+#[test]
+fn odt_oracle_reads_headings_and_alignment() {
+    let mut d = Document::from_plain_text("Document Title\nSection One\nbody text here");
+    d.set_heading(0, Some(1));
+    d.set_heading(1, Some(2));
+    d.paragraphs[2].style.alignment = Alignment::Center;
+    oracle_odt_text_round_trip(&d);
+}
+
+#[test]
+fn odt_oracle_reads_lists() {
+    // soffice's text export renders list items as "    • item"; strip the
+    // markers — what we assert is that the items and their order survive.
+    let Some(bin) = require_or_skip() else { return };
+    let mut d = Document::from_plain_text("intro\napples\npears\noutro");
+    d.paragraphs[1].style.list = ListKind::Bullet;
+    d.paragraphs[2].style.list = ListKind::Bullet;
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("lists.odt");
+    letters_core::odt::write(&d, path.to_str().unwrap()).expect("write odt");
+    let extracted = soffice_convert(bin, &path, "txt:Text (encoded):UTF8")
+        .expect("LibreOffice could not open our .odt");
+    let cleaned: String = norm(&extracted)
+        .lines()
+        .map(|l| l.trim_start().trim_start_matches("• ").trim_start())
+        .collect::<Vec<_>>()
+        .join("\n");
+    assert_eq!(cleaned, "intro\napples\npears\noutro");
+}
+
+#[test]
+fn odt_oracle_reads_unicode() {
+    oracle_odt_text_round_trip(&Document::from_plain_text("héllo — “fancy” 中文 emoji ✨"));
+}
+
+/// The reverse: an .odt LibreOffice writes must open in our engine.
+#[test]
+fn we_read_soffice_odt_output() {
+    let Some(bin) = require_or_skip() else { return };
+    let dir = tempfile::tempdir().unwrap();
+
+    let src = dir.path().join("lo-authored.txt");
+    std::fs::write(&src, "alpha\nbeta\ngamma\n").unwrap();
+    let _ = soffice_convert(bin, &src, "odt").ok();
+    let odt_path = dir.path().join("lo-authored.odt");
+    assert!(odt_path.exists(), "soffice did not produce an odt");
+
+    let doc = letters_core::odt::read(odt_path.to_str().unwrap())
+        .expect("our engine failed on LO-authored odt");
+    assert_eq!(norm(&doc.to_plain_text()), "alpha\nbeta\ngamma");
+}
+
+/// Style fidelity through LibreOffice: our odt → soffice converts to docx →
+/// our docx reader sees the same runs (bold survives a full LO pass).
+#[test]
+fn odt_styles_survive_lo_conversion_to_docx() {
+    let Some(bin) = require_or_skip() else { return };
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("styled.odt");
+    let mut d = Document::from_plain_text("plain bolded end");
+    d.apply_run_style(6, 12, &StylePatch::set_bold(true));
+    letters_core::odt::write(&d, path.to_str().unwrap()).expect("write odt");
+
+    let _ = soffice_convert(bin, &path, "docx").ok();
+    let docx_path = dir.path().join("styled.docx");
+    assert!(docx_path.exists(), "soffice did not convert odt to docx");
+    let rt = docx::read(docx_path.to_str().unwrap()).expect("read converted docx");
+    assert_eq!(norm(&rt.to_plain_text()), "plain bolded end");
+    let bold_text: String = rt.paragraphs[0]
+        .runs
+        .iter()
+        .filter(|r| r.style.bold)
+        .map(|r| r.text.as_str())
+        .collect();
+    assert_eq!(bold_text.trim(), "bolded", "bold did not survive the LO pass");
+}
