@@ -2683,14 +2683,23 @@ dependencies = [
 name = "tables"
 version = "0.1.0"
 dependencies = [
- "calamine",
  "gtk4",
- "ironcalc_base",
  "libadwaita",
  "pangocairo",
+ "suite-common",
+ "tables-core",
+ "tempfile",
+]
+
+[[package]]
+name = "tables-core"
+version = "0.1.0"
+dependencies = [
+ "calamine",
+ "ironcalc_base",
  "regex",
  "rust_xlsxwriter",
- "suite-common",
+ "suite-common-core",
  "tempfile",
 ]
 

@@ -1,12 +1,8 @@
 use gtk4::prelude::*;
 use gtk4::gio;
-mod engine;
-mod export;
 mod charts;
 mod window;
-mod undo;
 mod preferences;
-pub mod sheet;
 pub mod grid_render;
 
 fn main() {

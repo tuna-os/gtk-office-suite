@@ -1,8 +1,8 @@
 // undo.rs — Tables-specific commands implementing suite_common::undo::Command.
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-use suite_common::undo::Command;
-use suite_common::format::NumberFormat;
+use suite_common_core::undo::Command;
+use suite_common_core::format::NumberFormat;
 use crate::sheet::{SheetModel, CellBorder};
 
 // ── App state wrapper for undo ──────────────────────────────────────────
@@ -179,7 +179,7 @@ impl Command<SheetState> for FreezeCmd {
 mod tests {
     use super::*;
     use crate::sheet::{SheetModel, CellBorder, BorderStyle};
-    use suite_common::format::{NumberFormat, NumberFormatKind};
+    use suite_common_core::format::{NumberFormat, NumberFormatKind};
 
     fn make_state() -> SheetState {
         let sheet = SheetModel::new("Test", 5, 5, 0);

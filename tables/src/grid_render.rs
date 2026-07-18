@@ -2,7 +2,26 @@
 use gtk4::cairo::{self, Context};
 use std::cell::RefCell;
 use std::rc::Rc;
-use crate::sheet::{SheetModel, CellBorder, BorderStyle, xy_to_cell, col_label};
+use tables_core::sheet::{SheetModel, CellBorder, BorderStyle, xy_to_cell, col_label};
+
+/// Auto-fit column width to content using PangoLayout text measurement.
+/// Lives here (not tables-core) because it needs Cairo/Pango to measure.
+pub fn auto_fit_column(cr: &Context, sheet: &mut SheetModel, col: usize, _scroll_x: f64) {
+    let layout = pangocairo::functions::create_layout(cr);
+    let mut max_w: f64 = 30.0;
+    let label = col_label(col);
+    layout.set_text(&label);
+    let (tw, _) = layout.pixel_size();
+    max_w = max_w.max(tw as f64 + 16.0);
+    for r in 0..sheet.rows {
+        let val = sheet.cell(r, col);
+        if val.is_empty() { continue; }
+        layout.set_text(val);
+        let (tw, _) = layout.pixel_size();
+        max_w = max_w.max(tw as f64 + 12.0);
+    }
+    sheet.set_col_width(col, max_w.clamp(30.0, 500.0));
+}
 
 const ROW_HEIGHT: f64 = 28.0;
 const COL_WIDTH: f64 = 90.0;

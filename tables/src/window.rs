@@ -10,12 +10,12 @@ use adw::prelude::{AdwDialogExt, AlertDialogExt};
 use std::cell::{Cell, RefCell};
 use std::rc::Rc;
 
-use crate::engine::TablesEngine;
-use crate::sheet::*;
-use crate::grid_render::draw_grid;
+use tables_core::engine::TablesEngine;
+use tables_core::sheet::*;
+use crate::grid_render::{draw_grid, auto_fit_column};
 use suite_common::format::{NumberFormat, NumberFormatKind};
 use suite_common::undo::UndoManager;
-use crate::undo::SheetState;
+use tables_core::undo::SheetState;
 
 // ── Constants ──────────────────────────────────────────────────────────
 // ── Shared state ─────────────────────────────────────────────────────
@@ -48,121 +48,12 @@ impl AppState {
     }
 }
 
-// ── File I/O helpers ────────────────────────────────────────────────────
+// File I/O lives in tables_core::io; window code only adapts AppState.
+use tables_core::io::load_file_into_engine;
 
-/// Load spreadsheet file into the engine. Returns (rows, cols) or error string.
-fn load_file_into_engine(path: &str, engine: &mut TablesEngine) -> Result<(usize, usize), String> {
-    let ext = std::path::Path::new(path)
-        .extension().and_then(|e| e.to_str()).unwrap_or("").to_lowercase();
-
-    match ext.as_str() {
-        "xlsx" | "xls" | "xlsm" | "xlsb" => {
-            use calamine::{open_workbook, Reader, Xlsx};
-            let mut wb: Xlsx<_> = open_workbook(path)
-                .map_err(|e| format!("Cannot open file: {}", e))?;
-
-            let sheet_names = wb.sheet_names().to_vec();
-            if sheet_names.is_empty() { return Err("No sheets found".into()); }
-
-            let range = wb.worksheet_range(&sheet_names[0])
-                .map_err(|e| format!("Cannot read sheet: {}", e))?;
-            let (rows, cols) = (range.height(), range.width());
-
-            for (r, row) in range.rows().enumerate() {
-                for (c, cell) in row.iter().enumerate() {
-                    let val = match cell {
-                        calamine::Data::String(s) => s.clone(),
-                        calamine::Data::Float(f) => f.to_string(),
-                        calamine::Data::Int(i) => i.to_string(),
-                        calamine::Data::Bool(b) => b.to_string(),
-                        calamine::Data::DateTime(d) => d.to_string(),
-                        calamine::Data::Error(e) => format!("#{}", e),
-                        _ => String::new(),
-                    };
-                    engine.set_cell_text(r, c, &val);
-                }
-            }
-            engine.evaluate();
-            Ok((rows.max(1), cols.max(1)))
-        }
-        "ods" => {
-            use calamine::{open_workbook, Reader, Ods};
-            let mut wb: Ods<_> = open_workbook(path)
-                .map_err(|e| format!("Cannot open file: {}", e))?;
-            let sheet_names = wb.sheet_names().to_vec();
-            if sheet_names.is_empty() { return Err("No sheets found".into()); }
-            let range = wb.worksheet_range(&sheet_names[0])
-                .map_err(|e| format!("Cannot read sheet: {}", e))?;
-            let (rows, cols) = (range.height(), range.width());
-            for (r, row) in range.rows().enumerate() {
-                for (c, cell) in row.iter().enumerate() {
-                    let val = match cell {
-                        calamine::Data::String(s) => s.clone(),
-                        calamine::Data::Float(f) => f.to_string(),
-                        calamine::Data::Int(i) => i.to_string(),
-                        calamine::Data::Bool(b) => b.to_string(),
-                        calamine::Data::DateTime(d) => d.to_string(),
-                        calamine::Data::Error(e) => format!("#{}", e),
-                        _ => String::new(),
-                    };
-                    engine.set_cell_text(r, c, &val);
-                }
-            }
-            engine.evaluate();
-            Ok((rows.max(1), cols.max(1)))
-        }
-        "csv" | "tsv" => {
-            let content = std::fs::read_to_string(path)
-                .map_err(|e| format!("Cannot read file: {}", e))?;
-            let delim = if ext == "tsv" { '\t' } else { ',' };
-            let mut max_rows = 0usize;
-            let mut max_cols = 0usize;
-            for (r, line) in content.lines().enumerate() {
-                let cols: Vec<&str> = line.split(delim).collect();
-                max_cols = max_cols.max(cols.len());
-                for (c, val) in cols.iter().enumerate() {
-                    let trimmed = val.trim().trim_matches('"');
-                    engine.set_cell_text(r, c, trimmed);
-                }
-                max_rows = r + 1;
-            }
-            engine.evaluate();
-            Ok((max_rows.max(1), max_cols.max(1)))
-        }
-        _ => Err(format!("Unsupported format: .{}", ext)),
-    }
-}
-
-/// Save engine data to XLSX file.
 fn save_engine_to_xlsx(path: &str, state: &AppState) -> Result<(), String> {
-    use rust_xlsxwriter::*;
-    let mut workbook = Workbook::new();
-    for (i, sheet_rc) in state.sheets.iter().enumerate() {
-        let sh = sheet_rc.borrow();
-        let ws_name = &sh.name;
-        let sheet = if i == 0 {
-            workbook.add_worksheet()
-        } else {
-            workbook.add_worksheet()
-        };
-        sheet.set_name(ws_name).map_err(|e| format!("Sheet name: {}", e))?;
-        for r in 0..sh.rows {
-            for c in 0..sh.cols {
-                let val = &sh.data[r][c];
-                if val.is_empty() { continue; }
-                // Try number first
-                if let Ok(n) = val.parse::<f64>() {
-                    sheet.write_number(r as u32, c as u16, n)
-                        .map_err(|e| format!("Write error: {}", e))?;
-                } else {
-                    sheet.write_string(r as u32, c as u16, val)
-                        .map_err(|e| format!("Write error: {}", e))?;
-                }
-            }
-        }
-    }
-    workbook.save(path).map_err(|e| format!("Save error: {}", e))?;
-    Ok(())
+    let sheets: Vec<SheetModel> = state.sheets.iter().map(|s| s.borrow().clone()).collect();
+    tables_core::io::save_sheets_to_xlsx(path, &sheets)
 }
 
 // ── Main window ────────────────────────────────────────────────────────
@@ -640,7 +531,7 @@ impl TablesWindow {
                                 }
                                 st.engine.evaluate();
                                 let parent_win = wr2.borrow().clone();
-                                if let Err(err_msg) = crate::export::to_pdf(&st.engine, &path_str) {
+                                if let Err(err_msg) = tables_core::export::to_pdf(&st.engine, &path_str) {
                                     let alert = adw::AlertDialog::builder()
                                         .heading("Export Failed")
                                         .body(&err_msg)
