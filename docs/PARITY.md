@@ -13,7 +13,7 @@ Tier 3 items each need an explicit decision to enter scope.
 | I1 | Model unit tests | `*-core` crates, `cargo test` | logic, invariants, edge cases |
 | I2 | Round-trip ratchets | corpus harnesses (CommonMark, DOCX/XLSX/PPTX fixtures) | format fidelity, regressions |
 | I3 | LO-authored parity corpus | `lo_parity.rs` (soffice writes, we read) | reading real-world files |
-| I4 | soffice oracle | `soffice_oracle.rs` (we write, soffice reads) | writing real-world files |
+| I4 | soffice oracle | `soffice_oracle.rs` per core crate — 53 tests (Letters 23, Tables 15, Decks 15): we write → LO reads/rewrites → we re-read, asserting attributes not just text | writing real-world files |
 | I5 | Buffer/bridge round-trips | Xvfb `cargo test -p <app> bridge` | model ⇄ widget translation |
 | I6 | AT-SPI smoke tests | `tests/gui/test_smoke.py` | app-level behavior, input |
 | I7 | VLM visual audit | scheduled, non-gating | rendering/HIG regressions |

@@ -133,6 +133,9 @@ fn is_tx_box_attr<B: std::io::BufRead>(e: &BytesStart, reader: &Reader<B>) -> bo
 
 struct PendingShape {
     is_tx_box: bool,
+    /// A p:txBody element was seen. Impress adds an (empty) txBody to
+    /// every shape, so this alone does not make it a text box.
+    has_tx_body: bool,
     text: Vec<String>,
     runs: Vec<Run>,
     cur_style: RunStyle,
@@ -314,6 +317,7 @@ pub fn read_pptx(path: &str) -> Result<Deck, String> {
         let mut objects = Vec::new();
 
         // Parse slide XML using quick-xml event reader
+        let mut background = String::from("#ffffff");
         {
             let mut reader = Reader::from_str(&slide_xml);
             reader.trim_text(true);
@@ -322,15 +326,18 @@ pub fn read_pptx(path: &str) -> Result<Deck, String> {
             let mut current_shape: Option<PendingShape> = None;
             let mut current_picture: Option<PendingPicture> = None;
             let mut in_text_element = false;
+            let mut in_bg = false;
 
             loop {
                 match reader.read_event_into(&mut buf) {
                     Ok(Event::Start(ref e)) => {
                         let name = e.name();
                         match name.as_ref() {
+                            b"p:bg" => in_bg = true,
                             b"p:sp" => {
                                 current_shape = Some(PendingShape {
                                     is_tx_box: false,
+                                    has_tx_body: false,
                                     text: Vec::new(),
                                     runs: Vec::new(),
                                     cur_style: RunStyle::default(),
@@ -386,7 +393,7 @@ pub fn read_pptx(path: &str) -> Result<Deck, String> {
                             }
                             b"p:txBody" => {
                                 if let Some(shape) = current_shape.as_mut() {
-                                    shape.is_tx_box = true;
+                                    shape.has_tx_body = true;
                                 }
                             }
                             b"a:blip" => {
@@ -456,11 +463,26 @@ pub fn read_pptx(path: &str) -> Result<Deck, String> {
                                     }
                                 }
                             }
+                            b"a:srgbClr" if in_bg => {
+                                if let Some(val) = e
+                                    .attributes()
+                                    .filter_map(|a| a.ok())
+                                    .find(|a| a.key.as_ref() == b"val")
+                                {
+                                    background = format!(
+                                        "#{}",
+                                        String::from_utf8_lossy(&val.value).to_lowercase()
+                                    );
+                                }
+                            }
                             _ => {}
                         }
                     }
                     Ok(Event::End(ref e)) => {
                         let name = e.name();
+                        if name.as_ref() == b"p:bg" {
+                            in_bg = false;
+                        }
                         if name.as_ref() == b"p:sp" {
                             if let Some(shape) = current_shape.take() {
                                 let x = shape.x.unwrap_or(0.0) / 9525.0;
@@ -468,7 +490,9 @@ pub fn read_pptx(path: &str) -> Result<Deck, String> {
                                 let w = shape.w.unwrap_or(0.0) / 9525.0;
                                 let h = shape.h.unwrap_or(0.0) / 9525.0;
                                 
-                                if shape.is_tx_box {
+                                let has_text =
+                                    shape.text.iter().any(|t| !t.trim().is_empty());
+                                if shape.is_tx_box || (shape.has_tx_body && has_text) {
                                     let text = shape.text.join("\n");
                                     objects.push(SlideObject::TextBox { text, x, y, w, h, runs: shape.runs.clone() });
                                 } else {
@@ -539,7 +563,7 @@ pub fn read_pptx(path: &str) -> Result<Deck, String> {
 
         slides.push(Slide {
             title: format!("Slide {}", slide_index + 1),
-            background: "#ffffff".into(),
+            background,
             objects,
             notes,
             master_idx: Some(0),
@@ -946,6 +970,23 @@ pub fn write_pptx(path: &str, deck: &Deck) -> Result<(), String> {
             writer.write_event(Event::Start(sld)).map_err(|e| e.to_string())?;
 
             writer.write_event(Event::Start(BytesStart::new("p:cSld"))).map_err(|e| e.to_string())?;
+
+            // Slide background (only when it differs from the default
+            // white — Impress preserves an explicit p:bg).
+            let bg = slide.background.trim_start_matches('#');
+            if !bg.eq_ignore_ascii_case("ffffff") && bg.len() == 6 {
+                writer.write_event(Event::Start(BytesStart::new("p:bg"))).map_err(|e| e.to_string())?;
+                writer.write_event(Event::Start(BytesStart::new("p:bgPr"))).map_err(|e| e.to_string())?;
+                writer.write_event(Event::Start(BytesStart::new("a:solidFill"))).map_err(|e| e.to_string())?;
+                let mut clr = BytesStart::new("a:srgbClr");
+                clr.push_attribute(("val", bg.to_uppercase().as_str()));
+                writer.write_event(Event::Empty(clr)).map_err(|e| e.to_string())?;
+                writer.write_event(Event::End(BytesEnd::new("a:solidFill"))).map_err(|e| e.to_string())?;
+                writer.write_event(Event::Empty(BytesStart::new("a:effectLst"))).map_err(|e| e.to_string())?;
+                writer.write_event(Event::End(BytesEnd::new("p:bgPr"))).map_err(|e| e.to_string())?;
+                writer.write_event(Event::End(BytesEnd::new("p:bg"))).map_err(|e| e.to_string())?;
+            }
+
             writer.write_event(Event::Start(BytesStart::new("p:spTree"))).map_err(|e| e.to_string())?;
 
             // Group properties
@@ -1165,7 +1206,9 @@ xmlns:p=\"http://schemas.openxmlformats.org/presentationml/2006/main\">\
 /// Extract the body-placeholder text from a notesSlide part.
 fn extract_notes_text(xml: &str) -> String {
     let mut reader = Reader::from_str(xml);
-    reader.trim_text(true);
+    // No trim: a:t content is significant, including boundary spaces
+    // ("café — " + "東京"); capture is gated on in_t anyway.
+    reader.trim_text(false);
     let mut buf = Vec::new();
     let mut in_sp = false;
     let mut sp_is_body = false;
@@ -1179,6 +1222,9 @@ fn extract_notes_text(xml: &str) -> String {
                 b"a:t" if sp_is_body => in_t = true,
                 _ => {}
             },
+            Ok(Event::Empty(ref e)) if e.name().as_ref() == b"a:br" && sp_is_body => {
+                current.push('\n');
+            }
             Ok(Event::Empty(ref e)) if e.name().as_ref() == b"p:ph" && in_sp => {
                 for attr in e.attributes().flatten() {
                     if attr.key.as_ref() == b"type" {

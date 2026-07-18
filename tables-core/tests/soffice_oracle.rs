@@ -113,3 +113,252 @@ fn sheet_names_survive_calc() {
     assert!(names.contains(&"Budget".to_string()), "{names:?}");
     assert!(names.contains(&"Forecast".to_string()), "{names:?}");
 }
+
+// ── Oracle wave 2: Calc recalculation + fidelity (TDD) ───────────────
+
+use tables_core::engine::TablesEngine;
+
+/// Build an engine, mirror literal cells into a SheetModel, write xlsx
+/// (formulas from the engine), and return Calc's CSV extraction.
+fn calc_csv_of(cells: &[(usize, usize, &str)], rows: usize, cols: usize) -> Option<String> {
+    if !require_or_skip() { return None; }
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("t.xlsx");
+    let mut e = TablesEngine::new(rows, cols).unwrap();
+    let mut sheet = SheetModel::new("S", rows, cols, 0);
+    for (r, c, v) in cells {
+        e.set_cell_text(*r, *c, v);
+        if !v.starts_with('=') {
+            sheet.data[*r][*c] = v.to_string();
+        }
+    }
+    e.evaluate();
+    tables_core::io::save_sheets_to_xlsx_with_engine(path.to_str().unwrap(), &[sheet], Some(&e))
+        .expect("write xlsx");
+    // Keep the tempdir alive until the conversion is done.
+    let csv = convert_to_csv(&path).expect("Calc could not open our xlsx");
+    drop(dir);
+    Some(csv)
+}
+
+fn cell_at(csv: &str, row: usize, col: usize) -> String {
+    csv.lines()
+        .nth(row)
+        .map(|l| l.split(',').nth(col).unwrap_or("").trim_matches('"').to_string())
+        .unwrap_or_default()
+}
+
+#[test]
+fn calc_recalculates_aggregates() {
+    let Some(csv) = calc_csv_of(
+        &[(0, 0, "4"), (1, 0, "8"), (2, 0, "6"),
+          (0, 1, "=SUM(A1:A3)"), (1, 1, "=AVERAGE(A1:A3)"),
+          (2, 1, "=MIN(A1:A3)"), (3, 1, "=MAX(A1:A3)")],
+        5, 3,
+    ) else { return };
+    assert_eq!(cell_at(&csv, 0, 1), "18", "SUM: {csv}");
+    assert_eq!(cell_at(&csv, 1, 1), "6", "AVERAGE: {csv}");
+    assert_eq!(cell_at(&csv, 2, 1), "4", "MIN: {csv}");
+    assert_eq!(cell_at(&csv, 3, 1), "8", "MAX: {csv}");
+}
+
+#[test]
+fn calc_recalculates_logic_functions() {
+    let Some(csv) = calc_csv_of(
+        &[(0, 0, "10"), (0, 1, "3"),
+          (1, 0, "=IF(A1>B1,\"bigger\",\"smaller\")"),
+          (2, 0, "=IF(AND(A1>5,B1<5),1,0)"),
+          (3, 0, "=IF(OR(A1<5,B1<5),1,0)")],
+        5, 3,
+    ) else { return };
+    assert_eq!(cell_at(&csv, 1, 0), "bigger", "{csv}");
+    assert_eq!(cell_at(&csv, 2, 0), "1", "{csv}");
+    assert_eq!(cell_at(&csv, 3, 0), "1", "{csv}");
+}
+
+#[test]
+fn calc_recalculates_text_functions() {
+    let Some(csv) = calc_csv_of(
+        &[(0, 0, "gnome"), (1, 0, "=UPPER(A1)"),
+          (2, 0, "=LEFT(A1,2)"), (3, 0, "=CONCATENATE(A1,\"-os\")")],
+        5, 2,
+    ) else { return };
+    assert_eq!(cell_at(&csv, 1, 0), "GNOME", "{csv}");
+    assert_eq!(cell_at(&csv, 2, 0), "gn", "{csv}");
+    assert_eq!(cell_at(&csv, 3, 0), "gnome-os", "{csv}");
+}
+
+#[test]
+fn calc_recalculates_nested_and_absolute() {
+    let Some(csv) = calc_csv_of(
+        &[(0, 0, "5"), (1, 0, "7"), (2, 0, "9"),
+          (0, 1, "=IF(SUM(A1:A3)>20,SUM(A1:A3),0)"),
+          (1, 1, "=$A$1*10")],
+        5, 3,
+    ) else { return };
+    assert_eq!(cell_at(&csv, 0, 1), "21", "nested: {csv}");
+    assert_eq!(cell_at(&csv, 1, 1), "50", "absolute: {csv}");
+}
+
+#[test]
+fn unicode_cells_survive_calc() {
+    let Some(csv) = calc_csv_of(
+        &[(0, 0, "héllo"), (1, 0, "中文"), (2, 0, "naïve—dash")],
+        4, 2,
+    ) else { return };
+    assert_eq!(cell_at(&csv, 0, 0), "héllo", "{csv}");
+    assert_eq!(cell_at(&csv, 1, 0), "中文", "{csv}");
+    assert_eq!(cell_at(&csv, 2, 0), "naïve—dash", "{csv}");
+}
+
+#[test]
+fn negatives_and_floats_survive_calc() {
+    let Some(csv) = calc_csv_of(
+        &[(0, 0, "-3.5"), (1, 0, "0.125"), (2, 0, "=A1+A2")],
+        4, 2,
+    ) else { return };
+    // Calc's CSV export prints display precision, not the raw value —
+    // assert numerically.
+    let num = |r: usize| cell_at(&csv, r, 0).parse::<f64>().expect("numeric cell");
+    assert!((num(0) - -3.5).abs() < 0.01, "{csv}");
+    assert!((num(1) - 0.125).abs() < 0.01, "{csv}");
+    assert!((num(2) - -3.375).abs() < 0.01, "{csv}");
+}
+
+#[test]
+fn sparse_grid_positions_survive_calc() {
+    let Some(csv) = calc_csv_of(&[(4, 4, "island")], 6, 6) else { return };
+    assert_eq!(cell_at(&csv, 4, 4), "island", "value drifted: {csv}");
+    assert_eq!(cell_at(&csv, 0, 0), "", "phantom value at A1: {csv}");
+}
+
+#[test]
+fn large_grid_survives_calc() {
+    let mut cells: Vec<(usize, usize, String)> = Vec::new();
+    for r in 0..30 {
+        for c in 0..8 {
+            cells.push((r, c, format!("{}", r * 8 + c)));
+        }
+    }
+    let owned: Vec<(usize, usize, &str)> =
+        cells.iter().map(|(r, c, v)| (*r, *c, v.as_str())).collect();
+    let Some(csv) = calc_csv_of(&owned, 32, 10) else { return };
+    assert_eq!(cell_at(&csv, 0, 0), "0", "{csv}");
+    assert_eq!(cell_at(&csv, 29, 7), "239", "last cell lost: {csv}");
+}
+
+#[test]
+fn our_xlsx_survives_calc_rewrite() {
+    if !require_or_skip() { return; }
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("rt.xlsx");
+    let mut sheet = SheetModel::new("RT", 3, 3, 0);
+    sheet.data[0][0] = "alpha".into();
+    sheet.data[1][1] = "42".into();
+    save_sheets_to_xlsx(path.to_str().unwrap(), &[sheet]).unwrap();
+
+    let out_dir = dir.path().join("out");
+    std::fs::create_dir(&out_dir).unwrap();
+    let profile = dir.path().join("prof");
+    let st = Command::new("soffice")
+        .arg("--headless")
+        .arg(format!("-env:UserInstallation=file://{}", profile.display()))
+        .args(["--convert-to", "xlsx", "--outdir"])
+        .arg(&out_dir)
+        .arg(&path)
+        .output()
+        .expect("soffice");
+    assert!(st.status.success());
+    let mut e = TablesEngine::new(5, 5).unwrap();
+    let (rows, cols) =
+        tables_core::io::load_file_into_engine(out_dir.join("rt.xlsx").to_str().unwrap(), &mut e)
+            .expect("we failed to read Calc-rewritten xlsx");
+    assert!(rows >= 2 && cols >= 2, "grid shrank: {rows}x{cols}");
+    assert_eq!(e.cell(0, 0), "alpha");
+    assert_eq!(e.cell(1, 1), "42");
+}
+
+#[test]
+fn we_read_calc_authored_ods() {
+    if !require_or_skip() { return; }
+    let dir = tempfile::tempdir().unwrap();
+    let src = dir.path().join("src.csv");
+    std::fs::write(&src, "city,pop\nporto,231000\n").unwrap();
+    let profile = dir.path().join("prof");
+    let st = Command::new("soffice")
+        .arg("--headless")
+        .arg(format!("-env:UserInstallation=file://{}", profile.display()))
+        .args(["--convert-to", "ods", "--outdir"])
+        .arg(dir.path())
+        .arg(&src)
+        .output()
+        .expect("soffice");
+    assert!(st.status.success());
+    let mut e = TablesEngine::new(5, 5).unwrap();
+    tables_core::io::load_file_into_engine(dir.path().join("src.ods").to_str().unwrap(), &mut e)
+        .expect("we failed to read Calc-authored ods");
+    assert_eq!(e.cell(0, 0), "city");
+    assert_eq!(e.cell(1, 1), "231000");
+}
+
+#[test]
+fn we_read_calc_authored_xlsx() {
+    if !require_or_skip() { return; }
+    let dir = tempfile::tempdir().unwrap();
+    let src = dir.path().join("src.csv");
+    std::fs::write(&src, "k,v\ntemp,21.5\n").unwrap();
+    let profile = dir.path().join("prof");
+    let st = Command::new("soffice")
+        .arg("--headless")
+        .arg(format!("-env:UserInstallation=file://{}", profile.display()))
+        .args(["--convert-to", "xlsx", "--outdir"])
+        .arg(dir.path())
+        .arg(&src)
+        .output()
+        .expect("soffice");
+    assert!(st.status.success());
+    let mut e = TablesEngine::new(5, 5).unwrap();
+    tables_core::io::load_file_into_engine(dir.path().join("src.xlsx").to_str().unwrap(), &mut e)
+        .expect("we failed to read Calc-authored xlsx");
+    assert_eq!(e.cell(0, 0), "k");
+    // Calc applies a 0.00 display format on csv→xlsx; compare the value.
+    let v: f64 = e.cell(1, 1).parse().expect("numeric cell");
+    assert!((v - 21.5).abs() < 0.001, "value drifted: {}", e.cell(1, 1));
+}
+
+#[test]
+fn formula_strings_survive_calc_rewrite_as_formulas() {
+    use calamine::{open_workbook, Reader};
+    if !require_or_skip() { return; }
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("f.xlsx");
+    let mut e = TablesEngine::new(4, 4).unwrap();
+    e.set_cell_text(0, 0, "3");
+    e.set_cell_text(0, 1, "4");
+    e.set_cell_text(1, 0, "=A1+B1");
+    e.evaluate();
+    let mut sheet = SheetModel::new("F", 4, 4, 0);
+    sheet.data[0][0] = "3".into();
+    sheet.data[0][1] = "4".into();
+    tables_core::io::save_sheets_to_xlsx_with_engine(path.to_str().unwrap(), &[sheet], Some(&e))
+        .unwrap();
+
+    let out_dir = dir.path().join("out");
+    std::fs::create_dir(&out_dir).unwrap();
+    let profile = dir.path().join("prof");
+    let st = Command::new("soffice")
+        .arg("--headless")
+        .arg(format!("-env:UserInstallation=file://{}", profile.display()))
+        .args(["--convert-to", "xlsx", "--outdir"])
+        .arg(&out_dir)
+        .arg(&path)
+        .output()
+        .expect("soffice");
+    assert!(st.status.success());
+    // Calc keeps it a live formula (not a frozen value): the formulas
+    // sheet reader sees "=A1+B1" again.
+    let mut wb: calamine::Xlsx<_> = open_workbook(out_dir.join("f.xlsx")).expect("open");
+    let formulas = wb.worksheet_formula("F").expect("formula sheet");
+    let has = formulas.rows().flatten().any(|f| f.replace(' ', "").contains("A1+B1"));
+    assert!(has, "formula was frozen to a value by the round-trip");
+}

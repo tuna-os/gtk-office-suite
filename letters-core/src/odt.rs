@@ -159,9 +159,17 @@ fn content_xml(doc: &Document) -> String {
             body.push_str("</text:list-item><text:list-item>");
         }
 
-        let style_attr = match para_style_idx[pi] {
-            Some(i) => format!(" text:style-name=\"P{}\"", i + 1),
-            None => String::new(),
+        // LO built-in named styles win over our automatic styles; the
+        // names (Title, Subtitle, Quotations) are ODF/LO conventions.
+        let style_attr = if let Some(name) = &p.style.named_style {
+            format!(" text:style-name=\"{}\"", esc(name))
+        } else if p.style.block_quote {
+            " text:style-name=\"Quotations\"".to_string()
+        } else {
+            match para_style_idx[pi] {
+                Some(i) => format!(" text:style-name=\"P{}\"", i + 1),
+                None => String::new(),
+            }
         };
 
         let mut inner = String::new();
@@ -201,7 +209,13 @@ fn content_xml(doc: &Document) -> String {
          xmlns:style=\"urn:oasis:names:tc:opendocument:xmlns:style:1.0\" \
          xmlns:fo=\"urn:oasis:names:tc:opendocument:xmlns:xsl-fo-compatible:1.0\" \
          xmlns:xlink=\"http://www.w3.org/1999/xlink\" \
+         xmlns:svg=\"urn:oasis:names:tc:opendocument:xmlns:svg-compatible:1.0\" \
          office:version=\"1.2\">\
+         <office:font-face-decls>\
+         <style:font-face style:name=\"Monospace\" \
+         svg:font-family=\"&apos;Liberation Mono&apos;, monospace\" \
+         style:font-family-generic=\"modern\" style:font-pitch=\"fixed\"/>\
+         </office:font-face-decls>\
          <office:automatic-styles>{auto}</office:automatic-styles>\
          <office:body><office:text>{body}</office:text></office:body>\
          </office:document-content>"
@@ -300,10 +314,13 @@ fn attr_val(e: &quick_xml::events::BytesStart, name: &str) -> Option<String> {
 struct AutoStyles {
     text: std::collections::HashMap<String, RunStyle>,
     para: std::collections::HashMap<String, (Alignment, bool, f32)>,
+    /// Automatic paragraph style → its style:parent-style-name (LO
+    /// rewrites named styles as autos inheriting from the built-in).
+    para_parent: std::collections::HashMap<String, String>,
 }
 
 fn parse_auto_styles(xml: &str) -> AutoStyles {
-    let mut out = AutoStyles { text: Default::default(), para: Default::default() };
+    let mut out = AutoStyles { text: Default::default(), para: Default::default(), para_parent: Default::default() };
     let mut reader = Reader::from_str(xml);
     let mut cur_name: Option<String> = None;
     let mut cur_family = String::new();
@@ -314,6 +331,13 @@ fn parse_auto_styles(xml: &str) -> AutoStyles {
                     b"style:style" => {
                         cur_name = attr_val(&e, "style:name");
                         cur_family = attr_val(&e, "style:family").unwrap_or_default();
+                        if cur_family == "paragraph" {
+                            if let (Some(n), Some(parent)) =
+                                (cur_name.clone(), attr_val(&e, "style:parent-style-name"))
+                            {
+                                out.para_parent.insert(n, parent);
+                            }
+                        }
                     }
                     b"style:text-properties" => {
                         if let (Some(name), "text") = (cur_name.clone(), cur_family.as_str()) {
@@ -350,7 +374,26 @@ fn parse_auto_styles(xml: &str) -> AutoStyles {
                                 st.color = Some(c.trim_start_matches('#').to_lowercase());
                             }
                             if let Some(fam) = attr_val(&e, "fo:font-family") {
-                                st.font_family = Some(fam.trim_matches('\'').to_string());
+                                let f = fam.to_lowercase();
+                                if f.contains("mono") || f.contains("courier") {
+                                    st.code = true;
+                                } else {
+                                    st.font_family =
+                                        Some(fam.trim_matches('\'').to_string());
+                                }
+                            }
+                            if let Some(fname) = attr_val(&e, "style:font-name") {
+                                // Exactly what our writer emits for code
+                                // spans; LO preserves or maps it to a
+                                // mono face.
+                                let f = fname.to_lowercase();
+                                if f.contains("monospace")
+                                    || f.contains("courier")
+                                    || f.contains("liberation mono")
+                                {
+                                    st.code = true;
+                                    st.font_family = None;
+                                }
                             }
                             if let Some(tp) = attr_val(&e, "style:text-position") {
                                 if tp.starts_with("super") {
@@ -445,6 +488,20 @@ pub fn read(path: &str) -> Result<Document, String> {
                             style.alignment = *align;
                             style.page_break_before = *brk;
                             style.line_spacing = *spacing;
+                        }
+                        // Direct built-in name, or an automatic style
+                        // inheriting from one (LO's rewrite pattern).
+                        let base = auto
+                            .para_parent
+                            .get(&name)
+                            .cloned()
+                            .unwrap_or_else(|| name.clone());
+                        // ODF display names use _20_ for spaces.
+                        let base = base.replace("_20_", " ");
+                        match base.as_str() {
+                            "Title" | "Subtitle" => style.named_style = Some(base),
+                            "Quotations" => style.block_quote = true,
+                            _ => {}
                         }
                     }
                     style.list = list_kind;
