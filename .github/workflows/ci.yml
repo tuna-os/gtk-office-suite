@@ -62,6 +62,11 @@ jobs:
           REQUIRE_SOFFICE: "1"
         run: cargo test -p letters-core --test lo_parity -- --nocapture
 
+      - name: Conformance scorecard (job summary)
+        env:
+          REQUIRE_SOFFICE: "1"
+        run: python3 conformance/scorecard.py
+
   # Coverage — runs on push to main only (installs llvm-tools)
   coverage:
     runs-on: ubuntu-24.04
