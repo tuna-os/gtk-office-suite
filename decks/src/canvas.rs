@@ -180,7 +180,7 @@ pub fn draw_slide(
         for (oi, obj) in slides[current_slide].objects.iter().enumerate() {
             let is_selected = selected == Some(oi);
             match obj {
-                SlideObject::TextBox { text, x, y, w, h, .. } => {
+                SlideObject::TextBox { text, x, y, w, h, runs } => {
                     let sx = ox + (x / 960.0) * slide_w;
                     let sy = oy + (y / 540.0) * slide_h;
                     let sw = (w / 960.0) * slide_w;
@@ -191,12 +191,46 @@ pub fn draw_slide(
                         cr.rectangle(sx - 2.0, sy - 2.0, sw + 4.0, sh + 4.0);
                         cr.stroke().unwrap();
                     }
+                    // Pango layout with per-run attributes (shared WYSIWYG
+                    // primitives with Letters) — replaces the old toy-text
+                    // path that truncated at 20 chars and ignored styling.
                     cr.set_source_rgb(0.1, 0.1, 0.1);
-                    cr.select_font_face("Sans", cairo::FontSlant::Normal, cairo::FontWeight::Normal);
-                    cr.set_font_size(16.0);
-                    cr.move_to(sx + 4.0, sy + 20.0);
-                    let display = if text.len() > 20 { &text[..20] } else { text.as_str() };
-                    cr.show_text(display).unwrap();
+                    let layout = pangocairo::functions::create_layout(cr);
+                    layout.set_width(((sw - 8.0).max(8.0) as i32) * pango::SCALE);
+                    layout.set_wrap(pango::WrapMode::WordChar);
+                    layout.set_font_description(Some(&pango::FontDescription::from_string("Sans 16")));
+                    if runs.is_empty() {
+                        layout.set_text(text);
+                    } else {
+                        let attrs = pango::AttrList::new();
+                        let mut buf = String::new();
+                        for run in runs {
+                            let start = buf.len() as u32;
+                            buf.push_str(&run.text);
+                            let end = buf.len() as u32;
+                            let mut add = |mut a: pango::Attribute| {
+                                a.set_start_index(start);
+                                a.set_end_index(end);
+                                attrs.insert(a);
+                            };
+                            if run.style.bold {
+                                add(pango::AttrInt::new_weight(pango::Weight::Bold).into());
+                            }
+                            if run.style.italic {
+                                add(pango::AttrInt::new_style(pango::Style::Italic).into());
+                            }
+                            if run.style.underline {
+                                add(pango::AttrInt::new_underline(pango::Underline::Single).into());
+                            }
+                            if run.style.strikethrough {
+                                add(pango::AttrInt::new_strikethrough(true).into());
+                            }
+                        }
+                        layout.set_text(&buf);
+                        layout.set_attributes(Some(&attrs));
+                    }
+                    cr.move_to(sx + 4.0, sy + 4.0);
+                    pangocairo::functions::show_layout(cr, &layout);
                 }
                 SlideObject::Rect { x, y, w, h } => {
                     let sx = ox + (x / 960.0) * slide_w;

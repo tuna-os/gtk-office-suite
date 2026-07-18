@@ -84,6 +84,28 @@ pub fn capture_from_buffer(buf: &gtk::TextBuffer) -> Document {
             }
             at_line_start = false;
         }
+        // Embedded images appear as the object-replacement char; the source
+        // path and alt text ride on the paintable itself (see render side).
+        if let Some(paintable) = iter.paintable() {
+            let src: Option<String> = unsafe {
+                paintable.data::<String>("letters-image-src").map(|p| p.as_ref().clone())
+            };
+            let alt: String = unsafe {
+                paintable.data::<String>("letters-image-alt")
+                    .map(|p| p.as_ref().clone()).unwrap_or_default()
+            };
+            if let Some(src) = src {
+                if let Some(r) = current_run.take() {
+                    current.runs.push(r);
+                }
+                current.runs.push(Run {
+                    text: alt,
+                    style: RunStyle { image: Some(src), ..Default::default() },
+                });
+                iter.forward_char();
+                continue;
+            }
+        }
         let ch = iter.char();
         if ch == '\n' {
             if let Some(r) = current_run.take() {
@@ -123,6 +145,20 @@ pub fn render_to_buffer(doc: &Document, buf: &gtk::TextBuffer) {
         }
         let para_start = insert.offset();
         for run in &para.runs {
+            if let Some(src) = &run.style.image {
+                match gtk4::gdk::Texture::from_filename(src) {
+                    Ok(texture) => {
+                        unsafe {
+                            texture.set_data("letters-image-src", src.clone());
+                            texture.set_data("letters-image-alt", run.text.clone());
+                        }
+                        buf.insert_paintable(&mut insert, &texture);
+                    }
+                    // Unloadable image degrades to visible alt text.
+                    Err(_) => buf.insert(&mut insert, &run.text),
+                }
+                continue;
+            }
             let mut names: Vec<&str> = Vec::new();
             if run.style.bold { names.push("bold"); }
             if run.style.italic { names.push("italic"); }
@@ -264,6 +300,28 @@ plain");
         assert_eq!(rt.paragraphs[0].style.alignment, letters_core::Alignment::Center);
         assert_eq!(rt.paragraphs[1].style.alignment, letters_core::Alignment::Right);
         assert_eq!(rt.paragraphs[2].style.alignment, letters_core::Alignment::Left);
+
+        // image (renders as paintable, captures back with src + alt)
+        let buf = fresh();
+        let mtex = gtk::gdk::MemoryTexture::new(
+            1, 1, gtk::gdk::MemoryFormat::R8g8b8a8,
+            &gtk4::glib::Bytes::from_static(&[255, 0, 0, 255]), 4,
+        );
+        let png = gtk::prelude::TextureExt::save_to_png_bytes(&mtex);
+        let dir = std::env::temp_dir().join("letters-bridge-test");
+        let _ = std::fs::create_dir_all(&dir);
+        let img = dir.join("dot.png");
+        std::fs::write(&img, &png).unwrap();
+        let mut d = Document::from_plain_text("see: ");
+        d.paragraphs[0].runs.push(Run {
+            text: "a dot".into(),
+            style: RunStyle { image: Some(img.to_string_lossy().into_owned()), ..Default::default() },
+        });
+        let rt = round_trip(&buf, &d);
+        let ir = rt.paragraphs[0].runs.iter().find(|r| r.style.image.is_some())
+            .expect("image run lost through buffer");
+        assert_eq!(ir.text, "a dot", "alt text lost");
+        assert!(ir.style.image.as_deref().unwrap().ends_with("dot.png"));
 
         // links
         let buf = fresh();
