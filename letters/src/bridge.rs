@@ -6,8 +6,8 @@
 // model styles. Tag names map 1:1 to RunStyle fields / heading levels
 // (see register_formatting_tags in window.rs).
 //
-// Not yet bridged: links (no link tag in the buffer yet), alignment and
-// list kind (kept as literal text / view state today).
+// Links use dynamic "link:<url>" tags; alignment uses the align-* tags.
+// Not yet bridged: list kind (the editor keeps literal "- " markers today).
 
 use gtk4::{self as gtk, prelude::*};
 use letters_core::model::{Document, Paragraph, ParaStyle, Run, RunStyle};
@@ -41,8 +41,26 @@ pub fn capture_from_buffer(buf: &gtk::TextBuffer) -> Document {
                 }
             }
         }
+        // Links use one dynamically-created tag per URL, named "link:<url>".
+        for tag in iter.tags() {
+            if let Some(name) = tag.name() {
+                if let Some(url) = name.strip_prefix("link:") {
+                    s.link = Some(url.to_string());
+                    break;
+                }
+            }
+        }
         s
     };
+
+    let align_tags: Vec<(letters_core::Alignment, gtk::TextTag)> = [
+        (letters_core::Alignment::Center, "align-center"),
+        (letters_core::Alignment::Right, "align-right"),
+        (letters_core::Alignment::Justify, "align-justify"),
+    ]
+    .into_iter()
+    .filter_map(|(a, n)| table.lookup(n).map(|t| (a, t)))
+    .collect();
 
     let mut paragraphs: Vec<Paragraph> = Vec::new();
     let mut current = Paragraph::default();
@@ -55,6 +73,12 @@ pub fn capture_from_buffer(buf: &gtk::TextBuffer) -> Document {
             for (level, tag) in &heading_tags {
                 if iter.has_tag(tag) {
                     current.style.heading = Some(*level);
+                    break;
+                }
+            }
+            for (align, tag) in &align_tags {
+                if iter.has_tag(tag) {
+                    current.style.alignment = *align;
                     break;
                 }
             }
@@ -106,18 +130,38 @@ pub fn render_to_buffer(doc: &Document, buf: &gtk::TextBuffer) {
             if run.style.strikethrough { names.push("strikethrough"); }
             if run.style.highlight { names.push("highlight"); }
             if run.style.code { names.push("code"); }
+            let link_tag_name = run.style.link.as_ref().map(|url| {
+                let name = format!("link:{url}");
+                if buf.tag_table().lookup(&name).is_none() {
+                    let tag = gtk::TextTag::builder()
+                        .name(&name)
+                        .foreground("#1a5fb4")
+                        .underline(gtk4::pango::Underline::Single)
+                        .build();
+                    buf.tag_table().add(&tag);
+                }
+                name
+            });
+            if let Some(n) = &link_tag_name { names.push(n.as_str()); }
             if names.is_empty() {
                 buf.insert(&mut insert, &run.text);
             } else {
                 buf.insert_with_tags_by_name(&mut insert, &run.text, &names);
             }
         }
-        let tag_name = match (para.style.heading, &para.style.code_block) {
-            (Some(l), _) => Some(format!("h{}", l.clamp(1, 6))),
-            (None, Some(_)) => Some("code".to_string()),
-            _ => None,
-        };
-        if let Some(name) = tag_name {
+        let mut para_tags: Vec<String> = Vec::new();
+        match (para.style.heading, &para.style.code_block) {
+            (Some(l), _) => para_tags.push(format!("h{}", l.clamp(1, 6))),
+            (None, Some(_)) => para_tags.push("code".to_string()),
+            _ => {}
+        }
+        match para.style.alignment {
+            letters_core::Alignment::Center => para_tags.push("align-center".into()),
+            letters_core::Alignment::Right => para_tags.push("align-right".into()),
+            letters_core::Alignment::Justify => para_tags.push("align-justify".into()),
+            letters_core::Alignment::Left => {}
+        }
+        for name in para_tags {
             let start = buf.iter_at_offset(para_start);
             buf.apply_tag_by_name(&name, &start, &insert);
         }
@@ -159,54 +203,75 @@ mod tests {
     use super::*;
     use letters_core::model::StylePatch;
 
-    // Buffer round-trips need a display; skip cleanly when GTK can't init
-    // (plain `cargo test` on headless boxes). The gui-tests smoke job runs
-    // these under Xvfb where they must pass.
-    fn buffer_or_skip() -> Option<gtk::TextBuffer> {
-        if gtk::init().is_err() {
-            eprintln!("skipping: no display for GTK");
-            return None;
-        }
-        let buf = gtk::TextBuffer::new(None);
-        crate::window::register_formatting_tags(&buf);
-        Some(buf)
-    }
-
     fn round_trip(buf: &gtk::TextBuffer, doc: &Document) -> Document {
         render_to_buffer(doc, buf);
         capture_from_buffer(buf)
     }
 
+    // GTK insists on being initialized and used from a single thread, and
+    // cargo gives every #[test] its own thread — so all buffer round-trip
+    // cases live in this one test. Skips cleanly with no display; the
+    // gui-tests smoke job runs it under Xvfb where it must pass.
     #[test]
-    fn styled_document_round_trips_through_buffer() {
-        let Some(buf) = buffer_or_skip() else { return };
-        let mut d = Document::from_plain_text("plain bold italic\nsecond line");
+    fn document_round_trips_through_buffer() {
+        if gtk::init().is_err() {
+            eprintln!("skipping: no display for GTK");
+            return;
+        }
+        let fresh = || {
+            let buf = gtk::TextBuffer::new(None);
+            crate::window::register_formatting_tags(&buf);
+            buf
+        };
+
+        // styled runs
+        let buf = fresh();
+        let mut d = Document::from_plain_text("plain bold italic
+second line");
         d.apply_run_style(6, 10, &StylePatch::set_bold(true));
         d.apply_run_style(11, 17, &StylePatch::set_italic(true));
         let rt = round_trip(&buf, &d);
         assert_eq!(rt.to_plain_text(), d.to_plain_text());
-        assert!(rt.style_at(6).bold && !rt.style_at(5).bold);
-        assert!(rt.style_at(11).italic);
-    }
+        assert!(rt.style_at(6).bold && !rt.style_at(5).bold, "bold boundaries");
+        assert!(rt.style_at(11).italic, "italic");
 
-    #[test]
-    fn headings_round_trip_through_buffer() {
-        let Some(buf) = buffer_or_skip() else { return };
-        let mut d = Document::from_plain_text("Title\nbody text");
+        // headings
+        let buf = fresh();
+        let mut d = Document::from_plain_text("Title
+body text");
         d.set_heading(0, Some(1));
         let rt = round_trip(&buf, &d);
         assert_eq!(rt.paragraphs[0].style.heading, Some(1));
         assert_eq!(rt.paragraphs[1].style.heading, None);
-    }
 
-    #[test]
-    fn highlight_and_code_round_trip_through_buffer() {
-        let Some(buf) = buffer_or_skip() else { return };
+        // highlight + inline code
+        let buf = fresh();
         let mut d = Document::from_plain_text("glow mono");
         d.apply_run_style(0, 4, &StylePatch::set_highlight(true));
         d.apply_run_style(5, 9, &StylePatch::set_code(true));
         let rt = round_trip(&buf, &d);
-        assert!(rt.style_at(0).highlight && !rt.style_at(5).highlight);
-        assert!(rt.style_at(5).code && !rt.style_at(0).code);
+        assert!(rt.style_at(0).highlight && !rt.style_at(5).highlight, "highlight");
+        assert!(rt.style_at(5).code && !rt.style_at(0).code, "code");
+
+        // alignment
+        let buf = fresh();
+        let mut d = Document::from_plain_text("centered
+righted
+plain");
+        d.paragraphs[0].style.alignment = letters_core::Alignment::Center;
+        d.paragraphs[1].style.alignment = letters_core::Alignment::Right;
+        let rt = round_trip(&buf, &d);
+        assert_eq!(rt.paragraphs[0].style.alignment, letters_core::Alignment::Center);
+        assert_eq!(rt.paragraphs[1].style.alignment, letters_core::Alignment::Right);
+        assert_eq!(rt.paragraphs[2].style.alignment, letters_core::Alignment::Left);
+
+        // links
+        let buf = fresh();
+        let mut d = Document::from_plain_text("go to GNOME now");
+        d.apply_run_style(6, 11, &StylePatch::set_link(Some("https://gnome.org".into())));
+        let rt = round_trip(&buf, &d);
+        assert_eq!(rt.style_at(6).link.as_deref(), Some("https://gnome.org"));
+        assert_eq!(rt.style_at(0).link, None);
+        assert_eq!(rt.style_at(12).link, None);
     }
 }

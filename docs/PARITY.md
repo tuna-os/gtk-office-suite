@@ -31,9 +31,9 @@ anything interactive needs I5 or I6.
 |---|---|---|
 | Styled runs (b/i/u/s, highlight, inline code) | ✅ | I1 model, I2 docx 12/12, I3 104/104, I4, I5 |
 | Headings 1–6 | ✅ | I1, I2, I3, I5 |
-| Paragraph alignment | ✅ model/docx, ❌ bridge | I1–I4 green; **red I5 needed** |
+| Paragraph alignment | ✅ | I1–I5 |
 | Bullet/numbered lists (flat) | ✅ model/docx, ❌ bridge | I1–I3; **red I5** (buffer keeps literal "- ") |
-| Hyperlinks | ✅ model/docx, ❌ bridge | I2 green; **red I5** (no link tag in buffer) |
+| Hyperlinks | ✅ | I2, I5 (dynamic link:<url> tags) |
 | Code blocks | ✅ | I1, I2 (CommonMark fenced 24/29), I3 |
 | Markdown save/load with formatting | ✅ | I2 CommonMark ratchet 594/652 → target 630+ |
 | DOCX save/load | ✅ | I2, I3, I4 |

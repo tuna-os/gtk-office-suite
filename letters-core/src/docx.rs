@@ -1,10 +1,10 @@
 // docx.rs — Document ⇄ DOCX via rdocx.
 // SPDX-License-Identifier: GPL-3.0-or-later
 //
-// Replaces the ad-hoc GtkTextBuffer↔docx logic in letters/src/docx_bridge.rs
-// with model-level I/O. Current coverage: paragraphs, bold/italic/underline/
-// strikethrough runs, heading styles. Not yet mapped: highlight, links,
-// lists, alignment — tracked by red tests as they are added.
+// Model-level DOCX I/O: paragraphs, styled runs (incl. highlight and inline
+// code via SourceText), headings, alignment, lists, hyperlinks. Tables are
+// flattened (see read()). Fidelity is measured by tests/docx.rs and the
+// LO-authored corpus in tests/lo_parity.rs.
 
 use crate::model::{Alignment, Document, ListKind, Paragraph, ParaStyle, Run, RunStyle};
 
