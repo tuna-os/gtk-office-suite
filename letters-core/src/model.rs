@@ -24,6 +24,9 @@ pub struct RunStyle {
     pub link: Option<String>,
     /// Inline image: source path/URI. The run's text is the alt text.
     pub image: Option<String>,
+    /// Font family name (e.g. "Liberation Serif"); None = document default.
+    #[serde(default)]
+    pub font_family: Option<String>,
     /// Font size in half-points (24 = 12pt); None = document default.
     pub font_size_hp: Option<u16>,
     /// Text color as RRGGBB hex (no '#'); None = default.
@@ -208,6 +211,47 @@ pub struct Document {
     /// Page header/footer text; "{page}" substitutes the page number.
     pub header: Option<String>,
     pub footer: Option<String>,
+    /// Page size and margins; None = application default (A4).
+    pub page: Option<PageGeometry>,
+}
+
+/// Page size and margins, in points.
+#[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
+pub struct PageGeometry {
+    pub width_pt: f64,
+    pub height_pt: f64,
+    pub margin_top_pt: f64,
+    pub margin_bottom_pt: f64,
+    pub margin_left_pt: f64,
+    pub margin_right_pt: f64,
+}
+
+impl Default for PageGeometry {
+    /// A4 portrait with 1-inch margins.
+    fn default() -> Self {
+        Self {
+            width_pt: 595.3,
+            height_pt: 841.9,
+            margin_top_pt: 72.0,
+            margin_bottom_pt: 72.0,
+            margin_left_pt: 72.0,
+            margin_right_pt: 72.0,
+        }
+    }
+}
+
+impl PageGeometry {
+    /// Equality within half a point — format conversions round to twips
+    /// (1/20 pt) or hundredths of a millimetre.
+    pub fn approx_eq(&self, other: &PageGeometry) -> bool {
+        let close = |a: f64, b: f64| (a - b).abs() < 0.5;
+        close(self.width_pt, other.width_pt)
+            && close(self.height_pt, other.height_pt)
+            && close(self.margin_top_pt, other.margin_top_pt)
+            && close(self.margin_bottom_pt, other.margin_bottom_pt)
+            && close(self.margin_left_pt, other.margin_left_pt)
+            && close(self.margin_right_pt, other.margin_right_pt)
+    }
 }
 
 impl Default for Document {
@@ -216,7 +260,7 @@ impl Default for Document {
 
 impl Document {
     pub fn new() -> Self {
-        Self { paragraphs: vec![Paragraph::default()], header: None, footer: None }
+        Self { paragraphs: vec![Paragraph::default()], header: None, footer: None, page: None }
     }
 
     pub fn from_plain_text(text: &str) -> Self {
@@ -227,7 +271,7 @@ impl Document {
                 runs: if line.is_empty() { vec![] } else { vec![Run::plain(line)] },
             })
             .collect::<Vec<_>>();
-        let mut d = Self { paragraphs, header: None, footer: None };
+        let mut d = Self { paragraphs, header: None, footer: None, page: None };
         d.ensure_non_empty();
         d
     }

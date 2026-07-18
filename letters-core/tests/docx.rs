@@ -257,3 +257,43 @@ fn header_footer_survive() {
     assert_eq!(rt.header.as_deref(), Some("Quarterly Report"));
     assert_eq!(rt.footer.as_deref(), Some("Page {page}"));
 }
+
+// ── Page geometry & font family round-trip (PARITY stragglers) ───────
+
+#[test]
+fn docx_page_geometry_round_trips() {
+    use letters_core::model::PageGeometry;
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("geom.docx");
+    let mut d = Document::from_plain_text("body");
+    d.page = Some(PageGeometry {
+        width_pt: 612.0,
+        height_pt: 792.0,
+        margin_top_pt: 36.0,
+        margin_bottom_pt: 54.0,
+        margin_left_pt: 90.0,
+        margin_right_pt: 45.0,
+    });
+    docx::write(&d, path.to_str().unwrap()).expect("write");
+    let rt = docx::read(path.to_str().unwrap()).expect("read");
+    let pg = rt.page.expect("page geometry lost");
+    assert!(pg.approx_eq(&d.page.unwrap()), "geometry drifted: {pg:?}");
+}
+
+#[test]
+fn docx_font_family_round_trips() {
+    use letters_core::model::{Run, RunStyle};
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("font.docx");
+    let mut d = Document::from_plain_text("");
+    d.paragraphs[0].runs = vec![
+        Run::plain("sans "),
+        Run {
+            text: "serif".into(),
+            style: RunStyle { font_family: Some("Liberation Serif".into()), ..Default::default() },
+        },
+    ];
+    docx::write(&d, path.to_str().unwrap()).expect("write");
+    let rt = docx::read(path.to_str().unwrap()).expect("read");
+    assert_eq!(rt.paragraphs[0].runs, d.paragraphs[0].runs);
+}

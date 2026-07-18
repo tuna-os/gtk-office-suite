@@ -6,7 +6,7 @@
 // flattened (see read()). Fidelity is measured by tests/docx.rs and the
 // LO-authored corpus in tests/lo_parity.rs.
 
-use crate::model::{Alignment, Document, ListKind, Paragraph, ParaStyle, Run, RunStyle};
+use crate::model::{Alignment, Document, ListKind, PageGeometry, Paragraph, ParaStyle, Run, RunStyle};
 
 /// Read a .docx file into a Document.
 pub fn read(path: &str) -> Result<Document, String> {
@@ -75,6 +75,25 @@ pub fn read(path: &str) -> Result<Document, String> {
         paragraphs,
         header: doc.header_text(),
         footer: doc.footer_text(),
+        page: read_page_geometry(&doc),
+    })
+}
+
+/// Page geometry from the docx section properties, when present.
+fn read_page_geometry(doc: &rdocx::Document) -> Option<PageGeometry> {
+    let sect = doc.section_properties()?;
+    // Twips (1/20 pt) → points; the Twips newtype is not re-exported, so
+    // work through the tuple field.
+    let w = sect.page_width.map(|v| v.0 as f64 / 20.0)?;
+    let h = sect.page_height.map(|v| v.0 as f64 / 20.0)?;
+    let default = PageGeometry::default();
+    Some(PageGeometry {
+        width_pt: w,
+        height_pt: h,
+        margin_top_pt: sect.margin_top.map(|v| v.0 as f64 / 20.0).unwrap_or(default.margin_top_pt),
+        margin_bottom_pt: sect.margin_bottom.map(|v| v.0 as f64 / 20.0).unwrap_or(default.margin_bottom_pt),
+        margin_left_pt: sect.margin_left.map(|v| v.0 as f64 / 20.0).unwrap_or(default.margin_left_pt),
+        margin_right_pt: sect.margin_right.map(|v| v.0 as f64 / 20.0).unwrap_or(default.margin_right_pt),
     })
 }
 
@@ -192,6 +211,7 @@ pub fn write(doc: &Document, path: &str) -> Result<(), String> {
             if run.style.strikethrough { r = r.strike(true); }
             if run.style.highlight { r = r.highlight("yellow"); }
             if run.style.code { r = r.style("SourceText"); }
+            if let Some(f) = &run.style.font_family { r = r.font(f); }
             if let Some(hp) = run.style.font_size_hp { r = r.size(hp as f64 / 2.0); }
             if let Some(c) = &run.style.color { r = r.color(c); }
             match run.style.vert_align {
@@ -206,6 +226,15 @@ pub fn write(doc: &Document, path: &str) -> Result<(), String> {
     }
     if let Some(f) = &doc.footer {
         out.set_footer(f);
+    }
+    if let Some(pg) = &doc.page {
+        out.set_page_size(rdocx::Length::pt(pg.width_pt), rdocx::Length::pt(pg.height_pt));
+        out.set_margins(
+            rdocx::Length::pt(pg.margin_top_pt),
+            rdocx::Length::pt(pg.margin_right_pt),
+            rdocx::Length::pt(pg.margin_bottom_pt),
+            rdocx::Length::pt(pg.margin_left_pt),
+        );
     }
     out.save(path).map_err(|e| format!("Cannot save {}: {}", path, e))
 }
@@ -281,6 +310,7 @@ fn map_paragraph(doc: &rdocx::Document, p: &rdocx::ParagraphRef<'_>) -> Paragrap
                 code: r.style_id() == Some("SourceText"),
                 link: link_for(idx),
                 image: None,
+                font_family: r.font_name().map(|f| f.to_string()),
                 font_size_hp: r.size().map(|pt| (pt * 2.0).round() as u16),
                 color: r.color().map(|c| c.trim_start_matches('#').to_uppercase()),
                 vert_align: match r.vert_align() {

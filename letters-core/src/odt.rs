@@ -71,6 +71,9 @@ fn run_style_props(st: &RunStyle) -> String {
     if st.code {
         props.push_str(" style:font-name=\"Monospace\"");
     }
+    if let Some(fam) = &st.font_family {
+        props.push_str(&format!(" fo:font-family=\"{}\"", esc(fam)));
+    }
     props
 }
 
@@ -203,6 +206,17 @@ fn content_xml(doc: &Document) -> String {
 }
 
 fn styles_xml(doc: &Document) -> String {
+    let layout = match &doc.page {
+        Some(pg) => format!(
+            "<style:page-layout-properties \
+             fo:page-width=\"{:.2}pt\" fo:page-height=\"{:.2}pt\" \
+             fo:margin-top=\"{:.2}pt\" fo:margin-bottom=\"{:.2}pt\" \
+             fo:margin-left=\"{:.2}pt\" fo:margin-right=\"{:.2}pt\"/>",
+            pg.width_pt, pg.height_pt, pg.margin_top_pt, pg.margin_bottom_pt,
+            pg.margin_left_pt, pg.margin_right_pt
+        ),
+        None => "<style:page-layout-properties/>".to_string(),
+    };
     let mut hf = String::new();
     if doc.header.is_some() || doc.footer.is_some() {
         hf.push_str("<office:master-styles><style:master-page style:name=\"Standard\" style:page-layout-name=\"pm1\">");
@@ -231,7 +245,7 @@ fn styles_xml(doc: &Document) -> String {
          xmlns:fo=\"urn:oasis:names:tc:opendocument:xmlns:xsl-fo-compatible:1.0\" \
          office:version=\"1.2\">\
          <office:automatic-styles>\
-         <style:page-layout style:name=\"pm1\"><style:page-layout-properties/>\
+         <style:page-layout style:name=\"pm1\">{layout}\
          </style:page-layout></office:automatic-styles>{hf}\
          </office:document-styles>"
     )
@@ -332,6 +346,9 @@ fn parse_auto_styles(xml: &str) -> AutoStyles {
                             if let Some(c) = attr_val(&e, "fo:color") {
                                 st.color = Some(c.trim_start_matches('#').to_lowercase());
                             }
+                            if let Some(fam) = attr_val(&e, "fo:font-family") {
+                                st.font_family = Some(fam.trim_matches('\'').to_string());
+                            }
                             if let Some(tp) = attr_val(&e, "style:text-position") {
                                 if tp.starts_with("super") {
                                     st.vert_align = Some(VertAlign::Superscript);
@@ -365,6 +382,20 @@ fn parse_auto_styles(xml: &str) -> AutoStyles {
     out
 }
 
+/// Parse an ODF length ("595.3pt", "21cm", "210mm", "8.5in") to points.
+fn parse_length_pt(v: &str) -> Option<f64> {
+    let v = v.trim();
+    let (num, unit) = v.split_at(v.find(|c: char| c.is_ascii_alphabetic())?);
+    let n: f64 = num.parse().ok()?;
+    Some(match unit {
+        "pt" => n,
+        "cm" => n * 72.0 / 2.54,
+        "mm" => n * 72.0 / 25.4,
+        "in" => n * 72.0,
+        _ => return None,
+    })
+}
+
 /// Read an .odt into the model.
 pub fn read(path: &str) -> Result<Document, String> {
     let file = std::fs::File::open(path).map_err(|e| e.to_string())?;
@@ -381,7 +412,7 @@ pub fn read(path: &str) -> Result<Document, String> {
 
     let auto = parse_auto_styles(&content);
 
-    let mut doc = Document { paragraphs: Vec::new(), header: None, footer: None };
+    let mut doc = Document { paragraphs: Vec::new(), header: None, footer: None, page: None };
     let mut reader = Reader::from_str(&content);
     let mut in_body = false;
     let mut para: Option<Paragraph> = None;
@@ -443,8 +474,7 @@ pub fn read(path: &str) -> Result<Document, String> {
                     push_text(&mut para, &span_stack, &link_stack, "\t");
                 }
                 b"text:p" | b"text:h" if in_body => {
-                    let mut style = ParaStyle::default();
-                    style.list = list_kind;
+                    let style = ParaStyle { list: list_kind, ..Default::default() };
                     doc.paragraphs.push(Paragraph { style, runs: Vec::new() });
                 }
                 _ => {}
@@ -477,16 +507,38 @@ pub fn read(path: &str) -> Result<Document, String> {
         }
     }
 
-    // Header/footer from styles.xml (first text of style:header/footer).
+    // Header/footer and page geometry from styles.xml.
     if !styles.is_empty() {
         let mut reader = Reader::from_str(&styles);
         let mut in_header = false;
         let mut in_footer = false;
+        let mut read_page_layout = |e: &quick_xml::events::BytesStart| {
+            let w = attr_val(e, "fo:page-width").and_then(|v| parse_length_pt(&v));
+            let h = attr_val(e, "fo:page-height").and_then(|v| parse_length_pt(&v));
+            if let (Some(width_pt), Some(height_pt)) = (w, h) {
+                let d = PageGeometry::default();
+                let m = |name: &str, fallback: f64| {
+                    attr_val(e, name).and_then(|v| parse_length_pt(&v)).unwrap_or(fallback)
+                };
+                doc.page = Some(PageGeometry {
+                    width_pt,
+                    height_pt,
+                    margin_top_pt: m("fo:margin-top", d.margin_top_pt),
+                    margin_bottom_pt: m("fo:margin-bottom", d.margin_bottom_pt),
+                    margin_left_pt: m("fo:margin-left", d.margin_left_pt),
+                    margin_right_pt: m("fo:margin-right", d.margin_right_pt),
+                });
+            }
+        };
         loop {
             match reader.read_event() {
+                Ok(Event::Empty(e)) if e.name().as_ref() == b"style:page-layout-properties" => {
+                    read_page_layout(&e);
+                }
                 Ok(Event::Start(e)) => match e.name().as_ref() {
                     b"style:header" => in_header = true,
                     b"style:footer" => in_footer = true,
+                    b"style:page-layout-properties" => read_page_layout(&e),
                     _ => {}
                 },
                 Ok(Event::End(e)) => match e.name().as_ref() {
@@ -672,6 +724,45 @@ mod tests {
     fn special_chars_escaped() {
         let d = Document::from_plain_text("a < b & c > \"d\"");
         assert_eq!(round_trip(&d).to_plain_text(), d.to_plain_text());
+    }
+
+    #[test]
+    fn page_geometry_survives() {
+        let mut d = Document::from_plain_text("body");
+        d.page = Some(PageGeometry {
+            width_pt: 612.0,   // US Letter
+            height_pt: 792.0,
+            margin_top_pt: 36.0,
+            margin_bottom_pt: 54.0,
+            margin_left_pt: 90.0,
+            margin_right_pt: 45.0,
+        });
+        let rt = round_trip(&d);
+        let pg = rt.page.expect("page geometry lost");
+        assert!(pg.approx_eq(&d.page.unwrap()), "geometry drifted: {pg:?}");
+    }
+
+    #[test]
+    fn no_page_geometry_reads_none() {
+        let d = Document::from_plain_text("body");
+        assert_eq!(round_trip(&d).page, None);
+    }
+
+    #[test]
+    fn font_family_survives() {
+        let mut d = Document::from_plain_text("");
+        d.paragraphs[0].runs = vec![
+            Run::plain("sans "),
+            Run {
+                text: "serif".into(),
+                style: RunStyle {
+                    font_family: Some("Liberation Serif".into()),
+                    ..Default::default()
+                },
+            },
+        ];
+        let rt = round_trip(&d);
+        assert_eq!(rt.paragraphs[0].runs, d.paragraphs[0].runs);
     }
 
     #[test]

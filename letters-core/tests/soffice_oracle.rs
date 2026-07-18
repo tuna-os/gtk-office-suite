@@ -236,3 +236,31 @@ fn odt_styles_survive_lo_conversion_to_docx() {
         .collect();
     assert_eq!(bold_text.trim(), "bolded", "bold did not survive the LO pass");
 }
+
+/// Page geometry through LibreOffice: our odt → LO converts to docx →
+/// our docx reader sees the same page size and margins.
+#[test]
+fn page_geometry_survives_lo_conversion() {
+    use letters_core::model::PageGeometry;
+    let Some(bin) = require_or_skip() else { return };
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("geom.odt");
+    let mut d = Document::from_plain_text("geometry probe");
+    let want = PageGeometry {
+        width_pt: 612.0, // US Letter — distinct from the A4 default
+        height_pt: 792.0,
+        margin_top_pt: 36.0,
+        margin_bottom_pt: 54.0,
+        margin_left_pt: 90.0,
+        margin_right_pt: 45.0,
+    };
+    d.page = Some(want);
+    letters_core::odt::write(&d, path.to_str().unwrap()).expect("write odt");
+
+    let _ = soffice_convert(bin, &path, "docx").ok();
+    let docx_path = dir.path().join("geom.docx");
+    assert!(docx_path.exists(), "soffice did not convert odt to docx");
+    let rt = docx::read(docx_path.to_str().unwrap()).expect("read converted docx");
+    let pg = rt.page.expect("LibreOffice dropped the page geometry");
+    assert!(pg.approx_eq(&want), "geometry drifted through LO: {pg:?}");
+}
