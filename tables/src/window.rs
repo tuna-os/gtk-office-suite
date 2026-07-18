@@ -96,6 +96,12 @@ impl TablesWindow {
         let drawing_area = gtk4::DrawingArea::new();
         drawing_area.set_vexpand(true);
         drawing_area.set_hexpand(true);
+        // A11y: name the grid and keep its description tracking the active
+        // cell, so screen readers announce state and AT-SPI tests can
+        // assert it (the DrawingArea is otherwise opaque — issue #87).
+        drawing_area.set_accessible_role(gtk4::AccessibleRole::Img);
+        drawing_area.update_property(&[gtk4::accessible::Property::Label("Spreadsheet grid")]);
+        update_grid_a11y(&drawing_area, "A", 0, "");
 
         {
             let da_state = state.clone();
@@ -117,6 +123,7 @@ impl TablesWindow {
         let fx_entry = gtk4::Entry::new();
         fx_entry.set_hexpand(true);
         fx_entry.set_placeholder_text(Some("Formula or value\u{2026}"));
+        fx_entry.update_property(&[gtk4::accessible::Property::Label("Formula input")]);
 
         let fx_bar = gtk4::Box::new(gtk4::Orientation::Horizontal, 4);
         fx_bar.set_margin_start(6); fx_bar.set_margin_end(6);
@@ -152,6 +159,8 @@ impl TablesWindow {
                     sh.formulas[r][c] = val.starts_with('=');
                 }
                 st.sheet_mut().sync_from_engine(&st.engine);
+                let shown = st.engine.cell(r, c);
+                update_grid_a11y(&da, &tables_core::sheet::col_label(c), r, &shown);
                 da.queue_draw();
             });
         }
@@ -189,6 +198,10 @@ impl TablesWindow {
                 if let Some((col, row)) = xy_to_cell(wx, wy, h.value(), &*sh) {
                     drop(sh); drop(st);
                     let mut st = s.borrow_mut();
+                    {
+                        let shown = st.engine.cell(row, col);
+                        update_grid_a11y(&da, &tables_core::sheet::col_label(col), row, &shown);
+                    }
                     let mut sh = st.sheet_mut();
                     sh.selected_row = row;
                     sh.selected_col = col;
@@ -624,8 +637,14 @@ impl TablesWindow {
         app.add_action(&act);
 
         let st = stack.clone();
+        let fx = fx_entry.clone();
         let act = gtk4::gio::SimpleAction::new("new-document", None);
-        act.connect_activate(move |_, _| st.set_visible_child_name("editor"));
+        act.connect_activate(move |_, _| {
+            st.set_visible_child_name("editor");
+            // Focus the formula entry so typing works immediately (and so
+            // AT-SPI tests can drive the grid deterministically).
+            fx.grab_focus();
+        });
         app.add_action(&act);
 
         // File Open action
@@ -774,3 +793,14 @@ impl TablesWindow {
 
 // ── Coordinate conversion ─────────────────────────────────────────────
 
+
+/// Keep the grid's accessible description in sync with the active cell so
+/// assistive tech and AT-SPI tests can read grid state.
+fn update_grid_a11y(da: &gtk4::DrawingArea, col: &str, row: usize, value: &str) {
+    let desc = if value.is_empty() {
+        format!("cell {}{}, empty", col, row + 1)
+    } else {
+        format!("cell {}{}: {}", col, row + 1, value)
+    };
+    da.update_property(&[gtk4::accessible::Property::Description(&desc)]);
+}

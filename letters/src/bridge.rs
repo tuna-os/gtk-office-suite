@@ -6,8 +6,8 @@
 // model styles. Tag names map 1:1 to RunStyle fields / heading levels
 // (see register_formatting_tags in window.rs).
 //
-// Links use dynamic "link:<url>" tags; alignment uses the align-* tags.
-// Not yet bridged: list kind (the editor keeps literal "- " markers today).
+// Links use dynamic "link:<url>" tags; alignment uses the align-* tags;
+// list kinds translate to/from the editor's literal "- " / "N. " markers.
 
 use gtk4::{self as gtk, prelude::*};
 use letters_core::model::{Document, Paragraph, ParaStyle, Run, RunStyle};
@@ -111,6 +111,7 @@ pub fn capture_from_buffer(buf: &gtk::TextBuffer) -> Document {
             if let Some(r) = current_run.take() {
                 current.runs.push(r);
             }
+            capture_list_marker(&mut current);
             paragraphs.push(std::mem::take(&mut current));
             at_line_start = true;
         } else {
@@ -130,9 +131,42 @@ pub fn capture_from_buffer(buf: &gtk::TextBuffer) -> Document {
     if let Some(r) = current_run.take() {
         current.runs.push(r);
     }
+    capture_list_marker(&mut current);
     paragraphs.push(current);
 
     Document { paragraphs }
+}
+
+/// The editor shows lists as literal "- " / "N. " markers; the model wants
+/// ListKind. Strip the marker and set the kind when capturing.
+fn capture_list_marker(para: &mut Paragraph) {
+    let text = para.text();
+    let (kind, strip) = if text.starts_with("- ") {
+        (letters_core::ListKind::Bullet, 2)
+    } else if let Some(dot) = text.find(". ") {
+        if dot > 0 && text[..dot].chars().all(|c| c.is_ascii_digit()) {
+            (letters_core::ListKind::Numbered, dot + 2)
+        } else {
+            return;
+        }
+    } else {
+        return;
+    };
+    para.style.list = kind;
+    // Remove `strip` chars from the front of the run list.
+    let mut remaining = strip;
+    while remaining > 0 {
+        let Some(first) = para.runs.first_mut() else { break };
+        let n = first.text.chars().count();
+        if n <= remaining {
+            remaining -= n;
+            para.runs.remove(0);
+        } else {
+            let byte = first.text.char_indices().nth(remaining).map(|(b, _)| b).unwrap();
+            first.text = first.text[byte..].to_string();
+            remaining = 0;
+        }
+    }
 }
 
 /// Replace the buffer's content with a rendered Document.
@@ -144,6 +178,17 @@ pub fn render_to_buffer(doc: &Document, buf: &gtk::TextBuffer) {
             buf.insert(&mut insert, "\n");
         }
         let para_start = insert.offset();
+        match para.style.list {
+            letters_core::ListKind::Bullet => buf.insert(&mut insert, "- "),
+            letters_core::ListKind::Numbered => {
+                // Number within the current consecutive numbered group.
+                let n = doc.paragraphs[..i].iter().rev()
+                    .take_while(|p| p.style.list == letters_core::ListKind::Numbered)
+                    .count() + 1;
+                buf.insert(&mut insert, &format!("{n}. "));
+            }
+            letters_core::ListKind::None => {}
+        }
         for run in &para.runs {
             if let Some(src) = &run.style.image {
                 match gtk4::gdk::Texture::from_filename(src) {
@@ -322,6 +367,21 @@ plain");
             .expect("image run lost through buffer");
         assert_eq!(ir.text, "a dot", "alt text lost");
         assert!(ir.style.image.as_deref().unwrap().ends_with("dot.png"));
+
+        // lists: model kinds render as visible markers and capture back
+        let buf = fresh();
+        let mut d = Document::from_plain_text("first\nsecond\nplain");
+        d.paragraphs[0].style.list = letters_core::ListKind::Bullet;
+        d.paragraphs[1].style.list = letters_core::ListKind::Numbered;
+        render_to_buffer(&d, &buf);
+        let shown = buf.text(&buf.start_iter(), &buf.end_iter(), false).to_string();
+        assert_eq!(shown, "- first\n1. second\nplain", "markers not rendered: {shown:?}");
+        let rt = capture_from_buffer(&buf);
+        assert_eq!(rt.paragraphs[0].style.list, letters_core::ListKind::Bullet);
+        assert_eq!(rt.paragraphs[0].text(), "first");
+        assert_eq!(rt.paragraphs[1].style.list, letters_core::ListKind::Numbered);
+        assert_eq!(rt.paragraphs[1].text(), "second");
+        assert_eq!(rt.paragraphs[2].style.list, letters_core::ListKind::None);
 
         // links
         let buf = fresh();

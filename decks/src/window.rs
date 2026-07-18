@@ -60,6 +60,7 @@ impl DecksWindow {
         canvas.set_vexpand(true);
         canvas.set_hexpand(true);
         canvas.set_accessible_role(gtk::AccessibleRole::Img);
+        canvas.update_property(&[gtk::accessible::Property::Label("Slide canvas")]);
         canvas.set_content_width(960);
         canvas.set_content_height(540);
         {
@@ -68,13 +69,31 @@ impl DecksWindow {
             let so = selected_object.clone();
             let ts = transition.clone();
             let m = masters.clone();
-            canvas.set_draw_func(move |_area, cr, width, height| {
+            canvas.set_draw_func(move |area, cr, width, height| {
                 let t = ts.borrow();
                 if draw_transition(cr, &t, width as f64, height as f64) {
                     return; // transition is active, skip normal rendering
                 }
                 drop(t);
-                draw_slide(cr, width as f64, height as f64, &s.borrow(), c.get(), so.get(), &m.borrow());
+                let slides = s.borrow();
+                let cur = c.get();
+                // A11y: every state change redraws, so the accessible
+                // description tracks slide/selection here (issue #87).
+                let desc = {
+                    let n_objs = slides.get(cur).map(|sl| sl.objects.len()).unwrap_or(0);
+                    match so.get() {
+                        Some(oi) => format!(
+                            "slide {} of {}, {} objects, object {} selected",
+                            cur + 1, slides.len(), n_objs, oi + 1
+                        ),
+                        None => format!(
+                            "slide {} of {}, {} objects",
+                            cur + 1, slides.len(), n_objs
+                        ),
+                    }
+                };
+                area.update_property(&[gtk::accessible::Property::Description(&desc)]);
+                draw_slide(cr, width as f64, height as f64, &slides, cur, so.get(), &m.borrow());
             });
         }
 

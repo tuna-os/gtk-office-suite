@@ -113,6 +113,26 @@ class TablesSmoke(BaseGUITestCase):
         self.assertIsNotNone(self.app.child(roleName="frame"))
         self.assertIsNone(self.process.poll(), "tables exited after launch")
 
+    def test_formula_entry_updates_grid_a11y(self):
+        """Type a formula in the fx entry; the grid's accessible
+        description must show the evaluated value for the active cell.
+        This is the first semantically-assertable grid interaction
+        (issue #87 groundwork)."""
+        from dogtail import rawinput
+        import subprocess
+
+        # Tables starts on an empty-state page; the grid maps on new-document.
+        subprocess.run(["gapplication", "action", "org.tunaos.tables-rust", "new-document"])
+        time.sleep(1.5)
+        # new-document focuses the formula entry; type straight into it.
+        rawinput.typeText("=2+3")
+        rawinput.keyCombo("Return")
+        time.sleep(0.8)
+        grid = self.app.child(name="Spreadsheet grid")
+        self.assertIn("5", grid.description,
+                      f"grid description: {grid.description!r}")
+        self.assertIn("A1", grid.description)
+
 
 class DecksSmoke(BaseGUITestCase):
     app_name = "decks"
@@ -120,3 +140,18 @@ class DecksSmoke(BaseGUITestCase):
     def test_launch_shows_window(self):
         self.assertIsNotNone(self.app.child(roleName="frame"))
         self.assertIsNone(self.process.poll(), "decks exited after launch")
+
+    def test_canvas_reports_slide_state(self):
+        # Decks starts on an empty-state page; the canvas maps (and enters
+        # the AT-SPI tree) once a deck exists.
+        import subprocess
+        subprocess.run(["gapplication", "action", "org.tunaos.decks-rust", "new-document"])
+        time.sleep(1.5)
+        canvas = self.app.child(name="Slide canvas")
+        deadline = time.monotonic() + 5
+        while time.monotonic() < deadline:
+            if "slide 1 of" in canvas.description:
+                break
+            time.sleep(0.3)
+        self.assertIn("slide 1 of", canvas.description,
+                      f"canvas description: {canvas.description!r}")
