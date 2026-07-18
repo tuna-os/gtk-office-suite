@@ -47,6 +47,5 @@ fn main() {
         *pw_store.borrow_mut() = Some(win.window.clone().upcast::<gtk4::Window>());
         win.present();
     });
-    return;
     suite.run();
 }

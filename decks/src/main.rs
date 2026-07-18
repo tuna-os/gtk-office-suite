@@ -56,11 +56,5 @@ fn main() {
         *pw_store.borrow_mut() = Some(w.window.clone().upcast::<gtk4::Window>());
         w.present();
     });
-    return;
-
-    suite.app.connect_activate(|app| {
-        let w = window::DecksWindow::new(app);
-        w.present();
-    });
     suite.run();
 }
