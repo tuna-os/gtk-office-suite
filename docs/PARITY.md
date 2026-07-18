@@ -112,7 +112,7 @@ roadmap-dependent), external file references (decision: likely never),
 | Speaker notes | ✅ | I1, LO round-trip (notesSlide parts read+written) |
 | Undo/redo | ✅ | I1 (9 tests) |
 | Present mode + transitions | ✅ | I6 smoke: enter/exit presenting; I7 visual |
-| **LO-authored parity corpus for Decks** | ❌ missing | build `lo_parity.rs` for pptx: scenarios as fodp/HTML → soffice → pptx → our reader (mirror of Letters', the single biggest Decks gap) |
+| **LO-authored parity corpus for Decks** | ✅ 8/8 | decks-core/tests/lo_parity.rs (pptx through-the-oracle, ratcheted) |
 
 ### Tier 2 — Nice-to-have
 
