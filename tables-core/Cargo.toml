@@ -20,6 +20,7 @@ regex = "1"
 
 [dev-dependencies]
 tempfile = "3"
+zip = "2.0"
 
 [lib]
 name = "tables_core"

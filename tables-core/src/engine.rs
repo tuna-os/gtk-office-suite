@@ -68,6 +68,14 @@ impl TablesEngine {
     }
 
     /// Check if cell contains a formula (starts with '=').
+    /// The formula for a cell (without leading '='), if it has one.
+    pub fn formula(&self, row: usize, col: usize) -> Option<String> {
+        let r = row as i32 + 1;
+        let c = col as i32 + 1;
+        self.model.get_cell_formula(0, r, c).ok().flatten()
+            .map(|f| f.trim_start_matches('=').to_string())
+    }
+
     pub fn has_formula(&self, row: usize, col: usize) -> bool {
         let r = row as i32 + 1;
         let c = col as i32 + 1;

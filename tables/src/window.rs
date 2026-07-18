@@ -53,7 +53,7 @@ use tables_core::io::load_file_into_engine;
 
 fn save_engine_to_xlsx(path: &str, state: &AppState) -> Result<(), String> {
     let sheets: Vec<SheetModel> = state.sheets.iter().map(|s| s.borrow().clone()).collect();
-    tables_core::io::save_sheets_to_xlsx(path, &sheets)
+    tables_core::io::save_sheets_to_xlsx_with_engine(path, &sheets, Some(&state.engine))
 }
 
 // ── Main window ────────────────────────────────────────────────────────

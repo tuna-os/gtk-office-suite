@@ -80,20 +80,55 @@ pub fn load_file_into_engine(path: &str, engine: &mut TablesEngine) -> Result<(u
 }
 
 /// Save sheet data to an XLSX file. Numbers are written as numbers,
-/// everything else as strings.
+/// everything else as strings; formulas (from `engine`, first sheet)
+/// are written as real formulas so they survive into other suites.
 pub fn save_sheets_to_xlsx(path: &str, sheets: &[SheetModel]) -> Result<(), String> {
-    use rust_xlsxwriter::Workbook;
+    save_sheets_to_xlsx_with_engine(path, sheets, None)
+}
+
+pub fn save_sheets_to_xlsx_with_engine(
+    path: &str,
+    sheets: &[SheetModel],
+    engine: Option<&TablesEngine>,
+) -> Result<(), String> {
+    use rust_xlsxwriter::{Formula, Workbook};
     let mut workbook = Workbook::new();
-    for sh in sheets {
+    for (si, sh) in sheets.iter().enumerate() {
         let sheet = workbook.add_worksheet();
         sheet.set_name(&sh.name).map_err(|e| format!("Sheet name: {}", e))?;
         for r in 0..sh.rows {
             for c in 0..sh.cols {
+                // The engine backs the first sheet; formulas persist as
+                // formulas there (recalculable in Calc/Excel), values
+                // elsewhere.
+                if si == 0 {
+                    if let Some(eng) = engine {
+                        if let Some(f) = eng.formula(r, c) {
+                            // Cache the computed value alongside the formula:
+                            // consumers that skip recalc-on-load (LibreOffice
+                            // included) show the right result immediately.
+                            let cached = eng.cell(r, c);
+                            sheet.write_formula(r as u32, c as u16,
+                                    Formula::new(&f).set_result(&cached))
+                                .map_err(|e| format!("Write error: {}", e))?;
+                            continue;
+                        }
+                    }
+                }
                 let val = &sh.data[r][c];
                 if val.is_empty() { continue; }
                 if let Ok(n) = val.parse::<f64>() {
-                    sheet.write_number(r as u32, c as u16, n)
-                        .map_err(|e| format!("Write error: {}", e))?;
+                    match xlsx_num_format(&sh.formats[r][c]) {
+                        Some(fmt) => {
+                            let f = rust_xlsxwriter::Format::new().set_num_format(&fmt);
+                            sheet.write_number_with_format(r as u32, c as u16, n, &f)
+                                .map_err(|e| format!("Write error: {}", e))?;
+                        }
+                        None => {
+                            sheet.write_number(r as u32, c as u16, n)
+                                .map_err(|e| format!("Write error: {}", e))?;
+                        }
+                    }
                 } else {
                     sheet.write_string(r as u32, c as u16, val)
                         .map_err(|e| format!("Write error: {}", e))?;
@@ -103,6 +138,32 @@ pub fn save_sheets_to_xlsx(path: &str, sheets: &[SheetModel]) -> Result<(), Stri
     }
     workbook.save(path).map_err(|e| format!("Save error: {}", e))?;
     Ok(())
+}
+
+
+/// Map our NumberFormat onto an xlsx number-format code, if non-default.
+fn xlsx_num_format(nf: &suite_common_core::format::NumberFormat) -> Option<String> {
+    use suite_common_core::format::NumberFormatKind::*;
+    match &nf.kind {
+        General => None,
+        Number(d) => Some(if *d == 0 {
+            "#,##0".to_string()
+        } else {
+            format!("#,##0.{}", "0".repeat(*d as usize))
+        }),
+        Currency(sym, d) => Some(if *d == 0 {
+            format!("\"{}\"#,##0", sym)
+        } else {
+            format!("\"{}\"#,##0.{}", sym, "0".repeat(*d as usize))
+        }),
+        Percent(d) => Some(if *d == 0 {
+            "0%".to_string()
+        } else {
+            format!("0.{}%", "0".repeat(*d as usize))
+        }),
+        Date(_) => Some("yyyy-mm-dd".to_string()),
+        _ => None,
+    }
 }
 
 #[cfg(test)]
@@ -190,4 +251,48 @@ mod tests {
         assert_eq!(e.cell(2, 2), "3.50");
         assert!(rows >= 3 && cols >= 3);
     }
+
+    #[test]
+    fn formulas_survive_as_formulas() {
+        use calamine::{open_workbook, Reader};
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("f.xlsx");
+
+        let mut e = engine();
+        e.set_cell_text(0, 0, "2");
+        e.set_cell_text(0, 1, "3");
+        e.set_cell_text(1, 0, "=A1+B1");
+        e.evaluate();
+        let mut sheet = SheetModel::new("S", 3, 3, 0);
+        sheet.data[0][0] = "2".into();
+        sheet.data[0][1] = "3".into();
+        sheet.data[1][0] = "5".into();
+        save_sheets_to_xlsx_with_engine(path.to_str().unwrap(), &[sheet], Some(&e)).unwrap();
+
+        let mut wb: calamine::Xlsx<_> = open_workbook(&path).unwrap();
+        let names = wb.sheet_names().to_vec();
+        let formulas = wb.worksheet_formula(&names[0]).unwrap();
+        let has = formulas.rows().flatten().any(|f| f.contains("A1+B1"));
+        assert!(has, "formula not written as formula");
+    }
+
+
+    #[test]
+    fn number_formats_written_to_xlsx() {
+        use suite_common_core::format::{NumberFormat, NumberFormatKind};
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("fmt.xlsx");
+        let mut sheet = SheetModel::new("Fmt", 2, 2, 0);
+        sheet.data[0][0] = "0.5".into();
+        sheet.formats[0][0] = NumberFormat { kind: NumberFormatKind::Percent(1) };
+        save_sheets_to_xlsx(path.to_str().unwrap(), &[sheet]).unwrap();
+        // the format lives in styles.xml; presence check via zip
+        let bytes = std::fs::read(&path).unwrap();
+        let mut zip = zip::ZipArchive::new(std::io::Cursor::new(bytes)).unwrap();
+        let mut styles = String::new();
+        use std::io::Read as _;
+        zip.by_name("xl/styles.xml").unwrap().read_to_string(&mut styles).unwrap();
+        assert!(styles.contains("0.0%"), "percent format missing from styles: {styles}");
+    }
+
 }

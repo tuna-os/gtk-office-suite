@@ -3958,6 +3958,7 @@ dependencies = [
  "suite-common-core",
  "suite-export",
  "tempfile",
+ "zip 2.4.2",
 ]
 
 [[package]]
