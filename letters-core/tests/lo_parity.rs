@@ -250,9 +250,21 @@ fn scenarios() -> Vec<Scenario> {
 
     // ── Battery 9: tables ───────────────────────────────────────────────
     v.push(text_only("table-1x1", "<table><tr><td>lone</td></tr></table>", "lone"));
-    v.push(text_only("table-2x2",
+    v.push(sc("table-2x2",
         "<table><tr><td>a1</td><td>b1</td></tr><tr><td>a2</td><td>b2</td></tr></table>",
-        "a1\nb1\na2\nb2"));
+        "a1\nb1\na2\nb2",
+        Box::new(|d| {
+            // Structure, not just text: every cell at its coordinates.
+            let cells: Vec<(u32, u32, String)> = d.paragraphs.iter()
+                .filter_map(|p| p.style.table_cell.map(|tc| (tc.row, tc.col, p.text())))
+                .collect();
+            for want in [(0u32, 0u32, "a1"), (0, 1, "b1"), (1, 0, "a2"), (1, 1, "b2")] {
+                if !cells.contains(&(want.0, want.1, want.2.to_string())) {
+                    return Err(format!("missing cell {want:?}; got {cells:?}"));
+                }
+            }
+            Ok(())
+        })));
     v.push(text_only("table-3x2",
         "<table><tr><td>r1c1</td><td>r1c2</td></tr><tr><td>r2c1</td><td>r2c2</td></tr><tr><td>r3c1</td><td>r3c2</td></tr></table>",
         "r1c1\nr1c2\nr2c1\nr2c2\nr3c1\nr3c2"));

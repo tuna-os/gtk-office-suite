@@ -22,26 +22,44 @@ pub fn read(path: &str) -> Result<Document, String> {
         paragraphs.push(map_paragraph(&doc, &p));
     }
 
-    // Tables are not modeled yet; flatten their cell paragraphs (styles and
-    // all) so no content is lost. Limitation: rdocx exposes tables separately
-    // from the paragraph stream, so flattened cells append after body
-    // paragraphs rather than interleaving at their true position.
+    // Table cells become paragraphs tagged with (table, row, col) — the
+    // document stays flat (offset invariants intact) and the grid is fully
+    // recoverable. Position limitation: rdocx exposes tables separately
+    // from the paragraph stream, so tables append after body paragraphs.
     let tables = doc.tables();
     if !tables.is_empty() {
         // OOXML mandates an (empty) paragraph after each table; with the
-        // flattened cells appended at the end it is pure noise — drop it.
+        // tables appended at the end it is pure noise — drop it.
         while paragraphs.last().map(|p: &Paragraph| p.runs.is_empty()).unwrap_or(false) {
             paragraphs.pop();
         }
     }
-    for table in tables {
+    for (ti, table) in tables.iter().enumerate() {
         for ri in 0..table.row_count() {
             let Some(row) = table.row(ri) else { continue };
             for ci in 0..row.cell_count() {
                 let Some(cell) = row.cell(ci) else { continue };
+                let mut wrote_any = false;
                 for cp in cell.paragraphs() {
                     if cp.text().is_empty() { continue; }
-                    paragraphs.push(map_paragraph(&doc, &cp));
+                    let mut para = map_paragraph(&doc, &cp);
+                    para.style.table_cell = Some(crate::model::TableCell {
+                        table: ti as u32, row: ri as u32, col: ci as u32,
+                    });
+                    paragraphs.push(para);
+                    wrote_any = true;
+                }
+                // Empty cells still occupy a grid position.
+                if !wrote_any {
+                    paragraphs.push(Paragraph {
+                        style: ParaStyle {
+                            table_cell: Some(crate::model::TableCell {
+                                table: ti as u32, row: ri as u32, col: ci as u32,
+                            }),
+                            ..Default::default()
+                        },
+                        runs: vec![],
+                    });
                 }
             }
         }
@@ -56,7 +74,53 @@ pub fn read(path: &str) -> Result<Document, String> {
 /// Write a Document to a .docx file.
 pub fn write(doc: &Document, path: &str) -> Result<(), String> {
     let mut out = rdocx::Document::new();
-    for para in &doc.paragraphs {
+    let paras = &doc.paragraphs;
+    let mut i = 0;
+    while i < paras.len() {
+        // Consecutive paragraphs sharing a table id become one rdocx table.
+        if let Some(tc0) = paras[i].style.table_cell {
+            let start = i;
+            while i < paras.len()
+                && paras[i].style.table_cell.map(|t| t.table) == Some(tc0.table)
+            {
+                i += 1;
+            }
+            let group = &paras[start..i];
+            let rows = group.iter().filter_map(|p| p.style.table_cell.map(|t| t.row)).max().unwrap_or(0) as usize + 1;
+            let cols = group.iter().filter_map(|p| p.style.table_cell.map(|t| t.col)).max().unwrap_or(0) as usize + 1;
+            let mut tbl = out.add_table(rows, cols);
+            let mut filled = std::collections::HashSet::new();
+            for p in group {
+                let tc = p.style.table_cell.expect("grouped by table_cell");
+                if let Some(mut cell) = tbl.cell(tc.row as usize, tc.col as usize) {
+                    filled.insert((tc.row, tc.col));
+                    let mut cp = cell.add_paragraph("");
+                    for run in &p.runs {
+                        let mut r = cp.add_run(&run.text);
+                        if run.style.bold { r = r.bold(true); }
+                        if run.style.italic { r = r.italic(true); }
+                        if run.style.underline { r = r.underline(true); }
+                        if run.style.strikethrough { r = r.strike(true); }
+                        if run.style.highlight { r = r.highlight("yellow"); }
+                        if run.style.code { r = r.style("SourceText"); }
+                    }
+                }
+            }
+            // OOXML requires a paragraph in every cell and one after a table.
+            for r in 0..rows {
+                for c in 0..cols {
+                    if !filled.contains(&(r as u32, c as u32)) {
+                        if let Some(mut cell) = tbl.cell(r, c) {
+                            cell.add_paragraph("");
+                        }
+                    }
+                }
+            }
+            out.add_paragraph("");
+            continue;
+        }
+        let para = &paras[i];
+        i += 1;
         let mut p = match para.style.list {
             ListKind::Bullet => out.add_bullet_list_item("", 0),
             ListKind::Numbered => out.add_numbered_list_item("", 0),

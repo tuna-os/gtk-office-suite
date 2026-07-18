@@ -48,7 +48,7 @@ anything interactive needs I5 or I6.
 
 | Feature | How to test |
 |---|---|
-| Tables in documents (real model, not flattening) | I1 table model; I2 fixture round-trip; I3 scenarios (structure, not just text — replace today's flatten-checks); I4 |
+| Tables in documents (cell-tagged model) | ✅ I1+I2 round-trip, I3 structural (table-2x2 asserts coordinates). Interleaved position + UI editing remain |
 | Named paragraph styles (Title, Quote…) | I1 style registry; I3: LO styles map to ours and back |
 | Font size / family / color per run | I1 model fields; I3 (`<font>`, css sizes); I4 |
 | Superscript / subscript | I1 + I3 (`vert_align` getter already exists in rdocx) |

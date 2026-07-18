@@ -195,3 +195,42 @@ fn block_quote_survives() {
     assert!(rt.paragraphs[0].style.block_quote, "block quote lost");
     assert!(!rt.paragraphs[1].style.block_quote);
 }
+
+#[test]
+fn table_structure_survives() {
+    use letters_core::model::TableCell;
+    let mut d = Document::from_plain_text("intro");
+    for (r, c, txt) in [(0u32, 0u32, "a1"), (0, 1, "b1"), (1, 0, "a2"), (1, 1, "b2")] {
+        d.paragraphs.push(Paragraph {
+            style: ParaStyle {
+                table_cell: Some(TableCell { table: 0, row: r, col: c }),
+                ..Default::default()
+            },
+            runs: vec![Run::plain(txt)],
+        });
+    }
+    let rt = round_trip(&d);
+    let cells: Vec<(u32, u32, String)> = rt.paragraphs.iter()
+        .filter_map(|p| p.style.table_cell.map(|tc| (tc.row, tc.col, p.text())))
+        .collect();
+    assert_eq!(cells.len(), 4, "cell count changed: {cells:?}");
+    assert!(cells.contains(&(0, 0, "a1".into())), "{cells:?}");
+    assert!(cells.contains(&(1, 1, "b2".into())), "{cells:?}");
+    assert!(rt.to_plain_text().contains("intro"));
+}
+
+#[test]
+fn styled_table_cell_survives() {
+    use letters_core::model::TableCell;
+    let mut d = Document::from_plain_text("");
+    d.paragraphs[0].style.table_cell = Some(TableCell { table: 0, row: 0, col: 0 });
+    d.paragraphs[0].runs = vec![Run {
+        text: "bolded cell".into(),
+        style: RunStyle { bold: true, ..Default::default() },
+    }];
+    let rt = round_trip(&d);
+    let cell = rt.paragraphs.iter()
+        .find(|p| p.style.table_cell.is_some() && p.text().contains("bolded"))
+        .expect("cell lost");
+    assert!(cell.runs.iter().any(|r| r.style.bold), "cell bold lost");
+}

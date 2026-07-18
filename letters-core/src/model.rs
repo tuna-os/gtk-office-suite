@@ -101,11 +101,23 @@ pub struct ParaStyle {
     pub code_block: Option<String>,
     /// Block quote membership.
     pub block_quote: bool,
+    /// Table membership: this paragraph lives in the given cell. The
+    /// document stays a flat paragraph list (offset invariants intact);
+    /// consecutive paragraphs sharing a `table` id form one table, and
+    /// (row, col) recovers the grid.
+    pub table_cell: Option<TableCell>,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct TableCell {
+    pub table: u32,
+    pub row: u32,
+    pub col: u32,
 }
 
 impl Default for ParaStyle {
     fn default() -> Self {
-        Self { heading: None, alignment: Alignment::Left, list: ListKind::None, line_spacing: 1.0, code_block: None, block_quote: false }
+        Self { heading: None, alignment: Alignment::Left, list: ListKind::None, line_spacing: 1.0, code_block: None, block_quote: false, table_cell: None }
     }
 }
 
