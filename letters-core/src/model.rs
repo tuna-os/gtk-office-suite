@@ -33,6 +33,10 @@ pub struct RunStyle {
     pub color: Option<String>,
     /// Superscript/subscript position.
     pub vert_align: Option<VertAlign>,
+    /// Raw inline HTML: the run's text is emitted verbatim on Markdown
+    /// export (never escaped) and rendered as plain text in the editor.
+    #[serde(default)]
+    pub html: bool,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -106,6 +110,10 @@ pub struct ParaStyle {
     pub code_block: Option<String>,
     /// Block quote membership.
     pub block_quote: bool,
+    /// Raw HTML block line (Markdown source fidelity, like code_block:
+    /// consecutive html_block paragraphs form one block, emitted verbatim).
+    #[serde(default)]
+    pub html_block: bool,
     /// Start this paragraph on a new page.
     pub page_break_before: bool,
     /// Named document style (e.g. "Title", "Subtitle"); orthogonal to
@@ -127,7 +135,7 @@ pub struct TableCell {
 
 impl Default for ParaStyle {
     fn default() -> Self {
-        Self { heading: None, alignment: Alignment::Left, list: ListKind::None, line_spacing: 1.0, code_block: None, block_quote: false, page_break_before: false, named_style: None, table_cell: None }
+        Self { heading: None, alignment: Alignment::Left, list: ListKind::None, line_spacing: 1.0, code_block: None, block_quote: false, html_block: false, page_break_before: false, named_style: None, table_cell: None }
     }
 }
 

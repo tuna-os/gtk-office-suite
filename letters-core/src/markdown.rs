@@ -18,6 +18,7 @@ pub fn parse(md: &str) -> Document {
     let mut style = RunStyle::default();
     let mut list_stack: Vec<ListKind> = Vec::new();
     let mut code_block: Option<String> = None;
+    let mut in_html_block = false;
     let mut quote_depth = 0usize;
 
     let parser = Parser::new_ext(md, Options::ENABLE_STRIKETHROUGH);
@@ -60,6 +61,38 @@ pub fn parse(md: &str) -> Document {
             }
             Event::End(TagEnd::Item) => {
                 if let Some(p) = current.take() { paragraphs.push(p); }
+            }
+            Event::Start(Tag::HtmlBlock) => {
+                // Raw HTML block: preserved verbatim, line-per-paragraph
+                // like code blocks (source fidelity, no interpretation).
+                in_html_block = true;
+            }
+            Event::End(TagEnd::HtmlBlock) => {
+                if let Some(p) = current.take() { paragraphs.push(p); }
+                in_html_block = false;
+            }
+            Event::Html(t) | Event::InlineHtml(t) if in_html_block => {
+                let mut lines = t.split('\n').peekable();
+                while let Some(line) = lines.next() {
+                    if line.is_empty() && lines.peek().is_none() { break; }
+                    let para = current.get_or_insert_with(|| Paragraph {
+                        style: ParaStyle { html_block: true, ..Default::default() },
+                        runs: vec![],
+                    });
+                    if !line.is_empty() {
+                        para.runs.push(Run { text: line.to_string(), style: RunStyle::default() });
+                    }
+                    if lines.peek().is_some() {
+                        if let Some(p) = current.take() { paragraphs.push(p); }
+                    }
+                }
+            }
+            Event::InlineHtml(t) => {
+                let para = current.get_or_insert_with(Paragraph::default);
+                para.runs.push(Run {
+                    text: t.to_string(),
+                    style: RunStyle { html: true, ..style.clone() },
+                });
             }
             Event::Start(Tag::CodeBlock(kind)) => {
                 let lang = match kind {
@@ -203,14 +236,19 @@ pub fn serialize(doc: &Document) -> String {
             let same_list = prev.style.list != ListKind::None && prev.style.list == para.style.list;
             let same_code = para.style.code_block.is_some()
                 && prev.style.code_block == para.style.code_block;
+            let same_html = para.style.html_block && prev.style.html_block;
             let same_quote = para.style.block_quote && prev.style.block_quote;
-            if !same_list && !same_code {
+            if !same_list && !same_code && !same_html {
                 // Paragraph separation inside a quote needs a '>'-prefixed
                 // blank line, or the quote splits on reparse.
                 if same_quote { out.push_str(">\n"); } else { out.push('\n'); }
             }
         }
 
+        if para.style.html_block {
+            out.push_str(&para.text());
+            continue;
+        }
         if let Some(lang) = &para.style.code_block {
             // Opening fence when the previous paragraph isn't part of this block.
             if prev_code != Some(lang) {
@@ -372,6 +410,10 @@ fn serialize_runs(runs: &[Run]) -> String {
         // Code spans are per-run and innermost; their text is verbatim.
         // Backticks inside the span need a longer fence, and content that
         // starts/ends with a backtick (or is all spaces) needs padding.
+        if run.style.html {
+            out.push_str(&run.text);
+            continue;
+        }
         if run.style.code {
             let text = &run.text;
             let longest_tick_run = text

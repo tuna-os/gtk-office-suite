@@ -310,6 +310,7 @@ fn map_paragraph(doc: &rdocx::Document, p: &rdocx::ParagraphRef<'_>) -> Paragrap
                 code: r.style_id() == Some("SourceText"),
                 link: link_for(idx),
                 image: None,
+                html: false,
                 font_family: r.font_name().map(|f| f.to_string()),
                 font_size_hp: r.size().map(|pt| (pt * 2.0).round() as u16),
                 color: r.color().map(|c| c.trim_start_matches('#').to_uppercase()),
