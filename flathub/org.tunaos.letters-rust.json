@@ -1,0 +1,68 @@
+{
+  "app-id": "org.tunaos.letters-rust",
+  "runtime": "org.gnome.Platform",
+  "runtime-version": "50",
+  "sdk": "org.gnome.Sdk",
+  "sdk-extensions": [
+    "org.freedesktop.Sdk.Extension.rust-stable"
+  ],
+  "command": "letters",
+  "finish-args": [
+    "--share=ipc",
+    "--socket=fallback-x11",
+    "--socket=wayland",
+    "--device=dri",
+    "--filesystem=/run/user",
+    "--own-name=org.tunaos.letters-rust",
+    "--filesystem=xdg-documents"
+  ],
+  "build-options": {
+    "append-path": "/usr/lib/sdk/rust-stable/bin",
+    "env": {
+      "CARGO_HOME": "/run/build/letters-rust/cargo"
+    }
+  },
+  "modules": [
+    {
+      "name": "hunspell-en-us",
+      "buildsystem": "simple",
+      "build-commands": [
+        "install -Dm644 en_US.dic /app/share/hunspell/en_US.dic",
+        "install -Dm644 en_US.aff /app/share/hunspell/en_US.aff"
+      ],
+      "sources": [
+        {
+          "type": "file",
+          "url": "https://raw.githubusercontent.com/LibreOffice/dictionaries/master/en/en_US.dic",
+          "sha256": "f0b1a234bd178bdd01875b2a392a9647f888b8fe879f79c52aae62c2759b3647"
+        },
+        {
+          "type": "file",
+          "url": "https://raw.githubusercontent.com/LibreOffice/dictionaries/master/en/en_US.aff",
+          "sha256": "e746c882dd6f303c2c46e7452804b9201115a6942cfeb15f18f8edf774d2e24e"
+        }
+      ]
+    },
+    {
+      "name": "letters-rust",
+      "buildsystem": "simple",
+      "build-commands": [
+        "cargo --offline build --release -p letters",
+        "install -Dm755 target/release/letters /app/bin/letters",
+        "install -Dm644 flatpak/org.tunaos.letters-rust.desktop /app/share/applications/org.tunaos.letters-rust.desktop",
+        "install -Dm644 flatpak/org.tunaos.letters-rust.gschema.xml /app/share/glib-2.0/schemas/org.tunaos.letters-rust.gschema.xml",
+        "glib-compile-schemas /app/share/glib-2.0/schemas/",
+        "install -Dm644 flatpak/icons/org.tunaos.letters-rust.svg /app/share/icons/hicolor/scalable/apps/org.tunaos.letters-rust.svg",
+        "install -Dm644 flatpak/org.tunaos.letters-rust.metainfo.xml /app/share/metainfo/org.tunaos.letters-rust.metainfo.xml"
+      ],
+      "sources": [
+        {
+          "type": "git",
+          "url": "https://github.com/tuna-os/gtk-office-suite.git",
+          "tag": "v1.1.0"
+        },
+        "cargo-sources.json"
+      ]
+    }
+  ]
+}

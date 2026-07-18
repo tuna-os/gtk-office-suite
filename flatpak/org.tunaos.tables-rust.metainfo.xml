@@ -1,6 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <component type="desktop-application">
   <id>org.tunaos.tables-rust</id>
+  <launchable type="desktop-id">org.tunaos.tables-rust.desktop</launchable>
   <name>Tables</name>
   <summary>Spreadsheet for the GNOME desktop</summary>
   <developer_name>Hanthor Contributors</developer_name>
@@ -10,13 +11,24 @@
     <p>Tables is a spreadsheet application for the GNOME desktop, part of the Hanthor Office Suite.</p>
     <p>Features include formula evaluation, multi-sheet workbooks, and XLSX/ODS/CSV file support.</p>
   </description>
-  <url type="homepage">https://github.com/tuna-os/hanthor-rust</url>
-  <url type="bugtracker">https://github.com/tuna-os/hanthor-rust/issues</url>
+  <url type="homepage">https://github.com/tuna-os/gtk-office-suite</url>
+  <url type="bugtracker">https://github.com/tuna-os/gtk-office-suite/issues</url>
   <categories>
     <category>Office</category>
     <category>Spreadsheet</category>
   </categories>
+  <screenshots>
+    <screenshot type="default">
+      <image>https://raw.githubusercontent.com/tuna-os/gtk-office-suite/main/docs/screenshots/tables.png</image>
+      <caption>Spreadsheet for the GNOME desktop</caption>
+    </screenshot>
+  </screenshots>
   <releases>
+    <release version="1.1.0" date="2026-07-18">
+      <description>
+        <p>Surfacing wave, measured format parity, oracle-verified DOCX/XLSX/PPTX/ODT/ODP, charts, footnotes, conditional formatting, master slides.</p>
+      </description>
+    </release>
     <release version="0.1.0" date="2026-06-23"/>
   </releases>
   <content_rating type="oars-1.1"/>

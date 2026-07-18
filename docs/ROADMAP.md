@@ -78,24 +78,25 @@ without a test that fails first.
    (`filter_entries_with_recency` in suite-common-core, unit-tested;
    MRU persisted per app in the `palette-recent` GSettings key).
 
-## Later — each needs a scope decision (ADR) before it's "red"
+## Later — scoped by ADR 0003, executed 2026-07-18
 
-- **CommonMark last 22** (escapes, entities, autolinks — mostly
-  serializer escaping subtleties; ratchet is at 630, ceiling ~645
-  without an entity-preserving model).
-- **Track changes / comments / footnotes** (PARITY Tier 3; rdocx has a
-  footnotes module already).
-- **Charts persisted into xlsx** (Cairo dialogs exist; the chart part
-  is not written).
-- **Conditional formatting, pivot tables, array formulas** (Tables
-  Tier 3; array formulas depend on IronCalc roadmap).
-- **Master slides applied on render + Impress template import**
-  (Decks Tier 2/3).
-- **i18n**: gettext wiring — no user-facing string is translatable
-  today.
-- **Flathub submission**: manifests and metainfo exist and validate;
-  needs screenshots (now auto-generated), release tags, and the
-  submission PR.
+- ✅ **CommonMark**: 630 → **651/652** (fences, code-span padding,
+  autolinks, !/& escapes, entity newlines, emphasis depth counters).
+  Spec 150 is the accepted model ceiling.
+- ✅ **Footnotes**: docx round-trip via the rdocx fork's new footnote
+  API, Writer-oracle proven, Insert Footnote action (Ctrl+Alt+F).
+  Comments/track changes remain out (ADR 0003 §2).
+- ✅ **Charts in xlsx**: real chart parts (bar/line/pie) written and
+  read back, Calc-oracle proven; Insert into Sheet in the dialog.
+- ✅ **Conditional formatting**: cell-value rules persisted + rendered
+  + dialog, Calc-oracle proven. Pivots/array formulas out (§4).
+- ✅ **Master slides**: pptx slideLayout/slideMaster read (placeholders
+  skipped), slide→master mapping, master background on render.
+- ✅ **i18n**: gettext wired (domain gtk-office-suite), chrome wrapped,
+  POT extraction scripted. Translations are community work.
+- ✅ **Flathub prep**: metainfo (screenshots/releases/launchable)
+  validates pedantic-clean; flathub/ manifests build from tag v1.1.0.
+  The submission PR itself is a human action (see flathub/README.md).
 
 ## Standing infrastructure notes
 
