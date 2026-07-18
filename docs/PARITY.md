@@ -118,7 +118,7 @@ roadmap-dependent), external file references (decision: likely never),
 
 | Feature | How to test |
 |---|---|
-| Styled text inside text boxes (runs, not plain) | I1: reuse letters-core RunStyle in decks-core; I2 pptx round-trip |
+| Styled text inside text boxes (runs, not plain) | ✅ model+pptx (shared letters-core Run/RunStyle; LO corpus styled-runs scenario). Canvas *rendering* of styles is the remaining UI half |
 | Master slides applied on render | I1 resolution logic; I7 |
 | ODP read/write | I2 fixtures + I4 (LO native) |
 | Slide reorder / duplicate | I1 + I6 |

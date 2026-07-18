@@ -258,7 +258,7 @@ mod tests {
     #[test]
     fn test_change_text_undo() {
         let mut slides = make_slides();
-        slides[0].objects.push(SlideObject::TextBox { text: "old".into(), x: 0.0, y: 0.0, w: 100.0, h: 20.0 });
+        slides[0].objects.push(SlideObject::TextBox { text: "old".into(), x: 0.0, y: 0.0, w: 100.0, h: 20.0, runs: vec![] });
         let cmd = ChangeTextCmd { slide_idx: 0, index: 0, old_text: "old".into(), new_text: "new".into() };
         cmd.apply(&mut slides);
         if let SlideObject::TextBox { text, .. } = &slides[0].objects[0] {

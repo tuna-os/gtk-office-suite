@@ -52,6 +52,7 @@ fn sample_deck() -> Deck {
     deck.slides[0].objects.push(SlideObject::TextBox {
         text: "Impress must read this".into(),
         x: 100.0, y: 100.0, w: 400.0, h: 60.0,
+        runs: vec![],
     });
     deck.slides[0].objects.push(SlideObject::Rect { x: 50.0, y: 250.0, w: 200.0, h: 90.0 });
     deck.slides[0].notes = "speaker notes body".into();
@@ -81,6 +82,7 @@ fn impress_survives_multi_slide_deck() {
             objects: vec![SlideObject::TextBox {
                 text: format!("content {}", i),
                 x: 80.0, y: 120.0, w: 300.0, h: 50.0,
+                runs: vec![],
             }],
             notes: String::new(),
             master_idx: Some(0),

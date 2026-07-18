@@ -8,6 +8,7 @@ use zip::write::SimpleFileOptions;
 use quick_xml::events::{Event, BytesStart, BytesEnd, BytesDecl, BytesText};
 use quick_xml::Reader;
 use quick_xml::Writer;
+use letters_core::model::{Run, RunStyle};
 
 #[derive(Clone, Debug)]
 pub struct Deck {
@@ -34,7 +35,13 @@ pub struct MasterSlide {
 
 #[derive(Clone, Debug)]
 pub enum SlideObject {
-    TextBox { text: String, x: f64, y: f64, w: f64, h: f64 },
+    TextBox {
+        text: String,
+        x: f64, y: f64, w: f64, h: f64,
+        /// Styled runs (shared WYSIWYG primitive with Letters). When
+        /// non-empty, concatenated run text equals `text`.
+        runs: Vec<Run>,
+    },
     Rect { x: f64, y: f64, w: f64, h: f64 },
     Circle { x: f64, y: f64, r: f64 },
     Image { path: String, x: f64, y: f64, w: f64, h: f64 },
@@ -127,6 +134,8 @@ fn is_tx_box_attr<B: std::io::BufRead>(e: &BytesStart, reader: &Reader<B>) -> bo
 struct PendingShape {
     is_tx_box: bool,
     text: Vec<String>,
+    runs: Vec<Run>,
+    cur_style: RunStyle,
     x: Option<f64>,
     y: Option<f64>,
     w: Option<f64>,
@@ -323,6 +332,8 @@ pub fn read_pptx(path: &str) -> Result<Deck, String> {
                                 current_shape = Some(PendingShape {
                                     is_tx_box: false,
                                     text: Vec::new(),
+                                    runs: Vec::new(),
+                                    cur_style: RunStyle::default(),
                                     x: None,
                                     y: None,
                                     w: None,
@@ -388,12 +399,22 @@ pub fn read_pptx(path: &str) -> Result<Deck, String> {
                             b"a:t" => {
                                 in_text_element = true;
                             }
+                            b"a:rPr" => {
+                                if let Some(shape) = current_shape.as_mut() {
+                                    shape.cur_style = parse_run_style(e, &reader);
+                                }
+                            }
                             _ => {}
                         }
                     }
                     Ok(Event::Empty(ref e)) => {
                         let name = e.name();
                         match name.as_ref() {
+                            b"a:rPr" => {
+                                if let Some(shape) = current_shape.as_mut() {
+                                    shape.cur_style = parse_run_style(e, &reader);
+                                }
+                            }
                             b"a:off" => {
                                 let (x, y) = parse_coords(e, &reader, b"x", b"y");
                                 if let Some(shape) = current_shape.as_mut() {
@@ -449,7 +470,7 @@ pub fn read_pptx(path: &str) -> Result<Deck, String> {
                                 
                                 if shape.is_tx_box {
                                     let text = shape.text.join("\n");
-                                    objects.push(SlideObject::TextBox { text, x, y, w, h });
+                                    objects.push(SlideObject::TextBox { text, x, y, w, h, runs: shape.runs.clone() });
                                 } else {
                                     let prst = shape.prst.unwrap_or_else(|| "rect".to_string());
                                     if prst == "ellipse" {
@@ -484,7 +505,9 @@ pub fn read_pptx(path: &str) -> Result<Deck, String> {
                         if in_text_element {
                             if let Ok(unesc) = e.unescape() {
                                 if let Some(shape) = current_shape.as_mut() {
-                                    shape.text.push(unesc.into_owned());
+                                    let t = unesc.into_owned();
+                                    shape.runs.push(Run { text: t.clone(), style: shape.cur_style.clone() });
+                                    shape.text.push(t);
                                 }
                             }
                         }
@@ -576,6 +599,7 @@ fn write_text_box<W: std::io::Write>(
     name_idx: usize,
     x: f64, y: f64, w: f64, h: f64,
     text: &str,
+    runs: &[Run],
 ) -> Result<(), quick_xml::Error> {
     writer.write_event(Event::Start(BytesStart::new("p:sp")))?;
     
@@ -622,19 +646,32 @@ fn write_text_box<W: std::io::Write>(
     writer.write_event(Event::Empty(BytesStart::new("a:bodyPr")))?;
     writer.write_event(Event::Empty(BytesStart::new("a:lstStyle")))?;
     
+    // Emit styled runs when present (shared Run/RunStyle with Letters);
+    // otherwise a single default-styled run with the plain text.
+    let plain: Vec<Run>;
+    let effective: &[Run] = if runs.is_empty() {
+        plain = vec![Run { text: text.to_string(), style: RunStyle::default() }];
+        &plain
+    } else {
+        runs
+    };
     writer.write_event(Event::Start(BytesStart::new("a:p")))?;
-    writer.write_event(Event::Start(BytesStart::new("a:r")))?;
-    let mut r_pr = BytesStart::new("a:rPr");
-    r_pr.push_attribute(("lang", "en-US"));
-    r_pr.push_attribute(("sz", "1800"));
-    writer.write_event(Event::Empty(r_pr))?;
-    
-    writer.write_event(Event::Start(BytesStart::new("a:t")))?;
-    let escaped = quick_xml::escape::escape(text);
-    writer.write_event(Event::Text(BytesText::new(&escaped)))?;
-    writer.write_event(Event::End(BytesEnd::new("a:t")))?;
-    
-    writer.write_event(Event::End(BytesEnd::new("a:r")))?;
+    for run in effective {
+        writer.write_event(Event::Start(BytesStart::new("a:r")))?;
+        let mut r_pr = BytesStart::new("a:rPr");
+        r_pr.push_attribute(("lang", "en-US"));
+        r_pr.push_attribute(("sz", "1800"));
+        if run.style.bold { r_pr.push_attribute(("b", "1")); }
+        if run.style.italic { r_pr.push_attribute(("i", "1")); }
+        if run.style.underline { r_pr.push_attribute(("u", "sng")); }
+        if run.style.strikethrough { r_pr.push_attribute(("strike", "sngStrike")); }
+        writer.write_event(Event::Empty(r_pr))?;
+        writer.write_event(Event::Start(BytesStart::new("a:t")))?;
+        let escaped = quick_xml::escape::escape(run.text.as_str());
+        writer.write_event(Event::Text(BytesText::new(&escaped)))?;
+        writer.write_event(Event::End(BytesEnd::new("a:t")))?;
+        writer.write_event(Event::End(BytesEnd::new("a:r")))?;
+    }
     writer.write_event(Event::End(BytesEnd::new("a:p")))?;
     writer.write_event(Event::End(BytesEnd::new("p:txBody")))?;
     
@@ -950,8 +987,8 @@ pub fn write_pptx(path: &str, deck: &Deck) -> Result<(), String> {
             for (j, obj) in slide.objects.iter().enumerate() {
                 let id = 2 + j;
                 match obj {
-                    SlideObject::TextBox { text, x, y, w, h } => {
-                        write_text_box(&mut writer, id, j + 1, *x, *y, *w, *h, text).map_err(|e| e.to_string())?;
+                    SlideObject::TextBox { text, x, y, w, h, runs } => {
+                        write_text_box(&mut writer, id, j + 1, *x, *y, *w, *h, text, runs).map_err(|e| e.to_string())?;
                     }
                     SlideObject::Rect { x, y, w, h } => {
                         write_rect(&mut writer, id, j + 1, *x, *y, *w, *h).map_err(|e| e.to_string())?;
@@ -1043,6 +1080,7 @@ mod tests {
         deck.slides[0].objects.push(SlideObject::TextBox {
             text: "Hello Slide".into(),
             x: 100.0, y: 100.0, w: 300.0, h: 50.0,
+            runs: vec![],
         });
         deck.slides[0].objects.push(SlideObject::Rect {
             x: 150.0, y: 200.0, w: 200.0, h: 100.0,
@@ -1168,4 +1206,21 @@ fn extract_notes_text(xml: &str) -> String {
         buf.clear();
     }
     parts.join("\n")
+}
+
+/// Parse b/i/u/strike attributes from an a:rPr element into the shared
+/// RunStyle (same WYSIWYG primitive Letters uses).
+fn parse_run_style(e: &BytesStart, reader: &Reader<&[u8]>) -> RunStyle {
+    let mut st = RunStyle::default();
+    for attr in e.attributes().flatten() {
+        let val = attr.decode_and_unescape_value(reader).unwrap_or_default();
+        match attr.key.as_ref() {
+            b"b" => st.bold = val == "1" || val == "true",
+            b"i" => st.italic = val == "1" || val == "true",
+            b"u" => st.underline = val != "none" && !val.is_empty(),
+            b"strike" => st.strikethrough = val != "noStrike" && !val.is_empty(),
+            _ => {}
+        }
+    }
+    st
 }

@@ -825,6 +825,7 @@ dependencies = [
 name = "decks-core"
 version = "0.1.0"
 dependencies = [
+ "letters-core",
  "quick-xml 0.31.0",
  "suite-common-core",
  "tempfile",

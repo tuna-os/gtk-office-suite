@@ -332,6 +332,7 @@ impl DecksWindow {
                     let idx = cs_ref.get();
                     let obj = SlideObject::TextBox {
                         text: "Text".into(), x: 200.0, y: 150.0, w: 200.0, h: 40.0,
+                        runs: vec![],
                     };
                     undo.borrow_mut().execute(Box::new(AddObjectCmd::new(idx, obj)));
                     cs.queue_draw();
@@ -513,7 +514,7 @@ impl DecksWindow {
                 if idx >= slides.len() { return; }
                 if let Some(oi) = hit_test_object(&slides[idx].objects, x, y) {
                     let obj = slides[idx].objects[oi].clone();
-                    if let SlideObject::TextBox { text, x: ox, y: oy, w: ow, h: oh } = obj {
+                    if let SlideObject::TextBox { text, x: ox, y: oy, w: ow, h: oh, .. } = obj {
                         let old_text = text.clone();
                         drop(slides);
                         let text_view = gtk::TextView::new();

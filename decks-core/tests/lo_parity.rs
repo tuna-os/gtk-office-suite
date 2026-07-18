@@ -30,7 +30,7 @@ fn slide(title: &str, objects: Vec<SlideObject>) -> Slide {
 }
 
 fn text_box(text: &str) -> SlideObject {
-    SlideObject::TextBox { text: text.to_string(), x: 100.0, y: 100.0, w: 400.0, h: 80.0 }
+    SlideObject::TextBox { text: text.to_string(), x: 100.0, y: 100.0, w: 400.0, h: 80.0 , runs: vec![] }
 }
 
 fn all_text(deck: &Deck) -> Vec<String> {
@@ -163,9 +163,11 @@ fn scenarios() -> Vec<Scenario> {
             let mut d = Deck::new();
             d.slides[0].objects.push(SlideObject::TextBox {
                 text: "top-left".into(), x: 10.0, y: 10.0, w: 200.0, h: 40.0,
+                runs: vec![],
             });
             d.slides[0].objects.push(SlideObject::TextBox {
                 text: "lower".into(), x: 300.0, y: 400.0, w: 200.0, h: 40.0,
+                runs: vec![],
             });
             d
         },
@@ -180,6 +182,45 @@ fn scenarios() -> Vec<Scenario> {
             let top = ys.iter().find(|(t, _)| t.contains("top-left")).ok_or("top-left missing")?;
             let low = ys.iter().find(|(t, _)| t.contains("lower")).ok_or("lower missing")?;
             if top.1 < low.1 { Ok(()) } else { Err(format!("y-order wrong: {ys:?}")) }
+        },
+    });
+
+    v.push(Scenario {
+        name: "styled-runs",
+        deck: {
+            use letters_core::model::{Run, RunStyle};
+            let mut d = Deck::new();
+            d.slides[0].objects.push(SlideObject::TextBox {
+                text: "plain bold italic".into(),
+                x: 100.0, y: 100.0, w: 400.0, h: 60.0,
+                runs: vec![
+                    Run { text: "plain ".into(), style: RunStyle::default() },
+                    Run { text: "bold ".into(), style: RunStyle { bold: true, ..Default::default() } },
+                    Run { text: "italic".into(), style: RunStyle { italic: true, ..Default::default() } },
+                ],
+            });
+            d
+        },
+        check: |d| {
+            for s in &d.slides {
+                for o in &s.objects {
+                    if let SlideObject::TextBox { runs, .. } = o {
+                        let bold = runs.iter().find(|r| r.text.contains("bold"));
+                        let italic = runs.iter().find(|r| r.text.contains("italic"));
+                        if let (Some(b), Some(i)) = (bold, italic) {
+                            return if b.style.bold && i.style.italic {
+                                Ok(())
+                            } else {
+                                Err(format!(
+                                    "styles lost through Impress: bold={} italic={}",
+                                    b.style.bold, i.style.italic
+                                ))
+                            };
+                        }
+                    }
+                }
+            }
+            Err("styled text box missing".into())
         },
     });
 

@@ -180,7 +180,7 @@ pub fn draw_slide(
         for (oi, obj) in slides[current_slide].objects.iter().enumerate() {
             let is_selected = selected == Some(oi);
             match obj {
-                SlideObject::TextBox { text, x, y, w, h } => {
+                SlideObject::TextBox { text, x, y, w, h, .. } => {
                     let sx = ox + (x / 960.0) * slide_w;
                     let sy = oy + (y / 540.0) * slide_h;
                     let sw = (w / 960.0) * slide_w;

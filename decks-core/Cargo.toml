@@ -8,6 +8,7 @@ edition = "2021"
 # docs/DEVELOPMENT.md layering rule.
 [dependencies]
 suite-common-core = { path = "../suite-common-core" }
+letters-core = { path = "../letters-core" }
 zip = "2.0"
 quick-xml = "0.31"
 
