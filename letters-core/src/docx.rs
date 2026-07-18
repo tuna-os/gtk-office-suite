@@ -71,8 +71,13 @@ pub fn read(path: &str) -> Result<Document, String> {
         d.footer = doc.footer_text();
         return Ok(d);
     }
+    // Footnote texts land in the document list; docx ids remap to
+    // zero-based indexes on the referencing runs (see map_paragraph).
+    let footnotes: Vec<String> = doc.footnotes().into_iter().map(|(_, t)| t).collect();
+
     Ok(Document {
         paragraphs,
+        footnotes,
         header: doc.header_text(),
         footer: doc.footer_text(),
         page: read_page_geometry(&doc),
@@ -100,6 +105,8 @@ fn read_page_geometry(doc: &rdocx::Document) -> Option<PageGeometry> {
 /// Write a Document to a .docx file.
 pub fn write(doc: &Document, path: &str) -> Result<(), String> {
     let mut out = rdocx::Document::new();
+    // Footnote texts first: model index → docx id.
+    let footnote_ids: Vec<i32> = doc.footnotes.iter().map(|t| out.add_footnote(t)).collect();
     let paras = &doc.paragraphs;
     let mut i = 0;
     while i < paras.len() {
@@ -197,6 +204,13 @@ pub fn write(doc: &Document, path: &str) -> Result<(), String> {
                         let mut p = out.last_paragraph_mut().expect("paragraph");
                         let _ = p.add_run(&run.text);
                     }
+                }
+                continue;
+            }
+            if let Some(idx) = run.style.footnote {
+                if let Some(&fid) = footnote_ids.get(idx) {
+                    let mut p = out.last_paragraph_mut().expect("paragraph");
+                    p.add_footnote_ref(fid);
                 }
                 continue;
             }
@@ -300,6 +314,15 @@ fn map_paragraph(doc: &rdocx::Document, p: &rdocx::ParagraphRef<'_>) -> Paragrap
                 continue;
             }
         }
+        if let Some(fid) = r.footnote_id() {
+            if let Some(idx) = doc.footnotes().iter().position(|(id, _)| *id == fid) {
+                runs.push(Run {
+                    text: String::new(),
+                    style: RunStyle { footnote: Some(idx), ..Default::default() },
+                });
+            }
+            continue;
+        }
         let text = r.text();
         if text.is_empty() { continue; }
         runs.push(Run {
@@ -313,6 +336,7 @@ fn map_paragraph(doc: &rdocx::Document, p: &rdocx::ParagraphRef<'_>) -> Paragrap
                 code: r.style_id() == Some("SourceText"),
                 link: link_for(idx),
                 image: None,
+                footnote: None,
                 html: false,
                 font_family: r.font_name().map(|f| f.to_string()),
                 font_size_hp: r.size().map(|pt| (pt * 2.0).round() as u16),
@@ -350,9 +374,14 @@ fn style_id_to_heading(id: &str) -> Option<u8> {
 }
 
 fn normalize(p: &mut Paragraph) {
-    p.runs.retain(|r| !r.text.is_empty() || r.style.image.is_some());
+    p.runs
+        .retain(|r| !r.text.is_empty() || r.style.image.is_some() || r.style.footnote.is_some());
     let mut i = 0;
     while i + 1 < p.runs.len() {
+        if p.runs[i].style.footnote.is_some() || p.runs[i + 1].style.footnote.is_some() {
+            i += 1;
+            continue;
+        }
         if p.runs[i].style == p.runs[i + 1].style {
             let next = p.runs.remove(i + 1);
             p.runs[i].text.push_str(&next.text);

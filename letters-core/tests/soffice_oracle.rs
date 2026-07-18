@@ -616,3 +616,47 @@ fn line_spacing_survives_lo_docx_pass() {
     );
     assert!((rt.paragraphs[0].style.line_spacing - 1.0).abs() < 0.05);
 }
+
+// ── Footnotes (ADR 0003 §2) ──────────────────────────────────────────
+
+/// Our docx footnote must survive a Writer rewrite: content intact and
+/// still referenced from the body.
+#[test]
+fn footnote_survives_writer_rewrite() {
+    let Some(bin) = require_or_skip() else { return };
+    let mut d = Document::from_plain_text("Body text");
+    d.paragraphs[0].runs.push(Run {
+        text: String::new(),
+        style: RunStyle { footnote: Some(0), ..Default::default() },
+    });
+    d.footnotes = vec!["A note from the oracle.".into()];
+
+    let dir = tempfile::tempdir().unwrap();
+    let src_dir = dir.path().join("in");
+    std::fs::create_dir(&src_dir).unwrap();
+    let path = src_dir.join("fnote.docx");
+    docx::write(&d, path.to_str().unwrap()).expect("write docx");
+    // Distinct outdir so the rewrite cannot alias the input file.
+    let profile = dir.path().join("prof");
+    let st = Command::new(bin)
+        .arg("--headless")
+        .arg(format!("-env:UserInstallation=file://{}", profile.display()))
+        .args(["--convert-to", "docx", "--outdir"])
+        .arg(dir.path())
+        .arg(&path)
+        .output()
+        .expect("soffice runs");
+    assert!(st.status.success(), "{}", String::from_utf8_lossy(&st.stderr));
+    let rewritten = dir.path().join("fnote.docx");
+    assert!(rewritten.exists(), "Writer produced no docx");
+    let rt = docx::read(rewritten.to_str().unwrap()).expect("read rewritten docx");
+    assert!(
+        rt.footnotes.iter().any(|f| f.contains("A note from the oracle")),
+        "footnote text lost: {:?}",
+        rt.footnotes
+    );
+    assert!(
+        rt.paragraphs.iter().any(|p| p.runs.iter().any(|r| r.style.footnote.is_some())),
+        "footnote reference lost after Writer rewrite"
+    );
+}

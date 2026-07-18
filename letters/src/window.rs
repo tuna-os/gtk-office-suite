@@ -358,6 +358,7 @@ impl LettersWindow {
             ("app.style-h6", "Paragraph Style: Heading 6"),
             ("app.style-code", "Paragraph Style: Code"),
             ("app.style-quote", "Paragraph Style: Block Quote"),
+                    ("app.insert-footnote", "Insert Footnote\u{2026}"),
         ]);
 
         let primary_toolbar: Vec<suite_common::ToolbarItem> = vec![
@@ -888,6 +889,56 @@ impl LettersWindow {
             app.add_action(&a);
             // Ctrl+K belongs to the command palette (DESIGN-UI.md).
             app.set_accels_for_action("app.insertlink", &["<Primary><Shift>k"]);
+        }
+
+        // Insert Footnote: prompt for the note text, append it to the
+        // buffer's footnote list, drop a superscript marker at the cursor.
+        {
+            let tv = tab_view.clone();
+            let w = suite_win.window.clone();
+            let a = gtk::gio::SimpleAction::new("insert-footnote", None);
+            a.connect_activate(move |_, _| {
+                let Some(buf) = active_buffer(&tv) else { return };
+                let entry = gtk::Entry::builder()
+                    .placeholder_text("Footnote text")
+                    .activates_default(true)
+                    .build();
+                let dlg = adw::AlertDialog::builder()
+                    .heading("Insert Footnote")
+                    .build();
+                dlg.set_extra_child(Some(&entry));
+                dlg.add_response("cancel", "Cancel");
+                dlg.add_response("insert", "Insert");
+                dlg.set_response_appearance("insert", adw::ResponseAppearance::Suggested);
+                dlg.set_default_response(Some("insert"));
+                let buf2 = buf.clone();
+                dlg.connect_response(None, move |d, resp| {
+                    if resp != "insert" {
+                        return;
+                    }
+                    let text = entry.text().to_string();
+                    if text.is_empty() {
+                        return;
+                    }
+                    let mut notes: Vec<String> = unsafe {
+                        buf2.data::<Vec<String>>(crate::bridge::FOOTNOTES_KEY)
+                            .map(|p| p.as_ref().clone())
+                            .unwrap_or_default()
+                    };
+                    notes.push(text);
+                    let idx = notes.len() - 1;
+                    unsafe { buf2.set_data(crate::bridge::FOOTNOTES_KEY, notes) };
+                    let mut pos = buf2
+                        .selection_bounds()
+                        .map(|(_, e)| e)
+                        .unwrap_or_else(|| buf2.iter_at_mark(&buf2.get_insert()));
+                    crate::bridge::insert_footnote_marker(&buf2, &mut pos, idx);
+                    d.close();
+                });
+                dlg.present(Some(&w));
+            });
+            app.add_action(&a);
+            app.set_accels_for_action("app.insert-footnote", &["<Primary><Alt>f"]);
         }
 
         // Insert Table

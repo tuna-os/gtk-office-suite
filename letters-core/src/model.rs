@@ -33,6 +33,10 @@ pub struct RunStyle {
     pub color: Option<String>,
     /// Superscript/subscript position.
     pub vert_align: Option<VertAlign>,
+    /// Footnote reference: index into `Document::footnotes`. The run's
+    /// text is the visible marker (usually empty; renderers number it).
+    #[serde(default)]
+    pub footnote: Option<usize>,
     /// Raw inline HTML: the run's text is emitted verbatim on Markdown
     /// export (never escaped) and rendered as plain text in the editor.
     #[serde(default)]
@@ -170,11 +174,17 @@ impl Paragraph {
     }
 
     /// Merge adjacent runs with equal style and drop empty runs.
-    /// Image runs are kept even with empty alt text and never merged.
+    /// Image and footnote-reference runs are kept even with empty text
+    /// and never merged.
     fn normalize(&mut self) {
-        self.runs.retain(|r| !r.text.is_empty() || r.style.image.is_some());
+        self.runs
+            .retain(|r| !r.text.is_empty() || r.style.image.is_some() || r.style.footnote.is_some());
         let mut i = 0;
         while i + 1 < self.runs.len() {
+            if self.runs[i].style.footnote.is_some() || self.runs[i + 1].style.footnote.is_some() {
+                i += 1;
+                continue;
+            }
             if self.runs[i].style == self.runs[i + 1].style {
                 let next = self.runs.remove(i + 1);
                 self.runs[i].text.push_str(&next.text);
@@ -216,6 +226,9 @@ impl Paragraph {
 #[derive(Clone, Debug, PartialEq)]
 pub struct Document {
     pub paragraphs: Vec<Paragraph>,
+    /// Footnote texts; runs reference them by index via
+    /// `RunStyle::footnote`.
+    pub footnotes: Vec<String>,
     /// Page header/footer text; "{page}" substitutes the page number.
     pub header: Option<String>,
     pub footer: Option<String>,
@@ -268,7 +281,7 @@ impl Default for Document {
 
 impl Document {
     pub fn new() -> Self {
-        Self { paragraphs: vec![Paragraph::default()], header: None, footer: None, page: None }
+        Self { paragraphs: vec![Paragraph::default()], footnotes: vec![], header: None, footer: None, page: None }
     }
 
     pub fn from_plain_text(text: &str) -> Self {
@@ -279,7 +292,7 @@ impl Document {
                 runs: if line.is_empty() { vec![] } else { vec![Run::plain(line)] },
             })
             .collect::<Vec<_>>();
-        let mut d = Self { paragraphs, header: None, footer: None, page: None };
+        let mut d = Self { paragraphs, footnotes: vec![], header: None, footer: None, page: None };
         d.ensure_non_empty();
         d
     }

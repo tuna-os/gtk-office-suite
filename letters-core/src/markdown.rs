@@ -207,7 +207,7 @@ pub fn parse(md: &str) -> Document {
     }
     if let Some(p) = current.take() { paragraphs.push(p); }
 
-    let mut doc = Document { paragraphs, header: None, footer: None, page: None };
+    let mut doc = Document { paragraphs, footnotes: vec![], header: None, footer: None, page: None };
     if doc.paragraphs.is_empty() {
         doc = Document::new();
     }

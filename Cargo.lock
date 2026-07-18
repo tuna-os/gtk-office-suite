@@ -3263,12 +3263,12 @@ dependencies = [
 [[package]]
 name = "rdocx"
 version = "0.1.2"
-source = "git+https://github.com/hanthor/rdocx.git?rev=6f91a40#6f91a4057210e4af8326ecc44b4334bcd42fb185"
+source = "git+https://github.com/hanthor/rdocx.git?rev=3929421#3929421e36f6d9c4b9d56ca399ac5934ac0c2a7e"
 dependencies = [
  "rdocx-html",
  "rdocx-layout",
  "rdocx-opc",
- "rdocx-oxml 0.1.2 (git+https://github.com/hanthor/rdocx.git?rev=6f91a40)",
+ "rdocx-oxml 0.1.2 (git+https://github.com/hanthor/rdocx.git?rev=3929421)",
  "rdocx-pdf",
  "regex",
  "thiserror 2.0.18",
@@ -3277,18 +3277,18 @@ dependencies = [
 [[package]]
 name = "rdocx-html"
 version = "0.1.2"
-source = "git+https://github.com/hanthor/rdocx.git?rev=6f91a40#6f91a4057210e4af8326ecc44b4334bcd42fb185"
+source = "git+https://github.com/hanthor/rdocx.git?rev=3929421#3929421e36f6d9c4b9d56ca399ac5934ac0c2a7e"
 dependencies = [
- "rdocx-oxml 0.1.2 (git+https://github.com/hanthor/rdocx.git?rev=6f91a40)",
+ "rdocx-oxml 0.1.2 (git+https://github.com/hanthor/rdocx.git?rev=3929421)",
 ]
 
 [[package]]
 name = "rdocx-layout"
 version = "0.1.2"
-source = "git+https://github.com/hanthor/rdocx.git?rev=6f91a40#6f91a4057210e4af8326ecc44b4334bcd42fb185"
+source = "git+https://github.com/hanthor/rdocx.git?rev=3929421#3929421e36f6d9c4b9d56ca399ac5934ac0c2a7e"
 dependencies = [
  "fontdb",
- "rdocx-oxml 0.1.2 (git+https://github.com/hanthor/rdocx.git?rev=6f91a40)",
+ "rdocx-oxml 0.1.2 (git+https://github.com/hanthor/rdocx.git?rev=3929421)",
  "rustybuzz",
  "thiserror 2.0.18",
  "ttf-parser",
@@ -3298,7 +3298,7 @@ dependencies = [
 [[package]]
 name = "rdocx-opc"
 version = "0.1.2"
-source = "git+https://github.com/hanthor/rdocx.git?rev=6f91a40#6f91a4057210e4af8326ecc44b4334bcd42fb185"
+source = "git+https://github.com/hanthor/rdocx.git?rev=3929421#3929421e36f6d9c4b9d56ca399ac5934ac0c2a7e"
 dependencies = [
  "quick-xml 0.37.5",
  "thiserror 2.0.18",
@@ -3320,7 +3320,7 @@ dependencies = [
 [[package]]
 name = "rdocx-oxml"
 version = "0.1.2"
-source = "git+https://github.com/hanthor/rdocx.git?rev=6f91a40#6f91a4057210e4af8326ecc44b4334bcd42fb185"
+source = "git+https://github.com/hanthor/rdocx.git?rev=3929421#3929421e36f6d9c4b9d56ca399ac5934ac0c2a7e"
 dependencies = [
  "itoa",
  "quick-xml 0.37.5",
@@ -3331,7 +3331,7 @@ dependencies = [
 [[package]]
 name = "rdocx-pdf"
 version = "0.1.2"
-source = "git+https://github.com/hanthor/rdocx.git?rev=6f91a40#6f91a4057210e4af8326ecc44b4334bcd42fb185"
+source = "git+https://github.com/hanthor/rdocx.git?rev=3929421#3929421e36f6d9c4b9d56ca399ac5934ac0c2a7e"
 dependencies = [
  "miniz_oxide",
  "pdf-writer 0.14.0",

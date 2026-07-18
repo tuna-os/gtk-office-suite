@@ -313,3 +313,29 @@ fn docx_line_spacing_round_trips() {
         rt.paragraphs[1].style.line_spacing
     );
 }
+
+// ── Footnotes (ADR 0003 §2) ──────────────────────────────────────────
+
+#[test]
+fn footnote_round_trips_through_docx() {
+    use letters_core::model::{Run, RunStyle};
+    let mut doc = Document::new();
+    doc.paragraphs[0].runs = vec![
+        Run { text: "Body text".into(), style: RunStyle::default() },
+        Run { text: String::new(), style: RunStyle { footnote: Some(0), ..Default::default() } },
+        Run { text: " continues.".into(), style: RunStyle::default() },
+    ];
+    doc.footnotes = vec!["The footnote content.".into()];
+
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("fn.docx");
+    letters_core::docx::write(&doc, path.to_str().unwrap()).unwrap();
+    let rt = letters_core::docx::read(path.to_str().unwrap()).unwrap();
+
+    assert_eq!(rt.footnotes, vec!["The footnote content.".to_string()]);
+    let has_ref = rt.paragraphs[0]
+        .runs
+        .iter()
+        .any(|r| r.style.footnote == Some(0));
+    assert!(has_ref, "footnote reference lost: {:?}", rt.paragraphs[0].runs);
+}

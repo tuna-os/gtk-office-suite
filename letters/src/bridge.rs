@@ -106,6 +106,30 @@ pub fn capture_from_buffer(buf: &gtk::TextBuffer) -> Document {
                 continue;
             }
         }
+        // Footnote markers carry an "fnref:N" tag; the visible "[n]"
+        // text is presentation only — capture emits a reference run.
+        let fn_idx = iter.tags().iter().find_map(|t| {
+            t.name()
+                .and_then(|n| n.strip_prefix("fnref:").map(str::to_string))
+                .and_then(|v| v.parse::<usize>().ok())
+        });
+        if let Some(idx) = fn_idx {
+            if let Some(r) = current_run.take() {
+                current.runs.push(r);
+            }
+            current.runs.push(Run {
+                text: String::new(),
+                style: RunStyle { footnote: Some(idx), ..Default::default() },
+            });
+            while !iter.is_end()
+                && iter.tags().iter().any(|t| {
+                    t.name().map(|n| n.starts_with("fnref:")).unwrap_or(false)
+                })
+            {
+                iter.forward_char();
+            }
+            continue;
+        }
         let ch = iter.char();
         if ch == '\n' {
             if let Some(r) = current_run.take() {
@@ -134,8 +158,17 @@ pub fn capture_from_buffer(buf: &gtk::TextBuffer) -> Document {
     capture_list_marker(&mut current);
     paragraphs.push(current);
 
-    Document { paragraphs, header: None, footer: None, page: None }
+    // The footnote texts ride on the buffer (set by render/insert).
+    let footnotes: Vec<String> = unsafe {
+        buf.data::<Vec<String>>(FOOTNOTES_KEY)
+            .map(|p| p.as_ref().clone())
+            .unwrap_or_default()
+    };
+    Document { paragraphs, footnotes, header: None, footer: None, page: None }
 }
+
+/// Buffer data key holding the document's footnote texts.
+pub const FOOTNOTES_KEY: &str = "letters-footnotes";
 
 /// The editor shows lists as literal "- " / "N. " markers; the model wants
 /// ListKind. Strip the marker and set the kind when capturing.
@@ -171,6 +204,7 @@ fn capture_list_marker(para: &mut Paragraph) {
 
 /// Replace the buffer's content with a rendered Document.
 pub fn render_to_buffer(doc: &Document, buf: &gtk::TextBuffer) {
+    unsafe { buf.set_data(FOOTNOTES_KEY, doc.footnotes.clone()) };
     buf.set_text("");
     let mut insert = buf.start_iter();
     for (i, para) in doc.paragraphs.iter().enumerate() {
@@ -202,6 +236,10 @@ pub fn render_to_buffer(doc: &Document, buf: &gtk::TextBuffer) {
                     // Unloadable image degrades to visible alt text.
                     Err(_) => buf.insert(&mut insert, &run.text),
                 }
+                continue;
+            }
+            if let Some(idx) = run.style.footnote {
+                insert_footnote_marker(buf, &mut insert, idx);
                 continue;
             }
             let mut names: Vec<&str> = Vec::new();
@@ -394,4 +432,21 @@ plain");
         assert_eq!(rt.style_at(0).link, None);
         assert_eq!(rt.style_at(12).link, None);
     }
+}
+
+/// Insert the visible "[n]" marker for footnote index `idx`, tagged
+/// "fnref:idx" (superscript, accent color). Shared by render and the
+/// Insert Footnote action.
+pub fn insert_footnote_marker(buf: &gtk::TextBuffer, insert: &mut gtk::TextIter, idx: usize) {
+    let name = format!("fnref:{idx}");
+    if buf.tag_table().lookup(&name).is_none() {
+        let tag = gtk::TextTag::builder()
+            .name(&name)
+            .foreground("#1a5fb4")
+            .rise(4000)
+            .scale(0.75)
+            .build();
+        buf.tag_table().add(&tag);
+    }
+    buf.insert_with_tags_by_name(insert, &format!("[{}]", idx + 1), &[&name]);
 }
