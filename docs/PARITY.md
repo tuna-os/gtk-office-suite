@@ -29,7 +29,7 @@ anything interactive needs I5 or I6.
 
 | Feature | Status | Proven by |
 |---|---|---|
-| Styled runs (b/i/u/s, highlight, inline code) | ✅ | I1 model, I2 docx 12/12, I3 104/104, I4, I5 |
+| Styled runs (b/i/u/s, highlight, inline code) | ✅ | I1 model, I2 docx 17/17, I3 109/109, I4, I5 |
 | Headings 1–6 | ✅ | I1, I2, I3, I5 |
 | Paragraph alignment | ✅ | I1–I5 |
 | Bullet/numbered lists (flat) | ✅ model/docx, ❌ bridge | I1–I3; **red I5** (buffer keeps literal "- ") |
@@ -40,9 +40,9 @@ anything interactive needs I5 or I6.
 | Undo/redo | ✅ (buffer-level) | **move to model ops + I1**; I6 smoke |
 | Find & replace | ✅ UI | **extract to core + I1**; I6 |
 | Word count | ✅ | I6 smoke (live) |
-| Spell check | ❌ dictionaries missing | I6: misspelling gets a squiggle (needs Flatpak dicts, task #8) |
-| Print / PDF export | ✅ Typst CLI | I1 typst-source assertion + PDF-validity check (phase 4) |
-| Inline images | ✅ model+md+docx | I1 + I2: byte-identical docx round-trip (rdocx inline_image/image_data); buffer *rendering* of images is the remaining UI half |
+| Spell check | ✅ | dictionaries bundled in Flatpak; squiggle visible over AT-SPI attrs |
+| Print / PDF export | ✅ in-process Typst | I1 suite-export tests (valid PDF, error surfacing) |
+| Inline images | ✅ | I1+I2 byte-identical docx round-trip; I5 buffer paintable round-trip |
 
 ### Tier 2 — Nice-to-have (rounds out the product)
 
@@ -50,11 +50,11 @@ anything interactive needs I5 or I6.
 |---|---|
 | Tables in documents (cell-tagged model) | ✅ I1+I2 round-trip, I3 structural (table-2x2 asserts coordinates). Interleaved position + UI editing remain |
 | Named paragraph styles (Title, Quote…) | I1 style registry; I3: LO styles map to ours and back |
-| Font size / family / color per run | I1 model fields; I3 (`<font>`, css sizes); I4 |
-| Superscript / subscript | I1 + I3 (`vert_align` getter already exists in rdocx) |
+| Font size / color per run | ✅ I1 + I3 scenarios (font *family* still open) |
+| Superscript / subscript | ✅ I1 + I3 (incl. LO w:position encoding) |
 | Headers & footers with fields ({page}) | I2 docx sectPr round-trip; I7 visual |
 | Page setup (size, margins, breaks) | I1 layout math; I2 page-break-before round-trip (regressed — red test exists in commit log) |
-| Block quotes | I1 ParaStyle kind; I3 scenario upgrade from text-only |
+| Block quotes | ✅ I1 + I3 (BlockQuotation style) + markdown quote round-trip |
 | Line spacing round-trip | I2 (model has it; docx mapping missing — red) |
 | ODT read/write | new I2 fixture corpus + I3/I4 via LO (its native format — oracle is authoritative) |
 
@@ -76,7 +76,7 @@ anything interactive needs I5 or I6.
 | Feature | Status | Proven by |
 |---|---|---|
 | Cell editing + formula evaluation | ✅ IronCalc | I1 engine tests; I6 smoke (extend: type into cell) |
-| OpenFormula function coverage | partial (83 fns) | **new I2 ratchet**: table-driven suite keyed to OpenFormula "Small" then "Medium" group; scorecard = implemented/total |
+| OpenFormula function coverage | ✅ 107/107 | I2 ratchet (IronCalc upstream-main patch until next release) |
 | XLSX round-trip | ✅ | I1 io tests, I4 Calc oracle |
 | ODS / CSV / TSV import | ✅ | I1; add I3-style: LO-authored ods/xlsx read |
 | Number formats (currency, %, date) | ✅ core | I1 format.rs; **red I2**: formats survive xlsx round-trip (currently values only) |
@@ -112,13 +112,13 @@ roadmap-dependent), external file references (decision: likely never),
 | Speaker notes | ✅ | I1, LO round-trip (notesSlide parts read+written) |
 | Undo/redo | ✅ | I1 (9 tests) |
 | Present mode + transitions | ✅ | I6 smoke: enter/exit presenting; I7 visual |
-| **LO-authored parity corpus for Decks** | ✅ 8/8 | decks-core/tests/lo_parity.rs (pptx through-the-oracle, ratcheted) |
+| **LO-authored parity corpus for Decks** | ✅ 9/9 | decks-core/tests/lo_parity.rs (pptx through-the-oracle, ratcheted) |
 
 ### Tier 2 — Nice-to-have
 
 | Feature | How to test |
 |---|---|
-| Styled text inside text boxes (runs, not plain) | ✅ model+pptx (shared letters-core Run/RunStyle; LO corpus styled-runs scenario). Canvas *rendering* of styles is the remaining UI half |
+| Styled text inside text boxes (runs, not plain) | ✅ | model+pptx (shared Run/RunStyle) + Pango canvas rendering |
 | Master slides applied on render | I1 resolution logic; I7 |
 | ODP read/write | I2 fixtures + I4 (LO native) |
 | Slide reorder / duplicate | I1 + I6 |
