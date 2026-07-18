@@ -199,8 +199,21 @@ pub fn serialize(doc: &Document) -> String {
     out
 }
 
+/// Escape Markdown metacharacters so literal text survives a re-parse.
+fn escape_text(text: &str) -> String {
+    let mut out = String::with_capacity(text.len());
+    for c in text.chars() {
+        if matches!(c, '\\' | '`' | '*' | '_' | '[' | ']' | '<' | '>' | '#' | '~') {
+            out.push('\\');
+        }
+        out.push(c);
+    }
+    out
+}
+
 fn serialize_run(run: &Run) -> String {
-    let mut s = run.text.clone();
+    // Code spans keep their text verbatim; everything else is escaped.
+    let mut s = if run.style.code { run.text.clone() } else { escape_text(&run.text) };
     if run.style.code { s = format!("`{}`", s); }
     if run.style.strikethrough { s = format!("~~{}~~", s); }
     if run.style.italic { s = format!("*{}*", s); }
