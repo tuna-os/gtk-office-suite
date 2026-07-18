@@ -1,8 +1,7 @@
 // sheet.rs — Spreadsheet data model and cell types (extracted from window.rs).
 
-use gtk4::cairo;
 use crate::engine::TablesEngine;
-use suite_common::format::NumberFormat;
+use suite_common_core::format::NumberFormat;
 
 pub const DEFAULT_ROWS: usize = 100;
 pub const DEFAULT_COLS: usize = 26;
@@ -84,24 +83,6 @@ pub fn hit_col_divider(x: f64, y: f64, scroll_x: f64, sheet: &SheetModel) -> Opt
     let mut accum = 0.0;
     for c in 0..sheet.cols { accum += sheet.col_width(c); if (cx - accum).abs() < 5.0 { return Some(c); } }
     None
-}
-
-/// Auto-fit column width to content using PangoLayout text measurement.
-pub fn auto_fit_column(cr: &cairo::Context, sheet: &mut SheetModel, col: usize, _scroll_x: f64) {
-    let layout = pangocairo::functions::create_layout(cr);
-    let mut max_w: f64 = 30.0;
-    let label = col_label(col);
-    layout.set_text(&label);
-    let (tw, _) = layout.pixel_size();
-    max_w = max_w.max(tw as f64 + 16.0);
-    for r in 0..sheet.rows {
-        let val = sheet.cell(r, col);
-        if val.is_empty() { continue; }
-        layout.set_text(val);
-        let (tw, _) = layout.pixel_size();
-        max_w = max_w.max(tw as f64 + 12.0);
-    }
-    sheet.set_col_width(col, max_w.clamp(30.0, 500.0));
 }
 
 pub fn xy_to_cell(x: f64, y: f64, scroll_x: f64, sheet: &SheetModel) -> Option<(usize, usize)> {

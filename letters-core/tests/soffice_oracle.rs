@@ -1,0 +1,128 @@
+// soffice_oracle.rs — LibreOffice-headless interop oracle.
+//
+// The parity strategy (PLAN.md): we do not port LibreOffice code or tests;
+// we measure our output against LibreOffice's *behavior*. Every .docx this
+// engine writes must (a) open in LibreOffice Writer without error and
+// (b) survive soffice's own conversion with identical extracted text.
+//
+// Locally these tests skip when soffice is absent. In CI the oracle job
+// sets REQUIRE_SOFFICE=1, turning a missing oracle into a failure so the
+// check can never silently vanish (the lesson of the old GUI workflow).
+
+use std::process::Command;
+
+use letters_core::docx;
+use letters_core::model::*;
+
+fn soffice() -> Option<&'static str> {
+    for cand in ["soffice", "libreoffice"] {
+        if Command::new(cand).arg("--version").output().map(|o| o.status.success()).unwrap_or(false) {
+            return Some(match cand { "soffice" => "soffice", _ => "libreoffice" });
+        }
+    }
+    None
+}
+
+fn require_or_skip() -> Option<&'static str> {
+    match soffice() {
+        Some(bin) => Some(bin),
+        None => {
+            if std::env::var("REQUIRE_SOFFICE").is_ok() {
+                panic!("REQUIRE_SOFFICE set but no soffice binary found");
+            }
+            eprintln!("skipping: soffice not installed");
+            None
+        }
+    }
+}
+
+/// Convert a file with soffice; returns the output file's contents.
+fn soffice_convert(bin: &str, input: &std::path::Path, to: &str) -> Result<String, String> {
+    let dir = input.parent().unwrap();
+    // Isolated profile dir: parallel soffice instances clash otherwise.
+    let profile = dir.join("lo-profile");
+    let out = Command::new(bin)
+        .arg("--headless")
+        .arg(format!("-env:UserInstallation=file://{}", profile.display()))
+        .args(["--convert-to", to, "--outdir"])
+        .arg(dir)
+        .arg(input)
+        .output()
+        .map_err(|e| e.to_string())?;
+    if !out.status.success() {
+        return Err(format!("soffice failed: {}", String::from_utf8_lossy(&out.stderr)));
+    }
+    let converted = input.with_extension(to.split(':').next().unwrap());
+    std::fs::read_to_string(&converted)
+        .map_err(|e| format!("no converted output {}: {} (stdout: {})",
+            converted.display(), e, String::from_utf8_lossy(&out.stdout)))
+}
+
+/// Normalize text for comparison: soffice txt export uses \r\n and may add
+/// a trailing newline.
+fn norm(s: &str) -> String {
+    s.trim_start_matches('\u{feff}').replace("\r\n", "\n").trim_end_matches('\n').to_string()
+}
+
+fn oracle_text_round_trip(doc: &Document) {
+    let Some(bin) = require_or_skip() else { return };
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("ours.docx");
+    docx::write(doc, path.to_str().unwrap()).expect("write docx");
+
+    let extracted = soffice_convert(bin, &path, "txt:Text (encoded):UTF8")
+        .expect("LibreOffice could not open our .docx");
+    assert_eq!(
+        norm(&extracted),
+        norm(&doc.to_plain_text()),
+        "LibreOffice reads different text than we wrote"
+    );
+}
+
+#[test]
+fn oracle_reads_plain_paragraphs() {
+    oracle_text_round_trip(&Document::from_plain_text(
+        "first paragraph\nsecond paragraph\n\nfourth after blank",
+    ));
+}
+
+#[test]
+fn oracle_reads_styled_text() {
+    let mut d = Document::from_plain_text("normal bold italic strike");
+    d.apply_run_style(7, 11, &StylePatch::set_bold(true));
+    d.apply_run_style(12, 18, &StylePatch::set_italic(true));
+    d.apply_run_style(19, 25, &StylePatch::set_strikethrough(true));
+    oracle_text_round_trip(&d);
+}
+
+#[test]
+fn oracle_reads_headings() {
+    let mut d = Document::from_plain_text("Document Title\nSection One\nbody text here");
+    d.set_heading(0, Some(1));
+    d.set_heading(1, Some(2));
+    oracle_text_round_trip(&d);
+}
+
+#[test]
+fn oracle_reads_unicode() {
+    oracle_text_round_trip(&Document::from_plain_text("héllo — “fancy” 中文 emoji ✨"));
+}
+
+/// The reverse direction: a docx LibreOffice writes must open in our engine.
+#[test]
+fn we_read_soffice_output() {
+    let Some(bin) = require_or_skip() else { return };
+    let dir = tempfile::tempdir().unwrap();
+
+    // Have soffice author a .docx from markdown-ish plain text.
+    let src = dir.path().join("lo-authored.txt");
+    std::fs::write(&src, "alpha\nbeta\ngamma\n").unwrap();
+    let _ = soffice_convert(bin, &src, "docx").ok();
+    let docx_path = dir.path().join("lo-authored.docx");
+    // convert-to docx returns binary; soffice_convert tried read_to_string and
+    // may have failed — only require the file to exist.
+    assert!(docx_path.exists(), "soffice did not produce a docx");
+
+    let doc = docx::read(docx_path.to_str().unwrap()).expect("our engine failed on LO-authored docx");
+    assert_eq!(norm(&doc.to_plain_text()), "alpha\nbeta\ngamma");
+}

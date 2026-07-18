@@ -1,12 +1,12 @@
 // export.rs — Typst export for Decks.
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-pub fn to_typst(slides: &[crate::engine::Slide]) -> String {
+pub fn to_typst(slides: &[decks_core::engine::Slide]) -> String {
     let mut out = String::from("#set page(width: 16cm, height: 9cm)\n");
     for s in slides {
         out.push_str(&format!("#pagebreak()\n= {}\n", s.title));
         for obj in &s.objects {
-            use crate::engine::SlideObject::*;
+            use decks_core::engine::SlideObject::*;
             match obj {
                 TextBox { text, .. } => out.push_str(&format!("{}\n\n", text)),
                 Rect { .. } => out.push_str("#rect(width: 100%, height: 100%)\n"),
@@ -19,7 +19,7 @@ pub fn to_typst(slides: &[crate::engine::Slide]) -> String {
 }
 
 /// Export to PDF via typst CLI.
-pub fn to_pdf(slides: &[crate::engine::Slide], path: &str) -> Result<(), String> {
+pub fn to_pdf(slides: &[decks_core::engine::Slide], path: &str) -> Result<(), String> {
     let tmp = format!("{}.typ", path);
     std::fs::write(&tmp, to_typst(slides)).map_err(|e| e.to_string())?;
     let out = std::process::Command::new("typst")

@@ -4,7 +4,7 @@
 use gtk4::cairo;
 use std::cell::RefCell;
 use std::collections::HashMap;
-use crate::engine::{Slide, SlideObject, MasterSlide};
+use decks_core::engine::{Slide, SlideObject, MasterSlide};
 
 // ── Image loading with cache ─────────────────────────────────────────
 

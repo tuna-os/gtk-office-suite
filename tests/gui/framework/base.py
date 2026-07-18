@@ -59,7 +59,7 @@ class BaseGUITestCase(unittest.TestCase):
             except subprocess.TimeoutExpired:
                 self.process.kill()
 
-    def wait_for_app(self, name: str, timeout: float = 15.0) -> tree.Accessible:
+    def wait_for_app(self, name: str, timeout: float = 15.0) -> "tree.Node":
         deadline = time.monotonic() + timeout
         while time.monotonic() < deadline:
             try:

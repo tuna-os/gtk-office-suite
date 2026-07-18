@@ -198,24 +198,6 @@ mod imp {
                 drop(cr);
             }
 
-            // Position child: span all pages' content areas
-            if let Some(child) = self.obj().first_child() {
-                let ml = self.margin_left.get() * scale;
-                let mt = self.margin_top.get() * scale;
-                let mr = self.margin_right.get() * scale;
-                let mb = self.margin_bottom.get() * scale;
-
-                let content_per_page = sh - mt - mb;
-                let total_content = n_pages as f64 * content_per_page + (n_pages as f64 - 1.0) * PAGE_GAP * scale;
-
-                let cx = (px + ml) as i32;
-                let cy = (start_y + mt) as i32;
-                let cw = ((sw - ml - mr) as i32).max(1);
-                let ch = (total_content as i32).max(1);
-
-                child.size_allocate(&gtk4::Allocation::new(cx, cy, cw, ch), -1);
-            }
-
             self.parent_snapshot(snapshot);
         }
 
@@ -225,7 +207,42 @@ mod imp {
             (0, pw.max(ph), -1, -1)
         }
 
-        fn size_allocate(&self, _width: i32, _height: i32, _baseline: i32) {}
+        // Children must be allocated here, not in snapshot(): GTK4 derives
+        // mapping, focusability, and the AT-SPI tree from real allocations.
+        fn size_allocate(&self, width: i32, height: i32, _baseline: i32) {
+            let child = match self.obj().first_child() {
+                Some(c) => c,
+                None => return,
+            };
+            let w = width as f64;
+            let h = height as f64;
+            if w <= 0.0 || h <= 0.0 { return; }
+
+            let pw = self.page_width.get();
+            let ph = self.page_height.get();
+            let n_pages = self.page_count.get().max(1);
+            let pad = 24.0;
+            let zoom_factor = self.zoom_level.get() / 100.0;
+            let scale = ((w - pad * 2.0) / pw).min(1.5) * zoom_factor;
+            let sw = pw * scale;
+            let sh = ph * scale;
+            let total_height = n_pages as f64 * sh + (n_pages as f64 - 1.0) * PAGE_GAP * scale;
+            let px = (w - sw) / 2.0;
+            let start_y = ((h - total_height) / 2.0).max(pad);
+
+            let ml = self.margin_left.get() * scale;
+            let mt = self.margin_top.get() * scale;
+            let mr = self.margin_right.get() * scale;
+            let mb = self.margin_bottom.get() * scale;
+            let content_per_page = sh - mt - mb;
+            let total_content = n_pages as f64 * content_per_page + (n_pages as f64 - 1.0) * PAGE_GAP * scale;
+
+            let cx = (px + ml) as i32;
+            let cy = (start_y + mt) as i32;
+            let cw = ((sw - ml - mr) as i32).max(1);
+            let ch = (total_content as i32).max(1);
+            child.size_allocate(&gtk4::Allocation::new(cx, cy, cw, ch), -1);
+        }
     }
 }
 
@@ -244,7 +261,7 @@ impl PageContainer {
         let imp = self.imp();
         imp.page_width.set(width_pt);
         imp.page_height.set(height_pt);
-        self.queue_draw();
+        self.queue_resize();
     }
 
     pub fn set_margins(&self, top: f64, bottom: f64, left: f64, right: f64) {
@@ -253,19 +270,19 @@ impl PageContainer {
         imp.margin_bottom.set(bottom);
         imp.margin_left.set(left);
         imp.margin_right.set(right);
-        self.queue_draw();
+        self.queue_resize();
     }
 
     /// Set the number of pages to render.
     pub fn set_page_count(&self, count: usize) {
         self.imp().page_count.set(count.max(1));
-        self.queue_draw();
+        self.queue_resize();
     }
 
     /// Set the header text template. Use {page} for page number.
     pub fn set_header_text(&self, text: &str) {
         self.imp().header_text.replace(text.to_string());
-        self.queue_draw();
+        self.queue_resize();
     }
 
     /// Get the current header text template.
@@ -276,7 +293,7 @@ impl PageContainer {
     /// Set the footer text template. Use {page} for page number.
     pub fn set_footer_text(&self, text: &str) {
         self.imp().footer_text.replace(text.to_string());
-        self.queue_draw();
+        self.queue_resize();
     }
 
     /// Get the current footer text template.
@@ -287,7 +304,7 @@ impl PageContainer {
     /// Set zoom level (50-200).
     pub fn set_zoom(&self, level: f64) {
         self.imp().zoom_level.set(level.clamp(50.0, 200.0));
-        self.queue_draw();
+        self.queue_resize();
     }
 
     /// Get current zoom level.
@@ -298,7 +315,7 @@ impl PageContainer {
     /// Set column count for multi-column rendering.
     pub fn set_column_count(&self, count: u32) {
         self.imp().column_count.set(count.max(1));
-        self.queue_draw();
+        self.queue_resize();
     }
 
     pub fn load_from_settings(&self, settings: &gio::Settings) {

@@ -34,6 +34,12 @@ fn make_doc_widget(settings: Option<&gio::Settings>) -> (PageContainer, gtk::Tex
     editor.set_left_margin(24); editor.set_right_margin(24);
     editor.set_top_margin(16); editor.set_bottom_margin(16);
     editor.set_vexpand(true); editor.set_hexpand(true);
+    // Focus the editor whenever its tab becomes visible; otherwise keystrokes
+    // fall through to the window and the find SearchBar captures them.
+    editor.connect_map(|ed| {
+        let ed = ed.clone();
+        glib::idle_add_local_once(move || { ed.grab_focus(); });
+    });
     // Transparent background so PageContainer's white page shows through (no black block in dark mode)
     let css_provider = gtk::CssProvider::new();
     css_provider.load_from_string("textview, textview text, scrolledwindow { background: transparent; }");
@@ -268,7 +274,9 @@ impl LettersWindow {
 
         let suite_win = suite_common::SuiteWindow::new(app, "Letters", primary_toolbar, extended_toolbar);
         suite_win.add_top_bar(&tab_bar);
-        suite_win.set_content(&toast_overlay);
+        // Content is set below, after wrapping toast_overlay in the find/replace
+        // gtk::Overlay — setting it here would give toast_overlay a parent and
+        // make the later Overlay::set_child fail, orphaning the whole editor UI.
         suite_win.add_bottom_bar(&status_bar);
 
         // ── Ruler ──────────────────────────────────────────────────
@@ -804,9 +812,16 @@ impl LettersWindow {
     pub fn present(&self) { self.window.present(); }
 
     fn register_actions(tv: &adw::TabView, st: &gtk4::Stack, wc: &gtk4::Label, win: &adw::ApplicationWindow, app: &adw::Application, settings: &gio::Settings) {
+        // Word count: refresh on every buffer change and when switching tabs.
+        {
+            let wc = wc.clone();
+            tv.connect_selected_page_notify(move |tv| {
+                if let Some(buf) = active_buffer(tv) { update_word_count(&buf, &wc); }
+            });
+        }
         // New document
         {
-            let tv = tv.clone(); let st = st.clone(); let s = settings.clone();
+            let tv = tv.clone(); let st = st.clone(); let s = settings.clone(); let wc = wc.clone();
             let a = gtk::gio::SimpleAction::new("new-document", None);
             a.connect_activate(move |_, _| {
                 let (container, buf) = make_doc_widget(Some(&s));
@@ -817,16 +832,17 @@ impl LettersWindow {
                 tab_data_set(&container, TabData::new());
                 let p = tv.page(&container);
                 buf.connect_modified_changed(move |b| { p.set_needs_attention(b.is_modified()); });
+                connect_word_count(&buf, &wc);
             });
             app.add_action(&a);
         }
 
         // Open file
         {
-            let tv = tv.clone(); let st = st.clone(); let w = win.clone(); let s = settings.clone();
+            let tv = tv.clone(); let st = st.clone(); let w = win.clone(); let s = settings.clone(); let wc = wc.clone();
             let a = gtk::gio::SimpleAction::new("open-file", None);
             a.connect_activate(move |_, _| {
-                let tv = tv.clone(); let st = st.clone(); let w = w.clone(); let s = s.clone();
+                let tv = tv.clone(); let st = st.clone(); let w = w.clone(); let s = s.clone(); let wc = wc.clone();
                 let dlg = gtk::FileDialog::new();
                 let f = gtk::FileFilter::new();
                 f.add_pattern("*.md"); f.add_pattern("*.txt"); f.add_pattern("*.html"); f.add_pattern("*.docx");
@@ -859,6 +875,7 @@ impl LettersWindow {
                             st.set_visible_child_name("editor");
                             let p = tv.page(&container);
                             buf.connect_modified_changed(move |b| { p.set_needs_attention(b.is_modified()); });
+                            connect_word_count(&buf, &wc);
                         }
                     },
                 );
@@ -978,6 +995,17 @@ fn save_page_setup_to_settings(settings: &gio::Settings, ps: &gtk::PageSetup) {
     let _ = settings.set_double("page-margin-bottom", ps.bottom_margin(gtk::Unit::Points));
     let _ = settings.set_double("page-margin-left", ps.left_margin(gtk::Unit::Points));
     let _ = settings.set_double("page-margin-right", ps.right_margin(gtk::Unit::Points));
+}
+
+fn update_word_count(buf: &gtk::TextBuffer, wc: &gtk4::Label) {
+    let text = buf.text(&buf.start_iter(), &buf.end_iter(), false);
+    let n = text.split_whitespace().count();
+    wc.set_text(&format!("{} words", n));
+}
+
+fn connect_word_count(buf: &gtk::TextBuffer, wc: &gtk4::Label) {
+    let wc = wc.clone();
+    buf.connect_changed(move |b| update_word_count(b, &wc));
 }
 
 fn active_buffer(tv: &adw::TabView) -> Option<gtk::TextBuffer> {

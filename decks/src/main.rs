@@ -1,9 +1,7 @@
 use gtk4::prelude::*;
 use gtk4::gio;
 mod window;
-mod engine;
 mod export;
-mod undo;
 mod canvas;
 mod sidebar;
 mod toolbar;
@@ -54,12 +52,6 @@ fn main() {
     suite.app.connect_activate(move |app| {
         let w = window::DecksWindow::new(app);
         *pw_store.borrow_mut() = Some(w.window.clone().upcast::<gtk4::Window>());
-        w.present();
-    });
-    return;
-
-    suite.app.connect_activate(|app| {
-        let w = window::DecksWindow::new(app);
         w.present();
     });
     suite.run();

@@ -7,11 +7,8 @@ edition = "2021"
 gtk4 = { version = "0.11", features = ["v4_14"] }
 libadwaita = { version = "0.9", features = ["v1_5"] }
 suite-common = { path = "../suite-common" }
+tables-core = { path = "../tables-core" }
 pangocairo = "0.22"
-ironcalc_base = "0.7"
-regex = "1"
-calamine = "0.26"
-rust_xlsxwriter = "0.80"
 
 [[bin]]
 name = "tables"

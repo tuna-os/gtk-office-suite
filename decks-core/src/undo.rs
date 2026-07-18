@@ -4,7 +4,7 @@
 // Pattern #27 from AGENT-REFERENCE-LIBRARY.md.
 // Uses the generic UndoManager from suite-common.
 
-use suite_common::undo::Command;
+use suite_common_core::undo::Command;
 use crate::engine::{Slide, SlideObject};
 
 // ── Helper for offsetting object coordinates ───────────────────────────
@@ -211,7 +211,7 @@ impl Command<Vec<Slide>> for ReorderSlidesCmd {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use suite_common::undo::Command;
+    use suite_common_core::undo::Command;
 
     fn make_slides() -> Vec<Slide> {
         vec![Slide { title: "S1".into(), background: "#fff".into(), objects: vec![], notes: String::new(), master_idx: Some(0) }]

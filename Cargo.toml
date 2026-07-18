@@ -1,3 +1,3 @@
 [workspace]
-members = ["suite-common-core", "suite-common", "tables", "decks", "letters"]
+members = ["suite-common-core", "suite-common", "letters-core", "tables-core", "tables", "decks-core", "decks", "letters"]
 resolver = "2"
