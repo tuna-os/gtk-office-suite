@@ -913,6 +913,9 @@ impl LettersWindow {
             .unwrap_or_else(|| path.to_string());
         page.set_title(&name);
         page.set_tooltip(&name);
+        // The selected-page notify fired at append, before the title was
+        // set — refresh the window title now that it exists.
+        self.window.set_title(Some(&format!("{name} — Letters")));
         page.set_needs_attention(false);
         self.stack.set_visible_child_name("editor");
         let wc = self.word_count_label.clone();

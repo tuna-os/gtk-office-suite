@@ -227,6 +227,21 @@ impl TablesWindow {
             });
         }
 
+        // Escape in the fx entry or name box returns focus to the grid
+        // (Calc behavior: cancel editing, back to navigation).
+        for entry in [&fx_entry, &name_box] {
+            let da = drawing_area.clone();
+            let key = gtk4::EventControllerKey::new();
+            key.connect_key_pressed(move |_, keyval, _code, _mods| {
+                if keyval == gtk::gdk::Key::Escape {
+                    da.grab_focus();
+                    return gtk4::glib::Propagation::Stop;
+                }
+                gtk4::glib::Propagation::Proceed
+            });
+            entry.add_controller(key);
+        }
+
         // Wire formula bar: Enter commits
         {
             let s = state.clone();

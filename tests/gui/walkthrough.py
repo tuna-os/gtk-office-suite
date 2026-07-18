@@ -64,7 +64,11 @@ rawinput.keyCombo("<Control>g")
 time.sleep(0.3)
 rawinput.typeText("C6")
 rawinput.keyCombo("Return")
-time.sleep(0.5)
+time.sleep(0.3)
+# The jump hands focus to the fx entry for typing; Escape returns it to
+# the grid so keyboard range selection works.
+rawinput.keyCombo("Escape")
+time.sleep(0.3)
 for _ in range(4):
     rawinput.keyCombo("<Shift>Up")
 time.sleep(1.0)
