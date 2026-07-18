@@ -1,3 +1,8 @@
 [workspace]
 members = ["suite-common-core", "suite-common", "suite-export", "letters-core", "tables-core", "tables", "decks-core", "decks", "letters"]
 resolver = "2"
+
+# IronCalc 0.7.1 on crates.io predates STDEV/REPLACE/PROPER/CHAR/CODE/
+# SUMPRODUCT; upstream main has them. Drop this patch on the next release.
+[patch.crates-io]
+ironcalc_base = { git = "https://github.com/ironcalc/IronCalc", rev = "2f539370" }
