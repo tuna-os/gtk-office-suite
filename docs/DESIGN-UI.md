@@ -87,11 +87,15 @@ wired, so action-registry unification is the palette's prerequisite.
 
 ## Sequencing
 
-1. Command palette (shared widget in suite-common; biggest power-per-line)
-2. Letters selection popover + status readout
-3. Tables selection stats + name box + format-cells sheet
-4. Decks inspector + notes drawer
-5. Breakpoint/adaptive pass on all three (narrow-width usable)
+1. ✅ Command palette (2026-07-18; prerequisite discovered and done:
+   action-registry unification — Tables/Decks toolbars were closure-wired)
+2. ✅ Letters selection popover + style readout (2026-07-18)
+3. Tables: ✅ selection stats + name box + range selection + keyboard nav;
+   format-cells sheet still open (only the cycle button exists)
+4. Decks: ✅ inspector + presenter pill + status; notes drawer polish and
+   slide thumbnails still open
+5. Breakpoint/adaptive pass: SuiteWindow collapses the toolbar at 600sp;
+   full narrow-width audit still open
 6. Feature-surfacing audit sweep against PARITY.md, then screenshot set
 
 ## Cross-app clipboard (styling and data must survive)
