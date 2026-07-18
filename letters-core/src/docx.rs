@@ -48,6 +48,27 @@ pub fn read(path: &str) -> Result<Document, String> {
         paragraphs.push(para);
     }
 
+    // Tables are not modeled yet; flatten their cell text into paragraphs so
+    // no content is lost. Limitation: rdocx exposes tables separately from
+    // the paragraph stream, so flattened cells append after body paragraphs
+    // rather than interleaving at their true position.
+    for table in doc.tables() {
+        for ri in 0..table.row_count() {
+            let Some(row) = table.row(ri) else { continue };
+            for ci in 0..row.cell_count() {
+                let Some(cell) = row.cell(ci) else { continue };
+                for cp in cell.paragraphs() {
+                    let text = cp.text();
+                    if text.is_empty() { continue; }
+                    paragraphs.push(Paragraph {
+                        style: ParaStyle::default(),
+                        runs: vec![Run { text, style: RunStyle::default() }],
+                    });
+                }
+            }
+        }
+    }
+
     if paragraphs.is_empty() {
         return Ok(Document::new());
     }
