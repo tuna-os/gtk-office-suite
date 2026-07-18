@@ -240,9 +240,7 @@ pub fn serialize(doc: &Document) -> String {
             for _ in 0..level { out.push('#'); }
             out.push(' ');
         }
-        for run in &para.runs {
-            out.push_str(&serialize_run(run));
-        }
+        out.push_str(&serialize_runs(&para.runs));
     }
     out
 }
@@ -259,28 +257,125 @@ fn escape_text(text: &str) -> String {
     out
 }
 
-fn serialize_run(run: &Run) -> String {
-    if let Some(src) = &run.style.image {
-        let alt = escape_text(&run.text);
-        let dest = if src.contains(char::is_whitespace) || src.contains('(') || src.contains(')') {
-            format!("<{}>", src)
-        } else {
-            src.clone()
-        };
-        let img = format!("![{}]({})", alt, dest);
-        return match &run.style.link {
-            Some(url) => format!("[{}]({})", img, url),
-            None => img,
-        };
+fn serialize_image(run: &Run) -> String {
+    let src = run.style.image.as_deref().unwrap_or_default();
+    let alt = escape_text(&run.text);
+    let dest = if src.contains(char::is_whitespace) || src.contains('(') || src.contains(')') {
+        format!("<{}>", src)
+    } else {
+        src.to_string()
+    };
+    let img = format!("![{}]({})", alt, dest);
+    match &run.style.link {
+        Some(url) => format!("[{}]({})", img, url),
+        None => img,
     }
-    // Code spans keep their text verbatim; everything else is escaped.
-    let mut s = if run.style.code { run.text.clone() } else { escape_text(&run.text) };
-    if run.style.code { s = format!("`{}`", s); }
-    if run.style.strikethrough { s = format!("~~{}~~", s); }
-    if run.style.italic { s = format!("*{}*", s); }
-    if run.style.bold { s = format!("**{}**", s); }
-    if let Some(url) = &run.style.link { s = format!("[{}]({})", s, url); }
-    s
+}
+
+/// Inline features that serialize as paired markers. Links join the
+/// stack so emphasis spanning a link stays outside the brackets.
+#[derive(Clone, PartialEq)]
+enum Feat {
+    Bold,
+    Italic,
+    Strike,
+    Link(String),
+}
+
+fn run_has(run: &Run, f: &Feat) -> bool {
+    match f {
+        Feat::Bold => run.style.bold,
+        Feat::Italic => run.style.italic,
+        Feat::Strike => run.style.strikethrough,
+        Feat::Link(url) => run.style.link.as_deref() == Some(url.as_str()),
+    }
+}
+
+fn open_marker(f: &Feat) -> String {
+    match f {
+        Feat::Bold => "**".into(),
+        Feat::Italic => "*".into(),
+        Feat::Strike => "~~".into(),
+        Feat::Link(_) => "[".into(),
+    }
+}
+
+fn close_marker(f: &Feat) -> String {
+    match f {
+        Feat::Bold => "**".into(),
+        Feat::Italic => "*".into(),
+        Feat::Strike => "~~".into(),
+        Feat::Link(url) => format!("]({})", url),
+    }
+}
+
+/// Serialize a paragraph's runs with a marker stack: markers shared by
+/// consecutive runs stay open across the boundary, so `**foo *bar***`
+/// never degrades into `**foo *****bar***` (the old per-run closing).
+fn serialize_runs(runs: &[Run]) -> String {
+    let runs: Vec<&Run> = runs
+        .iter()
+        .filter(|r| !r.text.is_empty() || r.style.image.is_some())
+        .collect();
+    let mut out = String::new();
+    let mut stack: Vec<Feat> = Vec::new();
+
+    // Length of the maximal consecutive interval of `f` starting at `i`.
+    let interval_len = |i: usize, f: &Feat| -> usize {
+        runs[i..].iter().take_while(|r| run_has(r, f)).count()
+    };
+
+    for (i, &run) in runs.iter().enumerate() {
+        if run.style.image.is_some() {
+            out.push_str(&serialize_image(run));
+            continue;
+        }
+
+        // Close the deepest marker this run doesn't carry — and, stack
+        // discipline, everything above it (re-opened below if needed).
+        let keep = stack.iter().position(|f| !run_has(run, f)).unwrap_or(stack.len());
+        while stack.len() > keep {
+            let f = stack.pop().expect("len > keep");
+            out.push_str(&close_marker(&f));
+        }
+
+        // Open missing markers, longest-lasting first so longer spans
+        // nest outermost.
+        let mut missing: Vec<Feat> = Vec::new();
+        if run.style.bold && !stack.contains(&Feat::Bold) {
+            missing.push(Feat::Bold);
+        }
+        if run.style.italic && !stack.contains(&Feat::Italic) {
+            missing.push(Feat::Italic);
+        }
+        if run.style.strikethrough && !stack.contains(&Feat::Strike) {
+            missing.push(Feat::Strike);
+        }
+        if let Some(url) = &run.style.link {
+            let f = Feat::Link(url.clone());
+            if !stack.contains(&f) {
+                missing.push(f);
+            }
+        }
+        missing.sort_by_key(|f| std::cmp::Reverse(interval_len(i, f)));
+        for f in missing {
+            out.push_str(&open_marker(&f));
+            stack.push(f);
+        }
+
+        // Code spans are per-run and innermost; their text is verbatim.
+        if run.style.code {
+            out.push('`');
+            out.push_str(&run.text);
+            out.push('`');
+        } else {
+            out.push_str(&escape_text(&run.text));
+        }
+    }
+    while let Some(f) = stack.pop() {
+        out.push_str(&close_marker(&f));
+    }
+    out
 }
 
 /// What a Markdown export cannot represent (used by UI to warn on export).
