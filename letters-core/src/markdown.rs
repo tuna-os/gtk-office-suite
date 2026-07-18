@@ -257,17 +257,23 @@ fn escape_text(text: &str) -> String {
     out
 }
 
+/// A link/image destination: wrapped in angle brackets when it contains
+/// whitespace or parentheses, which would otherwise terminate the
+/// `(...)` early on re-parse.
+fn format_dest(dest: &str) -> String {
+    if dest.contains(char::is_whitespace) || dest.contains('(') || dest.contains(')') {
+        format!("<{}>", dest)
+    } else {
+        dest.to_string()
+    }
+}
+
 fn serialize_image(run: &Run) -> String {
     let src = run.style.image.as_deref().unwrap_or_default();
     let alt = escape_text(&run.text);
-    let dest = if src.contains(char::is_whitespace) || src.contains('(') || src.contains(')') {
-        format!("<{}>", src)
-    } else {
-        src.to_string()
-    };
-    let img = format!("![{}]({})", alt, dest);
+    let img = format!("![{}]({})", alt, format_dest(src));
     match &run.style.link {
-        Some(url) => format!("[{}]({})", img, url),
+        Some(url) => format!("[{}]({})", img, format_dest(url)),
         None => img,
     }
 }
@@ -305,7 +311,7 @@ fn close_marker(f: &Feat) -> String {
         Feat::Bold => "**".into(),
         Feat::Italic => "*".into(),
         Feat::Strike => "~~".into(),
-        Feat::Link(url) => format!("]({})", url),
+        Feat::Link(url) => format!("]({})", format_dest(url)),
     }
 }
 

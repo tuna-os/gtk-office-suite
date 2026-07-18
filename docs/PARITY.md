@@ -35,7 +35,7 @@ anything interactive needs I5 or I6.
 | Bullet/numbered lists (flat) | ✅ model/docx, ❌ bridge | I1–I3; **red I5** (buffer keeps literal "- ") |
 | Hyperlinks | ✅ | I2, I5 (dynamic link:<url> tags) |
 | Code blocks | ✅ | I1, I2 (CommonMark fenced 24/29), I3 |
-| Markdown save/load with formatting | ✅ | I2 CommonMark ratchet 612/652 → target 630+ |
+| Markdown save/load with formatting | ✅ | I2 CommonMark ratchet 618/652 → target 630+ |
 | DOCX save/load | ✅ | I2, I3, I4 |
 | Undo/redo | ✅ (buffer-level) | **move to model ops + I1**; I6 smoke |
 | Find & replace | ✅ UI | **extract to core + I1**; I6 |
