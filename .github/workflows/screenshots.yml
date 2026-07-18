@@ -52,4 +52,7 @@ jobs:
             exit 0
           fi
           git commit -m "docs: refresh walkthrough screenshots [skip ci]"
+          # main may have moved while we built; replay the screenshot
+          # commit on top rather than failing the push.
+          git pull --rebase origin main
           git push
