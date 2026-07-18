@@ -90,3 +90,34 @@ only), table insertion (none).
 4. Decks inspector + notes drawer
 5. Breakpoint/adaptive pass on all three (narrow-width usable)
 6. Feature-surfacing audit sweep against PARITY.md, then screenshot set
+
+## Cross-app clipboard (styling and data must survive)
+
+Copying between Letters, Tables, and Decks is where suite-ness becomes
+real — and our shared model makes it cheap to do *properly*:
+
+- **Suite fragment format** (`application/x-tunaos-suite+json`): a serde
+  serialization of model fragments — styled runs/paragraphs from Letters
+  (letters-core types), a cell grid with *formulas, values, and number
+  formats* from Tables, SlideObjects from Decks (which already carry
+  letters-core Run/RunStyle). Because Letters and Decks literally share
+  the run types, styled text pastes losslessly in both directions by
+  construction.
+- **Standard formats alongside**: every copy also offers `text/html`
+  (styled interchange with external apps; tables as `<table>`) and
+  `text/plain` (TSV for cell grids). Paste prefers suite JSON → HTML →
+  plain.
+- **Paste mapping matrix** (each cell of this matrix is a pure function
+  in the core crates, unit-testable without a clipboard):
+  - Tables grid → Letters: a real cell-tagged table (the table model
+    exists); formulas degrade to values, formats to formatted strings.
+  - Tables grid → Decks: a text box per row, or a table-styled box (v2).
+  - Letters styled text → Decks text box: runs carried verbatim.
+  - Decks text box → Letters: runs carried verbatim.
+  - External HTML → all three: through the existing HTML-ish readers.
+- **Testing**: `to_fragment`/`from_fragment` round-trips live in the core
+  crates (I1); a GUI smoke test covers one real end-to-end copy/paste per
+  direction once the GDK plumbing lands (I6).
+
+Implementation order: serde feature on letters-core model types → fragment
+module in suite-common-core → GDK ContentProvider glue per app.
