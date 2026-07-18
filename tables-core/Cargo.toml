@@ -2,13 +2,17 @@
 name = "tables-core"
 version = "0.1.0"
 edition = "2021"
+description = "GTK-free spreadsheet core: IronCalc-backed engine, sheet model, undo, xlsx/ods/csv I/O, OpenFormula-conformance-tested against LibreOffice Calc"
+license = "GPL-3.0-or-later"
+repository = "https://github.com/tuna-os/gtk-office-suite"
+keywords = ["spreadsheet", "xlsx", "openformula"]
 
 # GTK-free spreadsheet core: engine (IronCalc), sheet model, undo commands,
 # file I/O, Typst export. Must never depend on gtk4/libadwaita/cairo — see
 # docs/DEVELOPMENT.md layering rule.
 [dependencies]
-suite-common-core = { path = "../suite-common-core" }
-suite-export = { path = "../suite-export" }
+suite-common-core = { path = "../suite-common-core", version = "0.1.0" }
+suite-export = { path = "../suite-export", version = "0.1.0" }
 ironcalc_base = "0.7"
 calamine = "0.26"
 rust_xlsxwriter = "0.80"

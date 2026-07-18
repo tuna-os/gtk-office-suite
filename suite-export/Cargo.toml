@@ -2,6 +2,10 @@
 name = "suite-export"
 version = "0.1.0"
 edition = "2021"
+description = "In-process PDF export via Typst for office documents: compile Typst source to PDF bytes with embedded fonts"
+license = "GPL-3.0-or-later"
+repository = "https://github.com/tuna-os/gtk-office-suite"
+keywords = ["pdf", "typst", "export"]
 
 # Shared PDF export via the Typst library (no external binary — the CLI
 # was never bundled in the Flatpaks, so CLI-based export was broken for

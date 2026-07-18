@@ -2,6 +2,10 @@
 name = "suite-common-core"
 version = "0.1.0"
 edition = "2021"
+description = "Shared GTK-free office-suite primitives: undo commands, number formats, typed events, search, unit conversion, style inheritance"
+license = "GPL-3.0-or-later"
+repository = "https://github.com/tuna-os/gtk-office-suite"
+keywords = ["office", "undo", "number-format"]
 
 [dependencies]
 num-format = "0.4"
