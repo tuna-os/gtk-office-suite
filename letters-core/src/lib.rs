@@ -3,6 +3,7 @@
 //
 // See DESIGN.md for the model, invariants, and addressing scheme.
 
+pub mod docx;
 pub mod markdown;
 pub mod model;
 

@@ -1534,8 +1534,10 @@ name = "letters-core"
 version = "0.1.0"
 dependencies = [
  "pulldown-cmark",
+ "rdocx",
  "serde",
  "serde_json",
+ "tempfile",
 ]
 
 [[package]]
