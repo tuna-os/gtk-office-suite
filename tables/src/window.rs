@@ -125,9 +125,9 @@ impl TablesWindow {
         fx_entry.set_placeholder_text(Some("Formula or value\u{2026}"));
         fx_entry.update_property(&[gtk4::accessible::Property::Label("Formula input")]);
 
-        let fx_bar = gtk4::Box::new(gtk4::Orientation::Horizontal, 4);
+        let fx_bar = gtk4::Box::new(gtk4::Orientation::Horizontal, 6);
         fx_bar.set_margin_start(6); fx_bar.set_margin_end(6);
-        fx_bar.set_margin_top(2); fx_bar.set_margin_bottom(2);
+        fx_bar.set_margin_top(6); fx_bar.set_margin_bottom(6);
         fx_bar.set_halign(gtk4::Align::Fill);
         fx_bar.append(&fx_label);
         fx_bar.append(&fx_entry);

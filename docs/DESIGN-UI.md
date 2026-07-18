@@ -67,9 +67,12 @@ Three surfacing mechanisms, shared across all three apps:
 
 Every ✅ row in PARITY.md gets a "reachable in ≤2 interactions" audit
 entry; a feature the engine proves but the UI hides is a design red.
-Current known reds: speaker-notes editing (no UI), number formats (no
-UI), links (no insert flow beyond Ctrl+K plan), font size/color (menu
-only), table insertion (none).
+Current known reds: number formats (no UI), links (no insert flow beyond
+Ctrl+K plan), font size/color (menu only), table insertion (none).
+Resolved 2026-07-18: speaker-notes editing (Decks notes expander, wired
+to the model). Audit note: the palette plan assumed a complete GioAction
+registry — true only for Letters; Tables/Decks toolbars were closure-
+wired, so action-registry unification is the palette's prerequisite.
 
 ## Verification
 

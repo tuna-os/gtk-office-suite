@@ -204,13 +204,8 @@ impl SuiteToolbar {
         container.set_margin_start(6);
         container.set_margin_end(6);
 
-        let is_empty = primary.is_empty() && extended.is_empty();
-        println!("SuiteToolbar::new: primary len = {}, extended len = {}, is_empty = {}", primary.len(), extended.len(), is_empty);
-        if is_empty {
-            println!("SuiteToolbar::new: setting container visible to false");
+        if primary.is_empty() && extended.is_empty() {
             container.set_visible(false);
-        } else {
-            println!("SuiteToolbar::new: container remains visible (true)");
         }
 
         // ---- Primary section (always visible) ----
