@@ -201,6 +201,7 @@ gtk-office-suite/
 
 ## Links
 
+- **Roadmap:** [docs/ROADMAP.md](docs/ROADMAP.md)
 - **GitHub:** https://github.com/tuna-os/gtk-office-suite
 - **Release:** https://github.com/tuna-os/gtk-office-suite/releases/tag/v1.0
 - **GNOME HIG:** https://developer.gnome.org/hig/
