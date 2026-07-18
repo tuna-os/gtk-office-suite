@@ -16,6 +16,9 @@ pub fn parse(md: &str) -> Document {
     let mut paragraphs: Vec<Paragraph> = Vec::new();
     let mut current: Option<Paragraph> = None;
     let mut style = RunStyle::default();
+    // Same-type emphasis nests (*foo **bar *baz* bim** bop*): booleans
+    // would be cleared by the inner End while the outer is still open.
+    let (mut bold_depth, mut italic_depth, mut strike_depth) = (0u32, 0u32, 0u32);
     let mut list_stack: Vec<ListKind> = Vec::new();
     let mut code_block: Option<String> = None;
     let mut in_html_block = false;
@@ -105,12 +108,30 @@ pub fn parse(md: &str) -> Document {
                 if let Some(p) = current.take() { paragraphs.push(p); }
                 code_block = None;
             }
-            Event::Start(Tag::Strong) => style.bold = true,
-            Event::End(TagEnd::Strong) => style.bold = false,
-            Event::Start(Tag::Emphasis) => style.italic = true,
-            Event::End(TagEnd::Emphasis) => style.italic = false,
-            Event::Start(Tag::Strikethrough) => style.strikethrough = true,
-            Event::End(TagEnd::Strikethrough) => style.strikethrough = false,
+            Event::Start(Tag::Strong) => {
+                bold_depth += 1;
+                style.bold = true;
+            }
+            Event::End(TagEnd::Strong) => {
+                bold_depth = bold_depth.saturating_sub(1);
+                style.bold = bold_depth > 0;
+            }
+            Event::Start(Tag::Emphasis) => {
+                italic_depth += 1;
+                style.italic = true;
+            }
+            Event::End(TagEnd::Emphasis) => {
+                italic_depth = italic_depth.saturating_sub(1);
+                style.italic = italic_depth > 0;
+            }
+            Event::Start(Tag::Strikethrough) => {
+                strike_depth += 1;
+                style.strikethrough = true;
+            }
+            Event::End(TagEnd::Strikethrough) => {
+                strike_depth = strike_depth.saturating_sub(1);
+                style.strikethrough = strike_depth > 0;
+            }
             Event::Start(Tag::Link { dest_url, .. }) => style.link = Some(dest_url.to_string()),
             Event::End(TagEnd::Link) => style.link = None,
             Event::Start(Tag::Image { dest_url, .. }) => {
@@ -224,6 +245,7 @@ fn heading_to_u8(level: HeadingLevel) -> u8 {
 pub fn serialize(doc: &Document) -> String {
     let mut out = String::new();
     let mut numbered_counter = 0usize;
+    let mut code_fence = String::from("```");
     for (i, para) in doc.paragraphs.iter().enumerate() {
         let prev_code = i.checked_sub(1).and_then(|j| doc.paragraphs[j].style.code_block.as_ref());
         let next_code = doc.paragraphs.get(i + 1).and_then(|p| p.style.code_block.as_ref());
@@ -252,14 +274,34 @@ pub fn serialize(doc: &Document) -> String {
         if let Some(lang) = &para.style.code_block {
             // Opening fence when the previous paragraph isn't part of this block.
             if prev_code != Some(lang) {
-                out.push_str("```");
+                // The fence must not appear in the content: use one char
+                // more than the longest interior run. Info strings holding
+                // backticks are illegal on backtick fences — use tildes.
+                let mut content = String::new();
+                for p2 in &doc.paragraphs[i..] {
+                    if p2.style.code_block.as_ref() != Some(lang) { break; }
+                    content.push_str(&p2.text());
+                    content.push('\n');
+                }
+                let fence_char = if lang.contains('`') { '~' } else { '`' };
+                let longest = content
+                    .split(|c| c != fence_char)
+                    .map(str::len)
+                    .max()
+                    .unwrap_or(0);
+                let fence: String = std::iter::repeat(fence_char)
+                    .take((longest + 1).max(3))
+                    .collect();
+                out.push_str(&fence);
                 out.push_str(lang);
                 out.push('\n');
+                code_fence = fence;
             }
             out.push_str(&para.text());
             // Closing fence when the next paragraph isn't part of this block.
             if next_code != Some(lang) {
-                out.push_str("\n```");
+                out.push('\n');
+                out.push_str(&code_fence);
             }
             continue;
         }
@@ -278,7 +320,14 @@ pub fn serialize(doc: &Document) -> String {
             for _ in 0..level { out.push('#'); }
             out.push(' ');
         }
-        out.push_str(&serialize_runs(&para.runs));
+        let body = serialize_runs(&para.runs);
+        // Leading spaces/tabs would be stripped (or become indented code)
+        // on reparse — encode them as character references.
+        let kept = body.trim_start_matches([' ', '\t']);
+        for c in body[..body.len() - kept.len()].chars() {
+            out.push_str(if c == ' ' { "&#32;" } else { "&#9;" });
+        }
+        out.push_str(kept);
     }
     out
 }
@@ -287,10 +336,17 @@ pub fn serialize(doc: &Document) -> String {
 fn escape_text(text: &str) -> String {
     let mut out = String::with_capacity(text.len());
     for c in text.chars() {
-        if matches!(c, '\\' | '`' | '*' | '_' | '[' | ']' | '<' | '>' | '#' | '~') {
-            out.push('\\');
+        match c {
+            '\\' | '`' | '*' | '_' | '[' | ']' | '<' | '>' | '#' | '~' | '!' | '&' => {
+                out.push('\\');
+                out.push(c);
+            }
+            // Newlines/tabs inside run text only come from character
+            // references; raw, they would reparse as breaks/indented code.
+            '\n' => out.push_str("&#10;"),
+            '\t' => out.push_str("&#9;"),
+            _ => out.push(c),
         }
-        out.push(c);
     }
     out
 }
@@ -375,6 +431,30 @@ fn serialize_runs(runs: &[Run]) -> String {
             continue;
         }
 
+        // Autolink: a plain link whose visible text is its destination
+        // round-trips as <url> (escaping the [text](url) form would
+        // mangle backslashes in the URL).
+        if let Some(url) = &run.style.link {
+            let plain = !run.style.bold
+                && !run.style.italic
+                && !run.style.strikethrough
+                && !run.style.code
+                && run.text == *url
+                && !url.contains([' ', '<', '>'])
+                && interval_len(i, &Feat::Link(url.clone())) == 1
+                && !stack.iter().any(|f| matches!(f, Feat::Link(_)));
+            if plain {
+                // Close any inherited markers first (stack discipline).
+                while let Some(f) = stack.pop() {
+                    out.push_str(&close_marker(&f));
+                }
+                out.push('<');
+                out.push_str(url);
+                out.push('>');
+                continue;
+            }
+        }
+
         // Close the deepest marker this run doesn't carry — and, stack
         // discipline, everything above it (re-opened below if needed).
         let keep = stack.iter().position(|f| !run_has(run, f)).unwrap_or(stack.len());
@@ -422,9 +502,10 @@ fn serialize_runs(runs: &[Run]) -> String {
                 .max()
                 .unwrap_or(0);
             let fence = "`".repeat(longest_tick_run + 1);
+            let all_spaces = !text.is_empty() && text.chars().all(|c| c == ' ');
             let pad = text.starts_with('`')
                 || text.ends_with('`')
-                || (!text.is_empty() && text.chars().all(|c| c == ' '));
+                || (text.starts_with(' ') && text.ends_with(' ') && !all_spaces);
             out.push_str(&fence);
             if pad {
                 out.push(' ');
