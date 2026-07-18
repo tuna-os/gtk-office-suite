@@ -55,6 +55,39 @@ pub fn filter_entries(query: &str, entries: &[PaletteEntry]) -> Vec<PaletteEntry
     scored.into_iter().map(|(_, i)| entries[i].clone()).collect()
 }
 
+/// Filter and rank with a most-recent-first list of action names.
+/// Recency is a small bonus (< one match tier), so it reorders entries
+/// of equal match quality — a recent weak match never beats a strong
+/// one. With an empty query, recently used actions float to the top in
+/// recency order.
+pub fn filter_entries_with_recency(
+    query: &str,
+    entries: &[PaletteEntry],
+    recent: &[String],
+) -> Vec<PaletteEntry> {
+    let bonus = |name: &str| -> u32 {
+        match recent.iter().position(|r| r == name) {
+            Some(pos) => 90u32.saturating_sub((pos as u32) * 10),
+            None => 0,
+        }
+    };
+    let mut scored: Vec<(u32, usize)> = entries
+        .iter()
+        .enumerate()
+        .filter_map(|(i, e)| score(query, &e.label).map(|s| (s + bonus(&e.name), i)))
+        .collect();
+    scored.sort_by(|a, b| b.0.cmp(&a.0).then(a.1.cmp(&b.1)));
+    scored.into_iter().map(|(_, i)| entries[i].clone()).collect()
+}
+
+/// Record a use of `name` in the MRU list (most recent first, deduped,
+/// truncated to `cap`).
+pub fn push_recent(recent: &mut Vec<String>, name: &str, cap: usize) {
+    recent.retain(|r| r != name);
+    recent.insert(0, name.to_string());
+    recent.truncate(cap);
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -102,5 +135,41 @@ mod tests {
     fn case_insensitive() {
         let entries = vec![e("Merge Cells")];
         assert_eq!(filter_entries("MERGE", &entries).len(), 1);
+    }
+
+    #[test]
+    fn recency_floats_recent_to_top_on_empty_query() {
+        let entries = vec![e("Bold"), e("Italic"), e("Underline")];
+        let recent = vec!["app.underline".to_string(), "app.italic".to_string()];
+        let out = filter_entries_with_recency("", &entries, &recent);
+        assert_eq!(out[0].label, "Underline");
+        assert_eq!(out[1].label, "Italic");
+        assert_eq!(out[2].label, "Bold");
+    }
+
+    #[test]
+    fn recent_weak_match_never_beats_strong_match() {
+        let entries = vec![e("Bold"), e("Insert Bold Marker")];
+        // "Insert Bold Marker" was used recently, but "bo" prefix-matches Bold.
+        let recent = vec!["app.insert bold marker".to_string()];
+        let out = filter_entries_with_recency("bo", &entries, &recent);
+        assert_eq!(out[0].label, "Bold");
+    }
+
+    #[test]
+    fn recency_breaks_ties_within_a_tier() {
+        let entries = vec![e("Merge Cells"), e("Merge Rows")];
+        let recent = vec!["app.merge rows".to_string()];
+        let out = filter_entries_with_recency("merge", &entries, &recent);
+        assert_eq!(out[0].label, "Merge Rows");
+    }
+
+    #[test]
+    fn push_recent_dedupes_and_caps() {
+        let mut r = vec!["a".to_string(), "b".to_string()];
+        push_recent(&mut r, "b", 3);
+        assert_eq!(r, vec!["b", "a"]);
+        push_recent(&mut r, "c", 2);
+        assert_eq!(r, vec!["c", "b"]);
     }
 }

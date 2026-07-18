@@ -48,5 +48,10 @@
       <default>'#D9D9D9'</default>
       <summary>Grid line color (hex)</summary>
     </key>
+    <key name="palette-recent" type="as">
+      <default>[]</default>
+      <summary>Recently used command-palette actions</summary>
+      <description>Most-recent-first action names, used for palette ranking.</description>
+    </key>
   </schema>
 </schemalist>

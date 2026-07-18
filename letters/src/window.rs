@@ -428,6 +428,29 @@ impl LettersWindow {
         // Rulers are opt-in (DESIGN-UI): hidden by default, toggled via
         // the palette / Ctrl+Shift+R.
         ruler_widget.set_visible(false);
+        // Keep the ruler origin glued to the visible page edge (zoom,
+        // resize, sidebar changes all move it). set_screen_page only
+        // redraws on actual change, so the per-frame cost is a compare.
+        {
+            let tv = tab_view.clone();
+            ruler_widget.add_tick_callback(move |ruler, _| {
+                let pc = tv
+                    .selected_page()
+                    .and_then(|p| p.child().downcast::<crate::page_container::PageContainer>().ok());
+                if let Some(pc) = pc {
+                    let (px, sw) = pc.page_screen_geometry();
+                    if sw > 0.0 {
+                        if let Some(pt) = pc.compute_point(
+                            ruler,
+                            &gtk4::graphene::Point::new(px as f32, 0.0),
+                        ) {
+                            ruler.set_screen_page(pt.x() as f64, sw);
+                        }
+                    }
+                }
+                glib::ControlFlow::Continue
+            });
+        }
         {
             let rw = ruler_widget.clone();
             let a = gtk::gio::SimpleAction::new("toggle-ruler", None);

@@ -533,6 +533,15 @@ fn collect_palette_entries(app: &adw::Application) -> Vec<palette::PaletteEntry>
 pub fn show_command_palette(app: &adw::Application) {
     let entries = collect_palette_entries(app);
 
+    // Recently used actions rank first (persisted per app).
+    let settings = app
+        .application_id()
+        .map(|id| gio::Settings::new(&id));
+    let recent: Vec<String> = settings
+        .as_ref()
+        .map(|s| s.strv("palette-recent").iter().map(|g| g.to_string()).collect())
+        .unwrap_or_default();
+
     let search = gtk::SearchEntry::new();
     search.set_placeholder_text(Some("Type a command…"));
     search.update_property(&[gtk4::accessible::Property::Label("Command Palette")]);
@@ -570,11 +579,12 @@ pub fn show_command_palette(app: &adw::Application) {
     let populate = {
         let list = list.clone();
         let entries = entries.clone();
+        let recent = recent.clone();
         move |query: &str| {
             while let Some(row) = list.row_at_index(0) {
                 list.remove(&row);
             }
-            for e in palette::filter_entries(query, &entries) {
+            for e in palette::filter_entries_with_recency(query, &entries, &recent) {
                 let row_box = gtk::Box::new(gtk::Orientation::Horizontal, 12);
                 row_box.set_margin_start(12);
                 row_box.set_margin_end(12);
@@ -617,6 +627,15 @@ pub fn show_command_palette(app: &adw::Application) {
                 unsafe { row.data::<String>("action-name").map(|p| p.as_ref().clone()) };
             if let Some(full) = name {
                 dialog.close();
+                if let Some(s) = &settings {
+                    let mut r: Vec<String> =
+                        s.strv("palette-recent").iter().map(|g| g.to_string()).collect();
+                    palette::push_recent(&mut r, &full, 8);
+                    let _ = s.set_strv(
+                        "palette-recent",
+                        r.iter().map(|x| x.as_str()).collect::<Vec<_>>(),
+                    );
+                }
                 if let Some(short) = full.strip_prefix("app.") {
                     app.activate_action(short, None);
                 }

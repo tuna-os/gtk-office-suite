@@ -43,5 +43,10 @@
       <range min="100" max="2000"/>
       <summary>Default transition speed in milliseconds</summary>
     </key>
+    <key name="palette-recent" type="as">
+      <default>[]</default>
+      <summary>Recently used command-palette actions</summary>
+      <description>Most-recent-first action names, used for palette ranking.</description>
+    </key>
   </schema>
 </schemalist>

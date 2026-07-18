@@ -68,9 +68,15 @@ without a test that fails first.
    `narrow_breakpoint` and Decks hangs its setters there (both split
    views collapse, canvas min-width relaxes); (b) the status caption
    collided with the presenter pill (hidden at narrow).
-9. **Remaining advisor polish**: Tables overlay scrollbars (replace the
-   corner-grid Scrollbars), ruler origin aligned to the page edge,
-   palette recency ranking (persist last-used actions in GSettings).
+9. ✅ **Remaining advisor polish** (done 2026-07-18): Tables scrollbars
+   are now thin overlay indicators (GtkOverlay, no reserved gutters or
+   dead corner); the Letters ruler origin is glued to the visible page
+   edge (`PageContainer::page_screen_geometry` + a cheap per-frame tick
+   that only redraws on change — ticks, margin shading, indent/tab
+   markers all land on the page's real screen position at any zoom);
+   the command palette ranks recently used actions first
+   (`filter_entries_with_recency` in suite-common-core, unit-tested;
+   MRU persisted per app in the `palette-recent` GSettings key).
 
 ## Later — each needs a scope decision (ADR) before it's "red"
 

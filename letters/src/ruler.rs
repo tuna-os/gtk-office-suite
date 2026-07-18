@@ -50,6 +50,10 @@ mod imp {
         pub tab_stops: RefCell<Vec<TabStop>>,
         // Unit system
         pub use_metric: Cell<bool>,       // true = cm, false = inches
+        // On-screen page alignment: the ruler's origin/scale follow the
+        // visible page edge when set (0 width = legacy full-width map).
+        pub screen_origin: Cell<f64>,
+        pub screen_width: Cell<f64>,
         // Drag state
         pub dragging: Cell<Option<DragTarget>>,
         pub last_x: Cell<f64>,
@@ -94,8 +98,16 @@ mod imp {
             let pw = self.page_width.get();
             let ml = self.margin_left.get();
 
-            // Scale: map page width → widget width
-            let scale = w / pw;
+            // Scale/origin: follow the on-screen page when known,
+            // else legacy full-width mapping.
+            let sw = self.screen_width.get();
+            let (origin, scale) = if sw > 0.0 {
+                (self.screen_origin.get(), sw / pw)
+            } else {
+                let sc = w / pw;
+                (-ml * sc, sc)
+            };
+            let to_x = |pt: f64| origin + pt * scale;
 
             let cr = snapshot.append_cairo(&gtk4::graphene::Rect::new(
                 0.0, 0.0, w as f32, h as f32,
@@ -123,7 +135,7 @@ mod imp {
             let mut tick_idx = 0;
 
             while pos <= pw {
-                let x = (pos - ml) * scale;
+                let x = to_x(pos);
                 if x < -20.0 || x > w + 20.0 { pos += minor; tick_idx += 1; continue; }
 
                 let is_major = tick_idx % 4 == 0;
@@ -155,19 +167,18 @@ mod imp {
 
             // ── Margin shading (outside page margins) ──
             cr.set_source_rgba(0.85, 0.85, 0.85, 0.4);
-            // Left margin area
-            let left_margin_x = 0.0;
-            cr.rectangle(left_margin_x, 0.0, (ml * scale).max(0.0), ruler_h);
+            // Left margin area (page left edge → left margin)
+            cr.rectangle(to_x(0.0), 0.0, (ml * scale).max(0.0), ruler_h);
             cr.fill().unwrap();
-            // Right margin area
+            // Right margin area (right margin → page right edge)
             let mr = self.margin_right.get();
-            let right_margin_x = (pw - mr) * scale;
-            cr.rectangle(right_margin_x, 0.0, w - right_margin_x, ruler_h);
+            let right_margin_x = to_x(pw - mr);
+            cr.rectangle(right_margin_x, 0.0, (to_x(pw) - right_margin_x).max(0.0), ruler_h);
             cr.fill().unwrap();
 
             // ── Right margin marker (triangle at right edge) ──
             {
-                let rx = (pw - mr) * scale;
+                let rx = to_x(pw - mr);
                 cr.set_source_rgb(0.4, 0.4, 0.4);
                 cr.move_to(rx, ruler_h);
                 cr.line_to(rx - 5.0, ruler_h - 10.0);
@@ -182,7 +193,7 @@ mod imp {
 
             // First-line indent (top triangle pointing down)
             {
-                let ix = (fl - ml) * scale;
+                let ix = to_x(fl);
                 cr.set_source_rgb(0.3, 0.3, 0.3);
                 cr.move_to(ix, 0.0);
                 cr.line_to(ix - 5.0, 10.0);
@@ -193,7 +204,7 @@ mod imp {
 
             // Left indent (bottom triangle pointing up)
             {
-                let ix = (li - ml) * scale;
+                let ix = to_x(li);
                 cr.set_source_rgb(0.3, 0.3, 0.3);
                 cr.move_to(ix, ruler_h);
                 cr.line_to(ix - 5.0, ruler_h - 10.0);
@@ -204,7 +215,7 @@ mod imp {
 
             // ── Tab stops (L-shaped) ──
             for (i, ts) in self.tab_stops.borrow().iter().enumerate() {
-                let tx = (ts.position_pt - ml) * scale;
+                let tx = to_x(ts.position_pt);
                 if tx < 0.0 || tx > w { continue; }
                 cr.set_source_rgb(0.4, 0.4, 0.4);
                 cr.set_line_width(1.0);
@@ -346,6 +357,20 @@ impl Ruler {
     pub fn first_line_indent(&self) -> f64 { self.imp().first_line_indent.get() }
     pub fn left_indent(&self) -> f64 { self.imp().left_indent.get() }
 
+    /// Align the ruler to the on-screen page: `origin` is the page's
+    /// left edge in ruler coordinates, `width` its pixel width. Only
+    /// redraws when the geometry actually changes (safe per-frame).
+    pub fn set_screen_page(&self, origin: f64, width: f64) {
+        let imp = self.imp();
+        if (imp.screen_origin.get() - origin).abs() > 0.5
+            || (imp.screen_width.get() - width).abs() > 0.5
+        {
+            imp.screen_origin.set(origin);
+            imp.screen_width.set(width);
+            self.queue_draw();
+        }
+    }
+
     /// Set unit system (true = metric/cm, false = imperial/inches).
     pub fn set_metric(&self, metric: bool) {
         self.imp().use_metric.set(metric);
@@ -374,24 +399,30 @@ impl Ruler {
 
     // ── Internal hit testing & drag ─────────────────────────────────
 
-    fn pt_to_x(&self, pt: f64) -> f64 {
+    /// (origin, scale) of the page→widget mapping; must match snapshot.
+    fn mapping(&self) -> (f64, f64) {
         let imp = self.imp();
         let w = self.width() as f64;
         let pw = imp.page_width.get();
-        if pw <= 0.0 { return 0.0; }
-        let scale = w / pw;
-        let ml = imp.margin_left.get();
-        (pt - ml) * scale
+        if pw <= 0.0 { return (0.0, 1.0); }
+        let sw = imp.screen_width.get();
+        if sw > 0.0 {
+            (imp.screen_origin.get(), sw / pw)
+        } else {
+            let sc = w / pw;
+            (-imp.margin_left.get() * sc, sc)
+        }
+    }
+
+    fn pt_to_x(&self, pt: f64) -> f64 {
+        let (origin, scale) = self.mapping();
+        origin + pt * scale
     }
 
     fn x_to_pt(&self, x: f64) -> f64 {
-        let imp = self.imp();
-        let w = self.width() as f64;
-        let pw = imp.page_width.get();
-        if pw <= 0.0 { return 0.0; }
-        let scale = w / pw;
-        let ml = imp.margin_left.get();
-        (x / scale) + ml
+        let (origin, scale) = self.mapping();
+        if scale == 0.0 { return 0.0; }
+        (x - origin) / scale
     }
 
     fn handle_press(&self, _gesture: &gtk::GestureClick, x: f64, y: f64, n_press: i32) {

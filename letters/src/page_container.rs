@@ -280,6 +280,23 @@ impl PageContainer {
         this
     }
 
+    /// On-screen page geometry: (left edge x, pixel width) in this
+    /// widget's coordinates. Mirrors the snapshot math so the ruler can
+    /// align its origin to the visible page edge.
+    pub fn page_screen_geometry(&self) -> (f64, f64) {
+        let imp = self.imp();
+        let w = self.width() as f64;
+        let pw = imp.page_width.get();
+        if w <= 0.0 || pw <= 0.0 {
+            return (0.0, 0.0);
+        }
+        let pad = 24.0;
+        let zoom_factor = imp.zoom_level.get() / 100.0;
+        let scale = ((w - pad * 2.0) / pw).min(1.5) * zoom_factor;
+        let sw = pw * scale;
+        ((w - sw) / 2.0, sw)
+    }
+
     pub fn set_page_size(&self, width_pt: f64, height_pt: f64) {
         let imp = self.imp();
         imp.page_width.set(width_pt);

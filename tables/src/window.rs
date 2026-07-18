@@ -634,14 +634,23 @@ impl TablesWindow {
         }
 
         // ── Content stack ───────────────────────────────────────────────
-        let scroll_grid = gtk4::Grid::new();
+        // Overlay scrollbars (GNOME idiom): thin indicators floating over
+        // the grid edges instead of reserved gutters with a dead corner.
+        let scroll_grid = gtk4::Overlay::new();
         scroll_grid.set_vexpand(true);
         scroll_grid.set_hexpand(true);
         let h_scroll = gtk4::Scrollbar::new(gtk4::Orientation::Horizontal, Some(&h_adj));
         let v_scroll = gtk4::Scrollbar::new(gtk4::Orientation::Vertical, Some(&v_adj));
-        scroll_grid.attach(&drawing_area, 0, 0, 1, 1);
-        scroll_grid.attach(&v_scroll, 1, 0, 1, 1);
-        scroll_grid.attach(&h_scroll, 0, 1, 1, 1);
+        h_scroll.set_valign(gtk4::Align::End);
+        h_scroll.set_margin_end(14); // keep clear of the vertical bar
+        v_scroll.set_halign(gtk4::Align::End);
+        v_scroll.set_margin_bottom(14);
+        for sb in [&h_scroll, &v_scroll] {
+            sb.add_css_class("overlay-indicator");
+        }
+        scroll_grid.set_child(Some(&drawing_area));
+        scroll_grid.add_overlay(&v_scroll);
+        scroll_grid.add_overlay(&h_scroll);
 
         let stack = gtk4::Stack::new();
         stack.set_transition_type(gtk4::StackTransitionType::Crossfade);
