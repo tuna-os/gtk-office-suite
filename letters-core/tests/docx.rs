@@ -234,3 +234,26 @@ fn styled_table_cell_survives() {
         .expect("cell lost");
     assert!(cell.runs.iter().any(|r| r.style.bold), "cell bold lost");
 }
+
+#[test]
+fn page_breaks_and_named_styles_survive() {
+    let mut d = Document::from_plain_text("My Title\nsubtitle here\nchapter two starts");
+    d.paragraphs[0].style.named_style = Some("Title".into());
+    d.paragraphs[1].style.named_style = Some("Subtitle".into());
+    d.paragraphs[2].style.page_break_before = true;
+    let rt = round_trip(&d);
+    assert_eq!(rt.paragraphs[0].style.named_style.as_deref(), Some("Title"));
+    assert_eq!(rt.paragraphs[1].style.named_style.as_deref(), Some("Subtitle"));
+    assert!(rt.paragraphs[2].style.page_break_before, "page break lost");
+    assert!(!rt.paragraphs[0].style.page_break_before);
+}
+
+#[test]
+fn header_footer_survive() {
+    let mut d = Document::from_plain_text("body text");
+    d.header = Some("Quarterly Report".into());
+    d.footer = Some("Page {page}".into());
+    let rt = round_trip(&d);
+    assert_eq!(rt.header.as_deref(), Some("Quarterly Report"));
+    assert_eq!(rt.footer.as_deref(), Some("Page {page}"));
+}

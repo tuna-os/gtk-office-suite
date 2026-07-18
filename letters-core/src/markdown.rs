@@ -153,7 +153,7 @@ pub fn parse(md: &str) -> Document {
     }
     if let Some(p) = current.take() { paragraphs.push(p); }
 
-    let mut doc = Document { paragraphs };
+    let mut doc = Document { paragraphs, header: None, footer: None };
     if doc.paragraphs.is_empty() {
         doc = Document::new();
     }

@@ -101,6 +101,11 @@ pub struct ParaStyle {
     pub code_block: Option<String>,
     /// Block quote membership.
     pub block_quote: bool,
+    /// Start this paragraph on a new page.
+    pub page_break_before: bool,
+    /// Named document style (e.g. "Title", "Subtitle"); orthogonal to
+    /// heading levels.
+    pub named_style: Option<String>,
     /// Table membership: this paragraph lives in the given cell. The
     /// document stays a flat paragraph list (offset invariants intact);
     /// consecutive paragraphs sharing a `table` id form one table, and
@@ -117,7 +122,7 @@ pub struct TableCell {
 
 impl Default for ParaStyle {
     fn default() -> Self {
-        Self { heading: None, alignment: Alignment::Left, list: ListKind::None, line_spacing: 1.0, code_block: None, block_quote: false, table_cell: None }
+        Self { heading: None, alignment: Alignment::Left, list: ListKind::None, line_spacing: 1.0, code_block: None, block_quote: false, page_break_before: false, named_style: None, table_cell: None }
     }
 }
 
@@ -198,6 +203,9 @@ impl Paragraph {
 #[derive(Clone, Debug, PartialEq)]
 pub struct Document {
     pub paragraphs: Vec<Paragraph>,
+    /// Page header/footer text; "{page}" substitutes the page number.
+    pub header: Option<String>,
+    pub footer: Option<String>,
 }
 
 impl Default for Document {
@@ -206,7 +214,7 @@ impl Default for Document {
 
 impl Document {
     pub fn new() -> Self {
-        Self { paragraphs: vec![Paragraph::default()] }
+        Self { paragraphs: vec![Paragraph::default()], header: None, footer: None }
     }
 
     pub fn from_plain_text(text: &str) -> Self {
@@ -217,7 +225,7 @@ impl Document {
                 runs: if line.is_empty() { vec![] } else { vec![Run::plain(line)] },
             })
             .collect::<Vec<_>>();
-        let mut d = Self { paragraphs };
+        let mut d = Self { paragraphs, header: None, footer: None };
         d.ensure_non_empty();
         d
     }

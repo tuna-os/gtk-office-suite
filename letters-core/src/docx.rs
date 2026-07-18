@@ -66,9 +66,16 @@ pub fn read(path: &str) -> Result<Document, String> {
     }
 
     if paragraphs.is_empty() {
-        return Ok(Document::new());
+        let mut d = Document::new();
+        d.header = doc.header_text();
+        d.footer = doc.footer_text();
+        return Ok(d);
     }
-    Ok(Document { paragraphs })
+    Ok(Document {
+        paragraphs,
+        header: doc.header_text(),
+        footer: doc.footer_text(),
+    })
 }
 
 /// Write a Document to a .docx file.
@@ -132,6 +139,12 @@ pub fn write(doc: &Document, path: &str) -> Result<(), String> {
         if para.style.block_quote {
             p = p.style("Quote");
         }
+        if let Some(name) = &para.style.named_style {
+            p = p.style(name);
+        }
+        if para.style.page_break_before {
+            p = p.page_break_before(true);
+        }
         p = match para.style.alignment {
             Alignment::Left => p,
             Alignment::Center => p.alignment(rdocx::Alignment::Center),
@@ -188,6 +201,12 @@ pub fn write(doc: &Document, path: &str) -> Result<(), String> {
             }
         }
     }
+    if let Some(h) = &doc.header {
+        out.set_header(h);
+    }
+    if let Some(f) = &doc.footer {
+        out.set_footer(f);
+    }
     out.save(path).map_err(|e| format!("Cannot save {}: {}", path, e))
 }
 
@@ -205,6 +224,11 @@ fn map_paragraph(doc: &rdocx::Document, p: &rdocx::ParagraphRef<'_>) -> Paragrap
         Some(rdocx::Alignment::Justify) => Alignment::Justify,
         _ => Alignment::Left,
     };
+    let named_style = match p.style_id() {
+        Some(id @ ("Title" | "Subtitle")) => Some(id.to_string()),
+        _ => None,
+    };
+    let page_break_before = p.is_page_break_before();
     let list = match p.numbering() {
         Some((num_id, _level)) => match doc.numbering_is_bullet(num_id) {
             Some(false) => ListKind::Numbered,
@@ -274,7 +298,11 @@ fn map_paragraph(doc: &rdocx::Document, p: &rdocx::ParagraphRef<'_>) -> Paragrap
         });
     }
     let mut para = Paragraph {
-        style: ParaStyle { heading, alignment, list, code_block, block_quote, ..Default::default() },
+        style: ParaStyle {
+            heading, alignment, list, code_block, block_quote,
+            named_style, page_break_before,
+            ..Default::default()
+        },
         runs,
     };
     normalize(&mut para);

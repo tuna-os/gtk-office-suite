@@ -134,7 +134,7 @@ pub fn capture_from_buffer(buf: &gtk::TextBuffer) -> Document {
     capture_list_marker(&mut current);
     paragraphs.push(current);
 
-    Document { paragraphs }
+    Document { paragraphs, header: None, footer: None }
 }
 
 /// The editor shows lists as literal "- " / "N. " markers; the model wants
