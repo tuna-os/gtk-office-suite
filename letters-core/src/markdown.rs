@@ -289,9 +289,8 @@ pub fn serialize(doc: &Document) -> String {
                     .map(str::len)
                     .max()
                     .unwrap_or(0);
-                let fence: String = std::iter::repeat(fence_char)
-                    .take((longest + 1).max(3))
-                    .collect();
+                let fence: String =
+                    fence_char.to_string().repeat((longest + 1).max(3));
                 out.push_str(&fence);
                 out.push_str(lang);
                 out.push('\n');

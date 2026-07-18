@@ -892,6 +892,16 @@ impl TablesWindow {
             mk("cycle-cell-border", toggle_border);
             mk("merge-cells", toggle_merge);
             mk("insert-chart", show_chart_dialog);
+            {
+                let s = state.clone();
+                let da = drawing_area.clone();
+                let wr = win_ref.clone();
+                let act = gtk4::gio::SimpleAction::new("conditional-format", None);
+                act.connect_activate(move |_, _| {
+                    show_conditional_format_dialog(&s, &da, wr.borrow().as_ref());
+                });
+                app.add_action(&act);
+            }
             mk("export-pdf", export_pdf);
         }
 
@@ -900,6 +910,7 @@ impl TablesWindow {
             ("app.cycle-cell-border", "Cycle Cell Border"),
             ("app.merge-cells", "Merge Cells"),
             ("app.insert-chart", "Insert Chart…"),
+            ("app.conditional-format", "Conditional Formatting…"),
             ("app.export-pdf", "Export as PDF…"),
             ("app.open-file-dialog", "Open Spreadsheet…"),
             ("app.save-file-dialog", "Save as Excel Workbook…"),
@@ -978,6 +989,8 @@ impl TablesWindow {
                                         sheet.sync_from_engine(&ss.engine);
                                         sheet.charts =
                                             tables_core::io::read_charts_from_xlsx(&path_str);
+                                        sheet.cond_rules =
+                                            tables_core::io::read_cond_rules_from_xlsx(&path_str);
                                         ss.sheets.clear();
                                         ss.sheets.push(Rc::new(RefCell::new(sheet)));
                                         ss.active_sheet = 0;
@@ -1231,6 +1244,7 @@ impl TablesWindow {
                 SheetModel::new("Sheet1", rows.max(DEFAULT_ROWS), cols.max(DEFAULT_COLS), 0);
             sheet.sync_from_engine(&ss.engine);
             sheet.charts = tables_core::io::read_charts_from_xlsx(path);
+            sheet.cond_rules = tables_core::io::read_cond_rules_from_xlsx(path);
             ss.sheets.clear();
             ss.sheets.push(Rc::new(RefCell::new(sheet)));
             ss.active_sheet = 0;
@@ -1361,4 +1375,93 @@ fn update_grid_a11y(da: &gtk4::DrawingArea, col: &str, row: usize, value: &str) 
         format!("cell {}{}: {}", col, row + 1, value)
     };
     da.update_property(&[gtk4::accessible::Property::Description(&desc)]);
+}
+
+
+/// Conditional Formatting dialog: operator + threshold(s) + fill color,
+/// applied to the current selection (ADR 0003 §4 — cell-value rules).
+fn show_conditional_format_dialog(
+    state: &Rc<RefCell<AppState>>,
+    da: &gtk4::DrawingArea,
+    parent: Option<&adw::ApplicationWindow>,
+) {
+    use tables_core::sheet::{CondOp, CondRule};
+    let dialog = adw::Dialog::builder()
+        .title("Conditional Formatting")
+        .content_width(360)
+        .build();
+
+    let op_combo = gtk::DropDown::from_strings(&["Greater than", "Less than", "Equal to", "Between"]);
+    let value_entry = gtk::Entry::builder().placeholder_text("Value").build();
+    let value2_entry = gtk::Entry::builder().placeholder_text("Upper bound").build();
+    value2_entry.set_sensitive(false);
+    {
+        let v2 = value2_entry.clone();
+        op_combo.connect_selected_notify(move |dd| v2.set_sensitive(dd.selected() == 3));
+    }
+    let color_btn = gtk::ColorDialogButton::new(Some(gtk::ColorDialog::new()));
+    color_btn.set_rgba(&gtk4::gdk::RGBA::new(1.0, 0.75, 0.75, 1.0));
+
+    let grid = gtk4::Grid::new();
+    grid.set_row_spacing(8);
+    grid.set_column_spacing(12);
+    grid.set_margin_top(12);
+    grid.set_margin_bottom(12);
+    grid.set_margin_start(12);
+    grid.set_margin_end(12);
+    let lbl = |t: &str| {
+        let l = gtk::Label::new(Some(t));
+        l.set_halign(gtk::Align::Start);
+        l
+    };
+    grid.attach(&lbl("Condition"), 0, 0, 1, 1);
+    grid.attach(&op_combo, 1, 0, 1, 1);
+    grid.attach(&lbl("Value"), 0, 1, 1, 1);
+    grid.attach(&value_entry, 1, 1, 1, 1);
+    grid.attach(&lbl("And"), 0, 2, 1, 1);
+    grid.attach(&value2_entry, 1, 2, 1, 1);
+    grid.attach(&lbl("Fill"), 0, 3, 1, 1);
+    grid.attach(&color_btn, 1, 3, 1, 1);
+
+    let apply = gtk::Button::with_label("Apply to Selection");
+    apply.add_css_class("suggested-action");
+    grid.attach(&apply, 1, 4, 1, 1);
+
+    {
+        let s = state.clone();
+        let da = da.clone();
+        let dlg = dialog.clone();
+        let op_combo = op_combo.clone();
+        let value_entry = value_entry.clone();
+        let value2_entry = value2_entry.clone();
+        let color_btn = color_btn.clone();
+        apply.connect_clicked(move |_| {
+            let Ok(value) = value_entry.text().trim().parse::<f64>() else { return };
+            let value2 = value2_entry.text().trim().parse::<f64>().unwrap_or(value);
+            let op = match op_combo.selected() {
+                0 => CondOp::Greater,
+                1 => CondOp::Less,
+                2 => CondOp::Equal,
+                _ => CondOp::Between,
+            };
+            let rgba = color_btn.rgba();
+            let fill = format!(
+                "{:02X}{:02X}{:02X}",
+                (rgba.red() * 255.0) as u8,
+                (rgba.green() * 255.0) as u8,
+                (rgba.blue() * 255.0) as u8
+            );
+            let st = s.borrow();
+            let sheet_rc = st.sheets[st.active_sheet].clone();
+            let mut sheet = sheet_rc.borrow_mut();
+            let (r0, c0, r1, c1) = sheet.selection_rect();
+            sheet.cond_rules.push(CondRule { range: (r0, c0, r1, c1), op, value, value2, fill });
+            drop(sheet);
+            da.queue_draw();
+            dlg.close();
+        });
+    }
+
+    dialog.set_child(Some(&grid));
+    dialog.present(parent);
 }

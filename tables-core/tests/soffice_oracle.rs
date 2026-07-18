@@ -550,3 +550,35 @@ fn chart_survives_calc_rewrite() {
     assert_eq!(c.kind, ChartKind::Bar, "chart kind changed: {c:?}");
     assert_eq!(c.val, (1, 1, 3), "values range changed: {c:?}");
 }
+
+// ── Conditional formatting (ADR 0003 §4) ─────────────────────────────
+
+/// A cell-value rule must survive a Calc rewrite: operator, threshold,
+/// and range intact when read back by our own parser.
+#[test]
+fn cond_rule_survives_calc_rewrite() {
+    if !require_or_skip() { return; }
+    use tables_core::sheet::{CondOp, CondRule, SheetModel};
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("cf.xlsx");
+    let mut sh = SheetModel::new("Sheet1", 10, 5, 0);
+    for r in 0..5 {
+        sh.data[r][1] = format!("{}", r * 10);
+    }
+    sh.cond_rules.push(CondRule {
+        range: (0, 1, 4, 1),
+        op: CondOp::Greater,
+        value: 25.0,
+        value2: 25.0,
+        fill: "FFC0C0".into(),
+    });
+    tables_core::io::save_sheets_to_xlsx(path.to_str().unwrap(), &[sh]).unwrap();
+
+    let rewritten = convert(&path, "xlsx").expect("Calc rewrite failed");
+    let rules = tables_core::io::read_cond_rules_from_xlsx(rewritten.to_str().unwrap());
+    assert!(!rules.is_empty(), "Calc dropped the conditional format");
+    let r = &rules[0];
+    assert_eq!(r.op, CondOp::Greater, "operator changed: {r:?}");
+    assert!((r.value - 25.0).abs() < 1e-9, "threshold changed: {r:?}");
+    assert_eq!(r.range, (0, 1, 4, 1), "range changed: {r:?}");
+}

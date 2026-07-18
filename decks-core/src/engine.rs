@@ -716,11 +716,7 @@ pub fn parse_master_shapes(xml: &str) -> (Option<String>, Vec<SlideObject>) {
         text: Vec<String>,
     }
     let mut cur: Option<Pending> = None;
-    loop {
-        let ev = match reader.read_event_into(&mut buf) {
-            Ok(ev) => ev,
-            Err(_) => break,
-        };
+    while let Ok(ev) = reader.read_event_into(&mut buf) {
         match ev {
             Event::Start(ref e) | Event::Empty(ref e) => match e.name().as_ref() {
                 b"p:bg" => in_bg = true,

@@ -140,9 +140,24 @@ pub fn draw_grid(
             let in_range = r >= sr0 && r <= sr1 && c >= sc0 && c <= sc1;
             let border = &sheet.borders[r][c];
 
-            // Cell bg — whole selection range gets the accent wash.
+            // Cell bg — selection wash wins; else a matching
+            // conditional-formatting rule paints its fill.
+            let cond_fill = sheet.cond_rules.iter().find_map(|rule| {
+                if !rule.contains(r, c) {
+                    return None;
+                }
+                let v: f64 = sheet.data[r][c].parse().ok()?;
+                if rule.matches(v) { Some(rule.fill.clone()) } else { None }
+            });
             if in_range {
                 cr.set_source_rgb(0.8, 0.85, 0.95);
+            } else if let Some(hex) = cond_fill {
+                let p = |i| u8::from_str_radix(&hex[i..i + 2], 16).unwrap_or(255) as f64 / 255.0;
+                if hex.len() >= 6 {
+                    cr.set_source_rgb(p(0), p(2), p(4));
+                } else {
+                    cr.set_source_rgb(1.0, 1.0, 1.0);
+                }
             } else {
                 cr.set_source_rgb(1.0, 1.0, 1.0);
             }

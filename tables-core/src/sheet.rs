@@ -120,6 +120,46 @@ pub fn xy_to_cell(x: f64, y: f64, scroll_x: f64, sheet: &SheetModel) -> Option<(
     None
 }
 
+/// A cell-value conditional-formatting rule (ADR 0003 §4): when a
+/// numeric cell in `range` satisfies the comparison, paint `fill`.
+#[derive(Clone, Debug, PartialEq)]
+pub struct CondRule {
+    /// (first_row, first_col, last_row, last_col), zero-based inclusive.
+    pub range: (usize, usize, usize, usize),
+    pub op: CondOp,
+    pub value: f64,
+    /// Upper bound, used by Between only.
+    pub value2: f64,
+    /// Fill color as RRGGBB hex (no '#').
+    pub fill: String,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum CondOp {
+    Greater,
+    Less,
+    Equal,
+    Between,
+}
+
+impl CondRule {
+    /// Does `v` satisfy this rule?
+    pub fn matches(&self, v: f64) -> bool {
+        match self.op {
+            CondOp::Greater => v > self.value,
+            CondOp::Less => v < self.value,
+            CondOp::Equal => (v - self.value).abs() < 1e-9,
+            CondOp::Between => v >= self.value.min(self.value2) && v <= self.value.max(self.value2),
+        }
+    }
+
+    /// Is (row, col) inside this rule's range?
+    pub fn contains(&self, row: usize, col: usize) -> bool {
+        let (r0, c0, r1, c1) = self.range;
+        row >= r0 && row <= r1 && col >= c0 && col <= c1
+    }
+}
+
 /// One embedded chart: kind, title, and the data it draws, as
 /// zero-based inclusive cell ranges on this sheet.
 #[derive(Clone, Debug, PartialEq)]
@@ -163,6 +203,8 @@ pub struct SheetModel {
     pub merges: Vec<(usize, usize, usize, usize)>,
     /// Charts anchored on this sheet, persisted into xlsx (ADR 0003 §3).
     pub charts: Vec<ChartSpec>,
+    /// Conditional-formatting rules (ADR 0003 §4).
+    pub cond_rules: Vec<CondRule>,
     pub validations: Vec<Vec<Option<ValidationRule>>>,
     #[allow(dead_code)] // reserved for multi-engine sheets
     engine_idx: usize,
@@ -184,6 +226,7 @@ impl SheetModel {
             frozen_rows: 0, frozen_cols: 0,
             merges: Vec::new(),
             charts: Vec::new(),
+            cond_rules: Vec::new(),
             validations: vec![vec![None; cols]; rows],
             engine_idx,
         }
