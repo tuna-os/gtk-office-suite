@@ -26,9 +26,11 @@ without a test that fails first.
    I6 smoke tests. Remaining: on-screen extents still report position
    (0,0) (size is correct) — the widget-relative→screen translation
    needs the same treatment; keep driving tests by name/keyboard.
-3. **Letters bridge list gap** (the one red I5 in PARITY). The buffer
-   keeps literal "- " for lists; model↔buffer translation should carry
-   ListKind. *Prove:* existing red bridge test goes green.
+3. ✅ **Letters bridge list gap** — already closed: the bridge renders
+   ListKind as visible markers and captures them back losslessly
+   (bridge round-trip test green); the PARITY red was stale. The
+   remaining aesthetic step (native list rendering instead of literal
+   markers in the buffer) folds into the grid-paste-as-table work.
 4. **rdocx upstream follow-up**: land the ParagraphRef line-spacing
    getter (and numbering/highlight getters, hyperlink write) in
    tensorbee/rdocx#6, then close docx line-spacing read (PARITY red),

@@ -32,7 +32,7 @@ anything interactive needs I5 or I6. Cross-app clipboard: fragment matrix I1 + p
 | Styled runs (b/i/u/s, highlight, inline code) | ✅ | I1 model, I2 docx 17/17, I3 109/109, I4, I5 |
 | Headings 1–6 | ✅ | I1, I2, I3, I5 |
 | Paragraph alignment | ✅ | I1–I5 |
-| Bullet/numbered lists (flat) | ✅ model/docx, ❌ bridge | I1–I3; **red I5** (buffer keeps literal "- ") |
+| Bullet/numbered lists (flat) | ✅ | I1–I3 + I5: markers render as the buffer representation and capture back to ListKind (bridge round-trip green) |
 | Hyperlinks | ✅ | I2, I5 (dynamic link:<url> tags) |
 | Code blocks | ✅ | I1, I2 (CommonMark fenced 24/29), I3 |
 | Markdown save/load with formatting | ✅ | I2 CommonMark ratchet **630/652 — target met** (raw HTML preserved verbatim; remaining 22 are escape/entity/autolink edge cases) |
