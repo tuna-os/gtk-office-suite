@@ -19,7 +19,7 @@ Tier 3 items each need an explicit decision to enter scope.
 | I7 | VLM visual audit | scheduled, non-gating | rendering/HIG regressions |
 
 Rule of thumb: every feature needs I1; anything that persists needs I2–I4;
-anything interactive needs I5 or I6.
+anything interactive needs I5 or I6. Cross-app clipboard: fragment matrix I1 + per-app GDK glue I6 (copy/paste round trips in Letters and Tables).
 
 ---
 

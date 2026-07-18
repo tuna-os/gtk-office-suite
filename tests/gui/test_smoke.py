@@ -258,6 +258,92 @@ class TablesNameBoxSmoke(BaseGUITestCase):
         self.assertIsNone(self.process.poll(), "tables crashed during keyboard selection")
 
 
+class TablesClipboardSmoke(BaseGUITestCase):
+    """Suite-clipboard glue: Ctrl+C publishes the fragment MIME and
+    Ctrl+V pastes it back with formulas still live. (The cross-app
+    conversion matrix is unit-tested in the core crates; this exercises
+    the GDK provider/reader path end to end.)"""
+
+    app_name = "tables"
+
+    def test_copy_paste_round_trip_keeps_formula_live(self):
+        from dogtail import rawinput
+        import subprocess
+
+        subprocess.run(["gapplication", "action", "org.tunaos.tables-rust", "new-document"])
+        time.sleep(1.5)
+
+        def put(ref, value):
+            rawinput.keyCombo("<Control>g")
+            time.sleep(0.2)
+            rawinput.typeText(ref)
+            rawinput.keyCombo("Return")
+            time.sleep(0.3)
+            rawinput.typeText(value)
+            rawinput.keyCombo("Return")
+            time.sleep(0.3)
+
+        put("A1", "2")
+        put("B1", "3")
+        put("C1", "=A1+B1")
+        # Select C1 (grid has focus after the commit) and copy.
+        rawinput.keyCombo("<Control>g")
+        time.sleep(0.2)
+        rawinput.typeText("C1")
+        rawinput.keyCombo("Return")
+        time.sleep(0.3)
+        rawinput.keyCombo("Escape")
+        time.sleep(0.3)
+        rawinput.keyCombo("<Control>c")
+        time.sleep(0.5)
+        # Jump to E1 and paste; the formula re-evaluates there.
+        rawinput.keyCombo("<Control>g")
+        time.sleep(0.2)
+        rawinput.typeText("E1")
+        rawinput.keyCombo("Return")
+        time.sleep(0.3)
+        rawinput.keyCombo("Escape")
+        time.sleep(0.3)
+        rawinput.keyCombo("<Control>v")
+        time.sleep(1.0)
+        # Navigate away and back so the a11y description reflects E1.
+        rawinput.keyCombo("Right")
+        rawinput.keyCombo("Left")
+        time.sleep(0.5)
+        grid = self.app.child(name="Spreadsheet grid")
+        self.assertIn("E1", grid.description, f"desc: {grid.description!r}")
+        self.assertIn("5", grid.description,
+                      f"pasted formula did not evaluate: {grid.description!r}")
+        self.assertIsNone(self.process.poll(), "tables crashed during clipboard round trip")
+
+
+class LettersClipboardSmoke(BaseGUITestCase):
+    """Ctrl+C on a selection offers the suite fragment; Ctrl+V pastes it
+    back through the fragment path (not the TextView default)."""
+
+    app_name = "letters"
+
+    def test_copy_paste_round_trip(self):
+        from dogtail import rawinput
+
+        self.app.child(name="New Document", roleName="push button").do_action(0)
+        time.sleep(1.5)
+        rawinput.typeText("alpha beta")
+        time.sleep(0.5)
+        rawinput.keyCombo("<Control>a")
+        time.sleep(0.3)
+        rawinput.keyCombo("<Control>c")
+        time.sleep(0.5)
+        rawinput.keyCombo("<Control>End")
+        time.sleep(0.3)
+        rawinput.keyCombo("<Control>v")
+        time.sleep(1.0)
+        editor = self.app.child(roleName="text")
+        self.assertEqual(editor.text, "alpha betaalpha beta",
+                         f"editor text: {editor.text!r}")
+        self.assertIsNone(self.process.poll(), "letters crashed during clipboard round trip")
+
+
 class DecksSelectionSmoke(BaseGUITestCase):
     """Object selection updates the canvas a11y description and the
     inspector (fit-to-viewport geometry keeps coordinates stable)."""

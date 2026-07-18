@@ -9,12 +9,14 @@ without a test that fails first.
 
 ## Now — next few sessions
 
-1. **Cross-app clipboard, second half** (task #25). The pure paste
-   matrix (`*/src/fragment.rs`) is done and unit-tested; the GDK
-   `ContentProvider`/clipboard glue per app is not. Copy in Tables must
-   offer suite-JSON + `text/html` + TSV; paste in Letters must build a
-   real cell-tagged table. *Prove:* one I6 smoke per direction
-   (Tables→Letters, Letters→Decks, Decks→Letters, external HTML→each).
+1. ✅ **Cross-app clipboard, second half** (task #25, done 2026-07-18).
+   GDK glue in all three apps: copy offers suite-JSON + `text/html` +
+   plain/TSV; paste prefers the suite fragment (Tables formulas stay
+   live, Letters styled runs keep their tags, Decks pastes text boxes).
+   Proven by I6 copy/paste round trips in Letters and Tables. Still
+   open from the original spec: Letters pasting a grid as a real
+   cell-tagged table (blocked on the buffer-table bridge gap, item 3)
+   and true two-app smoke tests (need a WM in the harness).
 2. **Virtual a11y children** (task #23, deep half of issue #87).
    Per-cell / per-object AT-SPI nodes for the Tables grid and Decks
    canvas. This also unblocks honest GUI testing — today the canvases
