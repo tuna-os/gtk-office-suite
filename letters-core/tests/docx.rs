@@ -98,7 +98,6 @@ fn alignment_survives() {
 // Run with `cargo test -- --ignored` to see the guiding set.
 
 #[test]
-#[ignore = "RED: rdocx has no numbering read getter — list kind is lost on reload (fix upstream in hanthor/rdocx)"]
 fn list_kind_survives() {
     let mut d = Document::from_plain_text("first item\nsecond item");
     d.paragraphs[0].style.list = ListKind::Bullet;
@@ -109,7 +108,6 @@ fn list_kind_survives() {
 }
 
 #[test]
-#[ignore = "RED: rdocx has no highlight read getter on RunRef (fix upstream in hanthor/rdocx)"]
 fn highlight_survives() {
     let mut d = Document::from_plain_text("glow");
     d.apply_run_style(0, 4, &StylePatch::set_highlight(true));
@@ -118,7 +116,6 @@ fn highlight_survives() {
 }
 
 #[test]
-#[ignore = "RED: rdocx has no hyperlink write API — links are dropped on save (fix upstream in hanthor/rdocx)"]
 fn link_survives() {
     let mut d = Document::from_plain_text("click here");
     d.apply_run_style(6, 10, &StylePatch::set_link(Some("https://gnome.org".into())));

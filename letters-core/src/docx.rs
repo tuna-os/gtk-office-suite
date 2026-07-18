@@ -19,7 +19,7 @@ pub fn read(path: &str) -> Result<Document, String> {
         if p.style_id() == Some("HorizontalLine") && p.text().is_empty() {
             continue;
         }
-        paragraphs.push(map_paragraph(&p));
+        paragraphs.push(map_paragraph(&doc, &p));
     }
 
     // Tables are not modeled yet; flatten their cell paragraphs (styles and
@@ -41,7 +41,7 @@ pub fn read(path: &str) -> Result<Document, String> {
                 let Some(cell) = row.cell(ci) else { continue };
                 for cp in cell.paragraphs() {
                     if cp.text().is_empty() { continue; }
-                    paragraphs.push(map_paragraph(&cp));
+                    paragraphs.push(map_paragraph(&doc, &cp));
                 }
             }
         }
@@ -71,23 +71,29 @@ pub fn write(doc: &Document, path: &str) -> Result<(), String> {
             Alignment::Right => p.alignment(rdocx::Alignment::Right),
             Alignment::Justify => p.alignment(rdocx::Alignment::Justify),
         };
+        drop(p);
         for run in &para.runs {
+            if let Some(url) = &run.style.link {
+                // Hyperlinks need a document-level relationship; styles on
+                // link text are not yet carried through append_hyperlink.
+                out.append_hyperlink(&run.text, url);
+                continue;
+            }
+            let mut p = out.last_paragraph_mut().expect("paragraph just added");
             let mut r = p.add_run(&run.text);
             if run.style.bold { r = r.bold(true); }
             if run.style.italic { r = r.italic(true); }
             if run.style.underline { r = r.underline(true); }
             if run.style.strikethrough { r = r.strike(true); }
             if run.style.highlight { r = r.highlight("yellow"); }
+            if run.style.code { r = r.style("SourceText"); }
         }
     }
     out.save(path).map_err(|e| format!("Cannot save {}: {}", path, e))
 }
 
 /// Map one rdocx paragraph (body or table cell) into a model paragraph.
-/// NOTE: list kind and highlight cannot be read back yet — rdocx has no
-/// numbering/highlight getters on ParagraphRef/RunRef. Red tests in
-/// tests/docx.rs track this; fix lands upstream in hanthor/rdocx.
-fn map_paragraph(p: &rdocx::ParagraphRef<'_>) -> Paragraph {
+fn map_paragraph(doc: &rdocx::Document, p: &rdocx::ParagraphRef<'_>) -> Paragraph {
     let heading = p.style_id().and_then(style_id_to_heading);
     // LibreOffice emits PreformattedText for <pre>/code blocks.
     let code_block = matches!(p.style_id(), Some("PreformattedText") | Some("HTMLPreformatted"))
@@ -98,8 +104,25 @@ fn map_paragraph(p: &rdocx::ParagraphRef<'_>) -> Paragraph {
         Some(rdocx::Alignment::Justify) => Alignment::Justify,
         _ => Alignment::Left,
     };
+    let list = match p.numbering() {
+        Some((num_id, _level)) => match doc.numbering_is_bullet(num_id) {
+            Some(false) => ListKind::Numbered,
+            // Unknown num_id defaults to bullet — the safer visual guess.
+            _ => ListKind::Bullet,
+        },
+        None => ListKind::None,
+    };
+
+    // Per-run link URLs from hyperlink spans (indexes into the runs vec).
+    let spans = p.hyperlink_spans();
+    let link_for = |idx: usize| -> Option<String> {
+        spans.iter()
+            .find(|(start, end, _)| idx >= *start && idx < *end)
+            .and_then(|(_, _, rel_id)| rel_id.as_deref().and_then(|id| doc.hyperlink_url(id)))
+    };
+
     let mut runs = Vec::new();
-    for r in p.runs() {
+    for (idx, r) in p.runs().enumerate() {
         let text = r.text();
         if text.is_empty() { continue; }
         runs.push(Run {
@@ -109,12 +132,14 @@ fn map_paragraph(p: &rdocx::ParagraphRef<'_>) -> Paragraph {
                 italic: r.is_italic(),
                 underline: r.is_underline(),
                 strikethrough: r.is_strike(),
-                ..Default::default()
+                highlight: r.highlight().is_some(),
+                code: r.style_id() == Some("SourceText"),
+                link: link_for(idx),
             },
         });
     }
     let mut para = Paragraph {
-        style: ParaStyle { heading, alignment, code_block, ..Default::default() },
+        style: ParaStyle { heading, alignment, list, code_block, ..Default::default() },
         runs,
     };
     normalize(&mut para);
