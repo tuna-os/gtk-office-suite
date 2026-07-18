@@ -186,3 +186,9 @@ gtk-office-suite/
 - **GNOME HIG:** https://developer.gnome.org/hig/
 - **gtk4-rs docs:** https://gtk-rs.org/gtk4-rs/stable/latest/docs/gtk4/
 - **LibreOffice reference:** `/var/home/james/dev/libreoffice-core/`
+
+## License
+
+GPL-3.0-or-later. All source files carry SPDX headers; the core crates on
+crates.io (suite-common-core, suite-export, tables-core) are published
+under the same license.

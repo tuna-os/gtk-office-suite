@@ -2,6 +2,7 @@
 name = "decks-core"
 version = "0.1.0"
 edition = "2021"
+license = "GPL-3.0-or-later"
 
 # GTK-free presentation core: Deck/Slide/SlideObject model, PPTX I/O,
 # undo commands. Must never depend on gtk4/cairo/pango — see
