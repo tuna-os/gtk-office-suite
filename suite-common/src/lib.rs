@@ -324,6 +324,10 @@ pub struct SuiteWindow {
     pub window: adw::ApplicationWindow,
     pub toolbar_view: adw::ToolbarView,
     pub toolbar: SuiteToolbar,
+    /// The narrow-width (< 600sp) breakpoint. AdwWindow applies at most
+    /// one breakpoint at a time, so apps must add their narrow-mode
+    /// setters here rather than registering a second breakpoint.
+    pub narrow_breakpoint: adw::Breakpoint,
 }
 
 impl SuiteWindow {
@@ -364,7 +368,7 @@ impl SuiteWindow {
         ));
         bp.add_setter(&toolbar.extended_box, "visible", Some(&false.to_value()));
         bp.add_setter(&toolbar.more_button, "visible", Some(&true.to_value()));
-        win.add_breakpoint(bp);
+        win.add_breakpoint(bp.clone());
 
         // ---- Window sizing ----
         win.set_size_request(360, 300);
@@ -373,6 +377,7 @@ impl SuiteWindow {
             window: win,
             toolbar_view,
             toolbar,
+            narrow_breakpoint: bp,
         }
     }
 

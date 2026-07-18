@@ -59,10 +59,15 @@ without a test that fails first.
    two real reader bugs red-first: LO list-styles clobbering text-style
    names, and Impress's `draw:custom-shape` text (no `draw:text-box`)
    being invisible to the reader. Decks oracle suite: 20 → 27.
-8. **Adaptive/narrow-width audit** (DESIGN-UI §5): drive all three apps
-   at 400sp under Xvfb, fix what breaks; Tables fx bar and Decks
-   inspector are the likely offenders. *Prove:* smoke at narrow
-   geometry + screenshot set.
+8. ✅ **Adaptive/narrow-width audit** (done 2026-07-18): all three apps
+   screenshot-audited at 400×700 under Xvfb, start pages and editors with
+   demo documents. Letters and Tables adapt cleanly. Decks had two real
+   bugs: (a) it registered a second 600sp breakpoint — AdwWindow applies
+   at most one, so its editor demanded ~770px and clipped the header
+   bar's menu and window controls off-screen; SuiteWindow now exposes
+   `narrow_breakpoint` and Decks hangs its setters there (both split
+   views collapse, canvas min-width relaxes); (b) the status caption
+   collided with the presenter pill (hidden at narrow).
 9. **Remaining advisor polish**: Tables overlay scrollbars (replace the
    corner-grid Scrollbars), ruler origin aligned to the page edge,
    palette recency ranking (persist last-used actions in GSettings).

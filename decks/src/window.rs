@@ -376,14 +376,24 @@ impl DecksWindow {
         split_view.set_max_sidebar_width(260.0);
         split_view.set_min_sidebar_width(180.0);
 
-        // ── Breakpoint ────────────────────────────────────────────────────
-        let condition = adw::BreakpointCondition::parse("max-width: 600sp").unwrap();
-        let bp = adw::Breakpoint::new(condition);
-        let val = glib::Value::from(&true);
-        bp.add_setter(&split_view, "collapsed", Some(&val));
-
         // ── SuiteWindow chrome ────────────────────────────────────────────
         let suite_win = SuiteWindow::new(app, "Decks", vec![], vec![]);
+
+        // Narrow mode (< 600sp): AdwWindow applies at most one breakpoint,
+        // so all setters go on the shared SuiteWindow one. Both sidebars
+        // become hidden overlays and the canvas gives up its fixed minimum
+        // — otherwise the editor demands ~770px and the header bar's menu
+        // and window controls get clipped off-screen.
+        let bp = &suite_win.narrow_breakpoint;
+        let t = glib::Value::from(&true);
+        let f = glib::Value::from(&false);
+        bp.add_setter(&split_view, "collapsed", Some(&t));
+        bp.add_setter(&split_view, "show-sidebar", Some(&f));
+        bp.add_setter(&editor_split, "collapsed", Some(&t));
+        bp.add_setter(&editor_split, "show-sidebar", Some(&f));
+        bp.add_setter(&canvas_scroll, "min-content-width", Some(&glib::Value::from(&240i32)));
+        // The status caption collides with the centered presenter pill.
+        bp.add_setter(&status_label, "visible", Some(&f));
 
         // Speaker notes pane (collapsible, below the canvas)
         let notes_expander = gtk::Expander::new(Some("Speaker Notes"));
@@ -1254,9 +1264,6 @@ impl DecksWindow {
             });
             app.add_action(&act_save_as);
         }
-
-        // ── Add breakpoint to window ──────────────────────────────────────
-        suite_win.window.add_breakpoint(bp);
 
         Self {
             window: suite_win.window,
