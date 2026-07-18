@@ -95,6 +95,38 @@ valid non-empty PDF. Remove the CLI from Flatpak manifests.
 - Extend smoke tests as behaviors become assertable (tables cell entry,
   decks slide add).
 
+## Phase M — Measurement: conformance corpora + feature scorecard (cross-cutting)
+
+"Are we actually becoming a fully-featured office suite?" must be answerable
+from CI output, not vibes. Two instruments, started alongside phase 2 and
+grown with every phase:
+
+1. **Ported/mature test corpora** (vendored under `conformance/`, each with
+   LICENSE + provenance noted — only permissive/compatible sources):
+   - **CommonMark spec examples** (~650 cases, CC-BY-SA): used as an input
+     corpus for letters-core Markdown *round-trip idempotence*
+     (parse → Document → serialize → parse = same Document). We measure the
+     pass-rate; 100% is not required to merge, regressions are.
+   - **python-docx / python-pptx / openpyxl test fixtures** (MIT): real-world
+     .docx/.pptx/.xlsx files driving open-without-crash and round-trip tests
+     for letters-core, decks-core, tables-core.
+   - **IronCalc's own function tests** (MIT) as a baseline, extended with a
+     table-driven spreadsheet-function conformance suite keyed to the ODF
+     OpenFormula function list.
+   - Rejected for licensing: LibreOffice/Gnumeric test documents (MPL/GPL —
+     incompatible with vendoring into this Apache-2.0 repo).
+2. **Feature scorecard**: `FEATURES.md` per app — the target feature list of
+   a credible office suite (formatting, styles, tables-in-docs, images,
+   charts, print, formats...) where a feature may only be checked off with a
+   link to the test that proves it. A small script
+   (`conformance/scorecard.py`) counts corpus pass-rates + checked features
+   and writes them to the CI job summary, so every PR shows the number going
+   up (or refuses to let it silently go down).
+
+Acceptance: CI job summary shows per-app scorecard; conformance pass-rates
+are tracked in-repo and monotonically enforced (a PR that lowers a rate
+fails).
+
 ## Phase 6 — Guardrails so the foundation stays solid
 
 - `CONTEXT.md` at root: domain glossary + the layering rule.
@@ -108,7 +140,10 @@ valid non-empty PDF. Remove the CLI from Flatpak manifests.
 ## Sequencing
 
 Phase 2 first (small, proves the pattern), then 1 (large), 3, 4 in parallel
-where convenient, 5 and 6 alongside. Each phase lands as its own PR with
+where convenient, 5 and 6 alongside. Phase M starts with phase 2 (fixture
+corpus + scorecard harness land with tables-core) and every later phase adds
+its corpus before its implementation — the conformance tests are the TDD
+red state for each phase. Each phase lands as its own PR with
 tests in the same commits as the code they test.
 
 ## Engine decisions (settled — do not churn)
