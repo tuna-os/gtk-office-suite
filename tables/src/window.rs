@@ -66,6 +66,9 @@ pub struct TablesWindow {
     fx_entry: gtk4::Entry,
     stack: gtk4::Stack,
     undo: Rc<RefCell<UndoManager<SheetState>>>,
+    state: Rc<RefCell<AppState>>,
+    sheet_model: gtk4::StringList,
+    sheet_switcher: gtk4::DropDown,
 }
 
 impl TablesWindow {
@@ -1034,10 +1037,48 @@ impl TablesWindow {
             drawing_area.add_controller(key);
         }
 
-        Self { window: suite_win.window, drawing_area, h_adj, v_adj, fx_entry, stack, undo: undo_mgr }
+        Self {
+            window: suite_win.window,
+            drawing_area,
+            h_adj,
+            v_adj,
+            fx_entry,
+            stack,
+            undo: undo_mgr,
+            state,
+            sheet_model,
+            sheet_switcher,
+        }
     }
 
     pub fn present(&self) { self.window.present(); }
+
+    /// Open a spreadsheet file directly (CLI / file-manager open).
+    /// Mirrors the open-file-dialog success path.
+    pub fn open_path(&self, path: &str) -> Result<(), String> {
+        let (rows, cols) = load_file_into_engine(path, &mut self.state.borrow_mut().engine)?;
+        {
+            let mut ss = self.state.borrow_mut();
+            let mut sheet =
+                SheetModel::new("Sheet1", rows.max(DEFAULT_ROWS), cols.max(DEFAULT_COLS), 0);
+            sheet.sync_from_engine(&ss.engine);
+            ss.sheets.clear();
+            ss.sheets.push(Rc::new(RefCell::new(sheet)));
+            ss.active_sheet = 0;
+        }
+        self.sheet_model.splice(0, self.sheet_model.n_items(), &[]);
+        self.sheet_model.append("Sheet1");
+        self.sheet_switcher.set_selected(0);
+        self.fx_entry.set_text("");
+        self.stack.set_visible_child_name("editor");
+        let name = std::path::Path::new(path)
+            .file_name()
+            .map(|n| n.to_string_lossy().to_string())
+            .unwrap_or_default();
+        self.window.set_title(Some(&format!("{name} — Tables")));
+        self.drawing_area.queue_draw();
+        Ok(())
+    }
 }
 
 // ── Coordinate conversion ─────────────────────────────────────────────

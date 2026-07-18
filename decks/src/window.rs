@@ -32,6 +32,10 @@ pub struct DecksWindow {
     selected_object: Rc<Cell<Option<usize>>>,
     transition: Rc<RefCell<TransitionState>>,
     undo: Rc<RefCell<UndoManager<Vec<Slide>>>>,
+    content_stack: gtk::Stack,
+    editor_split: adw::OverlaySplitView,
+    file_path: Rc<RefCell<Option<String>>>,
+    refresh_hud: Rc<dyn Fn()>,
 }
 
 impl DecksWindow {
@@ -1142,10 +1146,36 @@ impl DecksWindow {
             selected_object,
             transition,
             undo,
+            content_stack,
+            editor_split,
+            file_path,
+            refresh_hud,
         }
     }
 
     pub fn present(&self) { self.window.present(); }
+
+    /// Open a .pptx directly (CLI / file-manager open). Mirrors the
+    /// open-file dialog success path.
+    pub fn open_path(&self, path: &str) -> Result<(), String> {
+        let deck = read_pptx(path)?;
+        *self.slides.borrow_mut() = deck.slides;
+        self.current_slide.set(0);
+        self.selected_object.set(None);
+        *self.file_path.borrow_mut() = Some(path.to_string());
+        if self.content_stack.child_by_name("editor").is_none() {
+            self.content_stack.add_titled(&self.editor_split, Some("editor"), "Editor");
+        }
+        self.content_stack.set_visible_child_name("editor");
+        rebuild_slide_list(&self.slide_list, &self.slides.borrow(), 0);
+        if let Some(name) = std::path::Path::new(path).file_name() {
+            self.window
+                .set_title(Some(&format!("{} — Decks", name.to_string_lossy())));
+        }
+        self.canvas.queue_draw();
+        (self.refresh_hud)();
+        Ok(())
+    }
 }
 
 // ── Helper: rebuild the slide list widget ────────────────────────────────

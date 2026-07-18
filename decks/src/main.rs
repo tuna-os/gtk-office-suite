@@ -48,11 +48,41 @@ fn main() {
     suite.app.add_action(&act_prefs);
     suite.app.set_accels_for_action("app.preferences", &["<Control>comma"]);
     // After window creation, store it for preferences
+    let win_store = std::rc::Rc::new(std::cell::RefCell::new(None::<window::DecksWindow>));
     let pw_store = parent_win.clone();
+    let ws = win_store.clone();
     suite.app.connect_activate(move |app| {
-        let w = window::DecksWindow::new(app);
-        *pw_store.borrow_mut() = Some(w.window.clone().upcast::<gtk4::Window>());
-        w.present();
+        let mut store = ws.borrow_mut();
+        if store.is_none() {
+            let w = window::DecksWindow::new(app);
+            *pw_store.borrow_mut() = Some(w.window.clone().upcast::<gtk4::Window>());
+            *store = Some(w);
+        }
+        store.as_ref().unwrap().present();
+    });
+
+    // CLI / file-manager launches: `decks talk.pptx` opens the file.
+    let pw_store = parent_win.clone();
+    let ws = win_store.clone();
+    suite.app.connect_open(move |app, files, _hint| {
+        {
+            let mut store = ws.borrow_mut();
+            if store.is_none() {
+                let w = window::DecksWindow::new(app);
+                *pw_store.borrow_mut() = Some(w.window.clone().upcast::<gtk4::Window>());
+                *store = Some(w);
+            }
+        }
+        let store = ws.borrow();
+        let win = store.as_ref().unwrap();
+        for file in files {
+            if let Some(path) = file.path() {
+                if let Err(e) = win.open_path(&path.to_string_lossy()) {
+                    eprintln!("open failed: {e}");
+                }
+            }
+        }
+        win.present();
     });
     suite.run();
 }

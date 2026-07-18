@@ -6,7 +6,7 @@ A LibreOffice-inspired office suite written in Rust with GTK4 and libadwaita, sh
 
 **Three apps:** Letters (word processor), Tables (spreadsheet), Decks (presentations).  
 **Stack:** Rust + gtk4-rs 0.11 + libadwaita 0.9 + GNOME 50 runtime.  
-**Status:** v1.0 released — functional with real file I/O, formula engine, and canvas rendering.
+**Status:** post-v1.0 — measured LibreOffice parity (ratcheted corpora: CommonMark 630/652, LO-Letters 109/109, LO-Decks 9/9, OpenFormula 107/107), Ctrl+K command palette, and per-app live status surfaces. See [docs/PARITY.md](docs/PARITY.md) for the feature-by-feature truth table.
 
 ---
 
@@ -138,11 +138,11 @@ gtk-office-suite/
 
 ### Letters (Word Processor)
 - ✅ Tabbed documents (AdwTabView)
-- ✅ Rich text formatting (B/I/U/S/H, H1-H6, Code, Blockquote)
+- ✅ Rich text formatting (B/I/U/S/H, H1-H6, Code, Blockquote) with a selection popover and live style readout
 - ✅ Markdown macros (type `**bold**` → auto-format)
 - ✅ Find & Replace, spell check
-- ✅ DOCX/Markdown/HTML/PDF/TXT/ODT/RTF I/O
-- ✅ Page layout, zoom, ruler, columns, line spacing
+- ✅ DOCX/Markdown/ODT/HTML/PDF/TXT I/O — page geometry, font family, headers/footers round-trip, LibreOffice-oracle-verified
+- ✅ Page layout, zoom, opt-in ruler, columns, line spacing
 - ✅ Auto-save, undo/redo, drag-and-drop images
 
 ### Tables (Spreadsheet)
@@ -152,6 +152,7 @@ gtk-office-suite/
 - ✅ Multi-sheet tabs, sort, borders, freeze panes
 - ✅ Number formatting (currency, date, percent, scientific)
 - ✅ Cell merge, data validation, chart dialog
+- ✅ Range selection (mouse, Shift+arrows) with live Sum/Avg/Count; name box + Ctrl+G Go to Cell
 - ✅ Column resize via drag, double-click auto-fit
 - ✅ Undo/redo (CellEdit, Sort, Format, Border, Merge, Freeze commands)
 
@@ -163,14 +164,17 @@ gtk-office-suite/
 - ✅ Object drag with snap-to-grid
 - ✅ Slide transitions (PushLeft, Fade, Wipe, Cover, Split)
 - ✅ Speaker notes pane, inline text editing
+- ✅ Object inspector (position/size), presenter pill, live slide/object status
 - ✅ Undo/redo (AddObject, DeleteObject, MoveObject, ChangeText, etc.)
 
 ### suite-common (Shared Infrastructure)
+- ✅ Ctrl+K command palette over the GioAction registry (all three apps; coverage-tested)
+- ✅ Keyboard shortcuts dialog (Ctrl+?) generated from the same registry
 - ✅ Generic undo/redo (`Command<T>` + `UndoManager<T>`)
 - ✅ Number format engine (`NumberFormat`, Excel serial dates)
 - ✅ Event broadcaster/listener (`Broadcaster<H>`)
 - ✅ File dialog helpers, toast manager
-- ⬜ Style system, property pool, search, print, unit conversion (v2)
+- ✅ Style system, property pool, search, print, unit conversion (suite-common-core)
 
 ---
 

@@ -37,10 +37,40 @@ fn main() {
     });
     suite.app.add_action(&act_prefs);
     suite.app.set_accels_for_action("app.preferences", &["<Control>comma"]);
+    let win_store = std::rc::Rc::new(std::cell::RefCell::new(None::<window::TablesWindow>));
     let pw_store = parent_win.clone();
+    let ws = win_store.clone();
     suite.app.connect_activate(move |app| {
-        let win = window::TablesWindow::new(app);
-        *pw_store.borrow_mut() = Some(win.window.clone().upcast::<gtk4::Window>());
+        let mut store = ws.borrow_mut();
+        if store.is_none() {
+            let win = window::TablesWindow::new(app);
+            *pw_store.borrow_mut() = Some(win.window.clone().upcast::<gtk4::Window>());
+            *store = Some(win);
+        }
+        store.as_ref().unwrap().present();
+    });
+
+    // CLI / file-manager launches: `tables budget.xlsx` opens the file.
+    let pw_store = parent_win.clone();
+    let ws = win_store.clone();
+    suite.app.connect_open(move |app, files, _hint| {
+        {
+            let mut store = ws.borrow_mut();
+            if store.is_none() {
+                let win = window::TablesWindow::new(app);
+                *pw_store.borrow_mut() = Some(win.window.clone().upcast::<gtk4::Window>());
+                *store = Some(win);
+            }
+        }
+        let store = ws.borrow();
+        let win = store.as_ref().unwrap();
+        for file in files {
+            if let Some(path) = file.path() {
+                if let Err(e) = win.open_path(&path.to_string_lossy()) {
+                    eprintln!("open failed: {e}");
+                }
+            }
+        }
         win.present();
     });
     suite.run();

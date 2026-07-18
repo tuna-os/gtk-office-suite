@@ -20,6 +20,14 @@ export GDK_BACKEND=x11
 export GTK_A11Y=atspi
 export GTK_MODULES=gail:atk-bridge
 
+# Demo documents: the markdown one is checked in; the binary formats are
+# generated from the core crates so they always match the current code.
+DEMO_DIR="${WALKTHROUGH_DEMO_DIR:-$(mktemp -d)}"
+export WALKTHROUGH_DEMO_DIR="$DEMO_DIR"
+cp "$REPO_ROOT/tests/gui/demo/quarterly-report.md" "$DEMO_DIR/"
+(cd "$REPO_ROOT" && cargo run -q -p tables-core --example make_demo_xlsx -- "$DEMO_DIR/demo.xlsx")
+(cd "$REPO_ROOT" && cargo run -q -p decks-core --example make_demo_pptx -- "$DEMO_DIR/demo.pptx")
+
 Xvfb :96 -screen 0 1600x1000x24 &
 XVFB_PID=$!
 trap 'kill $XVFB_PID 2>/dev/null || true' EXIT
