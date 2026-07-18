@@ -370,6 +370,17 @@ impl LettersWindow {
             });
         }
         suite_win.add_top_bar(&ruler_widget);
+        // Rulers are opt-in (DESIGN-UI): hidden by default, toggled via
+        // the palette / Ctrl+Shift+R.
+        ruler_widget.set_visible(false);
+        {
+            let rw = ruler_widget.clone();
+            let a = gtk::gio::SimpleAction::new("toggle-ruler", None);
+            a.connect_activate(move |_, _| rw.set_visible(!rw.is_visible()));
+            app.add_action(&a);
+            app.set_accels_for_action("app.toggle-ruler", &["<Primary><Shift>r"]);
+            suite_common::actions::register_labels(&[("app.toggle-ruler", "Toggle Ruler")]);
+        }
 
         // ── Style dropdown ────────────────────────────────────────
         let style_sheet = std::rc::Rc::new(std::cell::RefCell::new(
@@ -399,9 +410,28 @@ impl LettersWindow {
                 }
             });
         }
-        suite_win.add_top_bar(&style_dropdown);
+        // Compact dropdown inside the toolbar (a full-width style band
+        // was the design review's worst double-chrome offender).
+        style_dropdown.set_tooltip_text(Some("Paragraph style"));
+        suite_win.toolbar.container.prepend(&style_dropdown);
 
         let win = suite_win.window.clone();
+
+        // Window title follows the active document (HIG: title reflects
+        // content, not just the app name).
+        {
+            let w = win.clone();
+            tab_view.connect_selected_page_notify(move |tv| {
+                let title = match tv.selected_page() {
+                    // The notify can fire before the page title is set.
+                    Some(p) if !p.title().is_empty() => {
+                        format!("{} — Letters", p.title())
+                    }
+                    _ => "Letters".to_string(),
+                };
+                w.set_title(Some(&title));
+            });
+        }
 
         // ── Tab: selected-page ──────────────────────────────────────
         let st = stack.clone();

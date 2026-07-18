@@ -22,7 +22,7 @@ pub fn build_decks_toolbar() -> gtk::Box {
     let toolbar = gtk::Box::new(gtk::Orientation::Horizontal, 6);
     toolbar.set_margin_start(6);
     toolbar.set_margin_end(6);
-    toolbar.set_halign(gtk::Align::Center);
+    toolbar.set_halign(gtk::Align::Start);
 
     let bold = gtk::ToggleButton::builder()
         .icon_name("format-text-bold-symbolic").tooltip_text("Bold").build();
@@ -35,12 +35,10 @@ pub fn build_decks_toolbar() -> gtk::Box {
         toolbar.append(btn);
     }
 
-    let sep = gtk::Separator::new(gtk::Orientation::Vertical);
-    sep.set_margin_start(6); sep.set_margin_end(6);
-    toolbar.append(&sep);
 
     let text_box = gtk::Button::builder()
         .icon_name("insert-text-symbolic").tooltip_text("Add text box").build();
+    text_box.set_margin_start(12);
     text_box.add_css_class("flat");
     toolbar.append(&text_box);
 
@@ -54,11 +52,10 @@ pub fn build_decks_toolbar() -> gtk::Box {
     image.add_css_class("flat");
     toolbar.append(&image);
 
-    let sep2 = gtk::Separator::new(gtk::Orientation::Vertical);
-    toolbar.append(&sep2);
 
     let present = gtk::Button::builder()
         .icon_name("view-fullscreen-symbolic").tooltip_text("Present (F5)").build();
+    present.set_margin_start(12);
     present.add_css_class("flat");
     present.add_css_class("suggested-action");
     toolbar.append(&present);

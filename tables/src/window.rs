@@ -885,6 +885,11 @@ impl TablesWindow {
                                         sd.set_selected(0);
                                         fx.set_text("");
                                         st.set_visible_child_name("editor");
+                                        let name = std::path::Path::new(&path_str)
+                                            .file_name()
+                                            .map(|n| n.to_string_lossy().to_string())
+                                            .unwrap_or_default();
+                                        w2.set_title(Some(&format!("{name} — Tables")));
                                         da.queue_draw();
                                     }
                                     Err(e) => {

@@ -30,7 +30,7 @@ const COL_HEADER_HEIGHT: f64 = 26.0;
 const HEADER_BG: (f64, f64, f64) = (0.95, 0.95, 0.95);
 const HEADER_BG_DARK: (f64, f64, f64) = (0.25, 0.25, 0.25);
 const SELECTION_COLOR: (f64, f64, f64) = (0.21, 0.52, 0.89);
-const ACTIVE_CELL_BORDER: (f64, f64, f64) = (0.0, 0.6, 0.0);
+const ACTIVE_CELL_BORDER: (f64, f64, f64) = (0.13, 0.38, 0.77);
 const GRID_LINE: (f64, f64, f64) = (0.85, 0.85, 0.85);
 
 pub fn draw_border_edges(cr: &Context, x: f64, y: f64, w: f64, h: f64, border: &CellBorder) {
@@ -75,6 +75,11 @@ pub fn draw_grid(
     let start_col = (scroll_x / COL_WIDTH).max(0.0) as usize;
     let start_row = (scroll_y / ROW_HEIGHT).max(0.0) as usize;
 
+    // Corner cell — same shade as the headers, not the canvas grey.
+    cr.set_source_rgb(hdr_bg.0, hdr_bg.1, hdr_bg.2);
+    cr.rectangle(0.0, 0.0, ROW_HEADER_WIDTH, COL_HEADER_HEIGHT);
+    cr.fill().unwrap();
+
     // Column headers
     cr.save().unwrap();
     cr.rectangle(ROW_HEADER_WIDTH, 0.0, width - ROW_HEADER_WIDTH, COL_HEADER_HEIGHT);
@@ -89,7 +94,8 @@ pub fn draw_grid(
         if cx > width { break; }
         let label = col_label(c);
         cr.set_source_rgb(0.3, 0.3, 0.3);
-        cr.move_to(cx + 4.0, 18.0);
+        let ext = cr.text_extents(&label).unwrap();
+        cr.move_to(cx + (cw - ext.width()) / 2.0, 18.0);
         let _ = cr.show_text(&label);
         cr.set_source_rgb(0.8, 0.8, 0.8);
         cr.set_line_width(0.5);
@@ -110,8 +116,10 @@ pub fn draw_grid(
     let mut ry = COL_HEADER_HEIGHT - scroll_y;
     for r in start_row..sheet.rows.min(start_row + (height / ROW_HEIGHT) as usize + 1) {
         cr.set_source_rgb(0.3, 0.3, 0.3);
-        cr.move_to(4.0, ry + 18.0);
-        let _ = cr.show_text(&(r + 1).to_string());
+        let label = (r + 1).to_string();
+        let ext = cr.text_extents(&label).unwrap();
+        cr.move_to(ROW_HEADER_WIDTH - 6.0 - ext.width(), ry + 18.0);
+        let _ = cr.show_text(&label);
         ry += ROW_HEIGHT;
     }
     cr.restore().unwrap();

@@ -90,7 +90,8 @@ class LettersPaletteSmoke(BaseGUITestCase):
         labels = {c.name for c in self.app.findChildren(
             lambda c: c.roleName == "label")}
         self.assertIn("Bold", labels, "palette missing formatting action")
-        self.assertIn("Command Palette", labels, "palette dialog not shown")
+        entry = self.app.child(name="Command Palette")
+        self.assertIsNotNone(entry, "palette dialog not shown")
         unlabeled = sorted(l for l in labels if l.startswith("unlabeled:"))
         self.assertEqual(unlabeled, [],
                          "actions without registry labels: %s" % unlabeled)

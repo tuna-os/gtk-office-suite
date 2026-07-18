@@ -31,6 +31,9 @@ mod imp {
         pub footer_text: std::cell::RefCell<String>,
         pub zoom_level: Cell<f64>,
         pub column_count: Cell<u32>,
+        /// Pointer is over the widget — margin guides show only then
+        /// (DESIGN-UI: margins visible on hover only).
+        pub pointer_over: Cell<bool>,
     }
 
     #[glib::object_subclass]
@@ -118,7 +121,6 @@ mod imp {
                 draw_rounded_rect(&cr, px, page_y, sw, sh, 2.0);
                 cr.stroke().unwrap();
 
-                // Margin lines
                 let ml = self.margin_left.get() * scale;
                 let mr = self.margin_right.get() * scale;
                 let mt = self.margin_top.get() * scale;
@@ -128,21 +130,25 @@ mod imp {
                 cr.set_line_width(0.5);
                 cr.set_dash(&[4.0, 4.0], 0.0);
 
-                cr.move_to(px + ml, page_y);
-                cr.line_to(px + ml, page_y + sh);
-                cr.stroke().unwrap();
+                // Margin guides show on hover only (DESIGN-UI); the
+                // margins still shape layout and column separators.
+                if self.pointer_over.get() {
+                    cr.move_to(px + ml, page_y);
+                    cr.line_to(px + ml, page_y + sh);
+                    cr.stroke().unwrap();
 
-                cr.move_to(px + sw - mr, page_y);
-                cr.line_to(px + sw - mr, page_y + sh);
-                cr.stroke().unwrap();
+                    cr.move_to(px + sw - mr, page_y);
+                    cr.line_to(px + sw - mr, page_y + sh);
+                    cr.stroke().unwrap();
 
-                cr.move_to(px, page_y + mt);
-                cr.line_to(px + sw, page_y + mt);
-                cr.stroke().unwrap();
+                    cr.move_to(px, page_y + mt);
+                    cr.line_to(px + sw, page_y + mt);
+                    cr.stroke().unwrap();
 
-                cr.move_to(px, page_y + sh - mb);
-                cr.line_to(px + sw, page_y + sh - mb);
-                cr.stroke().unwrap();
+                    cr.move_to(px, page_y + sh - mb);
+                    cr.line_to(px + sw, page_y + sh - mb);
+                    cr.stroke().unwrap();
+                }
 
                 // Column separators
                 let cols = self.column_count.get();
@@ -254,7 +260,24 @@ glib::wrapper! {
 
 impl PageContainer {
     pub fn new() -> Self {
-        glib::Object::builder().build()
+        let this: Self = glib::Object::builder().build();
+        let motion = gtk::EventControllerMotion::new();
+        {
+            let w = this.clone();
+            motion.connect_enter(move |_, _, _| {
+                w.imp().pointer_over.set(true);
+                w.queue_draw();
+            });
+        }
+        {
+            let w = this.clone();
+            motion.connect_leave(move |_| {
+                w.imp().pointer_over.set(false);
+                w.queue_draw();
+            });
+        }
+        this.add_controller(motion);
+        this
     }
 
     pub fn set_page_size(&self, width_pt: f64, height_pt: f64) {

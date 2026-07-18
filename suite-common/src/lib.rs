@@ -530,6 +530,7 @@ pub fn show_command_palette(app: &adw::Application) {
 
     let search = gtk::SearchEntry::new();
     search.set_placeholder_text(Some("Type a command…"));
+    search.update_property(&[gtk4::accessible::Property::Label("Command Palette")]);
     search.set_margin_start(6);
     search.set_margin_end(6);
     search.set_margin_top(6);
@@ -551,16 +552,14 @@ pub fn show_command_palette(app: &adw::Application) {
     content.append(&search);
     content.append(&scroll);
 
+    // Chromeless palette (GNOME Text Editor / Builder idiom): the surface
+    // IS the search entry plus results — no titlebar, Esc closes.
     let dialog = adw::Dialog::builder()
         .title("Command Palette")
         .content_width(480)
         .content_height(420)
         .build();
-    let tv = adw::ToolbarView::new();
-    let hb = adw::HeaderBar::new();
-    tv.add_top_bar(&hb);
-    tv.set_content(Some(&content));
-    dialog.set_child(Some(&tv));
+    dialog.set_child(Some(&content));
 
     // (Re)populate rows for a query. Row widget: label left, accel right.
     let populate = {

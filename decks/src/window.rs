@@ -1026,6 +1026,14 @@ impl DecksWindow {
                                         }
                                         cs.set_visible_child_name("editor");
                                         rebuild_slide_list(&sl, &ss.borrow(), 0);
+                                        if let Some(name) = path_ref
+                                            .borrow()
+                                            .as_deref()
+                                            .and_then(|p| std::path::Path::new(p).file_name())
+                                        {
+                                            w2.set_title(Some(&format!(
+                                                "{} — Decks", name.to_string_lossy())));
+                                        }
                                         da.queue_draw();
                                     }
                                     Err(e) => {
