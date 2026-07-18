@@ -88,6 +88,9 @@ fn para_style_props(st: &ParaStyle) -> String {
     if st.page_break_before {
         props.push_str(" fo:break-before=\"page\"");
     }
+    if (st.line_spacing - 1.0).abs() > 0.01 {
+        props.push_str(&format!(" fo:line-height=\"{:.0}%\"", st.line_spacing * 100.0));
+    }
     props
 }
 
@@ -296,7 +299,7 @@ fn attr_val(e: &quick_xml::events::BytesStart, name: &str) -> Option<String> {
 /// styles into model styles keyed by style name.
 struct AutoStyles {
     text: std::collections::HashMap<String, RunStyle>,
-    para: std::collections::HashMap<String, (Alignment, bool)>,
+    para: std::collections::HashMap<String, (Alignment, bool, f32)>,
 }
 
 fn parse_auto_styles(xml: &str) -> AutoStyles {
@@ -368,7 +371,11 @@ fn parse_auto_styles(xml: &str) -> AutoStyles {
                                 _ => Alignment::Left,
                             };
                             let brk = attr_val(&e, "fo:break-before").as_deref() == Some("page");
-                            out.para.insert(name, (align, brk));
+                            let spacing = attr_val(&e, "fo:line-height")
+                                .and_then(|v| v.trim_end_matches('%').parse::<f32>().ok())
+                                .map(|pct| pct / 100.0)
+                                .unwrap_or(1.0);
+                            out.para.insert(name, (align, brk, spacing));
                         }
                     }
                     _ => {}
@@ -434,9 +441,10 @@ pub fn read(path: &str) -> Result<Document, String> {
                         style.heading = Some(lvl.clamp(1, 6));
                     }
                     if let Some(name) = attr_val(&e, "text:style-name") {
-                        if let Some((align, brk)) = auto.para.get(&name) {
+                        if let Some((align, brk, spacing)) = auto.para.get(&name) {
                             style.alignment = *align;
                             style.page_break_before = *brk;
+                            style.line_spacing = *spacing;
                         }
                     }
                     style.list = list_kind;
@@ -763,6 +771,15 @@ mod tests {
         ];
         let rt = round_trip(&d);
         assert_eq!(rt.paragraphs[0].runs, d.paragraphs[0].runs);
+    }
+
+    #[test]
+    fn line_spacing_survives() {
+        let mut d = Document::from_plain_text("single\ndouble");
+        d.paragraphs[1].style.line_spacing = 2.0;
+        let rt = round_trip(&d);
+        assert!((rt.paragraphs[0].style.line_spacing - 1.0).abs() < 0.01);
+        assert!((rt.paragraphs[1].style.line_spacing - 2.0).abs() < 0.01);
     }
 
     #[test]
