@@ -6,7 +6,7 @@
 // strikethrough runs, heading styles. Not yet mapped: highlight, links,
 // lists, alignment — tracked by red tests as they are added.
 
-use crate::model::{Document, Paragraph, ParaStyle, Run, RunStyle};
+use crate::model::{Alignment, Document, ListKind, Paragraph, ParaStyle, Run, RunStyle};
 
 /// Read a .docx file into a Document.
 pub fn read(path: &str) -> Result<Document, String> {
@@ -16,6 +16,15 @@ pub fn read(path: &str) -> Result<Document, String> {
     let mut paragraphs = Vec::new();
     for p in doc.paragraphs() {
         let heading = p.style_id().and_then(style_id_to_heading);
+        let alignment = match p.alignment() {
+            Some(rdocx::Alignment::Center) => Alignment::Center,
+            Some(rdocx::Alignment::Right) => Alignment::Right,
+            Some(rdocx::Alignment::Justify) => Alignment::Justify,
+            _ => Alignment::Left,
+        };
+        // NOTE: list kind and highlight cannot be read back yet — rdocx has
+        // no numbering/highlight getters on ParagraphRef/RunRef. Red tests
+        // in tests/docx.rs track this; fix lands upstream in hanthor/rdocx.
         let mut runs = Vec::new();
         for r in p.runs() {
             let text = r.text();
@@ -32,7 +41,7 @@ pub fn read(path: &str) -> Result<Document, String> {
             });
         }
         let mut para = Paragraph {
-            style: ParaStyle { heading, ..Default::default() },
+            style: ParaStyle { heading, alignment, ..Default::default() },
             runs,
         };
         normalize(&mut para);
@@ -49,16 +58,27 @@ pub fn read(path: &str) -> Result<Document, String> {
 pub fn write(doc: &Document, path: &str) -> Result<(), String> {
     let mut out = rdocx::Document::new();
     for para in &doc.paragraphs {
-        let mut p = out.add_paragraph("");
+        let mut p = match para.style.list {
+            ListKind::Bullet => out.add_bullet_list_item("", 0),
+            ListKind::Numbered => out.add_numbered_list_item("", 0),
+            ListKind::None => out.add_paragraph(""),
+        };
         if let Some(level) = para.style.heading {
             p = p.style(&format!("Heading{}", level.clamp(1, 6)));
         }
+        p = match para.style.alignment {
+            Alignment::Left => p,
+            Alignment::Center => p.alignment(rdocx::Alignment::Center),
+            Alignment::Right => p.alignment(rdocx::Alignment::Right),
+            Alignment::Justify => p.alignment(rdocx::Alignment::Justify),
+        };
         for run in &para.runs {
             let mut r = p.add_run(&run.text);
             if run.style.bold { r = r.bold(true); }
             if run.style.italic { r = r.italic(true); }
             if run.style.underline { r = r.underline(true); }
             if run.style.strikethrough { r = r.strike(true); }
+            if run.style.highlight { r = r.highlight("yellow"); }
         }
     }
     out.save(path).map_err(|e| format!("Cannot save {}: {}", path, e))

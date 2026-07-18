@@ -82,6 +82,51 @@ fn unicode_text_survives() {
 }
 
 #[test]
+fn alignment_survives() {
+    let mut d = Document::from_plain_text("centered\nrighted\njustified\nplain");
+    d.paragraphs[0].style.alignment = Alignment::Center;
+    d.paragraphs[1].style.alignment = Alignment::Right;
+    d.paragraphs[2].style.alignment = Alignment::Justify;
+    let rt = round_trip(&d);
+    assert_eq!(rt.paragraphs[0].style.alignment, Alignment::Center);
+    assert_eq!(rt.paragraphs[1].style.alignment, Alignment::Right);
+    assert_eq!(rt.paragraphs[2].style.alignment, Alignment::Justify);
+    assert_eq!(rt.paragraphs[3].style.alignment, Alignment::Left);
+}
+
+// ── RED: known fidelity gaps, kept visible until fixed ─────────────────
+// Run with `cargo test -- --ignored` to see the guiding set.
+
+#[test]
+#[ignore = "RED: rdocx has no numbering read getter — list kind is lost on reload (fix upstream in hanthor/rdocx)"]
+fn list_kind_survives() {
+    let mut d = Document::from_plain_text("first item\nsecond item");
+    d.paragraphs[0].style.list = ListKind::Bullet;
+    d.paragraphs[1].style.list = ListKind::Numbered;
+    let rt = round_trip(&d);
+    assert_eq!(rt.paragraphs[0].style.list, ListKind::Bullet);
+    assert_eq!(rt.paragraphs[1].style.list, ListKind::Numbered);
+}
+
+#[test]
+#[ignore = "RED: rdocx has no highlight read getter on RunRef (fix upstream in hanthor/rdocx)"]
+fn highlight_survives() {
+    let mut d = Document::from_plain_text("glow");
+    d.apply_run_style(0, 4, &StylePatch::set_highlight(true));
+    let rt = round_trip(&d);
+    assert!(rt.style_at(0).highlight);
+}
+
+#[test]
+#[ignore = "RED: rdocx has no hyperlink write API — links are dropped on save (fix upstream in hanthor/rdocx)"]
+fn link_survives() {
+    let mut d = Document::from_plain_text("click here");
+    d.apply_run_style(6, 10, &StylePatch::set_link(Some("https://gnome.org".into())));
+    let rt = round_trip(&d);
+    assert_eq!(rt.style_at(6).link.as_deref(), Some("https://gnome.org"));
+}
+
+#[test]
 fn style_boundaries_are_exact() {
     // Word processors classically off-by-one run boundaries.
     let mut d = Document::from_plain_text("aaabbbccc");
