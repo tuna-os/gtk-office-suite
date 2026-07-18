@@ -10,6 +10,22 @@ A LibreOffice-inspired office suite written in Rust with GTK4 and libadwaita, sh
 
 ---
 
+## Screenshots
+
+Captured automatically from the real apps by the
+[Screenshots workflow](.github/workflows/screenshots.yml)
+(`tests/gui/walkthrough.py` drives each app under Xvfb).
+
+| Letters | Tables |
+|---|---|
+| ![Letters — styled document](docs/screenshots/letters.png) | ![Tables — live range statistics and a formula](docs/screenshots/tables.png) |
+
+| Command palette (Ctrl+K) | Decks |
+|---|---|
+| ![Letters — command palette](docs/screenshots/letters-palette.png) | ![Decks — object inspector and presenter pill](docs/screenshots/decks.png) |
+
+---
+
 ## Quick Start
 
 ```bash

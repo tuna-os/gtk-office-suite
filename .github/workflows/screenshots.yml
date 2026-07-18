@@ -1,0 +1,55 @@
+name: Screenshots
+
+# Regenerate the README/docs walkthrough screenshots from the real apps
+# and commit them when they change. Weekly + on demand; not per-push
+# (font rendering noise would churn the repo).
+
+on:
+  schedule:
+    - cron: '0 7 * * 1'   # Mondays 7am UTC
+  workflow_dispatch:
+
+concurrency:
+  group: screenshots
+  cancel-in-progress: true
+
+permissions:
+  contents: write
+
+jobs:
+  capture:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install GTK4 + libadwaita dev libraries
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq libgtk-4-dev libadwaita-1-dev
+
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Build app binaries
+        run: cargo build --bin letters --bin tables --bin decks
+
+      - name: Install walkthrough dependencies
+        run: |
+          sudo apt-get install -y -qq xvfb dbus at-spi2-core \
+            python3-dogtail python3-pil
+          python3 -m pip install --break-system-packages mss
+
+      - name: Capture walkthrough
+        run: tests/gui/capture_walkthrough.sh docs/screenshots
+
+      - name: Commit updated screenshots
+        run: |
+          git config user.name "screenshot-bot"
+          git config user.email "actions@github.com"
+          git add docs/screenshots
+          if git diff --cached --quiet; then
+            echo "screenshots unchanged"
+            exit 0
+          fi
+          git commit -m "docs: refresh walkthrough screenshots [skip ci]"
+          git push
