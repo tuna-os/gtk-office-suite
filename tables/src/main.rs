@@ -4,6 +4,7 @@ mod charts;
 mod window;
 mod preferences;
 pub mod grid_render;
+pub mod grid_area;
 
 fn main() {
     let suite = suite_common::SuiteApp::new("org.tunaos.tables-rust");

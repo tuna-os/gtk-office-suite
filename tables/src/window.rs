@@ -96,13 +96,15 @@ impl TablesWindow {
         let v_adj = gtk4::Adjustment::new(0.0, 0.0, 5000.0, 10.0, 50.0, 500.0);
 
         // ── Drawing area ────────────────────────────────────────────────
-        let drawing_area = gtk4::DrawingArea::new();
+        // GridArea exposes each cell as a virtual AT-SPI child
+        // (grid_area.rs, issue #87); it IS a DrawingArea otherwise.
+        let grid_area = crate::grid_area::GridArea::default();
+        let drawing_area = grid_area.clone().upcast::<gtk4::DrawingArea>();
         drawing_area.set_vexpand(true);
         drawing_area.set_hexpand(true);
         // A11y: name the grid and keep its description tracking the active
-        // cell, so screen readers announce state and AT-SPI tests can
-        // assert it (the DrawingArea is otherwise opaque — issue #87).
-        drawing_area.set_accessible_role(gtk4::AccessibleRole::Img);
+        // cell; the per-cell children carry the detail.
+        drawing_area.set_accessible_role(gtk4::AccessibleRole::Table);
         drawing_area.update_property(&[gtk4::accessible::Property::Label("Spreadsheet grid")]);
         update_grid_a11y(&drawing_area, "A", 0, "");
 
@@ -156,9 +158,11 @@ impl TablesWindow {
             let s = state.clone();
             let nb = name_box.clone();
             let stats = stats_label.clone();
+            let ga = grid_area.clone();
             Rc::new(move || {
                 let st = s.borrow();
                 let sh = st.sheet();
+                ga.sync_cells(&sh.data, &sh.col_widths, sh.selection_rect());
                 nb.set_text(&format!(
                     "{}{}",
                     tables_core::sheet::col_label(sh.selected_col),
@@ -247,6 +251,7 @@ impl TablesWindow {
             let s = state.clone();
             let da = drawing_area.clone();
             let fx = fx_entry.clone();
+            let refresh = refresh_sel.clone();
             fx_entry.connect_activate(move |_| {
                 let val = fx.text().to_string();
                 let mut st = s.borrow_mut();
@@ -274,6 +279,7 @@ impl TablesWindow {
                 drop(st);
                 // Commit returns focus to the grid so arrow keys navigate
                 // (Calc behavior); the next keystroke edits via the grid.
+                refresh();
                 da.grab_focus();
                 da.queue_draw();
             });

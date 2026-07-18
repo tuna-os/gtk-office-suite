@@ -17,11 +17,15 @@ without a test that fails first.
    open from the original spec: Letters pasting a grid as a real
    cell-tagged table (blocked on the buffer-table bridge gap, item 3)
    and true two-app smoke tests (need a WM in the harness).
-2. **Virtual a11y children** (task #23, deep half of issue #87).
-   Per-cell / per-object AT-SPI nodes for the Tables grid and Decks
-   canvas. This also unblocks honest GUI testing — today the canvases
-   are opaque (bogus extents, description-string assertions). *Prove:*
-   smoke tests navigate to a cell/object accessible directly.
+2. ✅ **Virtual a11y children** (task #23, done 2026-07-18). The Tables
+   grid exposes each used cell (role cell, name "B2: 20", selection
+   state) and the Decks canvas exposes each object (role list item,
+   "Text box: …"/"Rectangle") as real AT-SPI nodes — GridArea/CanvasArea
+   DrawingArea subclasses with persistent GObject accessibles linked via
+   set_accessible_parent/update_next_accessible_sibling. Proven by two
+   I6 smoke tests. Remaining: on-screen extents still report position
+   (0,0) (size is correct) — the widget-relative→screen translation
+   needs the same treatment; keep driving tests by name/keyboard.
 3. **Letters bridge list gap** (the one red I5 in PARITY). The buffer
    keeps literal "- " for lists; model↔buffer translation should carry
    ListKind. *Prove:* existing red bridge test goes green.

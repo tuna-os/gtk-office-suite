@@ -344,6 +344,60 @@ class LettersClipboardSmoke(BaseGUITestCase):
         self.assertIsNone(self.process.poll(), "letters crashed during clipboard round trip")
 
 
+class TablesA11yCellsSmoke(BaseGUITestCase):
+    """Virtual a11y children (issue #87): the grid exposes each used
+    cell as a real AT-SPI node with role, name, and selection state —
+    not just one opaque drawing."""
+
+    app_name = "tables"
+
+    def test_cells_are_accessible_nodes(self):
+        from dogtail import rawinput
+        import subprocess
+
+        subprocess.run(["gapplication", "action", "org.tunaos.tables-rust", "new-document"])
+        time.sleep(1.5)
+        for ref, value in [("A1", "10"), ("B2", "20")]:
+            rawinput.keyCombo("<Control>g")
+            time.sleep(0.2)
+            rawinput.typeText(ref)
+            rawinput.keyCombo("Return")
+            time.sleep(0.3)
+            rawinput.typeText(value)
+            rawinput.keyCombo("Return")
+            time.sleep(0.3)
+        cell = self.app.child(name="A1: 10", roleName="table cell")
+        self.assertIsNotNone(cell)
+        cell2 = self.app.child(name="B2: 20", roleName="table cell")
+        self.assertIsNotNone(cell2)
+        # The active cell (B2 after its commit) carries the selected state.
+        import pyatspi
+        self.assertTrue(cell2.getState().contains(pyatspi.STATE_SELECTED),
+                        "active cell not marked selected")
+        self.assertIsNone(self.process.poll(), "tables crashed exposing cells")
+
+
+class DecksA11yObjectsSmoke(BaseGUITestCase):
+    """Virtual a11y children: slide objects are AT-SPI nodes."""
+
+    app_name = "decks"
+
+    def test_objects_are_accessible_nodes(self):
+        import subprocess
+
+        aid = "org.tunaos.decks-rust"
+        subprocess.run(["gapplication", "action", aid, "new-document"])
+        time.sleep(1.5)
+        subprocess.run(["gapplication", "action", aid, "add-text-box"])
+        subprocess.run(["gapplication", "action", aid, "add-shape"])
+        time.sleep(1.5)
+        box = self.app.child(name="Text box: Text", roleName="list item")
+        self.assertIsNotNone(box)
+        rect = self.app.child(name="Rectangle", roleName="list item")
+        self.assertIsNotNone(rect)
+        self.assertIsNone(self.process.poll(), "decks crashed exposing objects")
+
+
 class DecksSelectionSmoke(BaseGUITestCase):
     """Object selection updates the canvas a11y description and the
     inspector (fit-to-viewport geometry keeps coordinates stable)."""

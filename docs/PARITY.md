@@ -15,7 +15,7 @@ Tier 3 items each need an explicit decision to enter scope.
 | I3 | LO-authored parity corpus | `lo_parity.rs` (soffice writes, we read) | reading real-world files |
 | I4 | soffice oracle | `soffice_oracle.rs` per core crate — 65 tests (Letters 25, Tables 20, Decks 20 — the coverage target in TESTING.md): we write → LO reads/rewrites → we re-read, asserting attributes not just text | writing real-world files |
 | I5 | Buffer/bridge round-trips | Xvfb `cargo test -p <app> bridge` | model ⇄ widget translation |
-| I6 | AT-SPI smoke tests | `tests/gui/test_smoke.py` | app-level behavior, input |
+| I6 | AT-SPI smoke tests | `tests/gui/test_smoke.py` (17) — incl. per-cell/per-object virtual a11y nodes | app-level behavior, input |
 | I7 | VLM visual audit | scheduled, non-gating | rendering/HIG regressions |
 
 Rule of thumb: every feature needs I1; anything that persists needs I2–I4;

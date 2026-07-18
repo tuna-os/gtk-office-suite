@@ -3,6 +3,7 @@ use gtk4::gio;
 mod window;
 mod export;
 mod canvas;
+mod canvas_area;
 mod sidebar;
 mod toolbar;
 mod transition;

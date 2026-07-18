@@ -60,10 +60,13 @@ impl DecksWindow {
         let transition = Rc::new(RefCell::new(TransitionState::new()));
 
         // ── Canvas ────────────────────────────────────────────────────────
-        let canvas = gtk::DrawingArea::new();
+        // CanvasArea exposes each slide object as a virtual AT-SPI child
+        // (canvas_area.rs, issue #87); it IS a DrawingArea otherwise.
+        let canvas_area = crate::canvas_area::CanvasArea::default();
+        let canvas = canvas_area.clone().upcast::<gtk::DrawingArea>();
         canvas.set_vexpand(true);
         canvas.set_hexpand(true);
-        canvas.set_accessible_role(gtk::AccessibleRole::Img);
+        canvas.set_accessible_role(gtk::AccessibleRole::List);
         canvas.update_property(&[gtk::accessible::Property::Label("Slide canvas")]);
         // No fixed content size: the canvas fills the viewport and the
         // slide scales to fit (slide_geometry) — a fixed 960px minimum
@@ -201,9 +204,13 @@ impl DecksWindow {
             let grid = insp_grid.clone();
             let status = status_label.clone();
             let guard = insp_guard.clone();
+            let ca = canvas_area.clone();
             Rc::new(move || {
                 let idx = cs_ref.get();
                 let slides = ss.borrow();
+                if let Some(slide) = slides.get(idx) {
+                    ca.sync_objects(&slide.objects, so.get());
+                }
                 let n_objects = slides.get(idx).map(|s| s.objects.len()).unwrap_or(0);
                 status.set_text(&format!(
                     "Slide {}/{}  ·  {} object{}",
