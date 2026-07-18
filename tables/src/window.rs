@@ -998,6 +998,75 @@ impl TablesWindow {
             key.connect_key_pressed(move |_, keyval, _code, mods| {
                 use gtk4::gdk::Key;
                 let shift = mods.contains(gtk4::gdk::ModifierType::SHIFT_MASK);
+                let ctrl = mods.contains(gtk4::gdk::ModifierType::CONTROL_MASK);
+                if ctrl && keyval == Key::c {
+                    let st = s.borrow();
+                    let sh = st.sheet();
+                    let (r0, c0, r1, c1) = sh.selection_rect();
+                    let frag =
+                        tables_core::fragment::copy_range(&sh, &st.engine, r0, c0, r1, c1);
+                    let provider = suite_common::clipboard::provider(
+                        tables_core::fragment::MIME,
+                        &frag.to_json(),
+                        &frag.to_html(),
+                        &frag.to_plain(),
+                    );
+                    let _ = da.clipboard().set_content(Some(&provider));
+                    return gtk4::glib::Propagation::Stop;
+                }
+                if ctrl && keyval == Key::v {
+                    let clipboard = da.clipboard();
+                    let s2 = s.clone();
+                    let da2 = da.clone();
+                    let refresh2 = refresh.clone();
+                    let apply = move |frag: tables_core::fragment::Fragment| {
+                        {
+                            let mut st = s2.borrow_mut();
+                            let (row, col) = {
+                                let sh = st.sheet();
+                                (sh.selected_row, sh.selected_col)
+                            };
+                            tables_core::fragment::paste_at(&mut st.engine, row, col, &frag);
+                            st.sheet_mut().sync_from_engine(&st.engine);
+                        }
+                        refresh2();
+                        da2.queue_draw();
+                    };
+                    if suite_common::clipboard::offers(&clipboard, tables_core::fragment::MIME) {
+                        suite_common::clipboard::read_string(
+                            &clipboard,
+                            tables_core::fragment::MIME,
+                            move |json| {
+                                if let Some(frag) =
+                                    json.as_deref().and_then(tables_core::fragment::Fragment::from_json)
+                                {
+                                    apply(frag);
+                                }
+                            },
+                        );
+                    } else {
+                        clipboard.read_text_async(gtk4::gio::Cancellable::NONE, move |res| {
+                            if let Ok(Some(text)) = res {
+                                // Plain text pastes as a TSV grid.
+                                let rows: Vec<Vec<tables_core::fragment::GridCell>> = text
+                                    .lines()
+                                    .map(|l| {
+                                        l.split('\t')
+                                            .map(|v| tables_core::fragment::GridCell {
+                                                value: v.to_string(),
+                                                ..Default::default()
+                                            })
+                                            .collect()
+                                    })
+                                    .collect();
+                                if !rows.is_empty() {
+                                    apply(tables_core::fragment::Fragment::Grid(rows));
+                                }
+                            }
+                        });
+                    }
+                    return gtk4::glib::Propagation::Stop;
+                }
                 let delta = match keyval {
                     Key::Up => Some((-1i64, 0i64)),
                     Key::Down => Some((1, 0)),

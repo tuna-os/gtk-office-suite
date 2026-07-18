@@ -793,3 +793,62 @@ mod tests {
         assert_eq!(state.width_request(), -1);
     }
 }
+
+// ---------------------------------------------------------------------------
+// Cross-app clipboard (DESIGN-UI: suite fragment format)
+// ---------------------------------------------------------------------------
+
+/// Clipboard plumbing for the suite fragment format. The fragment types
+/// and conversions are pure and live in the core crates; this is only
+/// the GDK glue.
+pub mod clipboard {
+    use gtk4::prelude::*;
+    use gtk4::{gdk, gio, glib};
+
+    /// A provider offering the suite JSON, HTML, and plain text at once.
+    /// Paste order of preference elsewhere: suite JSON → HTML → plain.
+    pub fn provider(mime: &str, json: &str, html: &str, plain: &str) -> gdk::ContentProvider {
+        gdk::ContentProvider::new_union(&[
+            gdk::ContentProvider::for_bytes(mime, &glib::Bytes::from(json.as_bytes())),
+            gdk::ContentProvider::for_bytes("text/html", &glib::Bytes::from(html.as_bytes())),
+            gdk::ContentProvider::for_value(&glib::Value::from(plain)),
+        ])
+    }
+
+    /// True when the clipboard currently offers the given MIME type.
+    pub fn offers(clipboard: &gdk::Clipboard, mime: &str) -> bool {
+        clipboard.formats().contain_mime_type(mime)
+    }
+
+    /// Read the given MIME type as a string, asynchronously.
+    pub fn read_string<F: Fn(Option<String>) + 'static>(
+        clipboard: &gdk::Clipboard,
+        mime: &'static str,
+        cb: F,
+    ) {
+        clipboard.read_async(&[mime], glib::Priority::DEFAULT, gio::Cancellable::NONE, move |res| {
+            let Ok((stream, _)) = res else {
+                cb(None);
+                return;
+            };
+            let out = gio::MemoryOutputStream::new_resizable();
+            let flags = gio::OutputStreamSpliceFlags::CLOSE_SOURCE
+                | gio::OutputStreamSpliceFlags::CLOSE_TARGET;
+            let out2 = out.clone();
+            out.splice_async(
+                &stream,
+                flags,
+                glib::Priority::DEFAULT,
+                gio::Cancellable::NONE,
+                move |res| {
+                    if res.is_err() {
+                        cb(None);
+                        return;
+                    }
+                    let bytes = out2.steal_as_bytes();
+                    cb(String::from_utf8(bytes.to_vec()).ok());
+                },
+            );
+        });
+    }
+}

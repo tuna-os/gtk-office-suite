@@ -675,6 +675,81 @@ impl DecksWindow {
             }
         }
 
+        // ── Cross-app clipboard (DESIGN-UI): Ctrl+C copies the selected
+        // text box as a styled fragment; Ctrl+V pastes a fragment as a
+        // new text box. Window-level capture, skipped while an entry or
+        // the notes view has focus.
+        {
+            let ss = slides.clone();
+            let cs_ref = current_slide.clone();
+            let so = selected_object.clone();
+            let cs = canvas.clone();
+            let undo2 = undo.clone();
+            let refresh = refresh_hud.clone();
+            let win = suite_win.window.clone();
+            let key = gtk::EventControllerKey::new();
+            key.set_propagation_phase(gtk::PropagationPhase::Capture);
+            key.connect_key_pressed(move |_, keyval, _code, mods| {
+                let ctrl = mods.contains(gtk::gdk::ModifierType::CONTROL_MASK);
+                if !ctrl || (keyval != gtk::gdk::Key::c && keyval != gtk::gdk::Key::v) {
+                    return glib::Propagation::Proceed;
+                }
+                // Text widgets keep their own clipboard behavior.
+                if gtk::prelude::GtkWindowExt::focus(&win)
+                    .map(|w| w.is::<gtk::Text>() || w.is::<gtk::TextView>() || w.is::<gtk::Entry>())
+                    .unwrap_or(false)
+                {
+                    return glib::Propagation::Proceed;
+                }
+                if keyval == gtk::gdk::Key::c {
+                    let idx = cs_ref.get();
+                    let slides = ss.borrow();
+                    let frag = so
+                        .get()
+                        .and_then(|oi| slides.get(idx).and_then(|s| s.objects.get(oi)))
+                        .and_then(decks_core::fragment::copy_object);
+                    if let Some(frag) = frag {
+                        let provider = suite_common::clipboard::provider(
+                            decks_core::fragment::MIME,
+                            &frag.to_json(),
+                            &frag.to_html(),
+                            &frag.to_plain(),
+                        );
+                        let _ = cs.clipboard().set_content(Some(&provider));
+                        return glib::Propagation::Stop;
+                    }
+                    return glib::Propagation::Proceed;
+                }
+                // Paste
+                let clipboard = cs.clipboard();
+                if !suite_common::clipboard::offers(&clipboard, decks_core::fragment::MIME) {
+                    return glib::Propagation::Proceed;
+                }
+                let cs2 = cs.clone();
+                let cs_ref2 = cs_ref.clone();
+                let undo3 = undo2.clone();
+                let refresh2 = refresh.clone();
+                suite_common::clipboard::read_string(
+                    &clipboard,
+                    decks_core::fragment::MIME,
+                    move |json| {
+                        if let Some(frag) = json
+                            .as_deref()
+                            .and_then(decks_core::fragment::Fragment::from_json)
+                        {
+                            let obj = decks_core::fragment::paste_as_text_box(&frag, 240.0, 200.0);
+                            let idx = cs_ref2.get();
+                            undo3.borrow_mut().execute(Box::new(AddObjectCmd::new(idx, obj)));
+                            cs2.queue_draw();
+                            refresh2();
+                        }
+                    },
+                );
+                glib::Propagation::Stop
+            });
+            suite_win.window.add_controller(key);
+        }
+
         // ── Mouse interaction on canvas ──────────────────────────────────
         {
             let ss = slides.clone();

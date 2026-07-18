@@ -1,7 +1,7 @@
 // fragment.rs — Decks side of the cross-app clipboard.
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-use letters_core::fragment::Fragment;
+pub use letters_core::fragment::{Fragment, MIME};
 use letters_core::model::Paragraph;
 
 use crate::engine::SlideObject;

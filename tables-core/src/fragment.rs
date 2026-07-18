@@ -1,7 +1,7 @@
 // fragment.rs — Tables side of the cross-app clipboard.
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-use letters_core::fragment::{Fragment, GridCell};
+pub use letters_core::fragment::{Fragment, GridCell, MIME};
 
 use crate::engine::TablesEngine;
 use crate::sheet::SheetModel;

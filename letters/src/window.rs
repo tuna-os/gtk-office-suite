@@ -84,6 +84,61 @@ fn make_doc_widget(settings: Option<&gio::Settings>) -> (PageContainer, gtk::Tex
         });
         editor.add_controller(drop);
     }
+    // Cross-app clipboard (DESIGN-UI): Ctrl+C offers the suite fragment
+    // (styled runs) alongside HTML and plain text; Ctrl+V prefers it.
+    // Capture phase so we can supersede the TextView's built-in
+    // plain-text handling only when suite content is involved.
+    {
+        let buf = buffer.clone();
+        let ed = editor.clone();
+        let key = gtk::EventControllerKey::new();
+        key.set_propagation_phase(gtk::PropagationPhase::Capture);
+        key.connect_key_pressed(move |_, keyval, _code, mods| {
+            let ctrl = mods.contains(gtk4::gdk::ModifierType::CONTROL_MASK);
+            if ctrl && keyval == gtk4::gdk::Key::c {
+                if let Some((start, end)) = buf.selection_bounds() {
+                    let doc = crate::bridge::capture_from_buffer(&buf);
+                    let frag = letters_core::fragment::from_selection(
+                        &doc,
+                        start.offset() as usize,
+                        end.offset() as usize,
+                    );
+                    let provider = suite_common::clipboard::provider(
+                        letters_core::fragment::MIME,
+                        &frag.to_json(),
+                        &frag.to_html(),
+                        &frag.to_plain(),
+                    );
+                    let _ = ed.clipboard().set_content(Some(&provider));
+                    return gtk4::glib::Propagation::Stop;
+                }
+                return gtk4::glib::Propagation::Proceed;
+            }
+            if ctrl && keyval == gtk4::gdk::Key::v {
+                let clipboard = ed.clipboard();
+                if suite_common::clipboard::offers(&clipboard, letters_core::fragment::MIME) {
+                    let buf = buf.clone();
+                    suite_common::clipboard::read_string(
+                        &clipboard,
+                        letters_core::fragment::MIME,
+                        move |json| {
+                            if let Some(frag) = json
+                                .as_deref()
+                                .and_then(letters_core::fragment::Fragment::from_json)
+                            {
+                                insert_fragment(&buf, &frag);
+                            }
+                        },
+                    );
+                    return gtk4::glib::Propagation::Stop;
+                }
+                return gtk4::glib::Propagation::Proceed;
+            }
+            gtk4::glib::Propagation::Proceed
+        });
+        editor.add_controller(key);
+    }
+
     // Selection format popover: context reveals capability (DESIGN-UI §1).
     // Non-autohide so it never steals focus from the editor; buttons fire
     // the same app actions as the toolbar.
@@ -1131,6 +1186,41 @@ fn save_page_setup_to_settings(settings: &gio::Settings, ps: &gtk::PageSetup) {
     let _ = settings.set_double("page-margin-bottom", ps.bottom_margin(gtk::Unit::Points));
     let _ = settings.set_double("page-margin-left", ps.left_margin(gtk::Unit::Points));
     let _ = settings.set_double("page-margin-right", ps.right_margin(gtk::Unit::Points));
+}
+
+/// Insert a suite fragment at the cursor: styled runs map onto the
+/// editor's named tags; grids land as tab-separated lines (a real
+/// cell-tagged table paste needs the buffer table support tracked in
+/// PARITY's bridge gaps).
+fn insert_fragment(buf: &gtk::TextBuffer, frag: &letters_core::fragment::Fragment) {
+    use letters_core::fragment::Fragment;
+    match frag {
+        Fragment::Text(paras) => {
+            for (i, p) in paras.iter().enumerate() {
+                if i > 0 {
+                    buf.insert_at_cursor("\n");
+                }
+                for run in &p.runs {
+                    let mut tags: Vec<&str> = Vec::new();
+                    if run.style.bold { tags.push("bold"); }
+                    if run.style.italic { tags.push("italic"); }
+                    if run.style.underline { tags.push("underline"); }
+                    if run.style.strikethrough { tags.push("strikethrough"); }
+                    if run.style.highlight { tags.push("highlight"); }
+                    if run.style.code { tags.push("code"); }
+                    let mut iter = buf.iter_at_mark(&buf.get_insert());
+                    if tags.is_empty() {
+                        buf.insert(&mut iter, &run.text);
+                    } else {
+                        buf.insert_with_tags_by_name(&mut iter, &run.text, &tags);
+                    }
+                }
+            }
+        }
+        Fragment::Grid(_) => {
+            buf.insert_at_cursor(&frag.to_plain());
+        }
+    }
 }
 
 fn update_word_count(buf: &gtk::TextBuffer, wc: &gtk4::Label) {

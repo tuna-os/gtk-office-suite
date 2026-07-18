@@ -180,3 +180,93 @@ mod tests {
         assert!(html.contains("<b>bold"), "{html}");
     }
 }
+
+/// Extract the document range [start, end) (global char offsets, where
+/// each paragraph break counts as one char) as a text fragment —
+/// partial paragraphs keep their runs sliced at the boundaries.
+pub fn from_selection(doc: &crate::model::Document, start: usize, end: usize) -> Fragment {
+    let mut paras: Vec<Paragraph> = Vec::new();
+    let mut pos = 0usize;
+    for p in &doc.paragraphs {
+        let len = p.char_len();
+        let p_start = pos;
+        let p_end = pos + len;
+        pos = p_end + 1; // the paragraph break
+        if p_end < start || p_start >= end {
+            continue;
+        }
+        let s = start.saturating_sub(p_start);
+        let e = (end - p_start).min(len);
+        paras.push(slice_paragraph(p, s, e));
+    }
+    Fragment::Text(paras)
+}
+
+fn slice_paragraph(p: &Paragraph, start: usize, end: usize) -> Paragraph {
+    let mut runs: Vec<Run> = Vec::new();
+    let mut pos = 0usize;
+    for r in &p.runs {
+        let len = r.char_len();
+        let r_start = pos;
+        let r_end = pos + len;
+        pos = r_end;
+        if r_end <= start || r_start >= end {
+            continue;
+        }
+        let s = start.saturating_sub(r_start);
+        let e = (end - r_start).min(len);
+        let text: String = r.text.chars().skip(s).take(e - s).collect();
+        if !text.is_empty() {
+            runs.push(Run { text, style: r.style.clone() });
+        }
+    }
+    Paragraph { style: p.style.clone(), runs }
+}
+
+#[cfg(test)]
+mod selection_tests {
+    use super::*;
+    use crate::model::Document;
+
+    #[test]
+    fn whole_document_selection() {
+        let d = Document::from_plain_text("one\ntwo");
+        let Fragment::Text(paras) = from_selection(&d, 0, 7) else { panic!() };
+        assert_eq!(paras.len(), 2);
+        assert_eq!(paras[0].text(), "one");
+        assert_eq!(paras[1].text(), "two");
+    }
+
+    #[test]
+    fn partial_span_across_paragraphs() {
+        let d = Document::from_plain_text("hello\nworld");
+        // chars: h e l l o ⏎ w o r l d  → [3, 8) = "lo" + "wo"
+        let Fragment::Text(paras) = from_selection(&d, 3, 8) else { panic!() };
+        assert_eq!(paras.len(), 2);
+        assert_eq!(paras[0].text(), "lo");
+        assert_eq!(paras[1].text(), "wo");
+    }
+
+    #[test]
+    fn run_styles_survive_slicing() {
+        let mut d = Document::from_plain_text("plain bold tail");
+        d.apply_run_style(6, 10, &crate::model::StylePatch::set_bold(true));
+        // Select "n bold t" = [4, 12)
+        let Fragment::Text(paras) = from_selection(&d, 4, 12) else { panic!() };
+        assert_eq!(paras[0].text(), "n bold t");
+        let bold: String = paras[0]
+            .runs
+            .iter()
+            .filter(|r| r.style.bold)
+            .map(|r| r.text.as_str())
+            .collect();
+        assert_eq!(bold, "bold");
+    }
+
+    #[test]
+    fn empty_selection_is_empty() {
+        let d = Document::from_plain_text("abc");
+        let Fragment::Text(paras) = from_selection(&d, 2, 2) else { panic!() };
+        assert!(paras.is_empty() || paras.iter().all(|p| p.char_len() == 0));
+    }
+}
