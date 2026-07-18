@@ -370,10 +370,28 @@ fn serialize_runs(runs: &[Run]) -> String {
         }
 
         // Code spans are per-run and innermost; their text is verbatim.
+        // Backticks inside the span need a longer fence, and content that
+        // starts/ends with a backtick (or is all spaces) needs padding.
         if run.style.code {
-            out.push('`');
-            out.push_str(&run.text);
-            out.push('`');
+            let text = &run.text;
+            let longest_tick_run = text
+                .split(|c| c != '`')
+                .map(str::len)
+                .max()
+                .unwrap_or(0);
+            let fence = "`".repeat(longest_tick_run + 1);
+            let pad = text.starts_with('`')
+                || text.ends_with('`')
+                || (!text.is_empty() && text.chars().all(|c| c == ' '));
+            out.push_str(&fence);
+            if pad {
+                out.push(' ');
+            }
+            out.push_str(text);
+            if pad {
+                out.push(' ');
+            }
+            out.push_str(&fence);
         } else {
             out.push_str(&escape_text(&run.text));
         }
