@@ -30,6 +30,7 @@ pub struct StylePatch {
     pub underline: Option<bool>,
     pub strikethrough: Option<bool>,
     pub highlight: Option<bool>,
+    pub code: Option<bool>,
     pub link: Option<Option<String>>,
 }
 
@@ -39,6 +40,7 @@ impl StylePatch {
     pub fn set_underline(v: bool) -> Self { Self { underline: Some(v), ..Default::default() } }
     pub fn set_strikethrough(v: bool) -> Self { Self { strikethrough: Some(v), ..Default::default() } }
     pub fn set_highlight(v: bool) -> Self { Self { highlight: Some(v), ..Default::default() } }
+    pub fn set_code(v: bool) -> Self { Self { code: Some(v), ..Default::default() } }
     pub fn set_link(v: Option<String>) -> Self { Self { link: Some(v), ..Default::default() } }
 
     pub fn apply_to(&self, style: &mut RunStyle) {
@@ -47,6 +49,7 @@ impl StylePatch {
         if let Some(v) = self.underline { style.underline = v; }
         if let Some(v) = self.strikethrough { style.strikethrough = v; }
         if let Some(v) = self.highlight { style.highlight = v; }
+        if let Some(v) = self.code { style.code = v; }
         if let Some(v) = &self.link { style.link = v.clone(); }
     }
 }

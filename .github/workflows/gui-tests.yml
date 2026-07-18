@@ -41,6 +41,9 @@ jobs:
       - name: Run smoke tests
         run: tests/gui/run_gui_tests.sh test_smoke.py
 
+      - name: Run buffer-bridge round-trip tests (Xvfb)
+        run: xvfb-run -a cargo test -p letters bridge
+
   # VLM-judged visual audit. Non-gating (continue-on-error): screenshot
   # judgments flake on model output and need API keys, so they inform
   # rather than block. Failures are still visible in the job UI.

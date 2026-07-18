@@ -1,6 +1,7 @@
 use libadwaita as adw;
 use adw::prelude::AdwDialogExt;
 use gtk4::{gio, prelude::*};
+mod bridge;
 mod window;
 mod engine;
 mod preferences;

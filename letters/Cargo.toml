@@ -12,6 +12,7 @@ pango = "0.22"
 pangocairo = "0.22"
 zspell = { version = "0.5", features = ["unstable-suggestions"] }
 suite-common = { path = "../suite-common" }
+letters-core = { path = "../letters-core" }
 rdocx = { git = "https://github.com/hanthor/rdocx.git", rev = "8e30c27" }
 rdocx-oxml = "0.1.2"
 

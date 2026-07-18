@@ -856,14 +856,9 @@ impl LettersWindow {
                             let path = file.path().unwrap_or_default();
                             let name = file.basename().map(|p| p.display().to_string()).unwrap_or_default();
                             let (container, buf) = make_doc_widget(Some(&s));
-                            let is_docx = path.extension().and_then(|e| e.to_str()).map(|e| e == "docx").unwrap_or(false);
-                            if is_docx {
-                                // Use docx_bridge for formatting-preserving DOCX import
-                                let path_str = path.to_string_lossy().to_string();
-                                let _ = crate::docx_bridge::read_docx_to_buffer(&path_str, &buf);
-                            } else {
-                                let content = std::fs::read_to_string(&path).unwrap_or_default();
-                                buf.set_text(&content);
+                            let path_str = path.to_string_lossy().to_string();
+                            if let Err(e) = crate::bridge::load_file_to_buffer(&path_str, &buf) {
+                                eprintln!("open failed: {e}");
                             }
                             let td = TabData::new();
                             td.0.borrow_mut().file = Some(path);
@@ -1228,27 +1223,10 @@ fn do_save(tv: &adw::TabView, _stack: &gtk4::Stack) {
                 let buf = get_textview(&child).map(|tv| tv.buffer());
                 if let Some(buf) = buf {
                     let path_str = path.to_string_lossy().to_string();
-                    let is_docx = path.extension().and_then(|e| e.to_str()).map(|e| e == "docx").unwrap_or(false);
-                    if is_docx {
-                        // Paginate buffer to get page break positions
-                        let config = crate::layout::LayoutConfig::from_settings(
-                            &gtk4::gio::Settings::new("org.tunaos.letters-rust")
-                        );
-                        let ctx = gtk4::pango::Context::new();
-                        let pages = crate::layout::paginate(&buf, &config, &ctx);
-                        let page_breaks: Vec<usize> = pages.iter().skip(1).map(|p| {
-                            // Count paragraphs up to the page start offset
-                            let text = buf.text(&buf.start_iter(), &buf.end_iter(), false).to_string();
-                            text[..p.start_offset as usize].lines().count()
-                        }).collect();
-                        // Use docx_bridge with page break preservation
-                        let _ = crate::docx_bridge::write_buffer_to_docx_with_layout(
-                            &path_str, &buf, Some(&path_str), &page_breaks
-                        );
-                    } else {
-                        let text = buf.text(&buf.start_iter(), &buf.end_iter(), false);
-                        let doc = crate::engine::Document::from_text(&text);
-                        let _ = crate::engine::write(&path_str, &doc);
+                    // All formats route through letters-core via the bridge;
+                    // formatting survives in both markdown and docx now.
+                    if let Err(e) = crate::bridge::save_buffer_to_file(&buf, &path_str) {
+                        eprintln!("save failed: {e}");
                     }
                 }
                 page.set_needs_attention(false);
