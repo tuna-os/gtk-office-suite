@@ -116,7 +116,14 @@ impl TablesWindow {
         h_adj.connect_value_changed({ let da = drawing_area.clone(); move |_| da.queue_draw() });
         v_adj.connect_value_changed({ let da = drawing_area.clone(); move |_| da.queue_draw() });
 
-        // ── Formula bar ─────────────────────────────────────────────────
+        // ── Formula bar: name box (cell ref) + fx entry, Calc-style ────
+        let name_box = gtk4::Entry::new();
+        name_box.set_width_chars(7);
+        name_box.set_max_width_chars(7);
+        name_box.set_text("A1");
+        name_box.set_tooltip_text(Some("Cell reference — type one to jump"));
+        name_box.update_property(&[gtk4::accessible::Property::Label("Cell reference")]);
+
         let fx_label = gtk4::Label::new(Some(" fx"));
         fx_label.add_css_class("dim-label");
         fx_label.set_width_chars(5);
@@ -129,8 +136,93 @@ impl TablesWindow {
         fx_bar.set_margin_start(6); fx_bar.set_margin_end(6);
         fx_bar.set_margin_top(6); fx_bar.set_margin_bottom(6);
         fx_bar.set_halign(gtk4::Align::Fill);
+        fx_bar.append(&name_box);
         fx_bar.append(&fx_label);
         fx_bar.append(&fx_entry);
+
+        // Live selection readout (status area, DESIGN-UI: "live, not
+        // decorative"): cell ref in the name box; sum/avg/count of a range.
+        let stats_label = gtk4::Label::new(None);
+        stats_label.add_css_class("caption");
+        stats_label.add_css_class("dim-label");
+        stats_label.set_hexpand(true);
+        stats_label.set_halign(gtk4::Align::End);
+        stats_label.update_property(&[gtk4::accessible::Property::Label("Selection statistics")]);
+
+        let refresh_sel: Rc<dyn Fn()> = {
+            let s = state.clone();
+            let nb = name_box.clone();
+            let stats = stats_label.clone();
+            Rc::new(move || {
+                let st = s.borrow();
+                let sh = st.sheet();
+                nb.set_text(&format!(
+                    "{}{}",
+                    tables_core::sheet::col_label(sh.selected_col),
+                    sh.selected_row + 1
+                ));
+                if sh.has_range_selection() {
+                    let fmt = |v: f64| {
+                        if v.fract() == 0.0 && v.abs() < 1e15 {
+                            format!("{}", v as i64)
+                        } else {
+                            format!("{v:.2}")
+                        }
+                    };
+                    let stats_v = sh.selection_stats();
+                    let (r0, c0, r1, c1) = sh.selection_rect();
+                    let range = format!(
+                        "{}{}:{}{}",
+                        tables_core::sheet::col_label(c0), r0 + 1,
+                        tables_core::sheet::col_label(c1), r1 + 1
+                    );
+                    if stats_v.count > 0 {
+                        stats.set_text(&format!(
+                            "{}  ·  Sum {}  ·  Avg {}  ·  Count {}",
+                            range, fmt(stats_v.sum), fmt(stats_v.avg), stats_v.count
+                        ));
+                    } else {
+                        stats.set_text(&range);
+                    }
+                } else {
+                    stats.set_text("");
+                }
+            })
+        };
+
+        // Ctrl+G focuses the name box for a keyboard-only jump.
+        {
+            let nb = name_box.clone();
+            let act = gtk4::gio::SimpleAction::new("goto-cell", None);
+            act.connect_activate(move |_, _| {
+                nb.grab_focus();
+                nb.select_region(0, -1);
+            });
+            app.add_action(&act);
+            app.set_accels_for_action("app.goto-cell", &["<Primary>g"]);
+        }
+
+        // Name box: Enter jumps to the typed reference.
+        {
+            let s = state.clone();
+            let da = drawing_area.clone();
+            let refresh = refresh_sel.clone();
+            let fx = fx_entry.clone();
+            name_box.connect_activate(move |nb| {
+                if let Some((r, c)) = tables_core::sheet::parse_cell_ref(&nb.text()) {
+                    {
+                        let st = s.borrow();
+                        let mut sh = st.sheet_mut();
+                        let r = r.min(sh.rows.saturating_sub(1));
+                        let c = c.min(sh.cols.saturating_sub(1));
+                        sh.select_cell(r, c);
+                    }
+                    refresh();
+                    da.queue_draw();
+                    fx.grab_focus();
+                }
+            });
+        }
 
         // Wire formula bar: Enter commits
         {
@@ -161,6 +253,10 @@ impl TablesWindow {
                 st.sheet_mut().sync_from_engine(&st.engine);
                 let shown = st.engine.cell(r, c);
                 update_grid_a11y(&da, &tables_core::sheet::col_label(c), r, &shown);
+                drop(st);
+                // Commit returns focus to the grid so arrow keys navigate
+                // (Calc behavior); the next keystroke edits via the grid.
+                da.grab_focus();
                 da.queue_draw();
             });
         }
@@ -172,8 +268,9 @@ impl TablesWindow {
             let fx = fx_entry.clone();
             let h = h_adj.clone();
             let v = v_adj.clone();
+            let refresh = refresh_sel.clone();
             let click = gtk4::GestureClick::new();
-            click.connect_pressed(move |_g, _n, x, y| {
+            click.connect_pressed(move |g, _n, x, y| {
                 let wx = x + h.value();
                 let wy = y + v.value();
                 let st = s.borrow();
@@ -197,20 +294,26 @@ impl TablesWindow {
                 }
                 if let Some((col, row)) = xy_to_cell(wx, wy, h.value(), &*sh) {
                     drop(sh); drop(st);
-                    let mut st = s.borrow_mut();
+                    let shift = g
+                        .current_event_state()
+                        .contains(gtk4::gdk::ModifierType::SHIFT_MASK);
                     {
-                        let shown = st.engine.cell(row, col);
-                        update_grid_a11y(&da, &tables_core::sheet::col_label(col), row, &shown);
-                    }
-                    let mut sh = st.sheet_mut();
-                    sh.selected_row = row;
-                    sh.selected_col = col;
-                    let val = sh.data[row][col].clone();
-                    if sh.is_formula(row, col) {
+                        let mut st = s.borrow_mut();
+                        {
+                            let shown = st.engine.cell(row, col);
+                            update_grid_a11y(&da, &tables_core::sheet::col_label(col), row, &shown);
+                        }
+                        let mut sh = st.sheet_mut();
+                        if shift {
+                            sh.extend_selection(row, col);
+                        } else {
+                            sh.select_cell(row, col);
+                        }
+                        let val = sh.data[row][col].clone();
                         fx.set_text(&val);
-                    } else {
-                        fx.set_text(&val);
                     }
+                    refresh();
+                    da.grab_focus();
                     da.queue_draw();
                 }
             });
@@ -249,6 +352,65 @@ impl TablesWindow {
             drag.connect_drag_end(move |_g, _dx, _dy| {
                 dc3.set(None);
             });
+            drawing_area.add_controller(drag);
+        }
+
+        // ── Drag range selection on the cell area ───────────────────────
+        {
+            let s = state.clone();
+            let da = drawing_area.clone();
+            let h = h_adj.clone();
+            let v = v_adj.clone();
+            let refresh = refresh_sel.clone();
+            // Anchor cell of an in-progress selection drag, set on begin
+            // only when the press is in the cell area (not header/divider).
+            let anchor = Rc::new(Cell::new(None::<(usize, usize)>));
+            let drag = gtk4::GestureDrag::new();
+            drag.set_button(1);
+            {
+                let s = s.clone();
+                let h = h.clone();
+                let v = v.clone();
+                let anchor = anchor.clone();
+                drag.connect_drag_begin(move |_g, x, y| {
+                    let st = s.borrow();
+                    let sh = st.sheet();
+                    let wx = x + h.value();
+                    let wy = y + v.value();
+                    if hit_col_divider(x, y, h.value(), &sh).is_none() && wy >= COL_HEADER_HEIGHT {
+                        if let Some((col, row)) = xy_to_cell(wx, wy, h.value(), &sh) {
+                            anchor.set(Some((row, col)));
+                        }
+                    }
+                });
+            }
+            {
+                let s = s.clone();
+                let anchor = anchor.clone();
+                drag.connect_drag_update(move |g, dx, dy| {
+                    let Some((ar, ac)) = anchor.get() else { return };
+                    // Ignore sub-threshold jitters so plain clicks stay clicks.
+                    if dx.abs() < 4.0 && dy.abs() < 4.0 { return; }
+                    let Some((sx, sy)) = g.start_point() else { return };
+                    {
+                        let st = s.borrow();
+                        let sh = st.sheet();
+                        let wx = sx + dx + h.value();
+                        let wy = (sy + dy + v.value()).max(COL_HEADER_HEIGHT);
+                        let Some((col, row)) = xy_to_cell(wx, wy, h.value(), &sh) else { return };
+                        drop(sh);
+                        let mut sh = st.sheet_mut();
+                        sh.select_cell(ar, ac);
+                        sh.extend_selection(row, col);
+                    }
+                    refresh();
+                    da.queue_draw();
+                });
+            }
+            {
+                let anchor = anchor.clone();
+                drag.connect_drag_end(move |_g, _dx, _dy| anchor.set(None));
+            }
             drawing_area.add_controller(drag);
         }
 
@@ -381,6 +543,9 @@ impl TablesWindow {
             .build();
         add_btn.set_css_classes(&["flat", "circular"]);
         sheet_bar.append(&add_btn);
+        // Selection statistics live at the right end of the sheet bar,
+        // Calc-style (one bottom bar, tabs left / stats right).
+        sheet_bar.append(&stats_label);
 
         // Add sheet action
         {
@@ -641,6 +806,7 @@ impl TablesWindow {
             ("app.new-document", "New Spreadsheet"),
             ("app.undo", "Undo"),
             ("app.redo", "Redo"),
+            ("app.goto-cell", "Go to Cell…"),
         ]);
 
         let extended_toolbar: Vec<suite_common::ToolbarItem> = vec![
@@ -798,13 +964,58 @@ impl TablesWindow {
             app.set_accels_for_action("app.redo", &["<Primary>y", "<Primary><Shift>z"]);
         }
 
-        // ── Keyboard shortcuts ──────────────────────────────────────────
+        // ── Grid keyboard: arrows move, Shift+arrows extend, Delete clears ─
+        drawing_area.set_focusable(true);
         {
             let s = state.clone();
             let da = drawing_area.clone();
+            let fx = fx_entry.clone();
+            let refresh = refresh_sel.clone();
             let key = gtk4::EventControllerKey::new();
-            key.connect_key_pressed(move |_, keyval, _code, _mods| {
-                if keyval == gtk::gdk::Key::Delete || keyval == gtk::gdk::Key::BackSpace {
+            key.connect_key_pressed(move |_, keyval, _code, mods| {
+                use gtk4::gdk::Key;
+                let shift = mods.contains(gtk4::gdk::ModifierType::SHIFT_MASK);
+                let delta = match keyval {
+                    Key::Up => Some((-1i64, 0i64)),
+                    Key::Down => Some((1, 0)),
+                    Key::Left => Some((0, -1)),
+                    Key::Right => Some((0, 1)),
+                    _ => None,
+                };
+                if let Some((dr, dc)) = delta {
+                    {
+                        let st = s.borrow();
+                        let mut sh = st.sheet_mut();
+                        // Shift extends from the range's moving end; a plain
+                        // arrow moves the anchor cell.
+                        let (br, bc) = if shift {
+                            (sh.sel_end_row, sh.sel_end_col)
+                        } else {
+                            (sh.selected_row, sh.selected_col)
+                        };
+                        let nr = (br as i64 + dr).clamp(0, sh.rows as i64 - 1) as usize;
+                        let nc = (bc as i64 + dc).clamp(0, sh.cols as i64 - 1) as usize;
+                        if shift {
+                            sh.extend_selection(nr, nc);
+                        } else {
+                            sh.select_cell(nr, nc);
+                            let val = sh.data[nr][nc].clone();
+                            fx.set_text(&val);
+                        }
+                    }
+                    {
+                        let st = s.borrow();
+                        let sh = st.sheet();
+                        let (r, c) = (sh.selected_row, sh.selected_col);
+                        let shown = sh.cell(r, c).to_string();
+                        drop(sh);
+                        update_grid_a11y(&da, &tables_core::sheet::col_label(c), r, &shown);
+                    }
+                    refresh();
+                    da.queue_draw();
+                    return gtk4::glib::Propagation::Stop;
+                }
+                if keyval == Key::Delete || keyval == Key::BackSpace {
                     let mut st = s.borrow_mut();
                     let r = st.sheet().selected_row;
                     let c = st.sheet().selected_col;

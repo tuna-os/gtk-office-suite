@@ -162,6 +162,72 @@ class TablesSmoke(BaseGUITestCase):
         self.assertIn("A1", grid.description)
 
 
+class TablesNameBoxSmoke(BaseGUITestCase):
+    app_name = "tables"
+
+    def test_name_box_jump_and_edit(self):
+        """Type a ref in the name box → selection jumps; typed value lands
+        in that cell (asserted via the grid's accessible description)."""
+        from dogtail import rawinput
+        import subprocess
+
+        subprocess.run(["gapplication", "action", "org.tunaos.tables-rust", "new-document"])
+        time.sleep(1.5)
+        # Ctrl+G (Go to Cell) focuses the name box with text selected.
+        rawinput.keyCombo("<Control>g")
+        time.sleep(0.3)
+        rawinput.typeText("C5")
+        rawinput.keyCombo("Return")
+        time.sleep(0.5)
+        # The jump hands focus to the fx entry; type a value there.
+        rawinput.typeText("42")
+        rawinput.keyCombo("Return")
+        time.sleep(0.8)
+        grid = self.app.child(name="Spreadsheet grid")
+        self.assertIn("C5", grid.description,
+                      f"grid description: {grid.description!r}")
+        self.assertIn("42", grid.description)
+        self.assertIsNone(self.process.poll(), "tables crashed during name-box jump")
+
+    def _put(self, ref, value):
+        from dogtail import rawinput
+        rawinput.keyCombo("<Control>g")
+        time.sleep(0.2)
+        rawinput.typeText(ref)
+        rawinput.keyCombo("Return")
+        time.sleep(0.3)
+        rawinput.typeText(value)
+        rawinput.keyCombo("Return")
+        time.sleep(0.3)
+
+    def test_keyboard_range_selection_updates_stats(self):
+        """Shift+arrows extend the selection; the status area shows live
+        sum/avg/count for the numeric cells (DESIGN-UI: status is live)."""
+        from dogtail import rawinput
+        import subprocess
+
+        subprocess.run(["gapplication", "action", "org.tunaos.tables-rust", "new-document"])
+        time.sleep(1.5)
+        self._put("A1", "10")
+        self._put("A2", "20")
+        self._put("A3", "30")
+        # Committing in fx hands focus back to the grid (Calc behavior),
+        # so keyboard selection works straight away.
+        rawinput.keyCombo("<Shift>Up")
+        rawinput.keyCombo("<Shift>Up")
+        time.sleep(0.8)
+        # GtkLabel's AT-SPI name follows its text; find the stats readout
+        # by content.
+        labels = [c.name for c in self.app.findChildren(
+            lambda c: c.roleName == "label")]
+        stats = [l for l in labels if "Sum" in l]
+        self.assertTrue(stats, f"no stats label found; labels: {labels}")
+        self.assertIn("Sum 60", stats[0])
+        self.assertIn("Count 3", stats[0])
+        self.assertIn("A1:A3", stats[0])
+        self.assertIsNone(self.process.poll(), "tables crashed during keyboard selection")
+
+
 class DecksSmoke(BaseGUITestCase):
     app_name = "decks"
 

@@ -128,10 +128,12 @@ pub fn draw_grid(
             if cx + cw < ROW_HEADER_WIDTH { cx += cw; continue; }
             if cx > width { break; }
             let is_sel = r == sheet.selected_row && c == sheet.selected_col;
+            let (sr0, sc0, sr1, sc1) = sheet.selection_rect();
+            let in_range = r >= sr0 && r <= sr1 && c >= sc0 && c <= sc1;
             let border = &sheet.borders[r][c];
 
-            // Cell bg
-            if is_sel {
+            // Cell bg — whole selection range gets the accent wash.
+            if in_range {
                 cr.set_source_rgb(0.8, 0.85, 0.95);
             } else {
                 cr.set_source_rgb(1.0, 1.0, 1.0);
@@ -177,10 +179,21 @@ pub fn draw_grid(
     }
     cr.restore().unwrap();
 
-    // Selection highlight in header
-    cr.set_source_rgba(SELECTION_COLOR.0, SELECTION_COLOR.1, SELECTION_COLOR.2, 0.2);
-    let sel_cx = ROW_HEADER_WIDTH - scroll_x + sheet.selected_col as f64 * COL_WIDTH;
-    let sel_cy = COL_HEADER_HEIGHT - scroll_y + sheet.selected_row as f64 * ROW_HEIGHT;
-    cr.rectangle(sel_cx, sel_cy, sheet.col_width(sheet.selected_col), ROW_HEIGHT);
-    cr.fill().unwrap();
+    // Selection range outline (2px accent around the whole rectangle).
+    let (sr0, sc0, sr1, sc1) = sheet.selection_rect();
+    let px_x = |col: usize| -> f64 {
+        ROW_HEADER_WIDTH - scroll_x + (0..col).map(|c| sheet.col_width(c)).sum::<f64>()
+    };
+    let x0 = px_x(sc0);
+    let x1 = px_x(sc1 + 1);
+    let y0 = COL_HEADER_HEIGHT - scroll_y + sr0 as f64 * ROW_HEIGHT;
+    let y1 = COL_HEADER_HEIGHT - scroll_y + (sr1 + 1) as f64 * ROW_HEIGHT;
+    cr.save().unwrap();
+    cr.rectangle(ROW_HEADER_WIDTH, COL_HEADER_HEIGHT, width - ROW_HEADER_WIDTH, height - COL_HEADER_HEIGHT);
+    cr.clip();
+    cr.set_source_rgb(SELECTION_COLOR.0, SELECTION_COLOR.1, SELECTION_COLOR.2);
+    cr.set_line_width(2.0);
+    cr.rectangle(x0, y0, x1 - x0, y1 - y0);
+    cr.stroke().unwrap();
+    cr.restore().unwrap();
 }

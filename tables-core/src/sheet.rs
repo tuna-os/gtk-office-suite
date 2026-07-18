@@ -76,6 +76,32 @@ pub fn col_label(c: usize) -> String {
     s
 }
 
+/// Parse a cell reference like "A1", "b3", "AA10" → (row, col), 0-based.
+pub fn parse_cell_ref(s: &str) -> Option<(usize, usize)> {
+    let s = s.trim();
+    let letters: String = s.chars().take_while(|c| c.is_ascii_alphabetic()).collect();
+    let digits = &s[letters.len()..];
+    if letters.is_empty() || digits.is_empty() || !digits.chars().all(|c| c.is_ascii_digit()) {
+        return None;
+    }
+    let mut col: usize = 0;
+    for ch in letters.chars() {
+        col = col * 26 + (ch.to_ascii_uppercase() as usize - 'A' as usize) + 1;
+    }
+    let row: usize = digits.parse().ok()?;
+    if row == 0 { return None; }
+    Some((row - 1, col - 1))
+}
+
+/// Summary statistics over the numeric cells of a selection.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct SelectionStats {
+    /// Cells in the selection containing a parseable number.
+    pub count: usize,
+    pub sum: f64,
+    pub avg: f64,
+}
+
 pub fn hit_col_divider(x: f64, y: f64, scroll_x: f64, sheet: &SheetModel) -> Option<usize> {
     if !(0.0..=COL_HEADER_HEIGHT).contains(&y) { return None; }
     let cx = x - ROW_HEADER_WIDTH + scroll_x;
@@ -102,6 +128,10 @@ pub struct SheetModel {
     pub cols: usize,
     pub selected_row: usize,
     pub selected_col: usize,
+    /// Far corner of the selection rectangle (equals selected_* for a
+    /// single-cell selection). Kept valid by select_cell/extend_selection.
+    pub sel_end_row: usize,
+    pub sel_end_col: usize,
     pub col_widths: Vec<f64>,
     pub formulas: Vec<Vec<bool>>,
     pub formats: Vec<Vec<NumberFormat>>,
@@ -122,6 +152,7 @@ impl SheetModel {
             data: vec![vec![String::new(); cols]; rows],
             rows, cols,
             selected_row: 0, selected_col: 0,
+            sel_end_row: 0, sel_end_col: 0,
             col_widths: vec![COL_WIDTH; cols],
             formulas: vec![vec![false; cols]; rows],
             formats: vec![vec![NumberFormat::default(); cols]; rows],
@@ -132,6 +163,53 @@ impl SheetModel {
             validations: vec![vec![None; cols]; rows],
             engine_idx,
         }
+    }
+
+    /// Collapse the selection to a single cell.
+    pub fn select_cell(&mut self, r: usize, c: usize) {
+        self.selected_row = r;
+        self.selected_col = c;
+        self.sel_end_row = r;
+        self.sel_end_col = c;
+    }
+
+    /// Extend the selection rectangle from the anchor to (r, c).
+    pub fn extend_selection(&mut self, r: usize, c: usize) {
+        self.sel_end_row = r;
+        self.sel_end_col = c;
+    }
+
+    /// Normalized selection rectangle: (row0, col0, row1, col1), inclusive.
+    pub fn selection_rect(&self) -> (usize, usize, usize, usize) {
+        (
+            self.selected_row.min(self.sel_end_row),
+            self.selected_col.min(self.sel_end_col),
+            self.selected_row.max(self.sel_end_row).min(self.rows.saturating_sub(1)),
+            self.selected_col.max(self.sel_end_col).min(self.cols.saturating_sub(1)),
+        )
+    }
+
+    /// True when more than one cell is selected.
+    pub fn has_range_selection(&self) -> bool {
+        self.selected_row != self.sel_end_row || self.selected_col != self.sel_end_col
+    }
+
+    /// Sum/avg/count over numeric cells in the selection. Formula cells
+    /// count through their displayed value when it parses as a number.
+    pub fn selection_stats(&self) -> SelectionStats {
+        let (r0, c0, r1, c1) = self.selection_rect();
+        let mut count = 0usize;
+        let mut sum = 0f64;
+        for r in r0..=r1 {
+            for c in c0..=c1 {
+                if let Ok(v) = self.cell(r, c).trim().parse::<f64>() {
+                    count += 1;
+                    sum += v;
+                }
+            }
+        }
+        let avg = if count > 0 { sum / count as f64 } else { 0.0 };
+        SelectionStats { count, sum, avg }
     }
 
     pub fn cell(&self, r: usize, c: usize) -> &str {
@@ -170,9 +248,7 @@ impl SheetModel {
             else { vb.partial_cmp(&va).unwrap_or(std::cmp::Ordering::Equal) }
         });
         let old = std::mem::take(&mut self.data);
-        for (new_r, old_r) in indices.iter().enumerate() {
-            self.data[new_r] = old[*old_r].clone();
-        }
+        self.data = indices.iter().map(|&old_r| old[old_r].clone()).collect();
     }
 
     pub fn toggle_merge(&mut self) {
@@ -191,5 +267,97 @@ impl SheetModel {
                 self.formulas[r][c] = engine.has_formula(r, c);
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod selection_tests {
+    use super::*;
+
+    fn sheet() -> SheetModel {
+        let mut s = SheetModel::new("t", 10, 10, 0);
+        s.data[1][1] = "10".into();
+        s.data[1][2] = "20".into();
+        s.data[2][1] = "x".into();
+        s.data[2][2] = " 30 ".into();
+        s
+    }
+
+    #[test]
+    fn select_cell_collapses_range() {
+        let mut s = sheet();
+        s.extend_selection(5, 5);
+        assert!(s.has_range_selection());
+        s.select_cell(2, 2);
+        assert!(!s.has_range_selection());
+        assert_eq!(s.selection_rect(), (2, 2, 2, 2));
+    }
+
+    #[test]
+    fn selection_rect_normalizes_and_clamps() {
+        let mut s = sheet();
+        s.select_cell(4, 4);
+        s.extend_selection(1, 99);
+        assert_eq!(s.selection_rect(), (1, 4, 4, 9));
+    }
+
+    #[test]
+    fn stats_over_numeric_cells_only() {
+        let mut s = sheet();
+        s.select_cell(1, 1);
+        s.extend_selection(2, 2);
+        let st = s.selection_stats();
+        assert_eq!(st.count, 3);
+        assert_eq!(st.sum, 60.0);
+        assert_eq!(st.avg, 20.0);
+    }
+
+    #[test]
+    fn stats_empty_selection() {
+        let mut s = sheet();
+        s.select_cell(5, 5);
+        let st = s.selection_stats();
+        assert_eq!(st.count, 0);
+        assert_eq!(st.sum, 0.0);
+        assert_eq!(st.avg, 0.0);
+    }
+
+    #[test]
+    fn parse_cell_refs() {
+        assert_eq!(parse_cell_ref("A1"), Some((0, 0)));
+        assert_eq!(parse_cell_ref("b3"), Some((2, 1)));
+        assert_eq!(parse_cell_ref("AA10"), Some((9, 26)));
+        assert_eq!(parse_cell_ref(" C7 "), Some((6, 2)));
+        assert_eq!(parse_cell_ref("A0"), None);
+        assert_eq!(parse_cell_ref("1A"), None);
+        assert_eq!(parse_cell_ref(""), None);
+        assert_eq!(parse_cell_ref("hello"), None);
+    }
+
+    #[test]
+    fn col_label_round_trips_through_parse() {
+        for c in [0usize, 1, 25, 26, 27, 51, 52, 701, 702] {
+            let label = format!("{}1", col_label(c));
+            assert_eq!(parse_cell_ref(&label), Some((0, c)), "col {c} label {label}");
+        }
+    }
+}
+
+#[cfg(test)]
+mod sort_tests {
+    use super::*;
+
+    #[test]
+    fn toggle_sort_does_not_panic_and_sorts() {
+        let mut s = SheetModel::new("t", 3, 2, 0);
+        s.data[0][0] = "3".into();
+        s.data[1][0] = "1".into();
+        s.data[2][0] = "2".into();
+        s.toggle_sort(0);
+        let col: Vec<&str> = (0..3).map(|r| s.cell(r, 0)).collect();
+        assert_eq!(col, vec!["1", "2", "3"]);
+        s.toggle_sort(0);
+        let col: Vec<&str> = (0..3).map(|r| s.cell(r, 0)).collect();
+        assert_eq!(col, vec!["3", "2", "1"]);
     }
 }
