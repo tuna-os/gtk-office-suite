@@ -162,7 +162,7 @@ impl TablesWindow {
             Rc::new(move || {
                 let st = s.borrow();
                 let sh = st.sheet();
-                ga.sync_cells(&sh.data, &sh.col_widths, sh.selection_rect());
+                ga.sync_cells(&sh.data, &sh.formats, &sh.col_widths, sh.selection_rect());
                 nb.set_text(&format!(
                     "{}{}",
                     tables_core::sheet::col_label(sh.selected_col),
@@ -196,6 +196,30 @@ impl TablesWindow {
                 }
             })
         };
+
+        // Format Cells sheet (DESIGN-UI §Tables): right-click or the
+        // palette opens it; the chosen format applies to the selection.
+        {
+            let s2 = state.clone();
+            let da = drawing_area.clone();
+            let refresh = refresh_sel.clone();
+            let act = gtk4::gio::SimpleAction::new("format-cells", None);
+            act.connect_activate(move |_, _| {
+                let parent = da.root().and_downcast::<adw::ApplicationWindow>();
+                show_format_cells_dialog(&s2, &da, &refresh, parent);
+            });
+            app.add_action(&act);
+            suite_common::actions::register_labels(&[("app.format-cells", "Format Cells…")]);
+        }
+        {
+            let app2 = app.clone();
+            let right = gtk4::GestureClick::new();
+            right.set_button(3);
+            right.connect_pressed(move |_, _, _, _| {
+                app2.activate_action("format-cells", None);
+            });
+            drawing_area.add_controller(right);
+        }
 
         // Ctrl+G focuses the name box for a keyboard-only jump.
         {
@@ -1173,6 +1197,105 @@ impl TablesWindow {
 
 // ── Coordinate conversion ─────────────────────────────────────────────
 
+
+/// Format Cells dialog: number-format kind + decimals + currency
+/// symbol, applied to the whole selection.
+fn show_format_cells_dialog(
+    state: &Rc<RefCell<AppState>>,
+    da: &gtk4::DrawingArea,
+    refresh: &Rc<dyn Fn()>,
+    parent: Option<adw::ApplicationWindow>,
+) {
+    let kinds = ["General", "Number", "Currency", "Percent", "Date", "Scientific"];
+    let dropdown = gtk4::DropDown::from_strings(&kinds);
+    dropdown.update_property(&[gtk4::accessible::Property::Label("Format kind")]);
+    // Preselect from the active cell's current format.
+    {
+        let st = state.borrow();
+        let sh = st.sheet();
+        let idx = match sh.formats[sh.selected_row][sh.selected_col].kind {
+            NumberFormatKind::General | NumberFormatKind::Text => 0,
+            NumberFormatKind::Number(_) => 1,
+            NumberFormatKind::Currency(_, _) => 2,
+            NumberFormatKind::Percent(_) => 3,
+            NumberFormatKind::Date(_) | NumberFormatKind::DateTime(_) => 4,
+            NumberFormatKind::Scientific(_) => 5,
+        };
+        dropdown.set_selected(idx);
+    }
+
+    let decimals = gtk4::SpinButton::with_range(0.0, 6.0, 1.0);
+    decimals.set_value(2.0);
+    decimals.update_property(&[gtk4::accessible::Property::Label("Decimal places")]);
+    let symbol = gtk4::Entry::new();
+    symbol.set_text("$");
+    symbol.set_max_width_chars(4);
+    symbol.update_property(&[gtk4::accessible::Property::Label("Currency symbol")]);
+
+    let grid = gtk4::Grid::new();
+    grid.set_row_spacing(6);
+    grid.set_column_spacing(12);
+    grid.set_margin_start(12);
+    grid.set_margin_end(12);
+    grid.set_margin_top(12);
+    grid.set_margin_bottom(12);
+    let mut row = 0;
+    for (label, widget) in [
+        ("Format", dropdown.clone().upcast::<gtk4::Widget>()),
+        ("Decimals", decimals.clone().upcast()),
+        ("Symbol", symbol.clone().upcast()),
+    ] {
+        let l = gtk4::Label::new(Some(label));
+        l.add_css_class("dim-label");
+        l.set_halign(gtk4::Align::Start);
+        grid.attach(&l, 0, row, 1, 1);
+        grid.attach(&widget, 1, row, 1, 1);
+        row += 1;
+    }
+    let apply = gtk4::Button::with_label("Apply");
+    apply.add_css_class("suggested-action");
+    grid.attach(&apply, 1, row, 1, 1);
+
+    let dialog = adw::Dialog::builder()
+        .title("Format Cells")
+        .content_width(320)
+        .build();
+    dialog.set_child(Some(&grid));
+
+    {
+        let s = state.clone();
+        let da = da.clone();
+        let refresh = refresh.clone();
+        let dialog = dialog.clone();
+        let dropdown = dropdown.clone();
+        apply.connect_clicked(move |_| {
+            let dp = decimals.value() as u8;
+            let sym = symbol.text().to_string();
+            let kind = match dropdown.selected() {
+                1 => NumberFormatKind::Number(dp),
+                2 => NumberFormatKind::Currency(sym, dp),
+                3 => NumberFormatKind::Percent(dp),
+                4 => NumberFormatKind::Date("%Y-%m-%d".into()),
+                5 => NumberFormatKind::Scientific(dp),
+                _ => NumberFormatKind::General,
+            };
+            {
+                let st = s.borrow();
+                let mut sh = st.sheet_mut();
+                let (r0, c0, r1, c1) = sh.selection_rect();
+                for r in r0..=r1 {
+                    for c in c0..=c1 {
+                        sh.formats[r][c] = NumberFormat::new(kind.clone());
+                    }
+                }
+            }
+            refresh();
+            da.queue_draw();
+            dialog.close();
+        });
+    }
+    dialog.present(parent.as_ref());
+}
 
 /// Keep the grid's accessible description in sync with the active cell so
 /// assistive tech and AT-SPI tests can read grid state.

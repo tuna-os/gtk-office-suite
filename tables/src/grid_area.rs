@@ -12,6 +12,7 @@
 use gtk4::{self as gtk, glib, prelude::*, subclass::prelude::*};
 use std::cell::RefCell;
 
+use suite_common::format::NumberFormat;
 use tables_core::sheet::{col_label, COL_HEADER_HEIGHT, ROW_HEADER_WIDTH, ROW_HEIGHT};
 
 // ── CellAccessible: one virtual cell ─────────────────────────────────
@@ -207,6 +208,7 @@ impl GridArea {
     pub fn sync_cells(
         &self,
         data: &[Vec<String>],
+        formats: &[Vec<NumberFormat>],
         col_widths: &[f64],
         sel: (usize, usize, usize, usize),
     ) {
@@ -265,9 +267,19 @@ impl GridArea {
             cell.imp().col.set(c);
             if r < rows && c < cols {
                 cell.update_state(&[gtk::accessible::State::Hidden(false)]);
-                let value = data.get(r).and_then(|row| row.get(c));
+                let raw = data.get(r).and_then(|row| row.get(c));
+                // A11y reads the formatted value, same as the canvas.
+                let display = raw
+                    .map(|v| {
+                        formats
+                            .get(r)
+                            .and_then(|row| row.get(c))
+                            .map(|f| f.format(v))
+                            .unwrap_or_else(|| v.clone())
+                    })
+                    .unwrap_or_default();
                 let selected = r >= sel.0 && r <= sel.2 && c >= sel.1 && c <= sel.3;
-                cell.update(value.map(String::as_str).unwrap_or(""), selected);
+                cell.update(&display, selected);
             } else {
                 cell.update_state(&[gtk::accessible::State::Hidden(true)]);
             }

@@ -40,10 +40,11 @@ without a test that fails first.
 
 ## Near — rounds out the product
 
-5. **Tables format-cells sheet** (DESIGN-UI §Tables): right-click →
-   number-format UI over the engine-proven formats; formats currently
-   reachable only via the cycle button. *Prove:* smoke drives the sheet;
-   I2 xlsx round-trip already covers persistence.
+5. ✅ **Tables format-cells sheet** (done 2026-07-18): right-click or
+   the palette opens the Format Cells dialog (kind + decimals + currency
+   symbol, applied over the selection); number formats now render on the
+   canvas and in the a11y cell names — formats were previously invisible
+   outside exports. Proven by an I6 smoke test.
 6. **Decks slide thumbnails** in the sidebar (advisor finding): render
    the canvas snapshot into each row. *Prove:* I7 visual; smoke asserts
    rows carry image children once a11y children exist.

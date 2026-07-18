@@ -80,7 +80,7 @@ anything interactive needs I5 or I6. Cross-app clipboard: fragment matrix I1 + p
 | OpenFormula function coverage | ✅ 107/107 | I2 ratchet (IronCalc upstream-main patch until next release) |
 | XLSX round-trip | ✅ | I1 io tests, I4 Calc oracle |
 | ODS / CSV / TSV import | ✅ | I1; add I3-style: LO-authored ods/xlsx read |
-| Number formats (currency, %, date) | ✅ | I1 format.rs + I2 xlsx format codes |
+| Number formats (currency, %, date) | ✅ | I1 format.rs + I2 xlsx format codes + I6 Format Cells sheet; values render formatted on canvas and in a11y cells |
 | Undo/redo | ✅ | I1 (12 tests) |
 | Multi-sheet | ✅ | I1 + I4: names survive xlsx→Calc→xlsx |
 | Sort, cell borders, merge, validation | ✅ model | I1 + I4: merges/frozen panes/column widths persist to xlsx and survive Calc |

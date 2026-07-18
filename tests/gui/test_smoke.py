@@ -398,6 +398,48 @@ class DecksA11yObjectsSmoke(BaseGUITestCase):
         self.assertIsNone(self.process.poll(), "decks crashed exposing objects")
 
 
+class TablesFormatCellsSmoke(BaseGUITestCase):
+    """Number formats are visible: cycling a format changes the value a
+    screen reader hears, and the Format Cells sheet opens via action."""
+
+    app_name = "tables"
+
+    def test_format_visible_and_dialog_opens(self):
+        from dogtail import rawinput
+        import subprocess
+
+        aid = "org.tunaos.tables-rust"
+        subprocess.run(["gapplication", "action", aid, "new-document"])
+        time.sleep(1.5)
+        rawinput.keyCombo("<Control>g")
+        time.sleep(0.2)
+        rawinput.typeText("A1")
+        rawinput.keyCombo("Return")
+        time.sleep(0.3)
+        rawinput.typeText("1234.5")
+        rawinput.keyCombo("Return")
+        time.sleep(0.5)
+        # Cycle to Number(2): the a11y cell should read the formatted value.
+        subprocess.run(["gapplication", "action", aid, "cycle-number-format"])
+        time.sleep(0.3)
+        # Nudge the selection so the refresh runs.
+        rawinput.keyCombo("Right")
+        rawinput.keyCombo("Left")
+        time.sleep(0.8)
+        cells = [c.name for c in self.app.findChildren(
+            lambda c: c.roleName == "table cell")]
+        formatted = [n for n in cells if "1,234.50" in n or "1234.50" in n]
+        self.assertTrue(formatted, f"no formatted cell value: {cells}")
+        # The Format Cells sheet opens from the action registry.
+        subprocess.run(["gapplication", "action", aid, "format-cells"])
+        time.sleep(1.0)
+        apply_btn = self.app.child(name="Apply", roleName="push button")
+        self.assertIsNotNone(apply_btn)
+        apply_btn.do_action(0)
+        time.sleep(0.5)
+        self.assertIsNone(self.process.poll(), "tables crashed in format cells")
+
+
 class DecksSelectionSmoke(BaseGUITestCase):
     """Object selection updates the canvas a11y description and the
     inspector (fit-to-viewport geometry keeps coordinates stable)."""

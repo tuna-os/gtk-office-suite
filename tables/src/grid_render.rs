@@ -173,13 +173,14 @@ pub fn draw_grid(
                 cr.stroke().unwrap();
             }
 
-            // Text
+            // Text — through the cell's number format for display.
             let val = sheet.cell(r, c);
             if !val.is_empty() {
                 cr.set_source_rgb(0.0, 0.0, 0.0);
                 cr.move_to(cx + 4.0, cy + 19.0);
-                let display = if val.len() > 10 { &val[..10] } else { val };
-                let _ = cr.show_text(display);
+                let formatted = sheet.formats[r][c].format(val);
+                let display: String = formatted.chars().take(14).collect();
+                let _ = cr.show_text(&display);
             }
             cx += cw;
         }
