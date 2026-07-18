@@ -3953,6 +3953,7 @@ version = "0.1.0"
 dependencies = [
  "calamine",
  "ironcalc_base",
+ "letters-core",
  "regex",
  "rust_xlsxwriter",
  "suite-common-core",

@@ -9,8 +9,10 @@
 // Offsets are global character offsets; each paragraph break counts as one
 // character, matching GtkTextBuffer's offset model exactly.
 
+use serde::{Deserialize, Serialize};
+
 /// Character-level formatting. `Default` is unstyled text.
-#[derive(Clone, Debug, Default, PartialEq, Eq)]
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct RunStyle {
     pub bold: bool,
     pub italic: bool,
@@ -30,7 +32,7 @@ pub struct RunStyle {
     pub vert_align: Option<VertAlign>,
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub enum VertAlign {
     Superscript,
     Subscript,
@@ -68,7 +70,7 @@ impl StylePatch {
     }
 }
 
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub enum Alignment {
     #[default]
     Left,
@@ -77,7 +79,7 @@ pub enum Alignment {
     Justify,
 }
 
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub enum ListKind {
     #[default]
     None,
@@ -86,7 +88,7 @@ pub enum ListKind {
 }
 
 /// Paragraph-level formatting.
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct ParaStyle {
     /// Heading level 1..=6, or None for body text.
     pub heading: Option<u8>,
@@ -113,7 +115,7 @@ pub struct ParaStyle {
     pub table_cell: Option<TableCell>,
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct TableCell {
     pub table: u32,
     pub row: u32,
@@ -126,7 +128,7 @@ impl Default for ParaStyle {
     }
 }
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct Run {
     pub text: String,
     pub style: RunStyle,
@@ -141,7 +143,7 @@ impl Run {
     }
 }
 
-#[derive(Clone, Debug, Default, PartialEq)]
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
 pub struct Paragraph {
     pub style: ParaStyle,
     pub runs: Vec<Run>,

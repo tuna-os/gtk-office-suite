@@ -5,6 +5,7 @@
 // commands. The `decks` binary renders (Cairo/Pango) and wires signals.
 
 pub mod engine;
+pub mod fragment;
 pub mod undo;
 
 pub use engine::{Deck, MasterSlide, Slide, SlideObject};
