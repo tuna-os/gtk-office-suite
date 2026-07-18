@@ -6,7 +6,7 @@ use gtk4::{prelude::*, glib};
 use std::cell::RefCell;
 use std::rc::Rc;
 use crate::canvas::draw_slide;
-use crate::engine::Slide;
+use decks_core::engine::Slide;
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum TransitionType {

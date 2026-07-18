@@ -39,14 +39,15 @@ jobs:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
-      - name: Install LibreOffice Writer (headless)
+      - name: Install LibreOffice (headless Writer, Calc, Impress)
         run: |
           sudo apt-get update -qq
-          sudo apt-get install -y -qq --no-install-recommends libreoffice-writer
+          sudo apt-get install -y -qq --no-install-recommends \
+            libreoffice-writer libreoffice-calc libreoffice-impress
       - name: Run oracle tests
         env:
           REQUIRE_SOFFICE: "1"
-        run: cargo test -p letters-core --test soffice_oracle
+        run: cargo test -p letters-core -p tables-core -p decks-core --test soffice_oracle
 
   # Coverage — runs on push to main only (installs llvm-tools)
   coverage:

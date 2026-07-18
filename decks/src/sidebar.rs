@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 use gtk4::{self as gtk, prelude::*};
-use crate::engine::Slide;
+use decks_core::engine::Slide;
 
 /// Rebuild the slide list widget from the current slides state.
 pub fn rebuild_slide_list(list: &gtk::ListBox, slides: &[Slide], selected: usize) {

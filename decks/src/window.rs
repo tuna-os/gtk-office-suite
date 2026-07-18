@@ -11,13 +11,13 @@ use std::cell::{Cell, RefCell};
 use std::rc::Rc;
 use suite_common::undo::UndoManager;
 use suite_common::SuiteWindow;
-use crate::undo::{AddObjectCmd, DeleteObjectCmd, AddSlideCmd, DeleteSlideCmd, ReorderSlidesCmd, MoveObjectCmd, set_obj_position};
+use decks_core::undo::{AddObjectCmd, DeleteObjectCmd, AddSlideCmd, DeleteSlideCmd, ReorderSlidesCmd, MoveObjectCmd, set_obj_position};
 use crate::canvas::{draw_slide, canvas_to_slide, slide_to_canvas, hit_test_object, snap_to_grid, GRID_SPACING};
 use crate::sidebar::rebuild_slide_list;
 use crate::toolbar::{find_toolbar_child, build_decks_toolbar};
 use crate::transition::{TransitionState, TransitionType, draw_transition};
 
-use crate::engine::{Slide, SlideObject, MasterSlide, Deck, read_pptx, write_pptx};
+use decks_core::engine::{Slide, SlideObject, MasterSlide, Deck, read_pptx, write_pptx};
 
 // ── DecksWindow ──────────────────────────────────────────────────────────
 
@@ -459,7 +459,7 @@ impl DecksWindow {
                 let sl = ss2.borrow();
                 if idx >= sl.len() { return; }
                 if let Some(oi) = hit_test_object(&sl[idx].objects, x, y) {
-                    let (ox, oy) = crate::undo::obj_position(&sl[idx].objects[oi]);
+                    let (ox, oy) = decks_core::undo::obj_position(&sl[idx].objects[oi]);
                     so2.set(Some(oi));
                     ds2.set(Some((oi, ox, oy)));
                 }
@@ -545,7 +545,7 @@ impl DecksWindow {
                                 let new_text = buf.text(&buf.start_iter(), &buf.end_iter(), false).to_string();
                                 if new_text != old_text {
                                     undo2.borrow_mut().execute(Box::new(
-                                        crate::undo::ChangeTextCmd {
+                                        decks_core::undo::ChangeTextCmd {
                                             slide_idx: cs_ref2.get(), index: oi,
                                             old_text: old_text.clone(), new_text,
                                         }

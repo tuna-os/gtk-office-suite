@@ -627,6 +627,7 @@ name = "decks"
 version = "0.1.0"
 dependencies = [
  "cairo-rs",
+ "decks-core",
  "gtk4",
  "image",
  "libadwaita",
@@ -635,6 +636,16 @@ dependencies = [
  "pulldown-cmark",
  "quick-xml 0.31.0",
  "suite-common",
+ "zip 2.4.2",
+]
+
+[[package]]
+name = "decks-core"
+version = "0.1.0"
+dependencies = [
+ "quick-xml 0.31.0",
+ "suite-common-core",
+ "tempfile",
  "zip 2.4.2",
 ]
 

@@ -1,0 +1,19 @@
+[package]
+name = "decks-core"
+version = "0.1.0"
+edition = "2021"
+
+# GTK-free presentation core: Deck/Slide/SlideObject model, PPTX I/O,
+# undo commands. Must never depend on gtk4/cairo/pango — see
+# docs/DEVELOPMENT.md layering rule.
+[dependencies]
+suite-common-core = { path = "../suite-common-core" }
+zip = "2.0"
+quick-xml = "0.31"
+
+[dev-dependencies]
+tempfile = "3"
+
+[lib]
+name = "decks_core"
+path = "src/lib.rs"
