@@ -1,12 +1,16 @@
 // lo_parity.rs — LibreOffice-authored parity corpus (ratcheted).
 //
 // "Being in the LibreOffice test suite" without vendoring MPL data files:
-// each scenario below is authored as HTML, converted to .docx by headless
-// LibreOffice Writer at test time, and then read by our engine. A scenario
-// passes when we extract the expected text AND the expected styles from a
-// document LibreOffice itself wrote. The pass count ratchets like the
-// CommonMark corpus: dropping below baseline fails CI; raising it is
-// visible parity progress.
+// each scenario is authored as HTML, converted to .docx by headless
+// LibreOffice Writer at test time (one batched soffice launch), then read
+// by our engine. A scenario passes when we extract the expected text AND
+// the expected styles from a document LibreOffice itself wrote. The pass
+// count ratchets: dropping below baseline fails CI; raising it is visible
+// parity progress.
+//
+// Scenarios are generated as feature batteries (inline styles × positions,
+// headings, alignments, lists, tables, unicode, structure) so the corpus
+// grows multiplicatively — 100+ cases from a few loops.
 //
 // Skips without soffice unless REQUIRE_SOFFICE=1 (the CI oracle job sets it).
 
@@ -15,136 +19,324 @@ use std::process::Command;
 use letters_core::docx;
 use letters_core::model::{Alignment, Document};
 
+type Check = Box<dyn Fn(&Document) -> Result<(), String>>;
+
 struct Scenario {
-    name: &'static str,
-    html: &'static str,
-    expected_text: &'static str,
-    check: fn(&Document) -> Result<(), String>,
+    name: String,
+    html: String,
+    expected_text: String,
+    check: Check,
 }
 
-fn ok(_: &Document) -> Result<(), String> { Ok(()) }
+fn ok() -> Check { Box::new(|_| Ok(())) }
+
+fn sc(name: impl Into<String>, html: impl Into<String>, expected: impl Into<String>, check: Check) -> Scenario {
+    Scenario { name: name.into(), html: html.into(), expected_text: expected.into(), check }
+}
+
+fn text_only(name: impl Into<String>, html: impl Into<String>, expected: impl Into<String>) -> Scenario {
+    sc(name, html, expected, ok())
+}
+
+/// Check that a given style attribute holds exactly on [start, end) and
+/// nowhere adjacent.
+fn style_range(attr: &'static str, start: usize, end: usize) -> Check {
+    Box::new(move |d| {
+        let has = |o: usize| -> bool {
+            let s = d.style_at(o);
+            match attr {
+                "bold" => s.bold,
+                "italic" => s.italic,
+                "underline" => s.underline,
+                "strikethrough" => s.strikethrough,
+                "code" => s.code,
+                _ => unreachable!(),
+            }
+        };
+        if start > 0 && has(start - 1) {
+            return Err(format!("{attr} leaks before {start}"));
+        }
+        for o in start..end {
+            if !has(o) { return Err(format!("{attr} missing at {o}")); }
+        }
+        // Only check the trailing boundary when a character exists there:
+        // at paragraph end, style_at intentionally inherits the last run's
+        // style (so typing continues the current style).
+        if end < d.paragraphs[0].char_len() && has(end) {
+            return Err(format!("{attr} leaks past {end}"));
+        }
+        Ok(())
+    })
+}
+
+fn heading_check(levels: Vec<Option<u8>>) -> Check {
+    Box::new(move |d| {
+        for (i, want) in levels.iter().enumerate() {
+            let got = d.paragraphs.get(i).and_then(|p| p.style.heading);
+            if got != *want { return Err(format!("para {i}: heading {got:?} != {want:?}")); }
+        }
+        Ok(())
+    })
+}
+
+fn alignment_check(idx: usize, want: Alignment) -> Check {
+    Box::new(move |d| {
+        let got = d.paragraphs.get(idx).map(|p| p.style.alignment);
+        if got == Some(want) { Ok(()) } else { Err(format!("alignment {got:?} != {want:?}")) }
+    })
+}
 
 fn scenarios() -> Vec<Scenario> {
-    vec![
-        Scenario {
-            name: "plain-paragraphs",
-            html: "<p>first paragraph</p><p>second paragraph</p>",
-            expected_text: "first paragraph\nsecond paragraph",
-            check: ok,
-        },
-        Scenario {
-            name: "bold-run",
-            html: "<p>before <b>bolded</b> after</p>",
-            expected_text: "before bolded after",
-            check: |d| {
-                let s = d.style_at(7);
-                if s.bold { Ok(()) } else { Err("bold not detected at offset 7".into()) }
-            },
-        },
-        Scenario {
-            name: "italic-run",
-            html: "<p>an <i>italic</i> word</p>",
-            expected_text: "an italic word",
-            check: |d| if d.style_at(3).italic { Ok(()) } else { Err("italic lost".into()) },
-        },
-        Scenario {
-            name: "underline-run",
-            html: "<p>an <u>underlined</u> word</p>",
-            expected_text: "an underlined word",
-            check: |d| if d.style_at(3).underline { Ok(()) } else { Err("underline lost".into()) },
-        },
-        Scenario {
-            name: "strikethrough-run",
-            html: "<p>a <s>struck</s> word</p>",
-            expected_text: "a struck word",
-            check: |d| if d.style_at(2).strikethrough { Ok(()) } else { Err("strike lost".into()) },
-        },
-        Scenario {
-            name: "nested-bold-italic",
-            html: "<p><b><i>both</i></b> plain</p>",
-            expected_text: "both plain",
-            check: |d| {
-                let s = d.style_at(0);
-                if s.bold && s.italic { Ok(()) } else { Err(format!("want bold+italic, got {:?}", s)) }
-            },
-        },
-        Scenario {
-            name: "heading-1",
-            html: "<h1>Big Title</h1><p>body</p>",
-            expected_text: "Big Title\nbody",
-            check: |d| {
-                if d.paragraphs[0].style.heading == Some(1) { Ok(()) }
-                else { Err(format!("heading: {:?}", d.paragraphs[0].style.heading)) }
-            },
-        },
-        Scenario {
-            name: "heading-3",
-            html: "<h3>Sub</h3><p>body</p>",
-            expected_text: "Sub\nbody",
-            check: |d| {
-                if d.paragraphs[0].style.heading == Some(3) { Ok(()) }
-                else { Err(format!("heading: {:?}", d.paragraphs[0].style.heading)) }
-            },
-        },
-        Scenario {
-            name: "center-alignment",
-            html: "<p style=\"text-align:center\">centered text</p>",
-            expected_text: "centered text",
-            check: |d| {
-                if d.paragraphs[0].style.alignment == Alignment::Center { Ok(()) }
-                else { Err(format!("alignment: {:?}", d.paragraphs[0].style.alignment)) }
-            },
-        },
-        Scenario {
-            name: "right-alignment",
-            html: "<p style=\"text-align:right\">righted text</p>",
-            expected_text: "righted text",
-            check: |d| {
-                if d.paragraphs[0].style.alignment == Alignment::Right { Ok(()) }
-                else { Err(format!("alignment: {:?}", d.paragraphs[0].style.alignment)) }
-            },
-        },
-        Scenario {
-            name: "bullet-list-text",
-            html: "<ul><li>alpha</li><li>beta</li></ul>",
-            expected_text: "alpha\nbeta",
-            check: ok, // list *kind* readback is a known red (rdocx getter)
-        },
-        Scenario {
-            name: "numbered-list-text",
-            html: "<ol><li>one</li><li>two</li></ol>",
-            expected_text: "one\ntwo",
-            check: ok,
-        },
-        Scenario {
-            name: "hyperlink-text",
-            html: "<p>go to <a href=\"https://gnome.org\">GNOME</a> now</p>",
-            expected_text: "go to GNOME now",
-            check: ok, // link readback is a known red (rdocx LinkInfo mapping)
-        },
-        Scenario {
-            name: "unicode-content",
-            html: "<p>caf\u{e9} — “smart” 中文</p>",
-            expected_text: "café — “smart” 中文",
-            check: ok,
-        },
-        Scenario {
-            // LO's HTML import drops empty <p> elements — the ground truth
-            // here is what LibreOffice authored, and it authored two
-            // paragraphs. (Our own writer preserves empty paragraphs; that
-            // is covered by tests/docx.rs.)
-            name: "adjacent-paragraphs",
-            html: "<p>above</p><p></p><p>below</p>",
-            expected_text: "above\nbelow",
-            check: ok,
-        },
-        Scenario {
-            name: "simple-table-text",
-            html: "<table><tr><td>a1</td><td>b1</td></tr><tr><td>a2</td><td>b2</td></tr></table>",
-            expected_text: "a1\nb1\na2\nb2",
-            check: ok, // tables not modeled yet; text must at least survive
-        },
-    ]
+    let mut v: Vec<Scenario> = Vec::new();
+
+    // ── Battery 1: inline styles × positions ────────────────────────────
+    // 5 styles × 4 positions = 20 scenarios with exact-boundary checks.
+    let styles: [(&str, &str, &str); 5] = [
+        ("bold", "b", "bold"),
+        ("italic", "i", "italic"),
+        ("underline", "u", "underline"),
+        ("strike", "s", "strikethrough"),
+        ("code-span", "code", "code"),
+    ];
+    for (label, tag, attr) in styles {
+        // whole paragraph styled: "styled words" (12 chars)
+        v.push(sc(
+            format!("inline-{label}-whole"),
+            format!("<p><{tag}>styled words</{tag}></p>"),
+            "styled words",
+            style_range(attr, 0, 12),
+        ));
+        // at start: "hot cold" styled [0,3)
+        v.push(sc(
+            format!("inline-{label}-start"),
+            format!("<p><{tag}>hot</{tag}> cold</p>"),
+            "hot cold",
+            style_range(attr, 0, 3),
+        ));
+        // at end: "cold hot" styled [5,8)
+        v.push(sc(
+            format!("inline-{label}-end"),
+            format!("<p>cold <{tag}>hot</{tag}></p>"),
+            "cold hot",
+            style_range(attr, 5, 8),
+        ));
+        // mid-word: "unbelievable" styled [2,8)
+        v.push(sc(
+            format!("inline-{label}-midword"),
+            format!("<p>un<{tag}>believ</{tag}>able</p>"),
+            "unbelievable",
+            style_range(attr, 2, 8),
+        ));
+    }
+
+    // ── Battery 2: nested style pairs ───────────────────────────────────
+    // 6 pairs, both attributes must hold on the styled span.
+    let pairs: [(&str, &str); 6] =
+        [("b", "i"), ("b", "u"), ("b", "s"), ("i", "u"), ("i", "s"), ("u", "s")];
+    for (outer, inner) in pairs {
+        let name = format!("nested-{outer}-{inner}");
+        let html = format!("<p>pre <{outer}><{inner}>core</{inner}></{outer}> post</p>");
+        v.push(sc(name, html, "pre core post", Box::new(move |d| {
+            let s = d.style_at(5);
+            let want = |t: &str, on: bool| -> Result<(), String> {
+                let got = match t {
+                    "b" => s.bold, "i" => s.italic, "u" => s.underline, "s" => s.strikethrough,
+                    _ => unreachable!(),
+                };
+                if got == on { Ok(()) } else { Err(format!("{t} = {got}, want {on}")) }
+            };
+            want(outer, true)?;
+            want(inner, true)?;
+            if d.style_at(0).bold || d.style_at(0).italic || d.style_at(0).underline || d.style_at(0).strikethrough {
+                return Err("styles leak into prefix".into());
+            }
+            Ok(())
+        })));
+    }
+
+    // ── Battery 3: headings 1–6, plain and with styled content ──────────
+    for level in 1u8..=6 {
+        v.push(sc(
+            format!("heading-{level}"),
+            format!("<h{level}>Heading Text</h{level}><p>body</p>"),
+            "Heading Text\nbody",
+            heading_check(vec![Some(level), None]),
+        ));
+        v.push(sc(
+            format!("heading-{level}-with-italic"),
+            format!("<h{level}>plain <i>slanted</i></h{level}><p>body</p>"),
+            "plain slanted\nbody",
+            heading_check(vec![Some(level), None]),
+        ));
+    }
+
+    // ── Battery 4: alignments ───────────────────────────────────────────
+    for (name, css, want) in [
+        ("center", "center", Alignment::Center),
+        ("right", "right", Alignment::Right),
+        ("justify", "justify", Alignment::Justify),
+    ] {
+        v.push(sc(
+            format!("align-{name}"),
+            format!("<p style=\"text-align:{css}\">aligned body text</p>"),
+            "aligned body text",
+            alignment_check(0, want),
+        ));
+        v.push(sc(
+            format!("align-{name}-second-para"),
+            format!("<p>first</p><p style=\"text-align:{css}\">second</p>"),
+            "first\nsecond",
+            alignment_check(1, want),
+        ));
+    }
+
+    // ── Battery 5: paragraph structure ──────────────────────────────────
+    for n in [2usize, 3, 5, 8] {
+        let html: String = (1..=n).map(|i| format!("<p>paragraph {i}</p>")).collect();
+        let expected = (1..=n).map(|i| format!("paragraph {i}")).collect::<Vec<_>>().join("\n");
+        v.push(text_only(format!("structure-{n}-paragraphs"), html, expected));
+    }
+    v.push(text_only("structure-long-paragraph",
+        format!("<p>{}</p>", "long sentence ".repeat(40).trim()),
+        "long sentence ".repeat(40).trim().to_string()));
+    v.push(text_only("structure-hard-break", "<p>line one<br>line two</p>", "line one\nline two"));
+    v.push(text_only("structure-two-breaks", "<p>a<br>b<br>c</p>", "a\nb\nc"));
+    v.push(text_only("structure-hr", "<p>before</p><hr><p>after</p>", "before\nafter"));
+
+    // ── Battery 6: lists ────────────────────────────────────────────────
+    for (kind, tag) in [("bullet", "ul"), ("numbered", "ol")] {
+        for n in [1usize, 2, 4] {
+            let items: String = (1..=n).map(|i| format!("<li>item {i}</li>")).collect();
+            let expected = (1..=n).map(|i| format!("item {i}")).collect::<Vec<_>>().join("\n");
+            v.push(text_only(format!("list-{kind}-{n}-items"), format!("<{tag}>{items}</{tag}>"), expected));
+        }
+        v.push(text_only(
+            format!("list-{kind}-styled-item"),
+            format!("<{tag}><li>plain <b>bolded</b></li></{tag}>"),
+            "plain bolded",
+        ));
+    }
+    v.push(text_only("list-nested",
+        "<ul><li>outer<ul><li>inner</li></ul></li><li>outer two</li></ul>",
+        "outer\ninner\nouter two"));
+    v.push(text_only("list-then-paragraph",
+        "<ul><li>item</li></ul><p>afterwards</p>", "item\nafterwards"));
+
+    // ── Battery 7: links ────────────────────────────────────────────────
+    v.push(text_only("link-basic",
+        "<p>go to <a href=\"https://gnome.org\">GNOME</a> now</p>", "go to GNOME now"));
+    v.push(text_only("link-whole-paragraph",
+        "<p><a href=\"https://example.com\">entire link line</a></p>", "entire link line"));
+    v.push(text_only("link-two-in-one",
+        "<p><a href=\"https://a.example\">first</a> and <a href=\"https://b.example\">second</a></p>",
+        "first and second"));
+
+    // ── Battery 8: unicode & special content ────────────────────────────
+    for (name, content) in [
+        ("accents", "café naïve résumé"),
+        ("cjk", "中文测试 日本語 한국어"),
+        ("rtl-arabic", "مرحبا بالعالم"),
+        ("rtl-hebrew", "שלום עולם"),
+        ("smart-punct", "“curly” ‘quotes’ — em–en… dashes"),
+        ("math-symbols", "∑ ∫ √ ≈ ≠ ∞ π"),
+        ("emoji", "rocket 🚀 sparkles ✨"),
+        ("currency", "€100 £75 ¥500 ₹250"),
+        ("md-metachars", "*not markdown* _nor this_ [nor](this) #tag"),
+        ("xml-metachars", "a < b && c > d \"quoted\""),
+    ] {
+        v.push(text_only(format!("unicode-{name}"), format!("<p>{}</p>",
+            content.replace('&', "&amp;").replace('<', "&lt;").replace('>', "&gt;")), content));
+    }
+
+    // ── Battery 9: tables ───────────────────────────────────────────────
+    v.push(text_only("table-1x1", "<table><tr><td>lone</td></tr></table>", "lone"));
+    v.push(text_only("table-2x2",
+        "<table><tr><td>a1</td><td>b1</td></tr><tr><td>a2</td><td>b2</td></tr></table>",
+        "a1\nb1\na2\nb2"));
+    v.push(text_only("table-3x2",
+        "<table><tr><td>r1c1</td><td>r1c2</td></tr><tr><td>r2c1</td><td>r2c2</td></tr><tr><td>r3c1</td><td>r3c2</td></tr></table>",
+        "r1c1\nr1c2\nr2c1\nr2c2\nr3c1\nr3c2"));
+    v.push(sc("table-styled-cell",
+        "<table><tr><td>plain <b>bolded</b></td></tr></table>", "plain bolded",
+        Box::new(|d| {
+            let para = d.paragraphs.iter().find(|p| p.text().contains("bolded"))
+                .ok_or("cell text missing")?;
+            let run = para.runs.iter().find(|r| r.text.contains("bolded"))
+                .ok_or("no run containing 'bolded'")?;
+            if run.style.bold { Ok(()) } else { Err("cell bold lost".into()) }
+        })));
+    v.push(text_only("table-with-header-row",
+        "<table><tr><th>Name</th><th>Qty</th></tr><tr><td>apples</td><td>5</td></tr></table>",
+        "Name\nQty\napples\n5"));
+    v.push(text_only("table-after-paragraph",
+        "<p>intro</p><table><tr><td>cell</td></tr></table>", "intro\ncell"));
+
+    // ── Battery 10: block elements ──────────────────────────────────────
+    v.push(sc("pre-block", "<pre>let x = 1;</pre>", "let x = 1;",
+        Box::new(|d| {
+            if d.paragraphs[0].style.code_block.is_some() { Ok(()) }
+            else { Err("pre not mapped to code_block".into()) }
+        })));
+    v.push(sc("pre-block-multiline", "<pre>line a\nline b</pre>", "line a\nline b",
+        Box::new(|d| {
+            if d.paragraphs.iter().take(2).all(|p| p.style.code_block.is_some()) { Ok(()) }
+            else { Err("multiline pre not fully code_block".into()) }
+        })));
+    v.push(text_only("blockquote", "<blockquote><p>quoted wisdom</p></blockquote>", "quoted wisdom"));
+    v.push(text_only("sup-sub", "<p>x<sup>2</sup> and H<sub>2</sub>O</p>", "x2 and H2O"));
+    v.push(text_only("adjacent-paragraphs", "<p>above</p><p></p><p>below</p>", "above\nbelow"));
+    v.push(text_only("definition-list", "<dl><dt>term</dt><dd>definition</dd></dl>", "term\ndefinition"));
+
+    // ── Battery 11: mixed documents ─────────────────────────────────────
+    v.push(sc("mixed-article",
+        "<h1>Title</h1><p>intro with <b>bold</b></p><h2>Section</h2><ul><li>point one</li><li>point two</li></ul><p>closing</p>",
+        "Title\nintro with bold\nSection\npoint one\npoint two\nclosing",
+        heading_check(vec![Some(1), None, Some(2)])));
+    v.push(sc("mixed-report",
+        "<h2>Report</h2><p style=\"text-align:center\">centered abstract</p><p>body <i>emphasis</i> text</p>",
+        "Report\ncentered abstract\nbody emphasis text",
+        alignment_check(1, Alignment::Center)));
+    v.push(text_only("mixed-notes",
+        "<h3>Notes</h3><ol><li>first</li><li>second</li></ol><pre>code sample</pre>",
+        "Notes\nfirst\nsecond\ncode sample"));
+
+    // ── Battery 12: edge cases & combinations ───────────────────────────
+    v.push(text_only("edge-nbsp", "<p>a&nbsp;b</p>", "a\u{a0}b"));
+    v.push(text_only("edge-whitespace-collapse", "<p>a   b</p>", "a b"));
+    v.push(text_only("edge-ampersand-entities", "<p>fish &amp; chips &copy; 2026</p>", "fish & chips © 2026"));
+    v.push(text_only("edge-combining-diacritic", "<p>e\u{301}tude</p>", "e\u{301}tude"));
+    v.push(text_only("table-1x4",
+        "<table><tr><td>a</td><td>b</td><td>c</td><td>d</td></tr></table>", "a\nb\nc\nd"));
+    v.push(text_only("table-4x1",
+        "<table><tr><td>a</td></tr><tr><td>b</td></tr><tr><td>c</td></tr><tr><td>d</td></tr></table>",
+        "a\nb\nc\nd"));
+    v.push(text_only("table-two-tables",
+        "<table><tr><td>first</td></tr></table><p>mid</p><table><tr><td>second</td></tr></table>",
+        "mid\nfirst\nsecond")); // flattening appends tables after body text
+    v.push(text_only("list-eight-items",
+        &format!("<ul>{}</ul>", (1..=8).map(|i| format!("<li>i{i}</li>")).collect::<String>()),
+        (1..=8).map(|i| format!("i{i}")).collect::<Vec<_>>().join("\n")));
+    v.push(sc("heading-then-list",
+        "<h2>Agenda</h2><ol><li>alpha</li><li>beta</li></ol>",
+        "Agenda\nalpha\nbeta",
+        heading_check(vec![Some(2), None, None])));
+    v.push(text_only("link-with-bold-text",
+        "<p><a href=\"https://x.example\">has <b>bold</b> inside</a></p>", "has bold inside"));
+    v.push(text_only("pre-with-symbols", "<pre>if (a &lt; b) { return; }</pre>", "if (a < b) { return; }"));
+    v.push(sc("styled-across-break",
+        "<p><b>bold line<br>continues</b></p>", "bold line\ncontinues",
+        Box::new(|d| {
+            if d.style_at(0).bold && d.style_at(10).bold { Ok(()) }
+            else { Err("bold lost across hard break".into()) }
+        })));
+    v.push(text_only("deep-nested-list",
+        "<ul><li>l1<ul><li>l2<ul><li>l3</li></ul></li></ul></li></ul>", "l1\nl2\nl3"));
+    v.push(sc("mixed-full-document",
+        "<h1>Doc</h1><p style=\"text-align:center\">subtitle</p><h2>A</h2><p>text <b>b</b> <i>i</i> <u>u</u></p><ul><li>one</li></ul><pre>code</pre><table><tr><td>cell</td></tr></table>",
+        "Doc\nsubtitle\nA\ntext b i u\none\ncode\ncell",
+        heading_check(vec![Some(1), None, Some(2)])));
+
+    v
 }
 
 fn soffice_available() -> bool {
@@ -165,62 +357,66 @@ fn libreoffice_parity_ratchet() {
         return;
     }
 
+    let scenarios = scenarios();
     let dir = tempfile::tempdir().unwrap();
     let profile = dir.path().join("lo-profile");
+
+    // Author every scenario as HTML, then convert the whole batch in a
+    // single soffice launch (per-file launches would take minutes).
+    let mut html_paths = Vec::new();
+    for s in &scenarios {
+        let p = dir.path().join(format!("{}.html", s.name));
+        std::fs::write(&p, format!("<html><body>{}</body></html>", s.html)).unwrap();
+        html_paths.push(p);
+    }
+    let out = Command::new("soffice")
+        .arg("--headless")
+        .arg(format!("-env:UserInstallation=file://{}", profile.display()))
+        .args(["--convert-to", "docx:MS Word 2007 XML", "--outdir"])
+        .arg(dir.path())
+        .args(&html_paths)
+        .output()
+        .expect("run soffice");
+    if !out.status.success() {
+        panic!("batch conversion failed: {}", String::from_utf8_lossy(&out.stderr));
+    }
+
     let mut passed = 0usize;
-    let mut results = Vec::new();
+    let mut failures = Vec::new();
+    let total = scenarios.len();
 
-    for sc in scenarios() {
-        let html_path = dir.path().join(format!("{}.html", sc.name));
-        std::fs::write(&html_path, format!("<html><body>{}</body></html>", sc.html)).unwrap();
-
-        let out = Command::new("soffice")
-            .arg("--headless")
-            .arg(format!("-env:UserInstallation=file://{}", profile.display()))
-            .args(["--convert-to", "docx:MS Word 2007 XML", "--outdir"])
-            .arg(dir.path())
-            .arg(&html_path)
-            .output()
-            .expect("run soffice");
-        let docx_path = html_path.with_extension("docx");
-        if !out.status.success() || !docx_path.exists() {
-            results.push((sc.name, Err("LibreOffice conversion failed".to_string())));
-            continue;
-        }
-
-        let verdict = match docx::read(docx_path.to_str().unwrap()) {
-            Err(e) => Err(format!("our reader failed: {e}")),
-            Ok(doc) => {
-                let got = doc.to_plain_text();
-                // Trim outer empties: OOXML mandates a paragraph after each
-                // table, and our table flattening appends at the end (see
-                // docx.rs), so leading/trailing blanks are positional noise.
-                let got_norm = got.trim().to_string();
-                if got_norm != sc.expected_text {
-                    Err(format!("text mismatch:\n  want {:?}\n  got  {:?}", sc.expected_text, got_norm))
-                } else {
-                    (sc.check)(&doc)
+    for s in &scenarios {
+        let docx_path = dir.path().join(format!("{}.docx", s.name));
+        let verdict = if !docx_path.exists() {
+            Err("LibreOffice produced no output".to_string())
+        } else {
+            match docx::read(docx_path.to_str().unwrap()) {
+                Err(e) => Err(format!("our reader failed: {e}")),
+                Ok(doc) => {
+                    // Trim outer empties: OOXML mandates a paragraph after
+                    // each table, and table flattening appends at the end.
+                    let got = doc.to_plain_text().trim().to_string();
+                    if got != s.expected_text {
+                        Err(format!("text mismatch:\n    want {:?}\n    got  {:?}", s.expected_text, got))
+                    } else {
+                        (s.check)(&doc)
+                    }
                 }
             }
         };
-        if verdict.is_ok() { passed += 1; }
-        results.push((sc.name, verdict));
-    }
-
-    let total = results.len();
-    println!("\nLibreOffice-authored parity: {passed}/{total}");
-    for (name, r) in &results {
-        match r {
-            Ok(()) => println!("  PASS {name}"),
-            Err(e) => println!("  FAIL {name}: {e}"),
+        match verdict {
+            Ok(()) => passed += 1,
+            Err(e) => failures.push((s.name.clone(), e)),
         }
     }
 
+    println!("\nLibreOffice-authored parity: {passed}/{total}");
+    for (name, e) in &failures {
+        println!("  FAIL {name}: {e}");
+    }
+
     let base = baseline();
-    assert!(
-        passed >= base,
-        "REGRESSION: LO parity dropped to {passed}/{total}, baseline {base}"
-    );
+    assert!(passed >= base, "REGRESSION: LO parity dropped to {passed}/{total}, baseline {base}");
     if passed > base {
         println!("IMPROVEMENT: {passed} > baseline {base} — bump tests/corpus/lo-parity-baseline.txt");
     }

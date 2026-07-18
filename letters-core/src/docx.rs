@@ -15,55 +15,33 @@ pub fn read(path: &str) -> Result<Document, String> {
 
     let mut paragraphs = Vec::new();
     for p in doc.paragraphs() {
-        let heading = p.style_id().and_then(style_id_to_heading);
-        let alignment = match p.alignment() {
-            Some(rdocx::Alignment::Center) => Alignment::Center,
-            Some(rdocx::Alignment::Right) => Alignment::Right,
-            Some(rdocx::Alignment::Justify) => Alignment::Justify,
-            _ => Alignment::Left,
-        };
-        // NOTE: list kind and highlight cannot be read back yet — rdocx has
-        // no numbering/highlight getters on ParagraphRef/RunRef. Red tests
-        // in tests/docx.rs track this; fix lands upstream in hanthor/rdocx.
-        let mut runs = Vec::new();
-        for r in p.runs() {
-            let text = r.text();
-            if text.is_empty() { continue; }
-            runs.push(Run {
-                text,
-                style: RunStyle {
-                    bold: r.is_bold(),
-                    italic: r.is_italic(),
-                    underline: r.is_underline(),
-                    strikethrough: r.is_strike(),
-                    ..Default::default()
-                },
-            });
+        // Decorative rules (LibreOffice's HorizontalLine style) carry no text.
+        if p.style_id() == Some("HorizontalLine") && p.text().is_empty() {
+            continue;
         }
-        let mut para = Paragraph {
-            style: ParaStyle { heading, alignment, ..Default::default() },
-            runs,
-        };
-        normalize(&mut para);
-        paragraphs.push(para);
+        paragraphs.push(map_paragraph(&p));
     }
 
-    // Tables are not modeled yet; flatten their cell text into paragraphs so
-    // no content is lost. Limitation: rdocx exposes tables separately from
-    // the paragraph stream, so flattened cells append after body paragraphs
-    // rather than interleaving at their true position.
-    for table in doc.tables() {
+    // Tables are not modeled yet; flatten their cell paragraphs (styles and
+    // all) so no content is lost. Limitation: rdocx exposes tables separately
+    // from the paragraph stream, so flattened cells append after body
+    // paragraphs rather than interleaving at their true position.
+    let tables = doc.tables();
+    if !tables.is_empty() {
+        // OOXML mandates an (empty) paragraph after each table; with the
+        // flattened cells appended at the end it is pure noise — drop it.
+        while paragraphs.last().map(|p: &Paragraph| p.runs.is_empty()).unwrap_or(false) {
+            paragraphs.pop();
+        }
+    }
+    for table in tables {
         for ri in 0..table.row_count() {
             let Some(row) = table.row(ri) else { continue };
             for ci in 0..row.cell_count() {
                 let Some(cell) = row.cell(ci) else { continue };
                 for cp in cell.paragraphs() {
-                    let text = cp.text();
-                    if text.is_empty() { continue; }
-                    paragraphs.push(Paragraph {
-                        style: ParaStyle::default(),
-                        runs: vec![Run { text, style: RunStyle::default() }],
-                    });
+                    if cp.text().is_empty() { continue; }
+                    paragraphs.push(map_paragraph(&cp));
                 }
             }
         }
@@ -103,6 +81,44 @@ pub fn write(doc: &Document, path: &str) -> Result<(), String> {
         }
     }
     out.save(path).map_err(|e| format!("Cannot save {}: {}", path, e))
+}
+
+/// Map one rdocx paragraph (body or table cell) into a model paragraph.
+/// NOTE: list kind and highlight cannot be read back yet — rdocx has no
+/// numbering/highlight getters on ParagraphRef/RunRef. Red tests in
+/// tests/docx.rs track this; fix lands upstream in hanthor/rdocx.
+fn map_paragraph(p: &rdocx::ParagraphRef<'_>) -> Paragraph {
+    let heading = p.style_id().and_then(style_id_to_heading);
+    // LibreOffice emits PreformattedText for <pre>/code blocks.
+    let code_block = matches!(p.style_id(), Some("PreformattedText") | Some("HTMLPreformatted"))
+        .then(String::new);
+    let alignment = match p.alignment() {
+        Some(rdocx::Alignment::Center) => Alignment::Center,
+        Some(rdocx::Alignment::Right) => Alignment::Right,
+        Some(rdocx::Alignment::Justify) => Alignment::Justify,
+        _ => Alignment::Left,
+    };
+    let mut runs = Vec::new();
+    for r in p.runs() {
+        let text = r.text();
+        if text.is_empty() { continue; }
+        runs.push(Run {
+            text,
+            style: RunStyle {
+                bold: r.is_bold(),
+                italic: r.is_italic(),
+                underline: r.is_underline(),
+                strikethrough: r.is_strike(),
+                ..Default::default()
+            },
+        });
+    }
+    let mut para = Paragraph {
+        style: ParaStyle { heading, alignment, code_block, ..Default::default() },
+        runs,
+    };
+    normalize(&mut para);
+    para
 }
 
 fn style_id_to_heading(id: &str) -> Option<u8> {
