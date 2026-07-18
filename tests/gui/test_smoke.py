@@ -97,6 +97,35 @@ class LettersPaletteSmoke(BaseGUITestCase):
         self.assertIsNone(self.process.poll(), "letters crashed opening palette")
 
 
+class LettersSelectionUXSmoke(BaseGUITestCase):
+    """Selection popover + live cursor style readout (DESIGN-UI §1/§3)."""
+
+    app_name = "letters"
+
+    def test_selection_popover_and_style_readout(self):
+        from dogtail import rawinput
+        import subprocess
+
+        self.app.child(name="New Document", roleName="push button").do_action(0)
+        time.sleep(1.5)
+        rawinput.typeText("style readout test")
+        time.sleep(0.5)
+        # Select all → the floating format popover should appear.
+        rawinput.keyCombo("<Control>a")
+        time.sleep(1.0)
+        bold_btn = self.app.child(name="Bold", roleName="push button")
+        self.assertIsNotNone(bold_btn, "selection popover did not appear")
+        # Apply Heading 2 via its action; the status readout must follow.
+        subprocess.run(["gapplication", "action",
+                        "org.tunaos.letters-rust", "style-h2"])
+        time.sleep(1.0)
+        labels = {c.name for c in self.app.findChildren(
+            lambda c: c.roleName == "label")}
+        self.assertTrue(any("Heading 2" in l for l in labels),
+                        f"no Heading 2 readout; labels: {sorted(labels)}")
+        self.assertIsNone(self.process.poll(), "letters crashed during selection UX")
+
+
 class LettersFileRoundTripSmoke(BaseGUITestCase):
     """The full user journey: open a file from the CLI, edit through real
     input, Ctrl+S, and assert the bytes on disk. This is the GUI-level

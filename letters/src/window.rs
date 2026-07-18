@@ -84,6 +84,57 @@ fn make_doc_widget(settings: Option<&gio::Settings>) -> (PageContainer, gtk::Tex
         });
         editor.add_controller(drop);
     }
+    // Selection format popover: context reveals capability (DESIGN-UI §1).
+    // Non-autohide so it never steals focus from the editor; buttons fire
+    // the same app actions as the toolbar.
+    {
+        let pop = gtk::Popover::new();
+        pop.set_parent(&editor);
+        pop.set_autohide(false);
+        pop.set_position(gtk::PositionType::Top);
+        let row = gtk::Box::new(gtk::Orientation::Horizontal, 0);
+        row.add_css_class("linked");
+        for (icon, tooltip, action) in [
+            ("format-text-bold-symbolic", "Bold", "app.bold"),
+            ("format-text-italic-symbolic", "Italic", "app.italic"),
+            ("format-text-underline-symbolic", "Underline", "app.underline"),
+            ("format-text-strikethrough-symbolic", "Strikethrough", "app.strikethrough"),
+            ("color-select-symbolic", "Highlight", "app.highlight"),
+            ("insert-link-symbolic", "Insert link", "app.insertlink"),
+        ] {
+            let b = gtk::Button::from_icon_name(icon);
+            b.add_css_class("flat");
+            b.set_tooltip_text(Some(tooltip));
+            b.set_action_name(Some(action));
+            row.append(&b);
+        }
+        pop.set_child(Some(&row));
+
+        let ed = editor.clone();
+        let pop2 = pop.clone();
+        buffer.connect_mark_set(move |buf, _iter, mark| {
+            let name = mark.name();
+            let name = name.as_deref();
+            if name != Some("insert") && name != Some("selection_bound") {
+                return;
+            }
+            if let Some((start, _end)) = buf.selection_bounds() {
+                let loc = ed.iter_location(&start);
+                let (x, y) = ed.buffer_to_window_coords(
+                    gtk::TextWindowType::Widget, loc.x(), loc.y());
+                pop2.set_pointing_to(Some(&gtk4::gdk::Rectangle::new(
+                    x, y, 1, loc.height())));
+                if !pop2.is_visible() {
+                    pop2.popup();
+                }
+            } else if pop2.is_visible() {
+                pop2.popdown();
+            }
+        });
+        let pop3 = pop.clone();
+        editor.connect_destroy(move |_| pop3.unparent());
+    }
+
     let scroll = gtk::ScrolledWindow::new();
     scroll.set_child(Some(&editor));
     scroll.set_vexpand(true); scroll.set_hexpand(true);
@@ -154,6 +205,7 @@ pub struct LettersWindow {
     tab_view: adw::TabView,
     stack: gtk4::Stack,
     word_count_label: gtk4::Label,
+    style_label: gtk4::Label,
     settings: gio::Settings,
 }
 
@@ -180,6 +232,13 @@ impl LettersWindow {
         let toast_overlay = adw::ToastOverlay::new();
         toast_overlay.set_child(Some(&stack));
         let (status_bar, word_count_label) = suite_common::make_status_bar();
+        // Cursor style readout ("Heading 2 · Bold") — DESIGN-UI: the status
+        // bar is live, not decorative.
+        let style_label = gtk4::Label::new(Some("Normal"));
+        style_label.add_css_class("caption");
+        style_label.add_css_class("dim-label");
+        style_label.set_margin_start(12);
+        status_bar.append(&style_label);
         // Zoom slider in status bar
         let zoom_adj = gtk4::Adjustment::new(100.0, 50.0, 200.0, 5.0, 10.0, 0.0);
         let zoom_slider = gtk4::Scale::new(gtk4::Orientation::Horizontal, Some(&zoom_adj));
@@ -235,15 +294,15 @@ impl LettersWindow {
             ("app.print-preview", "Print Preview"),
             ("app.export-pdf", "Export as PDF…"),
             ("app.edit-headers", "Edit Headers and Footers…"),
-            ("app.style_p", "Paragraph Style: Normal"),
-            ("app.style_h1", "Paragraph Style: Heading 1"),
-            ("app.style_h2", "Paragraph Style: Heading 2"),
-            ("app.style_h3", "Paragraph Style: Heading 3"),
-            ("app.style_h4", "Paragraph Style: Heading 4"),
-            ("app.style_h5", "Paragraph Style: Heading 5"),
-            ("app.style_h6", "Paragraph Style: Heading 6"),
-            ("app.style_code", "Paragraph Style: Code"),
-            ("app.style_quote", "Paragraph Style: Block Quote"),
+            ("app.style-p", "Paragraph Style: Normal"),
+            ("app.style-h1", "Paragraph Style: Heading 1"),
+            ("app.style-h2", "Paragraph Style: Heading 2"),
+            ("app.style-h3", "Paragraph Style: Heading 3"),
+            ("app.style-h4", "Paragraph Style: Heading 4"),
+            ("app.style-h5", "Paragraph Style: Heading 5"),
+            ("app.style-h6", "Paragraph Style: Heading 6"),
+            ("app.style-code", "Paragraph Style: Code"),
+            ("app.style-quote", "Paragraph Style: Block Quote"),
         ]);
 
         let primary_toolbar: Vec<suite_common::ToolbarItem> = vec![
@@ -493,7 +552,7 @@ impl LettersWindow {
         }
 
         // ── Actions ────────────────────────────────────────────────
-        Self::register_actions(&tab_view, &stack, &word_count_label, &win, app, &settings);
+        Self::register_actions(&tab_view, &stack, &word_count_label, &style_label, &win, app, &settings);
         Self::register_formatting_actions(&tab_view, app);
 
         // ── Print action ──────────────────────────────────────────
@@ -802,7 +861,7 @@ impl LettersWindow {
             });
         }
 
-        LettersWindow { window: suite_win.window, tab_view, stack, word_count_label, settings }
+        LettersWindow { window: suite_win.window, tab_view, stack, word_count_label, style_label, settings }
     }
 
     pub fn present(&self) { self.window.present(); }
@@ -827,26 +886,34 @@ impl LettersWindow {
         page.set_needs_attention(false);
         self.stack.set_visible_child_name("editor");
         let wc = self.word_count_label.clone();
+        let sl = self.style_label.clone();
         buf.connect_modified_changed({
             let p = page.clone();
             move |b| { p.set_needs_attention(b.is_modified()); }
         });
         connect_word_count(&buf, &wc);
         update_word_count(&buf, &wc);
+        connect_style_readout(&buf, &sl);
+        update_style_readout(&buf, &sl);
         self.tab_view.set_selected_page(&page);
     }
 
-    fn register_actions(tv: &adw::TabView, st: &gtk4::Stack, wc: &gtk4::Label, win: &adw::ApplicationWindow, app: &adw::Application, settings: &gio::Settings) {
+    fn register_actions(tv: &adw::TabView, st: &gtk4::Stack, wc: &gtk4::Label, sl: &gtk4::Label, win: &adw::ApplicationWindow, app: &adw::Application, settings: &gio::Settings) {
         // Word count: refresh on every buffer change and when switching tabs.
         {
             let wc = wc.clone();
+            let sl = sl.clone();
             tv.connect_selected_page_notify(move |tv| {
-                if let Some(buf) = active_buffer(tv) { update_word_count(&buf, &wc); }
+                if let Some(buf) = active_buffer(tv) {
+                    update_word_count(&buf, &wc);
+                    update_style_readout(&buf, &sl);
+                }
             });
         }
         // New document
         {
             let tv = tv.clone(); let st = st.clone(); let s = settings.clone(); let wc = wc.clone();
+            let sl = sl.clone();
             let a = gtk::gio::SimpleAction::new("new-document", None);
             a.connect_activate(move |_, _| {
                 let (container, buf) = make_doc_widget(Some(&s));
@@ -858,6 +925,7 @@ impl LettersWindow {
                 let p = tv.page(&container);
                 buf.connect_modified_changed(move |b| { p.set_needs_attention(b.is_modified()); });
                 connect_word_count(&buf, &wc);
+                connect_style_readout(&buf, &sl);
             });
             app.add_action(&a);
         }
@@ -865,9 +933,11 @@ impl LettersWindow {
         // Open file
         {
             let tv = tv.clone(); let st = st.clone(); let w = win.clone(); let s = settings.clone(); let wc = wc.clone();
+            let sl = sl.clone();
             let a = gtk::gio::SimpleAction::new("open-file", None);
             a.connect_activate(move |_, _| {
                 let tv = tv.clone(); let st = st.clone(); let w = w.clone(); let s = s.clone(); let wc = wc.clone();
+                let sl = sl.clone();
                 let dlg = gtk::FileDialog::new();
                 let f = gtk::FileFilter::new();
                 f.add_pattern("*.md"); f.add_pattern("*.txt"); f.add_pattern("*.html"); f.add_pattern("*.docx");
@@ -896,6 +966,7 @@ impl LettersWindow {
                             let p = tv.page(&container);
                             buf.connect_modified_changed(move |b| { p.set_needs_attention(b.is_modified()); });
                             connect_word_count(&buf, &wc);
+                            connect_style_readout(&buf, &sl);
                         }
                     },
                 );
@@ -1038,6 +1109,48 @@ fn update_word_count(buf: &gtk::TextBuffer, wc: &gtk4::Label) {
 fn connect_word_count(buf: &gtk::TextBuffer, wc: &gtk4::Label) {
     let wc = wc.clone();
     buf.connect_changed(move |b| update_word_count(b, &wc));
+}
+
+fn update_style_readout(buf: &gtk::TextBuffer, label: &gtk4::Label) {
+    let mut iter = buf.iter_at_mark(&buf.get_insert());
+    let mut tags = iter.tags();
+    // At the end of a styled run the tag toggles off exactly at the
+    // cursor; typing continues the preceding character's style, so read
+    // that instead.
+    if tags.is_empty() && iter.backward_char() {
+        tags = iter.tags();
+    }
+    let names: Vec<String> = tags
+        .iter()
+        .filter_map(|t| t.name().map(|n| n.to_string()))
+        .collect();
+    let refs: Vec<&str> = names.iter().map(|s| s.as_str()).collect();
+    label.set_text(&letters_core::model::style_readout(&refs));
+}
+
+fn connect_style_readout(buf: &gtk::TextBuffer, label: &gtk4::Label) {
+    let l = label.clone();
+    buf.connect_notify_local(Some("cursor-position"), move |b, _| {
+        update_style_readout(b, &l);
+    });
+    let l = label.clone();
+    buf.connect_changed(move |b| update_style_readout(b, &l));
+    // Formatting changes don't move the cursor or emit `changed`; track
+    // tag application directly.
+    // apply-tag/remove-tag run before the default handler mutates the
+    // buffer; defer the readout to idle so it sees the new state.
+    let l = label.clone();
+    buf.connect_apply_tag(move |b, _, _, _| {
+        let b = b.clone();
+        let l = l.clone();
+        glib::idle_add_local_once(move || update_style_readout(&b, &l));
+    });
+    let l = label.clone();
+    buf.connect_remove_tag(move |b, _, _, _| {
+        let b = b.clone();
+        let l = l.clone();
+        glib::idle_add_local_once(move || update_style_readout(&b, &l));
+    });
 }
 
 fn active_buffer(tv: &adw::TabView) -> Option<gtk::TextBuffer> {
@@ -1196,10 +1309,10 @@ impl LettersWindow {
 
         // Styles
         let styles: &[(&str, &str)] = &[
-            ("style_p", ""),
-            ("style_h1", "h1"), ("style_h2", "h2"), ("style_h3", "h3"),
-            ("style_h4", "h4"), ("style_h5", "h5"), ("style_h6", "h6"),
-            ("style_code", "code"), ("style_quote", "blockquote"),
+            ("style-p", ""),
+            ("style-h1", "h1"), ("style-h2", "h2"), ("style-h3", "h3"),
+            ("style-h4", "h4"), ("style-h5", "h5"), ("style-h6", "h6"),
+            ("style-code", "code"), ("style-quote", "blockquote"),
         ];
         for (action_name, tag_name) in styles {
             let tv = tv.clone();

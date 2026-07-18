@@ -368,3 +368,80 @@ impl Document {
         }
     }
 }
+
+// ── Cursor style readout (status bar) ─────────────────────────────────
+
+/// Human-readable readout of the styles active at the cursor, from the
+/// text-tag names present there — "Heading 1 · Bold · Italic". Paragraph
+/// style first, inline styles after, presentation-only tags ignored.
+/// Empty input (or only ignorable tags) reads "Normal".
+pub fn style_readout(tag_names: &[&str]) -> String {
+    const PARA: &[(&str, &str)] = &[
+        ("h-title", "Title"),
+        ("h-subtitle", "Subtitle"),
+        ("h1", "Heading 1"),
+        ("h2", "Heading 2"),
+        ("h3", "Heading 3"),
+        ("h4", "Heading 4"),
+        ("h5", "Heading 5"),
+        ("h6", "Heading 6"),
+        ("code", "Code"),
+        ("blockquote", "Quote"),
+    ];
+    const INLINE: &[(&str, &str)] = &[
+        ("bold", "Bold"),
+        ("italic", "Italic"),
+        ("underline", "Underline"),
+        ("strikethrough", "Strikethrough"),
+        ("highlight", "Highlight"),
+        ("bullet", "List"),
+        ("numbered", "Numbered List"),
+    ];
+    let mut parts: Vec<&str> = Vec::new();
+    for (tag, label) in PARA {
+        if tag_names.contains(tag) {
+            parts.push(label);
+            break;
+        }
+    }
+    for (tag, label) in INLINE {
+        if tag_names.contains(tag) {
+            parts.push(label);
+        }
+    }
+    if parts.is_empty() {
+        "Normal".to_string()
+    } else {
+        parts.join(" · ")
+    }
+}
+
+#[cfg(test)]
+mod readout_tests {
+    use super::style_readout;
+
+    #[test]
+    fn empty_is_normal() {
+        assert_eq!(style_readout(&[]), "Normal");
+    }
+
+    #[test]
+    fn ignores_presentation_tags() {
+        assert_eq!(style_readout(&["line-spacing-1.5", "align-left"]), "Normal");
+    }
+
+    #[test]
+    fn inline_styles_join() {
+        assert_eq!(style_readout(&["italic", "bold"]), "Bold · Italic");
+    }
+
+    #[test]
+    fn paragraph_style_leads() {
+        assert_eq!(style_readout(&["bold", "h2"]), "Heading 2 · Bold");
+    }
+
+    #[test]
+    fn single_paragraph_style_only() {
+        assert_eq!(style_readout(&["h1", "h2"]), "Heading 1");
+    }
+}
