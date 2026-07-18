@@ -56,7 +56,7 @@ anything interactive needs I5 or I6. Cross-app clipboard: fragment matrix I1 + p
 | Page setup | breaks ✅ I2 round-trip; size/margins ✅ I2 (PageGeometry in docx sectPr + odt page-layout) + I3 oracle: geometry survives LO odt→docx pass |
 | Font family round-trip | ✅ I2 (RunStyle.font_family; docx rFonts + odt fo:font-family) |
 | Block quotes | ✅ I1 + I3 (BlockQuotation style) + markdown quote round-trip |
-| Line spacing round-trip | ✅ odt I2 (fo:line-height %); docx write-only — read blocked on an rdocx ParagraphRef getter (note in tensorbee/rdocx#6 follow-up) |
+| Line spacing round-trip | ✅ I2 both formats (odt fo:line-height %, docx w:spacing auto rule via rdocx line_spacing_multiple) + I3 oracle through LO in both |
 | ODT read/write | ✅ I2 10-test round-trip (paras, h1–6, b/i/u/s, highlight, size, color, links, alignment, lists, page breaks, header/footer) + I3 oracle 7 tests: LO opens ours, we open LO's, bold survives LO odt→docx pass |
 
 ### Tier 3 — Advanced (each needs an explicit scope decision)

@@ -164,6 +164,9 @@ pub fn write(doc: &Document, path: &str) -> Result<(), String> {
         if para.style.page_break_before {
             p = p.page_break_before(true);
         }
+        if (para.style.line_spacing - 1.0).abs() > 0.01 {
+            p = p.line_spacing_multiple(para.style.line_spacing as f64);
+        }
         p = match para.style.alignment {
             Alignment::Left => p,
             Alignment::Center => p.alignment(rdocx::Alignment::Center),
@@ -332,6 +335,7 @@ fn map_paragraph(doc: &rdocx::Document, p: &rdocx::ParagraphRef<'_>) -> Paragrap
         style: ParaStyle {
             heading, alignment, list, code_block, block_quote,
             named_style, page_break_before,
+            line_spacing: p.line_spacing_multiple().map(|m| m as f32).unwrap_or(1.0),
             ..Default::default()
         },
         runs,

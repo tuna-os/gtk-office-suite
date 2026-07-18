@@ -297,3 +297,19 @@ fn docx_font_family_round_trips() {
     let rt = docx::read(path.to_str().unwrap()).expect("read");
     assert_eq!(rt.paragraphs[0].runs, d.paragraphs[0].runs);
 }
+
+#[test]
+fn docx_line_spacing_round_trips() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("spacing.docx");
+    let mut d = Document::from_plain_text("single\ndouble");
+    d.paragraphs[1].style.line_spacing = 2.0;
+    docx::write(&d, path.to_str().unwrap()).expect("write");
+    let rt = docx::read(path.to_str().unwrap()).expect("read");
+    assert!((rt.paragraphs[0].style.line_spacing - 1.0).abs() < 0.01);
+    assert!(
+        (rt.paragraphs[1].style.line_spacing - 2.0).abs() < 0.01,
+        "line spacing lost: {}",
+        rt.paragraphs[1].style.line_spacing
+    );
+}

@@ -601,3 +601,18 @@ fn inline_image_survives_lo_docx_pass() {
         .any(|p| p.runs.iter().any(|r| r.style.image.is_some()));
     assert!(has_image_run, "our reader lost the image run");
 }
+
+/// Line spacing through a full LO docx rewrite (read side unblocked by
+/// rdocx's line_spacing_multiple getter).
+#[test]
+fn line_spacing_survives_lo_docx_pass() {
+    let mut d = Document::from_plain_text("single spaced\ndouble spaced");
+    d.paragraphs[1].style.line_spacing = 2.0;
+    let Some(rt) = through_lo_to_docx(&d, "docxspacing") else { return };
+    assert!(
+        (rt.paragraphs[1].style.line_spacing - 2.0).abs() < 0.05,
+        "line spacing lost through LO: {}",
+        rt.paragraphs[1].style.line_spacing
+    );
+    assert!((rt.paragraphs[0].style.line_spacing - 1.0).abs() < 0.05);
+}
