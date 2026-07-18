@@ -101,8 +101,8 @@ pub fn save_sheets_to_xlsx_with_engine(
         let mut merged: std::collections::HashSet<(usize, usize)> =
             std::collections::HashSet::new();
         for (mr, mc, rows, cols) in &sh.merges {
-            for r in *mr..mr + *rows as usize {
-                for c in *mc..mc + *cols as usize {
+            for r in *mr..mr + *rows {
+                for c in *mc..mc + *cols {
                     merged.insert((r, c));
                 }
             }
@@ -150,7 +150,7 @@ pub fn save_sheets_to_xlsx_with_engine(
         }
 
         for (mr, mc, rows, cols) in &sh.merges {
-            let (lr, lc) = (mr + (*rows as usize).max(1) - 1, mc + (*cols as usize).max(1) - 1);
+            let (lr, lc) = (mr + (*rows).max(1) - 1, mc + (*cols).max(1) - 1);
             let val = sh.data[*mr][*mc].clone();
             sheet
                 .merge_range(
