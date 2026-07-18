@@ -22,6 +22,18 @@ pub struct RunStyle {
     pub link: Option<String>,
     /// Inline image: source path/URI. The run's text is the alt text.
     pub image: Option<String>,
+    /// Font size in half-points (24 = 12pt); None = document default.
+    pub font_size_hp: Option<u16>,
+    /// Text color as RRGGBB hex (no '#'); None = default.
+    pub color: Option<String>,
+    /// Superscript/subscript position.
+    pub vert_align: Option<VertAlign>,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum VertAlign {
+    Superscript,
+    Subscript,
 }
 
 /// A partial style change: `None` fields are left untouched.
@@ -87,6 +99,8 @@ pub struct ParaStyle {
     /// the same language form one block; paragraphs never contain newlines,
     /// so a multi-line block is a run of these.
     pub code_block: Option<String>,
+    /// Block quote membership.
+    pub block_quote: bool,
 }
 
 impl Default for ParaStyle {

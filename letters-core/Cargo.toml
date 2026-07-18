@@ -2,6 +2,11 @@
 name = "letters-core"
 version = "0.1.0"
 edition = "2021"
+description = "GTK-free rich-text document engine: paragraphs of styled runs with Markdown and DOCX I/O, fidelity-tested against LibreOffice"
+license = "GPL-3.0-or-later"
+repository = "https://github.com/tuna-os/gtk-office-suite"
+keywords = ["document", "docx", "markdown", "rich-text", "wysiwyg"]
+categories = ["text-processing", "parser-implementations"]
 
 # GTK-free document engine for Letters: model (paragraphs + styled runs),
 # Markdown/DOCX I/O, editing operations. Must never depend on GTK — see
