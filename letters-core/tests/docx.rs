@@ -168,3 +168,30 @@ fn inline_image_survives() {
     assert_eq!(bytes, png, "image bytes changed in round trip");
     assert!(rt.to_plain_text().contains("before"));
 }
+
+#[test]
+fn font_size_color_vertalign_survive() {
+    let mut d = Document::from_plain_text("big red super");
+    d.paragraphs[0].runs = vec![
+        Run { text: "big ".into(), style: RunStyle { font_size_hp: Some(48), ..Default::default() } },
+        Run { text: "red ".into(), style: RunStyle { color: Some("FF0000".into()), ..Default::default() } },
+        Run { text: "super".into(), style: RunStyle { vert_align: Some(VertAlign::Superscript), ..Default::default() } },
+    ];
+    let rt = round_trip(&d);
+    let runs = &rt.paragraphs[0].runs;
+    let big = runs.iter().find(|r| r.text.contains("big")).expect("big run");
+    assert_eq!(big.style.font_size_hp, Some(48), "font size lost");
+    let red = runs.iter().find(|r| r.text.contains("red")).expect("red run");
+    assert_eq!(red.style.color.as_deref(), Some("FF0000"), "color lost");
+    let sup = runs.iter().find(|r| r.text.contains("super")).expect("super run");
+    assert_eq!(sup.style.vert_align, Some(VertAlign::Superscript), "vert align lost");
+}
+
+#[test]
+fn block_quote_survives() {
+    let mut d = Document::from_plain_text("wise words\nplain after");
+    d.paragraphs[0].style.block_quote = true;
+    let rt = round_trip(&d);
+    assert!(rt.paragraphs[0].style.block_quote, "block quote lost");
+    assert!(!rt.paragraphs[1].style.block_quote);
+}

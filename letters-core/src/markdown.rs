@@ -18,17 +18,23 @@ pub fn parse(md: &str) -> Document {
     let mut style = RunStyle::default();
     let mut list_stack: Vec<ListKind> = Vec::new();
     let mut code_block: Option<String> = None;
+    let mut quote_depth = 0usize;
 
     let parser = Parser::new_ext(md, Options::ENABLE_STRIKETHROUGH);
     for event in parser {
         match event {
             Event::Start(Tag::Paragraph) => {
                 let list = list_stack.last().copied().unwrap_or(ListKind::None);
+                // Flags cannot express container nesting order, so quotes
+                // inside list items stay plain (stable) rather than wrong.
+                let block_quote = quote_depth > 0 && list_stack.is_empty();
                 current.get_or_insert_with(|| Paragraph {
-                    style: ParaStyle { list, ..Default::default() },
+                    style: ParaStyle { list, block_quote, ..Default::default() },
                     runs: vec![],
                 });
             }
+            Event::Start(Tag::BlockQuote(_)) => quote_depth += 1,
+            Event::End(TagEnd::BlockQuote(_)) => quote_depth = quote_depth.saturating_sub(1),
             Event::End(TagEnd::Paragraph) => {
                 if let Some(p) = current.take() { paragraphs.push(p); }
             }
@@ -197,7 +203,12 @@ pub fn serialize(doc: &Document) -> String {
             let same_list = prev.style.list != ListKind::None && prev.style.list == para.style.list;
             let same_code = para.style.code_block.is_some()
                 && prev.style.code_block == para.style.code_block;
-            if !same_list && !same_code { out.push('\n'); }
+            let same_quote = para.style.block_quote && prev.style.block_quote;
+            if !same_list && !same_code {
+                // Paragraph separation inside a quote needs a '>'-prefixed
+                // blank line, or the quote splits on reparse.
+                if same_quote { out.push_str(">\n"); } else { out.push('\n'); }
+            }
         }
 
         if let Some(lang) = &para.style.code_block {
@@ -213,6 +224,9 @@ pub fn serialize(doc: &Document) -> String {
                 out.push_str("\n```");
             }
             continue;
+        }
+        if para.style.block_quote {
+            out.push_str("> ");
         }
         match para.style.list {
             ListKind::Numbered => {
@@ -277,5 +291,8 @@ pub fn lossy_features(doc: &Document) -> Vec<&'static str> {
     if any_run(|s| s.underline) { lost.push("underline"); }
     if doc.paragraphs.iter().any(|p| p.style.alignment != Alignment::Left) { lost.push("alignment"); }
     if doc.paragraphs.iter().any(|p| (p.style.line_spacing - 1.0).abs() > f32::EPSILON) { lost.push("line spacing"); }
+    if any_run(|s| s.font_size_hp.is_some()) { lost.push("font size"); }
+    if any_run(|s| s.color.is_some()) { lost.push("text color"); }
+    if any_run(|s| s.vert_align.is_some()) { lost.push("superscript/subscript"); }
     lost
 }

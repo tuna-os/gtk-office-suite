@@ -13,7 +13,7 @@ categories = ["text-processing", "parser-implementations"]
 # letters-core/DESIGN.md and docs/DEVELOPMENT.md.
 [dependencies]
 pulldown-cmark = "0.12"
-rdocx = { git = "https://github.com/hanthor/rdocx.git", rev = "9ba0c3a" }
+rdocx = { git = "https://github.com/hanthor/rdocx.git", rev = "61be17d" }
 
 [lib]
 name = "letters_core"

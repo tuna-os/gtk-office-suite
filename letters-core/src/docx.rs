@@ -65,6 +65,9 @@ pub fn write(doc: &Document, path: &str) -> Result<(), String> {
         if let Some(level) = para.style.heading {
             p = p.style(&format!("Heading{}", level.clamp(1, 6)));
         }
+        if para.style.block_quote {
+            p = p.style("Quote");
+        }
         p = match para.style.alignment {
             Alignment::Left => p,
             Alignment::Center => p.alignment(rdocx::Alignment::Center),
@@ -112,6 +115,13 @@ pub fn write(doc: &Document, path: &str) -> Result<(), String> {
             if run.style.strikethrough { r = r.strike(true); }
             if run.style.highlight { r = r.highlight("yellow"); }
             if run.style.code { r = r.style("SourceText"); }
+            if let Some(hp) = run.style.font_size_hp { r = r.size(hp as f64 / 2.0); }
+            if let Some(c) = &run.style.color { r = r.color(c); }
+            match run.style.vert_align {
+                Some(crate::model::VertAlign::Superscript) => { r = r.superscript(); }
+                Some(crate::model::VertAlign::Subscript) => { r = r.subscript(); }
+                None => {}
+            }
         }
     }
     out.save(path).map_err(|e| format!("Cannot save {}: {}", path, e))
@@ -120,6 +130,8 @@ pub fn write(doc: &Document, path: &str) -> Result<(), String> {
 /// Map one rdocx paragraph (body or table cell) into a model paragraph.
 fn map_paragraph(doc: &rdocx::Document, p: &rdocx::ParagraphRef<'_>) -> Paragraph {
     let heading = p.style_id().and_then(style_id_to_heading);
+    // LO uses "Quotations"; Word uses "Quote"/"IntenseQuote".
+    let block_quote = matches!(p.style_id(), Some("Quote") | Some("Quotations") | Some("IntenseQuote") | Some("BlockQuote") | Some("BlockQuotation"));
     // LibreOffice emits PreformattedText for <pre>/code blocks.
     let code_block = matches!(p.style_id(), Some("PreformattedText") | Some("HTMLPreformatted"))
         .then(String::new);
@@ -181,11 +193,24 @@ fn map_paragraph(doc: &rdocx::Document, p: &rdocx::ParagraphRef<'_>) -> Paragrap
                 code: r.style_id() == Some("SourceText"),
                 link: link_for(idx),
                 image: None,
+                font_size_hp: r.size().map(|pt| (pt * 2.0).round() as u16),
+                color: r.color().map(|c| c.trim_start_matches('#').to_uppercase()),
+                vert_align: match r.vert_align() {
+                    Some("superscript") => Some(crate::model::VertAlign::Superscript),
+                    Some("subscript") => Some(crate::model::VertAlign::Subscript),
+                    // LibreOffice encodes super/subscript as raised/lowered
+                    // position instead of vertAlign.
+                    _ => match r.position() {
+                        Some(p) if p > 0 => Some(crate::model::VertAlign::Superscript),
+                        Some(p) if p < 0 => Some(crate::model::VertAlign::Subscript),
+                        _ => None,
+                    },
+                },
             },
         });
     }
     let mut para = Paragraph {
-        style: ParaStyle { heading, alignment, list, code_block, ..Default::default() },
+        style: ParaStyle { heading, alignment, list, code_block, block_quote, ..Default::default() },
         runs,
     };
     normalize(&mut para);

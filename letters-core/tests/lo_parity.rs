@@ -300,6 +300,41 @@ fn scenarios() -> Vec<Scenario> {
         "<h3>Notes</h3><ol><li>first</li><li>second</li></ol><pre>code sample</pre>",
         "Notes\nfirst\nsecond\ncode sample"));
 
+    // ── Battery 13: run-level typography ────────────────────────────────
+    v.push(sc("font-size", "<p><span style=\"font-size:24pt\">huge</span> normal</p>", "huge normal",
+        Box::new(|d| {
+            let r = d.paragraphs[0].runs.iter().find(|r| r.text.contains("huge")).ok_or("run")?;
+            match r.style.font_size_hp {
+                Some(hp) if hp >= 44 => Ok(()),
+                other => Err(format!("font size: {other:?}")),
+            }
+        })));
+    v.push(sc("text-color", "<p><font color=\"#ff0000\">red</font> plain</p>", "red plain",
+        Box::new(|d| {
+            let r = d.paragraphs[0].runs.iter().find(|r| r.text.contains("red")).ok_or("run")?;
+            match r.style.color.as_deref() {
+                Some(c) if c.eq_ignore_ascii_case("ff0000") => Ok(()),
+                other => Err(format!("color: {other:?}")),
+            }
+        })));
+    v.push(sc("superscript", "<p>x<sup>2</sup></p>", "x2",
+        Box::new(|d| {
+            let r = d.paragraphs[0].runs.iter().find(|r| r.text == "2").ok_or("run")?;
+            if r.style.vert_align == Some(letters_core::model::VertAlign::Superscript) { Ok(()) }
+            else { Err(format!("vert: {:?}", r.style.vert_align)) }
+        })));
+    v.push(sc("subscript", "<p>H<sub>2</sub>O</p>", "H2O",
+        Box::new(|d| {
+            let r = d.paragraphs[0].runs.iter().find(|r| r.text == "2").ok_or("run")?;
+            if r.style.vert_align == Some(letters_core::model::VertAlign::Subscript) { Ok(()) }
+            else { Err(format!("vert: {:?}", r.style.vert_align)) }
+        })));
+    v.push(sc("blockquote-style", "<blockquote><p>quoted wisdom here</p></blockquote>", "quoted wisdom here",
+        Box::new(|d| {
+            if d.paragraphs[0].style.block_quote { Ok(()) }
+            else { Err(format!("not marked quote; style_id path: {:?}", d.paragraphs[0].style)) }
+        })));
+
     // ── Battery 12: edge cases & combinations ───────────────────────────
     v.push(text_only("edge-nbsp", "<p>a&nbsp;b</p>", "a\u{a0}b"));
     v.push(text_only("edge-whitespace-collapse", "<p>a   b</p>", "a b"));
