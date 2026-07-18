@@ -93,6 +93,11 @@ def main():
                               r"Decks LO-authored parity: (\d+)/(\d+)")
         failed |= not ok
         rows.append(("LO-authored parity (Decks)", f"{p}/{t} (baseline {dk_base})"))
+        of_base = read_baseline("tables-core/tests/corpus/openformula-baseline.txt")
+        p, t, ok = run_corpus("tables-core", "openformula",
+                              r"OpenFormula conformance: (\d+)/(\d+)")
+        failed |= not ok
+        rows.append(("OpenFormula conformance (Tables)", f"{p}/{t} (baseline {of_base})"))
 
     for app, (done, total) in parity_marks().items():
         rows.append((f"{app} tier-1/2 features green", f"{done}/{total}"))
