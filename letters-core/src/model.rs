@@ -17,6 +17,8 @@ pub struct RunStyle {
     pub underline: bool,
     pub strikethrough: bool,
     pub highlight: bool,
+    /// Inline code (monospace) span.
+    pub code: bool,
     pub link: Option<String>,
 }
 
@@ -75,11 +77,16 @@ pub struct ParaStyle {
     pub list: ListKind,
     /// Line spacing multiplier (1.0, 1.15, 1.5, 2.0).
     pub line_spacing: f32,
+    /// Code-block membership: Some(language) marks this paragraph as a line
+    /// of a code block ("" = no language). Consecutive code paragraphs with
+    /// the same language form one block; paragraphs never contain newlines,
+    /// so a multi-line block is a run of these.
+    pub code_block: Option<String>,
 }
 
 impl Default for ParaStyle {
     fn default() -> Self {
-        Self { heading: None, alignment: Alignment::Left, list: ListKind::None, line_spacing: 1.0 }
+        Self { heading: None, alignment: Alignment::Left, list: ListKind::None, line_spacing: 1.0, code_block: None }
     }
 }
 
