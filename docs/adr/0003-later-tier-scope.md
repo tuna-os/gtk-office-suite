@@ -51,10 +51,13 @@ semantics beyond background + decorations.
 
 ## 6. i18n — IN, wiring only
 
-gettext-rs + `po/` scaffolding + all user-facing strings wrapped in the
-three apps and suite-common, POT extraction scripted. **Out:** actual
-translations (community work), locale-aware number/date formats in
-Tables (separate decision, interacts with formulas).
+gettext-rs + `po/` scaffolding, POT extraction scripted
+(`scripts/update-pot.sh`, domain `gtk-office-suite`), shared chrome and
+dialog headings wrapped in `suite_common::i18n()`. Remaining literals
+get wrapped mechanically as they are touched — new UI strings MUST go
+through `i18n()`. **Out:** actual translations (community work),
+locale-aware number/date formats in Tables (separate decision,
+interacts with formulas).
 
 ## 7. Flathub — PREP ONLY
 

@@ -1171,7 +1171,7 @@ impl DecksWindow {
                                     }
                                     Err(e) => {
                                         let err = adw::AlertDialog::builder()
-                                            .heading("Error opening presentation")
+                                            .heading(&suite_common::i18n("Error opening presentation"))
                                             .body(&e)
                                             .build();
                                         err.add_response("ok", "OK");
@@ -1204,7 +1204,7 @@ impl DecksWindow {
                     let deck = Deck { slides: ss_clone.borrow().clone(), masters: m_save.borrow().clone() };
                     if let Err(e) = write_deck(&path_str, &deck) {
                         let err = adw::AlertDialog::builder()
-                            .heading("Error saving presentation")
+                            .heading(&suite_common::i18n("Error saving presentation"))
                             .body(&e)
                             .build();
                         err.add_response("ok", "OK");
@@ -1249,7 +1249,7 @@ impl DecksWindow {
                                     }
                                     Err(e) => {
                                         let err = adw::AlertDialog::builder()
-                                            .heading("Error saving presentation")
+                                            .heading(&suite_common::i18n("Error saving presentation"))
                                             .body(&e)
                                             .build();
                                         err.add_response("ok", "OK");

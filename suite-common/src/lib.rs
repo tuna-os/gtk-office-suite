@@ -33,11 +33,33 @@ pub struct SuiteApp {
     pub app: adw::Application,
 }
 
+/// Translate a user-facing string through gettext. All new UI strings
+/// go through this; `scripts/update-pot.sh` extracts them.
+pub fn i18n(s: &str) -> String {
+    gettextrs::gettext(s)
+}
+
+/// Initialize gettext for the suite. Called once from SuiteApp::new.
+/// Locale files install to <prefix>/share/locale (Flatpak: /app).
+fn init_i18n() {
+    use gettextrs::{bind_textdomain_codeset, bindtextdomain, setlocale, textdomain, LocaleCategory};
+    setlocale(LocaleCategory::LcAll, "");
+    let dir = if std::path::Path::new("/app/share/locale").exists() {
+        "/app/share/locale"
+    } else {
+        "/usr/share/locale"
+    };
+    let _ = bindtextdomain("gtk-office-suite", dir);
+    let _ = bind_textdomain_codeset("gtk-office-suite", "UTF-8");
+    let _ = textdomain("gtk-office-suite");
+}
+
 impl SuiteApp {
     /// Create a new SuiteApp with the given application id.
     /// Registers standard actions: new, open, save, save-as, preferences,
     /// about, keyboard-shortcuts, toggle-dark-mode, quit.
     pub fn new(app_id: &str) -> Self {
+        init_i18n();
         let app = adw::Application::builder()
             .application_id(app_id)
             // Apps open documents from the CLI / file manager ("Open with…").
@@ -414,7 +436,7 @@ pub fn make_header_bar() -> adw::HeaderBar {
     // ---- Start: New Document ----
     let new_btn = gtk::Button::builder()
         .icon_name("document-new-symbolic")
-        .tooltip_text("New Document")
+        .tooltip_text(i18n("New Document"))
         .action_name("app.new")
         .build();
     new_btn.add_css_class("flat");
@@ -423,28 +445,28 @@ pub fn make_header_bar() -> adw::HeaderBar {
     let menu = gio::Menu::new();
 
     let file_section = gio::Menu::new();
-    file_section.append(Some("_New"), Some("app.new"));
-    file_section.append(Some("_Open\u{2026}"), Some("app.open"));
-    file_section.append(Some("_Save"), Some("app.save"));
-    file_section.append(Some("Save _as\u{2026}"), Some("app.save-as"));
-    file_section.append(Some("Page set_up\u{2026}"), Some("app.page-setup"));
-    file_section.append(Some("Print pre_view\u{2026}"), Some("app.print-preview"));
-    file_section.append(Some("_Print\u{2026}"), Some("app.print"));
-    menu.append_section(Some("File"), &file_section);
+    file_section.append(Some(&i18n("_New")), Some("app.new"));
+    file_section.append(Some(&i18n("_Open\u{2026}")), Some("app.open"));
+    file_section.append(Some(&i18n("_Save")), Some("app.save"));
+    file_section.append(Some(&i18n("Save _as\u{2026}")), Some("app.save-as"));
+    file_section.append(Some(&i18n("Page set_up\u{2026}")), Some("app.page-setup"));
+    file_section.append(Some(&i18n("Print pre_view\u{2026}")), Some("app.print-preview"));
+    file_section.append(Some(&i18n("_Print\u{2026}")), Some("app.print"));
+    menu.append_section(Some(&i18n("File")), &file_section);
 
     let edit_section = gio::Menu::new();
-    edit_section.append(Some("_Preferences"), Some("app.preferences"));
-    menu.append_section(Some("Edit"), &edit_section);
+    edit_section.append(Some(&i18n("_Preferences")), Some("app.preferences"));
+    menu.append_section(Some(&i18n("Edit")), &edit_section);
 
     let help_section = gio::Menu::new();
-    help_section.append(Some("_Keyboard shortcuts"), Some("app.shortcuts"));
-    help_section.append(Some("_About"), Some("app.about"));
-    menu.append_section(Some("Help"), &help_section);
+    help_section.append(Some(&i18n("_Keyboard shortcuts")), Some("app.shortcuts"));
+    help_section.append(Some(&i18n("_About")), Some("app.about"));
+    menu.append_section(Some(&i18n("Help")), &help_section);
 
     let menu_btn = gtk::MenuButton::builder()
         .icon_name("open-menu-symbolic")
         .menu_model(&menu)
-        .tooltip_text("Menu")
+        .tooltip_text(i18n("Menu"))
         .build();
 
     let hb = adw::HeaderBar::new();
@@ -543,7 +565,7 @@ pub fn show_command_palette(app: &adw::Application) {
         .unwrap_or_default();
 
     let search = gtk::SearchEntry::new();
-    search.set_placeholder_text(Some("Type a command…"));
+    search.set_placeholder_text(Some(&i18n("Type a command…")));
     search.update_property(&[gtk4::accessible::Property::Label("Command Palette")]);
     search.set_margin_start(6);
     search.set_margin_end(6);

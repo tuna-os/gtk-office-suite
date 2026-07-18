@@ -904,11 +904,11 @@ impl LettersWindow {
                     .activates_default(true)
                     .build();
                 let dlg = adw::AlertDialog::builder()
-                    .heading("Insert Footnote")
+                    .heading(&suite_common::i18n("Insert Footnote"))
                     .build();
                 dlg.set_extra_child(Some(&entry));
-                dlg.add_response("cancel", "Cancel");
-                dlg.add_response("insert", "Insert");
+                dlg.add_response("cancel", &suite_common::i18n("Cancel"));
+                dlg.add_response("insert", &suite_common::i18n("Insert"));
                 dlg.set_response_appearance("insert", adw::ResponseAppearance::Suggested);
                 dlg.set_default_response(Some("insert"));
                 let buf2 = buf.clone();

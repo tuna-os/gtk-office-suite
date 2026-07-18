@@ -1,0 +1,122 @@
+# SOME DESCRIPTIVE TITLE.
+# Copyright (C) YEAR THE PACKAGE'S COPYRIGHT HOLDER
+# This file is distributed under the same license as the gtk-office-suite package.
+# FIRST AUTHOR <EMAIL@ADDRESS>, YEAR.
+#
+#, fuzzy
+msgid ""
+msgstr ""
+"Project-Id-Version: gtk-office-suite\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2026-07-18 23:42+0000\n"
+"PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
+"Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
+"Language-Team: LANGUAGE <LL@li.org>\n"
+"Language: \n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+
+#: decks/src/window.rs:1174
+msgid "Error opening presentation"
+msgstr ""
+
+#: decks/src/window.rs:1207 decks/src/window.rs:1252
+msgid "Error saving presentation"
+msgstr ""
+
+#: letters/src/window.rs:907
+msgid "Insert Footnote"
+msgstr ""
+
+#: letters/src/window.rs:910
+msgid "Cancel"
+msgstr ""
+
+#: letters/src/window.rs:911
+msgid "Insert"
+msgstr ""
+
+#: suite-common/src/lib.rs:439
+msgid "New Document"
+msgstr ""
+
+#: suite-common/src/lib.rs:448
+msgid "_New"
+msgstr ""
+
+#: suite-common/src/lib.rs:449
+msgid "_Open\\u{2026}"
+msgstr ""
+
+#: suite-common/src/lib.rs:450
+msgid "_Save"
+msgstr ""
+
+#: suite-common/src/lib.rs:451
+msgid "Save _as\\u{2026}"
+msgstr ""
+
+#: suite-common/src/lib.rs:452
+msgid "Page set_up\\u{2026}"
+msgstr ""
+
+#: suite-common/src/lib.rs:453
+msgid "Print pre_view\\u{2026}"
+msgstr ""
+
+#: suite-common/src/lib.rs:454
+msgid "_Print\\u{2026}"
+msgstr ""
+
+#: suite-common/src/lib.rs:455
+msgid "File"
+msgstr ""
+
+#: suite-common/src/lib.rs:458
+msgid "_Preferences"
+msgstr ""
+
+#: suite-common/src/lib.rs:459
+msgid "Edit"
+msgstr ""
+
+#: suite-common/src/lib.rs:462
+msgid "_Keyboard shortcuts"
+msgstr ""
+
+#: suite-common/src/lib.rs:463
+msgid "_About"
+msgstr ""
+
+#: suite-common/src/lib.rs:464
+msgid "Help"
+msgstr ""
+
+#: suite-common/src/lib.rs:469
+msgid "Menu"
+msgstr ""
+
+#: suite-common/src/lib.rs:568
+msgid "Type a command…"
+msgstr ""
+
+#: tables/src/window.rs:690
+msgid "Chart"
+msgstr ""
+
+#: tables/src/window.rs:727
+msgid "Insert into Sheet"
+msgstr ""
+
+#: tables/src/window.rs:1012
+msgid "Error opening file"
+msgstr ""
+
+#: tables/src/window.rs:1390
+msgid "Conditional Formatting"
+msgstr ""
+
+#: tables/src/window.rs:1426
+msgid "Apply to Selection"
+msgstr ""

@@ -687,7 +687,7 @@ impl TablesWindow {
                 if data.is_empty() { return; }
 
                 let dialog = adw::Dialog::builder()
-                    .title("Chart")
+                    .title(&suite_common::i18n("Chart"))
                     .content_width(600)
                     .content_height(480)
                     .build();
@@ -724,7 +724,7 @@ impl TablesWindow {
                 header.append(&type_combo);
 
                 // Insert persists the chart on the sheet (saved into xlsx).
-                let insert_btn = gtk::Button::with_label("Insert into Sheet");
+                let insert_btn = gtk::Button::with_label(&suite_common::i18n("Insert into Sheet"));
                 insert_btn.add_css_class("suggested-action");
                 insert_btn.set_halign(gtk::Align::End);
                 insert_btn.set_margin_end(12);
@@ -1009,7 +1009,7 @@ impl TablesWindow {
                                     }
                                     Err(e) => {
                                         let err = adw::AlertDialog::builder()
-                                            .heading("Error opening file")
+                                            .heading(&suite_common::i18n("Error opening file"))
                                             .body(&e)
                                             .build();
                                         err.add_response("ok", "OK");
@@ -1387,7 +1387,7 @@ fn show_conditional_format_dialog(
 ) {
     use tables_core::sheet::{CondOp, CondRule};
     let dialog = adw::Dialog::builder()
-        .title("Conditional Formatting")
+        .title(&suite_common::i18n("Conditional Formatting"))
         .content_width(360)
         .build();
 
@@ -1423,7 +1423,7 @@ fn show_conditional_format_dialog(
     grid.attach(&lbl("Fill"), 0, 3, 1, 1);
     grid.attach(&color_btn, 1, 3, 1, 1);
 
-    let apply = gtk::Button::with_label("Apply to Selection");
+    let apply = gtk::Button::with_label(&suite_common::i18n("Apply to Selection"));
     apply.add_css_class("suggested-action");
     grid.attach(&apply, 1, 4, 1, 1);
 
