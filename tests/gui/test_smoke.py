@@ -55,12 +55,12 @@ class LettersFormattingSmoke(BaseGUITestCase):
         self.app.child(name="New Document", roleName="push button").do_action(0)
         time.sleep(1.5)
         rawinput.typeText("plain ")
-        bold = self.app.child(name="Bold (<Control>b)", roleName="toggle button")
+        # Toolbar buttons are action-bound push buttons named by tooltip.
+        bold = self.app.child(name="Bold (Ctrl+B)", roleName="push button")
         bold.do_action(0)
         time.sleep(0.3)
-        # NOTE: the toggle's AT-SPI checked state does not latch (tracked in
-        # issue #87's follow-ups); formatting itself is proven by the model
-        # tests. Here we assert the interaction chain stays alive.
+        # Formatting fidelity is proven by the model tests; here we assert
+        # the interaction chain (action fires, typing lands) stays alive.
         rawinput.typeText("bolded")
         time.sleep(0.8)
         editor = self.app.child(roleName="text")

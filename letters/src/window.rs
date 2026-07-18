@@ -208,68 +208,53 @@ impl LettersWindow {
             });
         }
 
-        let app_clone = app.clone();
-        let primary_toolbar: Vec<(&'static str, &'static str, Box<dyn Fn(bool) + 'static>)> = vec![
-            ("format-text-bold-symbolic", "Bold (<Control>b)", Box::new({
-                let app = app_clone.clone();
-                move |_| { app.activate_action("bold", None); }
-            })),
-            ("format-text-italic-symbolic", "Italic (<Control>i)", Box::new({
-                let app = app_clone.clone();
-                move |_| { app.activate_action("italic", None); }
-            })),
-            ("format-text-underline-symbolic", "Underline (<Control>u)", Box::new({
-                let app = app_clone.clone();
-                move |_| { app.activate_action("underline", None); }
-            })),
+        suite_common::actions::register_labels(&[
+            ("app.bold", "Bold"),
+            ("app.italic", "Italic"),
+            ("app.underline", "Underline"),
+            ("app.strikethrough", "Strikethrough"),
+            ("app.highlight", "Highlight"),
+            ("app.bullet-list", "Bullet List"),
+            ("app.numbered-list", "Numbered List"),
+            ("app.align-left", "Align Left"),
+            ("app.align-center", "Align Center"),
+            ("app.align-right", "Align Right"),
+            ("app.align-justify", "Justify"),
+            ("app.insertlink", "Insert Link…"),
+            ("app.insertimage", "Insert Image…"),
+            ("app.insert-table", "Insert Table…"),
+            ("app.cycle-line-spacing", "Cycle Line Spacing"),
+            ("app.cycle-columns", "Cycle Column Layout"),
+            ("app.increase-font", "Increase Font Size"),
+            ("app.decrease-font", "Decrease Font Size"),
+            ("app.find", "Find and Replace"),
+            ("app.undo", "Undo"),
+            ("app.redo", "Redo"),
+            ("app.page-setup", "Page Setup…"),
+            ("app.print", "Print…"),
+            ("app.print-preview", "Print Preview"),
+            ("app.export-pdf", "Export as PDF…"),
+            ("app.edit-headers", "Edit Headers and Footers…"),
+        ]);
+
+        let primary_toolbar: Vec<suite_common::ToolbarItem> = vec![
+            ("format-text-bold-symbolic", "Bold (Ctrl+B)", "app.bold"),
+            ("format-text-italic-symbolic", "Italic (Ctrl+I)", "app.italic"),
+            ("format-text-underline-symbolic", "Underline (Ctrl+U)", "app.underline"),
         ];
 
-        let app_clone = app.clone();
-        let extended_toolbar: Vec<(&'static str, &'static str, Box<dyn Fn() + 'static>)> = vec![
-            ("format-text-strikethrough-symbolic", "Strikethrough (<Control><Shift>s)", Box::new({
-                let app = app_clone.clone();
-                move || { app.activate_action("strikethrough", None); }
-            })),
-            ("color-select-symbolic", "Highlight (<Control><Shift>h)", Box::new({
-                let app = app_clone.clone();
-                move || { app.activate_action("highlight", None); }
-            })),
-            ("view-list-bullet-symbolic", "Bullet list (<Control><Shift>8)", Box::new({
-                let app = app_clone.clone();
-                move || { app.activate_action("bullet-list", None); }
-            })),
-            ("view-list-ordered-symbolic", "Numbered list (<Control><Shift>7)", Box::new({
-                let app = app_clone.clone();
-                move || { app.activate_action("numbered-list", None); }
-            })),
-            ("format-justify-left-symbolic", "Align left (<Control>l)", Box::new({
-                let app = app_clone.clone();
-                move || { app.activate_action("align-left", None); }
-            })),
-            ("format-justify-center-symbolic", "Align center (<Control>e)", Box::new({
-                let app = app_clone.clone();
-                move || { app.activate_action("align-center", None); }
-            })),
-            ("format-justify-right-symbolic", "Align right (<Control>r)", Box::new({
-                let app = app_clone.clone();
-                move || { app.activate_action("align-right", None); }
-            })),
-            ("format-justify-fill-symbolic", "Justify (<Control>j)", Box::new({
-                let app = app_clone.clone();
-                move || { app.activate_action("align-justify", None); }
-            })),
-            ("insert-link-symbolic", "Insert link (<Control>k)", Box::new({
-                let app = app_clone.clone();
-                move || { app.activate_action("insertlink", None); }
-            })),
-            ("view-continuous-symbolic", "Line spacing", Box::new({
-                let app = app_clone.clone();
-                move || { app.activate_action("cycle-line-spacing", None); }
-            })),
-            ("view-dual-symbolic", "Column layout", Box::new({
-                let app = app_clone.clone();
-                move || { app.activate_action("cycle-columns", None); }
-            })),
+        let extended_toolbar: Vec<suite_common::ToolbarItem> = vec![
+            ("format-text-strikethrough-symbolic", "Strikethrough", "app.strikethrough"),
+            ("color-select-symbolic", "Highlight", "app.highlight"),
+            ("view-list-bullet-symbolic", "Bullet list (Ctrl+Shift+8)", "app.bullet-list"),
+            ("view-list-ordered-symbolic", "Numbered list (Ctrl+Shift+7)", "app.numbered-list"),
+            ("format-justify-left-symbolic", "Align left (Ctrl+L)", "app.align-left"),
+            ("format-justify-center-symbolic", "Align center (Ctrl+E)", "app.align-center"),
+            ("format-justify-right-symbolic", "Align right (Ctrl+R)", "app.align-right"),
+            ("format-justify-fill-symbolic", "Justify (Ctrl+J)", "app.align-justify"),
+            ("insert-link-symbolic", "Insert link (Ctrl+K)", "app.insertlink"),
+            ("view-continuous-symbolic", "Line spacing", "app.cycle-line-spacing"),
+            ("view-dual-symbolic", "Column layout", "app.cycle-columns"),
         ];
 
         let suite_win = suite_common::SuiteWindow::new(app, "Letters", primary_toolbar, extended_toolbar);

@@ -339,100 +339,114 @@ impl DecksWindow {
         }
 
         // ── Toolbar actions ───────────────────────────────────────────────
-        // "Add Text Box" button
+        // Each operation is a named GioAction; toolbar buttons bind to the
+        // action so the palette/shortcuts dialog see them too.
+        suite_common::actions::register_labels(&[
+            ("app.add-text-box", "Add Text Box"),
+            ("app.add-shape", "Add Shape"),
+            ("app.add-image", "Add Image…"),
+            ("app.present", "Present"),
+        ]);
+
+        // "Add Text Box"
         {
-            let ss = slides.clone();
             let cs = canvas.clone();
             let cs_ref = current_slide.clone();
             let undo = undo.clone();
-            let tb = find_toolbar_child(&toolbar, "insert-text-symbolic");
-            if let Some(btn) = tb {
-                btn.connect_clicked(move |_| {
-                    let idx = cs_ref.get();
-                    let obj = SlideObject::TextBox {
-                        text: "Text".into(), x: 200.0, y: 150.0, w: 200.0, h: 40.0,
-                        runs: vec![],
-                    };
-                    undo.borrow_mut().execute(Box::new(AddObjectCmd::new(idx, obj)));
-                    cs.queue_draw();
-                });
+            let act = gio::SimpleAction::new("add-text-box", None);
+            act.connect_activate(move |_, _| {
+                let idx = cs_ref.get();
+                let obj = SlideObject::TextBox {
+                    text: "Text".into(), x: 200.0, y: 150.0, w: 200.0, h: 40.0,
+                    runs: vec![],
+                };
+                undo.borrow_mut().execute(Box::new(AddObjectCmd::new(idx, obj)));
+                cs.queue_draw();
+            });
+            app.add_action(&act);
+            if let Some(btn) = find_toolbar_child(&toolbar, "insert-text-symbolic") {
+                btn.set_action_name(Some("app.add-text-box"));
             }
         }
 
-        // "Add Shape" button — cycles through Rect → Circle
+        // "Add Shape" — cycles through Rect → Circle
         {
             let ss = slides.clone();
             let cs = canvas.clone();
             let cs_ref = current_slide.clone();
             let shape_count = Rc::new(Cell::new(0u32));
             let undo = undo.clone();
-            let tb = find_toolbar_child(&toolbar, "insert-object-symbolic");
-            if let Some(btn) = tb {
-                btn.connect_clicked(move |_| {
-                    let idx = cs_ref.get();
-                    let ss_snap = ss.borrow();
-                    if idx >= ss_snap.len() { return; }
-                    let count = shape_count.get();
-                    shape_count.set(count + 1);
-                    let obj = if count % 2 == 0 {
-                        SlideObject::Rect { x: 200.0, y: 200.0, w: 200.0, h: 150.0 }
-                    } else {
-                        SlideObject::Circle { x: 300.0, y: 250.0, r: 80.0 }
-                    };
-                    drop(ss_snap);
-                    undo.borrow_mut().execute(Box::new(AddObjectCmd::new(idx, obj)));
-                    cs.queue_draw();
-                });
+            let act = gio::SimpleAction::new("add-shape", None);
+            act.connect_activate(move |_, _| {
+                let idx = cs_ref.get();
+                let ss_snap = ss.borrow();
+                if idx >= ss_snap.len() { return; }
+                let count = shape_count.get();
+                shape_count.set(count + 1);
+                let obj = if count % 2 == 0 {
+                    SlideObject::Rect { x: 200.0, y: 200.0, w: 200.0, h: 150.0 }
+                } else {
+                    SlideObject::Circle { x: 300.0, y: 250.0, r: 80.0 }
+                };
+                drop(ss_snap);
+                undo.borrow_mut().execute(Box::new(AddObjectCmd::new(idx, obj)));
+                cs.queue_draw();
+            });
+            app.add_action(&act);
+            if let Some(btn) = find_toolbar_child(&toolbar, "insert-object-symbolic") {
+                btn.set_action_name(Some("app.add-shape"));
             }
         }
 
-        // "Add Image" button
+        // "Add Image"
         {
-            let ss = slides.clone();
             let cs = canvas.clone();
             let cs_ref = current_slide.clone();
             let w = suite_win.window.clone();
             let undo = undo.clone();
-            let tb = find_toolbar_child(&toolbar, "insert-image-symbolic");
-            if let Some(btn) = tb {
-                btn.connect_clicked(move |_| {
-                    let dlg = gtk::FileDialog::new();
-                    let f = gtk::FileFilter::new();
-                    f.add_mime_type("image/*");
-                    f.set_name(Some("Images"));
-                    let fl = gio::ListStore::new::<gtk::FileFilter>();
-                    fl.append(&f);
-                    dlg.set_filters(Some(&fl));
-                    let ss = ss.clone(); let cs = cs.clone();
-                    let cs_ref = cs_ref.clone(); let w2 = w.clone();
-                    let undo = undo.clone();
-                    dlg.open(Some(&w), None::<&gio::Cancellable>,
-                        move |result: Result<gio::File, glib::Error>| {
-                            if let Ok(file) = result {
-                                if let Some(path) = file.path() {
-                                    let idx = cs_ref.get();
-                                    let p = path.to_string_lossy().to_string();
-                                    let obj = SlideObject::Image {
-                                        path: p, x: 200.0, y: 200.0, w: 200.0, h: 150.0,
-                                    };
-                                    undo.borrow_mut().execute(Box::new(AddObjectCmd::new(idx, obj)));
-                                    cs.queue_draw();
-                                }
+            let act = gio::SimpleAction::new("add-image", None);
+            act.connect_activate(move |_, _| {
+                let dlg = gtk::FileDialog::new();
+                let f = gtk::FileFilter::new();
+                f.add_mime_type("image/*");
+                f.set_name(Some("Images"));
+                let fl = gio::ListStore::new::<gtk::FileFilter>();
+                fl.append(&f);
+                dlg.set_filters(Some(&fl));
+                let cs = cs.clone();
+                let cs_ref = cs_ref.clone();
+                let undo = undo.clone();
+                dlg.open(Some(&w), None::<&gio::Cancellable>,
+                    move |result: Result<gio::File, glib::Error>| {
+                        if let Ok(file) = result {
+                            if let Some(path) = file.path() {
+                                let idx = cs_ref.get();
+                                let p = path.to_string_lossy().to_string();
+                                let obj = SlideObject::Image {
+                                    path: p, x: 200.0, y: 200.0, w: 200.0, h: 150.0,
+                                };
+                                undo.borrow_mut().execute(Box::new(AddObjectCmd::new(idx, obj)));
+                                cs.queue_draw();
                             }
-                        },
-                    );
-                });
+                        }
+                    },
+                );
+            });
+            app.add_action(&act);
+            if let Some(btn) = find_toolbar_child(&toolbar, "insert-image-symbolic") {
+                btn.set_action_name(Some("app.add-image"));
             }
         }
 
-        // Present button
+        // Present
         {
             let w = suite_win.window.clone();
-            let tb = find_toolbar_child(&toolbar, "view-fullscreen-symbolic");
-            if let Some(btn) = tb {
-                btn.connect_clicked(move |_| {
-                    w.fullscreen();
-                });
+            let act = gio::SimpleAction::new("present", None);
+            act.connect_activate(move |_, _| { w.fullscreen(); });
+            app.add_action(&act);
+            app.set_accels_for_action("app.present", &["F5"]);
+            if let Some(btn) = find_toolbar_child(&toolbar, "view-fullscreen-symbolic") {
+                btn.set_action_name(Some("app.present"));
             }
         }
 

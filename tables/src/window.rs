@@ -615,12 +615,40 @@ impl TablesWindow {
             })
         };
 
-        let extended_toolbar: Vec<(&'static str, &'static str, Box<dyn Fn() + 'static>)> = vec![
-            ("preferences-other-symbolic", "Toggle number format", toggle_format),
-            ("format-text-strikethrough-symbolic", "Toggle cell border", toggle_border),
-            ("object-group-symbolic", "Merge cells", toggle_merge),
-            ("insert-object-symbolic", "Chart", show_chart_dialog),
-            ("document-send-symbolic", "Export PDF", export_pdf),
+        // Toolbar operations are named GioActions so they are keyboard-
+        // reachable and appear in the shortcuts dialog / command palette.
+        {
+            let mk = |name: &str, f: Box<dyn Fn()>| {
+                let a = gtk4::gio::SimpleAction::new(name, None);
+                a.connect_activate(move |_, _| f());
+                app.add_action(&a);
+            };
+            mk("cycle-number-format", toggle_format);
+            mk("cycle-cell-border", toggle_border);
+            mk("merge-cells", toggle_merge);
+            mk("insert-chart", show_chart_dialog);
+            mk("export-pdf", export_pdf);
+        }
+
+        suite_common::actions::register_labels(&[
+            ("app.cycle-number-format", "Cycle Number Format"),
+            ("app.cycle-cell-border", "Cycle Cell Border"),
+            ("app.merge-cells", "Merge Cells"),
+            ("app.insert-chart", "Insert Chart…"),
+            ("app.export-pdf", "Export as PDF…"),
+            ("app.open-file-dialog", "Open Spreadsheet…"),
+            ("app.save-file-dialog", "Save as Excel Workbook…"),
+            ("app.new-document", "New Spreadsheet"),
+            ("app.undo", "Undo"),
+            ("app.redo", "Redo"),
+        ]);
+
+        let extended_toolbar: Vec<suite_common::ToolbarItem> = vec![
+            ("preferences-other-symbolic", "Toggle number format", "app.cycle-number-format"),
+            ("format-text-strikethrough-symbolic", "Toggle cell border", "app.cycle-cell-border"),
+            ("object-group-symbolic", "Merge cells", "app.merge-cells"),
+            ("insert-object-symbolic", "Chart", "app.insert-chart"),
+            ("document-send-symbolic", "Export PDF", "app.export-pdf"),
         ];
 
         let suite_win = suite_common::SuiteWindow::new(app, "Tables", vec![], extended_toolbar);
@@ -754,23 +782,28 @@ impl TablesWindow {
             app.add_action(&act);
         }
 
+        // ── Undo/redo as named actions (window-wide accels) ────────────
+        {
+            let u = undo_mgr.clone();
+            let da = drawing_area.clone();
+            let act = gtk4::gio::SimpleAction::new("undo", None);
+            act.connect_activate(move |_, _| { u.borrow_mut().undo(); da.queue_draw(); });
+            app.add_action(&act);
+            let u = undo_mgr.clone();
+            let da = drawing_area.clone();
+            let act = gtk4::gio::SimpleAction::new("redo", None);
+            act.connect_activate(move |_, _| { u.borrow_mut().redo(); da.queue_draw(); });
+            app.add_action(&act);
+            app.set_accels_for_action("app.undo", &["<Primary>z"]);
+            app.set_accels_for_action("app.redo", &["<Primary>y", "<Primary><Shift>z"]);
+        }
+
         // ── Keyboard shortcuts ──────────────────────────────────────────
         {
             let s = state.clone();
             let da = drawing_area.clone();
-            let u = undo_mgr.clone();
             let key = gtk4::EventControllerKey::new();
-            key.connect_key_pressed(move |_, keyval, _code, mods| {
-                if mods.contains(gtk4::gdk::ModifierType::CONTROL_MASK) && keyval == gtk4::gdk::Key::z {
-                    u.borrow_mut().undo();
-                    da.queue_draw();
-                    return gtk4::glib::Propagation::Stop;
-                }
-                if mods.contains(gtk4::gdk::ModifierType::CONTROL_MASK | gtk4::gdk::ModifierType::SHIFT_MASK) && keyval == gtk4::gdk::Key::z {
-                    u.borrow_mut().redo();
-                    da.queue_draw();
-                    return gtk4::glib::Propagation::Stop;
-                }
+            key.connect_key_pressed(move |_, keyval, _code, _mods| {
                 if keyval == gtk::gdk::Key::Delete || keyval == gtk::gdk::Key::BackSpace {
                     let mut st = s.borrow_mut();
                     let r = st.sheet().selected_row;

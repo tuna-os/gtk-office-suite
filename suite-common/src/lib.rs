@@ -12,7 +12,7 @@
 
 pub mod file_dialogs;
 pub mod toast_manager;
-pub use suite_common_core::{format, undo, events, string_pool, units, props, style, search, print};
+pub use suite_common_core::{actions, format, undo, events, string_pool, units, props, style, search, print};
 
 pub use file_dialogs::FileDialogHelper;
 pub use toast_manager::ToastManager;
@@ -100,7 +100,7 @@ impl SuiteApp {
         let app_weak = app.downgrade();
         act_shortcuts.connect_activate(move |_, _| {
             if let Some(app) = app_weak.upgrade() {
-                app.activate_action("show-shortcuts", None);
+                show_shortcuts_from_registry(&app);
             }
         });
         app.add_action(&act_shortcuts);
@@ -134,6 +134,18 @@ impl SuiteApp {
         app.set_accels_for_action("app.preferences", &["<Control>comma"]);
         app.set_accels_for_action("app.shortcuts",   &["<Control>question"]);
         app.set_accels_for_action("app.quit",        &["<Control>q"]);
+
+        actions::register_labels(&[
+            ("app.new", "New Document"),
+            ("app.open", "Open…"),
+            ("app.save", "Save"),
+            ("app.save-as", "Save As…"),
+            ("app.preferences", "Preferences"),
+            ("app.about", "About"),
+            ("app.shortcuts", "Keyboard Shortcuts"),
+            ("app.toggle-dark-mode", "Toggle Dark Mode"),
+            ("app.quit", "Quit"),
+        ]);
 
         SuiteApp { app }
     }
@@ -180,6 +192,12 @@ fn show_about_dialog() {
 // SuiteToolbar — responsive formatting toolbar
 // ---------------------------------------------------------------------------
 
+/// One toolbar item: (symbolic icon name, tooltip, fully qualified action
+/// name like `"app.bold"`). Buttons activate the named GioAction, so every
+/// toolbar capability is automatically keyboard-reachable, palette-listable,
+/// and collapsible into a real menu.
+pub type ToolbarItem = (&'static str, &'static str, &'static str);
+
 /// A responsive toolbar with a primary (always-visible) section and an
 /// extended section that collapses into a "More" menu on narrow windows.
 ///
@@ -194,12 +212,16 @@ pub struct SuiteToolbar {
     expanded: Cell<bool>,
 }
 
+/// Menu label for an action: registry label if present, else the tooltip
+/// with any trailing accelerator hint ("Bold (<Control>b)") stripped.
+fn menu_label(action: &str, tooltip: &str) -> String {
+    actions::label_for(action)
+        .unwrap_or_else(|| tooltip.split(" (").next().unwrap_or(tooltip).to_string())
+}
+
 impl SuiteToolbar {
-    /// Build a responsive toolbar.
-    pub fn new(
-        primary: Vec<(&'static str, &'static str, Box<dyn Fn(bool)>)>,
-        extended: Vec<(&'static str, &'static str, Box<dyn Fn()>)>,
-    ) -> Self {
+    /// Build a responsive toolbar from action-named items.
+    pub fn new(primary: Vec<ToolbarItem>, extended: Vec<ToolbarItem>) -> Self {
         let container = gtk::Box::new(gtk::Orientation::Horizontal, 6);
         container.set_margin_start(6);
         container.set_margin_end(6);
@@ -208,47 +230,38 @@ impl SuiteToolbar {
             container.set_visible(false);
         }
 
+        let make_button = |icon: &str, tooltip: &str, action: &str| -> gtk::Button {
+            let b = gtk::Button::new();
+            if icon.ends_with("-symbolic") {
+                b.set_icon_name(icon);
+                // GNOME HIG: symbolic icons with tooltips, NOT text labels
+                b.add_css_class("image-button");
+            } else {
+                b.set_label(icon);
+            }
+            b.set_tooltip_text(Some(tooltip));
+            b.set_action_name(Some(action));
+            b
+        };
+
         // ---- Primary section (always visible) ----
         let primary_box = gtk::Box::new(gtk::Orientation::Horizontal, 0);
         primary_box.add_css_class("linked");
-        for (icon_or_label, tooltip, cb) in primary {
-            let btn: gtk::ToggleButton = if icon_or_label.ends_with("-symbolic") {
-                let b = gtk::ToggleButton::new();
-                b.set_icon_name(icon_or_label);
-                // GNOME HIG: symbolic icons with tooltips, NOT text labels
-                b.add_css_class("image-button");
-                b
-            } else {
-                gtk::ToggleButton::with_label(icon_or_label)
-            };
-            btn.set_tooltip_text(Some(tooltip));
-            let cb = cb;
-            btn.connect_toggled(move |b| {
-                cb(b.is_active());
-            });
-            primary_box.append(&btn);
+        for (icon, tooltip, action) in &primary {
+            primary_box.append(&make_button(icon, tooltip, action));
         }
         container.append(&primary_box);
 
         // ---- Extended section + More button ----
         let extended_box = gtk::Box::new(gtk::Orientation::Horizontal, 0);
         extended_box.add_css_class("linked");
-        for (icon_or_label, tooltip, cb) in extended {
-            let btn: gtk::Button = if icon_or_label.ends_with("-symbolic") {
-                let b = gtk::Button::new();
-                b.set_icon_name(icon_or_label);
-                // GNOME HIG: symbolic icons with tooltips, NOT text labels
-                b.add_css_class("image-button");
-                b
-            } else {
-                gtk::Button::with_label(icon_or_label)
-            };
-            btn.set_tooltip_text(Some(tooltip));
-            btn.connect_clicked(move |_| cb());
-            extended_box.append(&btn);
+        let more_menu = gio::Menu::new();
+        for (icon, tooltip, action) in &extended {
+            extended_box.append(&make_button(icon, tooltip, action));
+            // Same action in the overflow menu, shown when collapsed.
+            more_menu.append(Some(&menu_label(action, tooltip)), Some(action));
         }
 
-        let more_menu = gio::Menu::new();
         let more_button = gtk::MenuButton::builder()
             .icon_name("view-more-symbolic")
             .tooltip_text("More")
@@ -307,8 +320,8 @@ impl SuiteWindow {
     pub fn new(
         app: &adw::Application,
         title: &str,
-        primary_toolbar: Vec<(&'static str, &'static str, Box<dyn Fn(bool)>)>,
-        extended_toolbar: Vec<(&'static str, &'static str, Box<dyn Fn()>)>,
+        primary_toolbar: Vec<ToolbarItem>,
+        extended_toolbar: Vec<ToolbarItem>,
     ) -> Self {
         let win = adw::ApplicationWindow::builder()
             .application(app)
@@ -330,6 +343,17 @@ impl SuiteWindow {
         toolbar_view.add_top_bar(&toolbar.container);
 
         win.set_content(Some(&toolbar_view));
+
+        // ---- Adaptive collapse (HIG: adapt below 600sp) ----
+        // The extended toolbar section folds into the "More" menu.
+        let bp = adw::Breakpoint::new(adw::BreakpointCondition::new_length(
+            adw::BreakpointConditionLengthType::MaxWidth,
+            600.0,
+            adw::LengthUnit::Sp,
+        ));
+        bp.add_setter(&toolbar.extended_box, "visible", Some(&false.to_value()));
+        bp.add_setter(&toolbar.more_button, "visible", Some(&true.to_value()));
+        win.add_breakpoint(bp);
 
         // ---- Window sizing ----
         win.set_size_request(360, 300);
@@ -448,6 +472,35 @@ pub fn show_shortcuts_dialog(
         section.add_group(&group);
     }
 
+    win.add_section(&section);
+    win.set_visible(true);
+}
+
+/// Show the keyboard-shortcuts dialog generated from the action label
+/// registry: every labeled action that has accelerators gets a row.
+/// Registering labels (which the palette needs anyway) is all an app has
+/// to do for Ctrl+? to work.
+pub fn show_shortcuts_from_registry(app: &adw::Application) {
+    let win = gtk::ShortcutsWindow::builder().modal(true).build();
+    let section = gtk::ShortcutsSection::builder()
+        .section_name("main")
+        .visible(true)
+        .build();
+    let group = gtk::ShortcutsGroup::builder().title("Actions").build();
+
+    for entry in actions::labeled_actions() {
+        let accels = app.accels_for_action(&entry.name);
+        if let Some(accel) = accels.first() {
+            group.add_shortcut(
+                &gtk::ShortcutsShortcut::builder()
+                    .title(entry.label.as_str())
+                    .accelerator(accel.as_str())
+                    .build(),
+            );
+        }
+    }
+
+    section.add_group(&group);
     win.add_section(&section);
     win.set_visible(true);
 }
