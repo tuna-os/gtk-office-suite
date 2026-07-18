@@ -17,16 +17,7 @@ pub fn to_typst(ss: &TablesEngine) -> String {
     out
 }
 
-/// Export to PDF via typst CLI.
+/// Export to PDF via the in-process Typst engine.
 pub fn to_pdf(ss: &TablesEngine, output_path: &str) -> Result<(), String> {
-    let tmp = format!("{}.typ", output_path);
-    std::fs::write(&tmp, to_typst(ss)).map_err(|e| e.to_string())?;
-    let out = std::process::Command::new("typst")
-        .args(["compile", &tmp, output_path])
-        .output()
-        .map_err(|e| format!("typst not found: {}", e))?;
-    if !out.status.success() {
-        return Err(String::from_utf8_lossy(&out.stderr).into());
-    }
-    Ok(())
+    suite_export::compile_pdf_to_file(&to_typst(ss), output_path)
 }

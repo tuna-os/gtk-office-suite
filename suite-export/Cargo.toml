@@ -1,0 +1,16 @@
+[package]
+name = "suite-export"
+version = "0.1.0"
+edition = "2021"
+
+# Shared PDF export via the Typst library (no external binary — the CLI
+# was never bundled in the Flatpaks, so CLI-based export was broken for
+# every Flatpak user). Heavy dependency, so it lives in its own crate
+# rather than in the core crates.
+[dependencies]
+typst-as-lib = { version = "0.16", features = ["typst-kit-fonts", "typst-kit-embed-fonts"] }
+typst-pdf = "0.15"
+
+[lib]
+name = "suite_export"
+path = "src/lib.rs"

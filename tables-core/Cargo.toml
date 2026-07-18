@@ -8,6 +8,7 @@ edition = "2021"
 # docs/DEVELOPMENT.md layering rule.
 [dependencies]
 suite-common-core = { path = "../suite-common-core" }
+suite-export = { path = "../suite-export" }
 ironcalc_base = "0.7"
 calamine = "0.26"
 rust_xlsxwriter = "0.80"

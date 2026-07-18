@@ -28,14 +28,8 @@ pub fn save_typst(text: &str, path: &str) -> Result<(), String> {
     std::fs::write(path, &src).map_err(|e| format!("{}", e))
 }
 
-/// Compile Typst to PDF via CLI (requires `typst` installed).
+/// Compile a Typst source file to PDF via the in-process engine.
 pub fn typst_to_pdf(input: &str, output: &str) -> Result<(), String> {
-    let out = std::process::Command::new("typst")
-        .args(["compile", input, output])
-        .output()
-        .map_err(|e| format!("typst not found: {}", e))?;
-    if !out.status.success() {
-        return Err(String::from_utf8_lossy(&out.stderr).into());
-    }
-    Ok(())
+    let src = std::fs::read_to_string(input).map_err(|e| format!("{}", e))?;
+    suite_export::compile_pdf_to_file(&src, output)
 }

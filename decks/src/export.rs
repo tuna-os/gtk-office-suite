@@ -18,16 +18,7 @@ pub fn to_typst(slides: &[decks_core::engine::Slide]) -> String {
     out
 }
 
-/// Export to PDF via typst CLI.
+/// Export to PDF via the in-process Typst engine.
 pub fn to_pdf(slides: &[decks_core::engine::Slide], path: &str) -> Result<(), String> {
-    let tmp = format!("{}.typ", path);
-    std::fs::write(&tmp, to_typst(slides)).map_err(|e| e.to_string())?;
-    let out = std::process::Command::new("typst")
-        .args(["compile", &tmp, path])
-        .output()
-        .map_err(|e| format!("typst not found: {}", e))?;
-    if !out.status.success() {
-        return Err(String::from_utf8_lossy(&out.stderr).into());
-    }
-    Ok(())
+    suite_export::compile_pdf_to_file(&to_typst(slides), path)
 }

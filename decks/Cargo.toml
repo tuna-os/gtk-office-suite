@@ -8,6 +8,7 @@ gtk4 = { version = "0.11", features = ["v4_14"] }
 libadwaita = { version = "0.9", features = ["v1_5"] }
 suite-common = { path = "../suite-common" }
 decks-core = { path = "../decks-core" }
+suite-export = { path = "../suite-export" }
 cairo-rs = { version = "0.22", features = ["png"] }
 pango = { version = "0.22" }
 pangocairo = { version = "0.22" }
