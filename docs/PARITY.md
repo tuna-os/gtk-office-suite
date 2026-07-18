@@ -49,11 +49,11 @@ anything interactive needs I5 or I6.
 | Feature | How to test |
 |---|---|
 | Tables in documents (cell-tagged model) | ✅ I1+I2 round-trip, I3 structural (table-2x2 asserts coordinates). Interleaved position + UI editing remain |
-| Named paragraph styles (Title, Quote…) | I1 style registry; I3: LO styles map to ours and back |
+| Named paragraph styles (Title, Subtitle, Quote) | ✅ I1+I2 round-trip |
 | Font size / color per run | ✅ I1 + I3 scenarios (font *family* still open) |
 | Superscript / subscript | ✅ I1 + I3 (incl. LO w:position encoding) |
-| Headers & footers with fields ({page}) | I2 docx sectPr round-trip; I7 visual |
-| Page setup (size, margins, breaks) | I1 layout math; I2 page-break-before round-trip (regressed — red test exists in commit log) |
+| Headers & footers with fields ({page}) | ✅ I2 round-trip (Document.header/footer) |
+| Page setup | breaks ✅ I2 round-trip; size/margins round-trip still open |
 | Block quotes | ✅ I1 + I3 (BlockQuotation style) + markdown quote round-trip |
 | Line spacing round-trip | I2 (model has it; docx mapping missing — red) |
 | ODT read/write | new I2 fixture corpus + I3/I4 via LO (its native format — oracle is authoritative) |
@@ -79,16 +79,16 @@ anything interactive needs I5 or I6.
 | OpenFormula function coverage | ✅ 107/107 | I2 ratchet (IronCalc upstream-main patch until next release) |
 | XLSX round-trip | ✅ | I1 io tests, I4 Calc oracle |
 | ODS / CSV / TSV import | ✅ | I1; add I3-style: LO-authored ods/xlsx read |
-| Number formats (currency, %, date) | ✅ core | I1 format.rs; **red I2**: formats survive xlsx round-trip (currently values only) |
+| Number formats (currency, %, date) | ✅ | I1 format.rs + I2 xlsx format codes |
 | Undo/redo | ✅ | I1 (12 tests) |
-| Multi-sheet | ✅ model | I1; **red I4**: sheet names/count survive in Calc |
+| Multi-sheet | ✅ | I1 + I4: names survive xlsx→Calc→xlsx |
 | Sort, cell borders, merge, validation | ✅ model | I1; add I4 for visual attrs surviving |
 
 ### Tier 2 — Nice-to-have
 
 | Feature | How to test |
 |---|---|
-| Formulas surviving save (not just values) | red I2/I4: `=SUM(A1:B2)` reopens as a formula in Calc |
+| Formulas surviving save | ✅ I2+I4: written as formulas with cached results; Calc evaluates ours |
 | Charts (bar/line/pie exist as Cairo) | I1 chart-model; I4: chart part present in xlsx Calc opens |
 | Conditional formatting | I1 rule engine; I2 round-trip |
 | Freeze panes / autofill / named ranges | I1 each; freeze survives xlsx (I2) |
