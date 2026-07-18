@@ -65,7 +65,7 @@ anything interactive needs I5 or I6. Cross-app clipboard: fragment matrix I1 + p
 |---|---|
 | Track changes | I1 revision model; I2 docx `w:ins`/`w:del` fixtures; I3 LO-authored tracked docs |
 | Comments | I2 docx comments part round-trip |
-| Footnotes/endnotes | I2 + I3 (rdocx has a footnotes module already) |
+| Footnotes | ✅ | I2 round-trip + I4 (survives Writer rewrite); insert action in Letters. Endnotes/comments/track changes out per ADR 0003 §2 |
 | Multi-column sections | I1 layout; I7 visual |
 | Bidi/RTL editing | I3 already covers RTL text survival; editing needs I6 caret tests |
 | Table of contents generation | I1: TOC derived from heading model |
@@ -90,8 +90,8 @@ anything interactive needs I5 or I6. Cross-app clipboard: fragment matrix I1 + p
 | Feature | How to test |
 |---|---|
 | Formulas surviving save | ✅ I2+I4: written as formulas with cached results; Calc evaluates ours |
-| Charts (bar/line/pie exist as Cairo) | I1 chart-model; I4: chart part present in xlsx Calc opens |
-| Conditional formatting | I1 rule engine; I2 round-trip |
+| Charts persisted (bar/line/pie) | ✅ | I2 round-trip (write + own reader) + I4 (survives Calc rewrite); Insert into Sheet dialog |
+| Conditional formatting (cell-value rules) | ✅ | I1 rule matching + I2 round-trip + I4 (survives Calc rewrite); rendered on canvas, dialog |
 | Freeze panes / autofill / named ranges | I1 each; freeze survives xlsx (I2) |
 | Cross-sheet references | I1 IronCalc already supports; add coverage |
 
@@ -120,7 +120,7 @@ roadmap-dependent), external file references (decision: likely never),
 | Feature | How to test |
 |---|---|
 | Styled text inside text boxes (runs, not plain) | ✅ | model+pptx (shared Run/RunStyle) + Pango canvas rendering |
-| Master slides applied on render | I1 resolution logic; I7 |
+| Master slides applied on render | ✅ | I1 placeholder-skip parser + I4 (Impress-authored pptx maps slides→masters); master background inherited on canvas |
 | ODP read/write | ✅ | decks-core/src/odp.rs: I2 round-trips (text, runs, geometry, notes, background) + 7 I4 oracle tests (Impress rewrite both ways; reads Impress custom-shape output) |
 | Slide reorder / duplicate | I1 + I6 |
 | Image fit/crop modes | I1 geometry |
