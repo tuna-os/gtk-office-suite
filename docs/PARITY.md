@@ -13,7 +13,7 @@ Tier 3 items each need an explicit decision to enter scope.
 | I1 | Model unit tests | `*-core` crates, `cargo test` | logic, invariants, edge cases |
 | I2 | Round-trip ratchets | corpus harnesses (CommonMark, DOCX/XLSX/PPTX fixtures) | format fidelity, regressions |
 | I3 | LO-authored parity corpus | `lo_parity.rs` (soffice writes, we read) | reading real-world files |
-| I4 | soffice oracle | `soffice_oracle.rs` per core crate — 53 tests (Letters 23, Tables 15, Decks 15): we write → LO reads/rewrites → we re-read, asserting attributes not just text | writing real-world files |
+| I4 | soffice oracle | `soffice_oracle.rs` per core crate — 65 tests (Letters 25, Tables 20, Decks 20 — the coverage target in TESTING.md): we write → LO reads/rewrites → we re-read, asserting attributes not just text | writing real-world files |
 | I5 | Buffer/bridge round-trips | Xvfb `cargo test -p <app> bridge` | model ⇄ widget translation |
 | I6 | AT-SPI smoke tests | `tests/gui/test_smoke.py` | app-level behavior, input |
 | I7 | VLM visual audit | scheduled, non-gating | rendering/HIG regressions |
@@ -83,7 +83,7 @@ anything interactive needs I5 or I6.
 | Number formats (currency, %, date) | ✅ | I1 format.rs + I2 xlsx format codes |
 | Undo/redo | ✅ | I1 (12 tests) |
 | Multi-sheet | ✅ | I1 + I4: names survive xlsx→Calc→xlsx |
-| Sort, cell borders, merge, validation | ✅ model | I1; add I4 for visual attrs surviving |
+| Sort, cell borders, merge, validation | ✅ model | I1 + I4: merges/frozen panes/column widths persist to xlsx and survive Calc |
 
 ### Tier 2 — Nice-to-have
 

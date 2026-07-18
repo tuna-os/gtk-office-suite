@@ -501,3 +501,103 @@ fn title_subtitle_survive_lo_odt_pass() {
         "Subtitle lost"
     );
 }
+
+/// A document table survives docx → LO rewrite → our reader with its
+/// grid coordinates intact.
+#[test]
+fn table_grid_survives_lo_docx_pass() {
+    use letters_core::model::TableCell;
+    let Some(bin) = require_or_skip() else { return };
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("table.docx");
+    let mut d = Document::from_plain_text("before");
+    for (r, c, text) in [(0u32, 0u32, "a1"), (0, 1, "b1"), (1, 0, "a2"), (1, 1, "b2")] {
+        d.paragraphs.push(Paragraph {
+            style: ParaStyle {
+                table_cell: Some(TableCell { table: 0, row: r, col: c }),
+                ..Default::default()
+            },
+            runs: vec![Run::plain(text)],
+        });
+    }
+    docx::write(&d, path.to_str().unwrap()).expect("write docx");
+    let out_dir = dir.path().join("out");
+    std::fs::create_dir(&out_dir).unwrap();
+    let profile = dir.path().join("p");
+    let st = std::process::Command::new(bin)
+        .arg("--headless")
+        .arg(format!("-env:UserInstallation=file://{}", profile.display()))
+        .args(["--convert-to", "docx", "--outdir"])
+        .arg(&out_dir)
+        .arg(&path)
+        .output()
+        .expect("soffice");
+    assert!(st.status.success());
+    let rt = docx::read(out_dir.join("table.docx").to_str().unwrap()).expect("read");
+    let mut found = std::collections::HashMap::new();
+    for p in &rt.paragraphs {
+        if let Some(tc) = p.style.table_cell {
+            found.insert((tc.row, tc.col), p.text());
+        }
+    }
+    assert_eq!(found.get(&(0, 0)).map(String::as_str), Some("a1"), "{found:?}");
+    assert_eq!(found.get(&(1, 1)).map(String::as_str), Some("b2"), "{found:?}");
+}
+
+/// An inline image survives our docx → LO rewrite (structurally: the
+/// rewritten package still embeds a media part and our reader sees an
+/// image run).
+#[test]
+fn inline_image_survives_lo_docx_pass() {
+    let Some(bin) = require_or_skip() else { return };
+    let dir = tempfile::tempdir().unwrap();
+    let png_path = dir.path().join("dot.png");
+    let png: &[u8] = &[
+        0x89, b'P', b'N', b'G', 0x0d, 0x0a, 0x1a, 0x0a,
+        0, 0, 0, 13, b'I', b'H', b'D', b'R', 0, 0, 0, 2, 0, 0, 0, 2, 8, 2, 0, 0, 0,
+        0xfd, 0xd4, 0x9a, 0x73,
+        0, 0, 0, 21, b'I', b'D', b'A', b'T', 0x78, 0x9c, 0x62, 0xfa, 0xcf, 0xc0, 0xc0,
+        0xf0, 0x1f, 0x88, 0xff, 0x33, 0x30, 0x30, 0x00, 0x00, 0x00, 0xff, 0xff,
+        0x03, 0x00, 0x2b, 0x11, 0x04, 0xf9,
+        0, 0, 0, 0, b'I', b'E', b'N', b'D', 0xae, 0x42, 0x60, 0x82,
+    ];
+    std::fs::write(&png_path, png).unwrap();
+    let path = dir.path().join("img.docx");
+    let mut d = Document::from_plain_text("caption text");
+    d.paragraphs.push(Paragraph {
+        style: ParaStyle::default(),
+        runs: vec![Run {
+            text: "alt text".into(),
+            style: RunStyle {
+                image: Some(png_path.to_string_lossy().to_string()),
+                ..Default::default()
+            },
+        }],
+    });
+    docx::write(&d, path.to_str().unwrap()).expect("write docx");
+    let out_dir = dir.path().join("out");
+    std::fs::create_dir(&out_dir).unwrap();
+    let profile = dir.path().join("p");
+    let st = std::process::Command::new(bin)
+        .arg("--headless")
+        .arg(format!("-env:UserInstallation=file://{}", profile.display()))
+        .args(["--convert-to", "docx", "--outdir"])
+        .arg(&out_dir)
+        .arg(&path)
+        .output()
+        .expect("soffice");
+    assert!(st.status.success());
+    let rewritten = out_dir.join("img.docx");
+    // Structural: the media part survived the LO rewrite.
+    let f = std::fs::File::open(&rewritten).unwrap();
+    let z = zip::ZipArchive::new(f).unwrap();
+    let has_media = z.file_names().any(|n| n.starts_with("word/media/"));
+    assert!(has_media, "embedded image lost through LO");
+    // And our reader sees an image run.
+    let rt = docx::read(rewritten.to_str().unwrap()).expect("read");
+    let has_image_run = rt
+        .paragraphs
+        .iter()
+        .any(|p| p.runs.iter().any(|r| r.style.image.is_some()));
+    assert!(has_image_run, "our reader lost the image run");
+}

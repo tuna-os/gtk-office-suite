@@ -74,3 +74,21 @@ shipped behind a green badge. Honest red is the product; see PR #86.
 - Debug AT-SPI by dumping the tree (`dogtail.tree`) rather than guessing
   role names; GTK4 role mappings are surprising, and a widget missing from
   the tree usually means a real allocation/mapping bug in the app.
+
+## Oracle coverage target (adopted 2026-07-18)
+
+The bar for through-LibreOffice coverage (I4): **every green Tier-1/2
+PARITY row that persists data has at least one oracle assertion per
+format direction it claims** — numerically 25+ Letters, 20+ Tables,
+20+ Decks (~65–70 tests). Each test writes our file, has LibreOffice
+read/rewrite it, and re-reads the result through our own readers,
+asserting the *attribute*, not just the text.
+
+Rules of engagement:
+- New oracle tests are written red-first; a wave that comes back all
+  green earns another probe into an uncovered row.
+- Above ~70 hand-written tests, breadth comes from the LO-authored
+  corpora (`lo_parity.rs`), which are ratcheted and cover many features
+  per file at lower CI cost.
+- Display-precision differences (Calc CSV rounding, Impress soft line
+  breaks) are normalized in the test, not in the engines.

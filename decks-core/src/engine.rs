@@ -327,6 +327,7 @@ pub fn read_pptx(path: &str) -> Result<Deck, String> {
             let mut current_picture: Option<PendingPicture> = None;
             let mut in_text_element = false;
             let mut in_bg = false;
+            let mut in_rpr = false;
 
             loop {
                 match reader.read_event_into(&mut buf) {
@@ -410,6 +411,7 @@ pub fn read_pptx(path: &str) -> Result<Deck, String> {
                                 if let Some(shape) = current_shape.as_mut() {
                                     shape.cur_style = parse_run_style(e, &reader);
                                 }
+                                in_rpr = true;
                             }
                             _ => {}
                         }
@@ -420,6 +422,23 @@ pub fn read_pptx(path: &str) -> Result<Deck, String> {
                             b"a:rPr" => {
                                 if let Some(shape) = current_shape.as_mut() {
                                     shape.cur_style = parse_run_style(e, &reader);
+                                }
+                            }
+                            b"a:srgbClr" if in_rpr || in_bg => {
+                                if let Some(val) = e
+                                    .attributes()
+                                    .filter_map(|a| a.ok())
+                                    .find(|a| a.key.as_ref() == b"val")
+                                {
+                                    let hex =
+                                        String::from_utf8_lossy(&val.value).to_lowercase();
+                                    if in_rpr {
+                                        if let Some(shape) = current_shape.as_mut() {
+                                            shape.cur_style.color = Some(hex);
+                                        }
+                                    } else {
+                                        background = format!("#{hex}");
+                                    }
                                 }
                             }
                             b"a:off" => {
@@ -482,6 +501,9 @@ pub fn read_pptx(path: &str) -> Result<Deck, String> {
                         let name = e.name();
                         if name.as_ref() == b"p:bg" {
                             in_bg = false;
+                        }
+                        if name.as_ref() == b"a:rPr" {
+                            in_rpr = false;
                         }
                         if name.as_ref() == b"p:sp" {
                             if let Some(shape) = current_shape.take() {
@@ -684,12 +706,23 @@ fn write_text_box<W: std::io::Write>(
         writer.write_event(Event::Start(BytesStart::new("a:r")))?;
         let mut r_pr = BytesStart::new("a:rPr");
         r_pr.push_attribute(("lang", "en-US"));
-        r_pr.push_attribute(("sz", "1800"));
+        let sz = run.style.font_size_hp.map(|hp| hp as u32 * 50).unwrap_or(1800);
+        r_pr.push_attribute(("sz", sz.to_string().as_str()));
         if run.style.bold { r_pr.push_attribute(("b", "1")); }
         if run.style.italic { r_pr.push_attribute(("i", "1")); }
         if run.style.underline { r_pr.push_attribute(("u", "sng")); }
         if run.style.strikethrough { r_pr.push_attribute(("strike", "sngStrike")); }
-        writer.write_event(Event::Empty(r_pr))?;
+        if let Some(color) = &run.style.color {
+            writer.write_event(Event::Start(r_pr))?;
+            writer.write_event(Event::Start(BytesStart::new("a:solidFill")))?;
+            let mut clr = BytesStart::new("a:srgbClr");
+            clr.push_attribute(("val", color.to_uppercase().as_str()));
+            writer.write_event(Event::Empty(clr))?;
+            writer.write_event(Event::End(BytesEnd::new("a:solidFill")))?;
+            writer.write_event(Event::End(BytesEnd::new("a:rPr")))?;
+        } else {
+            writer.write_event(Event::Empty(r_pr))?;
+        }
         writer.write_event(Event::Start(BytesStart::new("a:t")))?;
         let escaped = quick_xml::escape::escape(run.text.as_str());
         writer.write_event(Event::Text(BytesText::new(&escaped)))?;
@@ -1265,6 +1298,11 @@ fn parse_run_style(e: &BytesStart, reader: &Reader<&[u8]>) -> RunStyle {
             b"i" => st.italic = val == "1" || val == "true",
             b"u" => st.underline = val != "none" && !val.is_empty(),
             b"strike" => st.strikethrough = val != "noStrike" && !val.is_empty(),
+            b"sz" => {
+                if let Ok(hundredths) = val.parse::<u32>() {
+                    st.font_size_hp = Some((hundredths / 50) as u16);
+                }
+            }
             _ => {}
         }
     }

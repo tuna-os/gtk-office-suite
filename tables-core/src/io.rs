@@ -96,8 +96,21 @@ pub fn save_sheets_to_xlsx_with_engine(
     for (si, sh) in sheets.iter().enumerate() {
         let sheet = workbook.add_worksheet();
         sheet.set_name(&sh.name).map_err(|e| format!("Sheet name: {}", e))?;
+
+        // Cells covered by a merge are written by merge_range below.
+        let mut merged: std::collections::HashSet<(usize, usize)> =
+            std::collections::HashSet::new();
+        for (mr, mc, rows, cols) in &sh.merges {
+            for r in *mr..mr + *rows as usize {
+                for c in *mc..mc + *cols as usize {
+                    merged.insert((r, c));
+                }
+            }
+        }
+
         for r in 0..sh.rows {
             for c in 0..sh.cols {
+                if merged.contains(&(r, c)) { continue; }
                 // The engine backs the first sheet; formulas persist as
                 // formulas there (recalculable in Calc/Excel), values
                 // elsewhere.
@@ -133,6 +146,31 @@ pub fn save_sheets_to_xlsx_with_engine(
                     sheet.write_string(r as u32, c as u16, val)
                         .map_err(|e| format!("Write error: {}", e))?;
                 }
+            }
+        }
+
+        for (mr, mc, rows, cols) in &sh.merges {
+            let (lr, lc) = (mr + (*rows as usize).max(1) - 1, mc + (*cols as usize).max(1) - 1);
+            let val = sh.data[*mr][*mc].clone();
+            sheet
+                .merge_range(
+                    *mr as u32, *mc as u16, lr as u32, lc as u16,
+                    &val, &rust_xlsxwriter::Format::default(),
+                )
+                .map_err(|e| format!("Merge error: {}", e))?;
+        }
+        if sh.frozen_rows > 0 || sh.frozen_cols > 0 {
+            sheet
+                .set_freeze_panes(sh.frozen_rows as u32, sh.frozen_cols as u16)
+                .map_err(|e| format!("Freeze error: {}", e))?;
+        }
+        for c in 0..sh.cols {
+            let w = sh.col_width(c);
+            if (w - tables_core_default_col_width()).abs() > 0.5 {
+                // Pixels → Excel character width (~7px per character unit).
+                sheet
+                    .set_column_width(c as u16, w / 7.0)
+                    .map_err(|e| format!("Width error: {}", e))?;
             }
         }
     }
@@ -295,4 +333,9 @@ mod tests {
         assert!(styles.contains("0.0%"), "percent format missing from styles: {styles}");
     }
 
+}
+
+/// The SheetModel default column width in px (COL_WIDTH).
+fn tables_core_default_col_width() -> f64 {
+    crate::sheet::COL_WIDTH
 }

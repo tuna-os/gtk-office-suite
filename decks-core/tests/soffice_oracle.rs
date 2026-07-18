@@ -360,3 +360,139 @@ fn background_color_survives_impress_rewrite() {
         rt.slides[0].background
     );
 }
+
+// ── Oracle wave 3: run styling, images, notes mapping ────────────────
+
+use letters_core::model::{Run, RunStyle};
+
+fn styled_run_slide(runs: Vec<Run>) -> Slide {
+    let text = runs.iter().map(|r| r.text.as_str()).collect::<String>();
+    Slide {
+        title: "styled".into(),
+        background: "#ffffff".into(),
+        objects: vec![SlideObject::TextBox {
+            text,
+            x: 100.0, y: 100.0, w: 600.0, h: 80.0,
+            runs,
+        }],
+        notes: String::new(),
+        master_idx: Some(0),
+    }
+}
+
+fn runs_of(slide: &Slide) -> Vec<Run> {
+    slide
+        .objects
+        .iter()
+        .filter_map(|o| match o {
+            SlideObject::TextBox { runs, .. } => Some(runs.clone()),
+            _ => None,
+        })
+        .flatten()
+        .collect()
+}
+
+#[test]
+fn italic_underline_runs_survive_impress_rewrite() {
+    let mut deck = Deck::new();
+    deck.slides = vec![styled_run_slide(vec![
+        Run { text: "it".into(), style: RunStyle { italic: true, ..Default::default() } },
+        Run { text: " and ".into(), style: RunStyle::default() },
+        Run { text: "un".into(), style: RunStyle { underline: true, ..Default::default() } },
+    ])];
+    let Some(rt) = through_impress(&deck, "itun") else { return };
+    let runs = runs_of(&rt.slides[0]);
+    let italic: String =
+        runs.iter().filter(|r| r.style.italic).map(|r| r.text.as_str()).collect();
+    let underline: String =
+        runs.iter().filter(|r| r.style.underline).map(|r| r.text.as_str()).collect();
+    assert_eq!(italic.trim(), "it", "italic lost: {runs:?}");
+    assert_eq!(underline.trim(), "un", "underline lost: {runs:?}");
+}
+
+#[test]
+fn run_font_size_survives_impress_rewrite() {
+    let mut deck = Deck::new();
+    deck.slides = vec![styled_run_slide(vec![
+        Run { text: "small".into(), style: RunStyle::default() },
+        Run {
+            text: "BIG".into(),
+            style: RunStyle { font_size_hp: Some(64), ..Default::default() }, // 32pt
+        },
+    ])];
+    let Some(rt) = through_impress(&deck, "fontsize") else { return };
+    let runs = runs_of(&rt.slides[0]);
+    let big = runs.iter().find(|r| r.text.contains("BIG")).expect("BIG run lost");
+    assert_eq!(big.style.font_size_hp, Some(64), "font size lost: {runs:?}");
+}
+
+#[test]
+fn run_color_survives_impress_rewrite() {
+    let mut deck = Deck::new();
+    deck.slides = vec![styled_run_slide(vec![Run {
+        text: "red text".into(),
+        style: RunStyle { color: Some("cc0000".into()), ..Default::default() },
+    }])];
+    let Some(rt) = through_impress(&deck, "runcolor") else { return };
+    let runs = runs_of(&rt.slides[0]);
+    let red = runs.iter().find(|r| r.text.contains("red")).expect("run lost");
+    assert_eq!(
+        red.style.color.as_deref().map(str::to_lowercase),
+        Some("cc0000".into()),
+        "color lost: {runs:?}"
+    );
+}
+
+#[test]
+fn image_object_survives_impress_rewrite() {
+    if !require_or_skip() { return; }
+    // A 2x2 red PNG, generated inline so no fixture file is needed.
+    let dir = tempfile::tempdir().unwrap();
+    let png_path = dir.path().join("dot.png");
+    let png: &[u8] = &[
+        0x89, b'P', b'N', b'G', 0x0d, 0x0a, 0x1a, 0x0a,
+        0, 0, 0, 13, b'I', b'H', b'D', b'R', 0, 0, 0, 2, 0, 0, 0, 2, 8, 2, 0, 0, 0,
+        0xfd, 0xd4, 0x9a, 0x73,
+        0, 0, 0, 21, b'I', b'D', b'A', b'T', 0x78, 0x9c, 0x62, 0xfa, 0xcf, 0xc0, 0xc0,
+        0xf0, 0x1f, 0x88, 0xff, 0x33, 0x30, 0x30, 0x00, 0x00, 0x00, 0xff, 0xff,
+        0x03, 0x00, 0x2b, 0x11, 0x04, 0xf9,
+        0, 0, 0, 0, b'I', b'E', b'N', b'D', 0xae, 0x42, 0x60, 0x82,
+    ];
+    std::fs::write(&png_path, png).unwrap();
+
+    let mut deck = Deck::new();
+    deck.slides = vec![Slide {
+        title: "img".into(),
+        background: "#ffffff".into(),
+        objects: vec![SlideObject::Image {
+            path: png_path.to_string_lossy().to_string(),
+            x: 100.0, y: 100.0, w: 200.0, h: 150.0,
+        }],
+        notes: String::new(),
+        master_idx: Some(0),
+    }];
+    let Some(rt) = through_impress(&deck, "image") else { return };
+    let images = rt.slides[0]
+        .objects
+        .iter()
+        .filter(|o| matches!(o, SlideObject::Image { .. }))
+        .count();
+    assert!(images >= 1, "image object lost: {:?}", rt.slides[0].objects);
+}
+
+#[test]
+fn notes_map_to_their_slides_through_impress() {
+    let mut deck = Deck::new();
+    deck.slides = (1..=3)
+        .map(|i| text_slide(&format!("S{i}"), &format!("body {i}"), &format!("note {i}")))
+        .collect();
+    let Some(rt) = through_impress(&deck, "notesmap") else { return };
+    for (i, slide) in rt.slides.iter().enumerate() {
+        assert!(
+            slide.notes.contains(&format!("note {}", i + 1)),
+            "slide {} has wrong notes: {:?}",
+            i + 1,
+            slide.notes
+        );
+    }
+}
