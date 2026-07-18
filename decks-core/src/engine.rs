@@ -252,6 +252,9 @@ pub fn read_pptx(path: &str) -> Result<Deck, String> {
     }
 
     let mut slides = Vec::new();
+    // Layout part path per slide (slide → layout → master mapping is
+    // resolved after the slide loop, when `archive` is free again).
+    let mut slide_layout_paths: Vec<Option<String>> = Vec::new();
 
     // 3. Parse each slide XML file
     for (slide_index, r_id) in ordered_slide_rids.iter().enumerate() {
@@ -583,12 +586,94 @@ pub fn read_pptx(path: &str) -> Result<Deck, String> {
             }
         }
 
+        slide_layout_paths.push(
+            slide_image_rels
+                .values()
+                .find(|t| t.contains("slideLayout"))
+                .map(|t| format!("ppt/{}", t.trim_start_matches("../"))),
+        );
+
         slides.push(Slide {
             title: format!("Slide {}", slide_index + 1),
             background,
             objects,
             notes,
             master_idx: Some(0),
+        });
+    }
+
+    // ── Masters: one entry per distinct layout (master decorations +
+    // layout decorations, placeholders skipped). ────────────────────────
+    let mut masters: Vec<MasterSlide> = Vec::new();
+    {
+        let mut layout_to_idx: std::collections::HashMap<String, usize> =
+            std::collections::HashMap::new();
+        let read_part = |archive: &mut zip::ZipArchive<File>, name: &str| -> String {
+            let mut s = String::new();
+            if let Ok(mut f) = archive.by_name(name) {
+                f.read_to_string(&mut s).unwrap_or(0);
+            }
+            s
+        };
+        for (i, layout_path) in slide_layout_paths.iter().enumerate() {
+            let Some(layout_path) = layout_path else { continue };
+            let idx = if let Some(&idx) = layout_to_idx.get(layout_path) {
+                idx
+            } else {
+                let layout_xml = read_part(&mut archive, layout_path);
+                if layout_xml.is_empty() {
+                    continue;
+                }
+                // Layout rels → its slideMaster part.
+                let dir = Path::new(layout_path).parent().unwrap_or(Path::new("ppt"));
+                let file = Path::new(layout_path)
+                    .file_name()
+                    .unwrap_or_default()
+                    .to_string_lossy()
+                    .to_string();
+                let rels = read_part(
+                    &mut archive,
+                    &format!("{}/_rels/{}.rels", dir.to_string_lossy(), file),
+                );
+                let master_xml = rels
+                    .split("Target=\"")
+                    .skip(1)
+                    .filter_map(|s| s.split('"').next())
+                    .find(|t| t.contains("slideMaster"))
+                    .map(|t| format!("ppt/{}", t.trim_start_matches("../")))
+                    .map(|p| read_part(&mut archive, &p))
+                    .unwrap_or_default();
+
+                let (master_bg, mut shapes) = parse_master_shapes(&master_xml);
+                let (layout_bg, layout_shapes) = parse_master_shapes(&layout_xml);
+                shapes.extend(layout_shapes);
+                let name = Path::new(layout_path)
+                    .file_stem()
+                    .map(|s| s.to_string_lossy().to_string())
+                    .unwrap_or_else(|| "Master".into());
+                masters.push(MasterSlide {
+                    name,
+                    background: layout_bg
+                        .or(master_bg)
+                        .unwrap_or_else(|| "#ffffff".into()),
+                    default_font: "Sans".into(),
+                    shapes,
+                });
+                let idx = masters.len() - 1;
+                layout_to_idx.insert(layout_path.clone(), idx);
+                idx
+            };
+            if let Some(s) = slides.get_mut(i) {
+                s.master_idx = Some(idx);
+            }
+        }
+    }
+    if masters.is_empty() {
+        masters.push(MasterSlide {
+            name: "Default".into(),
+            background: "#ffffff".into(),
+            default_font: "Sans".into(),
+            shapes: vec![],
         });
     }
 
@@ -602,7 +687,149 @@ pub fn read_pptx(path: &str) -> Result<Deck, String> {
         });
     }
 
-    Ok(Deck { slides, masters: vec![] })
+    Ok(Deck { slides, masters })
+}
+
+/// Parse a slideMaster/slideLayout part: background color and
+/// non-placeholder decoration shapes. Placeholder shapes (`p:ph` —
+/// "Click to edit Master title style" and friends) are styling slots,
+/// not content, and are skipped.
+pub fn parse_master_shapes(xml: &str) -> (Option<String>, Vec<SlideObject>) {
+    if xml.is_empty() {
+        return (None, Vec::new());
+    }
+    let mut reader = Reader::from_str(xml);
+    reader.trim_text(true);
+    let mut buf = Vec::new();
+    let mut background: Option<String> = None;
+    let mut shapes = Vec::new();
+    let mut in_bg = false;
+    let mut in_text = false;
+    // (x, y, w, h, prst, has_ph, text)
+    struct Pending {
+        x: f64,
+        y: f64,
+        w: f64,
+        h: f64,
+        prst: Option<String>,
+        has_ph: bool,
+        text: Vec<String>,
+    }
+    let mut cur: Option<Pending> = None;
+    loop {
+        let ev = match reader.read_event_into(&mut buf) {
+            Ok(ev) => ev,
+            Err(_) => break,
+        };
+        match ev {
+            Event::Start(ref e) | Event::Empty(ref e) => match e.name().as_ref() {
+                b"p:bg" => in_bg = true,
+                b"p:sp" => {
+                    cur = Some(Pending {
+                        x: 0.0,
+                        y: 0.0,
+                        w: 0.0,
+                        h: 0.0,
+                        prst: None,
+                        has_ph: false,
+                        text: Vec::new(),
+                    });
+                }
+                b"p:ph" => {
+                    if let Some(p) = cur.as_mut() {
+                        p.has_ph = true;
+                    }
+                }
+                b"a:off" => {
+                    if let Some(p) = cur.as_mut() {
+                        let (x, y) = parse_coords(e, &reader, b"x", b"y");
+                        if let Some(x) = x {
+                            p.x = x / 9525.0;
+                        }
+                        if let Some(y) = y {
+                            p.y = y / 9525.0;
+                        }
+                    }
+                }
+                b"a:ext" => {
+                    if let Some(p) = cur.as_mut() {
+                        let (w, h) = parse_coords(e, &reader, b"cx", b"cy");
+                        if let Some(w) = w {
+                            p.w = w / 9525.0;
+                        }
+                        if let Some(h) = h {
+                            p.h = h / 9525.0;
+                        }
+                    }
+                }
+                b"a:prstGeom" => {
+                    if let Some(p) = cur.as_mut() {
+                        p.prst = parse_prst_geom(e, &reader);
+                    }
+                }
+                b"a:t" => in_text = true,
+                b"a:srgbClr" if in_bg => {
+                    if let Some(val) = e
+                        .attributes()
+                        .filter_map(|a| a.ok())
+                        .find(|a| a.key.as_ref() == b"val")
+                    {
+                        background =
+                            Some(format!("#{}", String::from_utf8_lossy(&val.value).to_lowercase()));
+                    }
+                }
+                _ => {}
+            },
+            Event::End(ref e) => match e.name().as_ref() {
+                b"p:bg" => in_bg = false,
+                b"a:t" => in_text = false,
+                b"p:sp" => {
+                    if let Some(p) = cur.take() {
+                        if !p.has_ph && p.w > 0.0 && p.h > 0.0 {
+                            let has_text = p.text.iter().any(|t| !t.trim().is_empty());
+                            if has_text {
+                                shapes.push(SlideObject::TextBox {
+                                    text: p.text.join("\n"),
+                                    x: p.x,
+                                    y: p.y,
+                                    w: p.w,
+                                    h: p.h,
+                                    runs: vec![],
+                                });
+                            } else if p.prst.as_deref() == Some("ellipse") {
+                                shapes.push(SlideObject::Circle {
+                                    x: p.x + p.w / 2.0,
+                                    y: p.y + p.h / 2.0,
+                                    r: p.w / 2.0,
+                                });
+                            } else {
+                                shapes.push(SlideObject::Rect {
+                                    x: p.x,
+                                    y: p.y,
+                                    w: p.w,
+                                    h: p.h,
+                                });
+                            }
+                        }
+                    }
+                }
+                _ => {}
+            },
+            Event::Text(ref t) => {
+                if in_text {
+                    if let Some(p) = cur.as_mut() {
+                        if let Ok(u) = t.unescape() {
+                            p.text.push(u.into_owned());
+                        }
+                    }
+                }
+            }
+            Event::Eof => break,
+            _ => {}
+        }
+        buf.clear();
+    }
+    (background, shapes)
 }
 
 fn resolve_and_extract_picture(
@@ -1307,4 +1534,33 @@ fn parse_run_style(e: &BytesStart, reader: &Reader<&[u8]>) -> RunStyle {
         }
     }
     st
+
+}
+
+#[cfg(test)]
+mod master_tests {
+    use super::*;
+
+    #[test]
+    fn master_parser_skips_placeholders_keeps_decorations() {
+        let xml = r##"<p:sldMaster xmlns:p="x" xmlns:a="y"><p:cSld>
+            <p:bg><p:bgPr><a:solidFill><a:srgbClr val="1A2B3C"/></a:solidFill></p:bgPr></p:bg>
+            <p:spTree>
+            <p:sp><p:nvSpPr><p:nvPr><p:ph type="title"/></p:nvPr></p:nvSpPr>
+              <p:spPr><a:xfrm><a:off x="9525" y="9525"/><a:ext cx="95250" cy="95250"/></a:xfrm></p:spPr>
+              <p:txBody><a:p><a:r><a:t>Click to edit Master title style</a:t></a:r></a:p></p:txBody></p:sp>
+            <p:sp><p:spPr><a:xfrm><a:off x="19050" y="28575"/><a:ext cx="190500" cy="95250"/></a:xfrm>
+              <a:prstGeom prst="rect"/></p:spPr></p:sp>
+            </p:spTree></p:cSld></p:sldMaster>"##;
+        let (bg, shapes) = parse_master_shapes(xml);
+        assert_eq!(bg.as_deref(), Some("#1a2b3c"));
+        assert_eq!(shapes.len(), 1, "placeholder must be skipped: {shapes:?}");
+        match &shapes[0] {
+            SlideObject::Rect { x, y, w, h } => {
+                assert!((x - 2.0).abs() < 0.01 && (y - 3.0).abs() < 0.01);
+                assert!((w - 20.0).abs() < 0.01 && (h - 10.0).abs() < 0.01);
+            }
+            other => panic!("expected rect, got {other:?}"),
+        }
+    }
 }

@@ -123,9 +123,19 @@ pub fn draw_slide(
     cr.rectangle(ox + 3.0, oy + 3.0, slide_w, slide_h);
     cr.fill().unwrap();
 
-    // Slide background
+    // Slide background — an unset (white) slide inherits its master's.
     if current_slide < slides.len() {
-        let bg = &slides[current_slide].background;
+        let slide_bg = &slides[current_slide].background;
+        let master_bg = slides[current_slide]
+            .master_idx
+            .and_then(|mi| masters.get(mi))
+            .map(|m| m.background.as_str())
+            .filter(|b| !b.is_empty() && *b != "#ffffff");
+        let bg: &str = if (slide_bg == "#ffffff" || slide_bg.is_empty()) && master_bg.is_some() {
+            master_bg.unwrap()
+        } else {
+            slide_bg
+        };
         if bg == "#ffffff" || bg.is_empty() {
             cr.set_source_rgb(1.0, 1.0, 1.0);
         } else if bg.starts_with('#') && bg.len() >= 7 {

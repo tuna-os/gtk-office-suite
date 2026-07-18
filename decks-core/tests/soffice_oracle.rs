@@ -651,3 +651,35 @@ fn we_read_impress_authored_odp() {
         "text lost reading Impress-authored odp"
     );
 }
+
+// ── Master slides (ADR 0003 §5) ──────────────────────────────────────
+
+/// An Impress-rewritten pptx has real slideMaster/slideLayout parts:
+/// we must map slides to masters and must NOT ingest the master's
+/// placeholder prompts ("Click to edit …") as decoration content.
+#[test]
+fn masters_read_from_impress_pptx_without_placeholder_leakage() {
+    if !require_or_skip() { return; }
+    let mut deck = Deck::new();
+    deck.slides = vec![text_slide("T", "master mapping test", "")];
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("src.pptx");
+    write_pptx(path.to_str().unwrap(), &deck).expect("write pptx");
+    let rewritten = convert(&path, "pptx").expect("Impress rewrite");
+    let rt = decks_core::engine::read_pptx(rewritten.to_str().unwrap()).expect("read");
+    assert!(!rt.masters.is_empty(), "no masters read");
+    for s in &rt.slides {
+        let mi = s.master_idx.expect("slide unmapped");
+        assert!(mi < rt.masters.len(), "master_idx out of range");
+    }
+    for m in &rt.masters {
+        for obj in &m.shapes {
+            if let SlideObject::TextBox { text, .. } = obj {
+                assert!(
+                    !text.to_lowercase().contains("click to edit"),
+                    "placeholder leaked into master decorations: {text:?}"
+                );
+            }
+        }
+    }
+}
