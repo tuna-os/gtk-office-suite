@@ -30,21 +30,21 @@ impl ValidationRule {
         match self {
             ValidationRule::List(items) => items.is_empty() || items.iter().any(|i| i == value),
             ValidationRule::WholeNumber { min, max } => {
-                value.parse::<i64>().ok().map_or(false, |v| {
-                    min.map_or(true, |m| v >= m) && max.map_or(true, |m| v <= m)
+                value.parse::<i64>().ok().is_some_and(|v| {
+                    min.is_none_or(|m| v >= m) && max.is_none_or(|m| v <= m)
                 })
             }
             ValidationRule::Decimal { min, max } => {
-                value.parse::<f64>().ok().map_or(false, |v| {
-                    min.map_or(true, |m| v >= m) && max.map_or(true, |m| v <= m)
+                value.parse::<f64>().ok().is_some_and(|v| {
+                    min.is_none_or(|m| v >= m) && max.is_none_or(|m| v <= m)
                 })
             }
             ValidationRule::TextLength { min, max } => {
                 let len = value.len();
-                min.map_or(true, |m| len >= m) && max.map_or(true, |m| len <= m)
+                min.is_none_or(|m| len >= m) && max.is_none_or(|m| len <= m)
             }
             ValidationRule::Regex(pattern) => {
-                regex::Regex::new(pattern).map_or(false, |re| re.is_match(value))
+                regex::Regex::new(pattern).is_ok_and(|re| re.is_match(value))
             }
         }
     }
@@ -77,7 +77,7 @@ pub fn col_label(c: usize) -> String {
 }
 
 pub fn hit_col_divider(x: f64, y: f64, scroll_x: f64, sheet: &SheetModel) -> Option<usize> {
-    if y < 0.0 || y > COL_HEADER_HEIGHT { return None; }
+    if !(0.0..=COL_HEADER_HEIGHT).contains(&y) { return None; }
     let cx = x - ROW_HEADER_WIDTH + scroll_x;
     if cx < 0.0 { return None; }
     let mut accum = 0.0;
@@ -111,6 +111,7 @@ pub struct SheetModel {
     pub frozen_cols: usize,
     pub merges: Vec<(usize, usize, usize, usize)>,
     pub validations: Vec<Vec<Option<ValidationRule>>>,
+    #[allow(dead_code)] // reserved for multi-engine sheets
     engine_idx: usize,
 }
 
@@ -150,7 +151,7 @@ impl SheetModel {
     }
 
     pub fn set_col_width(&mut self, c: usize, w: f64) {
-        if c < self.col_widths.len() { self.col_widths[c] = w.max(30.0).min(500.0); }
+        if c < self.col_widths.len() { self.col_widths[c] = w.clamp(30.0, 500.0); }
     }
 
     pub fn toggle_sort(&mut self, col: usize) {
@@ -181,6 +182,7 @@ impl SheetModel {
         else { self.merges.push((r, c, 2, 2)); }
     }
 
+    #[allow(clippy::needless_range_loop)]
     pub fn sync_from_engine(&mut self, engine: &TablesEngine) {
         let grid = engine.to_grid();
         for r in 0..self.rows.min(grid.len()) {

@@ -40,6 +40,12 @@ pub enum SlideObject {
     Image { path: String, x: f64, y: f64, w: f64, h: f64 },
 }
 
+impl Default for Deck {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl Deck {
     pub fn new() -> Self {
         let default_master = MasterSlide {
@@ -546,6 +552,7 @@ fn resolve_and_extract_picture(
 
 // ── Write PPTX ───────────────────────────────────────────────────────
 
+#[allow(clippy::too_many_arguments)]
 fn write_text_box<W: std::io::Write>(
     writer: &mut Writer<W>,
     id: usize,
@@ -722,6 +729,7 @@ fn write_circle<W: std::io::Write>(
     Ok(())
 }
 
+#[allow(clippy::too_many_arguments)]
 fn write_image<W: std::io::Write>(
     writer: &mut Writer<W>,
     id: usize,
@@ -852,7 +860,7 @@ pub fn write_pptx(path: &str, deck: &Deck) -> Result<(), String> {
     for i in 0..deck.slides.len() {
         pres_rels.push_str(&format!(
             "  <Relationship Id=\"{}\" Type=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships/slide\" Target=\"slides/slide{}.xml\"/>\n",
-            format!("rId{}", i + 1),
+            format_args!("rId{}", i + 1),
             i + 1
         ));
     }

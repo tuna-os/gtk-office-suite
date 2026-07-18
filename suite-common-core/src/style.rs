@@ -58,12 +58,8 @@ impl StylePool {
             if let Some(val) = current.props.get(prop) {
                 return Some(val);
             }
-            match &current.parent {
-                Some(parent_name) => {
-                    current = self.styles.get(parent_name)?;
-                }
-                None => return None,
-            }
+            let parent_name = current.parent.as_ref()?;
+            current = self.styles.get(parent_name)?;
         }
     }
 

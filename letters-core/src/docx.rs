@@ -71,7 +71,7 @@ pub fn write(doc: &Document, path: &str) -> Result<(), String> {
             Alignment::Right => p.alignment(rdocx::Alignment::Right),
             Alignment::Justify => p.alignment(rdocx::Alignment::Justify),
         };
-        drop(p);
+        let _ = p; // release the builder borrow before append_hyperlink
         for run in &para.runs {
             if let Some(url) = &run.style.link {
                 // Hyperlinks need a document-level relationship; styles on

@@ -94,8 +94,8 @@ fn search_regex(haystack: &str, query: &SearchQuery) -> Vec<SearchMatch> {
 }
 
 fn is_word_boundary(text: &str, start: usize, end: usize) -> bool {
-    let before = start == 0 || text.as_bytes().get(start - 1).map_or(true, |b| !b.is_ascii_alphanumeric());
-    let after = end >= text.len() || text.as_bytes().get(end).map_or(true, |b| !b.is_ascii_alphanumeric());
+    let before = start == 0 || text.as_bytes().get(start - 1).is_none_or(|b| !b.is_ascii_alphanumeric());
+    let after = end >= text.len() || text.as_bytes().get(end).is_none_or(|b| !b.is_ascii_alphanumeric());
     before && after
 }
 
