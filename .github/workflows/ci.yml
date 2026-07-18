@@ -2,6 +2,12 @@ name: CI
 
 on: [push, pull_request]
 
+# Rapid alpha pushes: newer commits supersede queued/running CI for the
+# same ref instead of stacking up and starving the runner pool.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
 env:
   CARGO_TERM_COLOR: always
 

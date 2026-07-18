@@ -9,6 +9,10 @@ on:
     branches: [main]
   workflow_dispatch:
 
+concurrency:
+  group: gui-tests-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   # Deterministic AT-SPI smoke tests. These GATE: no `|| true`, no VLM.
   # If they fail, an app does not launch or basic input is broken.
