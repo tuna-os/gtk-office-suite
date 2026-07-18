@@ -40,6 +40,8 @@ impl SuiteApp {
     pub fn new(app_id: &str) -> Self {
         let app = adw::Application::builder()
             .application_id(app_id)
+            // Apps open documents from the CLI / file manager ("Open with…").
+            .flags(gio::ApplicationFlags::HANDLES_OPEN)
             .build();
 
         // ---- Register actions (using closure captures) ----

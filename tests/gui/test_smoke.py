@@ -10,6 +10,7 @@ and no screenshot judging, so they are fast and cannot flake on model
 output.
 """
 
+import os
 import time
 
 from framework import BaseGUITestCase
@@ -66,6 +67,43 @@ class LettersFormattingSmoke(BaseGUITestCase):
         self.assertEqual(editor.text, "plain bolded")
         self.assertIsNotNone(self.app.child(name="2 words", roleName="label"))
         self.assertIsNone(self.process.poll(), "letters crashed during formatting")
+
+
+class LettersFileRoundTripSmoke(BaseGUITestCase):
+    """The full user journey: open a file from the CLI, edit through real
+    input, Ctrl+S, and assert the bytes on disk. This is the GUI-level
+    fidelity test the model corpora back up."""
+
+    app_name = "letters"
+
+    def setUp(self):
+        import tempfile
+        self._dir = tempfile.mkdtemp(prefix="letters-rt-")
+        self._doc = os.path.join(self._dir, "journey.md")
+        with open(self._doc, "w") as f:
+            f.write("hello world")
+        self.launch_args = [self._doc]
+        super().setUp()
+
+    def tearDown(self):
+        super().tearDown()
+        import shutil
+        shutil.rmtree(self._dir, ignore_errors=True)
+
+    def test_open_edit_save_round_trip(self):
+        from dogtail import rawinput
+
+        editor = self.app.child(roleName="text")
+        self.assertEqual(editor.text, "hello world", "file did not open into editor")
+        # editor self-focuses on map (see window.rs); jump to end and type
+        rawinput.keyCombo("<Control>End")
+        rawinput.typeText(" edited")
+        time.sleep(0.5)
+        rawinput.keyCombo("<Control>s")
+        time.sleep(1.5)
+        with open(self._doc) as f:
+            saved = f.read()
+        self.assertIn("hello world edited", saved, f"saved file: {saved!r}")
 
 
 class TablesSmoke(BaseGUITestCase):

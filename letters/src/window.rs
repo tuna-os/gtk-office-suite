@@ -811,6 +811,35 @@ impl LettersWindow {
 
     pub fn present(&self) { self.window.present(); }
 
+    /// Open a document from a filesystem path into a new tab (used by
+    /// CLI/file-manager launches via GApplication::open).
+    pub fn open_path(&self, path: &str) {
+        let (container, buf) = make_doc_widget(Some(&self.settings));
+        if let Err(e) = crate::bridge::load_file_to_buffer(path, &buf) {
+            eprintln!("open failed: {e}");
+            return;
+        }
+        let td = TabData::new();
+        td.0.borrow_mut().file = Some(std::path::PathBuf::from(path));
+        tab_data_set(&container, td);
+        let page = self.tab_view.append(&container);
+        let name = std::path::Path::new(path)
+            .file_name().map(|n| n.to_string_lossy().to_string())
+            .unwrap_or_else(|| path.to_string());
+        page.set_title(&name);
+        page.set_tooltip(&name);
+        page.set_needs_attention(false);
+        self.stack.set_visible_child_name("editor");
+        let wc = self.word_count_label.clone();
+        buf.connect_modified_changed({
+            let p = page.clone();
+            move |b| { p.set_needs_attention(b.is_modified()); }
+        });
+        connect_word_count(&buf, &wc);
+        update_word_count(&buf, &wc);
+        self.tab_view.set_selected_page(&page);
+    }
+
     fn register_actions(tv: &adw::TabView, st: &gtk4::Stack, wc: &gtk4::Label, win: &adw::ApplicationWindow, app: &adw::Application, settings: &gio::Settings) {
         // Word count: refresh on every buffer change and when switching tabs.
         {
@@ -952,11 +981,23 @@ impl LettersWindow {
 
 /// Walk from a TabPage child through PageContainer → ScrolledWindow → TextView.
 fn get_textview(widget: &impl IsA<gtk::Widget>) -> Option<gtk::TextView> {
-    widget.as_ref()
-        .first_child()                                          // PageContainer
-        .and_then(|pc| pc.first_child())                        // ScrolledWindow
-        .and_then(|sw| sw.first_child())                        // TextView
-        .and_then(|tv| tv.downcast::<gtk::TextView>().ok())
+    // Depth-first search: the tab child IS the PageContainer, and fixed-depth
+    // chains silently break when the widget tree changes (which is exactly
+    // what happened — save was returning None for every tab).
+    fn find(w: &gtk::Widget) -> Option<gtk::TextView> {
+        if let Ok(tv) = w.clone().downcast::<gtk::TextView>() {
+            return Some(tv);
+        }
+        let mut child = w.first_child();
+        while let Some(c) = child {
+            if let Some(tv) = find(&c) {
+                return Some(tv);
+            }
+            child = c.next_sibling();
+        }
+        None
+    }
+    find(widget.as_ref().upcast_ref::<gtk::Widget>())
 }
 
 // ── Page setup helpers ────────────────────────────────────────────────

@@ -88,15 +88,45 @@ fn main() {
     });
     suite.app.set_accels_for_action("app.export-pdf", &["<Primary><Shift>e"]);
 
+    let win_store: std::rc::Rc<std::cell::RefCell<Option<window::LettersWindow>>> =
+        std::rc::Rc::new(std::cell::RefCell::new(None));
+
     let s = settings.clone();
+    let ws = win_store.clone();
     suite.app.connect_activate(move |gtk_app| {
         // Restore dark mode after GTK init
         if s.boolean("dark-mode") {
             let sm = adw::StyleManager::default();
             sm.set_color_scheme(adw::ColorScheme::ForceDark);
         }
-        let w = window::LettersWindow::new(gtk_app, s.clone());
-        w.present();
+        let mut store = ws.borrow_mut();
+        if store.is_none() {
+            *store = Some(window::LettersWindow::new(gtk_app, s.clone()));
+        }
+        store.as_ref().unwrap().present();
+    });
+
+    // CLI / file-manager launches: `letters doc.md` opens each file in a tab.
+    let s = settings.clone();
+    let ws = win_store.clone();
+    suite.app.connect_open(move |gtk_app, files, _hint| {
+        {
+            let mut store = ws.borrow_mut();
+            if store.is_none() {
+                if s.boolean("dark-mode") {
+                    adw::StyleManager::default().set_color_scheme(adw::ColorScheme::ForceDark);
+                }
+                *store = Some(window::LettersWindow::new(gtk_app, s.clone()));
+            }
+        }
+        let store = ws.borrow();
+        let win = store.as_ref().unwrap();
+        for file in files {
+            if let Some(path) = file.path() {
+                win.open_path(&path.to_string_lossy());
+            }
+        }
+        win.present();
     });
     suite.run();
 }
