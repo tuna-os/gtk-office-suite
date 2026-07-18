@@ -1,0 +1,118 @@
+name: Publish Flatpaks
+
+# Build the three apps as Flatpak OCI images, push them to GHCR, and
+# update the TunaOS Flatpak index (tunaos.org/flatpak) so
+# `flatpak install tuna-os org.tunaos.<app>-rust` serves current builds.
+# Also attaches installable .flatpak bundles to the triggering release.
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  packages: write
+
+jobs:
+  build-oci:
+    name: Build OCI — ${{ matrix.app }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        app: [letters-rust, tables-rust, decks-rust]
+    container:
+      image: ghcr.io/flathub-infra/flatpak-github-actions:gnome-50
+      options: --privileged
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build Flatpak
+        uses: flatpak/flatpak-github-actions/flatpak-builder@v6
+        with:
+          manifest-path: flatpak/org.tunaos.${{ matrix.app }}.json
+          cache-key: flatpak-publish-${{ matrix.app }}-${{ github.sha }}
+          bundle: ${{ matrix.app }}.flatpak
+          upload-artifact: false
+
+      - name: Export OCI
+        run: |
+          flatpak build-bundle --oci --arch=x86_64 repo ${{ matrix.app }}.oci org.tunaos.${{ matrix.app }}
+
+      - name: Upload OCI artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.app }}-oci
+          path: ${{ matrix.app }}.oci/
+          retention-days: 1
+
+      - name: Upload bundle artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.app }}-bundle
+          path: ${{ matrix.app }}.flatpak
+          retention-days: 7
+
+  publish:
+    name: Publish — ${{ matrix.app }}
+    needs: build-oci
+    runs-on: ubuntu-latest
+    strategy:
+      # The index update is a git push to tuna-os/docs; serialize so the
+      # three apps don't race each other.
+      max-parallel: 1
+      matrix:
+        app: [letters-rust, tables-rust, decks-rust]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: ${{ matrix.app }}-oci
+          path: ${{ matrix.app }}.oci
+
+      - name: Push OCI to GHCR
+        run: |
+          echo "${{ secrets.GITHUB_TOKEN }}" | skopeo login ghcr.io -u "${{ github.actor }}" --password-stdin
+          skopeo copy oci:${{ matrix.app }}.oci docker://ghcr.io/tuna-os/${{ matrix.app }}:latest
+
+      - name: Update central index (tuna-os/docs)
+        env:
+          FLATPAK_INDEX_TOKEN: ${{ secrets.FLATPAK_INDEX_TOKEN }}
+        run: |
+          git clone --depth 1 \
+            https://x-access-token:${FLATPAK_INDEX_TOKEN}@github.com/tuna-os/docs.git \
+            index-repo
+          pip install requests
+          python3 .github/scripts/update-index.py \
+            --oci-dir ${{ matrix.app }}.oci \
+            --index-file index-repo/static/flatpak/index/static \
+            --repo-name tuna-os/${{ matrix.app }} \
+            --tags latest
+          cd index-repo
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add static/flatpak/index/static
+          if git diff --cached --quiet; then
+            echo "No index changes"
+          else
+            git commit -m "chore(flatpak): update ${{ matrix.app }} OCI index"
+            git push origin main
+          fi
+
+  release-bundles:
+    name: Attach bundles to release
+    needs: publish
+    if: startsWith(github.ref, 'refs/tags/')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: '*-bundle'
+          merge-multiple: true
+      - name: Upload to release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release upload "${GITHUB_REF_NAME}" *.flatpak --clobber --repo "${GITHUB_REPOSITORY}"
