@@ -134,3 +134,37 @@ fn style_boundaries_are_exact() {
     assert!(rt.style_at(5).bold);
     assert!(!rt.style_at(6).bold);
 }
+
+#[test]
+fn inline_image_survives() {
+    // 1x1 PNG written to a temp file, placed in a doc, round-tripped.
+    let png: &[u8] = &[
+        0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, 0x00, 0x00, 0x00, 0x0D,
+        0x49, 0x48, 0x44, 0x52, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01,
+        0x08, 0x02, 0x00, 0x00, 0x00, 0x90, 0x77, 0x53, 0xDE, 0x00, 0x00, 0x00,
+        0x0C, 0x49, 0x44, 0x41, 0x54, 0x08, 0xD7, 0x63, 0xF8, 0xCF, 0xC0, 0x00,
+        0x00, 0x00, 0x03, 0x00, 0x01, 0x9E, 0xDD, 0x22, 0x71, 0x00, 0x00, 0x00,
+        0x00, 0x49, 0x45, 0x4E, 0x44, 0xAE, 0x42, 0x60, 0x82,
+    ];
+    let dir = tempfile::tempdir().unwrap();
+    let img_path = dir.path().join("dot.png");
+    std::fs::write(&img_path, png).unwrap();
+
+    let mut d = Document::from_plain_text("before");
+    d.paragraphs.push(Paragraph {
+        style: ParaStyle::default(),
+        runs: vec![Run {
+            text: "a red dot".into(),
+            style: RunStyle { image: Some(img_path.to_string_lossy().into_owned()), ..Default::default() },
+        }],
+    });
+    let rt = round_trip(&d);
+
+    let img_run = rt.paragraphs.iter().flat_map(|p| p.runs.iter())
+        .find(|r| r.style.image.is_some())
+        .expect("image run lost in round trip");
+    let extracted = img_run.style.image.as_ref().unwrap();
+    let bytes = std::fs::read(extracted).expect("extracted image unreadable");
+    assert_eq!(bytes, png, "image bytes changed in round trip");
+    assert!(rt.to_plain_text().contains("before"));
+}

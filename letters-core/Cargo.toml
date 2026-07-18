@@ -8,7 +8,7 @@ edition = "2021"
 # letters-core/DESIGN.md and docs/DEVELOPMENT.md.
 [dependencies]
 pulldown-cmark = "0.12"
-rdocx = { git = "https://github.com/hanthor/rdocx.git", rev = "8e30c27" }
+rdocx = { git = "https://github.com/hanthor/rdocx.git", rev = "9ba0c3a" }
 
 [lib]
 name = "letters_core"

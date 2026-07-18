@@ -74,6 +74,27 @@ pub fn parse(md: &str) -> Document {
             Event::End(TagEnd::Strikethrough) => style.strikethrough = false,
             Event::Start(Tag::Link { dest_url, .. }) => style.link = Some(dest_url.to_string()),
             Event::End(TagEnd::Link) => style.link = None,
+            Event::Start(Tag::Image { dest_url, .. }) => {
+                // Alt text arrives as Text events inside and lands in runs
+                // carrying this image source in their style.
+                style.image = Some(dest_url.to_string());
+            }
+            Event::End(TagEnd::Image) => {
+                // Alt-less images produced no Text event; emit the run here.
+                let para = current.get_or_insert_with(Paragraph::default);
+                let has = para.runs.last().map(|r| r.style.image == style.image).unwrap_or(false);
+                if !has {
+                    para.runs.push(Run {
+                        text: String::new(),
+                        style: RunStyle {
+                            image: style.image.clone(),
+                            link: style.link.clone(),
+                            ..Default::default()
+                        },
+                    });
+                }
+                style.image = None;
+            }
             Event::Text(t) if code_block.is_some() => {
                 // Code block text arrives with embedded newlines; the model is
                 // paragraph-per-line, so each line becomes a code paragraph.
@@ -102,7 +123,20 @@ pub fn parse(md: &str) -> Document {
             }
             Event::Text(t) => {
                 let para = current.get_or_insert_with(Paragraph::default);
-                para.runs.push(Run { text: t.to_string(), style: style.clone() });
+                if style.image.is_some() {
+                    // Alt text is plain by definition; keep only image + link
+                    // so alt-internal styling cannot destabilize round-trips.
+                    para.runs.push(Run {
+                        text: t.to_string(),
+                        style: RunStyle {
+                            image: style.image.clone(),
+                            link: style.link.clone(),
+                            ..Default::default()
+                        },
+                    });
+                } else {
+                    para.runs.push(Run { text: t.to_string(), style: style.clone() });
+                }
             }
             Event::SoftBreak | Event::HardBreak => {
                 let para = current.get_or_insert_with(Paragraph::default);
@@ -212,6 +246,19 @@ fn escape_text(text: &str) -> String {
 }
 
 fn serialize_run(run: &Run) -> String {
+    if let Some(src) = &run.style.image {
+        let alt = escape_text(&run.text);
+        let dest = if src.contains(char::is_whitespace) || src.contains('(') || src.contains(')') {
+            format!("<{}>", src)
+        } else {
+            src.clone()
+        };
+        let img = format!("![{}]({})", alt, dest);
+        return match &run.style.link {
+            Some(url) => format!("[{}]({})", img, url),
+            None => img,
+        };
+    }
     // Code spans keep their text verbatim; everything else is escaped.
     let mut s = if run.style.code { run.text.clone() } else { escape_text(&run.text) };
     if run.style.code { s = format!("`{}`", s); }

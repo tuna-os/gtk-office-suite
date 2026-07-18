@@ -42,7 +42,7 @@ anything interactive needs I5 or I6.
 | Word count | ✅ | I6 smoke (live) |
 | Spell check | ❌ dictionaries missing | I6: misspelling gets a squiggle (needs Flatpak dicts, task #8) |
 | Print / PDF export | ✅ Typst CLI | I1 typst-source assertion + PDF-validity check (phase 4) |
-| Inline images | ❌ (markdown text only) | red I2: image survives docx round-trip; I3 scenario `<img>` |
+| Inline images | ✅ model+md+docx | I1 + I2: byte-identical docx round-trip (rdocx inline_image/image_data); buffer *rendering* of images is the remaining UI half |
 
 ### Tier 2 — Nice-to-have (rounds out the product)
 

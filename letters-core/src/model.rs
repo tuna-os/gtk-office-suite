@@ -20,6 +20,8 @@ pub struct RunStyle {
     /// Inline code (monospace) span.
     pub code: bool,
     pub link: Option<String>,
+    /// Inline image: source path/URI. The run's text is the alt text.
+    pub image: Option<String>,
 }
 
 /// A partial style change: `None` fields are left untouched.
@@ -124,8 +126,9 @@ impl Paragraph {
     }
 
     /// Merge adjacent runs with equal style and drop empty runs.
+    /// Image runs are kept even with empty alt text and never merged.
     fn normalize(&mut self) {
-        self.runs.retain(|r| !r.text.is_empty());
+        self.runs.retain(|r| !r.text.is_empty() || r.style.image.is_some());
         let mut i = 0;
         while i + 1 < self.runs.len() {
             if self.runs[i].style == self.runs[i + 1].style {

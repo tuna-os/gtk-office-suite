@@ -73,6 +73,31 @@ pub fn write(doc: &Document, path: &str) -> Result<(), String> {
         };
         let _ = p; // release the builder borrow before append_hyperlink
         for run in &para.runs {
+            if let Some(src) = &run.style.image {
+                // Images embed via add_picture, which appends its own
+                // paragraph — mid-paragraph images therefore split the
+                // paragraph (documented v1 limitation). Unreadable sources
+                // degrade to the alt text.
+                match std::fs::read(src) {
+                    Ok(bytes) => {
+                        let name = std::path::Path::new(src)
+                            .file_name().map(|n| n.to_string_lossy().to_string())
+                            .unwrap_or_else(|| "image.png".into());
+                        let mut pic = out.add_picture(
+                            &bytes, &name,
+                            rdocx::Length::inches(4.0), rdocx::Length::inches(3.0),
+                        );
+                        pic = pic.style("Figure");
+                        let _ = pic;
+                        out.add_paragraph("");
+                    }
+                    Err(_) => {
+                        let mut p = out.last_paragraph_mut().expect("paragraph");
+                        let _ = p.add_run(&run.text);
+                    }
+                }
+                continue;
+            }
             if let Some(url) = &run.style.link {
                 // Hyperlinks need a document-level relationship; styles on
                 // link text are not yet carried through append_hyperlink.
@@ -123,6 +148,26 @@ fn map_paragraph(doc: &rdocx::Document, p: &rdocx::ParagraphRef<'_>) -> Paragrap
 
     let mut runs = Vec::new();
     for (idx, r) in p.runs().enumerate() {
+        // Inline images: extract bytes to a cache file so the model's
+        // image path is always locally readable.
+        if let Some((rel_id, alt)) = r.inline_image() {
+            if let Some(bytes) = doc.image_data(rel_id) {
+                let dir = std::env::temp_dir().join("letters-images");
+                let _ = std::fs::create_dir_all(&dir);
+                let mut hasher = std::collections::hash_map::DefaultHasher::new();
+                std::hash::Hash::hash(&bytes, &mut hasher);
+                let path = dir.join(format!("{:x}.png", std::hash::Hasher::finish(&hasher)));
+                let _ = std::fs::write(&path, &bytes);
+                runs.push(Run {
+                    text: alt.unwrap_or("").to_string(),
+                    style: RunStyle {
+                        image: Some(path.to_string_lossy().into_owned()),
+                        ..Default::default()
+                    },
+                });
+                continue;
+            }
+        }
         let text = r.text();
         if text.is_empty() { continue; }
         runs.push(Run {
@@ -135,6 +180,7 @@ fn map_paragraph(doc: &rdocx::Document, p: &rdocx::ParagraphRef<'_>) -> Paragrap
                 highlight: r.highlight().is_some(),
                 code: r.style_id() == Some("SourceText"),
                 link: link_for(idx),
+                image: None,
             },
         });
     }
@@ -152,7 +198,7 @@ fn style_id_to_heading(id: &str) -> Option<u8> {
 }
 
 fn normalize(p: &mut Paragraph) {
-    p.runs.retain(|r| !r.text.is_empty());
+    p.runs.retain(|r| !r.text.is_empty() || r.style.image.is_some());
     let mut i = 0;
     while i + 1 < p.runs.len() {
         if p.runs[i].style == p.runs[i + 1].style {
