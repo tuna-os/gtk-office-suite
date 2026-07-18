@@ -51,9 +51,14 @@ without a test that fails first.
    the canvas now scales with the slide geometry (18pt at full size,
    matching the pptx writer default; per-run sizes honored) — WYSIWYG
    where a fixed 16pt used to be.
-7. **ODP read/write** for Decks (its LO-native format, like ODT for
-   Letters). *Prove:* I2 round-trip + oracle wave, same pattern as
-   `letters-core/src/odt.rs`.
+7. ✅ **ODP read/write** (done 2026-07-18): `decks-core/src/odp.rs`,
+   same zip+XML pattern as `letters-core/src/odt.rs`. Text boxes with
+   styled runs, rects/circles, speaker notes, slide backgrounds, slide
+   order. Open/Save dialogs and `open_path` dispatch by extension
+   (`decks_core::read_deck`/`write_deck`). Oracle wave (7 tests) caught
+   two real reader bugs red-first: LO list-styles clobbering text-style
+   names, and Impress's `draw:custom-shape` text (no `draw:text-box`)
+   being invisible to the reader. Decks oracle suite: 20 → 27.
 8. **Adaptive/narrow-width audit** (DESIGN-UI §5): drive all three apps
    at 400sp under Xvfb, fix what breaks; Tables fx bar and Decks
    inspector are the likely offenders. *Prove:* smoke at narrow

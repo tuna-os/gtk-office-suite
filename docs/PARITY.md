@@ -121,7 +121,7 @@ roadmap-dependent), external file references (decision: likely never),
 |---|---|
 | Styled text inside text boxes (runs, not plain) | ✅ | model+pptx (shared Run/RunStyle) + Pango canvas rendering |
 | Master slides applied on render | I1 resolution logic; I7 |
-| ODP read/write | I2 fixtures + I4 (LO native) |
+| ODP read/write | ✅ | decks-core/src/odp.rs: I2 round-trips (text, runs, geometry, notes, background) + 7 I4 oracle tests (Impress rewrite both ways; reads Impress custom-shape output) |
 | Slide reorder / duplicate | I1 + I6 |
 | Image fit/crop modes | I1 geometry |
 

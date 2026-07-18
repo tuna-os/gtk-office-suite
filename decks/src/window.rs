@@ -17,7 +17,8 @@ use crate::sidebar::rebuild_slide_list;
 use crate::toolbar::{find_toolbar_child, build_decks_toolbar};
 use crate::transition::{TransitionState, TransitionType, draw_transition};
 
-use decks_core::engine::{Slide, SlideObject, MasterSlide, Deck, read_pptx, write_pptx};
+use decks_core::engine::{Slide, SlideObject, MasterSlide, Deck};
+use decks_core::{read_deck, write_deck};
 
 // ── DecksWindow ──────────────────────────────────────────────────────────
 
@@ -1105,11 +1106,20 @@ impl DecksWindow {
             let act = gtk::gio::SimpleAction::new("open-file", None);
             act.connect_activate(move |_, _| {
                 let dlg = gtk::FileDialog::new();
+                let all = gtk::FileFilter::new();
+                all.add_pattern("*.pptx");
+                all.add_pattern("*.odp");
+                all.set_name(Some("Presentations (.pptx, .odp)"));
                 let f = gtk::FileFilter::new();
                 f.add_pattern("*.pptx");
                 f.set_name(Some("PowerPoint Presentations (.pptx)"));
+                let odp = gtk::FileFilter::new();
+                odp.add_pattern("*.odp");
+                odp.set_name(Some("OpenDocument Presentations (.odp)"));
                 let fl = gio::ListStore::new::<gtk::FileFilter>();
+                fl.append(&all);
                 fl.append(&f);
+                fl.append(&odp);
                 dlg.set_filters(Some(&fl));
 
                 let cs = cs.clone();
@@ -1128,7 +1138,7 @@ impl DecksWindow {
                         if let Ok(file) = result {
                             if let Some(path) = file.path() {
                                 let path_str = path.to_string_lossy().to_string();
-                                match read_pptx(&path_str) {
+                                match read_deck(&path_str) {
                                     Ok(deck) => {
                                         *ss.borrow_mut() = deck.slides;
                                         cs_ref.set(0);
@@ -1182,7 +1192,7 @@ impl DecksWindow {
                 let current_path = path_clone.borrow().clone();
                 if let Some(path_str) = current_path {
                     let deck = Deck { slides: ss_clone.borrow().clone(), masters: m_save.borrow().clone() };
-                    if let Err(e) = write_pptx(&path_str, &deck) {
+                    if let Err(e) = write_deck(&path_str, &deck) {
                         let err = adw::AlertDialog::builder()
                             .heading("Error saving presentation")
                             .body(&e)
@@ -1204,8 +1214,12 @@ impl DecksWindow {
                 let f = gtk::FileFilter::new();
                 f.add_pattern("*.pptx");
                 f.set_name(Some("PowerPoint Presentations (.pptx)"));
+                let odp = gtk::FileFilter::new();
+                odp.add_pattern("*.odp");
+                odp.set_name(Some("OpenDocument Presentations (.odp)"));
                 let fl = gio::ListStore::new::<gtk::FileFilter>();
                 fl.append(&f);
+                fl.append(&odp);
                 dlg.set_filters(Some(&fl));
                 dlg.set_initial_name(Some("Untitled.pptx"));
 
@@ -1219,7 +1233,7 @@ impl DecksWindow {
                             if let Some(path) = file.path() {
                                 let path_str = path.to_string_lossy().to_string();
                                 let deck = Deck { slides: ss.borrow().clone(), masters: m_inner.borrow().clone() };
-                                match write_pptx(&path_str, &deck) {
+                                match write_deck(&path_str, &deck) {
                                     Ok(()) => {
                                         *path_ref.borrow_mut() = Some(path_str);
                                     }
@@ -1264,10 +1278,10 @@ impl DecksWindow {
 
     pub fn present(&self) { self.window.present(); }
 
-    /// Open a .pptx directly (CLI / file-manager open). Mirrors the
+    /// Open a .pptx or .odp directly (CLI / file-manager open). Mirrors the
     /// open-file dialog success path.
     pub fn open_path(&self, path: &str) -> Result<(), String> {
-        let deck = read_pptx(path)?;
+        let deck = read_deck(path)?;
         *self.slides.borrow_mut() = deck.slides;
         self.current_slide.set(0);
         self.selected_object.set(None);

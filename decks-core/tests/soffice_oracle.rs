@@ -496,3 +496,158 @@ fn notes_map_to_their_slides_through_impress() {
         );
     }
 }
+
+// ── ODP oracle (roadmap item 7 — the LO-native format) ───────────────
+
+use decks_core::odp;
+
+/// Our odp → Impress rewrites as odp → our reader.
+fn odp_through_impress(deck: &Deck, stem: &str) -> Option<Deck> {
+    if !require_or_skip() { return None; }
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join(format!("{stem}.odp"));
+    odp::write(deck, path.to_str().unwrap()).expect("write odp");
+    let out_dir = dir.path().join("out");
+    std::fs::create_dir(&out_dir).unwrap();
+    let profile = dir.path().join("prof");
+    let st = Command::new("soffice")
+        .arg("--headless")
+        .arg(format!("-env:UserInstallation=file://{}", profile.display()))
+        .args(["--convert-to", "odp", "--outdir"])
+        .arg(&out_dir)
+        .arg(&path)
+        .output()
+        .expect("soffice runs");
+    assert!(st.status.success(), "{}", String::from_utf8_lossy(&st.stderr));
+    let rewritten = out_dir.join(format!("{stem}.odp"));
+    assert!(rewritten.exists(), "Impress produced no odp");
+    Some(odp::read(rewritten.to_str().unwrap()).expect("we failed to read Impress odp"))
+}
+
+#[test]
+fn odp_text_survives_impress_rewrite() {
+    let mut deck = Deck::new();
+    deck.slides = vec![text_slide("T", "hello from odp", "")];
+    let Some(rt) = odp_through_impress(&deck, "text") else { return };
+    assert!(
+        all_text(&rt.slides[0]).replace('\n', " ").contains("hello from odp"),
+        "text lost: {:?}",
+        rt.slides[0].objects
+    );
+}
+
+#[test]
+fn odp_notes_survive_impress_rewrite() {
+    let mut deck = Deck::new();
+    deck.slides = vec![text_slide("T", "body", "the odp note")];
+    let Some(rt) = odp_through_impress(&deck, "notes") else { return };
+    assert!(
+        rt.slides[0].notes.replace('\n', " ").contains("the odp note"),
+        "notes lost: {:?}",
+        rt.slides[0].notes
+    );
+}
+
+#[test]
+fn odp_geometry_survives_impress_rewrite() {
+    let mut deck = Deck::new();
+    deck.slides = vec![Slide {
+        title: "g".into(),
+        background: "#ffffff".into(),
+        objects: vec![SlideObject::Rect { x: 240.0, y: 180.0, w: 320.0, h: 120.0 }],
+        notes: String::new(),
+        master_idx: Some(0),
+    }];
+    let Some(rt) = odp_through_impress(&deck, "geom") else { return };
+    let Some(SlideObject::Rect { x, y, w, h }) = rt.slides[0]
+        .objects
+        .iter()
+        .find(|o| matches!(o, SlideObject::Rect { .. }))
+    else {
+        panic!("rect lost: {:?}", rt.slides[0].objects)
+    };
+    let close = |a: f64, b: f64| (a - b).abs() < 6.0;
+    assert!(close(*x, 240.0) && close(*y, 180.0), "position drifted: {x},{y}");
+    assert!(close(*w, 320.0) && close(*h, 120.0), "size drifted: {w}x{h}");
+}
+
+#[test]
+fn odp_background_survives_impress_rewrite() {
+    let mut deck = Deck::new();
+    let mut s = text_slide("bg", "colored", "");
+    s.background = "#e8f0fe".into();
+    deck.slides = vec![s];
+    let Some(rt) = odp_through_impress(&deck, "bg") else { return };
+    assert_eq!(rt.slides[0].background.to_lowercase(), "#e8f0fe",
+        "background lost: {}", rt.slides[0].background);
+}
+
+#[test]
+fn odp_slide_order_survives_impress_rewrite() {
+    let mut deck = Deck::new();
+    deck.slides = (1..=3)
+        .map(|i| text_slide(&format!("S{i}"), &format!("content {i}"), ""))
+        .collect();
+    let Some(rt) = odp_through_impress(&deck, "order") else { return };
+    assert_eq!(rt.slides.len(), 3);
+    for (i, slide) in rt.slides.iter().enumerate() {
+        assert!(
+            all_text(slide).contains(&format!("content {}", i + 1)),
+            "slide {} out of order",
+            i
+        );
+    }
+}
+
+#[test]
+fn odp_bold_run_survives_impress_rewrite() {
+    use letters_core::model::{Run as LRun, RunStyle as LRunStyle};
+    let mut deck = Deck::new();
+    deck.slides = vec![Slide {
+        title: "styled".into(),
+        background: "#ffffff".into(),
+        objects: vec![SlideObject::TextBox {
+            text: "plain bolded".into(),
+            x: 100.0, y: 100.0, w: 500.0, h: 60.0,
+            runs: vec![
+                LRun { text: "plain ".into(), style: LRunStyle::default() },
+                LRun {
+                    text: "bolded".into(),
+                    style: LRunStyle { bold: true, ..Default::default() },
+                },
+            ],
+        }],
+        notes: String::new(),
+        master_idx: Some(0),
+    }];
+    let Some(rt) = odp_through_impress(&deck, "boldrun") else { return };
+    let bold: String = rt.slides[0]
+        .objects
+        .iter()
+        .filter_map(|o| match o {
+            SlideObject::TextBox { runs, .. } => Some(
+                runs.iter().filter(|r| r.style.bold).map(|r| r.text.as_str()).collect::<String>(),
+            ),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(bold.trim(), "bolded", "bold lost: {:?}", rt.slides[0].objects);
+}
+
+/// The reverse: an odp Impress writes (from our pptx) must open in our
+/// odp reader with the text intact.
+#[test]
+fn we_read_impress_authored_odp() {
+    if !require_or_skip() { return; }
+    let mut deck = Deck::new();
+    deck.slides = vec![text_slide("T", "authored elsewhere", "")];
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("src.pptx");
+    write_pptx(path.to_str().unwrap(), &deck).expect("write pptx");
+    let odp_path = convert(&path, "odp").expect("Impress could not convert to odp");
+    let rt = odp::read(odp_path.to_str().unwrap()).expect("our odp reader failed");
+    assert!(
+        rt.slides.iter().any(|s| all_text(s).contains("authored elsewhere")),
+        "text lost reading Impress-authored odp"
+    );
+}
