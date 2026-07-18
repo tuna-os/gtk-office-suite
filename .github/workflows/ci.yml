@@ -60,7 +60,7 @@ jobs:
       - name: Run LibreOffice-authored parity corpus
         env:
           REQUIRE_SOFFICE: "1"
-        run: cargo test -p letters-core --test lo_parity -- --nocapture
+        run: cargo test -p letters-core -p decks-core --test lo_parity -- --nocapture
 
       - name: Conformance scorecard (job summary)
         env:

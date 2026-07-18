@@ -88,6 +88,11 @@ def main():
                               r"LibreOffice-authored parity: (\d+)/(\d+)")
         failed |= not ok
         rows.append(("LO-authored parity (Letters)", f"{p}/{t} (baseline {lo_base})"))
+        dk_base = read_baseline("decks-core/tests/corpus/lo-parity-baseline.txt")
+        p, t, ok = run_corpus("decks-core", "lo_parity",
+                              r"Decks LO-authored parity: (\d+)/(\d+)")
+        failed |= not ok
+        rows.append(("LO-authored parity (Decks)", f"{p}/{t} (baseline {dk_base})"))
 
     for app, (done, total) in parity_marks().items():
         rows.append((f"{app} tier-1/2 features green", f"{done}/{total}"))

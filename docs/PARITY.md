@@ -109,7 +109,7 @@ roadmap-dependent), external file references (decision: likely never),
 | Slide CRUD + object model | ✅ | I1 (10 tests) |
 | Text boxes, rects, circles, images | ✅ | I1 round-trip |
 | PPTX save/load | ✅ | I1, I4 Impress oracle |
-| Speaker notes | ✅ model | **red I4**: notes visible after Impress convert to odp |
+| Speaker notes | ✅ | I1, LO round-trip (notesSlide parts read+written) |
 | Undo/redo | ✅ | I1 (9 tests) |
 | Present mode + transitions | ✅ | I6 smoke: enter/exit presenting; I7 visual |
 | **LO-authored parity corpus for Decks** | ❌ missing | build `lo_parity.rs` for pptx: scenarios as fodp/HTML → soffice → pptx → our reader (mirror of Letters', the single biggest Decks gap) |

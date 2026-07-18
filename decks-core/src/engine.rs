@@ -497,11 +497,28 @@ pub fn read_pptx(path: &str) -> Result<Deck, String> {
             }
         }
 
+        // Speaker notes: follow the notesSlide relationship if present.
+        let mut notes = String::new();
+        for target in slide_image_rels.values() {
+            if target.contains("notesSlide") {
+                let rel = target.trim_start_matches("../");
+                let notes_path = format!("ppt/{}", rel);
+                let mut notes_xml = String::new();
+                if let Ok(mut f) = archive.by_name(&notes_path) {
+                    f.read_to_string(&mut notes_xml).unwrap_or(0);
+                }
+                if !notes_xml.is_empty() {
+                    notes = extract_notes_text(&notes_xml);
+                }
+                break;
+            }
+        }
+
         slides.push(Slide {
             title: format!("Slide {}", slide_index + 1),
             background: "#ffffff".into(),
             objects,
-            notes: String::new(),
+            notes,
             master_idx: Some(0),
         });
     }
@@ -814,6 +831,12 @@ pub fn write_pptx(path: &str, deck: &Deck) -> Result<(), String> {
             "  <Override PartName=\"/ppt/slides/slide{}.xml\" ContentType=\"application/vnd.openxmlformats-officedocument.presentationml.slide+xml\"/>\n",
             i + 1
         ));
+        if !deck.slides[i].notes.is_empty() {
+            content_types.push_str(&format!(
+                "  <Override PartName=\"/ppt/notesSlides/notesSlide{}.xml\" ContentType=\"application/vnd.openxmlformats-officedocument.presentationml.notesSlide+xml\"/>\n",
+                i + 1
+            ));
+        }
     }
     content_types.push_str("</Types>");
     zip.start_file("[Content_Types].xml", options).map_err(|e| e.to_string())?;
@@ -957,16 +980,27 @@ pub fn write_pptx(path: &str, deck: &Deck) -> Result<(), String> {
         zip.start_file(&slide_path, options).map_err(|e| e.to_string())?;
         zip.write_all(&slide_data).map_err(|e| e.to_string())?;
 
-        // Write slide relationships if there are images
-        if !slide_rels.is_empty() {
+        // Write slide relationships (images and/or speaker notes)
+        let has_notes = !slide.notes.is_empty();
+        if !slide_rels.is_empty() || has_notes {
             let mut rels_str = String::from(
                 "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>\n\
                  <Relationships xmlns=\"http://schemas.openxmlformats.org/package/2006/relationships\">\n"
             );
-            for (rel_id, target) in slide_rels {
+            let mut max_rel = 0usize;
+            for (rel_id, target) in &slide_rels {
+                if let Some(n) = rel_id.strip_prefix("rId").and_then(|n| n.parse::<usize>().ok()) {
+                    max_rel = max_rel.max(n);
+                }
                 rels_str.push_str(&format!(
                     "  <Relationship Id=\"{}\" Type=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships/image\" Target=\"{}\"/>\n",
                     rel_id, target
+                ));
+            }
+            if has_notes {
+                rels_str.push_str(&format!(
+                    "  <Relationship Id=\"rId{}\" Type=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships/notesSlide\" Target=\"../notesSlides/notesSlide{}.xml\"/>\n",
+                    max_rel + 1, i + 1
                 ));
             }
             rels_str.push_str("</Relationships>");
@@ -974,6 +1008,12 @@ pub fn write_pptx(path: &str, deck: &Deck) -> Result<(), String> {
             let rels_path = format!("ppt/slides/_rels/slide{}.xml.rels", i + 1);
             zip.start_file(&rels_path, options).map_err(|e| e.to_string())?;
             zip.write_all(rels_str.as_bytes()).map_err(|e| e.to_string())?;
+        }
+
+        if has_notes {
+            let notes_path = format!("ppt/notesSlides/notesSlide{}.xml", i + 1);
+            zip.start_file(&notes_path, options).map_err(|e| e.to_string())?;
+            zip.write_all(notes_slide_xml(&slide.notes).as_bytes()).map_err(|e| e.to_string())?;
         }
     }
 
@@ -1057,4 +1097,75 @@ mod tests {
 
         let _ = std::fs::remove_file(&path);
     }
+}
+
+/// Minimal notesSlide part with the notes text in a body placeholder.
+fn notes_slide_xml(notes: &str) -> String {
+    let mut paras = String::new();
+    for line in notes.split('\n') {
+        let escaped = line
+            .replace('&', "&amp;")
+            .replace('<', "&lt;")
+            .replace('>', "&gt;");
+        paras.push_str(&format!("<a:p><a:r><a:t>{}</a:t></a:r></a:p>", escaped));
+    }
+    format!(
+        "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>\n\
+         <p:notes xmlns:a=\"http://schemas.openxmlformats.org/drawingml/2006/main\" \
+xmlns:r=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships\" \
+xmlns:p=\"http://schemas.openxmlformats.org/presentationml/2006/main\">\
+<p:cSld><p:spTree>\
+<p:nvGrpSpPr><p:cNvPr id=\"1\" name=\"\"/><p:cNvGrpSpPr/><p:nvPr/></p:nvGrpSpPr><p:grpSpPr/>\
+<p:sp><p:nvSpPr><p:cNvPr id=\"2\" name=\"Notes Placeholder\"/><p:cNvSpPr><a:spLocks noGrp=\"1\"/></p:cNvSpPr>\
+<p:nvPr><p:ph type=\"body\" idx=\"1\"/></p:nvPr></p:nvSpPr><p:spPr/>\
+<p:txBody><a:bodyPr/><a:lstStyle/>{}</p:txBody></p:sp>\
+</p:spTree></p:cSld></p:notes>",
+        paras
+    )
+}
+
+/// Extract the body-placeholder text from a notesSlide part.
+fn extract_notes_text(xml: &str) -> String {
+    let mut reader = Reader::from_str(xml);
+    reader.trim_text(true);
+    let mut buf = Vec::new();
+    let mut in_sp = false;
+    let mut sp_is_body = false;
+    let mut in_t = false;
+    let mut current = String::new();
+    let mut parts: Vec<String> = Vec::new();
+    loop {
+        match reader.read_event_into(&mut buf) {
+            Ok(Event::Start(ref e)) => match e.name().as_ref() {
+                b"p:sp" => { in_sp = true; sp_is_body = false; }
+                b"a:t" if sp_is_body => in_t = true,
+                _ => {}
+            },
+            Ok(Event::Empty(ref e)) if e.name().as_ref() == b"p:ph" && in_sp => {
+                for attr in e.attributes().flatten() {
+                    if attr.key.as_ref() == b"type" {
+                        if let Ok(v) = attr.decode_and_unescape_value(&reader) {
+                            if v == "body" { sp_is_body = true; }
+                        }
+                    }
+                }
+            }
+            Ok(Event::Text(ref t)) if in_t => {
+                current.push_str(&t.unescape().unwrap_or_default());
+            }
+            Ok(Event::End(ref e)) => match e.name().as_ref() {
+                b"a:t" => in_t = false,
+                b"a:p" if sp_is_body => {
+                    if !current.is_empty() { parts.push(std::mem::take(&mut current)); }
+                }
+                b"p:sp" => { in_sp = false; sp_is_body = false; }
+                _ => {}
+            },
+            Ok(Event::Eof) => break,
+            Err(_) => break,
+            _ => {}
+        }
+        buf.clear();
+    }
+    parts.join("\n")
 }
