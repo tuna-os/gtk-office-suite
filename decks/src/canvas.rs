@@ -202,7 +202,14 @@ pub fn draw_slide(
                     let layout = pangocairo::functions::create_layout(cr);
                     layout.set_width(((sw - 8.0).max(8.0) as i32) * pango::SCALE);
                     layout.set_wrap(pango::WrapMode::WordChar);
-                    layout.set_font_description(Some(&pango::FontDescription::from_string("Sans 16")));
+                    // WYSIWYG: 18pt at full slide size (matching the pptx
+                    // writer's default sz=1800), scaled with the viewport —
+                    // this is also what keeps thumbnails proportional.
+                    let scale = slide_w / 960.0;
+                    let base_pt = 18.0 * scale;
+                    let mut desc = pango::FontDescription::from_string("Sans");
+                    desc.set_absolute_size(base_pt * 96.0 / 72.0 * pango::SCALE as f64);
+                    layout.set_font_description(Some(&desc));
                     if runs.is_empty() {
                         layout.set_text(text);
                     } else {
@@ -228,6 +235,13 @@ pub fn draw_slide(
                             }
                             if run.style.strikethrough {
                                 add(pango::AttrInt::new_strikethrough(true).into());
+                            }
+                            if let Some(hp) = run.style.font_size_hp {
+                                let pt = hp as f64 / 2.0 * scale;
+                                add(pango::AttrSize::new_size_absolute(
+                                    (pt * 96.0 / 72.0 * pango::SCALE as f64) as i32,
+                                )
+                                .into());
                             }
                         }
                         layout.set_text(&buf);

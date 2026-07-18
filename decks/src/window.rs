@@ -195,6 +195,9 @@ impl DecksWindow {
         editor_split.set_max_sidebar_width(220.0);
 
         // Central HUD refresh: status text + inspector fields.
+        // The thumbnail updater is late-bound (the slide list is built
+        // after this closure).
+        let thumb_updater: Rc<RefCell<Option<Box<dyn Fn()>>>> = Rc::new(RefCell::new(None));
         let insp_guard = Rc::new(Cell::new(false));
         let refresh_hud: Rc<dyn Fn()> = {
             let ss = slides.clone();
@@ -205,12 +208,18 @@ impl DecksWindow {
             let status = status_label.clone();
             let guard = insp_guard.clone();
             let ca = canvas_area.clone();
+            let tu = thumb_updater.clone();
             Rc::new(move || {
                 let idx = cs_ref.get();
                 let slides = ss.borrow();
                 if let Some(slide) = slides.get(idx) {
                     ca.sync_objects(&slide.objects, so.get());
                 }
+                drop(slides);
+                if let Some(update) = tu.borrow().as_ref() {
+                    update();
+                }
+                let slides = ss.borrow();
                 let n_objects = slides.get(idx).map(|s| s.objects.len()).unwrap_or(0);
                 status.set_text(&format!(
                     "Slide {}/{}  ·  {} object{}",
@@ -322,7 +331,7 @@ impl DecksWindow {
         slide_list.set_activate_on_single_click(false); // we handle selection manually
 
         // Populate initial slide list
-        rebuild_slide_list(&slide_list, &slides.borrow(), 0);
+        rebuild_slide_list(&slide_list, &slides.borrow(), &masters.borrow(), 0);
 
         let sidebar_controls = gtk::Box::new(gtk::Orientation::Horizontal, 4);
         sidebar_controls.set_margin_start(6);
@@ -417,6 +426,17 @@ impl DecksWindow {
             }
         });
 
+        // Late-bind the thumbnail updater now that the list exists.
+        {
+            let sl = slide_list.clone();
+            let ss = slides.clone();
+            let m = masters.clone();
+            let cs_ref = current_slide.clone();
+            *thumb_updater.borrow_mut() = Some(Box::new(move || {
+                crate::sidebar::update_thumbnail(&sl, &ss.borrow(), &m.borrow(), cs_ref.get());
+            }));
+        }
+
         // Second row-selected handler: HUD follows slide switches.
         {
             let refresh = refresh_hud.clone();
@@ -471,6 +491,7 @@ impl DecksWindow {
             let cs_ref = current_slide.clone();
             let cs_stack = content_stack.clone();
             let undo = undo.clone();
+            let masters = masters.clone();
             add_btn.connect_clicked(move |_| {
                 let idx = ss.borrow().len();
                 let new_slide = Slide {
@@ -484,7 +505,7 @@ impl DecksWindow {
                     index: idx,
                     slide: new_slide.clone(),
                 }));
-                rebuild_slide_list(&sl, &ss.borrow(), idx);
+                rebuild_slide_list(&sl, &ss.borrow(), &masters.borrow(), idx);
                 cs_ref.set(idx);
                 cs.queue_draw();
                 cs_stack.set_visible_child_name("editor");
@@ -498,6 +519,7 @@ impl DecksWindow {
             let cs = canvas.clone();
             let cs_ref = current_slide.clone();
             let undo = undo.clone();
+            let masters = masters.clone();
             del_btn.connect_clicked(move |_| {
                 let idx = cs_ref.get();
                 let has_slides = {
@@ -518,7 +540,7 @@ impl DecksWindow {
                         slide: removed,
                     }));
                     cs_ref.set(new_idx);
-                    rebuild_slide_list(&sl, &ss.borrow(), new_idx);
+                    rebuild_slide_list(&sl, &ss.borrow(), &masters.borrow(), new_idx);
                     cs.queue_draw();
                 }
             });
@@ -531,6 +553,7 @@ impl DecksWindow {
             let cs = canvas.clone();
             let cs_ref = current_slide.clone();
             let undo = undo.clone();
+            let masters = masters.clone();
             up_btn.connect_clicked(move |_| {
                 let idx = cs_ref.get();
                 if idx > 0 {
@@ -538,7 +561,7 @@ impl DecksWindow {
                         from: idx, to: idx - 1,
                     }));
                     cs_ref.set(idx - 1);
-                    rebuild_slide_list(&sl, &ss.borrow(), idx - 1);
+                    rebuild_slide_list(&sl, &ss.borrow(), &masters.borrow(), idx - 1);
                     cs.queue_draw();
                 }
             });
@@ -549,6 +572,7 @@ impl DecksWindow {
             let cs = canvas.clone();
             let cs_ref = current_slide.clone();
             let undo = undo.clone();
+            let masters = masters.clone();
             down_btn.connect_clicked(move |_| {
                 let idx = cs_ref.get();
                 let slides = ss.borrow();
@@ -558,7 +582,7 @@ impl DecksWindow {
                         from: idx, to: idx + 1,
                     }));
                     cs_ref.set(idx + 1);
-                    rebuild_slide_list(&sl, &ss.borrow(), idx + 1);
+                    rebuild_slide_list(&sl, &ss.borrow(), &masters.borrow(), idx + 1);
                     cs.queue_draw();
                 }
             });
@@ -949,7 +973,7 @@ impl DecksWindow {
                     if u.undo() {
                         cs.queue_draw();
                         let slides = ss.borrow();
-                        rebuild_slide_list(&sl, &slides, cs_ref.get());
+                        rebuild_slide_list(&sl, &slides, &m.borrow(), cs_ref.get());
                     }
                     return glib::Propagation::Stop;
                 }
@@ -959,7 +983,7 @@ impl DecksWindow {
                     if u.redo() {
                         cs.queue_draw();
                         let slides = ss.borrow();
-                        rebuild_slide_list(&sl, &slides, cs_ref.get());
+                        rebuild_slide_list(&sl, &slides, &m.borrow(), cs_ref.get());
                     }
                     return glib::Propagation::Stop;
                 }
@@ -977,7 +1001,7 @@ impl DecksWindow {
                                     &sls[idx], &sls[idx - 1], &cs);
                             }
                             cs_ref.set(idx - 1);
-                            rebuild_slide_list(&sl, &sls, idx - 1);
+                            rebuild_slide_list(&sl, &sls, &m.borrow(), idx - 1);
                             cs.queue_draw();
                         }
                         glib::Propagation::Stop
@@ -989,14 +1013,14 @@ impl DecksWindow {
                             ts.borrow_mut().start(TransitionType::PushLeft,
                                 &slides[idx], &slides[idx + 1], &cs);
                             cs_ref.set(idx + 1);
-                            rebuild_slide_list(&sl, &slides, idx + 1);
+                            rebuild_slide_list(&sl, &slides, &m.borrow(), idx + 1);
                             cs.queue_draw();
                         }
                         glib::Propagation::Stop
                     }
                     gtk::gdk::Key::Home => {
                         cs_ref.set(0);
-                        rebuild_slide_list(&sl, &ss.borrow(), 0);
+                        rebuild_slide_list(&sl, &ss.borrow(), &m.borrow(), 0);
                         cs.queue_draw();
                         glib::Propagation::Stop
                     }
@@ -1004,7 +1028,7 @@ impl DecksWindow {
                         let slides = ss.borrow();
                         if !slides.is_empty() {
                             cs_ref.set(slides.len() - 1);
-                            rebuild_slide_list(&sl, &slides, slides.len() - 1);
+                            rebuild_slide_list(&sl, &slides, &m.borrow(), slides.len() - 1);
                             cs.queue_draw();
                         }
                         glib::Propagation::Stop
@@ -1041,6 +1065,7 @@ impl DecksWindow {
             let cs_scroll = editor_split.clone();
             let path_ref = file_path.clone();
             let refresh = refresh_hud.clone();
+            let masters = masters.clone();
             let act = gtk::gio::SimpleAction::new("new-document", None);
             act.connect_activate(move |_, _| {
                 if cs.child_by_name("editor").is_none() {
@@ -1058,7 +1083,7 @@ impl DecksWindow {
                     }];
                 }
                 *path_ref.borrow_mut() = None;
-                rebuild_slide_list(&sl, &ss.borrow(), 0);
+                rebuild_slide_list(&sl, &ss.borrow(), &masters.borrow(), 0);
                 cs.queue_draw();
                 refresh();
             });
@@ -1075,6 +1100,7 @@ impl DecksWindow {
             let w = suite_win.window.clone();
             let cs_scroll = editor_split.clone();
             let path_ref = file_path.clone();
+            let masters = masters.clone();
 
             let act = gtk::gio::SimpleAction::new("open-file", None);
             act.connect_activate(move |_, _| {
@@ -1095,6 +1121,7 @@ impl DecksWindow {
                 let w2 = w.clone();
                 let cs_scroll = cs_scroll.clone();
                 let path_ref = path_ref.clone();
+                let masters = masters.clone();
 
                 dlg.open(Some(&w), None::<&gio::Cancellable>,
                     move |result: Result<gio::File, glib::Error>| {
@@ -1111,7 +1138,7 @@ impl DecksWindow {
                                             cs.add_titled(&cs_scroll, Some("editor"), "Editor");
                                         }
                                         cs.set_visible_child_name("editor");
-                                        rebuild_slide_list(&sl, &ss.borrow(), 0);
+                                        rebuild_slide_list(&sl, &ss.borrow(), &masters.borrow(), 0);
                                         if let Some(name) = path_ref
                                             .borrow()
                                             .as_deref()
@@ -1249,7 +1276,7 @@ impl DecksWindow {
             self.content_stack.add_titled(&self.editor_split, Some("editor"), "Editor");
         }
         self.content_stack.set_visible_child_name("editor");
-        rebuild_slide_list(&self.slide_list, &self.slides.borrow(), 0);
+        rebuild_slide_list(&self.slide_list, &self.slides.borrow(), &self.masters.borrow(), 0);
         if let Some(name) = std::path::Path::new(path).file_name() {
             self.window
                 .set_title(Some(&format!("{} — Decks", name.to_string_lossy())));

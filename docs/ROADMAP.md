@@ -45,9 +45,12 @@ without a test that fails first.
    symbol, applied over the selection); number formats now render on the
    canvas and in the a11y cell names — formats were previously invisible
    outside exports. Proven by an I6 smoke test.
-6. **Decks slide thumbnails** in the sidebar (advisor finding): render
-   the canvas snapshot into each row. *Prove:* I7 visual; smoke asserts
-   rows carry image children once a11y children exist.
+6. ✅ **Decks slide thumbnails** (done 2026-07-18): each strip row shows
+   an offscreen render of its slide (cairo → GdkMemoryTexture), and the
+   current slide's thumbnail refreshes live as content changes. Text on
+   the canvas now scales with the slide geometry (18pt at full size,
+   matching the pptx writer default; per-run sizes honored) — WYSIWYG
+   where a fixed 16pt used to be.
 7. **ODP read/write** for Decks (its LO-native format, like ODT for
    Letters). *Prove:* I2 round-trip + oracle wave, same pattern as
    `letters-core/src/odt.rs`.
