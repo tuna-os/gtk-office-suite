@@ -120,6 +120,27 @@ pub fn xy_to_cell(x: f64, y: f64, scroll_x: f64, sheet: &SheetModel) -> Option<(
     None
 }
 
+/// One embedded chart: kind, title, and the data it draws, as
+/// zero-based inclusive cell ranges on this sheet.
+#[derive(Clone, Debug, PartialEq)]
+pub struct ChartSpec {
+    pub kind: ChartKind,
+    pub title: String,
+    /// Category labels range (first_row, col, last_row).
+    pub cat: (usize, usize, usize),
+    /// Values range (first_row, col, last_row).
+    pub val: (usize, usize, usize),
+    /// Anchor cell (row, col) of the chart's top-left corner.
+    pub anchor: (usize, usize),
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ChartKind {
+    Bar,
+    Line,
+    Pie,
+}
+
 #[derive(Clone)]
 pub struct SheetModel {
     pub name: String,
@@ -140,6 +161,8 @@ pub struct SheetModel {
     pub frozen_rows: usize,
     pub frozen_cols: usize,
     pub merges: Vec<(usize, usize, usize, usize)>,
+    /// Charts anchored on this sheet, persisted into xlsx (ADR 0003 §3).
+    pub charts: Vec<ChartSpec>,
     pub validations: Vec<Vec<Option<ValidationRule>>>,
     #[allow(dead_code)] // reserved for multi-engine sheets
     engine_idx: usize,
@@ -160,6 +183,7 @@ impl SheetModel {
             borders: vec![vec![CellBorder::none(); cols]; rows],
             frozen_rows: 0, frozen_cols: 0,
             merges: Vec::new(),
+            charts: Vec::new(),
             validations: vec![vec![None; cols]; rows],
             engine_idx,
         }

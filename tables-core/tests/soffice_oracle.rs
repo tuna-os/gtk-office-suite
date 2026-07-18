@@ -497,3 +497,56 @@ fn cross_sheet_reference_recalculated_by_calc() {
     let wb_xml = xlsx_member(&rewritten, "xl/workbook.xml");
     assert!(wb_xml.contains("Notes"), "second sheet lost: {wb_xml}");
 }
+
+/// Convert via headless Calc into `to`, returning the produced path.
+fn convert(input: &std::path::Path, to: &str) -> Result<std::path::PathBuf, String> {
+    let out_dir = input.parent().unwrap().join("conv-out");
+    std::fs::create_dir_all(&out_dir).map_err(|e| e.to_string())?;
+    let profile = input.parent().unwrap().join("conv-prof");
+    let st = std::process::Command::new("soffice")
+        .arg("--headless")
+        .arg(format!("-env:UserInstallation=file://{}", profile.display()))
+        .args(["--convert-to", to, "--outdir"])
+        .arg(&out_dir)
+        .arg(input)
+        .output()
+        .map_err(|e| e.to_string())?;
+    if !st.status.success() {
+        return Err(String::from_utf8_lossy(&st.stderr).into_owned());
+    }
+    let stem = input.file_stem().unwrap().to_string_lossy();
+    let out = out_dir.join(format!("{stem}.{to}"));
+    if out.exists() { Ok(out) } else { Err("no output produced".into()) }
+}
+
+// ── Charts (ADR 0003 §3) ─────────────────────────────────────────────
+
+/// A chart we write must survive a Calc rewrite of the workbook —
+/// kind and values range intact, read back by our own chart reader.
+#[test]
+fn chart_survives_calc_rewrite() {
+    if !require_or_skip() { return; }
+    use tables_core::sheet::{ChartKind, ChartSpec, SheetModel};
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("chart.xlsx");
+    let mut sh = SheetModel::new("Sheet1", 10, 5, 0);
+    for (i, (l, v)) in [("North", 12.0), ("South", 9.5), ("East", 14.0)].iter().enumerate() {
+        sh.data[i + 1][0] = l.to_string();
+        sh.data[i + 1][1] = v.to_string();
+    }
+    sh.charts.push(ChartSpec {
+        kind: ChartKind::Bar,
+        title: "Regions".into(),
+        cat: (1, 0, 3),
+        val: (1, 1, 3),
+        anchor: (5, 3),
+    });
+    tables_core::io::save_sheets_to_xlsx(path.to_str().unwrap(), &[sh]).unwrap();
+
+    let rewritten = convert(&path, "xlsx").expect("Calc rewrite failed");
+    let charts = tables_core::io::read_charts_from_xlsx(rewritten.to_str().unwrap());
+    assert!(!charts.is_empty(), "Calc dropped the chart");
+    let c = &charts[0];
+    assert_eq!(c.kind, ChartKind::Bar, "chart kind changed: {c:?}");
+    assert_eq!(c.val, (1, 1, 3), "values range changed: {c:?}");
+}

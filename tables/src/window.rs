@@ -723,9 +723,52 @@ impl TablesWindow {
                 header.append(&gtk::Label::new(Some("Type:")));
                 header.append(&type_combo);
 
+                // Insert persists the chart on the sheet (saved into xlsx).
+                let insert_btn = gtk::Button::with_label("Insert into Sheet");
+                insert_btn.add_css_class("suggested-action");
+                insert_btn.set_halign(gtk::Align::End);
+                insert_btn.set_margin_end(12);
+                insert_btn.set_margin_bottom(12);
+                {
+                    let s = s.clone();
+                    let ct = chart_type.clone();
+                    let dlg = dialog.clone();
+                    insert_btn.connect_clicked(move |_| {
+                        use tables_core::sheet::{ChartKind, ChartSpec};
+                        let st = s.borrow();
+                        let sheet_rc = st.sheets[st.active_sheet].clone();
+                        let mut sheet = sheet_rc.borrow_mut();
+                        let col = sheet.selected_col;
+                        // Rows where the value column parses numerically.
+                        let mut first = None;
+                        let mut last = 0;
+                        for r in 0..sheet.rows {
+                            if sheet.data[r][col].parse::<f64>().is_ok() {
+                                first.get_or_insert(r);
+                                last = r;
+                            }
+                        }
+                        let Some(first) = first else { return };
+                        let kind = match ct.get() {
+                            crate::charts::ChartType::Bar => ChartKind::Bar,
+                            crate::charts::ChartType::Line => ChartKind::Line,
+                            crate::charts::ChartType::Pie => ChartKind::Pie,
+                        };
+                        sheet.charts.push(ChartSpec {
+                            kind,
+                            title: String::new(),
+                            cat: (first, 0, last),
+                            val: (first, col, last),
+                            anchor: (last + 2, col),
+                        });
+                        dlg.close();
+                    });
+                }
+
                 let box_content = gtk::Box::new(gtk::Orientation::Vertical, 6);
                 box_content.append(&header);
                 box_content.append(&preview);
+                box_content.append(&insert_btn);
                 dialog.set_child(Some(&box_content));
                 let pw = wr.borrow().clone();
                 dialog.present(pw.as_ref());
@@ -933,6 +976,8 @@ impl TablesWindow {
                                             "Sheet1", rows.max(DEFAULT_ROWS),
                                             cols.max(DEFAULT_COLS), 0);
                                         sheet.sync_from_engine(&ss.engine);
+                                        sheet.charts =
+                                            tables_core::io::read_charts_from_xlsx(&path_str);
                                         ss.sheets.clear();
                                         ss.sheets.push(Rc::new(RefCell::new(sheet)));
                                         ss.active_sheet = 0;
@@ -1185,6 +1230,7 @@ impl TablesWindow {
             let mut sheet =
                 SheetModel::new("Sheet1", rows.max(DEFAULT_ROWS), cols.max(DEFAULT_COLS), 0);
             sheet.sync_from_engine(&ss.engine);
+            sheet.charts = tables_core::io::read_charts_from_xlsx(path);
             ss.sheets.clear();
             ss.sheets.push(Rc::new(RefCell::new(sheet)));
             ss.active_sheet = 0;
