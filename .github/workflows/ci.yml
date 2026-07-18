@@ -29,6 +29,25 @@ jobs:
       - name: cargo test
         run: cargo test --workspace
 
+  # LibreOffice interop oracle: every .docx letters-core writes must open
+  # in LibreOffice Writer and extract identical text (both directions).
+  # Core crates only — no GTK needed. REQUIRE_SOFFICE turns a missing
+  # oracle into a failure so this check can never silently skip.
+  oracle:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Install LibreOffice Writer (headless)
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq --no-install-recommends libreoffice-writer
+      - name: Run oracle tests
+        env:
+          REQUIRE_SOFFICE: "1"
+        run: cargo test -p letters-core --test soffice_oracle
+
   # Coverage — runs on push to main only (installs llvm-tools)
   coverage:
     runs-on: ubuntu-24.04

@@ -146,6 +146,22 @@ its corpus before its implementation — the conformance tests are the TDD
 red state for each phase. Each phase lands as its own PR with
 tests in the same commits as the code they test.
 
+## Parity strategy: oracle, not port
+
+We do not port LibreOffice/OpenOffice code, tests, or data files — that
+would import thirty years of compatibility archaeology. Parity is measured
+behaviorally: **LibreOffice headless (`soffice`) runs in CI as an interop
+oracle** (letters-core/tests/soffice_oracle.rs, `oracle` job in ci.yml).
+Both directions gate: our .docx must open in Writer with identical
+extracted text, and Writer-authored .docx must open in our engine. The same
+pattern extends to Impress for Decks (phase 3) and Calc for Tables.
+
+Scope target: "the documents people actually make" — styled text, headings,
+lists, links, images, simple tables, speaker notes — with fidelity proven
+by corpus and oracle numbers. Writer's long tail (fields, macros, change
+tracking, frames with text flow) is explicitly out of scope until each item
+earns its way in. Text layout is Pango's job, not ours.
+
 ## Engine decisions (settled — do not churn)
 
 IronCalc, rdocx, pulldown-cmark, zip+quick-xml, zspell stay. Typst moves
