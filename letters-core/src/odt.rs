@@ -268,11 +268,6 @@ pub fn write(doc: &Document, path: &str) -> Result<(), String> {
 
 // ── Reading ──────────────────────────────────────────────────────────
 
-#[derive(Default, Clone)]
-struct TextStyle {
-    patch: RunStyle,
-}
-
 fn attr_val(e: &quick_xml::events::BytesStart, name: &str) -> Option<String> {
     e.attributes().filter_map(|a| a.ok()).find_map(|a| {
         if a.key.as_ref() == name.as_bytes() {
