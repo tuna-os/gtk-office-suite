@@ -1,4 +1,5 @@
 // grid_render.rs — Cairo grid drawing for the spreadsheet canvas.
+use libadwaita as adw;
 use gtk4::cairo::{self, Context};
 use std::cell::RefCell;
 use std::rc::Rc;
@@ -64,7 +65,7 @@ pub fn draw_grid(
 ) {
     let st = state.borrow();
     let sheet = &st.sheets[st.active_sheet].borrow();
-    let is_dark = false; // detect from theme
+    let is_dark = adw::StyleManager::default().is_dark();
     let hdr_bg = if is_dark { HEADER_BG_DARK } else { HEADER_BG };
 
     // Background

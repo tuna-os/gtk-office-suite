@@ -5,6 +5,7 @@
 
 use gtk4::{self as gtk, gio, glib, prelude::*};
 use gtk4::subclass::prelude::*;
+use libadwaita as adw;
 use std::cell::Cell;
 
 pub const A4_WIDTH_PT: f64 = 595.0;
@@ -89,9 +90,14 @@ mod imp {
             let px = (w - sw) / 2.0;
             let start_y = ((h - total_height) / 2.0).max(pad);
 
-            // Fill entire widget with desktop gray
+            // Fill entire widget with desktop gray (theme-aware:
+            // tuna-os/gtk-office-suite#77 — the page itself stays white,
+            // matching every other document editor's paper convention,
+            // but the surrounding canvas backdrop should follow the theme).
+            let is_dark = adw::StyleManager::default().is_dark();
+            let desktop_bg = if is_dark { (0.13, 0.13, 0.13) } else { (0.753, 0.753, 0.753) };
             snapshot.append_color(
-                &gtk4::gdk::RGBA::new(0.753, 0.753, 0.753, 1.0),
+                &gtk4::gdk::RGBA::new(desktop_bg.0 as f32, desktop_bg.1 as f32, desktop_bg.2 as f32, 1.0),
                 &gtk4::graphene::Rect::new(0.0, 0.0, w as f32, h as f32),
             );
 
@@ -194,7 +200,8 @@ mod imp {
                 if page_idx > 0 {
                     let gap_center_y = page_y - PAGE_GAP * scale / 2.0;
                     cr.set_dash(&[], 0.0);
-                    cr.set_source_rgba(0.5, 0.5, 0.5, 0.6);
+                    let gap_ink = if is_dark { (0.75, 0.75, 0.75, 0.7) } else { (0.5, 0.5, 0.5, 0.6) };
+                    cr.set_source_rgba(gap_ink.0, gap_ink.1, gap_ink.2, gap_ink.3);
                     cr.set_font_size(10.0);
                     let label = format!("Page {}", page_idx + 1);
                     cr.move_to(px + sw / 2.0 - 15.0, gap_center_y + 4.0);

@@ -52,8 +52,10 @@ pub fn show_print_preview(
         let px = (w as f64 - sw) / 2.0;
         let py = (h as f64 - sh) / 2.0;
 
-        // Desktop gray
-        cr.set_source_rgb(0.75, 0.75, 0.75);
+        // Desktop gray (theme-aware — tuna-os/gtk-office-suite#77)
+        let is_dark = adw::StyleManager::default().is_dark();
+        let desktop_bg = if is_dark { (0.13, 0.13, 0.13) } else { (0.75, 0.75, 0.75) };
+        cr.set_source_rgb(desktop_bg.0, desktop_bg.1, desktop_bg.2);
         cr.rectangle(0.0, 0.0, w as f64, h as f64);
         cr.fill().unwrap();
 

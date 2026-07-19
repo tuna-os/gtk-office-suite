@@ -124,6 +124,9 @@ pub fn draw_slide(
     cr.fill().unwrap();
 
     // Slide background — an unset (white) slide inherits its master's.
+    // Captured for the text-color contrast check below
+    // (tuna-os/gtk-office-suite#78).
+    let mut slide_bg_rgb: (f64, f64, f64) = (1.0, 1.0, 1.0);
     if current_slide < slides.len() {
         let slide_bg = &slides[current_slide].background;
         let master_bg = slides[current_slide]
@@ -136,14 +139,16 @@ pub fn draw_slide(
         } else {
             slide_bg
         };
-        if bg == "#ffffff" || bg.is_empty() {
-            cr.set_source_rgb(1.0, 1.0, 1.0);
+        let resolved_bg = if bg == "#ffffff" || bg.is_empty() {
+            (1.0, 1.0, 1.0)
         } else if bg.starts_with('#') && bg.len() >= 7 {
             let r = u8::from_str_radix(&bg[1..3], 16).unwrap_or(255) as f64 / 255.0;
             let g = u8::from_str_radix(&bg[3..5], 16).unwrap_or(255) as f64 / 255.0;
             let b = u8::from_str_radix(&bg[5..7], 16).unwrap_or(255) as f64 / 255.0;
-            cr.set_source_rgb(r, g, b);
-        } else { cr.set_source_rgb(1.0, 1.0, 1.0); }
+            (r, g, b)
+        } else { (1.0, 1.0, 1.0) };
+        cr.set_source_rgb(resolved_bg.0, resolved_bg.1, resolved_bg.2);
+        slide_bg_rgb = resolved_bg;
     } else { cr.set_source_rgb(1.0, 1.0, 1.0); }
     cr.rectangle(ox, oy, slide_w, slide_h);
     cr.fill().unwrap();
@@ -208,7 +213,16 @@ pub fn draw_slide(
                     // Pango layout with per-run attributes (shared WYSIWYG
                     // primitives with Letters) — replaces the old toy-text
                     // path that truncated at 20 chars and ignored styling.
-                    cr.set_source_rgb(0.1, 0.1, 0.1);
+                    // Contrast against the actual slide background, not
+                    // the app theme — a light-text slide on a photo/dark
+                    // fill needs white text regardless of GTK dark mode
+                    // (tuna-os/gtk-office-suite#78).
+                    let luminance = 0.299 * slide_bg_rgb.0 + 0.587 * slide_bg_rgb.1 + 0.114 * slide_bg_rgb.2;
+                    if luminance < 0.5 {
+                        cr.set_source_rgb(0.95, 0.95, 0.95);
+                    } else {
+                        cr.set_source_rgb(0.1, 0.1, 0.1);
+                    }
                     let layout = pangocairo::functions::create_layout(cr);
                     layout.set_width(((sw - 8.0).max(8.0) as i32) * pango::SCALE);
                     layout.set_wrap(pango::WrapMode::WordChar);
