@@ -49,18 +49,8 @@ class LettersSnapshotSmoke(BaseGUITestCase):
     app_name = "letters"
 
     def setUp(self):
-        import tempfile
-        self._snapshot_path = tempfile.mktemp(prefix="letters-snapshot-", suffix=".json")
-        self.launch_env = {
-            "GTK_OFFICE_TEST_MODE": "1",
-            "GTK_OFFICE_SNAPSHOT_PATH": self._snapshot_path,
-        }
+        self._snapshot_path = self.isolate_snapshot(prefix="letters-snapshot-")
         super().setUp()
-
-    def tearDown(self):
-        super().tearDown()
-        if os.path.exists(self._snapshot_path):
-            os.remove(self._snapshot_path)
 
     def test_snapshot_reflects_typed_text(self):
         import json
@@ -180,18 +170,12 @@ class LettersFileRoundTripSmoke(BaseGUITestCase):
     app_name = "letters"
 
     def setUp(self):
-        import tempfile
-        self._dir = tempfile.mkdtemp(prefix="letters-rt-")
+        self._dir = self.temp_dir(prefix="letters-rt-")
         self._doc = os.path.join(self._dir, "journey.md")
         with open(self._doc, "w") as f:
             f.write("hello world")
         self.launch_args = [self._doc]
         super().setUp()
-
-    def tearDown(self):
-        super().tearDown()
-        import shutil
-        shutil.rmtree(self._dir, ignore_errors=True)
 
     def test_open_edit_save_round_trip(self):
         from dogtail import rawinput
@@ -219,14 +203,8 @@ class LettersCloseGuardSmoke(BaseGUITestCase):
     app_name = "letters"
 
     def setUp(self):
-        import tempfile
-        self._dir = tempfile.mkdtemp(prefix="letters-close-guard-")
+        self._dir = self.temp_dir(prefix="letters-close-guard-")
         super().setUp()
-
-    def tearDown(self):
-        super().tearDown()
-        import shutil
-        shutil.rmtree(self._dir, ignore_errors=True)
 
     def _type_into_new_document(self):
         from dogtail import rawinput
@@ -286,15 +264,8 @@ class LettersAutosaveSmoke(BaseGUITestCase):
     app_name = "letters"
 
     def setUp(self):
-        import tempfile
-        self._state_dir = tempfile.mkdtemp(prefix="letters-autosave-state-")
-        self.launch_env = {"XDG_STATE_HOME": self._state_dir}
+        self._state_dir = self.isolate_autosave_state(prefix="letters-autosave-state-")
         super().setUp()
-
-    def tearDown(self):
-        super().tearDown()
-        import shutil
-        shutil.rmtree(self._state_dir, ignore_errors=True)
 
     def _snapshot_files(self):
         snap_dir = os.path.join(self._state_dir, "letters")
@@ -374,18 +345,8 @@ class LettersPreferenceBindingSmoke(BaseGUITestCase):
     app_name = "letters"
 
     def setUp(self):
-        import tempfile
-        self._config_dir = tempfile.mkdtemp(prefix="letters-prefs-cfg-")
-        self.launch_env = {
-            "GSETTINGS_BACKEND": "keyfile",
-            "XDG_CONFIG_HOME": self._config_dir,
-        }
+        self._config_dir = self.isolate_gsettings(prefix="letters-prefs-cfg-")
         super().setUp()
-
-    def tearDown(self):
-        super().tearDown()
-        import shutil
-        shutil.rmtree(self._config_dir, ignore_errors=True)
 
     def _gsettings(self, *args):
         import subprocess
@@ -499,14 +460,8 @@ class TablesCloseGuardSmoke(BaseGUITestCase):
     app_name = "tables"
 
     def setUp(self):
-        import tempfile
-        self._dir = tempfile.mkdtemp(prefix="tables-close-guard-")
+        self._dir = self.temp_dir(prefix="tables-close-guard-")
         super().setUp()
-
-    def tearDown(self):
-        super().tearDown()
-        import shutil
-        shutil.rmtree(self._dir, ignore_errors=True)
 
     def _edit_a1(self):
         import subprocess
@@ -564,15 +519,8 @@ class TablesAutosaveSmoke(BaseGUITestCase):
     app_name = "tables"
 
     def setUp(self):
-        import tempfile
-        self._state_dir = tempfile.mkdtemp(prefix="tables-autosave-state-")
-        self.launch_env = {"XDG_STATE_HOME": self._state_dir}
+        self._state_dir = self.isolate_autosave_state(prefix="tables-autosave-state-")
         super().setUp()
-
-    def tearDown(self):
-        super().tearDown()
-        import shutil
-        shutil.rmtree(self._state_dir, ignore_errors=True)
 
     def _snapshot_files(self):
         snap_dir = os.path.join(self._state_dir, "tables")
@@ -638,10 +586,9 @@ class TablesUndoSaveReopenSmoke(BaseGUITestCase):
     app_name = "tables"
 
     def setUp(self):
-        import tempfile
         import zipfile
 
-        self._dir = tempfile.mkdtemp(prefix="tables-rt-")
+        self._dir = self.temp_dir(prefix="tables-rt-")
         self._doc = os.path.join(self._dir, "journey.xlsx")
         parts = {
             "[Content_Types].xml": """<?xml version="1.0" encoding="UTF-8"?>
@@ -671,11 +618,6 @@ class TablesUndoSaveReopenSmoke(BaseGUITestCase):
                 book.writestr(name, content)
         self.launch_args = [self._doc]
         super().setUp()
-
-    def tearDown(self):
-        super().tearDown()
-        import shutil
-        shutil.rmtree(self._dir, ignore_errors=True)
 
     def test_edit_undo_redo_save_and_reopen(self):
         from dogtail import rawinput
@@ -972,19 +914,8 @@ class TablesSnapshotSmoke(BaseGUITestCase):
     app_name = "tables"
 
     def setUp(self):
-        import tempfile
-        self._snapshot_path = tempfile.mktemp(prefix="tables-snapshot-", suffix=".json")
-        self.launch_env = {
-            "GTK_OFFICE_TEST_MODE": "1",
-            "GTK_OFFICE_SNAPSHOT_PATH": self._snapshot_path,
-        }
+        self._snapshot_path = self.isolate_snapshot(prefix="tables-snapshot-")
         super().setUp()
-
-    def tearDown(self):
-        super().tearDown()
-        import os
-        if os.path.exists(self._snapshot_path):
-            os.remove(self._snapshot_path)
 
     def test_snapshot_reflects_cell_edits_and_formulas(self):
         import json
@@ -1033,18 +964,8 @@ class DecksSnapshotSmoke(BaseGUITestCase):
     app_name = "decks"
 
     def setUp(self):
-        import tempfile
-        self._snapshot_path = tempfile.mktemp(prefix="decks-snapshot-", suffix=".json")
-        self.launch_env = {
-            "GTK_OFFICE_TEST_MODE": "1",
-            "GTK_OFFICE_SNAPSHOT_PATH": self._snapshot_path,
-        }
+        self._snapshot_path = self.isolate_snapshot(prefix="decks-snapshot-")
         super().setUp()
-
-    def tearDown(self):
-        super().tearDown()
-        if os.path.exists(self._snapshot_path):
-            os.remove(self._snapshot_path)
 
     def test_snapshot_reflects_added_objects(self):
         import json
@@ -1125,14 +1046,8 @@ class DecksCloseGuardSmoke(BaseGUITestCase):
     app_name = "decks"
 
     def setUp(self):
-        import tempfile
-        self._dir = tempfile.mkdtemp(prefix="decks-close-guard-")
+        self._dir = self.temp_dir(prefix="decks-close-guard-")
         super().setUp()
-
-    def tearDown(self):
-        super().tearDown()
-        import shutil
-        shutil.rmtree(self._dir, ignore_errors=True)
 
     def _add_shape(self):
         import subprocess
@@ -1189,15 +1104,8 @@ class DecksAutosaveSmoke(BaseGUITestCase):
     app_name = "decks"
 
     def setUp(self):
-        import tempfile
-        self._state_dir = tempfile.mkdtemp(prefix="decks-autosave-state-")
-        self.launch_env = {"XDG_STATE_HOME": self._state_dir}
+        self._state_dir = self.isolate_autosave_state(prefix="decks-autosave-state-")
         super().setUp()
-
-    def tearDown(self):
-        super().tearDown()
-        import shutil
-        shutil.rmtree(self._state_dir, ignore_errors=True)
 
     def _snapshot_files(self):
         snap_dir = os.path.join(self._state_dir, "decks")

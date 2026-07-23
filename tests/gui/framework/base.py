@@ -25,6 +25,57 @@ class BaseGUITestCase(unittest.TestCase):
         if not cls.app_name:
             raise unittest.SkipTest("app_name not set")
 
+    # ── Shared test-isolation helpers (#104) ────────────────────────────
+    # Call these from a subclass's setUp() *before* calling super().setUp()
+    # (launch_env has to be in place before the app process launches).
+    # Cleanup is registered via addCleanup, which unittest runs after
+    # tearDown regardless of pass/fail — subclasses using these don't need
+    # their own tearDown just to remove a temp dir.
+
+    def temp_dir(self, prefix="gtk-office-test-"):
+        """A fresh temp directory, auto-removed after the test."""
+        import tempfile
+        import shutil
+        d = tempfile.mkdtemp(prefix=prefix)
+        self.addCleanup(shutil.rmtree, d, ignore_errors=True)
+        return d
+
+    def isolate_autosave_state(self, prefix="autosave-state-"):
+        """Points XDG_STATE_HOME at a fresh temp dir so crash-recovery
+        snapshot tests don't collide with each other or a real session."""
+        d = self.temp_dir(prefix)
+        self.launch_env = {**getattr(self, "launch_env", {}), "XDG_STATE_HOME": d}
+        return d
+
+    def isolate_snapshot(self, prefix="snapshot-"):
+        """Sets up the #104 test-only state-snapshot interface: registers
+        the app's GTK_OFFICE_TEST_MODE-gated snapshot action and points it
+        at a fresh temp file, auto-removed after the test. Returns the
+        path — trigger the action with `gapplication action <id>
+        test-snapshot`, then read/json.load() the path afterward."""
+        import tempfile
+        path = tempfile.mktemp(prefix=prefix, suffix=".json")
+        self.addCleanup(lambda: os.path.exists(path) and os.remove(path))
+        self.launch_env = {
+            **getattr(self, "launch_env", {}),
+            "GTK_OFFICE_TEST_MODE": "1",
+            "GTK_OFFICE_SNAPSHOT_PATH": path,
+        }
+        return path
+
+    def isolate_gsettings(self, prefix="gsettings-cfg-"):
+        """The default GSettings backend is dconf, a shared per-user D-Bus
+        daemon whose storage isn't controlled by env vars — the keyfile
+        backend plus a fresh XDG_CONFIG_HOME is what actually isolates a
+        test's settings from a real session or other tests."""
+        d = self.temp_dir(prefix)
+        self.launch_env = {
+            **getattr(self, "launch_env", {}),
+            "GSETTINGS_BACKEND": "keyfile",
+            "XDG_CONFIG_HOME": d,
+        }
+        return d
+
     def setUp(self):
         # Resolve directories
         self.framework_dir = os.path.dirname(os.path.abspath(__file__))
