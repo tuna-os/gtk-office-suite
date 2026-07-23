@@ -27,9 +27,6 @@ fn main() {
             println!("── example {} ({}) ──", ex.example, ex.section);
             println!("input:  {:?}", ex.markdown);
             println!("re-ser: {:?}", md2);
-            if shown >= usize::MAX {
-                break;
-            }
         }
     }
     println!("{shown} failing in sections matching {filter:?}");

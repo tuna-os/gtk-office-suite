@@ -20,41 +20,8 @@ pub struct Document {
 }
 
 impl Document {
-    pub fn new() -> Self {
-        Self { text: String::new() }
-    }
-
     pub fn from_text(text: &str) -> Self {
         Self { text: text.to_string() }
-    }
-}
-
-// ── Read ─────────────────────────────────────────────────────────────
-
-/// Read a file into a Document. Supports:
-/// - `.md`, `.txt`, `.html` — read as-is (Markdown or raw text)
-/// - `.docx` — extracts plain text via rdocx (native, no pandoc)
-pub fn read(path: &str) -> Result<Document, String> {
-    let p = Path::new(path);
-    let ext = p.extension().and_then(|e| e.to_str()).unwrap_or("").to_lowercase();
-
-    match ext.as_str() {
-        "md" | "txt" | "html" | "htm" | "" => {
-            let text = fs::read_to_string(path)
-                .map_err(|e| format!("Cannot read {}: {}", path, e))?;
-            Ok(Document::from_text(&text))
-        }
-        "docx" => {
-            let doc = RDocxDoc::open(path)
-                .map_err(|e| format!("Cannot open .docx {}: {}", path, e))?;
-            let mut text = String::new();
-            for p in doc.paragraphs() {
-                if !text.is_empty() { text.push('\n'); }
-                text.push_str(&p.text());
-            }
-            Ok(Document::from_text(&text))
-        }
-        _ => Err(format!("Unsupported file format: .{}", ext)),
     }
 }
 
@@ -192,25 +159,22 @@ mod tests {
     }
 
     #[test]
-    fn test_docx_roundtrip() {
+    fn test_docx_write_then_read_via_core() {
         let text = "# Test Title\n\nHello from Antigravity test.";
         let doc = Document::from_text(text);
-        
+
         let temp_dir = std::env::temp_dir();
         let path = temp_dir.join("test_doc.docx");
         let path_str = path.to_string_lossy();
-        
-        // Write docx
+
         let write_res = write(&path_str, &doc);
         assert!(write_res.is_ok(), "Write docx failed: {:?}", write_res.err());
-        
-        // Read docx
-        let read_res = read(&path_str);
-        assert!(read_res.is_ok(), "Read docx failed: {:?}", read_res.err());
-        
-        let read_doc = read_res.unwrap();
-        assert!(read_doc.text.contains("Hello from Antigravity test"));
-        
+
+        // Production reads go through letters_core::docx (see bridge::load_file_to_buffer).
+        let read_doc = letters_core::docx::read(&path_str);
+        assert!(read_doc.is_ok(), "Read docx failed: {:?}", read_doc.err());
+        assert!(read_doc.unwrap().to_plain_text().contains("Hello from Antigravity test"));
+
         let _ = std::fs::remove_file(&path);
     }
 

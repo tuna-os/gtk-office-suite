@@ -322,7 +322,7 @@ mod tests {
         cmd.apply(&mut slides);
         assert_eq!(slides[0].objects.len(), 1);
         match &slides[0].objects[0] {
-            SlideObject::Image { path, x, y, w, h } => {
+            SlideObject::Image { path, x, y, w: _, h: _ } => {
                 assert_eq!(path, "/tmp/test.png");
                 assert_eq!(*x, 0.0);
                 assert_eq!(*y, 0.0);

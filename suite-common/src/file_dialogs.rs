@@ -3,7 +3,7 @@
 // FileDialogHelper — shared open/save/export file dialog helpers
 // with standard office format filters. Used by Letters, Tables, Decks.
 
-use gtk4::{self as gtk, gio, glib, prelude::*};
+use gtk4::{self as gtk, gio, prelude::*};
 use libadwaita as adw;
 use std::path::PathBuf;
 

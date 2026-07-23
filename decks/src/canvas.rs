@@ -134,8 +134,8 @@ pub fn draw_slide(
             .and_then(|mi| masters.get(mi))
             .map(|m| m.background.as_str())
             .filter(|b| !b.is_empty() && *b != "#ffffff");
-        let bg: &str = if (slide_bg == "#ffffff" || slide_bg.is_empty()) && master_bg.is_some() {
-            master_bg.unwrap()
+        let bg: &str = if slide_bg == "#ffffff" || slide_bg.is_empty() {
+            master_bg.unwrap_or(slide_bg)
         } else {
             slide_bg
         };
@@ -243,7 +243,7 @@ pub fn draw_slide(
                             let start = buf.len() as u32;
                             buf.push_str(&run.text);
                             let end = buf.len() as u32;
-                            let mut add = |mut a: pango::Attribute| {
+                            let add = |mut a: pango::Attribute| {
                                 a.set_start_index(start);
                                 a.set_end_index(end);
                                 attrs.insert(a);

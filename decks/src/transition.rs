@@ -8,7 +8,12 @@ use std::rc::Rc;
 use crate::canvas::draw_slide;
 use decks_core::engine::Slide;
 
+// Fade/CoverLeft/SplitHorizontal are drawn (see draw_transition below) but
+// not yet selectable from any UI — only None/PushLeft/WipeLeft are wired
+// to a picker. Kept rather than deleted since the render path already
+// supports them.
 #[derive(Clone, Copy, Debug, PartialEq)]
+#[allow(dead_code)]
 pub enum TransitionType {
     None,
     Fade,
@@ -86,7 +91,7 @@ impl TransitionState {
 fn render_slide_to_surface(slide: &Slide) -> cairo::ImageSurface {
     let surface = cairo::ImageSurface::create(cairo::Format::ARgb32, 960, 540).unwrap();
     let cr = cairo::Context::new(&surface).unwrap();
-    draw_slide(&cr, 960.0, 540.0, &[slide.clone()], 0, None, &[]);
+    draw_slide(&cr, 960.0, 540.0, std::slice::from_ref(slide), 0, None, &[]);
     surface.flush();
     surface
 }

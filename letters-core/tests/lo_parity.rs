@@ -361,7 +361,7 @@ fn scenarios() -> Vec<Scenario> {
         "<table><tr><td>first</td></tr></table><p>mid</p><table><tr><td>second</td></tr></table>",
         "mid\nfirst\nsecond")); // flattening appends tables after body text
     v.push(text_only("list-eight-items",
-        &format!("<ul>{}</ul>", (1..=8).map(|i| format!("<li>i{i}</li>")).collect::<String>()),
+        format!("<ul>{}</ul>", (1..=8).map(|i| format!("<li>i{i}</li>")).collect::<String>()),
         (1..=8).map(|i| format!("i{i}")).collect::<Vec<_>>().join("\n")));
     v.push(sc("heading-then-list",
         "<h2>Agenda</h2><ol><li>alpha</li><li>beta</li></ol>",

@@ -94,12 +94,15 @@ impl StyleSheet {
 
     /// Modify a style and sync its properties to all TextTags using it.
     /// Automatically updates all text tagged with this style.
+    ///
+    /// Not yet wired to any UI (planned for a custom-style editor); kept
+    /// alongside [`Self::names`] rather than deleted.
+    #[allow(dead_code)]
     pub fn modify_and_sync<F: FnOnce(&mut Style)>(&mut self, name: &str, tag_table: &gtk::TextTagTable, f: F) -> bool {
         if let Some(style) = self.styles.get_mut(name) {
             f(style);
             // Re-resolve from stored data (clone to avoid borrow conflict)
             let style_clone = style.clone();
-            drop(style); // end mutable borrow
             let resolved = self.resolve_style(&style_clone);
             let tag_name = style_to_tag_name(name);
             if !tag_name.is_empty() {
@@ -139,7 +142,9 @@ impl StyleSheet {
         resolved
     }
 
-    /// List all style names.
+    /// List all style names. Not yet wired to any UI (planned for a
+    /// custom-style editor); kept alongside [`Self::modify_and_sync`].
+    #[allow(dead_code)]
     pub fn names(&self) -> Vec<String> {
         self.styles.keys().cloned().collect()
     }
@@ -228,10 +233,10 @@ fn sync_style_to_tag(style: &Style, tag: &gtk::TextTag) {
 pub fn ensure_tags_synced(sheet: &StyleSheet, tag_table: &gtk::TextTagTable) {
     sheet.sync_to_tag_table(tag_table);
 }
-pub fn apply_style(buf: &gtk::TextBuffer, sheet: &StyleSheet, style_name: &str) {
+pub fn apply_style(buf: &gtk::TextBuffer, _sheet: &StyleSheet, style_name: &str) {
     let (start, end) = buf.selection_bounds()
         .unwrap_or_else(|| {
-            let mut s = buf.cursor_position();
+            let s = buf.cursor_position();
             let mut line_start = buf.iter_at_offset(s);
             line_start.backward_line();
             let mut line_end = buf.iter_at_offset(s);

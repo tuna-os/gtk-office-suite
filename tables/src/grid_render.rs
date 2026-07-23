@@ -1,9 +1,9 @@
 // grid_render.rs — Cairo grid drawing for the spreadsheet canvas.
 use libadwaita as adw;
-use gtk4::cairo::{self, Context};
+use gtk4::cairo::Context;
 use std::cell::RefCell;
 use std::rc::Rc;
-use tables_core::sheet::{SheetModel, CellBorder, BorderStyle, xy_to_cell, col_label};
+use tables_core::sheet::{SheetModel, CellBorder, BorderStyle, col_label};
 
 /// Auto-fit column width to content using PangoLayout text measurement.
 /// Lives here (not tables-core) because it needs Cairo/Pango to measure.
@@ -48,7 +48,7 @@ const BORDER_LINE: (f64, f64, f64) = (0.0, 0.0, 0.0);
 const BORDER_LINE_DARK: (f64, f64, f64) = (0.85, 0.85, 0.85);
 
 pub fn draw_border_edges(cr: &Context, x: f64, y: f64, w: f64, h: f64, border: &CellBorder, is_dark: bool) {
-    let lw = 1.5;
+    let _lw = 1.5;
     draw_border_line(cr, &border.top, x, y, x + w, y, is_dark);
     draw_border_line(cr, &border.bottom, x, y + h, x + w, y + h, is_dark);
     draw_border_line(cr, &border.left, x, y, x, y + h, is_dark);

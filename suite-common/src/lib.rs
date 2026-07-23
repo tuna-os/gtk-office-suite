@@ -820,6 +820,12 @@ pub struct SuiteTabView {
     pub tab_bar: adw::TabBar,
 }
 
+impl Default for SuiteTabView {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl SuiteTabView {
     pub fn new() -> Self {
         let tab_view = adw::TabView::new();

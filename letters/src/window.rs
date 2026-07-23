@@ -87,7 +87,7 @@ fn make_doc_widget(settings: Option<&gio::Settings>) -> (PageContainer, gtk::Tex
     css_provider.load_from_string(&format!(
         "textview, textview text, scrolledwindow {{ background: transparent; }} {font_css}"
     ));
-    editor.style_context().add_provider(&css_provider, gtk::STYLE_PROVIDER_PRIORITY_APPLICATION + 1);
+    gtk::style_context_add_provider_for_display(&editor.display(), &css_provider, gtk::STYLE_PROVIDER_PRIORITY_APPLICATION + 1);
     // Spell-check via zspell (hunspell-compatible, pure Rust).
     // Applies red wavy underline to misspelled words, re-checks on edits.
     let spell_enabled = settings.map(|s| s.boolean("spell-check-enabled")).unwrap_or(true);
@@ -238,7 +238,7 @@ fn make_doc_widget(settings: Option<&gio::Settings>) -> (PageContainer, gtk::Tex
     scroll.set_child(Some(&editor));
     scroll.set_vexpand(true); scroll.set_hexpand(true);
     // Transparent background so PageContainer's white page shows through
-    scroll.style_context().add_provider(&css_provider, gtk::STYLE_PROVIDER_PRIORITY_APPLICATION + 1);
+    gtk::style_context_add_provider_for_display(&scroll.display(), &css_provider, gtk::STYLE_PROVIDER_PRIORITY_APPLICATION + 1);
     let container = PageContainer::new();
     if let Some(s) = settings {
         container.load_from_settings(s);
@@ -571,7 +571,7 @@ impl LettersWindow {
 
         // ── Tab: close-page with unsaved confirmation ───────────────
         {
-            let tv = tab_view.clone();
+            let _tv = tab_view.clone();
             let st = stack.clone();
             tab_view.connect_close_page(move |tv, page| {
                 if !page.needs_attention() {
@@ -713,6 +713,10 @@ impl LettersWindow {
                 }
                 let s2 = s.clone();
                 let tv2 = tv.clone();
+                // GtkPageSetupUnixDialog predates GTK4's FileDialog-style async
+                // dialogs and has no non-deprecated replacement for its
+                // response signal; `.present()` below is the real 4.10 fix.
+                #[allow(deprecated)]
                 dialog.connect_response(move |dlg, _response| {
                     let ps = dlg.page_setup();
                     save_page_setup_to_settings(&s2, &ps);
@@ -726,7 +730,7 @@ impl LettersWindow {
                     }
                     dlg.close();
                 });
-                dialog.show();
+                dialog.present();
             });
             app.add_action(&a);
             app.set_accels_for_action("app.page-setup", &["<Primary><Shift>l"]);
@@ -787,6 +791,37 @@ impl LettersWindow {
             });
             app.add_action(&a);
             app.set_accels_for_action("app.print", &["<Primary>p"]);
+        }
+
+        // ── Export PDF action (Typst-backed, distinct from print-to-file) ──
+        {
+            let tv = tab_view.clone();
+            let w = win.clone();
+            let a = gtk::gio::SimpleAction::new("export-pdf", None);
+            a.connect_activate(move |_, _| {
+                let Some(buf) = active_buffer(&tv) else { return };
+                let text = buf.text(&buf.start_iter(), &buf.end_iter(), false).to_string();
+                let dlg = gtk::FileDialog::new();
+                let f = gtk::FileFilter::new();
+                f.add_pattern("*.pdf");
+                f.set_name(Some("PDF"));
+                let fl = gio::ListStore::new::<gtk::FileFilter>();
+                fl.append(&f);
+                dlg.set_filters(Some(&fl));
+                dlg.set_initial_name(Some("Untitled.pdf"));
+                dlg.save(Some(&w), None::<&gio::Cancellable>,
+                    move |result: Result<gio::File, glib::Error>| {
+                        if let Ok(file) = result {
+                            if let Some(path) = file.path() {
+                                if let Err(e) = crate::engine::export_pdf(&text, &path.to_string_lossy()) {
+                                    eprintln!("export pdf failed: {e}");
+                                }
+                            }
+                        }
+                    });
+            });
+            app.add_action(&a);
+            app.set_accels_for_action("app.export-pdf", &["<Primary><Shift>e"]);
         }
 
         // ── Print Preview action ──────────────────────────────────
@@ -866,7 +901,7 @@ impl LettersWindow {
         let tv = tab_view.clone();
         let a = gtk::gio::SimpleAction::new("edit-headers", None);
         a.connect_activate(move |_, _| {
-            if let Some(buf) = active_buffer(&tv) {
+            if let Some(_buf) = active_buffer(&tv) {
                 // Find the PageContainer and show an edit dialog
                 let page = tv.selected_page();
                 if let Some(page) = page {
@@ -976,7 +1011,7 @@ impl LettersWindow {
                     .activates_default(true)
                     .build();
                 let dlg = adw::AlertDialog::builder()
-                    .heading(&suite_common::i18n("Insert Footnote"))
+                    .heading(suite_common::i18n("Insert Footnote"))
                     .build();
                 dlg.set_extra_child(Some(&entry));
                 dlg.add_response("cancel", &suite_common::i18n("Cancel"));
@@ -1579,7 +1614,8 @@ fn toggle_highlight(tv: &adw::TabView) { toggle_tag(tv, "highlight"); }
 impl LettersWindow {
     fn register_formatting_actions(tv: &adw::TabView, app: &adw::Application) {
         // Inline formatting
-        let pairs: &[(&str, fn(&adw::TabView))] = &[
+        type ToggleHandler = fn(&adw::TabView);
+        let pairs: &[(&str, ToggleHandler)] = &[
             ("bold", toggle_inline_bold),
             ("italic", toggle_inline_italic),
             ("underline", toggle_inline_underline),
@@ -1627,9 +1663,9 @@ impl LettersWindow {
                     let (anchor, _) = bounds.unwrap_or_else(|| {
                         (buf.start_iter(), buf.start_iter())
                     });
-                    let mut line_start = anchor.clone();
+                    let mut line_start = anchor;
                     line_start.backward_line();
-                    let mut line_end = anchor.clone();
+                    let mut line_end = anchor;
                     line_end.forward_line();
                     // Remove all alignment tags from this line first
                     for an in &["align-left", "align-center", "align-right", "align-justify"] {
@@ -1951,7 +1987,7 @@ fn make_find_replace_widget(tv: &adw::TabView) -> (gtk::SearchBar, gtk::SearchEn
                 let mut matches = Vec::new();
                 let mut iter = buf.start_iter();
                 while let Some((start, end)) = iter.forward_search(&query, flags, None) {
-                    matches.push((start.clone(), end.clone()));
+                    matches.push((start, end));
                     iter = end;
                 }
                 let count = matches.len();
@@ -1966,7 +2002,7 @@ fn make_find_replace_widget(tv: &adw::TabView) -> (gtk::SearchBar, gtk::SearchEn
                 }
                 // Highlight current match
                 if let Some(tag) = buf.tag_table().lookup("search-current") {
-                    if let Some((s, e)) = state.borrow().matches.get(0) {
+                    if let Some((s, e)) = state.borrow().matches.first() {
                         buf.apply_tag(&tag, s, e);
                         buf.select_range(s, e);
                         scroll_to_cursor(&tv);
@@ -2024,8 +2060,8 @@ fn make_find_replace_widget(tv: &adw::TabView) -> (gtk::SearchBar, gtk::SearchEn
             if st.matches.is_empty() { return; }
             if let Some((start, end)) = st.matches.get(st.current) {
                 if let Some(buf) = active_buffer(&tv) {
-                    let mut s = start.clone();
-                    let mut e = end.clone();
+                    let mut s = *start;
+                    let mut e = *end;
                     buf.begin_user_action();
                     buf.delete(&mut s, &mut e);
                     buf.insert(&mut s, &replacement);
@@ -2112,7 +2148,7 @@ fn navigate_match(tv: &adw::TabView, state: &RefCell<FindState>, ml: &gtk::Label
     let n = st.matches.len() as i32;
     let new_idx = ((st.current as i32 + direction).rem_euclid(n)) as usize;
     st.current = new_idx;
-    let m = st.matches[new_idx].clone();
+    let m = st.matches[new_idx];
     drop(st);
     if let Some(buf) = active_buffer(tv) {
         if let Some(tag) = buf.tag_table().lookup("search-current") {
@@ -2179,9 +2215,9 @@ pub fn register_formatting_tags(buffer: &gtk::TextBuffer) {
 // ── List helpers ─────────────────────────────────────────────────────
 
 fn line_text(buf: &gtk::TextBuffer, iter: &gtk::TextIter) -> String {
-    let mut start = iter.clone();
+    let mut start = *iter;
     start.backward_line();
-    let mut end = iter.clone();
+    let mut end = *iter;
     end.forward_line();
     buf.text(&start, &end, false).to_string()
 }
@@ -2198,8 +2234,8 @@ fn toggle_list(tv: &adw::TabView, kind: &str) {
             && text.trim_start().contains(". ");
 
         buf.begin_user_action();
-        let mut start = ins.clone(); start.backward_line();
-        let mut end = ins.clone(); end.forward_line();
+        let mut start = ins; start.backward_line();
+        let mut end = ins; end.forward_line();
 
         if (kind == "bullet" && has_bullet) || (kind == "numbered" && has_number) {
             // Remove list prefix - delete from line start to after prefix
@@ -2213,7 +2249,7 @@ fn toggle_list(tv: &adw::TabView, kind: &str) {
             let indent = line.len() - trimmed.len();
             let del_len = indent + prefix_end;
             if del_len > 0 {
-                let mut del_end = start.clone();
+                let mut del_end = start;
                 del_end.forward_chars(del_len as i32);
                 if del_end > start { buf.delete(&mut start, &mut del_end); }
             }
@@ -2235,9 +2271,9 @@ fn connect_list_continuation(editor: &gtk::TextView, buf: &gtk::TextBuffer) {
         if key == gtk::gdk::Key::Return || key == gtk::gdk::Key::KP_Enter {
             let bounds = buf.selection_bounds();
             let (ins, _) = bounds.unwrap_or((buf.start_iter(), buf.start_iter()));
-            let mut line_start = ins.clone();
+            let mut line_start = ins;
             line_start.backward_line();
-            let mut line_end = ins.clone();
+            let mut line_end = ins;
             line_end.forward_line();
             let line = buf.text(&line_start, &line_end, false);
             let trimmed = line.trim_start();
@@ -2325,9 +2361,9 @@ fn connect_markdown_macros(buf: &gtk::TextBuffer) {
         if text == "\n" || text == "\r\n" {
             let mut line_iter = buf.start_iter();
             line_iter.set_offset(insert_pos);
-            let mut line_start = line_iter.clone();
+            let mut line_start = line_iter;
             line_start.backward_line();
-            let mut line_end = line_iter.clone();
+            let mut line_end = line_iter;
             line_end.forward_line();
             let line = buf.text(&line_start, &line_end, false);
             let trimmed = line.trim_start();
@@ -2337,17 +2373,17 @@ fn connect_markdown_macros(buf: &gtk::TextBuffer) {
                 let prefix = format!("{} ", "#".repeat(level));
                 if trimmed.starts_with(&prefix) {
                     let tag_name = format!("h{}", level);
-                    let content = trimmed[prefix.len()..].to_string();
+                    let _content = trimmed[prefix.len()..].to_string();
                     let indent = line.len() - trimmed.len();
                     buf.begin_user_action();
                     // Delete the markdown prefix
-                    let mut del_start = line_start.clone();
+                    let mut del_start = line_start;
                     del_start.forward_chars(indent as i32 + prefix.len() as i32);
                     buf.delete(&mut line_start, &mut del_start);
                     // Apply heading tag
                     if let Some(tag) = buf.tag_table().lookup(&tag_name) {
-                        let mut start = line_start; // now at content start
-                        let mut end = line_end.clone();
+                        let start = line_start; // now at content start
+                        let mut end = line_end;
                         end.backward_char(); // exclude trailing newline
                         buf.apply_tag(&tag, &start, &end);
                     }
@@ -2358,20 +2394,18 @@ fn connect_markdown_macros(buf: &gtk::TextBuffer) {
 
             // Blockquote: >
             if trimmed.starts_with("> ") {
-                let content = trimmed[2..].to_string();
                 let indent = line.len() - trimmed.len();
                 buf.begin_user_action();
-                let mut del_start = line_start.clone();
+                let mut del_start = line_start;
                 del_start.forward_chars(indent as i32 + 2);
                 buf.delete(&mut line_start, &mut del_start);
                 if let Some(tag) = buf.tag_table().lookup("blockquote") {
-                    let mut start = line_start;
-                    let mut end = line_end.clone();
+                    let start = line_start;
+                    let mut end = line_end;
                     end.backward_char();
                     buf.apply_tag(&tag, &start, &end);
                 }
                 buf.end_user_action();
-                return;
             }
         }
     });

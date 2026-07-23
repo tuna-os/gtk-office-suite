@@ -2,7 +2,7 @@
 //
 // print_preview.rs — Print preview dialog reusing PageContainer's Cairo rendering.
 
-use gtk4::{self as gtk, gio, glib, prelude::*};
+use gtk4::{self as gtk, gio, prelude::*};
 use libadwaita as adw;
 use adw::prelude::*;
 use std::cell::Cell;

@@ -5,7 +5,6 @@
 
 use adw::prelude::*;
 use gtk4::{self as gtk, gio, glib, prelude::*};
-use gtk4::cairo;
 use libadwaita as adw;
 use std::cell::{Cell, RefCell};
 use std::rc::Rc;
@@ -13,13 +12,17 @@ use suite_common::events::{Broadcaster, Hint, Listener};
 use suite_common::undo::UndoManager;
 use suite_common::SuiteWindow;
 use decks_core::undo::{AddObjectCmd, DeleteObjectCmd, AddSlideCmd, DeleteSlideCmd, ReorderSlidesCmd, MoveObjectCmd, set_obj_position};
-use crate::canvas::{draw_slide, canvas_to_slide, slide_to_canvas, hit_test_object, snap_to_grid, GRID_SPACING};
+use crate::canvas::{draw_slide, canvas_to_slide, hit_test_object, snap_to_grid, GRID_SPACING};
 use crate::sidebar::rebuild_slide_list;
 use crate::toolbar::{find_toolbar_child, build_decks_toolbar};
 use crate::transition::{TransitionState, TransitionType, draw_transition};
 
 use decks_core::engine::{Slide, SlideObject, MasterSlide, Deck};
 use decks_core::{read_deck, write_deck, write_deck_bytes};
+
+/// Late-bound thumbnail-refresh callback (the slide list is built after
+/// the closure that will eventually call it is created).
+type ThumbUpdater = Rc<RefCell<Option<Box<dyn Fn()>>>>;
 
 // ── Crash-recovery snapshots ─────────────────────────────────────────────
 static NEXT_DOC_ID: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
@@ -49,15 +52,12 @@ fn autosave_format_hint(path: &Option<String>) -> String {
 
 pub struct DecksWindow {
     pub window: adw::ApplicationWindow,
-    split_view: adw::OverlaySplitView,
     slide_list: gtk::ListBox,
     canvas: gtk::DrawingArea,
     slides: Rc<RefCell<Vec<Slide>>>,
     masters: Rc<RefCell<Vec<MasterSlide>>>,
     current_slide: Rc<Cell<usize>>,
     selected_object: Rc<Cell<Option<usize>>>,
-    transition: Rc<RefCell<TransitionState>>,
-    undo: Rc<RefCell<UndoManager<Vec<Slide>>>>,
     content_stack: gtk::Stack,
     editor_split: adw::OverlaySplitView,
     file_path: Rc<RefCell<Option<String>>>,
@@ -67,7 +67,6 @@ pub struct DecksWindow {
     /// touched at each of the many `undo.execute()` call sites in this
     /// file, so it can't drift from what the undo history actually did.
     dirty: Rc<Cell<bool>>,
-    autosave_slot: Rc<suite_common::autosave::AutosaveSlot>,
 }
 
 /// Marks a deck dirty on any undo-stack mutation (execute, undo, or redo).
@@ -261,7 +260,7 @@ impl DecksWindow {
         // Central HUD refresh: status text + inspector fields.
         // The thumbnail updater is late-bound (the slide list is built
         // after this closure).
-        let thumb_updater: Rc<RefCell<Option<Box<dyn Fn()>>>> = Rc::new(RefCell::new(None));
+        let thumb_updater: ThumbUpdater = Rc::new(RefCell::new(None));
         let insp_guard = Rc::new(Cell::new(false));
         let refresh_hud: Rc<dyn Fn()> = {
             let ss = slides.clone();
@@ -597,14 +596,14 @@ impl DecksWindow {
         suite_win.add_top_bar(&toolbar);
 
         // ── Wire sidebar signals ──────────────────────────────────────────
-        let sl = slide_list.clone();
+        let _sl = slide_list.clone();
         let cs = canvas.clone();
         let cs_ref = current_slide.clone();
         let ss = slides.clone();
         let notes_skip = Rc::new(Cell::new(false));
         let notes_skip2 = notes_skip.clone();
         let nb = notes_buffer.clone();
-        slide_list.connect_row_selected(move |list, row| {
+        slide_list.connect_row_selected(move |_list, row| {
             if let Some(r) = row {
                 let idx = r.index() as usize;
                 if idx < ss.borrow().len() {
@@ -829,7 +828,7 @@ impl DecksWindow {
                 if idx >= ss_snap.len() { return; }
                 let count = shape_count.get();
                 shape_count.set(count + 1);
-                let obj = if count % 2 == 0 {
+                let obj = if count.is_multiple_of(2) {
                     SlideObject::Rect { x: 200.0, y: 200.0, w: 200.0, h: 150.0 }
                 } else {
                     SlideObject::Circle { x: 300.0, y: 250.0, r: 80.0 }
@@ -864,7 +863,7 @@ impl DecksWindow {
                 let cs = cs.clone();
                 let cs_ref = cs_ref.clone();
                 let undo = undo.clone();
-                let refresh = refresh.clone();
+                let _refresh = refresh.clone();
                 dlg.open(Some(&w), None::<&gio::Cancellable>,
                     move |result: Result<gio::File, glib::Error>| {
                         if let Ok(file) = result {
@@ -1010,7 +1009,7 @@ impl DecksWindow {
             let ds3 = drag_state.clone();
             let ds4 = drag_state.clone();
             let ss2 = ss.clone();
-            let cs2 = cs.clone();
+            let _cs2 = cs.clone();
             let cs_ref2 = cs_ref.clone();
             let cs_ref3 = cs_ref.clone();
             let cs_ref4 = cs_ref.clone();
@@ -1083,7 +1082,7 @@ impl DecksWindow {
             let ss = slides.clone();
             let cs = canvas.clone();
             let cs_ref = current_slide.clone();
-            let so = selected_object.clone();
+            let _so = selected_object.clone();
             let undo = undo.clone();
             let dbl = gtk::GestureClick::new();
             dbl.set_button(1);
@@ -1109,15 +1108,15 @@ impl DecksWindow {
                         overlay.put(&text_view, cvx, cvy);
                         // Add overlay to window via a stack or popover — put on Fixed overlay
                         // For now, add as child of the canvas parent scrolled window area
-                        cs2.parent().map(|p| {
+                        if let Some(p) = cs2.parent() {
                             if let Ok(fixed) = p.downcast::<gtk::Fixed>() {
                                 fixed.put(&overlay, 0.0, 0.0);
                             }
-                        });
+                        }
                         text_view.grab_focus();
                         // Commit on Enter via EventControllerKey
                         let key_ctrl = gtk::EventControllerKey::new();
-                        let ss2 = ss.clone();
+                        let _ss2 = ss.clone();
                         let cs3 = cs.clone();
                         let undo2 = undo.clone();
                         let tv2 = text_view.clone();
@@ -1146,9 +1145,9 @@ impl DecksWindow {
                         // Commit on focus loss
                         let fc = gtk::EventControllerFocus::new();
                         let tv3 = text_view.clone();
-                        let ov3 = overlay.clone();
+                        let _ov3 = overlay.clone();
                         fc.connect_leave(move |_| {
-                            tv3.parent().map(|p| { p.unparent(); });
+                            if let Some(p) = tv3.parent() { p.unparent(); }
                         });
                         text_view.add_controller(fc);
                     }
@@ -1169,7 +1168,7 @@ impl DecksWindow {
             let ts = transition.clone();
             let m = masters.clone();
             let key = gtk::EventControllerKey::new();
-            key.connect_key_pressed(move |_, keyval, code, mods| {
+            key.connect_key_pressed(move |_, keyval, _code, mods| {
                 // Ctrl+Z: undo
                 if mods.contains(gtk::gdk::ModifierType::CONTROL_MASK) && keyval == gtk::gdk::Key::z {
                     let mut u = undo.borrow_mut();
@@ -1364,7 +1363,7 @@ impl DecksWindow {
                                     }
                                     Err(e) => {
                                         let err = adw::AlertDialog::builder()
-                                            .heading(&suite_common::i18n("Error opening presentation"))
+                                            .heading(suite_common::i18n("Error opening presentation"))
                                             .body(&e)
                                             .build();
                                         err.add_response("ok", "OK");
@@ -1404,7 +1403,7 @@ impl DecksWindow {
                         }
                         Err(e) => {
                             let err = adw::AlertDialog::builder()
-                                .heading(&suite_common::i18n("Error saving presentation"))
+                                .heading(suite_common::i18n("Error saving presentation"))
                                 .body(&e)
                                 .build();
                             err.add_response("ok", "OK");
@@ -1456,7 +1455,7 @@ impl DecksWindow {
                                     }
                                     Err(e) => {
                                         let err = adw::AlertDialog::builder()
-                                            .heading(&suite_common::i18n("Error saving presentation"))
+                                            .heading(suite_common::i18n("Error saving presentation"))
                                             .body(&e)
                                             .build();
                                         err.add_response("ok", "OK");
@@ -1529,21 +1528,17 @@ impl DecksWindow {
 
         Self {
             window: suite_win.window,
-            split_view,
             slide_list,
             canvas,
             slides,
             masters: masters.clone(),
             current_slide,
             selected_object,
-            transition,
-            undo,
             content_stack,
             editor_split,
             file_path,
             refresh_hud,
             dirty,
-            autosave_slot,
         }
     }
 

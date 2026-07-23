@@ -3,7 +3,6 @@
 // TablesWindow — Spreadsheet window with Cairo grid, formula bar, sheet tabs, and file I/O.
 // GNOME GUI spec: AdwApplicationWindow + AdwToolbarView + AdwBreakpoint.
 
-use gtk4::cairo::{self, Context};
 use gtk4::{self as gtk, gio, glib, prelude::*};
 use libadwaita as adw;
 use adw::prelude::{AdwDialogExt, AlertDialogExt, AlertDialogExtManual};
@@ -73,8 +72,6 @@ fn autosave_state_dir() -> std::path::PathBuf {
 pub struct TablesWindow {
     pub window: adw::ApplicationWindow,
     drawing_area: gtk4::DrawingArea,
-    h_adj: gtk4::Adjustment,
-    v_adj: gtk4::Adjustment,
     fx_entry: gtk4::Entry,
     stack: gtk4::Stack,
     controller: Rc<RefCell<WorkbookController>>,
@@ -82,7 +79,6 @@ pub struct TablesWindow {
     sheet_model: gtk4::StringList,
     sheet_switcher: gtk4::DropDown,
     current_path: Rc<RefCell<Option<std::path::PathBuf>>>,
-    autosave_slot: Rc<suite_common::autosave::AutosaveSlot>,
 }
 
 impl TablesWindow {
@@ -350,13 +346,13 @@ impl TablesWindow {
                         return;
                     }
                 }
-                if let Some((col, row)) = xy_to_cell(wx, wy, h.value(), &*sh) {
+                if let Some((col, row)) = xy_to_cell(wx, wy, h.value(), &sh) {
                     drop(sh); drop(st);
                     let shift = g
                         .current_event_state()
                         .contains(gtk4::gdk::ModifierType::SHIFT_MASK);
                     {
-                        let mut st = s.borrow_mut();
+                        let st = s.borrow_mut();
                         {
                             let shown = st.engine.cell(row, col);
                             update_grid_a11y(&da, &tables_core::sheet::col_label(col), row, &shown);
@@ -393,19 +389,19 @@ impl TablesWindow {
             let before_end = resize_before.clone();
             let s2 = s.clone();
             let resize_controller = controller.clone();
-            let h2 = h.clone();
+            let _h2 = h.clone();
             drag.connect_drag_begin(move |_g, x, y| {
                 let st = s.borrow();
                 let sh = st.sheet();
-                if let Some(col) = hit_col_divider(x as f64, y as f64, h.value(), &*sh) {
+                if let Some(col) = hit_col_divider(x, y, h.value(), &sh) {
                     *before_begin.borrow_mut() = Some(sh.clone());
                     dc2.set(Some((col, sh.col_width(col))));
                 }
             });
             drag.connect_drag_update(move |_g, dx, _dy| {
                 if let Some((col, start_w)) = drag_col.get() {
-                    let new_w = (start_w + dx as f64).clamp(30.0, 500.0);
-                    let mut st = s2.borrow_mut();
+                    let new_w = (start_w + dx).clamp(30.0, 500.0);
+                    let st = s2.borrow_mut();
                     let mut sh = st.sheet_mut();
                     sh.set_col_width(col, new_w);
                     drop(sh); drop(st);
@@ -501,8 +497,8 @@ impl TablesWindow {
             motion.connect_motion(move |_m, x, y| {
                 let st = s.borrow();
                 let sh = st.sheet();
-                let over_div = hit_col_divider(x as f64, y as f64, h.value(), &*sh).is_some();
-                let over_head = (y as f64) < COL_HEADER_HEIGHT && (x as f64) > ROW_HEADER_WIDTH;
+                let over_div = hit_col_divider(x, y, h.value(), &sh).is_some();
+                let over_head = y < COL_HEADER_HEIGHT && x > ROW_HEADER_WIDTH;
                 if over_div {
                     da.set_cursor_from_name(Some("col-resize"));
                 } else if over_head {
@@ -533,7 +529,7 @@ impl TablesWindow {
                 {
                     let st = s.borrow();
                     let sh = st.sheet();
-                    if let Some(col) = hit_col_divider(wx, wy, h.value(), &*sh) {
+                    if let Some(col) = hit_col_divider(wx, wy, h.value(), &sh) {
                         drop(sh); drop(st);
                         // Auto-fit by temporarily setting draw func to measure
                         let s2 = s.clone();
@@ -542,9 +538,9 @@ impl TablesWindow {
                         let da2 = da.clone();
                         let gl2 = gl.clone();
                         da.set_draw_func(move |_area, cr, width, height| {
-                            let mut st = s2.borrow_mut();
+                            let st = s2.borrow_mut();
                             let mut sh = st.sheet_mut();
-                            auto_fit_column(cr, &mut *sh, col, h2.value());
+                            auto_fit_column(cr, &mut sh, col, h2.value());
                             drop(sh);
                             draw_grid(cr, &s2, width as f64, height as f64, h2.value(), v2.value(), gl2.get());
                             // Restore normal draw func
@@ -562,8 +558,8 @@ impl TablesWindow {
                 }
                 let st = s.borrow();
                 let sh = st.sheet();
-                if let Some((col, row)) = xy_to_cell(wx, wy, h.value(), &*sh) {
-                    let mut st = s.borrow_mut();
+                if let Some((col, row)) = xy_to_cell(wx, wy, h.value(), &sh) {
+                    let st = s.borrow_mut();
                     let val = st.sheet().data[row][col].clone();
                     // Compute cell x-offset using per-column widths
                     let cell_x = ROW_HEADER_WIDTH + (0..col).map(|cc| st.sheet().col_width(cc)).sum::<f64>();
@@ -585,13 +581,13 @@ impl TablesWindow {
                     entry.connect_activate(move |e| {
                         let new_val = e.text().to_string();
                         ctl2.borrow_mut().edit_cell(row, col, new_val);
-                        e.parent().map(|p| { p.unparent(); });
+                        if let Some(p) = e.parent() { p.unparent(); }
                         da2.queue_draw();
                     });
                     let focus_ctrl = gtk4::EventControllerFocus::new();
                     let e2 = entry.clone();
                     focus_ctrl.connect_leave(move |_| {
-                        e2.parent().map(|p| { p.unparent(); });
+                        if let Some(p) = e2.parent() { p.unparent(); }
                     });
                     entry.add_controller(focus_ctrl);
                 }
@@ -690,7 +686,7 @@ impl TablesWindow {
                     .activates_default(true)
                     .build();
                 let dlg = adw::AlertDialog::builder()
-                    .heading(&suite_common::i18n("Rename Sheet"))
+                    .heading(suite_common::i18n("Rename Sheet"))
                     .build();
                 dlg.set_extra_child(Some(&entry));
                 dlg.add_response("cancel", &suite_common::i18n("Cancel"));
@@ -781,8 +777,8 @@ impl TablesWindow {
                 drop(controller);
                 if state.borrow().sheets.len() <= 1 {
                     let err = adw::AlertDialog::builder()
-                        .heading(&suite_common::i18n("Can't Delete Sheet"))
-                        .body(&suite_common::i18n("A workbook needs at least one sheet."))
+                        .heading(suite_common::i18n("Can't Delete Sheet"))
+                        .body(suite_common::i18n("A workbook needs at least one sheet."))
                         .build();
                     err.add_response("ok", &suite_common::i18n("OK"));
                     err.present(w.as_ref());
@@ -790,8 +786,8 @@ impl TablesWindow {
                 }
                 let name = state.borrow().sheets[idx].borrow().name.clone();
                 let dlg = adw::AlertDialog::builder()
-                    .heading(&suite_common::i18n("Delete Sheet?"))
-                    .body(&format!("“{name}” will be permanently deleted."))
+                    .heading(suite_common::i18n("Delete Sheet?"))
+                    .body(format!("“{name}” will be permanently deleted."))
                     .build();
                 dlg.add_response("cancel", &suite_common::i18n("Cancel"));
                 dlg.add_response("delete", &suite_common::i18n("Delete"));
@@ -917,7 +913,7 @@ impl TablesWindow {
                 if data.is_empty() { return; }
 
                 let dialog = adw::Dialog::builder()
-                    .title(&suite_common::i18n("Chart"))
+                    .title(suite_common::i18n("Chart"))
                     .content_width(600)
                     .content_height(480)
                     .build();
@@ -1361,7 +1357,7 @@ impl TablesWindow {
                                     }
                                     Err(e) => {
                                         let err = adw::AlertDialog::builder()
-                                            .heading(&suite_common::i18n("Error opening file"))
+                                            .heading(suite_common::i18n("Error opening file"))
                                             .body(&e)
                                             .build();
                                         err.add_response("ok", "OK");
@@ -1703,8 +1699,6 @@ impl TablesWindow {
         Self {
             window: suite_win.window,
             drawing_area,
-            h_adj,
-            v_adj,
             fx_entry,
             stack,
             controller,
@@ -1712,7 +1706,6 @@ impl TablesWindow {
             sheet_model,
             sheet_switcher,
             current_path,
-            autosave_slot,
         }
     }
 
@@ -1963,7 +1956,7 @@ fn show_conditional_format_dialog(
 ) {
     use tables_core::sheet::{CondOp, CondRule};
     let dialog = adw::Dialog::builder()
-        .title(&suite_common::i18n("Conditional Formatting"))
+        .title(suite_common::i18n("Conditional Formatting"))
         .content_width(360)
         .build();
 

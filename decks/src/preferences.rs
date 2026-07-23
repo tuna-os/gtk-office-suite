@@ -1,7 +1,7 @@
 // preferences.rs — Decks preferences dialog.
 use libadwaita as adw;
 use adw::prelude::*;
-use gtk4::{gio, prelude::*};
+use gtk4::gio;
 
 pub struct DecksPreferences {
     pub window: adw::PreferencesDialog,

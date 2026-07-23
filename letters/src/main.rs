@@ -80,14 +80,6 @@ fn main() {
     suite.app.add_action(&act_shortcuts);
     suite.app.set_accels_for_action("app.show-shortcuts", &["<Primary>question"]);
 
-    // Register export-pdf action
-    suite.app.add_action(&{
-        let a = gtk4::gio::SimpleAction::new("export-pdf", None);
-        a.connect_activate(|_, _| {});
-        a
-    });
-    suite.app.set_accels_for_action("app.export-pdf", &["<Primary><Shift>e"]);
-
     let win_store: std::rc::Rc<std::cell::RefCell<Option<window::LettersWindow>>> =
         std::rc::Rc::new(std::cell::RefCell::new(None));
 

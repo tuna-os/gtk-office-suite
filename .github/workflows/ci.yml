@@ -29,11 +29,8 @@ jobs:
       - name: cargo check
         run: cargo check --workspace
 
-      - name: cargo clippy
-        run: cargo clippy --workspace
-
-      - name: cargo clippy (core crates, deny warnings)
-        run: cargo clippy -p suite-common-core -p letters-core -p tables-core -p decks-core -- -D warnings
+      - name: cargo clippy (deny warnings, all crates)
+        run: cargo clippy --workspace --all-targets -- -D warnings
 
       - name: cargo test
         run: cargo test --workspace

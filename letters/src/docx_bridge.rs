@@ -5,75 +5,11 @@
 
 use gtk4::{self as gtk, prelude::*};
 
-/// Read a .docx file into a GtkTextBuffer, preserving formatting and styles.
-pub fn read_docx_to_buffer(path: &str, buf: &gtk::TextBuffer) -> Result<(), String> {
-    let doc = rdocx::Document::open(path)
-        .map_err(|e| format!("Failed to open {}: {}", path, e))?;
-
-    // Register any custom styles from the document
-    let mut style_map = std::collections::HashMap::new();
-    for s in doc.styles() {
-        let id = s.style_id();
-        if let Some(_name) = s.name() {
-            let tag_name = map_style_id_to_tag(id);
-            if !tag_name.is_empty() && buf.tag_table().lookup(&tag_name).is_none() {
-                let tag = gtk::TextTag::builder().name(&tag_name).build();
-                buf.tag_table().add(&tag);
-            }
-            style_map.insert(id.to_string(), tag_name);
-        }
-    }
-
-    let paragraphs = doc.paragraphs();
-    let mut first = true;
-
-    for p in &paragraphs {
-        // Insert page break if set on this paragraph
-        if p.is_page_break_before() && !first {
-            let mut end = buf.end_iter();
-            buf.insert(&mut end, "\n");
-        }
-
-        if !first {
-            let mut end = buf.end_iter();
-            buf.insert(&mut end, "\n");
-        }
-        first = false;
-
-        let para_style_tag = p.style_id()
-            .and_then(|id| style_map.get(id).cloned())
-            .unwrap_or_else(|| map_style_id_to_tag(p.style_id().unwrap_or("Normal")));
-
-        let para_start = buf.end_iter();
-
-        for r in p.runs() {
-            let text = r.text();
-            let start = buf.end_iter();
-            let mut end = start.clone();
-            buf.insert(&mut end, &text);
-            apply_run_tags(buf, &start, &end, &r);
-        }
-
-        if !para_style_tag.is_empty() {
-            let para_end = buf.end_iter();
-            if let Some(tag) = buf.tag_table().lookup(&para_style_tag) {
-                buf.apply_tag(&tag, &para_start, &para_end);
-            }
-        }
-    }
-
-    Ok(())
-}
-
-/// Write a GtkTextBuffer to a .docx file (plain text, no layout).
-pub fn write_buffer_to_docx(path: &str, buf: &gtk::TextBuffer) -> Result<(), String> {
-    write_buffer_to_docx_with_layout(path, buf, None, &[])
-}
-
-/// Write with style preservation from an existing .docx file.
-pub fn write_buffer_to_docx_preserving_styles(path: &str, buf: &gtk::TextBuffer, source_path: &str) -> Result<(), String> {
-    write_buffer_to_docx_with_layout(path, buf, Some(source_path), &[])
-}
+/// Write a GtkTextBuffer to a .docx file with layout-aware page breaks.
+///
+/// Reading .docx now goes through `letters_core::docx::read` (see
+/// `bridge::load_file_to_buffer`); the old buffer-populating reader that
+/// used to live here was superseded and has been removed.
 pub fn write_buffer_to_docx_with_layout(
     path: &str,
     buf: &gtk::TextBuffer,
@@ -123,6 +59,19 @@ pub fn write_buffer_to_docx_with_layout(
 
     doc.save(path).map_err(|e| format!("Failed to save {}: {}", path, e))
 }
+// ── Style mapping ─────────────────────────────────────────────────────
+
+fn tag_to_style_id(tag: &str) -> &str {
+    match tag {
+        "h1" => "Heading1", "h2" => "Heading2", "h3" => "Heading3",
+        "h4" => "Heading4", "h5" => "Heading5", "h6" => "Heading6",
+        "h-title" => "Title", "h-subtitle" => "Subtitle",
+        "code" => "Code", "blockquote" => "Blockquote",
+        "normal" => "Normal",
+        _ => "",
+    }
+}
+
 // ── Paragraph representation ──────────────────────────────────────────
 
 struct ParaInfo {
@@ -184,9 +133,7 @@ fn split_runs_from_buffer(buf: &gtk::TextBuffer, para_offset: i32, para_text: &s
     if para_text.is_empty() {
         return vec![];
     }
-    let len = para_text.len() as i32;
     let end = buf.end_iter();
-    let mut offset = para_offset;
     let mut runs = Vec::new();
     let mut current = RunSegment { text: String::new(), bold: false, italic: false, strike: false, underline: false };
 
@@ -222,49 +169,3 @@ fn split_runs_from_buffer(buf: &gtk::TextBuffer, para_offset: i32, para_text: &s
     runs
 }
 
-// ── Style mapping ─────────────────────────────────────────────────────
-
-fn map_style_id_to_tag(id: &str) -> String {
-    match id {
-        "Heading1" | "heading1" => "h1".into(),
-        "Heading2" | "heading2" => "h2".into(),
-        "Heading3" | "heading3" => "h3".into(),
-        "Heading4" | "heading4" => "h4".into(),
-        "Heading5" | "heading5" => "h5".into(),
-        "Heading6" | "heading6" => "h6".into(),
-        "Title" => "h-title".into(),
-        "Subtitle" => "h-subtitle".into(),
-        "Code" | "HTMLCode" => "code".into(),
-        "Blockquote" | "BlockText" => "blockquote".into(),
-        "Normal" => "normal".into(),
-        s => format!("custom-{}", s.to_lowercase().replace(' ', "-")),
-    }
-}
-
-pub fn tag_to_style_id(tag: &str) -> &str {
-    match tag {
-        "h1" => "Heading1", "h2" => "Heading2", "h3" => "Heading3",
-        "h4" => "Heading4", "h5" => "Heading5", "h6" => "Heading6",
-        "h-title" => "Title", "h-subtitle" => "Subtitle",
-        "code" => "Code", "blockquote" => "Blockquote",
-        "normal" => "Normal",
-        _ => "",
-    }
-}
-
-// ── Helpers ────────────────────────────────────────────────────────────
-
-fn apply_run_tags(buf: &gtk::TextBuffer, start: &gtk::TextIter, end: &gtk::TextIter, run: &rdocx::RunRef<'_>) {
-    if run.is_bold() {
-        if let Some(tag) = buf.tag_table().lookup("bold") { buf.apply_tag(&tag, start, end); }
-    }
-    if run.is_italic() {
-        if let Some(tag) = buf.tag_table().lookup("italic") { buf.apply_tag(&tag, start, end); }
-    }
-    if run.is_strike() {
-        if let Some(tag) = buf.tag_table().lookup("strikethrough") { buf.apply_tag(&tag, start, end); }
-    }
-    if run.is_underline() {
-        if let Some(tag) = buf.tag_table().lookup("underline") { buf.apply_tag(&tag, start, end); }
-    }
-}

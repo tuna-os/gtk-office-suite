@@ -13,8 +13,6 @@ pub const A4_HEIGHT_PT: f64 = 842.0;
 const DEFAULT_MARGIN_TB: f64 = 72.0;
 const DEFAULT_MARGIN_LR: f64 = 72.0;
 const PAGE_GAP: f64 = 12.0;
-const HEADER_HEIGHT: f64 = 36.0;  // header area in points
-const FOOTER_HEIGHT: f64 = 36.0;  // footer area in points
 
 mod imp {
     use super::*;
@@ -376,7 +374,7 @@ impl PageContainer {
             settings.double("page-margin-right"),
         );
         self.set_column_count(settings.int("column-count").max(1) as u32);
-        self.set_zoom(settings.double("zoom-level").max(50.0).min(200.0));
+        self.set_zoom(settings.double("zoom-level").clamp(50.0, 200.0));
     }
 
     pub fn reload_settings(&self, settings: &gio::Settings) {
@@ -389,6 +387,7 @@ impl Default for PageContainer {
 }
 
 /// Draw a single page to a Cairo context. Shared by PageContainer snapshot and print preview.
+#[allow(clippy::too_many_arguments)]
 pub fn draw_page_to_cairo(
     cr: &cairo::Context,
     page_idx: usize,

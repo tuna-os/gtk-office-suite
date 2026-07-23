@@ -1,5 +1,10 @@
 // export.rs — Typst export for Decks.
 // SPDX-License-Identifier: GPL-3.0-or-later
+//
+// Not yet wired to a menu action (unlike Letters, which has an "Export
+// PDF" entry) — kept rather than deleted since the Typst rendering is
+// already implemented and tested.
+#![allow(dead_code)]
 
 pub fn to_typst(slides: &[decks_core::engine::Slide]) -> String {
     let mut out = String::from("#set page(width: 16cm, height: 9cm)\n");

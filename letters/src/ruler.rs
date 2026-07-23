@@ -18,7 +18,6 @@ use std::cell::{Cell, RefCell};
 
 const RULER_HEIGHT: i32 = 28;
 const TICK_MAJOR_INTERVAL: f64 = 72.0; // 1 inch in points
-const TICK_MINOR_INTERVAL: f64 = 18.0;  // ~1/4 inch
 
 // ── GObject subclass ───────────────────────────────────────────────────
 
@@ -160,11 +159,7 @@ mod imp {
 
                 // Major tick labels
                 if is_major {
-                    let label = if self.use_metric.get() {
-                        format!("{}", tick_idx / 4 + 1)
-                    } else {
-                        format!("{}", tick_idx / 4 + 1)
-                    };
+                    let label = format!("{}", tick_idx / 4 + 1);
                     cr.set_source_rgb(ink.0, ink.1, ink.2);
                     cr.set_font_size(9.0);
                     cr.move_to(x - 6.0, 10.0);
@@ -224,7 +219,7 @@ mod imp {
             }
 
             // ── Tab stops (L-shaped) ──
-            for (i, ts) in self.tab_stops.borrow().iter().enumerate() {
+            for ts in self.tab_stops.borrow().iter() {
                 let tx = to_x(ts.position_pt);
                 if tx < 0.0 || tx > w { continue; }
                 cr.set_source_rgb(marker.0, marker.1, marker.2);
@@ -242,7 +237,7 @@ mod imp {
             (RULER_HEIGHT, RULER_HEIGHT, -1, -1)
         }
 
-        fn size_allocate(&self, width: i32, _height: i32, _baseline: i32) {
+        fn size_allocate(&self, _width: i32, _height: i32, _baseline: i32) {
             // Force height to RULER_HEIGHT
             // Width comes from parent allocation
         }
@@ -557,7 +552,7 @@ impl Ruler {
 }
 
 // Re-export
-pub use imp::{DragTarget, TabStop, TabAlignment};
+pub use imp::{DragTarget, TabAlignment};
 
 impl Default for Ruler {
     fn default() -> Self {

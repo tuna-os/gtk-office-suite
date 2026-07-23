@@ -8,13 +8,17 @@ use gtk4::{self as gtk, prelude::*};
 /// A page calculated by the layout engine.
 #[derive(Debug, Clone)]
 pub struct Page {
-    /// 0-based page index.
+    /// 0-based page index. Not yet read anywhere (planned for a "Page N of
+    /// M" status indicator); kept as part of the page metadata contract.
+    #[allow(dead_code)]
     pub index: usize,
     /// Byte offset at the start of this page's content in the buffer.
     pub start_offset: i32,
     /// Byte offset at the end of this page's content.
     pub end_offset: i32,
-    /// Number of lines on this page.
+    /// Number of lines on this page. Not yet read anywhere; kept as part
+    /// of the page metadata contract.
+    #[allow(dead_code)]
     pub line_count: usize,
 }
 
@@ -102,7 +106,7 @@ pub fn paginate(
     }
 
     let mut pages = Vec::new();
-    let total_chunks = (line_count + lines_per_page - 1) / lines_per_page;
+    let total_chunks = line_count.div_ceil(lines_per_page);
 
     for page_idx in 0..total_chunks {
         let line_start = page_idx * lines_per_page;

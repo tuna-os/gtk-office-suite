@@ -1,7 +1,7 @@
 // preferences.rs — Tables preferences dialog.
 use libadwaita as adw;
 use adw::prelude::*;
-use gtk4::{gio, prelude::*};
+use gtk4::gio;
 
 pub struct TablesPreferences {
     pub window: adw::PreferencesDialog,

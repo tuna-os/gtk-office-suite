@@ -2294,6 +2294,7 @@ dependencies = [
  "pulldown-cmark",
  "rdocx",
  "rdocx-oxml 0.1.2 (registry+https://github.com/rust-lang/crates.io-index)",
+ "serde_json",
  "suite-common",
  "suite-export",
  "zspell",
@@ -2308,6 +2309,7 @@ dependencies = [
  "rdocx",
  "serde",
  "serde_json",
+ "suite-common-core",
  "tempfile",
  "zip 2.4.2",
 ]
@@ -3929,6 +3931,7 @@ dependencies = [
  "chrono",
  "num-format",
  "regex",
+ "tempfile",
 ]
 
 [[package]]

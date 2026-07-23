@@ -3,9 +3,8 @@
 // ToastManager — shared toast notification system wrapping AdwToastOverlay.
 // Used by Letters, Tables, Decks for consistent save/error/action feedback.
 
-use gtk4::{self as gtk, glib, prelude::*};
+use gtk4::{self as gtk, prelude::*};
 use libadwaita as adw;
-use adw::prelude::*;
 
 /// Manages toast notifications via an AdwToastOverlay.
 pub struct ToastManager {

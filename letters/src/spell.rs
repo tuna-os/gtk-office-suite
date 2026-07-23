@@ -52,11 +52,19 @@ impl SpellChecker {
         Some(SpellCheckHandle { checker: sc, _handler: Rc::new(handler) })
     }
 
+    // add_word/suggestions and the SpellCheckHandle suggestion-menu API
+    // below are the backend for a right-click "suggestions" context menu
+    // that isn't wired into the text view's popup yet — see word_at_point
+    // and make_spell_menu at the bottom of this file for the other half
+    // of the planned feature. Kept and #[allow(dead_code)]'d rather than
+    // deleted since the checker/dictionary plumbing is already in place.
+    #[allow(dead_code)]
     pub fn add_word(&self, word: &str) {
         self.user_words.borrow_mut().insert(word.to_lowercase());
         self.check_all();
     }
 
+    #[allow(dead_code)]
     pub fn suggestions(&self, word: &str) -> Vec<String> {
         let dict = self.dict.borrow();
         match dict.as_ref() {
@@ -116,8 +124,8 @@ impl SpellChecker {
             while pos < bytes.len() && is_word_byte(bytes[pos]) { pos += 1; }
             let word = &text[ws..pos];
             if !self.is_correct(word) {
-                let mut si = start.clone(); si.forward_chars(ws as i32);
-                let mut ei = start.clone(); ei.forward_chars(pos as i32);
+                let mut si = start; si.forward_chars(ws as i32);
+                let mut ei = start; ei.forward_chars(pos as i32);
                 self.buffer.apply_tag(&self.error_tag, &si, &ei);
             }
         }
@@ -126,15 +134,20 @@ impl SpellChecker {
 
 #[derive(Clone)]
 pub struct SpellCheckHandle {
+    #[allow(dead_code)]
     checker: Rc<RefCell<SpellChecker>>,
     _handler: Rc<glib::SignalHandlerId>,
 }
 
+// The methods below back a right-click spelling-suggestions context menu
+// that isn't wired into the text view's popup handler yet (see the note
+// on SpellChecker::add_word above). Kept in place rather than deleted.
+#[allow(dead_code)]
 impl SpellCheckHandle {
     pub fn word_at_cursor(&self, buffer: &gtk::TextBuffer) -> Option<String> {
         let ins = buffer.cursor_position();
         let mut start = buffer.iter_at_offset(ins);
-        let mut end = start.clone();
+        let mut end = start;
         while start.backward_char() {
             let c = start.char();
             if !c.is_ascii_alphabetic() && c != '\'' { start.forward_char(); break; }
@@ -169,7 +182,7 @@ impl SpellCheckHandle {
     pub fn replace_last(&self, buffer: &gtk::TextBuffer, replacement: &str) {
         let ins = buffer.cursor_position();
         let mut start = buffer.iter_at_offset(ins);
-        let mut end = start.clone();
+        let mut end = start;
         while start.backward_char() {
             let c = start.char();
             if !c.is_ascii_alphabetic() && c != '\'' { start.forward_char(); break; }
@@ -186,8 +199,8 @@ impl SpellCheckHandle {
         }
     }
 
-    pub fn set_current_word(&self, word: &str) {
-        if let Ok(mut s) = self.checker.try_borrow_mut() {
+    pub fn set_current_word(&self, _word: &str) {
+        if let Ok(_s) = self.checker.try_borrow_mut() {
             // No-op placeholder — word is captured in closures
         }
     }
@@ -266,17 +279,20 @@ fn is_word_byte(c: u8) -> bool {
 }
 
 // ── Spell popup menu builder ────────────────────────────────────────────
-
-// ── Spell popup menu builder ────────────────────────────────────────────
+//
+// word_at_point/make_spell_menu are the other half of the right-click
+// suggestions menu described above (not wired into the text view's popup
+// handler yet). Kept rather than deleted.
 
 /// Find the word at a given (x, y) position in the text view.
+#[allow(dead_code)]
 pub fn word_at_point(tv: &gtk::TextView, x: f64, y: f64) -> Option<String> {
     // Convert widget coords to buffer position using text view's coordinate mapping
     let (bx, by) = tv.window_to_buffer_coords(gtk::TextWindowType::Widget, x as i32, y as i32);
     if let Some(iter) = tv.iter_at_location(bx, by) {
         let buf = tv.buffer();
         if iter.offset() < 0 { return None; }
-        let mut start = iter.clone();
+        let mut start = iter;
         let mut end = iter;
         // Expand backward to word start
         while start.backward_char() {
@@ -296,6 +312,7 @@ pub fn word_at_point(tv: &gtk::TextView, x: f64, y: f64) -> Option<String> {
     None
 }
 
+#[allow(dead_code)]
 pub fn make_spell_menu(word: &str, suggestions: &[String]) -> gio::Menu {
     let menu = gio::Menu::new();
     if !suggestions.is_empty() {

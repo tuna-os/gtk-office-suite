@@ -4,7 +4,7 @@
 
 use libadwaita as adw;
 use adw::prelude::*;
-use gtk4::{gio, prelude::*};
+use gtk4::gio;
 
 const FORMAT_NAMES: &[&str] = &["ODT (OpenDocument)", "DOCX (Office Open XML)",
     "Markdown", "HTML", "Plain Text", "RTF (Rich Text)"];

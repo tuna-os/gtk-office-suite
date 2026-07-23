@@ -10,7 +10,7 @@
 // list kinds translate to/from the editor's literal "- " / "N. " markers.
 
 use gtk4::{self as gtk, prelude::*};
-use letters_core::model::{Document, Paragraph, ParaStyle, Run, RunStyle};
+use letters_core::model::{Document, Paragraph, Run, RunStyle};
 
 const RUN_TAGS: [&str; 6] = ["bold", "italic", "underline", "strikethrough", "highlight", "code"];
 
@@ -322,6 +322,23 @@ pub fn save_buffer_to_file(buf: &gtk::TextBuffer, path: &str) -> Result<(), Stri
     }
 }
 
+/// Insert the visible "[n]" marker for footnote index `idx`, tagged
+/// "fnref:idx" (superscript, accent color). Shared by render and the
+/// Insert Footnote action.
+pub fn insert_footnote_marker(buf: &gtk::TextBuffer, insert: &mut gtk::TextIter, idx: usize) {
+    let name = format!("fnref:{idx}");
+    if buf.tag_table().lookup(&name).is_none() {
+        let tag = gtk::TextTag::builder()
+            .name(&name)
+            .foreground("#1a5fb4")
+            .rise(4000)
+            .scale(0.75)
+            .build();
+        buf.tag_table().add(&tag);
+    }
+    buf.insert_with_tags_by_name(insert, &format!("[{}]", idx + 1), &[&name]);
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -435,21 +452,4 @@ plain");
         assert_eq!(rt.style_at(0).link, None);
         assert_eq!(rt.style_at(12).link, None);
     }
-}
-
-/// Insert the visible "[n]" marker for footnote index `idx`, tagged
-/// "fnref:idx" (superscript, accent color). Shared by render and the
-/// Insert Footnote action.
-pub fn insert_footnote_marker(buf: &gtk::TextBuffer, insert: &mut gtk::TextIter, idx: usize) {
-    let name = format!("fnref:{idx}");
-    if buf.tag_table().lookup(&name).is_none() {
-        let tag = gtk::TextTag::builder()
-            .name(&name)
-            .foreground("#1a5fb4")
-            .rise(4000)
-            .scale(0.75)
-            .build();
-        buf.tag_table().add(&tag);
-    }
-    buf.insert_with_tags_by_name(insert, &format!("[{}]", idx + 1), &[&name]);
 }

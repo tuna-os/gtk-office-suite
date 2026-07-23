@@ -1,5 +1,10 @@
 // markdown.rs — Markdown rendering on Cairo canvas using pulldown-cmark + Pango.
 // Parses **bold**, *italic*, `code` and renders via Pango attributes on Cairo.
+//
+// Not yet called from slide rendering (see canvas.rs, which currently
+// renders plain text) — kept rather than deleted since it's a working,
+// self-contained rendering path planned for slide body text.
+#![allow(dead_code)]
 
 use gtk4::cairo;
 use pulldown_cmark::{Parser, Event, Tag, TagEnd, Options};
@@ -30,10 +35,10 @@ pub fn render_markdown(
             Event::Start(Tag::CodeBlock(_)) => is_code = true,
             Event::End(TagEnd::CodeBlock) => is_code = false,
             Event::Text(t) => {
-                render_text(&cr, &layout, &t.to_string(), x, &mut cy, bold, italic, is_code);
+                render_text(cr, &layout, t.as_ref(), x, &mut cy, bold, italic, is_code);
             }
             Event::Code(t) => {
-                render_text(&cr, &layout, &t.to_string(), x, &mut cy, bold, italic, true);
+                render_text(cr, &layout, t.as_ref(), x, &mut cy, bold, italic, true);
             }
             Event::SoftBreak => {
                 let (_, h) = layout.pixel_size();
@@ -49,12 +54,13 @@ pub fn render_markdown(
     cy - y
 }
 
+#[allow(clippy::too_many_arguments)]
 fn render_text(
     cr: &cairo::Context, layout: &pango::Layout, text_str: &str,
     x: f64, cy: &mut f64, bold: bool, italic: bool, is_code: bool,
 ) {
     layout.set_text(text_str);
-    let mut attrs = pango::AttrList::new();
+    let attrs = pango::AttrList::new();
     if bold { attrs.insert(pango::AttrInt::new_weight(pango::Weight::Bold)); }
     if italic { attrs.insert(pango::AttrInt::new_style(pango::Style::Italic)); }
     if is_code { attrs.insert(pango::AttrString::new_family("Monospace")); }

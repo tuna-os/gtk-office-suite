@@ -34,7 +34,7 @@ fn draw_line(cr: &Context, data: &[(String, f64)], w: i32, h: i32) { /* same */
     let n = data.len(); let max_val = data.iter().map(|d| d.1).fold(0.0, f64::max).max(1.0);
     let step_x = w as f64 * 0.8 / (n as f64 - 1.0).max(1.0); let ox = w as f64 * 0.1;
     cr.set_source_rgb(0.9, 0.3, 0.2); cr.set_line_width(2.0);
-    for i in 0..n { let x = ox + i as f64 * step_x; let y = h as f64 * 0.85 - (data[i].1 / max_val) * (h as f64 * 0.7);
+    for (i, d) in data.iter().enumerate().take(n) { let x = ox + i as f64 * step_x; let y = h as f64 * 0.85 - (d.1 / max_val) * (h as f64 * 0.7);
         if i == 0 { cr.move_to(x, y); } else { cr.line_to(x, y); } }
     cr.stroke().unwrap();
     for (i, (label, _)) in data.iter().enumerate() { cr.set_source_rgb(0.1, 0.1, 0.1); cr.move_to(ox + i as f64 * step_x, h as f64 * 0.92); cr.show_text(label).unwrap(); }

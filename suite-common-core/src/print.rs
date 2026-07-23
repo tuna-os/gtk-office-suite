@@ -109,8 +109,7 @@ mod tests {
 
     #[test]
     fn test_landscape_swaps_dimensions() {
-        let mut setup = PageSetup::default();
-        setup.orientation = Orientation::Landscape;
+        let setup = PageSetup { orientation: Orientation::Landscape, ..Default::default() };
         let (w, h) = setup.page_dimensions_mm();
         assert!((w - 297.0).abs() < 0.1); // swapped
         assert!((h - 210.0).abs() < 0.1);
