@@ -34,7 +34,7 @@ jobs:
 
       - name: Install GUI test dependencies
         run: |
-          sudo apt-get install -y -qq xvfb dbus at-spi2-core \
+          sudo apt-get install -y -qq xvfb dbus at-spi2-core matchbox-window-manager \
             python3-dogtail python3-pytest python3-pil python3-requests
           python3 -m pip install --break-system-packages mss
 
@@ -72,7 +72,7 @@ jobs:
 
       - name: Install GUI test dependencies
         run: |
-          sudo apt-get install -y -qq xvfb dbus at-spi2-core \
+          sudo apt-get install -y -qq xvfb dbus at-spi2-core matchbox-window-manager \
             python3-dogtail python3-pytest python3-pil python3-requests
           python3 -m pip install --break-system-packages mss
 

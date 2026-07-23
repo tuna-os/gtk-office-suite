@@ -11,7 +11,11 @@ from io import BytesIO
 import mss
 import requests
 from PIL import Image
-from dogtail import tree
+from dogtail import tree, rawinput
+
+_dogtail_click = rawinput.click
+_dogtail_key_combo = rawinput.keyCombo
+_dogtail_type_text = rawinput.typeText
 
 class BaseGUITestCase(unittest.TestCase):
     app_name = None  # to be overridden by subclasses
@@ -50,9 +54,13 @@ class BaseGUITestCase(unittest.TestCase):
 
         # Wait for application node in AT-SPI tree
         self.app = self.wait_for_app(self.app_name)
+        self._activate_window()
         self.last_screenshot = None
 
     def tearDown(self):
+        rawinput.click = _dogtail_click
+        rawinput.keyCombo = _dogtail_key_combo
+        rawinput.typeText = _dogtail_type_text
         if hasattr(self, "process") and self.process:
             self.process.terminate()
             try:
@@ -72,6 +80,84 @@ class BaseGUITestCase(unittest.TestCase):
                 return code
             time.sleep(0.1)
         return self.process.poll()
+
+    def _activate_window(self):
+        """dogtail.rawinput's keyboard/mouse synthesis goes through AT-SPI's
+        DeviceEventController (Registry.generateKeyboardEvent/
+        generateMouseEvent), which is a D-Bus call asking the AT-SPI
+        registry daemon to synthesize XTEST events on the caller's behalf.
+        In this harness that call succeeds without error but the events
+        never arrive at the app — confirmed by direct probing: xdotool's
+        own XTest calls (which bypass the AT-SPI registry entirely) work
+        correctly against the exact same window in the exact same
+        session. So this replaces the 3 rawinput entry points test_smoke
+        actually uses (click/keyCombo/typeText) with xdotool-backed
+        equivalents scoped to this test's window, rather than trying to
+        fix the AT-SPI daemon's XTest bridge itself.
+
+        Re-activating the window before every call (not just once here)
+        matters too: a test that clicks "New Document" or opens a dialog
+        after setUp can end up with a widget that never got real X focus,
+        since GTK's internal focus-follows-widget-creation doesn't
+        re-assert top-level X focus on its own."""
+        win_id = None
+        try:
+            result = subprocess.run(
+                ["xdotool", "search", "--pid", str(self.process.pid)],
+                capture_output=True, text=True, timeout=5,
+            )
+            win_ids = [w for w in result.stdout.split() if w]
+            if win_ids:
+                win_id = win_ids[-1]
+                subprocess.run(["xdotool", "windowactivate", "--sync", win_id],
+                                capture_output=True, timeout=5)
+        except (FileNotFoundError, subprocess.TimeoutExpired) as e:
+            print(f"Warning: window activation failed ({e}); rawinput tests may not receive input")
+            return
+        if win_id is None:
+            return
+
+        def reactivate():
+            try:
+                subprocess.run(["xdotool", "windowactivate", "--sync", win_id],
+                                capture_output=True, timeout=2)
+            except (FileNotFoundError, subprocess.TimeoutExpired):
+                pass
+
+        def click(x, y, button=1, check=True):
+            reactivate()
+            subprocess.run(
+                ["xdotool", "mousemove", "--sync", str(int(x)), str(int(y)),
+                 "click", str(button)],
+                capture_output=True, timeout=5,
+            )
+
+        def key_combo(combo_string):
+            # Dogtail's own syntax: '<Control>k' -> tokens ['Control', 'k'].
+            # Reuse its alias table (control -> Control_L etc.) so the
+            # tokens are valid X keysym names, then join for xdotool.
+            tokens = []
+            for s in combo_string.split('<'):
+                if s:
+                    for tok in s.split('>'):
+                        if tok:
+                            tokens.append(rawinput.keyNameAliases.get(tok.lower(), tok))
+            reactivate()
+            subprocess.run(
+                ["xdotool", "key", "--window", win_id, "+".join(tokens)],
+                capture_output=True, timeout=5,
+            )
+
+        def type_text(text):
+            reactivate()
+            subprocess.run(
+                ["xdotool", "type", "--window", win_id, "--", text],
+                capture_output=True, timeout=10,
+            )
+
+        rawinput.click = click
+        rawinput.keyCombo = key_combo
+        rawinput.typeText = type_text
 
     def wait_for_app(self, name: str, timeout: float = 15.0) -> "tree.Node":
         deadline = time.monotonic() + timeout
