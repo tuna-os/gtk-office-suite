@@ -41,14 +41,14 @@ jobs:
           flatpak build-bundle --oci --arch=x86_64 repo ${{ matrix.app }}.oci org.tunaos.${{ matrix.app }}
 
       - name: Upload OCI artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: ${{ matrix.app }}-oci
           path: ${{ matrix.app }}.oci/
           retention-days: 1
 
       - name: Upload bundle artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: ${{ matrix.app }}-bundle
           path: ${{ matrix.app }}.flatpak
@@ -67,7 +67,7 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           name: ${{ matrix.app }}-oci
           path: ${{ matrix.app }}.oci
@@ -107,7 +107,7 @@ jobs:
     if: startsWith(github.ref, 'refs/tags/')
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           pattern: '*-bundle'
           merge-multiple: true
