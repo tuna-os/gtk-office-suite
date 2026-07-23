@@ -15,7 +15,7 @@ suite-common-core = { path = "../suite-common-core", version = "0.1.0" }
 letters-core = { path = "../letters-core", version = "0.1.0" }
 suite-export = { path = "../suite-export", version = "0.1.0" }
 ironcalc_base = "0.7"
-calamine = "0.26"
+calamine = "0.36"
 rust_xlsxwriter = "0.80"
 regex = "1"
 zip = "2.0"
