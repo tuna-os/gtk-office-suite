@@ -1,4 +1,5 @@
 pub mod actions;
+pub mod atomic_save;
 pub mod palette;
 pub mod format;
 pub mod undo;
