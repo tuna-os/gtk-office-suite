@@ -821,7 +821,7 @@ dependencies = [
  "pango",
  "pangocairo",
  "pulldown-cmark",
- "quick-xml 0.31.0",
+ "quick-xml 0.41.0",
  "suite-common",
  "suite-export",
  "zip 2.4.2",
@@ -832,7 +832,7 @@ name = "decks-core"
 version = "0.1.0"
 dependencies = [
  "letters-core",
- "quick-xml 0.31.0",
+ "quick-xml 0.41.0",
  "suite-common-core",
  "tempfile",
  "zip 2.4.2",
@@ -2305,7 +2305,7 @@ name = "letters-core"
 version = "0.1.0"
 dependencies = [
  "pulldown-cmark",
- "quick-xml 0.31.0",
+ "quick-xml 0.41.0",
  "rdocx",
  "serde",
  "serde_json",
