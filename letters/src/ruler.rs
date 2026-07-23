@@ -13,6 +13,7 @@
 
 use gtk4::{self as gtk, gio, glib, prelude::*};
 use gtk4::subclass::prelude::*;
+use libadwaita as adw;
 use std::cell::{Cell, RefCell};
 
 const RULER_HEIGHT: i32 = 28;
@@ -95,6 +96,15 @@ mod imp {
             let h = self.obj().height() as f64;
             if w <= 0.0 || h <= 0.0 { return; }
 
+            // Dark-mode-aware ruler palette (tuna-os/gtk-office-suite#76).
+            let is_dark = adw::StyleManager::default().is_dark();
+            let bg = if is_dark { (0.16, 0.16, 0.16) } else { (0.95, 0.95, 0.93) };
+            let border = if is_dark { (0.35, 0.35, 0.35) } else { (0.7, 0.7, 0.7) };
+            let tick = if is_dark { (0.6, 0.6, 0.6) } else { (0.5, 0.5, 0.5) };
+            let ink = if is_dark { (0.8, 0.8, 0.8) } else { (0.3, 0.3, 0.3) };
+            let margin_shade = if is_dark { (0.4, 0.4, 0.4, 0.4) } else { (0.85, 0.85, 0.85, 0.4) };
+            let marker = if is_dark { (0.7, 0.7, 0.7) } else { (0.4, 0.4, 0.4) };
+
             let pw = self.page_width.get();
             let ml = self.margin_left.get();
 
@@ -116,12 +126,12 @@ mod imp {
             let ruler_h = h;
 
             // ── Background ──
-            cr.set_source_rgb(0.95, 0.95, 0.93);
+            cr.set_source_rgb(bg.0, bg.1, bg.2);
             cr.rectangle(0.0, 0.0, w, ruler_h);
             cr.fill().unwrap();
 
             // ── Bottom border ──
-            cr.set_source_rgb(0.7, 0.7, 0.7);
+            cr.set_source_rgb(border.0, border.1, border.2);
             cr.set_line_width(1.0);
             cr.move_to(0.0, ruler_h - 0.5);
             cr.line_to(w, ruler_h - 0.5);
@@ -142,7 +152,7 @@ mod imp {
                 let tick_top = if is_major { 4.0 } else { 12.0 };
                 let tick_bottom = ruler_h - 4.0;
 
-                cr.set_source_rgb(0.5, 0.5, 0.5);
+                cr.set_source_rgb(tick.0, tick.1, tick.2);
                 cr.set_line_width(if is_major { 1.0 } else { 0.5 });
                 cr.move_to(x, tick_top);
                 cr.line_to(x, tick_bottom);
@@ -155,7 +165,7 @@ mod imp {
                     } else {
                         format!("{}", tick_idx / 4 + 1)
                     };
-                    cr.set_source_rgb(0.3, 0.3, 0.3);
+                    cr.set_source_rgb(ink.0, ink.1, ink.2);
                     cr.set_font_size(9.0);
                     cr.move_to(x - 6.0, 10.0);
                     let _ = cr.show_text(&label);
@@ -166,7 +176,7 @@ mod imp {
             }
 
             // ── Margin shading (outside page margins) ──
-            cr.set_source_rgba(0.85, 0.85, 0.85, 0.4);
+            cr.set_source_rgba(margin_shade.0, margin_shade.1, margin_shade.2, margin_shade.3);
             // Left margin area (page left edge → left margin)
             cr.rectangle(to_x(0.0), 0.0, (ml * scale).max(0.0), ruler_h);
             cr.fill().unwrap();
@@ -179,7 +189,7 @@ mod imp {
             // ── Right margin marker (triangle at right edge) ──
             {
                 let rx = to_x(pw - mr);
-                cr.set_source_rgb(0.4, 0.4, 0.4);
+                cr.set_source_rgb(marker.0, marker.1, marker.2);
                 cr.move_to(rx, ruler_h);
                 cr.line_to(rx - 5.0, ruler_h - 10.0);
                 cr.line_to(rx + 5.0, ruler_h - 10.0);
@@ -194,7 +204,7 @@ mod imp {
             // First-line indent (top triangle pointing down)
             {
                 let ix = to_x(fl);
-                cr.set_source_rgb(0.3, 0.3, 0.3);
+                cr.set_source_rgb(ink.0, ink.1, ink.2);
                 cr.move_to(ix, 0.0);
                 cr.line_to(ix - 5.0, 10.0);
                 cr.line_to(ix + 5.0, 10.0);
@@ -205,7 +215,7 @@ mod imp {
             // Left indent (bottom triangle pointing up)
             {
                 let ix = to_x(li);
-                cr.set_source_rgb(0.3, 0.3, 0.3);
+                cr.set_source_rgb(ink.0, ink.1, ink.2);
                 cr.move_to(ix, ruler_h);
                 cr.line_to(ix - 5.0, ruler_h - 10.0);
                 cr.line_to(ix + 5.0, ruler_h - 10.0);
@@ -217,7 +227,7 @@ mod imp {
             for (i, ts) in self.tab_stops.borrow().iter().enumerate() {
                 let tx = to_x(ts.position_pt);
                 if tx < 0.0 || tx > w { continue; }
-                cr.set_source_rgb(0.4, 0.4, 0.4);
+                cr.set_source_rgb(marker.0, marker.1, marker.2);
                 cr.set_line_width(1.0);
                 cr.move_to(tx, ruler_h - 12.0);
                 cr.line_to(tx, ruler_h - 4.0);

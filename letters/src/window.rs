@@ -1551,8 +1551,9 @@ fn show_header_footer_dialog(pc: &crate::page_container::PageContainer) {
     dialog.set_default_response(Some("apply"));
     dialog.set_response_appearance("apply", adw::ResponseAppearance::Suggested);
 
+    let parent = pc.root().and_downcast::<adw::ApplicationWindow>();
     let pc = pc.clone();
-    dialog.choose(None::<&gtk4::Window>, None::<&gtk4::gio::Cancellable>, move |response| {
+    dialog.choose(parent.as_ref(), None::<&gtk4::gio::Cancellable>, move |response| {
         if response.as_str() == "apply" {
             pc.set_header_text(&hdr_entry.text());
             pc.set_footer_text(&ftr_entry.text());
