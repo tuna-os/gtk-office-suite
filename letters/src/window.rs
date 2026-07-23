@@ -585,21 +585,36 @@ impl LettersWindow {
                 }
                 if dirty.is_empty() { return glib::Propagation::Proceed; }
                 let body = format!(
-                    "The following documents have unsaved changes:\n• {}\nAll unsaved changes will be discarded if you close Letters now.",
+                    "The following documents have unsaved changes:\n• {}\nChoose Save All to keep your changes, or Discard All to close without saving.",
                     dirty.join("\n• ")
                 );
                 let dialog = adw::AlertDialog::new(Some("Unsaved changes"), Some(body.as_str()));
-                dialog.add_responses(&[("cancel", "_Cancel"), ("discard", "_Discard All")]);
+                dialog.add_responses(&[("cancel", "_Cancel"), ("discard", "_Discard All"), ("save", "_Save All")]);
                 dialog.set_close_response("cancel");
-                dialog.set_default_response(Some("cancel"));
+                dialog.set_default_response(Some("save"));
+                dialog.set_response_appearance("save", adw::ResponseAppearance::Suggested);
                 dialog.set_response_appearance("discard", adw::ResponseAppearance::Destructive);
                 let win_weak = win.downgrade();
                 let force_close_clone = force_close.clone();
+                let tv_clone = tv.clone();
                 dialog.choose(Some(win), None::<&gio::Cancellable>,
                     move |response: glib::GString| {
-                        if response == "discard" {
-                            force_close_clone.set(true);
-                            if let Some(w) = win_weak.upgrade() { w.close(); }
+                        match response.as_str() {
+                            "discard" => {
+                                force_close_clone.set(true);
+                                if let Some(w) = win_weak.upgrade() { w.close(); }
+                            }
+                            "save" => {
+                                if let Some(w) = win_weak.upgrade() {
+                                    let n = tv_clone.n_pages();
+                                    let queue: std::collections::VecDeque<adw::TabPage> = (0..n)
+                                        .map(|i| tv_clone.nth_page(i))
+                                        .filter(|p| p.needs_attention())
+                                        .collect();
+                                    close_all_dirty_pages(w, tv_clone.clone(), queue, force_close_clone.clone());
+                                }
+                            }
+                            _ => {}
                         }
                     },
                 );
@@ -1186,6 +1201,7 @@ impl LettersWindow {
                                             let doc = crate::engine::Document::from_text(&text);
                                             let _ = crate::engine::write(&path_str, &doc);
                                         }
+                                        buf.set_modified(false);
                                     }
                                     page.set_needs_attention(false);
                                     if let Some(name) = file.basename() { page.set_title(&name.display().to_string()); }
@@ -1561,29 +1577,87 @@ fn show_header_footer_dialog(pc: &crate::page_container::PageContainer) {
     });
 }
 
+/// Save `page`'s document to its already-known file path, if it has one.
+/// Returns `false` (no-op) for a never-saved tab — callers fall back to a
+/// Save As prompt in that case. Clears both the buffer's GTK-level modified
+/// flag and the tab's `needs-attention` so later edits re-trigger dirty
+/// tracking correctly (leaving the GTK flag stuck `true` after a save would
+/// mean the next edit doesn't re-fire `modified-changed`, silently defeating
+/// the close guard).
+fn save_page(page: &adw::TabPage) -> bool {
+    let child = page.child();
+    let Some(td) = tab_data_get(&child) else { return false };
+    let path = td.0.borrow().file.clone();
+    let Some(path) = path else { return false };
+    // All formats route through letters-core via the bridge; formatting
+    // survives in both markdown and docx now.
+    if let Some(buf) = get_textview(&child).map(|tv| tv.buffer()) {
+        let path_str = path.to_string_lossy().to_string();
+        if let Err(e) = crate::bridge::save_buffer_to_file(&buf, &path_str) {
+            eprintln!("save failed: {e}");
+        }
+        buf.set_modified(false);
+    }
+    page.set_needs_attention(false);
+    if let Some(name) = path.file_name().and_then(|s| s.to_str()) {
+        page.set_title(name);
+    }
+    true
+}
+
 fn do_save(tv: &adw::TabView, _stack: &gtk4::Stack) {
     if let Some(page) = tv.selected_page() {
         if !page.needs_attention() { return; }
-        let child = page.child();
-        if let Some(td) = tab_data_get(&child) {
-            let path = td.0.borrow().file.clone();
-            if let Some(path) = path {
-                let buf = get_textview(&child).map(|tv| tv.buffer());
-                if let Some(buf) = buf {
-                    let path_str = path.to_string_lossy().to_string();
-                    // All formats route through letters-core via the bridge;
-                    // formatting survives in both markdown and docx now.
-                    if let Err(e) = crate::bridge::save_buffer_to_file(&buf, &path_str) {
-                        eprintln!("save failed: {e}");
-                    }
-                }
-                page.set_needs_attention(false);
-                if let Some(name) = path.file_name().and_then(|s| s.to_str()) {
-                    page.set_title(name);
-                }
-            }
-        }
+        save_page(&page);
     }
+}
+
+/// Save every dirty page in `queue`, prompting Save As for any tab that has
+/// never been saved to a path, then close the window. A cancelled Save As
+/// aborts the whole close (window stays open, remaining queue is dropped) —
+/// the safe default, matching the per-tab close guard's Cancel behavior.
+fn close_all_dirty_pages(
+    win: adw::ApplicationWindow,
+    tv: adw::TabView,
+    mut queue: std::collections::VecDeque<adw::TabPage>,
+    force_close: Rc<std::cell::Cell<bool>>,
+) {
+    while let Some(page) = queue.pop_front() {
+        if save_page(&page) {
+            continue;
+        }
+        let dlg = gtk::FileDialog::new();
+        let f = gtk::FileFilter::new();
+        f.add_pattern("*.md"); f.add_pattern("*.txt"); f.add_pattern("*.docx"); f.add_pattern("*.odt");
+        f.set_name(Some("Documents"));
+        let fl = gio::ListStore::new::<gtk::FileFilter>();
+        fl.append(&f);
+        dlg.set_filters(Some(&fl));
+        dlg.set_initial_name(Some(&page.title()));
+        let win2 = win.clone();
+        let tv2 = tv.clone();
+        let force_close2 = force_close.clone();
+        let page2 = page.clone();
+        dlg.save(Some(&win), None::<&gio::Cancellable>, move |result| {
+            let Ok(file) = result else { return };
+            let Some(path) = file.path() else { return };
+            let child = page2.child();
+            if let Some(buf) = get_textview(&child).map(|tv| tv.buffer()) {
+                let path_str = path.to_string_lossy().to_string();
+                if let Err(e) = crate::bridge::save_buffer_to_file(&buf, &path_str) {
+                    eprintln!("save failed: {e}");
+                }
+                buf.set_modified(false);
+            }
+            page2.set_needs_attention(false);
+            if let Some(name) = file.basename() { page2.set_title(&name.display().to_string()); }
+            if let Some(td) = tab_data_get(&child) { td.0.borrow_mut().file = file.path(); }
+            close_all_dirty_pages(win2, tv2, queue, force_close2);
+        });
+        return;
+    }
+    force_close.set(true);
+    win.close();
 }
 
 // ── Tab context menu ─────────────────────────────────────────────────

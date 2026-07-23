@@ -164,6 +164,73 @@ class LettersFileRoundTripSmoke(BaseGUITestCase):
         self.assertIn("hello world edited", saved, f"saved file: {saved!r}")
 
 
+class LettersCloseGuardSmoke(BaseGUITestCase):
+    """Real GTK journey: closing Letters with unsaved tabs offers Save
+    All/Discard All/Cancel (issue #99), same contract as Tables/Decks.
+    Unlike those two, Letters' window-level guard must drive a Save As
+    dialog for a never-saved tab (Save All has no existing path to write
+    straight to) before it can close."""
+
+    app_name = "letters"
+
+    def setUp(self):
+        import tempfile
+        self._dir = tempfile.mkdtemp(prefix="letters-close-guard-")
+        super().setUp()
+
+    def tearDown(self):
+        super().tearDown()
+        import shutil
+        shutil.rmtree(self._dir, ignore_errors=True)
+
+    def _type_into_new_document(self):
+        from dogtail import rawinput
+
+        self.app.child(name="New Document", roleName="push button").do_action(0)
+        time.sleep(1.5)
+        rawinput.typeText("unsaved letters content")
+        time.sleep(0.5)
+
+    def test_cancel_keeps_window_open_then_discard_closes(self):
+        self._type_into_new_document()
+
+        self.app.child(name="Close", roleName="push button").do_action(0)
+        time.sleep(0.8)
+        self.app.child(name="Cancel", roleName="push button").do_action(0)
+        time.sleep(0.5)
+        self.assertIsNone(self.process.poll(), "Cancel must not close the window")
+        self.assertIsNotNone(self.app.child(roleName="frame"), "window should still be open")
+
+        self.app.child(name="Close", roleName="push button").do_action(0)
+        time.sleep(0.8)
+        self.app.child(name="Discard All", roleName="push button").do_action(0)
+        self.assertIsNotNone(self.wait_for_process_exit(), "Discard must close the window")
+
+    def test_save_in_close_guard_prompts_save_as_writes_and_closes(self):
+        from dogtail import tree
+
+        self._type_into_new_document()
+        out_path = os.path.join(self._dir, "close-guard-save.md")
+
+        self.app.child(name="Close", roleName="push button").do_action(0)
+        time.sleep(0.8)
+        self.app.child(name="Save All", roleName="push button").do_action(0)
+        time.sleep(1.0)
+
+        name_entry = tree.root.findChild(lambda n: n.name == "Name:" and n.roleName == "text")
+        name_entry.text = out_path
+        time.sleep(0.3)
+        confirm = tree.root.findChild(lambda n: n.name == "Save" and n.roleName == "push button")
+        confirm.do_action(0)
+
+        self.assertIsNotNone(self.wait_for_process_exit(),
+                              "Save must close the window once the Save As dialog completes")
+        self.assertTrue(os.path.exists(out_path), "the document was not written to disk")
+        with open(out_path) as f:
+            saved = f.read()
+        self.assertIn("unsaved letters content", saved, f"saved file: {saved!r}")
+
+
 class TablesSmoke(BaseGUITestCase):
     app_name = "tables"
 
