@@ -329,9 +329,10 @@ pub fn save_sheets_to_xlsx_with_engine(
                 .map_err(|e| format!("Chart error: {}", e))?;
         }
     }
-    workbook
-        .save(path)
+    let bytes = workbook
+        .save_to_buffer()
         .map_err(|e| format!("Save error: {}", e))?;
+    suite_common_core::atomic_save::atomic_write_bytes(std::path::Path::new(path), &bytes)?;
     Ok(())
 }
 

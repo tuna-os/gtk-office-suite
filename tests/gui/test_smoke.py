@@ -231,6 +231,71 @@ class TablesMultiSheetSmoke(BaseGUITestCase):
         self.assertNotIn("6", grid.description, "Sheet2's value leaked into Sheet1")
 
 
+class TablesCloseGuardSmoke(BaseGUITestCase):
+    """Real GTK journey: closing a dirty workbook offers Save/Discard/Cancel
+    (issue #99) instead of silently discarding unsaved work."""
+
+    app_name = "tables"
+
+    def setUp(self):
+        import tempfile
+        self._dir = tempfile.mkdtemp(prefix="tables-close-guard-")
+        super().setUp()
+
+    def tearDown(self):
+        super().tearDown()
+        import shutil
+        shutil.rmtree(self._dir, ignore_errors=True)
+
+    def _edit_a1(self):
+        import subprocess
+        from dogtail import rawinput
+
+        subprocess.run(["gapplication", "action", "org.tunaos.tables-rust", "new-document"])
+        time.sleep(1.5)
+        rawinput.typeText("=1+1")
+        rawinput.keyCombo("Return")
+        time.sleep(0.5)
+
+    def test_cancel_keeps_window_open_then_discard_closes(self):
+        self._edit_a1()
+
+        self.app.child(name="Close", roleName="push button").do_action(0)
+        time.sleep(0.8)
+        self.app.child(name="Cancel", roleName="push button").do_action(0)
+        time.sleep(0.5)
+        self.assertIsNone(self.process.poll(), "Cancel must not close the window")
+        self.assertIsNotNone(self.app.child(roleName="frame"), "window should still be open")
+
+        self.app.child(name="Close", roleName="push button").do_action(0)
+        time.sleep(0.8)
+        self.app.child(name="Discard", roleName="push button").do_action(0)
+        time.sleep(1.0)
+        self.assertIsNotNone(self.process.poll(), "Discard must close the window")
+
+    def test_save_in_close_guard_writes_the_file_and_closes(self):
+        from dogtail import tree
+
+        self._edit_a1()
+        out_path = os.path.join(self._dir, "close-guard-save.xlsx")
+
+        self.app.child(name="Close", roleName="push button").do_action(0)
+        time.sleep(0.8)
+        self.app.child(name="Save", roleName="push button").do_action(0)
+        time.sleep(1.0)
+
+        name_entry = tree.root.findChild(lambda n: n.name == "Name:" and n.roleName == "text")
+        name_entry.text = out_path
+        time.sleep(0.3)
+        confirm = tree.root.findChild(lambda n: n.name == "Save" and n.roleName == "push button")
+        confirm.do_action(0)
+        time.sleep(1.5)
+
+        self.assertIsNotNone(self.process.poll(), "Save must close the window once it succeeds")
+        self.assertTrue(os.path.exists(out_path), "the workbook was not written to disk")
+        self.assertGreater(os.path.getsize(out_path), 0)
+
+
 class TablesUndoSaveReopenSmoke(BaseGUITestCase):
     """Real GTK journey: edit, undo, redo, save, restart, and reopen."""
 

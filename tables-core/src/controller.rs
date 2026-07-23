@@ -304,6 +304,11 @@ impl Command<WorkbookState> for CellBatchCommand {
 pub struct WorkbookController {
     pub state: Rc<RefCell<WorkbookState>>,
     undo: UndoManager<WorkbookState>,
+    /// True whenever the workbook differs from what's on disk. Set by any
+    /// executed/undone/redone command, cleared only by [`Self::mark_clean`]
+    /// after a successful save. Undoing back to a prior save point does not
+    /// re-clean the flag — a conservative simplification (issue #99).
+    dirty: bool,
 }
 
 impl WorkbookController {
@@ -311,13 +316,30 @@ impl WorkbookController {
         let state = Rc::new(RefCell::new(WorkbookState::new(rows, cols)?));
         let mut undo = UndoManager::new(state.clone());
         undo.broadcaster = Some(Rc::new(Broadcaster::new()));
-        Ok(Self { state, undo })
+        Ok(Self { state, undo, dirty: false })
     }
 
     pub fn listen_history(&self, listener: Rc<dyn Listener<Hint>>) {
         if let Some(broadcaster) = &self.undo.broadcaster {
             broadcaster.listen(listener);
         }
+    }
+
+    /// Execute a command and mark the workbook dirty. Every mutation must
+    /// route through this (not `self.undo.execute` directly) so dirty state
+    /// can never drift from what the undo history actually did.
+    fn execute(&mut self, cmd: Box<dyn Command<WorkbookState>>) {
+        self.undo.execute(cmd);
+        self.dirty = true;
+    }
+
+    pub fn is_dirty(&self) -> bool {
+        self.dirty
+    }
+
+    /// Call after a successful save.
+    pub fn mark_clean(&mut self) {
+        self.dirty = false;
     }
 
     pub fn edit_cell(&mut self, row: usize, col: usize, input: impl Into<String>) {
@@ -329,7 +351,7 @@ impl WorkbookController {
         if old_input == new_input {
             return;
         }
-        self.undo.execute(Box::new(CellInputCommand {
+        self.execute(Box::new(CellInputCommand {
             sheet_id,
             row,
             col,
@@ -354,7 +376,7 @@ impl WorkbookController {
         drop(state);
         let mut after = before.clone();
         mutation(&mut after);
-        self.undo.execute(Box::new(SheetSnapshotCommand {
+        self.execute(Box::new(SheetSnapshotCommand {
             sheet_id,
             before,
             after,
@@ -490,7 +512,7 @@ impl WorkbookController {
             .map(|&row| before_sheet.validations[row].clone())
             .collect();
 
-        self.undo.execute(Box::new(SortCommand {
+        self.execute(Box::new(SortCommand {
             sheet_id,
             before_inputs,
             after_inputs,
@@ -505,7 +527,7 @@ impl WorkbookController {
     pub fn record_sheet_mutation(&mut self, description: &'static str, before: SheetModel) {
         let after = self.state.borrow().sheet().clone();
         let sheet_id = self.state.borrow().sheet().sheet_id;
-        self.undo.execute(Box::new(SheetSnapshotCommand {
+        self.execute(Box::new(SheetSnapshotCommand {
             sheet_id,
             before,
             after,
@@ -514,11 +536,19 @@ impl WorkbookController {
     }
 
     pub fn undo(&mut self) -> bool {
-        self.undo.undo()
+        let did = self.undo.undo();
+        if did {
+            self.dirty = true;
+        }
+        did
     }
 
     pub fn redo(&mut self) -> bool {
-        self.undo.redo()
+        let did = self.undo.redo();
+        if did {
+            self.dirty = true;
+        }
+        did
     }
 
     pub fn can_undo(&self) -> bool {
@@ -840,5 +870,41 @@ mod tests {
         assert_eq!(state.sheets[0].borrow().name, "Sheet2");
         assert_eq!(state.sheets[0].borrow().cell(0, 0), "on-sheet-2");
         assert_eq!(state.sheets[1].borrow().col_width(0), 200.0);
+    }
+
+    #[test]
+    fn dirty_tracks_every_mutating_action_and_clears_only_on_mark_clean() {
+        let mut controller = WorkbookController::new(2, 2).unwrap();
+        assert!(!controller.is_dirty(), "a fresh workbook should not be dirty");
+
+        controller.edit_cell(0, 0, "5");
+        assert!(controller.is_dirty());
+
+        controller.mark_clean();
+        assert!(!controller.is_dirty());
+
+        // Undo/redo also move the workbook away from the saved state.
+        controller.edit_cell(0, 1, "6");
+        controller.mark_clean();
+        assert!(controller.undo());
+        assert!(controller.is_dirty(), "undo must dirty a just-saved workbook");
+
+        controller.mark_clean();
+        assert!(controller.redo());
+        assert!(controller.is_dirty(), "redo must dirty a just-saved workbook");
+    }
+
+    #[test]
+    fn dirty_tracks_sheet_mutations_and_sort_too() {
+        let mut controller = WorkbookController::new(2, 2).unwrap();
+        controller.mutate_sheet("Freeze Panes", |sheet| sheet.frozen_rows = 1);
+        assert!(controller.is_dirty());
+        controller.mark_clean();
+
+        controller.edit_cell(0, 0, "2");
+        controller.edit_cell(1, 0, "1");
+        controller.mark_clean();
+        controller.toggle_sort(0);
+        assert!(controller.is_dirty(), "sort is a mutation and must dirty the workbook");
     }
 }

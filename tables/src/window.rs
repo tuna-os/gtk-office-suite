@@ -6,7 +6,7 @@
 use gtk4::cairo::{self, Context};
 use gtk4::{self as gtk, gio, glib, prelude::*};
 use libadwaita as adw;
-use adw::prelude::{AdwDialogExt, AlertDialogExt};
+use adw::prelude::{AdwDialogExt, AlertDialogExt, AlertDialogExtManual};
 use std::cell::{Cell, RefCell};
 use std::rc::Rc;
 
@@ -65,7 +65,7 @@ impl TablesWindow {
                 .expect("Failed to create spreadsheet controller"),
         ));
         let state = controller.borrow().state.clone();
-        let current_path = Rc::new(RefCell::new(None));
+        let current_path: Rc<RefCell<Option<std::path::PathBuf>>> = Rc::new(RefCell::new(None));
 
         // ── Scrolling ──────────────────────────────────────────────────
         let h_adj = gtk4::Adjustment::new(0.0, 0.0, 5000.0, 10.0, 50.0, 500.0);
@@ -1129,6 +1129,110 @@ impl TablesWindow {
         suite_win.set_content(&stack);
         suite_win.add_bottom_bar(&sheet_bar);
 
+        // ── Window close-request: Save / Discard / Cancel guard ──────────
+        // Mirrors Letters' force_close re-entrancy pattern: close-request
+        // can't await a dialog response, so the handler stops the first
+        // close, and the dialog's own response re-invokes .close() with the
+        // guard set so this handler lets it through the second time.
+        {
+            let ctl = controller.clone();
+            let s = state.clone();
+            let path_state = current_path.clone();
+            let force_close = Rc::new(Cell::new(false));
+            suite_win.window.connect_close_request(move |win| {
+                if force_close.get() {
+                    return gtk4::glib::Propagation::Proceed;
+                }
+                if !ctl.borrow().is_dirty() {
+                    return gtk4::glib::Propagation::Proceed;
+                }
+                let dialog = adw::AlertDialog::builder()
+                    .heading("Save changes?")
+                    .body("This workbook has unsaved changes. If you close without saving, they will be lost.")
+                    .build();
+                dialog.add_responses(&[
+                    ("cancel", "_Cancel"),
+                    ("discard", "_Discard"),
+                    ("save", "_Save"),
+                ]);
+                dialog.set_close_response("cancel");
+                dialog.set_default_response(Some("save"));
+                dialog.set_response_appearance("discard", adw::ResponseAppearance::Destructive);
+                dialog.set_response_appearance("save", adw::ResponseAppearance::Suggested);
+
+                let win_weak = win.downgrade();
+                let force_close = force_close.clone();
+                let ctl = ctl.clone();
+                let s = s.clone();
+                let path_state = path_state.clone();
+                dialog.choose(Some(win), None::<&gio::Cancellable>, move |response: glib::GString| {
+                    let Some(win) = win_weak.upgrade() else { return };
+                    if response == "discard" {
+                        force_close.set(true);
+                        win.close();
+                        return;
+                    }
+                    if response != "save" {
+                        return;
+                    }
+                    let existing_path = path_state.borrow().clone();
+                    if let Some(path) = existing_path {
+                        match save_engine_to_xlsx(&path.to_string_lossy(), &s.borrow()) {
+                            Ok(()) => {
+                                ctl.borrow_mut().mark_clean();
+                                force_close.set(true);
+                                win.close();
+                            }
+                            Err(e) => {
+                                let err = adw::AlertDialog::builder()
+                                    .heading("Error saving file")
+                                    .body(&e)
+                                    .build();
+                                err.add_response("ok", "OK");
+                                err.present(Some(&win));
+                            }
+                        }
+                        return;
+                    }
+                    // Never saved: prompt for a destination, then close only
+                    // once that save actually succeeds.
+                    let dlg = gtk4::FileDialog::new();
+                    let f = gtk4::FileFilter::new();
+                    f.add_suffix("xlsx");
+                    f.set_name(Some("Excel Workbook (.xlsx)"));
+                    let fl = gio::ListStore::new::<gtk4::FileFilter>();
+                    fl.append(&f);
+                    dlg.set_filters(Some(&fl));
+                    dlg.set_initial_name(Some("Untitled.xlsx"));
+                    let win2 = win.clone();
+                    dlg.save(Some(&win), None::<&gio::Cancellable>, move |result| {
+                        if let Ok(file) = result {
+                            if let Some(path) = file.path() {
+                                let path_str = path.to_string_lossy().to_string();
+                                match save_engine_to_xlsx(&path_str, &s.borrow()) {
+                                    Ok(()) => {
+                                        *path_state.borrow_mut() = Some(path);
+                                        ctl.borrow_mut().mark_clean();
+                                        force_close.set(true);
+                                        win2.close();
+                                    }
+                                    Err(e) => {
+                                        let err = adw::AlertDialog::builder()
+                                            .heading("Error saving file")
+                                            .body(&e)
+                                            .build();
+                                        err.add_response("ok", "OK");
+                                        err.present(Some(&win2));
+                                    }
+                                }
+                            }
+                        }
+                    });
+                });
+                gtk4::glib::Propagation::Stop
+            });
+        }
+
         // ── App actions ─────────────────────────────────────────────────
         let st = stack.clone();
         let fx = fx_entry.clone();
@@ -1227,6 +1331,7 @@ impl TablesWindow {
         // File Save action
         {
             let s = state.clone();
+            let ctl = controller.clone();
             let w = suite_win.window.clone();
             let path_state = current_path.clone();
             // no toast for now
@@ -1241,7 +1346,8 @@ impl TablesWindow {
                 fl.append(&f);
                 dlg.set_filters(Some(&fl));
                 dlg.set_initial_name(Some("Untitled.xlsx"));
-                let s = s.clone(); let w2 = w.clone(); let path_state = path_state.clone();
+                let s = s.clone(); let ctl = ctl.clone();
+                let w2 = w.clone(); let path_state = path_state.clone();
                 dlg.save(Some(&w), None::<&gio::Cancellable>,
                     move |result: Result<gio::File, glib::Error>| {
                         if let Ok(file) = result {
@@ -1250,7 +1356,9 @@ impl TablesWindow {
                                 let ss = s.borrow();
                                 match save_engine_to_xlsx(&path_str, &ss) {
                                     Ok(()) => {
+                                        drop(ss);
                                         *path_state.borrow_mut() = Some(path);
+                                        ctl.borrow_mut().mark_clean();
                                     }
                                     Err(e) => {
                                         let err = adw::AlertDialog::builder()
@@ -1271,6 +1379,7 @@ impl TablesWindow {
         }
         {
             let s = state.clone();
+            let ctl = controller.clone();
             let w = suite_win.window.clone();
             let path_state = current_path.clone();
             let app_for_save = app.clone();
@@ -1280,14 +1389,17 @@ impl TablesWindow {
                     app_for_save.activate_action("save-file-as", None);
                     return;
                 };
-                if let Err(e) = save_engine_to_xlsx(&path.to_string_lossy(), &s.borrow()) {
-                    let err = adw::AlertDialog::builder()
-                        .heading("Error saving file")
-                        .body(&e)
-                        .build();
-                    err.add_response("ok", "OK");
-                    err.set_default_response(Some("ok"));
-                    err.present(Some(&w));
+                match save_engine_to_xlsx(&path.to_string_lossy(), &s.borrow()) {
+                    Ok(()) => ctl.borrow_mut().mark_clean(),
+                    Err(e) => {
+                        let err = adw::AlertDialog::builder()
+                            .heading("Error saving file")
+                            .body(&e)
+                            .build();
+                        err.add_response("ok", "OK");
+                        err.set_default_response(Some("ok"));
+                        err.present(Some(&w));
+                    }
                 }
             });
             app.add_action(&act);
