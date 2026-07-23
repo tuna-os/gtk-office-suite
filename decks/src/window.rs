@@ -9,7 +9,7 @@ use libadwaita as adw;
 use std::cell::{Cell, RefCell};
 use std::rc::Rc;
 use suite_common::SuiteWindow;
-use decks_core::undo::{AddObjectCmd, DeleteObjectCmd, MoveObjectCmd, set_obj_position};
+use decks_core::undo::set_obj_position;
 use crate::canvas::{draw_slide, canvas_to_slide, hit_test_object, snap_to_grid, GRID_SPACING};
 use crate::sidebar::rebuild_slide_list;
 use crate::toolbar::{find_toolbar_child, build_decks_toolbar};
@@ -755,7 +755,7 @@ impl DecksWindow {
                     text: "Text".into(), x: 200.0, y: 150.0, w: 200.0, h: 40.0,
                     runs: vec![],
                 };
-                controller.execute(Box::new(AddObjectCmd::new(idx, obj)));
+                controller.add_object(idx, obj);
                 cs.queue_draw();
                 refresh();
             });
@@ -786,7 +786,7 @@ impl DecksWindow {
                     SlideObject::Circle { x: 300.0, y: 250.0, r: 80.0 }
                 };
                 drop(ss_snap);
-                controller.execute(Box::new(AddObjectCmd::new(idx, obj)));
+                controller.add_object(idx, obj);
                 cs.queue_draw();
                 refresh();
             });
@@ -825,7 +825,7 @@ impl DecksWindow {
                                 let obj = SlideObject::Image {
                                     path: p, x: 200.0, y: 200.0, w: 200.0, h: 150.0,
                                 };
-                                controller.execute(Box::new(AddObjectCmd::new(idx, obj)));
+                                controller.add_object(idx, obj);
                                 cs.queue_draw();
                             }
                         }
@@ -914,7 +914,7 @@ impl DecksWindow {
                         {
                             let obj = decks_core::fragment::paste_as_text_box(&frag, 240.0, 200.0);
                             let idx = cs_ref2.get();
-                            controller3.execute(Box::new(AddObjectCmd::new(idx, obj)));
+                            controller3.add_object(idx, obj);
                             cs2.queue_draw();
                             refresh2();
                         }
@@ -1016,12 +1016,7 @@ impl DecksWindow {
                     let net_dx = snapped_x - orig_x;
                     let net_dy = snapped_y - orig_y;
                     if net_dx != 0.0 || net_dy != 0.0 {
-                        controller.execute(Box::new(
-                            MoveObjectCmd {
-                                slide_idx: cs_ref4.get(), index: oi,
-                                dx: net_dx, dy: net_dy,
-                            }
-                        ));
+                        controller.move_object(cs_ref4.get(), oi, net_dx, net_dy);
                     }
                 }
                 ds4.set(None);
@@ -1079,12 +1074,7 @@ impl DecksWindow {
                                 let buf = tv2.buffer();
                                 let new_text = buf.text(&buf.start_iter(), &buf.end_iter(), false).to_string();
                                 if new_text != old_text {
-                                    controller2.execute(Box::new(
-                                        decks_core::undo::ChangeTextCmd {
-                                            slide_idx: cs_ref2.get(), index: oi,
-                                            old_text: old_text.clone(), new_text,
-                                        }
-                                    ));
+                                    controller2.change_text(cs_ref2.get(), oi, old_text.clone(), new_text);
                                 }
                                 ov2.unparent();
                                 cs3.queue_draw();
@@ -1193,9 +1183,7 @@ impl DecksWindow {
                                 if oi < slides[idx].objects.len() {
                                     let obj = slides[idx].objects[oi].clone();
                                     drop(slides);
-                                    controller.execute(Box::new(
-                                        DeleteObjectCmd::new(idx, oi, obj)
-                                    ));
+                                    controller.delete_object(idx, oi, obj);
                                     so.set(None);
                                     cs.queue_draw();
                                 }

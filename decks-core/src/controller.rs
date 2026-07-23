@@ -16,8 +16,11 @@ use std::rc::Rc;
 use suite_common_core::events::{Broadcaster, Hint, Listener};
 use suite_common_core::undo::UndoManager;
 
-use crate::engine::{MasterSlide, Slide};
-use crate::undo::{AddSlideCmd, DeleteSlideCmd, ReorderSlidesCmd};
+use crate::engine::{MasterSlide, Slide, SlideObject};
+use crate::undo::{
+    AddObjectCmd, AddSlideCmd, ChangeTextCmd, DeleteObjectCmd, DeleteSlideCmd, MoveObjectCmd,
+    ReorderSlidesCmd,
+};
 
 /// Marks the deck dirty on any undo-stack mutation (execute, undo, or
 /// redo) — driven by the undo manager's own broadcaster rather than set
@@ -105,12 +108,28 @@ impl DecksController {
         Some(index + 1)
     }
 
-    /// Escape hatch for object-level commands (add/move/delete object,
-    /// text edits) that don't yet have their own controller method —
-    /// still routed through the same owned undo history rather than a
-    /// second one, so slide-list and object edits never desync.
+    /// Escape hatch for object-level commands that don't yet have their
+    /// own controller method — still routed through the same owned undo
+    /// history rather than a second one, so slide-list and object edits
+    /// never desync.
     pub fn execute(&self, cmd: Box<dyn suite_common_core::undo::Command<Vec<Slide>>>) {
         self.undo.borrow_mut().execute(cmd);
+    }
+
+    pub fn add_object(&self, slide_idx: usize, object: SlideObject) {
+        self.execute(Box::new(AddObjectCmd::new(slide_idx, object)));
+    }
+
+    pub fn delete_object(&self, slide_idx: usize, index: usize, object: SlideObject) {
+        self.execute(Box::new(DeleteObjectCmd::new(slide_idx, index, object)));
+    }
+
+    pub fn move_object(&self, slide_idx: usize, index: usize, dx: f64, dy: f64) {
+        self.execute(Box::new(MoveObjectCmd { slide_idx, index, dx, dy }));
+    }
+
+    pub fn change_text(&self, slide_idx: usize, index: usize, old_text: String, new_text: String) {
+        self.execute(Box::new(ChangeTextCmd { slide_idx, index, old_text, new_text }));
     }
 
     pub fn undo(&self) -> bool {
@@ -137,6 +156,65 @@ mod tests {
 
     fn slide(title: &str) -> Slide {
         Slide { title: title.into(), background: "#fff".into(), objects: vec![], notes: String::new(), master_idx: Some(0) }
+    }
+
+    fn rect(x: f64, y: f64) -> SlideObject {
+        SlideObject::Rect { x, y, w: 10.0, h: 10.0 }
+    }
+
+    #[test]
+    fn add_object_appends_to_slide_and_marks_dirty() {
+        let c = DecksController::new(vec![slide("S1")], vec![]);
+        c.add_object(0, rect(1.0, 2.0));
+        assert_eq!(c.slides.borrow()[0].objects.len(), 1);
+        assert!(c.dirty.get());
+    }
+
+    #[test]
+    fn move_object_offsets_position() {
+        let c = DecksController::new(vec![slide("S1")], vec![]);
+        c.add_object(0, rect(1.0, 2.0));
+        c.move_object(0, 0, 5.0, -1.0);
+        let slides = c.slides.borrow();
+        match slides[0].objects[0] {
+            SlideObject::Rect { x, y, .. } => {
+                assert_eq!(x, 6.0);
+                assert_eq!(y, 1.0);
+            }
+            _ => panic!("expected Rect"),
+        }
+    }
+
+    #[test]
+    fn delete_object_removes_it_and_undo_restores_it() {
+        let c = DecksController::new(vec![slide("S1")], vec![]);
+        c.add_object(0, rect(0.0, 0.0));
+        let obj = c.slides.borrow()[0].objects[0].clone();
+        c.delete_object(0, 0, obj);
+        assert!(c.slides.borrow()[0].objects.is_empty());
+        assert!(c.undo());
+        assert_eq!(c.slides.borrow()[0].objects.len(), 1);
+    }
+
+    #[test]
+    fn change_text_updates_textbox_and_undo_reverts() {
+        let mut s = slide("S1");
+        s.objects.push(SlideObject::TextBox { text: "old".into(), x: 0.0, y: 0.0, w: 10.0, h: 10.0, runs: vec![] });
+        let c = DecksController::new(vec![s], vec![]);
+        c.change_text(0, 0, "old".into(), "new".into());
+        {
+            let slides = c.slides.borrow();
+            match &slides[0].objects[0] {
+                SlideObject::TextBox { text, .. } => assert_eq!(text, "new"),
+                _ => panic!("expected TextBox"),
+            }
+        }
+        assert!(c.undo());
+        let slides = c.slides.borrow();
+        match &slides[0].objects[0] {
+            SlideObject::TextBox { text, .. } => assert_eq!(text, "old"),
+            _ => panic!("expected TextBox"),
+        }
     }
 
     #[test]
