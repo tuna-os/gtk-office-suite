@@ -1325,6 +1325,7 @@ impl DecksWindow {
                                 match read_deck(&path_str) {
                                     Ok(deck) => {
                                         *ss.borrow_mut() = deck.slides;
+                                        *masters.borrow_mut() = deck.masters;
                                         cs_ref.set(0);
                                         so.set(None);
                                         *path_ref.borrow_mut() = Some(path_str);
@@ -1572,6 +1573,7 @@ impl DecksWindow {
     pub fn open_path(&self, path: &str) -> Result<(), String> {
         let deck = read_deck(path)?;
         *self.slides.borrow_mut() = deck.slides;
+        *self.masters.borrow_mut() = deck.masters;
         self.current_slide.set(0);
         self.selected_object.set(None);
         *self.file_path.borrow_mut() = Some(path.to_string());
