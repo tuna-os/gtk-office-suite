@@ -231,12 +231,12 @@ impl DecksWindow {
         pill.set_valign(gtk::Align::End);
         pill.set_margin_bottom(12);
         let prev_btn = gtk::Button::from_icon_name("go-previous-symbolic");
-        prev_btn.set_tooltip_text(Some("Previous slide"));
+        prev_btn.set_tooltip_text(Some(&suite_common::i18n("Previous slide")));
         let present_btn = gtk::Button::from_icon_name("media-playback-start-symbolic");
-        present_btn.set_tooltip_text(Some("Present (F5)"));
+        present_btn.set_tooltip_text(Some(&suite_common::i18n("Present (F5)")));
         present_btn.set_action_name(Some("app.present"));
         let next_btn = gtk::Button::from_icon_name("go-next-symbolic");
-        next_btn.set_tooltip_text(Some("Next slide"));
+        next_btn.set_tooltip_text(Some(&suite_common::i18n("Next slide")));
         pill.append(&prev_btn);
         pill.append(&present_btn);
         pill.append(&next_btn);

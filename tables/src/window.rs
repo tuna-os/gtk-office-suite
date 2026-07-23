@@ -137,7 +137,7 @@ impl TablesWindow {
         name_box.set_width_chars(7);
         name_box.set_max_width_chars(7);
         name_box.set_text("A1");
-        name_box.set_tooltip_text(Some("Cell reference — type one to jump"));
+        name_box.set_tooltip_text(Some(&suite_common::i18n("Cell reference — type one to jump")));
         name_box.update_property(&[gtk4::accessible::Property::Label("Cell reference")]);
 
         let fx_label = gtk4::Label::new(Some(" fx"));
@@ -1155,7 +1155,7 @@ impl TablesWindow {
         let extended_toolbar: Vec<suite_common::ToolbarItem> = vec![
             ("preferences-other-symbolic", "Toggle number format", "app.cycle-number-format"),
             ("format-text-strikethrough-symbolic", "Toggle cell border", "app.cycle-cell-border"),
-            ("object-group-symbolic", "Merge cells", "app.merge-cells"),
+            ("insert-object-symbolic", "Merge cells", "app.merge-cells"),
             ("insert-object-symbolic", "Chart", "app.insert-chart"),
             ("document-send-symbolic", "Export PDF", "app.export-pdf"),
         ];

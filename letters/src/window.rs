@@ -544,7 +544,7 @@ impl LettersWindow {
         }
         // Compact dropdown inside the toolbar (a full-width style band
         // was the design review's worst double-chrome offender).
-        style_dropdown.set_tooltip_text(Some("Paragraph style"));
+        style_dropdown.set_tooltip_text(Some(&suite_common::i18n("Paragraph style")));
         suite_win.toolbar.container.prepend(&style_dropdown);
 
         let win = suite_win.window.clone();
@@ -1915,20 +1915,20 @@ fn make_find_replace_widget(tv: &adw::TabView) -> (gtk::SearchBar, gtk::SearchEn
 
     let find_prev = gtk::Button::new();
     find_prev.set_icon_name("go-up-symbolic");
-    find_prev.set_tooltip_text(Some("Previous match (Shift+Enter)"));
+    find_prev.set_tooltip_text(Some(&suite_common::i18n("Previous match (Shift+Enter)")));
     find_prev.add_css_class("flat");
 
     let find_next = gtk::Button::new();
     find_next.set_icon_name("go-down-symbolic");
-    find_next.set_tooltip_text(Some("Next match (Enter)"));
+    find_next.set_tooltip_text(Some(&suite_common::i18n("Next match (Enter)")));
     find_next.add_css_class("flat");
 
     let replace_btn = gtk::Button::with_label("Replace");
-    replace_btn.set_tooltip_text(Some("Replace current match"));
+    replace_btn.set_tooltip_text(Some(&suite_common::i18n("Replace current match")));
     replace_btn.add_css_class("flat");
 
     let replace_all_btn = gtk::Button::with_label("All");
-    replace_all_btn.set_tooltip_text(Some("Replace all matches"));
+    replace_all_btn.set_tooltip_text(Some(&suite_common::i18n("Replace all matches")));
     replace_all_btn.add_css_class("flat");
 
     let case_toggle = gtk::ToggleButton::builder()

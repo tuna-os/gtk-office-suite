@@ -76,7 +76,7 @@ def run():
         print(f"Screenshot: {path}")
 
         # Vision model analysis
-        print("Sending to vision model...")
+        print("Sending to vision model…")
         start = time.time()
 
         prompt = """Describe this GTK4 application window screenshot concisely:

@@ -107,7 +107,7 @@ impl LettersPreferences {
         prefs.add(&editing);
 
         // ── Appearance page ──────────────────────────────────────────────
-        let appearance = suite_common::make_preferences_page("Appearance", "preferences-desktop-symbolic");
+        let appearance = suite_common::make_preferences_page("Appearance", "preferences-desktop-appearance-symbolic");
 
         let layout_group = suite_common::make_preferences_group("Layout", "Window layout");
         let toolbar_row = adw::SwitchRow::builder()
