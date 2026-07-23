@@ -73,7 +73,20 @@ fn make_doc_widget(settings: Option<&gio::Settings>) -> (PageContainer, gtk::Tex
     });
     // Transparent background so PageContainer's white page shows through (no black block in dark mode)
     let css_provider = gtk::CssProvider::new();
-    css_provider.load_from_string("textview, textview text, scrolledwindow { background: transparent; }");
+    let font_css = settings
+        .map(|s| s.string("font"))
+        .filter(|f| !f.is_empty())
+        .map(|f| gtk4::pango::FontDescription::from_string(&f))
+        .filter(|desc| desc.size() > 0)
+        .map(|desc| {
+            let family = desc.family().map(|f| f.to_string()).unwrap_or_else(|| "sans-serif".into());
+            let size_pt = desc.size() as f64 / gtk4::pango::SCALE as f64;
+            format!("textview, textview text {{ font-family: \"{family}\"; font-size: {size_pt}pt; }}")
+        })
+        .unwrap_or_default();
+    css_provider.load_from_string(&format!(
+        "textview, textview text, scrolledwindow {{ background: transparent; }} {font_css}"
+    ));
     editor.style_context().add_provider(&css_provider, gtk::STYLE_PROVIDER_PRIORITY_APPLICATION + 1);
     // Spell-check via zspell (hunspell-compatible, pure Rust).
     // Applies red wavy underline to misspelled words, re-checks on edits.
@@ -414,6 +427,14 @@ impl LettersWindow {
         ];
 
         let suite_win = suite_common::SuiteWindow::new(app, "Letters", primary_toolbar, extended_toolbar);
+        suite_common::bind_window_geometry(&suite_win.window, &settings);
+        suite_win.toolbar.container.set_visible(settings.boolean("show-toolbar"));
+        {
+            let tb = suite_win.toolbar.container.clone();
+            settings.connect_changed(Some("show-toolbar"), move |s, _| {
+                tb.set_visible(s.boolean("show-toolbar"));
+            });
+        }
         suite_win.add_top_bar(&tab_bar);
         // Content is set below, after wrapping toast_overlay in the find/replace
         // gtk::Overlay — setting it here would give toast_overlay a parent and
@@ -1260,6 +1281,7 @@ impl LettersWindow {
         {
             let tv = tv.clone(); let w = win.clone();
             let a = gtk::gio::SimpleAction::new("save-file-as", None);
+            let s = settings.clone();
             a.connect_activate(move |_, _| {
                 let tv = tv.clone(); let w = w.clone();
                 let dlg = gtk::FileDialog::new();
@@ -1269,6 +1291,8 @@ impl LettersWindow {
                 let fl = gio::ListStore::new::<gtk::FileFilter>();
                 fl.append(&f);
                 dlg.set_filters(Some(&fl));
+                let default_ext = s.string("default-format");
+                dlg.set_initial_name(Some(&format!("Untitled.{}", if default_ext.is_empty() { "odt" } else { &default_ext })));
                 dlg.save(Some(&w), None::<&gio::Cancellable>,
                     move |result: Result<gio::File, glib::Error>| {
                         if let Ok(file) = result {

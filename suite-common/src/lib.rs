@@ -424,6 +424,32 @@ impl SuiteWindow {
     }
 }
 
+/// Restore window size/maximized state from `window-width`/`window-height`/
+/// `window-maximized` GSettings keys, and persist it back on every close
+/// attempt (whether or not the close actually proceeds — a dirty-document
+/// close guard may cancel it, but the size at that moment is still worth
+/// keeping). Call this right after `SuiteWindow::new()`, before the app
+/// registers its own `close-request` handler: GTK's boolean-return signal
+/// accumulator stops calling further handlers once one returns "stop", so
+/// this handler must run first or a close-guard Stop would skip it.
+pub fn bind_window_geometry(window: &adw::ApplicationWindow, settings: &gio::Settings) {
+    let w = settings.int("window-width");
+    let h = settings.int("window-height");
+    if w > 0 && h > 0 {
+        window.set_default_size(w, h);
+    }
+    if settings.boolean("window-maximized") {
+        window.set_maximized(true);
+    }
+    let s = settings.clone();
+    window.connect_close_request(move |win| {
+        let _ = s.set_int("window-width", win.default_width());
+        let _ = s.set_int("window-height", win.default_height());
+        let _ = s.set_boolean("window-maximized", win.is_maximized());
+        glib::Propagation::Proceed
+    });
+}
+
 // ---------------------------------------------------------------------------
 // Header bar builder
 // ---------------------------------------------------------------------------

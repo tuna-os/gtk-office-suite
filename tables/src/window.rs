@@ -97,6 +97,7 @@ impl TablesWindow {
         let autosave_slot = Rc::new(suite_common::autosave::AutosaveSlot::new(
             autosave_state_dir(), next_doc_id(),
         ));
+        let show_gridlines = Rc::new(Cell::new(settings.boolean("show-gridlines")));
 
         // ── Scrolling ──────────────────────────────────────────────────
         let h_adj = gtk4::Adjustment::new(0.0, 0.0, 5000.0, 10.0, 50.0, 500.0);
@@ -119,9 +120,16 @@ impl TablesWindow {
             let da_state = state.clone();
             let da_h = h_adj.clone();
             let da_v = v_adj.clone();
+            let gl = show_gridlines.clone();
             drawing_area.set_draw_func(move |_da, cr, width, height| {
                 draw_grid(cr, &da_state, width as f64, height as f64,
-                          da_h.value(), da_v.value());
+                          da_h.value(), da_v.value(), gl.get());
+            });
+            let gl = show_gridlines.clone();
+            let da = drawing_area.clone();
+            settings.connect_changed(Some("show-gridlines"), move |s, _| {
+                gl.set(s.boolean("show-gridlines"));
+                da.queue_draw();
             });
         }
 
@@ -513,6 +521,7 @@ impl TablesWindow {
             let da = drawing_area.clone();
             let h = h_adj.clone();
             let v = v_adj.clone();
+            let gl = show_gridlines.clone();
             let dbl = gtk4::GestureClick::new();
             dbl.set_button(1);
             dbl.set_touch_only(false);
@@ -531,18 +540,20 @@ impl TablesWindow {
                         let h2 = h.clone();
                         let v2 = v.clone();
                         let da2 = da.clone();
+                        let gl2 = gl.clone();
                         da.set_draw_func(move |_area, cr, width, height| {
                             let mut st = s2.borrow_mut();
                             let mut sh = st.sheet_mut();
                             auto_fit_column(cr, &mut *sh, col, h2.value());
                             drop(sh);
-                            draw_grid(cr, &s2, width as f64, height as f64, h2.value(), v2.value());
+                            draw_grid(cr, &s2, width as f64, height as f64, h2.value(), v2.value(), gl2.get());
                             // Restore normal draw func
                             let s3 = s2.clone();
                             let h3 = h2.clone();
                             let v3 = v2.clone();
+                            let gl3 = gl2.clone();
                             da2.set_draw_func(move |_, cr, w, h| {
-                                draw_grid(cr, &s3, w as f64, h as f64, h3.value(), v3.value());
+                                draw_grid(cr, &s3, w as f64, h as f64, h3.value(), v3.value(), gl3.get());
                             });
                         });
                         da.queue_draw();
@@ -1154,6 +1165,7 @@ impl TablesWindow {
         ];
 
         let suite_win = suite_common::SuiteWindow::new(app, "Tables", vec![], extended_toolbar);
+        suite_common::bind_window_geometry(&suite_win.window, &settings);
         *win_ref.borrow_mut() = Some(suite_win.window.clone());
 
         suite_win.add_top_bar(&fx_bar);

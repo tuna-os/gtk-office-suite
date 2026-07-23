@@ -8,11 +8,22 @@ pub struct TablesPreferences {
 }
 
 impl TablesPreferences {
-    pub fn new(_settings: &gio::Settings) -> Self {
+    pub fn new(settings: &gio::Settings) -> Self {
         let prefs = suite_common::make_preferences_window();
         let page = suite_common::make_preferences_page("General", "emblem-system-symbolic");
         let group = suite_common::make_preferences_group("Grid", "Spreadsheet appearance");
-        let row = adw::SwitchRow::builder().title("Show gridlines").active(true).build();
+        let row = adw::SwitchRow::builder()
+            .title("Show gridlines")
+            .subtitle("Show cell gridlines in the spreadsheet grid")
+            .active(settings.boolean("show-gridlines"))
+            .build();
+        {
+            let s = settings.clone();
+            row.connect_active_notify(move |row| {
+                s.set_boolean("show-gridlines", row.is_active())
+                    .unwrap_or_else(|e| eprintln!("GSettings write failed: {}", e));
+            });
+        }
         group.add(&row);
         page.add(&group);
         prefs.add(&page);

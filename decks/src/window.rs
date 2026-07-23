@@ -107,6 +107,13 @@ impl DecksWindow {
         let autosave_slot = Rc::new(suite_common::autosave::AutosaveSlot::new(
             autosave_state_dir(), next_doc_id(),
         ));
+        let snap_enabled = Rc::new(Cell::new(settings.boolean("snap-to-grid")));
+        {
+            let se = snap_enabled.clone();
+            settings.connect_changed(Some("snap-to-grid"), move |s, _| {
+                se.set(s.boolean("snap-to-grid"));
+            });
+        }
         undo.borrow_mut().broadcaster = Some(Rc::new(Broadcaster::new()));
         undo
             .borrow()
@@ -434,6 +441,7 @@ impl DecksWindow {
 
         // ── SuiteWindow chrome ────────────────────────────────────────────
         let suite_win = SuiteWindow::new(app, "Decks", vec![], vec![]);
+        suite_common::bind_window_geometry(&suite_win.window, &settings);
 
         // ── Window close-request: Save / Discard / Cancel guard ──────────
         // Same force_close re-entrancy pattern as Letters/Tables: a dialog
@@ -1010,6 +1018,8 @@ impl DecksWindow {
             let so2 = so.clone();
             let cvb = cs.clone();
             let cve = cs.clone();
+            let snap2 = snap_enabled.clone();
+            let snap3 = snap_enabled.clone();
             drag.connect_drag_begin(move |_g, x, y| {
                 let idx = cs_ref2.get();
                 let sl = ss2.borrow();
@@ -1030,8 +1040,12 @@ impl DecksWindow {
                         let (_, _, sw, _) = crate::canvas::slide_geometry(
                             cs3.width() as f64, cs3.height() as f64);
                         let k = 960.0 / sw.max(1.0);
-                        let nx = snap_to_grid(orig_x + dx * k, GRID_SPACING);
-                        let ny = snap_to_grid(orig_y + dy * k, GRID_SPACING);
+                        let (raw_x, raw_y) = (orig_x + dx * k, orig_y + dy * k);
+                        let (nx, ny) = if snap2.get() {
+                            (snap_to_grid(raw_x, GRID_SPACING), snap_to_grid(raw_y, GRID_SPACING))
+                        } else {
+                            (raw_x, raw_y)
+                        };
                         set_obj_position(&mut sl[idx].objects[oi], nx, ny);
                         cs3.queue_draw();
                     }
@@ -1042,8 +1056,12 @@ impl DecksWindow {
                     let (_, _, sw, _) = crate::canvas::slide_geometry(
                         cve.width() as f64, cve.height() as f64);
                     let k = 960.0 / sw.max(1.0);
-                    let snapped_x = snap_to_grid(orig_x + dx * k, GRID_SPACING);
-                    let snapped_y = snap_to_grid(orig_y + dy * k, GRID_SPACING);
+                    let (raw_x, raw_y) = (orig_x + dx * k, orig_y + dy * k);
+                    let (snapped_x, snapped_y) = if snap3.get() {
+                        (snap_to_grid(raw_x, GRID_SPACING), snap_to_grid(raw_y, GRID_SPACING))
+                    } else {
+                        (raw_x, raw_y)
+                    };
                     let net_dx = snapped_x - orig_x;
                     let net_dy = snapped_y - orig_y;
                     if net_dx != 0.0 || net_dy != 0.0 {

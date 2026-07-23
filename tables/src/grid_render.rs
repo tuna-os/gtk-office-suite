@@ -75,7 +75,7 @@ fn draw_border_line(cr: &Context, style: &BorderStyle, x1: f64, y1: f64, x2: f64
 
 pub fn draw_grid(
     cr: &Context, state: &Rc<RefCell<crate::window::AppState>>,
-    width: f64, height: f64, scroll_x: f64, scroll_y: f64,
+    width: f64, height: f64, scroll_x: f64, scroll_y: f64, show_gridlines: bool,
 ) {
     let st = state.borrow();
     let sheet = &st.sheets[st.active_sheet].borrow();
@@ -186,14 +186,16 @@ pub fn draw_grid(
             cr.fill().unwrap();
 
             // Grid line
-            cr.set_source_rgb(grid_line.0, grid_line.1, grid_line.2);
-            cr.set_line_width(0.5);
-            cr.move_to(cx + cw, cy);
-            cr.line_to(cx + cw, cy + ROW_HEIGHT);
-            cr.stroke().unwrap();
-            cr.move_to(cx, cy + ROW_HEIGHT);
-            cr.line_to(cx + cw, cy + ROW_HEIGHT);
-            cr.stroke().unwrap();
+            if show_gridlines {
+                cr.set_source_rgb(grid_line.0, grid_line.1, grid_line.2);
+                cr.set_line_width(0.5);
+                cr.move_to(cx + cw, cy);
+                cr.line_to(cx + cw, cy + ROW_HEIGHT);
+                cr.stroke().unwrap();
+                cr.move_to(cx, cy + ROW_HEIGHT);
+                cr.line_to(cx + cw, cy + ROW_HEIGHT);
+                cr.stroke().unwrap();
+            }
 
             // Cell border
             if border.top != BorderStyle::None || border.bottom != BorderStyle::None

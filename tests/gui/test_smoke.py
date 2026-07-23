@@ -311,6 +311,75 @@ class LettersAutosaveSmoke(BaseGUITestCase):
                           f"recovered tab contents: {seen!r}")
 
 
+class LettersPreferenceBindingSmoke(BaseGUITestCase):
+    """Issue #101: a visible preference must actually change behavior, and
+    that behavior must persist. Settings are isolated per test via the
+    keyfile GSettings backend pointed at a temp XDG_CONFIG_HOME — the
+    default dconf backend is a shared per-user daemon and can't be
+    sandboxed by env vars alone (see [[session memory]] for why the
+    autosave XDG_STATE_HOME trick doesn't transfer to GSettings).
+
+    The AdwPreferencesDialog's rows aren't currently reachable through the
+    AT-SPI tree (a separate a11y gap, not this issue's problem), so this
+    drives the underlying GSettings key directly via the gsettings CLI
+    under the same isolated env — that's still a real end-to-end check of
+    the app's own live-apply + persistence wiring, just without also
+    exercising the dialog widget itself."""
+
+    app_name = "letters"
+
+    def setUp(self):
+        import tempfile
+        self._config_dir = tempfile.mkdtemp(prefix="letters-prefs-cfg-")
+        self.launch_env = {
+            "GSETTINGS_BACKEND": "keyfile",
+            "XDG_CONFIG_HOME": self._config_dir,
+        }
+        super().setUp()
+
+    def tearDown(self):
+        super().tearDown()
+        import shutil
+        shutil.rmtree(self._config_dir, ignore_errors=True)
+
+    def _gsettings(self, *args):
+        import subprocess
+        env = os.environ.copy()
+        env.update(self.launch_env)
+        subprocess.run(["gsettings", *args], env=env, check=True)
+
+    def _toolbar_visible(self):
+        return len(self.app.findChildren(lambda c: c.name == "Bold (Ctrl+B)" and c.roleName == "push button")) > 0
+
+    def test_show_toolbar_applies_live_and_persists_across_relaunch(self):
+        import subprocess
+
+        self.app.child(name="New Document", roleName="push button").do_action(0)
+        time.sleep(1.5)
+        self.assertTrue(self._toolbar_visible(), "toolbar should be visible by default")
+
+        self._gsettings("set", "org.tunaos.letters-rust", "show-toolbar", "false")
+        time.sleep(0.5)
+        self.assertFalse(self._toolbar_visible(), "toolbar did not hide live when show-toolbar was set false")
+
+        self.process.terminate()
+        self.process.wait(timeout=5)
+
+        env = os.environ.copy()
+        env["GDK_BACKEND"] = "x11"
+        env.update(self.launch_env)
+        self.process = subprocess.Popen(
+            [self.bin_path], env=env,
+            stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
+        )
+        self.app = self.wait_for_app(self.app_name)
+        time.sleep(1.5)
+        self.app.child(name="New Document", roleName="push button").do_action(0)
+        time.sleep(1.5)
+        self.assertFalse(self._toolbar_visible(),
+                          "show-toolbar=false did not persist across relaunch")
+
+
 class TablesSmoke(BaseGUITestCase):
     app_name = "tables"
 
