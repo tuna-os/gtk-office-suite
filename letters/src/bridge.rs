@@ -314,7 +314,10 @@ pub fn save_buffer_to_file(buf: &gtk::TextBuffer, path: &str) -> Result<(), Stri
         "odt" => letters_core::odt::write(&doc, path),
         _ => {
             let md = letters_core::markdown::serialize(&doc);
-            std::fs::write(path, md).map_err(|e| format!("Cannot write {path}: {e}"))
+            suite_common::atomic_save::atomic_write_bytes(
+                std::path::Path::new(path),
+                md.as_bytes(),
+            )
         }
     }
 }

@@ -275,10 +275,12 @@ const MANIFEST: &str = "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\
 <manifest:file-entry manifest:full-path=\"styles.xml\" manifest:media-type=\"text/xml\"/>\
 </manifest:manifest>";
 
-/// Write the document as .odt.
+/// Write the document as .odt. Built fully in memory, then placed
+/// atomically (see suite_common_core::atomic_save) — a rename before the
+/// ZipWriter flushes its central directory would leave a corrupt archive.
 pub fn write(doc: &Document, path: &str) -> Result<(), String> {
-    let file = std::fs::File::create(path).map_err(|e| e.to_string())?;
-    let mut z = zip::ZipWriter::new(file);
+    let buf = std::io::Cursor::new(Vec::new());
+    let mut z = zip::ZipWriter::new(buf);
     // Per ODF spec the mimetype entry comes first and uncompressed.
     z.start_file(
         "mimetype",
@@ -293,8 +295,8 @@ pub fn write(doc: &Document, path: &str) -> Result<(), String> {
     z.write_all(content_xml(doc).as_bytes()).map_err(|e| e.to_string())?;
     z.start_file("styles.xml", opt).map_err(|e| e.to_string())?;
     z.write_all(styles_xml(doc).as_bytes()).map_err(|e| e.to_string())?;
-    z.finish().map_err(|e| e.to_string())?;
-    Ok(())
+    let bytes = z.finish().map_err(|e| e.to_string())?.into_inner();
+    suite_common_core::atomic_save::atomic_write_bytes(std::path::Path::new(path), &bytes)
 }
 
 // ── Reading ──────────────────────────────────────────────────────────

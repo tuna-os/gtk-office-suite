@@ -253,7 +253,10 @@ pub fn write(doc: &Document, path: &str) -> Result<(), String> {
             rdocx::Length::pt(pg.margin_left_pt),
         );
     }
-    out.save(path).map_err(|e| format!("Cannot save {}: {}", path, e))
+    let bytes = out
+        .to_bytes()
+        .map_err(|e| format!("Cannot save {}: {}", path, e))?;
+    suite_common_core::atomic_save::atomic_write_bytes(std::path::Path::new(path), &bytes)
 }
 
 /// Map one rdocx paragraph (body or table cell) into a model paragraph.
