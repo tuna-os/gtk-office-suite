@@ -87,6 +87,20 @@ impl DecksWindow {
         let current_slide = Rc::new(Cell::new(0usize));
         let selected_object = Rc::new(Cell::new(None));
         let file_path = controller.file_path.clone();
+
+        // Test-only state snapshot (#104): only registered when
+        // GTK_OFFICE_TEST_MODE is set — see tables/src/window.rs for the
+        // identical pattern and rationale.
+        if std::env::var_os("GTK_OFFICE_TEST_MODE").is_some() {
+            let ctl = controller.clone();
+            let act = gio::SimpleAction::new("test-snapshot", None);
+            act.connect_activate(move |_, _| {
+                let Ok(path) = std::env::var("GTK_OFFICE_SNAPSHOT_PATH") else { return };
+                let snap = decks_core::snapshot::snapshot(&ctl);
+                let _ = std::fs::write(path, snap.to_json());
+            });
+            app.add_action(&act);
+        }
         let settings = gio::Settings::new("org.tunaos.decks-rust");
         let autosave_slot = Rc::new(suite_common::autosave::AutosaveSlot::new(
             autosave_state_dir(), next_doc_id(),

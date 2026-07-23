@@ -981,6 +981,51 @@ class TablesSnapshotSmoke(BaseGUITestCase):
         self.assertIsNone(self.process.poll(), "tables crashed writing a snapshot")
 
 
+class DecksSnapshotSmoke(BaseGUITestCase):
+    """State-snapshot interface (#104), same mechanism as
+    TablesSnapshotSmoke: adding objects is visible in the normalized
+    JSON snapshot, not just the AT-SPI tree."""
+
+    app_name = "decks"
+
+    def setUp(self):
+        import tempfile
+        self._snapshot_path = tempfile.mktemp(prefix="decks-snapshot-", suffix=".json")
+        self.launch_env = {
+            "GTK_OFFICE_TEST_MODE": "1",
+            "GTK_OFFICE_SNAPSHOT_PATH": self._snapshot_path,
+        }
+        super().setUp()
+
+    def tearDown(self):
+        super().tearDown()
+        if os.path.exists(self._snapshot_path):
+            os.remove(self._snapshot_path)
+
+    def test_snapshot_reflects_added_objects(self):
+        import json
+        import subprocess
+
+        aid = "org.tunaos.decks-rust"
+        subprocess.run(["gapplication", "action", aid, "new-document"])
+        time.sleep(1.5)
+        subprocess.run(["gapplication", "action", aid, "add-text-box"])
+        subprocess.run(["gapplication", "action", aid, "add-shape"])
+        time.sleep(1.0)
+
+        subprocess.run(["gapplication", "action", aid, "test-snapshot"])
+        time.sleep(0.5)
+        self.assertTrue(os.path.exists(self._snapshot_path), "snapshot file was not written")
+        with open(self._snapshot_path) as f:
+            snap = json.load(f)
+
+        self.assertEqual(snap["slide_count"], 1)
+        kinds = [o["kind"] for o in snap["slides"][0]["objects"]]
+        self.assertIn("TextBox", kinds)
+        self.assertIn("Rect", kinds)
+        self.assertIsNone(self.process.poll(), "decks crashed writing a snapshot")
+
+
 class DecksSelectionSmoke(BaseGUITestCase):
     """Object selection updates the canvas a11y description and the
     inspector (fit-to-viewport geometry keeps coordinates stable)."""

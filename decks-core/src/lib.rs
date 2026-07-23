@@ -8,6 +8,7 @@ pub mod controller;
 pub mod engine;
 pub mod fragment;
 pub mod odp;
+pub mod snapshot;
 pub mod undo;
 
 pub use controller::DecksController;
