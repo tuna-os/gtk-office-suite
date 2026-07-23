@@ -10,7 +10,7 @@ license = "GPL-3.0-or-later"
 [dependencies]
 suite-common-core = { path = "../suite-common-core" }
 letters-core = { path = "../letters-core" }
-zip = "2.0"
+zip = "8.0"
 quick-xml = "0.41"
 
 [dev-dependencies]
