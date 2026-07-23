@@ -24,7 +24,12 @@ pub struct UndoManager<T> {
 
 impl<T> UndoManager<T> {
     pub fn new(state: Rc<RefCell<T>>) -> Self {
-        UndoManager { undo_stack: Vec::new(), redo_stack: Vec::new(), state, broadcaster: None }
+        UndoManager {
+            undo_stack: Vec::new(),
+            redo_stack: Vec::new(),
+            state,
+            broadcaster: None,
+        }
     }
 
     /// Execute a command: apply it, push to undo stack, clear redo.
@@ -66,19 +71,37 @@ impl<T> UndoManager<T> {
         }
     }
 
-    pub fn can_undo(&self) -> bool { !self.undo_stack.is_empty() }
-    pub fn can_redo(&self) -> bool { !self.redo_stack.is_empty() }
+    pub fn can_undo(&self) -> bool {
+        !self.undo_stack.is_empty()
+    }
+    pub fn can_redo(&self) -> bool {
+        !self.redo_stack.is_empty()
+    }
+    pub fn undo_description(&self) -> Option<&str> {
+        self.undo_stack.last().map(|command| command.description())
+    }
+    pub fn redo_description(&self) -> Option<&str> {
+        self.redo_stack.last().map(|command| command.description())
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
 
-    struct CounterCmd { delta: i32 }
+    struct CounterCmd {
+        delta: i32,
+    }
     impl Command<i32> for CounterCmd {
-        fn apply(&self, state: &mut i32) { *state += self.delta; }
-        fn undo(&self, state: &mut i32) { *state -= self.delta; }
-        fn description(&self) -> &str { "counter" }
+        fn apply(&self, state: &mut i32) {
+            *state += self.delta;
+        }
+        fn undo(&self, state: &mut i32) {
+            *state -= self.delta;
+        }
+        fn description(&self) -> &str {
+            "counter"
+        }
     }
 
     #[test]

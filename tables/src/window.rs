@@ -10,46 +10,32 @@ use adw::prelude::{AdwDialogExt, AlertDialogExt};
 use std::cell::{Cell, RefCell};
 use std::rc::Rc;
 
-use tables_core::engine::TablesEngine;
+use suite_common::events::{Hint, Listener};
+use tables_core::controller::{WorkbookController, WorkbookState};
 use tables_core::sheet::*;
 use crate::grid_render::{draw_grid, auto_fit_column};
 use suite_common::format::{NumberFormat, NumberFormatKind};
-use suite_common::undo::UndoManager;
-use tables_core::undo::SheetState;
 
 // ── Constants ──────────────────────────────────────────────────────────
 // ── Shared state ─────────────────────────────────────────────────────
-pub struct AppState {
-    pub sheets: Vec<Rc<RefCell<SheetModel>>>,
-    pub active_sheet: usize,
-    pub engine: TablesEngine,
+pub type AppState = WorkbookState;
+
+struct HistoryActionListener {
+    undo: gtk4::gio::SimpleAction,
+    redo: gtk4::gio::SimpleAction,
 }
 
-impl AppState {
-    fn sheet(&self) -> std::cell::Ref<SheetModel> {
-        self.sheets[self.active_sheet].borrow()
-    }
-
-    fn sheet_mut(&self) -> std::cell::RefMut<SheetModel> {
-        self.sheets[self.active_sheet].borrow_mut()
-    }
-
-    fn grid_data(&self) -> Vec<Vec<String>> {
-        let mut grid = Vec::new();
-        let s = self.sheet();
-        for r in 0..s.rows {
-            let mut row = Vec::new();
-            for c in 0..s.cols {
-                row.push(s.data[r][c].clone());
-            }
-            grid.push(row);
+impl Listener<Hint> for HistoryActionListener {
+    fn on_event(&self, hint: &Hint) {
+        if let Hint::UndoStateChanged { can_undo, can_redo } = hint {
+            self.undo.set_enabled(*can_undo);
+            self.redo.set_enabled(*can_redo);
         }
-        grid
     }
 }
 
 // File I/O lives in tables_core::io; window code only adapts AppState.
-use tables_core::io::load_file_into_engine;
+use tables_core::io::{load_file_into_engine, load_xlsx_workbook};
 
 fn save_engine_to_xlsx(path: &str, state: &AppState) -> Result<(), String> {
     let sheets: Vec<SheetModel> = state.sheets.iter().map(|s| s.borrow().clone()).collect();
@@ -65,31 +51,21 @@ pub struct TablesWindow {
     v_adj: gtk4::Adjustment,
     fx_entry: gtk4::Entry,
     stack: gtk4::Stack,
-    undo: Rc<RefCell<UndoManager<SheetState>>>,
+    controller: Rc<RefCell<WorkbookController>>,
     state: Rc<RefCell<AppState>>,
     sheet_model: gtk4::StringList,
     sheet_switcher: gtk4::DropDown,
+    current_path: Rc<RefCell<Option<std::path::PathBuf>>>,
 }
 
 impl TablesWindow {
     pub fn new(app: &adw::Application) -> Self {
-        let engine = TablesEngine::new(DEFAULT_ROWS, DEFAULT_COLS)
-            .expect("Failed to create spreadsheet engine");
-
-        let sheet = SheetModel::new("Sheet1", DEFAULT_ROWS, DEFAULT_COLS, 0);
-        let sheet_clone = sheet.clone();
-        let state = Rc::new(RefCell::new(AppState {
-            sheets: vec![Rc::new(RefCell::new(sheet))],
-            active_sheet: 0,
-            engine,
-        }));
-
-        // ── Undo manager ─────────────────────────────────────────────
-        let undo_state = Rc::new(RefCell::new(SheetState {
-            sheets: vec![sheet_clone],
-            active_sheet: 0,
-        }));
-        let undo_mgr: Rc<RefCell<UndoManager<SheetState>>> = Rc::new(RefCell::new(UndoManager::new(undo_state)));
+        let controller = Rc::new(RefCell::new(
+            WorkbookController::new(DEFAULT_ROWS, DEFAULT_COLS)
+                .expect("Failed to create spreadsheet controller"),
+        ));
+        let state = controller.borrow().state.clone();
+        let current_path = Rc::new(RefCell::new(None));
 
         // ── Scrolling ──────────────────────────────────────────────────
         let h_adj = gtk4::Adjustment::new(0.0, 0.0, 5000.0, 10.0, 50.0, 500.0);
@@ -200,13 +176,13 @@ impl TablesWindow {
         // Format Cells sheet (DESIGN-UI §Tables): right-click or the
         // palette opens it; the chosen format applies to the selection.
         {
-            let s2 = state.clone();
+            let ctl = controller.clone();
             let da = drawing_area.clone();
             let refresh = refresh_sel.clone();
             let act = gtk4::gio::SimpleAction::new("format-cells", None);
             act.connect_activate(move |_, _| {
                 let parent = da.root().and_downcast::<adw::ApplicationWindow>();
-                show_format_cells_dialog(&s2, &da, &refresh, parent);
+                show_format_cells_dialog(&ctl, &da, &refresh, parent);
             });
             app.add_action(&act);
             suite_common::actions::register_labels(&[("app.format-cells", "Format Cells…")]);
@@ -273,34 +249,29 @@ impl TablesWindow {
         // Wire formula bar: Enter commits
         {
             let s = state.clone();
+            let ctl = controller.clone();
             let da = drawing_area.clone();
             let fx = fx_entry.clone();
             let refresh = refresh_sel.clone();
             fx_entry.connect_activate(move |_| {
                 let val = fx.text().to_string();
-                let mut st = s.borrow_mut();
-                let r = st.sheet().selected_row;
-                let c = st.sheet().selected_col;
-                // Validate
-                let sh = st.sheet();
-                if let Some(rule) = &sh.validations[r][c] {
-                    if !rule.validate(&val) {
-                        let _toast = adw::Toast::new("Invalid input — value rejected");
-                        _toast.set_timeout(3);
-                        return;
+                let (r, c) = {
+                    let st = s.borrow();
+                    let sh = st.sheet();
+                    let r = sh.selected_row;
+                    let c = sh.selected_col;
+                    if let Some(rule) = &sh.validations[r][c] {
+                        if !rule.validate(&val) {
+                            let toast = adw::Toast::new("Invalid input — value rejected");
+                            toast.set_timeout(3);
+                            return;
+                        }
                     }
-                }
-                drop(sh);
-                st.engine.set_cell_text(r, c, &val);
-                {
-                    let mut sh = st.sheets[st.active_sheet].borrow_mut();
-                    sh.data[r][c] = val.clone();
-                    sh.formulas[r][c] = val.starts_with('=');
-                }
-                st.sheet_mut().sync_from_engine(&st.engine);
-                let shown = st.engine.cell(r, c);
+                    (r, c)
+                };
+                ctl.borrow_mut().edit_cell(r, c, val);
+                let shown = s.borrow().engine.cell(r, c);
                 update_grid_a11y(&da, &tables_core::sheet::col_label(c), r, &shown);
-                drop(st);
                 // Commit returns focus to the grid so arrow keys navigate
                 // (Calc behavior); the next keystroke edits via the grid.
                 refresh();
@@ -312,6 +283,7 @@ impl TablesWindow {
         // ── Mouse: single-click select ──────────────────────────────────
         {
             let s = state.clone();
+            let ctl = controller.clone();
             let da = drawing_area.clone();
             let fx = fx_entry.clone();
             let h = h_adj.clone();
@@ -334,8 +306,7 @@ impl TablesWindow {
                     }
                     if let Some(col) = clicked_col {
                         drop(sh); drop(st);
-                        let mut st = s.borrow_mut();
-                        st.sheet_mut().toggle_sort(col);
+                        ctl.borrow_mut().toggle_sort(col);
                         da.queue_draw();
                         return;
                     }
@@ -374,16 +345,21 @@ impl TablesWindow {
             let da = drawing_area.clone();
             let h = h_adj.clone();
             let drag_col = Rc::new(Cell::new(None::<(usize, f64)>));
+            let resize_before = Rc::new(RefCell::new(None::<SheetModel>));
             let drag = gtk4::GestureDrag::new();
             drag.set_button(1);
             let dc2 = drag_col.clone();
             let dc3 = drag_col.clone();
+            let before_begin = resize_before.clone();
+            let before_end = resize_before.clone();
             let s2 = s.clone();
+            let resize_controller = controller.clone();
             let h2 = h.clone();
             drag.connect_drag_begin(move |_g, x, y| {
                 let st = s.borrow();
                 let sh = st.sheet();
                 if let Some(col) = hit_col_divider(x as f64, y as f64, h.value(), &*sh) {
+                    *before_begin.borrow_mut() = Some(sh.clone());
                     dc2.set(Some((col, sh.col_width(col))));
                 }
             });
@@ -398,6 +374,21 @@ impl TablesWindow {
                 }
             });
             drag.connect_drag_end(move |_g, _dx, _dy| {
+                if let (Some((col, old_width)), Some(before)) =
+                    (dc3.get(), before_end.borrow_mut().take())
+                {
+                    let new_width = resize_controller
+                        .borrow()
+                        .state
+                        .borrow()
+                        .sheet()
+                        .col_width(col);
+                    if (new_width - old_width).abs() > f64::EPSILON {
+                        resize_controller
+                            .borrow_mut()
+                            .record_sheet_mutation("Resize Column", before);
+                    }
+                }
                 dc3.set(None);
             });
             drawing_area.add_controller(drag);
@@ -487,6 +478,7 @@ impl TablesWindow {
         // ── Double-click: inline edit or auto-fit column ────────────────
         {
             let s = state.clone();
+            let ctl = controller.clone();
             let da = drawing_area.clone();
             let h = h_adj.clone();
             let v = v_adj.clone();
@@ -546,19 +538,11 @@ impl TablesWindow {
                     entry.grab_focus();
                     entry.select_region(0, -1);
 
-                    let s2 = s.clone();
+                    let ctl2 = ctl.clone();
                     let da2 = da.clone();
                     entry.connect_activate(move |e| {
                         let new_val = e.text().to_string();
-                        let mut st = s2.borrow_mut();
-                        let r = row; let c = col;
-                        st.engine.set_cell_text(r, c, &new_val);
-                        {
-                            let mut sh = st.sheet_mut();
-                            sh.data[r][c] = new_val.clone();
-                            sh.formulas[r][c] = new_val.starts_with('=');
-                        }
-                        st.sheet_mut().sync_from_engine(&st.engine);
+                        ctl2.borrow_mut().edit_cell(row, col, new_val);
                         e.parent().map(|p| { p.unparent(); });
                         da2.queue_draw();
                     });
@@ -597,18 +581,20 @@ impl TablesWindow {
 
         // Add sheet action
         {
-            let s = state.clone();
+            let ctl = controller.clone();
             let sm = sheet_model.clone();
             let sd = sheet_switcher.clone();
             let da = drawing_area.clone();
             add_btn.connect_clicked(move |_| {
-                let mut st = s.borrow_mut();
-                let idx = st.sheets.len();
+                let mut controller = ctl.borrow_mut();
+                let idx = controller.state.borrow().sheets.len();
                 let name = format!("Sheet{}", idx + 1);
-                let sheet = SheetModel::new(&name, DEFAULT_ROWS, DEFAULT_COLS, idx);
-                let rc = Rc::new(RefCell::new(sheet));
-                st.sheets.push(rc);
-                st.active_sheet = idx;
+                controller
+                    .state
+                    .borrow_mut()
+                    .add_sheet(name.clone(), DEFAULT_ROWS, DEFAULT_COLS)
+                    .expect("add worksheet");
+                controller.state.borrow_mut().switch_sheet(idx).expect("switch worksheet");
                 sm.append(&name);
                 sd.set_selected(idx as u32);
                 da.queue_draw();
@@ -617,16 +603,12 @@ impl TablesWindow {
 
         // Switch sheet
         {
-            let s = state.clone();
+            let ctl = controller.clone();
             let da = drawing_area.clone();
             let fx = fx_entry.clone();
             sheet_switcher.connect_selected_notify(move |dd| {
                 let idx = dd.selected() as usize;
-                let mut st = s.borrow_mut();
-                if idx < st.sheets.len() {
-                    st.active_sheet = idx;
-                    // Also sync engine state
-                    st.sheet_mut().sync_from_engine(&st.engine);
+                if ctl.borrow_mut().state.borrow_mut().switch_sheet(idx).is_ok() {
                     fx.set_text("");
                     da.queue_draw();
                 }
@@ -670,6 +652,7 @@ impl TablesWindow {
         let show_chart_dialog = {
             let wr = win_ref.clone();
             let s = state.clone();
+            let ctl = controller.clone();
             Box::new(move || {
                 let st = s.borrow();
                 let active = st.active_sheet;
@@ -730,36 +713,41 @@ impl TablesWindow {
                 insert_btn.set_margin_end(12);
                 insert_btn.set_margin_bottom(12);
                 {
-                    let s = s.clone();
+                    let ctl = ctl.clone();
                     let ct = chart_type.clone();
                     let dlg = dialog.clone();
                     insert_btn.connect_clicked(move |_| {
                         use tables_core::sheet::{ChartKind, ChartSpec};
-                        let st = s.borrow();
-                        let sheet_rc = st.sheets[st.active_sheet].clone();
-                        let mut sheet = sheet_rc.borrow_mut();
-                        let col = sheet.selected_col;
-                        // Rows where the value column parses numerically.
-                        let mut first = None;
-                        let mut last = 0;
-                        for r in 0..sheet.rows {
-                            if sheet.data[r][col].parse::<f64>().is_ok() {
-                                first.get_or_insert(r);
-                                last = r;
+                        let (col, first, last) = {
+                            let state = ctl.borrow().state.clone();
+                            let st = state.borrow();
+                            let sheet = st.sheet();
+                            let col = sheet.selected_col;
+                            let mut first = None;
+                            let mut last = 0;
+                            for r in 0..sheet.rows {
+                                if sheet.data[r][col].parse::<f64>().is_ok() {
+                                    first.get_or_insert(r);
+                                    last = r;
+                                }
                             }
-                        }
+                            (col, first, last)
+                        };
                         let Some(first) = first else { return };
                         let kind = match ct.get() {
                             crate::charts::ChartType::Bar => ChartKind::Bar,
                             crate::charts::ChartType::Line => ChartKind::Line,
                             crate::charts::ChartType::Pie => ChartKind::Pie,
                         };
-                        sheet.charts.push(ChartSpec {
+                        let chart = ChartSpec {
                             kind,
                             title: String::new(),
                             cat: (first, 0, last),
                             val: (first, col, last),
                             anchor: (last + 2, col),
+                        };
+                        ctl.borrow_mut().mutate_sheet("Insert Chart", move |sheet| {
+                            sheet.charts.push(chart);
                         });
                         dlg.close();
                     });
@@ -827,55 +815,55 @@ impl TablesWindow {
         });
 
         let toggle_format = {
-            let s = state.clone();
+            let ctl = controller.clone();
             let da = drawing_area.clone();
             Box::new(move || {
-                let mut st = s.borrow_mut();
-                let mut sh = st.sheet_mut();
-                let r = sh.selected_row;
-                let c = sh.selected_col;
-                let current = &sh.formats[r][c].kind;
-                let next = match current {
-                    NumberFormatKind::General => NumberFormatKind::Number(2),
-                    NumberFormatKind::Number(_) => NumberFormatKind::Currency("$".into(), 2),
-                    NumberFormatKind::Currency(_, _) => NumberFormatKind::Percent(1),
-                    NumberFormatKind::Percent(_) => NumberFormatKind::Date("%Y-%m-%d".into()),
-                    NumberFormatKind::Date(_) => NumberFormatKind::Scientific(2),
-                    NumberFormatKind::Scientific(_) => NumberFormatKind::General,
-                    _ => NumberFormatKind::General,
-                };
-                sh.formats[r][c] = NumberFormat::new(next);
+                ctl.borrow_mut().mutate_sheet("Change Number Format", |sh| {
+                    let r = sh.selected_row;
+                    let c = sh.selected_col;
+                    let current = &sh.formats[r][c].kind;
+                    let next = match current {
+                        NumberFormatKind::General => NumberFormatKind::Number(2),
+                        NumberFormatKind::Number(_) => NumberFormatKind::Currency("$".into(), 2),
+                        NumberFormatKind::Currency(_, _) => NumberFormatKind::Percent(1),
+                        NumberFormatKind::Percent(_) => NumberFormatKind::Date("%Y-%m-%d".into()),
+                        NumberFormatKind::Date(_) => NumberFormatKind::Scientific(2),
+                        NumberFormatKind::Scientific(_) => NumberFormatKind::General,
+                        _ => NumberFormatKind::General,
+                    };
+                    sh.formats[r][c] = NumberFormat::new(next);
+                });
                 da.queue_draw();
             })
         };
 
         let toggle_border = {
-            let s = state.clone();
+            let ctl = controller.clone();
             let da = drawing_area.clone();
             Box::new(move || {
-                let mut st = s.borrow_mut();
-                let mut sh = st.sheet_mut();
-                let r = sh.selected_row;
-                let c = sh.selected_col;
-                let current = &sh.borders[r][c].top;
-                let next = match current {
-                    BorderStyle::None => BorderStyle::Solid,
-                    BorderStyle::Solid => BorderStyle::Dashed,
-                    BorderStyle::Dashed => BorderStyle::Dotted,
-                    BorderStyle::Dotted => BorderStyle::Double,
-                    BorderStyle::Double => BorderStyle::None,
-                };
-                sh.borders[r][c] = CellBorder::outline(next, (0.0, 0.0, 0.0));
+                ctl.borrow_mut().mutate_sheet("Change Cell Border", |sh| {
+                    let r = sh.selected_row;
+                    let c = sh.selected_col;
+                    let current = &sh.borders[r][c].top;
+                    let next = match current {
+                        BorderStyle::None => BorderStyle::Solid,
+                        BorderStyle::Solid => BorderStyle::Dashed,
+                        BorderStyle::Dashed => BorderStyle::Dotted,
+                        BorderStyle::Dotted => BorderStyle::Double,
+                        BorderStyle::Double => BorderStyle::None,
+                    };
+                    sh.borders[r][c] = CellBorder::outline(next, (0.0, 0.0, 0.0));
+                });
                 da.queue_draw();
             })
         };
 
         let toggle_merge = {
-            let s = state.clone();
+            let ctl = controller.clone();
             let da = drawing_area.clone();
             Box::new(move || {
-                let mut st = s.borrow_mut();
-                st.sheet_mut().toggle_merge();
+                ctl.borrow_mut()
+                    .mutate_sheet("Merge Cells", SheetModel::toggle_merge);
                 da.queue_draw();
             })
         };
@@ -893,12 +881,12 @@ impl TablesWindow {
             mk("merge-cells", toggle_merge);
             mk("insert-chart", show_chart_dialog);
             {
-                let s = state.clone();
+                let ctl = controller.clone();
                 let da = drawing_area.clone();
                 let wr = win_ref.clone();
                 let act = gtk4::gio::SimpleAction::new("conditional-format", None);
                 act.connect_activate(move |_, _| {
-                    show_conditional_format_dialog(&s, &da, wr.borrow().as_ref());
+                    show_conditional_format_dialog(&ctl, &da, wr.borrow().as_ref());
                 });
                 app.add_action(&act);
             }
@@ -912,8 +900,9 @@ impl TablesWindow {
             ("app.insert-chart", "Insert Chart…"),
             ("app.conditional-format", "Conditional Formatting…"),
             ("app.export-pdf", "Export as PDF…"),
-            ("app.open-file-dialog", "Open Spreadsheet…"),
-            ("app.save-file-dialog", "Save as Excel Workbook…"),
+            ("app.open-file", "Open Spreadsheet…"),
+            ("app.save-file", "Save"),
+            ("app.save-file-as", "Save as Excel Workbook…"),
             ("app.new-document", "New Spreadsheet"),
             ("app.undo", "Undo"),
             ("app.redo", "Redo"),
@@ -937,11 +926,6 @@ impl TablesWindow {
 
         // ── App actions ─────────────────────────────────────────────────
         let st = stack.clone();
-        let act = gtk4::gio::SimpleAction::new("open-file", None);
-        act.connect_activate(move |_, _| st.set_visible_child_name("editor"));
-        app.add_action(&act);
-
-        let st = stack.clone();
         let fx = fx_entry.clone();
         let act = gtk4::gio::SimpleAction::new("new-document", None);
         act.connect_activate(move |_, _| {
@@ -961,7 +945,8 @@ impl TablesWindow {
             let da = drawing_area.clone();
             let sm = sheet_model.clone();
             let sd = sheet_switcher.clone();
-            let act = gtk4::gio::SimpleAction::new("open-file-dialog", None);
+            let path_state = current_path.clone();
+            let act = gtk4::gio::SimpleAction::new("open-file", None);
             act.connect_activate(move |_, _| {
                 let dlg = gtk4::FileDialog::new();
                 let f = gtk4::FileFilter::new();
@@ -974,6 +959,7 @@ impl TablesWindow {
                 let s = s.clone(); let st = st.clone();
                 let w2 = w.clone(); let fx = fx.clone();
                 let da = da.clone(); let sm = sm.clone(); let sd = sd.clone();
+                let path_state = path_state.clone();
                 dlg.open(Some(&w), None::<&gio::Cancellable>,
                     move |result: Result<gio::File, glib::Error>| {
                         if let Ok(file) = result {
@@ -1005,6 +991,7 @@ impl TablesWindow {
                                             .map(|n| n.to_string_lossy().to_string())
                                             .unwrap_or_default();
                                         w2.set_title(Some(&format!("{name} — Tables")));
+                                        *path_state.borrow_mut() = Some(path.clone());
                                         da.queue_draw();
                                     }
                                     Err(e) => {
@@ -1029,8 +1016,9 @@ impl TablesWindow {
         {
             let s = state.clone();
             let w = suite_win.window.clone();
+            let path_state = current_path.clone();
             // no toast for now
-            let act = gtk4::gio::SimpleAction::new("save-file-dialog", None);
+            let act = gtk4::gio::SimpleAction::new("save-file-as", None);
             act.connect_activate(move |_, _| {
                 // no toast
                 let dlg = gtk4::FileDialog::new();
@@ -1041,7 +1029,7 @@ impl TablesWindow {
                 fl.append(&f);
                 dlg.set_filters(Some(&fl));
                 dlg.set_initial_name(Some("Untitled.xlsx"));
-                let s = s.clone(); let w2 = w.clone();
+                let s = s.clone(); let w2 = w.clone(); let path_state = path_state.clone();
                 dlg.save(Some(&w), None::<&gio::Cancellable>,
                     move |result: Result<gio::File, glib::Error>| {
                         if let Ok(file) = result {
@@ -1049,7 +1037,9 @@ impl TablesWindow {
                                 let path_str = path.to_string_lossy().to_string();
                                 let ss = s.borrow();
                                 match save_engine_to_xlsx(&path_str, &ss) {
-                                    Ok(()) => {}
+                                    Ok(()) => {
+                                        *path_state.borrow_mut() = Some(path);
+                                    }
                                     Err(e) => {
                                         let err = adw::AlertDialog::builder()
                                             .heading("Error saving file")
@@ -1067,19 +1057,56 @@ impl TablesWindow {
             });
             app.add_action(&act);
         }
+        {
+            let s = state.clone();
+            let w = suite_win.window.clone();
+            let path_state = current_path.clone();
+            let app_for_save = app.clone();
+            let act = gtk4::gio::SimpleAction::new("save-file", None);
+            act.connect_activate(move |_, _| {
+                let Some(path) = path_state.borrow().clone() else {
+                    app_for_save.activate_action("save-file-as", None);
+                    return;
+                };
+                if let Err(e) = save_engine_to_xlsx(&path.to_string_lossy(), &s.borrow()) {
+                    let err = adw::AlertDialog::builder()
+                        .heading("Error saving file")
+                        .body(&e)
+                        .build();
+                    err.add_response("ok", "OK");
+                    err.set_default_response(Some("ok"));
+                    err.present(Some(&w));
+                }
+            });
+            app.add_action(&act);
+        }
 
         // ── Undo/redo as named actions (window-wide accels) ────────────
         {
-            let u = undo_mgr.clone();
+            let ctl = controller.clone();
             let da = drawing_area.clone();
-            let act = gtk4::gio::SimpleAction::new("undo", None);
-            act.connect_activate(move |_, _| { u.borrow_mut().undo(); da.queue_draw(); });
-            app.add_action(&act);
-            let u = undo_mgr.clone();
+            let undo_action = gtk4::gio::SimpleAction::new("undo", None);
+            undo_action.set_enabled(false);
+            undo_action.connect_activate(move |_, _| {
+                if ctl.borrow_mut().undo() {
+                    da.queue_draw();
+                }
+            });
+            app.add_action(&undo_action);
+            let ctl = controller.clone();
             let da = drawing_area.clone();
-            let act = gtk4::gio::SimpleAction::new("redo", None);
-            act.connect_activate(move |_, _| { u.borrow_mut().redo(); da.queue_draw(); });
-            app.add_action(&act);
+            let redo_action = gtk4::gio::SimpleAction::new("redo", None);
+            redo_action.set_enabled(false);
+            redo_action.connect_activate(move |_, _| {
+                if ctl.borrow_mut().redo() {
+                    da.queue_draw();
+                }
+            });
+            app.add_action(&redo_action);
+            controller.borrow().listen_history(Rc::new(HistoryActionListener {
+                undo: undo_action,
+                redo: redo_action,
+            }));
             app.set_accels_for_action("app.undo", &["<Primary>z"]);
             app.set_accels_for_action("app.redo", &["<Primary>y", "<Primary><Shift>z"]);
         }
@@ -1088,6 +1115,7 @@ impl TablesWindow {
         drawing_area.set_focusable(true);
         {
             let s = state.clone();
+            let ctl = controller.clone();
             let da = drawing_area.clone();
             let fx = fx_entry.clone();
             let refresh = refresh_sel.clone();
@@ -1113,19 +1141,17 @@ impl TablesWindow {
                 }
                 if ctrl && keyval == Key::v {
                     let clipboard = da.clipboard();
-                    let s2 = s.clone();
+                    let ctl2 = ctl.clone();
                     let da2 = da.clone();
                     let refresh2 = refresh.clone();
                     let apply = move |frag: tables_core::fragment::Fragment| {
-                        {
-                            let mut st = s2.borrow_mut();
-                            let (row, col) = {
-                                let sh = st.sheet();
-                                (sh.selected_row, sh.selected_col)
-                            };
-                            tables_core::fragment::paste_at(&mut st.engine, row, col, &frag);
-                            st.sheet_mut().sync_from_engine(&st.engine);
-                        }
+                        let (row, col) = {
+                            let controller = ctl2.borrow();
+                            let st = controller.state.borrow();
+                            let sh = st.sheet();
+                            (sh.selected_row, sh.selected_col)
+                        };
+                        ctl2.borrow_mut().paste_fragment(row, col, &frag);
                         refresh2();
                         da2.queue_draw();
                     };
@@ -1205,12 +1231,12 @@ impl TablesWindow {
                     return gtk4::glib::Propagation::Stop;
                 }
                 if keyval == Key::Delete || keyval == Key::BackSpace {
-                    let mut st = s.borrow_mut();
-                    let r = st.sheet().selected_row;
-                    let c = st.sheet().selected_col;
-                    st.engine.set_cell_text(r, c, "");
-                    st.sheet_mut().data[r][c] = String::new();
-                    st.sheet_mut().formulas[r][c] = false;
+                    let (r, c) = {
+                        let st = s.borrow();
+                        let sh = st.sheet();
+                        (sh.selected_row, sh.selected_col)
+                    };
+                    ctl.borrow_mut().edit_cell(r, c, "");
                     da.queue_draw();
                 }
                 gtk4::glib::Propagation::Proceed
@@ -1225,10 +1251,11 @@ impl TablesWindow {
             v_adj,
             fx_entry,
             stack,
-            undo: undo_mgr,
+            controller,
             state,
             sheet_model,
             sheet_switcher,
+            current_path,
         }
     }
 
@@ -1237,6 +1264,41 @@ impl TablesWindow {
     /// Open a spreadsheet file directly (CLI / file-manager open).
     /// Mirrors the open-file-dialog success path.
     pub fn open_path(&self, path: &str) -> Result<(), String> {
+        if std::path::Path::new(path)
+            .extension()
+            .and_then(|extension| extension.to_str())
+            .is_some_and(|extension| extension.eq_ignore_ascii_case("xlsx"))
+        {
+            let (engine, sheets) = load_xlsx_workbook(path)?;
+            let names = sheets
+                .iter()
+                .map(|sheet| sheet.name.clone())
+                .collect::<Vec<_>>();
+            {
+                let mut state = self.state.borrow_mut();
+                state.engine = engine;
+                state.sheets = sheets
+                    .into_iter()
+                    .map(|sheet| Rc::new(RefCell::new(sheet)))
+                    .collect();
+                state.active_sheet = 0;
+            }
+            self.sheet_model.splice(0, self.sheet_model.n_items(), &[]);
+            for name in names {
+                self.sheet_model.append(&name);
+            }
+            self.sheet_switcher.set_selected(0);
+            self.fx_entry.set_text("");
+            self.stack.set_visible_child_name("editor");
+            let name = std::path::Path::new(path)
+                .file_name()
+                .map(|name| name.to_string_lossy().to_string())
+                .unwrap_or_default();
+            self.window.set_title(Some(&format!("{name} — Tables")));
+            *self.current_path.borrow_mut() = Some(std::path::PathBuf::from(path));
+            self.drawing_area.queue_draw();
+            return Ok(());
+        }
         let (rows, cols) = load_file_into_engine(path, &mut self.state.borrow_mut().engine)?;
         {
             let mut ss = self.state.borrow_mut();
@@ -1259,6 +1321,7 @@ impl TablesWindow {
             .map(|n| n.to_string_lossy().to_string())
             .unwrap_or_default();
         self.window.set_title(Some(&format!("{name} — Tables")));
+        *self.current_path.borrow_mut() = Some(std::path::PathBuf::from(path));
         self.drawing_area.queue_draw();
         Ok(())
     }
@@ -1270,7 +1333,7 @@ impl TablesWindow {
 /// Format Cells dialog: number-format kind + decimals + currency
 /// symbol, applied to the whole selection.
 fn show_format_cells_dialog(
-    state: &Rc<RefCell<AppState>>,
+    controller: &Rc<RefCell<WorkbookController>>,
     da: &gtk4::DrawingArea,
     refresh: &Rc<dyn Fn()>,
     parent: Option<adw::ApplicationWindow>,
@@ -1280,6 +1343,7 @@ fn show_format_cells_dialog(
     dropdown.update_property(&[gtk4::accessible::Property::Label("Format kind")]);
     // Preselect from the active cell's current format.
     {
+        let state = controller.borrow().state.clone();
         let st = state.borrow();
         let sh = st.sheet();
         let idx = match sh.formats[sh.selected_row][sh.selected_col].kind {
@@ -1332,7 +1396,7 @@ fn show_format_cells_dialog(
     dialog.set_child(Some(&grid));
 
     {
-        let s = state.clone();
+        let ctl = controller.clone();
         let da = da.clone();
         let refresh = refresh.clone();
         let dialog = dialog.clone();
@@ -1348,16 +1412,14 @@ fn show_format_cells_dialog(
                 5 => NumberFormatKind::Scientific(dp),
                 _ => NumberFormatKind::General,
             };
-            {
-                let st = s.borrow();
-                let mut sh = st.sheet_mut();
+            ctl.borrow_mut().mutate_sheet("Format Cells", move |sh| {
                 let (r0, c0, r1, c1) = sh.selection_rect();
                 for r in r0..=r1 {
                     for c in c0..=c1 {
                         sh.formats[r][c] = NumberFormat::new(kind.clone());
                     }
                 }
-            }
+            });
             refresh();
             da.queue_draw();
             dialog.close();
@@ -1381,7 +1443,7 @@ fn update_grid_a11y(da: &gtk4::DrawingArea, col: &str, row: usize, value: &str) 
 /// Conditional Formatting dialog: operator + threshold(s) + fill color,
 /// applied to the current selection (ADR 0003 §4 — cell-value rules).
 fn show_conditional_format_dialog(
-    state: &Rc<RefCell<AppState>>,
+    controller: &Rc<RefCell<WorkbookController>>,
     da: &gtk4::DrawingArea,
     parent: Option<&adw::ApplicationWindow>,
 ) {
@@ -1428,7 +1490,7 @@ fn show_conditional_format_dialog(
     grid.attach(&apply, 1, 4, 1, 1);
 
     {
-        let s = state.clone();
+        let ctl = controller.clone();
         let da = da.clone();
         let dlg = dialog.clone();
         let op_combo = op_combo.clone();
@@ -1451,12 +1513,16 @@ fn show_conditional_format_dialog(
                 (rgba.green() * 255.0) as u8,
                 (rgba.blue() * 255.0) as u8
             );
-            let st = s.borrow();
-            let sheet_rc = st.sheets[st.active_sheet].clone();
-            let mut sheet = sheet_rc.borrow_mut();
-            let (r0, c0, r1, c1) = sheet.selection_rect();
-            sheet.cond_rules.push(CondRule { range: (r0, c0, r1, c1), op, value, value2, fill });
-            drop(sheet);
+            ctl.borrow_mut().mutate_sheet("Conditional Formatting", move |sheet| {
+                let (r0, c0, r1, c1) = sheet.selection_rect();
+                sheet.cond_rules.push(CondRule {
+                    range: (r0, c0, r1, c1),
+                    op,
+                    value,
+                    value2,
+                    fill,
+                });
+            });
             da.queue_draw();
             dlg.close();
         });

@@ -17,6 +17,7 @@
 //   - Column/row management
 //   - Grid data export for Cairo rendering
 
+use ironcalc_base::expressions::types::{Area, CellReferenceIndex};
 use ironcalc_base::{cell::CellValue, Model};
 
 /// The Tables spreadsheet engine.
@@ -24,6 +25,7 @@ pub struct TablesEngine {
     pub model: Model<'static>,
     pub rows: usize,
     pub cols: usize,
+    active_sheet: usize,
 }
 
 impl TablesEngine {
@@ -31,14 +33,45 @@ impl TablesEngine {
     pub fn new(rows: usize, cols: usize) -> Result<Self, String> {
         let model = Model::new_empty("Sheet1", "en", "UTC", "en")
             .map_err(|e| format!("Failed to create engine: {}", e))?;
-        Ok(TablesEngine { model, rows, cols })
+        Ok(TablesEngine {
+            model,
+            rows,
+            cols,
+            active_sheet: 0,
+        })
+    }
+
+    /// Add a worksheet to the workbook and return its engine index.
+    pub fn add_sheet(&mut self, name: &str) -> Result<usize, String> {
+        self.model.add_sheet(name)?;
+        Ok(self.model.workbook.worksheets.len() - 1)
+    }
+
+    pub fn rename_sheet(&mut self, index: usize, name: &str) -> Result<(), String> {
+        self.model.rename_sheet_by_index(index as u32, name)
+    }
+
+    pub fn set_active_sheet(&mut self, index: usize) -> Result<(), String> {
+        if index >= self.model.workbook.worksheets.len() {
+            return Err(format!("Sheet index {index} does not exist"));
+        }
+        self.active_sheet = index;
+        Ok(())
+    }
+
+    pub fn active_sheet(&self) -> usize {
+        self.active_sheet
     }
 
     /// Get cell value as a display string.
     pub fn cell(&self, row: usize, col: usize) -> String {
+        self.cell_at(self.active_sheet, row, col)
+    }
+
+    pub fn cell_at(&self, sheet: usize, row: usize, col: usize) -> String {
         let r = row as i32 + 1; // IronCalc uses 1-based, i32
         let c = col as i32 + 1;
-        match self.model.get_cell_value_by_index(0, r, c) {
+        match self.model.get_cell_value_by_index(sheet as u32, r, c) {
             Ok(CellValue::String(s)) => s,
             Ok(CellValue::Number(n)) => {
                 if n.fract() == 0.0 && (n.abs() < 1e15) {
@@ -57,7 +90,9 @@ impl TablesEngine {
     pub fn set_cell_text(&mut self, row: usize, col: usize, val: &str) {
         let r = row as i32 + 1; // IronCalc uses 1-based, i32
         let c = col as i32 + 1;
-        let _ = self.model.set_user_input(0, r, c, val.to_string());
+        let _ = self
+            .model
+            .set_user_input(self.active_sheet as u32, r, c, val.to_string());
         // Re-evaluate formulas
         self.model.evaluate();
     }
@@ -67,12 +102,46 @@ impl TablesEngine {
         self.model.evaluate();
     }
 
+    /// Translate relative references as a cell input moves within the grid.
+    pub fn move_input(&mut self, input: &str, from: (usize, usize), to: (usize, usize)) -> String {
+        if !input.starts_with('=') || from == to {
+            return input.to_string();
+        }
+        let source = CellReferenceIndex {
+            sheet: self.active_sheet as u32,
+            row: from.0 as i32 + 1,
+            column: from.1 as i32 + 1,
+        };
+        let target = CellReferenceIndex {
+            sheet: self.active_sheet as u32,
+            row: to.0 as i32 + 1,
+            column: to.1 as i32 + 1,
+        };
+        let area = Area {
+            sheet: self.active_sheet as u32,
+            row: 1,
+            column: 1,
+            width: self.cols as i32,
+            height: self.rows as i32,
+        };
+        self.model
+            .move_cell_value_to_area(input, &source, &target, &area)
+            .unwrap_or_else(|_| input.to_string())
+    }
+
     /// Check if cell contains a formula (starts with '=').
     /// The formula for a cell (without leading '='), if it has one.
     pub fn formula(&self, row: usize, col: usize) -> Option<String> {
+        self.formula_at(self.active_sheet, row, col)
+    }
+
+    pub fn formula_at(&self, sheet: usize, row: usize, col: usize) -> Option<String> {
         let r = row as i32 + 1;
         let c = col as i32 + 1;
-        self.model.get_cell_formula(0, r, c).ok().flatten()
+        self.model
+            .get_cell_formula(sheet as u32, r, c)
+            .ok()
+            .flatten()
             .map(|f| f.trim_start_matches('=').to_string())
     }
 
@@ -80,7 +149,7 @@ impl TablesEngine {
         let r = row as i32 + 1;
         let c = col as i32 + 1;
         // Check raw cell for formula flag
-        if let Ok(ws) = self.model.workbook.worksheet(0) {
+        if let Ok(ws) = self.model.workbook.worksheet(self.active_sheet as u32) {
             if let Some(cell) = ws.cell(r, c) {
                 return cell.has_formula();
             }
@@ -164,5 +233,20 @@ mod tests {
         assert!(engine.has_formula(0, 0));
         engine.set_cell_text(0, 1, "not a formula");
         assert!(!engine.has_formula(0, 1));
+    }
+
+    #[test]
+    fn cross_sheet_formula_recalculates() {
+        let mut engine = TablesEngine::new(3, 3).unwrap();
+        engine.set_cell_text(0, 0, "7");
+        engine.add_sheet("Sheet2").unwrap();
+        engine.set_active_sheet(1).unwrap();
+        engine.set_cell_text(0, 0, "=Sheet1!A1*2");
+        assert_eq!(engine.cell(0, 0), "14");
+
+        engine.set_active_sheet(0).unwrap();
+        engine.set_cell_text(0, 0, "9");
+        engine.set_active_sheet(1).unwrap();
+        assert_eq!(engine.cell(0, 0), "18");
     }
 }

@@ -192,6 +192,91 @@ class TablesSmoke(BaseGUITestCase):
         self.assertIn("A1", grid.description)
 
 
+class TablesUndoSaveReopenSmoke(BaseGUITestCase):
+    """Real GTK journey: edit, undo, redo, save, restart, and reopen."""
+
+    app_name = "tables"
+
+    def setUp(self):
+        import tempfile
+        import zipfile
+
+        self._dir = tempfile.mkdtemp(prefix="tables-rt-")
+        self._doc = os.path.join(self._dir, "journey.xlsx")
+        parts = {
+            "[Content_Types].xml": """<?xml version="1.0" encoding="UTF-8"?>
+<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
+ <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
+ <Default Extension="xml" ContentType="application/xml"/>
+ <Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>
+ <Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>
+</Types>""",
+            "_rels/.rels": """<?xml version="1.0" encoding="UTF-8"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+ <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/>
+</Relationships>""",
+            "xl/workbook.xml": """<?xml version="1.0" encoding="UTF-8"?>
+<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
+ <sheets><sheet name="Sheet1" sheetId="1" r:id="rId1"/></sheets>
+</workbook>""",
+            "xl/_rels/workbook.xml.rels": """<?xml version="1.0" encoding="UTF-8"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+ <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/>
+</Relationships>""",
+            "xl/worksheets/sheet1.xml": """<?xml version="1.0" encoding="UTF-8"?>
+<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetData><row r="1"><c r="A1"><v>1</v></c></row></sheetData></worksheet>""",
+        }
+        with zipfile.ZipFile(self._doc, "w", zipfile.ZIP_DEFLATED) as book:
+            for name, content in parts.items():
+                book.writestr(name, content)
+        self.launch_args = [self._doc]
+        super().setUp()
+
+    def tearDown(self):
+        super().tearDown()
+        import shutil
+        shutil.rmtree(self._dir, ignore_errors=True)
+
+    def test_edit_undo_redo_save_and_reopen(self):
+        from dogtail import rawinput
+        import subprocess
+        import zipfile
+
+        time.sleep(1.0)
+        rawinput.keyCombo("<Control>g")
+        rawinput.typeText("A1")
+        rawinput.keyCombo("Return")
+        rawinput.typeText("=2+3")
+        rawinput.keyCombo("Return")
+        rawinput.keyCombo("<Control>z")
+        rawinput.keyCombo("<Control><Shift>z")
+        rawinput.keyCombo("<Control>s")
+        time.sleep(1.2)
+        with zipfile.ZipFile(self._doc) as book:
+            sheet_xml = book.read("xl/worksheets/sheet1.xml").decode()
+        self.assertIn("<f>2+3</f>", sheet_xml)
+
+        self.process.terminate()
+        self.process.wait(timeout=3)
+        env = os.environ.copy()
+        env["GDK_BACKEND"] = "x11"
+        self.process = subprocess.Popen(
+            [self.bin_path, self._doc], env=env,
+            stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
+        )
+        self.app = self.wait_for_app(self.app_name)
+        time.sleep(1.2)
+        rawinput.keyCombo("<Control>g")
+        rawinput.typeText("A1")
+        rawinput.keyCombo("Return")
+        rawinput.keyCombo("Escape")
+        rawinput.keyCombo("Right")
+        rawinput.keyCombo("Left")
+        time.sleep(0.5)
+        grid = self.app.child(name="Spreadsheet grid")
+        self.assertIn("5", grid.description, f"reopened grid: {grid.description!r}")
+
+
 class TablesNameBoxSmoke(BaseGUITestCase):
     app_name = "tables"
 

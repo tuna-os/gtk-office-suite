@@ -5,6 +5,7 @@
 // (xlsx/ods/csv/tsv in, xlsx out), and Typst export. The `tables` binary
 // renders and wires signals; it must not grow logic that belongs here.
 
+pub mod controller;
 pub mod engine;
 pub mod export;
 pub mod fragment;

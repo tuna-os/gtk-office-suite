@@ -33,33 +33,81 @@ fn load_range_into_engine(
     (rows.max(1), cols.max(1))
 }
 
+fn load_xlsx_ranges_into_engine(
+    values: &calamine::Range<Data>,
+    formulas: &calamine::Range<String>,
+    engine: &mut TablesEngine,
+) -> (usize, usize) {
+    let rows = values.height().max(formulas.height());
+    let cols = values.width().max(formulas.width());
+    for row in 0..rows {
+        for col in 0..cols {
+            let formula = formulas
+                .get_value((row as u32, col as u32))
+                .map(String::as_str)
+                .unwrap_or("");
+            if formula.is_empty() {
+                let value = values
+                    .get_value((row as u32, col as u32))
+                    .map(data_to_string)
+                    .unwrap_or_default();
+                engine.set_cell_text(row, col, &value);
+            } else {
+                let input = if formula.starts_with('=') {
+                    formula.to_string()
+                } else {
+                    format!("={formula}")
+                };
+                engine.set_cell_text(row, col, &input);
+            }
+        }
+    }
+    engine.evaluate();
+    (rows.max(1), cols.max(1))
+}
+
 /// Load a spreadsheet file into the engine. Returns (rows, cols).
-pub fn load_file_into_engine(path: &str, engine: &mut TablesEngine) -> Result<(usize, usize), String> {
+pub fn load_file_into_engine(
+    path: &str,
+    engine: &mut TablesEngine,
+) -> Result<(usize, usize), String> {
     let ext = std::path::Path::new(path)
-        .extension().and_then(|e| e.to_str()).unwrap_or("").to_lowercase();
+        .extension()
+        .and_then(|e| e.to_str())
+        .unwrap_or("")
+        .to_lowercase();
 
     match ext.as_str() {
         "xlsx" | "xls" | "xlsm" | "xlsb" => {
-            let mut wb: calamine::Xlsx<_> = open_workbook(path)
-                .map_err(|e| format!("Cannot open file: {}", e))?;
+            let mut wb: calamine::Xlsx<_> =
+                open_workbook(path).map_err(|e| format!("Cannot open file: {}", e))?;
             let sheet_names = wb.sheet_names().to_vec();
-            if sheet_names.is_empty() { return Err("No sheets found".into()); }
-            let range = wb.worksheet_range(&sheet_names[0])
+            if sheet_names.is_empty() {
+                return Err("No sheets found".into());
+            }
+            let formulas = wb
+                .worksheet_formula(&sheet_names[0])
+                .map_err(|e| format!("Cannot read formulas: {}", e))?;
+            let range = wb
+                .worksheet_range(&sheet_names[0])
                 .map_err(|e| format!("Cannot read sheet: {}", e))?;
-            Ok(load_range_into_engine(&range, engine))
+            Ok(load_xlsx_ranges_into_engine(&range, &formulas, engine))
         }
         "ods" => {
-            let mut wb: calamine::Ods<_> = open_workbook(path)
-                .map_err(|e| format!("Cannot open file: {}", e))?;
+            let mut wb: calamine::Ods<_> =
+                open_workbook(path).map_err(|e| format!("Cannot open file: {}", e))?;
             let sheet_names = wb.sheet_names().to_vec();
-            if sheet_names.is_empty() { return Err("No sheets found".into()); }
-            let range = wb.worksheet_range(&sheet_names[0])
+            if sheet_names.is_empty() {
+                return Err("No sheets found".into());
+            }
+            let range = wb
+                .worksheet_range(&sheet_names[0])
                 .map_err(|e| format!("Cannot read sheet: {}", e))?;
             Ok(load_range_into_engine(&range, engine))
         }
         "csv" | "tsv" => {
-            let content = std::fs::read_to_string(path)
-                .map_err(|e| format!("Cannot read file: {}", e))?;
+            let content =
+                std::fs::read_to_string(path).map_err(|e| format!("Cannot read file: {}", e))?;
             let delim = if ext == "tsv" { '\t' } else { ',' };
             let mut max_rows = 0usize;
             let mut max_cols = 0usize;
@@ -79,6 +127,49 @@ pub fn load_file_into_engine(path: &str, engine: &mut TablesEngine) -> Result<(u
     }
 }
 
+/// Load every XLSX worksheet into one calculation engine, preserving sheet
+/// names/order and formula inputs. CSV/ODS remain single-sheet imports.
+pub fn load_xlsx_workbook(path: &str) -> Result<(TablesEngine, Vec<SheetModel>), String> {
+    let mut book: calamine::Xlsx<_> =
+        open_workbook(path).map_err(|e| format!("Cannot open file: {e}"))?;
+    let names = book.sheet_names().to_vec();
+    if names.is_empty() {
+        return Err("No sheets found".into());
+    }
+
+    let mut source = Vec::with_capacity(names.len());
+    let mut max_rows = 1usize;
+    let mut max_cols = 1usize;
+    for name in &names {
+        let formulas = book
+            .worksheet_formula(name)
+            .map_err(|e| format!("Cannot read formulas: {e}"))?;
+        let values = book
+            .worksheet_range(name)
+            .map_err(|e| format!("Cannot read sheet: {e}"))?;
+        max_rows = max_rows.max(values.height()).max(formulas.height());
+        max_cols = max_cols.max(values.width()).max(formulas.width());
+        source.push((values, formulas));
+    }
+
+    let mut engine = TablesEngine::new(max_rows, max_cols)?;
+    engine.rename_sheet(0, &names[0])?;
+    for name in names.iter().skip(1) {
+        engine.add_sheet(name)?;
+    }
+
+    let mut sheets = Vec::with_capacity(names.len());
+    for (index, ((values, formulas), name)) in source.into_iter().zip(names.iter()).enumerate() {
+        engine.set_active_sheet(index)?;
+        let (rows, cols) = load_xlsx_ranges_into_engine(&values, &formulas, &mut engine);
+        let mut sheet = SheetModel::new(name, rows.max(1), cols.max(1), index);
+        sheet.sync_from_engine(&engine);
+        sheets.push(sheet);
+    }
+    engine.set_active_sheet(0)?;
+    Ok((engine, sheets))
+}
+
 /// Save sheet data to an XLSX file. Numbers are written as numbers,
 /// everything else as strings; formulas (from `engine`, first sheet)
 /// are written as real formulas so they survive into other suites.
@@ -95,7 +186,9 @@ pub fn save_sheets_to_xlsx_with_engine(
     let mut workbook = Workbook::new();
     for (si, sh) in sheets.iter().enumerate() {
         let sheet = workbook.add_worksheet();
-        sheet.set_name(&sh.name).map_err(|e| format!("Sheet name: {}", e))?;
+        sheet
+            .set_name(&sh.name)
+            .map_err(|e| format!("Sheet name: {}", e))?;
 
         // Cells covered by a merge are written by merge_range below.
         let mut merged: std::collections::HashSet<(usize, usize)> =
@@ -110,40 +203,42 @@ pub fn save_sheets_to_xlsx_with_engine(
 
         for r in 0..sh.rows {
             for c in 0..sh.cols {
-                if merged.contains(&(r, c)) { continue; }
-                // The engine backs the first sheet; formulas persist as
-                // formulas there (recalculable in Calc/Excel), values
-                // elsewhere.
-                if si == 0 {
-                    if let Some(eng) = engine {
-                        if let Some(f) = eng.formula(r, c) {
-                            // Cache the computed value alongside the formula:
-                            // consumers that skip recalc-on-load (LibreOffice
-                            // included) show the right result immediately.
-                            let cached = eng.cell(r, c);
-                            sheet.write_formula(r as u32, c as u16,
-                                    Formula::new(&f).set_result(&cached))
-                                .map_err(|e| format!("Write error: {}", e))?;
-                            continue;
-                        }
+                if merged.contains(&(r, c)) {
+                    continue;
+                }
+                if let Some(eng) = engine {
+                    if let Some(f) = eng.formula_at(si, r, c) {
+                        // Cache the computed value alongside the formula:
+                        // consumers that skip recalc-on-load (LibreOffice
+                        // included) show the right result immediately.
+                        let cached = eng.cell_at(si, r, c);
+                        sheet
+                            .write_formula(r as u32, c as u16, Formula::new(&f).set_result(&cached))
+                            .map_err(|e| format!("Write error: {}", e))?;
+                        continue;
                     }
                 }
                 let val = &sh.data[r][c];
-                if val.is_empty() { continue; }
+                if val.is_empty() {
+                    continue;
+                }
                 if let Ok(n) = val.parse::<f64>() {
                     match xlsx_num_format(&sh.formats[r][c]) {
                         Some(fmt) => {
                             let f = rust_xlsxwriter::Format::new().set_num_format(&fmt);
-                            sheet.write_number_with_format(r as u32, c as u16, n, &f)
+                            sheet
+                                .write_number_with_format(r as u32, c as u16, n, &f)
                                 .map_err(|e| format!("Write error: {}", e))?;
                         }
                         None => {
-                            sheet.write_number(r as u32, c as u16, n)
+                            sheet
+                                .write_number(r as u32, c as u16, n)
                                 .map_err(|e| format!("Write error: {}", e))?;
                         }
                     }
                 } else {
-                    sheet.write_string(r as u32, c as u16, val)
+                    sheet
+                        .write_string(r as u32, c as u16, val)
                         .map_err(|e| format!("Write error: {}", e))?;
                 }
             }
@@ -154,8 +249,12 @@ pub fn save_sheets_to_xlsx_with_engine(
             let val = sh.data[*mr][*mc].clone();
             sheet
                 .merge_range(
-                    *mr as u32, *mc as u16, lr as u32, lc as u16,
-                    &val, &rust_xlsxwriter::Format::default(),
+                    *mr as u32,
+                    *mc as u16,
+                    lr as u32,
+                    lc as u16,
+                    &val,
+                    &rust_xlsxwriter::Format::default(),
                 )
                 .map_err(|e| format!("Merge error: {}", e))?;
         }
@@ -176,23 +275,21 @@ pub fn save_sheets_to_xlsx_with_engine(
 
         for rule in &sh.cond_rules {
             use crate::sheet::CondOp;
-            use rust_xlsxwriter::{
-                ConditionalFormatCell, ConditionalFormatCellRule as R, Format,
-            };
+            use rust_xlsxwriter::{ConditionalFormatCell, ConditionalFormatCellRule as R, Format};
             let cf_rule = match rule.op {
                 CondOp::Greater => R::GreaterThan(rule.value),
                 CondOp::Less => R::LessThan(rule.value),
                 CondOp::Equal => R::EqualTo(rule.value),
-                CondOp::Between => R::Between(
-                    rule.value.min(rule.value2),
-                    rule.value.max(rule.value2),
-                ),
+                CondOp::Between => {
+                    R::Between(rule.value.min(rule.value2), rule.value.max(rule.value2))
+                }
             };
-            let fmt = Format::new()
-                .set_background_color(rust_xlsxwriter::Color::RGB(
-                    u32::from_str_radix(&rule.fill, 16).unwrap_or(0xFFFF00),
-                ));
-            let cf = ConditionalFormatCell::new().set_rule(cf_rule).set_format(fmt);
+            let fmt = Format::new().set_background_color(rust_xlsxwriter::Color::RGB(
+                u32::from_str_radix(&rule.fill, 16).unwrap_or(0xFFFF00),
+            ));
+            let cf = ConditionalFormatCell::new()
+                .set_rule(cf_rule)
+                .set_format(fmt);
             let (r0, c0, r1, c1) = rule.range;
             sheet
                 .add_conditional_format(r0 as u32, c0 as u16, r1 as u32, c1 as u16, &cf)
@@ -211,13 +308,17 @@ pub fn save_sheets_to_xlsx_with_engine(
                 .add_series()
                 .set_categories((
                     sh.name.as_str(),
-                    ch.cat.0 as u32, ch.cat.1 as u16,
-                    ch.cat.2 as u32, ch.cat.1 as u16,
+                    ch.cat.0 as u32,
+                    ch.cat.1 as u16,
+                    ch.cat.2 as u32,
+                    ch.cat.1 as u16,
                 ))
                 .set_values((
                     sh.name.as_str(),
-                    ch.val.0 as u32, ch.val.1 as u16,
-                    ch.val.2 as u32, ch.val.1 as u16,
+                    ch.val.0 as u32,
+                    ch.val.1 as u16,
+                    ch.val.2 as u32,
+                    ch.val.1 as u16,
                 ));
             if !ch.title.is_empty() {
                 chart.title().set_name(&ch.title);
@@ -227,10 +328,11 @@ pub fn save_sheets_to_xlsx_with_engine(
                 .map_err(|e| format!("Chart error: {}", e))?;
         }
     }
-    workbook.save(path).map_err(|e| format!("Save error: {}", e))?;
+    workbook
+        .save(path)
+        .map_err(|e| format!("Save error: {}", e))?;
     Ok(())
 }
-
 
 /// Map our NumberFormat onto an xlsx number-format code, if non-default.
 fn xlsx_num_format(nf: &suite_common_core::format::NumberFormat) -> Option<String> {
@@ -367,6 +469,65 @@ mod tests {
         assert!(has, "formula not written as formula");
     }
 
+    #[test]
+    fn formulas_on_each_sheet_are_written_as_formulas() {
+        use calamine::{open_workbook, Reader};
+
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("multi.xlsx");
+        let mut engine = TablesEngine::new(3, 3).unwrap();
+        engine.set_cell_text(0, 0, "2");
+        engine.set_cell_text(0, 1, "=A1*2");
+        engine.add_sheet("Sheet2").unwrap();
+        engine.set_active_sheet(1).unwrap();
+        engine.set_cell_text(0, 0, "3");
+        engine.set_cell_text(0, 1, "=A1*3");
+
+        let first = SheetModel::new("Sheet1", 3, 3, 0);
+        let second = SheetModel::new("Sheet2", 3, 3, 1);
+        save_sheets_to_xlsx_with_engine(path.to_str().unwrap(), &[first, second], Some(&engine))
+            .unwrap();
+
+        let mut book: calamine::Xlsx<_> = open_workbook(&path).unwrap();
+        for (name, formula) in [("Sheet1", "A1*2"), ("Sheet2", "A1*3")] {
+            let formulas = book.worksheet_formula(name).unwrap();
+            assert!(formulas
+                .rows()
+                .flatten()
+                .any(|value| value.contains(formula)));
+        }
+    }
+
+    #[test]
+    fn xlsx_workbook_loader_preserves_sheet_order_and_cross_sheet_formula() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("multi-load.xlsx");
+        let mut engine = TablesEngine::new(3, 3).unwrap();
+        engine.set_cell_text(0, 0, "4");
+        engine.add_sheet("Rates").unwrap();
+        engine.set_active_sheet(1).unwrap();
+        engine.set_cell_text(0, 0, "=Sheet1!A1*5");
+        engine.set_active_sheet(0).unwrap();
+        let mut first = SheetModel::new("Sheet1", 3, 3, 0);
+        first.sync_from_engine(&engine);
+        engine.set_active_sheet(1).unwrap();
+        let mut second = SheetModel::new("Rates", 3, 3, 1);
+        second.sync_from_engine(&engine);
+        let sheets = [first, second];
+        save_sheets_to_xlsx_with_engine(path.to_str().unwrap(), &sheets, Some(&engine)).unwrap();
+
+        let (mut loaded, sheets) = load_xlsx_workbook(path.to_str().unwrap()).unwrap();
+        assert_eq!(
+            sheets
+                .iter()
+                .map(|sheet| sheet.name.as_str())
+                .collect::<Vec<_>>(),
+            ["Sheet1", "Rates"]
+        );
+        loaded.set_active_sheet(1).unwrap();
+        assert_eq!(loaded.formula(0, 0).as_deref(), Some("Sheet1!A1*5"));
+        assert_eq!(loaded.cell(0, 0), "20");
+    }
 
     #[test]
     fn number_formats_written_to_xlsx() {
@@ -375,17 +536,24 @@ mod tests {
         let path = dir.path().join("fmt.xlsx");
         let mut sheet = SheetModel::new("Fmt", 2, 2, 0);
         sheet.data[0][0] = "0.5".into();
-        sheet.formats[0][0] = NumberFormat { kind: NumberFormatKind::Percent(1) };
+        sheet.formats[0][0] = NumberFormat {
+            kind: NumberFormatKind::Percent(1),
+        };
         save_sheets_to_xlsx(path.to_str().unwrap(), &[sheet]).unwrap();
         // the format lives in styles.xml; presence check via zip
         let bytes = std::fs::read(&path).unwrap();
         let mut zip = zip::ZipArchive::new(std::io::Cursor::new(bytes)).unwrap();
         let mut styles = String::new();
         use std::io::Read as _;
-        zip.by_name("xl/styles.xml").unwrap().read_to_string(&mut styles).unwrap();
-        assert!(styles.contains("0.0%"), "percent format missing from styles: {styles}");
+        zip.by_name("xl/styles.xml")
+            .unwrap()
+            .read_to_string(&mut styles)
+            .unwrap();
+        assert!(
+            styles.contains("0.0%"),
+            "percent format missing from styles: {styles}"
+        );
     }
-
 }
 
 /// The SheetModel default column width in px (COL_WIDTH).
@@ -393,18 +561,23 @@ fn tables_core_default_col_width() -> f64 {
     crate::sheet::COL_WIDTH
 }
 
-
 /// Read embedded charts back from an xlsx (ours or a Calc rewrite).
 /// Best-effort: unknown chart kinds and foreign anchoring are skipped.
 pub fn read_charts_from_xlsx(path: &str) -> Vec<crate::sheet::ChartSpec> {
     use crate::sheet::{parse_cell_ref, ChartKind, ChartSpec};
-    let Ok(f) = std::fs::File::open(path) else { return Vec::new() };
-    let Ok(mut zip) = zip::ZipArchive::new(f) else { return Vec::new() };
+    let Ok(f) = std::fs::File::open(path) else {
+        return Vec::new();
+    };
+    let Ok(mut zip) = zip::ZipArchive::new(f) else {
+        return Vec::new();
+    };
 
     // A1-style absolute range "Sheet1!$A$2:$A$5" → (first_row, col, last_row).
     fn parse_range(r: &str) -> Option<(usize, usize, usize)> {
         let range = r.rsplit('!').next()?.replace('$', "");
-        let (a, b) = range.split_once(':').unwrap_or((range.as_str(), range.as_str()));
+        let (a, b) = range
+            .split_once(':')
+            .unwrap_or((range.as_str(), range.as_str()));
         let (r0, c0) = parse_cell_ref(a)?;
         let (r1, c1) = parse_cell_ref(b)?;
         if c0 != c1 {
@@ -422,7 +595,11 @@ pub fn read_charts_from_xlsx(path: &str) -> Vec<crate::sheet::ChartSpec> {
     for name in &drawing_names {
         let mut xml = String::new();
         use std::io::Read as _;
-        if zip.by_name(name).map(|mut f| f.read_to_string(&mut xml)).is_err() {
+        if zip
+            .by_name(name)
+            .map(|mut f| f.read_to_string(&mut xml))
+            .is_err()
+        {
             continue;
         }
         // First <xdr:from> per anchor: <xdr:col>N</xdr:col><xdr:row>N</xdr:row>
@@ -430,7 +607,13 @@ pub fn read_charts_from_xlsx(path: &str) -> Vec<crate::sheet::ChartSpec> {
             let grab = |tag: &str| -> Option<usize> {
                 let open = format!("<xdr:{tag}>");
                 let close = format!("</xdr:{tag}>");
-                from.split(&open).nth(1)?.split(&close).next()?.trim().parse().ok()
+                from.split(&open)
+                    .nth(1)?
+                    .split(&close)
+                    .next()?
+                    .trim()
+                    .parse()
+                    .ok()
             };
             if let (Some(c), Some(r)) = (grab("col"), grab("row")) {
                 anchors.push((r, c));
@@ -446,7 +629,11 @@ pub fn read_charts_from_xlsx(path: &str) -> Vec<crate::sheet::ChartSpec> {
     for (ci, name) in chart_names.iter().enumerate() {
         let mut xml = String::new();
         use std::io::Read as _;
-        if zip.by_name(name).map(|mut f| f.read_to_string(&mut xml)).is_err() {
+        if zip
+            .by_name(name)
+            .map(|mut f| f.read_to_string(&mut xml))
+            .is_err()
+        {
             continue;
         }
         let kind = if xml.contains("<c:barChart") {
@@ -468,7 +655,9 @@ pub fn read_charts_from_xlsx(path: &str) -> Vec<crate::sheet::ChartSpec> {
                 .map(str::to_string)
         };
         let cat = grab_f("<c:cat>").and_then(|r| parse_range(&r));
-        let Some(val) = grab_f("<c:val>").and_then(|r| parse_range(&r)) else { continue };
+        let Some(val) = grab_f("<c:val>").and_then(|r| parse_range(&r)) else {
+            continue;
+        };
         // Title: first a:t inside c:title.
         let title = xml
             .split("<c:title>")
@@ -499,7 +688,10 @@ mod chart_tests {
         let dir = tempfile::tempdir().unwrap();
         let path = dir.path().join("c.xlsx");
         let mut sh = SheetModel::new("Sheet1", 10, 5, 0);
-        for (i, (l, v)) in [("North", 12.0), ("South", 9.5), ("East", 14.0)].iter().enumerate() {
+        for (i, (l, v)) in [("North", 12.0), ("South", 9.5), ("East", 14.0)]
+            .iter()
+            .enumerate()
+        {
             sh.data[i + 1][0] = l.to_string();
             sh.data[i + 1][1] = v.to_string();
         }
@@ -544,14 +736,17 @@ mod chart_tests {
     }
 }
 
-
 /// Read cell-value conditional-formatting rules back from an xlsx.
 /// Best-effort: only the rule shapes we write (and Calc's rewrites of
 /// them) are recognized.
 pub fn read_cond_rules_from_xlsx(path: &str) -> Vec<crate::sheet::CondRule> {
     use crate::sheet::{parse_cell_ref, CondOp, CondRule};
-    let Ok(f) = std::fs::File::open(path) else { return Vec::new() };
-    let Ok(mut zip) = zip::ZipArchive::new(f) else { return Vec::new() };
+    let Ok(f) = std::fs::File::open(path) else {
+        return Vec::new();
+    };
+    let Ok(mut zip) = zip::ZipArchive::new(f) else {
+        return Vec::new();
+    };
     use std::io::Read as _;
 
     // dxf index → fill RGB, from styles.xml (order of <dxf> elements).
@@ -573,7 +768,11 @@ pub fn read_cond_rules_from_xlsx(path: &str) -> Vec<crate::sheet::CondRule> {
                         .map(|c| {
                             let c = c.to_uppercase();
                             // ARGB → RGB: drop the alpha byte only.
-                            if c.len() == 8 { c[2..].to_string() } else { c }
+                            if c.len() == 8 {
+                                c[2..].to_string()
+                            } else {
+                                c
+                            }
                         });
                     dxf_fills.push(fill);
                 }
@@ -592,17 +791,24 @@ pub fn read_cond_rules_from_xlsx(path: &str) -> Vec<crate::sheet::CondRule> {
 
     let mut out = Vec::new();
     for block in sheet_xml.split("<conditionalFormatting").skip(1) {
-        let block = block.split("</conditionalFormatting>").next().unwrap_or(block);
-        let Some(sqref) = block.split("sqref=\"").nth(1).and_then(|t| t.split('"').next())
+        let block = block
+            .split("</conditionalFormatting>")
+            .next()
+            .unwrap_or(block);
+        let Some(sqref) = block
+            .split("sqref=\"")
+            .nth(1)
+            .and_then(|t| t.split('"').next())
         else {
             continue;
         };
         // First range in the sqref (we write exactly one).
         let range = sqref.split(' ').next().unwrap_or(sqref);
         let (a, b) = range.split_once(':').unwrap_or((range, range));
-        let (Some((r0, c0)), Some((r1, c1))) =
-            (parse_cell_ref(&a.replace('$', "")), parse_cell_ref(&b.replace('$', "")))
-        else {
+        let (Some((r0, c0)), Some((r1, c1))) = (
+            parse_cell_ref(&a.replace('$', "")),
+            parse_cell_ref(&b.replace('$', "")),
+        ) else {
             continue;
         };
         for rule_xml in block.split("<cfRule").skip(1) {
@@ -622,7 +828,9 @@ pub fn read_cond_rules_from_xlsx(path: &str) -> Vec<crate::sheet::CondRule> {
                 .filter_map(|t| t.split("</formula>").next())
                 .filter_map(|v| v.trim().parse().ok())
                 .collect();
-            let Some(v0) = formulas.first().copied() else { continue };
+            let Some(v0) = formulas.first().copied() else {
+                continue;
+            };
             let op = match attr("operator").as_deref() {
                 Some("greaterThan") => CondOp::Greater,
                 Some("lessThan") => CondOp::Less,
