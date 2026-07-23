@@ -192,6 +192,45 @@ class TablesSmoke(BaseGUITestCase):
         self.assertIn("A1", grid.description)
 
 
+class TablesMultiSheetSmoke(BaseGUITestCase):
+    """Real GTK journey: add a sheet, edit both independently, and confirm
+    switching never leaks one sheet's data into the other (issue #98)."""
+
+    app_name = "tables"
+
+    def test_add_sheet_keeps_data_isolated_across_switches(self):
+        from dogtail import rawinput
+        import subprocess
+
+        subprocess.run(["gapplication", "action", "org.tunaos.tables-rust", "new-document"])
+        time.sleep(1.5)
+        rawinput.typeText("=1+1")
+        rawinput.keyCombo("Return")
+        time.sleep(0.5)
+
+        self.app.child(name="Add sheet", roleName="push button").do_action(0)
+        time.sleep(0.8)
+        # GtkDropDown's accessible name mirrors the selected item's label
+        # ("Sheet2" once added), not a fixed string, so match by role.
+        switcher = self.app.child(roleName="combo box")
+
+        rawinput.typeText("=3+3")
+        rawinput.keyCombo("Return")
+        time.sleep(0.5)
+        grid = self.app.child(name="Spreadsheet grid")
+        self.assertIn("6", grid.description, f"Sheet2 grid: {grid.description!r}")
+
+        # Switch back to Sheet1 via the dropdown and confirm its own value.
+        switcher.child(name="Sheet2", roleName="toggle button").do_action(0)
+        time.sleep(0.3)
+        rawinput.keyCombo("Up")
+        rawinput.keyCombo("Return")
+        time.sleep(0.5)
+        grid = self.app.child(name="Spreadsheet grid")
+        self.assertIn("2", grid.description, f"Sheet1 grid: {grid.description!r}")
+        self.assertNotIn("6", grid.description, "Sheet2's value leaked into Sheet1")
+
+
 class TablesUndoSaveReopenSmoke(BaseGUITestCase):
     """Real GTK journey: edit, undo, redo, save, restart, and reopen."""
 

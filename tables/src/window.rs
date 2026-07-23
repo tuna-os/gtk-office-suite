@@ -568,16 +568,209 @@ impl TablesWindow {
             .tooltip_text("Switch sheet")
             .build();
         sheet_bar.append(&sheet_switcher);
+        sheet_switcher.update_property(&[gtk4::accessible::Property::Label("Sheet switcher")]);
 
         let add_btn = gtk4::Button::builder()
             .icon_name("list-add-symbolic")
             .tooltip_text("Add sheet")
             .build();
         add_btn.set_css_classes(&["flat", "circular"]);
+        add_btn.update_property(&[gtk4::accessible::Property::Label("Add sheet")]);
         sheet_bar.append(&add_btn);
+
+        let rename_sheet_btn = gtk4::Button::builder()
+            .icon_name("document-edit-symbolic")
+            .tooltip_text("Rename sheet")
+            .build();
+        rename_sheet_btn.set_css_classes(&["flat", "circular"]);
+        rename_sheet_btn.update_property(&[gtk4::accessible::Property::Label("Rename sheet")]);
+        sheet_bar.append(&rename_sheet_btn);
+
+        let move_sheet_left_btn = gtk4::Button::builder()
+            .icon_name("go-previous-symbolic")
+            .tooltip_text("Move sheet left")
+            .build();
+        move_sheet_left_btn.set_css_classes(&["flat", "circular"]);
+        move_sheet_left_btn
+            .update_property(&[gtk4::accessible::Property::Label("Move sheet left")]);
+        sheet_bar.append(&move_sheet_left_btn);
+
+        let move_sheet_right_btn = gtk4::Button::builder()
+            .icon_name("go-next-symbolic")
+            .tooltip_text("Move sheet right")
+            .build();
+        move_sheet_right_btn.set_css_classes(&["flat", "circular"]);
+        move_sheet_right_btn
+            .update_property(&[gtk4::accessible::Property::Label("Move sheet right")]);
+        sheet_bar.append(&move_sheet_right_btn);
+
+        let delete_sheet_btn = gtk4::Button::builder()
+            .icon_name("edit-delete-symbolic")
+            .tooltip_text("Delete sheet")
+            .build();
+        delete_sheet_btn.set_css_classes(&["flat", "circular"]);
+        delete_sheet_btn.update_property(&[gtk4::accessible::Property::Label("Delete sheet")]);
+        sheet_bar.append(&delete_sheet_btn);
         // Selection statistics live at the right end of the sheet bar,
         // Calc-style (one bottom bar, tabs left / stats right).
         sheet_bar.append(&stats_label);
+
+        // Rebuild the sheet-name dropdown from the live sheet list. Used
+        // after any structural change (delete/rename/reorder) so the
+        // switcher never drifts from `WorkbookState::sheets`.
+        fn refresh_sheet_model(sm: &gtk4::StringList, state: &Rc<RefCell<WorkbookState>>) {
+            let names: Vec<String> = state
+                .borrow()
+                .sheets
+                .iter()
+                .map(|sheet| sheet.borrow().name.clone())
+                .collect();
+            let refs: Vec<&str> = names.iter().map(String::as_str).collect();
+            sm.splice(0, sm.n_items(), &refs);
+        }
+
+        // Rename sheet
+        {
+            let ctl = controller.clone();
+            let sm = sheet_model.clone();
+            let sd = sheet_switcher.clone();
+            let btn = rename_sheet_btn.clone();
+            rename_sheet_btn.connect_clicked(move |_| {
+                let w = btn.root().and_downcast::<adw::ApplicationWindow>();
+                let idx = sd.selected() as usize;
+                let controller = ctl.borrow();
+                let state = controller.state.clone();
+                let current_name = state.borrow().sheets[idx].borrow().name.clone();
+                drop(controller);
+
+                let entry = gtk4::Entry::builder()
+                    .text(&current_name)
+                    .activates_default(true)
+                    .build();
+                let dlg = adw::AlertDialog::builder()
+                    .heading(&suite_common::i18n("Rename Sheet"))
+                    .build();
+                dlg.set_extra_child(Some(&entry));
+                dlg.add_response("cancel", &suite_common::i18n("Cancel"));
+                dlg.add_response("rename", &suite_common::i18n("Rename"));
+                dlg.set_response_appearance("rename", adw::ResponseAppearance::Suggested);
+                dlg.set_default_response(Some("rename"));
+                let sm = sm.clone();
+                dlg.connect_response(None, move |_, resp| {
+                    if resp != "rename" {
+                        return;
+                    }
+                    let name = entry.text().to_string();
+                    if name.is_empty() || name == current_name {
+                        return;
+                    }
+                    if state.borrow_mut().rename_sheet(idx, &name).is_ok() {
+                        refresh_sheet_model(&sm, &state);
+                    }
+                });
+                dlg.present(w.as_ref());
+            });
+        }
+
+        // Move sheet left / right
+        {
+            let ctl = controller.clone();
+            let sm = sheet_model.clone();
+            let sd = sheet_switcher.clone();
+            let da = drawing_area.clone();
+            move_sheet_left_btn.connect_clicked(move |_| {
+                let controller = ctl.borrow();
+                let state = controller.state.clone();
+                drop(controller);
+                let idx = sd.selected() as usize;
+                if idx == 0 {
+                    return;
+                }
+                let count = state.borrow().sheets.len();
+                let mut order: Vec<usize> = (0..count).collect();
+                order.swap(idx, idx - 1);
+                if state.borrow_mut().reorder_sheets(&order).is_ok() {
+                    refresh_sheet_model(&sm, &state);
+                    // `ctl`'s own borrow is dropped above: set_selected fires
+                    // selected-notify synchronously, which also borrows `ctl`.
+                    sd.set_selected((idx - 1) as u32);
+                    da.queue_draw();
+                }
+            });
+        }
+        {
+            let ctl = controller.clone();
+            let sm = sheet_model.clone();
+            let sd = sheet_switcher.clone();
+            let da = drawing_area.clone();
+            move_sheet_right_btn.connect_clicked(move |_| {
+                let controller = ctl.borrow();
+                let state = controller.state.clone();
+                drop(controller);
+                let idx = sd.selected() as usize;
+                let count = state.borrow().sheets.len();
+                if idx + 1 >= count {
+                    return;
+                }
+                let mut order: Vec<usize> = (0..count).collect();
+                order.swap(idx, idx + 1);
+                if state.borrow_mut().reorder_sheets(&order).is_ok() {
+                    refresh_sheet_model(&sm, &state);
+                    // `ctl`'s own borrow is dropped above: set_selected fires
+                    // selected-notify synchronously, which also borrows `ctl`.
+                    sd.set_selected((idx + 1) as u32);
+                    da.queue_draw();
+                }
+            });
+        }
+
+        // Delete sheet (with confirmation; refuses to delete the only sheet)
+        {
+            let ctl = controller.clone();
+            let sm = sheet_model.clone();
+            let sd = sheet_switcher.clone();
+            let da = drawing_area.clone();
+            let btn = delete_sheet_btn.clone();
+            delete_sheet_btn.connect_clicked(move |_| {
+                let w = btn.root().and_downcast::<adw::ApplicationWindow>();
+                let controller = ctl.borrow();
+                let state = controller.state.clone();
+                let idx = sd.selected() as usize;
+                drop(controller);
+                if state.borrow().sheets.len() <= 1 {
+                    let err = adw::AlertDialog::builder()
+                        .heading(&suite_common::i18n("Can't Delete Sheet"))
+                        .body(&suite_common::i18n("A workbook needs at least one sheet."))
+                        .build();
+                    err.add_response("ok", &suite_common::i18n("OK"));
+                    err.present(w.as_ref());
+                    return;
+                }
+                let name = state.borrow().sheets[idx].borrow().name.clone();
+                let dlg = adw::AlertDialog::builder()
+                    .heading(&suite_common::i18n("Delete Sheet?"))
+                    .body(&format!("“{name}” will be permanently deleted."))
+                    .build();
+                dlg.add_response("cancel", &suite_common::i18n("Cancel"));
+                dlg.add_response("delete", &suite_common::i18n("Delete"));
+                dlg.set_response_appearance("delete", adw::ResponseAppearance::Destructive);
+                dlg.set_default_response(Some("cancel"));
+                let sm = sm.clone();
+                let sd = sd.clone();
+                let da = da.clone();
+                dlg.connect_response(None, move |_, resp| {
+                    if resp != "delete" {
+                        return;
+                    }
+                    if state.borrow_mut().delete_sheet(idx).is_ok() {
+                        refresh_sheet_model(&sm, &state);
+                        sd.set_selected(state.borrow().active_sheet as u32);
+                        da.queue_draw();
+                    }
+                });
+                dlg.present(w.as_ref());
+            });
+        }
 
         // Add sheet action
         {
@@ -586,30 +779,42 @@ impl TablesWindow {
             let sd = sheet_switcher.clone();
             let da = drawing_area.clone();
             add_btn.connect_clicked(move |_| {
-                let mut controller = ctl.borrow_mut();
-                let idx = controller.state.borrow().sheets.len();
+                let idx = ctl.borrow().state.borrow().sheets.len();
                 let name = format!("Sheet{}", idx + 1);
-                controller
-                    .state
-                    .borrow_mut()
-                    .add_sheet(name.clone(), DEFAULT_ROWS, DEFAULT_COLS)
-                    .expect("add worksheet");
-                controller.state.borrow_mut().switch_sheet(idx).expect("switch worksheet");
+                {
+                    let controller = ctl.borrow_mut();
+                    controller
+                        .state
+                        .borrow_mut()
+                        .add_sheet(name.clone(), DEFAULT_ROWS, DEFAULT_COLS)
+                        .expect("add worksheet");
+                    controller.state.borrow_mut().switch_sheet(idx).expect("switch worksheet");
+                }
                 sm.append(&name);
+                // Dropped the controller borrow above: GtkDropDown fires
+                // selected-notify synchronously, and that handler also
+                // borrows `ctl` — holding our own borrow across this call
+                // panics with "RefCell already borrowed" (issue found via
+                // TablesMultiSheetSmoke GUI test).
                 sd.set_selected(idx as u32);
                 da.queue_draw();
             });
         }
 
-        // Switch sheet
+        // Switch sheet. This also fires synchronously whenever add/rename/
+        // delete/reorder call `sheet_switcher.set_selected()`, so it is the
+        // one place that needs to refresh the grid's a11y description after
+        // any structural sheet change.
         {
             let ctl = controller.clone();
+            let s = state.clone();
             let da = drawing_area.clone();
             let fx = fx_entry.clone();
             sheet_switcher.connect_selected_notify(move |dd| {
                 let idx = dd.selected() as usize;
                 if ctl.borrow_mut().state.borrow_mut().switch_sheet(idx).is_ok() {
                     fx.set_text("");
+                    refresh_grid_a11y(&da, &s);
                     da.queue_draw();
                 }
             });
@@ -967,19 +1172,26 @@ impl TablesWindow {
                                 let path_str = path.to_string_lossy().to_string();
                                 match load_file_into_engine(&path_str, &mut s.borrow_mut().engine) {
                                     Ok((rows, cols)) => {
-                                        let mut ss = s.borrow_mut();
-                                        // Replace with loaded data
-                                        let mut sheet = SheetModel::new(
-                                            "Sheet1", rows.max(DEFAULT_ROWS),
-                                            cols.max(DEFAULT_COLS), 0);
-                                        sheet.sync_from_engine(&ss.engine);
-                                        sheet.charts =
-                                            tables_core::io::read_charts_from_xlsx(&path_str);
-                                        sheet.cond_rules =
-                                            tables_core::io::read_cond_rules_from_xlsx(&path_str);
-                                        ss.sheets.clear();
-                                        ss.sheets.push(Rc::new(RefCell::new(sheet)));
-                                        ss.active_sheet = 0;
+                                        // Scoped so the RefMut guard drops before
+                                        // set_selected() below: GtkDropDown fires
+                                        // selected-notify synchronously, and that
+                                        // handler also borrows this same state.
+                                        {
+                                            let mut ss = s.borrow_mut();
+                                            // Replace with loaded data
+                                            let sheet_id = ss.engine.sheet_id_at(0).unwrap_or(0);
+                                            let mut sheet = SheetModel::new(
+                                                "Sheet1", rows.max(DEFAULT_ROWS),
+                                                cols.max(DEFAULT_COLS), sheet_id);
+                                            sheet.sync_from_engine(&ss.engine);
+                                            sheet.charts =
+                                                tables_core::io::read_charts_from_xlsx(&path_str);
+                                            sheet.cond_rules =
+                                                tables_core::io::read_cond_rules_from_xlsx(&path_str);
+                                            ss.sheets.clear();
+                                            ss.sheets.push(Rc::new(RefCell::new(sheet)));
+                                            ss.active_sheet = 0;
+                                        }
                                         // Update sheet switcher
                                         sm.splice(0, sm.n_items(), &[]);
                                         sm.append("Sheet1");
@@ -1238,6 +1450,32 @@ impl TablesWindow {
                     };
                     ctl.borrow_mut().edit_cell(r, c, "");
                     da.queue_draw();
+                    return gtk4::glib::Propagation::Stop;
+                }
+                // Type-to-edit: any other printable keystroke on the focused
+                // grid starts editing the selected cell, spreadsheet-style
+                // (Excel/Calc/Sheets), instead of requiring a click into the
+                // formula bar first.
+                if !ctrl && !mods.contains(gtk4::gdk::ModifierType::ALT_MASK) {
+                    if let Some(ch) = keyval.to_unicode() {
+                        if !ch.is_control() {
+                            fx.set_text(&ch.to_string());
+                            fx.grab_focus();
+                            fx.set_position(-1);
+                            return gtk4::glib::Propagation::Stop;
+                        }
+                    }
+                }
+                if keyval == Key::F2 || keyval == Key::Return || keyval == Key::KP_Enter {
+                    let current = {
+                        let st = s.borrow();
+                        let (r, c) = (st.sheet().selected_row, st.sheet().selected_col);
+                        st.cell_input(r, c)
+                    };
+                    fx.set_text(&current);
+                    fx.grab_focus();
+                    fx.set_position(-1);
+                    return gtk4::glib::Propagation::Stop;
                 }
                 gtk4::glib::Propagation::Proceed
             });
@@ -1302,8 +1540,9 @@ impl TablesWindow {
         let (rows, cols) = load_file_into_engine(path, &mut self.state.borrow_mut().engine)?;
         {
             let mut ss = self.state.borrow_mut();
+            let sheet_id = ss.engine.sheet_id_at(0).unwrap_or(0);
             let mut sheet =
-                SheetModel::new("Sheet1", rows.max(DEFAULT_ROWS), cols.max(DEFAULT_COLS), 0);
+                SheetModel::new("Sheet1", rows.max(DEFAULT_ROWS), cols.max(DEFAULT_COLS), sheet_id);
             sheet.sync_from_engine(&ss.engine);
             sheet.charts = tables_core::io::read_charts_from_xlsx(path);
             sheet.cond_rules = tables_core::io::read_cond_rules_from_xlsx(path);
@@ -1437,6 +1676,20 @@ fn update_grid_a11y(da: &gtk4::DrawingArea, col: &str, row: usize, value: &str) 
         format!("cell {}{}: {}", col, row + 1, value)
     };
     da.update_property(&[gtk4::accessible::Property::Description(&desc)]);
+}
+
+/// Recompute the grid's a11y description from the currently active sheet's
+/// selection. Sheet switches change which cell "A1" refers to without
+/// necessarily moving the on-screen selection, so anything that changes the
+/// active sheet (add, switch, delete, reorder) must call this — otherwise
+/// screen readers keep announcing the previous sheet's stale content.
+fn refresh_grid_a11y(da: &gtk4::DrawingArea, state: &Rc<RefCell<WorkbookState>>) {
+    let st = state.borrow();
+    let sh = st.sheet();
+    let (r, c) = (sh.selected_row, sh.selected_col);
+    let shown = sh.cell(r, c).to_string();
+    drop(sh);
+    update_grid_a11y(da, &tables_core::sheet::col_label(c), r, &shown);
 }
 
 
