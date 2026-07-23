@@ -190,6 +190,13 @@ const MANIFEST: &str = "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\
 /// never touched until the full buffer is ready (see suite_common_core::
 /// atomic_save).
 pub fn write(deck: &Deck, path: &str) -> Result<(), String> {
+    let bytes = write_bytes(deck)?;
+    suite_common_core::atomic_save::atomic_write_bytes(std::path::Path::new(path), &bytes)
+}
+
+/// Render the deck to an in-memory .odp buffer without touching disk —
+/// shared by the real save path (above) and autosave snapshots.
+pub fn write_bytes(deck: &Deck) -> Result<Vec<u8>, String> {
     let buf = std::io::Cursor::new(Vec::new());
     let mut z = zip::ZipWriter::new(buf);
     z.start_file(
@@ -203,8 +210,7 @@ pub fn write(deck: &Deck, path: &str) -> Result<(), String> {
     z.write_all(MANIFEST.as_bytes()).map_err(|e| e.to_string())?;
     z.start_file("content.xml", opt).map_err(|e| e.to_string())?;
     z.write_all(content_xml(deck).as_bytes()).map_err(|e| e.to_string())?;
-    let bytes = z.finish().map_err(|e| e.to_string())?.into_inner();
-    suite_common_core::atomic_save::atomic_write_bytes(std::path::Path::new(path), &bytes)
+    z.finish().map_err(|e| e.to_string()).map(|c| c.into_inner())
 }
 
 // ── Reading ──────────────────────────────────────────────────────────

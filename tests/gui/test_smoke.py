@@ -859,6 +859,68 @@ class DecksCloseGuardSmoke(BaseGUITestCase):
         self.assertGreater(os.path.getsize(out_path), 0)
 
 
+class DecksAutosaveSmoke(BaseGUITestCase):
+    """Crash-recovery snapshot lifecycle (issue #99), same contract as
+    Tables: a dirty, never-saved deck survives an unclean process kill and
+    is offered back on the next launch."""
+
+    app_name = "decks"
+
+    def setUp(self):
+        import tempfile
+        self._state_dir = tempfile.mkdtemp(prefix="decks-autosave-state-")
+        self.launch_env = {"XDG_STATE_HOME": self._state_dir}
+        super().setUp()
+
+    def tearDown(self):
+        super().tearDown()
+        import shutil
+        shutil.rmtree(self._state_dir, ignore_errors=True)
+
+    def _snapshot_files(self):
+        snap_dir = os.path.join(self._state_dir, "decks")
+        if not os.path.isdir(snap_dir):
+            return []
+        return [f for f in os.listdir(snap_dir) if f.endswith(".snapshot")]
+
+    def _add_shape(self):
+        import subprocess
+
+        aid = "org.tunaos.decks-rust"
+        subprocess.run(["gapplication", "action", aid, "new-document"])
+        time.sleep(1.5)
+        subprocess.run(["gapplication", "action", aid, "add-shape"])
+        time.sleep(1.0)
+
+    def test_crash_then_relaunch_recovers_and_clears_the_snapshot(self):
+        import subprocess
+
+        self._add_shape()
+        subprocess.run(["gapplication", "action", "org.tunaos.decks-rust", "autosave-now"])
+        time.sleep(0.5)
+        self.assertEqual(len(self._snapshot_files()), 1, "autosave-now must have written a snapshot")
+
+        # Simulate a crash: kill the process directly, bypassing the close
+        # guard, so the snapshot is never cleared by a clean exit.
+        self.process.kill()
+        self.process.wait(timeout=5)
+
+        env = os.environ.copy()
+        env["GDK_BACKEND"] = "x11"
+        env.update(self.launch_env)
+        self.process = subprocess.Popen(
+            [self.bin_path], env=env,
+            stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
+        )
+        self.app = self.wait_for_app(self.app_name)
+        time.sleep(1.5)
+
+        frame = self.app.child(roleName="frame")
+        self.assertIn("Recovered", frame.name, f"window did not announce recovery: {frame.name!r}")
+        self.assertEqual(self._snapshot_files(), [],
+                          "the recovered snapshot must be cleared so it isn't offered again")
+
+
 class DecksSmoke(BaseGUITestCase):
     app_name = "decks"
 

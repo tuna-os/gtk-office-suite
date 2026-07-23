@@ -43,6 +43,15 @@
       <range min="100" max="2000"/>
       <summary>Default transition speed in milliseconds</summary>
     </key>
+    <key name="auto-save" type="b">
+      <default>true</default>
+      <summary>Enable automatic save</summary>
+    </key>
+    <key name="auto-save-interval" type="i">
+      <default>60</default>
+      <range min="10" max="3600"/>
+      <summary>Auto-save interval in seconds</summary>
+    </key>
     <key name="palette-recent" type="as">
       <default>[]</default>
       <summary>Recently used command-palette actions</summary>

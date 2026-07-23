@@ -28,3 +28,14 @@ pub fn write_deck(path: &str, deck: &engine::Deck) -> Result<(), String> {
         engine::write_pptx(path, deck)
     }
 }
+
+/// Render a presentation to an in-memory buffer without touching disk, in
+/// the format implied by `format_hint` ("odp" or anything else -> pptx) —
+/// used for autosave snapshots, which have no real save path to dispatch on.
+pub fn write_deck_bytes(format_hint: &str, deck: &engine::Deck) -> Result<Vec<u8>, String> {
+    if format_hint.eq_ignore_ascii_case("odp") {
+        odp::write_bytes(deck)
+    } else {
+        engine::write_pptx_bytes(deck)
+    }
+}

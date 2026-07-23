@@ -19,7 +19,31 @@ use crate::toolbar::{find_toolbar_child, build_decks_toolbar};
 use crate::transition::{TransitionState, TransitionType, draw_transition};
 
 use decks_core::engine::{Slide, SlideObject, MasterSlide, Deck};
-use decks_core::{read_deck, write_deck};
+use decks_core::{read_deck, write_deck, write_deck_bytes};
+
+// ── Crash-recovery snapshots ─────────────────────────────────────────────
+static NEXT_DOC_ID: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+fn next_doc_id() -> String {
+    let n = NEXT_DOC_ID.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+    format!("{}-{n}", std::process::id())
+}
+
+fn autosave_state_dir() -> std::path::PathBuf {
+    // glib::user_state_dir() needs the "v2_72" feature this workspace's
+    // glib binding doesn't enable — do the XDG fallback ourselves.
+    let base = std::env::var_os("XDG_STATE_HOME")
+        .map(std::path::PathBuf::from)
+        .or_else(|| std::env::var_os("HOME").map(|h| std::path::PathBuf::from(h).join(".local/state")))
+        .unwrap_or_else(|| std::path::PathBuf::from("/tmp"));
+    base.join("decks")
+}
+
+fn autosave_format_hint(path: &Option<String>) -> String {
+    match path {
+        Some(p) if p.to_lowercase().ends_with(".odp") => "odp".to_string(),
+        _ => "pptx".to_string(),
+    }
+}
 
 // ── DecksWindow ──────────────────────────────────────────────────────────
 
@@ -43,6 +67,7 @@ pub struct DecksWindow {
     /// touched at each of the many `undo.execute()` call sites in this
     /// file, so it can't drift from what the undo history actually did.
     dirty: Rc<Cell<bool>>,
+    autosave_slot: Rc<suite_common::autosave::AutosaveSlot>,
 }
 
 /// Marks a deck dirty on any undo-stack mutation (execute, undo, or redo).
@@ -78,6 +103,10 @@ impl DecksWindow {
         let file_path = Rc::new(RefCell::new(None::<String>));
         let undo = Rc::new(RefCell::new(UndoManager::new(slides.clone())));
         let dirty = Rc::new(Cell::new(false));
+        let settings = gio::Settings::new("org.tunaos.decks-rust");
+        let autosave_slot = Rc::new(suite_common::autosave::AutosaveSlot::new(
+            autosave_state_dir(), next_doc_id(),
+        ));
         undo.borrow_mut().broadcaster = Some(Rc::new(Broadcaster::new()));
         undo
             .borrow()
@@ -416,6 +445,7 @@ impl DecksWindow {
             let ss = slides.clone();
             let m = masters.clone();
             let path_state = file_path.clone();
+            let slot = autosave_slot.clone();
             let force_close = Rc::new(Cell::new(false));
             suite_win.window.connect_close_request(move |win| {
                 if force_close.get() {
@@ -444,9 +474,11 @@ impl DecksWindow {
                 let ss = ss.clone();
                 let m = m.clone();
                 let path_state = path_state.clone();
+                let slot = slot.clone();
                 dialog.choose(Some(win), None::<&gio::Cancellable>, move |response: glib::GString| {
                     let Some(win) = win_weak.upgrade() else { return };
                     if response == "discard" {
+                        let _ = slot.clear();
                         force_close.set(true);
                         win.close();
                         return;
@@ -460,6 +492,7 @@ impl DecksWindow {
                         match write_deck(&path, &deck) {
                             Ok(()) => {
                                 dirty.set(false);
+                                let _ = slot.clear();
                                 force_close.set(true);
                                 win.close();
                             }
@@ -489,6 +522,7 @@ impl DecksWindow {
                     dlg.set_filters(Some(&fl));
                     dlg.set_initial_name(Some("Untitled.pptx"));
                     let win2 = win.clone();
+                    let slot = slot.clone();
                     dlg.save(Some(&win), None::<&gio::Cancellable>, move |result| {
                         if let Ok(file) = result {
                             if let Some(path) = file.path() {
@@ -498,6 +532,7 @@ impl DecksWindow {
                                     Ok(()) => {
                                         *path_state.borrow_mut() = Some(path_str);
                                         dirty.set(false);
+                                        let _ = slot.clear();
                                         force_close.set(true);
                                         win2.close();
                                     }
@@ -1338,12 +1373,16 @@ impl DecksWindow {
             let path_clone = path_ref.clone();
             let m_save = masters.clone();
             let dirty_save = dirty.clone();
+            let slot_save = autosave_slot.clone();
             act_save.connect_activate(move |_, _| {
                 let current_path = path_clone.borrow().clone();
                 if let Some(path_str) = current_path {
                     let deck = Deck { slides: ss_clone.borrow().clone(), masters: m_save.borrow().clone() };
                     match write_deck(&path_str, &deck) {
-                        Ok(()) => dirty_save.set(false),
+                        Ok(()) => {
+                            dirty_save.set(false);
+                            let _ = slot_save.clear();
+                        }
                         Err(e) => {
                             let err = adw::AlertDialog::builder()
                                 .heading(&suite_common::i18n("Error saving presentation"))
@@ -1363,6 +1402,7 @@ impl DecksWindow {
             let act_save_as = gtk::gio::SimpleAction::new("save-file-as", None);
             let m_as = masters.clone();
             let dirty_as = dirty.clone();
+            let slot_as = autosave_slot.clone();
             act_save_as.connect_activate(move |_, _| {
                 let dlg = gtk::FileDialog::new();
                 let f = gtk::FileFilter::new();
@@ -1382,6 +1422,7 @@ impl DecksWindow {
                 let path_ref = path_ref.clone();
                 let m_inner = m_as.clone();
                 let dirty_as = dirty_as.clone();
+                let slot_as = slot_as.clone();
                 dlg.save(Some(&w), None::<&gio::Cancellable>,
                     move |result: Result<gio::File, glib::Error>| {
                         if let Ok(file) = result {
@@ -1392,6 +1433,7 @@ impl DecksWindow {
                                     Ok(()) => {
                                         *path_ref.borrow_mut() = Some(path_str);
                                         dirty_as.set(false);
+                                        let _ = slot_as.clear();
                                     }
                                     Err(e) => {
                                         let err = adw::AlertDialog::builder()
@@ -1411,6 +1453,61 @@ impl DecksWindow {
             app.add_action(&act_save_as);
         }
 
+        // ── Autosave: periodic crash-recovery snapshot ──────────────────
+        // Mirrors Tables: writes to the state-dir slot, never to the deck's
+        // own path, and never clears `dirty` — a snapshot is not a save,
+        // the close guard still needs to fire.
+        {
+            let ss = slides.clone();
+            let m = masters.clone();
+            let dirty = dirty.clone();
+            let slot = autosave_slot.clone();
+            let path_state = file_path.clone();
+            let act = gtk::gio::SimpleAction::new("autosave-now", None);
+            act.connect_activate(move |_, _| {
+                if !dirty.get() {
+                    return;
+                }
+                let deck = Deck { slides: ss.borrow().clone(), masters: m.borrow().clone() };
+                let path = path_state.borrow().clone();
+                let kind = autosave_format_hint(&path);
+                if let Ok(bytes) = write_deck_bytes(&kind, &deck) {
+                    let meta = suite_common::autosave::SnapshotMeta {
+                        original_path: path.map(std::path::PathBuf::from),
+                        kind,
+                    };
+                    let _ = slot.write(&bytes, &meta);
+                }
+            });
+            app.add_action(&act);
+        }
+        {
+            let ss = slides.clone();
+            let m = masters.clone();
+            let dirty = dirty.clone();
+            let slot = autosave_slot.clone();
+            let path_state = file_path.clone();
+            let interval = settings.int("auto-save-interval").max(10) as u32;
+            let enabled = settings.boolean("auto-save");
+            if enabled {
+                glib::source::timeout_add_seconds_local(interval, move || {
+                    if dirty.get() {
+                        let deck = Deck { slides: ss.borrow().clone(), masters: m.borrow().clone() };
+                        let path = path_state.borrow().clone();
+                        let kind = autosave_format_hint(&path);
+                        if let Ok(bytes) = write_deck_bytes(&kind, &deck) {
+                            let meta = suite_common::autosave::SnapshotMeta {
+                                original_path: path.map(std::path::PathBuf::from),
+                                kind,
+                            };
+                            let _ = slot.write(&bytes, &meta);
+                        }
+                    }
+                    glib::ControlFlow::Continue
+                });
+            }
+        }
+
         Self {
             window: suite_win.window,
             split_view,
@@ -1427,10 +1524,48 @@ impl DecksWindow {
             file_path,
             refresh_hud,
             dirty,
+            autosave_slot,
         }
     }
 
     pub fn present(&self) { self.window.present(); }
+
+    /// Check for a snapshot orphaned by a crash and load it if found. Call
+    /// once, right after construction, before any explicit CLI-open — an
+    /// explicit open target should win over recovering an unrelated
+    /// document. Returns true if a snapshot was recovered.
+    pub fn recover_from_snapshot(&self) -> bool {
+        let state_dir = autosave_state_dir();
+        let Some(orphan_id) = suite_common::autosave::find_orphaned_snapshots(&state_dir).into_iter().next() else {
+            return false;
+        };
+        let orphan = suite_common::autosave::AutosaveSlot::new(state_dir, orphan_id);
+        let Some((bytes, meta)) = orphan.read() else { return false };
+        let ext = if meta.kind == "odp" { "odp" } else { "pptx" };
+        let tmp = std::env::temp_dir().join(format!("decks-recovery-{}.{ext}", std::process::id()));
+        if std::fs::write(&tmp, &bytes).is_err() {
+            return false;
+        }
+        let recovered = self.open_path(&tmp.to_string_lossy()).is_ok();
+        let _ = std::fs::remove_file(&tmp);
+        if !recovered {
+            return false;
+        }
+        // open_path() pointed file_path at the temp recovery file and left
+        // `dirty` untouched (it's a plain field write, not an undo-stack
+        // mutation) — recovered content targets the *original* path (or
+        // none) and must count as dirty so the close guard offers to
+        // save it.
+        *self.file_path.borrow_mut() = meta.original_path.as_ref().map(|p| p.to_string_lossy().to_string());
+        self.dirty.set(true);
+        let name = meta.original_path.as_ref()
+            .and_then(|p| p.file_name())
+            .map(|n| n.to_string_lossy().to_string())
+            .unwrap_or_else(|| "Untitled".to_string());
+        self.window.set_title(Some(&format!("{name} (Recovered) — Decks")));
+        let _ = orphan.clear();
+        true
+    }
 
     /// Open a .pptx or .odp directly (CLI / file-manager open). Mirrors the
     /// open-file dialog success path.

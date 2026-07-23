@@ -1122,6 +1122,13 @@ fn write_image<W: std::io::Write>(
 }
 
 pub fn write_pptx(path: &str, deck: &Deck) -> Result<(), String> {
+    let bytes = write_pptx_bytes(deck)?;
+    suite_common_core::atomic_save::atomic_write_bytes(std::path::Path::new(path), &bytes)
+}
+
+/// Render the deck to an in-memory .pptx buffer without touching disk —
+/// shared by the real save path (above) and autosave snapshots.
+pub fn write_pptx_bytes(deck: &Deck) -> Result<Vec<u8>, String> {
     // Built fully in memory, then placed atomically — see
     // suite_common_core::atomic_save and odp::write for why.
     let buf = std::io::Cursor::new(Vec::new());
@@ -1365,8 +1372,7 @@ pub fn write_pptx(path: &str, deck: &Deck) -> Result<(), String> {
         zip.write_all(&buffer).map_err(|e| e.to_string())?;
     }
 
-    let bytes = zip.finish().map_err(|e| e.to_string())?.into_inner();
-    suite_common_core::atomic_save::atomic_write_bytes(std::path::Path::new(path), &bytes)
+    zip.finish().map_err(|e| e.to_string()).map(|c| c.into_inner())
 }
 
 #[cfg(test)]

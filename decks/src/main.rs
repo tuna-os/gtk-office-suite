@@ -56,6 +56,7 @@ fn main() {
         let mut store = ws.borrow_mut();
         if store.is_none() {
             let w = window::DecksWindow::new(app);
+            w.recover_from_snapshot();
             *pw_store.borrow_mut() = Some(w.window.clone().upcast::<gtk4::Window>());
             *store = Some(w);
         }
