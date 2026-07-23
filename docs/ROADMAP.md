@@ -1,5 +1,11 @@
 # Roadmap
 
+> The post-v1 feature ledger below is retained as historical context. The
+> current product, interoperability, and confidence plan is
+> [Product and Quality Roadmap (2026-07-21)](PRODUCT-QUALITY-ROADMAP-2026-07.md).
+> That roadmap supersedes check-mark-only completeness and requires model,
+> GUI-journey, data-safety, and interoperability evidence.
+
 State as of 2026-07-18: the surfacing wave, format-parity stragglers, and
 the oracle expansion are done (see PARITY.md for the row-by-row truth;
 TESTING.md for the coverage bar: 65 oracle tests, CommonMark 630/652,
