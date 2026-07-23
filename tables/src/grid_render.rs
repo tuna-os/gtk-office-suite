@@ -33,19 +33,33 @@ const HEADER_BG_DARK: (f64, f64, f64) = (0.25, 0.25, 0.25);
 const SELECTION_COLOR: (f64, f64, f64) = (0.21, 0.52, 0.89);
 const ACTIVE_CELL_BORDER: (f64, f64, f64) = (0.13, 0.38, 0.77);
 const GRID_LINE: (f64, f64, f64) = (0.85, 0.85, 0.85);
+const GRID_LINE_DARK: (f64, f64, f64) = (0.35, 0.35, 0.35);
+const CANVAS_BG: (f64, f64, f64) = (0.5, 0.5, 0.5);
+const CANVAS_BG_DARK: (f64, f64, f64) = (0.15, 0.15, 0.15);
+const CELL_BG: (f64, f64, f64) = (1.0, 1.0, 1.0);
+const CELL_BG_DARK: (f64, f64, f64) = (0.18, 0.18, 0.18);
+const CELL_TEXT: (f64, f64, f64) = (0.0, 0.0, 0.0);
+const CELL_TEXT_DARK: (f64, f64, f64) = (0.92, 0.92, 0.92);
+const HEADER_TEXT: (f64, f64, f64) = (0.3, 0.3, 0.3);
+const HEADER_TEXT_DARK: (f64, f64, f64) = (0.8, 0.8, 0.8);
+const RANGE_WASH: (f64, f64, f64) = (0.8, 0.85, 0.95);
+const RANGE_WASH_DARK: (f64, f64, f64) = (0.16, 0.24, 0.36);
+const BORDER_LINE: (f64, f64, f64) = (0.0, 0.0, 0.0);
+const BORDER_LINE_DARK: (f64, f64, f64) = (0.85, 0.85, 0.85);
 
-pub fn draw_border_edges(cr: &Context, x: f64, y: f64, w: f64, h: f64, border: &CellBorder) {
+pub fn draw_border_edges(cr: &Context, x: f64, y: f64, w: f64, h: f64, border: &CellBorder, is_dark: bool) {
     let lw = 1.5;
-    draw_border_line(cr, &border.top, x, y, x + w, y);
-    draw_border_line(cr, &border.bottom, x, y + h, x + w, y + h);
-    draw_border_line(cr, &border.left, x, y, x, y + h);
-    draw_border_line(cr, &border.right, x + w, y, x + w, y + h);
+    draw_border_line(cr, &border.top, x, y, x + w, y, is_dark);
+    draw_border_line(cr, &border.bottom, x, y + h, x + w, y + h, is_dark);
+    draw_border_line(cr, &border.left, x, y, x, y + h, is_dark);
+    draw_border_line(cr, &border.right, x + w, y, x + w, y + h, is_dark);
 }
 
-fn draw_border_line(cr: &Context, style: &BorderStyle, x1: f64, y1: f64, x2: f64, y2: f64) {
+fn draw_border_line(cr: &Context, style: &BorderStyle, x1: f64, y1: f64, x2: f64, y2: f64, is_dark: bool) {
     if *style == BorderStyle::None { return; }
+    let c = if is_dark { BORDER_LINE_DARK } else { BORDER_LINE };
     cr.save().unwrap();
-    cr.set_source_rgb(0.0, 0.0, 0.0);
+    cr.set_source_rgb(c.0, c.1, c.2);
     cr.set_line_width(1.5);
     match style {
         BorderStyle::Dotted => cr.set_dash(&[2.0, 2.0], 0.0),
@@ -67,9 +81,15 @@ pub fn draw_grid(
     let sheet = &st.sheets[st.active_sheet].borrow();
     let is_dark = adw::StyleManager::default().is_dark();
     let hdr_bg = if is_dark { HEADER_BG_DARK } else { HEADER_BG };
+    let hdr_text = if is_dark { HEADER_TEXT_DARK } else { HEADER_TEXT };
+    let grid_line = if is_dark { GRID_LINE_DARK } else { GRID_LINE };
+    let cell_bg = if is_dark { CELL_BG_DARK } else { CELL_BG };
+    let cell_text = if is_dark { CELL_TEXT_DARK } else { CELL_TEXT };
+    let range_wash = if is_dark { RANGE_WASH_DARK } else { RANGE_WASH };
+    let canvas_bg = if is_dark { CANVAS_BG_DARK } else { CANVAS_BG };
 
     // Background
-    cr.set_source_rgb(0.5, 0.5, 0.5);
+    cr.set_source_rgb(canvas_bg.0, canvas_bg.1, canvas_bg.2);
     cr.rectangle(0.0, 0.0, width, height);
     cr.fill().unwrap();
 
@@ -94,11 +114,11 @@ pub fn draw_grid(
         if cx + cw < ROW_HEADER_WIDTH { cx += cw - scroll_x; continue; }
         if cx > width { break; }
         let label = col_label(c);
-        cr.set_source_rgb(0.3, 0.3, 0.3);
+        cr.set_source_rgb(hdr_text.0, hdr_text.1, hdr_text.2);
         let ext = cr.text_extents(&label).unwrap();
         cr.move_to(cx + (cw - ext.width()) / 2.0, 18.0);
         let _ = cr.show_text(&label);
-        cr.set_source_rgb(0.8, 0.8, 0.8);
+        cr.set_source_rgb(grid_line.0, grid_line.1, grid_line.2);
         cr.set_line_width(0.5);
         cr.move_to(cx + cw, 0.0);
         cr.line_to(cx + cw, COL_HEADER_HEIGHT);
@@ -116,7 +136,7 @@ pub fn draw_grid(
     cr.fill().unwrap();
     let mut ry = COL_HEADER_HEIGHT - scroll_y;
     for r in start_row..sheet.rows.min(start_row + (height / ROW_HEIGHT) as usize + 1) {
-        cr.set_source_rgb(0.3, 0.3, 0.3);
+        cr.set_source_rgb(hdr_text.0, hdr_text.1, hdr_text.2);
         let label = (r + 1).to_string();
         let ext = cr.text_extents(&label).unwrap();
         cr.move_to(ROW_HEADER_WIDTH - 6.0 - ext.width(), ry + 18.0);
@@ -151,22 +171,22 @@ pub fn draw_grid(
                 if rule.matches(v) { Some(rule.fill.clone()) } else { None }
             });
             if in_range {
-                cr.set_source_rgb(0.8, 0.85, 0.95);
+                cr.set_source_rgb(range_wash.0, range_wash.1, range_wash.2);
             } else if let Some(hex) = cond_fill {
                 let p = |i| u8::from_str_radix(&hex[i..i + 2], 16).unwrap_or(255) as f64 / 255.0;
                 if hex.len() >= 6 {
                     cr.set_source_rgb(p(0), p(2), p(4));
                 } else {
-                    cr.set_source_rgb(1.0, 1.0, 1.0);
+                    cr.set_source_rgb(cell_bg.0, cell_bg.1, cell_bg.2);
                 }
             } else {
-                cr.set_source_rgb(1.0, 1.0, 1.0);
+                cr.set_source_rgb(cell_bg.0, cell_bg.1, cell_bg.2);
             }
             cr.rectangle(cx, cy, cw, ROW_HEIGHT);
             cr.fill().unwrap();
 
             // Grid line
-            cr.set_source_rgb(GRID_LINE.0, GRID_LINE.1, GRID_LINE.2);
+            cr.set_source_rgb(grid_line.0, grid_line.1, grid_line.2);
             cr.set_line_width(0.5);
             cr.move_to(cx + cw, cy);
             cr.line_to(cx + cw, cy + ROW_HEIGHT);
@@ -178,7 +198,7 @@ pub fn draw_grid(
             // Cell border
             if border.top != BorderStyle::None || border.bottom != BorderStyle::None
                 || border.left != BorderStyle::None || border.right != BorderStyle::None {
-                draw_border_edges(cr, cx, cy, cw, ROW_HEIGHT, border);
+                draw_border_edges(cr, cx, cy, cw, ROW_HEIGHT, border, is_dark);
             }
 
             // Active cell border
@@ -192,7 +212,7 @@ pub fn draw_grid(
             // Text — through the cell's number format for display.
             let val = sheet.cell(r, c);
             if !val.is_empty() {
-                cr.set_source_rgb(0.0, 0.0, 0.0);
+                cr.set_source_rgb(cell_text.0, cell_text.1, cell_text.2);
                 cr.move_to(cx + 4.0, cy + 19.0);
                 let formatted = sheet.formats[r][c].format(val);
                 let display: String = formatted.chars().take(14).collect();
