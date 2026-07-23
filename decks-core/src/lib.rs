@@ -4,11 +4,13 @@
 // Owns the Deck/Slide/SlideObject model, PPTX read/write, and undo
 // commands. The `decks` binary renders (Cairo/Pango) and wires signals.
 
+pub mod controller;
 pub mod engine;
 pub mod fragment;
 pub mod odp;
 pub mod undo;
 
+pub use controller::DecksController;
 pub use engine::{Deck, MasterSlide, Slide, SlideObject};
 
 /// Read a presentation, dispatching on extension (.pptx or .odp).
