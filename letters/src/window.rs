@@ -6,7 +6,6 @@ use gtk4::{self as gtk, gio, glib, prelude::*};
 use libadwaita as adw;
 use adw::prelude::{AlertDialogExt, AlertDialogExtManual, AdwDialogExt};
 use std::cell::RefCell;
-use std::path::PathBuf;
 use std::rc::Rc;
 
 use crate::page_container::PageContainer;
@@ -31,23 +30,20 @@ fn autosave_state_dir() -> std::path::PathBuf {
 }
 
 // ── Per-tab state via widget Qdata ─────────────────────────────────────
+// Session identity (file/closing/autosave) is canonical, GTK-free state —
+// letters_core::DocumentSession (#103). The tab's actual document
+// *content* is still the GtkTextBuffer itself; there's no GTK-free
+// representation of that today (a larger design question than this
+// slice), so TabData only owns identity, not content.
 
 #[derive(Clone)]
 struct TabData(Rc<RefCell<TabDataInner>>);
-struct TabDataInner {
-    file: Option<PathBuf>,
-    closing_after_save: bool,
-    autosave_slot: Rc<suite_common::autosave::AutosaveSlot>,
-}
+type TabDataInner = letters_core::DocumentSession;
 impl TabData {
     fn new() -> Self {
-        TabData(Rc::new(RefCell::new(TabDataInner {
-            file: None,
-            closing_after_save: false,
-            autosave_slot: Rc::new(suite_common::autosave::AutosaveSlot::new(
-                autosave_state_dir(), next_doc_id(),
-            )),
-        })))
+        TabData(Rc::new(RefCell::new(TabDataInner::new(Rc::new(
+            suite_common::autosave::AutosaveSlot::new(autosave_state_dir(), next_doc_id()),
+        )))))
     }
 }
 fn tab_data_set(w: &impl IsA<gtk::Widget>, d: TabData) { unsafe { w.upcast_ref::<gtk::Widget>().set_data("tab-data", d); } }

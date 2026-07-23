@@ -8,5 +8,7 @@ pub mod fragment;
 pub mod markdown;
 pub mod model;
 pub mod odt;
+pub mod session;
 
 pub use model::{Alignment, Document, ListKind, Paragraph, ParaStyle, Run, RunStyle, StylePatch};
+pub use session::DocumentSession;
