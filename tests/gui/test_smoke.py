@@ -40,6 +40,50 @@ class LettersSmoke(BaseGUITestCase):
         self.assertIsNone(self.process.poll(), "letters crashed while typing")
 
 
+class LettersSnapshotSmoke(BaseGUITestCase):
+    """State-snapshot interface (#104), same mechanism as
+    TablesSnapshotSmoke/DecksSnapshotSmoke: typed text is visible in the
+    normalized JSON snapshot (via the buffer->Document extraction path
+    save-to-docx already uses), not just the word-count label."""
+
+    app_name = "letters"
+
+    def setUp(self):
+        import tempfile
+        self._snapshot_path = tempfile.mktemp(prefix="letters-snapshot-", suffix=".json")
+        self.launch_env = {
+            "GTK_OFFICE_TEST_MODE": "1",
+            "GTK_OFFICE_SNAPSHOT_PATH": self._snapshot_path,
+        }
+        super().setUp()
+
+    def tearDown(self):
+        super().tearDown()
+        if os.path.exists(self._snapshot_path):
+            os.remove(self._snapshot_path)
+
+    def test_snapshot_reflects_typed_text(self):
+        import json
+        import subprocess
+        from dogtail import rawinput
+
+        self.app.child(name="New Document", roleName="push button").do_action(0)
+        time.sleep(1.5)
+        rawinput.typeText("the quick brown fox")
+        time.sleep(1.0)
+
+        aid = "org.tunaos.letters-rust"
+        subprocess.run(["gapplication", "action", aid, "test-snapshot"])
+        time.sleep(0.5)
+        self.assertTrue(os.path.exists(self._snapshot_path), "snapshot file was not written")
+        with open(self._snapshot_path) as f:
+            snap = json.load(f)
+
+        text = "".join(r["text"] for p in snap["paragraphs"] for r in p["runs"])
+        self.assertEqual(text, "the quick brown fox")
+        self.assertIsNone(self.process.poll(), "letters crashed writing a snapshot")
+
+
 class LettersFormattingSmoke(BaseGUITestCase):
     app_name = "letters"
 

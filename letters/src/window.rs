@@ -892,6 +892,26 @@ impl LettersWindow {
             app.add_action(&a);
         }
 
+        // Test-only state snapshot (#104): only registered when
+        // GTK_OFFICE_TEST_MODE is set — see tables/src/window.rs for the
+        // identical pattern. Content is extracted via the same
+        // buffer->Document path save-to-docx already uses (letters_core's
+        // Document already derives serde::Serialize, so no hand-written
+        // JSON writer is needed here unlike Tables/Decks).
+        if std::env::var_os("GTK_OFFICE_TEST_MODE").is_some() {
+            let tv = tab_view.clone();
+            let act = gtk::gio::SimpleAction::new("test-snapshot", None);
+            act.connect_activate(move |_, _| {
+                let Ok(path) = std::env::var("GTK_OFFICE_SNAPSHOT_PATH") else { return };
+                let Some(buf) = active_buffer(&tv) else { return };
+                let doc = crate::bridge::capture_from_buffer(&buf);
+                if let Ok(json) = serde_json::to_string(&doc) {
+                    let _ = std::fs::write(path, json);
+                }
+            });
+            app.add_action(&act);
+        }
+
         // Header/Footer edit dialog action
     {
         let tv = tab_view.clone();
