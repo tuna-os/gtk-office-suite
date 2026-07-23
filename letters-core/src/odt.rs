@@ -8,11 +8,32 @@
 // oracle (tests/soffice_oracle.rs pattern), never ported from it.
 
 use crate::model::*;
-use quick_xml::events::Event;
+use quick_xml::events::{BytesRef, BytesText, Event};
 use quick_xml::Reader;
 use std::io::{Read, Write};
 
 const MIMETYPE: &str = "application/vnd.oasis.opendocument.text";
+
+fn unescape_text(t: &BytesText) -> String {
+    let decoded = t.decode().unwrap_or_default();
+    quick_xml::escape::unescape(&decoded)
+        .map(|s| s.into_owned())
+        .unwrap_or_else(|_| decoded.into_owned())
+}
+
+// quick-xml 0.41 stopped inlining `&entity;`/`&#NN;` references into
+// Event::Text — they now arrive as a separate Event::GeneralRef that must
+// be resolved and appended alongside surrounding text, or escaped
+// characters silently vanish from read documents.
+fn resolve_general_ref(r: &BytesRef) -> String {
+    if let Ok(Some(c)) = r.resolve_char_ref() {
+        return c.to_string();
+    }
+    let name = r.decode().unwrap_or_default();
+    quick_xml::escape::resolve_predefined_entity(&name)
+        .map(|s| s.to_string())
+        .unwrap_or_else(|| format!("&{name};"))
+}
 
 // ── XML helpers ──────────────────────────────────────────────────────
 
@@ -548,7 +569,13 @@ pub fn read(path: &str) -> Result<Document, String> {
             },
             Ok(Event::Text(t)) => {
                 if para.is_some() {
-                    let txt = t.unescape().unwrap_or_default().to_string();
+                    let txt = unescape_text(&t);
+                    push_text(&mut para, &span_stack, &link_stack, &txt);
+                }
+            }
+            Ok(Event::GeneralRef(r)) => {
+                if para.is_some() {
+                    let txt = resolve_general_ref(&r);
                     push_text(&mut para, &span_stack, &link_stack, &txt);
                 }
             }
@@ -614,11 +641,20 @@ pub fn read(path: &str) -> Result<Document, String> {
                     _ => {}
                 },
                 Ok(Event::Text(t)) => {
-                    let txt = t.unescape().unwrap_or_default().to_string();
+                    let txt = unescape_text(&t);
                     if in_header && !txt.trim().is_empty() {
                         doc.header.get_or_insert_with(String::new).push_str(&txt);
                     }
                     if in_footer && !txt.trim().is_empty() {
+                        doc.footer.get_or_insert_with(String::new).push_str(&txt);
+                    }
+                }
+                Ok(Event::GeneralRef(r)) => {
+                    let txt = resolve_general_ref(&r);
+                    if in_header {
+                        doc.header.get_or_insert_with(String::new).push_str(&txt);
+                    }
+                    if in_footer {
                         doc.footer.get_or_insert_with(String::new).push_str(&txt);
                     }
                 }

@@ -327,7 +327,7 @@ pub fn read(path: &str) -> Result<Deck, String> {
         shapes: vec![],
     }] };
     let mut reader = Reader::from_str(&content);
-    reader.trim_text(false);
+    reader.config_mut().trim_text(false);
     let mut slide: Option<Slide> = None;
     let mut in_notes = false;
     // Current draw:frame geometry; taken by the text-box inside it.
@@ -424,7 +424,23 @@ pub fn read(path: &str) -> Result<Deck, String> {
             },
             Ok(Event::Text(ref t)) => {
                 if in_text {
-                    let txt = t.unescape().unwrap_or_default().to_string();
+                    let txt = crate::engine::unescape_text(t);
+                    if let Some((lines, runs)) = textbox.as_mut() {
+                        if let Some(last) = lines.last_mut() {
+                            last.push_str(&txt);
+                        }
+                        if !txt.is_empty() {
+                            runs.push(Run {
+                                text: txt,
+                                style: span_style.clone().unwrap_or_default(),
+                            });
+                        }
+                    }
+                }
+            }
+            Ok(Event::GeneralRef(ref r)) => {
+                if in_text {
+                    let txt = crate::engine::resolve_general_ref(r);
                     if let Some((lines, runs)) = textbox.as_mut() {
                         if let Some(last) = lines.last_mut() {
                             last.push_str(&txt);

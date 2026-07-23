@@ -1,14 +1,43 @@
 // engine.rs — Presentation engine: PPTX I/O using zip and XML.
 // SPDX-License-Identifier: GPL-3.0-or-later
+//
+// quick-xml 0.41 deprecated Attribute::decode_and_unescape_value in favor
+// of decoded_and_normalized_value (which also normalizes \t\r\n per the
+// XML spec) — kept on the old, behavior-preserving call rather than
+// migrating every call site to the new signature.
+#![allow(deprecated)]
 
 use std::fs::File;
 use std::io::{Read, Write};
 use std::path::Path;
 use zip::write::SimpleFileOptions;
-use quick_xml::events::{Event, BytesStart, BytesEnd, BytesDecl, BytesText};
+use quick_xml::events::{Event, BytesStart, BytesEnd, BytesDecl, BytesRef, BytesText};
 use quick_xml::Reader;
 use quick_xml::Writer;
 use letters_core::model::{Run, RunStyle};
+
+/// quick-xml 0.41 removed `BytesText::unescape()`; this restores the same
+/// decode-then-unescape behavior via the two-step replacement API.
+pub(crate) fn unescape_text(t: &BytesText) -> String {
+    let decoded = t.decode().unwrap_or_default();
+    quick_xml::escape::unescape(&decoded)
+        .map(|s| s.into_owned())
+        .unwrap_or_else(|_| decoded.into_owned())
+}
+
+// quick-xml 0.41 stopped inlining `&entity;`/`&#NN;` references into
+// Event::Text — they now arrive as a separate Event::GeneralRef that must
+// be resolved and appended alongside surrounding text, or escaped
+// characters silently vanish from read documents.
+pub(crate) fn resolve_general_ref(r: &BytesRef) -> String {
+    if let Ok(Some(c)) = r.resolve_char_ref() {
+        return c.to_string();
+    }
+    let name = r.decode().unwrap_or_default();
+    quick_xml::escape::resolve_predefined_entity(&name)
+        .map(|s| s.to_string())
+        .unwrap_or_else(|| format!("&{name};"))
+}
 
 #[derive(Clone, Debug)]
 pub struct Deck {
@@ -86,11 +115,11 @@ fn parse_coords<B: std::io::BufRead>(
     let mut v2 = None;
     for attr in e.attributes().flatten() {
         if attr.key.as_ref() == k1 {
-            if let Ok(val) = attr.decode_and_unescape_value(reader) {
+            if let Ok(val) = attr.decode_and_unescape_value(reader.decoder()) {
                 v1 = val.parse::<f64>().ok();
             }
         } else if attr.key.as_ref() == k2 {
-            if let Ok(val) = attr.decode_and_unescape_value(reader) {
+            if let Ok(val) = attr.decode_and_unescape_value(reader.decoder()) {
                 v2 = val.parse::<f64>().ok();
             }
         }
@@ -101,7 +130,7 @@ fn parse_coords<B: std::io::BufRead>(
 fn parse_blip_embed<B: std::io::BufRead>(e: &BytesStart, reader: &Reader<B>) -> Option<String> {
     for attr in e.attributes().flatten() {
         if attr.key.as_ref() == b"r:embed" {
-            if let Ok(val) = attr.decode_and_unescape_value(reader) {
+            if let Ok(val) = attr.decode_and_unescape_value(reader.decoder()) {
                 return Some(val.into_owned());
             }
         }
@@ -112,7 +141,7 @@ fn parse_blip_embed<B: std::io::BufRead>(e: &BytesStart, reader: &Reader<B>) -> 
 fn parse_prst_geom<B: std::io::BufRead>(e: &BytesStart, reader: &Reader<B>) -> Option<String> {
     for attr in e.attributes().flatten() {
         if attr.key.as_ref() == b"prst" {
-            if let Ok(val) = attr.decode_and_unescape_value(reader) {
+            if let Ok(val) = attr.decode_and_unescape_value(reader.decoder()) {
                 return Some(val.into_owned());
             }
         }
@@ -123,7 +152,7 @@ fn parse_prst_geom<B: std::io::BufRead>(e: &BytesStart, reader: &Reader<B>) -> O
 fn is_tx_box_attr<B: std::io::BufRead>(e: &BytesStart, reader: &Reader<B>) -> bool {
     for attr in e.attributes().flatten() {
         if attr.key.as_ref() == b"txBox" {
-            if let Ok(val) = attr.decode_and_unescape_value(reader) {
+            if let Ok(val) = attr.decode_and_unescape_value(reader.decoder()) {
                 return val.as_ref() == "1";
             }
         }
@@ -180,7 +209,7 @@ pub fn read_pptx(path: &str) -> Result<Deck, String> {
     let mut slide_paths = std::collections::BTreeMap::new();
     {
         let mut reader = Reader::from_str(&rels_xml);
-        reader.trim_text(true);
+        reader.config_mut().trim_text(true);
         let mut buf = Vec::new();
         loop {
             match reader.read_event_into(&mut buf) {
@@ -193,13 +222,13 @@ pub fn read_pptx(path: &str) -> Result<Deck, String> {
                         for attr in e.attributes().flatten() {
                             match attr.key.as_ref() {
                                 b"Id" => {
-                                    id = attr.decode_and_unescape_value(&reader).ok().map(|v| v.into_owned());
+                                    id = attr.decode_and_unescape_value(reader.decoder()).ok().map(|v| v.into_owned());
                                 }
                                 b"Target" => {
-                                    target = attr.decode_and_unescape_value(&reader).ok().map(|v| v.into_owned());
+                                    target = attr.decode_and_unescape_value(reader.decoder()).ok().map(|v| v.into_owned());
                                 }
                                 b"Type" => {
-                                    if let Ok(v) = attr.decode_and_unescape_value(&reader) {
+                                    if let Ok(v) = attr.decode_and_unescape_value(reader.decoder()) {
                                         if v.contains("relationships/slide") {
                                             is_slide = true;
                                         }
@@ -227,7 +256,7 @@ pub fn read_pptx(path: &str) -> Result<Deck, String> {
     let mut ordered_slide_rids = Vec::new();
     {
         let mut reader = Reader::from_str(&presentation_xml);
-        reader.trim_text(true);
+        reader.config_mut().trim_text(true);
         let mut buf = Vec::new();
         loop {
             match reader.read_event_into(&mut buf) {
@@ -236,7 +265,7 @@ pub fn read_pptx(path: &str) -> Result<Deck, String> {
                     if name.as_ref() == b"p:sldId" {
                         for attr in e.attributes().flatten() {
                             if attr.key.as_ref() == b"r:id" {
-                                if let Ok(val) = attr.decode_and_unescape_value(&reader) {
+                                if let Ok(val) = attr.decode_and_unescape_value(reader.decoder()) {
                                     ordered_slide_rids.push(val.into_owned());
                                 }
                             }
@@ -289,7 +318,7 @@ pub fn read_pptx(path: &str) -> Result<Deck, String> {
         let mut slide_image_rels = std::collections::HashMap::new();
         if !slide_rels_xml.is_empty() {
             let mut reader = Reader::from_str(&slide_rels_xml);
-            reader.trim_text(true);
+            reader.config_mut().trim_text(true);
             let mut buf = Vec::new();
             loop {
                 match reader.read_event_into(&mut buf) {
@@ -300,9 +329,9 @@ pub fn read_pptx(path: &str) -> Result<Deck, String> {
                             let mut target = None;
                             for attr in e.attributes().flatten() {
                                 if attr.key.as_ref() == b"Id" {
-                                    id = attr.decode_and_unescape_value(&reader).ok().map(|v| v.into_owned());
+                                    id = attr.decode_and_unescape_value(reader.decoder()).ok().map(|v| v.into_owned());
                                 } else if attr.key.as_ref() == b"Target" {
-                                    target = attr.decode_and_unescape_value(&reader).ok().map(|v| v.into_owned());
+                                    target = attr.decode_and_unescape_value(reader.decoder()).ok().map(|v| v.into_owned());
                                 }
                             }
                             if let (Some(id_val), Some(target_val)) = (id, target) {
@@ -323,7 +352,7 @@ pub fn read_pptx(path: &str) -> Result<Deck, String> {
         let mut background = String::from("#ffffff");
         {
             let mut reader = Reader::from_str(&slide_xml);
-            reader.trim_text(true);
+            reader.config_mut().trim_text(true);
             let mut buf = Vec::new();
 
             let mut current_shape: Option<PendingShape> = None;
@@ -552,12 +581,21 @@ pub fn read_pptx(path: &str) -> Result<Deck, String> {
                     }
                     Ok(Event::Text(ref e)) => {
                         if in_text_element {
-                            if let Ok(unesc) = e.unescape() {
+                            {
+                                let t = unescape_text(e);
                                 if let Some(shape) = current_shape.as_mut() {
-                                    let t = unesc.into_owned();
                                     shape.runs.push(Run { text: t.clone(), style: shape.cur_style.clone() });
                                     shape.text.push(t);
                                 }
+                            }
+                        }
+                    }
+                    Ok(Event::GeneralRef(ref r)) => {
+                        if in_text_element {
+                            let t = resolve_general_ref(r);
+                            if let Some(shape) = current_shape.as_mut() {
+                                shape.runs.push(Run { text: t.clone(), style: shape.cur_style.clone() });
+                                shape.text.push(t);
                             }
                         }
                     }
@@ -699,7 +737,7 @@ pub fn parse_master_shapes(xml: &str) -> (Option<String>, Vec<SlideObject>) {
         return (None, Vec::new());
     }
     let mut reader = Reader::from_str(xml);
-    reader.trim_text(true);
+    reader.config_mut().trim_text(true);
     let mut buf = Vec::new();
     let mut background: Option<String> = None;
     let mut shapes = Vec::new();
@@ -814,9 +852,14 @@ pub fn parse_master_shapes(xml: &str) -> (Option<String>, Vec<SlideObject>) {
             Event::Text(ref t) => {
                 if in_text {
                     if let Some(p) = cur.as_mut() {
-                        if let Ok(u) = t.unescape() {
-                            p.text.push(u.into_owned());
-                        }
+                        p.text.push(unescape_text(t));
+                    }
+                }
+            }
+            Event::GeneralRef(ref r) => {
+                if in_text {
+                    if let Some(p) = cur.as_mut() {
+                        p.text.push(resolve_general_ref(r));
                     }
                 }
             }
@@ -1472,7 +1515,7 @@ fn extract_notes_text(xml: &str) -> String {
     let mut reader = Reader::from_str(xml);
     // No trim: a:t content is significant, including boundary spaces
     // ("café — " + "東京"); capture is gated on in_t anyway.
-    reader.trim_text(false);
+    reader.config_mut().trim_text(false);
     let mut buf = Vec::new();
     let mut in_sp = false;
     let mut sp_is_body = false;
@@ -1492,14 +1535,17 @@ fn extract_notes_text(xml: &str) -> String {
             Ok(Event::Empty(ref e)) if e.name().as_ref() == b"p:ph" && in_sp => {
                 for attr in e.attributes().flatten() {
                     if attr.key.as_ref() == b"type" {
-                        if let Ok(v) = attr.decode_and_unescape_value(&reader) {
+                        if let Ok(v) = attr.decode_and_unescape_value(reader.decoder()) {
                             if v == "body" { sp_is_body = true; }
                         }
                     }
                 }
             }
             Ok(Event::Text(ref t)) if in_t => {
-                current.push_str(&t.unescape().unwrap_or_default());
+                current.push_str(&unescape_text(t));
+            }
+            Ok(Event::GeneralRef(ref r)) if in_t => {
+                current.push_str(&resolve_general_ref(r));
             }
             Ok(Event::End(ref e)) => match e.name().as_ref() {
                 b"a:t" => in_t = false,
@@ -1523,7 +1569,7 @@ fn extract_notes_text(xml: &str) -> String {
 fn parse_run_style(e: &BytesStart, reader: &Reader<&[u8]>) -> RunStyle {
     let mut st = RunStyle::default();
     for attr in e.attributes().flatten() {
-        let val = attr.decode_and_unescape_value(reader).unwrap_or_default();
+        let val = attr.decode_and_unescape_value(reader.decoder()).unwrap_or_default();
         match attr.key.as_ref() {
             b"b" => st.bold = val == "1" || val == "true",
             b"i" => st.italic = val == "1" || val == "true",
