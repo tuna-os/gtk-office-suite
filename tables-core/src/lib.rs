@@ -11,6 +11,7 @@ pub mod export;
 pub mod fragment;
 pub mod io;
 pub mod sheet;
+pub mod snapshot;
 pub mod undo;
 
 pub use engine::TablesEngine;

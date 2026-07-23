@@ -921,6 +921,66 @@ class TablesFormatCellsSmoke(BaseGUITestCase):
         self.assertIsNone(self.process.poll(), "tables crashed in format cells")
 
 
+class TablesSnapshotSmoke(BaseGUITestCase):
+    """State-snapshot interface (#104): a real edit + formula is visible
+    in the normalized JSON snapshot, not just in the AT-SPI cell text."""
+
+    app_name = "tables"
+
+    def setUp(self):
+        import tempfile
+        self._snapshot_path = tempfile.mktemp(prefix="tables-snapshot-", suffix=".json")
+        self.launch_env = {
+            "GTK_OFFICE_TEST_MODE": "1",
+            "GTK_OFFICE_SNAPSHOT_PATH": self._snapshot_path,
+        }
+        super().setUp()
+
+    def tearDown(self):
+        super().tearDown()
+        import os
+        if os.path.exists(self._snapshot_path):
+            os.remove(self._snapshot_path)
+
+    def test_snapshot_reflects_cell_edits_and_formulas(self):
+        import json
+        import subprocess
+        from dogtail import rawinput
+
+        aid = "org.tunaos.tables-rust"
+        subprocess.run(["gapplication", "action", aid, "new-document"])
+        time.sleep(1.0)
+        rawinput.keyCombo("<Control>g")
+        time.sleep(0.2)
+        rawinput.typeText("A1")
+        rawinput.keyCombo("Return")
+        time.sleep(0.3)
+        rawinput.typeText("42")
+        rawinput.keyCombo("Return")
+        time.sleep(0.3)
+        rawinput.keyCombo("<Control>g")
+        time.sleep(0.2)
+        rawinput.typeText("A2")
+        rawinput.keyCombo("Return")
+        time.sleep(0.3)
+        rawinput.typeText("=A1*2")
+        rawinput.keyCombo("Return")
+        time.sleep(0.3)
+
+        subprocess.run(["gapplication", "action", aid, "test-snapshot"])
+        time.sleep(0.5)
+        self.assertTrue(os.path.exists(self._snapshot_path), "snapshot file was not written")
+        with open(self._snapshot_path) as f:
+            snap = json.load(f)
+
+        cells = {(c["row"], c["col"]): c for c in snap["sheet"]["cells"]}
+        self.assertEqual(cells[(0, 0)]["value"], "42")
+        self.assertIsNone(cells[(0, 0)]["formula"])
+        self.assertEqual(cells[(1, 0)]["value"], "84")
+        self.assertEqual(cells[(1, 0)]["formula"], "A1*2")
+        self.assertIsNone(self.process.poll(), "tables crashed writing a snapshot")
+
+
 class DecksSelectionSmoke(BaseGUITestCase):
     """Object selection updates the canvas a11y description and the
     inspector (fit-to-viewport geometry keeps coordinates stable)."""

@@ -89,6 +89,24 @@ impl TablesWindow {
         ));
         let state = controller.borrow().state.clone();
         let current_path = controller.borrow().file_path.clone();
+
+        // Test-only state snapshot (#104): only registered when
+        // GTK_OFFICE_TEST_MODE is set, so it doesn't exist as an attack
+        // surface or discoverable action in a normal/production run.
+        // Activating it writes a JSON snapshot of the active sheet's
+        // top-left 100x26 cells to the path in GTK_OFFICE_SNAPSHOT_PATH —
+        // GUI tests read that file instead of scraping AT-SPI cell text.
+        if std::env::var_os("GTK_OFFICE_TEST_MODE").is_some() {
+            let ctl = controller.clone();
+            let act = gtk4::gio::SimpleAction::new("test-snapshot", None);
+            act.connect_activate(move |_, _| {
+                let Ok(path) = std::env::var("GTK_OFFICE_SNAPSHOT_PATH") else { return };
+                let snap = tables_core::snapshot::snapshot(&ctl.borrow(), 0..100, 0..26);
+                let _ = std::fs::write(path, snap.to_json());
+            });
+            app.add_action(&act);
+        }
+
         let settings = gio::Settings::new("org.tunaos.tables-rust");
         let autosave_slot = Rc::new(suite_common::autosave::AutosaveSlot::new(
             autosave_state_dir(), next_doc_id(),
