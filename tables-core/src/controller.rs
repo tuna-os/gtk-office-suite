@@ -783,6 +783,47 @@ mod tests {
         assert_eq!(controller.state.borrow().sheet().cell(0, 0), "");
     }
 
+    /// Closes the last #98 acceptance-criteria gap: reordered, renamed
+    /// sheets must save and reopen with their identity and order intact.
+    #[test]
+    fn reorder_rename_save_and_reopen_preserves_sheet_identity_and_order() {
+        let mut controller = WorkbookController::new(2, 2).unwrap();
+        controller.edit_cell(0, 0, "sheet1-value");
+        {
+            let mut state = controller.state.borrow_mut();
+            state.add_sheet("Sheet2".into(), 2, 2).unwrap();
+            state.switch_sheet(1).unwrap();
+        }
+        controller.edit_cell(0, 0, "sheet2-value");
+        controller.state.borrow_mut().rename_sheet(1, "Totals").unwrap();
+        // Front-load the renamed sheet.
+        controller.state.borrow_mut().reorder_sheets(&[1, 0]).unwrap();
+
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("reorder-rename.xlsx");
+        {
+            let state = controller.state.borrow();
+            let sheets = state
+                .sheets
+                .iter()
+                .map(|sheet| sheet.borrow().clone())
+                .collect::<Vec<_>>();
+            crate::io::save_sheets_to_xlsx_with_engine(
+                path.to_str().unwrap(),
+                &sheets,
+                Some(&state.engine),
+            )
+            .unwrap();
+        }
+
+        let (engine, sheets) = crate::io::load_xlsx_workbook(path.to_str().unwrap()).unwrap();
+        assert_eq!(sheets.len(), 2);
+        assert_eq!(sheets[0].name, "Totals");
+        assert_eq!(sheets[1].name, "Sheet1");
+        assert_eq!(engine.cell_at(0, 0, 0), "sheet2-value");
+        assert_eq!(engine.cell_at(1, 0, 0), "sheet1-value");
+    }
+
     #[test]
     fn reorder_sheets_permutes_presentation_state_with_engine_content() {
         let mut controller = WorkbookController::new(2, 2).unwrap();
