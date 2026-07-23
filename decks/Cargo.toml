@@ -16,7 +16,7 @@ pangocairo = { version = "0.22" }
 pulldown-cmark = "0.13"
 image = "0.25"
 zip = "2.0"
-quick-xml = "0.31"
+quick-xml = "0.41"
 
 [[bin]]
 name = "decks"

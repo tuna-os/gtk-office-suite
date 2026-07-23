@@ -11,7 +11,7 @@ license = "GPL-3.0-or-later"
 suite-common-core = { path = "../suite-common-core" }
 letters-core = { path = "../letters-core" }
 zip = "2.0"
-quick-xml = "0.31"
+quick-xml = "0.41"
 
 [dev-dependencies]
 tempfile = "3"
