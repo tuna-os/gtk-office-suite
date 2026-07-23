@@ -42,6 +42,32 @@ fn save_engine_to_xlsx(path: &str, state: &AppState) -> Result<(), String> {
     tables_core::io::save_sheets_to_xlsx_with_engine(path, &sheets, Some(&state.engine))
 }
 
+fn autosave_bytes(state: &AppState) -> Result<Vec<u8>, String> {
+    let sheets: Vec<SheetModel> = state.sheets.iter().map(|s| s.borrow().clone()).collect();
+    tables_core::io::save_sheets_to_xlsx_bytes(&sheets, Some(&state.engine))
+}
+
+// ── Crash-recovery snapshots ─────────────────────────────────────────────
+// One doc_id per open window, unique for the life of the process — it does
+// not need to survive a restart, since recovery finds snapshots by scanning
+// the state dir rather than by recomputing a prior id (see autosave.rs).
+static NEXT_DOC_ID: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+fn next_doc_id() -> String {
+    let n = NEXT_DOC_ID.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+    format!("{}-{n}", std::process::id())
+}
+
+fn autosave_state_dir() -> std::path::PathBuf {
+    // glib::user_state_dir() needs the "v2_72" feature (glib >= 2.72 at the
+    // C level), which this workspace's glib binding doesn't enable — do the
+    // XDG Base Directory fallback ourselves instead.
+    let base = std::env::var_os("XDG_STATE_HOME")
+        .map(std::path::PathBuf::from)
+        .or_else(|| std::env::var_os("HOME").map(|h| std::path::PathBuf::from(h).join(".local/state")))
+        .unwrap_or_else(|| std::path::PathBuf::from("/tmp"));
+    base.join("tables")
+}
+
 // ── Main window ────────────────────────────────────────────────────────
 
 pub struct TablesWindow {
@@ -56,6 +82,7 @@ pub struct TablesWindow {
     sheet_model: gtk4::StringList,
     sheet_switcher: gtk4::DropDown,
     current_path: Rc<RefCell<Option<std::path::PathBuf>>>,
+    autosave_slot: Rc<suite_common::autosave::AutosaveSlot>,
 }
 
 impl TablesWindow {
@@ -66,6 +93,10 @@ impl TablesWindow {
         ));
         let state = controller.borrow().state.clone();
         let current_path: Rc<RefCell<Option<std::path::PathBuf>>> = Rc::new(RefCell::new(None));
+        let settings = gio::Settings::new("org.tunaos.tables-rust");
+        let autosave_slot = Rc::new(suite_common::autosave::AutosaveSlot::new(
+            autosave_state_dir(), next_doc_id(),
+        ));
 
         // ── Scrolling ──────────────────────────────────────────────────
         let h_adj = gtk4::Adjustment::new(0.0, 0.0, 5000.0, 10.0, 50.0, 500.0);
@@ -1138,6 +1169,7 @@ impl TablesWindow {
             let ctl = controller.clone();
             let s = state.clone();
             let path_state = current_path.clone();
+            let slot = autosave_slot.clone();
             let force_close = Rc::new(Cell::new(false));
             suite_win.window.connect_close_request(move |win| {
                 if force_close.get() {
@@ -1165,9 +1197,11 @@ impl TablesWindow {
                 let ctl = ctl.clone();
                 let s = s.clone();
                 let path_state = path_state.clone();
+                let slot = slot.clone();
                 dialog.choose(Some(win), None::<&gio::Cancellable>, move |response: glib::GString| {
                     let Some(win) = win_weak.upgrade() else { return };
                     if response == "discard" {
+                        let _ = slot.clear();
                         force_close.set(true);
                         win.close();
                         return;
@@ -1180,6 +1214,7 @@ impl TablesWindow {
                         match save_engine_to_xlsx(&path.to_string_lossy(), &s.borrow()) {
                             Ok(()) => {
                                 ctl.borrow_mut().mark_clean();
+                                let _ = slot.clear();
                                 force_close.set(true);
                                 win.close();
                             }
@@ -1205,6 +1240,7 @@ impl TablesWindow {
                     dlg.set_filters(Some(&fl));
                     dlg.set_initial_name(Some("Untitled.xlsx"));
                     let win2 = win.clone();
+                    let slot = slot.clone();
                     dlg.save(Some(&win), None::<&gio::Cancellable>, move |result| {
                         if let Ok(file) = result {
                             if let Some(path) = file.path() {
@@ -1213,6 +1249,7 @@ impl TablesWindow {
                                     Ok(()) => {
                                         *path_state.borrow_mut() = Some(path);
                                         ctl.borrow_mut().mark_clean();
+                                        let _ = slot.clear();
                                         force_close.set(true);
                                         win2.close();
                                     }
@@ -1334,6 +1371,7 @@ impl TablesWindow {
             let ctl = controller.clone();
             let w = suite_win.window.clone();
             let path_state = current_path.clone();
+            let slot = autosave_slot.clone();
             // no toast for now
             let act = gtk4::gio::SimpleAction::new("save-file-as", None);
             act.connect_activate(move |_, _| {
@@ -1348,6 +1386,7 @@ impl TablesWindow {
                 dlg.set_initial_name(Some("Untitled.xlsx"));
                 let s = s.clone(); let ctl = ctl.clone();
                 let w2 = w.clone(); let path_state = path_state.clone();
+                let slot = slot.clone();
                 dlg.save(Some(&w), None::<&gio::Cancellable>,
                     move |result: Result<gio::File, glib::Error>| {
                         if let Ok(file) = result {
@@ -1359,6 +1398,7 @@ impl TablesWindow {
                                         drop(ss);
                                         *path_state.borrow_mut() = Some(path);
                                         ctl.borrow_mut().mark_clean();
+                                        let _ = slot.clear();
                                     }
                                     Err(e) => {
                                         let err = adw::AlertDialog::builder()
@@ -1383,6 +1423,7 @@ impl TablesWindow {
             let w = suite_win.window.clone();
             let path_state = current_path.clone();
             let app_for_save = app.clone();
+            let slot = autosave_slot.clone();
             let act = gtk4::gio::SimpleAction::new("save-file", None);
             act.connect_activate(move |_, _| {
                 let Some(path) = path_state.borrow().clone() else {
@@ -1390,7 +1431,10 @@ impl TablesWindow {
                     return;
                 };
                 match save_engine_to_xlsx(&path.to_string_lossy(), &s.borrow()) {
-                    Ok(()) => ctl.borrow_mut().mark_clean(),
+                    Ok(()) => {
+                        ctl.borrow_mut().mark_clean();
+                        let _ = slot.clear();
+                    }
                     Err(e) => {
                         let err = adw::AlertDialog::builder()
                             .heading("Error saving file")
@@ -1403,6 +1447,56 @@ impl TablesWindow {
                 }
             });
             app.add_action(&act);
+        }
+
+        // ── Autosave: periodic crash-recovery snapshot ──────────────────
+        // Snapshots write to a state-dir slot, never to the document's own
+        // path — this is not a save (it must not call mark_clean; the
+        // close guard still needs to fire), it only survives a crash so the
+        // next launch can offer recovery. `autosave-now` runs one tick
+        // immediately and exists so tests (and users who just want it now)
+        // don't have to wait out the real interval.
+        {
+            let s = state.clone();
+            let ctl = controller.clone();
+            let slot = autosave_slot.clone();
+            let path_state = current_path.clone();
+            let act = gtk4::gio::SimpleAction::new("autosave-now", None);
+            act.connect_activate(move |_, _| {
+                if !ctl.borrow().is_dirty() {
+                    return;
+                }
+                if let Ok(bytes) = autosave_bytes(&s.borrow()) {
+                    let meta = suite_common::autosave::SnapshotMeta {
+                        original_path: path_state.borrow().clone(),
+                        kind: "xlsx".to_string(),
+                    };
+                    let _ = slot.write(&bytes, &meta);
+                }
+            });
+            app.add_action(&act);
+        }
+        {
+            let s = state.clone();
+            let ctl = controller.clone();
+            let slot = autosave_slot.clone();
+            let path_state = current_path.clone();
+            let interval = settings.int("auto-save-interval").max(10) as u32;
+            let enabled = settings.boolean("auto-save");
+            if enabled {
+                glib::source::timeout_add_seconds_local(interval, move || {
+                    if ctl.borrow().is_dirty() {
+                        if let Ok(bytes) = autosave_bytes(&s.borrow()) {
+                            let meta = suite_common::autosave::SnapshotMeta {
+                                original_path: path_state.borrow().clone(),
+                                kind: "xlsx".to_string(),
+                            };
+                            let _ = slot.write(&bytes, &meta);
+                        }
+                    }
+                    glib::ControlFlow::Continue
+                });
+            }
         }
 
         // ── Undo/redo as named actions (window-wide accels) ────────────
@@ -1606,10 +1700,53 @@ impl TablesWindow {
             sheet_model,
             sheet_switcher,
             current_path,
+            autosave_slot,
         }
     }
 
     pub fn present(&self) { self.window.present(); }
+
+    /// Check for a snapshot orphaned by a crash (no matching clean save or
+    /// discard ever cleared it) and load it if found. Call once, right
+    /// after construction, before any explicit CLI-open — an explicit open
+    /// target should win over recovering an unrelated document. Returns
+    /// true if a snapshot was recovered.
+    pub fn recover_from_snapshot(&self) -> bool {
+        let state_dir = autosave_state_dir();
+        let Some(orphan_id) = suite_common::autosave::find_orphaned_snapshots(&state_dir).into_iter().next() else {
+            return false;
+        };
+        let orphan = suite_common::autosave::AutosaveSlot::new(state_dir, orphan_id);
+        let Some((bytes, meta)) = orphan.read() else { return false };
+        let tmp = std::env::temp_dir().join(format!("tables-recovery-{}.xlsx", std::process::id()));
+        if std::fs::write(&tmp, &bytes).is_err() {
+            return false;
+        }
+        let recovered = self.open_path(&tmp.to_string_lossy()).is_ok();
+        let _ = std::fs::remove_file(&tmp);
+        if !recovered {
+            return false;
+        }
+        // open_path() pointed current_path at the temp recovery file; the
+        // recovered document actually targets the *original* path (or none,
+        // for a document that was never saved before it crashed). It also
+        // leaves the controller's dirty flag untouched (open_path replaces
+        // state directly, bypassing execute()) — force it dirty so the
+        // close guard still offers to save the recovered content.
+        *self.current_path.borrow_mut() = meta.original_path.clone();
+        self.controller.borrow_mut().mark_dirty();
+        let name = meta.original_path.as_ref()
+            .and_then(|p| p.file_name())
+            .map(|n| n.to_string_lossy().to_string())
+            .unwrap_or_else(|| "Untitled".to_string());
+        self.window.set_title(Some(&format!("{name} (Recovered) — Tables")));
+        // The orphan is now reflected in memory; clear its slot so it isn't
+        // offered again on the next launch. If this session crashes again
+        // before a real save, autosave writes a fresh snapshot under this
+        // window's own doc_id.
+        let _ = orphan.clear();
+        true
+    }
 
     /// Open a spreadsheet file directly (CLI / file-manager open).
     /// Mirrors the open-file-dialog success path.

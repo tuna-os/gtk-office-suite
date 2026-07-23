@@ -39,6 +39,7 @@ class BaseGUITestCase(unittest.TestCase):
         # Launch app under GDK_BACKEND=x11
         env = os.environ.copy()
         env["GDK_BACKEND"] = "x11"
+        env.update(getattr(self, "launch_env", {}))
         self.process = subprocess.Popen(
             [self.bin_path] + list(getattr(self, "launch_args", [])),
             env=env,

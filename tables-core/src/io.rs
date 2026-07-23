@@ -183,6 +183,17 @@ pub fn save_sheets_to_xlsx_with_engine(
     sheets: &[SheetModel],
     engine: Option<&TablesEngine>,
 ) -> Result<(), String> {
+    let bytes = save_sheets_to_xlsx_bytes(sheets, engine)?;
+    suite_common_core::atomic_save::atomic_write_bytes(std::path::Path::new(path), &bytes)
+}
+
+/// Render the workbook to an in-memory xlsx buffer without touching disk —
+/// shared by the real save path (which then writes it atomically) and
+/// autosave (which writes it into a crash-recovery snapshot slot instead).
+pub fn save_sheets_to_xlsx_bytes(
+    sheets: &[SheetModel],
+    engine: Option<&TablesEngine>,
+) -> Result<Vec<u8>, String> {
     use rust_xlsxwriter::{Formula, Workbook};
     let mut workbook = Workbook::new();
     for (si, sh) in sheets.iter().enumerate() {
@@ -329,11 +340,9 @@ pub fn save_sheets_to_xlsx_with_engine(
                 .map_err(|e| format!("Chart error: {}", e))?;
         }
     }
-    let bytes = workbook
+    workbook
         .save_to_buffer()
-        .map_err(|e| format!("Save error: {}", e))?;
-    suite_common_core::atomic_save::atomic_write_bytes(std::path::Path::new(path), &bytes)?;
-    Ok(())
+        .map_err(|e| format!("Save error: {}", e))
 }
 
 /// Map our NumberFormat onto an xlsx number-format code, if non-default.

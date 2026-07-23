@@ -342,6 +342,13 @@ impl WorkbookController {
         self.dirty = false;
     }
 
+    /// Call after loading state through a path that bypasses `execute`
+    /// (e.g. crash recovery, which replaces `state` directly from a
+    /// snapshot) so the close guard still offers to save it.
+    pub fn mark_dirty(&mut self) {
+        self.dirty = true;
+    }
+
     pub fn edit_cell(&mut self, row: usize, col: usize, input: impl Into<String>) {
         let new_input = input.into();
         let state = self.state.borrow();

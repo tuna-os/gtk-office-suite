@@ -45,6 +45,7 @@ fn main() {
         let mut store = ws.borrow_mut();
         if store.is_none() {
             let win = window::TablesWindow::new(app);
+            win.recover_from_snapshot();
             *pw_store.borrow_mut() = Some(win.window.clone().upcast::<gtk4::Window>());
             *store = Some(win);
         }

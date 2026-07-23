@@ -362,6 +362,82 @@ class TablesCloseGuardSmoke(BaseGUITestCase):
         self.assertGreater(os.path.getsize(out_path), 0)
 
 
+class TablesAutosaveSmoke(BaseGUITestCase):
+    """Crash-recovery snapshot lifecycle (issue #99): a dirty, never-saved
+    workbook survives an unclean process kill and is offered back on the
+    next launch; a clean close leaves nothing behind to recover."""
+
+    app_name = "tables"
+
+    def setUp(self):
+        import tempfile
+        self._state_dir = tempfile.mkdtemp(prefix="tables-autosave-state-")
+        self.launch_env = {"XDG_STATE_HOME": self._state_dir}
+        super().setUp()
+
+    def tearDown(self):
+        super().tearDown()
+        import shutil
+        shutil.rmtree(self._state_dir, ignore_errors=True)
+
+    def _snapshot_files(self):
+        snap_dir = os.path.join(self._state_dir, "tables")
+        if not os.path.isdir(snap_dir):
+            return []
+        return [f for f in os.listdir(snap_dir) if f.endswith(".snapshot")]
+
+    def _edit_a1(self):
+        import subprocess
+        from dogtail import rawinput
+
+        subprocess.run(["gapplication", "action", "org.tunaos.tables-rust", "new-document"])
+        time.sleep(1.5)
+        rawinput.typeText("=6*7")
+        rawinput.keyCombo("Return")
+        time.sleep(0.5)
+
+    def test_autosave_now_writes_a_snapshot_only_while_dirty(self):
+        import subprocess
+
+        subprocess.run(["gapplication", "action", "org.tunaos.tables-rust", "autosave-now"])
+        time.sleep(0.5)
+        self.assertEqual(self._snapshot_files(), [], "a clean, untouched workbook must not snapshot")
+
+        self._edit_a1()
+        subprocess.run(["gapplication", "action", "org.tunaos.tables-rust", "autosave-now"])
+        time.sleep(0.5)
+        self.assertEqual(len(self._snapshot_files()), 1, "dirty workbook should have snapshotted")
+
+    def test_crash_then_relaunch_recovers_and_clears_the_snapshot(self):
+        import subprocess
+
+        self._edit_a1()
+        subprocess.run(["gapplication", "action", "org.tunaos.tables-rust", "autosave-now"])
+        time.sleep(0.5)
+        self.assertEqual(len(self._snapshot_files()), 1, "autosave-now must have written a snapshot")
+
+        # Simulate a crash: kill the process directly, bypassing the close
+        # guard entirely, so the snapshot is never cleared by a clean exit.
+        self.process.kill()
+        self.process.wait(timeout=5)
+
+        # Relaunch against the same state dir and expect recovery.
+        env = os.environ.copy()
+        env["GDK_BACKEND"] = "x11"
+        env.update(self.launch_env)
+        self.process = subprocess.Popen(
+            [self.bin_path], env=env,
+            stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
+        )
+        self.app = self.wait_for_app(self.app_name)
+        time.sleep(1.5)
+
+        frame = self.app.child(roleName="frame")
+        self.assertIn("Recovered", frame.name, f"window did not announce recovery: {frame.name!r}")
+        self.assertEqual(self._snapshot_files(), [],
+                          "the recovered snapshot must be cleared so it isn't offered again")
+
+
 class TablesUndoSaveReopenSmoke(BaseGUITestCase):
     """Real GTK journey: edit, undo, redo, save, restart, and reopen."""
 
