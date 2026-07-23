@@ -54,10 +54,27 @@ class BaseGUITestCase(unittest.TestCase):
 
         # Wait for application node in AT-SPI tree
         self.app = self.wait_for_app(self.app_name)
+        self._input_trace = []
         self._activate_window()
         self.last_screenshot = None
 
+    def _callTestMethod(self, method):
+        # unittest.TestCase.run() calls setUp -> _callTestMethod -> tearDown
+        # as one synchronous sequence with no pytest hook in between (unlike
+        # plain pytest tests, unittest tests don't split into separate
+        # setup/call/teardown pytest phases) — so tearDown must learn
+        # whether the test failed from inside this same call, not from a
+        # pytest_runtest_makereport hook, which fires too late to matter.
+        try:
+            method()
+            self._test_failed = False
+        except Exception:
+            self._test_failed = True
+            raise
+
     def tearDown(self):
+        if getattr(self, "_test_failed", False):
+            self._capture_failure_artifacts()
         rawinput.click = _dogtail_click
         rawinput.keyCombo = _dogtail_key_combo
         rawinput.typeText = _dogtail_type_text
@@ -67,6 +84,86 @@ class BaseGUITestCase(unittest.TestCase):
                 self.process.wait(timeout=2)
             except subprocess.TimeoutExpired:
                 self.process.kill()
+
+    def _capture_failure_artifacts(self):
+        """Retain enough to debug a failure without re-running it:
+        screenshot, app stdout/stderr, AT-SPI tree dump, the input trace
+        (every synthetic click/key/type call this test made), and the
+        state snapshot file if the test used GTK_OFFICE_SNAPSHOT_PATH."""
+        artifacts_dir = os.path.join(self.gui_dir, "failure_artifacts",
+                                      f"{type(self).__name__}.{self._testMethodName}")
+        try:
+            os.makedirs(artifacts_dir, exist_ok=True)
+        except OSError as e:
+            print(f"Warning: could not create artifacts dir: {e}")
+            return
+
+        try:
+            self.take_screenshot("failure", crop=False)
+            if self.last_screenshot and os.path.exists(self.last_screenshot):
+                import shutil
+                shutil.copy(self.last_screenshot, os.path.join(artifacts_dir, "screenshot.png"))
+        except Exception as e:
+            print(f"Warning: failure screenshot capture failed: {e}")
+
+        try:
+            with open(os.path.join(artifacts_dir, "atspi_tree.txt"), "w") as f:
+                f.write(self._dump_atspi_tree())
+        except Exception as e:
+            print(f"Warning: AT-SPI tree dump failed: {e}")
+
+        try:
+            with open(os.path.join(artifacts_dir, "input_trace.json"), "w") as f:
+                json.dump(getattr(self, "_input_trace", []), f, indent=2)
+        except Exception as e:
+            print(f"Warning: input trace dump failed: {e}")
+
+        try:
+            if hasattr(self, "process") and self.process and self.process.poll() is None:
+                self.process.terminate()
+            if hasattr(self, "process") and self.process:
+                out, err = self.process.communicate(timeout=2)
+                with open(os.path.join(artifacts_dir, "app.log"), "w") as f:
+                    f.write("--- stdout ---\n")
+                    f.write(out or "")
+                    f.write("\n--- stderr ---\n")
+                    f.write(err or "")
+        except Exception as e:
+            print(f"Warning: app log capture failed: {e}")
+
+        snapshot_path = os.environ.get("GTK_OFFICE_SNAPSHOT_PATH")
+        if snapshot_path and os.path.exists(snapshot_path):
+            try:
+                import shutil
+                shutil.copy(snapshot_path, os.path.join(artifacts_dir, "state_snapshot.json"))
+            except Exception as e:
+                print(f"Warning: snapshot artifact copy failed: {e}")
+
+        print(f"Failure artifacts retained at {artifacts_dir}")
+
+    def _dump_atspi_tree(self, max_depth: int = 12) -> str:
+        lines = []
+
+        def walk(node, depth):
+            if depth > max_depth:
+                return
+            try:
+                pos = node.position
+                size = node.size
+            except Exception:
+                pos = size = None
+            lines.append(f"{'  ' * depth}{node.roleName} {node.name!r} {pos} {size}")
+            try:
+                for child in node.children:
+                    walk(child, depth + 1)
+            except Exception:
+                pass
+
+        try:
+            walk(self.app, 0)
+        except Exception as e:
+            lines.append(f"(tree dump failed: {e})")
+        return "\n".join(lines)
 
     def wait_for_process_exit(self, timeout: float = 5.0) -> "int | None":
         """Poll self.process until it exits or the timeout elapses. A fixed
@@ -124,7 +221,13 @@ class BaseGUITestCase(unittest.TestCase):
             except (FileNotFoundError, subprocess.TimeoutExpired):
                 pass
 
+        def trace(kind, **fields):
+            trace_list = getattr(self, "_input_trace", None)
+            if trace_list is not None:
+                trace_list.append({"time": time.monotonic(), "type": kind, **fields})
+
         def click(x, y, button=1, check=True):
+            trace("click", x=x, y=y, button=button)
             reactivate()
             subprocess.run(
                 ["xdotool", "mousemove", "--sync", str(int(x)), str(int(y)),
@@ -133,6 +236,7 @@ class BaseGUITestCase(unittest.TestCase):
             )
 
         def key_combo(combo_string):
+            trace("key_combo", combo=combo_string)
             # Dogtail's own syntax: '<Control>k' -> tokens ['Control', 'k'].
             # Reuse its alias table (control -> Control_L etc.) so the
             # tokens are valid X keysym names, then join for xdotool.
@@ -149,6 +253,7 @@ class BaseGUITestCase(unittest.TestCase):
             )
 
         def type_text(text):
+            trace("type_text", text=text)
             reactivate()
             subprocess.run(
                 ["xdotool", "type", "--window", win_id, "--", text],
