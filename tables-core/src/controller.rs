@@ -25,12 +25,22 @@ pub struct WorkbookState {
 impl WorkbookState {
     pub fn new(rows: usize, cols: usize) -> Result<Self, String> {
         let engine = TablesEngine::new(rows, cols)?;
-        let sheet = SheetModel::new("Sheet1", rows, cols, 0);
+        let sheet_id = engine.sheet_id_at(0).unwrap_or(0);
+        let sheet = SheetModel::new("Sheet1", rows, cols, sheet_id);
         Ok(Self {
             sheets: vec![Rc::new(RefCell::new(sheet))],
             active_sheet: 0,
             engine,
         })
+    }
+
+    /// Resolve a stable sheet identity to its current position. Sheets are
+    /// never deleted out from under a live GUI reference without also being
+    /// dropped from `sheets`, so this stays in lockstep with the engine.
+    pub fn sheet_index_for_id(&self, sheet_id: u32) -> Option<usize> {
+        self.sheets
+            .iter()
+            .position(|sheet| sheet.borrow().sheet_id == sheet_id)
     }
 
     pub fn sheet(&self) -> Ref<'_, SheetModel> {
@@ -95,8 +105,9 @@ impl WorkbookState {
 
     pub fn add_sheet(&mut self, name: String, rows: usize, cols: usize) -> Result<usize, String> {
         let index = self.engine.add_sheet(&name)?;
+        let sheet_id = self.engine.sheet_id_at(index).unwrap_or(index as u32);
         self.sheets.push(Rc::new(RefCell::new(SheetModel::new(
-            &name, rows, cols, index,
+            &name, rows, cols, sheet_id,
         ))));
         Ok(index)
     }
@@ -111,6 +122,39 @@ impl WorkbookState {
         Ok(())
     }
 
+    /// Rename a sheet in both the engine and its live presentation model.
+    pub fn rename_sheet(&mut self, index: usize, name: &str) -> Result<(), String> {
+        if index >= self.sheets.len() {
+            return Err(format!("Sheet index {index} does not exist"));
+        }
+        self.engine.rename_sheet(index, name)?;
+        self.sheets[index].borrow_mut().name = name.to_string();
+        Ok(())
+    }
+
+    /// Delete a sheet. Fails if it is the only sheet. Undo history entries
+    /// that targeted the deleted sheet become inert no-ops rather than
+    /// corrupting a different sheet (they resolve by sheet_id, and the id
+    /// no longer exists).
+    pub fn delete_sheet(&mut self, index: usize) -> Result<(), String> {
+        if index >= self.sheets.len() {
+            return Err(format!("Sheet index {index} does not exist"));
+        }
+        self.engine.delete_sheet(index)?;
+        self.sheets.remove(index);
+        self.active_sheet = self.engine.active_sheet();
+        self.sync_active_sheet();
+        Ok(())
+    }
+
+    /// Reorder sheets. `new_order` must be a permutation of current indices.
+    pub fn reorder_sheets(&mut self, new_order: &[usize]) -> Result<(), String> {
+        self.engine.reorder_sheets(new_order)?;
+        self.sheets = new_order.iter().map(|&i| self.sheets[i].clone()).collect();
+        self.active_sheet = self.engine.active_sheet();
+        Ok(())
+    }
+
     fn sync_active_sheet(&mut self) {
         let active = self.active_sheet;
         self.sheets[active]
@@ -120,7 +164,7 @@ impl WorkbookState {
 }
 
 struct CellInputCommand {
-    sheet: usize,
+    sheet_id: u32,
     row: usize,
     col: usize,
     old_input: String,
@@ -128,7 +172,7 @@ struct CellInputCommand {
 }
 
 struct SheetSnapshotCommand {
-    sheet: usize,
+    sheet_id: u32,
     before: SheetModel,
     after: SheetModel,
     description: &'static str,
@@ -136,11 +180,15 @@ struct SheetSnapshotCommand {
 
 impl Command<WorkbookState> for SheetSnapshotCommand {
     fn apply(&self, state: &mut WorkbookState) {
-        *state.sheets[self.sheet].borrow_mut() = self.after.clone();
+        if let Some(index) = state.sheet_index_for_id(self.sheet_id) {
+            *state.sheets[index].borrow_mut() = self.after.clone();
+        }
     }
 
     fn undo(&self, state: &mut WorkbookState) {
-        *state.sheets[self.sheet].borrow_mut() = self.before.clone();
+        if let Some(index) = state.sheet_index_for_id(self.sheet_id) {
+            *state.sheets[index].borrow_mut() = self.before.clone();
+        }
     }
 
     fn description(&self) -> &str {
@@ -150,11 +198,15 @@ impl Command<WorkbookState> for SheetSnapshotCommand {
 
 impl Command<WorkbookState> for CellInputCommand {
     fn apply(&self, state: &mut WorkbookState) {
-        state.set_cell_input_on_sheet(self.sheet, self.row, self.col, &self.new_input);
+        if let Some(index) = state.sheet_index_for_id(self.sheet_id) {
+            state.set_cell_input_on_sheet(index, self.row, self.col, &self.new_input);
+        }
     }
 
     fn undo(&self, state: &mut WorkbookState) {
-        state.set_cell_input_on_sheet(self.sheet, self.row, self.col, &self.old_input);
+        if let Some(index) = state.sheet_index_for_id(self.sheet_id) {
+            state.set_cell_input_on_sheet(index, self.row, self.col, &self.old_input);
+        }
     }
 
     fn description(&self) -> &str {
@@ -170,12 +222,12 @@ struct CellInputChange {
 }
 
 struct CellBatchCommand {
-    sheet: usize,
+    sheet_id: u32,
     changes: Vec<CellInputChange>,
 }
 
 struct SortCommand {
-    sheet: usize,
+    sheet_id: u32,
     before_inputs: Vec<Vec<String>>,
     after_inputs: Vec<Vec<String>>,
     before_sheet: SheetModel,
@@ -204,11 +256,15 @@ impl SortCommand {
 
 impl Command<WorkbookState> for SortCommand {
     fn apply(&self, state: &mut WorkbookState) {
-        Self::restore(state, self.sheet, &self.after_inputs, &self.after_sheet);
+        if let Some(index) = state.sheet_index_for_id(self.sheet_id) {
+            Self::restore(state, index, &self.after_inputs, &self.after_sheet);
+        }
     }
 
     fn undo(&self, state: &mut WorkbookState) {
-        Self::restore(state, self.sheet, &self.before_inputs, &self.before_sheet);
+        if let Some(index) = state.sheet_index_for_id(self.sheet_id) {
+            Self::restore(state, index, &self.before_inputs, &self.before_sheet);
+        }
     }
 
     fn description(&self) -> &str {
@@ -218,21 +274,25 @@ impl Command<WorkbookState> for SortCommand {
 
 impl Command<WorkbookState> for CellBatchCommand {
     fn apply(&self, state: &mut WorkbookState) {
-        state.set_cell_inputs_on_sheet(
-            self.sheet,
-            self.changes
-                .iter()
-                .map(|change| (change.row, change.col, change.new_input.as_str())),
-        );
+        if let Some(index) = state.sheet_index_for_id(self.sheet_id) {
+            state.set_cell_inputs_on_sheet(
+                index,
+                self.changes
+                    .iter()
+                    .map(|change| (change.row, change.col, change.new_input.as_str())),
+            );
+        }
     }
 
     fn undo(&self, state: &mut WorkbookState) {
-        state.set_cell_inputs_on_sheet(
-            self.sheet,
-            self.changes
-                .iter()
-                .map(|change| (change.row, change.col, change.old_input.as_str())),
-        );
+        if let Some(index) = state.sheet_index_for_id(self.sheet_id) {
+            state.set_cell_inputs_on_sheet(
+                index,
+                self.changes
+                    .iter()
+                    .map(|change| (change.row, change.col, change.old_input.as_str())),
+            );
+        }
     }
 
     fn description(&self) -> &str {
@@ -263,14 +323,14 @@ impl WorkbookController {
     pub fn edit_cell(&mut self, row: usize, col: usize, input: impl Into<String>) {
         let new_input = input.into();
         let state = self.state.borrow();
-        let sheet = state.active_sheet;
+        let sheet_id = state.sheet().sheet_id;
         let old_input = state.cell_input(row, col);
         drop(state);
         if old_input == new_input {
             return;
         }
         self.undo.execute(Box::new(CellInputCommand {
-            sheet,
+            sheet_id,
             row,
             col,
             old_input,
@@ -289,13 +349,13 @@ impl WorkbookController {
         mutation: impl FnOnce(&mut SheetModel),
     ) {
         let state = self.state.borrow();
-        let sheet = state.active_sheet;
+        let sheet_id = state.sheet().sheet_id;
         let before = state.sheet().clone();
         drop(state);
         let mut after = before.clone();
         mutation(&mut after);
         self.undo.execute(Box::new(SheetSnapshotCommand {
-            sheet,
+            sheet_id,
             before,
             after,
             description,
@@ -305,7 +365,7 @@ impl WorkbookController {
     /// Paste a suite fragment as one undoable calculation edit.
     pub fn paste_fragment(&mut self, row: usize, col: usize, fragment: &Fragment) {
         let state = self.state.borrow();
-        let sheet = state.active_sheet;
+        let sheet_id = state.sheet().sheet_id;
         let (rows, cols) = {
             let sheet = state.sheet();
             (sheet.rows, sheet.cols)
@@ -350,7 +410,7 @@ impl WorkbookController {
         drop(state);
         if !changes.is_empty() {
             self.undo
-                .execute(Box::new(CellBatchCommand { sheet, changes }));
+                .execute(Box::new(CellBatchCommand { sheet_id, changes }));
         }
     }
 
@@ -360,7 +420,7 @@ impl WorkbookController {
         use SortDirection::{Ascending, Descending};
 
         let state = self.state.borrow();
-        let sheet = state.active_sheet;
+        let sheet_id = state.sheet().sheet_id;
         let before_sheet = state.sheet().clone();
         if col >= before_sheet.cols {
             return;
@@ -431,7 +491,7 @@ impl WorkbookController {
             .collect();
 
         self.undo.execute(Box::new(SortCommand {
-            sheet,
+            sheet_id,
             before_inputs,
             after_inputs,
             before_sheet,
@@ -444,9 +504,9 @@ impl WorkbookController {
     /// completed gesture becomes one undo step.
     pub fn record_sheet_mutation(&mut self, description: &'static str, before: SheetModel) {
         let after = self.state.borrow().sheet().clone();
-        let sheet = self.state.borrow().active_sheet;
+        let sheet_id = self.state.borrow().sheet().sheet_id;
         self.undo.execute(Box::new(SheetSnapshotCommand {
-            sheet,
+            sheet_id,
             before,
             after,
             description,
@@ -662,5 +722,82 @@ mod tests {
         assert_eq!(controller.state.borrow().sheet().cell(0, 0), "");
         controller.state.borrow_mut().switch_sheet(1).unwrap();
         assert_eq!(controller.state.borrow().sheet().cell(0, 0), "second sheet");
+    }
+
+    #[test]
+    fn rename_sheet_updates_name_and_keeps_cross_sheet_formulas_live() {
+        let mut controller = WorkbookController::new(2, 2).unwrap();
+        controller.edit_cell(0, 0, "5");
+        {
+            let mut state = controller.state.borrow_mut();
+            state.add_sheet("Sheet2".into(), 2, 2).unwrap();
+            state.switch_sheet(1).unwrap();
+        }
+        controller.edit_cell(0, 0, "=Sheet1!A1*2");
+        assert_eq!(controller.state.borrow().sheet().cell(0, 0), "10");
+
+        controller.state.borrow_mut().rename_sheet(0, "Inputs").unwrap();
+        assert_eq!(controller.state.borrow().sheets[0].borrow().name, "Inputs");
+        assert_eq!(controller.state.borrow().sheet().cell(0, 0), "10");
+
+        // The formula on Sheet2 still resolves through the renamed sheet.
+        controller.state.borrow_mut().switch_sheet(0).unwrap();
+        controller.edit_cell(0, 0, "7");
+        controller.state.borrow_mut().switch_sheet(1).unwrap();
+        assert_eq!(controller.state.borrow().sheet().cell(0, 0), "14");
+    }
+
+    /// The adversarial case for sheet-identity undo: after a structural
+    /// delete renumbers sheet positions, older undo commands (captured by
+    /// sheet_id) must keep targeting their original sheet rather than
+    /// whatever now sits at their old positional index.
+    #[test]
+    fn deleting_a_sheet_does_not_retarget_other_sheets_undo_history() {
+        let mut controller = WorkbookController::new(2, 2).unwrap();
+        controller.edit_cell(0, 0, "sheet1-a"); // undo #1, targets Sheet1
+
+        {
+            let mut state = controller.state.borrow_mut();
+            state.add_sheet("Sheet2".into(), 2, 2).unwrap();
+            state.add_sheet("Sheet3".into(), 2, 2).unwrap();
+            state.switch_sheet(1).unwrap();
+        }
+        controller.edit_cell(0, 0, "sheet2-a");
+
+        // Delete Sheet2 (positional index 1). Sheet3 shifts from index 2 to 1.
+        controller.state.borrow_mut().switch_sheet(0).unwrap();
+        controller.state.borrow_mut().delete_sheet(1).unwrap();
+        assert_eq!(controller.state.borrow().sheets.len(), 2);
+
+        // Undoing the Sheet2 edit is inert: Sheet2 no longer exists, and the
+        // command must not silently retarget Sheet3, which is now at the old
+        // Sheet2 position.
+        controller.state.borrow_mut().switch_sheet(1).unwrap();
+        let sheet3_before = controller.state.borrow().sheet().cell(0, 0).to_string();
+        assert!(controller.undo()); // pops the Sheet2 edit off the stack
+        assert_eq!(controller.state.borrow().sheet().cell(0, 0), sheet3_before);
+
+        // The Sheet1 edit underneath it still undoes correctly.
+        controller.state.borrow_mut().switch_sheet(0).unwrap();
+        assert!(controller.undo());
+        assert_eq!(controller.state.borrow().sheet().cell(0, 0), "");
+    }
+
+    #[test]
+    fn reorder_sheets_permutes_presentation_state_with_engine_content() {
+        let mut controller = WorkbookController::new(2, 2).unwrap();
+        {
+            let mut state = controller.state.borrow_mut();
+            state.sheets[0].borrow_mut().set_col_width(0, 200.0);
+            state.add_sheet("Sheet2".into(), 2, 2).unwrap();
+            state.switch_sheet(1).unwrap();
+        }
+        controller.edit_cell(0, 0, "on-sheet-2");
+
+        controller.state.borrow_mut().reorder_sheets(&[1, 0]).unwrap();
+        let state = controller.state.borrow();
+        assert_eq!(state.sheets[0].borrow().name, "Sheet2");
+        assert_eq!(state.sheets[0].borrow().cell(0, 0), "on-sheet-2");
+        assert_eq!(state.sheets[1].borrow().col_width(0), 200.0);
     }
 }

@@ -162,7 +162,8 @@ pub fn load_xlsx_workbook(path: &str) -> Result<(TablesEngine, Vec<SheetModel>),
     for (index, ((values, formulas), name)) in source.into_iter().zip(names.iter()).enumerate() {
         engine.set_active_sheet(index)?;
         let (rows, cols) = load_xlsx_ranges_into_engine(&values, &formulas, &mut engine);
-        let mut sheet = SheetModel::new(name, rows.max(1), cols.max(1), index);
+        let sheet_id = engine.sheet_id_at(index).unwrap_or(index as u32);
+        let mut sheet = SheetModel::new(name, rows.max(1), cols.max(1), sheet_id);
         sheet.sync_from_engine(&engine);
         sheets.push(sheet);
     }

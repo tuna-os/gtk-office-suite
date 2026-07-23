@@ -63,6 +63,109 @@ impl TablesEngine {
         self.active_sheet
     }
 
+    pub fn sheet_count(&self) -> usize {
+        self.model.workbook.worksheets.len()
+    }
+
+    /// The IronCalc worksheet identity at a position. Stable across add,
+    /// delete, and reorder — unlike the position itself.
+    pub fn sheet_id_at(&self, index: usize) -> Option<u32> {
+        self.model.workbook.worksheets.get(index).map(|w| w.sheet_id)
+    }
+
+    pub fn index_for_sheet_id(&self, id: u32) -> Option<usize> {
+        self.model
+            .workbook
+            .worksheets
+            .iter()
+            .position(|w| w.sheet_id == id)
+    }
+
+    /// Delete a worksheet. Fails if it is the only sheet.
+    pub fn delete_sheet(&mut self, index: usize) -> Result<(), String> {
+        self.model.delete_sheet(index as u32)?;
+        let count = self.sheet_count();
+        if self.active_sheet >= count {
+            self.active_sheet = count - 1;
+        } else if self.active_sheet > index {
+            self.active_sheet -= 1;
+        }
+        self.model.evaluate();
+        Ok(())
+    }
+
+    /// Rebuild the workbook with worksheets in `new_order` (a permutation of
+    /// current indices). IronCalc has no native sheet-move operation, so this
+    /// replays every cell's input text into a fresh model in the new order.
+    /// Cross-sheet formulas reference sheets by name, not position, so they
+    /// keep resolving correctly across the rebuild.
+    pub fn reorder_sheets(&mut self, new_order: &[usize]) -> Result<(), String> {
+        let sheet_count = self.sheet_count();
+        if new_order.len() != sheet_count {
+            return Err("new_order must cover every sheet exactly once".into());
+        }
+        let mut seen = vec![false; sheet_count];
+        for &i in new_order {
+            if i >= sheet_count || std::mem::replace(&mut seen[i], true) {
+                return Err("new_order must be a permutation of existing sheet indices".into());
+            }
+        }
+
+        let names: Vec<String> = (0..sheet_count)
+            .map(|i| self.sheet_name_at(i).unwrap_or_default())
+            .collect();
+        let inputs: Vec<Vec<(usize, usize, String)>> = (0..sheet_count)
+            .map(|i| {
+                let mut cells = Vec::new();
+                for r in 0..self.rows {
+                    for c in 0..self.cols {
+                        let input = self
+                            .formula_at(i, r, c)
+                            .map(|f| format!("={f}"))
+                            .unwrap_or_else(|| self.cell_at(i, r, c));
+                        if !input.is_empty() {
+                            cells.push((r, c, input));
+                        }
+                    }
+                }
+                cells
+            })
+            .collect();
+        // Rebuilding assigns fresh IronCalc sheet_ids, so the old active
+        // sheet's id will not exist in the new model. Track identity by
+        // position within `new_order` instead.
+        let active_old_index = self.active_sheet;
+
+        // The placeholder name only needs to be valid and 'static; it is
+        // immediately overwritten with the real (non-'static) target name,
+        // which `rename_sheet_by_index` copies into an owned `String`.
+        let mut model = Model::new_empty("Sheet1", "en", "UTC", "en")
+            .map_err(|e| format!("Failed to rebuild workbook: {e}"))?;
+        model.rename_sheet_by_index(0, &names[new_order[0]])?;
+        for &old_idx in &new_order[1..] {
+            model.add_sheet(&names[old_idx])?;
+        }
+        self.model = model;
+
+        for (new_idx, &old_idx) in new_order.iter().enumerate() {
+            for (r, c, input) in &inputs[old_idx] {
+                let rr = *r as i32 + 1;
+                let cc = *c as i32 + 1;
+                let _ = self.model.set_user_input(new_idx as u32, rr, cc, input.clone());
+            }
+        }
+        self.model.evaluate();
+        self.active_sheet = new_order
+            .iter()
+            .position(|&old_idx| old_idx == active_old_index)
+            .unwrap_or(0);
+        Ok(())
+    }
+
+    pub fn sheet_name_at(&self, index: usize) -> Option<String> {
+        self.model.workbook.worksheets.get(index).map(|w| w.name.clone())
+    }
+
     /// Get cell value as a display string.
     pub fn cell(&self, row: usize, col: usize) -> String {
         self.cell_at(self.active_sheet, row, col)
@@ -248,5 +351,65 @@ mod tests {
         engine.set_cell_text(0, 0, "9");
         engine.set_active_sheet(1).unwrap();
         assert_eq!(engine.cell(0, 0), "18");
+    }
+
+    #[test]
+    fn delete_sheet_removes_only_that_sheet() {
+        let mut engine = TablesEngine::new(3, 3).unwrap();
+        engine.set_cell_text(0, 0, "1");
+        engine.add_sheet("Sheet2").unwrap();
+        engine.set_active_sheet(1).unwrap();
+        engine.set_cell_text(0, 0, "2");
+        engine.add_sheet("Sheet3").unwrap();
+        engine.set_active_sheet(2).unwrap();
+        engine.set_cell_text(0, 0, "3");
+
+        engine.delete_sheet(1).unwrap();
+        assert_eq!(engine.sheet_count(), 2);
+        assert_eq!(engine.sheet_name_at(0).as_deref(), Some("Sheet1"));
+        assert_eq!(engine.sheet_name_at(1).as_deref(), Some("Sheet3"));
+        assert_eq!(engine.cell_at(0, 0, 0), "1");
+        assert_eq!(engine.cell_at(1, 0, 0), "3");
+    }
+
+    #[test]
+    fn delete_sheet_rejects_the_only_sheet() {
+        let mut engine = TablesEngine::new(2, 2).unwrap();
+        assert!(engine.delete_sheet(0).is_err());
+    }
+
+    #[test]
+    fn reorder_sheets_moves_content_and_keeps_cross_sheet_formulas_live() {
+        let mut engine = TablesEngine::new(3, 3).unwrap();
+        engine.set_cell_text(0, 0, "1"); // Sheet1
+        engine.add_sheet("Sheet2").unwrap();
+        engine.set_active_sheet(1).unwrap();
+        engine.set_cell_text(0, 0, "=Sheet1!A1*10");
+        engine.add_sheet("Sheet3").unwrap();
+        engine.set_active_sheet(2).unwrap();
+        engine.set_cell_text(0, 0, "3");
+
+        // Move Sheet3 to the front: [2, 0, 1]
+        engine.reorder_sheets(&[2, 0, 1]).unwrap();
+        assert_eq!(engine.sheet_name_at(0).as_deref(), Some("Sheet3"));
+        assert_eq!(engine.sheet_name_at(1).as_deref(), Some("Sheet1"));
+        assert_eq!(engine.sheet_name_at(2).as_deref(), Some("Sheet2"));
+        assert_eq!(engine.cell_at(0, 0, 0), "3");
+        assert_eq!(engine.cell_at(1, 0, 0), "1");
+        assert_eq!(engine.cell_at(2, 0, 0), "10");
+
+        engine.set_active_sheet(1).unwrap();
+        engine.set_cell_text(0, 0, "5");
+        assert_eq!(engine.cell_at(2, 0, 0), "50");
+    }
+
+    #[test]
+    fn reorder_sheets_preserves_active_sheet_identity() {
+        let mut engine = TablesEngine::new(2, 2).unwrap();
+        engine.add_sheet("Sheet2").unwrap();
+        engine.set_active_sheet(1).unwrap();
+        engine.reorder_sheets(&[1, 0]).unwrap();
+        assert_eq!(engine.active_sheet(), 0);
+        assert_eq!(engine.sheet_name_at(engine.active_sheet()).as_deref(), Some("Sheet2"));
     }
 }

@@ -206,12 +206,15 @@ pub struct SheetModel {
     /// Conditional-formatting rules (ADR 0003 §4).
     pub cond_rules: Vec<CondRule>,
     pub validations: Vec<Vec<Option<ValidationRule>>>,
-    #[allow(dead_code)] // reserved for multi-engine sheets
-    engine_idx: usize,
+    /// Stable IronCalc worksheet identity. Unlike the sheet's position in
+    /// `WorkbookState::sheets`, this never changes when other sheets are
+    /// added, deleted, or reordered — undo commands key off this instead of
+    /// a positional index so they keep targeting the right sheet.
+    pub sheet_id: u32,
 }
 
 impl SheetModel {
-    pub fn new(name: &str, rows: usize, cols: usize, engine_idx: usize) -> Self {
+    pub fn new(name: &str, rows: usize, cols: usize, sheet_id: u32) -> Self {
         SheetModel {
             name: name.to_string(),
             data: vec![vec![String::new(); cols]; rows],
@@ -228,7 +231,7 @@ impl SheetModel {
             charts: Vec::new(),
             cond_rules: Vec::new(),
             validations: vec![vec![None; cols]; rows],
-            engine_idx,
+            sheet_id,
         }
     }
 
