@@ -231,6 +231,86 @@ class LettersCloseGuardSmoke(BaseGUITestCase):
         self.assertIn("unsaved letters content", saved, f"saved file: {saved!r}")
 
 
+class LettersAutosaveSmoke(BaseGUITestCase):
+    """Crash-recovery snapshot lifecycle (issue #99), per-tab this time:
+    Letters can have several dirty tabs at once, so a crash with two dirty
+    tabs must recover *both* — recovering only the first (an easy bug if
+    the code reuses Tables/Decks' single-document `.next()` pattern) would
+    silently drop the other one."""
+
+    app_name = "letters"
+
+    def setUp(self):
+        import tempfile
+        self._state_dir = tempfile.mkdtemp(prefix="letters-autosave-state-")
+        self.launch_env = {"XDG_STATE_HOME": self._state_dir}
+        super().setUp()
+
+    def tearDown(self):
+        super().tearDown()
+        import shutil
+        shutil.rmtree(self._state_dir, ignore_errors=True)
+
+    def _snapshot_files(self):
+        snap_dir = os.path.join(self._state_dir, "letters")
+        if not os.path.isdir(snap_dir):
+            return []
+        return [f for f in os.listdir(snap_dir) if f.endswith(".snapshot")]
+
+    def test_crash_with_two_dirty_tabs_recovers_both(self):
+        import subprocess
+        from dogtail import rawinput
+
+        aid = "org.tunaos.letters-rust"
+        # The "New Document" button only lives in the empty-state view, so
+        # it's only clickable for the very first tab; every tab after that
+        # (like every other multi-tab test in this file) goes through the
+        # action directly rather than a UI element that's since gone hidden.
+        subprocess.run(["gapplication", "action", aid, "new-document"])
+        time.sleep(2.0)
+        rawinput.typeText("first tab content")
+        time.sleep(1.0)
+
+        subprocess.run(["gapplication", "action", aid, "new-document"])
+        time.sleep(2.0)
+        rawinput.typeText("second tab content")
+        time.sleep(1.0)
+
+        subprocess.run(["gapplication", "action", "org.tunaos.letters-rust", "autosave-now"])
+        time.sleep(0.5)
+        self.assertEqual(len(self._snapshot_files()), 2,
+                          "both dirty tabs should have snapshotted")
+
+        # Simulate a crash: kill the process directly, bypassing the close
+        # guard, so the snapshots are never cleared by a clean exit.
+        self.process.kill()
+        self.process.wait(timeout=5)
+
+        env = os.environ.copy()
+        env["GDK_BACKEND"] = "x11"
+        env.update(self.launch_env)
+        self.process = subprocess.Popen(
+            [self.bin_path], env=env,
+            stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
+        )
+        self.app = self.wait_for_app(self.app_name)
+        time.sleep(2.0)
+
+        frame = self.app.child(roleName="frame")
+        self.assertIn("Recovered", frame.name, f"window did not announce recovery: {frame.name!r}")
+        self.assertEqual(self._snapshot_files(), [],
+                          "both recovered snapshots must be cleared so they aren't offered again")
+
+        seen = set()
+        for _ in range(2):
+            editor = self.app.child(roleName="text")
+            seen.add(editor.text.strip())
+            rawinput.keyCombo("<Control>Tab")
+            time.sleep(0.5)
+        self.assertEqual(seen, {"first tab content", "second tab content"},
+                          f"recovered tab contents: {seen!r}")
+
+
 class TablesSmoke(BaseGUITestCase):
     app_name = "tables"
 

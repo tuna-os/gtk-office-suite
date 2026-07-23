@@ -101,7 +101,9 @@ fn main() {
         }
         let mut store = ws.borrow_mut();
         if store.is_none() {
-            *store = Some(window::LettersWindow::new(gtk_app, s.clone()));
+            let win = window::LettersWindow::new(gtk_app, s.clone());
+            win.recover_from_snapshot();
+            *store = Some(win);
         }
         store.as_ref().unwrap().present();
     });

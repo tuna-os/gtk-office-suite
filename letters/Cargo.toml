@@ -17,6 +17,7 @@ letters-core = { path = "../letters-core" }
 suite-export = { path = "../suite-export" }
 rdocx = { git = "https://github.com/hanthor/rdocx.git", rev = "3929421" }
 rdocx-oxml = "0.1.2"
+serde_json = "1"
 
 [[bin]]
 name = "letters"

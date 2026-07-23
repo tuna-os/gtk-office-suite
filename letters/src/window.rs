@@ -11,13 +11,44 @@ use std::rc::Rc;
 
 use crate::page_container::PageContainer;
 
+// ── Crash-recovery snapshots ─────────────────────────────────────────────
+// One AutosaveSlot per tab (not per window, unlike Tables/Decks): each tab
+// is its own document, so each needs its own doc_id and its own slot.
+static NEXT_DOC_ID: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+fn next_doc_id() -> String {
+    let n = NEXT_DOC_ID.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+    format!("{}-{n}", std::process::id())
+}
+
+fn autosave_state_dir() -> std::path::PathBuf {
+    // glib::user_state_dir() needs the "v2_72" feature this workspace's
+    // glib binding doesn't enable — do the XDG fallback ourselves.
+    let base = std::env::var_os("XDG_STATE_HOME")
+        .map(std::path::PathBuf::from)
+        .or_else(|| std::env::var_os("HOME").map(|h| std::path::PathBuf::from(h).join(".local/state")))
+        .unwrap_or_else(|| std::path::PathBuf::from("/tmp"));
+    base.join("letters")
+}
+
 // ── Per-tab state via widget Qdata ─────────────────────────────────────
 
 #[derive(Clone)]
 struct TabData(Rc<RefCell<TabDataInner>>);
-struct TabDataInner { file: Option<PathBuf>, closing_after_save: bool }
+struct TabDataInner {
+    file: Option<PathBuf>,
+    closing_after_save: bool,
+    autosave_slot: Rc<suite_common::autosave::AutosaveSlot>,
+}
 impl TabData {
-    fn new() -> Self { TabData(Rc::new(RefCell::new(TabDataInner { file: None, closing_after_save: false }))) }
+    fn new() -> Self {
+        TabData(Rc::new(RefCell::new(TabDataInner {
+            file: None,
+            closing_after_save: false,
+            autosave_slot: Rc::new(suite_common::autosave::AutosaveSlot::new(
+                autosave_state_dir(), next_doc_id(),
+            )),
+        })))
+    }
 }
 fn tab_data_set(w: &impl IsA<gtk::Widget>, d: TabData) { unsafe { w.upcast_ref::<gtk::Widget>().set_data("tab-data", d); } }
 fn tab_data_get(w: &gtk::Widget) -> Option<TabData> { unsafe { w.data::<TabData>("tab-data").map(|p| p.as_ref().clone()) } }
@@ -359,6 +390,7 @@ impl LettersWindow {
             ("app.style-code", "Paragraph Style: Code"),
             ("app.style-quote", "Paragraph Style: Block Quote"),
                     ("app.insert-footnote", "Insert Footnote\u{2026}"),
+            ("app.autosave-now", "Save Crash-Recovery Snapshot Now"),
         ]);
 
         let primary_toolbar: Vec<suite_common::ToolbarItem> = vec![
@@ -545,6 +577,7 @@ impl LettersWindow {
                                 do_save(&tv2, &st2);
                             }
                             "discard" => {
+                                clear_tab_autosave(&child);
                                 tv2.close_page_finish(&tv2.page(&child), true);
                                 if tv2.n_pages() == 0 { st2.set_visible_child_name("empty"); }
                             }
@@ -601,6 +634,9 @@ impl LettersWindow {
                     move |response: glib::GString| {
                         match response.as_str() {
                             "discard" => {
+                                for i in 0..tv_clone.n_pages() {
+                                    clear_tab_autosave(&tv_clone.nth_page(i).child());
+                                }
                                 force_close_clone.set(true);
                                 if let Some(w) = win_weak.upgrade() { w.close(); }
                             }
@@ -1075,6 +1111,61 @@ impl LettersWindow {
         self.tab_view.set_selected_page(&page);
     }
 
+    /// Recover every snapshot orphaned by a crash, each into its own new
+    /// tab — unlike Tables/Decks (one document per window), Letters can
+    /// have several dirty tabs open at once, and a crash with N of them
+    /// dirty leaves N orphans; recovering only the first would silently
+    /// drop the rest. Call once, right after construction, before any
+    /// explicit CLI-open. Returns the number of tabs recovered.
+    pub fn recover_from_snapshot(&self) -> usize {
+        let state_dir = autosave_state_dir();
+        let orphan_ids = suite_common::autosave::find_orphaned_snapshots(&state_dir);
+        let mut recovered = 0;
+        for orphan_id in orphan_ids {
+            let orphan = suite_common::autosave::AutosaveSlot::new(state_dir.clone(), orphan_id);
+            let Some((bytes, meta)) = orphan.read() else { continue };
+            let Ok(doc) = serde_json::from_slice::<letters_core::model::Document>(&bytes) else { continue };
+
+            let (container, buf) = make_doc_widget(Some(&self.settings));
+            crate::bridge::render_to_buffer(&doc, &buf);
+            // render_to_buffer ends with buf.set_modified(false) (it's also
+            // used for a normal file open); recovered content is unsaved
+            // by definition, so mark it dirty right back so the close guard
+            // protects it and autosave will re-snapshot it under this tab's
+            // own (fresh) doc_id if this session crashes again too.
+            buf.set_modified(true);
+
+            let td = TabData::new();
+            td.0.borrow_mut().file = meta.original_path.clone();
+            tab_data_set(&container, td);
+            let page = self.tab_view.append(&container);
+            let name = meta.original_path.as_ref()
+                .and_then(|p| p.file_name())
+                .map(|n| n.to_string_lossy().to_string())
+                .unwrap_or_else(|| "Untitled Document".to_string());
+            page.set_title(&format!("{name} (Recovered)"));
+            page.set_needs_attention(true);
+            self.stack.set_visible_child_name("editor");
+            let wc = self.word_count_label.clone();
+            let sl = self.style_label.clone();
+            buf.connect_modified_changed({
+                let p = page.clone();
+                move |b| { p.set_needs_attention(b.is_modified()); }
+            });
+            connect_word_count(&buf, &wc);
+            update_word_count(&buf, &wc);
+            connect_style_readout(&buf, &sl);
+            update_style_readout(&buf, &sl);
+
+            let _ = orphan.clear();
+            recovered += 1;
+        }
+        if recovered > 0 {
+            self.window.set_title(Some("Letters — Recovered documents"));
+        }
+        recovered
+    }
+
     fn register_actions(tv: &adw::TabView, st: &gtk4::Stack, wc: &gtk4::Label, sl: &gtk4::Label, win: &adw::ApplicationWindow, app: &adw::Application, settings: &gio::Settings) {
         // Word count: refresh on every buffer change and when switching tabs.
         {
@@ -1103,6 +1194,11 @@ impl LettersWindow {
                 buf.connect_modified_changed(move |b| { p.set_needs_attention(b.is_modified()); });
                 connect_word_count(&buf, &wc);
                 connect_style_readout(&buf, &sl);
+                // AdwTabView only auto-selects a new page when it's the
+                // first one; a second (or later) "New Document" while a tab
+                // is already open otherwise leaves the old tab selected and
+                // silently sends typing there instead.
+                tv.set_selected_page(&page);
             });
             app.add_action(&a);
         }
@@ -1144,6 +1240,7 @@ impl LettersWindow {
                             buf.connect_modified_changed(move |b| { p.set_needs_attention(b.is_modified()); });
                             connect_word_count(&buf, &wc);
                             connect_style_readout(&buf, &sl);
+                            tv.set_selected_page(&page);
                         }
                     },
                 );
@@ -1211,6 +1308,7 @@ impl LettersWindow {
                                     if let Some(td) = tab_data_get(&child) {
                                         td.0.borrow_mut().file = file.path();
                                     }
+                                    clear_tab_autosave(&child);
                                 }
                             }
                         }
@@ -1219,6 +1317,49 @@ impl LettersWindow {
             });
             app.add_action(&a);
         }
+
+        // ── Autosave: periodic per-tab crash-recovery snapshot ──────────
+        // One tick covers every open tab. Serializes through
+        // capture_from_buffer (the same model the bridge uses for a real
+        // save) to JSON — snapshotting doesn't need a real file format,
+        // just a lossless round-trip back into a buffer on recovery.
+        {
+            let atv = tv.clone();
+            let a = gtk::gio::SimpleAction::new("autosave-now", None);
+            a.connect_activate(move |_, _| { autosave_all_tabs(&atv); });
+            app.add_action(&a);
+        }
+        {
+            let atv = tv.clone();
+            let interval = settings.int("auto-save-interval");
+            if interval > 0 {
+                glib::source::timeout_add_seconds_local(interval.max(10) as u32, move || {
+                    autosave_all_tabs(&atv);
+                    glib::ControlFlow::Continue
+                });
+            }
+        }
+    }
+}
+
+fn autosave_all_tabs(tv: &adw::TabView) {
+    for i in 0..tv.n_pages() {
+        let page = tv.nth_page(i);
+        if !page.needs_attention() {
+            continue;
+        }
+        let child = page.child();
+        let (Some(td), Some(buf)) = (tab_data_get(&child), get_textview(&child).map(|tv| tv.buffer())) else {
+            continue;
+        };
+        let doc = crate::bridge::capture_from_buffer(&buf);
+        let Ok(bytes) = serde_json::to_vec(&doc) else { continue };
+        let td = td.0.borrow();
+        let meta = suite_common::autosave::SnapshotMeta {
+            original_path: td.file.clone(),
+            kind: "letters-json".to_string(),
+        };
+        let _ = td.autosave_slot.write(&bytes, &meta);
     }
 }
 
@@ -1602,7 +1743,16 @@ fn save_page(page: &adw::TabPage) -> bool {
     if let Some(name) = path.file_name().and_then(|s| s.to_str()) {
         page.set_title(name);
     }
+    let _ = td.0.borrow().autosave_slot.clear();
     true
+}
+
+/// Clear a tab's autosave slot — call on Discard as well as on save,
+/// since a discarded tab shouldn't be offered back as "recovered" either.
+fn clear_tab_autosave(child: &gtk::Widget) {
+    if let Some(td) = tab_data_get(child) {
+        let _ = td.0.borrow().autosave_slot.clear();
+    }
 }
 
 fn do_save(tv: &adw::TabView, _stack: &gtk4::Stack) {
@@ -1652,6 +1802,7 @@ fn close_all_dirty_pages(
             page2.set_needs_attention(false);
             if let Some(name) = file.basename() { page2.set_title(&name.display().to_string()); }
             if let Some(td) = tab_data_get(&child) { td.0.borrow_mut().file = file.path(); }
+            clear_tab_autosave(&child);
             close_all_dirty_pages(win2, tv2, queue, force_close2);
         });
         return;

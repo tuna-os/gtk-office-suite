@@ -223,7 +223,7 @@ impl Paragraph {
     }
 }
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct Document {
     pub paragraphs: Vec<Paragraph>,
     /// Footnote texts; runs reference them by index via
