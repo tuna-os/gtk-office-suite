@@ -108,13 +108,35 @@ pub fn hit_test_object(objects: &[SlideObject], sx: f64, sy: f64) -> Option<usiz
 
 // ── Main slide rendering ─────────────────────────────────────────────
 
+/// Selection-highlight color, in place of a hardcoded blue
+/// (tuna-os/gtk-office-suite#78). `AdwStyleManager::accent_color_rgba()`
+/// would be the direct way to ask for this, but it's gated behind
+/// libadwaita's v1_6 feature and CI's Ubuntu 24.04 runner only ships
+/// libadwaita 1.5 — so this reads the `@accent_bg_color` named CSS color
+/// instead, which is a plain GTK4 mechanism available since libadwaita
+/// 1.0. `lookup_color` only exists on the (deprecated-since-4.10)
+/// StyleContext; there's no non-deprecated widget-level replacement for
+/// looking up a *named* color yet.
+#[allow(deprecated)]
+pub fn accent_rgb(widget: &impl gtk4::prelude::WidgetExt) -> (f64, f64, f64) {
+    use gtk4::prelude::StyleContextExt;
+    widget
+        .style_context()
+        .lookup_color("accent_bg_color")
+        .map(|c| (c.red() as f64, c.green() as f64, c.blue() as f64))
+        .unwrap_or((0.0, 0.5, 1.0))
+}
+
+#[allow(clippy::too_many_arguments)]
 pub fn draw_slide(
     cr: &cairo::Context, width: f64, height: f64,
     slides: &[Slide], current_slide: usize, selected: Option<usize>,
-    masters: &[MasterSlide],
+    masters: &[MasterSlide], accent: (f64, f64, f64),
 ) {
     cr.set_source_rgb(0.86, 0.86, 0.86);
     cr.paint().unwrap();
+
+    let (ar, ag, ab) = accent;
 
     let (ox, oy, slide_w, slide_h) = slide_geometry(width, height);
 
@@ -205,7 +227,7 @@ pub fn draw_slide(
                     let sw = (w / 960.0) * slide_w;
                     let sh = (h / 540.0) * slide_h;
                     if is_selected {
-                        cr.set_source_rgb(0.0, 0.5, 1.0);
+                        cr.set_source_rgb(ar, ag, ab);
                         cr.set_line_width(2.0);
                         cr.rectangle(sx - 2.0, sy - 2.0, sw + 4.0, sh + 4.0);
                         cr.stroke().unwrap();
@@ -280,7 +302,7 @@ pub fn draw_slide(
                     let sw = (w / 960.0) * slide_w;
                     let sh = (h / 540.0) * slide_h;
                     if is_selected {
-                        cr.set_source_rgb(0.0, 0.5, 1.0);
+                        cr.set_source_rgb(ar, ag, ab);
                         cr.set_line_width(2.0);
                         cr.rectangle(sx - 2.0, sy - 2.0, sw + 4.0, sh + 4.0);
                         cr.stroke().unwrap();
@@ -294,7 +316,7 @@ pub fn draw_slide(
                     let cy = oy + (y / 540.0) * slide_h;
                     let radius = (r / 540.0) * slide_h;
                     if is_selected {
-                        cr.set_source_rgb(0.0, 0.5, 1.0);
+                        cr.set_source_rgb(ar, ag, ab);
                         cr.set_line_width(2.0);
                         cr.arc(cx, cy, radius + 2.0, 0.0, 2.0 * std::f64::consts::PI);
                         cr.stroke().unwrap();
@@ -309,7 +331,7 @@ pub fn draw_slide(
                     let sw = (w / 960.0) * slide_w;
                     let sh = (h / 540.0) * slide_h;
                     if is_selected {
-                        cr.set_source_rgb(0.0, 0.5, 1.0);
+                        cr.set_source_rgb(ar, ag, ab);
                         cr.set_line_width(2.0);
                         cr.rectangle(sx - 2.0, sy - 2.0, sw + 4.0, sh + 4.0);
                         cr.stroke().unwrap();

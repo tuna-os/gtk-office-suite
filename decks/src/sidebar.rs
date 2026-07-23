@@ -25,6 +25,7 @@ fn slide_thumbnail(
             index,
             None,
             masters,
+            (0.0, 0.5, 1.0), // thumbnails never show selection; unused
         );
     }
     surface.flush();

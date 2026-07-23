@@ -91,7 +91,8 @@ impl TransitionState {
 fn render_slide_to_surface(slide: &Slide) -> cairo::ImageSurface {
     let surface = cairo::ImageSurface::create(cairo::Format::ARgb32, 960, 540).unwrap();
     let cr = cairo::Context::new(&surface).unwrap();
-    draw_slide(&cr, 960.0, 540.0, std::slice::from_ref(slide), 0, None, &[]);
+    draw_slide(&cr, 960.0, 540.0, std::slice::from_ref(slide), 0, None, &[],
+               (0.0, 0.5, 1.0)); // transition snapshots never show selection; unused
     surface.flush();
     surface
 }

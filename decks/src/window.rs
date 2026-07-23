@@ -164,7 +164,8 @@ impl DecksWindow {
                     }
                 };
                 area.update_property(&[gtk::accessible::Property::Description(&desc)]);
-                draw_slide(cr, width as f64, height as f64, &slides, cur, so.get(), &m.borrow());
+                let accent = crate::canvas::accent_rgb(area);
+                draw_slide(cr, width as f64, height as f64, &slides, cur, so.get(), &m.borrow(), accent);
             });
         }
 
