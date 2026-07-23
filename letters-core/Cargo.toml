@@ -12,7 +12,7 @@ categories = ["text-processing", "parser-implementations"]
 # Markdown/DOCX I/O, editing operations. Must never depend on GTK — see
 # letters-core/DESIGN.md and docs/DEVELOPMENT.md.
 [dependencies]
-pulldown-cmark = "0.12"
+pulldown-cmark = "0.13"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 rdocx = { git = "https://github.com/hanthor/rdocx.git", rev = "3929421" }
