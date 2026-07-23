@@ -41,6 +41,11 @@ pub struct DecksController {
     pub slides: Rc<RefCell<Vec<Slide>>>,
     pub masters: Rc<RefCell<Vec<MasterSlide>>>,
     pub dirty: Rc<Cell<bool>>,
+    /// The deck's on-disk path, or `None` for an unsaved new document.
+    /// Canonical document identity (#103) — window.rs reads/writes this
+    /// shared cell rather than tracking its own copy (mirrors
+    /// tables_core::controller::WorkbookController::file_path).
+    pub file_path: Rc<RefCell<Option<String>>>,
     undo: RefCell<UndoManager<Vec<Slide>>>,
 }
 
@@ -58,6 +63,7 @@ impl DecksController {
             slides,
             masters: Rc::new(RefCell::new(masters)),
             dirty,
+            file_path: Rc::new(RefCell::new(None)),
             undo: RefCell::new(undo),
         }
     }

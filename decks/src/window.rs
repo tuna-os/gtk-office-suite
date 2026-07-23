@@ -86,7 +86,7 @@ impl DecksWindow {
         let dirty = controller.dirty.clone();
         let current_slide = Rc::new(Cell::new(0usize));
         let selected_object = Rc::new(Cell::new(None));
-        let file_path = Rc::new(RefCell::new(None::<String>));
+        let file_path = controller.file_path.clone();
         let settings = gio::Settings::new("org.tunaos.decks-rust");
         let autosave_slot = Rc::new(suite_common::autosave::AutosaveSlot::new(
             autosave_state_dir(), next_doc_id(),
