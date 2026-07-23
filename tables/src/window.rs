@@ -88,7 +88,7 @@ impl TablesWindow {
                 .expect("Failed to create spreadsheet controller"),
         ));
         let state = controller.borrow().state.clone();
-        let current_path: Rc<RefCell<Option<std::path::PathBuf>>> = Rc::new(RefCell::new(None));
+        let current_path = controller.borrow().file_path.clone();
         let settings = gio::Settings::new("org.tunaos.tables-rust");
         let autosave_slot = Rc::new(suite_common::autosave::AutosaveSlot::new(
             autosave_state_dir(), next_doc_id(),

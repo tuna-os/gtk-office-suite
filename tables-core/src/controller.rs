@@ -309,6 +309,10 @@ pub struct WorkbookController {
     /// after a successful save. Undoing back to a prior save point does not
     /// re-clean the flag — a conservative simplification (issue #99).
     dirty: bool,
+    /// The workbook's on-disk path, or `None` for an unsaved new document.
+    /// Canonical document identity (#103) — window.rs reads/writes this
+    /// shared cell rather than tracking its own copy.
+    pub file_path: Rc<RefCell<Option<std::path::PathBuf>>>,
 }
 
 impl WorkbookController {
@@ -316,7 +320,7 @@ impl WorkbookController {
         let state = Rc::new(RefCell::new(WorkbookState::new(rows, cols)?));
         let mut undo = UndoManager::new(state.clone());
         undo.broadcaster = Some(Rc::new(Broadcaster::new()));
-        Ok(Self { state, undo, dirty: false })
+        Ok(Self { state, undo, dirty: false, file_path: Rc::new(RefCell::new(None)) })
     }
 
     pub fn listen_history(&self, listener: Rc<dyn Listener<Hint>>) {
