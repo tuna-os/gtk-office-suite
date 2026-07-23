@@ -16,7 +16,7 @@ jobs:
   test:
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Install GTK4 + libadwaita dev libraries
         run: |
@@ -42,7 +42,7 @@ jobs:
   oracle:
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
       - name: Install LibreOffice (headless Writer, Calc, Impress)
@@ -70,7 +70,7 @@ jobs:
     needs: [test]
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Install GTK4 deps
         run: sudo apt-get update -qq && sudo apt-get install -y -qq libgtk-4-dev libadwaita-1-dev
       - uses: dtolnay/rust-toolchain@stable
@@ -92,7 +92,7 @@ jobs:
       image: ghcr.io/flathub-infra/flatpak-github-actions:gnome-50
       options: --privileged
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Build Flatpak — org.tunaos.${{ matrix.app }}
         uses: flatpak/flatpak-github-actions/flatpak-builder@v6
