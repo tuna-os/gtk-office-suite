@@ -9,6 +9,7 @@ use gtk4::cairo;
 use libadwaita as adw;
 use std::cell::{Cell, RefCell};
 use std::rc::Rc;
+use suite_common::events::{Broadcaster, Hint, Listener};
 use suite_common::undo::UndoManager;
 use suite_common::SuiteWindow;
 use decks_core::undo::{AddObjectCmd, DeleteObjectCmd, AddSlideCmd, DeleteSlideCmd, ReorderSlidesCmd, MoveObjectCmd, set_obj_position};
@@ -37,6 +38,24 @@ pub struct DecksWindow {
     editor_split: adw::OverlaySplitView,
     file_path: Rc<RefCell<Option<String>>>,
     refresh_hud: Rc<dyn Fn()>,
+    /// True whenever the deck differs from what's on disk. Driven by the
+    /// undo manager's own broadcaster (see [`DirtyListener`]) rather than
+    /// touched at each of the many `undo.execute()` call sites in this
+    /// file, so it can't drift from what the undo history actually did.
+    dirty: Rc<Cell<bool>>,
+}
+
+/// Marks a deck dirty on any undo-stack mutation (execute, undo, or redo).
+struct DirtyListener {
+    dirty: Rc<Cell<bool>>,
+}
+
+impl Listener<Hint> for DirtyListener {
+    fn on_event(&self, hint: &Hint) {
+        if let Hint::UndoStateChanged { .. } = hint {
+            self.dirty.set(true);
+        }
+    }
 }
 
 impl DecksWindow {
@@ -58,6 +77,14 @@ impl DecksWindow {
         let selected_object = Rc::new(Cell::new(None));
         let file_path = Rc::new(RefCell::new(None::<String>));
         let undo = Rc::new(RefCell::new(UndoManager::new(slides.clone())));
+        let dirty = Rc::new(Cell::new(false));
+        undo.borrow_mut().broadcaster = Some(Rc::new(Broadcaster::new()));
+        undo
+            .borrow()
+            .broadcaster
+            .as_ref()
+            .unwrap()
+            .listen(Rc::new(DirtyListener { dirty: dirty.clone() }));
         let transition = Rc::new(RefCell::new(TransitionState::new()));
 
         // ── Canvas ────────────────────────────────────────────────────────
@@ -378,6 +405,118 @@ impl DecksWindow {
 
         // ── SuiteWindow chrome ────────────────────────────────────────────
         let suite_win = SuiteWindow::new(app, "Decks", vec![], vec![]);
+
+        // ── Window close-request: Save / Discard / Cancel guard ──────────
+        // Same force_close re-entrancy pattern as Letters/Tables: a dialog
+        // response can't be awaited inside close-request, so the first
+        // close is stopped and the dialog's own callback re-invokes
+        // .close() with the guard set so this handler lets it through.
+        {
+            let dirty = dirty.clone();
+            let ss = slides.clone();
+            let m = masters.clone();
+            let path_state = file_path.clone();
+            let force_close = Rc::new(Cell::new(false));
+            suite_win.window.connect_close_request(move |win| {
+                if force_close.get() {
+                    return glib::Propagation::Proceed;
+                }
+                if !dirty.get() {
+                    return glib::Propagation::Proceed;
+                }
+                let dialog = adw::AlertDialog::builder()
+                    .heading("Save changes?")
+                    .body("This presentation has unsaved changes. If you close without saving, they will be lost.")
+                    .build();
+                dialog.add_responses(&[
+                    ("cancel", "_Cancel"),
+                    ("discard", "_Discard"),
+                    ("save", "_Save"),
+                ]);
+                dialog.set_close_response("cancel");
+                dialog.set_default_response(Some("save"));
+                dialog.set_response_appearance("discard", adw::ResponseAppearance::Destructive);
+                dialog.set_response_appearance("save", adw::ResponseAppearance::Suggested);
+
+                let win_weak = win.downgrade();
+                let force_close = force_close.clone();
+                let dirty = dirty.clone();
+                let ss = ss.clone();
+                let m = m.clone();
+                let path_state = path_state.clone();
+                dialog.choose(Some(win), None::<&gio::Cancellable>, move |response: glib::GString| {
+                    let Some(win) = win_weak.upgrade() else { return };
+                    if response == "discard" {
+                        force_close.set(true);
+                        win.close();
+                        return;
+                    }
+                    if response != "save" {
+                        return;
+                    }
+                    let existing_path = path_state.borrow().clone();
+                    if let Some(path) = existing_path {
+                        let deck = Deck { slides: ss.borrow().clone(), masters: m.borrow().clone() };
+                        match write_deck(&path, &deck) {
+                            Ok(()) => {
+                                dirty.set(false);
+                                force_close.set(true);
+                                win.close();
+                            }
+                            Err(e) => {
+                                let err = adw::AlertDialog::builder()
+                                    .heading("Error saving file")
+                                    .body(&e)
+                                    .build();
+                                err.add_response("ok", "OK");
+                                err.present(Some(&win));
+                            }
+                        }
+                        return;
+                    }
+                    // Never saved: prompt for a destination, then close only
+                    // once that save actually succeeds.
+                    let dlg = gtk::FileDialog::new();
+                    let f = gtk::FileFilter::new();
+                    f.add_pattern("*.pptx");
+                    f.set_name(Some("PowerPoint Presentations (.pptx)"));
+                    let odp = gtk::FileFilter::new();
+                    odp.add_pattern("*.odp");
+                    odp.set_name(Some("OpenDocument Presentations (.odp)"));
+                    let fl = gio::ListStore::new::<gtk::FileFilter>();
+                    fl.append(&f);
+                    fl.append(&odp);
+                    dlg.set_filters(Some(&fl));
+                    dlg.set_initial_name(Some("Untitled.pptx"));
+                    let win2 = win.clone();
+                    dlg.save(Some(&win), None::<&gio::Cancellable>, move |result| {
+                        if let Ok(file) = result {
+                            if let Some(path) = file.path() {
+                                let path_str = path.to_string_lossy().to_string();
+                                let deck = Deck { slides: ss.borrow().clone(), masters: m.borrow().clone() };
+                                match write_deck(&path_str, &deck) {
+                                    Ok(()) => {
+                                        *path_state.borrow_mut() = Some(path_str);
+                                        dirty.set(false);
+                                        force_close.set(true);
+                                        win2.close();
+                                    }
+                                    Err(e) => {
+                                        let err = adw::AlertDialog::builder()
+                                            .heading("Error saving file")
+                                            .body(&e)
+                                            .build();
+                                        err.add_response("ok", "OK");
+                                        err.present(Some(&win2));
+                                    }
+                                }
+                            }
+                        }
+                    });
+                });
+                glib::Propagation::Stop
+            });
+        }
 
         // Narrow mode (< 600sp): AdwWindow applies at most one breakpoint,
         // so all setters go on the shared SuiteWindow one. Both sidebars
@@ -1198,18 +1337,22 @@ impl DecksWindow {
             let w_clone = w.clone();
             let path_clone = path_ref.clone();
             let m_save = masters.clone();
+            let dirty_save = dirty.clone();
             act_save.connect_activate(move |_, _| {
                 let current_path = path_clone.borrow().clone();
                 if let Some(path_str) = current_path {
                     let deck = Deck { slides: ss_clone.borrow().clone(), masters: m_save.borrow().clone() };
-                    if let Err(e) = write_deck(&path_str, &deck) {
-                        let err = adw::AlertDialog::builder()
-                            .heading(&suite_common::i18n("Error saving presentation"))
-                            .body(&e)
-                            .build();
-                        err.add_response("ok", "OK");
-                        err.set_default_response(Some("ok"));
-                        err.present(Some(&w_clone));
+                    match write_deck(&path_str, &deck) {
+                        Ok(()) => dirty_save.set(false),
+                        Err(e) => {
+                            let err = adw::AlertDialog::builder()
+                                .heading(&suite_common::i18n("Error saving presentation"))
+                                .body(&e)
+                                .build();
+                            err.add_response("ok", "OK");
+                            err.set_default_response(Some("ok"));
+                            err.present(Some(&w_clone));
+                        }
                     }
                 } else {
                     let _ = gtk4::prelude::WidgetExt::activate_action(&w_clone, "app.save-file-as", None);
@@ -1219,6 +1362,7 @@ impl DecksWindow {
 
             let act_save_as = gtk::gio::SimpleAction::new("save-file-as", None);
             let m_as = masters.clone();
+            let dirty_as = dirty.clone();
             act_save_as.connect_activate(move |_, _| {
                 let dlg = gtk::FileDialog::new();
                 let f = gtk::FileFilter::new();
@@ -1237,6 +1381,7 @@ impl DecksWindow {
                 let w2 = w.clone();
                 let path_ref = path_ref.clone();
                 let m_inner = m_as.clone();
+                let dirty_as = dirty_as.clone();
                 dlg.save(Some(&w), None::<&gio::Cancellable>,
                     move |result: Result<gio::File, glib::Error>| {
                         if let Ok(file) = result {
@@ -1246,6 +1391,7 @@ impl DecksWindow {
                                 match write_deck(&path_str, &deck) {
                                     Ok(()) => {
                                         *path_ref.borrow_mut() = Some(path_str);
+                                        dirty_as.set(false);
                                     }
                                     Err(e) => {
                                         let err = adw::AlertDialog::builder()
@@ -1280,6 +1426,7 @@ impl DecksWindow {
             editor_split,
             file_path,
             refresh_hud,
+            dirty,
         }
     }
 

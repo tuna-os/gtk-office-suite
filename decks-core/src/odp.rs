@@ -184,10 +184,14 @@ const MANIFEST: &str = "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\
 <manifest:file-entry manifest:full-path=\"content.xml\" manifest:media-type=\"text/xml\"/>\
 </manifest:manifest>";
 
-/// Write the deck as .odp.
+/// Write the deck as .odp. Builds the whole archive in memory first, then
+/// places it atomically — a rename before the ZipWriter flushes its central
+/// directory would leave a corrupt archive, so the destination path is
+/// never touched until the full buffer is ready (see suite_common_core::
+/// atomic_save).
 pub fn write(deck: &Deck, path: &str) -> Result<(), String> {
-    let file = std::fs::File::create(path).map_err(|e| e.to_string())?;
-    let mut z = zip::ZipWriter::new(file);
+    let buf = std::io::Cursor::new(Vec::new());
+    let mut z = zip::ZipWriter::new(buf);
     z.start_file(
         "mimetype",
         zip::write::SimpleFileOptions::default().compression_method(zip::CompressionMethod::Stored),
@@ -199,8 +203,8 @@ pub fn write(deck: &Deck, path: &str) -> Result<(), String> {
     z.write_all(MANIFEST.as_bytes()).map_err(|e| e.to_string())?;
     z.start_file("content.xml", opt).map_err(|e| e.to_string())?;
     z.write_all(content_xml(deck).as_bytes()).map_err(|e| e.to_string())?;
-    z.finish().map_err(|e| e.to_string())?;
-    Ok(())
+    let bytes = z.finish().map_err(|e| e.to_string())?.into_inner();
+    suite_common_core::atomic_save::atomic_write_bytes(std::path::Path::new(path), &bytes)
 }
 
 // ── Reading ──────────────────────────────────────────────────────────

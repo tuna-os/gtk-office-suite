@@ -59,6 +59,19 @@ class BaseGUITestCase(unittest.TestCase):
             except subprocess.TimeoutExpired:
                 self.process.kill()
 
+    def wait_for_process_exit(self, timeout: float = 5.0) -> "int | None":
+        """Poll self.process until it exits or the timeout elapses. A fixed
+        sleep before checking poll() is a common source of flaky failures
+        under load (Xvfb/AT-SPI daemon contention slows real exits down);
+        this waits only as long as actually needed."""
+        deadline = time.monotonic() + timeout
+        while time.monotonic() < deadline:
+            code = self.process.poll()
+            if code is not None:
+                return code
+            time.sleep(0.1)
+        return self.process.poll()
+
     def wait_for_app(self, name: str, timeout: float = 15.0) -> "tree.Node":
         deadline = time.monotonic() + timeout
         while time.monotonic() < deadline:

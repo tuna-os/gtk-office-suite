@@ -1122,8 +1122,10 @@ fn write_image<W: std::io::Write>(
 }
 
 pub fn write_pptx(path: &str, deck: &Deck) -> Result<(), String> {
-    let file = File::create(path).map_err(|e| format!("Cannot create file: {}", e))?;
-    let mut zip = zip::ZipWriter::new(file);
+    // Built fully in memory, then placed atomically — see
+    // suite_common_core::atomic_save and odp::write for why.
+    let buf = std::io::Cursor::new(Vec::new());
+    let mut zip = zip::ZipWriter::new(buf);
 
     let options = SimpleFileOptions::default()
         .compression_method(zip::CompressionMethod::Deflated)
@@ -1363,8 +1365,8 @@ pub fn write_pptx(path: &str, deck: &Deck) -> Result<(), String> {
         zip.write_all(&buffer).map_err(|e| e.to_string())?;
     }
 
-    zip.finish().map_err(|e| e.to_string())?;
-    Ok(())
+    let bytes = zip.finish().map_err(|e| e.to_string())?.into_inner();
+    suite_common_core::atomic_save::atomic_write_bytes(std::path::Path::new(path), &bytes)
 }
 
 #[cfg(test)]
