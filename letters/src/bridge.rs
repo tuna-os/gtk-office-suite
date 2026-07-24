@@ -14,6 +14,40 @@ use letters_core::model::{Document, Paragraph, Run, RunStyle};
 
 const RUN_TAGS: [&str; 6] = ["bold", "italic", "underline", "strikethrough", "highlight", "code"];
 
+/// GtkTextTag name for a discrete line-spacing multiplier — reuses the
+/// same "line-spacing-1.0"/"1.15"/"1.5"/"2.0" tags window.rs's
+/// register_formatting_tags already registers and its cycle-line-spacing
+/// action already applies live; this just makes the choice persist
+/// through Document/DOCX/ODT instead of being GTK-buffer-only. `None`
+/// for the default single spacing (1.0 — no tag needed on render, mirrors
+/// `Alignment::Left`); capture still recognizes an explicit
+/// "line-spacing-1.0" tag if present (the live-editing action applies
+/// one for that case too), mapping it back to 1.0 all the same.
+fn line_spacing_tag_name(spacing: f32) -> Option<&'static str> {
+    if (spacing - 1.15).abs() < 0.01 {
+        Some("line-spacing-1.15")
+    } else if (spacing - 1.5).abs() < 0.01 {
+        Some("line-spacing-1.5")
+    } else if (spacing - 2.0).abs() < 0.01 {
+        Some("line-spacing-2.0")
+    } else {
+        None
+    }
+}
+
+/// Inverse of [`line_spacing_tag_name`] — covers "line-spacing-1.0" too
+/// (captured back as 1.0, same as no tag) since the live-editing action
+/// applies it explicitly for the default case.
+fn line_spacing_from_tag_name(name: &str) -> Option<f32> {
+    match name {
+        "line-spacing-1.0" => Some(1.0),
+        "line-spacing-1.15" => Some(1.15),
+        "line-spacing-1.5" => Some(1.5),
+        "line-spacing-2.0" => Some(2.0),
+        _ => None,
+    }
+}
+
 /// Rebuild a Document from the buffer's text and tags.
 pub fn capture_from_buffer(buf: &gtk::TextBuffer) -> Document {
     let table = buf.tag_table();
@@ -62,6 +96,12 @@ pub fn capture_from_buffer(buf: &gtk::TextBuffer) -> Document {
     .filter_map(|(a, n)| table.lookup(n).map(|t| (a, t)))
     .collect();
 
+    let line_spacing_tags: Vec<(f32, gtk::TextTag)> =
+        ["line-spacing-1.15", "line-spacing-1.5", "line-spacing-2.0", "line-spacing-1.0"]
+            .into_iter()
+            .filter_map(|n| table.lookup(n).map(|t| (line_spacing_from_tag_name(n).unwrap(), t)))
+            .collect();
+
     let mut paragraphs: Vec<Paragraph> = Vec::new();
     let mut current = Paragraph::default();
     let mut current_run: Option<Run> = None;
@@ -79,6 +119,12 @@ pub fn capture_from_buffer(buf: &gtk::TextBuffer) -> Document {
             for (align, tag) in &align_tags {
                 if iter.has_tag(tag) {
                     current.style.alignment = *align;
+                    break;
+                }
+            }
+            for (spacing, tag) in &line_spacing_tags {
+                if iter.has_tag(tag) {
+                    current.style.line_spacing = *spacing;
                     break;
                 }
             }
@@ -280,6 +326,9 @@ pub fn render_to_buffer(doc: &Document, buf: &gtk::TextBuffer) {
             letters_core::Alignment::Justify => para_tags.push("align-justify".into()),
             letters_core::Alignment::Left => {}
         }
+        if let Some(name) = line_spacing_tag_name(para.style.line_spacing) {
+            para_tags.push(name.to_string());
+        }
         for name in para_tags {
             let start = buf.iter_at_offset(para_start);
             buf.apply_tag_by_name(&name, &start, &insert);
@@ -405,6 +454,18 @@ plain");
         assert_eq!(rt.paragraphs[0].style.alignment, letters_core::Alignment::Center);
         assert_eq!(rt.paragraphs[1].style.alignment, letters_core::Alignment::Right);
         assert_eq!(rt.paragraphs[2].style.alignment, letters_core::Alignment::Left);
+
+        // line spacing
+        let buf = fresh();
+        let mut d = Document::from_plain_text("wide
+double
+single");
+        d.paragraphs[0].style.line_spacing = 1.15;
+        d.paragraphs[1].style.line_spacing = 2.0;
+        let rt = round_trip(&buf, &d);
+        assert_eq!(rt.paragraphs[0].style.line_spacing, 1.15);
+        assert_eq!(rt.paragraphs[1].style.line_spacing, 2.0);
+        assert_eq!(rt.paragraphs[2].style.line_spacing, 1.0);
 
         // image (renders as paintable, captures back with src + alt)
         let buf = fresh();
