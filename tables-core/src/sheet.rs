@@ -242,6 +242,11 @@ pub struct SheetModel {
     /// Conditional-formatting rules (ADR 0003 §4).
     pub cond_rules: Vec<CondRule>,
     pub validations: Vec<Vec<Option<ValidationRule>>>,
+    /// Rows currently hidden by a column-value filter (#113). Purely a
+    /// display concern — data, formulas, and formatting for a hidden row
+    /// are untouched; rendering and hit-testing are expected to skip
+    /// indices in this set.
+    pub hidden_rows: std::collections::HashSet<usize>,
     /// Stable IronCalc worksheet identity. Unlike the sheet's position in
     /// `WorkbookState::sheets`, this never changes when other sheets are
     /// added, deleted, or reordered — undo commands key off this instead of
@@ -267,8 +272,14 @@ impl SheetModel {
             charts: Vec::new(),
             cond_rules: Vec::new(),
             validations: vec![vec![None; cols]; rows],
+            hidden_rows: std::collections::HashSet::new(),
             sheet_id,
         }
+    }
+
+    /// Whether `row` should be skipped by rendering/hit-testing.
+    pub fn is_row_hidden(&self, row: usize) -> bool {
+        self.hidden_rows.contains(&row)
     }
 
     /// Collapse the selection to a single cell.

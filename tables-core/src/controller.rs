@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 use std::cell::{Ref, RefCell, RefMut};
+use std::collections::HashSet;
 use std::rc::Rc;
 
 use suite_common_core::events::{Broadcaster, Hint, Listener};
@@ -247,6 +248,31 @@ impl Command<WorkbookState> for DefinedNameCommand {
     }
     fn description(&self) -> &str {
         "Define Name"
+    }
+}
+
+/// Set which rows are hidden by a column-value filter, as one undo step.
+/// Degrades gracefully (no-op) if the target sheet has since been
+/// deleted — same posture as the other undo commands here.
+struct FilterCommand {
+    sheet_id: u32,
+    before: HashSet<usize>,
+    after: HashSet<usize>,
+}
+
+impl Command<WorkbookState> for FilterCommand {
+    fn apply(&self, state: &mut WorkbookState) {
+        if let Some(idx) = state.sheet_index_for_id(self.sheet_id) {
+            state.sheets[idx].borrow_mut().hidden_rows = self.after.clone();
+        }
+    }
+    fn undo(&self, state: &mut WorkbookState) {
+        if let Some(idx) = state.sheet_index_for_id(self.sheet_id) {
+            state.sheets[idx].borrow_mut().hidden_rows = self.before.clone();
+        }
+    }
+    fn description(&self) -> &str {
+        "Filter Rows"
     }
 }
 
@@ -630,6 +656,44 @@ impl WorkbookController {
         Ok(())
     }
 
+    /// Hide every row on the active sheet whose `col` cell doesn't
+    /// case-insensitively contain `needle`, as one undo step. An empty
+    /// `needle` matches everything (i.e. unhides all rows) — same as
+    /// [`clear_filter`](Self::clear_filter), provided as a convenience
+    /// for callers driving this from a single filter text entry.
+    pub fn filter_by_value(&mut self, col: usize, needle: &str) {
+        let state = self.state.borrow();
+        let sheet_id = state.sheet().sheet_id;
+        let sheet = state.sheet();
+        let before = sheet.hidden_rows.clone();
+        let after: HashSet<usize> = if needle.is_empty() {
+            HashSet::new()
+        } else {
+            let needle_lower = needle.to_lowercase();
+            (0..sheet.rows)
+                .filter(|&r| !sheet.cell(r, col).to_lowercase().contains(&needle_lower))
+                .collect()
+        };
+        drop(sheet);
+        drop(state);
+        if before != after {
+            self.execute(Box::new(FilterCommand { sheet_id, before, after }));
+        }
+    }
+
+    /// Unhide every row on the active sheet hidden by a prior filter, as
+    /// one undo step. No-op (no undo entry) if nothing is currently
+    /// filtered.
+    pub fn clear_filter(&mut self) {
+        let state = self.state.borrow();
+        let sheet_id = state.sheet().sheet_id;
+        let before = state.sheet().hidden_rows.clone();
+        drop(state);
+        if !before.is_empty() {
+            self.execute(Box::new(FilterCommand { sheet_id, before, after: HashSet::new() }));
+        }
+    }
+
     /// Cycle a whole-sheet column sort while keeping source formulas and
     /// row-level presentation metadata aligned with their records.
     pub fn toggle_sort(&mut self, col: usize) {
@@ -986,6 +1050,95 @@ mod tests {
 
         assert!(controller.redo());
         assert_eq!(controller.state.borrow().engine.model.workbook.defined_names.len(), 1);
+    }
+
+    #[test]
+    fn filter_by_value_hides_non_matching_rows() {
+        let mut controller = WorkbookController::new(4, 2).unwrap();
+        controller.edit_cell(0, 0, "apple");
+        controller.edit_cell(1, 0, "banana");
+        controller.edit_cell(2, 0, "apricot");
+        controller.edit_cell(3, 0, "cherry");
+
+        controller.filter_by_value(0, "ap");
+        let state = controller.state.borrow();
+        let sheet = state.sheet();
+        assert!(!sheet.is_row_hidden(0)); // apple
+        assert!(sheet.is_row_hidden(1)); // banana
+        assert!(!sheet.is_row_hidden(2)); // apricot
+        assert!(sheet.is_row_hidden(3)); // cherry
+    }
+
+    #[test]
+    fn filter_by_value_is_case_insensitive() {
+        let mut controller = WorkbookController::new(2, 1).unwrap();
+        controller.edit_cell(0, 0, "Apple");
+        controller.filter_by_value(0, "APP");
+        assert!(!controller.state.borrow().sheet().is_row_hidden(0));
+    }
+
+    #[test]
+    fn filter_by_value_with_empty_needle_clears_the_filter() {
+        let mut controller = WorkbookController::new(2, 1).unwrap();
+        controller.edit_cell(0, 0, "apple");
+        controller.edit_cell(1, 0, "banana");
+        controller.filter_by_value(0, "apple");
+        assert!(controller.state.borrow().sheet().is_row_hidden(1));
+
+        controller.filter_by_value(0, "");
+        assert!(!controller.state.borrow().sheet().is_row_hidden(1));
+    }
+
+    #[test]
+    fn clear_filter_unhides_everything() {
+        let mut controller = WorkbookController::new(2, 1).unwrap();
+        controller.edit_cell(0, 0, "apple");
+        controller.edit_cell(1, 0, "banana");
+        controller.filter_by_value(0, "apple");
+        assert!(controller.state.borrow().sheet().is_row_hidden(1));
+
+        controller.clear_filter();
+        assert!(!controller.state.borrow().sheet().is_row_hidden(1));
+    }
+
+    #[test]
+    fn clear_filter_on_an_unfiltered_sheet_is_a_no_op() {
+        let mut controller = WorkbookController::new(2, 1).unwrap();
+        controller.edit_cell(0, 0, "apple");
+        controller.clear_filter();
+        assert!(!controller.can_undo());
+    }
+
+    #[test]
+    fn filter_is_undoable_and_redoable() {
+        let mut controller = WorkbookController::new(2, 1).unwrap();
+        controller.edit_cell(0, 0, "apple");
+        controller.edit_cell(1, 0, "banana");
+        controller.filter_by_value(0, "apple");
+        assert!(controller.state.borrow().sheet().is_row_hidden(1));
+
+        assert!(controller.undo());
+        assert!(!controller.state.borrow().sheet().is_row_hidden(1));
+
+        assert!(controller.redo());
+        assert!(controller.state.borrow().sheet().is_row_hidden(1));
+    }
+
+    #[test]
+    fn filter_matching_the_same_result_again_does_not_push_a_redundant_undo_step() {
+        let mut controller = WorkbookController::new(2, 1).unwrap();
+        controller.edit_cell(0, 0, "apple");
+        controller.edit_cell(1, 0, "banana");
+        controller.filter_by_value(0, "apple"); // hides row 1 — one undo step
+        controller.filter_by_value(0, "apple"); // identical result — no new step
+
+        // Exactly 3 undo steps total (2 edits + 1 filter): the redundant
+        // second filter call must not have pushed a 4th.
+        assert!(controller.undo());
+        assert!(!controller.state.borrow().sheet().is_row_hidden(1));
+        assert!(controller.undo());
+        assert!(controller.undo());
+        assert!(!controller.can_undo());
     }
 
     #[test]
