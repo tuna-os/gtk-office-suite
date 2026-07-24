@@ -648,10 +648,13 @@ impl WorkbookController {
                 bottom + 1
             )
         };
-        // Validate before creating an undo entry — an invalid name/formula
-        // must never reach the undo stack.
-        state.engine.model.is_valid_defined_name(name, None, &formula)?;
         drop(state);
+        // Validate before creating an undo entry — an invalid name/formula
+        // must never reach the undo stack. is_valid_defined_name takes
+        // &mut self (it's read-only in effect, but the upstream signature
+        // requires it), so this needs its own borrow_mut, separate from
+        // and after the read-only borrow above.
+        self.state.borrow_mut().engine.model.is_valid_defined_name(name, None, &formula)?;
         self.execute(Box::new(DefinedNameCommand { name: name.to_string(), formula }));
         Ok(())
     }
@@ -1106,6 +1109,10 @@ mod tests {
         let mut controller = WorkbookController::new(2, 1).unwrap();
         controller.edit_cell(0, 0, "apple");
         controller.clear_filter();
+
+        // Exactly 1 undo step (the edit): clear_filter on an already-clear
+        // sheet must not have pushed its own step.
+        assert!(controller.undo());
         assert!(!controller.can_undo());
     }
 
