@@ -4,3 +4,4 @@ tests/gui/failure_artifacts/
 
 # Agent runtime artifacts
 .pi/goals/
+.claude/

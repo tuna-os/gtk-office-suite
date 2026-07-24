@@ -35,51 +35,11 @@ jobs:
       - name: cargo test
         run: cargo test --workspace
 
-  # LibreOffice interop oracle: every .docx letters-core writes must open
-  # in LibreOffice Writer and extract identical text (both directions).
-  # Core crates only — no GTK needed. REQUIRE_SOFFICE turns a missing
-  # oracle into a failure so this check can never silently skip.
-  oracle:
-    runs-on: ubuntu-24.04
-    steps:
-      - uses: actions/checkout@v7
-      - uses: dtolnay/rust-toolchain@stable
-      - uses: Swatinem/rust-cache@v2
-      - name: Install LibreOffice (headless Writer, Calc, Impress)
-        run: |
-          sudo apt-get update -qq
-          sudo apt-get install -y -qq --no-install-recommends \
-            libreoffice-writer libreoffice-calc libreoffice-impress
-      - name: Run oracle tests
-        env:
-          REQUIRE_SOFFICE: "1"
-        run: cargo test -p letters-core -p tables-core -p decks-core --test soffice_oracle
-      - name: Run LibreOffice-authored parity corpus
-        env:
-          REQUIRE_SOFFICE: "1"
-        run: cargo test -p letters-core -p decks-core --test lo_parity -- --nocapture
-
-      - name: Conformance scorecard (job summary)
-        env:
-          REQUIRE_SOFFICE: "1"
-        run: python3 conformance/scorecard.py
-
-  # Coverage — runs on push to main only (installs llvm-tools)
-  coverage:
-    runs-on: ubuntu-24.04
-    needs: [test]
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    steps:
-      - uses: actions/checkout@v7
-      - name: Install GTK4 deps
-        run: sudo apt-get update -qq && sudo apt-get install -y -qq libgtk-4-dev libadwaita-1-dev
-      - uses: dtolnay/rust-toolchain@stable
-      - name: Install llvm-cov
-        run: cargo install cargo-llvm-cov --quiet
-      - name: Install llvm-tools
-        run: rustup component add llvm-tools-preview
-      - name: Run coverage
-        run: cargo llvm-cov --workspace --summary-only
+  # LibreOffice interop oracle and coverage moved to nightly.yml (#108):
+  # installing LibreOffice + running the full oracle/parity corpus on
+  # every single push/PR is what turned this session's 10 renovate PRs
+  # into a 26-run GitHub Actions queue backlog. Still runs daily plus
+  # on-demand via workflow_dispatch — see nightly.yml for the reasoning.
 
   # Flatpak builds — uses Flatpak SDK container (no Rust needed)
   flatpak:
