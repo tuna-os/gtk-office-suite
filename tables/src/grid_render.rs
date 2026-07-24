@@ -94,7 +94,6 @@ pub fn draw_grid(
     cr.fill().unwrap();
 
     let start_col = (scroll_x / COL_WIDTH).max(0.0) as usize;
-    let start_row = (scroll_y / ROW_HEIGHT).max(0.0) as usize;
 
     // Corner cell — same shade as the headers, not the canvas grey.
     cr.set_source_rgb(hdr_bg.0, hdr_bg.1, hdr_bg.2);
@@ -134,14 +133,20 @@ pub fn draw_grid(
     cr.set_source_rgb(hdr_bg.0, hdr_bg.1, hdr_bg.2);
     cr.rectangle(0.0, COL_HEADER_HEIGHT, ROW_HEADER_WIDTH, height);
     cr.fill().unwrap();
-    let mut ry = COL_HEADER_HEIGHT - scroll_y;
-    for r in start_row..sheet.rows.min(start_row + (height / ROW_HEIGHT) as usize + 1) {
+    // Hidden rows (#113 filtering) collapse to zero height, so this walks
+    // every row rather than a fixed-step range — cheap at sheet sizes
+    // this app deals with, and the only way to know a row's true screen
+    // position once earlier rows may not all be drawn.
+    for r in 0..sheet.rows {
+        if sheet.is_row_hidden(r) { continue; }
+        let ry = tables_core::sheet::row_y(r, scroll_y, sheet);
+        if ry + ROW_HEIGHT < COL_HEADER_HEIGHT { continue; }
+        if ry > height { break; }
         cr.set_source_rgb(hdr_text.0, hdr_text.1, hdr_text.2);
         let label = (r + 1).to_string();
         let ext = cr.text_extents(&label).unwrap();
         cr.move_to(ROW_HEADER_WIDTH - 6.0 - ext.width(), ry + 18.0);
         let _ = cr.show_text(&label);
-        ry += ROW_HEIGHT;
     }
     cr.restore().unwrap();
 
@@ -149,8 +154,11 @@ pub fn draw_grid(
     cr.save().unwrap();
     cr.rectangle(ROW_HEADER_WIDTH, COL_HEADER_HEIGHT, width - ROW_HEADER_WIDTH, height - COL_HEADER_HEIGHT);
     cr.clip();
-    let mut cy = COL_HEADER_HEIGHT - scroll_y;
-    for r in start_row..sheet.rows.min(start_row + (height / ROW_HEIGHT) as usize + 1) {
+    for r in 0..sheet.rows {
+        if sheet.is_row_hidden(r) { continue; }
+        let cy = tables_core::sheet::row_y(r, scroll_y, sheet);
+        if cy + ROW_HEIGHT < COL_HEADER_HEIGHT { continue; }
+        if cy > height { break; }
         cx = ROW_HEADER_WIDTH - scroll_x;
         for c in start_col..sheet.cols {
             let cw = sheet.col_width(c);
@@ -222,7 +230,6 @@ pub fn draw_grid(
             }
             cx += cw;
         }
-        cy += ROW_HEIGHT;
     }
     cr.restore().unwrap();
 
@@ -233,8 +240,8 @@ pub fn draw_grid(
     };
     let x0 = px_x(sc0);
     let x1 = px_x(sc1 + 1);
-    let y0 = COL_HEADER_HEIGHT - scroll_y + sr0 as f64 * ROW_HEIGHT;
-    let y1 = COL_HEADER_HEIGHT - scroll_y + (sr1 + 1) as f64 * ROW_HEIGHT;
+    let y0 = tables_core::sheet::row_y(sr0, scroll_y, sheet);
+    let y1 = tables_core::sheet::row_y(sr1, scroll_y, sheet) + ROW_HEIGHT;
     cr.save().unwrap();
     cr.rectangle(ROW_HEADER_WIDTH, COL_HEADER_HEIGHT, width - ROW_HEADER_WIDTH, height - COL_HEADER_HEIGHT);
     cr.clip();

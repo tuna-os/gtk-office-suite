@@ -128,7 +128,7 @@ pub fn fill_handle_center(
     sheet: &SheetModel,
 ) -> (f64, f64) {
     let x = ROW_HEADER_WIDTH - scroll_x + (0..=right).map(|c| sheet.col_width(c)).sum::<f64>();
-    let y = COL_HEADER_HEIGHT - scroll_y + (bottom + 1) as f64 * ROW_HEIGHT;
+    let y = row_y(bottom, scroll_y, sheet) + ROW_HEIGHT;
     (x, y)
 }
 
@@ -147,10 +147,33 @@ pub fn hit_fill_handle(
     (x - hx).abs() <= FILL_HANDLE_HALF && (y - hy).abs() <= FILL_HANDLE_HALF
 }
 
+/// Position of `row` among the sheet's visible (non-[[hidden_rows]])
+/// rows, 0-indexed — how many rows are actually drawn above it now that
+/// filtered rows collapse to zero height. Any pixel math involving a row
+/// index should go through this (or [[row_y]]), not `row` itself.
+pub fn visible_row_position(row: usize, sheet: &SheetModel) -> usize {
+    (0..row).filter(|&r| !sheet.is_row_hidden(r)).count()
+}
+
+/// Inverse of [[visible_row_position]]: the actual row index drawn at
+/// on-screen visible slot `pos`, or `None` past the last visible row.
+pub fn row_at_visible_position(pos: usize, sheet: &SheetModel) -> Option<usize> {
+    (0..sheet.rows).filter(|&r| !sheet.is_row_hidden(r)).nth(pos)
+}
+
+/// Screen y-coordinate of the top of `row`, in widget-local (scroll-
+/// adjusted) space — accounts for any hidden rows above it collapsing to
+/// zero height. Shared by the renderer and hit-testers so they can never
+/// disagree about where a row actually falls on screen.
+pub fn row_y(row: usize, scroll_y: f64, sheet: &SheetModel) -> f64 {
+    COL_HEADER_HEIGHT - scroll_y + visible_row_position(row, sheet) as f64 * ROW_HEIGHT
+}
+
 pub fn xy_to_cell(x: f64, y: f64, scroll_x: f64, sheet: &SheetModel) -> Option<(usize, usize)> {
     let col_x = x - ROW_HEADER_WIDTH + scroll_x;
     if col_x < 0.0 || y < COL_HEADER_HEIGHT { return None; }
-    let row = ((y - COL_HEADER_HEIGHT) / ROW_HEIGHT) as usize;
+    let vis_row = ((y - COL_HEADER_HEIGHT) / ROW_HEIGHT) as usize;
+    let row = row_at_visible_position(vis_row, sheet)?;
     let mut accum = 0.0;
     for c in 0..sheet.cols { accum += sheet.col_width(c); if col_x < accum { return Some((c, row)); } }
     None
@@ -417,6 +440,60 @@ mod selection_tests {
         let (x1, y1) = fill_handle_center(2, 2, 20.0, 15.0, &s);
         assert_eq!(x1, x0 - 20.0);
         assert_eq!(y1, y0 - 15.0);
+    }
+
+    #[test]
+    fn visible_row_position_ignores_hidden_rows_above() {
+        let mut s = sheet();
+        assert_eq!(visible_row_position(3, &s), 3);
+        s.hidden_rows.insert(1);
+        // Row 1 is hidden, so row 3 is now only 2 visible rows down.
+        assert_eq!(visible_row_position(3, &s), 2);
+    }
+
+    #[test]
+    fn row_at_visible_position_skips_hidden_rows() {
+        let mut s = sheet();
+        s.hidden_rows.insert(1);
+        assert_eq!(row_at_visible_position(0, &s), Some(0));
+        // Slot 1 on screen is row 2 (row 1 is hidden and takes no slot).
+        assert_eq!(row_at_visible_position(1, &s), Some(2));
+    }
+
+    #[test]
+    fn row_y_collapses_hidden_rows_to_zero_height() {
+        let mut s = sheet();
+        let y_before = row_y(3, 0.0, &s);
+        s.hidden_rows.insert(1);
+        let y_after = row_y(3, 0.0, &s);
+        assert_eq!(y_after, y_before - ROW_HEIGHT);
+    }
+
+    #[test]
+    fn xy_to_cell_skips_hidden_rows() {
+        let mut s = sheet();
+        s.hidden_rows.insert(1);
+        // Screen slot 1 (second visible row) is now data row 2, not 1.
+        let y = COL_HEADER_HEIGHT + ROW_HEIGHT * 1.5;
+        let x = ROW_HEADER_WIDTH + 5.0;
+        assert_eq!(xy_to_cell(x, y, 0.0, &s), Some((0, 2)));
+    }
+
+    #[test]
+    fn xy_to_cell_past_the_last_visible_row_is_none() {
+        let s = sheet();
+        let y = COL_HEADER_HEIGHT + ROW_HEIGHT * (s.rows as f64 + 5.0);
+        let x = ROW_HEADER_WIDTH + 5.0;
+        assert_eq!(xy_to_cell(x, y, 0.0, &s), None);
+    }
+
+    #[test]
+    fn fill_handle_center_accounts_for_hidden_rows_above() {
+        let mut s = sheet();
+        let (_, y_before) = fill_handle_center(2, 2, 0.0, 0.0, &s);
+        s.hidden_rows.insert(1);
+        let (_, y_after) = fill_handle_center(2, 2, 0.0, 0.0, &s);
+        assert_eq!(y_after, y_before - ROW_HEIGHT);
     }
 
     #[test]

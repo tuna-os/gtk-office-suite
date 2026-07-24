@@ -638,9 +638,17 @@ impl TablesWindow {
                     let cell_x = ROW_HEADER_WIDTH + (0..col).map(|cc| st.sheet().col_width(cc)).sum::<f64>();
                     let cell_w = st.sheet().col_width(col);
                     drop(st);
-                    // Position entry overlay at cell
+                    // Position entry overlay at cell. Re-borrows fresh
+                    // (not the outer `sh`, whose lifetime must not be
+                    // extended across the borrow_mut above — see
+                    // gtk-refcell-signal-reentrancy) after the mutable
+                    // borrow used for cell_x/cell_w has been dropped.
                     let sx = cell_x - h.value();
-                    let sy = COL_HEADER_HEIGHT + row as f64 * ROW_HEIGHT - v.value();
+                    let sy = {
+                        let st2 = s.borrow();
+                        let sh2 = st2.sheet();
+                        tables_core::sheet::row_y(row, v.value(), &sh2)
+                    };
                     let entry = gtk4::Entry::new();
                     entry.set_text(&val);
                     entry.set_size_request(cell_w as i32 - 4, ROW_HEIGHT as i32 - 2);
@@ -1206,6 +1214,26 @@ impl TablesWindow {
                 });
                 app.add_action(&act);
             }
+            {
+                let ctl = controller.clone();
+                let da = drawing_area.clone();
+                let wr = win_ref.clone();
+                let act = gtk4::gio::SimpleAction::new("filter-by-column", None);
+                act.connect_activate(move |_, _| {
+                    show_filter_dialog(&ctl, &da, wr.borrow().as_ref());
+                });
+                app.add_action(&act);
+            }
+            {
+                let ctl = controller.clone();
+                let da = drawing_area.clone();
+                let act = gtk4::gio::SimpleAction::new("clear-filter", None);
+                act.connect_activate(move |_, _| {
+                    ctl.borrow_mut().clear_filter();
+                    da.queue_draw();
+                });
+                app.add_action(&act);
+            }
             mk("export-pdf", export_pdf);
         }
 
@@ -1215,6 +1243,8 @@ impl TablesWindow {
             ("app.merge-cells", "Merge Cells"),
             ("app.insert-chart", "Insert Chart…"),
             ("app.conditional-format", "Conditional Formatting…"),
+            ("app.filter-by-column", "Filter by Selected Column…"),
+            ("app.clear-filter", "Clear Filter"),
             ("app.export-pdf", "Export as PDF…"),
             ("app.open-file", "Open Spreadsheet…"),
             ("app.save-file", "Save"),
@@ -1230,6 +1260,7 @@ impl TablesWindow {
             ("format-text-strikethrough-symbolic", "Toggle cell border", "app.cycle-cell-border"),
             ("insert-object-symbolic", "Merge cells", "app.merge-cells"),
             ("insert-object-symbolic", "Chart", "app.insert-chart"),
+            ("funnel-symbolic", "Filter by column", "app.filter-by-column"),
             ("document-send-symbolic", "Export PDF", "app.export-pdf"),
         ];
 
@@ -2103,6 +2134,62 @@ fn show_conditional_format_dialog(
                     fill,
                 });
             });
+            da.queue_draw();
+            dlg.close();
+        });
+    }
+
+    dialog.set_child(Some(&grid));
+    dialog.present(parent);
+}
+
+/// Filter rows by a substring match against the currently selected
+/// column (#113). Hiding non-matching rows, not deleting them — see
+/// `WorkbookController::filter_by_value`.
+fn show_filter_dialog(
+    controller: &Rc<RefCell<WorkbookController>>,
+    da: &gtk4::DrawingArea,
+    parent: Option<&adw::ApplicationWindow>,
+) {
+    let col = controller.borrow().state.borrow().sheet().selected_col;
+    let col_label = tables_core::sheet::col_label(col);
+
+    let dialog = adw::Dialog::builder()
+        .title(suite_common::i18n("Filter by Column"))
+        .content_width(320)
+        .build();
+
+    let grid = gtk4::Grid::new();
+    grid.set_row_spacing(8);
+    grid.set_column_spacing(12);
+    grid.set_margin_top(12);
+    grid.set_margin_bottom(12);
+    grid.set_margin_start(12);
+    grid.set_margin_end(12);
+    let lbl = |t: &str| {
+        let l = gtk::Label::new(Some(t));
+        l.set_halign(gtk::Align::Start);
+        l
+    };
+    let value_entry = gtk::Entry::builder()
+        .placeholder_text("Value contains…")
+        .build();
+    value_entry.update_property(&[gtk4::accessible::Property::Label("Filter value")]);
+    grid.attach(&lbl(&format!("Column {col_label}")), 0, 0, 1, 1);
+    grid.attach(&value_entry, 1, 0, 1, 1);
+
+    let apply = gtk::Button::with_label(&suite_common::i18n("Filter"));
+    apply.add_css_class("suggested-action");
+    grid.attach(&apply, 1, 1, 1, 1);
+
+    {
+        let ctl = controller.clone();
+        let da = da.clone();
+        let dlg = dialog.clone();
+        let value_entry = value_entry.clone();
+        apply.connect_clicked(move |_| {
+            let needle = value_entry.text().to_string();
+            ctl.borrow_mut().filter_by_value(col, &needle);
             da.queue_draw();
             dlg.close();
         });

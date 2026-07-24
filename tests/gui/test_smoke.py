@@ -1028,6 +1028,70 @@ class TablesFillHandleSmoke(BaseGUITestCase):
         self.assertIsNone(self.process.poll(), "tables crashed during fill-handle drag")
 
 
+class TablesFilterSmoke(BaseGUITestCase):
+    """Row filtering (#113): the Filter by Column dialog hides rows that
+    don't match, verified via the #104 state snapshot's hidden_rows list
+    (not AT-SPI cell text/position — same rationale as
+    TablesFillHandleSmoke)."""
+
+    app_name = "tables"
+
+    def setUp(self):
+        self._snapshot_path = self.isolate_snapshot(prefix="tables-filter-")
+        super().setUp()
+
+    def test_filter_by_column_hides_non_matching_rows_and_clear_unhides(self):
+        import json
+        import subprocess
+        from dogtail import rawinput, tree
+
+        aid = "org.tunaos.tables-rust"
+        subprocess.run(["gapplication", "action", aid, "new-document"])
+        time.sleep(1.0)
+
+        for row, value in enumerate(["apple", "banana", "apple"]):
+            rawinput.keyCombo("<Control>g")
+            time.sleep(0.2)
+            rawinput.typeText(f"A{row + 1}")
+            rawinput.keyCombo("Return")
+            time.sleep(0.3)
+            rawinput.typeText(value)
+            rawinput.keyCombo("Return")
+            time.sleep(0.3)
+
+        # Selection is on column A after the loop above (A4) — open the
+        # filter dialog and filter to "apple".
+        subprocess.run(["gapplication", "action", aid, "filter-by-column"])
+        time.sleep(0.8)
+        value_entry = tree.root.findChild(lambda n: n.name == "Filter value" and n.roleName == "text")
+        value_entry.text = "apple"
+        time.sleep(0.2)
+        confirm = tree.root.findChild(lambda n: n.name == "Filter" and n.roleName == "push button")
+        confirm.do_action(0)
+        time.sleep(0.5)
+
+        subprocess.run(["gapplication", "action", aid, "test-snapshot"])
+        time.sleep(0.5)
+        self.assertTrue(os.path.exists(self._snapshot_path), "snapshot file was not written")
+        with open(self._snapshot_path) as f:
+            snap = json.load(f)
+        # Every other row is empty and so also fails the "apple" match —
+        # only assert on the 3 rows this test actually populated.
+        hidden = set(snap["sheet"]["hidden_rows"])
+        self.assertIn(1, hidden, f"snapshot: {snap}")
+        self.assertNotIn(0, hidden, f"snapshot: {snap}")
+        self.assertNotIn(2, hidden, f"snapshot: {snap}")
+
+        subprocess.run(["gapplication", "action", aid, "clear-filter"])
+        time.sleep(0.5)
+        subprocess.run(["gapplication", "action", aid, "test-snapshot"])
+        time.sleep(0.5)
+        with open(self._snapshot_path) as f:
+            snap = json.load(f)
+        self.assertEqual(snap["sheet"]["hidden_rows"], [], f"snapshot: {snap}")
+        self.assertIsNone(self.process.poll(), "tables crashed during filter/clear-filter")
+
+
 class DecksSnapshotSmoke(BaseGUITestCase):
     """State-snapshot interface (#104), same mechanism as
     TablesSnapshotSmoke: adding objects is visible in the normalized

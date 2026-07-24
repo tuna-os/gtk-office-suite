@@ -24,6 +24,8 @@ pub struct CellSnapshot {
 pub struct SheetSnapshot {
     pub name: String,
     pub cells: Vec<CellSnapshot>,
+    /// Rows currently hidden by a column filter (#113), sorted ascending.
+    pub hidden_rows: Vec<usize>,
 }
 
 pub struct WorkbookSnapshot {
@@ -55,11 +57,14 @@ pub fn snapshot(
             cells.push(CellSnapshot { row, col, value, formula });
         }
     }
+    let mut hidden_rows: Vec<usize> = state.sheet().hidden_rows.iter().copied().collect();
+    hidden_rows.sort_unstable();
     drop(state);
 
     let sheet = SheetSnapshot {
         name: sheet_names[active_sheet_index].clone(),
         cells,
+        hidden_rows,
     };
 
     WorkbookSnapshot { active_sheet_index, sheet_names, sheet }
@@ -115,12 +120,20 @@ impl WorkbookSnapshot {
             })
             .collect::<Vec<_>>()
             .join(",");
+        let hidden_rows = self
+            .sheet
+            .hidden_rows
+            .iter()
+            .map(|r| r.to_string())
+            .collect::<Vec<_>>()
+            .join(",");
         format!(
-            "{{\"active_sheet_index\":{},\"sheet_names\":[{}],\"sheet\":{{\"name\":{},\"cells\":[{}]}}}}",
+            "{{\"active_sheet_index\":{},\"sheet_names\":[{}],\"sheet\":{{\"name\":{},\"cells\":[{}],\"hidden_rows\":[{}]}}}}",
             self.active_sheet_index,
             sheet_names,
             json_str(&self.sheet.name),
             cells,
+            hidden_rows,
         )
     }
 }
@@ -152,5 +165,17 @@ mod tests {
         assert!(json.contains("\\\"world\\\""));
         assert!(json.contains("\"active_sheet_index\":0"));
         assert!(json.contains("\"sheet_names\":[\"Sheet1\"]"));
+    }
+
+    #[test]
+    fn snapshot_reports_hidden_rows_sorted() {
+        let mut c = WorkbookController::new(3, 2).unwrap();
+        c.edit_cell(0, 0, "apple");
+        c.edit_cell(1, 0, "banana");
+        c.edit_cell(2, 0, "apple");
+        c.filter_by_value(0, "apple");
+        let snap = snapshot(&c, 0..3, 0..2);
+        assert_eq!(snap.sheet.hidden_rows, vec![1]);
+        assert!(snap.to_json().contains("\"hidden_rows\":[1]"));
     }
 }
