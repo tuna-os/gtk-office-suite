@@ -473,16 +473,29 @@ impl WorkbookController {
 
     /// Drag the fill handle from selection `sel` (top, left, bottom,
     /// right, inclusive) to `(drag_row, drag_col)`. Copies the selected
-    /// pattern (literal cell input text — see fill.rs for what's
-    /// deliberately out of scope) into the newly covered cells as one
-    /// undoable step. No-op if the drag lands inside the selection.
+    /// pattern into the newly covered cells as one undoable step;
+    /// formula cells get their relative references shifted the same way
+    /// a real spreadsheet's fill/copy does (`=A1` filled down a row
+    /// becomes `=A2`, `=$A$1` stays put — see `TablesEngine::extend_input`).
+    /// No-op if the drag lands inside the selection.
     pub fn fill(&mut self, sel: (usize, usize, usize, usize), drag_row: usize, drag_col: usize) {
         let Some((direction, distance)) = infer_fill(sel, drag_row, drag_col) else { return };
         let (top, left, bottom, right) = sel;
         let state = self.state.borrow();
         let sheet_id = state.sheet().sheet_id;
 
-        let mut changes = Vec::new();
+        // `formula_source` is the originating cell of a copied formula —
+        // extend_fill/tile_fill only ever carry formula text verbatim,
+        // so the reference shift happens in a second pass below, once we
+        // have mutable access to the engine.
+        struct Change {
+            row: usize,
+            col: usize,
+            old_input: String,
+            new_input: String,
+            formula_source: Option<(usize, usize)>,
+        }
+        let mut changes: Vec<Change> = Vec::new();
         match direction {
             FillDirection::Down => {
                 for c in left..=right {
@@ -494,11 +507,12 @@ impl WorkbookController {
                         })
                         .collect();
                     let filled = extend_fill(&source, distance);
-                    for (i, (input, _)) in filled.into_iter().enumerate() {
+                    for (i, (input, is_formula)) in filled.into_iter().enumerate() {
                         let row = bottom + 1 + i;
                         let old_input = state.cell_input(row, c);
                         if old_input != input {
-                            changes.push(CellInputChange { row, col: c, old_input, new_input: input });
+                            let formula_source = is_formula.then(|| (top + i % source.len(), c));
+                            changes.push(Change { row, col: c, old_input, new_input: input, formula_source });
                         }
                     }
                 }
@@ -513,11 +527,12 @@ impl WorkbookController {
                         })
                         .collect();
                     let filled = extend_fill(&source, distance);
-                    for (i, (input, _)) in filled.into_iter().enumerate() {
+                    for (i, (input, is_formula)) in filled.into_iter().enumerate() {
                         let col = right + 1 + i;
                         let old_input = state.cell_input(r, col);
                         if old_input != input {
-                            changes.push(CellInputChange { row: r, col, old_input, new_input: input });
+                            let formula_source = is_formula.then(|| (r, left + i % source.len()));
+                            changes.push(Change { row: r, col, old_input, new_input: input, formula_source });
                         }
                     }
                 }
@@ -534,11 +549,12 @@ impl WorkbookController {
                     let filled = extend_fill(&source, distance);
                     // Adjacent-to-selection cell (top - 1) gets the first
                     // tile element, same convention as Down's bottom + 1.
-                    for (i, (input, _)) in filled.into_iter().enumerate() {
+                    for (i, (input, is_formula)) in filled.into_iter().enumerate() {
                         let row = top - 1 - i;
                         let old_input = state.cell_input(row, c);
                         if old_input != input {
-                            changes.push(CellInputChange { row, col: c, old_input, new_input: input });
+                            let formula_source = is_formula.then(|| (top + i % source.len(), c));
+                            changes.push(Change { row, col: c, old_input, new_input: input, formula_source });
                         }
                     }
                 }
@@ -553,17 +569,31 @@ impl WorkbookController {
                         })
                         .collect();
                     let filled = extend_fill(&source, distance);
-                    for (i, (input, _)) in filled.into_iter().enumerate() {
+                    for (i, (input, is_formula)) in filled.into_iter().enumerate() {
                         let col = left - 1 - i;
                         let old_input = state.cell_input(r, col);
                         if old_input != input {
-                            changes.push(CellInputChange { row: r, col, old_input, new_input: input });
+                            let formula_source = is_formula.then(|| (r, left + i % source.len()));
+                            changes.push(Change { row: r, col, old_input, new_input: input, formula_source });
                         }
                     }
                 }
             }
         }
         drop(state);
+        if changes.iter().any(|c| c.formula_source.is_some()) {
+            let mut state = self.state.borrow_mut();
+            for change in changes.iter_mut() {
+                if let Some(source) = change.formula_source {
+                    change.new_input =
+                        state.engine.extend_input(&change.new_input, source, (change.row, change.col));
+                }
+            }
+        }
+        let changes: Vec<CellInputChange> = changes
+            .into_iter()
+            .map(|c| CellInputChange { row: c.row, col: c.col, old_input: c.old_input, new_input: c.new_input })
+            .collect();
         if !changes.is_empty() {
             self.undo
                 .execute(Box::new(CellBatchCommand { sheet_id, changes, description: "Fill" }));
@@ -793,15 +823,49 @@ mod tests {
     }
 
     #[test]
-    fn fill_keeps_formulas_live_through_the_engine() {
+    fn fill_shifts_relative_formula_references_like_a_real_spreadsheet() {
+        // Filling a formula down should behave like Excel/LibreOffice's
+        // own fill handle: relative references shift with the target
+        // cell, not get copied verbatim (which would silently duplicate
+        // the source formula's *meaning* into cells with different
+        // neighbors — a correctness bug, not a convenience).
+        let mut controller = WorkbookController::new(6, 6).unwrap();
+        controller.edit_cell(0, 0, "10"); // A1
+        controller.edit_cell(1, 0, "20"); // A2
+        controller.edit_cell(2, 0, "30"); // A3
+        controller.edit_cell(0, 1, "=A1*2"); // B1
+
+        controller.fill((0, 1, 0, 1), 2, 1); // drag B1 down through B3
+        let state = controller.state.borrow();
+        assert_eq!(state.cell_input(1, 1), "=A2*2");
+        assert_eq!(state.cell_input(2, 1), "=A3*2");
+        assert_eq!(state.sheet().cell(1, 1), "40");
+        assert_eq!(state.sheet().cell(2, 1), "60");
+    }
+
+    #[test]
+    fn fill_leaves_absolute_formula_references_pinned() {
+        let mut controller = WorkbookController::new(6, 6).unwrap();
+        controller.edit_cell(0, 0, "10"); // A1
+        controller.edit_cell(0, 1, "=$A$1*2"); // B1
+
+        controller.fill((0, 1, 0, 1), 2, 1); // drag B1 down through B3
+        let state = controller.state.borrow();
+        assert_eq!(state.cell_input(1, 1), "=$A$1*2");
+        assert_eq!(state.cell_input(2, 1), "=$A$1*2");
+        assert_eq!(state.sheet().cell(2, 1), "20");
+    }
+
+    #[test]
+    fn fill_formula_reference_shift_is_undoable() {
         let mut controller = WorkbookController::new(6, 6).unwrap();
         controller.edit_cell(0, 0, "10");
         controller.edit_cell(0, 1, "=A1*2");
+        controller.fill((0, 1, 0, 1), 1, 1);
+        assert_eq!(controller.state.borrow().cell_input(1, 1), "=A2*2");
 
-        controller.fill((0, 1, 0, 1), 2, 1);
-        assert_eq!(controller.state.borrow().sheet().cell(1, 1), "20");
-        controller.edit_cell(0, 0, "5");
-        assert_eq!(controller.state.borrow().sheet().cell(1, 1), "10");
+        assert!(controller.undo());
+        assert_eq!(controller.state.borrow().sheet().cell(1, 1), "");
     }
 
     #[test]

@@ -232,6 +232,31 @@ impl TablesEngine {
             .unwrap_or_else(|_| input.to_string())
     }
 
+    /// Adjust a formula's relative references as if it were copied (not
+    /// moved) from `from` to `to` — e.g. `=A1` copied from A1 down to A2
+    /// becomes `=A2`, but `=$A$1` stays `=$A$1`. Unlike `move_input`
+    /// (which updates *other* cells' references to point at a relocated
+    /// cell), this is the fill-handle/copy-paste semantics: only the
+    /// formula text itself changes, nothing else in the sheet does.
+    pub fn extend_input(&mut self, input: &str, from: (usize, usize), to: (usize, usize)) -> String {
+        if !input.starts_with('=') || from == to {
+            return input.to_string();
+        }
+        let source = CellReferenceIndex {
+            sheet: self.active_sheet as u32,
+            row: from.0 as i32 + 1,
+            column: from.1 as i32 + 1,
+        };
+        let target = CellReferenceIndex {
+            sheet: self.active_sheet as u32,
+            row: to.0 as i32 + 1,
+            column: to.1 as i32 + 1,
+        };
+        self.model
+            .extend_copied_value(input, &source, &target)
+            .unwrap_or_else(|_| input.to_string())
+    }
+
     /// Check if cell contains a formula (starts with '=').
     /// The formula for a cell (without leading '='), if it has one.
     pub fn formula(&self, row: usize, col: usize) -> Option<String> {
@@ -309,6 +334,32 @@ mod tests {
         engine.set_cell_text(0, 1, "World");
         engine.set_cell_text(0, 2, "=CONCAT(A1, \" \", B1)");
         assert_eq!(engine.cell(0, 2), "Hello World");
+    }
+
+    #[test]
+    fn extend_input_shifts_relative_references() {
+        let mut engine = TablesEngine::new(5, 5).unwrap();
+        let shifted = engine.extend_input("=A1", (0, 0), (1, 0));
+        assert_eq!(shifted, "=A2");
+    }
+
+    #[test]
+    fn extend_input_leaves_absolute_references_unchanged() {
+        let mut engine = TablesEngine::new(5, 5).unwrap();
+        let shifted = engine.extend_input("=$A$1", (0, 0), (1, 0));
+        assert_eq!(shifted, "=$A$1");
+    }
+
+    #[test]
+    fn extend_input_leaves_non_formulas_unchanged() {
+        let mut engine = TablesEngine::new(5, 5).unwrap();
+        assert_eq!(engine.extend_input("42", (0, 0), (1, 0)), "42");
+    }
+
+    #[test]
+    fn extend_input_same_source_and_target_is_a_no_op() {
+        let mut engine = TablesEngine::new(5, 5).unwrap();
+        assert_eq!(engine.extend_input("=A1+1", (2, 2), (2, 2)), "=A1+1");
     }
 
     #[test]
