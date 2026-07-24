@@ -1189,7 +1189,7 @@ impl TablesWindow {
                                 }
                                 st.engine.evaluate();
                                 let parent_win = wr2.borrow().clone();
-                                if let Err(err_msg) = tables_core::export::to_pdf(&st.engine, &path_str) {
+                                if let Err(err_msg) = tables_core::export::to_pdf_range(&st.engine, sheet_model.print_area, &path_str) {
                                     let alert = adw::AlertDialog::builder()
                                         .heading("Export Failed")
                                         .body(&err_msg)
@@ -1311,6 +1311,23 @@ impl TablesWindow {
                 });
                 app.add_action(&act);
             }
+            {
+                let ctl = controller.clone();
+                let act = gtk4::gio::SimpleAction::new("set-print-area", None);
+                act.connect_activate(move |_, _| {
+                    let sel = ctl.borrow().state.borrow().sheet().selection_rect();
+                    ctl.borrow_mut().set_print_area(sel);
+                });
+                app.add_action(&act);
+            }
+            {
+                let ctl = controller.clone();
+                let act = gtk4::gio::SimpleAction::new("clear-print-area", None);
+                act.connect_activate(move |_, _| {
+                    ctl.borrow_mut().clear_print_area();
+                });
+                app.add_action(&act);
+            }
             mk("export-pdf", export_pdf);
         }
 
@@ -1323,6 +1340,8 @@ impl TablesWindow {
             ("app.filter-by-column", "Filter by Selected Column…"),
             ("app.clear-filter", "Clear Filter"),
             ("app.define-name", "Define Name…"),
+            ("app.set-print-area", "Set Print Area"),
+            ("app.clear-print-area", "Clear Print Area"),
             ("app.export-pdf", "Export as PDF…"),
             ("app.open-file", "Open Spreadsheet…"),
             ("app.save-file", "Save"),
@@ -1340,6 +1359,7 @@ impl TablesWindow {
             ("insert-object-symbolic", "Chart", "app.insert-chart"),
             ("funnel-symbolic", "Filter by column", "app.filter-by-column"),
             ("tag-symbolic", "Define name", "app.define-name"),
+            ("view-paged-symbolic", "Set print area", "app.set-print-area"),
             ("document-send-symbolic", "Export PDF", "app.export-pdf"),
         ];
 

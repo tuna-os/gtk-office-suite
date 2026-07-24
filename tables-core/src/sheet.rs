@@ -318,6 +318,10 @@ pub struct SheetModel {
     /// are untouched; rendering and hit-testing are expected to skip
     /// indices in this set.
     pub hidden_rows: std::collections::HashSet<usize>,
+    /// Print area (#113): (top, left, bottom, right), 0-based inclusive.
+    /// `None` means "print the whole used range" (export's existing
+    /// default). Purely an export-time concern — doesn't affect editing.
+    pub print_area: Option<(usize, usize, usize, usize)>,
     /// Stable IronCalc worksheet identity. Unlike the sheet's position in
     /// `WorkbookState::sheets`, this never changes when other sheets are
     /// added, deleted, or reordered — undo commands key off this instead of
@@ -345,6 +349,7 @@ impl SheetModel {
             cond_rules: Vec::new(),
             validations: vec![vec![None; cols]; rows],
             hidden_rows: std::collections::HashSet::new(),
+            print_area: None,
             sheet_id,
         }
     }

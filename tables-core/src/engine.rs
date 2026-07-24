@@ -297,6 +297,23 @@ impl TablesEngine {
         }
         grid
     }
+
+    /// Like [`Self::to_grid`], bounded to `range` (top, left, bottom,
+    /// right, 0-based inclusive) — for print-area export (#113).
+    pub fn to_grid_range(&self, range: (usize, usize, usize, usize)) -> Vec<Vec<String>> {
+        let (top, left, bottom, right) = range;
+        let bottom = bottom.min(self.rows.saturating_sub(1));
+        let right = right.min(self.cols.saturating_sub(1));
+        let mut grid = Vec::new();
+        for r in top..=bottom.max(top) {
+            let mut row = Vec::new();
+            for c in left..=right.max(left) {
+                row.push(self.cell(r, c));
+            }
+            grid.push(row);
+        }
+        grid
+    }
 }
 
 #[cfg(test)]

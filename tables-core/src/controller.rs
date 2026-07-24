@@ -276,6 +276,28 @@ impl Command<WorkbookState> for FilterCommand {
     }
 }
 
+struct PrintAreaCommand {
+    sheet_id: u32,
+    before: Option<(usize, usize, usize, usize)>,
+    after: Option<(usize, usize, usize, usize)>,
+}
+
+impl Command<WorkbookState> for PrintAreaCommand {
+    fn apply(&self, state: &mut WorkbookState) {
+        if let Some(idx) = state.sheet_index_for_id(self.sheet_id) {
+            state.sheets[idx].borrow_mut().print_area = self.after;
+        }
+    }
+    fn undo(&self, state: &mut WorkbookState) {
+        if let Some(idx) = state.sheet_index_for_id(self.sheet_id) {
+            state.sheets[idx].borrow_mut().print_area = self.before;
+        }
+    }
+    fn description(&self) -> &str {
+        "Set Print Area"
+    }
+}
+
 struct SortCommand {
     sheet_id: u32,
     before_inputs: Vec<Vec<String>>,
@@ -694,6 +716,30 @@ impl WorkbookController {
         drop(state);
         if !before.is_empty() {
             self.execute(Box::new(FilterCommand { sheet_id, before, after: HashSet::new() }));
+        }
+    }
+
+    /// Restrict export (PDF) to `sel` (top, left, bottom, right,
+    /// inclusive) on the active sheet, undoable as one step.
+    pub fn set_print_area(&mut self, sel: (usize, usize, usize, usize)) {
+        let state = self.state.borrow();
+        let sheet_id = state.sheet().sheet_id;
+        let before = state.sheet().print_area;
+        drop(state);
+        let after = Some(sel);
+        if before != after {
+            self.execute(Box::new(PrintAreaCommand { sheet_id, before, after }));
+        }
+    }
+
+    /// Clear the print area, reverting export to the whole used range.
+    pub fn clear_print_area(&mut self) {
+        let state = self.state.borrow();
+        let sheet_id = state.sheet().sheet_id;
+        let before = state.sheet().print_area;
+        drop(state);
+        if before.is_some() {
+            self.execute(Box::new(PrintAreaCommand { sheet_id, before, after: None }));
         }
     }
 
@@ -1144,6 +1190,48 @@ mod tests {
         assert!(controller.undo());
         assert!(!controller.state.borrow().sheet().is_row_hidden(1));
         assert!(controller.undo());
+        assert!(controller.undo());
+        assert!(!controller.can_undo());
+    }
+
+    #[test]
+    fn set_print_area_is_undoable_and_redoable() {
+        let mut controller = WorkbookController::new(6, 6).unwrap();
+        assert_eq!(controller.state.borrow().sheet().print_area, None);
+
+        controller.set_print_area((0, 0, 2, 1));
+        assert_eq!(controller.state.borrow().sheet().print_area, Some((0, 0, 2, 1)));
+
+        assert!(controller.undo());
+        assert_eq!(controller.state.borrow().sheet().print_area, None);
+
+        assert!(controller.redo());
+        assert_eq!(controller.state.borrow().sheet().print_area, Some((0, 0, 2, 1)));
+    }
+
+    #[test]
+    fn clear_print_area_reverts_to_whole_sheet_export() {
+        let mut controller = WorkbookController::new(6, 6).unwrap();
+        controller.set_print_area((0, 0, 2, 1));
+        controller.clear_print_area();
+        assert_eq!(controller.state.borrow().sheet().print_area, None);
+
+        assert!(controller.undo()); // undoes clear
+        assert_eq!(controller.state.borrow().sheet().print_area, Some((0, 0, 2, 1)));
+    }
+
+    #[test]
+    fn clear_print_area_on_an_unset_sheet_is_a_no_op() {
+        let mut controller = WorkbookController::new(6, 6).unwrap();
+        controller.clear_print_area();
+        assert!(!controller.can_undo());
+    }
+
+    #[test]
+    fn setting_the_same_print_area_again_does_not_push_a_redundant_undo_step() {
+        let mut controller = WorkbookController::new(6, 6).unwrap();
+        controller.set_print_area((0, 0, 2, 1));
+        controller.set_print_area((0, 0, 2, 1));
         assert!(controller.undo());
         assert!(!controller.can_undo());
     }
