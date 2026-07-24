@@ -2184,6 +2184,7 @@ dependencies = [
 name = "letters-core"
 version = "0.1.0"
 dependencies = [
+ "proptest",
  "pulldown-cmark",
  "quick-xml 0.41.0",
  "rdocx",
