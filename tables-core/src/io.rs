@@ -168,6 +168,12 @@ pub fn load_xlsx_workbook(path: &str) -> Result<(TablesEngine, Vec<SheetModel>),
         sheets.push(sheet);
     }
     engine.set_active_sheet(0)?;
+    // Named ranges (#113): calamine reads each <definedName>'s raw text
+    // content, which is already in the '='-free "Sheet1!$A$1:$A$3" form
+    // this app's own defined_names formulas use — no reformatting needed.
+    for (name, formula) in book.defined_names() {
+        let _ = engine.model.new_defined_name(name, None, formula);
+    }
     Ok((engine, sheets))
 }
 
@@ -346,6 +352,18 @@ pub fn save_sheets_to_xlsx_bytes(
             sheet
                 .insert_chart(ch.anchor.0 as u32, ch.anchor.1 as u16, &chart)
                 .map_err(|e| format!("Chart error: {}", e))?;
+        }
+    }
+    // Named ranges (#113): all workbook-scoped in this app today (no
+    // per-sheet-scoped names yet), so each gets a plain global
+    // definition — rust_xlsxwriter strips the leading '=' before
+    // writing, matching the '=' -free form our own formula string and
+    // calamine's own read-back both use.
+    if let Some(eng) = engine {
+        for dn in &eng.model.workbook.defined_names {
+            workbook
+                .define_name(&dn.name, &format!("={}", dn.formula))
+                .map_err(|e| format!("Defined name error: {}", e))?;
         }
     }
     workbook
@@ -569,6 +587,39 @@ mod tests {
         loaded.set_active_sheet(1).unwrap();
         assert_eq!(loaded.formula(0, 0).as_deref(), Some("Sheet1!A1*5"));
         assert_eq!(loaded.cell(0, 0), "20");
+    }
+
+    #[test]
+    fn defined_names_round_trip_through_xlsx() {
+        // A single-cell name, used directly in a formula, exercises both
+        // that names survive round-tripping AND that the round-tripped
+        // name is genuinely usable, not just bookkeeping. (A range-valued
+        // name in a scalar formula context, e.g. `=Total*2` where Total
+        // is a 3-cell range, hits an unrelated IronCalc implicit-
+        // intersection panic — an upstream engine limitation, not
+        // something this persistence slice needs to work around.)
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("names-rt.xlsx");
+        let mut engine = TablesEngine::new(4, 2).unwrap();
+        engine.set_cell_text(0, 0, "21");
+        engine
+            .model
+            .new_defined_name("Rate", None, "Sheet1!$A$1")
+            .unwrap();
+        engine.set_cell_text(1, 0, "=Rate*2");
+        engine.evaluate();
+        let mut sheet = SheetModel::new("Sheet1", 4, 2, 0);
+        sheet.sync_from_engine(&engine);
+        save_sheets_to_xlsx_with_engine(path.to_str().unwrap(), &[sheet], Some(&engine)).unwrap();
+
+        let (mut loaded, _sheets) = load_xlsx_workbook(path.to_str().unwrap()).unwrap();
+        let names = &loaded.model.workbook.defined_names;
+        assert_eq!(names.len(), 1);
+        assert_eq!(names[0].name, "Rate");
+        assert_eq!(names[0].formula, "Sheet1!$A$1");
+        assert_eq!(loaded.formula(1, 0).as_deref(), Some("Rate*2"));
+        loaded.evaluate();
+        assert_eq!(loaded.cell(1, 0), "42");
     }
 
     #[test]
