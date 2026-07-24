@@ -8,6 +8,7 @@ use suite_common_core::events::{Broadcaster, Hint, Listener};
 use suite_common_core::undo::{Command, UndoManager};
 
 use crate::engine::TablesEngine;
+use crate::fill::{infer_fill, tile_fill, FillDirection};
 use crate::fragment::Fragment;
 use crate::sheet::{SheetModel, SortDirection};
 
@@ -224,6 +225,7 @@ struct CellInputChange {
 struct CellBatchCommand {
     sheet_id: u32,
     changes: Vec<CellInputChange>,
+    description: &'static str,
 }
 
 struct SortCommand {
@@ -296,7 +298,7 @@ impl Command<WorkbookState> for CellBatchCommand {
     }
 
     fn description(&self) -> &str {
-        "Paste Cells"
+        self.description
     }
 }
 
@@ -443,7 +445,71 @@ impl WorkbookController {
         drop(state);
         if !changes.is_empty() {
             self.undo
-                .execute(Box::new(CellBatchCommand { sheet_id, changes }));
+                .execute(Box::new(CellBatchCommand { sheet_id, changes, description: "Paste Cells" }));
+        }
+    }
+
+    /// Drag the fill handle from selection `sel` (top, left, bottom,
+    /// right, inclusive) to `(drag_row, drag_col)`. Copies the selected
+    /// pattern (literal cell input text — see fill.rs for what's
+    /// deliberately out of scope) into the newly covered cells as one
+    /// undoable step. No-op if the drag lands inside the selection, or
+    /// (for now) if it's an Up/Left drag — see fill.rs's module doc.
+    pub fn fill(&mut self, sel: (usize, usize, usize, usize), drag_row: usize, drag_col: usize) {
+        let Some((direction, distance)) = infer_fill(sel, drag_row, drag_col) else { return };
+        let (top, left, bottom, right) = sel;
+        let state = self.state.borrow();
+        let sheet_id = state.sheet().sheet_id;
+
+        let mut changes = Vec::new();
+        match direction {
+            FillDirection::Down => {
+                for c in left..=right {
+                    let source: Vec<_> = (top..=bottom)
+                        .map(|r| {
+                            let input = state.cell_input(r, c);
+                            let is_formula = input.starts_with('=');
+                            (input, is_formula)
+                        })
+                        .collect();
+                    let filled = tile_fill(&source, distance);
+                    for (i, (input, _)) in filled.into_iter().enumerate() {
+                        let row = bottom + 1 + i;
+                        let old_input = state.cell_input(row, c);
+                        if old_input != input {
+                            changes.push(CellInputChange { row, col: c, old_input, new_input: input });
+                        }
+                    }
+                }
+            }
+            FillDirection::Right => {
+                for r in top..=bottom {
+                    let source: Vec<_> = (left..=right)
+                        .map(|c| {
+                            let input = state.cell_input(r, c);
+                            let is_formula = input.starts_with('=');
+                            (input, is_formula)
+                        })
+                        .collect();
+                    let filled = tile_fill(&source, distance);
+                    for (i, (input, _)) in filled.into_iter().enumerate() {
+                        let col = right + 1 + i;
+                        let old_input = state.cell_input(r, col);
+                        if old_input != input {
+                            changes.push(CellInputChange { row: r, col, old_input, new_input: input });
+                        }
+                    }
+                }
+            }
+            // Up/Left fill (dragging the handle backward) is deliberately
+            // deferred — same "narrow, honest first slice" scoping as the
+            // rest of this issue's work. No-op rather than a wrong fill.
+            FillDirection::Up | FillDirection::Left => {}
+        }
+        drop(state);
+        if !changes.is_empty() {
+            self.undo
+                .execute(Box::new(CellBatchCommand { sheet_id, changes, description: "Fill" }));
         }
     }
 
@@ -598,6 +664,67 @@ mod tests {
 
         assert!(controller.redo());
         assert_eq!(observed.borrow().sheet().cell(0, 0), "41");
+    }
+
+    #[test]
+    fn fill_down_tiles_single_cell_and_is_one_undo_step() {
+        let mut controller = WorkbookController::new(6, 6).unwrap();
+        controller.edit_cell(0, 0, "42");
+
+        controller.fill((0, 0, 0, 0), 3, 0);
+        for row in 1..=3 {
+            assert_eq!(controller.state.borrow().sheet().cell(row, 0), "42");
+        }
+        assert!(!controller.can_redo());
+
+        // One undo reverts the whole fill (not one cell at a time).
+        assert!(controller.undo());
+        for row in 1..=3 {
+            assert_eq!(controller.state.borrow().sheet().cell(row, 0), "");
+        }
+        assert_eq!(controller.state.borrow().sheet().cell(0, 0), "42");
+
+        // The other undo entry is the original edit_cell, from before fill.
+        assert!(controller.undo());
+        assert_eq!(controller.state.borrow().sheet().cell(0, 0), "");
+        assert!(!controller.can_undo());
+    }
+
+    #[test]
+    fn fill_right_tiles_a_multi_cell_selection_pattern() {
+        let mut controller = WorkbookController::new(4, 8).unwrap();
+        controller.edit_cell(0, 0, "a");
+        controller.edit_cell(0, 1, "b");
+
+        controller.fill((0, 0, 0, 1), 0, 5);
+        let sheet = controller.state.borrow();
+        let sh = sheet.sheet();
+        assert_eq!(sh.cell(0, 2), "a");
+        assert_eq!(sh.cell(0, 3), "b");
+        assert_eq!(sh.cell(0, 4), "a");
+        assert_eq!(sh.cell(0, 5), "b");
+    }
+
+    #[test]
+    fn fill_keeps_formulas_live_through_the_engine() {
+        let mut controller = WorkbookController::new(6, 6).unwrap();
+        controller.edit_cell(0, 0, "10");
+        controller.edit_cell(0, 1, "=A1*2");
+
+        controller.fill((0, 1, 0, 1), 2, 1);
+        assert_eq!(controller.state.borrow().sheet().cell(1, 1), "20");
+        controller.edit_cell(0, 0, "5");
+        assert_eq!(controller.state.borrow().sheet().cell(1, 1), "10");
+    }
+
+    #[test]
+    fn fill_inside_selection_is_a_no_op() {
+        let mut controller = WorkbookController::new(6, 6).unwrap();
+        controller.edit_cell(0, 0, "x");
+        controller.fill((0, 0, 2, 2), 1, 1);
+        // The only undo entry is the original edit_cell — fill added none.
+        assert!(controller.undo());
+        assert!(!controller.can_undo());
     }
 
     #[test]

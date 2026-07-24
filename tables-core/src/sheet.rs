@@ -111,6 +111,42 @@ pub fn hit_col_divider(x: f64, y: f64, scroll_x: f64, sheet: &SheetModel) -> Opt
     None
 }
 
+/// Half-width in pixels of the fill-handle hit zone (issue #113) — a
+/// small square at the selection's bottom-right corner. Slightly larger
+/// than the drawn handle itself so it's easy to grab with a mouse.
+pub const FILL_HANDLE_HALF: f64 = 5.0;
+
+/// Screen position of the fill-handle's center, given the selection's
+/// bottom-right cell `(bottom, right)` and current scroll offsets.
+/// Shared by the renderer (draws it) and the hit-tester (checks presses
+/// against it), so they can never disagree about where it is.
+pub fn fill_handle_center(
+    bottom: usize,
+    right: usize,
+    scroll_x: f64,
+    scroll_y: f64,
+    sheet: &SheetModel,
+) -> (f64, f64) {
+    let x = ROW_HEADER_WIDTH - scroll_x + (0..=right).map(|c| sheet.col_width(c)).sum::<f64>();
+    let y = COL_HEADER_HEIGHT - scroll_y + (bottom + 1) as f64 * ROW_HEIGHT;
+    (x, y)
+}
+
+/// Whether `(x, y)` (widget-local, not scroll-adjusted) presses the fill
+/// handle of a selection ending at `(bottom, right)`.
+pub fn hit_fill_handle(
+    x: f64,
+    y: f64,
+    bottom: usize,
+    right: usize,
+    scroll_x: f64,
+    scroll_y: f64,
+    sheet: &SheetModel,
+) -> bool {
+    let (hx, hy) = fill_handle_center(bottom, right, scroll_x, scroll_y, sheet);
+    (x - hx).abs() <= FILL_HANDLE_HALF && (y - hy).abs() <= FILL_HANDLE_HALF
+}
+
 pub fn xy_to_cell(x: f64, y: f64, scroll_x: f64, sheet: &SheetModel) -> Option<(usize, usize)> {
     let col_x = x - ROW_HEADER_WIDTH + scroll_x;
     if col_x < 0.0 || y < COL_HEADER_HEIGHT { return None; }
@@ -351,6 +387,25 @@ mod selection_tests {
         s.data[2][1] = "x".into();
         s.data[2][2] = " 30 ".into();
         s
+    }
+
+    #[test]
+    fn fill_handle_hit_test_centers_on_selection_corner() {
+        let s = sheet();
+        let (hx, hy) = fill_handle_center(2, 2, 0.0, 0.0, &s);
+        assert!(hit_fill_handle(hx, hy, 2, 2, 0.0, 0.0, &s));
+        assert!(hit_fill_handle(hx + FILL_HANDLE_HALF, hy - FILL_HANDLE_HALF, 2, 2, 0.0, 0.0, &s));
+        assert!(!hit_fill_handle(hx + FILL_HANDLE_HALF + 1.0, hy, 2, 2, 0.0, 0.0, &s));
+        assert!(!hit_fill_handle(hx, hy + FILL_HANDLE_HALF + 1.0, 2, 2, 0.0, 0.0, &s));
+    }
+
+    #[test]
+    fn fill_handle_center_tracks_scroll_offset() {
+        let s = sheet();
+        let (x0, y0) = fill_handle_center(2, 2, 0.0, 0.0, &s);
+        let (x1, y1) = fill_handle_center(2, 2, 20.0, 15.0, &s);
+        assert_eq!(x1, x0 - 20.0);
+        assert_eq!(y1, y0 - 15.0);
     }
 
     #[test]

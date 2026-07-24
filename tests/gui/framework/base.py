@@ -264,6 +264,7 @@ class BaseGUITestCase(unittest.TestCase):
             return
         if win_id is None:
             return
+        self._win_id = win_id
 
         def reactivate():
             try:
@@ -314,6 +315,41 @@ class BaseGUITestCase(unittest.TestCase):
         rawinput.click = click
         rawinput.keyCombo = key_combo
         rawinput.typeText = type_text
+
+    def drag(self, x1: float, y1: float, x2: float, y2: float, button: int = 1):
+        """Press-move-release from (x1, y1) to (x2, y2), window-local
+        coordinates — same xdotool-backed approach as the click/keyCombo/
+        typeText replacements in _activate_window (AT-SPI's own synthetic
+        input doesn't reach the app here, see #129). No rawinput
+        equivalent exists to shadow, so this is a plain method rather
+        than another monkey-patched rawinput entry point."""
+        win_id = getattr(self, "_win_id", None)
+        if win_id is None:
+            return
+        trace_list = getattr(self, "_input_trace", None)
+        if trace_list is not None:
+            trace_list.append({
+                "time": time.monotonic(), "type": "drag",
+                "x1": x1, "y1": y1, "x2": x2, "y2": y2,
+            })
+        subprocess.run(["xdotool", "windowactivate", "--sync", win_id],
+                        capture_output=True, timeout=2)
+        subprocess.run(
+            ["xdotool", "mousemove", "--sync", str(int(x1)), str(int(y1))],
+            capture_output=True, timeout=5,
+        )
+        subprocess.run(["xdotool", "mousedown", str(button)], capture_output=True, timeout=5)
+        # A couple of intermediate points so GTK's GestureDrag sees real
+        # motion, not a single jump — matches how a human drag arrives.
+        for frac in (0.34, 0.67, 1.0):
+            mx = x1 + (x2 - x1) * frac
+            my = y1 + (y2 - y1) * frac
+            subprocess.run(
+                ["xdotool", "mousemove", "--sync", str(int(mx)), str(int(my))],
+                capture_output=True, timeout=5,
+            )
+            time.sleep(0.05)
+        subprocess.run(["xdotool", "mouseup", str(button)], capture_output=True, timeout=5)
 
     def wait_for_app(self, name: str, timeout: float = 15.0) -> "tree.Node":
         deadline = time.monotonic() + timeout

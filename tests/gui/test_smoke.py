@@ -956,6 +956,78 @@ class TablesSnapshotSmoke(BaseGUITestCase):
         self.assertIsNone(self.process.poll(), "tables crashed writing a snapshot")
 
 
+class TablesFillHandleSmoke(BaseGUITestCase):
+    """Fill handle (#113): dragging the handle at a selection's bottom-
+    right corner tiles its content downward — a real mouse drag, not
+    keyboard-only, verified against the #104 state snapshot rather than
+    AT-SPI cell text/position (this grid's virtual cell nodes share the
+    same container-position bridge gap as #132 — size is right, position
+    isn't — so this test computes screen coordinates from the grid's own
+    fixed layout constants instead of trusting AT-SPI node position)."""
+
+    app_name = "tables"
+
+    # Canvas origin: below the header/name-box UI chrome, left-aligned
+    # under matchbox's fullscreen layout. Empirically measured via
+    # screenshot against tables-core::sheet's ROW_HEADER_WIDTH (50),
+    # COL_HEADER_HEIGHT (26), ROW_HEIGHT (28), COL_WIDTH (90) — not an
+    # AT-SPI-reported position.
+    CANVAS_X = 0
+    CANVAS_Y = 128
+    ROW_HEADER_WIDTH = 50
+    COL_HEADER_HEIGHT = 26
+    ROW_HEIGHT = 28
+    COL_WIDTH = 90
+
+    def setUp(self):
+        self._snapshot_path = self.isolate_snapshot(prefix="tables-fill-")
+        super().setUp()
+
+    def _cell_bottom_right(self, row: int, col: int) -> tuple[float, float]:
+        x = self.CANVAS_X + self.ROW_HEADER_WIDTH + (col + 1) * self.COL_WIDTH
+        y = self.CANVAS_Y + self.COL_HEADER_HEIGHT + (row + 1) * self.ROW_HEIGHT
+        return x, y
+
+    def test_drag_fill_handle_down_tiles_the_value(self):
+        import json
+        import subprocess
+        from dogtail import rawinput
+
+        aid = "org.tunaos.tables-rust"
+        subprocess.run(["gapplication", "action", aid, "new-document"])
+        time.sleep(1.0)
+        rawinput.keyCombo("<Control>g")
+        time.sleep(0.2)
+        rawinput.typeText("A1")
+        rawinput.keyCombo("Return")
+        time.sleep(0.3)
+        rawinput.typeText("7")
+        rawinput.keyCombo("Return")
+        time.sleep(0.3)
+        # Re-select A1 (Enter above moved the active cell to A2).
+        rawinput.keyCombo("<Control>g")
+        time.sleep(0.2)
+        rawinput.typeText("A1")
+        rawinput.keyCombo("Return")
+        time.sleep(0.3)
+
+        hx, hy = self._cell_bottom_right(0, 0)
+        _, target_y = self._cell_bottom_right(3, 0)
+        self.drag(hx, hy, hx, target_y)
+        time.sleep(0.5)
+
+        subprocess.run(["gapplication", "action", aid, "test-snapshot"])
+        time.sleep(0.5)
+        self.assertTrue(os.path.exists(self._snapshot_path), "snapshot file was not written")
+        with open(self._snapshot_path) as f:
+            snap = json.load(f)
+        cells = {(c["row"], c["col"]): c["value"] for c in snap["sheet"]["cells"]}
+        self.assertEqual(cells.get((0, 0)), "7", f"A1 unexpectedly changed: {cells}")
+        for row in (1, 2, 3):
+            self.assertEqual(cells.get((row, 0)), "7", f"row {row} not filled: {cells}")
+        self.assertIsNone(self.process.poll(), "tables crashed during fill-handle drag")
+
+
 class DecksSnapshotSmoke(BaseGUITestCase):
     """State-snapshot interface (#104), same mechanism as
     TablesSnapshotSmoke: adding objects is visible in the normalized

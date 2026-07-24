@@ -8,6 +8,7 @@
 pub mod controller;
 pub mod engine;
 pub mod export;
+pub mod fill;
 pub mod fragment;
 pub mod io;
 pub mod sheet;

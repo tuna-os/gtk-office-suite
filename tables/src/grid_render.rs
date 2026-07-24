@@ -242,5 +242,18 @@ pub fn draw_grid(
     cr.set_line_width(2.0);
     cr.rectangle(x0, y0, x1 - x0, y1 - y0);
     cr.stroke().unwrap();
+
+    // Fill handle (#113): a small solid square at the selection's
+    // bottom-right corner, same shared geometry hit_fill_handle() tests
+    // presses against — see tables_core::sheet::fill_handle_center.
+    cr.set_source_rgb(SELECTION_COLOR.0, SELECTION_COLOR.1, SELECTION_COLOR.2);
+    cr.rectangle(
+        x1 - tables_core::sheet::FILL_HANDLE_HALF,
+        y1 - tables_core::sheet::FILL_HANDLE_HALF,
+        tables_core::sheet::FILL_HANDLE_HALF * 2.0,
+        tables_core::sheet::FILL_HANDLE_HALF * 2.0,
+    );
+    cr.fill().unwrap();
+
     cr.restore().unwrap();
 }

@@ -447,9 +447,10 @@ impl TablesWindow {
             drawing_area.add_controller(drag);
         }
 
-        // ── Drag range selection on the cell area ───────────────────────
+        // ── Drag range selection on the cell area, or fill-handle drag ──
         {
             let s = state.clone();
+            let ctl = controller.clone();
             let da = drawing_area.clone();
             let h = h_adj.clone();
             let v = v_adj.clone();
@@ -457,6 +458,11 @@ impl TablesWindow {
             // Anchor cell of an in-progress selection drag, set on begin
             // only when the press is in the cell area (not header/divider).
             let anchor = Rc::new(Cell::new(None::<(usize, usize)>));
+            // Source selection rect of an in-progress fill-handle drag
+            // (#113) — mutually exclusive with `anchor`: a drag is either
+            // extending the selection or filling from its handle, never
+            // both.
+            let filling = Rc::new(Cell::new(None::<(usize, usize, usize, usize)>));
             let drag = gtk4::GestureDrag::new();
             drag.set_button(1);
             {
@@ -464,9 +470,15 @@ impl TablesWindow {
                 let h = h.clone();
                 let v = v.clone();
                 let anchor = anchor.clone();
+                let filling = filling.clone();
                 drag.connect_drag_begin(move |_g, x, y| {
                     let st = s.borrow();
                     let sh = st.sheet();
+                    let sel = sh.selection_rect();
+                    if hit_fill_handle(x, y, sel.2, sel.3, h.value(), v.value(), &sh) {
+                        filling.set(Some(sel));
+                        return;
+                    }
                     let wx = x + h.value();
                     let wy = y + v.value();
                     if hit_col_divider(x, y, h.value(), &sh).is_none() && wy >= COL_HEADER_HEIGHT {
@@ -479,7 +491,15 @@ impl TablesWindow {
             {
                 let s = s.clone();
                 let anchor = anchor.clone();
+                let filling = filling.clone();
                 drag.connect_drag_update(move |g, dx, dy| {
+                    if filling.get().is_some() {
+                        // No live preview yet (#113 follow-up) — the fill
+                        // applies on release. Still redraw so the cursor
+                        // feedback (if any is added later) stays current.
+                        da.queue_draw();
+                        return;
+                    }
                     let Some((ar, ac)) = anchor.get() else { return };
                     // Ignore sub-threshold jitters so plain clicks stay clicks.
                     if dx.abs() < 4.0 && dy.abs() < 4.0 { return; }
@@ -500,8 +520,43 @@ impl TablesWindow {
                 });
             }
             {
+                let s = s.clone();
+                let ctl = ctl.clone();
+                let h = h_adj.clone();
+                let v = v_adj.clone();
+                let da = drawing_area.clone();
+                let refresh = refresh_sel.clone();
                 let anchor = anchor.clone();
-                drag.connect_drag_end(move |_g, _dx, _dy| anchor.set(None));
+                let filling = filling.clone();
+                drag.connect_drag_end(move |g, dx, dy| {
+                    if let Some(sel) = filling.take() {
+                        if let Some((sx, sy)) = g.start_point() {
+                            // Resolve the target cell in its own scope so
+                            // this borrow of `s` (shared with the
+                            // controller's own WorkbookState) is fully
+                            // dropped before calling into the controller
+                            // below — fill() needs its own borrow_mut of
+                            // the same RefCell to apply the undo command,
+                            // and an outstanding borrow here would panic
+                            // ("already borrowed") instead of just failing
+                            // to compile, since GTK signal handlers can't
+                            // express that conflict at the type level.
+                            let target = {
+                                let st = s.borrow();
+                                let sh = st.sheet();
+                                let wx = sx + dx + h.value();
+                                let wy = (sy + dy + v.value()).max(COL_HEADER_HEIGHT);
+                                xy_to_cell(wx, wy, h.value(), &sh)
+                            };
+                            if let Some((col, row)) = target {
+                                ctl.borrow_mut().fill(sel, row, col);
+                            }
+                        }
+                        refresh();
+                        da.queue_draw();
+                    }
+                    anchor.set(None);
+                });
             }
             drawing_area.add_controller(drag);
         }
