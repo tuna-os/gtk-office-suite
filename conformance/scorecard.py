@@ -112,6 +112,13 @@ def main():
         with open(summary, "a") as f:
             f.write(report + "\n")
 
+    # The step summary is only visible in that one Actions run's UI and
+    # isn't downloadable/diffable across runs — also write a file (#108's
+    # "capability-matrix artifacts are published") so CI can upload it
+    # the same way junit-results already is.
+    with open(os.path.join(ROOT, "conformance", "scorecard-latest.md"), "w") as f:
+        f.write(report + "\n")
+
     sys.exit(1 if failed else 0)
 
 

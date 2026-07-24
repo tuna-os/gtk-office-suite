@@ -48,6 +48,14 @@ jobs:
           REQUIRE_SOFFICE: "1"
         run: python3 conformance/scorecard.py
 
+      - name: Upload capability-matrix artifact
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: conformance-scorecard
+          path: conformance/scorecard-latest.md
+          retention-days: 90
+
   coverage:
     runs-on: ubuntu-24.04
     steps:

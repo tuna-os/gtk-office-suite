@@ -1,6 +1,7 @@
 .flatpak-cache/
 tests/gui/*.png
 tests/gui/failure_artifacts/
+conformance/scorecard-latest.md
 
 # Agent runtime artifacts
 .pi/goals/
