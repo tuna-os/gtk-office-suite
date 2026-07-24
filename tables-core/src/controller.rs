@@ -8,7 +8,7 @@ use suite_common_core::events::{Broadcaster, Hint, Listener};
 use suite_common_core::undo::{Command, UndoManager};
 
 use crate::engine::TablesEngine;
-use crate::fill::{infer_fill, tile_fill, FillDirection};
+use crate::fill::{extend_fill, infer_fill, FillDirection};
 use crate::fragment::Fragment;
 use crate::sheet::{col_label, SheetModel, SortDirection};
 
@@ -493,7 +493,7 @@ impl WorkbookController {
                             (input, is_formula)
                         })
                         .collect();
-                    let filled = tile_fill(&source, distance);
+                    let filled = extend_fill(&source, distance);
                     for (i, (input, _)) in filled.into_iter().enumerate() {
                         let row = bottom + 1 + i;
                         let old_input = state.cell_input(row, c);
@@ -512,7 +512,7 @@ impl WorkbookController {
                             (input, is_formula)
                         })
                         .collect();
-                    let filled = tile_fill(&source, distance);
+                    let filled = extend_fill(&source, distance);
                     for (i, (input, _)) in filled.into_iter().enumerate() {
                         let col = right + 1 + i;
                         let old_input = state.cell_input(r, col);
@@ -531,7 +531,7 @@ impl WorkbookController {
                             (input, is_formula)
                         })
                         .collect();
-                    let filled = tile_fill(&source, distance);
+                    let filled = extend_fill(&source, distance);
                     // Adjacent-to-selection cell (top - 1) gets the first
                     // tile element, same convention as Down's bottom + 1.
                     for (i, (input, _)) in filled.into_iter().enumerate() {
@@ -552,7 +552,7 @@ impl WorkbookController {
                             (input, is_formula)
                         })
                         .collect();
-                    let filled = tile_fill(&source, distance);
+                    let filled = extend_fill(&source, distance);
                     for (i, (input, _)) in filled.into_iter().enumerate() {
                         let col = left - 1 - i;
                         let old_input = state.cell_input(r, col);
@@ -837,15 +837,41 @@ mod tests {
     fn fill_up_and_down_are_symmetric_around_a_selection() {
         // Filling down then filling the result back up (from a fresh
         // selection at the new bottom) should reproduce the same tile
-        // order adjacent-first in both directions.
+        // order adjacent-first in both directions. Non-numeric content,
+        // so this exercises tile behavior specifically, not series
+        // detection (see fill_down_continues_an_arithmetic_series for
+        // that).
         let mut controller = WorkbookController::new(8, 6).unwrap();
-        controller.edit_cell(2, 0, "1");
-        controller.edit_cell(3, 0, "2");
+        controller.edit_cell(2, 0, "x");
+        controller.edit_cell(3, 0, "y");
         controller.fill((2, 0, 3, 0), 5, 0);
         let sheet = controller.state.borrow();
         let sh = sheet.sheet();
-        assert_eq!(sh.cell(4, 0), "1");
-        assert_eq!(sh.cell(5, 0), "2");
+        assert_eq!(sh.cell(4, 0), "x");
+        assert_eq!(sh.cell(5, 0), "y");
+    }
+
+    #[test]
+    fn fill_down_continues_an_arithmetic_series() {
+        let mut controller = WorkbookController::new(8, 6).unwrap();
+        controller.edit_cell(0, 0, "1");
+        controller.edit_cell(1, 0, "2");
+        controller.fill((0, 0, 1, 0), 3, 0);
+        let sheet = controller.state.borrow();
+        let sh = sheet.sheet();
+        assert_eq!(sh.cell(2, 0), "3");
+        assert_eq!(sh.cell(3, 0), "4");
+    }
+
+    #[test]
+    fn fill_down_single_numeric_cell_tiles_not_increments() {
+        let mut controller = WorkbookController::new(8, 6).unwrap();
+        controller.edit_cell(0, 0, "5");
+        controller.fill((0, 0, 0, 0), 2, 0);
+        let sheet = controller.state.borrow();
+        let sh = sheet.sheet();
+        assert_eq!(sh.cell(1, 0), "5");
+        assert_eq!(sh.cell(2, 0), "5");
     }
 
     #[test]
