@@ -10,7 +10,7 @@ use suite_common_core::undo::{Command, UndoManager};
 use crate::engine::TablesEngine;
 use crate::fill::{infer_fill, tile_fill, FillDirection};
 use crate::fragment::Fragment;
-use crate::sheet::{SheetModel, SortDirection};
+use crate::sheet::{col_label, SheetModel, SortDirection};
 
 /// Canonical mutable state for a Tables window.
 ///
@@ -226,6 +226,28 @@ struct CellBatchCommand {
     sheet_id: u32,
     changes: Vec<CellInputChange>,
     description: &'static str,
+}
+
+/// Create-a-named-range as one undo step (undo = delete it again). Errors
+/// from a stale apply/undo — e.g. redoing after something else deleted
+/// the name — are swallowed rather than panicking, same posture as
+/// CellBatchCommand's sheet_index_for_id lookups: undo/redo commands
+/// degrade gracefully when the state they target has moved on.
+struct DefinedNameCommand {
+    name: String,
+    formula: String,
+}
+
+impl Command<WorkbookState> for DefinedNameCommand {
+    fn apply(&self, state: &mut WorkbookState) {
+        let _ = state.engine.model.new_defined_name(&self.name, None, &self.formula);
+    }
+    fn undo(&self, state: &mut WorkbookState) {
+        let _ = state.engine.model.delete_defined_name(&self.name, None);
+    }
+    fn description(&self) -> &str {
+        "Define Name"
+    }
 }
 
 struct SortCommand {
@@ -548,6 +570,36 @@ impl WorkbookController {
         }
     }
 
+    /// Define a workbook-scoped named range covering `sel` (top, left,
+    /// bottom, right, inclusive) on the active sheet — undoable as one
+    /// step (undo deletes the name). First slice of #113's named-ranges
+    /// work: workbook scope only (no per-sheet-scoped names yet), and no
+    /// GTK wiring — see tables-core/src/controller.rs's define_name for
+    /// why that's deferred rather than rushed.
+    pub fn define_name(&mut self, name: &str, sel: (usize, usize, usize, usize)) -> Result<(), String> {
+        let (top, left, bottom, right) = sel;
+        let state = self.state.borrow();
+        let sheet_name = state.sheet().name.clone();
+        let formula = if top == bottom && left == right {
+            format!("{}!${}${}", sheet_name, col_label(left), top + 1)
+        } else {
+            format!(
+                "{}!${}${}:${}${}",
+                sheet_name,
+                col_label(left),
+                top + 1,
+                col_label(right),
+                bottom + 1
+            )
+        };
+        // Validate before creating an undo entry — an invalid name/formula
+        // must never reach the undo stack.
+        state.engine.model.is_valid_defined_name(name, None, &formula)?;
+        drop(state);
+        self.execute(Box::new(DefinedNameCommand { name: name.to_string(), formula }));
+        Ok(())
+    }
+
     /// Cycle a whole-sheet column sort while keeping source formulas and
     /// row-level presentation metadata aligned with their records.
     pub fn toggle_sort(&mut self, col: usize) {
@@ -794,6 +846,56 @@ mod tests {
         let sh = sheet.sheet();
         assert_eq!(sh.cell(4, 0), "1");
         assert_eq!(sh.cell(5, 0), "2");
+    }
+
+    #[test]
+    fn define_name_creates_a_workbook_scoped_name() {
+        let mut controller = WorkbookController::new(6, 6).unwrap();
+        controller.define_name("Total", (0, 0, 2, 1)).unwrap();
+        let state = controller.state.borrow();
+        let names = &state.engine.model.workbook.defined_names;
+        assert_eq!(names.len(), 1);
+        assert_eq!(names[0].name, "Total");
+        assert_eq!(names[0].formula, "Sheet1!$A$1:$B$3");
+        assert!(names[0].sheet_id.is_none(), "workbook-scoped name must have no sheet_id");
+    }
+
+    #[test]
+    fn define_name_single_cell_omits_the_range_colon() {
+        let mut controller = WorkbookController::new(6, 6).unwrap();
+        controller.define_name("Rate", (2, 3, 2, 3)).unwrap();
+        let state = controller.state.borrow();
+        assert_eq!(state.engine.model.workbook.defined_names[0].formula, "Sheet1!$D$3");
+    }
+
+    #[test]
+    fn define_name_is_usable_in_a_formula() {
+        let mut controller = WorkbookController::new(6, 6).unwrap();
+        controller.edit_cell(0, 0, "21");
+        controller.define_name("Rate", (0, 0, 0, 0)).unwrap();
+        controller.edit_cell(0, 1, "=Rate*2");
+        assert_eq!(controller.state.borrow().sheet().cell(0, 1), "42");
+    }
+
+    #[test]
+    fn define_name_rejects_an_invalid_identifier_without_creating_an_undo_entry() {
+        let mut controller = WorkbookController::new(6, 6).unwrap();
+        assert!(controller.define_name("2invalid", (0, 0, 0, 0)).is_err());
+        assert!(!controller.can_undo());
+        assert!(controller.state.borrow().engine.model.workbook.defined_names.is_empty());
+    }
+
+    #[test]
+    fn define_name_undo_removes_it_and_redo_restores_it() {
+        let mut controller = WorkbookController::new(6, 6).unwrap();
+        controller.define_name("Total", (0, 0, 0, 0)).unwrap();
+        assert_eq!(controller.state.borrow().engine.model.workbook.defined_names.len(), 1);
+
+        assert!(controller.undo());
+        assert!(controller.state.borrow().engine.model.workbook.defined_names.is_empty());
+
+        assert!(controller.redo());
+        assert_eq!(controller.state.borrow().engine.model.workbook.defined_names.len(), 1);
     }
 
     #[test]
