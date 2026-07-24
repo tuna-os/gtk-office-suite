@@ -20,6 +20,55 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      # #108: only run the AT-SPI journeys for apps a change could
+      # actually affect, instead of always running all three. A change
+      # to a shared crate (suite-common*, suite-export) or the test
+      # harness itself can affect every app, so those — and anything we
+      # fail to classify — fall back to running everything. Silence here
+      # would mean silently losing coverage, so "unsure" always means
+      # "run it all," never "skip it."
+      - name: Determine affected apps
+        id: affected
+        run: |
+          case "${{ github.event_name }}" in
+            schedule|workflow_dispatch)
+              echo "filter=" >> "$GITHUB_OUTPUT"
+              echo "Scheduled/manual run: testing all apps." ;;
+            *)
+              if [ "${{ github.event_name }}" = "pull_request" ]; then
+                base="${{ github.event.pull_request.base.sha }}"
+              else
+                base="${{ github.event.before }}"
+              fi
+              if [ -z "$base" ] || ! git cat-file -e "$base" 2>/dev/null; then
+                echo "filter=" >> "$GITHUB_OUTPUT"
+                echo "No usable base commit: testing all apps."
+              else
+                changed=$(git diff --name-only "$base" "${{ github.sha }}")
+                echo "Changed files:"; echo "$changed"
+                shared=0
+                echo "$changed" | grep -qE '^(suite-common|suite-common-core|suite-export)/|^tests/gui/(framework/|conftest|run_gui_tests\.sh)|^Cargo\.(toml|lock)$' && shared=1
+                apps=""
+                if [ "$shared" = "1" ]; then
+                  echo "Shared crate or test-harness change: testing all apps."
+                else
+                  echo "$changed" | grep -qE '^letters(-core)?/' && apps="$apps Letters"
+                  echo "$changed" | grep -qE '^tables(-core)?/' && apps="$apps Tables"
+                  echo "$changed" | grep -qE '^decks(-core)?/' && apps="$apps Decks"
+                fi
+                if [ "$shared" = "1" ] || [ -z "$apps" ]; then
+                  echo "filter=" >> "$GITHUB_OUTPUT"
+                  [ -z "$apps" ] && [ "$shared" != "1" ] && echo "No recognized app path changed: testing all apps (fail-safe)."
+                else
+                  filter=$(echo "$apps" | xargs | sed 's/ / or /g')
+                  echo "filter=-k \"$filter\"" >> "$GITHUB_OUTPUT"
+                  echo "Testing only: $filter"
+                fi
+              fi ;;
+          esac
 
       - name: Install GTK4 + libadwaita dev libraries
         run: |
@@ -39,7 +88,7 @@ jobs:
           python3 -m pip install --break-system-packages mss
 
       - name: Run smoke tests
-        run: tests/gui/run_gui_tests.sh test_smoke.py
+        run: tests/gui/run_gui_tests.sh test_smoke.py ${{ steps.affected.outputs.filter }}
 
       - name: Run buffer-bridge round-trip tests (Xvfb)
         run: xvfb-run -a cargo test -p letters bridge
