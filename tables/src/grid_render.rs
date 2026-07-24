@@ -3,7 +3,7 @@ use libadwaita as adw;
 use gtk4::cairo::Context;
 use std::cell::RefCell;
 use std::rc::Rc;
-use tables_core::sheet::{SheetModel, CellBorder, BorderStyle, col_label};
+use tables_core::sheet::{SheetModel, CellBorder, BorderStyle, SortDirection, col_label};
 
 /// Auto-fit column width to content using PangoLayout text measurement.
 /// Lives here (not tables-core) because it needs Cairo/Pango to measure.
@@ -73,6 +73,31 @@ fn draw_border_line(cr: &Context, style: &BorderStyle, x1: f64, y1: f64, x2: f64
     cr.restore().unwrap();
 }
 
+/// A small filled triangle in a column header showing which way it's
+/// sorted (#113's "visible criteria" — the standard spreadsheet
+/// convention). `(cx, cy)` is the arrow's center.
+fn draw_sort_arrow(cr: &Context, cx: f64, cy: f64, dir: SortDirection, color: (f64, f64, f64)) {
+    let half_w = 4.0;
+    let half_h = 3.0;
+    cr.save().unwrap();
+    cr.set_source_rgb(color.0, color.1, color.2);
+    match dir {
+        SortDirection::Ascending => {
+            cr.move_to(cx - half_w, cy + half_h);
+            cr.line_to(cx + half_w, cy + half_h);
+            cr.line_to(cx, cy - half_h);
+        }
+        SortDirection::Descending => {
+            cr.move_to(cx - half_w, cy - half_h);
+            cr.line_to(cx + half_w, cy - half_h);
+            cr.line_to(cx, cy + half_h);
+        }
+    }
+    cr.close_path();
+    cr.fill().unwrap();
+    cr.restore().unwrap();
+}
+
 pub fn draw_grid(
     cr: &Context, state: &Rc<RefCell<crate::window::AppState>>,
     width: f64, height: f64, scroll_x: f64, scroll_y: f64, show_gridlines: bool,
@@ -117,6 +142,13 @@ pub fn draw_grid(
         let ext = cr.text_extents(&label).unwrap();
         cr.move_to(cx + (cw - ext.width()) / 2.0, 18.0);
         let _ = cr.show_text(&label);
+        // Sort indicator (#113: "visible criteria" — a small triangle
+        // pointing the sort direction, standard spreadsheet convention).
+        if let Some((sc, dir)) = sheet.sorted_col {
+            if sc == c {
+                draw_sort_arrow(cr, cx + cw - 12.0, COL_HEADER_HEIGHT / 2.0, dir, hdr_text);
+            }
+        }
         cr.set_source_rgb(grid_line.0, grid_line.1, grid_line.2);
         cr.set_line_width(0.5);
         cr.move_to(cx + cw, 0.0);

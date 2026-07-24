@@ -34,6 +34,9 @@ pub struct SheetSnapshot {
     /// sequences (see the grow/shrink-extent crash noted alongside
     /// #113's named-ranges GUI test).
     pub selection: (usize, usize, usize, usize),
+    /// Currently-sorted column and direction (#113's "visible criteria"),
+    /// or `None` if unsorted. `true` = ascending.
+    pub sorted_col: Option<(usize, bool)>,
 }
 
 pub struct WorkbookSnapshot {
@@ -68,6 +71,10 @@ pub fn snapshot(
     let mut hidden_rows: Vec<usize> = state.sheet().hidden_rows.iter().copied().collect();
     hidden_rows.sort_unstable();
     let selection = state.sheet().selection_rect();
+    let sorted_col = state
+        .sheet()
+        .sorted_col
+        .map(|(c, dir)| (c, dir == crate::sheet::SortDirection::Ascending));
     drop(state);
 
     let sheet = SheetSnapshot {
@@ -75,6 +82,7 @@ pub fn snapshot(
         cells,
         hidden_rows,
         selection,
+        sorted_col,
     };
 
     WorkbookSnapshot { active_sheet_index, sheet_names, sheet }
@@ -138,14 +146,19 @@ impl WorkbookSnapshot {
             .collect::<Vec<_>>()
             .join(",");
         let (sr0, sc0, sr1, sc1) = self.sheet.selection;
+        let sorted_col = match self.sheet.sorted_col {
+            Some((c, asc)) => format!("{{\"col\":{c},\"ascending\":{asc}}}"),
+            None => "null".to_string(),
+        };
         format!(
-            "{{\"active_sheet_index\":{},\"sheet_names\":[{}],\"sheet\":{{\"name\":{},\"cells\":[{}],\"hidden_rows\":[{}],\"selection\":[{},{},{},{}]}}}}",
+            "{{\"active_sheet_index\":{},\"sheet_names\":[{}],\"sheet\":{{\"name\":{},\"cells\":[{}],\"hidden_rows\":[{}],\"selection\":[{},{},{},{}],\"sorted_col\":{}}}}}",
             self.active_sheet_index,
             sheet_names,
             json_str(&self.sheet.name),
             cells,
             hidden_rows,
             sr0, sc0, sr1, sc1,
+            sorted_col,
         )
     }
 }
@@ -199,5 +212,20 @@ mod tests {
         let snap = snapshot(&c, 0..5, 0..5);
         assert_eq!(snap.sheet.selection, (0, 0, 2, 0));
         assert!(snap.to_json().contains("\"selection\":[0,0,2,0]"));
+    }
+
+    #[test]
+    fn snapshot_reports_sorted_col_and_direction() {
+        let mut c = WorkbookController::new(3, 2).unwrap();
+        c.edit_cell(0, 0, "b");
+        c.edit_cell(1, 0, "a");
+        let snap = snapshot(&c, 0..3, 0..2);
+        assert_eq!(snap.sheet.sorted_col, None);
+        assert!(snap.to_json().contains("\"sorted_col\":null"));
+
+        c.toggle_sort(0);
+        let snap = snapshot(&c, 0..3, 0..2);
+        assert_eq!(snap.sheet.sorted_col, Some((0, true)));
+        assert!(snap.to_json().contains("\"sorted_col\":{\"col\":0,\"ascending\":true}"));
     }
 }

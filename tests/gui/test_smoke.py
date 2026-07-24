@@ -1097,6 +1097,83 @@ class TablesFillHandleSmoke(BaseGUITestCase):
         self.assertIsNone(self.process.poll(), "tables crashed during fill-handle drag")
 
 
+class TablesSortIndicatorSmoke(BaseGUITestCase):
+    """Sort (#113's "visible criteria"): clicking a column header toggles
+    sort on that column, drawn as a small triangle in the header — clicking
+    again reverses direction, a third time clears it. Verified via the
+    #104 state snapshot's sorted_col field, not AT-SPI (the header text
+    nodes share the same virtual-cell fragility documented for
+    TablesFillHandleSmoke and #137)."""
+
+    app_name = "tables"
+
+    CANVAS_X = 0
+    CANVAS_Y = 128
+    ROW_HEADER_WIDTH = 50
+    COL_HEADER_HEIGHT = 26
+    COL_WIDTH = 90
+
+    def setUp(self):
+        self._snapshot_path = self.isolate_snapshot(prefix="tables-sort-")
+        super().setUp()
+
+    def _col_header_center(self, col: int) -> tuple[float, float]:
+        x = self.CANVAS_X + self.ROW_HEADER_WIDTH + col * self.COL_WIDTH + self.COL_WIDTH / 2
+        y = self.CANVAS_Y + self.COL_HEADER_HEIGHT / 2
+        return x, y
+
+    def _sorted_col(self):
+        import json
+        import subprocess
+
+        subprocess.run(["gapplication", "action", "org.tunaos.tables-rust", "test-snapshot"])
+        time.sleep(0.5)
+        with open(self._snapshot_path) as f:
+            return json.load(f)["sheet"]["sorted_col"]
+
+    def test_clicking_column_header_cycles_sort_direction_then_clears(self):
+        import subprocess
+        from dogtail import rawinput
+
+        aid = "org.tunaos.tables-rust"
+        subprocess.run(["gapplication", "action", aid, "new-document"])
+        time.sleep(1.5)
+        rawinput.keyCombo("<Control>g")
+        time.sleep(0.2)
+        rawinput.typeText("A1")
+        rawinput.keyCombo("Return")
+        time.sleep(0.3)
+        rawinput.typeText("b")
+        rawinput.keyCombo("Return")
+        time.sleep(0.5)
+
+        # xdotool's `mousemove --sync` appears to hang waiting for a
+        # motion event that never fires when the target pixel is the
+        # same as the pointer's current position (confirmed: clicking
+        # the exact same header pixel three times in a row deterministically
+        # hangs on the second click) — nudge the pointer to the corner box
+        # (row/col header intersection, outside the header-click handler's
+        # `wx > ROW_HEADER_WIDTH` zone, so it can't itself trigger a sort)
+        # between clicks so each mousemove is a genuine move.
+        x, y = self._col_header_center(0)
+        corner_x, corner_y = self.CANVAS_X + self.ROW_HEADER_WIDTH / 2, self.CANVAS_Y + self.COL_HEADER_HEIGHT / 2
+
+        rawinput.click(int(x), int(y))
+        time.sleep(0.5)
+        self.assertEqual(self._sorted_col(), {"col": 0, "ascending": True})
+
+        rawinput.click(int(corner_x), int(corner_y))
+        rawinput.click(int(x), int(y))
+        time.sleep(0.5)
+        self.assertEqual(self._sorted_col(), {"col": 0, "ascending": False})
+
+        rawinput.click(int(corner_x), int(corner_y))
+        rawinput.click(int(x), int(y))
+        time.sleep(0.5)
+        self.assertIsNone(self._sorted_col())
+        self.assertIsNone(self.process.poll(), "tables crashed cycling sort")
+
+
 class TablesFilterSmoke(BaseGUITestCase):
     """Row filtering (#113): the Filter by Column dialog hides rows that
     don't match, verified via the #104 state snapshot's hidden_rows list
