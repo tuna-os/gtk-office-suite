@@ -453,8 +453,7 @@ impl WorkbookController {
     /// right, inclusive) to `(drag_row, drag_col)`. Copies the selected
     /// pattern (literal cell input text — see fill.rs for what's
     /// deliberately out of scope) into the newly covered cells as one
-    /// undoable step. No-op if the drag lands inside the selection, or
-    /// (for now) if it's an Up/Left drag — see fill.rs's module doc.
+    /// undoable step. No-op if the drag lands inside the selection.
     pub fn fill(&mut self, sel: (usize, usize, usize, usize), drag_row: usize, drag_col: usize) {
         let Some((direction, distance)) = infer_fill(sel, drag_row, drag_col) else { return };
         let (top, left, bottom, right) = sel;
@@ -501,10 +500,46 @@ impl WorkbookController {
                     }
                 }
             }
-            // Up/Left fill (dragging the handle backward) is deliberately
-            // deferred — same "narrow, honest first slice" scoping as the
-            // rest of this issue's work. No-op rather than a wrong fill.
-            FillDirection::Up | FillDirection::Left => {}
+            FillDirection::Up => {
+                for c in left..=right {
+                    let source: Vec<_> = (top..=bottom)
+                        .map(|r| {
+                            let input = state.cell_input(r, c);
+                            let is_formula = input.starts_with('=');
+                            (input, is_formula)
+                        })
+                        .collect();
+                    let filled = tile_fill(&source, distance);
+                    // Adjacent-to-selection cell (top - 1) gets the first
+                    // tile element, same convention as Down's bottom + 1.
+                    for (i, (input, _)) in filled.into_iter().enumerate() {
+                        let row = top - 1 - i;
+                        let old_input = state.cell_input(row, c);
+                        if old_input != input {
+                            changes.push(CellInputChange { row, col: c, old_input, new_input: input });
+                        }
+                    }
+                }
+            }
+            FillDirection::Left => {
+                for r in top..=bottom {
+                    let source: Vec<_> = (left..=right)
+                        .map(|c| {
+                            let input = state.cell_input(r, c);
+                            let is_formula = input.starts_with('=');
+                            (input, is_formula)
+                        })
+                        .collect();
+                    let filled = tile_fill(&source, distance);
+                    for (i, (input, _)) in filled.into_iter().enumerate() {
+                        let col = left - 1 - i;
+                        let old_input = state.cell_input(r, col);
+                        if old_input != input {
+                            changes.push(CellInputChange { row: r, col, old_input, new_input: input });
+                        }
+                    }
+                }
+            }
         }
         drop(state);
         if !changes.is_empty() {
@@ -715,6 +750,50 @@ mod tests {
         assert_eq!(controller.state.borrow().sheet().cell(1, 1), "20");
         controller.edit_cell(0, 0, "5");
         assert_eq!(controller.state.borrow().sheet().cell(1, 1), "10");
+    }
+
+    #[test]
+    fn fill_up_tiles_starting_adjacent_to_the_selection() {
+        let mut controller = WorkbookController::new(6, 6).unwrap();
+        controller.edit_cell(3, 0, "a");
+        controller.edit_cell(4, 0, "b");
+
+        // Selection rows 3..=4; drag up to row 0 -> fills rows 0..=2,
+        // adjacent-first: row2=a, row1=b, row0=a (tiled, cycling source).
+        controller.fill((3, 0, 4, 0), 0, 0);
+        let sheet = controller.state.borrow();
+        let sh = sheet.sheet();
+        assert_eq!(sh.cell(2, 0), "a");
+        assert_eq!(sh.cell(1, 0), "b");
+        assert_eq!(sh.cell(0, 0), "a");
+    }
+
+    #[test]
+    fn fill_left_tiles_starting_adjacent_to_the_selection() {
+        let mut controller = WorkbookController::new(6, 6).unwrap();
+        controller.edit_cell(0, 3, "x");
+
+        controller.fill((0, 3, 0, 3), 0, 0);
+        let sheet = controller.state.borrow();
+        let sh = sheet.sheet();
+        assert_eq!(sh.cell(0, 2), "x");
+        assert_eq!(sh.cell(0, 1), "x");
+        assert_eq!(sh.cell(0, 0), "x");
+    }
+
+    #[test]
+    fn fill_up_and_down_are_symmetric_around_a_selection() {
+        // Filling down then filling the result back up (from a fresh
+        // selection at the new bottom) should reproduce the same tile
+        // order adjacent-first in both directions.
+        let mut controller = WorkbookController::new(8, 6).unwrap();
+        controller.edit_cell(2, 0, "1");
+        controller.edit_cell(3, 0, "2");
+        controller.fill((2, 0, 3, 0), 5, 0);
+        let sheet = controller.state.borrow();
+        let sh = sheet.sheet();
+        assert_eq!(sh.cell(4, 0), "1");
+        assert_eq!(sh.cell(5, 0), "2");
     }
 
     #[test]
