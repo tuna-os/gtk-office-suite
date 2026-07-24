@@ -262,20 +262,34 @@ impl TablesWindow {
             app.set_accels_for_action("app.goto-cell", &["<Primary>g"]);
         }
 
-        // Name box: Enter jumps to the typed reference.
+        // Name box: Enter jumps to the typed reference, or — if it isn't
+        // a bare cell reference — to a matching defined name's range
+        // (#113 named ranges), case-insensitive like Excel's name box.
         {
             let s = state.clone();
+            let ctl = controller.clone();
             let da = drawing_area.clone();
             let refresh = refresh_sel.clone();
             let fx = fx_entry.clone();
             name_box.connect_activate(move |nb| {
-                if let Some((r, c)) = tables_core::sheet::parse_cell_ref(&nb.text()) {
+                let text = nb.text();
+                let target = tables_core::sheet::parse_cell_ref(&text).map(|(r, c)| (r, c, r, c)).or_else(|| {
+                    let ctl = ctl.borrow();
+                    let names = &ctl.state.borrow().engine.model.workbook.defined_names;
+                    names
+                        .iter()
+                        .find(|n| n.name.eq_ignore_ascii_case(text.trim()))
+                        .and_then(|n| tables_core::sheet::parse_defined_name_range(&n.formula))
+                });
+                if let Some((top, left, bottom, right)) = target {
                     {
                         let st = s.borrow();
                         let mut sh = st.sheet_mut();
-                        let r = r.min(sh.rows.saturating_sub(1));
-                        let c = c.min(sh.cols.saturating_sub(1));
-                        sh.select_cell(r, c);
+                        let (max_r, max_c) = (sh.rows.saturating_sub(1), sh.cols.saturating_sub(1));
+                        sh.select_cell(top.min(max_r), left.min(max_c));
+                        if (top, left) != (bottom, right) {
+                            sh.extend_selection(bottom.min(max_r), right.min(max_c));
+                        }
                     }
                     refresh();
                     da.queue_draw();
@@ -1234,6 +1248,15 @@ impl TablesWindow {
                 });
                 app.add_action(&act);
             }
+            {
+                let ctl = controller.clone();
+                let wr = win_ref.clone();
+                let act = gtk4::gio::SimpleAction::new("define-name", None);
+                act.connect_activate(move |_, _| {
+                    show_define_name_dialog(&ctl, wr.borrow().as_ref());
+                });
+                app.add_action(&act);
+            }
             mk("export-pdf", export_pdf);
         }
 
@@ -1245,6 +1268,7 @@ impl TablesWindow {
             ("app.conditional-format", "Conditional Formatting…"),
             ("app.filter-by-column", "Filter by Selected Column…"),
             ("app.clear-filter", "Clear Filter"),
+            ("app.define-name", "Define Name…"),
             ("app.export-pdf", "Export as PDF…"),
             ("app.open-file", "Open Spreadsheet…"),
             ("app.save-file", "Save"),
@@ -1261,6 +1285,7 @@ impl TablesWindow {
             ("insert-object-symbolic", "Merge cells", "app.merge-cells"),
             ("insert-object-symbolic", "Chart", "app.insert-chart"),
             ("funnel-symbolic", "Filter by column", "app.filter-by-column"),
+            ("tag-symbolic", "Define name", "app.define-name"),
             ("document-send-symbolic", "Export PDF", "app.export-pdf"),
         ];
 
@@ -2136,6 +2161,65 @@ fn show_conditional_format_dialog(
             });
             da.queue_draw();
             dlg.close();
+        });
+    }
+
+    dialog.set_child(Some(&grid));
+    dialog.present(parent);
+}
+
+/// Define a workbook-scoped named range covering the current selection
+/// (#113). Jump back to a defined name via the name box (typing its
+/// name, not just a cell reference — see the name box's connect_activate
+/// handler) rather than a separate management UI; deleting a name is
+/// deferred until there's a concrete need for it.
+fn show_define_name_dialog(
+    controller: &Rc<RefCell<WorkbookController>>,
+    parent: Option<&adw::ApplicationWindow>,
+) {
+    let sel = controller.borrow().state.borrow().sheet().selection_rect();
+
+    let dialog = adw::Dialog::builder()
+        .title(suite_common::i18n("Define Name"))
+        .content_width(320)
+        .build();
+
+    let grid = gtk4::Grid::new();
+    grid.set_row_spacing(8);
+    grid.set_column_spacing(12);
+    grid.set_margin_top(12);
+    grid.set_margin_bottom(12);
+    grid.set_margin_start(12);
+    grid.set_margin_end(12);
+    let lbl = |t: &str| {
+        let l = gtk::Label::new(Some(t));
+        l.set_halign(gtk::Align::Start);
+        l
+    };
+    let name_entry = gtk::Entry::builder().placeholder_text("e.g. TaxRate").build();
+    name_entry.update_property(&[gtk4::accessible::Property::Label("Name")]);
+    let error_label = gtk::Label::new(None);
+    error_label.add_css_class("error");
+    error_label.set_halign(gtk::Align::Start);
+    grid.attach(&lbl("Name"), 0, 0, 1, 1);
+    grid.attach(&name_entry, 1, 0, 1, 1);
+    grid.attach(&error_label, 0, 1, 2, 1);
+
+    let apply = gtk::Button::with_label(&suite_common::i18n("Define"));
+    apply.add_css_class("suggested-action");
+    grid.attach(&apply, 1, 2, 1, 1);
+
+    {
+        let ctl = controller.clone();
+        let dlg = dialog.clone();
+        let name_entry = name_entry.clone();
+        let error_label = error_label.clone();
+        apply.connect_clicked(move |_| {
+            let name = name_entry.text().to_string();
+            match ctl.borrow_mut().define_name(&name, sel) {
+                Ok(()) => { dlg.close(); }
+                Err(e) => error_label.set_text(&e),
+            }
         });
     }
 

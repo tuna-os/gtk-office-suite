@@ -725,6 +725,75 @@ class TablesNameBoxSmoke(BaseGUITestCase):
         self.assertIsNone(self.process.poll(), "tables crashed during keyboard selection")
 
 
+class TablesNamedRangeSmoke(BaseGUITestCase):
+    """Named ranges (#113): Define Name captures the current selection;
+    typing that name into the name box (instead of a cell reference)
+    jumps back to and re-selects the whole range, verified via the
+    stats label's live range readout (same one keyboard range-selection
+    already exercises)."""
+
+    app_name = "tables"
+
+    def _put(self, ref, value):
+        from dogtail import rawinput
+        rawinput.keyCombo("<Control>g")
+        time.sleep(0.2)
+        rawinput.typeText(ref)
+        rawinput.keyCombo("Return")
+        time.sleep(0.3)
+        rawinput.typeText(value)
+        rawinput.keyCombo("Return")
+        time.sleep(0.3)
+
+    def test_define_name_then_jump_to_it_via_name_box(self):
+        from dogtail import rawinput, tree
+        import subprocess
+
+        subprocess.run(["gapplication", "action", "org.tunaos.tables-rust", "new-document"])
+        time.sleep(1.5)
+        self._put("A1", "10")
+        self._put("A2", "20")
+        self._put("A3", "30")
+        # Select A1:A3 (Enter above leaves the active cell on A4 —
+        # jump back to A1 first, matching the keyboard-selection test).
+        rawinput.keyCombo("<Control>g")
+        time.sleep(0.2)
+        rawinput.typeText("A1")
+        rawinput.keyCombo("Return")
+        time.sleep(0.3)
+        rawinput.keyCombo("<Shift>Down")
+        rawinput.keyCombo("<Shift>Down")
+        time.sleep(0.5)
+
+        subprocess.run(["gapplication", "action", "org.tunaos.tables-rust", "define-name"])
+        time.sleep(0.8)
+        name_entry = tree.root.findChild(lambda n: n.name == "Name" and n.roleName == "text")
+        name_entry.text = "MyRange"
+        time.sleep(0.2)
+        confirm = tree.root.findChild(lambda n: n.name == "Define" and n.roleName == "push button")
+        confirm.do_action(0)
+        time.sleep(0.5)
+
+        # Jump elsewhere, then back to the range by name.
+        rawinput.keyCombo("<Control>g")
+        time.sleep(0.2)
+        rawinput.typeText("Z9")
+        rawinput.keyCombo("Return")
+        time.sleep(0.5)
+        rawinput.keyCombo("<Control>g")
+        time.sleep(0.2)
+        rawinput.typeText("MyRange")
+        rawinput.keyCombo("Return")
+        time.sleep(0.5)
+
+        labels = [c.name for c in self.app.findChildren(lambda c: c.roleName == "label")]
+        stats = [l for l in labels if "Sum" in l]
+        self.assertTrue(stats, f"no stats label found; labels: {labels}")
+        self.assertIn("A1:A3", stats[0], f"stats: {stats[0]!r}")
+        self.assertIn("Sum 60", stats[0])
+        self.assertIsNone(self.process.poll(), "tables crashed jumping to a named range")
+
+
 class TablesClipboardSmoke(BaseGUITestCase):
     """Suite-clipboard glue: Ctrl+C publishes the fragment MIME and
     Ctrl+V pastes it back with formulas still live. (The cross-app
@@ -1090,6 +1159,133 @@ class TablesFilterSmoke(BaseGUITestCase):
             snap = json.load(f)
         self.assertEqual(snap["sheet"]["hidden_rows"], [], f"snapshot: {snap}")
         self.assertIsNone(self.process.poll(), "tables crashed during filter/clear-filter")
+
+
+class TablesNamedRangeSmoke(BaseGUITestCase):
+    """Named ranges (#113): Define Name captures the current selection;
+    typing that name into the name box (instead of a cell reference)
+    jumps back to and re-selects the whole range. Verified via the #104
+    state snapshot's selection field rather than AT-SPI cell text.
+
+    This deliberately does NOT jump to a far cell (e.g. Z9) before
+    jumping back to the named range — doing so grows then shrinks this
+    grid's virtual-cell accessible extent, which reliably crashes the
+    app with a SIGSEGV on the very next AT-SPI-registry interaction,
+    even one as unrelated as an ordinary D-Bus action call (not just a
+    live dogtail tree walk). Confirmed independently of this feature
+    with keyboard input alone; filed as #137 (worse than #132's wrong
+    coordinates — this one's a hard crash). See
+    test_jump_far_and_back_to_named_range_crashes_137 below for the
+    documented repro, skipped rather than fixed here."""
+
+    app_name = "tables"
+
+    def setUp(self):
+        self._snapshot_path = self.isolate_snapshot(prefix="tables-named-range-")
+        super().setUp()
+
+    def test_define_name_then_jump_to_it_via_name_box(self):
+        import json
+        import subprocess
+        from dogtail import rawinput, tree
+
+        aid = "org.tunaos.tables-rust"
+        subprocess.run(["gapplication", "action", aid, "new-document"])
+        time.sleep(1.5)
+
+        for row, value in enumerate(["10", "20", "30"]):
+            rawinput.keyCombo("<Control>g")
+            time.sleep(0.2)
+            rawinput.typeText(f"A{row + 1}")
+            rawinput.keyCombo("Return")
+            time.sleep(0.3)
+            rawinput.typeText(value)
+            rawinput.keyCombo("Return")
+            time.sleep(0.3)
+
+        rawinput.keyCombo("<Control>g")
+        time.sleep(0.2)
+        rawinput.typeText("A1")
+        rawinput.keyCombo("Return")
+        time.sleep(0.3)
+        # A name-box jump hands focus to fx (so the user can type a new
+        # value straight away, per test_name_box_jump_and_edit) — Escape
+        # returns focus to the grid so Shift+Down actually extends the
+        # grid selection instead of doing nothing inside fx.
+        rawinput.keyCombo("Escape")
+        time.sleep(0.3)
+        rawinput.keyCombo("<Shift>Down")
+        rawinput.keyCombo("<Shift>Down")
+        time.sleep(0.5)
+
+        subprocess.run(["gapplication", "action", aid, "define-name"])
+        time.sleep(0.8)
+        name_entry = tree.root.findChild(lambda n: n.name == "Name" and n.roleName == "text")
+        name_entry.text = "MyRange"
+        time.sleep(0.2)
+        confirm = tree.root.findChild(lambda n: n.name == "Define" and n.roleName == "push button")
+        confirm.do_action(0)
+        time.sleep(0.5)
+
+        # Collapse back to a single cell (still within the existing
+        # extent — no far jump, see class docstring) so the jump below
+        # actually proves the name box re-extends the selection rather
+        # than trivially matching an unchanged one.
+        rawinput.keyCombo("<Control>g")
+        time.sleep(0.2)
+        rawinput.typeText("A1")
+        rawinput.keyCombo("Return")
+        time.sleep(0.5)
+        rawinput.keyCombo("<Control>g")
+        time.sleep(0.2)
+        rawinput.typeText("MyRange")
+        rawinput.keyCombo("Return")
+        time.sleep(0.5)
+
+        subprocess.run(["gapplication", "action", aid, "test-snapshot"])
+        time.sleep(0.5)
+        self.assertTrue(os.path.exists(self._snapshot_path), "snapshot file was not written")
+        with open(self._snapshot_path) as f:
+            snap = json.load(f)
+        self.assertEqual(tuple(snap["sheet"]["selection"]), (0, 0, 2, 0), f"snapshot: {snap}")
+        self.assertIsNone(self.process.poll(), "tables crashed defining/jumping to a named range")
+
+    @unittest.skip(
+        "SIGSEGV: jumping to a cell far from the origin (growing this "
+        "grid's virtual-cell AT-SPI accessible extent), then back to a "
+        "small selection (shrinking it), then any AT-SPI-registry "
+        "interaction at all — even an unrelated D-Bus action call, not "
+        "just a live tree walk — crashes the app. 100% reproducible "
+        "with keyboard input alone, independent of the named-ranges "
+        "feature itself (which is why this repro doesn't use Define "
+        "Name). Filed as #137 (tables/src/grid_area.rs's CellAccessible "
+        "bridge; needs a GObject-lifetime-aware pass, not a quick "
+        "patch — same family as #132 but a hard crash, not just wrong "
+        "coordinates). Revisit once #137 is fixed."
+    )
+    def test_jump_far_and_back_to_named_range_crashes_137(self):
+        import subprocess
+        from dogtail import rawinput
+
+        aid = "org.tunaos.tables-rust"
+        subprocess.run(["gapplication", "action", aid, "new-document"])
+        time.sleep(1.5)
+        rawinput.keyCombo("<Control>g")
+        time.sleep(0.2)
+        rawinput.typeText("Z9")
+        rawinput.keyCombo("Return")
+        time.sleep(0.5)
+        rawinput.keyCombo("<Control>g")
+        time.sleep(0.2)
+        rawinput.typeText("A1")
+        rawinput.keyCombo("Return")
+        time.sleep(0.3)
+        rawinput.keyCombo("<Shift>Down")
+        rawinput.keyCombo("<Shift>Down")
+        time.sleep(0.5)
+        subprocess.run(["gapplication", "action", aid, "test-snapshot"])
+        time.sleep(0.5)
+        self.assertIsNone(self.process.poll(), "expected to crash per #137 — fixed?")
 
 
 class DecksSnapshotSmoke(BaseGUITestCase):

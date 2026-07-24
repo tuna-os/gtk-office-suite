@@ -93,6 +93,24 @@ pub fn parse_cell_ref(s: &str) -> Option<(usize, usize)> {
     Some((row - 1, col - 1))
 }
 
+/// Parse a defined-name formula like `"Sheet1!$D$3"` or
+/// `"Sheet1!$A$1:$B$3"` — the exact shape `WorkbookController::define_name`
+/// writes — back into a `(top, left, bottom, right)` selection rect,
+/// 0-based inclusive. `None` for anything this app doesn't itself
+/// generate (multi-sheet ranges, unparseable formulas).
+pub fn parse_defined_name_range(formula: &str) -> Option<(usize, usize, usize, usize)> {
+    let refs = formula.rsplit('!').next()?;
+    let mut parts = refs.split(':');
+    let (r0, c0) = parse_cell_ref(&parts.next()?.replace('$', ""))?;
+    match parts.next() {
+        Some(second) => {
+            let (r1, c1) = parse_cell_ref(&second.replace('$', ""))?;
+            Some((r0.min(r1), c0.min(c1), r0.max(r1), c0.max(c1)))
+        }
+        None => Some((r0, c0, r0, c0)),
+    }
+}
+
 /// Summary statistics over the numeric cells of a selection.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct SelectionStats {
@@ -545,6 +563,22 @@ mod selection_tests {
         assert_eq!(parse_cell_ref("1A"), None);
         assert_eq!(parse_cell_ref(""), None);
         assert_eq!(parse_cell_ref("hello"), None);
+    }
+
+    #[test]
+    fn parse_defined_name_range_single_cell() {
+        assert_eq!(parse_defined_name_range("Sheet1!$D$3"), Some((2, 3, 2, 3)));
+    }
+
+    #[test]
+    fn parse_defined_name_range_a_rectangle() {
+        assert_eq!(parse_defined_name_range("Sheet1!$A$1:$B$3"), Some((0, 0, 2, 1)));
+    }
+
+    #[test]
+    fn parse_defined_name_range_rejects_garbage() {
+        assert_eq!(parse_defined_name_range("not a range"), None);
+        assert_eq!(parse_defined_name_range(""), None);
     }
 
     #[test]

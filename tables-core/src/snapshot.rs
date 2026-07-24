@@ -26,6 +26,14 @@ pub struct SheetSnapshot {
     pub cells: Vec<CellSnapshot>,
     /// Rows currently hidden by a column filter (#113), sorted ascending.
     pub hidden_rows: Vec<usize>,
+    /// Normalized selection rect (top, left, bottom, right), 0-based
+    /// inclusive — same shape as `SheetModel::selection_rect`. Lets tests
+    /// assert on a jump/selection outcome (e.g. a named-range jump)
+    /// without walking the live AT-SPI tree, which this app's custom
+    /// grid accessible can't yet survive after certain selection
+    /// sequences (see the grow/shrink-extent crash noted alongside
+    /// #113's named-ranges GUI test).
+    pub selection: (usize, usize, usize, usize),
 }
 
 pub struct WorkbookSnapshot {
@@ -59,12 +67,14 @@ pub fn snapshot(
     }
     let mut hidden_rows: Vec<usize> = state.sheet().hidden_rows.iter().copied().collect();
     hidden_rows.sort_unstable();
+    let selection = state.sheet().selection_rect();
     drop(state);
 
     let sheet = SheetSnapshot {
         name: sheet_names[active_sheet_index].clone(),
         cells,
         hidden_rows,
+        selection,
     };
 
     WorkbookSnapshot { active_sheet_index, sheet_names, sheet }
@@ -127,13 +137,15 @@ impl WorkbookSnapshot {
             .map(|r| r.to_string())
             .collect::<Vec<_>>()
             .join(",");
+        let (sr0, sc0, sr1, sc1) = self.sheet.selection;
         format!(
-            "{{\"active_sheet_index\":{},\"sheet_names\":[{}],\"sheet\":{{\"name\":{},\"cells\":[{}],\"hidden_rows\":[{}]}}}}",
+            "{{\"active_sheet_index\":{},\"sheet_names\":[{}],\"sheet\":{{\"name\":{},\"cells\":[{}],\"hidden_rows\":[{}],\"selection\":[{},{},{},{}]}}}}",
             self.active_sheet_index,
             sheet_names,
             json_str(&self.sheet.name),
             cells,
             hidden_rows,
+            sr0, sc0, sr1, sc1,
         )
     }
 }
@@ -177,5 +189,15 @@ mod tests {
         let snap = snapshot(&c, 0..3, 0..2);
         assert_eq!(snap.sheet.hidden_rows, vec![1]);
         assert!(snap.to_json().contains("\"hidden_rows\":[1]"));
+    }
+
+    #[test]
+    fn snapshot_reports_the_current_selection() {
+        let mut c = WorkbookController::new(5, 5).unwrap();
+        c.state.borrow().sheet_mut().select_cell(0, 0);
+        c.state.borrow().sheet_mut().extend_selection(2, 0);
+        let snap = snapshot(&c, 0..5, 0..5);
+        assert_eq!(snap.sheet.selection, (0, 0, 2, 0));
+        assert!(snap.to_json().contains("\"selection\":[0,0,2,0]"));
     }
 }
