@@ -234,7 +234,15 @@ pub fn save_sheets_to_xlsx_bytes(
                 if val.is_empty() {
                     continue;
                 }
-                if let Ok(n) = val.parse::<f64>() {
+                // Rust's f64::from_str accepts "inf"/"infinity"/"nan"
+                // (any case, optionally signed) as valid floats — but a
+                // user typing that text almost certainly means literal
+                // text, not IEEE-754 infinity/NaN, and no spreadsheet
+                // app treats it as numeric by default. Writing it as a
+                // number here round-trips as "INF" (calamine's own
+                // float formatting) on reopen, silently corrupting the
+                // cell — caught by tables-core/tests/property.rs.
+                if let Some(n) = val.parse::<f64>().ok().filter(|n| n.is_finite()) {
                     match xlsx_num_format(&sh.formats[r][c]) {
                         Some(fmt) => {
                             let f = rust_xlsxwriter::Format::new().set_num_format(&fmt);
@@ -454,6 +462,29 @@ mod tests {
         assert_eq!(e.cell(0, 1), "42");
         assert_eq!(e.cell(2, 2), "3.50");
         assert!(rows >= 3 && cols >= 3);
+    }
+
+    #[test]
+    fn xlsx_round_trip_preserves_inf_and_nan_as_text() {
+        // Rust's f64::from_str accepts "inf"/"nan" (any case) as valid
+        // floats, but a user typing that text means literal text, not
+        // IEEE-754 infinity/NaN — regression test for the round-trip
+        // corruption ("inf" -> written as numeric infinity -> read back
+        // as "INF") caught by tables-core/tests/property.rs.
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("inf.xlsx").to_string_lossy().into_owned();
+
+        let mut sheet = SheetModel::new("Sheet1", 2, 2, 0);
+        sheet.data[0][0] = "inf".into();
+        sheet.data[0][1] = "NaN".into();
+        sheet.data[1][0] = "-Infinity".into();
+        save_sheets_to_xlsx(&path, &[sheet]).unwrap();
+
+        let mut e = engine();
+        load_file_into_engine(&path, &mut e).unwrap();
+        assert_eq!(e.cell(0, 0), "inf");
+        assert_eq!(e.cell(0, 1), "NaN");
+        assert_eq!(e.cell(1, 0), "-Infinity");
     }
 
     #[test]
