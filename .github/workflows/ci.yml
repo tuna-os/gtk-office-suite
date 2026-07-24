@@ -26,14 +26,32 @@ jobs:
       - name: Install Rust stable
         uses: dtolnay/rust-toolchain@stable
 
+      - name: Install cargo-nextest
+        uses: taiki-e/install-action@nextest
+
       - name: cargo check
         run: cargo check --workspace
 
       - name: cargo clippy (deny warnings, all crates)
         run: cargo clippy --workspace --all-targets -- -D warnings
 
-      - name: cargo test
-        run: cargo test --workspace
+      # nextest doesn't run doctests (a known limitation) — cargo test
+      # --doc covers those separately. #108: JUnit output published as
+      # an artifact even on failure, so a failing run's per-test detail
+      # survives past the job's own log retention.
+      - name: cargo nextest run
+        run: cargo nextest run --workspace --profile ci
+
+      - name: cargo test --doc
+        run: cargo test --doc --workspace
+
+      - name: Upload JUnit test results
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: junit-results
+          path: target/nextest/ci/junit.xml
+          retention-days: 14
 
   # LibreOffice interop oracle and coverage moved to nightly.yml (#108):
   # installing LibreOffice + running the full oracle/parity corpus on
