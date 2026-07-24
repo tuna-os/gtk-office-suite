@@ -24,7 +24,6 @@ pub fn auto_fit_column(cr: &Context, sheet: &mut SheetModel, col: usize, _scroll
     sheet.set_col_width(col, max_w.clamp(30.0, 500.0));
 }
 
-const ROW_HEIGHT: f64 = 28.0;
 const COL_WIDTH: f64 = 90.0;
 const ROW_HEADER_WIDTH: f64 = 50.0;
 const COL_HEADER_HEIGHT: f64 = 26.0;
@@ -172,7 +171,7 @@ pub fn draw_grid(
     for r in 0..sheet.rows {
         if sheet.is_row_hidden(r) { continue; }
         let ry = tables_core::sheet::row_y(r, scroll_y, sheet);
-        if ry + ROW_HEIGHT < COL_HEADER_HEIGHT { continue; }
+        if ry + sheet.row_height(r) < COL_HEADER_HEIGHT { continue; }
         if ry > height { break; }
         cr.set_source_rgb(hdr_text.0, hdr_text.1, hdr_text.2);
         let label = (r + 1).to_string();
@@ -189,7 +188,8 @@ pub fn draw_grid(
     for r in 0..sheet.rows {
         if sheet.is_row_hidden(r) { continue; }
         let cy = tables_core::sheet::row_y(r, scroll_y, sheet);
-        if cy + ROW_HEIGHT < COL_HEADER_HEIGHT { continue; }
+        let rh = sheet.row_height(r);
+        if cy + rh < COL_HEADER_HEIGHT { continue; }
         if cy > height { break; }
         cx = ROW_HEADER_WIDTH - scroll_x;
         for c in start_col..sheet.cols {
@@ -222,7 +222,7 @@ pub fn draw_grid(
             } else {
                 cr.set_source_rgb(cell_bg.0, cell_bg.1, cell_bg.2);
             }
-            cr.rectangle(cx, cy, cw, ROW_HEIGHT);
+            cr.rectangle(cx, cy, cw, rh);
             cr.fill().unwrap();
 
             // Grid line
@@ -230,24 +230,24 @@ pub fn draw_grid(
                 cr.set_source_rgb(grid_line.0, grid_line.1, grid_line.2);
                 cr.set_line_width(0.5);
                 cr.move_to(cx + cw, cy);
-                cr.line_to(cx + cw, cy + ROW_HEIGHT);
+                cr.line_to(cx + cw, cy + rh);
                 cr.stroke().unwrap();
-                cr.move_to(cx, cy + ROW_HEIGHT);
-                cr.line_to(cx + cw, cy + ROW_HEIGHT);
+                cr.move_to(cx, cy + rh);
+                cr.line_to(cx + cw, cy + rh);
                 cr.stroke().unwrap();
             }
 
             // Cell border
             if border.top != BorderStyle::None || border.bottom != BorderStyle::None
                 || border.left != BorderStyle::None || border.right != BorderStyle::None {
-                draw_border_edges(cr, cx, cy, cw, ROW_HEIGHT, border, is_dark);
+                draw_border_edges(cr, cx, cy, cw, rh, border, is_dark);
             }
 
             // Active cell border
             if is_sel {
                 cr.set_source_rgb(ACTIVE_CELL_BORDER.0, ACTIVE_CELL_BORDER.1, ACTIVE_CELL_BORDER.2);
                 cr.set_line_width(2.0);
-                cr.rectangle(cx, cy, cw, ROW_HEIGHT);
+                cr.rectangle(cx, cy, cw, rh);
                 cr.stroke().unwrap();
             }
 
@@ -273,7 +273,7 @@ pub fn draw_grid(
     let x0 = px_x(sc0);
     let x1 = px_x(sc1 + 1);
     let y0 = tables_core::sheet::row_y(sr0, scroll_y, sheet);
-    let y1 = tables_core::sheet::row_y(sr1, scroll_y, sheet) + ROW_HEIGHT;
+    let y1 = tables_core::sheet::row_y(sr1, scroll_y, sheet) + sheet.row_height(sr1);
     cr.save().unwrap();
     cr.rectangle(ROW_HEADER_WIDTH, COL_HEADER_HEIGHT, width - ROW_HEADER_WIDTH, height - COL_HEADER_HEIGHT);
     cr.clip();

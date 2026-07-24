@@ -129,6 +129,23 @@ pub fn hit_col_divider(x: f64, y: f64, scroll_x: f64, sheet: &SheetModel) -> Opt
     None
 }
 
+/// Row-header equivalent of [[hit_col_divider]]: `(x, y)` widget-local,
+/// `y` scroll-adjusted via `scroll_y` since (unlike the fixed column
+/// header strip) the row header scrolls vertically with the content.
+/// Hidden rows contribute no divider (their height collapses to zero).
+pub fn hit_row_divider(x: f64, y: f64, scroll_y: f64, sheet: &SheetModel) -> Option<usize> {
+    if !(0.0..=ROW_HEADER_WIDTH).contains(&x) { return None; }
+    let cy = y - COL_HEADER_HEIGHT + scroll_y;
+    if cy < 0.0 { return None; }
+    let mut accum = 0.0;
+    for r in 0..sheet.rows {
+        if sheet.is_row_hidden(r) { continue; }
+        accum += sheet.row_height(r);
+        if (cy - accum).abs() < 5.0 { return Some(r); }
+    }
+    None
+}
+
 /// Half-width in pixels of the fill-handle hit zone (issue #113) — a
 /// small square at the selection's bottom-right corner. Slightly larger
 /// than the drawn handle itself so it's easy to grab with a mouse.
@@ -146,7 +163,7 @@ pub fn fill_handle_center(
     sheet: &SheetModel,
 ) -> (f64, f64) {
     let x = ROW_HEADER_WIDTH - scroll_x + (0..=right).map(|c| sheet.col_width(c)).sum::<f64>();
-    let y = row_y(bottom, scroll_y, sheet) + ROW_HEIGHT;
+    let y = row_y(bottom, scroll_y, sheet) + sheet.row_height(bottom);
     (x, y)
 }
 
@@ -165,33 +182,43 @@ pub fn hit_fill_handle(
     (x - hx).abs() <= FILL_HANDLE_HALF && (y - hy).abs() <= FILL_HANDLE_HALF
 }
 
-/// Position of `row` among the sheet's visible (non-[[hidden_rows]])
-/// rows, 0-indexed — how many rows are actually drawn above it now that
-/// filtered rows collapse to zero height. Any pixel math involving a row
-/// index should go through this (or [[row_y]]), not `row` itself.
-pub fn visible_row_position(row: usize, sheet: &SheetModel) -> usize {
-    (0..row).filter(|&r| !sheet.is_row_hidden(r)).count()
-}
-
-/// Inverse of [[visible_row_position]]: the actual row index drawn at
-/// on-screen visible slot `pos`, or `None` past the last visible row.
-pub fn row_at_visible_position(pos: usize, sheet: &SheetModel) -> Option<usize> {
-    (0..sheet.rows).filter(|&r| !sheet.is_row_hidden(r)).nth(pos)
-}
-
 /// Screen y-coordinate of the top of `row`, in widget-local (scroll-
-/// adjusted) space — accounts for any hidden rows above it collapsing to
-/// zero height. Shared by the renderer and hit-testers so they can never
-/// disagree about where a row actually falls on screen.
+/// adjusted) space — sums each preceding visible row's own height
+/// (hidden rows collapse to zero, per-row heights per [[SheetModel::row_height]]).
+/// Shared by the renderer and hit-testers so they can never disagree
+/// about where a row actually falls on screen.
 pub fn row_y(row: usize, scroll_y: f64, sheet: &SheetModel) -> f64 {
-    COL_HEADER_HEIGHT - scroll_y + visible_row_position(row, sheet) as f64 * ROW_HEIGHT
+    let mut y = COL_HEADER_HEIGHT - scroll_y;
+    for r in 0..row {
+        if !sheet.is_row_hidden(r) {
+            y += sheet.row_height(r);
+        }
+    }
+    y
+}
+
+/// Inverse of the row-position half of [[row_y]]: the row whose visible
+/// band contains content-space offset `offset` (i.e. `y - COL_HEADER_HEIGHT`
+/// at zero scroll), or `None` past the last visible row.
+fn row_at_content_offset(offset: f64, sheet: &SheetModel) -> Option<usize> {
+    let mut accum = 0.0;
+    for r in 0..sheet.rows {
+        if sheet.is_row_hidden(r) {
+            continue;
+        }
+        let h = sheet.row_height(r);
+        if offset < accum + h {
+            return Some(r);
+        }
+        accum += h;
+    }
+    None
 }
 
 pub fn xy_to_cell(x: f64, y: f64, scroll_x: f64, sheet: &SheetModel) -> Option<(usize, usize)> {
     let col_x = x - ROW_HEADER_WIDTH + scroll_x;
     if col_x < 0.0 || y < COL_HEADER_HEIGHT { return None; }
-    let vis_row = ((y - COL_HEADER_HEIGHT) / ROW_HEIGHT) as usize;
-    let row = row_at_visible_position(vis_row, sheet)?;
+    let row = row_at_content_offset(y - COL_HEADER_HEIGHT, sheet)?;
     let mut accum = 0.0;
     for c in 0..sheet.cols { accum += sheet.col_width(c); if col_x < accum { return Some((c, row)); } }
     None
@@ -271,6 +298,9 @@ pub struct SheetModel {
     pub sel_end_row: usize,
     pub sel_end_col: usize,
     pub col_widths: Vec<f64>,
+    /// Per-row heights (#113), mirroring col_widths — a row not yet
+    /// resized uses ROW_HEIGHT (see row_height()).
+    pub row_heights: Vec<f64>,
     pub formulas: Vec<Vec<bool>>,
     pub formats: Vec<Vec<NumberFormat>>,
     pub sorted_col: Option<(usize, SortDirection)>,
@@ -304,6 +334,7 @@ impl SheetModel {
             selected_row: 0, selected_col: 0,
             sel_end_row: 0, sel_end_col: 0,
             col_widths: vec![COL_WIDTH; cols],
+            row_heights: vec![ROW_HEIGHT; rows],
             formulas: vec![vec![false; cols]; rows],
             formats: vec![vec![NumberFormat::default(); cols]; rows],
             sorted_col: None,
@@ -390,6 +421,14 @@ impl SheetModel {
         if c < self.col_widths.len() { self.col_widths[c] = w.clamp(30.0, 500.0); }
     }
 
+    pub fn row_height(&self, r: usize) -> f64 {
+        if r < self.row_heights.len() { self.row_heights[r] } else { ROW_HEIGHT }
+    }
+
+    pub fn set_row_height(&mut self, r: usize, h: f64) {
+        if r < self.row_heights.len() { self.row_heights[r] = h.clamp(12.0, 300.0); }
+    }
+
     pub fn toggle_sort(&mut self, col: usize) {
         use SortDirection::*;
         let new_dir = match self.sorted_col {
@@ -461,21 +500,58 @@ mod selection_tests {
     }
 
     #[test]
-    fn visible_row_position_ignores_hidden_rows_above() {
+    fn row_height_defaults_to_row_height_constant_and_is_settable() {
         let mut s = sheet();
-        assert_eq!(visible_row_position(3, &s), 3);
-        s.hidden_rows.insert(1);
-        // Row 1 is hidden, so row 3 is now only 2 visible rows down.
-        assert_eq!(visible_row_position(3, &s), 2);
+        assert_eq!(s.row_height(0), ROW_HEIGHT);
+        s.set_row_height(0, 60.0);
+        assert_eq!(s.row_height(0), 60.0);
+        assert_eq!(s.row_height(1), ROW_HEIGHT, "other rows unaffected");
     }
 
     #[test]
-    fn row_at_visible_position_skips_hidden_rows() {
+    fn row_height_clamps_to_a_sane_range() {
         let mut s = sheet();
-        s.hidden_rows.insert(1);
-        assert_eq!(row_at_visible_position(0, &s), Some(0));
-        // Slot 1 on screen is row 2 (row 1 is hidden and takes no slot).
-        assert_eq!(row_at_visible_position(1, &s), Some(2));
+        s.set_row_height(0, 1.0);
+        assert_eq!(s.row_height(0), 12.0);
+        s.set_row_height(0, 10_000.0);
+        assert_eq!(s.row_height(0), 300.0);
+    }
+
+    #[test]
+    fn hit_row_divider_finds_the_boundary_between_rows() {
+        let s = sheet();
+        // Row 0's default height is ROW_HEIGHT, so its bottom boundary
+        // sits at COL_HEADER_HEIGHT + ROW_HEIGHT.
+        let y = COL_HEADER_HEIGHT + ROW_HEIGHT;
+        assert_eq!(hit_row_divider(ROW_HEADER_WIDTH / 2.0, y, 0.0, &s), Some(0));
+        assert_eq!(hit_row_divider(ROW_HEADER_WIDTH / 2.0, y + 20.0, 0.0, &s), None);
+    }
+
+    #[test]
+    fn hit_row_divider_outside_the_row_header_column_is_none() {
+        let s = sheet();
+        let y = COL_HEADER_HEIGHT + ROW_HEIGHT;
+        assert_eq!(hit_row_divider(ROW_HEADER_WIDTH + 5.0, y, 0.0, &s), None);
+    }
+
+    #[test]
+    fn row_y_accounts_for_a_resized_row_above() {
+        let mut s = sheet();
+        let y_before = row_y(3, 0.0, &s);
+        s.set_row_height(1, ROW_HEIGHT * 2.0);
+        let y_after = row_y(3, 0.0, &s);
+        assert_eq!(y_after, y_before + ROW_HEIGHT);
+    }
+
+    #[test]
+    fn xy_to_cell_accounts_for_a_resized_row_above() {
+        let mut s = sheet();
+        s.set_row_height(0, ROW_HEIGHT * 2.0);
+        // Row 0 now spans 2x the normal height, so a y just past one
+        // normal ROW_HEIGHT still lands in row 0, not row 1.
+        let y = COL_HEADER_HEIGHT + ROW_HEIGHT * 1.5;
+        let x = ROW_HEADER_WIDTH + 5.0;
+        assert_eq!(xy_to_cell(x, y, 0.0, &s), Some((0, 0)));
     }
 
     #[test]

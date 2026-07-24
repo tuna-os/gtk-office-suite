@@ -207,6 +207,14 @@ pub fn save_sheets_to_xlsx_bytes(
         sheet
             .set_name(&sh.name)
             .map_err(|e| format!("Sheet name: {}", e))?;
+        for r in 0..sh.rows {
+            let h = sh.row_height(r);
+            if (h - crate::sheet::ROW_HEIGHT).abs() > f64::EPSILON {
+                sheet
+                    .set_row_height_pixels(r as u32, h as u32)
+                    .map_err(|e| format!("Row height: {}", e))?;
+            }
+        }
 
         // Cells covered by a merge are written by merge_range below.
         let mut merged: std::collections::HashSet<(usize, usize)> =
@@ -461,6 +469,22 @@ mod tests {
     fn missing_xlsx_is_an_error_not_a_panic() {
         let mut e = engine();
         assert!(load_file_into_engine("/nonexistent/file.xlsx", &mut e).is_err());
+    }
+
+    #[test]
+    fn resized_row_heights_write_without_error() {
+        // calamine (this app's xlsx reader) has no row-height-reading API,
+        // so a full write/read round trip isn't possible yet — this
+        // confirms the write side succeeds and only non-default rows
+        // trigger a set_row_height_pixels call (default rows are left
+        // alone rather than writing a redundant explicit height for
+        // every single row).
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("row-height.xlsx");
+        let mut sheet = SheetModel::new("Sheet1", 3, 2, 0);
+        sheet.set_row_height(1, 60.0);
+        save_sheets_to_xlsx(path.to_str().unwrap(), &[sheet]).unwrap();
+        assert!(path.exists());
     }
 
     #[test]

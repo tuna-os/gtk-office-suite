@@ -461,6 +461,60 @@ impl TablesWindow {
             drawing_area.add_controller(drag);
         }
 
+        // ── Row resize: drag divider in the row header (#113) ────────────
+        {
+            let s = state.clone();
+            let da = drawing_area.clone();
+            let v = v_adj.clone();
+            let drag_row = Rc::new(Cell::new(None::<(usize, f64)>));
+            let resize_before = Rc::new(RefCell::new(None::<SheetModel>));
+            let drag = gtk4::GestureDrag::new();
+            drag.set_button(1);
+            let dr2 = drag_row.clone();
+            let dr3 = drag_row.clone();
+            let before_begin = resize_before.clone();
+            let before_end = resize_before.clone();
+            let s2 = s.clone();
+            let resize_controller = controller.clone();
+            drag.connect_drag_begin(move |_g, x, y| {
+                let st = s.borrow();
+                let sh = st.sheet();
+                if let Some(row) = hit_row_divider(x, y, v.value(), &sh) {
+                    *before_begin.borrow_mut() = Some(sh.clone());
+                    dr2.set(Some((row, sh.row_height(row))));
+                }
+            });
+            drag.connect_drag_update(move |_g, _dx, dy| {
+                if let Some((row, start_h)) = drag_row.get() {
+                    let new_h = (start_h + dy).clamp(12.0, 300.0);
+                    let st = s2.borrow_mut();
+                    let mut sh = st.sheet_mut();
+                    sh.set_row_height(row, new_h);
+                    drop(sh); drop(st);
+                    da.queue_draw();
+                }
+            });
+            drag.connect_drag_end(move |_g, _dx, _dy| {
+                if let (Some((row, old_height)), Some(before)) =
+                    (dr3.get(), before_end.borrow_mut().take())
+                {
+                    let new_height = resize_controller
+                        .borrow()
+                        .state
+                        .borrow()
+                        .sheet()
+                        .row_height(row);
+                    if (new_height - old_height).abs() > f64::EPSILON {
+                        resize_controller
+                            .borrow_mut()
+                            .record_sheet_mutation("Resize Row", before);
+                    }
+                }
+                dr3.set(None);
+            });
+            drawing_area.add_controller(drag);
+        }
+
         // ── Drag range selection on the cell area, or fill-handle drag ──
         {
             let s = state.clone();
