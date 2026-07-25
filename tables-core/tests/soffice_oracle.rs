@@ -582,3 +582,72 @@ fn cond_rule_survives_calc_rewrite() {
     assert!((r.value - 25.0).abs() < 1e-9, "threshold changed: {r:?}");
     assert_eq!(r.range, (0, 1, 4, 1), "range changed: {r:?}");
 }
+
+// ── Row/column hiding, print area, page setup (#113) ─────────────────
+
+/// Hidden rows and columns must survive a Calc rewrite, read back by our
+/// own reader — the same pattern as charts/conditional formatting above.
+#[test]
+fn hidden_rows_and_cols_survive_calc_rewrite() {
+    if !require_or_skip() { return; }
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("hide.xlsx");
+    let mut sh = SheetModel::new("Sheet1", 6, 6, 0);
+    sh.data[0][0] = "visible".into();
+    sh.hidden_rows_manual.insert(2);
+    sh.hidden_cols.insert(3);
+    save_sheets_to_xlsx(path.to_str().unwrap(), &[sh]).unwrap();
+
+    let rewritten = calc_rewrite(&path);
+    let names = vec!["Sheet1".to_string()];
+    let props =
+        tables_core::io::read_sheet_props_from_xlsx(rewritten.to_str().unwrap(), &names);
+    let props = &props["Sheet1"];
+    assert!(props.hidden_rows.contains(&2), "hidden row lost through Calc: {props:?}");
+    assert!(props.hidden_cols.contains(&3), "hidden column lost through Calc: {props:?}");
+}
+
+/// A print area must survive a Calc rewrite as the `_xlnm.Print_Area`
+/// built-in defined name, read back through the real multi-sheet loader.
+#[test]
+fn print_area_survives_calc_rewrite() {
+    if !require_or_skip() { return; }
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("pa.xlsx");
+    let mut sh = SheetModel::new("Sheet1", 6, 6, 0);
+    sh.data[0][0] = "x".into();
+    sh.print_area = Some((0, 0, 2, 2));
+    save_sheets_to_xlsx(path.to_str().unwrap(), &[sh]).unwrap();
+
+    let rewritten = calc_rewrite(&path);
+    let (_e, sheets) =
+        tables_core::io::load_xlsx_workbook(rewritten.to_str().unwrap()).expect("open");
+    assert_eq!(
+        sheets[0].print_area,
+        Some((0, 0, 2, 2)),
+        "print area lost or changed through Calc: {:?}",
+        sheets[0].print_area
+    );
+}
+
+/// Page setup (paper size, orientation) must survive a Calc rewrite.
+#[test]
+fn page_setup_survives_calc_rewrite() {
+    if !require_or_skip() { return; }
+    use suite_common_core::print::{Orientation, PageSize};
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("setup.xlsx");
+    let mut sh = SheetModel::new("Sheet1", 4, 4, 0);
+    sh.data[0][0] = "x".into();
+    sh.page_setup.size = PageSize::Legal;
+    sh.page_setup.orientation = Orientation::Landscape;
+    save_sheets_to_xlsx(path.to_str().unwrap(), &[sh]).unwrap();
+
+    let rewritten = calc_rewrite(&path);
+    let names = vec!["Sheet1".to_string()];
+    let props =
+        tables_core::io::read_sheet_props_from_xlsx(rewritten.to_str().unwrap(), &names);
+    let setup = props["Sheet1"].page_setup.as_ref().expect("page setup lost through Calc");
+    assert_eq!(setup.size, PageSize::Legal, "paper size changed: {setup:?}");
+    assert_eq!(setup.orientation, Orientation::Landscape, "orientation changed: {setup:?}");
+}
