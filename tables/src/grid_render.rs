@@ -307,6 +307,23 @@ pub fn draw_grid(
     );
     cr.fill().unwrap();
 
+    // Print area (#113): a dashed border around the range PDF export
+    // will use, same convention as Excel/Sheets — print_area only ever
+    // affected the export bounds before this, with no on-screen way to
+    // see what was set.
+    if let Some((pr0, pc0, pr1, pc1)) = sheet.print_area {
+        let px0 = px_x(pc0);
+        let px1 = px_x(pc1 + 1);
+        let py0 = tables_core::sheet::row_y(pr0, scroll_y, sheet);
+        let py1 = tables_core::sheet::row_y(pr1, scroll_y, sheet) + sheet.row_height(pr1);
+        cr.set_source_rgb(hdr_text.0, hdr_text.1, hdr_text.2);
+        cr.set_line_width(1.5);
+        cr.set_dash(&[4.0, 3.0], 0.0);
+        cr.rectangle(px0, py0, px1 - px0, py1 - py0);
+        cr.stroke().unwrap();
+        cr.set_dash(&[], 0.0);
+    }
+
     // Formula reference highlighting (#113): outline each cell/range the
     // formula being edited refers to, cycling through a fixed palette in
     // order of appearance — same convention as Excel/Sheets.

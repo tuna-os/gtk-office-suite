@@ -1362,18 +1362,22 @@ impl TablesWindow {
             }
             {
                 let ctl = controller.clone();
+                let da = drawing_area.clone();
                 let act = gtk4::gio::SimpleAction::new("set-print-area", None);
                 act.connect_activate(move |_, _| {
                     let sel = ctl.borrow().state.borrow().sheet().selection_rect();
                     ctl.borrow_mut().set_print_area(sel);
+                    da.queue_draw();
                 });
                 app.add_action(&act);
             }
             {
                 let ctl = controller.clone();
+                let da = drawing_area.clone();
                 let act = gtk4::gio::SimpleAction::new("clear-print-area", None);
                 act.connect_activate(move |_, _| {
                     ctl.borrow_mut().clear_print_area();
+                    da.queue_draw();
                 });
                 app.add_action(&act);
             }
