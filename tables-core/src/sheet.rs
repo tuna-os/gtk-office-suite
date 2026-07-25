@@ -322,6 +322,8 @@ pub struct SheetModel {
     /// `None` means "print the whole used range" (export's existing
     /// default). Purely an export-time concern — doesn't affect editing.
     pub print_area: Option<(usize, usize, usize, usize)>,
+    /// Page orientation/size/margins for PDF export (#113).
+    pub page_setup: suite_common_core::print::PageSetup,
     /// Stable IronCalc worksheet identity. Unlike the sheet's position in
     /// `WorkbookState::sheets`, this never changes when other sheets are
     /// added, deleted, or reordered — undo commands key off this instead of
@@ -350,6 +352,7 @@ impl SheetModel {
             validations: vec![vec![None; cols]; rows],
             hidden_rows: std::collections::HashSet::new(),
             print_area: None,
+            page_setup: suite_common_core::print::PageSetup::default(),
             sheet_id,
         }
     }

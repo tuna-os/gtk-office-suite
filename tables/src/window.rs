@@ -1189,7 +1189,7 @@ impl TablesWindow {
                                 }
                                 st.engine.evaluate();
                                 let parent_win = wr2.borrow().clone();
-                                if let Err(err_msg) = tables_core::export::to_pdf_range(&st.engine, sheet_model.print_area, &path_str) {
+                                if let Err(err_msg) = tables_core::export::to_pdf_with_setup(&st.engine, sheet_model.print_area, &sheet_model.page_setup, &path_str) {
                                     let alert = adw::AlertDialog::builder()
                                         .heading("Export Failed")
                                         .body(&err_msg)
@@ -1328,6 +1328,15 @@ impl TablesWindow {
                 });
                 app.add_action(&act);
             }
+            {
+                let ctl = controller.clone();
+                let wr = win_ref.clone();
+                let act = gtk4::gio::SimpleAction::new("page-setup", None);
+                act.connect_activate(move |_, _| {
+                    show_page_setup_dialog(&ctl, wr.borrow().as_ref());
+                });
+                app.add_action(&act);
+            }
             mk("export-pdf", export_pdf);
         }
 
@@ -1342,6 +1351,7 @@ impl TablesWindow {
             ("app.define-name", "Define Name…"),
             ("app.set-print-area", "Set Print Area"),
             ("app.clear-print-area", "Clear Print Area"),
+            ("app.page-setup", "Page Setup…"),
             ("app.export-pdf", "Export as PDF…"),
             ("app.open-file", "Open Spreadsheet…"),
             ("app.save-file", "Save"),
@@ -1360,6 +1370,7 @@ impl TablesWindow {
             ("funnel-symbolic", "Filter by column", "app.filter-by-column"),
             ("tag-symbolic", "Define name", "app.define-name"),
             ("view-paged-symbolic", "Set print area", "app.set-print-area"),
+            ("printer-symbolic", "Page setup", "app.page-setup"),
             ("document-send-symbolic", "Export PDF", "app.export-pdf"),
         ];
 
@@ -2294,6 +2305,93 @@ fn show_define_name_dialog(
                 Ok(()) => { dlg.close(); }
                 Err(e) => error_label.set_text(&e),
             }
+        });
+    }
+
+    dialog.set_child(Some(&grid));
+    dialog.present(parent);
+}
+
+/// Page setup for PDF export (#113): paper size, orientation, and a
+/// single uniform margin (real apps allow per-side margins; this keeps
+/// the dialog to one control per concern for a first slice).
+fn show_page_setup_dialog(
+    controller: &Rc<RefCell<WorkbookController>>,
+    parent: Option<&adw::ApplicationWindow>,
+) {
+    use suite_common::print::{Orientation, PageSetup, PageSize};
+
+    let current = controller.borrow().state.borrow().sheet().page_setup.clone();
+
+    let dialog = adw::Dialog::builder()
+        .title(suite_common::i18n("Page Setup"))
+        .content_width(320)
+        .build();
+
+    let grid = gtk4::Grid::new();
+    grid.set_row_spacing(8);
+    grid.set_column_spacing(12);
+    grid.set_margin_top(12);
+    grid.set_margin_bottom(12);
+    grid.set_margin_start(12);
+    grid.set_margin_end(12);
+    let lbl = |t: &str| {
+        let l = gtk::Label::new(Some(t));
+        l.set_halign(gtk::Align::Start);
+        l
+    };
+
+    let size_names = ["A4", "A3", "Letter", "Legal"];
+    let size_combo = gtk::DropDown::from_strings(&size_names);
+    let size_index = match current.size {
+        PageSize::A4 => 0,
+        PageSize::A3 => 1,
+        PageSize::Letter => 2,
+        PageSize::Legal => 3,
+        PageSize::Custom { .. } => 0,
+    };
+    size_combo.set_selected(size_index);
+
+    let orientation_combo = gtk::DropDown::from_strings(&["Portrait", "Landscape"]);
+    orientation_combo.set_selected(if current.orientation == Orientation::Landscape { 1 } else { 0 });
+
+    let margin_entry = gtk::Entry::builder().text(current.margin_top_mm.to_string()).build();
+    margin_entry.update_property(&[gtk4::accessible::Property::Label("Margin (mm)")]);
+
+    grid.attach(&lbl("Paper size"), 0, 0, 1, 1);
+    grid.attach(&size_combo, 1, 0, 1, 1);
+    grid.attach(&lbl("Orientation"), 0, 1, 1, 1);
+    grid.attach(&orientation_combo, 1, 1, 1, 1);
+    grid.attach(&lbl("Margin (mm)"), 0, 2, 1, 1);
+    grid.attach(&margin_entry, 1, 2, 1, 1);
+
+    let apply = gtk::Button::with_label(&suite_common::i18n("Apply"));
+    apply.add_css_class("suggested-action");
+    grid.attach(&apply, 1, 3, 1, 1);
+
+    {
+        let ctl = controller.clone();
+        let dlg = dialog.clone();
+        apply.connect_clicked(move |_| {
+            let size = match size_combo.selected() {
+                1 => PageSize::A3,
+                2 => PageSize::Letter,
+                3 => PageSize::Legal,
+                _ => PageSize::A4,
+            };
+            let orientation =
+                if orientation_combo.selected() == 1 { Orientation::Landscape } else { Orientation::Portrait };
+            let margin = margin_entry.text().trim().parse::<f64>().unwrap_or(25.4).max(0.0);
+            ctl.borrow_mut().set_page_setup(PageSetup {
+                size,
+                orientation,
+                margin_top_mm: margin,
+                margin_bottom_mm: margin,
+                margin_left_mm: margin,
+                margin_right_mm: margin,
+                scale: 1.0,
+            });
+            dlg.close();
         });
     }
 

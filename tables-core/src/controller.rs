@@ -298,6 +298,28 @@ impl Command<WorkbookState> for PrintAreaCommand {
     }
 }
 
+struct PageSetupCommand {
+    sheet_id: u32,
+    before: suite_common_core::print::PageSetup,
+    after: suite_common_core::print::PageSetup,
+}
+
+impl Command<WorkbookState> for PageSetupCommand {
+    fn apply(&self, state: &mut WorkbookState) {
+        if let Some(idx) = state.sheet_index_for_id(self.sheet_id) {
+            state.sheets[idx].borrow_mut().page_setup = self.after.clone();
+        }
+    }
+    fn undo(&self, state: &mut WorkbookState) {
+        if let Some(idx) = state.sheet_index_for_id(self.sheet_id) {
+            state.sheets[idx].borrow_mut().page_setup = self.before.clone();
+        }
+    }
+    fn description(&self) -> &str {
+        "Page Setup"
+    }
+}
+
 struct SortCommand {
     sheet_id: u32,
     before_inputs: Vec<Vec<String>>,
@@ -740,6 +762,18 @@ impl WorkbookController {
         drop(state);
         if before.is_some() {
             self.execute(Box::new(PrintAreaCommand { sheet_id, before, after: None }));
+        }
+    }
+
+    /// Replace the active sheet's page setup (orientation/size/margins
+    /// for PDF export), undoable as one step.
+    pub fn set_page_setup(&mut self, setup: suite_common_core::print::PageSetup) {
+        let state = self.state.borrow();
+        let sheet_id = state.sheet().sheet_id;
+        let before = state.sheet().page_setup.clone();
+        drop(state);
+        if before != setup {
+            self.execute(Box::new(PageSetupCommand { sheet_id, before, after: setup }));
         }
     }
 
@@ -1233,6 +1267,31 @@ mod tests {
         controller.set_print_area((0, 0, 2, 1));
         controller.set_print_area((0, 0, 2, 1));
         assert!(controller.undo());
+        assert!(!controller.can_undo());
+    }
+
+    #[test]
+    fn set_page_setup_is_undoable_and_redoable() {
+        use suite_common_core::print::{Orientation, PageSetup};
+        let mut controller = WorkbookController::new(6, 6).unwrap();
+        assert_eq!(controller.state.borrow().sheet().page_setup, PageSetup::default());
+
+        let landscape = PageSetup { orientation: Orientation::Landscape, ..PageSetup::default() };
+        controller.set_page_setup(landscape.clone());
+        assert_eq!(controller.state.borrow().sheet().page_setup, landscape);
+
+        assert!(controller.undo());
+        assert_eq!(controller.state.borrow().sheet().page_setup, PageSetup::default());
+
+        assert!(controller.redo());
+        assert_eq!(controller.state.borrow().sheet().page_setup, landscape);
+    }
+
+    #[test]
+    fn setting_the_same_page_setup_again_does_not_push_a_redundant_undo_step() {
+        use suite_common_core::print::PageSetup;
+        let mut controller = WorkbookController::new(6, 6).unwrap();
+        controller.set_page_setup(PageSetup::default());
         assert!(!controller.can_undo());
     }
 

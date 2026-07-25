@@ -17,6 +17,39 @@ pub fn to_typst_range(ss: &TablesEngine, range: Option<(usize, usize, usize, usi
     }
 }
 
+/// Typst `#set page(...)` directive for a page setup (#113) — width/
+/// height already account for orientation via `page_dimensions_mm`.
+fn typst_page_directive(setup: &suite_common_core::print::PageSetup) -> String {
+    let (w, h) = setup.page_dimensions_mm();
+    format!(
+        "#set page(width: {w}mm, height: {h}mm, margin: (top: {top}mm, bottom: {bottom}mm, left: {left}mm, right: {right}mm))\n",
+        top = setup.margin_top_mm,
+        bottom = setup.margin_bottom_mm,
+        left = setup.margin_left_mm,
+        right = setup.margin_right_mm,
+    )
+}
+
+/// Like [`to_typst_range`], with an explicit page setup (#113) prepended
+/// as a Typst `#set page(...)` directive.
+pub fn to_typst_with_setup(
+    ss: &TablesEngine,
+    range: Option<(usize, usize, usize, usize)>,
+    setup: &suite_common_core::print::PageSetup,
+) -> String {
+    format!("{}{}", typst_page_directive(setup), to_typst_range(ss, range))
+}
+
+/// Like [`to_pdf_range`], with an explicit page setup (#113).
+pub fn to_pdf_with_setup(
+    ss: &TablesEngine,
+    range: Option<(usize, usize, usize, usize)>,
+    setup: &suite_common_core::print::PageSetup,
+    output_path: &str,
+) -> Result<(), String> {
+    suite_export::compile_pdf_to_file(&to_typst_with_setup(ss, range, setup), output_path)
+}
+
 fn typst_table(grid: &[Vec<String>]) -> String {
     let mut out = String::from("#table(\n  columns: 1,\n");
     for row in grid {
@@ -65,5 +98,19 @@ mod tests {
         assert!(!bounded.contains("out"));
         // 2x2 range -> 2 table rows, not the full 4.
         assert_eq!(bounded.matches("],\n").count(), 2);
+    }
+
+    #[test]
+    fn to_typst_with_setup_prepends_a_page_directive() {
+        use suite_common_core::print::{Orientation, PageSetup};
+        let mut e = TablesEngine::new(2, 2).unwrap();
+        e.set_cell_text(0, 0, "hi");
+        let landscape = PageSetup { orientation: Orientation::Landscape, ..PageSetup::default() };
+        let out = to_typst_with_setup(&e, None, &landscape);
+        assert!(out.starts_with("#set page("));
+        // Landscape A4: 297mm wide, 210mm tall (swapped from portrait).
+        assert!(out.contains("width: 297"));
+        assert!(out.contains("height: 210"));
+        assert!(out.contains("#table("), "table body still present after the directive");
     }
 }

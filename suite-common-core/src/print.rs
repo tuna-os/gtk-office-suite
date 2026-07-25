@@ -32,7 +32,7 @@ impl PageSize {
 pub enum Orientation { Portrait, Landscape }
 
 /// Page setup configuration.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct PageSetup {
     pub size: PageSize,
     pub orientation: Orientation,
