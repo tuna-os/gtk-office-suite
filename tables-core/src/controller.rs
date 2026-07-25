@@ -276,6 +276,53 @@ impl Command<WorkbookState> for FilterCommand {
     }
 }
 
+/// Manual row/column hiding (#113), independent of [`FilterCommand`] —
+/// see `SheetModel::hidden_rows_manual`'s doc comment for why they're
+/// kept separate.
+struct HideRowsCommand {
+    sheet_id: u32,
+    before: HashSet<usize>,
+    after: HashSet<usize>,
+}
+
+impl Command<WorkbookState> for HideRowsCommand {
+    fn apply(&self, state: &mut WorkbookState) {
+        if let Some(idx) = state.sheet_index_for_id(self.sheet_id) {
+            state.sheets[idx].borrow_mut().hidden_rows_manual = self.after.clone();
+        }
+    }
+    fn undo(&self, state: &mut WorkbookState) {
+        if let Some(idx) = state.sheet_index_for_id(self.sheet_id) {
+            state.sheets[idx].borrow_mut().hidden_rows_manual = self.before.clone();
+        }
+    }
+    fn description(&self) -> &str {
+        "Hide Rows"
+    }
+}
+
+struct HideColsCommand {
+    sheet_id: u32,
+    before: HashSet<usize>,
+    after: HashSet<usize>,
+}
+
+impl Command<WorkbookState> for HideColsCommand {
+    fn apply(&self, state: &mut WorkbookState) {
+        if let Some(idx) = state.sheet_index_for_id(self.sheet_id) {
+            state.sheets[idx].borrow_mut().hidden_cols = self.after.clone();
+        }
+    }
+    fn undo(&self, state: &mut WorkbookState) {
+        if let Some(idx) = state.sheet_index_for_id(self.sheet_id) {
+            state.sheets[idx].borrow_mut().hidden_cols = self.before.clone();
+        }
+    }
+    fn description(&self) -> &str {
+        "Hide Columns"
+    }
+}
+
 struct PrintAreaCommand {
     sheet_id: u32,
     before: Option<(usize, usize, usize, usize)>,
@@ -747,6 +794,65 @@ impl WorkbookController {
         drop(state);
         if !before.is_empty() {
             self.execute(Box::new(FilterCommand { sheet_id, before, after: HashSet::new() }));
+        }
+    }
+
+    /// Hide every row spanned by the current selection, as one undo step
+    /// (#113). Independent of [`filter_by_value`](Self::filter_by_value)
+    /// — see `SheetModel::hidden_rows_manual`.
+    pub fn hide_selected_rows(&mut self) {
+        let state = self.state.borrow();
+        let sheet_id = state.sheet().sheet_id;
+        let sheet = state.sheet();
+        let before = sheet.hidden_rows_manual.clone();
+        let (r0, _, r1, _) = sheet.selection_rect();
+        let mut after = before.clone();
+        after.extend(r0..=r1);
+        drop(sheet);
+        drop(state);
+        if before != after {
+            self.execute(Box::new(HideRowsCommand { sheet_id, before, after }));
+        }
+    }
+
+    /// Unhide every manually-hidden row on the active sheet, as one undo
+    /// step. No-op if nothing is currently manually hidden.
+    pub fn unhide_all_rows(&mut self) {
+        let state = self.state.borrow();
+        let sheet_id = state.sheet().sheet_id;
+        let before = state.sheet().hidden_rows_manual.clone();
+        drop(state);
+        if !before.is_empty() {
+            self.execute(Box::new(HideRowsCommand { sheet_id, before, after: HashSet::new() }));
+        }
+    }
+
+    /// Hide every column spanned by the current selection, as one undo
+    /// step (#113).
+    pub fn hide_selected_cols(&mut self) {
+        let state = self.state.borrow();
+        let sheet_id = state.sheet().sheet_id;
+        let sheet = state.sheet();
+        let before = sheet.hidden_cols.clone();
+        let (_, c0, _, c1) = sheet.selection_rect();
+        let mut after = before.clone();
+        after.extend(c0..=c1);
+        drop(sheet);
+        drop(state);
+        if before != after {
+            self.execute(Box::new(HideColsCommand { sheet_id, before, after }));
+        }
+    }
+
+    /// Unhide every manually-hidden column on the active sheet, as one
+    /// undo step. No-op if nothing is currently hidden.
+    pub fn unhide_all_cols(&mut self) {
+        let state = self.state.borrow();
+        let sheet_id = state.sheet().sheet_id;
+        let before = state.sheet().hidden_cols.clone();
+        drop(state);
+        if !before.is_empty() {
+            self.execute(Box::new(HideColsCommand { sheet_id, before, after: HashSet::new() }));
         }
     }
 
@@ -1272,6 +1378,78 @@ mod tests {
         assert!(controller.undo());
         assert!(!controller.state.borrow().sheet().is_row_hidden(1));
         assert!(controller.undo());
+        assert!(controller.undo());
+        assert!(!controller.can_undo());
+    }
+
+    #[test]
+    fn hide_selected_rows_hides_the_selection_span() {
+        let mut controller = WorkbookController::new(6, 2).unwrap();
+        controller.state.borrow().sheet_mut().select_cell(1, 0);
+        controller.state.borrow().sheet_mut().extend_selection(3, 0);
+        controller.hide_selected_rows();
+        let state = controller.state.borrow();
+        let sheet = state.sheet();
+        assert!(!sheet.is_row_hidden(0));
+        assert!(sheet.is_row_hidden(1));
+        assert!(sheet.is_row_hidden(2));
+        assert!(sheet.is_row_hidden(3));
+        assert!(!sheet.is_row_hidden(4));
+    }
+
+    #[test]
+    fn unhide_all_rows_reveals_manually_hidden_rows_but_not_filtered_ones() {
+        let mut controller = WorkbookController::new(4, 1).unwrap();
+        controller.edit_cell(0, 0, "apple");
+        controller.edit_cell(1, 0, "banana");
+        controller.edit_cell(2, 0, "apple");
+        controller.filter_by_value(0, "apple"); // hides row 1 (banana)
+        controller.state.borrow().sheet_mut().select_cell(3, 0);
+        controller.hide_selected_rows(); // manually hides row 3 too
+
+        controller.unhide_all_rows();
+        let state = controller.state.borrow();
+        let sheet = state.sheet();
+        assert!(sheet.is_row_hidden(1), "filter-hidden row must survive unhide_all_rows");
+        assert!(!sheet.is_row_hidden(3), "manually-hidden row must be revealed");
+    }
+
+    #[test]
+    fn hide_selected_cols_hides_the_selection_span() {
+        let mut controller = WorkbookController::new(2, 5).unwrap();
+        controller.state.borrow().sheet_mut().select_cell(0, 1);
+        controller.state.borrow().sheet_mut().extend_selection(0, 2);
+        controller.hide_selected_cols();
+        let state = controller.state.borrow();
+        let sheet = state.sheet();
+        assert!(!sheet.is_col_hidden(0));
+        assert!(sheet.is_col_hidden(1));
+        assert!(sheet.is_col_hidden(2));
+        assert!(!sheet.is_col_hidden(3));
+    }
+
+    #[test]
+    fn hide_and_unhide_cols_are_undoable_and_redoable() {
+        let mut controller = WorkbookController::new(2, 3).unwrap();
+        controller.state.borrow().sheet_mut().select_cell(0, 1);
+        controller.hide_selected_cols();
+        assert!(controller.state.borrow().sheet().is_col_hidden(1));
+
+        assert!(controller.undo());
+        assert!(!controller.state.borrow().sheet().is_col_hidden(1));
+
+        assert!(controller.redo());
+        assert!(controller.state.borrow().sheet().is_col_hidden(1));
+    }
+
+    #[test]
+    fn unhide_all_cols_on_an_unhidden_sheet_is_a_no_op() {
+        let mut controller = WorkbookController::new(2, 2).unwrap();
+        controller.edit_cell(0, 0, "x");
+        controller.unhide_all_cols();
+
+        // Exactly 1 undo step (the edit): a no-op unhide must not push
+        // its own step.
         assert!(controller.undo());
         assert!(!controller.can_undo());
     }

@@ -430,6 +430,53 @@ class Tables113FeatureVisuals(BaseGUITestCase):
         self.take_screenshot("filter_cleared")
         self.assertIsNone(self.process.poll(), "tables crashed during filter visual check")
 
+    # ── row/column hiding ────────────────────────────────────────
+    def test_row_and_column_hiding(self):
+        import subprocess
+        from dogtail import rawinput
+
+        aid = "org.tunaos.tables-rust"
+        self._new_document()
+        self._put("A1", "10")
+        self._put("A2", "20")
+        self._put("A3", "30")
+        self._put("B1", "x")
+        self._put("C1", "y")
+
+        # Select row 2 (A2) and hide it.
+        rawinput.keyCombo("<Control>g")
+        time.sleep(0.2)
+        rawinput.typeText("A2")
+        rawinput.keyCombo("Return")
+        time.sleep(0.3)
+        subprocess.run(["gapplication", "action", aid, "hide-selected-rows"])
+        time.sleep(0.5)
+        self.take_screenshot("row_hidden")
+        snap = self._snapshot()
+        self.assertIn(1, snap["sheet"]["hidden_rows"], f"row 2 should be hidden: {snap}")
+
+        # Select column B and hide it too.
+        rawinput.keyCombo("<Control>g")
+        time.sleep(0.2)
+        rawinput.typeText("B1")
+        rawinput.keyCombo("Return")
+        time.sleep(0.3)
+        subprocess.run(["gapplication", "action", aid, "hide-selected-cols"])
+        time.sleep(0.5)
+        self.take_screenshot("row_and_col_hidden")
+        snap = self._snapshot()
+        self.assertIn(1, snap["sheet"]["hidden_rows"], f"row 2 should still be hidden: {snap}")
+        self.assertIn(1, snap["sheet"]["hidden_cols"], f"col B should be hidden: {snap}")
+
+        subprocess.run(["gapplication", "action", aid, "unhide-all-rows"])
+        subprocess.run(["gapplication", "action", aid, "unhide-all-cols"])
+        time.sleep(0.5)
+        self.take_screenshot("row_and_col_unhidden")
+        snap = self._snapshot()
+        self.assertEqual(snap["sheet"]["hidden_rows"], [], f"rows should be unhidden: {snap}")
+        self.assertEqual(snap["sheet"]["hidden_cols"], [], f"cols should be unhidden: {snap}")
+        self.assertIsNone(self.process.poll(), "tables crashed during row/column hiding visual check")
+
     # ── sort indicator ───────────────────────────────────────────
     def test_sort_indicator(self):
         from dogtail import rawinput

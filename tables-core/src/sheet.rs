@@ -186,12 +186,46 @@ pub struct SelectionStats {
     pub avg: f64,
 }
 
+/// Screen x-coordinate of the left edge of `col`, in widget-local
+/// (scroll-adjusted) space — column analog of [[row_y]]: sums each
+/// preceding visible column's own width, hidden columns collapsing to
+/// zero. Shared by the renderer and hit-testers.
+pub fn col_x(col: usize, scroll_x: f64, sheet: &SheetModel) -> f64 {
+    let mut x = ROW_HEADER_WIDTH - scroll_x;
+    for c in 0..col {
+        if !sheet.is_col_hidden(c) {
+            x += sheet.col_width(c);
+        }
+    }
+    x
+}
+
+/// Column analog of [[row_at_content_offset]].
+fn col_at_content_offset(offset: f64, sheet: &SheetModel) -> Option<usize> {
+    let mut accum = 0.0;
+    for c in 0..sheet.cols {
+        if sheet.is_col_hidden(c) {
+            continue;
+        }
+        let w = sheet.col_width(c);
+        if offset < accum + w {
+            return Some(c);
+        }
+        accum += w;
+    }
+    None
+}
+
 pub fn hit_col_divider(x: f64, y: f64, scroll_x: f64, sheet: &SheetModel) -> Option<usize> {
     if !(0.0..=COL_HEADER_HEIGHT).contains(&y) { return None; }
     let cx = x - ROW_HEADER_WIDTH + scroll_x;
     if cx < 0.0 { return None; }
     let mut accum = 0.0;
-    for c in 0..sheet.cols { accum += sheet.col_width(c); if (cx - accum).abs() < 5.0 { return Some(c); } }
+    for c in 0..sheet.cols {
+        if sheet.is_col_hidden(c) { continue; }
+        accum += sheet.col_width(c);
+        if (cx - accum).abs() < 5.0 { return Some(c); }
+    }
     None
 }
 
@@ -228,7 +262,7 @@ pub fn fill_handle_center(
     scroll_y: f64,
     sheet: &SheetModel,
 ) -> (f64, f64) {
-    let x = ROW_HEADER_WIDTH - scroll_x + (0..=right).map(|c| sheet.col_width(c)).sum::<f64>();
+    let x = col_x(right + 1, scroll_x, sheet);
     let y = row_y(bottom, scroll_y, sheet) + sheet.row_height(bottom);
     (x, y)
 }
@@ -282,12 +316,11 @@ fn row_at_content_offset(offset: f64, sheet: &SheetModel) -> Option<usize> {
 }
 
 pub fn xy_to_cell(x: f64, y: f64, scroll_x: f64, sheet: &SheetModel) -> Option<(usize, usize)> {
-    let col_x = x - ROW_HEADER_WIDTH + scroll_x;
-    if col_x < 0.0 || y < COL_HEADER_HEIGHT { return None; }
+    let content_x = x - ROW_HEADER_WIDTH + scroll_x;
+    if content_x < 0.0 || y < COL_HEADER_HEIGHT { return None; }
     let row = row_at_content_offset(y - COL_HEADER_HEIGHT, sheet)?;
-    let mut accum = 0.0;
-    for c in 0..sheet.cols { accum += sheet.col_width(c); if col_x < accum { return Some((c, row)); } }
-    None
+    let col = col_at_content_offset(content_x, sheet)?;
+    Some((col, row))
 }
 
 /// A cell-value conditional-formatting rule (ADR 0003 §4): when a
@@ -384,6 +417,14 @@ pub struct SheetModel {
     /// are untouched; rendering and hit-testing are expected to skip
     /// indices in this set.
     pub hidden_rows: std::collections::HashSet<usize>,
+    /// Rows/columns manually hidden by the user (#113 "row/column
+    /// hiding"), independent of `hidden_rows`'s filter — clearing a
+    /// filter must not reveal a row the user deliberately hid, and vice
+    /// versa. `is_row_hidden`/`is_col_hidden` fold both concepts together
+    /// for rendering/hit-testing, which don't need to distinguish why a
+    /// row or column is hidden, only that it is.
+    pub hidden_rows_manual: std::collections::HashSet<usize>,
+    pub hidden_cols: std::collections::HashSet<usize>,
     /// Print area (#113): (top, left, bottom, right), 0-based inclusive.
     /// `None` means "print the whole used range" (export's existing
     /// default). Purely an export-time concern — doesn't affect editing.
@@ -417,15 +458,23 @@ impl SheetModel {
             cond_rules: Vec::new(),
             validations: vec![vec![None; cols]; rows],
             hidden_rows: std::collections::HashSet::new(),
+            hidden_rows_manual: std::collections::HashSet::new(),
+            hidden_cols: std::collections::HashSet::new(),
             print_area: None,
             page_setup: suite_common_core::print::PageSetup::default(),
             sheet_id,
         }
     }
 
-    /// Whether `row` should be skipped by rendering/hit-testing.
+    /// Whether `row` should be skipped by rendering/hit-testing — hidden
+    /// either by the active filter or by a manual hide.
     pub fn is_row_hidden(&self, row: usize) -> bool {
-        self.hidden_rows.contains(&row)
+        self.hidden_rows.contains(&row) || self.hidden_rows_manual.contains(&row)
+    }
+
+    /// Whether `col` should be skipped by rendering/hit-testing.
+    pub fn is_col_hidden(&self, col: usize) -> bool {
+        self.hidden_cols.contains(&col)
     }
 
     /// Collapse the selection to a single cell.
@@ -662,6 +711,57 @@ mod selection_tests {
         s.hidden_rows.insert(1);
         let (_, y_after) = fill_handle_center(2, 2, 0.0, 0.0, &s);
         assert_eq!(y_after, y_before - ROW_HEIGHT);
+    }
+
+    #[test]
+    fn col_x_collapses_hidden_cols_to_zero_width() {
+        let mut s = sheet();
+        let x_before = col_x(3, 0.0, &s);
+        s.hidden_cols.insert(1);
+        let x_after = col_x(3, 0.0, &s);
+        assert_eq!(x_after, x_before - COL_WIDTH);
+    }
+
+    #[test]
+    fn xy_to_cell_skips_hidden_cols() {
+        let mut s = sheet();
+        s.hidden_cols.insert(1);
+        // Screen slot 1 (second visible col) is now data col 2, not 1.
+        let x = ROW_HEADER_WIDTH + COL_WIDTH * 1.5;
+        let y = COL_HEADER_HEIGHT + 5.0;
+        assert_eq!(xy_to_cell(x, y, 0.0, &s), Some((2, 0)));
+    }
+
+    #[test]
+    fn fill_handle_center_accounts_for_hidden_cols_to_the_left() {
+        let mut s = sheet();
+        let (x_before, _) = fill_handle_center(2, 2, 0.0, 0.0, &s);
+        s.hidden_cols.insert(1);
+        let (x_after, _) = fill_handle_center(2, 2, 0.0, 0.0, &s);
+        assert_eq!(x_after, x_before - COL_WIDTH);
+    }
+
+    #[test]
+    fn is_row_hidden_is_true_for_either_filter_or_manual_hide() {
+        let mut s = sheet();
+        assert!(!s.is_row_hidden(1));
+        s.hidden_rows_manual.insert(1);
+        assert!(s.is_row_hidden(1));
+        s.hidden_rows_manual.remove(&1);
+        s.hidden_rows.insert(1);
+        assert!(s.is_row_hidden(1));
+    }
+
+    #[test]
+    fn manually_hiding_a_row_does_not_affect_the_filter_set_and_vice_versa() {
+        // Regression guard: clearing a filter must not reveal a row the
+        // user deliberately hid, and hiding a row manually must not be
+        // undone by clearing an unrelated filter.
+        let mut s = sheet();
+        s.hidden_rows_manual.insert(1);
+        s.hidden_rows.insert(2);
+        assert!(!s.hidden_rows.contains(&1));
+        assert!(!s.hidden_rows_manual.contains(&2));
     }
 
     #[test]

@@ -24,8 +24,13 @@ pub struct CellSnapshot {
 pub struct SheetSnapshot {
     pub name: String,
     pub cells: Vec<CellSnapshot>,
-    /// Rows currently hidden by a column filter (#113), sorted ascending.
+    /// Rows currently hidden — by a column filter or a manual hide
+    /// (#113); tests generally care whether a row is hidden, not why,
+    /// so this folds both together the same way `SheetModel::is_row_hidden`
+    /// does. Sorted ascending.
     pub hidden_rows: Vec<usize>,
+    /// Columns currently manually hidden (#113), sorted ascending.
+    pub hidden_cols: Vec<usize>,
     /// Normalized selection rect (top, left, bottom, right), 0-based
     /// inclusive — same shape as `SheetModel::selection_rect`. Lets tests
     /// assert on a jump/selection outcome (e.g. a named-range jump)
@@ -68,8 +73,12 @@ pub fn snapshot(
             cells.push(CellSnapshot { row, col, value, formula });
         }
     }
-    let mut hidden_rows: Vec<usize> = state.sheet().hidden_rows.iter().copied().collect();
+    let mut hidden_rows: Vec<usize> = (0..state.sheet().rows)
+        .filter(|&r| state.sheet().is_row_hidden(r))
+        .collect();
     hidden_rows.sort_unstable();
+    let mut hidden_cols: Vec<usize> = state.sheet().hidden_cols.iter().copied().collect();
+    hidden_cols.sort_unstable();
     let selection = state.sheet().selection_rect();
     let sorted_col = state
         .sheet()
@@ -81,6 +90,7 @@ pub fn snapshot(
         name: sheet_names[active_sheet_index].clone(),
         cells,
         hidden_rows,
+        hidden_cols,
         selection,
         sorted_col,
     };
@@ -145,18 +155,26 @@ impl WorkbookSnapshot {
             .map(|r| r.to_string())
             .collect::<Vec<_>>()
             .join(",");
+        let hidden_cols = self
+            .sheet
+            .hidden_cols
+            .iter()
+            .map(|c| c.to_string())
+            .collect::<Vec<_>>()
+            .join(",");
         let (sr0, sc0, sr1, sc1) = self.sheet.selection;
         let sorted_col = match self.sheet.sorted_col {
             Some((c, asc)) => format!("{{\"col\":{c},\"ascending\":{asc}}}"),
             None => "null".to_string(),
         };
         format!(
-            "{{\"active_sheet_index\":{},\"sheet_names\":[{}],\"sheet\":{{\"name\":{},\"cells\":[{}],\"hidden_rows\":[{}],\"selection\":[{},{},{},{}],\"sorted_col\":{}}}}}",
+            "{{\"active_sheet_index\":{},\"sheet_names\":[{}],\"sheet\":{{\"name\":{},\"cells\":[{}],\"hidden_rows\":[{}],\"hidden_cols\":[{}],\"selection\":[{},{},{},{}],\"sorted_col\":{}}}}}",
             self.active_sheet_index,
             sheet_names,
             json_str(&self.sheet.name),
             cells,
             hidden_rows,
+            hidden_cols,
             sr0, sc0, sr1, sc1,
             sorted_col,
         )
@@ -202,6 +220,20 @@ mod tests {
         let snap = snapshot(&c, 0..3, 0..2);
         assert_eq!(snap.sheet.hidden_rows, vec![1]);
         assert!(snap.to_json().contains("\"hidden_rows\":[1]"));
+    }
+
+    #[test]
+    fn snapshot_reports_manually_hidden_rows_and_cols() {
+        let mut c = WorkbookController::new(3, 3).unwrap();
+        c.state.borrow().sheet_mut().select_cell(1, 1);
+        c.hide_selected_rows();
+        c.hide_selected_cols();
+        let snap = snapshot(&c, 0..3, 0..3);
+        assert_eq!(snap.sheet.hidden_rows, vec![1]);
+        assert_eq!(snap.sheet.hidden_cols, vec![1]);
+        let json = snap.to_json();
+        assert!(json.contains("\"hidden_rows\":[1]"));
+        assert!(json.contains("\"hidden_cols\":[1]"));
     }
 
     #[test]

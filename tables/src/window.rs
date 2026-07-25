@@ -1383,6 +1383,46 @@ impl TablesWindow {
             }
             {
                 let ctl = controller.clone();
+                let da = drawing_area.clone();
+                let act = gtk4::gio::SimpleAction::new("hide-selected-rows", None);
+                act.connect_activate(move |_, _| {
+                    ctl.borrow_mut().hide_selected_rows();
+                    da.queue_draw();
+                });
+                app.add_action(&act);
+            }
+            {
+                let ctl = controller.clone();
+                let da = drawing_area.clone();
+                let act = gtk4::gio::SimpleAction::new("unhide-all-rows", None);
+                act.connect_activate(move |_, _| {
+                    ctl.borrow_mut().unhide_all_rows();
+                    da.queue_draw();
+                });
+                app.add_action(&act);
+            }
+            {
+                let ctl = controller.clone();
+                let da = drawing_area.clone();
+                let act = gtk4::gio::SimpleAction::new("hide-selected-cols", None);
+                act.connect_activate(move |_, _| {
+                    ctl.borrow_mut().hide_selected_cols();
+                    da.queue_draw();
+                });
+                app.add_action(&act);
+            }
+            {
+                let ctl = controller.clone();
+                let da = drawing_area.clone();
+                let act = gtk4::gio::SimpleAction::new("unhide-all-cols", None);
+                act.connect_activate(move |_, _| {
+                    ctl.borrow_mut().unhide_all_cols();
+                    da.queue_draw();
+                });
+                app.add_action(&act);
+            }
+            {
+                let ctl = controller.clone();
                 let wr = win_ref.clone();
                 let act = gtk4::gio::SimpleAction::new("page-setup", None);
                 act.connect_activate(move |_, _| {
@@ -1404,6 +1444,10 @@ impl TablesWindow {
             ("app.define-name", "Define Name…"),
             ("app.set-print-area", "Set Print Area"),
             ("app.clear-print-area", "Clear Print Area"),
+            ("app.hide-selected-rows", "Hide Selected Rows"),
+            ("app.unhide-all-rows", "Unhide All Rows"),
+            ("app.hide-selected-cols", "Hide Selected Columns"),
+            ("app.unhide-all-cols", "Unhide All Columns"),
             ("app.page-setup", "Page Setup…"),
             ("app.export-pdf", "Export as PDF…"),
             ("app.open-file", "Open Spreadsheet…"),
@@ -1423,6 +1467,8 @@ impl TablesWindow {
             ("funnel-symbolic", "Filter by column", "app.filter-by-column"),
             ("tag-symbolic", "Define name", "app.define-name"),
             ("view-paged-symbolic", "Set print area", "app.set-print-area"),
+            ("view-conceal-symbolic", "Hide selected rows", "app.hide-selected-rows"),
+            ("view-conceal-symbolic", "Hide selected columns", "app.hide-selected-cols"),
             ("printer-symbolic", "Page setup", "app.page-setup"),
             ("document-send-symbolic", "Export PDF", "app.export-pdf"),
         ];

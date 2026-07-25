@@ -24,7 +24,6 @@ pub fn auto_fit_column(cr: &Context, sheet: &mut SheetModel, col: usize, _scroll
     sheet.set_col_width(col, max_w.clamp(30.0, 500.0));
 }
 
-const COL_WIDTH: f64 = 90.0;
 const ROW_HEADER_WIDTH: f64 = 50.0;
 const COL_HEADER_HEIGHT: f64 = 26.0;
 const HEADER_BG: (f64, f64, f64) = (0.95, 0.95, 0.95);
@@ -130,8 +129,6 @@ pub fn draw_grid(
     cr.rectangle(0.0, 0.0, width, height);
     cr.fill().unwrap();
 
-    let start_col = (scroll_x / COL_WIDTH).max(0.0) as usize;
-
     // Corner cell — same shade as the headers, not the canvas grey.
     cr.set_source_rgb(hdr_bg.0, hdr_bg.1, hdr_bg.2);
     cr.rectangle(0.0, 0.0, ROW_HEADER_WIDTH, COL_HEADER_HEIGHT);
@@ -144,10 +141,14 @@ pub fn draw_grid(
     cr.set_source_rgb(hdr_bg.0, hdr_bg.1, hdr_bg.2);
     cr.rectangle(ROW_HEADER_WIDTH, 0.0, width, COL_HEADER_HEIGHT);
     cr.fill().unwrap();
+    // Hidden columns (#113) collapse to zero width, so — like the hidden
+    // rows below — this walks every column rather than a fixed-step
+    // range starting at a scroll-derived index.
     let mut cx = ROW_HEADER_WIDTH - scroll_x;
-    for c in start_col..sheet.cols {
+    for c in 0..sheet.cols {
+        if sheet.is_col_hidden(c) { continue; }
         let cw = sheet.col_width(c);
-        if cx + cw < ROW_HEADER_WIDTH { cx += cw - scroll_x; continue; }
+        if cx + cw < ROW_HEADER_WIDTH { cx += cw; continue; }
         if cx > width { break; }
         let label = col_label(c);
         cr.set_source_rgb(hdr_text.0, hdr_text.1, hdr_text.2);
@@ -205,7 +206,8 @@ pub fn draw_grid(
         if cy + rh < COL_HEADER_HEIGHT { continue; }
         if cy > height { break; }
         cx = ROW_HEADER_WIDTH - scroll_x;
-        for c in start_col..sheet.cols {
+        for c in 0..sheet.cols {
+            if sheet.is_col_hidden(c) { continue; }
             let cw = sheet.col_width(c);
             if cx + cw < ROW_HEADER_WIDTH { cx += cw; continue; }
             if cx > width { break; }
@@ -280,9 +282,7 @@ pub fn draw_grid(
 
     // Selection range outline (2px accent around the whole rectangle).
     let (sr0, sc0, sr1, sc1) = sheet.selection_rect();
-    let px_x = |col: usize| -> f64 {
-        ROW_HEADER_WIDTH - scroll_x + (0..col).map(|c| sheet.col_width(c)).sum::<f64>()
-    };
+    let px_x = |col: usize| -> f64 { tables_core::sheet::col_x(col, scroll_x, sheet) };
     let x0 = px_x(sc0);
     let x1 = px_x(sc1 + 1);
     let y0 = tables_core::sheet::row_y(sr0, scroll_y, sheet);
