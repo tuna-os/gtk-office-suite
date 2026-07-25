@@ -363,6 +363,43 @@ class Tables113FeatureVisuals(BaseGUITestCase):
         subprocess.run(["gapplication", "action", "org.tunaos.tables-rust", "new-document"])
         time.sleep(1.5)
 
+    def _screenshot_when_changed(self, suffix, baseline_path, max_wait=6.0, poll_interval=0.4):
+        """take_screenshot(), but poll until the pixels differ from
+        `baseline_path` instead of trusting a fixed sleep.
+
+        Under Xvfb (no DRI3/GPU — confirmed via a standalone repro:
+        libEGL "Could not get DRI3 device"), GTK's frame clock falls
+        back to a degraded repaint cadence: a queue_draw() after a
+        click can leave the on-screen pixels stale for 1.5-3+ seconds
+        even though the underlying model state (verified via the
+        #104 snapshot mechanism) updates immediately. A fixed
+        `time.sleep(1.5)` before screenshotting is exactly long enough
+        to *sometimes* miss this and capture the stale frame — which
+        is what happened here: test_sort_indicator's data assertions
+        passed while the saved PNG still showed pre-sort data. This
+        is believed to be specific to the headless/software-rendered
+        test environment, not real hardware. Two consecutive-equal
+        screenshots is NOT a valid stability check on its own here —
+        the stale frame is itself stable for over a second, so a
+        naive "wait until unchanged" would falsely declare done while
+        still showing the old frame. Comparing to a known-good
+        pre-action baseline and waiting for a genuine change avoids
+        that trap.
+        """
+        import hashlib
+
+        def file_hash(path):
+            with open(path, "rb") as f:
+                return hashlib.sha256(f.read()).hexdigest()
+
+        baseline_hash = file_hash(baseline_path)
+        deadline = time.time() + max_wait
+        path = self.take_screenshot(suffix)
+        while file_hash(path) == baseline_hash and time.time() < deadline:
+            time.sleep(poll_interval)
+            path = self.take_screenshot(suffix)
+        return path
+
     # ── row filtering ─────────────────────────────────────────────
     def test_row_filtering(self):
         import subprocess
@@ -411,9 +448,12 @@ class Tables113FeatureVisuals(BaseGUITestCase):
         corner_y = self.CANVAS_Y + self.COL_HEADER_HEIGHT / 2
         x, y = self._col_header_center(0)
         rawinput.click(int(corner_x), int(corner_y))
+        baseline = self.take_screenshot("sort_baseline")
         rawinput.click(int(x), int(y))
-        time.sleep(0.5)
-        self.take_screenshot("sort_ascending")
+        # See _screenshot_when_changed: under Xvfb, the on-screen pixels
+        # can lag the actual (already-correct) sorted state by several
+        # seconds, so poll for a real change instead of a fixed sleep.
+        ascending_shot = self._screenshot_when_changed("sort_ascending", baseline)
         snap = self._snapshot()
         self.assertEqual(snap["sheet"]["sorted_col"], {"col": 0, "ascending": True}, f"{snap}")
         cells = {(c["row"], c["col"]): c["value"] for c in snap["sheet"]["cells"]}
@@ -422,8 +462,7 @@ class Tables113FeatureVisuals(BaseGUITestCase):
         self.assertEqual([cells.get((r, 0)) for r in range(3)], ["a", "b", "c"], f"data not reordered: {snap}")
         rawinput.click(int(corner_x), int(corner_y))
         rawinput.click(int(x), int(y))
-        time.sleep(0.5)
-        self.take_screenshot("sort_descending")
+        self._screenshot_when_changed("sort_descending", ascending_shot)
         snap = self._snapshot()
         self.assertEqual(snap["sheet"]["sorted_col"], {"col": 0, "ascending": False}, f"{snap}")
         cells = {(c["row"], c["col"]): c["value"] for c in snap["sheet"]["cells"]}
