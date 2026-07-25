@@ -804,23 +804,41 @@ impl WorkbookController {
                     .collect()
             })
             .collect();
+        // Numeric compare when both cells parse as numbers; otherwise a
+        // case-insensitive string compare. The previous version always
+        // parsed-with-fallback-to-0.0, so any non-numeric column (the
+        // common case — sorting names, categories, anything text) had
+        // every row compare equal and silently never actually reorder,
+        // even though sorted_col (and the header arrow) still updated
+        // as if it had. Caught via #113's visual-validation screenshots
+        // (a text-column sort test) showing unsorted data despite a
+        // passing sorted_col assertion — a real bug, not a rendering gap.
+        //
+        // Blank cells always sort last regardless of direction (Excel/
+        // Sheets convention) — without this, sorting a lightly-used
+        // sheet pushes real data to the bottom on ascending sort, since
+        // "" < any non-empty string. Caught the same way: a GUI test on
+        // the app's real 100-row default sheet (only 3 rows filled)
+        // found the 3 values sorted correctly among themselves but
+        // shoved to rows 97-99 by the 97 blank rows sorting ahead of
+        // them.
         let mut order: Vec<usize> = (0..before_sheet.rows).collect();
         order.sort_by(|&left, &right| {
-            let left = before_sheet.data[left][col]
-                .parse::<f64>()
-                .ok()
-                .unwrap_or(0.0);
-            let right = before_sheet.data[right][col]
-                .parse::<f64>()
-                .ok()
-                .unwrap_or(0.0);
-            if new_direction == Ascending {
-                left.partial_cmp(&right)
-                    .unwrap_or(std::cmp::Ordering::Equal)
-            } else {
-                right
-                    .partial_cmp(&left)
-                    .unwrap_or(std::cmp::Ordering::Equal)
+            let left_text = &before_sheet.data[left][col];
+            let right_text = &before_sheet.data[right][col];
+            let left_blank = left_text.trim().is_empty();
+            let right_blank = right_text.trim().is_empty();
+            match (left_blank, right_blank) {
+                (true, true) => std::cmp::Ordering::Equal,
+                (true, false) => std::cmp::Ordering::Greater,
+                (false, true) => std::cmp::Ordering::Less,
+                (false, false) => {
+                    let cmp = match (left_text.parse::<f64>(), right_text.parse::<f64>()) {
+                        (Ok(l), Ok(r)) => l.partial_cmp(&r).unwrap_or(std::cmp::Ordering::Equal),
+                        _ => left_text.to_lowercase().cmp(&right_text.to_lowercase()),
+                    };
+                    if new_direction == Ascending { cmp } else { cmp.reverse() }
+                }
             }
         });
         drop(state);
@@ -1399,6 +1417,78 @@ mod tests {
             state.sheet().formats[1][0].kind,
             NumberFormatKind::Percent(1)
         );
+    }
+
+    #[test]
+    fn sort_reorders_a_text_column_alphabetically() {
+        // Regression test: the sort compare previously parsed every cell
+        // as f64 with a 0.0 fallback, so a text column's rows all
+        // compared equal and never actually moved — sorted_col still
+        // updated, giving the false impression sorting worked.
+        let mut controller = WorkbookController::new(3, 1).unwrap();
+        for (row, value) in ["banana", "apple", "cherry"].into_iter().enumerate() {
+            controller.edit_cell(row, 0, value);
+        }
+        controller.toggle_sort(0);
+        let state = controller.state.borrow();
+        assert_eq!(state.sheet().cell(0, 0), "apple");
+        assert_eq!(state.sheet().cell(1, 0), "banana");
+        assert_eq!(state.sheet().cell(2, 0), "cherry");
+    }
+
+    #[test]
+    fn sort_descending_reorders_a_text_column() {
+        let mut controller = WorkbookController::new(3, 1).unwrap();
+        for (row, value) in ["banana", "apple", "cherry"].into_iter().enumerate() {
+            controller.edit_cell(row, 0, value);
+        }
+        controller.toggle_sort(0); // ascending
+        controller.toggle_sort(0); // descending
+        let state = controller.state.borrow();
+        assert_eq!(state.sheet().cell(0, 0), "cherry");
+        assert_eq!(state.sheet().cell(1, 0), "banana");
+        assert_eq!(state.sheet().cell(2, 0), "apple");
+    }
+
+    #[test]
+    fn sort_text_column_is_case_insensitive() {
+        let mut controller = WorkbookController::new(3, 1).unwrap();
+        for (row, value) in ["Banana", "apple", "Cherry"].into_iter().enumerate() {
+            controller.edit_cell(row, 0, value);
+        }
+        controller.toggle_sort(0);
+        let state = controller.state.borrow();
+        assert_eq!(state.sheet().cell(0, 0), "apple");
+        assert_eq!(state.sheet().cell(1, 0), "Banana");
+        assert_eq!(state.sheet().cell(2, 0), "Cherry");
+    }
+
+    #[test]
+    fn sort_pushes_blank_rows_to_the_end_regardless_of_direction() {
+        // On a sheet that's mostly blank (the app's real default is 100
+        // rows; a small fixture here stands in), blanks must never
+        // outrank real data — ascending sort would otherwise push every
+        // filled row to the bottom, below all the blanks.
+        let mut controller = WorkbookController::new(5, 1).unwrap();
+        controller.edit_cell(0, 0, "banana");
+        controller.edit_cell(2, 0, "apple");
+        // Rows 1, 3, 4 stay blank.
+        controller.toggle_sort(0);
+        let state = controller.state.borrow();
+        assert_eq!(state.sheet().cell(0, 0), "apple");
+        assert_eq!(state.sheet().cell(1, 0), "banana");
+        assert_eq!(state.sheet().cell(2, 0), "");
+        assert_eq!(state.sheet().cell(3, 0), "");
+        assert_eq!(state.sheet().cell(4, 0), "");
+        drop(state);
+
+        controller.toggle_sort(0); // descending
+        let state = controller.state.borrow();
+        assert_eq!(state.sheet().cell(0, 0), "banana");
+        assert_eq!(state.sheet().cell(1, 0), "apple");
+        assert_eq!(state.sheet().cell(2, 0), "");
+        assert_eq!(state.sheet().cell(3, 0), "");
+        assert_eq!(state.sheet().cell(4, 0), "");
     }
 
     #[test]

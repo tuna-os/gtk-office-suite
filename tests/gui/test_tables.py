@@ -286,3 +286,244 @@ class TablesTest(BaseGUITestCase):
             "Cell A4 shows the sum result '600' from =SUM(A1:A3)",
             "Sheet tabs show 'Sheet1' and 'Sheet2'",
         ], screenshot_path=self.last_screenshot)
+
+
+class Tables113FeatureVisuals(BaseGUITestCase):
+    """Screenshot-only visual record of every #113 feature shipped in the
+    2026-07-24/25 session (row filtering, sort indicator, row resize,
+    named ranges, print area, page setup, formula reference
+    highlighting). No assertVision calls (no VLM round trip needed) —
+    each test just drives the feature via the same rawinput/AT-SPI
+    mechanisms test_smoke.py's gating tests already prove reliable, and
+    calls take_screenshot() so a human (or Claude) can eyeball the
+    result. Re-run any single test here (`run_gui_tests.sh test_tables.py
+    -k <name>`) any time a #113-area change needs a quick visual sanity
+    check instead of re-deriving one from scratch.
+
+    Canvas layout constants match TablesFillHandleSmoke/
+    TablesSortIndicatorSmoke in test_smoke.py — empirically measured
+    against tables-core::sheet's ROW_HEADER_WIDTH/COL_HEADER_HEIGHT/
+    ROW_HEIGHT/COL_WIDTH under matchbox's fullscreen layout, not
+    AT-SPI-reported position (this grid's virtual-cell nodes have their
+    own known position bug, #132/#137)."""
+
+    app_name = "tables"
+
+    CANVAS_X = 0
+    CANVAS_Y = 128
+    ROW_HEADER_WIDTH = 50
+    COL_HEADER_HEIGHT = 26
+    ROW_HEIGHT = 28
+    COL_WIDTH = 90
+
+    def setUp(self):
+        # Autosave isolation matters here specifically: without it, a
+        # leftover crash-recovery snapshot from an unclean previous kill
+        # (e.g. a manually pkill -9'd dev binary) gets auto-restored on
+        # launch instead of a blank document, silently contaminating
+        # every test in this class with stale cell data.
+        self.isolate_autosave_state()
+        self._snapshot_path = self.isolate_snapshot(prefix="tables-113-visual-")
+        super().setUp()
+
+    # ── shared helpers ────────────────────────────────────────────
+    def _col_header_center(self, col):
+        x = self.CANVAS_X + self.ROW_HEADER_WIDTH + col * self.COL_WIDTH + self.COL_WIDTH / 2
+        y = self.CANVAS_Y + self.COL_HEADER_HEIGHT / 2
+        return x, y
+
+    def _row_divider_y(self, row):
+        """Y of the divider *below* `row` (0-indexed), for drag-resize."""
+        return self.CANVAS_Y + self.COL_HEADER_HEIGHT + (row + 1) * self.ROW_HEIGHT
+
+    def _snapshot(self):
+        import json
+        import subprocess
+
+        subprocess.run(["gapplication", "action", "org.tunaos.tables-rust", "test-snapshot"])
+        time.sleep(0.5)
+        with open(self._snapshot_path) as f:
+            return json.load(f)
+
+    def _put(self, ref, value):
+        from dogtail import rawinput
+
+        rawinput.keyCombo("<Control>g")
+        time.sleep(0.2)
+        rawinput.typeText(ref)
+        rawinput.keyCombo("Return")
+        time.sleep(0.3)
+        rawinput.typeText(value)
+        rawinput.keyCombo("Return")
+        time.sleep(0.3)
+
+    def _new_document(self):
+        import subprocess
+
+        subprocess.run(["gapplication", "action", "org.tunaos.tables-rust", "new-document"])
+        time.sleep(1.5)
+
+    # ── row filtering ─────────────────────────────────────────────
+    def test_row_filtering(self):
+        import subprocess
+
+        self._new_document()
+        self._put("A1", "apple")
+        self._put("A2", "banana")
+        self._put("A3", "apple")
+        self._put("A4", "cherry")
+        subprocess.run(["gapplication", "action", "org.tunaos.tables-rust", "filter-by-column"])
+        time.sleep(0.8)
+        from dogtail import rawinput, tree
+        rawinput.typeText("apple")
+        self.take_screenshot("filter_dialog")
+        # The dialog's entry has no connect_activate handler wired — only
+        # the "Filter" button applies it, so Return here is a no-op.
+        confirm = tree.root.findChild(lambda n: n.name == "Filter" and n.roleName == "push button")
+        confirm.do_action(0)
+        time.sleep(0.5)
+        self.take_screenshot("filter_applied")
+        snap = self._snapshot()
+        hidden = set(snap["sheet"]["hidden_rows"])
+        self.assertIn(1, hidden, f"row 2 (banana) should be hidden: {snap}")
+        self.assertNotIn(0, hidden)
+        self.assertNotIn(2, hidden)
+        subprocess.run(["gapplication", "action", "org.tunaos.tables-rust", "clear-filter"])
+        time.sleep(0.5)
+        self.take_screenshot("filter_cleared")
+        self.assertIsNone(self.process.poll(), "tables crashed during filter visual check")
+
+    # ── sort indicator ───────────────────────────────────────────
+    def test_sort_indicator(self):
+        from dogtail import rawinput
+
+        self._new_document()
+        self._put("A1", "b")
+        self._put("A2", "a")
+        self._put("A3", "c")
+        # xdotool's `mousemove --sync` can hang if the pointer is already
+        # at (or very near) the target pixel — confirmed multiple times
+        # this session. Route every header click through the corner box
+        # first (outside the header's click-to-sort zone, so it can't
+        # itself trigger a sort) so each move is genuine, same workaround
+        # TablesSortIndicatorSmoke in test_smoke.py already relies on.
+        corner_x = self.CANVAS_X + self.ROW_HEADER_WIDTH / 2
+        corner_y = self.CANVAS_Y + self.COL_HEADER_HEIGHT / 2
+        x, y = self._col_header_center(0)
+        rawinput.click(int(corner_x), int(corner_y))
+        rawinput.click(int(x), int(y))
+        time.sleep(0.5)
+        self.take_screenshot("sort_ascending")
+        snap = self._snapshot()
+        self.assertEqual(snap["sheet"]["sorted_col"], {"col": 0, "ascending": True}, f"{snap}")
+        cells = {(c["row"], c["col"]): c["value"] for c in snap["sheet"]["cells"]}
+        # Blank rows (this sheet defaults to 100 rows; only 3 are filled)
+        # must sort last, not first, so the filled rows stay at the top.
+        self.assertEqual([cells.get((r, 0)) for r in range(3)], ["a", "b", "c"], f"data not reordered: {snap}")
+        rawinput.click(int(corner_x), int(corner_y))
+        rawinput.click(int(x), int(y))
+        time.sleep(0.5)
+        self.take_screenshot("sort_descending")
+        snap = self._snapshot()
+        self.assertEqual(snap["sheet"]["sorted_col"], {"col": 0, "ascending": False}, f"{snap}")
+        cells = {(c["row"], c["col"]): c["value"] for c in snap["sheet"]["cells"]}
+        self.assertEqual([cells.get((r, 0)) for r in range(3)], ["c", "b", "a"], f"data not reordered: {snap}")
+        self.assertIsNone(self.process.poll(), "tables crashed during sort visual check")
+
+    # ── row resize ───────────────────────────────────────────────
+    def test_row_resize(self):
+        from dogtail import rawinput
+
+        self._new_document()
+        self._put("A1", "resize me")
+        divider_x = self.ROW_HEADER_WIDTH / 2
+        divider_y = self._row_divider_y(0)
+        self.drag(divider_x, divider_y, divider_x, divider_y + 40)
+        time.sleep(0.5)
+        self.take_screenshot("row_resized")
+        self.assertIsNone(self.process.poll(), "tables crashed during row-resize visual check")
+
+    # ── named ranges ─────────────────────────────────────────────
+    def test_named_range_define_dialog(self):
+        import subprocess
+        from dogtail import rawinput, tree
+
+        self._new_document()
+        self._put("A1", "10")
+        self._put("A2", "20")
+        rawinput.keyCombo("<Control>g")
+        time.sleep(0.2)
+        rawinput.typeText("A1")
+        rawinput.keyCombo("Return")
+        time.sleep(0.3)
+        rawinput.keyCombo("<Shift>Down")
+        time.sleep(0.3)
+        subprocess.run(["gapplication", "action", "org.tunaos.tables-rust", "define-name"])
+        time.sleep(0.8)
+        name_entry = tree.root.findChild(lambda n: n.name == "Name" and n.roleName == "text")
+        name_entry.text = "MyRange"
+        self.take_screenshot("define_name_dialog")
+        confirm = tree.root.findChild(lambda n: n.name == "Define" and n.roleName == "push button")
+        confirm.do_action(0)
+        time.sleep(0.5)
+        self.take_screenshot("define_name_done")
+        self.assertIsNone(self.process.poll(), "tables crashed during named-range visual check")
+
+    # ── print area ───────────────────────────────────────────────
+    def test_print_area(self):
+        import subprocess
+        from dogtail import rawinput
+
+        self._new_document()
+        self._put("A1", "10")
+        self._put("A2", "20")
+        rawinput.keyCombo("<Control>g")
+        time.sleep(0.2)
+        rawinput.typeText("A1")
+        rawinput.keyCombo("Return")
+        time.sleep(0.3)
+        rawinput.keyCombo("<Shift>Down")
+        time.sleep(0.3)
+        subprocess.run(["gapplication", "action", "org.tunaos.tables-rust", "set-print-area"])
+        time.sleep(0.5)
+        self.take_screenshot("print_area_set")
+        # print_area isn't in the #104 state snapshot (only hidden_rows/
+        # selection/sorted_col are) — this test is visual-only, relying
+        # on the screenshot rather than an assertion on hidden state.
+        self.assertIsNone(self.process.poll(), "tables crashed during print-area visual check")
+
+    # ── page setup ───────────────────────────────────────────────
+    def test_page_setup_dialog(self):
+        import subprocess
+        from dogtail import rawinput
+
+        self._new_document()
+        subprocess.run(["gapplication", "action", "org.tunaos.tables-rust", "page-setup"])
+        time.sleep(0.8)
+        self.take_screenshot("page_setup_dialog")
+        rawinput.keyCombo("Escape")
+        time.sleep(0.3)
+        self.assertIsNone(self.process.poll(), "tables crashed during page-setup visual check")
+
+    # ── formula reference highlighting ──────────────────────────
+    def test_formula_reference_highlighting(self):
+        from dogtail import rawinput
+
+        self._new_document()
+        self._put("A1", "10")
+        self._put("A2", "20")
+        self._put("A3", "30")
+        rawinput.keyCombo("<Control>g")
+        time.sleep(0.2)
+        rawinput.typeText("C1")
+        rawinput.keyCombo("Return")
+        time.sleep(0.3)
+        rawinput.typeText("=A1+A2+A3")
+        time.sleep(0.5)
+        self.take_screenshot("formula_highlighting")
+        rawinput.keyCombo("Return")
+        time.sleep(0.5)
+        snap = self._snapshot()
+        cells = {(c["row"], c["col"]): c["value"] for c in snap["sheet"]["cells"]}
+        self.assertEqual(cells.get((0, 2)), "60", f"C1 should compute 60: {cells}")
+        self.assertIsNone(self.process.poll(), "tables crashed during formula-highlight visual check")
