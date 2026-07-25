@@ -1097,6 +1097,65 @@ class TablesFillHandleSmoke(BaseGUITestCase):
         self.assertIsNone(self.process.poll(), "tables crashed during fill-handle drag")
 
 
+class TablesFormulaReferenceHighlightSmoke(BaseGUITestCase):
+    """Formula reference highlighting (#113): typing a formula in the fx
+    entry parses and outlines its cell/range references live (a
+    connect_changed handler on every keystroke). The outlines themselves
+    are canvas pixels with no AT-SPI/snapshot signal to assert on, so
+    this test instead confirms the wiring doesn't break or crash normal
+    formula entry — typing a multi-reference formula keystroke by
+    keystroke (triggering connect_changed repeatedly, including
+    mid-formula incomplete states like "=A1+" that must not panic the
+    parser) still commits and evaluates correctly. The parser itself
+    (including the defined-name-disambiguation edge case) is unit-tested
+    in tables-core/src/sheet.rs."""
+
+    app_name = "tables"
+
+    def setUp(self):
+        self._snapshot_path = self.isolate_snapshot(prefix="tables-formula-ref-")
+        super().setUp()
+
+    def test_typing_a_multi_reference_formula_keystroke_by_keystroke_still_works(self):
+        import json
+        import subprocess
+        from dogtail import rawinput
+
+        aid = "org.tunaos.tables-rust"
+        subprocess.run(["gapplication", "action", aid, "new-document"])
+        time.sleep(1.5)
+
+        for row, value in enumerate(["10", "20"]):
+            rawinput.keyCombo("<Control>g")
+            time.sleep(0.2)
+            rawinput.typeText(f"A{row + 1}")
+            rawinput.keyCombo("Return")
+            time.sleep(0.3)
+            rawinput.typeText(value)
+            rawinput.keyCombo("Return")
+            time.sleep(0.3)
+
+        rawinput.keyCombo("<Control>g")
+        time.sleep(0.2)
+        rawinput.typeText("C1")
+        rawinput.keyCombo("Return")
+        time.sleep(0.3)
+        # typeText sends this character by character via xdotool, so
+        # connect_changed fires once per character, including on
+        # incomplete/invalid intermediate states like "=A1+".
+        rawinput.typeText("=A1+A2")
+        rawinput.keyCombo("Return")
+        time.sleep(0.5)
+
+        subprocess.run(["gapplication", "action", aid, "test-snapshot"])
+        time.sleep(0.5)
+        with open(self._snapshot_path) as f:
+            snap = json.load(f)
+        cells = {(c["row"], c["col"]): c["value"] for c in snap["sheet"]["cells"]}
+        self.assertEqual(cells.get((0, 2)), "30", f"C1 formula result wrong: {cells}")
+        self.assertIsNone(self.process.poll(), "tables crashed typing a formula with references")
+
+
 class TablesSortIndicatorSmoke(BaseGUITestCase):
     """Sort (#113's "visible criteria"): clicking a column header toggles
     sort on that column, drawn as a small triangle in the header — clicking

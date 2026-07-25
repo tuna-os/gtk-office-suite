@@ -111,6 +111,72 @@ pub fn parse_defined_name_range(formula: &str) -> Option<(usize, usize, usize, u
     }
 }
 
+/// One cell/range reference found inside a formula, for reference
+/// highlighting while editing (#113) — a colored outline drawn around
+/// each referenced cell/range, the standard spreadsheet convention.
+#[derive(Debug, Clone, PartialEq)]
+pub struct FormulaRef {
+    /// `None` means the same sheet the formula lives on. `Some(name)`
+    /// for an explicit `Sheet2!A1`-style prefix — recognized so the
+    /// parser doesn't misfire on it, but only same-sheet references are
+    /// meaningful to highlight (the other sheet isn't visible).
+    pub sheet_name: Option<String>,
+    /// (top, left, bottom, right), 0-based inclusive.
+    pub rect: (usize, usize, usize, usize),
+    /// The raw matched text of a single-cell reference (e.g. "A1" or
+    /// "Tax1"), `$` signs stripped — `None` for a range (a defined name
+    /// can't be a range in this app). Lets callers with access to a
+    /// defined-names list exclude a match that's actually a name that
+    /// happens to look like a cell ref, which this pure parser can't do
+    /// on its own.
+    pub single_cell_text: Option<String>,
+}
+
+/// Find every cell/range reference in formula text (leading `=` optional
+/// — works on either `"=A1+B2"` or `"A1+B2"`). A simple regex scan, not
+/// a real tokenizer: guards against the two collisions that matter in
+/// practice — a function call like `LOG10(` (an ident that happens to
+/// look like a cell ref, followed immediately by `(`) is excluded, but
+/// disambiguating a defined name that happens to look like a cell ref
+/// (e.g. a name literally called `Tax1`) needs the caller's own
+/// defined-names list, which this pure parser doesn't have access to.
+pub fn parse_formula_references(formula: &str) -> Vec<FormulaRef> {
+    use std::sync::OnceLock;
+    static RE: OnceLock<regex::Regex> = OnceLock::new();
+    let re = RE.get_or_init(|| {
+        regex::Regex::new(
+            r"(?:('(?:[^']|'')+'|[A-Za-z_][A-Za-z0-9_.]*)!)?(\$?[A-Za-z]{1,3}\$?[0-9]+)(?::(\$?[A-Za-z]{1,3}\$?[0-9]+))?",
+        )
+        .unwrap()
+    });
+
+    let mut out = Vec::new();
+    for cap in re.captures_iter(formula) {
+        let whole = cap.get(0).unwrap();
+        if formula[whole.end()..].starts_with('(') {
+            continue; // a function call, e.g. LOG10(...), not a cell ref
+        }
+        let sheet_name = cap.get(1).map(|m| m.as_str().trim_matches('\'').replace("''", "'"));
+        let first_text = cap.get(2).unwrap().as_str().replace('$', "");
+        let Some((r0, c0)) = parse_cell_ref(&first_text) else {
+            continue;
+        };
+        let (r1, c1, single_cell_text) = match cap.get(3) {
+            Some(m) => match parse_cell_ref(&m.as_str().replace('$', "")) {
+                Some(rc) => (rc.0, rc.1, None),
+                None => continue,
+            },
+            None => (r0, c0, Some(first_text)),
+        };
+        out.push(FormulaRef {
+            sheet_name,
+            rect: (r0.min(r1), c0.min(c1), r0.max(r1), c0.max(c1)),
+            single_cell_text,
+        });
+    }
+    out
+}
+
 /// Summary statistics over the numeric cells of a selection.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct SelectionStats {
@@ -663,6 +729,75 @@ mod selection_tests {
     fn parse_defined_name_range_rejects_garbage() {
         assert_eq!(parse_defined_name_range("not a range"), None);
         assert_eq!(parse_defined_name_range(""), None);
+    }
+
+    #[test]
+    fn parse_formula_references_finds_single_cells() {
+        let refs = parse_formula_references("=A1+B2*3");
+        assert_eq!(refs.len(), 2);
+        assert_eq!(
+            refs[0],
+            FormulaRef { sheet_name: None, rect: (0, 0, 0, 0), single_cell_text: Some("A1".into()) }
+        );
+        assert_eq!(
+            refs[1],
+            FormulaRef { sheet_name: None, rect: (1, 1, 1, 1), single_cell_text: Some("B2".into()) }
+        );
+    }
+
+    #[test]
+    fn parse_formula_references_finds_a_range() {
+        let refs = parse_formula_references("=SUM(A1:A3)");
+        assert_eq!(
+            refs,
+            vec![FormulaRef { sheet_name: None, rect: (0, 0, 2, 0), single_cell_text: None }]
+        );
+    }
+
+    #[test]
+    fn parse_formula_references_handles_absolute_refs() {
+        let refs = parse_formula_references("=$A$1*2");
+        assert_eq!(
+            refs,
+            vec![FormulaRef { sheet_name: None, rect: (0, 0, 0, 0), single_cell_text: Some("A1".into()) }]
+        );
+    }
+
+    #[test]
+    fn parse_formula_references_recognizes_a_cross_sheet_reference() {
+        let refs = parse_formula_references("=Sheet2!A1+1");
+        assert_eq!(
+            refs,
+            vec![FormulaRef {
+                sheet_name: Some("Sheet2".to_string()),
+                rect: (0, 0, 0, 0),
+                single_cell_text: Some("A1".into()),
+            }]
+        );
+    }
+
+    #[test]
+    fn parse_formula_references_exposes_raw_text_for_defined_name_disambiguation() {
+        // "Tax1" parses as a syntactically valid cell ref (col "TAX", row
+        // 1), but callers with a defined-names list can check
+        // single_cell_text against it to tell the difference.
+        let refs = parse_formula_references("=Tax1*2");
+        assert_eq!(refs.len(), 1);
+        assert_eq!(refs[0].single_cell_text.as_deref(), Some("Tax1"));
+    }
+
+    #[test]
+    fn parse_formula_references_does_not_mistake_a_function_call_for_a_ref() {
+        // LOG10( looks like a cell ref (3 letters + digits) followed by
+        // an open paren — a function call, not a reference to cell LOG10.
+        let refs = parse_formula_references("=LOG10(100)");
+        assert!(refs.is_empty(), "{refs:?}");
+    }
+
+    #[test]
+    fn parse_formula_references_of_plain_text_is_empty() {
+        assert!(parse_formula_references("hello world").is_empty());
+        assert!(parse_formula_references("").is_empty());
     }
 
     #[test]

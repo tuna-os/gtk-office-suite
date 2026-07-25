@@ -206,7 +206,7 @@ mod tests {
 
     #[test]
     fn snapshot_reports_the_current_selection() {
-        let mut c = WorkbookController::new(5, 5).unwrap();
+        let c = WorkbookController::new(5, 5).unwrap();
         c.state.borrow().sheet_mut().select_cell(0, 0);
         c.state.borrow().sheet_mut().extend_selection(2, 0);
         let snap = snapshot(&c, 0..5, 0..5);

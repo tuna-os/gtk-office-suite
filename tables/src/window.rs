@@ -67,6 +67,11 @@ fn autosave_state_dir() -> std::path::PathBuf {
     base.join("tables")
 }
 
+/// Cell/range references parsed live from the fx entry while editing a
+/// formula (#113), shared between the entry's connect_changed handler
+/// and the renderer.
+type FormulaRefs = Rc<RefCell<Vec<(usize, usize, usize, usize)>>>;
+
 // ── Main window ────────────────────────────────────────────────────────
 
 pub struct TablesWindow {
@@ -112,6 +117,10 @@ impl TablesWindow {
             autosave_state_dir(), next_doc_id(),
         ));
         let show_gridlines = Rc::new(Cell::new(settings.boolean("show-gridlines")));
+        // Cell/range references parsed live from the fx entry while typing
+        // a formula (#113) — drawn as colored outlines on the grid, same
+        // convention as Excel/Sheets. Empty outside formula editing.
+        let formula_refs: FormulaRefs = Rc::new(RefCell::new(Vec::new()));
 
         // ── Scrolling ──────────────────────────────────────────────────
         let h_adj = gtk4::Adjustment::new(0.0, 0.0, 5000.0, 10.0, 50.0, 500.0);
@@ -135,9 +144,10 @@ impl TablesWindow {
             let da_h = h_adj.clone();
             let da_v = v_adj.clone();
             let gl = show_gridlines.clone();
+            let da_refs = formula_refs.clone();
             drawing_area.set_draw_func(move |_da, cr, width, height| {
                 draw_grid(cr, &da_state, width as f64, height as f64,
-                          da_h.value(), da_v.value(), gl.get());
+                          da_h.value(), da_v.value(), gl.get(), &da_refs.borrow());
             });
             let gl = show_gridlines.clone();
             let da = drawing_area.clone();
@@ -165,6 +175,42 @@ impl TablesWindow {
         fx_entry.set_hexpand(true);
         fx_entry.set_placeholder_text(Some("Formula or value\u{2026}"));
         fx_entry.update_property(&[gtk4::accessible::Property::Label("Formula input")]);
+
+        // Reference highlighting (#113): while typing a formula, outline
+        // each same-sheet cell/range it references, same convention as
+        // Excel/Sheets. A match is excluded if it's actually a defined
+        // name that happens to look like a cell ref (e.g. a name called
+        // "Tax1") rather than a real reference.
+        {
+            let ctl = controller.clone();
+            let refs = formula_refs.clone();
+            let da = drawing_area.clone();
+            fx_entry.connect_changed(move |entry| {
+                let text = entry.text();
+                let new_refs = if text.starts_with('=') {
+                    let ctlb = ctl.borrow();
+                    let state = ctlb.state.borrow();
+                    let sheet_name = state.sheet().name.clone();
+                    let defined_names: Vec<String> =
+                        state.engine.model.workbook.defined_names.iter().map(|n| n.name.clone()).collect();
+                    drop(state);
+                    drop(ctlb);
+                    tables_core::sheet::parse_formula_references(&text)
+                        .into_iter()
+                        .filter(|r| r.sheet_name.is_none() || r.sheet_name.as_deref() == Some(sheet_name.as_str()))
+                        .filter(|r| match &r.single_cell_text {
+                            Some(t) => !defined_names.iter().any(|n| n.eq_ignore_ascii_case(t)),
+                            None => true,
+                        })
+                        .map(|r| r.rect)
+                        .collect()
+                } else {
+                    Vec::new()
+                };
+                *refs.borrow_mut() = new_refs;
+                da.queue_draw();
+            });
+        }
 
         let fx_bar = gtk4::Box::new(gtk4::Orientation::Horizontal, 6);
         fx_bar.set_margin_start(6); fx_bar.set_margin_end(6);
@@ -659,6 +705,7 @@ impl TablesWindow {
             let h = h_adj.clone();
             let v = v_adj.clone();
             let gl = show_gridlines.clone();
+            let refs = formula_refs.clone();
             let dbl = gtk4::GestureClick::new();
             dbl.set_button(1);
             dbl.set_touch_only(false);
@@ -678,19 +725,21 @@ impl TablesWindow {
                         let v2 = v.clone();
                         let da2 = da.clone();
                         let gl2 = gl.clone();
+                        let refs2 = refs.clone();
                         da.set_draw_func(move |_area, cr, width, height| {
                             let st = s2.borrow_mut();
                             let mut sh = st.sheet_mut();
                             auto_fit_column(cr, &mut sh, col, h2.value());
                             drop(sh);
-                            draw_grid(cr, &s2, width as f64, height as f64, h2.value(), v2.value(), gl2.get());
+                            draw_grid(cr, &s2, width as f64, height as f64, h2.value(), v2.value(), gl2.get(), &refs2.borrow());
                             // Restore normal draw func
                             let s3 = s2.clone();
                             let h3 = h2.clone();
                             let v3 = v2.clone();
                             let gl3 = gl2.clone();
+                            let refs3 = refs2.clone();
                             da2.set_draw_func(move |_, cr, w, h| {
-                                draw_grid(cr, &s3, w as f64, h as f64, h3.value(), v3.value(), gl3.get());
+                                draw_grid(cr, &s3, w as f64, h as f64, h3.value(), v3.value(), gl3.get(), &refs3.borrow());
                             });
                         });
                         da.queue_draw();

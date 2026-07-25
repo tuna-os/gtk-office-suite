@@ -97,9 +97,22 @@ fn draw_sort_arrow(cr: &Context, cx: f64, cy: f64, dir: SortDirection, color: (f
     cr.restore().unwrap();
 }
 
+/// Rotating palette for formula-reference outlines (#113), same
+/// convention as Excel/Sheets — each distinct reference in a formula
+/// gets the next color in order of appearance.
+const FORMULA_REF_COLORS: [(f64, f64, f64); 5] = [
+    (0.13, 0.38, 0.77), // blue
+    (0.77, 0.13, 0.13), // red
+    (0.13, 0.6, 0.2),   // green
+    (0.55, 0.2, 0.7),   // purple
+    (0.85, 0.5, 0.0),   // orange
+];
+
+#[allow(clippy::too_many_arguments)]
 pub fn draw_grid(
     cr: &Context, state: &Rc<RefCell<crate::window::AppState>>,
     width: f64, height: f64, scroll_x: f64, scroll_y: f64, show_gridlines: bool,
+    formula_refs: &[(usize, usize, usize, usize)],
 ) {
     let st = state.borrow();
     let sheet = &st.sheets[st.active_sheet].borrow();
@@ -293,6 +306,21 @@ pub fn draw_grid(
         tables_core::sheet::FILL_HANDLE_HALF * 2.0,
     );
     cr.fill().unwrap();
+
+    // Formula reference highlighting (#113): outline each cell/range the
+    // formula being edited refers to, cycling through a fixed palette in
+    // order of appearance — same convention as Excel/Sheets.
+    for (i, &(fr0, fc0, fr1, fc1)) in formula_refs.iter().enumerate() {
+        let color = FORMULA_REF_COLORS[i % FORMULA_REF_COLORS.len()];
+        let fx0 = px_x(fc0);
+        let fx1 = px_x(fc1 + 1);
+        let fy0 = tables_core::sheet::row_y(fr0, scroll_y, sheet);
+        let fy1 = tables_core::sheet::row_y(fr1, scroll_y, sheet) + sheet.row_height(fr1);
+        cr.set_source_rgb(color.0, color.1, color.2);
+        cr.set_line_width(1.5);
+        cr.rectangle(fx0, fy0, fx1 - fx0, fy1 - fy0);
+        cr.stroke().unwrap();
+    }
 
     cr.restore().unwrap();
 }
