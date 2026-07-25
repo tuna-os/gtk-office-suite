@@ -708,6 +708,12 @@ impl WorkbookController {
     /// `needle` matches everything (i.e. unhides all rows) — same as
     /// [`clear_filter`](Self::clear_filter), provided as a convenience
     /// for callers driving this from a single filter text entry.
+    ///
+    /// A row with no data anywhere is never hidden: `sheet.rows` is the
+    /// nominal grid size (e.g. 100), almost all of it unused on a new
+    /// document, and a blank row has nothing to filter on — hiding it
+    /// anyway would collapse the entire unused tail of the sheet to zero
+    /// height on screen.
     pub fn filter_by_value(&mut self, col: usize, needle: &str) {
         let state = self.state.borrow();
         let sheet_id = state.sheet().sheet_id;
@@ -718,7 +724,10 @@ impl WorkbookController {
         } else {
             let needle_lower = needle.to_lowercase();
             (0..sheet.rows)
-                .filter(|&r| !sheet.cell(r, col).to_lowercase().contains(&needle_lower))
+                .filter(|&r| {
+                    (0..sheet.cols).any(|c| !sheet.cell(r, c).is_empty())
+                        && !sheet.cell(r, col).to_lowercase().contains(&needle_lower)
+                })
                 .collect()
         };
         drop(sheet);
@@ -1168,6 +1177,27 @@ mod tests {
         assert!(sheet.is_row_hidden(1)); // banana
         assert!(!sheet.is_row_hidden(2)); // apricot
         assert!(sheet.is_row_hidden(3)); // cherry
+    }
+
+    #[test]
+    fn filter_by_value_never_hides_a_completely_blank_row() {
+        // Regression: a new document is 100x26 by default, so filtering
+        // used to hide every one of the ~96 unused trailing rows too
+        // (an empty cell never contains a non-empty needle), collapsing
+        // the whole rest of the sheet to zero height on screen. A row
+        // with no data anywhere has nothing to filter on and must stay
+        // visible regardless of the needle.
+        let mut controller = WorkbookController::new(10, 2).unwrap();
+        controller.edit_cell(0, 0, "apple");
+        controller.edit_cell(1, 0, "banana");
+        controller.filter_by_value(0, "apple");
+        let state = controller.state.borrow();
+        let sheet = state.sheet();
+        assert!(!sheet.is_row_hidden(0)); // apple
+        assert!(sheet.is_row_hidden(1)); // banana
+        for r in 2..10 {
+            assert!(!sheet.is_row_hidden(r), "blank row {r} should never be hidden by a filter");
+        }
     }
 
     #[test]
