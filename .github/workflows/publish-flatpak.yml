@@ -86,6 +86,11 @@ jobs:
           path: .
 
       - name: Push OCI to GHCR
+        env:
+          # Blacksmith runners' default container auth path
+          # (/run/containers/$UID/auth.json) isn't writable; point skopeo
+          # at a location under RUNNER_TEMP instead.
+          REGISTRY_AUTH_FILE: ${{ runner.temp }}/auth.json
         run: |
           echo "${{ secrets.GITHUB_TOKEN }}" | skopeo login ghcr.io -u "${{ github.actor }}" --password-stdin
           skopeo copy oci:${{ matrix.app }}-x86_64.oci docker://ghcr.io/tuna-os/${{ matrix.app }}:latest-x86_64
