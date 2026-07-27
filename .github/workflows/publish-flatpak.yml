@@ -5,6 +5,11 @@ name: Publish Flatpaks
 # `flatpak install tuna-os org.tunaos.<app>` serves current builds on
 # either architecture.
 # Also attaches installable .flatpak bundles to the triggering release.
+#
+# Each arch builds natively on its own runner rather than cross-building via
+# QEMU -- Blacksmith runners don't come with binfmt_misc/qemu-user
+# preregistered the way GitHub-hosted runners do, so bwrap inside the
+# cross-arch build fails with "Exec format error".
 
 on:
   push:
@@ -17,59 +22,44 @@ permissions:
 
 jobs:
   build-oci:
-    name: Build OCI — ${{ matrix.app }}
-    runs-on: blacksmith-4vcpu-ubuntu-2404
+    name: Build OCI — ${{ matrix.app }} (${{ matrix.arch }})
+    runs-on: ${{ matrix.arch == 'aarch64' && 'blacksmith-4vcpu-ubuntu-2404-arm' || 'blacksmith-4vcpu-ubuntu-2404' }}
     strategy:
       fail-fast: false
       matrix:
         app: [letters, tables, decks]
+        arch: [x86_64, aarch64]
     container:
       image: ghcr.io/flathub-infra/flatpak-github-actions:gnome-50
       options: --privileged
     steps:
       - uses: actions/checkout@v7
 
-      - name: Install aarch64 GNOME SDK (for cross-build)
-        run: |
-          flatpak install --noninteractive flathub org.gnome.Sdk/aarch64/50 2>&1 | tail -3 || true
-
-      - name: Build x86_64
+      - name: Build
         uses: flatpak/flatpak-github-actions/flatpak-builder@v6
         with:
           manifest-path: flatpak/org.tunaos.${{ matrix.app }}.json
-          cache-key: flatpak-publish-${{ matrix.app }}-${{ github.sha }}-x86_64
-          bundle: ${{ matrix.app }}-x86_64.flatpak
+          cache-key: flatpak-publish-${{ matrix.app }}-${{ github.sha }}-${{ matrix.arch }}
+          bundle: ${{ matrix.app }}-${{ matrix.arch }}.flatpak
           upload-artifact: false
+          arch: ${{ matrix.arch }}
 
-      - name: Export x86_64 OCI
+      - name: Export OCI
         run: |
-          flatpak build-bundle --oci --arch=x86_64 repo ${{ matrix.app }}-x86_64.oci org.tunaos.${{ matrix.app }}
+          flatpak build-bundle --oci --arch=${{ matrix.arch }} repo ${{ matrix.app }}-${{ matrix.arch }}.oci org.tunaos.${{ matrix.app }}
 
-      - name: Build aarch64
-        uses: flatpak/flatpak-github-actions/flatpak-builder@v6
-        with:
-          manifest-path: flatpak/org.tunaos.${{ matrix.app }}.json
-          cache-key: flatpak-publish-${{ matrix.app }}-${{ github.sha }}-aarch64
-          bundle: ${{ matrix.app }}-aarch64.flatpak
-          upload-artifact: false
-          arch: aarch64
-
-      - name: Export aarch64 OCI
-        run: |
-          flatpak build-bundle --oci --arch=aarch64 repo ${{ matrix.app }}-aarch64.oci org.tunaos.${{ matrix.app }}
-
-      - name: Upload OCI artifacts
+      - name: Upload OCI artifact
         uses: actions/upload-artifact@v7
         with:
-          name: ${{ matrix.app }}-oci
-          path: ${{ matrix.app }}-*.oci/
+          name: ${{ matrix.app }}-${{ matrix.arch }}-oci
+          path: ${{ matrix.app }}-${{ matrix.arch }}.oci/
           retention-days: 1
 
-      - name: Upload bundle artifacts
+      - name: Upload bundle artifact
         uses: actions/upload-artifact@v7
         with:
-          name: ${{ matrix.app }}-bundle
-          path: ${{ matrix.app }}-*.flatpak
+          name: ${{ matrix.app }}-${{ matrix.arch }}-bundle
+          path: ${{ matrix.app }}-${{ matrix.arch }}.flatpak
           retention-days: 7
 
   publish:
@@ -87,7 +77,12 @@ jobs:
 
       - uses: actions/download-artifact@v8
         with:
-          name: ${{ matrix.app }}-oci
+          name: ${{ matrix.app }}-x86_64-oci
+          path: .
+
+      - uses: actions/download-artifact@v8
+        with:
+          name: ${{ matrix.app }}-aarch64-oci
           path: .
 
       - name: Push OCI to GHCR
