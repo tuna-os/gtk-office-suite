@@ -1,8 +1,9 @@
 name: Publish Flatpaks
 
-# Build the three apps as Flatpak OCI images, push them to GHCR, and
-# update the TunaOS Flatpak index (tunaos.org/flatpak) so
-# `flatpak install tuna-os org.tunaos.<app>-rust` serves current builds.
+# Build the three apps as Flatpak OCI images for x86_64 and aarch64, push
+# them to GHCR, and update the TunaOS Flatpak index (tunaos.org/flatpak) so
+# `flatpak install tuna-os org.tunaos.<app>-rust` serves current builds on
+# either architecture.
 # Also attaches installable .flatpak bundles to the triggering release.
 
 on:
@@ -28,30 +29,47 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
-      - name: Build Flatpak
+      - name: Install aarch64 GNOME SDK (for cross-build)
+        run: |
+          flatpak install --noninteractive flathub org.gnome.Sdk/aarch64/50 2>&1 | tail -3 || true
+
+      - name: Build x86_64
         uses: flatpak/flatpak-github-actions/flatpak-builder@v6
         with:
           manifest-path: flatpak/org.tunaos.${{ matrix.app }}.json
-          cache-key: flatpak-publish-${{ matrix.app }}-${{ github.sha }}
-          bundle: ${{ matrix.app }}.flatpak
+          cache-key: flatpak-publish-${{ matrix.app }}-${{ github.sha }}-x86_64
+          bundle: ${{ matrix.app }}-x86_64.flatpak
           upload-artifact: false
 
-      - name: Export OCI
+      - name: Export x86_64 OCI
         run: |
-          flatpak build-bundle --oci --arch=x86_64 repo ${{ matrix.app }}.oci org.tunaos.${{ matrix.app }}
+          flatpak build-bundle --oci --arch=x86_64 repo ${{ matrix.app }}-x86_64.oci org.tunaos.${{ matrix.app }}
 
-      - name: Upload OCI artifact
+      - name: Build aarch64
+        uses: flatpak/flatpak-github-actions/flatpak-builder@v6
+        with:
+          manifest-path: flatpak/org.tunaos.${{ matrix.app }}.json
+          cache-key: flatpak-publish-${{ matrix.app }}-${{ github.sha }}-aarch64
+          bundle: ${{ matrix.app }}-aarch64.flatpak
+          upload-artifact: false
+          arch: aarch64
+
+      - name: Export aarch64 OCI
+        run: |
+          flatpak build-bundle --oci --arch=aarch64 repo ${{ matrix.app }}-aarch64.oci org.tunaos.${{ matrix.app }}
+
+      - name: Upload OCI artifacts
         uses: actions/upload-artifact@v7
         with:
           name: ${{ matrix.app }}-oci
-          path: ${{ matrix.app }}.oci/
+          path: ${{ matrix.app }}-*.oci/
           retention-days: 1
 
-      - name: Upload bundle artifact
+      - name: Upload bundle artifacts
         uses: actions/upload-artifact@v7
         with:
           name: ${{ matrix.app }}-bundle
-          path: ${{ matrix.app }}.flatpak
+          path: ${{ matrix.app }}-*.flatpak
           retention-days: 7
 
   publish:
@@ -70,12 +88,13 @@ jobs:
       - uses: actions/download-artifact@v8
         with:
           name: ${{ matrix.app }}-oci
-          path: ${{ matrix.app }}.oci
+          path: .
 
       - name: Push OCI to GHCR
         run: |
           echo "${{ secrets.GITHUB_TOKEN }}" | skopeo login ghcr.io -u "${{ github.actor }}" --password-stdin
-          skopeo copy oci:${{ matrix.app }}.oci docker://ghcr.io/tuna-os/${{ matrix.app }}:latest
+          skopeo copy oci:${{ matrix.app }}-x86_64.oci docker://ghcr.io/tuna-os/${{ matrix.app }}:latest-x86_64
+          skopeo copy oci:${{ matrix.app }}-aarch64.oci docker://ghcr.io/tuna-os/${{ matrix.app }}:latest-aarch64
 
       - name: Update central index (tuna-os/docs)
         env:
@@ -86,7 +105,12 @@ jobs:
             index-repo
           pip install requests
           python3 .github/scripts/update-index.py \
-            --oci-dir ${{ matrix.app }}.oci \
+            --oci-dir ${{ matrix.app }}-x86_64.oci \
+            --index-file index-repo/static/flatpak/index/static \
+            --repo-name tuna-os/${{ matrix.app }} \
+            --tags latest
+          python3 .github/scripts/update-index.py \
+            --oci-dir ${{ matrix.app }}-aarch64.oci \
             --index-file index-repo/static/flatpak/index/static \
             --repo-name tuna-os/${{ matrix.app }} \
             --tags latest
@@ -97,7 +121,7 @@ jobs:
           if git diff --cached --quiet; then
             echo "No index changes"
           else
-            git commit -m "chore(flatpak): update ${{ matrix.app }} OCI index"
+            git commit -m "chore(flatpak): update ${{ matrix.app }} OCI index (x86_64 + aarch64)"
             git push origin main
           fi
 
