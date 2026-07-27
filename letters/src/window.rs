@@ -80,8 +80,13 @@ fn make_doc_widget(settings: Option<&gio::Settings>) -> (PageContainer, gtk::Tex
             format!("textview, textview text {{ font-family: \"{family}\"; font-size: {size_pt}pt; }}")
         })
         .unwrap_or_default();
+    // The page is always white regardless of app theme (see above), so
+    // the text color must be pinned dark too — otherwise dark mode's
+    // light theme-default text color renders white-on-white and the
+    // whole document becomes invisible while still fully editable.
     css_provider.load_from_string(&format!(
-        "textview, textview text, scrolledwindow {{ background: transparent; }} {font_css}"
+        "textview, textview text, scrolledwindow {{ background: transparent; }} \
+         textview text {{ color: rgba(0, 0, 0, 0.85); }} {font_css}"
     ));
     gtk::style_context_add_provider_for_display(&editor.display(), &css_provider, gtk::STYLE_PROVIDER_PRIORITY_APPLICATION + 1);
     // Spell-check via zspell (hunspell-compatible, pure Rust).
