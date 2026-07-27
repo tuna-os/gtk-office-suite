@@ -604,8 +604,16 @@ impl DecksWindow {
                     cs.queue_draw();
                     let slides = ss.borrow();
                     if let Some(slide) = slides.get(idx) {
+                        let notes = slide.notes.clone();
+                        // Don't hold ss's Ref across nb.set_text() below --
+                        // GTK's set_text does a delete-then-insert and can
+                        // emit `changed` twice, and the second emission's
+                        // handler takes ss.borrow_mut() (see notes_skip
+                        // comment below).
+                        drop(slides);
                         notes_skip2.set(true);
-                        nb.set_text(&slide.notes);
+                        nb.set_text(&notes);
+                        notes_skip2.set(false);
                     }
                 }
             }
@@ -659,7 +667,13 @@ impl DecksWindow {
             let cs_ref = current_slide.clone();
             let skip = notes_skip.clone();
             notes_buffer.connect_changed(move |buf| {
-                if skip.get() { skip.set(false); return; }
+                // `skip` is cleared by the row-selected handler once its
+                // set_text() call fully returns, not here -- set_text can
+                // emit `changed` twice (delete, then insert) and clearing
+                // it after the first emission left the second free to
+                // reach ss.borrow_mut() while that handler's ss.borrow()
+                // was still alive (the exact Tables reentrancy bug class).
+                if skip.get() { return; }
                 let idx = cs_ref.get();
                 let mut slides = ss.borrow_mut();
                 if let Some(slide) = slides.get_mut(idx) {
@@ -687,7 +701,7 @@ impl DecksWindow {
             master_idx: Some(0),
                 };
                 let idx = controller.add_slide(idx, new_slide);
-                rebuild_slide_list(&sl, &ss.borrow(), &masters.borrow(), idx);
+                rebuild_slide_list(&sl, &ss.borrow().clone(), &masters.borrow(), idx);
                 cs_ref.set(idx);
                 cs.queue_draw();
                 cs_stack.set_visible_child_name("editor");
@@ -706,7 +720,7 @@ impl DecksWindow {
                 let idx = cs_ref.get();
                 if let Some(new_idx) = controller.delete_slide(idx) {
                     cs_ref.set(new_idx);
-                    rebuild_slide_list(&sl, &ss.borrow(), &masters.borrow(), new_idx);
+                    rebuild_slide_list(&sl, &ss.borrow().clone(), &masters.borrow(), new_idx);
                     cs.queue_draw();
                 }
             });
@@ -724,7 +738,7 @@ impl DecksWindow {
                 let idx = cs_ref.get();
                 if let Some(new_idx) = controller.move_slide_up(idx) {
                     cs_ref.set(new_idx);
-                    rebuild_slide_list(&sl, &ss.borrow(), &masters.borrow(), new_idx);
+                    rebuild_slide_list(&sl, &ss.borrow().clone(), &masters.borrow(), new_idx);
                     cs.queue_draw();
                 }
             });
@@ -740,7 +754,7 @@ impl DecksWindow {
                 let idx = cs_ref.get();
                 if let Some(new_idx) = controller.move_slide_down(idx) {
                     cs_ref.set(new_idx);
-                    rebuild_slide_list(&sl, &ss.borrow(), &masters.borrow(), new_idx);
+                    rebuild_slide_list(&sl, &ss.borrow().clone(), &masters.borrow(), new_idx);
                     cs.queue_draw();
                 }
             });
@@ -1129,7 +1143,10 @@ impl DecksWindow {
                 if mods.contains(gtk::gdk::ModifierType::CONTROL_MASK) && keyval == gtk::gdk::Key::z {
                     if controller.undo() {
                         cs.queue_draw();
-                        let slides = ss.borrow();
+                        // Snapshot instead of holding ss.borrow() across the
+                        // call -- rebuild_slide_list()'s select_row() fires
+                        // row-selected synchronously, which reaches ss.borrow_mut().
+                        let slides = ss.borrow().clone();
                         rebuild_slide_list(&sl, &slides, &m.borrow(), cs_ref.get());
                     }
                     return glib::Propagation::Stop;
@@ -1138,7 +1155,7 @@ impl DecksWindow {
                 if mods.contains(gtk::gdk::ModifierType::CONTROL_MASK | gtk::gdk::ModifierType::SHIFT_MASK) && keyval == gtk::gdk::Key::z {
                     if controller.redo() {
                         cs.queue_draw();
-                        let slides = ss.borrow();
+                        let slides = ss.borrow().clone();
                         rebuild_slide_list(&sl, &slides, &m.borrow(), cs_ref.get());
                     }
                     return glib::Propagation::Stop;
@@ -1156,8 +1173,12 @@ impl DecksWindow {
                                 ts.borrow_mut().start(TransitionType::PushLeft,
                                     &sls[idx], &sls[idx - 1], &cs);
                             }
+                            // Snapshot + drop before rebuild_slide_list(),
+                            // whose select_row() reaches ss.borrow_mut().
+                            let snap = sls.clone();
+                            drop(sls);
                             cs_ref.set(idx - 1);
-                            rebuild_slide_list(&sl, &sls, &m.borrow(), idx - 1);
+                            rebuild_slide_list(&sl, &snap, &m.borrow(), idx - 1);
                             cs.queue_draw();
                         }
                         glib::Propagation::Stop
@@ -1168,23 +1189,29 @@ impl DecksWindow {
                         if idx + 1 < slides.len() {
                             ts.borrow_mut().start(TransitionType::PushLeft,
                                 &slides[idx], &slides[idx + 1], &cs);
+                            let snap = slides.clone();
+                            drop(slides);
                             cs_ref.set(idx + 1);
-                            rebuild_slide_list(&sl, &slides, &m.borrow(), idx + 1);
+                            rebuild_slide_list(&sl, &snap, &m.borrow(), idx + 1);
                             cs.queue_draw();
                         }
                         glib::Propagation::Stop
                     }
                     gtk::gdk::Key::Home => {
                         cs_ref.set(0);
-                        rebuild_slide_list(&sl, &ss.borrow(), &m.borrow(), 0);
+                        let snap = ss.borrow().clone();
+                        rebuild_slide_list(&sl, &snap, &m.borrow(), 0);
                         cs.queue_draw();
                         glib::Propagation::Stop
                     }
                     gtk::gdk::Key::End => {
                         let slides = ss.borrow();
                         if !slides.is_empty() {
-                            cs_ref.set(slides.len() - 1);
-                            rebuild_slide_list(&sl, &slides, &m.borrow(), slides.len() - 1);
+                            let snap = slides.clone();
+                            let last = snap.len() - 1;
+                            drop(slides);
+                            cs_ref.set(last);
+                            rebuild_slide_list(&sl, &snap, &m.borrow(), last);
                             cs.queue_draw();
                         }
                         glib::Propagation::Stop
@@ -1237,7 +1264,7 @@ impl DecksWindow {
                     }];
                 }
                 *path_ref.borrow_mut() = None;
-                rebuild_slide_list(&sl, &ss.borrow(), &masters.borrow(), 0);
+                rebuild_slide_list(&sl, &ss.borrow().clone(), &masters.borrow(), 0);
                 cs.queue_draw();
                 refresh();
             });
@@ -1302,7 +1329,7 @@ impl DecksWindow {
                                             cs.add_titled(&cs_scroll, Some("editor"), "Editor");
                                         }
                                         cs.set_visible_child_name("editor");
-                                        rebuild_slide_list(&sl, &ss.borrow(), &masters.borrow(), 0);
+                                        rebuild_slide_list(&sl, &ss.borrow().clone(), &masters.borrow(), 0);
                                         if let Some(name) = path_ref
                                             .borrow()
                                             .as_deref()
@@ -1544,7 +1571,7 @@ impl DecksWindow {
             self.content_stack.add_titled(&self.editor_split, Some("editor"), "Editor");
         }
         self.content_stack.set_visible_child_name("editor");
-        rebuild_slide_list(&self.slide_list, &self.controller.slides.borrow(), &self.controller.masters.borrow(), 0);
+        rebuild_slide_list(&self.slide_list, &self.controller.slides.borrow().clone(), &self.controller.masters.borrow(), 0);
         if let Some(name) = std::path::Path::new(path).file_name() {
             self.window
                 .set_title(Some(&format!("{} — Decks", name.to_string_lossy())));

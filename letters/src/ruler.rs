@@ -297,8 +297,13 @@ impl Ruler {
             release.connect_released(move |_gesture, _n_press, _x, _y| {
                 if let Some(ruler) = ruler_weak.upgrade() {
                     ruler.imp().dragging.set(None);
-                    if let Some(ref cb) = *ruler.imp().on_changed.borrow() {
+                    // Take the callback out (dropping the borrow) before
+                    // invoking it, so `cb` is free to call
+                    // `connect_changed` again without a reentrant-borrow
+                    // panic on this same RefCell.
+                    if let Some(cb) = ruler.imp().on_changed.borrow_mut().take() {
                         cb();
+                        ruler.imp().on_changed.borrow_mut().get_or_insert(cb);
                     }
                 }
             });
@@ -473,25 +478,34 @@ impl Ruler {
         }
 
         // Check tab stops — double-click to cycle type
-        for (i, ts) in imp.tab_stops.borrow().iter().enumerate() {
-            let tx = self.pt_to_x(ts.position_pt);
-            if y > h - 16.0 && (x - tx).abs() < 6.0 {
-                if n_press >= 2 {
-                    // Double-click: cycle tab type
-                    let mut tabs = imp.tab_stops.borrow_mut();
-                    tabs[i].alignment = match ts.alignment {
-                        TabAlignment::Left => TabAlignment::Center,
-                        TabAlignment::Center => TabAlignment::Right,
-                        TabAlignment::Right => TabAlignment::Decimal,
-                        TabAlignment::Decimal => TabAlignment::Left,
-                    };
-                    self.queue_draw();
-                    return;
-                }
-                imp.dragging.set(Some(DragTarget::TabStop(i)));
-                imp.last_x.set(pt);
+        // Hit-test into a plain Vec first so the `Ref` guard from
+        // `.borrow()` is dropped before any `.borrow_mut()` below —
+        // holding it across the loop (as the head-expression temporary
+        // does) panics on the double-click branch (RefCell already
+        // borrowed).
+        let hit = {
+            let tabs = imp.tab_stops.borrow();
+            tabs.iter().enumerate().find_map(|(i, ts)| {
+                let tx = self.pt_to_x(ts.position_pt);
+                (y > h - 16.0 && (x - tx).abs() < 6.0).then(|| (i, ts.alignment.clone()))
+            })
+        };
+        if let Some((i, alignment)) = hit {
+            if n_press >= 2 {
+                // Double-click: cycle tab type
+                let mut tabs = imp.tab_stops.borrow_mut();
+                tabs[i].alignment = match alignment {
+                    TabAlignment::Left => TabAlignment::Center,
+                    TabAlignment::Center => TabAlignment::Right,
+                    TabAlignment::Right => TabAlignment::Decimal,
+                    TabAlignment::Decimal => TabAlignment::Left,
+                };
+                self.queue_draw();
                 return;
             }
+            imp.dragging.set(Some(DragTarget::TabStop(i)));
+            imp.last_x.set(pt);
+            return;
         }
 
         // Click on empty space: add tab stop

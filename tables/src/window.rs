@@ -442,6 +442,10 @@ impl TablesWindow {
                             sh.select_cell(row, col);
                         }
                         let val = sh.data[row][col].clone();
+                        // fx.set_text() fires `changed` synchronously, and
+                        // for formula text that handler re-borrows this
+                        // same per-sheet RefCell -- drop before calling it.
+                        drop(sh); drop(st);
                         fx.set_text(&val);
                     }
                     refresh();
@@ -730,7 +734,10 @@ impl TablesWindow {
                             let st = s2.borrow_mut();
                             let mut sh = st.sheet_mut();
                             auto_fit_column(cr, &mut sh, col, h2.value());
-                            drop(sh);
+                            // draw_grid() immediately re-borrows `s2`
+                            // (the same AppState RefCell as `st`), so drop
+                            // both -- not just `sh` -- before calling it.
+                            drop(sh); drop(st);
                             draw_grid(cr, &s2, width as f64, height as f64, h2.value(), v2.value(), gl2.get(), &refs2.borrow());
                             // Restore normal draw func
                             let s3 = s2.clone();
@@ -749,6 +756,7 @@ impl TablesWindow {
                 let st = s.borrow();
                 let sh = st.sheet();
                 if let Some((col, row)) = xy_to_cell(wx, wy, h.value(), &sh) {
+                    drop(sh); drop(st);
                     let st = s.borrow_mut();
                     let val = st.sheet().data[row][col].clone();
                     // Compute cell x-offset using per-column widths
@@ -1000,7 +1008,12 @@ impl TablesWindow {
                     }
                     if state.borrow_mut().delete_sheet(idx).is_ok() {
                         refresh_sheet_model(&sm, &state);
-                        sd.set_selected(state.borrow().active_sheet as u32);
+                        // set_selected() fires selected-notify synchronously,
+                        // which re-borrows `state` mutably -- bind the
+                        // argument first so this borrow ends at the `;`
+                        // instead of lasting through the call.
+                        let active = state.borrow().active_sheet as u32;
+                        sd.set_selected(active);
                         da.queue_draw();
                     }
                 });
@@ -1632,7 +1645,13 @@ impl TablesWindow {
                         if let Ok(file) = result {
                             if let Some(path) = file.path() {
                                 let path_str = path.to_string_lossy().to_string();
-                                match load_file_into_engine(&path_str, &mut s.borrow_mut().engine) {
+                                // Bind the result before matching on it --
+                                // a `match`'s scrutinee temporaries live for
+                                // the whole match, so `s.borrow_mut()` used
+                                // inline here would still be held (and panic)
+                                // when the Ok arm re-borrows `s` below.
+                                let load_result = load_file_into_engine(&path_str, &mut s.borrow_mut().engine);
+                                match load_result {
                                     Ok((rows, cols)) => {
                                         // Scoped so the RefMut guard drops before
                                         // set_selected() below: GtkDropDown fires
@@ -1937,7 +1956,7 @@ impl TablesWindow {
                     _ => None,
                 };
                 if let Some((dr, dc)) = delta {
-                    {
+                    let moved_val = {
                         let st = s.borrow();
                         let mut sh = st.sheet_mut();
                         // Shift extends from the range's moving end; a plain
@@ -1951,11 +1970,18 @@ impl TablesWindow {
                         let nc = (bc as i64 + dc).clamp(0, sh.cols as i64 - 1) as usize;
                         if shift {
                             sh.extend_selection(nr, nc);
+                            None
                         } else {
                             sh.select_cell(nr, nc);
-                            let val = sh.data[nr][nc].clone();
-                            fx.set_text(&val);
+                            Some(sh.data[nr][nc].clone())
                         }
+                    };
+                    // fx.set_text() fires `changed` synchronously, and for
+                    // formula text that handler re-borrows this same
+                    // per-sheet RefCell -- call it only after `sh`/`st`
+                    // above have dropped.
+                    if let Some(val) = moved_val {
+                        fx.set_text(&val);
                     }
                     {
                         let st = s.borrow();
