@@ -112,7 +112,7 @@ impl TablesWindow {
             app.add_action(&act);
         }
 
-        let settings = gio::Settings::new("org.tunaos.tables-rust");
+        let settings = gio::Settings::new("org.tunaos.tables");
         let autosave_slot = Rc::new(suite_common::autosave::AutosaveSlot::new(
             autosave_state_dir(), next_doc_id(),
         ));

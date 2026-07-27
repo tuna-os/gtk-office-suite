@@ -340,7 +340,7 @@ class Tables113FeatureVisuals(BaseGUITestCase):
         import json
         import subprocess
 
-        subprocess.run(["gapplication", "action", "org.tunaos.tables-rust", "test-snapshot"])
+        subprocess.run(["gapplication", "action", "org.tunaos.tables", "test-snapshot"])
         time.sleep(0.5)
         with open(self._snapshot_path) as f:
             return json.load(f)
@@ -360,7 +360,7 @@ class Tables113FeatureVisuals(BaseGUITestCase):
     def _new_document(self):
         import subprocess
 
-        subprocess.run(["gapplication", "action", "org.tunaos.tables-rust", "new-document"])
+        subprocess.run(["gapplication", "action", "org.tunaos.tables", "new-document"])
         time.sleep(1.5)
 
     def _screenshot_when_changed(self, suffix, baseline_path, max_wait=6.0, poll_interval=0.4):
@@ -409,7 +409,7 @@ class Tables113FeatureVisuals(BaseGUITestCase):
         self._put("A2", "banana")
         self._put("A3", "apple")
         self._put("A4", "cherry")
-        subprocess.run(["gapplication", "action", "org.tunaos.tables-rust", "filter-by-column"])
+        subprocess.run(["gapplication", "action", "org.tunaos.tables", "filter-by-column"])
         time.sleep(0.8)
         from dogtail import rawinput, tree
         rawinput.typeText("apple")
@@ -425,7 +425,7 @@ class Tables113FeatureVisuals(BaseGUITestCase):
         self.assertIn(1, hidden, f"row 2 (banana) should be hidden: {snap}")
         self.assertNotIn(0, hidden)
         self.assertNotIn(2, hidden)
-        subprocess.run(["gapplication", "action", "org.tunaos.tables-rust", "clear-filter"])
+        subprocess.run(["gapplication", "action", "org.tunaos.tables", "clear-filter"])
         time.sleep(0.5)
         self.take_screenshot("filter_cleared")
         self.assertIsNone(self.process.poll(), "tables crashed during filter visual check")
@@ -435,7 +435,7 @@ class Tables113FeatureVisuals(BaseGUITestCase):
         import subprocess
         from dogtail import rawinput
 
-        aid = "org.tunaos.tables-rust"
+        aid = "org.tunaos.tables"
         self._new_document()
         self._put("A1", "10")
         self._put("A2", "20")
@@ -544,7 +544,7 @@ class Tables113FeatureVisuals(BaseGUITestCase):
         time.sleep(0.3)
         rawinput.keyCombo("<Shift>Down")
         time.sleep(0.3)
-        subprocess.run(["gapplication", "action", "org.tunaos.tables-rust", "define-name"])
+        subprocess.run(["gapplication", "action", "org.tunaos.tables", "define-name"])
         time.sleep(0.8)
         name_entry = tree.root.findChild(lambda n: n.name == "Name" and n.roleName == "text")
         name_entry.text = "MyRange"
@@ -570,7 +570,7 @@ class Tables113FeatureVisuals(BaseGUITestCase):
         time.sleep(0.3)
         rawinput.keyCombo("<Shift>Down")
         time.sleep(0.3)
-        subprocess.run(["gapplication", "action", "org.tunaos.tables-rust", "set-print-area"])
+        subprocess.run(["gapplication", "action", "org.tunaos.tables", "set-print-area"])
         time.sleep(0.5)
         self.take_screenshot("print_area_set")
         # print_area isn't in the #104 state snapshot (only hidden_rows/
@@ -584,7 +584,7 @@ class Tables113FeatureVisuals(BaseGUITestCase):
         from dogtail import rawinput
 
         self._new_document()
-        subprocess.run(["gapplication", "action", "org.tunaos.tables-rust", "page-setup"])
+        subprocess.run(["gapplication", "action", "org.tunaos.tables", "page-setup"])
         time.sleep(0.8)
         self.take_screenshot("page_setup_dialog")
         rawinput.keyCombo("Escape")

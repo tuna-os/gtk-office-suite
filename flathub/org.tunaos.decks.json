@@ -1,5 +1,5 @@
 {
-  "app-id": "org.tunaos.decks-rust",
+  "app-id": "org.tunaos.decks",
   "runtime": "org.gnome.Platform",
   "runtime-version": "50",
   "sdk": "org.gnome.Sdk",
@@ -12,7 +12,7 @@
     "--socket=fallback-x11",
     "--socket=wayland",
     "--device=dri",
-    "--own-name=org.tunaos.decks-rust",
+    "--own-name=org.tunaos.decks",
     "--filesystem=xdg-documents"
   ],
   "build-options": {
@@ -28,11 +28,11 @@
       "build-commands": [
         "cargo --offline build --release -p decks",
         "install -Dm755 target/release/decks /app/bin/decks",
-        "install -Dm644 flatpak/org.tunaos.decks-rust.desktop /app/share/applications/org.tunaos.decks-rust.desktop",
-        "install -Dm644 flatpak/org.tunaos.decks-rust.gschema.xml /app/share/glib-2.0/schemas/org.tunaos.decks-rust.gschema.xml",
+        "install -Dm644 flatpak/org.tunaos.decks.desktop /app/share/applications/org.tunaos.decks.desktop",
+        "install -Dm644 flatpak/org.tunaos.decks.gschema.xml /app/share/glib-2.0/schemas/org.tunaos.decks.gschema.xml",
         "glib-compile-schemas /app/share/glib-2.0/schemas/",
-        "install -Dm644 flatpak/icons/org.tunaos.decks-rust.svg /app/share/icons/hicolor/scalable/apps/org.tunaos.decks-rust.svg",
-        "install -Dm644 flatpak/org.tunaos.decks-rust.metainfo.xml /app/share/metainfo/org.tunaos.decks-rust.metainfo.xml"
+        "install -Dm644 flatpak/icons/org.tunaos.decks.svg /app/share/icons/hicolor/scalable/apps/org.tunaos.decks.svg",
+        "install -Dm644 flatpak/org.tunaos.decks.metainfo.xml /app/share/metainfo/org.tunaos.decks.metainfo.xml"
       ],
       "sources": [
         {

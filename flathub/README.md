@@ -17,7 +17,7 @@ network build-args, and trim `--filesystem=host:ro` to `xdg-documents`.
 
 2. Local verification build:
 
-       flatpak-builder --force-clean build flathub/org.tunaos.letters-rust.json
+       flatpak-builder --force-clean build flathub/org.tunaos.letters.json
 
 3. Fork flathub/flathub, branch `new-pr`, add one app dir per submission
    (start with Letters), open the PR per

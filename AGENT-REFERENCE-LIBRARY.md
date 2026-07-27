@@ -137,7 +137,7 @@ area.add_controller(&click);
 **Key API:** `gio::Settings`
 
 ```rust
-let settings = gio::Settings::new("org.tunaos.letters-rust");
+let settings = gio::Settings::new("org.tunaos.letters");
 // Read
 let is_dark = settings.boolean("dark-mode");
 let width = settings.int("window-width");
@@ -153,7 +153,7 @@ settings.connect_changed(Some("dark-mode"), move |settings, key| {
 
 **Schema XML:**
 ```xml
-<schema id="org.tunaos.letters-rust" path="/org/tunaos/letters-rust/">
+<schema id="org.tunaos.letters" path="/org/tunaos/letters/">
   <key name="dark-mode" type="b">
     <default>false</default>
     <summary>Dark mode</summary>

@@ -73,7 +73,7 @@ AdwApplicationWindow
 | Requirement | Implementation |
 |-------------|---------------|
 | **Runtime** | `org.gnome.Platform` 50 (stable), `org.gnome.Sdk` 50 (build) |
-| **App ID** | Reverse DNS: `org.tunaos.{app}-rust` |
+| **App ID** | Reverse DNS: `org.tunaos.{app}` |
 | **Metainfo** | Must validate with `appstreamcli validate` |
 | **Desktop file** | Must include `Categories=Office;` |
 | **Icons** | SVG, 128x128 minimum, installed to `/app/share/icons/hicolor/scalable/apps/` |

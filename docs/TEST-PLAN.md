@@ -94,9 +94,9 @@ cargo test --workspace
 # Total: 18 tests pass
 
 # Flatpak build verification:
-flatpak run org.flatpak.Builder --state-dir=.flatpak-builder build-dir flatpak/org.tunaos.tables-rust.json
-flatpak run org.flatpak.Builder --state-dir=.flatpak-builder build-dir flatpak/org.tunaos.decks-rust.json
-flatpak run org.flatpak.Builder --state-dir=.flatpak-builder build-dir flatpak/org.tunaos.letters-rust.json
+flatpak run org.flatpak.Builder --state-dir=.flatpak-builder build-dir flatpak/org.tunaos.tables.json
+flatpak run org.flatpak.Builder --state-dir=.flatpak-builder build-dir flatpak/org.tunaos.decks.json
+flatpak run org.flatpak.Builder --state-dir=.flatpak-builder build-dir flatpak/org.tunaos.letters.json
 ```
 
 ---

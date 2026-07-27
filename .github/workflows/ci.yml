@@ -65,7 +65,7 @@ jobs:
     needs: [test]
     strategy:
       matrix:
-        app: [letters-rust, tables-rust, decks-rust]
+        app: [letters, tables, decks]
     container:
       image: ghcr.io/flathub-infra/flatpak-github-actions:gnome-50
       options: --privileged

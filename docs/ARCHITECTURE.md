@@ -49,19 +49,19 @@ gtk-office-suite/
 │       └── export.rs   # Typst/PDF export
 │
 ├── flatpak/            # Flatpak packaging
-│   ├── org.tunaos.letters-rust.json
-│   ├── org.tunaos.letters-rust.metainfo.xml
-│   ├── org.tunaos.letters-rust.desktop
-│   ├── org.tunaos.tables-rust.json
-│   ├── org.tunaos.tables-rust.metainfo.xml
-│   ├── org.tunaos.tables-rust.desktop
-│   ├── org.tunaos.decks-rust.json
-│   ├── org.tunaos.decks-rust.metainfo.xml
-│   ├── org.tunaos.decks-rust.desktop
+│   ├── org.tunaos.letters.json
+│   ├── org.tunaos.letters.metainfo.xml
+│   ├── org.tunaos.letters.desktop
+│   ├── org.tunaos.tables.json
+│   ├── org.tunaos.tables.metainfo.xml
+│   ├── org.tunaos.tables.desktop
+│   ├── org.tunaos.decks.json
+│   ├── org.tunaos.decks.metainfo.xml
+│   ├── org.tunaos.decks.desktop
 │   └── icons/
-│       ├── org.tunaos.letters-rust.svg
-│       ├── org.tunaos.tables-rust.svg
-│       └── org.tunaos.decks-rust.svg
+│       ├── org.tunaos.letters.svg
+│       ├── org.tunaos.tables.svg
+│       └── org.tunaos.decks.svg
 │
 ├── tests/              # Integration tests
 ├── docs/               # Documentation

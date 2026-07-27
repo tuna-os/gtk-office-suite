@@ -1,0 +1,8 @@
+[Desktop Entry]
+Name=Decks
+Comment=Presentations — TunaOS office suite
+Exec=decks
+Icon=org.tunaos.decks
+Terminal=false
+Type=Application
+Categories=Office;

@@ -11,7 +11,7 @@ mod markdown;
 mod preferences;
 
 fn main() {
-    let suite = suite_common::SuiteApp::new("org.tunaos.decks-rust");
+    let suite = suite_common::SuiteApp::new("org.tunaos.decks");
     let shortcuts: &[(&str, &[(&str, &str)])] = &[
         ("Editing", &[
             ("Undo", "<Control>z"),
@@ -42,7 +42,7 @@ fn main() {
     let parent_win = std::rc::Rc::new(std::cell::RefCell::new(None::<gtk4::Window>));
     let pw = parent_win.clone();
     act_prefs.connect_activate(move |_, _| {
-        let settings = gio::Settings::new("org.tunaos.decks-rust");
+        let settings = gio::Settings::new("org.tunaos.decks");
         let prefs_win = preferences::DecksPreferences::new(&settings);
         libadwaita::prelude::AdwDialogExt::present(&prefs_win.window, pw.borrow().as_ref());
     });

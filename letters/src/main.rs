@@ -14,10 +14,10 @@ mod layout;
 mod print_preview;
 
 fn main() {
-    let suite = suite_common::SuiteApp::new("org.tunaos.letters-rust");
+    let suite = suite_common::SuiteApp::new("org.tunaos.letters");
 
     // Store settings so we can pass to preferences
-    let settings = gio::Settings::new("org.tunaos.letters-rust");
+    let settings = gio::Settings::new("org.tunaos.letters");
 
     // Register the "show-preferences" action
     let s = settings.clone();

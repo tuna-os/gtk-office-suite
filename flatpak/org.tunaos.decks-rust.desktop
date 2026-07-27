@@ -1,8 +1,0 @@
-[Desktop Entry]
-Name=Decks (Rust)
-Comment=Presentations — TunaOS office suite (Rust)
-Exec=decks
-Icon=org.tunaos.decks-rust
-Terminal=false
-Type=Application
-Categories=Office;

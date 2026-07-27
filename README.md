@@ -42,7 +42,7 @@ cargo test -p tables
 cargo test -p suite-common
 
 # Build Flatpaks (on Bluefin host with Flatpak Builder)
-flatpak run org.flatpak.Builder --state-dir=.flatpak-builder build-dir flatpak/org.tunaos.letters-rust.json
+flatpak run org.flatpak.Builder --state-dir=.flatpak-builder build-dir flatpak/org.tunaos.letters.json
 ```
 
 ---

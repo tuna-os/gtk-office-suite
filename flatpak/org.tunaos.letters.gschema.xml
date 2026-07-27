@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <schemalist>
-  <schema id="org.tunaos.letters-rust" path="/org/tunaos/letters-rust/">
+  <schema id="org.tunaos.letters" path="/org/tunaos/letters/">
     <key name="dark-mode" type="b">
       <default>false</default>
       <summary>Dark mode</summary>

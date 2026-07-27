@@ -1,0 +1,27 @@
+{
+  "app-id": "org.tunaos.tables",
+  "runtime": "org.gnome.Platform",
+  "runtime-version": "50",
+  "sdk": "org.gnome.Sdk",
+  "sdk-extensions": ["org.freedesktop.Sdk.Extension.rust-stable"],
+  "command": "tables",
+  "finish-args": ["--share=ipc", "--socket=fallback-x11", "--socket=wayland", "--device=dri", "--filesystem=host:ro", "--own-name=org.tunaos.tables"],
+  "build-options": {
+    "append-path": "/usr/lib/sdk/rust-stable/bin",
+    "build-args": ["--share=network"]
+  },
+  "modules": [{
+    "name": "tables-rust",
+    "buildsystem": "simple",
+    "build-commands": [
+      "cargo clean && cargo build --release -p tables",
+      "install -Dm755 target/release/tables /app/bin/tables",
+      "install -Dm644 flatpak/org.tunaos.tables.desktop /app/share/applications/org.tunaos.tables.desktop",
+      "install -Dm644 flatpak/org.tunaos.tables.gschema.xml /app/share/glib-2.0/schemas/org.tunaos.tables.gschema.xml",
+      "glib-compile-schemas /app/share/glib-2.0/schemas/",
+      "install -Dm644 flatpak/icons/org.tunaos.tables.svg /app/share/icons/hicolor/scalable/apps/org.tunaos.tables.svg",
+      "install -Dm644 flatpak/org.tunaos.tables.metainfo.xml /app/share/metainfo/org.tunaos.tables.metainfo.xml"
+    ],
+    "sources": [{"type": "dir", "path": "..", "dest": "."}]
+  }]
+}

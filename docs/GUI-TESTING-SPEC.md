@@ -98,9 +98,9 @@ GitHub Actions Runner (ubuntu-24.04)
     run: |
       # Inside VM:
       flatpak remote-add --if-not-exists flathub https://flathub.org/repo/flathub.flatpakrepo
-      flatpak install -y org.tunaos.letters-rust
-      flatpak install -y org.tunaos.tables-rust
-      flatpak install -y org.tunaos.decks-rust
+      flatpak install -y org.tunaos.letters
+      flatpak install -y org.tunaos.tables
+      flatpak install -y org.tunaos.decks
       pip install dogtail
       python3 /tests/run_all.py
     record: screen.mp4                    # Always record for debugging

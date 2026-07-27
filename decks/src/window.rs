@@ -101,7 +101,7 @@ impl DecksWindow {
             });
             app.add_action(&act);
         }
-        let settings = gio::Settings::new("org.tunaos.decks-rust");
+        let settings = gio::Settings::new("org.tunaos.decks");
         let autosave_slot = Rc::new(suite_common::autosave::AutosaveSlot::new(
             autosave_state_dir(), next_doc_id(),
         ));

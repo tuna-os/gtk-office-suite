@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <schemalist>
-  <schema id="org.tunaos.decks-rust" path="/org/tunaos/decks-rust/">
+  <schema id="org.tunaos.decks" path="/org/tunaos/decks/">
     <key name="dark-mode" type="b">
       <default>false</default>
       <summary>Dark mode</summary>

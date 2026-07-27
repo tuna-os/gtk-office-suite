@@ -1,0 +1,27 @@
+{
+  "app-id": "org.tunaos.decks",
+  "runtime": "org.gnome.Platform",
+  "runtime-version": "50",
+  "sdk": "org.gnome.Sdk",
+  "sdk-extensions": ["org.freedesktop.Sdk.Extension.rust-stable"],
+  "command": "decks",
+  "finish-args": ["--share=ipc", "--socket=fallback-x11", "--socket=wayland", "--device=dri", "--filesystem=host:ro", "--own-name=org.tunaos.decks"],
+  "build-options": {
+    "append-path": "/usr/lib/sdk/rust-stable/bin",
+    "build-args": ["--share=network"]
+  },
+  "modules": [{
+    "name": "decks-rust",
+    "buildsystem": "simple",
+    "build-commands": [
+      "cargo clean && cargo build --release -p decks",
+      "install -Dm755 target/release/decks /app/bin/decks",
+      "install -Dm644 flatpak/org.tunaos.decks.desktop /app/share/applications/org.tunaos.decks.desktop",
+      "install -Dm644 flatpak/org.tunaos.decks.gschema.xml /app/share/glib-2.0/schemas/org.tunaos.decks.gschema.xml",
+      "glib-compile-schemas /app/share/glib-2.0/schemas/",
+      "install -Dm644 flatpak/icons/org.tunaos.decks.svg /app/share/icons/hicolor/scalable/apps/org.tunaos.decks.svg",
+      "install -Dm644 flatpak/org.tunaos.decks.metainfo.xml /app/share/metainfo/org.tunaos.decks.metainfo.xml"
+    ],
+    "sources": [{"type": "dir", "path": "..", "dest": "."}]
+  }]
+}

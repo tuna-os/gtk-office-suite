@@ -2,7 +2,7 @@ name: Publish Flatpaks
 
 # Build the three apps as Flatpak OCI images for x86_64 and aarch64, push
 # them to GHCR, and update the TunaOS Flatpak index (tunaos.org/flatpak) so
-# `flatpak install tuna-os org.tunaos.<app>-rust` serves current builds on
+# `flatpak install tuna-os org.tunaos.<app>` serves current builds on
 # either architecture.
 # Also attaches installable .flatpak bundles to the triggering release.
 
@@ -22,7 +22,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        app: [letters-rust, tables-rust, decks-rust]
+        app: [letters, tables, decks]
     container:
       image: ghcr.io/flathub-infra/flatpak-github-actions:gnome-50
       options: --privileged
@@ -81,7 +81,7 @@ jobs:
       # three apps don't race each other.
       max-parallel: 1
       matrix:
-        app: [letters-rust, tables-rust, decks-rust]
+        app: [letters, tables, decks]
     steps:
       - uses: actions/checkout@v7
 

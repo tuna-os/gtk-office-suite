@@ -20,7 +20,7 @@ Uses a Vision Language Model (Gemini 2.5 Flash or Gemma-4-31B via Lemonade) to v
 # Build and install Flatpaks
 cd /var/home/james/dev/tuna-os/gtk-office-suite
 flatpak run org.flatpak.Builder --force-clean --install --user --ccache \
-  --disable-rofiles-fuse build-dir flatpak/org.tunaos.letters-rust.json
+  --disable-rofiles-fuse build-dir flatpak/org.tunaos.letters.json
 
 # Run all GUI tests with Gemini backend
 cd tests/gui
@@ -31,7 +31,7 @@ VLM_BACKEND=gemini python3 -m pytest test_letters.py -v --tb=short
 
 Each test method in `test_letters.py`, `test_decks.py`, and `test_tables.py`:
 
-1. Launches the Flatpak app via `flatpak run org.tunaos.<app>-rust`
+1. Launches the Flatpak app via `flatpak run org.tunaos.<app>`
 2. Uses `dogtail` to find widgets by their AT-SPI accessible names
 3. Performs an action (click button, type text, press shortcut)
 4. Takes a screenshot via `mss` cropped to the app window

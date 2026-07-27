@@ -871,7 +871,7 @@ impl LettersWindow {
                         // Persist line spacing to GSettings
                         let spacing_map = [("line-spacing-1.0", 1.0), ("line-spacing-1.15", 1.15), ("line-spacing-1.5", 1.5), ("line-spacing-2.0", 2.0)];
                         let val = spacing_map.iter().find(|(n,_)| *n == spacing_tags[next]).map(|(_,v)| *v).unwrap_or(1.15);
-                        let s = gtk4::gio::Settings::new("org.tunaos.letters-rust");
+                        let s = gtk4::gio::Settings::new("org.tunaos.letters");
                         let _ = s.set_double("line-spacing", val);
                     }
                     buf.end_user_action();
@@ -1357,7 +1357,7 @@ impl LettersWindow {
                                         let is_docx = path.extension().and_then(|e| e.to_str()).map(|e| e == "docx").unwrap_or(false);
                                         if is_docx {
                                             let config = crate::layout::LayoutConfig::from_settings(
-                                                &gtk4::gio::Settings::new("org.tunaos.letters-rust")
+                                                &gtk4::gio::Settings::new("org.tunaos.letters")
                                             );
                                             let ctx = gtk4::pango::Context::new();
                                             let pages = crate::layout::paginate(&buf, &config, &ctx);

@@ -62,7 +62,7 @@ class LettersSnapshotSmoke(BaseGUITestCase):
         rawinput.typeText("the quick brown fox")
         time.sleep(1.0)
 
-        aid = "org.tunaos.letters-rust"
+        aid = "org.tunaos.letters"
         subprocess.run(["gapplication", "action", aid, "test-snapshot"])
         time.sleep(0.5)
         self.assertTrue(os.path.exists(self._snapshot_path), "snapshot file was not written")
@@ -153,7 +153,7 @@ class LettersSelectionUXSmoke(BaseGUITestCase):
         self.assertIsNotNone(bold_btn, "selection popover did not appear")
         # Apply Heading 2 via its action; the status readout must follow.
         subprocess.run(["gapplication", "action",
-                        "org.tunaos.letters-rust", "style-h2"])
+                        "org.tunaos.letters", "style-h2"])
         time.sleep(1.0)
         labels = {c.name for c in self.app.findChildren(
             lambda c: c.roleName == "label")}
@@ -277,7 +277,7 @@ class LettersAutosaveSmoke(BaseGUITestCase):
         import subprocess
         from dogtail import rawinput
 
-        aid = "org.tunaos.letters-rust"
+        aid = "org.tunaos.letters"
         # The "New Document" button only lives in the empty-state view, so
         # it's only clickable for the very first tab; every tab after that
         # (like every other multi-tab test in this file) goes through the
@@ -292,7 +292,7 @@ class LettersAutosaveSmoke(BaseGUITestCase):
         rawinput.typeText("second tab content")
         time.sleep(1.0)
 
-        subprocess.run(["gapplication", "action", "org.tunaos.letters-rust", "autosave-now"])
+        subprocess.run(["gapplication", "action", "org.tunaos.letters", "autosave-now"])
         time.sleep(0.5)
         self.assertEqual(len(self._snapshot_files()), 2,
                           "both dirty tabs should have snapshotted")
@@ -364,7 +364,7 @@ class LettersPreferenceBindingSmoke(BaseGUITestCase):
         time.sleep(1.5)
         self.assertTrue(self._toolbar_visible(), "toolbar should be visible by default")
 
-        self._gsettings("set", "org.tunaos.letters-rust", "show-toolbar", "false")
+        self._gsettings("set", "org.tunaos.letters", "show-toolbar", "false")
         time.sleep(0.5)
         self.assertFalse(self._toolbar_visible(), "toolbar did not hide live when show-toolbar was set false")
 
@@ -402,7 +402,7 @@ class TablesSmoke(BaseGUITestCase):
         import subprocess
 
         # Tables starts on an empty-state page; the grid maps on new-document.
-        subprocess.run(["gapplication", "action", "org.tunaos.tables-rust", "new-document"])
+        subprocess.run(["gapplication", "action", "org.tunaos.tables", "new-document"])
         time.sleep(1.5)
         # new-document focuses the formula entry; type straight into it.
         rawinput.typeText("=2+3")
@@ -424,7 +424,7 @@ class TablesMultiSheetSmoke(BaseGUITestCase):
         from dogtail import rawinput
         import subprocess
 
-        subprocess.run(["gapplication", "action", "org.tunaos.tables-rust", "new-document"])
+        subprocess.run(["gapplication", "action", "org.tunaos.tables", "new-document"])
         time.sleep(1.5)
         rawinput.typeText("=1+1")
         rawinput.keyCombo("Return")
@@ -467,7 +467,7 @@ class TablesCloseGuardSmoke(BaseGUITestCase):
         import subprocess
         from dogtail import rawinput
 
-        subprocess.run(["gapplication", "action", "org.tunaos.tables-rust", "new-document"])
+        subprocess.run(["gapplication", "action", "org.tunaos.tables", "new-document"])
         time.sleep(1.5)
         rawinput.typeText("=1+1")
         rawinput.keyCombo("Return")
@@ -532,7 +532,7 @@ class TablesAutosaveSmoke(BaseGUITestCase):
         import subprocess
         from dogtail import rawinput
 
-        subprocess.run(["gapplication", "action", "org.tunaos.tables-rust", "new-document"])
+        subprocess.run(["gapplication", "action", "org.tunaos.tables", "new-document"])
         time.sleep(1.5)
         rawinput.typeText("=6*7")
         rawinput.keyCombo("Return")
@@ -541,12 +541,12 @@ class TablesAutosaveSmoke(BaseGUITestCase):
     def test_autosave_now_writes_a_snapshot_only_while_dirty(self):
         import subprocess
 
-        subprocess.run(["gapplication", "action", "org.tunaos.tables-rust", "autosave-now"])
+        subprocess.run(["gapplication", "action", "org.tunaos.tables", "autosave-now"])
         time.sleep(0.5)
         self.assertEqual(self._snapshot_files(), [], "a clean, untouched workbook must not snapshot")
 
         self._edit_a1()
-        subprocess.run(["gapplication", "action", "org.tunaos.tables-rust", "autosave-now"])
+        subprocess.run(["gapplication", "action", "org.tunaos.tables", "autosave-now"])
         time.sleep(0.5)
         self.assertEqual(len(self._snapshot_files()), 1, "dirty workbook should have snapshotted")
 
@@ -554,7 +554,7 @@ class TablesAutosaveSmoke(BaseGUITestCase):
         import subprocess
 
         self._edit_a1()
-        subprocess.run(["gapplication", "action", "org.tunaos.tables-rust", "autosave-now"])
+        subprocess.run(["gapplication", "action", "org.tunaos.tables", "autosave-now"])
         time.sleep(0.5)
         self.assertEqual(len(self._snapshot_files()), 1, "autosave-now must have written a snapshot")
 
@@ -668,7 +668,7 @@ class TablesNameBoxSmoke(BaseGUITestCase):
         from dogtail import rawinput
         import subprocess
 
-        subprocess.run(["gapplication", "action", "org.tunaos.tables-rust", "new-document"])
+        subprocess.run(["gapplication", "action", "org.tunaos.tables", "new-document"])
         time.sleep(1.5)
         # Ctrl+G (Go to Cell) focuses the name box with text selected.
         rawinput.keyCombo("<Control>g")
@@ -703,7 +703,7 @@ class TablesNameBoxSmoke(BaseGUITestCase):
         from dogtail import rawinput
         import subprocess
 
-        subprocess.run(["gapplication", "action", "org.tunaos.tables-rust", "new-document"])
+        subprocess.run(["gapplication", "action", "org.tunaos.tables", "new-document"])
         time.sleep(1.5)
         self._put("A1", "10")
         self._put("A2", "20")
@@ -749,7 +749,7 @@ class TablesNamedRangeSmoke(BaseGUITestCase):
         from dogtail import rawinput, tree
         import subprocess
 
-        subprocess.run(["gapplication", "action", "org.tunaos.tables-rust", "new-document"])
+        subprocess.run(["gapplication", "action", "org.tunaos.tables", "new-document"])
         time.sleep(1.5)
         self._put("A1", "10")
         self._put("A2", "20")
@@ -765,7 +765,7 @@ class TablesNamedRangeSmoke(BaseGUITestCase):
         rawinput.keyCombo("<Shift>Down")
         time.sleep(0.5)
 
-        subprocess.run(["gapplication", "action", "org.tunaos.tables-rust", "define-name"])
+        subprocess.run(["gapplication", "action", "org.tunaos.tables", "define-name"])
         time.sleep(0.8)
         name_entry = tree.root.findChild(lambda n: n.name == "Name" and n.roleName == "text")
         name_entry.text = "MyRange"
@@ -806,7 +806,7 @@ class TablesClipboardSmoke(BaseGUITestCase):
         from dogtail import rawinput
         import subprocess
 
-        subprocess.run(["gapplication", "action", "org.tunaos.tables-rust", "new-document"])
+        subprocess.run(["gapplication", "action", "org.tunaos.tables", "new-document"])
         time.sleep(1.5)
 
         def put(ref, value):
@@ -891,7 +891,7 @@ class TablesA11yCellsSmoke(BaseGUITestCase):
         from dogtail import rawinput
         import subprocess
 
-        subprocess.run(["gapplication", "action", "org.tunaos.tables-rust", "new-document"])
+        subprocess.run(["gapplication", "action", "org.tunaos.tables", "new-document"])
         time.sleep(1.5)
         for ref, value in [("A1", "10"), ("B2", "20")]:
             rawinput.keyCombo("<Control>g")
@@ -921,7 +921,7 @@ class DecksA11yObjectsSmoke(BaseGUITestCase):
     def test_objects_are_accessible_nodes(self):
         import subprocess
 
-        aid = "org.tunaos.decks-rust"
+        aid = "org.tunaos.decks"
         subprocess.run(["gapplication", "action", aid, "new-document"])
         time.sleep(1.5)
         subprocess.run(["gapplication", "action", aid, "add-text-box"])
@@ -944,7 +944,7 @@ class TablesFormatCellsSmoke(BaseGUITestCase):
         from dogtail import rawinput
         import subprocess
 
-        aid = "org.tunaos.tables-rust"
+        aid = "org.tunaos.tables"
         subprocess.run(["gapplication", "action", aid, "new-document"])
         time.sleep(1.5)
         rawinput.keyCombo("<Control>g")
@@ -991,7 +991,7 @@ class TablesSnapshotSmoke(BaseGUITestCase):
         import subprocess
         from dogtail import rawinput
 
-        aid = "org.tunaos.tables-rust"
+        aid = "org.tunaos.tables"
         subprocess.run(["gapplication", "action", aid, "new-document"])
         time.sleep(1.0)
         rawinput.keyCombo("<Control>g")
@@ -1062,7 +1062,7 @@ class TablesFillHandleSmoke(BaseGUITestCase):
         import subprocess
         from dogtail import rawinput
 
-        aid = "org.tunaos.tables-rust"
+        aid = "org.tunaos.tables"
         subprocess.run(["gapplication", "action", aid, "new-document"])
         time.sleep(1.0)
         rawinput.keyCombo("<Control>g")
@@ -1121,7 +1121,7 @@ class TablesFormulaReferenceHighlightSmoke(BaseGUITestCase):
         import subprocess
         from dogtail import rawinput
 
-        aid = "org.tunaos.tables-rust"
+        aid = "org.tunaos.tables"
         subprocess.run(["gapplication", "action", aid, "new-document"])
         time.sleep(1.5)
 
@@ -1185,7 +1185,7 @@ class TablesSortIndicatorSmoke(BaseGUITestCase):
         import json
         import subprocess
 
-        subprocess.run(["gapplication", "action", "org.tunaos.tables-rust", "test-snapshot"])
+        subprocess.run(["gapplication", "action", "org.tunaos.tables", "test-snapshot"])
         time.sleep(0.5)
         with open(self._snapshot_path) as f:
             return json.load(f)["sheet"]["sorted_col"]
@@ -1194,7 +1194,7 @@ class TablesSortIndicatorSmoke(BaseGUITestCase):
         import subprocess
         from dogtail import rawinput
 
-        aid = "org.tunaos.tables-rust"
+        aid = "org.tunaos.tables"
         subprocess.run(["gapplication", "action", aid, "new-document"])
         time.sleep(1.5)
         rawinput.keyCombo("<Control>g")
@@ -1250,7 +1250,7 @@ class TablesFilterSmoke(BaseGUITestCase):
         import subprocess
         from dogtail import rawinput, tree
 
-        aid = "org.tunaos.tables-rust"
+        aid = "org.tunaos.tables"
         subprocess.run(["gapplication", "action", aid, "new-document"])
         time.sleep(1.0)
 
@@ -1325,7 +1325,7 @@ class TablesNamedRangeSmoke(BaseGUITestCase):
         import subprocess
         from dogtail import rawinput, tree
 
-        aid = "org.tunaos.tables-rust"
+        aid = "org.tunaos.tables"
         subprocess.run(["gapplication", "action", aid, "new-document"])
         time.sleep(1.5)
 
@@ -1403,7 +1403,7 @@ class TablesNamedRangeSmoke(BaseGUITestCase):
         import subprocess
         from dogtail import rawinput
 
-        aid = "org.tunaos.tables-rust"
+        aid = "org.tunaos.tables"
         subprocess.run(["gapplication", "action", aid, "new-document"])
         time.sleep(1.5)
         rawinput.keyCombo("<Control>g")
@@ -1439,7 +1439,7 @@ class DecksSnapshotSmoke(BaseGUITestCase):
         import json
         import subprocess
 
-        aid = "org.tunaos.decks-rust"
+        aid = "org.tunaos.decks"
         subprocess.run(["gapplication", "action", aid, "new-document"])
         time.sleep(1.5)
         subprocess.run(["gapplication", "action", aid, "add-text-box"])
@@ -1480,7 +1480,7 @@ class DecksSelectionSmoke(BaseGUITestCase):
         from dogtail import rawinput
         import subprocess
 
-        aid = "org.tunaos.decks-rust"
+        aid = "org.tunaos.decks"
         subprocess.run(["gapplication", "action", aid, "new-document"])
         time.sleep(1.5)
         subprocess.run(["gapplication", "action", aid, "add-shape"])
@@ -1520,7 +1520,7 @@ class DecksCloseGuardSmoke(BaseGUITestCase):
     def _add_shape(self):
         import subprocess
 
-        aid = "org.tunaos.decks-rust"
+        aid = "org.tunaos.decks"
         subprocess.run(["gapplication", "action", aid, "new-document"])
         time.sleep(1.5)
         subprocess.run(["gapplication", "action", aid, "add-shape"])
@@ -1584,7 +1584,7 @@ class DecksAutosaveSmoke(BaseGUITestCase):
     def _add_shape(self):
         import subprocess
 
-        aid = "org.tunaos.decks-rust"
+        aid = "org.tunaos.decks"
         subprocess.run(["gapplication", "action", aid, "new-document"])
         time.sleep(1.5)
         subprocess.run(["gapplication", "action", aid, "add-shape"])
@@ -1594,7 +1594,7 @@ class DecksAutosaveSmoke(BaseGUITestCase):
         import subprocess
 
         self._add_shape()
-        subprocess.run(["gapplication", "action", "org.tunaos.decks-rust", "autosave-now"])
+        subprocess.run(["gapplication", "action", "org.tunaos.decks", "autosave-now"])
         time.sleep(0.5)
         self.assertEqual(len(self._snapshot_files()), 1, "autosave-now must have written a snapshot")
 
@@ -1630,7 +1630,7 @@ class DecksSmoke(BaseGUITestCase):
         # Decks starts on an empty-state page; the canvas maps (and enters
         # the AT-SPI tree) once a deck exists.
         import subprocess
-        subprocess.run(["gapplication", "action", "org.tunaos.decks-rust", "new-document"])
+        subprocess.run(["gapplication", "action", "org.tunaos.decks", "new-document"])
         time.sleep(1.5)
         canvas = self.app.child(name="Slide canvas")
         deadline = time.monotonic() + 5
