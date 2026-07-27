@@ -1168,6 +1168,14 @@ fn xml_attr<'a>(tag: &'a str, attr: &str) -> Option<&'a str> {
     Some(&tag[start..end])
 }
 
+/// OOXML boolean attributes are legal as either "1"/"0" or "true"/"false"
+/// — our own writer emits "1", but LibreOffice's re-saved xlsx uses
+/// "true", so a strict `== Some("1")` check silently drops hidden
+/// rows/cols on a Calc round trip.
+fn xml_bool_attr(tag: &str, attr: &str) -> bool {
+    matches!(xml_attr(tag, attr), Some("1") | Some("true"))
+}
+
 /// name → target for each `<Relationship Id="rIdN" Target="...">` in a
 /// `.rels` part.
 fn parse_rels(xml: &str) -> std::collections::HashMap<String, String> {
@@ -1259,7 +1267,7 @@ pub fn read_sheet_props_from_xlsx(
             let cols_block = cols_block.split("</cols>").next().unwrap_or("");
             for tag in cols_block.split("<col ").skip(1) {
                 let tag = tag.split('>').next().unwrap_or("").trim_end_matches('/');
-                if xml_attr(tag, "hidden") != Some("1") {
+                if !xml_bool_attr(tag, "hidden") {
                     continue;
                 }
                 let min: Option<usize> = xml_attr(tag, "min").and_then(|v| v.parse().ok());
@@ -1276,7 +1284,7 @@ pub fn read_sheet_props_from_xlsx(
             let data_block = data_block.split("</sheetData>").next().unwrap_or("");
             for tag in data_block.split("<row ").skip(1) {
                 let tag = tag.split('>').next().unwrap_or("").trim_end_matches('/');
-                if xml_attr(tag, "hidden") != Some("1") {
+                if !xml_bool_attr(tag, "hidden") {
                     continue;
                 }
                 if let Some(r) = xml_attr(tag, "r").and_then(|v| v.parse::<usize>().ok()) {
@@ -1360,6 +1368,19 @@ mod sheet_props_tests {
         assert!(props["Sheet1"].hidden_cols.contains(&2));
         assert!(props["Sheet2"].hidden_rows.is_empty(), "Sheet2 must not inherit Sheet1's hides");
         assert!(props["Sheet2"].hidden_cols.is_empty());
+    }
+
+    #[test]
+    fn xml_bool_attr_accepts_true_as_well_as_1() {
+        // LibreOffice's own xlsx export writes hidden="true" (a legal
+        // OOXML boolean per the xsd:boolean spec) rather than our
+        // writer's hidden="1" — a naive `== Some("1")` check silently
+        // drops every hidden row/col on a Calc round trip (caught by
+        // soffice_oracle.rs's hidden_rows_and_cols_survive_calc_rewrite).
+        assert!(xml_bool_attr("r=\"3\" hidden=\"true\"", "hidden"));
+        assert!(xml_bool_attr("r=\"3\" hidden=\"1\"", "hidden"));
+        assert!(!xml_bool_attr("r=\"3\" hidden=\"false\"", "hidden"));
+        assert!(!xml_bool_attr("r=\"3\"", "hidden"));
     }
 
     #[test]
