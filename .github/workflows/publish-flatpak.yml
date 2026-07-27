@@ -78,12 +78,17 @@ jobs:
       - uses: actions/download-artifact@v8
         with:
           name: ${{ matrix.app }}-x86_64-oci
-          path: .
+          # upload-artifact flattens a single-directory `path` to the
+          # artifact root, so both arches must download into distinct
+          # subdirectories -- `path: .` for both put x86_64's and
+          # aarch64's index.json/blobs in the same place, clobbering
+          # each other.
+          path: ${{ matrix.app }}-x86_64.oci
 
       - uses: actions/download-artifact@v8
         with:
           name: ${{ matrix.app }}-aarch64-oci
-          path: .
+          path: ${{ matrix.app }}-aarch64.oci
 
       - name: Push OCI to GHCR
         env:
