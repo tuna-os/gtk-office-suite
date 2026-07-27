@@ -24,7 +24,7 @@ jobs:
   # Core crates only — no GTK needed. REQUIRE_SOFFICE turns a missing
   # oracle into a failure so this check can never silently skip.
   oracle:
-    runs-on: ubuntu-24.04
+    runs-on: blacksmith-4vcpu-ubuntu-2404
     steps:
       - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@stable
@@ -57,7 +57,7 @@ jobs:
           retention-days: 90
 
   coverage:
-    runs-on: ubuntu-24.04
+    runs-on: blacksmith-4vcpu-ubuntu-2404
     steps:
       - uses: actions/checkout@v7
       - name: Install GTK4 deps

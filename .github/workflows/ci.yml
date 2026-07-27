@@ -14,7 +14,7 @@ env:
 jobs:
   # Unit tests + clippy on Ubuntu 24.04 (has GTK 4.14 + libadwaita 1.5)
   test:
-    runs-on: ubuntu-24.04
+    runs-on: blacksmith-4vcpu-ubuntu-2404
     steps:
       - uses: actions/checkout@v7
 
@@ -61,7 +61,7 @@ jobs:
 
   # Flatpak builds — uses Flatpak SDK container (no Rust needed)
   flatpak:
-    runs-on: ubuntu-latest
+    runs-on: blacksmith-4vcpu-ubuntu-2404
     needs: [test]
     strategy:
       matrix:

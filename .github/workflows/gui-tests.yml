@@ -17,7 +17,7 @@ jobs:
   # Deterministic AT-SPI smoke tests. These GATE: no `|| true`, no VLM.
   # If they fail, an app does not launch or basic input is broken.
   smoke:
-    runs-on: ubuntu-24.04
+    runs-on: blacksmith-4vcpu-ubuntu-2404
     steps:
       - uses: actions/checkout@v7
         with:
@@ -97,7 +97,7 @@ jobs:
   # judgments flake on model output and need API keys, so they inform
   # rather than block. Failures are still visible in the job UI.
   vlm-audit:
-    runs-on: ubuntu-24.04
+    runs-on: blacksmith-4vcpu-ubuntu-2404
     needs: smoke
     if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
     continue-on-error: true
