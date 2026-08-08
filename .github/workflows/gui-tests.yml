@@ -61,7 +61,13 @@ jobs:
                 fi
                 if [ "$shared" = "1" ] || [ -z "$apps" ]; then
                   echo "filter=" >> "$GITHUB_OUTPUT"
-                  [ -z "$apps" ] && [ "$shared" != "1" ] && echo "No recognized app path changed: testing all apps (fail-safe)."
+                  # A bare `a && b && echo` here is the step's last command, so
+                  # when it evaluates false (shared=1) its non-zero status kills
+                  # the step under `bash -e` — after it has already decided
+                  # correctly. Keep it a real conditional.
+                  if [ -z "$apps" ] && [ "$shared" != "1" ]; then
+                    echo "No recognized app path changed: testing all apps (fail-safe)."
+                  fi
                 else
                   filter=$(echo "$apps" | xargs | sed 's/ / or /g')
                   echo "filter=-k \"$filter\"" >> "$GITHUB_OUTPUT"
