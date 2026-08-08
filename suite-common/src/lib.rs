@@ -43,7 +43,8 @@ pub fn i18n(s: &str) -> String {
 /// Locale files install to <prefix>/share/locale (Flatpak: /app).
 fn init_i18n() {
     use gettextrs::{bind_textdomain_codeset, bindtextdomain, setlocale, textdomain, LocaleCategory};
-    setlocale(LocaleCategory::LcAll, "");
+    // SAFETY: setlocale is safe in single-threaded startup; gettext-rs 0.8 marks it unsafe.
+    unsafe { setlocale(LocaleCategory::LcAll, ""); }
     let dir = if std::path::Path::new("/app/share/locale").exists() {
         "/app/share/locale"
     } else {
