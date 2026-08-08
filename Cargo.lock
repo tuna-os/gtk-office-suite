@@ -2020,8 +2020,9 @@ dependencies = [
 
 [[package]]
 name = "ironcalc_base"
-version = "0.7.1"
-source = "git+https://github.com/ironcalc/IronCalc?rev=2f539370#2f539370489872ddac0d452e4d93d7c402cb4be3"
+version = "0.8.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ce1dd83cada7da742782076daccda92e33162e9f4396a958ae3e7c5bb64e6a01"
 dependencies = [
  "bitcode",
  "chrono",
@@ -5496,3 +5497,8 @@ checksum = "27bc9d5b815bc103f142aa054f561d9187d191692ec7c2d1e2b4737f8dbd7296"
 dependencies = [
  "zune-core",
 ]
+
+[[patch.unused]]
+name = "ironcalc_base"
+version = "0.7.1"
+source = "git+https://github.com/ironcalc/IronCalc?rev=2f539370#2f539370489872ddac0d452e4d93d7c402cb4be3"
