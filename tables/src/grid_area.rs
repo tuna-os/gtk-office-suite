@@ -140,6 +140,9 @@ mod imp_grid {
         pub cells: RefCell<Vec<CellAccessible>>,
         pub cols: std::cell::Cell<usize>,
         pub col_widths: RefCell<Vec<f64>>,
+        /// Visible extent so sibling iteration can skip hidden cells.
+        pub visible_rows: std::cell::Cell<usize>,
+        pub visible_cols: std::cell::Cell<usize>,
     }
 
     #[glib::object_subclass]
@@ -159,10 +162,18 @@ mod imp_grid {
 
     impl AccessibleImpl for GridArea {
         fn first_accessible_child(&self) -> Option<gtk::Accessible> {
-            self.cells
-                .borrow()
-                .first()
-                .map(|c| c.clone().upcast::<gtk::Accessible>())
+            let cells = self.cells.borrow();
+            let vis_rows = self.visible_rows.get().max(1);
+            let vis_cols = self.visible_cols.get().max(1);
+            let cols = self.cols.get().max(1);
+            for idx in 0..cells.len() {
+                let r = idx / cols;
+                let c = idx % cols;
+                if r < vis_rows && c < vis_cols {
+                    return cells.get(idx).map(|c| c.clone().upcast::<gtk::Accessible>());
+                }
+            }
+            None
         }
     }
 
@@ -172,11 +183,19 @@ mod imp_grid {
             if cols == 0 {
                 return None;
             }
-            let idx = row * cols + col + 1;
-            self.cells
-                .borrow()
-                .get(idx)
-                .map(|c| c.clone().upcast::<gtk::Accessible>())
+            let vis_rows = self.visible_rows.get().max(1);
+            let vis_cols = self.visible_cols.get().max(1);
+            let mut idx = row * cols + col + 1;
+            let cells = self.cells.borrow();
+            while idx < cells.len() {
+                let r = idx / cols;
+                let c = idx % cols;
+                if r < vis_rows && c < vis_cols {
+                    return cells.get(idx).map(|c| c.clone().upcast::<gtk::Accessible>());
+                }
+                idx += 1;
+            }
+            None
         }
 
         /// x-origin and width of a column, in widget coordinates.
@@ -240,6 +259,8 @@ impl GridArea {
         // geometry changes and surplus cells are hidden.
         let grid_cols = self.imp().cols.get().max(cols);
         let needed = rows.max(1) * grid_cols.max(1);
+        self.imp().visible_rows.set(rows);
+        self.imp().visible_cols.set(cols);
         // Append without holding the borrow across GTK calls —
         // set_accessible_parent re-enters first_accessible_child.
         loop {
