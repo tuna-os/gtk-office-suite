@@ -37,7 +37,7 @@ anything interactive needs I5 or I6. Cross-app clipboard: fragment matrix I1 + p
 | Code blocks | ✅ | I1, I2 (CommonMark fenced 24/29), I3 |
 | Markdown save/load with formatting | ✅ | I2 CommonMark ratchet **630/652 — target met** (raw HTML preserved verbatim; remaining 22 are escape/entity/autolink edge cases) |
 | DOCX save/load | ✅ | I2, I3, I4 |
-| Undo/redo | ✅ (buffer-level) | **move to model ops + I1**; I6 smoke |
+| Undo/redo | ✅ (buffer-level) | **move to model ops + I1**; I6 journey: tests/gui/test_letters.py (undo/redo typed text) |
 | Find & replace | ✅ UI | **extract to core + I1**; I6 |
 | Word count | ✅ | I6 smoke (live) |
 | Spell check | ✅ | dictionaries bundled in Flatpak; squiggle visible over AT-SPI attrs |
@@ -81,8 +81,8 @@ anything interactive needs I5 or I6. Cross-app clipboard: fragment matrix I1 + p
 | XLSX round-trip | ✅ | I1 io tests, I4 Calc oracle |
 | ODS / CSV / TSV import | ✅ | I1; add I3-style: LO-authored ods/xlsx read |
 | Number formats (currency, %, date) | ✅ | I1 format.rs + I2 xlsx format codes + I6 Format Cells sheet; values render formatted on canvas and in a11y cells |
-| Undo/redo | ✅ | I1 (12 tests) |
-| Multi-sheet | ✅ | I1 + I4: names survive xlsx→Calc→xlsx |
+| Undo/redo | ✅ | I1 (12 tests) + I6 journey: tests/gui/test_tables.py::test_undo_removes_cell_value, tests/gui/test_smoke.py::TablesUndoSaveReopenSmoke |
+| Multi-sheet | ✅ | I1 + I4: names survive xlsx→Calc→xlsx; I6 journey: tests/gui/test_tables.py (add-sheet tabs) |
 | Sort, cell borders, merge, validation | ✅ model | I1 + I4: merges/frozen panes/column widths persist to xlsx and survive Calc |
 
 ### Tier 2 — Nice-to-have
@@ -111,7 +111,7 @@ roadmap-dependent), external file references (decision: likely never),
 | Text boxes, rects, circles, images | ✅ | I1 round-trip |
 | PPTX save/load | ✅ | I1, I4 Impress oracle |
 | Speaker notes | ✅ | I1, LO round-trip (notesSlide parts read+written) |
-| Undo/redo | ✅ | I1 (9 tests) |
+| Undo/redo | ✅ | I1 (9 tests) + I6 journey: tests/gui/test_decks.py::test_undo_removes_added_slide |
 | Present mode + transitions | ✅ | I6 smoke: enter/exit presenting; I7 visual |
 | **LO-authored parity corpus for Decks** | ✅ 9/9 | decks-core/tests/lo_parity.rs (pptx through-the-oracle, ratcheted) |
 
@@ -119,7 +119,7 @@ roadmap-dependent), external file references (decision: likely never),
 
 | Feature | How to test |
 |---|---|
-| Styled text inside text boxes (runs, not plain) | ✅ | model+pptx (shared Run/RunStyle) + Pango canvas rendering |
+| Styled text inside text boxes (runs, not plain) | ✅ | I3 LO-authored styled-runs (decks-core/tests/lo_parity.rs) + I4 soffice oracle bold_run_survives_impress_rewrite; model+pptx (shared Run/RunStyle) |
 | Master slides applied on render | ✅ | I1 placeholder-skip parser + I4 (Impress-authored pptx maps slides→masters); master background inherited on canvas |
 | ODP read/write | ✅ | decks-core/src/odp.rs: I2 round-trips (text, runs, geometry, notes, background) + 7 I4 oracle tests (Impress rewrite both ways; reads Impress custom-shape output) |
 | Slide reorder / duplicate | I1 + I6 |

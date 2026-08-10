@@ -45,6 +45,27 @@ cargo test -p suite-common
 flatpak run org.flatpak.Builder --state-dir=.flatpak-builder build-dir flatpak/org.tunaos.letters.json
 ```
 
+## Nix
+
+The repo ships a [flake](flake.nix) so you can try the suite without installing
+GTK4/libadwaita dev libraries yourself:
+
+```bash
+nix run .            # default: Letters
+nix run . -- tables  # pick an app (letters | tables | decks)
+nix run .#decks      # ...or target an app directly
+nix develop          # dev shell with Rust + GTK4/libadwaita system deps
+nix build            # build all three apps + desktop/schema/icon files
+```
+
+`nix develop` points `GSETTINGS_SCHEMA_DIR` at `flatpak/` (the same schema dir
+the `justfile` smoke tests use), so `cargo run -p letters` works immediately.
+
+The flake pins two crates to git revisions (IronCalc, rdocx) and uses
+`allowBuiltinFetchGit` to fetch them, so no dependency hashes need to be
+maintained. `flake.lock` is not committed yet — run `nix flake lock` on a Nix
+machine to pin the nixpkgs input and commit the result (tracked as follow-up).
+
 ---
 
 ## Architecture

@@ -368,43 +368,43 @@ impl LettersWindow {
         }
 
         suite_common::actions::register_labels(&[
-            ("app.bold", "Bold"),
-            ("app.italic", "Italic"),
-            ("app.underline", "Underline"),
-            ("app.strikethrough", "Strikethrough"),
-            ("app.highlight", "Highlight"),
-            ("app.bullet-list", "Bullet List"),
-            ("app.numbered-list", "Numbered List"),
-            ("app.align-left", "Align Left"),
-            ("app.align-center", "Align Center"),
-            ("app.align-right", "Align Right"),
-            ("app.align-justify", "Justify"),
-            ("app.insertlink", "Insert Link…"),
-            ("app.insertimage", "Insert Image…"),
-            ("app.insert-table", "Insert Table…"),
-            ("app.cycle-line-spacing", "Cycle Line Spacing"),
-            ("app.cycle-columns", "Cycle Column Layout"),
-            ("app.increase-font", "Increase Font Size"),
-            ("app.decrease-font", "Decrease Font Size"),
-            ("app.find", "Find and Replace"),
-            ("app.undo", "Undo"),
-            ("app.redo", "Redo"),
-            ("app.page-setup", "Page Setup…"),
-            ("app.print", "Print…"),
-            ("app.print-preview", "Print Preview"),
-            ("app.export-pdf", "Export as PDF…"),
-            ("app.edit-headers", "Edit Headers and Footers…"),
-            ("app.style-p", "Paragraph Style: Normal"),
-            ("app.style-h1", "Paragraph Style: Heading 1"),
-            ("app.style-h2", "Paragraph Style: Heading 2"),
-            ("app.style-h3", "Paragraph Style: Heading 3"),
-            ("app.style-h4", "Paragraph Style: Heading 4"),
-            ("app.style-h5", "Paragraph Style: Heading 5"),
-            ("app.style-h6", "Paragraph Style: Heading 6"),
-            ("app.style-code", "Paragraph Style: Code"),
-            ("app.style-quote", "Paragraph Style: Block Quote"),
-                    ("app.insert-footnote", "Insert Footnote\u{2026}"),
-            ("app.autosave-now", "Save Crash-Recovery Snapshot Now"),
+            ("app.bold", &suite_common::i18n("Bold")),
+            ("app.italic", &suite_common::i18n("Italic")),
+            ("app.underline", &suite_common::i18n("Underline")),
+            ("app.strikethrough", &suite_common::i18n("Strikethrough")),
+            ("app.highlight", &suite_common::i18n("Highlight")),
+            ("app.bullet-list", &suite_common::i18n("Bullet List")),
+            ("app.numbered-list", &suite_common::i18n("Numbered List")),
+            ("app.align-left", &suite_common::i18n("Align Left")),
+            ("app.align-center", &suite_common::i18n("Align Center")),
+            ("app.align-right", &suite_common::i18n("Align Right")),
+            ("app.align-justify", &suite_common::i18n("Justify")),
+            ("app.insertlink", &suite_common::i18n("Insert Link…")),
+            ("app.insertimage", &suite_common::i18n("Insert Image…")),
+            ("app.insert-table", &suite_common::i18n("Insert Table…")),
+            ("app.cycle-line-spacing", &suite_common::i18n("Cycle Line Spacing")),
+            ("app.cycle-columns", &suite_common::i18n("Cycle Column Layout")),
+            ("app.increase-font", &suite_common::i18n("Increase Font Size")),
+            ("app.decrease-font", &suite_common::i18n("Decrease Font Size")),
+            ("app.find", &suite_common::i18n("Find and Replace")),
+            ("app.undo", &suite_common::i18n("Undo")),
+            ("app.redo", &suite_common::i18n("Redo")),
+            ("app.page-setup", &suite_common::i18n("Page Setup…")),
+            ("app.print", &suite_common::i18n("Print…")),
+            ("app.print-preview", &suite_common::i18n("Print Preview")),
+            ("app.export-pdf", &suite_common::i18n("Export as PDF…")),
+            ("app.edit-headers", &suite_common::i18n("Edit Headers and Footers…")),
+            ("app.style-p", &suite_common::i18n("Paragraph Style: Normal")),
+            ("app.style-h1", &suite_common::i18n("Paragraph Style: Heading 1")),
+            ("app.style-h2", &suite_common::i18n("Paragraph Style: Heading 2")),
+            ("app.style-h3", &suite_common::i18n("Paragraph Style: Heading 3")),
+            ("app.style-h4", &suite_common::i18n("Paragraph Style: Heading 4")),
+            ("app.style-h5", &suite_common::i18n("Paragraph Style: Heading 5")),
+            ("app.style-h6", &suite_common::i18n("Paragraph Style: Heading 6")),
+            ("app.style-code", &suite_common::i18n("Paragraph Style: Code")),
+            ("app.style-quote", &suite_common::i18n("Paragraph Style: Block Quote")),
+                    ("app.insert-footnote", &suite_common::i18n("Insert Footnote\u{2026}")),
+            ("app.autosave-now", &suite_common::i18n("Save Crash-Recovery Snapshot Now")),
         ]);
 
         let primary_toolbar: Vec<suite_common::ToolbarItem> = vec![
@@ -512,7 +512,7 @@ impl LettersWindow {
             a.connect_activate(move |_, _| rw.set_visible(!rw.is_visible()));
             app.add_action(&a);
             app.set_accels_for_action("app.toggle-ruler", &["<Primary><Shift>r"]);
-            suite_common::actions::register_labels(&[("app.toggle-ruler", "Toggle Ruler")]);
+            suite_common::actions::register_labels(&[("app.toggle-ruler", &suite_common::i18n("Toggle Ruler"))]);
         }
 
         // ── Style dropdown ────────────────────────────────────────
@@ -1944,17 +1944,17 @@ fn make_find_replace_widget(tv: &adw::TabView) -> (gtk::SearchBar, gtk::SearchEn
     find_next.set_tooltip_text(Some(&suite_common::i18n("Next match (Enter)")));
     find_next.add_css_class("flat");
 
-    let replace_btn = gtk::Button::with_label("Replace");
+    let replace_btn = gtk::Button::with_label(&suite_common::i18n("Replace"));
     replace_btn.set_tooltip_text(Some(&suite_common::i18n("Replace current match")));
     replace_btn.add_css_class("flat");
 
-    let replace_all_btn = gtk::Button::with_label("All");
+    let replace_all_btn = gtk::Button::with_label(&suite_common::i18n("Replace All"));
     replace_all_btn.set_tooltip_text(Some(&suite_common::i18n("Replace all matches")));
     replace_all_btn.add_css_class("flat");
 
     let case_toggle = gtk::ToggleButton::builder()
         .label("Aa")
-        .tooltip_text("Case sensitive")
+        .tooltip_text(suite_common::i18n("Case sensitive"))
         .build();
     case_toggle.add_css_class("flat");
 
