@@ -142,9 +142,15 @@ impl DecksWindow {
                 let cur = c.get();
                 // A11y: every state change redraws, so the accessible
                 // description tracks slide/selection here (issue #87).
+                // Also embed the canvas's position relative to the
+                // toplevel window so GUI tests can compute click
+                // coordinates: AT-SPI Component.position is broken for
+                // widgets nested in box containers (upstream GTK4
+                // bridge gap, tracked as #132), but GTK's own
+                // compute_point works correctly.
                 let desc = {
                     let n_objs = slides.get(cur).map(|sl| sl.objects.len()).unwrap_or(0);
-                    match so.get() {
+                    let base = match so.get() {
                         Some(oi) => format!(
                             "slide {} of {}, {} objects, object {} selected",
                             cur + 1, slides.len(), n_objs, oi + 1
@@ -153,7 +159,13 @@ impl DecksWindow {
                             "slide {} of {}, {} objects",
                             cur + 1, slides.len(), n_objs
                         ),
-                    }
+                    };
+                    let pos_hint = area
+                        .root()
+                        .and_then(|root| area.compute_point(&root, &gtk::graphene::Point::new(0.0, 0.0)))
+                        .map(|pt| format!(" canvas_at={},{}", pt.x() as i32, pt.y() as i32))
+                        .unwrap_or_default();
+                    format!("{}{}", base, pos_hint)
                 };
                 area.update_property(&[gtk::accessible::Property::Description(&desc)]);
                 let accent = crate::canvas::accent_rgb(area);
