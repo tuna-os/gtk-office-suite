@@ -148,3 +148,103 @@ fn line_number_to_byte_offset(text: &str, line_num: usize) -> i32 {
     }
     text.len() as i32
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Build a LayoutConfig with fixed margins; only page size/columns vary.
+    fn config(page_width_pt: f64, page_height_pt: f64, column_count: u32) -> LayoutConfig {
+        LayoutConfig {
+            page_width_pt,
+            page_height_pt,
+            margin_top: 72.0,
+            margin_bottom: 72.0,
+            margin_left: 72.0,
+            margin_right: 72.0,
+            column_count,
+        }
+    }
+
+    fn assert_close(actual: f64, expected: f64) {
+        assert!(
+            (actual - expected).abs() < 1e-9,
+            "expected {expected}, got {actual}"
+        );
+    }
+
+    #[test]
+    fn default_config_content_area_is_a4_minus_margins() {
+        let cfg = LayoutConfig::default();
+        assert_close(cfg.content_height(), 842.0 - 72.0 - 72.0);
+        assert_close(cfg.content_width(), 595.0 - 72.0 - 72.0);
+    }
+
+    #[test]
+    fn content_width_splits_across_columns() {
+        let cfg = config(595.0, 842.0, 2);
+        assert_close(cfg.content_width(), (595.0 - 144.0) / 2.0);
+    }
+
+    #[test]
+    fn zero_column_count_clamps_to_single_column() {
+        let cfg = config(595.0, 842.0, 0);
+        assert_close(cfg.content_width(), 595.0 - 144.0);
+    }
+
+    #[test]
+    fn content_area_never_drops_below_ten_points() {
+        // Margins larger than the page → clamp to the 10pt floor.
+        let cfg = config(100.0, 100.0, 1);
+        assert_close(cfg.content_height(), 10.0);
+        assert_close(cfg.content_width(), 10.0);
+    }
+
+    #[test]
+    fn line_zero_always_maps_to_zero() {
+        assert_eq!(line_number_to_byte_offset("", 0), 0);
+        assert_eq!(line_number_to_byte_offset("a\nb", 0), 0);
+    }
+
+    #[test]
+    fn byte_offset_lands_after_each_newline() {
+        let text = "a\nb\nc";
+        assert_eq!(line_number_to_byte_offset(text, 1), 2); // points at 'b'
+        assert_eq!(line_number_to_byte_offset(text, 2), 4); // points at 'c'
+    }
+
+    #[test]
+    fn byte_offset_past_last_line_returns_len() {
+        let text = "a\nb\nc";
+        assert_eq!(line_number_to_byte_offset(text, 3), text.len() as i32);
+        assert_eq!(line_number_to_byte_offset(text, 99), text.len() as i32);
+    }
+
+    #[test]
+    fn byte_offset_is_byte_based_not_char_based_for_utf8() {
+        // 'é' and 'ö' are two bytes each; offsets must skip whole bytes.
+        let text = "héllo\nwörld";
+        assert_eq!(text.len(), 13);
+        assert_eq!(line_number_to_byte_offset(text, 1), 7); // after the first \n
+        assert_eq!(line_number_to_byte_offset(text, 2), text.len() as i32);
+    }
+
+    #[test]
+    fn trailing_newline_counts_as_line_break() {
+        let text = "x\n";
+        assert_eq!(line_number_to_byte_offset(text, 1), text.len() as i32);
+    }
+
+    #[test]
+    fn empty_text_maps_any_line_to_zero() {
+        assert_eq!(line_number_to_byte_offset("", 5), 0);
+    }
+
+    #[test]
+    fn consecutive_newlines_are_empty_lines() {
+        let text = "a\n\nb";
+        assert_eq!(line_number_to_byte_offset(text, 1), 2);
+        assert_eq!(line_number_to_byte_offset(text, 2), 3);
+        assert_eq!(line_number_to_byte_offset(text, 3), text.len() as i32);
+    }
+}
