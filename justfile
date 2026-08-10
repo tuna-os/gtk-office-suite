@@ -53,6 +53,18 @@ lint:
 
 preflight: check lint test
 
+# ── Parity conformance ────────────────────────────────────────────────────
+
+# Validate docs/PARITY.md evidence (E1–E3): every green claim must cite a
+# test/instrument/path that actually exists (#96).
+parity-validate:
+    python3 conformance/validate_parity.py
+
+# Also check status transitions (E4) against a base-branch PARITY.md, e.g.
+#   just parity-validate-base /tmp/parity-main.md
+parity-validate-base base:
+    python3 conformance/validate_parity.py --base {{base}}
+
 # ── Smoke test ─────────────────────────────────────────────────────────
 
 verify-letters: build
