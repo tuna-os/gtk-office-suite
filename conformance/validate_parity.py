@@ -111,7 +111,7 @@ def has_marker(row_text: str) -> bool:
 
 def path_tokens(evidence: str):
     for m in PATH_RE.finditer(evidence):
-        tok = m.group(1)
+        tok = m.group(0)
         # strip a trailing sentence-punctuation / closing paren
         tok = re.sub(r"[.,;:)\]}>]+$", "", tok)
         yield tok
