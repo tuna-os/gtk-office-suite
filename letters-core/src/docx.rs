@@ -393,3 +393,83 @@ fn normalize(p: &mut Paragraph) {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::model::{Paragraph, Run, RunStyle};
+
+    // ── style_id_to_heading ───────────────────────────────────────────────────
+
+    #[test]
+    fn style_id_heading_1_to_6_parse() {
+        assert_eq!(style_id_to_heading("Heading1"), Some(1));
+        assert_eq!(style_id_to_heading("Heading3"), Some(3));
+        assert_eq!(style_id_to_heading("Heading6"), Some(6));
+    }
+
+    #[test]
+    fn style_id_heading_out_of_range_is_none() {
+        assert_eq!(style_id_to_heading("Heading0"), None);
+        assert_eq!(style_id_to_heading("Heading7"), None);
+    }
+
+    #[test]
+    fn style_id_heading_non_numeric_or_malformed_is_none() {
+        assert_eq!(style_id_to_heading("HeadingX"), None);
+        assert_eq!(style_id_to_heading("heading1"), None);
+        assert_eq!(style_id_to_heading("Subtitle"), None);
+    }
+
+    // ── normalize ─────────────────────────────────────────────────────────────
+
+    fn para_with(runs: Vec<Run>) -> Paragraph {
+        Paragraph { style: Default::default(), runs }
+    }
+
+    fn run(text: &str, style: RunStyle) -> Run {
+        Run { text: text.to_string(), style }
+    }
+
+    #[test]
+    fn normalize_merges_adjacent_runs_with_same_style() {
+        let mut p = para_with(vec![
+            run("foo", RunStyle::default()),
+            run("bar", RunStyle::default()),
+        ]);
+        normalize(&mut p);
+        assert_eq!(p.runs.len(), 1);
+        assert_eq!(p.runs[0].text, "foobar");
+    }
+
+    #[test]
+    fn normalize_keeps_runs_with_different_styles() {
+        let mut p = para_with(vec![
+            run("foo", RunStyle { bold: true, ..Default::default() }),
+            run("bar", RunStyle::default()),
+        ]);
+        normalize(&mut p);
+        assert_eq!(p.runs.len(), 2);
+    }
+
+    #[test]
+    fn normalize_drops_empty_runs() {
+        let mut p = para_with(vec![
+            run("", RunStyle::default()),
+            run("kept", RunStyle::default()),
+        ]);
+        normalize(&mut p);
+        assert_eq!(p.runs.len(), 1);
+        assert_eq!(p.runs[0].text, "kept");
+    }
+
+    #[test]
+    fn normalize_does_not_merge_footnote_runs() {
+        let mut p = para_with(vec![
+            run("a", RunStyle { footnote: Some(0), ..Default::default() }),
+            run("b", RunStyle::default()),
+        ]);
+        normalize(&mut p);
+        assert_eq!(p.runs.len(), 2);
+    }
+}

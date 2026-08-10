@@ -537,3 +537,84 @@ pub fn lossy_features(doc: &Document) -> Vec<&'static str> {
     if any_run(|s| s.vert_align.is_some()) { lost.push("superscript/subscript"); }
     lost
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use pulldown_cmark::HeadingLevel;
+
+    // ── escape_text ──────────────────────────────────────────────────────────
+
+    #[test]
+    fn escape_text_leaves_plain_text_alone() {
+        assert_eq!(escape_text("plain text 123"), "plain text 123");
+    }
+
+    #[test]
+    fn escape_text_backslashes_markdown_specials() {
+        assert_eq!(
+            escape_text(r"\`*_[]<>#~!&"),
+            r"\\\`\*\_\[\]\<\>\#\~\!\&"
+        );
+    }
+
+    #[test]
+    fn escape_text_encodes_newlines_as_character_reference() {
+        assert_eq!(escape_text("a\nb"), "a&#10;b");
+    }
+
+    #[test]
+    fn escape_text_encodes_tabs_as_character_reference() {
+        assert_eq!(escape_text("a\tb"), "a&#9;b");
+    }
+
+    #[test]
+    fn escape_text_mixed_content() {
+        assert_eq!(escape_text("**bold**\nnext"), r"\*\*bold\*\*&#10;next");
+    }
+
+    // ── format_dest ───────────────────────────────────────────────────────────
+
+    #[test]
+    fn format_dest_plain_stays_plain() {
+        assert_eq!(format_dest("https://example.com/a"), "https://example.com/a");
+    }
+
+    #[test]
+    fn format_dest_with_space_is_angle_wrapped() {
+        assert_eq!(format_dest("a b"), "<a b>");
+    }
+
+    #[test]
+    fn format_dest_with_parenthesis_is_angle_wrapped() {
+        assert_eq!(format_dest("a(b)"), "<a(b)>");
+    }
+
+    // ── open/close markers ────────────────────────────────────────────────────
+
+    #[test]
+    fn open_marker_matches_feature() {
+        assert_eq!(open_marker(&Feat::Bold), "**");
+        assert_eq!(open_marker(&Feat::Italic), "*");
+        assert_eq!(open_marker(&Feat::Strike), "~~");
+        assert_eq!(open_marker(&Feat::Link("https://x".into())), "[");
+    }
+
+    #[test]
+    fn close_marker_link_formats_destination() {
+        assert_eq!(close_marker(&Feat::Link("https://x".into())), "](https://x)");
+        assert_eq!(close_marker(&Feat::Link("a b".into())), "](<a b>)");
+    }
+
+    // ── heading_to_u8 ─────────────────────────────────────────────────────────
+
+    #[test]
+    fn heading_levels_map_to_numbers() {
+        assert_eq!(heading_to_u8(HeadingLevel::H1), 1);
+        assert_eq!(heading_to_u8(HeadingLevel::H2), 2);
+        assert_eq!(heading_to_u8(HeadingLevel::H3), 3);
+        assert_eq!(heading_to_u8(HeadingLevel::H4), 4);
+        assert_eq!(heading_to_u8(HeadingLevel::H5), 5);
+        assert_eq!(heading_to_u8(HeadingLevel::H6), 6);
+    }
+}
