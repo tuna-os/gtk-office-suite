@@ -270,3 +270,188 @@ fn parse_hex_color(hex: &str) -> Result<gtk4::gdk::RGBA, ()> {
     let b = u8::from_str_radix(&h[4..6], 16).map_err(|_| ())?;
     Ok(gtk4::gdk::RGBA::new(r as f32 / 255.0, g as f32 / 255.0, b as f32 / 255.0, 1.0))
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Build a minimal Style for tests, filling the fields a test cares about
+    /// and leaving the rest unset (so inheritance has something to resolve).
+    #[allow(clippy::too_many_arguments)]
+    fn style(
+        name: &str,
+        base_style: Option<&str>,
+        font: Option<&str>,
+        size_pt: Option<f64>,
+        weight: Option<i32>,
+        italic: Option<bool>,
+        color: Option<&str>,
+    ) -> Style {
+        Style {
+            name: name.to_string(),
+            base_style: base_style.map(str::to_string),
+            font: font.map(str::to_string),
+            size_pt,
+            weight,
+            italic,
+            underline: None,
+            color: color.map(str::to_string),
+            background: None,
+            alignment: None,
+            scale: None,
+        }
+    }
+
+    #[test]
+    fn style_names_are_stable_and_complete() {
+        assert_eq!(
+            style_names(),
+            vec![
+                "Normal",
+                "Title",
+                "Subtitle",
+                "Heading 1",
+                "Heading 2",
+                "Heading 3",
+                "Heading 4",
+                "Heading 5",
+                "Heading 6",
+                "Code",
+                "Blockquote",
+            ]
+        );
+    }
+
+    #[test]
+    fn default_styles_exist_with_expected_shapes() {
+        let sheet = StyleSheet::default_styles();
+        assert_eq!(sheet.names().len(), 11);
+
+        let normal = sheet.get("Normal").expect("Normal present");
+        assert_eq!(normal.base_style, None);
+        assert_eq!(normal.font.as_deref(), Some("Sans"));
+        assert_eq!(normal.size_pt, Some(11.0));
+        assert_eq!(normal.weight, Some(400));
+
+        // Title and Subtitle inherit the font from Normal.
+        let title = sheet.get("Title").expect("Title present");
+        assert_eq!(title.font.as_deref(), Some("Sans"));
+        assert_eq!(title.size_pt, Some(26.0));
+        assert_eq!(title.weight, Some(700));
+
+        let subtitle = sheet.get("Subtitle").expect("Subtitle present");
+        assert_eq!(subtitle.font.as_deref(), Some("Sans"));
+        assert_eq!(subtitle.size_pt, Some(15.0));
+        assert_eq!(subtitle.color.as_deref(), Some("#666666"));
+        assert_eq!(subtitle.alignment.as_deref(), Some("center"));
+
+        let code = sheet.get("Code").expect("Code present");
+        assert_eq!(code.font.as_deref(), Some("Monospace"));
+        assert_eq!(code.background.as_deref(), Some("#F0F0F0"));
+
+        let blockquote = sheet.get("Blockquote").expect("Blockquote present");
+        assert_eq!(blockquote.italic, Some(true));
+        assert_eq!(blockquote.color.as_deref(), Some("#666666"));
+    }
+
+    #[test]
+    fn heading_properties_follow_the_table() {
+        let sheet = StyleSheet::default_styles();
+        let expected = [
+            (1, 22.0, 2.0),
+            (2, 16.5, 1.5),
+            (3, 12.9, 1.17),
+            (4, 11.0, 1.0),
+            (5, 9.1, 0.83),
+            (6, 7.4, 0.67),
+        ];
+        for (level, size, scale) in expected {
+            let h = sheet
+                .get(&format!("Heading {level}"))
+                .unwrap_or_else(|| panic!("Heading {level} present"));
+            assert_eq!(h.base_style.as_deref(), Some("Normal"), "Heading {level} base");
+            assert_eq!(h.weight, Some(700), "Heading {level} weight");
+            assert_eq!(h.size_pt, Some(size), "Heading {level} size");
+            assert_eq!(h.scale, Some(scale), "Heading {level} scale");
+        }
+    }
+
+    #[test]
+    fn explicit_properties_override_inherited_ones() {
+        let sheet = StyleSheet::default_styles();
+        // Subtitle sets its own size/color/alignment; font and weight inherit.
+        let subtitle = sheet.get("Subtitle").expect("Subtitle present");
+        assert_eq!(subtitle.size_pt, Some(15.0));
+        assert_eq!(subtitle.color.as_deref(), Some("#666666"));
+        assert_eq!(subtitle.font.as_deref(), Some("Sans"));
+        assert_eq!(subtitle.weight, Some(400));
+    }
+
+    #[test]
+    fn get_returns_none_for_unknown_style() {
+        let sheet = StyleSheet::default_styles();
+        assert!(sheet.get("Bogus").is_none());
+    }
+
+    #[test]
+    fn add_replaces_existing_style() {
+        let mut sheet = StyleSheet::default_styles();
+        sheet.add(style("Code", None, Some("Courier New"), Some(9.0), Some(500), None, None));
+        let code = sheet.get("Code").expect("Code present after replace");
+        assert_eq!(code.font.as_deref(), Some("Courier New"));
+        assert_eq!(code.size_pt, Some(9.0));
+        assert_eq!(code.background, None);
+    }
+
+    #[test]
+    fn inheritance_chain_resolves_through_intermediate_base() {
+        let mut sheet = StyleSheet::default_styles();
+        // Custom style based on "Heading 1", which itself bases on "Normal".
+        sheet.add(style("My Heading", Some("Heading 1"), None, Some(30.0), None, None, None));
+        let resolved = sheet.get("My Heading").expect("custom style present");
+        // font is inherited through Heading 1 → Normal.
+        assert_eq!(resolved.font.as_deref(), Some("Sans"));
+        // Own property wins.
+        assert_eq!(resolved.size_pt, Some(30.0));
+        // Weight and scale come from the intermediate base.
+        assert_eq!(resolved.weight, Some(700));
+        assert_eq!(resolved.scale, Some(2.0));
+    }
+
+    #[test]
+    fn base_chain_stops_when_base_missing() {
+        let mut sheet = StyleSheet::default_styles();
+        sheet.add(style("Orphan", Some("No Such Base"), None, None, None, None, None));
+        let resolved = sheet.get("Orphan").expect("orphan present");
+        // Base missing → chain stops; nothing inherited, own fields stay unset.
+        assert_eq!(resolved.base_style.as_deref(), Some("No Such Base"));
+        assert_eq!(resolved.font, None);
+        assert_eq!(resolved.size_pt, None);
+    }
+
+    #[test]
+    fn style_to_tag_name_maps_all_known_styles() {
+        assert_eq!(style_to_tag_name("Normal"), "normal");
+        assert_eq!(style_to_tag_name("Title"), "h-title");
+        assert_eq!(style_to_tag_name("Subtitle"), "h-subtitle");
+        assert_eq!(style_to_tag_name("Heading 1"), "h1");
+        assert_eq!(style_to_tag_name("Heading 6"), "h6");
+        assert_eq!(style_to_tag_name("Code"), "code");
+        assert_eq!(style_to_tag_name("Blockquote"), "blockquote");
+        assert_eq!(style_to_tag_name("Unknown"), "");
+    }
+
+    #[test]
+    fn parse_hex_color_accepts_valid_and_rejects_invalid() {
+        let ok = parse_hex_color("#FF8000").expect("valid hex parses");
+        assert!((ok.red() - 1.0).abs() < 1e-6);
+        assert!((ok.green() - 128.0 / 255.0).abs() < 1e-6);
+        assert!((ok.blue() - 0.0).abs() < 1e-6);
+        assert!((ok.alpha() - 1.0).abs() < 1e-6);
+
+        assert!(parse_hex_color("notacolor").is_err());
+        assert!(parse_hex_color("#FFF").is_err()); // 3-digit hex unsupported
+        assert!(parse_hex_color("#GGGGGG").is_err()); // non-hex chars
+        assert!(parse_hex_color("").is_err());
+    }
+}
