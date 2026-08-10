@@ -1465,18 +1465,8 @@ class DecksSelectionSmoke(BaseGUITestCase):
 
     app_name = "decks"
 
-    @unittest.skip(
-        "AT-SPI reports this DrawingArea's Component.position in DESKTOP_COORDS "
-        "as (0, 0) regardless of the sidebar/toolbar it's actually offset behind "
-        "(confirmed via direct XTest probing: a click computed from that position "
-        "lands ~265px right / ~85px down of where it should, while hit-testing "
-        "and the coordinate math it feeds into are both correct once given real "
-        "screen coordinates). This looks like a GTK4 AT-SPI bridge gap for custom "
-        "DrawingArea widgets nested in a box/paned layout, not an app bug — "
-        "tracked as #132; revisit once that's fixed or a GTK4 AT-SPI fix for "
-        "Component position lands upstream."
-    )
     def test_click_selects_object(self):
+        import re
         from dogtail import rawinput
         import subprocess
 
@@ -1491,9 +1481,19 @@ class DecksSelectionSmoke(BaseGUITestCase):
         # on-screen click point from the canvas's real geometry rather
         # than assuming a fixed window size, since that varies by window
         # manager (e.g. matchbox fullscreens new windows).
+        #
+        # AT-SPI Component.position is broken for widgets nested in box
+        # containers (upstream GTK4 bridge gap, #132): the bridge doesn't
+        # accumulate ancestor allocation offsets. The app works around
+        # this by embedding the canvas position (computed via
+        # translate_coordinates relative to the toplevel) in the
+        # accessible description as "canvas_at=x,y".
         canvas_for_geom = self.app.child(name="Slide canvas")
-        cx, cy = canvas_for_geom.position
         cw, ch = canvas_for_geom.size
+        match = re.search(r"canvas_at=(-?\d+),(-?\d+)", canvas_for_geom.description)
+        if not match:
+            self.fail(f"canvas_at not found in description: {canvas_for_geom.description!r}")
+        cx, cy = int(match.group(1)), int(match.group(2))
         scale = min(cw / 960.0, ch / 540.0) * 0.92
         ox = (cw - 960.0 * scale) / 2.0
         oy = (ch - 540.0 * scale) / 2.0
