@@ -1659,19 +1659,20 @@ mod master_tests {
     fn notes_extract_resolves_numeric_char_refs() {
         // quick-xml 0.41 surfaces &#NN; as a GeneralRef event;
         // resolve_general_ref must turn it back into the character.
-        let xml = notes_with_txbody("<a:t>&#65;&#x42;</a:t>");
+        let xml = notes_with_txbody("<a:p><a:r><a:t>&#65;&#x42;</a:t></a:r></a:p>");
         assert_eq!(extract_notes_text(&xml), "AB");
     }
 
     #[test]
     fn notes_extract_preserves_unknown_entities() {
-        let xml = notes_with_txbody("<a:t>a &bogus; b</a:t>");
+        let xml = notes_with_txbody("<a:p><a:r><a:t>a &bogus; b</a:t></a:r></a:p>");
         assert_eq!(extract_notes_text(&xml), "a &bogus; b");
     }
 
     #[test]
     fn notes_extract_soft_break_becomes_newline() {
-        let xml = notes_with_txbody("<a:t>one</a:t><a:br/><a:t>two</a:t>");
+        let xml =
+            notes_with_txbody("<a:p><a:r><a:t>one</a:t></a:r><a:br/><a:r><a:t>two</a:t></a:r></a:p>");
         assert_eq!(extract_notes_text(&xml), "one\ntwo");
     }
 
