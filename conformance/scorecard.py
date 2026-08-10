@@ -6,6 +6,11 @@ feature-status marks in docs/PARITY.md, and writes a markdown table to
 stdout and (in CI) to $GITHUB_STEP_SUMMARY. Exits non-zero if any corpus
 run regresses (the ratchet asserts do the real gating; this is reporting).
 
+Also gates on the structural validator (validate_parity.py, E1–E3) — the
+scorecard is only as trustworthy as the claims it counts, so a green row
+that lost its evidence, or cites a path that no longer exists, fails this
+job instead of being tallied (#96).
+
 Usage: python3 conformance/scorecard.py [--no-run]
   --no-run  skip cargo invocations; report baselines + PARITY.md only
 """
@@ -14,8 +19,14 @@ import os
 import re
 import subprocess
 import sys
+from pathlib import Path
 
-ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+# Sibling validator. When run as `python3 conformance/scorecard.py` the
+# script's directory is on sys.path, so a plain import works locally and
+# in CI.
+import validate_parity
+
+ROOT = Path(__file__).resolve().parent.parent
 
 
 def read_baseline(rel):
@@ -72,6 +83,12 @@ def main():
     no_run = "--no-run" in sys.argv
     rows = []
     failed = False
+
+    # #96: fail the scorecard when the structural validator rejects the
+    # claims (E1–E3). Run first so invalid evidence fails fast, before the
+    # expensive corpus invocations.
+    if validate_parity.validate(ROOT / "docs" / "PARITY.md", repo_root=ROOT) != 0:
+        failed = True
 
     cm_base = read_baseline("letters-core/tests/corpus/roundtrip-baseline.txt")
     lo_base = read_baseline("letters-core/tests/corpus/lo-parity-baseline.txt")

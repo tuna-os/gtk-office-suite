@@ -226,17 +226,15 @@ def check_transitions(base_path, head_rows, errors):
                 )
 
 
-def main():
-    ap = argparse.ArgumentParser(description=__doc__)
-    ap.add_argument("--base", metavar="FILE", default=None,
-                    help="base-branch docs/PARITY.md for transition checks (E4)")
-    ap.add_argument("--repo-root", metavar="DIR", default=None,
-                    help="repo root (default: parent of the script's directory)")
-    ap.add_argument("--parity", metavar="FILE", default="docs/PARITY.md")
-    args = ap.parse_args()
+def validate(parity: Path, base: Path | None = None,
+             repo_root: Path | None = None) -> int:
+    """Run E1–E3 (and E4 when *base* is given); return 0 when all pass.
 
-    repo_root = Path(args.repo_root) if args.repo_root else Path(__file__).resolve().parent.parent
-    parity = repo_root / args.parity
+    Programmatic entry point so other conformance tooling (scorecard.py,
+    CI gates) can call the same checks without re-parsing argv.
+    """
+    if repo_root is None:
+        repo_root = Path(__file__).resolve().parent.parent
     if not parity.exists():
         print(f"validate_parity: {parity} not found", file=sys.stderr)
         return 2
@@ -246,8 +244,7 @@ def main():
     for row in rows:
         check_evidence(row, repo_root, errors, warnings)
 
-    if args.base:
-        base = Path(args.base)
+    if base is not None:
         if not base.exists():
             print(f"validate_parity: base file {base} not found", file=sys.stderr)
             return 2
@@ -270,6 +267,21 @@ def main():
     if warnings:
         print(f"  ({len(warnings)} note(s) — informational only)")
     return 1 if errors else 0
+
+
+def main():
+    ap = argparse.ArgumentParser(description=__doc__)
+    ap.add_argument("--base", metavar="FILE", default=None,
+                    help="base-branch docs/PARITY.md for transition checks (E4)")
+    ap.add_argument("--repo-root", metavar="DIR", default=None,
+                    help="repo root (default: parent of the script's directory)")
+    ap.add_argument("--parity", metavar="FILE", default="docs/PARITY.md")
+    args = ap.parse_args()
+
+    repo_root = Path(args.repo_root) if args.repo_root else Path(__file__).resolve().parent.parent
+    parity = repo_root / args.parity
+    base = Path(args.base) if args.base else None
+    return validate(parity, base=base, repo_root=repo_root)
 
 
 if __name__ == "__main__":
