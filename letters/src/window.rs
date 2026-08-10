@@ -436,7 +436,9 @@ impl LettersWindow {
                 tb.set_visible(s.boolean("show-toolbar"));
             });
         }
-        suite_win.add_top_bar(&tab_bar);
+        // HIG: tab bar lives inside the header bar, not as a separate
+        // stacked bar (fixes #73).
+        suite_win.header_bar.set_title_widget(Some(&tab_bar));
         // Content is set below, after wrapping toast_overlay in the find/replace
         // gtk::Overlay — setting it here would give toast_overlay a parent and
         // make the later Overlay::set_child fail, orphaning the whole editor UI.
@@ -547,6 +549,11 @@ impl LettersWindow {
         // was the design review's worst double-chrome offender).
         style_dropdown.set_tooltip_text(Some(&suite_common::i18n("Paragraph style")));
         suite_win.toolbar.container.prepend(&style_dropdown);
+
+        // Narrow breakpoint (≤ 500sp): hide the style dropdown to save
+        // horizontal space (fixes #79).
+        suite_win.narrow_breakpoint.add_setter(
+            &style_dropdown, "visible", Some(&false.to_value()));
 
         let win = suite_win.window.clone();
 

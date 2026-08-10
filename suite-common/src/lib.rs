@@ -347,10 +347,15 @@ pub struct SuiteWindow {
     pub window: adw::ApplicationWindow,
     pub toolbar_view: adw::ToolbarView,
     pub toolbar: SuiteToolbar,
-    /// The narrow-width (< 600sp) breakpoint. AdwWindow applies at most
-    /// one breakpoint at a time, so apps must add their narrow-mode
-    /// setters here rather than registering a second breakpoint.
+    pub header_bar: adw::HeaderBar,
+    /// Narrow breakpoint (≤ 500sp). AdwWindow applies at most one
+    /// breakpoint at a time, so this one includes all medium setters
+    /// too — apps add their narrow-mode setters here.
     pub narrow_breakpoint: adw::Breakpoint,
+    /// Medium breakpoint (≤ 800sp) for toolbar collapse and sidebar
+    /// folding. When the narrow breakpoint fires this one does not,
+    /// so apps should only add medium-specific setters here.
+    pub medium_breakpoint: adw::Breakpoint,
 }
 
 impl SuiteWindow {
@@ -382,16 +387,28 @@ impl SuiteWindow {
 
         win.set_content(Some(&toolbar_view));
 
-        // ---- Adaptive collapse (HIG: adapt below 600sp) ----
-        // The extended toolbar section folds into the "More" menu.
-        let bp = adw::Breakpoint::new(adw::BreakpointCondition::new_length(
+        // ---- Adaptive collapse (HIG breakpoints) ----
+        // Medium (≤ 800sp): the extended toolbar section folds into "More".
+        let medium_bp = adw::Breakpoint::new(adw::BreakpointCondition::new_length(
             adw::BreakpointConditionLengthType::MaxWidth,
-            600.0,
+            800.0,
             adw::LengthUnit::Sp,
         ));
-        bp.add_setter(&toolbar.extended_box, "visible", Some(&false.to_value()));
-        bp.add_setter(&toolbar.more_button, "visible", Some(&true.to_value()));
-        win.add_breakpoint(bp.clone());
+        medium_bp.add_setter(&toolbar.extended_box, "visible", Some(&false.to_value()));
+        medium_bp.add_setter(&toolbar.more_button, "visible", Some(&true.to_value()));
+        win.add_breakpoint(medium_bp.clone());
+
+        // Narrow (≤ 500sp): includes all medium setters plus any
+        // app-specific aggressive simplification.  Apps add their own
+        // setters (hide sidebars, compact formula bar, etc.) post-construction.
+        let narrow_bp = adw::Breakpoint::new(adw::BreakpointCondition::new_length(
+            adw::BreakpointConditionLengthType::MaxWidth,
+            500.0,
+            adw::LengthUnit::Sp,
+        ));
+        narrow_bp.add_setter(&toolbar.extended_box, "visible", Some(&false.to_value()));
+        narrow_bp.add_setter(&toolbar.more_button, "visible", Some(&true.to_value()));
+        win.add_breakpoint(narrow_bp.clone());
 
         // ---- Window sizing ----
         win.set_size_request(360, 300);
@@ -400,7 +417,9 @@ impl SuiteWindow {
             window: win,
             toolbar_view,
             toolbar,
-            narrow_breakpoint: bp,
+            header_bar,
+            narrow_breakpoint: narrow_bp,
+            medium_breakpoint: medium_bp,
         }
     }
 
