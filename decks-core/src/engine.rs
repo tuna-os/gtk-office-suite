@@ -1613,4 +1613,111 @@ mod master_tests {
             other => panic!("expected rect, got {other:?}"),
         }
     }
+
+    // ── notes_slide_xml ↔ extract_notes_text ─────────────────────────────
+
+    /// Build a minimal notesSlide part around raw txBody XML so entity and
+    /// break handling can be tested without going through `notes_slide_xml`.
+    fn notes_with_txbody(txbody: &str) -> String {
+        format!(
+            r##"<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<p:notes xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main">
+<p:cSld><p:spTree>
+<p:nvGrpSpPr><p:cNvPr id="1" name=""/><p:cNvGrpSpPr/><p:nvPr/></p:nvGrpSpPr><p:grpSpPr/>
+<p:sp><p:nvSpPr><p:cNvPr id="2" name="Notes Placeholder"/><p:cNvSpPr><a:spLocks noGrp="1"/></p:cNvSpPr>
+<p:nvPr><p:ph type="body" idx="1"/></p:nvPr></p:nvSpPr><p:spPr/>
+<p:txBody><a:bodyPr/><a:lstStyle/>{txbody}</p:txBody></p:sp>
+</p:spTree></p:cSld></p:notes>"##
+        )
+    }
+
+    #[test]
+    fn notes_round_trip_plain_and_multiline() {
+        assert_eq!(extract_notes_text(&notes_slide_xml("Hello")), "Hello");
+        assert_eq!(
+            extract_notes_text(&notes_slide_xml("line one\nline two")),
+            "line one\nline two"
+        );
+        assert_eq!(extract_notes_text(&notes_slide_xml("")), "");
+    }
+
+    #[test]
+    fn notes_round_trip_escapes_and_unescapes_entities() {
+        let notes = "café & <b> > \"quotes\" 東京";
+        assert_eq!(extract_notes_text(&notes_slide_xml(notes)), notes);
+    }
+
+    #[test]
+    fn notes_blank_lines_do_not_survive_round_trip() {
+        // Current behavior: empty paragraphs are dropped when captured, so
+        // blank lines in speaker notes collapse on a write→read round trip.
+        assert_eq!(extract_notes_text(&notes_slide_xml("a\n\nb")), "a\nb");
+        assert_eq!(extract_notes_text(&notes_slide_xml("a\n")), "a");
+    }
+
+    #[test]
+    fn notes_extract_resolves_numeric_char_refs() {
+        // quick-xml 0.41 surfaces &#NN; as a GeneralRef event;
+        // resolve_general_ref must turn it back into the character.
+        let xml = notes_with_txbody("<a:t>&#65;&#x42;</a:t>");
+        assert_eq!(extract_notes_text(&xml), "AB");
+    }
+
+    #[test]
+    fn notes_extract_preserves_unknown_entities() {
+        let xml = notes_with_txbody("<a:t>a &bogus; b</a:t>");
+        assert_eq!(extract_notes_text(&xml), "a &bogus; b");
+    }
+
+    #[test]
+    fn notes_extract_soft_break_becomes_newline() {
+        let xml = notes_with_txbody("<a:t>one</a:t><a:br/><a:t>two</a:t>");
+        assert_eq!(extract_notes_text(&xml), "one\ntwo");
+    }
+
+    // ── parse_master_shapes ──────────────────────────────────────────────
+
+    #[test]
+    fn master_parse_empty_xml_has_no_background_or_shapes() {
+        let (bg, shapes) = parse_master_shapes("");
+        assert!(bg.is_none());
+        assert!(shapes.is_empty());
+    }
+
+    #[test]
+    fn master_parse_missing_background_returns_none() {
+        let xml = r##"<p:sldMaster xmlns:p="x"><p:cSld><p:spTree/></p:cSld></p:sldMaster>"##;
+        let (bg, shapes) = parse_master_shapes(xml);
+        assert!(bg.is_none());
+        assert!(shapes.is_empty());
+    }
+
+    #[test]
+    fn master_parse_background_without_shapes() {
+        let xml = r##"<p:sldMaster xmlns:p="x" xmlns:a="y"><p:cSld>
+<p:bg><p:bgPr><a:solidFill><a:srgbClr val="AABBCC"/></a:solidFill></p:bgPr></p:bg>
+<p:spTree/></p:cSld></p:sldMaster>"##;
+        let (bg, shapes) = parse_master_shapes(xml);
+        assert_eq!(bg.as_deref(), Some("#aabbcc"));
+        assert!(shapes.is_empty());
+    }
+
+    #[test]
+    fn master_parse_text_box_shape() {
+        let xml = r##"<p:sldMaster xmlns:p="x" xmlns:a="y"><p:cSld><p:spTree>
+<p:sp><p:spPr><a:xfrm><a:off x="19050" y="28575"/><a:ext cx="190500" cy="95250"/></a:xfrm></p:spPr>
+<p:txBody><a:p><a:r><a:t>Deck title</a:t></a:r></a:p></p:txBody></p:sp>
+</p:spTree></p:cSld></p:sldMaster>"##;
+        let (_, shapes) = parse_master_shapes(xml);
+        assert_eq!(shapes.len(), 1);
+        match &shapes[0] {
+            SlideObject::TextBox { text, x, y, w, h, runs } => {
+                assert_eq!(text, "Deck title");
+                assert!(runs.is_empty());
+                assert!((x - 2.0).abs() < 0.01 && (y - 3.0).abs() < 0.01);
+                assert!((w - 20.0).abs() < 0.01 && (h - 10.0).abs() < 0.01);
+            }
+            other => panic!("expected text box, got {other:?}"),
+        }
+    }
 }
