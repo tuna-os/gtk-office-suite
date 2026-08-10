@@ -553,21 +553,31 @@ impl DecksWindow {
             });
         }
 
-        // Narrow mode (< 600sp): AdwWindow applies at most one breakpoint,
-        // so all setters go on the shared SuiteWindow one. Both sidebars
-        // become hidden overlays and the canvas gives up its fixed minimum
-        // — otherwise the editor demands ~770px and the header bar's menu
-        // and window controls get clipped off-screen.
-        let bp = &suite_win.narrow_breakpoint;
+        // Medium breakpoint (≤ 800sp): both sidebars become hidden
+        // overlays and the canvas gives up its fixed minimum — otherwise
+        // the editor demands ~770px and the header bar's menu and window
+        // controls get clipped off-screen (fixes #79).
         let t = glib::Value::from(&true);
         let f = glib::Value::from(&false);
-        bp.add_setter(&split_view, "collapsed", Some(&t));
-        bp.add_setter(&split_view, "show-sidebar", Some(&f));
-        bp.add_setter(&editor_split, "collapsed", Some(&t));
-        bp.add_setter(&editor_split, "show-sidebar", Some(&f));
-        bp.add_setter(&canvas_scroll, "min-content-width", Some(&glib::Value::from(&240i32)));
+        let mbp = &suite_win.medium_breakpoint;
+        mbp.add_setter(&split_view, "collapsed", Some(&t));
+        mbp.add_setter(&split_view, "show-sidebar", Some(&f));
+        mbp.add_setter(&editor_split, "collapsed", Some(&t));
+        mbp.add_setter(&editor_split, "show-sidebar", Some(&f));
+        mbp.add_setter(&canvas_scroll, "min-content-width", Some(&glib::Value::from(&240i32)));
         // The status caption collides with the centered presenter pill.
-        bp.add_setter(&status_label, "visible", Some(&f));
+        mbp.add_setter(&status_label, "visible", Some(&f));
+
+        // Narrow breakpoint (≤ 500sp): hide sidebars and reduce
+        // minimum canvas width further.  The toolbar is hidden below
+        // once it has been created.
+        let nbp = &suite_win.narrow_breakpoint;
+        nbp.add_setter(&split_view, "collapsed", Some(&t));
+        nbp.add_setter(&split_view, "show-sidebar", Some(&f));
+        nbp.add_setter(&editor_split, "collapsed", Some(&t));
+        nbp.add_setter(&editor_split, "show-sidebar", Some(&f));
+        nbp.add_setter(&canvas_scroll, "min-content-width", Some(&glib::Value::from(&180i32)));
+        nbp.add_setter(&status_label, "visible", Some(&f));
 
         // Speaker notes pane (collapsible, below the canvas)
         let notes_expander = gtk::Expander::new(Some("Speaker Notes"));
@@ -587,6 +597,9 @@ impl DecksWindow {
 
         let toolbar = build_decks_toolbar();
         suite_win.add_top_bar(&toolbar);
+        // Narrow breakpoint: hide the editing toolbar entirely —
+        // only the header bar, canvas, and pill survive.
+        suite_win.narrow_breakpoint.add_setter(&toolbar, "visible", Some(&f));
 
         // ── Wire sidebar signals ──────────────────────────────────────────
         let _sl = slide_list.clone();

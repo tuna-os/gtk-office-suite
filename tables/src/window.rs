@@ -1494,6 +1494,22 @@ impl TablesWindow {
         suite_win.set_content(&stack);
         suite_win.add_bottom_bar(&sheet_bar);
 
+        // ── Responsive breakpoints (fixes #79) ───────────────────────────
+        // Narrow (≤ 500sp): hide the name box and fx label in the formula
+        // bar, keep only the formula entry.  The toolbar collapse is
+        // already handled by SuiteWindow's shared narrow breakpoint.
+        {
+            let f = glib::Value::from(&false);
+            suite_win.narrow_breakpoint.add_setter(&name_box, "visible", Some(&f));
+            suite_win.narrow_breakpoint.add_setter(&fx_label, "visible", Some(&f));
+            // Hide the sheet management buttons (add/rename/move/delete)
+            // but keep the dropdown switcher.
+            for btn in [&add_btn, &rename_sheet_btn, &move_sheet_left_btn,
+                         &move_sheet_right_btn, &delete_sheet_btn] {
+                suite_win.narrow_breakpoint.add_setter(btn, "visible", Some(&f));
+            }
+        }
+
         // ── Window close-request: Save / Discard / Cancel guard ──────────
         // Mirrors Letters' force_close re-entrancy pattern: close-request
         // can't await a dialog response, so the handler stops the first
