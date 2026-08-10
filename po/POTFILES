@@ -1,0 +1,9 @@
+# List of source files containing translatable strings (i18n() calls).
+# Regenerate the template: scripts/update-pot.sh
+suite-common/src/lib.rs
+letters/src/window.rs
+letters/src/main.rs
+decks/src/window.rs
+decks/src/main.rs
+tables/src/window.rs
+tables/src/main.rs

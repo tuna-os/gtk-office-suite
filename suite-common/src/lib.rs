@@ -211,11 +211,11 @@ impl SuiteApp {
 /// Show a generic about dialog (apps override with their own metadata).
 fn show_about_dialog() {
     let about = adw::AboutDialog::new();
-    about.set_application_name("Hanthor Office");
+    about.set_application_name(&i18n("Hanthor Office"));
     about.set_version("0.1.0");
-    about.set_developer_name("Hanthor Contributors");
+    about.set_developer_name(&i18n("Hanthor Contributors"));
     about.set_license_type(gtk::License::Gpl30);
-    about.set_comments("A GNOME-native office suite written in Rust.");
+    about.set_comments(&i18n("A GNOME-native office suite written in Rust."));
     about.set_website("https://github.com/tuna-os/gtk-office-suite");
     about.set_issue_url("https://github.com/tuna-os/gtk-office-suite/issues");
     about.present(gtk::Window::NONE);
@@ -297,7 +297,7 @@ impl SuiteToolbar {
 
         let more_button = gtk::MenuButton::builder()
             .icon_name("view-more-symbolic")
-            .tooltip_text("More")
+            .tooltip_text(i18n("More"))
             .menu_model(&more_menu)
             .build();
 
@@ -592,7 +592,7 @@ pub fn show_command_palette(app: &adw::Application) {
 
     let search = gtk::SearchEntry::new();
     search.set_placeholder_text(Some(&i18n("Type a command…")));
-    search.update_property(&[gtk4::accessible::Property::Label("Command Palette")]);
+    search.update_property(&[gtk4::accessible::Property::Label(&i18n("Command Palette"))]);
     search.set_margin_start(6);
     search.set_margin_end(6);
     search.set_margin_top(6);
@@ -603,7 +603,7 @@ pub fn show_command_palette(app: &adw::Application) {
     list.set_margin_start(6);
     list.set_margin_end(6);
     list.set_margin_bottom(6);
-    list.update_property(&[gtk4::accessible::Property::Label("Command list")]);
+    list.update_property(&[gtk4::accessible::Property::Label(&i18n("Command list"))]);
 
     let scroll = gtk::ScrolledWindow::new();
     scroll.set_child(Some(&list));
@@ -617,7 +617,7 @@ pub fn show_command_palette(app: &adw::Application) {
     // Chromeless palette (GNOME Text Editor / Builder idiom): the surface
     // IS the search entry plus results — no titlebar, Esc closes.
     let dialog = adw::Dialog::builder()
-        .title("Command Palette")
+        .title(i18n("Command Palette"))
         .content_width(480)
         .content_height(420)
         .build();
@@ -798,7 +798,7 @@ pub fn make_empty_state(
 
 /// Build a status bar widget with a word count label (left) and other info.
 pub fn make_status_bar() -> (gtk::Box, gtk::Label) {
-    let word_count = gtk::Label::new(Some("0 words"));
+    let word_count = gtk::Label::new(Some(&i18n("0 words")));
     word_count.set_halign(gtk::Align::End);
     word_count.set_margin_start(6);
     word_count.set_margin_end(6);

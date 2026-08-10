@@ -284,7 +284,7 @@ impl TablesWindow {
                 show_format_cells_dialog(&ctl, &da, &refresh, parent);
             });
             app.add_action(&act);
-            suite_common::actions::register_labels(&[("app.format-cells", "Format Cells…")]);
+            suite_common::actions::register_labels(&[("app.format-cells", &suite_common::i18n("Format Cells…"))]);
         }
         {
             let app2 = app.clone();
@@ -1253,10 +1253,10 @@ impl TablesWindow {
                                 let parent_win = wr2.borrow().clone();
                                 if let Err(err_msg) = tables_core::export::to_pdf_with_setup(&st.engine, sheet_model.print_area, &sheet_model.page_setup, &path_str) {
                                     let alert = adw::AlertDialog::builder()
-                                        .heading("Export Failed")
+                                        .heading(suite_common::i18n("Export Failed"))
                                         .body(&err_msg)
                                         .build();
-                                    alert.add_response("ok", "OK");
+                                    alert.add_response("ok", &suite_common::i18n("OK"));
                                     alert.present(parent_win.as_ref());
                                 } else {
                                     println!("PDF exported successfully to {}", path_str);
@@ -1447,29 +1447,29 @@ impl TablesWindow {
         }
 
         suite_common::actions::register_labels(&[
-            ("app.cycle-number-format", "Cycle Number Format"),
-            ("app.cycle-cell-border", "Cycle Cell Border"),
-            ("app.merge-cells", "Merge Cells"),
-            ("app.insert-chart", "Insert Chart…"),
-            ("app.conditional-format", "Conditional Formatting…"),
-            ("app.filter-by-column", "Filter by Selected Column…"),
-            ("app.clear-filter", "Clear Filter"),
-            ("app.define-name", "Define Name…"),
-            ("app.set-print-area", "Set Print Area"),
-            ("app.clear-print-area", "Clear Print Area"),
-            ("app.hide-selected-rows", "Hide Selected Rows"),
-            ("app.unhide-all-rows", "Unhide All Rows"),
-            ("app.hide-selected-cols", "Hide Selected Columns"),
-            ("app.unhide-all-cols", "Unhide All Columns"),
-            ("app.page-setup", "Page Setup…"),
-            ("app.export-pdf", "Export as PDF…"),
-            ("app.open-file", "Open Spreadsheet…"),
-            ("app.save-file", "Save"),
-            ("app.save-file-as", "Save as Excel Workbook…"),
-            ("app.new-document", "New Spreadsheet"),
-            ("app.undo", "Undo"),
-            ("app.redo", "Redo"),
-            ("app.goto-cell", "Go to Cell…"),
+            ("app.cycle-number-format", &suite_common::i18n("Cycle Number Format")),
+            ("app.cycle-cell-border", &suite_common::i18n("Cycle Cell Border")),
+            ("app.merge-cells", &suite_common::i18n("Merge Cells")),
+            ("app.insert-chart", &suite_common::i18n("Insert Chart…")),
+            ("app.conditional-format", &suite_common::i18n("Conditional Formatting…")),
+            ("app.filter-by-column", &suite_common::i18n("Filter by Selected Column…")),
+            ("app.clear-filter", &suite_common::i18n("Clear Filter")),
+            ("app.define-name", &suite_common::i18n("Define Name…")),
+            ("app.set-print-area", &suite_common::i18n("Set Print Area")),
+            ("app.clear-print-area", &suite_common::i18n("Clear Print Area")),
+            ("app.hide-selected-rows", &suite_common::i18n("Hide Selected Rows")),
+            ("app.unhide-all-rows", &suite_common::i18n("Unhide All Rows")),
+            ("app.hide-selected-cols", &suite_common::i18n("Hide Selected Columns")),
+            ("app.unhide-all-cols", &suite_common::i18n("Unhide All Columns")),
+            ("app.page-setup", &suite_common::i18n("Page Setup…")),
+            ("app.export-pdf", &suite_common::i18n("Export as PDF…")),
+            ("app.open-file", &suite_common::i18n("Open Spreadsheet…")),
+            ("app.save-file", &suite_common::i18n("Save")),
+            ("app.save-file-as", &suite_common::i18n("Save as Excel Workbook…")),
+            ("app.new-document", &suite_common::i18n("New Spreadsheet")),
+            ("app.undo", &suite_common::i18n("Undo")),
+            ("app.redo", &suite_common::i18n("Redo")),
+            ("app.goto-cell", &suite_common::i18n("Go to Cell…")),
         ]);
 
         let extended_toolbar: Vec<suite_common::ToolbarItem> = vec![
@@ -1554,10 +1554,10 @@ impl TablesWindow {
                             }
                             Err(e) => {
                                 let err = adw::AlertDialog::builder()
-                                    .heading("Error saving file")
+                                    .heading(suite_common::i18n("Error saving file"))
                                     .body(&e)
                                     .build();
-                                err.add_response("ok", "OK");
+                                err.add_response("ok", &suite_common::i18n("OK"));
                                 err.present(Some(&win));
                             }
                         }
@@ -1589,10 +1589,10 @@ impl TablesWindow {
                                     }
                                     Err(e) => {
                                         let err = adw::AlertDialog::builder()
-                                            .heading("Error saving file")
+                                            .heading(suite_common::i18n("Error saving file"))
                                             .body(&e)
                                             .build();
-                                        err.add_response("ok", "OK");
+                                        err.add_response("ok", &suite_common::i18n("OK"));
                                         err.present(Some(&win2));
                                     }
                                 }
@@ -1692,7 +1692,7 @@ impl TablesWindow {
                                             .heading(suite_common::i18n("Error opening file"))
                                             .body(&e)
                                             .build();
-                                        err.add_response("ok", "OK");
+                                        err.add_response("ok", &suite_common::i18n("OK"));
                                         err.set_default_response(Some("ok"));
                                         err.present(Some(&w2));
                                     }
@@ -1742,10 +1742,10 @@ impl TablesWindow {
                                     }
                                     Err(e) => {
                                         let err = adw::AlertDialog::builder()
-                                            .heading("Error saving file")
+                                            .heading(suite_common::i18n("Error saving file"))
                                             .body(&e)
                                             .build();
-                                        err.add_response("ok", "OK");
+                                        err.add_response("ok", &suite_common::i18n("OK"));
                                         err.set_default_response(Some("ok"));
                                         err.present(Some(&w2));
                                     }
@@ -1777,10 +1777,10 @@ impl TablesWindow {
                     }
                     Err(e) => {
                         let err = adw::AlertDialog::builder()
-                            .heading("Error saving file")
+                            .heading(suite_common::i18n("Error saving file"))
                             .body(&e)
                             .build();
-                        err.add_response("ok", "OK");
+                        err.add_response("ok", &suite_common::i18n("OK"));
                         err.set_default_response(Some("ok"));
                         err.present(Some(&w));
                     }
@@ -2206,9 +2206,9 @@ fn show_format_cells_dialog(
     grid.set_margin_bottom(12);
     let mut row = 0;
     for (label, widget) in [
-        ("Format", dropdown.clone().upcast::<gtk4::Widget>()),
-        ("Decimals", decimals.clone().upcast()),
-        ("Symbol", symbol.clone().upcast()),
+        (&suite_common::i18n("Format"), dropdown.clone().upcast::<gtk4::Widget>()),
+        (&suite_common::i18n("Decimals"), decimals.clone().upcast()),
+        (&suite_common::i18n("Symbol"), symbol.clone().upcast()),
     ] {
         let l = gtk4::Label::new(Some(label));
         l.add_css_class("dim-label");

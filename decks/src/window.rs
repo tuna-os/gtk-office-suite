@@ -498,10 +498,10 @@ impl DecksWindow {
                             }
                             Err(e) => {
                                 let err = adw::AlertDialog::builder()
-                                    .heading("Error saving file")
+                                    .heading(suite_common::i18n("Error saving file"))
                                     .body(&e)
                                     .build();
-                                err.add_response("ok", "OK");
+                                err.add_response("ok", &suite_common::i18n("OK"));
                                 err.present(Some(&win));
                             }
                         }
@@ -538,10 +538,10 @@ impl DecksWindow {
                                     }
                                     Err(e) => {
                                         let err = adw::AlertDialog::builder()
-                                            .heading("Error saving file")
+                                            .heading(suite_common::i18n("Error saving file"))
                                             .body(&e)
                                             .build();
-                                        err.add_response("ok", "OK");
+                                        err.add_response("ok", &suite_common::i18n("OK"));
                                         err.present(Some(&win2));
                                     }
                                 }
@@ -1345,7 +1345,7 @@ impl DecksWindow {
                                             .heading(suite_common::i18n("Error opening presentation"))
                                             .body(&e)
                                             .build();
-                                        err.add_response("ok", "OK");
+                                        err.add_response("ok", &suite_common::i18n("OK"));
                                         err.set_default_response(Some("ok"));
                                         err.present(Some(&w2));
                                     }
@@ -1385,7 +1385,7 @@ impl DecksWindow {
                                 .heading(suite_common::i18n("Error saving presentation"))
                                 .body(&e)
                                 .build();
-                            err.add_response("ok", "OK");
+                            err.add_response("ok", &suite_common::i18n("OK"));
                             err.set_default_response(Some("ok"));
                             err.present(Some(&w_clone));
                         }
@@ -1437,7 +1437,7 @@ impl DecksWindow {
                                             .heading(suite_common::i18n("Error saving presentation"))
                                             .body(&e)
                                             .build();
-                                        err.add_response("ok", "OK");
+                                        err.add_response("ok", &suite_common::i18n("OK"));
                                         err.set_default_response(Some("ok"));
                                         err.present(Some(&w2));
                                     }
