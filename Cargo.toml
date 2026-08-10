@@ -3,7 +3,7 @@ members = ["suite-common-core", "suite-common", "suite-export", "letters-core", 
 resolver = "2"
 
 [workspace.dependencies]
-gettext-rs = { version = "0.7", features = ["gettext-system"] }
+gettext-rs = { version = "0.8", features = ["gettext-system"] }
 
 # IronCalc 0.7.1 on crates.io predates STDEV/REPLACE/PROPER/CHAR/CODE/
 # SUMPRODUCT; upstream main has them. Drop this patch on the next release.
