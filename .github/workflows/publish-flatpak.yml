@@ -92,12 +92,13 @@ jobs:
 
       - name: Push OCI to GHCR
         env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           # Blacksmith runners' default container auth path
           # (/run/containers/$UID/auth.json) isn't writable; point skopeo
           # at a location under RUNNER_TEMP instead.
           REGISTRY_AUTH_FILE: ${{ runner.temp }}/auth.json
         run: |
-          echo "${{ secrets.GITHUB_TOKEN }}" | skopeo login ghcr.io -u "${{ github.actor }}" --password-stdin
+          echo "${{ env.GITHUB_TOKEN }}" | skopeo login ghcr.io -u "${{ github.actor }}" --password-stdin
           skopeo copy oci:${{ matrix.app }}-x86_64.oci docker://ghcr.io/tuna-os/${{ matrix.app }}:latest-x86_64
           skopeo copy oci:${{ matrix.app }}-aarch64.oci docker://ghcr.io/tuna-os/${{ matrix.app }}:latest-aarch64
 
@@ -106,8 +107,12 @@ jobs:
           FLATPAK_INDEX_TOKEN: ${{ secrets.FLATPAK_INDEX_TOKEN }}
         run: |
           git clone --depth 1 \
-            https://x-access-token:${FLATPAK_INDEX_TOKEN}@github.com/tuna-os/docs.git \
+            https://github.com/tuna-os/docs.git \
             index-repo
+          # Use header-based auth so the token never lands in the remote URL
+          # (avoids leaks via .git/config, `git remote -v`, and process listings).
+          git -C index-repo config --local http.extraheader \
+            "AUTHORIZATION: basic $(printf 'x-access-token:%s' "$FLATPAK_INDEX_TOKEN" | base64)"
           pip install requests
           python3 .github/scripts/update-index.py \
             --oci-dir ${{ matrix.app }}-x86_64.oci \
