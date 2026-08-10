@@ -1925,9 +1925,11 @@ fn make_find_replace_widget(tv: &adw::TabView) -> (gtk::SearchBar, gtk::SearchEn
     let search_entry = gtk::SearchEntry::new();
     search_entry.set_placeholder_text(Some("Find\u{2026}"));
     search_entry.set_hexpand(true);
+    search_entry.update_property(&[gtk::accessible::Property::Label("Find")]);
 
     let replace_entry = gtk::Entry::new();
     replace_entry.set_placeholder_text(Some("Replace\u{2026}"));
+    replace_entry.update_property(&[gtk::accessible::Property::Label("Replace with")]);
 
     let match_label = gtk::Label::new(Some(""));
     match_label.add_css_class("dim-label");
