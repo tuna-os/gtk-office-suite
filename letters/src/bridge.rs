@@ -393,21 +393,54 @@ mod tests {
     use super::*;
     use letters_core::model::StylePatch;
 
+    /// Run a GTK-dependent closure on GTK's single main thread. GTK objects may
+    /// only be created from the thread that called `gtk::init`, and `gtk::init`
+    /// succeeds at most once per process, so all GTK tests share one exclusive
+    /// worker thread. When GTK cannot initialize (headless CI without a
+    /// display) this skips (logs and returns without running the closure),
+    /// rather than panicking like `#[gtk::test]` does.
+    fn gtk_test<F>(f: F)
+    where
+        F: FnOnce() + Send + std::panic::UnwindSafe + 'static,
+    {
+        use std::panic;
+        use std::sync::mpsc;
+        use std::sync::OnceLock;
+
+        static MAIN: OnceLock<Option<gtk::glib::ThreadPool>> = OnceLock::new();
+        let pool = MAIN
+            .get_or_init(|| {
+                let pool = gtk::glib::ThreadPool::exclusive(1).ok()?;
+                let (tx, rx) = mpsc::channel();
+                pool.push(move || {
+                    let _ = tx.send(gtk::init().is_ok());
+                })
+                .ok()?;
+                match rx.recv().ok()? {
+                    true => Some(pool),
+                    false => None,
+                }
+            })
+            .as_ref();
+        let Some(pool) = pool else {
+            eprintln!("skipping GTK test: no display");
+            return;
+        };
+        let (tx, rx) = mpsc::sync_channel(1);
+        let _ = pool.push(move || {
+            let _ = tx.send(panic::catch_unwind(f));
+        });
+        let _ = rx.recv();
+    }
+
     fn round_trip(buf: &gtk::TextBuffer, doc: &Document) -> Document {
         render_to_buffer(doc, buf);
         capture_from_buffer(buf)
     }
 
-    // GTK insists on being initialized and used from a single thread, and
-    // cargo gives every #[test] its own thread — so all buffer round-trip
-    // cases live in this one test. Skips cleanly with no display; the
-    // gui-tests smoke job runs it under Xvfb where it must pass.
     #[test]
     fn document_round_trips_through_buffer() {
-        if gtk::init().is_err() {
-            eprintln!("skipping: no display for GTK");
-            return;
-        }
+        gtk_test(|| {
         let fresh = || {
             let buf = gtk::TextBuffer::new(None);
             crate::window::register_formatting_tags(&buf);
@@ -512,5 +545,6 @@ single");
         assert_eq!(rt.style_at(6).link.as_deref(), Some("https://gnome.org"));
         assert_eq!(rt.style_at(0).link, None);
         assert_eq!(rt.style_at(12).link, None);
+        });
     }
 }
