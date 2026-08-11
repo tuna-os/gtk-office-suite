@@ -69,6 +69,13 @@ comparing ZIP bytes. The OnlyOffice conversion lane is opt-in via
 `ONLYOFFICE_BIN`; LibreOffice remains the required behavioral oracle in the
 nightly workflow.
 
+Format importers also expose a GTK-free structured compatibility report. It
+classifies detected content as must-preserve, opaque pass-through, warn-on-loss,
+or hard-error. `OpaquePackage` carries uninterpreted ZIP members across an
+unrelated edit, while `CompatibilityReport::validate_save` blocks hard errors
+and requires explicit confirmation for destructive loss. The report and
+pass-through behavior are unit-tested in `suite-common-core/src/interop.rs`.
+
 House rule: **never `|| true` a test step.** The GUI workflow ran that way
 for weeks while pytest wasn't even installed, and three launch-blocking bugs
 (apps exiting at startup, the Letters editor orphaned from its window)
