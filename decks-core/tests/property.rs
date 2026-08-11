@@ -96,7 +96,7 @@ proptest! {
     ) {
         let dir = tempfile::tempdir().unwrap();
         let path = dir.path().join("unicode.pptx");
-        let deck = build_deck(&[texts.clone()]);
+        let deck = build_deck(std::slice::from_ref(&texts));
 
         write_pptx(path.to_str().unwrap(), &deck).unwrap();
         let read_back = read_pptx(path.to_str().unwrap()).unwrap();
