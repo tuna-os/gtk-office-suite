@@ -59,7 +59,10 @@ mod tests {
             .filter_map(|e| e.ok())
             .filter(|e| e.file_name().to_string_lossy().contains(".tmp-"))
             .collect();
-        assert!(leftovers.is_empty(), "temp file was not cleaned up: {leftovers:?}");
+        assert!(
+            leftovers.is_empty(),
+            "temp file was not cleaned up: {leftovers:?}"
+        );
     }
 
     #[test]
@@ -95,5 +98,35 @@ mod tests {
 
         assert!(result.is_err(), "expected the write to fail under a read-only directory");
         assert_eq!(fs::read(&path).unwrap(), b"original content");
+    }
+    #[test]
+    fn rename_over_directory_fails_and_cleans_up_temp_file() {
+        let dir = tempfile::tempdir().unwrap();
+        let target = dir.path().join("existing-dir");
+        std::fs::create_dir(&target).unwrap();
+
+        let result = atomic_write_bytes(&target, b"data");
+        assert!(
+            result.is_err(),
+            "renaming a file over a directory must fail"
+        );
+
+        // The destination directory is untouched and the temp file removed.
+        assert!(target.is_dir(), "destination directory must be preserved");
+        let leftovers: Vec<_> = std::fs::read_dir(dir.path())
+            .unwrap()
+            .filter_map(|e| e.ok())
+            .filter(|e| e.file_name().to_string_lossy().contains(".tmp-"))
+            .collect();
+        assert!(
+            leftovers.is_empty(),
+            "temp file was not cleaned up: {leftovers:?}"
+        );
+    }
+
+    #[test]
+    fn path_without_file_name_errors_before_any_write() {
+        let err = atomic_write_bytes(Path::new("/"), b"data").unwrap_err();
+        assert!(err.contains("no file name"), "got: {err}");
     }
 }
