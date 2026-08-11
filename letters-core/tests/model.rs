@@ -231,3 +231,95 @@ fn paragraph_split_preserves_para_style() {
     assert_eq!(d.paragraphs[0].style.heading, Some(2));
     assert_eq!(d.paragraphs[1].style.heading, Some(2));
 }
+
+// ── Model helpers not covered above ──────────────────────────────────────
+
+#[test]
+fn page_geometry_approx_eq_within_half_point() {
+    let a = PageGeometry::default();
+    // Format conversions round to twips (1/20 pt) or 0.01 mm — sub-half-point
+    // differences must compare equal.
+    let within = PageGeometry { width_pt: a.width_pt + 0.4, ..a };
+    assert!(a.approx_eq(&within), "0.4pt drift should be within tolerance");
+    let beyond = PageGeometry { width_pt: a.width_pt + 0.6, ..a };
+    assert!(!a.approx_eq(&beyond), "0.6pt drift should exceed tolerance");
+    assert!(a.approx_eq(&a), "identical geometry is equal");
+}
+
+#[test]
+fn from_plain_text_keeps_leading_and_trailing_empty_lines() {
+    let d = doc("\n\nx\n");
+    assert_eq!(d.paragraphs.len(), 4);
+    assert!(d.paragraphs[0].runs.is_empty());
+    assert!(d.paragraphs[1].runs.is_empty());
+    assert_eq!(d.paragraphs[3].runs.len(), 0);
+    assert_eq!(d.to_plain_text(), "\n\nx\n", "round trip must preserve blank lines");
+    assert_invariants(&d);
+}
+
+#[test]
+fn footnote_runs_never_merge_across_normalize() {
+    let mut d = Document::new();
+    d.footnotes.push("footnote body".to_string());
+    let mut fn_run = Run::plain("\u{204b}"); // visible marker; text is not empty
+    fn_run.style.footnote = Some(0);
+    d.paragraphs[0].runs = vec![Run::plain("alpha"), fn_run.clone(), Run::plain("omega")];
+    // Trigger normalize via an edit at the end.
+    d.insert_text(d.char_len(), "!");
+    let runs = &d.paragraphs[0].runs;
+    assert_eq!(runs.len(), 3, "plain runs must not merge across a footnote: {runs:?}");
+    assert_eq!(runs[0].text, "alpha");
+    assert_eq!(runs[1].style.footnote, Some(0), "footnote run must stay separate");
+    assert_eq!(runs[2].text, "omega!");
+    assert_invariants(&d);
+}
+
+#[test]
+fn delete_across_paragraphs_preserves_footnote_run() {
+    let mut d = doc("abc\ndef");
+    d.footnotes.push("note".to_string());
+    let mut fn_run = Run::plain("\u{204b}");
+    fn_run.style.footnote = Some(0);
+    d.paragraphs[1].runs.push(fn_run);
+    // Delete 'b', 'c', the break, and 'd' — merges the two paragraphs.
+    d.delete_range(1, 4);
+    assert_eq!(d.paragraphs.len(), 1, "paragraphs must merge");
+    let runs = &d.paragraphs[0].runs;
+    assert_eq!(runs.len(), 2, "got {runs:?}");
+    assert_eq!(runs[0].text, "adef");
+    assert_eq!(runs[1].style.footnote, Some(0), "footnote must survive the merge");
+    assert_invariants(&d);
+}
+
+#[test]
+fn style_at_document_end_inherits_last_run() {
+    let mut d = doc("hello");
+    d.paragraphs[0].runs[0].style.bold = true;
+    assert!(d.style_at(5).bold, "style at doc end should inherit the last run");
+    assert!(d.style_at(0).bold);
+}
+
+#[test]
+fn insert_at_unicode_boundary_does_not_split_utf8() {
+    let mut d = doc("héllo"); // é is 2 bytes; offsets are char-based
+    d.insert_text(3, "-"); // after 'h', 'é', 'l'
+    assert_eq!(d.to_plain_text(), "hél-lo");
+    assert_eq!(d.char_len(), 6);
+    assert_invariants(&d);
+}
+
+#[test]
+fn insert_at_run_boundary_inherits_following_style() {
+    let mut d = Document::new();
+    let mut r1 = Run::plain("ab");
+    r1.style.bold = true;
+    d.paragraphs[0].runs = vec![r1, Run::plain("cd")];
+    d.insert_text(2, "|"); // boundary between bold "ab" and plain "cd"
+    let runs = &d.paragraphs[0].runs;
+    assert_eq!(runs.len(), 2, "got {runs:?}");
+    assert_eq!(runs[0].text, "ab");
+    assert!(runs[0].style.bold);
+    assert_eq!(runs[1].text, "|cd");
+    assert!(!runs[1].style.bold);
+    assert_invariants(&d);
+}
