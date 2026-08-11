@@ -12,3 +12,5 @@ flatpak/gschemas.compiled
 
 # Rust build output
 /target/
+fuzz/artifacts/
+fuzz/corpus/

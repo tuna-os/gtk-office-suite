@@ -37,6 +37,18 @@ fn grid_strategy() -> impl Strategy<Value = Vec<Vec<String>>> {
     )
 }
 
+fn unicode_cell_strategy() -> impl Strategy<Value = String> {
+    prop::collection::vec(
+        prop_oneof![
+            Just('e'), Just('\u{0301}'),
+            prop::char::range('\u{4e00}', '\u{4eff}'),
+            prop::char::range('\u{05d0}', '\u{05ea}'),
+            prop::char::range('\u{1f600}', '\u{1f64f}'),
+        ],
+        0..10,
+    ).prop_map(|chars| chars.into_iter().collect())
+}
+
 proptest! {
     #![proptest_config(ProptestConfig::with_cases(64))]
 
@@ -67,6 +79,38 @@ proptest! {
                     &actual, expected,
                     "cell ({}, {}): wrote {:?}, read back {:?}", r, c, expected, actual
                 );
+            }
+        }
+    }
+
+    #[test]
+    fn xlsx_round_trip_preserves_unicode_cell_values(
+        grid in prop::collection::vec(
+            prop::collection::vec(unicode_cell_strategy(), COLS), ROWS
+        )
+    ) {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("unicode.xlsx");
+        let mut engine = TablesEngine::new(ROWS, COLS).unwrap();
+
+        for (r, row) in grid.iter().enumerate() {
+            for (c, value) in row.iter().enumerate() {
+                engine.set_cell_text(r, c, value);
+            }
+        }
+        engine.evaluate();
+        let mut sheet = SheetModel::new("Unicode", ROWS, COLS, 0);
+        sheet.sync_from_engine(&engine);
+        save_sheets_to_xlsx_with_engine(
+            path.to_str().unwrap(), &[sheet], Some(&engine)
+        ).unwrap();
+
+        let (mut loaded, _sheets) = load_xlsx_workbook(path.to_str().unwrap()).unwrap();
+        loaded.set_active_sheet(0).unwrap();
+        for (r, row) in grid.iter().enumerate() {
+            for (c, expected) in row.iter().enumerate() {
+                let actual = loaded.cell(r, c);
+                prop_assert_eq!(&actual, expected);
             }
         }
     }
