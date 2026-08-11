@@ -397,9 +397,9 @@ mod tests {
     /// only be created from the thread that called `gtk::init`, and `gtk::init`
     /// succeeds at most once per process, so all GTK tests share one exclusive
     /// worker thread. When GTK cannot initialize (headless CI without a
-    /// display) this returns `false` and the caller skips, rather than
-    /// panicking like `#[gtk::test]` does.
-    fn gtk_test<F>(f: F) -> bool
+    /// display) this skips (logs and returns without running the closure),
+    /// rather than panicking like `#[gtk::test]` does.
+    fn gtk_test<F>(f: F)
     where
         F: FnOnce() + Send + std::panic::UnwindSafe + 'static,
     {
@@ -424,14 +424,13 @@ mod tests {
             .as_ref();
         let Some(pool) = pool else {
             eprintln!("skipping GTK test: no display");
-            return false;
+            return;
         };
         let (tx, rx) = mpsc::sync_channel(1);
         let _ = pool.push(move || {
             let _ = tx.send(panic::catch_unwind(f));
         });
         let _ = rx.recv();
-        true
     }
 
     fn round_trip(buf: &gtk::TextBuffer, doc: &Document) -> Document {
@@ -441,7 +440,7 @@ mod tests {
 
     #[test]
     fn document_round_trips_through_buffer() {
-        if !gtk_test(|| {
+        gtk_test(|| {
         let fresh = || {
             let buf = gtk::TextBuffer::new(None);
             crate::window::register_formatting_tags(&buf);
@@ -546,8 +545,6 @@ single");
         assert_eq!(rt.style_at(6).link.as_deref(), Some("https://gnome.org"));
         assert_eq!(rt.style_at(0).link, None);
         assert_eq!(rt.style_at(12).link, None);
-        }) {
-            return;
-        }
+        });
     }
 }

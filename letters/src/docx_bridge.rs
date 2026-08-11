@@ -179,9 +179,9 @@ mod tests {
     /// only be created from the thread that called `gtk::init`, and `gtk::init`
     /// succeeds at most once per process, so all GTK tests share one exclusive
     /// worker thread. When GTK cannot initialize (headless CI without a
-    /// display) this returns `false` and the caller skips, rather than
-    /// panicking like `#[gtk::test]` does.
-    fn gtk_test<F>(f: F) -> bool
+    /// display) this skips (logs and returns without running the closure),
+    /// rather than panicking like `#[gtk::test]` does.
+    fn gtk_test<F>(f: F)
     where
         F: FnOnce() + Send + std::panic::UnwindSafe + 'static,
     {
@@ -206,14 +206,13 @@ mod tests {
             .as_ref();
         let Some(pool) = pool else {
             eprintln!("skipping GTK test: no display");
-            return false;
+            return;
         };
         let (tx, rx) = mpsc::sync_channel(1);
         let _ = pool.push(move || {
             let _ = tx.send(panic::catch_unwind(f));
         });
         let _ = rx.recv();
-        true
     }
 
     #[test]
@@ -239,7 +238,7 @@ mod tests {
 
     #[test]
     fn split_paragraphs_tracks_offsets_and_detects_style_tags() {
-        if !gtk_test(|| {
+        gtk_test(|| {
             let buf = gtk::TextBuffer::new(None);
             buf.set_text("line1\nline2");
 
@@ -259,14 +258,12 @@ mod tests {
             assert_eq!(paras[1].text, "line2");
             assert_eq!(paras[1].offset, 6); // 5 bytes + newline
             assert_eq!(paras[1].style_id, "");
-        }) {
-            return;
-        }
+        });
     }
 
     #[test]
     fn split_paragraphs_detects_custom_style_prefix() {
-        if !gtk_test(|| {
+        gtk_test(|| {
             let buf = gtk::TextBuffer::new(None);
             buf.set_text("custom-styled");
             let table = buf.tag_table();
@@ -279,14 +276,12 @@ mod tests {
             let paras = split_paragraphs(&buf, "custom-styled");
             assert_eq!(paras.len(), 1);
             assert_eq!(paras[0].style_id, "foo"); // "custom-" prefix stripped
-        }) {
-            return;
-        }
+        });
     }
 
     #[test]
     fn buffer_round_trips_to_docx_and_back() {
-        if !gtk_test(|| {
+        gtk_test(|| {
             let buf = gtk::TextBuffer::new(None);
             buf.set_text("Hello docx bridge\nSecond paragraph");
 
@@ -304,8 +299,6 @@ mod tests {
             assert!(plain.contains("Second paragraph"), "missing second paragraph in {plain:?}");
 
             let _ = std::fs::remove_file(&path_str);
-        }) {
-            return;
-        }
+        });
     }
 }
