@@ -116,6 +116,11 @@ flatpak run org.flatpak.Builder --state-dir=.flatpak-builder build-dir flatpak/o
 - [ ] ODS import: parses all calamine Data variants correctly
 
 ### Decks
+- [ ] Presenter release journey: current/next slide, notes, timer, display
+  selection, and external-display fallback (ADR-0004)
+- [ ] Missing-media journey names the slide and path before presentation or
+  export (`decks-core/src/presenter.rs`)
+- [ ] PDF export verifies 16:9 geometry, backgrounds, masters, and fonts
 - [ ] Undo/redo: AddObject → Undo → Redo → object restored
 - [ ] Undo/redo: DeleteSlide → Undo → slide restored
 - [ ] Undo/redo: ReorderSlides swap and unswap
