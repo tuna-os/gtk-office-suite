@@ -161,4 +161,51 @@ mod tests {
         assert!(json.contains("\\\"1\\\""));
         assert!(json.contains("\"slide_count\":1"));
     }
+
+    // ── escape_json / json helpers (pure string logic) ──────────────────────
+
+    #[test]
+    fn escapes_quotes_backslash_and_whitespace() {
+        assert_eq!(escape_json("a\"b\\c"), "a\\\"b\\\\c");
+        assert_eq!(escape_json("line1\nline2\r\n\ttab"), "line1\\nline2\\r\\n\\ttab");
+    }
+
+    #[test]
+    fn escapes_control_characters_as_unicode_escapes() {
+        assert_eq!(escape_json("\u{01}"), "\\u0001");
+        assert_eq!(escape_json("\u{1f}"), "\\u001f");
+    }
+
+    #[test]
+    fn passes_through_unicode_and_plain_text() {
+        assert_eq!(escape_json("héllo wörld"), "héllo wörld");
+        assert_eq!(escape_json("emoji 😀 ok"), "emoji 😀 ok");
+    }
+
+    #[test]
+    fn json_opt_str_none_is_null() {
+        assert_eq!(json_opt_str(&None), "null");
+        assert_eq!(json_opt_str(&Some("hi".into())), "\"hi\"");
+    }
+
+    #[test]
+    fn object_snapshot_maps_every_kind() {
+        let objs = [
+            SlideObject::TextBox { text: "t".into(), x: 1.0, y: 2.0, w: 3.0, h: 4.0, runs: vec![] },
+            SlideObject::Rect { x: 1.0, y: 2.0, w: 3.0, h: 4.0 },
+            SlideObject::Circle { x: 1.0, y: 2.0, r: 3.0 },
+            SlideObject::Image { path: "p.png".into(), x: 1.0, y: 2.0, w: 3.0, h: 4.0 },
+        ];
+        let kinds = objs.iter().enumerate().map(|(i, o)| object_snapshot(i, o)).collect::<Vec<_>>();
+        assert_eq!(kinds[0].kind, "TextBox");
+        assert_eq!(kinds[0].text.as_deref(), Some("t"));
+        assert_eq!(kinds[1].kind, "Rect");
+        assert!(kinds[1].text.is_none());
+        assert_eq!(kinds[2].kind, "Circle");
+        assert_eq!(kinds[3].kind, "Image");
+        for (i, k) in kinds.iter().enumerate() {
+            assert_eq!(k.index, i);
+            assert_eq!((k.x, k.y), (1.0, 2.0));
+        }
+    }
 }
