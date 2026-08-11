@@ -60,6 +60,15 @@ and need `GEMINI_API_KEY`. Locally they skip without a key.
 | `gui-tests.yml` → `smoke` | push/PR to main | yes | tier 2 under Xvfb |
 | `gui-tests.yml` → `vlm-audit` | daily 06:00 UTC, manual | no | tier 3 + screenshot artifacts |
 
+The versioned office interoperability contract lives in
+[`interop/corpus.json`](../interop/corpus.json). Its cheap structural check
+runs on every PR and can be run locally with `python3
+interop/validate_corpus.py`. It validates metadata, both directions for DOCX/
+ODT, XLSX/ODS, and PPTX/ODP, and package relationships/content types without
+comparing ZIP bytes. The OnlyOffice conversion lane is opt-in via
+`ONLYOFFICE_BIN`; LibreOffice remains the required behavioral oracle in the
+nightly workflow.
+
 House rule: **never `|| true` a test step.** The GUI workflow ran that way
 for weeks while pytest wasn't even installed, and three launch-blocking bugs
 (apps exiting at startup, the Letters editor orphaned from its window)

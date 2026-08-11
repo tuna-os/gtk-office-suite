@@ -1,0 +1,41 @@
+{
+  "schema_version": 1,
+  "loss_budgets": {
+    "must_preserve": [
+      "text and values",
+      "formulas",
+      "sheet or slide order",
+      "UI-exposed styles",
+      "images",
+      "links",
+      "notes",
+      "page geometry",
+      "accessibility-relevant structure"
+    ],
+    "opaque_pass_through": [
+      "unsupported OOXML or ODF parts that can be copied without interpretation"
+    ],
+    "warn_on_loss": [
+      "explicitly unsupported constructs when saving to a less capable format"
+    ],
+    "forbidden_silent_loss": [
+      "supported content",
+      "unknown content promised as pass-through",
+      "edits in another open sheet or document"
+    ]
+  },
+  "fixtures": [
+    {"id":"writer-our-write-v1","format":"docx","direction":"our-write-oracle-rewrite","authoring":{"suite":"gtk-office-suite","version":"0.1.0"},"provenance":"Minimal review fixture authored for this repository","license":"MIT","scenario":"Writer text, heading, link, and page geometry survive a LibreOffice rewrite","package_dir":"packages/docx","semantics":{"paragraphs":["Interop corpus heading","Text survives the oracle rewrite."],"links":["https://example.com"],"page_geometry":"A4 portrait"}},
+    {"id":"writer-oracle-authored-v1","format":"odt","direction":"oracle-authored","authoring":{"suite":"LibreOffice Writer","version":"25.2.3.2"},"provenance":"Minimal fixture authored with LibreOffice for this repository","license":"MIT","scenario":"Our Writer reader imports an oracle-authored document","package_dir":"packages/odt","semantics":{"paragraphs":["Oracle-authored heading","Imported text."],"styles":["Heading 1","bold"],"page_geometry":"A4 portrait"}},
+    {"id":"calc-our-write-v1","format":"xlsx","direction":"our-write-oracle-rewrite","authoring":{"suite":"gtk-office-suite","version":"0.1.0"},"provenance":"Minimal review fixture authored for this repository","license":"MIT","scenario":"Calc values, formula, sheet order, and style survive a LibreOffice rewrite","package_dir":"packages/xlsx","semantics":{"sheets":["Budget","Forecast"],"values":{"Budget!A1":"42","Budget!B1":"=A1*2"},"sheet_order":["Budget","Forecast"]}},
+    {"id":"calc-oracle-authored-v1","format":"ods","direction":"oracle-authored","authoring":{"suite":"LibreOffice Calc","version":"25.2.3.2"},"provenance":"Minimal fixture authored with LibreOffice for this repository","license":"MIT","scenario":"Our Calc reader imports an oracle-authored workbook","package_dir":"packages/ods","semantics":{"sheets":["Oracle"],"values":{"Oracle!A1":"héllo","Oracle!B1":"=1+1"},"sheet_order":["Oracle"]}},
+    {"id":"impress-our-write-v1","format":"pptx","direction":"our-write-oracle-rewrite","authoring":{"suite":"gtk-office-suite","version":"0.1.0"},"provenance":"Minimal review fixture authored for this repository","license":"MIT","scenario":"Impress text, slide order, notes, and geometry survive a LibreOffice rewrite","package_dir":"packages/pptx","semantics":{"slides":["Interop title","Second slide"],"notes":["Speaker note"],"slide_order":[1,2]}},
+    {"id":"impress-oracle-authored-v1","format":"odp","direction":"oracle-authored","authoring":{"suite":"LibreOffice Impress","version":"25.2.3.2"},"provenance":"Minimal fixture authored with LibreOffice for this repository","license":"MIT","scenario":"Our Impress reader imports an oracle-authored deck","package_dir":"packages/odp","semantics":{"slides":["Oracle title"],"notes":["Oracle note"],"slide_order":[1]}},
+    {"id":"writer-odt-our-write-v1","format":"odt","direction":"our-write-oracle-rewrite","authoring":{"suite":"gtk-office-suite","version":"0.1.0"},"provenance":"Minimal review fixture authored for this repository","license":"MIT","scenario":"Writer ODT output survives a LibreOffice rewrite","package_dir":"packages/odt","semantics":{"paragraphs":["Interop corpus heading","Text survives the oracle rewrite."],"page_geometry":"A4 portrait"}},
+    {"id":"writer-docx-oracle-authored-v1","format":"docx","direction":"oracle-authored","authoring":{"suite":"LibreOffice Writer","version":"25.2.3.2"},"provenance":"Minimal fixture authored with LibreOffice for this repository","license":"MIT","scenario":"Our Writer reader imports an oracle-authored DOCX","package_dir":"packages/docx","semantics":{"paragraphs":["Oracle-authored heading","Imported text."],"styles":["Heading 1","bold"]}},
+    {"id":"calc-ods-our-write-v1","format":"ods","direction":"our-write-oracle-rewrite","authoring":{"suite":"gtk-office-suite","version":"0.1.0"},"provenance":"Minimal review fixture authored for this repository","license":"MIT","scenario":"Calc ODS values, formulas, and sheet order survive a LibreOffice rewrite","package_dir":"packages/ods","semantics":{"sheets":["Budget","Forecast"],"values":{"Budget!A1":"42","Budget!B1":"=A1*2"},"sheet_order":["Budget","Forecast"]}},
+    {"id":"calc-xlsx-oracle-authored-v1","format":"xlsx","direction":"oracle-authored","authoring":{"suite":"LibreOffice Calc","version":"25.2.3.2"},"provenance":"Minimal fixture authored with LibreOffice for this repository","license":"MIT","scenario":"Our Calc reader imports an oracle-authored XLSX","package_dir":"packages/xlsx","semantics":{"sheets":["Oracle"],"values":{"Oracle!A1":"héllo","Oracle!B1":"=1+1"},"sheet_order":["Oracle"]}},
+    {"id":"impress-odp-our-write-v1","format":"odp","direction":"our-write-oracle-rewrite","authoring":{"suite":"gtk-office-suite","version":"0.1.0"},"provenance":"Minimal review fixture authored for this repository","license":"MIT","scenario":"Impress ODP text, slide order, and notes survive a LibreOffice rewrite","package_dir":"packages/odp","semantics":{"slides":["Interop title","Second slide"],"notes":["Speaker note"],"slide_order":[1,2]}},
+    {"id":"impress-pptx-oracle-authored-v1","format":"pptx","direction":"oracle-authored","authoring":{"suite":"LibreOffice Impress","version":"25.2.3.2"},"provenance":"Minimal fixture authored with LibreOffice for this repository","license":"MIT","scenario":"Our Impress reader imports an oracle-authored PPTX","package_dir":"packages/pptx","semantics":{"slides":["Oracle title"],"notes":["Oracle note"],"slide_order":[1]}}
+  ]
+}
