@@ -169,3 +169,91 @@ fn split_runs_from_buffer(buf: &gtk::TextBuffer, para_offset: i32, para_text: &s
     runs
 }
 
+
+#[cfg(test)]
+mod tests {
+    use super::{split_paragraphs, tag_to_style_id, write_buffer_to_docx_with_layout};
+    use gtk4::{self as gtk, prelude::*};
+
+    #[test]
+    fn tag_to_style_id_maps_all_heading_and_special_tags() {
+        assert_eq!(tag_to_style_id("h1"), "Heading1");
+        assert_eq!(tag_to_style_id("h2"), "Heading2");
+        assert_eq!(tag_to_style_id("h3"), "Heading3");
+        assert_eq!(tag_to_style_id("h4"), "Heading4");
+        assert_eq!(tag_to_style_id("h5"), "Heading5");
+        assert_eq!(tag_to_style_id("h6"), "Heading6");
+        assert_eq!(tag_to_style_id("h-title"), "Title");
+        assert_eq!(tag_to_style_id("h-subtitle"), "Subtitle");
+        assert_eq!(tag_to_style_id("code"), "Code");
+        assert_eq!(tag_to_style_id("blockquote"), "Blockquote");
+        assert_eq!(tag_to_style_id("normal"), "Normal");
+    }
+
+    #[test]
+    fn tag_to_style_id_unknown_returns_empty() {
+        assert_eq!(tag_to_style_id("unknown"), "");
+        assert_eq!(tag_to_style_id(""), "");
+    }
+
+    #[test]
+    fn split_paragraphs_tracks_offsets_and_detects_style_tags() {
+        let buf = gtk::TextBuffer::new(None);
+        buf.set_text("line1\nline2");
+
+        // Tag the first line as h1.
+        let table = buf.tag_table();
+        let h1 = gtk::TextTag::builder().name("h1").build();
+        table.add(&h1);
+        let mut start = buf.start_iter();
+        let mut end = buf.iter_at_offset(5);
+        buf.apply_tag(&h1, &start, &end);
+        let _ = start;
+
+        let paras = split_paragraphs(&buf, "line1\nline2");
+        assert_eq!(paras.len(), 2);
+        assert_eq!(paras[0].text, "line1");
+        assert_eq!(paras[0].offset, 0);
+        assert_eq!(paras[0].style_id, "Heading1");
+        assert_eq!(paras[1].text, "line2");
+        assert_eq!(paras[1].offset, 6); // 5 bytes + newline
+        assert_eq!(paras[1].style_id, "");
+    }
+
+    #[test]
+    fn split_paragraphs_detects_custom_style_prefix() {
+        let buf = gtk::TextBuffer::new(None);
+        buf.set_text("custom-styled");
+        let table = buf.tag_table();
+        let tag = gtk::TextTag::builder().name("custom-foo").build();
+        table.add(&tag);
+        let mut start = buf.start_iter();
+        let mut end = buf.end_iter();
+        buf.apply_tag(&tag, &start, &end);
+
+        let paras = split_paragraphs(&buf, "custom-styled");
+        assert_eq!(paras.len(), 1);
+        assert_eq!(paras[0].style_id, "foo"); // "custom-" prefix stripped
+    }
+
+    #[test]
+    fn buffer_round_trips_to_docx_and_back() {
+        let buf = gtk::TextBuffer::new(None);
+        buf.set_text("Hello docx bridge\nSecond paragraph");
+
+        let path = std::env::temp_dir()
+            .join(format!("letters-docx-bridge-{}.docx", std::process::id()));
+        let path_str = path.to_string_lossy().to_string();
+
+        let res = write_buffer_to_docx_with_layout(&path_str, &buf, None, &[]);
+        assert!(res.is_ok(), "write_buffer_to_docx_with_layout failed: {:?}", res.err());
+
+        let read_doc = letters_core::docx::read(&path_str);
+        assert!(read_doc.is_ok(), "read back failed: {:?}", read_doc.err());
+        let plain = read_doc.unwrap().to_plain_text();
+        assert!(plain.contains("Hello docx bridge"), "missing first paragraph in {plain:?}");
+        assert!(plain.contains("Second paragraph"), "missing second paragraph in {plain:?}");
+
+        let _ = std::fs::remove_file(&path_str);
+    }
+}
