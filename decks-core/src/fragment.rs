@@ -73,4 +73,91 @@ mod tests {
             _ => panic!("wrong object"),
         }
     }
+
+    // ── copy_object edge cases ───────────────────────────────────────────────
+
+    fn textbox(text: &str, runs: Vec<Run>) -> SlideObject {
+        SlideObject::TextBox { text: text.into(), x: 0.0, y: 0.0, w: 100.0, h: 50.0, runs }
+    }
+
+    #[test]
+    fn copy_non_textbox_returns_none() {
+        assert!(copy_object(&SlideObject::Rect { x: 0.0, y: 0.0, w: 1.0, h: 1.0 }).is_none());
+        assert!(copy_object(&SlideObject::Circle { x: 0.0, y: 0.0, r: 1.0 }).is_none());
+        assert!(copy_object(&SlideObject::Image { path: "p.png".into(), x: 0.0, y: 0.0, w: 1.0, h: 1.0 }).is_none());
+    }
+
+    #[test]
+    fn copy_unstyled_textbox_falls_back_to_plain_text() {
+        let frag = copy_object(&textbox("alpha\nbeta", vec![])).expect("fragment");
+        match frag {
+            Fragment::Text(paras) => {
+                assert_eq!(paras.len(), 2);
+                assert_eq!(paras[0].text(), "alpha");
+                assert_eq!(paras[1].text(), "beta");
+            }
+            _ => panic!("expected text fragment"),
+        }
+    }
+
+    #[test]
+    fn copy_styled_textbox_keeps_runs_verbatim() {
+        let runs = vec![Run { text: "b".into(), style: RunStyle { bold: true, ..Default::default() } }];
+        let frag = copy_object(&textbox("b", runs.clone())).expect("fragment");
+        match frag {
+            Fragment::Text(paras) => {
+                assert_eq!(paras.len(), 1);
+                assert_eq!(paras[0].runs, runs);
+            }
+            _ => panic!("expected text fragment"),
+        }
+    }
+
+    // ── paste_as_text_box edge cases ────────────────────────────────────────
+
+    #[test]
+    fn paste_multiparagraph_text_drops_runs() {
+        let d = letters_core::model::Document::from_plain_text("l1\nl2");
+        let frag = Fragment::Text(d.paragraphs);
+        let back = paste_as_text_box(&frag, 1.0, 2.0);
+        match back {
+            SlideObject::TextBox { text, runs, x, y, .. } => {
+                assert_eq!(text, "l1\nl2");
+                assert!(runs.is_empty(), "multi-paragraph paste must drop runs");
+                assert_eq!((x, y), (1.0, 2.0));
+            }
+            _ => panic!("wrong object"),
+        }
+    }
+
+    #[test]
+    fn paste_single_paragraph_keeps_runs() {
+        let mut d = letters_core::model::Document::from_plain_text("styled");
+        d.paragraphs[0].runs = vec![Run { text: "styled".into(), style: RunStyle { italic: true, ..Default::default() } }];
+        let frag = Fragment::Text(d.paragraphs);
+        let back = paste_as_text_box(&frag, 0.0, 0.0);
+        match back {
+            SlideObject::TextBox { runs, .. } => {
+                assert_eq!(runs.len(), 1);
+                assert!(runs[0].style.italic);
+            }
+            _ => panic!("wrong object"),
+        }
+    }
+
+    #[test]
+    fn grid_pastes_as_tsv_with_default_geometry() {
+        use letters_core::fragment::GridCell;
+        let frag = Fragment::Grid(vec![
+            vec![GridCell { value: "a".into(), ..Default::default() }],
+            vec![GridCell { value: "b".into(), ..Default::default() }],
+        ]);
+        match paste_as_text_box(&frag, 5.0, 6.0) {
+            SlideObject::TextBox { text, x, y, w, h, .. } => {
+                assert_eq!(text, "a\nb");
+                assert_eq!((x, y, w, h), (5.0, 6.0, 400.0, 100.0));
+            }
+            _ => panic!("wrong object"),
+        }
+    }
 }
