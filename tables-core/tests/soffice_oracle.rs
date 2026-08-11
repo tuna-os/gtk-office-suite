@@ -537,9 +537,15 @@ fn chart_survives_calc_rewrite() {
     sh.charts.push(ChartSpec {
         kind: ChartKind::Bar,
         title: "Regions".into(),
+        x_axis_title: None,
+        y_axis_title: None,
+        legend_position: tables_core::sheet::LegendPosition::Right,
+        series: Vec::new(),
         cat: (1, 0, 3),
         val: (1, 1, 3),
         anchor: (5, 3),
+        width_px: 480.0,
+        height_px: 280.0,
     });
     tables_core::io::save_sheets_to_xlsx(path.to_str().unwrap(), &[sh]).unwrap();
 

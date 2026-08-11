@@ -363,18 +363,42 @@ impl CondRule {
     }
 }
 
-/// One embedded chart: kind, title, and the data it draws, as
-/// zero-based inclusive cell ranges on this sheet.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum LegendPosition {
+    None,
+    Top,
+    Bottom,
+    Left,
+    Right,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct ChartSeries {
+    pub name: String,
+    /// Category range: (first_row, col, last_row)
+    pub cat: (usize, usize, usize),
+    /// Values range: (first_row, col, last_row)
+    pub val: (usize, usize, usize),
+    pub color: Option<String>,
+}
+
+/// One embedded chart: kind, title, series, axes, legend, and placement.
 #[derive(Clone, Debug, PartialEq)]
 pub struct ChartSpec {
     pub kind: ChartKind,
     pub title: String,
-    /// Category labels range (first_row, col, last_row).
+    pub x_axis_title: Option<String>,
+    pub y_axis_title: Option<String>,
+    pub legend_position: LegendPosition,
+    pub series: Vec<ChartSeries>,
+    /// Primary category range (for backwards compatibility / single series)
     pub cat: (usize, usize, usize),
-    /// Values range (first_row, col, last_row).
+    /// Primary values range (for backwards compatibility / single series)
     pub val: (usize, usize, usize),
-    /// Anchor cell (row, col) of the chart's top-left corner.
+    /// Anchor cell (row, col) of top-left corner
     pub anchor: (usize, usize),
+    pub width_px: f64,
+    pub height_px: f64,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -382,6 +406,82 @@ pub enum ChartKind {
     Bar,
     Line,
     Pie,
+    Scatter,
+    Area,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum PivotAggFunc {
+    Sum,
+    Count,
+    Average,
+    Min,
+    Max,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct PivotField {
+    pub col_index: usize,
+    pub name: String,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct PivotDataField {
+    pub col_index: usize,
+    pub name: String,
+    pub func: PivotAggFunc,
+}
+
+/// Pivot Table specification model.
+#[derive(Clone, Debug, PartialEq)]
+pub struct PivotTableSpec {
+    pub name: String,
+    /// Source data range: (top, left, bottom, right), 0-based inclusive
+    pub source_range: (usize, usize, usize, usize),
+    /// Destination anchor (row, col)
+    pub target_cell: (usize, usize),
+    pub row_fields: Vec<PivotField>,
+    pub col_fields: Vec<PivotField>,
+    pub data_fields: Vec<PivotDataField>,
+}
+
+/// Cell protection settings.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct CellProtection {
+    pub locked: bool,
+    pub hidden_formula: bool,
+}
+
+impl Default for CellProtection {
+    fn default() -> Self {
+        Self { locked: true, hidden_formula: false }
+    }
+}
+
+/// Sheet protection specification model.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct SheetProtection {
+    pub protected: bool,
+    pub password_hash: Option<String>,
+    pub allow_select_locked: bool,
+    pub allow_select_unlocked: bool,
+    pub allow_format_cells: bool,
+    pub allow_insert_rows: bool,
+    pub allow_delete_rows: bool,
+}
+
+impl Default for SheetProtection {
+    fn default() -> Self {
+        Self {
+            protected: false,
+            password_hash: None,
+            allow_select_locked: true,
+            allow_select_unlocked: true,
+            allow_format_cells: false,
+            allow_insert_rows: false,
+            allow_delete_rows: false,
+        }
+    }
 }
 
 #[derive(Clone)]
@@ -409,6 +509,11 @@ pub struct SheetModel {
     pub merges: Vec<(usize, usize, usize, usize)>,
     /// Charts anchored on this sheet, persisted into xlsx (ADR 0003 §3).
     pub charts: Vec<ChartSpec>,
+    /// Pivot tables defined on this sheet.
+    pub pivot_tables: Vec<PivotTableSpec>,
+    /// Sheet protection status.
+    pub protection: SheetProtection,
+    pub cell_protections: Vec<Vec<CellProtection>>,
     /// Conditional-formatting rules (ADR 0003 §4).
     pub cond_rules: Vec<CondRule>,
     pub validations: Vec<Vec<Option<ValidationRule>>>,
@@ -455,6 +560,9 @@ impl SheetModel {
             frozen_rows: 0, frozen_cols: 0,
             merges: Vec::new(),
             charts: Vec::new(),
+            pivot_tables: Vec::new(),
+            protection: SheetProtection::default(),
+            cell_protections: vec![vec![CellProtection::default(); cols]; rows],
             cond_rules: Vec::new(),
             validations: vec![vec![None; cols]; rows],
             hidden_rows: std::collections::HashSet::new(),

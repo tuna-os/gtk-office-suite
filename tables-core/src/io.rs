@@ -412,35 +412,80 @@ pub fn save_sheets_to_xlsx_bytes(
         }
 
         for ch in &sh.charts {
-            use crate::sheet::ChartKind;
-            use rust_xlsxwriter::{Chart, ChartType as XType};
+            use crate::sheet::{ChartKind, LegendPosition};
+            use rust_xlsxwriter::{Chart, ChartLegendPosition, ChartType as XType};
             let mut chart = Chart::new(match ch.kind {
                 ChartKind::Bar => XType::Column,
                 ChartKind::Line => XType::Line,
                 ChartKind::Pie => XType::Pie,
+                ChartKind::Scatter => XType::Scatter,
+                ChartKind::Area => XType::Area,
             });
-            chart
-                .add_series()
-                .set_categories((
-                    sh.name.as_str(),
-                    ch.cat.0 as u32,
-                    ch.cat.1 as u16,
-                    ch.cat.2 as u32,
-                    ch.cat.1 as u16,
-                ))
-                .set_values((
-                    sh.name.as_str(),
-                    ch.val.0 as u32,
-                    ch.val.1 as u16,
-                    ch.val.2 as u32,
-                    ch.val.1 as u16,
-                ));
+
+            if !ch.series.is_empty() {
+                for s in &ch.series {
+                    let series = chart.add_series();
+                    if !s.name.is_empty() {
+                        series.set_name(&s.name);
+                    }
+                    series.set_categories((
+                        sh.name.as_str(),
+                        s.cat.0 as u32,
+                        s.cat.1 as u16,
+                        s.cat.2 as u32,
+                        s.cat.1 as u16,
+                    ));
+                    series.set_values((
+                        sh.name.as_str(),
+                        s.val.0 as u32,
+                        s.val.1 as u16,
+                        s.val.2 as u32,
+                        s.val.1 as u16,
+                    ));
+                }
+            } else {
+                chart
+                    .add_series()
+                    .set_categories((
+                        sh.name.as_str(),
+                        ch.cat.0 as u32,
+                        ch.cat.1 as u16,
+                        ch.cat.2 as u32,
+                        ch.cat.1 as u16,
+                    ))
+                    .set_values((
+                        sh.name.as_str(),
+                        ch.val.0 as u32,
+                        ch.val.1 as u16,
+                        ch.val.2 as u32,
+                        ch.val.1 as u16,
+                    ));
+            }
+
             if !ch.title.is_empty() {
                 chart.title().set_name(&ch.title);
             }
+            if let Some(x_title) = &ch.x_axis_title {
+                chart.x_axis().set_name(x_title);
+            }
+            if let Some(y_title) = &ch.y_axis_title {
+                chart.y_axis().set_name(y_title);
+            }
+            match ch.legend_position {
+                LegendPosition::None => chart.legend().set_hidden(),
+                LegendPosition::Top => chart.legend().set_position(ChartLegendPosition::Top),
+                LegendPosition::Bottom => chart.legend().set_position(ChartLegendPosition::Bottom),
+                LegendPosition::Left => chart.legend().set_position(ChartLegendPosition::Left),
+                LegendPosition::Right => chart.legend().set_position(ChartLegendPosition::Right),
+            };
+
             sheet
                 .insert_chart(ch.anchor.0 as u32, ch.anchor.1 as u16, &chart)
                 .map_err(|e| format!("Chart error: {}", e))?;
+        }
+
+        if sh.protection.protected {
+            sheet.protect();
         }
     }
     // Named ranges (#113): all workbook-scoped in this app today (no
@@ -792,7 +837,7 @@ fn tables_core_default_col_width() -> f64 {
 /// Read embedded charts back from an xlsx (ours or a Calc rewrite).
 /// Best-effort: unknown chart kinds and foreign anchoring are skipped.
 pub fn read_charts_from_xlsx(path: &str) -> Vec<crate::sheet::ChartSpec> {
-    use crate::sheet::{parse_cell_ref, ChartKind, ChartSpec};
+    use crate::sheet::{parse_cell_ref, ChartKind, ChartSpec, LegendPosition};
     let Ok(f) = std::fs::File::open(path) else {
         return Vec::new();
     };
@@ -898,9 +943,15 @@ pub fn read_charts_from_xlsx(path: &str) -> Vec<crate::sheet::ChartSpec> {
         out.push(ChartSpec {
             kind,
             title,
+            x_axis_title: None,
+            y_axis_title: None,
+            legend_position: LegendPosition::Right,
+            series: Vec::new(),
             cat: cat.unwrap_or(val),
             val,
             anchor: anchors.get(ci).copied().unwrap_or((0, 0)),
+            width_px: 480.0,
+            height_px: 280.0,
         });
     }
     out
@@ -909,7 +960,7 @@ pub fn read_charts_from_xlsx(path: &str) -> Vec<crate::sheet::ChartSpec> {
 #[cfg(test)]
 mod chart_tests {
     use super::*;
-    use crate::sheet::{ChartKind, ChartSpec};
+    use crate::sheet::{ChartKind, ChartSpec, LegendPosition};
 
     #[test]
     fn chart_round_trips_through_xlsx() {
@@ -926,9 +977,15 @@ mod chart_tests {
         sh.charts.push(ChartSpec {
             kind: ChartKind::Bar,
             title: "Regions".into(),
+            x_axis_title: None,
+            y_axis_title: None,
+            legend_position: LegendPosition::Right,
+            series: Vec::new(),
             cat: (1, 0, 3),
             val: (1, 1, 3),
             anchor: (5, 3),
+            width_px: 480.0,
+            height_px: 280.0,
         });
         save_sheets_to_xlsx(path.to_str().unwrap(), &[sh]).unwrap();
         let charts = read_charts_from_xlsx(path.to_str().unwrap());
@@ -952,9 +1009,15 @@ mod chart_tests {
             sh.charts.push(ChartSpec {
                 kind,
                 title: String::new(),
+                x_axis_title: None,
+                y_axis_title: None,
+                legend_position: LegendPosition::Right,
+                series: Vec::new(),
                 cat: (0, 0, 0),
                 val: (0, 1, 0),
                 anchor: (2, 0),
+                width_px: 480.0,
+                height_px: 280.0,
             });
             save_sheets_to_xlsx(path.to_str().unwrap(), &[sh]).unwrap();
             let charts = read_charts_from_xlsx(path.to_str().unwrap());
