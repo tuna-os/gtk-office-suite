@@ -31,7 +31,7 @@ pub fn paste_as_text_box(frag: &Fragment, x: f64, y: f64) -> SlideObject {
         }
         Fragment::Grid(_) => (frag.to_plain(), vec![]),
     };
-    SlideObject::TextBox { text, x, y, w: 400.0, h: 100.0, runs }
+    SlideObject::TextBox { text, x, y, w: 400.0, h: 100.0, rotation: 0.0, runs }
 }
 
 #[cfg(test)]
@@ -44,6 +44,7 @@ mod tests {
         let obj = SlideObject::TextBox {
             text: "plain bold".into(),
             x: 0.0, y: 0.0, w: 100.0, h: 50.0,
+            rotation: 0.0,
             runs: vec![
                 Run { text: "plain ".into(), style: RunStyle::default() },
                 Run { text: "bold".into(), style: RunStyle { bold: true, ..Default::default() } },

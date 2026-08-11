@@ -44,6 +44,180 @@ pub fn obj_position(obj: &SlideObject) -> (f64, f64) {
     }
 }
 
+/// Get rotation angle in degrees of any object.
+pub fn obj_rotation(obj: &SlideObject) -> f64 {
+    match obj {
+        SlideObject::TextBox { rotation, .. }
+        | SlideObject::Rect { rotation, .. }
+        | SlideObject::Circle { rotation, .. }
+        | SlideObject::Image { rotation, .. } => *rotation,
+    }
+}
+
+/// Set rotation angle in degrees of any object.
+pub fn set_obj_rotation(obj: &mut SlideObject, angle: f64) {
+    match obj {
+        SlideObject::TextBox { rotation, .. }
+        | SlideObject::Rect { rotation, .. }
+        | SlideObject::Circle { rotation, .. }
+        | SlideObject::Image { rotation, .. } => *rotation = angle,
+    }
+}
+
+/// Get bounding rectangle of any object as (x, y, w, h).
+pub fn obj_bounds(obj: &SlideObject) -> (f64, f64, f64, f64) {
+    match obj {
+        SlideObject::TextBox { x, y, w, h, .. }
+        | SlideObject::Rect { x, y, w, h, .. }
+        | SlideObject::Image { x, y, w, h, .. } => (*x, *y, *w, *h),
+        SlideObject::Circle { x, y, r, .. } => (*x - *r, *y - *r, *r * 2.0, *r * 2.0),
+    }
+}
+
+/// Set bounding rectangle of any object (x, y, w, h).
+pub fn set_obj_bounds(obj: &mut SlideObject, nx: f64, ny: f64, nw: f64, nh: f64) {
+    match obj {
+        SlideObject::TextBox { x, y, w, h, .. }
+        | SlideObject::Rect { x, y, w, h, .. }
+        | SlideObject::Image { x, y, w, h, .. } => {
+            *x = nx;
+            *y = ny;
+            *w = nw.max(10.0);
+            *h = nh.max(10.0);
+        }
+        SlideObject::Circle { x, y, r, .. } => {
+            *x = nx + nw / 2.0;
+            *y = ny + nh / 2.0;
+            *r = (nw.min(nh) / 2.0).max(5.0);
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum AlignMode {
+    Left,
+    Center,
+    Right,
+    Top,
+    Middle,
+    Bottom,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum DistributeMode {
+    Horizontal,
+    Vertical,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ZOrderOp {
+    BringToFront,
+    SendToBack,
+    BringForward,
+    SendBackward,
+}
+
+pub struct ResizeObjectCmd {
+    pub slide_idx: usize,
+    pub index: usize,
+    pub old_bounds: (f64, f64, f64, f64),
+    pub new_bounds: (f64, f64, f64, f64),
+}
+
+impl Command<Vec<Slide>> for ResizeObjectCmd {
+    fn apply(&self, slides: &mut Vec<Slide>) {
+        if self.slide_idx < slides.len() {
+            if let Some(obj) = slides[self.slide_idx].objects.get_mut(self.index) {
+                let (nx, ny, nw, nh) = self.new_bounds;
+                set_obj_bounds(obj, nx, ny, nw, nh);
+            }
+        }
+    }
+    fn undo(&self, slides: &mut Vec<Slide>) {
+        if self.slide_idx < slides.len() {
+            if let Some(obj) = slides[self.slide_idx].objects.get_mut(self.index) {
+                let (ox, oy, ow, oh) = self.old_bounds;
+                set_obj_bounds(obj, ox, oy, ow, oh);
+            }
+        }
+    }
+    fn description(&self) -> &str { "Resize Object" }
+}
+
+pub struct RotateObjectCmd {
+    pub slide_idx: usize,
+    pub index: usize,
+    pub old_angle: f64,
+    pub new_angle: f64,
+}
+
+impl Command<Vec<Slide>> for RotateObjectCmd {
+    fn apply(&self, slides: &mut Vec<Slide>) {
+        if self.slide_idx < slides.len() {
+            if let Some(obj) = slides[self.slide_idx].objects.get_mut(self.index) {
+                set_obj_rotation(obj, self.new_angle);
+            }
+        }
+    }
+    fn undo(&self, slides: &mut Vec<Slide>) {
+        if self.slide_idx < slides.len() {
+            if let Some(obj) = slides[self.slide_idx].objects.get_mut(self.index) {
+                set_obj_rotation(obj, self.old_angle);
+            }
+        }
+    }
+    fn description(&self) -> &str { "Rotate Object" }
+}
+
+pub struct AlignObjectsCmd {
+    pub slide_idx: usize,
+    pub indices: Vec<usize>,
+    pub old_positions: Vec<(f64, f64)>,
+    pub new_positions: Vec<(f64, f64)>,
+}
+
+impl Command<Vec<Slide>> for AlignObjectsCmd {
+    fn apply(&self, slides: &mut Vec<Slide>) {
+        if self.slide_idx < slides.len() {
+            for (&idx, &(nx, ny)) in self.indices.iter().zip(self.new_positions.iter()) {
+                if let Some(obj) = slides[self.slide_idx].objects.get_mut(idx) {
+                    set_obj_position(obj, nx, ny);
+                }
+            }
+        }
+    }
+    fn undo(&self, slides: &mut Vec<Slide>) {
+        if self.slide_idx < slides.len() {
+            for (&idx, &(ox, oy)) in self.indices.iter().zip(self.old_positions.iter()) {
+                if let Some(obj) = slides[self.slide_idx].objects.get_mut(idx) {
+                    set_obj_position(obj, ox, oy);
+                }
+            }
+        }
+    }
+    fn description(&self) -> &str { "Align Objects" }
+}
+
+pub struct ZOrderCmd {
+    pub slide_idx: usize,
+    pub old_objects: Vec<SlideObject>,
+    pub new_objects: Vec<SlideObject>,
+}
+
+impl Command<Vec<Slide>> for ZOrderCmd {
+    fn apply(&self, slides: &mut Vec<Slide>) {
+        if self.slide_idx < slides.len() {
+            slides[self.slide_idx].objects = self.new_objects.clone();
+        }
+    }
+    fn undo(&self, slides: &mut Vec<Slide>) {
+        if self.slide_idx < slides.len() {
+            slides[self.slide_idx].objects = self.old_objects.clone();
+        }
+    }
+    fn description(&self) -> &str { "Reorder Object" }
+}
+
 // ── Concrete commands ──────────────────────────────────────────────────
 
 pub struct AddObjectCmd {

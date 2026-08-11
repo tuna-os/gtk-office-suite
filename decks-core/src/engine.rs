@@ -67,13 +67,41 @@ pub enum SlideObject {
     TextBox {
         text: String,
         x: f64, y: f64, w: f64, h: f64,
+        rotation: f64,
         /// Styled runs (shared WYSIWYG primitive with Letters). When
         /// non-empty, concatenated run text equals `text`.
         runs: Vec<Run>,
     },
-    Rect { x: f64, y: f64, w: f64, h: f64 },
-    Circle { x: f64, y: f64, r: f64 },
-    Image { path: String, x: f64, y: f64, w: f64, h: f64 },
+    Rect { x: f64, y: f64, w: f64, h: f64, rotation: f64 },
+    Circle { x: f64, y: f64, r: f64, rotation: f64 },
+    Image { path: String, x: f64, y: f64, w: f64, h: f64, rotation: f64 },
+}
+
+impl SlideObject {
+    pub fn x(&self) -> f64 {
+        match self {
+            SlideObject::TextBox { x, .. }
+            | SlideObject::Rect { x, .. }
+            | SlideObject::Image { x, .. } => *x,
+            SlideObject::Circle { x, r, .. } => *x - *r,
+        }
+    }
+    pub fn y(&self) -> f64 {
+        match self {
+            SlideObject::TextBox { y, .. }
+            | SlideObject::Rect { y, .. }
+            | SlideObject::Image { y, .. } => *y,
+            SlideObject::Circle { y, r, .. } => *y - *r,
+        }
+    }
+    pub fn rotation(&self) -> f64 {
+        match self {
+            SlideObject::TextBox { rotation, .. }
+            | SlideObject::Rect { rotation, .. }
+            | SlideObject::Circle { rotation, .. }
+            | SlideObject::Image { rotation, .. } => *rotation,
+        }
+    }
 }
 
 impl Default for Deck {
@@ -548,7 +576,7 @@ pub fn read_pptx(path: &str) -> Result<Deck, String> {
                                     shape.text.iter().any(|t| !t.trim().is_empty());
                                 if shape.is_tx_box || (shape.has_tx_body && has_text) {
                                     let text = shape.text.join("\n");
-                                    objects.push(SlideObject::TextBox { text, x, y, w, h, runs: shape.runs.clone() });
+                                    objects.push(SlideObject::TextBox { text, x, y, w, h, rotation: 0.0, runs: shape.runs.clone() });
                                 } else {
                                     let prst = shape.prst.unwrap_or_else(|| "rect".to_string());
                                     if prst == "ellipse" {
@@ -556,9 +584,10 @@ pub fn read_pptx(path: &str) -> Result<Deck, String> {
                                             x: x + w / 2.0,
                                             y: y + h / 2.0,
                                             r: w / 2.0,
+                                            rotation: 0.0,
                                         });
                                     } else {
-                                        objects.push(SlideObject::Rect { x, y, w, h });
+                                        objects.push(SlideObject::Rect { x, y, w, h, rotation: 0.0 });
                                     }
                                 }
                             }
@@ -570,7 +599,11 @@ pub fn read_pptx(path: &str) -> Result<Deck, String> {
                                     let w = pic.w.unwrap_or(0.0) / 9525.0;
                                     let h = pic.h.unwrap_or(0.0) / 9525.0;
                                     
-                                    if let Some(obj) = resolve_and_extract_picture(&embed_id, x, y, w, h, &slide_image_rels, &mut archive) {
+                                    if let Some(mut obj) = resolve_and_extract_picture(&embed_id, x, y, w, h, &slide_image_rels, &mut archive) {
+                                        match &mut obj {
+                                            SlideObject::Image { rotation, .. } => *rotation = 0.0,
+                                            _ => {}
+                                        }
                                         objects.push(obj);
                                     }
                                 }
@@ -1336,16 +1369,16 @@ pub fn write_pptx_bytes(deck: &Deck) -> Result<Vec<u8>, String> {
             for (j, obj) in slide.objects.iter().enumerate() {
                 let id = 2 + j;
                 match obj {
-                    SlideObject::TextBox { text, x, y, w, h, runs } => {
+                    SlideObject::TextBox { text, x, y, w, h, runs, .. } => {
                         write_text_box(&mut writer, id, j + 1, *x, *y, *w, *h, text, runs).map_err(|e| e.to_string())?;
                     }
-                    SlideObject::Rect { x, y, w, h } => {
+                    SlideObject::Rect { x, y, w, h, .. } => {
                         write_rect(&mut writer, id, j + 1, *x, *y, *w, *h).map_err(|e| e.to_string())?;
                     }
-                    SlideObject::Circle { x, y, r } => {
+                    SlideObject::Circle { x, y, r, .. } => {
                         write_circle(&mut writer, id, j + 1, *x, *y, *r).map_err(|e| e.to_string())?;
                     }
-                    SlideObject::Image { path, x, y, w, h } => {
+                    SlideObject::Image { path, x, y, w, h, .. } => {
                         let img_idx = images_to_add.len() + 1;
                         images_to_add.push(path.clone());
 

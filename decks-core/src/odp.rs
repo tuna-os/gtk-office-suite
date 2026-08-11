@@ -111,7 +111,7 @@ fn content_xml(deck: &Deck) -> String {
         ));
         for obj in &slide.objects {
             match obj {
-                SlideObject::TextBox { text, x, y, w, h, runs } => {
+                SlideObject::TextBox { text, x, y, w, h, runs, .. } => {
                     let inner: String = if runs.is_empty() {
                         text.split('\n')
                             .map(|l| format!("<text:p>{}</text:p>", esc(l)))
@@ -128,13 +128,13 @@ fn content_xml(deck: &Deck) -> String {
                          <draw:text-box>{inner}</draw:text-box></draw:frame>"
                     ));
                 }
-                SlideObject::Rect { x, y, w, h } => {
+                SlideObject::Rect { x, y, w, h, .. } => {
                     pages.push_str(&format!(
                         "<draw:rect svg:x=\"{x:.2}pt\" svg:y=\"{y:.2}pt\" \
                          svg:width=\"{w:.2}pt\" svg:height=\"{h:.2}pt\"/>"
                     ));
                 }
-                SlideObject::Circle { x, y, r } => {
+                SlideObject::Circle { x, y, r, .. } => {
                     let (cx, cy, d) = (x - r, y - r, r * 2.0);
                     pages.push_str(&format!(
                         "<draw:ellipse svg:x=\"{cx:.2}pt\" svg:y=\"{cy:.2}pt\" \
@@ -386,7 +386,7 @@ pub fn read(path: &str) -> Result<Deck, String> {
                     if let Some(s) = slide.as_mut() {
                         if !in_notes {
                             let (x, y, w, h) = geo(e);
-                            s.objects.push(SlideObject::Rect { x, y, w, h });
+                            s.objects.push(SlideObject::Rect { x, y, w, h, rotation: 0.0 });
                         }
                     }
                 }
@@ -395,7 +395,7 @@ pub fn read(path: &str) -> Result<Deck, String> {
                         if !in_notes {
                             let (x, y, w, h) = geo(e);
                             let r = (w.max(h)) / 2.0;
-                            s.objects.push(SlideObject::Circle { x: x + w / 2.0, y: y + h / 2.0, r });
+                            s.objects.push(SlideObject::Circle { x: x + w / 2.0, y: y + h / 2.0, r, rotation: 0.0 });
                         }
                     }
                 }
@@ -410,14 +410,14 @@ pub fn read(path: &str) -> Result<Deck, String> {
                 b"draw:rect" => {
                     if let (Some(s), false) = (slide.as_mut(), in_notes) {
                         let (x, y, w, h) = geo(e);
-                        s.objects.push(SlideObject::Rect { x, y, w, h });
+                        s.objects.push(SlideObject::Rect { x, y, w, h, rotation: 0.0 });
                     }
                 }
                 b"draw:ellipse" | b"draw:circle" => {
                     if let (Some(s), false) = (slide.as_mut(), in_notes) {
                         let (x, y, w, h) = geo(e);
                         let r = (w.max(h)) / 2.0;
-                        s.objects.push(SlideObject::Circle { x: x + w / 2.0, y: y + h / 2.0, r });
+                        s.objects.push(SlideObject::Circle { x: x + w / 2.0, y: y + h / 2.0, r, rotation: 0.0 });
                     }
                 }
                 _ => {}
@@ -476,6 +476,7 @@ pub fn read(path: &str) -> Result<Deck, String> {
                                     y,
                                     w,
                                     h,
+                                    rotation: 0.0,
                                     runs: keep_runs,
                                 });
                             }
@@ -493,12 +494,12 @@ pub fn read(path: &str) -> Result<Deck, String> {
                                 }
                             } else if !text.is_empty() {
                                 let keep_runs = if lines.len() == 1 { runs } else { vec![] };
-                                s.objects.push(SlideObject::TextBox { text, x, y, w, h, runs: keep_runs });
+                                s.objects.push(SlideObject::TextBox { text, x, y, w, h, rotation: 0.0, runs: keep_runs });
                             } else if shape_type.as_deref().is_some_and(|t| t.contains("ellipse")) {
                                 let r = (w.max(h)) / 2.0;
-                                s.objects.push(SlideObject::Circle { x: x + w / 2.0, y: y + h / 2.0, r });
+                                s.objects.push(SlideObject::Circle { x: x + w / 2.0, y: y + h / 2.0, r, rotation: 0.0 });
                             } else {
-                                s.objects.push(SlideObject::Rect { x, y, w, h });
+                                s.objects.push(SlideObject::Rect { x, y, w, h, rotation: 0.0 });
                             }
                         }
                     }
