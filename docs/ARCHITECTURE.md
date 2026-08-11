@@ -94,6 +94,24 @@ gtk-office-suite/
 
 ---
 
+## Canonical Document Controllers & Threading Rules
+
+To allow headless testing, dirty state tracking, and consistent undo history without GTK runtime dependencies:
+
+1. **Controller Ownership Boundary**:
+   - `tables_core::controller::WorkbookController` owns the canonical workbook state (`WorkbookState`), engine calculation context, undo history, file path identity, and dirty flag.
+   - `decks_core::controller::DecksController` owns the slide list, master slide list, object commands, undo history, file path identity, and dirty flag.
+   - `letters_core::session::DocumentSession` owns per-tab session identity (file path, autosave slot, closing-after-save state).
+   - GTK application windows (`window.rs`) do not duplicate authoritative document state; they act strictly as view/input adapters over the shared core controllers.
+   - Core format crates (`tables-core`, `decks-core`, `letters-core`) act as persistence adapters for format I/O (XLSX/ODS, PPTX/ODP, DOCX/ODT/MD).
+
+2. **Threading and Mutability Rules**:
+   - Controllers run on the main UI/application thread (using `Rc<RefCell<...>>` / `Rc<Cell<...>>`) to match GTK4 single-threaded event dispatching.
+   - Asynchronous background tasks (e.g. file loading or rendering workers) must pass immutable snapshots or owned data across threads, communicating results back to the main thread via glib channels or idle callbacks before updating the canonical controller.
+   - All state mutations (cell edits, slide modifications, undo/redo operations) MUST route through controller methods to guarantee recalculation, dirty flag synchronization, and undo history lockstep.
+
+---
+
 ## LibreOffice Architecture Mapping
 
 Our architecture deliberately mirrors LibreOffice's shared-layer pattern:
