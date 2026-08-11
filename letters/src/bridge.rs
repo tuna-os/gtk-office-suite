@@ -398,16 +398,11 @@ mod tests {
         capture_from_buffer(buf)
     }
 
-    // GTK insists on being initialized and used from a single thread, and
-    // cargo gives every #[test] its own thread — so all buffer round-trip
-    // cases live in this one test. Skips cleanly with no display; the
-    // gui-tests smoke job runs it under Xvfb where it must pass.
-    #[test]
+    // GTK insists on being initialized and used from a single thread.
+    // #[gtk::test] runs all GTK tests on the same main-thread worker.
+    // The gui-tests smoke job runs this under Xvfb where it must pass.
+    #[gtk::test]
     fn document_round_trips_through_buffer() {
-        if gtk::init().is_err() {
-            eprintln!("skipping: no display for GTK");
-            return;
-        }
         let fresh = || {
             let buf = gtk::TextBuffer::new(None);
             crate::window::register_formatting_tags(&buf);

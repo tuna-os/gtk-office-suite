@@ -196,21 +196,8 @@ mod tests {
         assert_eq!(tag_to_style_id(""), "");
     }
 
-    /// gtk::init() may only run once per process — cache the result so
-    /// multiple GTK tests share a single init (mirrors bridge.rs, which
-    /// guards its single buffer test the same way).
-    fn ensure_gtk_initialized() -> bool {
-        use std::sync::OnceLock;
-        static INIT: OnceLock<bool> = OnceLock::new();
-        *INIT.get_or_init(|| gtk::init().is_ok())
-    }
-
-    #[test]
+    #[gtk::test]
     fn split_paragraphs_tracks_offsets_and_detects_style_tags() {
-        if !ensure_gtk_initialized() {
-            eprintln!("skipping: no display for GTK");
-            return;
-        }
         let buf = gtk::TextBuffer::new(None);
         buf.set_text("line1\nline2");
 
@@ -232,12 +219,8 @@ mod tests {
         assert_eq!(paras[1].style_id, "");
     }
 
-    #[test]
+    #[gtk::test]
     fn split_paragraphs_detects_custom_style_prefix() {
-        if !ensure_gtk_initialized() {
-            eprintln!("skipping: no display for GTK");
-            return;
-        }
         let buf = gtk::TextBuffer::new(None);
         buf.set_text("custom-styled");
         let table = buf.tag_table();
@@ -252,12 +235,8 @@ mod tests {
         assert_eq!(paras[0].style_id, "foo"); // "custom-" prefix stripped
     }
 
-    #[test]
+    #[gtk::test]
     fn buffer_round_trips_to_docx_and_back() {
-        if !ensure_gtk_initialized() {
-            eprintln!("skipping: no display for GTK");
-            return;
-        }
         let buf = gtk::TextBuffer::new(None);
         buf.set_text("Hello docx bridge\nSecond paragraph");
 
