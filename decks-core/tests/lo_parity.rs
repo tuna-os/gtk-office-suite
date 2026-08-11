@@ -164,10 +164,12 @@ fn scenarios() -> Vec<Scenario> {
             d.slides[0].objects.push(SlideObject::TextBox {
                 text: "top-left".into(), x: 10.0, y: 10.0, w: 200.0, h: 40.0,
                 runs: vec![],
+                rotation: 0.0,
             });
             d.slides[0].objects.push(SlideObject::TextBox {
                 text: "lower".into(), x: 300.0, y: 400.0, w: 200.0, h: 40.0,
                 runs: vec![],
+                rotation: 0.0,
             });
             d
         },
@@ -198,6 +200,7 @@ fn scenarios() -> Vec<Scenario> {
                     Run { text: "bold ".into(), style: RunStyle { bold: true, ..Default::default() } },
                     Run { text: "italic".into(), style: RunStyle { italic: true, ..Default::default() } },
                 ],
+                rotation: 0.0,
             });
             d
         },

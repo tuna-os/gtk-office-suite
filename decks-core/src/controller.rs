@@ -295,7 +295,7 @@ mod tests {
     }
 
     fn rect(x: f64, y: f64) -> SlideObject {
-        SlideObject::Rect { x, y, w: 10.0, h: 10.0 }
+        SlideObject::Rect { x, y, w: 10.0, h: 10.0, rotation: 0.0 }
     }
 
     #[test]
@@ -335,7 +335,7 @@ mod tests {
     #[test]
     fn change_text_updates_textbox_and_undo_reverts() {
         let mut s = slide("S1");
-        s.objects.push(SlideObject::TextBox { text: "old".into(), x: 0.0, y: 0.0, w: 10.0, h: 10.0, runs: vec![] });
+        s.objects.push(SlideObject::TextBox { text: "old".into(), x: 0.0, y: 0.0, w: 10.0, h: 10.0, runs: vec![], rotation: 0.0 });
         let c = DecksController::new(vec![s], vec![]);
         c.change_text(0, 0, "old".into(), "new".into());
         {

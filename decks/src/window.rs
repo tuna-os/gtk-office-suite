@@ -10,7 +10,7 @@ use std::cell::{Cell, RefCell};
 use std::rc::Rc;
 use suite_common::SuiteWindow;
 use decks_core::undo::set_obj_position;
-use crate::canvas::{draw_slide, canvas_to_slide, hit_test_object, snap_to_grid, GRID_SPACING};
+use crate::canvas::{canvas_to_slide, hit_test_object, snap_to_grid, GRID_SPACING};
 use crate::sidebar::rebuild_slide_list;
 use crate::toolbar::{find_toolbar_child, build_decks_toolbar};
 use crate::transition::{TransitionState, TransitionType, draw_transition};
@@ -305,9 +305,9 @@ impl DecksWindow {
                         guard.set(true);
                         let (x, y, w, h) = match o {
                             SlideObject::TextBox { x, y, w, h, .. }
-                            | SlideObject::Rect { x, y, w, h }
+                            | SlideObject::Rect { x, y, w, h, .. }
                             | SlideObject::Image { x, y, w, h, .. } => (*x, *y, *w, *h),
-                            SlideObject::Circle { x, y, r } => (*x, *y, r * 2.0, r * 2.0),
+                            SlideObject::Circle { x, y, r, .. } => (*x, *y, r * 2.0, r * 2.0),
                         };
                         sx.set_value(x);
                         sy.set_value(y);
@@ -357,14 +357,14 @@ impl DecksWindow {
                     let v = sb.value();
                     match obj {
                         SlideObject::TextBox { x, y, w, h, .. }
-                        | SlideObject::Rect { x, y, w, h }
+                        | SlideObject::Rect { x, y, w, h, .. }
                         | SlideObject::Image { x, y, w, h, .. } => match field {
                             Field::X => *x = v,
                             Field::Y => *y = v,
                             Field::W => *w = v.max(1.0),
                             Field::H => *h = v.max(1.0),
                         },
-                        SlideObject::Circle { x, y, r } => match field {
+                        SlideObject::Circle { x, y, r, .. } => match field {
                             Field::X => *x = v,
                             Field::Y => *y = v,
                             Field::W | Field::H => *r = (v / 2.0).max(1.0),

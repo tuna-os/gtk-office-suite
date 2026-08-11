@@ -78,14 +78,14 @@ mod tests {
     // ── copy_object edge cases ───────────────────────────────────────────────
 
     fn textbox(text: &str, runs: Vec<Run>) -> SlideObject {
-        SlideObject::TextBox { text: text.into(), x: 0.0, y: 0.0, w: 100.0, h: 50.0, runs }
+        SlideObject::TextBox { text: text.into(), x: 0.0, y: 0.0, w: 100.0, h: 50.0, runs, rotation: 0.0 }
     }
 
     #[test]
     fn copy_non_textbox_returns_none() {
-        assert!(copy_object(&SlideObject::Rect { x: 0.0, y: 0.0, w: 1.0, h: 1.0 }).is_none());
-        assert!(copy_object(&SlideObject::Circle { x: 0.0, y: 0.0, r: 1.0 }).is_none());
-        assert!(copy_object(&SlideObject::Image { path: "p.png".into(), x: 0.0, y: 0.0, w: 1.0, h: 1.0 }).is_none());
+        assert!(copy_object(&SlideObject::Rect { x: 0.0, y: 0.0, w: 1.0, h: 1.0, rotation: 0.0 }).is_none());
+        assert!(copy_object(&SlideObject::Circle { x: 0.0, y: 0.0, r: 1.0, rotation: 0.0 }).is_none());
+        assert!(copy_object(&SlideObject::Image { path: "p.png".into(), x: 0.0, y: 0.0, w: 1.0, h: 1.0, rotation: 0.0 }).is_none());
     }
 
     #[test]

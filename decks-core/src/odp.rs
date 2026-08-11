@@ -553,6 +553,7 @@ mod tests {
                 w: 400.0,
                 h: 60.0,
                 runs: vec![],
+                rotation: 0.0,
             }],
             notes: notes.into(),
             master_idx: Some(0),
@@ -578,15 +579,15 @@ mod tests {
             title: "g".into(),
             background: "#ffffff".into(),
             objects: vec![
-                SlideObject::Rect { x: 240.0, y: 180.0, w: 320.0, h: 120.0 },
-                SlideObject::Circle { x: 500.0, y: 300.0, r: 80.0 },
+                SlideObject::Rect { x: 240.0, y: 180.0, w: 320.0, h: 120.0, rotation: 0.0 },
+                SlideObject::Circle { x: 500.0, y: 300.0, r: 80.0, rotation: 0.0 },
             ],
             notes: String::new(),
             master_idx: Some(0),
         }];
         let rt = round_trip(&deck);
         let close = |a: f64, b: f64| (a - b).abs() < 0.1;
-        let Some(SlideObject::Rect { x, y, w, h }) = rt.slides[0]
+        let Some(SlideObject::Rect { x, y, w, h, .. }) = rt.slides[0]
             .objects
             .iter()
             .find(|o| matches!(o, SlideObject::Rect { .. }))
@@ -594,7 +595,7 @@ mod tests {
             panic!("rect lost: {:?}", rt.slides[0].objects)
         };
         assert!(close(*x, 240.0) && close(*y, 180.0) && close(*w, 320.0) && close(*h, 120.0));
-        let Some(SlideObject::Circle { x, y, r }) = rt.slides[0]
+        let Some(SlideObject::Circle { x, y, r, .. }) = rt.slides[0]
             .objects
             .iter()
             .find(|o| matches!(o, SlideObject::Circle { .. }))
@@ -628,6 +629,7 @@ mod tests {
                         },
                     },
                 ],
+                rotation: 0.0,
             }],
             notes: String::new(),
             master_idx: Some(0),

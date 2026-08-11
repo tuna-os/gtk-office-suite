@@ -394,7 +394,7 @@ mod tests {
     #[test]
     fn test_add_object_undo() {
         let mut slides = make_slides();
-        let obj = SlideObject::Rect { x: 10.0, y: 10.0, w: 100.0, h: 50.0 };
+        let obj = SlideObject::Rect { x: 10.0, y: 10.0, w: 100.0, h: 50.0, rotation: 0.0 };
         let cmd = AddObjectCmd::new(0, obj);
         cmd.apply(&mut slides);
         assert_eq!(slides[0].objects.len(), 1);
@@ -405,7 +405,7 @@ mod tests {
     #[test]
     fn test_delete_object_undo() {
         let mut slides = make_slides();
-        let obj = SlideObject::Rect { x: 10.0, y: 10.0, w: 100.0, h: 50.0 };
+        let obj = SlideObject::Rect { x: 10.0, y: 10.0, w: 100.0, h: 50.0, rotation: 0.0 };
         slides[0].objects.push(obj.clone());
         let cmd = DeleteObjectCmd::new(0, 0, obj);
         cmd.apply(&mut slides);
@@ -417,7 +417,7 @@ mod tests {
     #[test]
     fn test_move_object_undo() {
         let mut slides = make_slides();
-        slides[0].objects.push(SlideObject::Rect { x: 10.0, y: 10.0, w: 100.0, h: 50.0 });
+        slides[0].objects.push(SlideObject::Rect { x: 10.0, y: 10.0, w: 100.0, h: 50.0, rotation: 0.0 });
         let cmd = MoveObjectCmd { slide_idx: 0, index: 0, dx: 10.0, dy: 20.0 };
         cmd.apply(&mut slides);
         let (x, y) = obj_position(&slides[0].objects[0]);
@@ -432,7 +432,7 @@ mod tests {
     #[test]
     fn test_change_text_undo() {
         let mut slides = make_slides();
-        slides[0].objects.push(SlideObject::TextBox { text: "old".into(), x: 0.0, y: 0.0, w: 100.0, h: 20.0, runs: vec![] });
+        slides[0].objects.push(SlideObject::TextBox { text: "old".into(), x: 0.0, y: 0.0, w: 100.0, h: 20.0, runs: vec![], rotation: 0.0 });
         let cmd = ChangeTextCmd { slide_idx: 0, index: 0, old_text: "old".into(), new_text: "new".into() };
         cmd.apply(&mut slides);
         if let SlideObject::TextBox { text, .. } = &slides[0].objects[0] {
@@ -491,12 +491,12 @@ mod tests {
     #[test]
     fn test_add_image_object() {
         let mut slides = make_slides();
-        let img = SlideObject::Image { path: "/tmp/test.png".into(), x: 0.0, y: 0.0, w: 100.0, h: 100.0 };
+        let img = SlideObject::Image { path: "/tmp/test.png".into(), x: 0.0, y: 0.0, w: 100.0, h: 100.0, rotation: 0.0 };
         let cmd = AddObjectCmd::new(0, img);
         cmd.apply(&mut slides);
         assert_eq!(slides[0].objects.len(), 1);
         match &slides[0].objects[0] {
-            SlideObject::Image { path, x, y, w: _, h: _ } => {
+            SlideObject::Image { path, x, y, .. } => {
                 assert_eq!(path, "/tmp/test.png");
                 assert_eq!(*x, 0.0);
                 assert_eq!(*y, 0.0);

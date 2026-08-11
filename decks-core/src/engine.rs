@@ -599,11 +599,7 @@ pub fn read_pptx(path: &str) -> Result<Deck, String> {
                                     let w = pic.w.unwrap_or(0.0) / 9525.0;
                                     let h = pic.h.unwrap_or(0.0) / 9525.0;
                                     
-                                    if let Some(mut obj) = resolve_and_extract_picture(&embed_id, x, y, w, h, &slide_image_rels, &mut archive) {
-                                        match &mut obj {
-                                            SlideObject::Image { rotation, .. } => *rotation = 0.0,
-                                            _ => {}
-                                        }
+                                    if let Some(obj) = resolve_and_extract_picture(&embed_id, x, y, w, h, &slide_image_rels, &mut archive) {
                                         objects.push(obj);
                                     }
                                 }
@@ -861,6 +857,7 @@ pub fn parse_master_shapes(xml: &str) -> (Option<String>, Vec<SlideObject>) {
                                     y: p.y,
                                     w: p.w,
                                     h: p.h,
+                                    rotation: 0.0,
                                     runs: vec![],
                                 });
                             } else if p.prst.as_deref() == Some("ellipse") {
@@ -868,6 +865,7 @@ pub fn parse_master_shapes(xml: &str) -> (Option<String>, Vec<SlideObject>) {
                                     x: p.x + p.w / 2.0,
                                     y: p.y + p.h / 2.0,
                                     r: p.w / 2.0,
+                                    rotation: 0.0,
                                 });
                             } else {
                                 shapes.push(SlideObject::Rect {
@@ -875,6 +873,7 @@ pub fn parse_master_shapes(xml: &str) -> (Option<String>, Vec<SlideObject>) {
                                     y: p.y,
                                     w: p.w,
                                     h: p.h,
+                                    rotation: 0.0,
                                 });
                             }
                         }
@@ -932,6 +931,7 @@ fn resolve_and_extract_picture(
         y,
         w,
         h,
+        rotation: 0.0,
     })
 }
 
@@ -1462,12 +1462,15 @@ mod tests {
             text: "Hello Slide".into(),
             x: 100.0, y: 100.0, w: 300.0, h: 50.0,
             runs: vec![],
+            rotation: 0.0,
         });
         deck.slides[0].objects.push(SlideObject::Rect {
             x: 150.0, y: 200.0, w: 200.0, h: 100.0,
+            rotation: 0.0,
         });
         deck.slides[0].objects.push(SlideObject::Circle {
             x: 400.0, y: 300.0, r: 50.0,
+            rotation: 0.0,
         });
 
         let temp_dir = std::env::temp_dir();
@@ -1495,7 +1498,7 @@ mod tests {
 
         // Verify Rect
         match &slide.objects[1] {
-            SlideObject::Rect { x, y, w, h } => {
+            SlideObject::Rect { x, y, w, h, .. } => {
                 assert!((x - 150.0).abs() < 0.1);
                 assert!((y - 200.0).abs() < 0.1);
                 assert!((w - 200.0).abs() < 0.1);
@@ -1506,7 +1509,7 @@ mod tests {
 
         // Verify Circle
         match &slide.objects[2] {
-            SlideObject::Circle { x, y, r } => {
+            SlideObject::Circle { x, y, r, .. } => {
                 assert!((x - 400.0).abs() < 0.1);
                 assert!((y - 300.0).abs() < 0.1);
                 assert!((r - 50.0).abs() < 0.1);
@@ -1639,7 +1642,7 @@ mod master_tests {
         assert_eq!(bg.as_deref(), Some("#1a2b3c"));
         assert_eq!(shapes.len(), 1, "placeholder must be skipped: {shapes:?}");
         match &shapes[0] {
-            SlideObject::Rect { x, y, w, h } => {
+            SlideObject::Rect { x, y, w, h, .. } => {
                 assert!((x - 2.0).abs() < 0.01 && (y - 3.0).abs() < 0.01);
                 assert!((w - 20.0).abs() < 0.01 && (h - 10.0).abs() < 0.01);
             }
@@ -1745,7 +1748,7 @@ mod master_tests {
         let (_, shapes) = parse_master_shapes(xml);
         assert_eq!(shapes.len(), 1);
         match &shapes[0] {
-            SlideObject::TextBox { text, x, y, w, h, runs } => {
+            SlideObject::TextBox { text, x, y, w, h, runs, .. } => {
                 assert_eq!(text, "Deck title");
                 assert!(runs.is_empty());
                 assert!((x - 2.0).abs() < 0.01 && (y - 3.0).abs() < 0.01);
