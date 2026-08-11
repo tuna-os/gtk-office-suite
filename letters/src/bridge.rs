@@ -401,7 +401,7 @@ mod tests {
     /// panicking like `#[gtk::test]` does.
     fn gtk_test<F>(f: F) -> bool
     where
-        F: FnOnce() + Send + 'static,
+        F: FnOnce() + Send + std::panic::UnwindSafe + 'static,
     {
         use std::panic;
         use std::sync::mpsc;
