@@ -205,11 +205,10 @@ mod tests {
         let table = buf.tag_table();
         let h1 = gtk::TextTag::builder().name("h1").build();
         table.add(&h1);
-        let mut start = buf.start_iter();
-        let mut end = buf.iter_at_offset(5);
+        let start = buf.start_iter();
+        let end = buf.iter_at_offset(5);
         buf.apply_tag(&h1, &start, &end);
-        let _ = start;
-
+        
         let paras = split_paragraphs(&buf, "line1\nline2");
         assert_eq!(paras.len(), 2);
         assert_eq!(paras[0].text, "line1");
@@ -227,8 +226,8 @@ mod tests {
         let table = buf.tag_table();
         let tag = gtk::TextTag::builder().name("custom-foo").build();
         table.add(&tag);
-        let mut start = buf.start_iter();
-        let mut end = buf.end_iter();
+        let start = buf.start_iter();
+        let end = buf.end_iter();
         buf.apply_tag(&tag, &start, &end);
 
         let paras = split_paragraphs(&buf, "custom-styled");
