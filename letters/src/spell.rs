@@ -278,6 +278,62 @@ fn is_word_byte(c: u8) -> bool {
     c.is_ascii_alphabetic() || c == b'\''
 }
 
+#[cfg(test)]
+mod tests {
+    use super::{generate_candidates, is_word_byte, levenshtein};
+
+    #[test]
+    fn is_word_byte_accepts_letters_and_apostrophe() {
+        assert!(is_word_byte(b'a'));
+        assert!(is_word_byte(b'Z'));
+        assert!(is_word_byte(b'\''));
+    }
+
+    #[test]
+    fn is_word_byte_rejects_punctuation_digits_and_non_ascii() {
+        assert!(!is_word_byte(b' '));
+        assert!(!is_word_byte(b'0'));
+        assert!(!is_word_byte(b'-'));
+        assert!(!is_word_byte(b'.'));
+        assert!(!is_word_byte(0xE9)); // é is not ASCII
+    }
+
+    #[test]
+    fn levenshtein_basics() {
+        assert_eq!(levenshtein("", ""), 0);
+        assert_eq!(levenshtein("a", "a"), 0);
+        assert_eq!(levenshtein("xyz", ""), 3);
+    }
+
+    #[test]
+    fn levenshtein_known_edit_distances() {
+        assert_eq!(levenshtein("kitten", "sitting"), 3);
+        assert_eq!(levenshtein("flaw", "lawn"), 2);
+        assert_eq!(levenshtein("abc", "abcd"), 1);
+        // Plain Levenshtein counts a transposition as two edits.
+        assert_eq!(levenshtein("teh", "the"), 2);
+    }
+
+    #[test]
+    fn generate_candidates_includes_all_edit_kinds() {
+        let c = generate_candidates("cat");
+        for want in ["at", "ct", "ca", "act", "cta", "sat", "cet", "ceat", "cats", "scat"] {
+            assert!(c.iter().any(|s| s == want), "missing candidate {want}");
+        }
+    }
+
+    #[test]
+    fn generate_candidates_count_matches_edit_span() {
+        // n=3 "cat": 3 deletions + 2 transpositions + 2 applicable substitutions
+        // ('c'→'s', 'a'→'e') + 4×6 insertions = 31.
+        assert_eq!(generate_candidates("cat").len(), 31);
+        // n=5 "hello": 5 + 4 + 3 ('e'→'i'/'a', 'o'→'u') + 6×6 = 48.
+        assert_eq!(generate_candidates("hello").len(), 48);
+        // Empty word: only (0+1)×6 insertions.
+        assert_eq!(generate_candidates("").len(), 6);
+    }
+}
+
 // ── Spell popup menu builder ────────────────────────────────────────────
 //
 // word_at_point/make_spell_menu are the other half of the right-click
