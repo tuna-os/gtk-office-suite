@@ -2146,7 +2146,12 @@ impl TablesWindow {
             self.drawing_area.queue_draw();
             return Ok(());
         }
-        let (rows, cols) = load_file_into_engine(path, &mut self.state.borrow_mut().engine)?;
+        // Bind before matching — a `?`'s implicit match holds the
+        // borrow_mut() guard through the whole expression.  Separate the
+        // call from the `?` so the guard drops at the `;` and the next
+        // block can re-borrow without panicking (#139 file-open path).
+        let load_result = load_file_into_engine(path, &mut self.state.borrow_mut().engine);
+        let (rows, cols) = load_result?;
         {
             let mut ss = self.state.borrow_mut();
             let sheet_id = ss.engine.sheet_id_at(0).unwrap_or(0);
