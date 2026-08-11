@@ -47,6 +47,20 @@ class BaseGUITestCase(unittest.TestCase):
         self.launch_env = {**getattr(self, "launch_env", {}), "XDG_STATE_HOME": d}
         return d
 
+    def isolate_xdg(self, prefix="xdg-"):
+        """Put all user XDG stores in one disposable per-test directory."""
+        d = self.temp_dir(prefix)
+        self.launch_env = {
+            **getattr(self, "launch_env", {}),
+            "XDG_CONFIG_HOME": os.path.join(d, "config"),
+            "XDG_DATA_HOME": os.path.join(d, "data"),
+            "XDG_CACHE_HOME": os.path.join(d, "cache"),
+            "XDG_STATE_HOME": os.path.join(d, "state"),
+        }
+        for child in ("config", "data", "cache", "state"):
+            os.makedirs(os.path.join(d, child), exist_ok=True)
+        return d
+
     def isolate_snapshot(self, prefix="snapshot-"):
         """Sets up the #104 test-only state-snapshot interface: registers
         the app's GTK_OFFICE_TEST_MODE-gated snapshot action and points it
@@ -82,6 +96,11 @@ class BaseGUITestCase(unittest.TestCase):
         self.gui_dir = os.path.dirname(self.framework_dir)
         self.workspace_dir = os.path.dirname(os.path.dirname(self.gui_dir))
 
+        # Keep rendering and locale-sensitive output stable across developer
+        # desktops and CI runners. Individual tests may override a value by
+        # populating launch_env before calling super().setUp().
+        self.configure_deterministic_environment()
+
         # Path to compiled binary
         self.bin_path = os.path.join(self.workspace_dir, "target", "debug", self.app_name)
         if not os.path.exists(self.bin_path):
@@ -89,8 +108,6 @@ class BaseGUITestCase(unittest.TestCase):
 
         # Clear any leftover processes
         subprocess.run(["pkill", "-x", self.app_name], stderr=subprocess.DEVNULL)
-        time.sleep(0.2)
-
         # Launch app under GDK_BACKEND=x11
         env = os.environ.copy()
         env["GDK_BACKEND"] = "x11"
@@ -108,6 +125,97 @@ class BaseGUITestCase(unittest.TestCase):
         self._input_trace = []
         self._activate_window()
         self.last_screenshot = None
+
+    def configure_deterministic_environment(self):
+        """Set shared, test-only launch defaults for reproducible journeys.
+
+        This is deliberately environment-only: production binaries do not
+        gain a test mode or a diagnostic action merely because the harness
+        exists. Tests that need isolated settings/state can layer
+        isolate_gsettings or isolate_autosave_state on top.
+        """
+        defaults = {
+            "LANG": "C.UTF-8",
+            "LC_ALL": "C.UTF-8",
+            "TZ": "UTC",
+            "GTK_THEME": "Adwaita",
+            "GDK_SCALE": "1",
+            "GDK_DPI_SCALE": "1",
+            "GTK_ENABLE_ANIMATIONS": "0",
+            "SOURCE_DATE_EPOCH": "0",
+        }
+        font_config = os.path.join(self.framework_dir, "fonts.conf")
+        if os.path.exists(font_config):
+            defaults["FONTCONFIG_FILE"] = font_config
+        self.launch_env = {**defaults, **getattr(self, "launch_env", {})}
+
+    def wait_for_condition(self, predicate, timeout=10.0, interval=0.05,
+                           description="condition"):
+        """Poll an observable readiness condition and return its value."""
+        deadline = time.monotonic() + timeout
+        while time.monotonic() < deadline:
+            try:
+                value = predicate()
+                if value:
+                    return value
+            except Exception:
+                pass
+            time.sleep(min(interval, max(0.0, deadline - time.monotonic())))
+        self.fail(f"Timed out after {timeout}s waiting for {description}")
+
+    def wait_for_node(self, **criteria):
+        """Wait until an AT-SPI child matching criteria is exposed."""
+        return self.wait_for_condition(
+            lambda: self.app.child(**criteria),
+            description=f"AT-SPI node {criteria!r}",
+        )
+
+    def wait_for_file(self, path, timeout=5.0):
+        """Wait for a file to be created by a save/portal/recovery action."""
+        return self.wait_for_condition(
+            lambda: path if os.path.isfile(path) else None,
+            timeout=timeout,
+            description=f"file {path}",
+        )
+
+    def gapplication_action(self, action_id, action, timeout=5.0):
+        """Run an app action and wait for its observable effect when needed."""
+        result = subprocess.run(
+            ["gapplication", "action", action_id, action],
+            check=True, capture_output=True, text=True, timeout=timeout,
+        )
+        return result
+
+    def trigger_snapshot(self, action_id, timeout=5.0):
+        """Trigger the test-only snapshot action and return normalized JSON."""
+        snapshot_path = getattr(self, "launch_env", {}).get(
+            "GTK_OFFICE_SNAPSHOT_PATH",
+            os.environ.get("GTK_OFFICE_SNAPSHOT_PATH"),
+        )
+        if not snapshot_path:
+            self.fail("GTK_OFFICE_SNAPSHOT_PATH is not configured")
+        try:
+            os.remove(snapshot_path)
+        except FileNotFoundError:
+            pass
+        subprocess.run(
+            ["gapplication", "action", action_id, "test-snapshot"],
+            check=True, capture_output=True, text=True,
+        )
+
+        def read_snapshot():
+            if not os.path.exists(snapshot_path) or os.path.getsize(snapshot_path) == 0:
+                return None
+            try:
+                with open(snapshot_path) as f:
+                    return json.load(f)
+            except (OSError, json.JSONDecodeError):
+                return None
+
+        return self.wait_for_condition(
+            read_snapshot, timeout=timeout,
+            description=f"snapshot at {snapshot_path}",
+        )
 
     def _callTestMethod(self, method):
         # unittest.TestCase.run() calls setUp -> _callTestMethod -> tearDown
@@ -352,16 +460,11 @@ class BaseGUITestCase(unittest.TestCase):
         subprocess.run(["xdotool", "mouseup", str(button)], capture_output=True, timeout=5)
 
     def wait_for_app(self, name: str, timeout: float = 15.0) -> "tree.Node":
-        deadline = time.monotonic() + timeout
-        while time.monotonic() < deadline:
-            try:
-                app = tree.root.application(name)
-                if app:
-                    return app
-            except Exception:
-                pass
-            time.sleep(0.5)
-        raise RuntimeError(f"Application '{name}' did not appear in AT-SPI registry within {timeout}s")
+        return self.wait_for_condition(
+            lambda: tree.root.application(name),
+            timeout=timeout,
+            description=f"application '{name}' in the AT-SPI registry",
+        )
 
     def get_window_geometry(self) -> tuple[int, int, int, int]:
         """Locates the main frame window of the app and returns (x, y, w, h)."""

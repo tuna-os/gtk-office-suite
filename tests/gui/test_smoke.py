@@ -53,21 +53,14 @@ class LettersSnapshotSmoke(BaseGUITestCase):
         super().setUp()
 
     def test_snapshot_reflects_typed_text(self):
-        import json
-        import subprocess
         from dogtail import rawinput
 
-        self.app.child(name="New Document", roleName="push button").do_action(0)
-        time.sleep(1.5)
+        self.wait_for_node(name="New Document", roleName="push button").do_action(0)
+        self.wait_for_node(roleName="text")
         rawinput.typeText("the quick brown fox")
-        time.sleep(1.0)
+        self.wait_for_node(name="4 words", roleName="label")
 
-        aid = "org.tunaos.letters"
-        subprocess.run(["gapplication", "action", aid, "test-snapshot"])
-        time.sleep(0.5)
-        self.assertTrue(os.path.exists(self._snapshot_path), "snapshot file was not written")
-        with open(self._snapshot_path) as f:
-            snap = json.load(f)
+        snap = self.trigger_snapshot("org.tunaos.letters")
 
         text = "".join(r["text"] for p in snap["paragraphs"] for r in p["runs"])
         self.assertEqual(text, "the quick brown fox")
@@ -987,13 +980,11 @@ class TablesSnapshotSmoke(BaseGUITestCase):
         super().setUp()
 
     def test_snapshot_reflects_cell_edits_and_formulas(self):
-        import json
-        import subprocess
         from dogtail import rawinput
 
         aid = "org.tunaos.tables"
-        subprocess.run(["gapplication", "action", aid, "new-document"])
-        time.sleep(1.0)
+        self.gapplication_action(aid, "new-document")
+        self.wait_for_node(name="Spreadsheet grid")
         rawinput.keyCombo("<Control>g")
         time.sleep(0.2)
         rawinput.typeText("A1")
@@ -1009,13 +1000,12 @@ class TablesSnapshotSmoke(BaseGUITestCase):
         time.sleep(0.3)
         rawinput.typeText("=A1*2")
         rawinput.keyCombo("Return")
-        time.sleep(0.3)
+        self.wait_for_condition(
+            lambda: "84" in self.app.child(name="Spreadsheet grid").description,
+            description="formula result 84 in the spreadsheet grid",
+        )
 
-        subprocess.run(["gapplication", "action", aid, "test-snapshot"])
-        time.sleep(0.5)
-        self.assertTrue(os.path.exists(self._snapshot_path), "snapshot file was not written")
-        with open(self._snapshot_path) as f:
-            snap = json.load(f)
+        snap = self.trigger_snapshot(aid)
 
         cells = {(c["row"], c["col"]): c for c in snap["sheet"]["cells"]}
         self.assertEqual(cells[(0, 0)]["value"], "42")
@@ -1436,21 +1426,12 @@ class DecksSnapshotSmoke(BaseGUITestCase):
         super().setUp()
 
     def test_snapshot_reflects_added_objects(self):
-        import json
-        import subprocess
-
         aid = "org.tunaos.decks"
-        subprocess.run(["gapplication", "action", aid, "new-document"])
-        time.sleep(1.5)
-        subprocess.run(["gapplication", "action", aid, "add-text-box"])
-        subprocess.run(["gapplication", "action", aid, "add-shape"])
-        time.sleep(1.0)
+        self.gapplication_action(aid, "new-document")
+        self.gapplication_action(aid, "add-text-box")
+        self.gapplication_action(aid, "add-shape")
 
-        subprocess.run(["gapplication", "action", aid, "test-snapshot"])
-        time.sleep(0.5)
-        self.assertTrue(os.path.exists(self._snapshot_path), "snapshot file was not written")
-        with open(self._snapshot_path) as f:
-            snap = json.load(f)
+        snap = self.trigger_snapshot(aid)
 
         self.assertEqual(snap["slide_count"], 1)
         kinds = [o["kind"] for o in snap["slides"][0]["objects"]]
