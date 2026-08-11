@@ -30,7 +30,7 @@ fn slide(title: &str, objects: Vec<SlideObject>) -> Slide {
 }
 
 fn text_box(text: &str) -> SlideObject {
-    SlideObject::TextBox { text: text.to_string(), x: 100.0, y: 100.0, w: 400.0, h: 80.0 , runs: vec![] }
+    SlideObject::TextBox { text: text.to_string(), x: 100.0, y: 100.0, w: 400.0, h: 80.0, rotation: 0.0, runs: vec![] }
 }
 
 fn all_text(deck: &Deck) -> Vec<String> {
@@ -89,8 +89,8 @@ fn scenarios() -> Vec<Scenario> {
         name: "shapes-survive",
         deck: {
             let mut d = Deck::new();
-            d.slides[0].objects.push(SlideObject::Rect { x: 50.0, y: 50.0, w: 200.0, h: 100.0 });
-            d.slides[0].objects.push(SlideObject::Circle { x: 400.0, y: 200.0, r: 60.0 });
+            d.slides[0].objects.push(SlideObject::Rect { x: 50.0, y: 50.0, w: 200.0, h: 100.0, rotation: 0.0 });
+            d.slides[0].objects.push(SlideObject::Circle { x: 400.0, y: 200.0, r: 60.0, rotation: 0.0 });
             d.slides[0].objects.push(text_box("with shapes"));
             d
         },
@@ -164,10 +164,12 @@ fn scenarios() -> Vec<Scenario> {
             d.slides[0].objects.push(SlideObject::TextBox {
                 text: "top-left".into(), x: 10.0, y: 10.0, w: 200.0, h: 40.0,
                 runs: vec![],
+                rotation: 0.0,
             });
             d.slides[0].objects.push(SlideObject::TextBox {
                 text: "lower".into(), x: 300.0, y: 400.0, w: 200.0, h: 40.0,
                 runs: vec![],
+                rotation: 0.0,
             });
             d
         },
@@ -198,6 +200,7 @@ fn scenarios() -> Vec<Scenario> {
                     Run { text: "bold ".into(), style: RunStyle { bold: true, ..Default::default() } },
                     Run { text: "italic".into(), style: RunStyle { italic: true, ..Default::default() } },
                 ],
+                rotation: 0.0,
             });
             d
         },

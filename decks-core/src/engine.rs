@@ -67,13 +67,41 @@ pub enum SlideObject {
     TextBox {
         text: String,
         x: f64, y: f64, w: f64, h: f64,
+        rotation: f64,
         /// Styled runs (shared WYSIWYG primitive with Letters). When
         /// non-empty, concatenated run text equals `text`.
         runs: Vec<Run>,
     },
-    Rect { x: f64, y: f64, w: f64, h: f64 },
-    Circle { x: f64, y: f64, r: f64 },
-    Image { path: String, x: f64, y: f64, w: f64, h: f64 },
+    Rect { x: f64, y: f64, w: f64, h: f64, rotation: f64 },
+    Circle { x: f64, y: f64, r: f64, rotation: f64 },
+    Image { path: String, x: f64, y: f64, w: f64, h: f64, rotation: f64 },
+}
+
+impl SlideObject {
+    pub fn x(&self) -> f64 {
+        match self {
+            SlideObject::TextBox { x, .. }
+            | SlideObject::Rect { x, .. }
+            | SlideObject::Image { x, .. } => *x,
+            SlideObject::Circle { x, r, .. } => *x - *r,
+        }
+    }
+    pub fn y(&self) -> f64 {
+        match self {
+            SlideObject::TextBox { y, .. }
+            | SlideObject::Rect { y, .. }
+            | SlideObject::Image { y, .. } => *y,
+            SlideObject::Circle { y, r, .. } => *y - *r,
+        }
+    }
+    pub fn rotation(&self) -> f64 {
+        match self {
+            SlideObject::TextBox { rotation, .. }
+            | SlideObject::Rect { rotation, .. }
+            | SlideObject::Circle { rotation, .. }
+            | SlideObject::Image { rotation, .. } => *rotation,
+        }
+    }
 }
 
 impl Default for Deck {
@@ -548,7 +576,7 @@ pub fn read_pptx(path: &str) -> Result<Deck, String> {
                                     shape.text.iter().any(|t| !t.trim().is_empty());
                                 if shape.is_tx_box || (shape.has_tx_body && has_text) {
                                     let text = shape.text.join("\n");
-                                    objects.push(SlideObject::TextBox { text, x, y, w, h, runs: shape.runs.clone() });
+                                    objects.push(SlideObject::TextBox { text, x, y, w, h, rotation: 0.0, runs: shape.runs.clone() });
                                 } else {
                                     let prst = shape.prst.unwrap_or_else(|| "rect".to_string());
                                     if prst == "ellipse" {
@@ -556,9 +584,10 @@ pub fn read_pptx(path: &str) -> Result<Deck, String> {
                                             x: x + w / 2.0,
                                             y: y + h / 2.0,
                                             r: w / 2.0,
+                                            rotation: 0.0,
                                         });
                                     } else {
-                                        objects.push(SlideObject::Rect { x, y, w, h });
+                                        objects.push(SlideObject::Rect { x, y, w, h, rotation: 0.0 });
                                     }
                                 }
                             }
@@ -828,6 +857,7 @@ pub fn parse_master_shapes(xml: &str) -> (Option<String>, Vec<SlideObject>) {
                                     y: p.y,
                                     w: p.w,
                                     h: p.h,
+                                    rotation: 0.0,
                                     runs: vec![],
                                 });
                             } else if p.prst.as_deref() == Some("ellipse") {
@@ -835,6 +865,7 @@ pub fn parse_master_shapes(xml: &str) -> (Option<String>, Vec<SlideObject>) {
                                     x: p.x + p.w / 2.0,
                                     y: p.y + p.h / 2.0,
                                     r: p.w / 2.0,
+                                    rotation: 0.0,
                                 });
                             } else {
                                 shapes.push(SlideObject::Rect {
@@ -842,6 +873,7 @@ pub fn parse_master_shapes(xml: &str) -> (Option<String>, Vec<SlideObject>) {
                                     y: p.y,
                                     w: p.w,
                                     h: p.h,
+                                    rotation: 0.0,
                                 });
                             }
                         }
@@ -899,6 +931,7 @@ fn resolve_and_extract_picture(
         y,
         w,
         h,
+        rotation: 0.0,
     })
 }
 
@@ -1336,16 +1369,16 @@ pub fn write_pptx_bytes(deck: &Deck) -> Result<Vec<u8>, String> {
             for (j, obj) in slide.objects.iter().enumerate() {
                 let id = 2 + j;
                 match obj {
-                    SlideObject::TextBox { text, x, y, w, h, runs } => {
+                    SlideObject::TextBox { text, x, y, w, h, runs, .. } => {
                         write_text_box(&mut writer, id, j + 1, *x, *y, *w, *h, text, runs).map_err(|e| e.to_string())?;
                     }
-                    SlideObject::Rect { x, y, w, h } => {
+                    SlideObject::Rect { x, y, w, h, .. } => {
                         write_rect(&mut writer, id, j + 1, *x, *y, *w, *h).map_err(|e| e.to_string())?;
                     }
-                    SlideObject::Circle { x, y, r } => {
+                    SlideObject::Circle { x, y, r, .. } => {
                         write_circle(&mut writer, id, j + 1, *x, *y, *r).map_err(|e| e.to_string())?;
                     }
-                    SlideObject::Image { path, x, y, w, h } => {
+                    SlideObject::Image { path, x, y, w, h, .. } => {
                         let img_idx = images_to_add.len() + 1;
                         images_to_add.push(path.clone());
 
@@ -1429,12 +1462,15 @@ mod tests {
             text: "Hello Slide".into(),
             x: 100.0, y: 100.0, w: 300.0, h: 50.0,
             runs: vec![],
+            rotation: 0.0,
         });
         deck.slides[0].objects.push(SlideObject::Rect {
             x: 150.0, y: 200.0, w: 200.0, h: 100.0,
+            rotation: 0.0,
         });
         deck.slides[0].objects.push(SlideObject::Circle {
             x: 400.0, y: 300.0, r: 50.0,
+            rotation: 0.0,
         });
 
         let temp_dir = std::env::temp_dir();
@@ -1462,7 +1498,7 @@ mod tests {
 
         // Verify Rect
         match &slide.objects[1] {
-            SlideObject::Rect { x, y, w, h } => {
+            SlideObject::Rect { x, y, w, h, .. } => {
                 assert!((x - 150.0).abs() < 0.1);
                 assert!((y - 200.0).abs() < 0.1);
                 assert!((w - 200.0).abs() < 0.1);
@@ -1473,7 +1509,7 @@ mod tests {
 
         // Verify Circle
         match &slide.objects[2] {
-            SlideObject::Circle { x, y, r } => {
+            SlideObject::Circle { x, y, r, .. } => {
                 assert!((x - 400.0).abs() < 0.1);
                 assert!((y - 300.0).abs() < 0.1);
                 assert!((r - 50.0).abs() < 0.1);
@@ -1606,7 +1642,7 @@ mod master_tests {
         assert_eq!(bg.as_deref(), Some("#1a2b3c"));
         assert_eq!(shapes.len(), 1, "placeholder must be skipped: {shapes:?}");
         match &shapes[0] {
-            SlideObject::Rect { x, y, w, h } => {
+            SlideObject::Rect { x, y, w, h, .. } => {
                 assert!((x - 2.0).abs() < 0.01 && (y - 3.0).abs() < 0.01);
                 assert!((w - 20.0).abs() < 0.01 && (h - 10.0).abs() < 0.01);
             }
@@ -1712,7 +1748,7 @@ mod master_tests {
         let (_, shapes) = parse_master_shapes(xml);
         assert_eq!(shapes.len(), 1);
         match &shapes[0] {
-            SlideObject::TextBox { text, x, y, w, h, runs } => {
+            SlideObject::TextBox { text, x, y, w, h, runs, .. } => {
                 assert_eq!(text, "Deck title");
                 assert!(runs.is_empty());
                 assert!((x - 2.0).abs() < 0.01 && (y - 3.0).abs() < 0.01);

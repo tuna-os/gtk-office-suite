@@ -55,6 +55,7 @@ fn build_deck(slides: &[Vec<String>]) -> Deck {
                     text: t.clone(),
                     x: 10.0, y: 10.0, w: 100.0, h: 20.0,
                     runs: vec![],
+                    rotation: 0.0,
                 })
                 .collect(),
             notes: String::new(),

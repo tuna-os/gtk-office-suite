@@ -14,7 +14,7 @@ fn slide(title: &str, objects: Vec<SlideObject>, notes: &str) -> Slide {
 }
 
 fn text(text: &str, x: f64, y: f64, w: f64, h: f64) -> SlideObject {
-    SlideObject::TextBox { text: text.to_string(), x, y, w, h, runs: vec![] }
+    SlideObject::TextBox { text: text.to_string(), x, y, w, h, rotation: 0.0, runs: vec![] }
 }
 
 fn main() -> Result<(), String> {
@@ -26,7 +26,7 @@ fn main() -> Result<(), String> {
             vec![
                 text("TunaOS Office Suite", 180.0, 180.0, 600.0, 80.0),
                 text("Q2 2026 update", 180.0, 270.0, 400.0, 40.0),
-                SlideObject::Rect { x: 180.0, y: 340.0, w: 240.0, h: 8.0 },
+                SlideObject::Rect { x: 180.0, y: 340.0, w: 240.0, h: 8.0, rotation: 0.0 },
             ],
             "Welcome everyone — one-line agenda first.",
         ),
@@ -35,7 +35,7 @@ fn main() -> Result<(), String> {
             vec![
                 text("Revenue grew 12% QoQ", 120.0, 120.0, 500.0, 50.0),
                 text("Churn at a two-year low", 120.0, 200.0, 500.0, 50.0),
-                SlideObject::Circle { x: 720.0, y: 300.0, r: 90.0 },
+                SlideObject::Circle { x: 720.0, y: 300.0, r: 90.0, rotation: 0.0 },
             ],
             "Pause on the churn number — it is the headline.",
         ),

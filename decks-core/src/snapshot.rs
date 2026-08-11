@@ -143,9 +143,10 @@ mod tests {
     #[test]
     fn snapshot_reports_slides_and_objects() {
         let c = DecksController::new(vec![slide("S1"), slide("S2")], vec![]);
-        c.add_object(0, SlideObject::Rect { x: 1.0, y: 2.0, w: 10.0, h: 10.0 });
+        c.add_object(0, SlideObject::Rect { x: 1.0, y: 2.0, w: 10.0, h: 10.0, rotation: 0.0 });
         c.add_object(1, SlideObject::TextBox {
             text: "hi".into(), x: 0.0, y: 0.0, w: 5.0, h: 5.0, runs: vec![],
+            rotation: 0.0,
         });
         let snap = snapshot(&c);
         assert_eq!(snap.slide_count, 2);
@@ -191,10 +192,10 @@ mod tests {
     #[test]
     fn object_snapshot_maps_every_kind() {
         let objs = [
-            SlideObject::TextBox { text: "t".into(), x: 1.0, y: 2.0, w: 3.0, h: 4.0, runs: vec![] },
-            SlideObject::Rect { x: 1.0, y: 2.0, w: 3.0, h: 4.0 },
-            SlideObject::Circle { x: 1.0, y: 2.0, r: 3.0 },
-            SlideObject::Image { path: "p.png".into(), x: 1.0, y: 2.0, w: 3.0, h: 4.0 },
+            SlideObject::TextBox { text: "t".into(), x: 1.0, y: 2.0, w: 3.0, h: 4.0, rotation: 0.0, runs: vec![] },
+            SlideObject::Rect { x: 1.0, y: 2.0, w: 3.0, h: 4.0, rotation: 0.0 },
+            SlideObject::Circle { x: 1.0, y: 2.0, r: 3.0, rotation: 0.0 },
+            SlideObject::Image { path: "p.png".into(), x: 1.0, y: 2.0, w: 3.0, h: 4.0, rotation: 0.0 },
         ];
         let kinds = objs.iter().enumerate().map(|(i, o)| object_snapshot(i, o)).collect::<Vec<_>>();
         assert_eq!(kinds[0].kind, "TextBox");

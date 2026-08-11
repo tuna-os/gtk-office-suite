@@ -124,11 +124,11 @@ impl ObjectAccessible {
                 };
                 (label, (*x, *y, *w, *h))
             }
-            SlideObject::Rect { x, y, w, h } => ("Rectangle".to_string(), (*x, *y, *w, *h)),
-            SlideObject::Circle { x, y, r } => {
+            SlideObject::Rect { x, y, w, h, .. } => ("Rectangle".to_string(), (*x, *y, *w, *h)),
+            SlideObject::Circle { x, y, r, .. } => {
                 ("Circle".to_string(), (x - r, y - r, r * 2.0, r * 2.0))
             }
-            SlideObject::Image { path, x, y, w, h } => {
+            SlideObject::Image { path, x, y, w, h, .. } => {
                 let file = std::path::Path::new(path)
                     .file_name()
                     .map(|n| n.to_string_lossy().to_string())

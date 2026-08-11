@@ -52,9 +52,10 @@ fn sample_deck() -> Deck {
     deck.slides[0].objects.push(SlideObject::TextBox {
         text: "Impress must read this".into(),
         x: 100.0, y: 100.0, w: 400.0, h: 60.0,
+        rotation: 0.0,
         runs: vec![],
     });
-    deck.slides[0].objects.push(SlideObject::Rect { x: 50.0, y: 250.0, w: 200.0, h: 90.0 });
+    deck.slides[0].objects.push(SlideObject::Rect { x: 50.0, y: 250.0, w: 200.0, h: 90.0, rotation: 0.0 });
     deck.slides[0].notes = "speaker notes body".into();
     deck
 }
@@ -82,6 +83,7 @@ fn impress_survives_multi_slide_deck() {
             objects: vec![SlideObject::TextBox {
                 text: format!("content {}", i),
                 x: 80.0, y: 120.0, w: 300.0, h: 50.0,
+                rotation: 0.0,
                 runs: vec![],
             }],
             notes: String::new(),
@@ -129,6 +131,7 @@ fn text_slide(title: &str, text: &str, notes: &str) -> Slide {
             text: text.into(),
             x: 100.0, y: 100.0, w: 500.0, h: 60.0,
             runs: vec![],
+            rotation: 0.0,
         }],
         notes: notes.into(),
         master_idx: Some(0),
@@ -215,8 +218,8 @@ fn shape_kinds_survive_impress_rewrite() {
         title: "shapes".into(),
         background: "#ffffff".into(),
         objects: vec![
-            SlideObject::Rect { x: 100.0, y: 100.0, w: 200.0, h: 100.0 },
-            SlideObject::Circle { x: 500.0, y: 300.0, r: 80.0 },
+            SlideObject::Rect { x: 100.0, y: 100.0, w: 200.0, h: 100.0, rotation: 0.0 },
+            SlideObject::Circle { x: 500.0, y: 300.0, r: 80.0, rotation: 0.0 },
         ],
         notes: String::new(),
         master_idx: Some(0),
@@ -235,12 +238,12 @@ fn positions_approx_survive_impress_rewrite() {
     deck.slides = vec![Slide {
         title: "pos".into(),
         background: "#ffffff".into(),
-        objects: vec![SlideObject::Rect { x: 240.0, y: 180.0, w: 320.0, h: 120.0 }],
+        objects: vec![SlideObject::Rect { x: 240.0, y: 180.0, w: 320.0, h: 120.0, rotation: 0.0 }],
         notes: String::new(),
         master_idx: Some(0),
     }];
     let Some(rt) = through_impress(&deck, "pos") else { return };
-    let Some(SlideObject::Rect { x, y, w, h }) = rt.slides[0]
+    let Some(SlideObject::Rect { x, y, w, h, .. }) = rt.slides[0]
         .objects
         .iter()
         .find(|o| matches!(o, SlideObject::Rect { .. }))
@@ -300,6 +303,7 @@ fn bold_run_survives_impress_rewrite() {
                     style: RunStyle { bold: true, ..Default::default() },
                 },
             ],
+            rotation: 0.0,
         }],
         notes: String::new(),
         master_idx: Some(0),
@@ -374,6 +378,7 @@ fn styled_run_slide(runs: Vec<Run>) -> Slide {
             text,
             x: 100.0, y: 100.0, w: 600.0, h: 80.0,
             runs,
+            rotation: 0.0,
         }],
         notes: String::new(),
         master_idx: Some(0),
@@ -467,6 +472,7 @@ fn image_object_survives_impress_rewrite() {
         objects: vec![SlideObject::Image {
             path: png_path.to_string_lossy().to_string(),
             x: 100.0, y: 100.0, w: 200.0, h: 150.0,
+            rotation: 0.0,
         }],
         notes: String::new(),
         master_idx: Some(0),
@@ -554,12 +560,12 @@ fn odp_geometry_survives_impress_rewrite() {
     deck.slides = vec![Slide {
         title: "g".into(),
         background: "#ffffff".into(),
-        objects: vec![SlideObject::Rect { x: 240.0, y: 180.0, w: 320.0, h: 120.0 }],
+        objects: vec![SlideObject::Rect { x: 240.0, y: 180.0, w: 320.0, h: 120.0, rotation: 0.0 }],
         notes: String::new(),
         master_idx: Some(0),
     }];
     let Some(rt) = odp_through_impress(&deck, "geom") else { return };
-    let Some(SlideObject::Rect { x, y, w, h }) = rt.slides[0]
+    let Some(SlideObject::Rect { x, y, w, h, .. }) = rt.slides[0]
         .objects
         .iter()
         .find(|o| matches!(o, SlideObject::Rect { .. }))
@@ -616,6 +622,7 @@ fn odp_bold_run_survives_impress_rewrite() {
                     style: LRunStyle { bold: true, ..Default::default() },
                 },
             ],
+            rotation: 0.0,
         }],
         notes: String::new(),
         master_idx: Some(0),

@@ -138,6 +138,136 @@ impl DecksController {
         self.execute(Box::new(ChangeTextCmd { slide_idx, index, old_text, new_text }));
     }
 
+    pub fn resize_object(&self, slide_idx: usize, index: usize, old_bounds: (f64, f64, f64, f64), new_bounds: (f64, f64, f64, f64)) {
+        self.execute(Box::new(crate::undo::ResizeObjectCmd { slide_idx, index, old_bounds, new_bounds }));
+    }
+
+    pub fn rotate_object(&self, slide_idx: usize, index: usize, old_angle: f64, new_angle: f64) {
+        self.execute(Box::new(crate::undo::RotateObjectCmd { slide_idx, index, old_angle, new_angle }));
+    }
+
+    pub fn align_objects(&self, slide_idx: usize, indices: &[usize], mode: crate::undo::AlignMode) {
+        use crate::undo::{obj_bounds, AlignMode, AlignObjectsCmd};
+        let slides = self.slides.borrow();
+        if slide_idx >= slides.len() || indices.len() < 2 { return; }
+        let objects = &slides[slide_idx].objects;
+        let mut bounds_list = Vec::new();
+        let mut old_positions = Vec::new();
+        for &idx in indices {
+            if idx >= objects.len() { return; }
+            bounds_list.push(obj_bounds(&objects[idx]));
+            old_positions.push((objects[idx].x(), objects[idx].y()));
+        }
+
+        let target = match mode {
+            AlignMode::Left => bounds_list.iter().map(|b| b.0).fold(f64::INFINITY, f64::min),
+            AlignMode::Top => bounds_list.iter().map(|b| b.1).fold(f64::INFINITY, f64::min),
+            AlignMode::Right => bounds_list.iter().map(|b| b.0 + b.2).fold(f64::NEG_INFINITY, f64::max),
+            AlignMode::Bottom => bounds_list.iter().map(|b| b.1 + b.3).fold(f64::NEG_INFINITY, f64::max),
+            AlignMode::Center => bounds_list.iter().map(|b| b.0 + b.2 / 2.0).sum::<f64>() / bounds_list.len() as f64,
+            AlignMode::Middle => bounds_list.iter().map(|b| b.1 + b.3 / 2.0).sum::<f64>() / bounds_list.len() as f64,
+        };
+
+        let new_positions: Vec<(f64, f64)> = bounds_list.iter().map(|&(x, y, w, h)| {
+            match mode {
+                AlignMode::Left => (target, y),
+                AlignMode::Right => (target - w, y),
+                AlignMode::Center => (target - w / 2.0, y),
+                AlignMode::Top => (x, target),
+                AlignMode::Bottom => (x, target - h),
+                AlignMode::Middle => (x, target - h / 2.0),
+            }
+        }).collect();
+        drop(slides);
+
+        self.execute(Box::new(AlignObjectsCmd {
+            slide_idx,
+            indices: indices.to_vec(),
+            old_positions,
+            new_positions,
+        }));
+    }
+
+    pub fn distribute_objects(&self, slide_idx: usize, indices: &[usize], mode: crate::undo::DistributeMode) {
+        use crate::undo::{obj_bounds, DistributeMode, AlignObjectsCmd};
+        let slides = self.slides.borrow();
+        if slide_idx >= slides.len() || indices.len() < 3 { return; }
+        let objects = &slides[slide_idx].objects;
+        let mut items: Vec<(usize, (f64, f64, f64, f64))> = indices.iter().filter_map(|&i| {
+            objects.get(i).map(|o| (i, obj_bounds(o)))
+        }).collect();
+
+        if mode == DistributeMode::Horizontal {
+            items.sort_by(|a, b| a.1.0.partial_cmp(&b.1.0).unwrap());
+            let min_x = items.first().unwrap().1.0;
+            let max_x = items.last().unwrap().1.0;
+            let total_span = max_x - min_x;
+            let step = total_span / (items.len() - 1) as f64;
+            let old_pos: Vec<(f64, f64)> = items.iter().map(|i| (i.1.0, i.1.1)).collect();
+            let new_pos: Vec<(f64, f64)> = items.iter().enumerate().map(|(idx, item)| {
+                (min_x + idx as f64 * step, item.1.1)
+            }).collect();
+            let sorted_indices: Vec<usize> = items.iter().map(|i| i.0).collect();
+            drop(slides);
+            self.execute(Box::new(AlignObjectsCmd {
+                slide_idx,
+                indices: sorted_indices,
+                old_positions: old_pos,
+                new_positions: new_pos,
+            }));
+        } else {
+            items.sort_by(|a, b| a.1.1.partial_cmp(&b.1.1).unwrap());
+            let min_y = items.first().unwrap().1.1;
+            let max_y = items.last().unwrap().1.1;
+            let total_span = max_y - min_y;
+            let step = total_span / (items.len() - 1) as f64;
+            let old_pos: Vec<(f64, f64)> = items.iter().map(|i| (i.1.0, i.1.1)).collect();
+            let new_pos: Vec<(f64, f64)> = items.iter().enumerate().map(|(idx, item)| {
+                (item.1.0, min_y + idx as f64 * step)
+            }).collect();
+            let sorted_indices: Vec<usize> = items.iter().map(|i| i.0).collect();
+            drop(slides);
+            self.execute(Box::new(AlignObjectsCmd {
+                slide_idx,
+                indices: sorted_indices,
+                old_positions: old_pos,
+                new_positions: new_pos,
+            }));
+        }
+    }
+
+    pub fn z_order_object(&self, slide_idx: usize, index: usize, op: crate::undo::ZOrderOp) {
+        use crate::undo::{ZOrderCmd, ZOrderOp};
+        let slides = self.slides.borrow();
+        if slide_idx >= slides.len() || index >= slides[slide_idx].objects.len() { return; }
+        let old_objects = slides[slide_idx].objects.clone();
+        let mut new_objects = old_objects.clone();
+        let len = new_objects.len();
+
+        match op {
+            ZOrderOp::BringToFront => {
+                let obj = new_objects.remove(index);
+                new_objects.push(obj);
+            }
+            ZOrderOp::SendToBack => {
+                let obj = new_objects.remove(index);
+                new_objects.insert(0, obj);
+            }
+            ZOrderOp::BringForward => {
+                if index + 1 < len {
+                    new_objects.swap(index, index + 1);
+                }
+            }
+            ZOrderOp::SendBackward => {
+                if index > 0 {
+                    new_objects.swap(index, index - 1);
+                }
+            }
+        }
+        drop(slides);
+        self.execute(Box::new(ZOrderCmd { slide_idx, old_objects, new_objects }));
+    }
+
     pub fn undo(&self) -> bool {
         self.undo.borrow_mut().undo()
     }
@@ -165,7 +295,7 @@ mod tests {
     }
 
     fn rect(x: f64, y: f64) -> SlideObject {
-        SlideObject::Rect { x, y, w: 10.0, h: 10.0 }
+        SlideObject::Rect { x, y, w: 10.0, h: 10.0, rotation: 0.0 }
     }
 
     #[test]
@@ -205,7 +335,7 @@ mod tests {
     #[test]
     fn change_text_updates_textbox_and_undo_reverts() {
         let mut s = slide("S1");
-        s.objects.push(SlideObject::TextBox { text: "old".into(), x: 0.0, y: 0.0, w: 10.0, h: 10.0, runs: vec![] });
+        s.objects.push(SlideObject::TextBox { text: "old".into(), x: 0.0, y: 0.0, w: 10.0, h: 10.0, runs: vec![], rotation: 0.0 });
         let c = DecksController::new(vec![s], vec![]);
         c.change_text(0, 0, "old".into(), "new".into());
         {
@@ -308,5 +438,59 @@ mod tests {
         let reopened_notes: Vec<String> = reopened.slides.iter().map(|s| s.notes.clone()).collect();
         assert_eq!(reopened_notes, notes);
         let _ = std::fs::remove_file(&path);
+    }
+
+    #[test]
+    fn resize_and_rotate_object_with_undo() {
+        let mut s = slide("S1");
+        s.objects.push(SlideObject::Rect { x: 10.0, y: 10.0, w: 50.0, h: 50.0, rotation: 0.0 });
+        let c = DecksController::new(vec![s], vec![]);
+        c.resize_object(0, 0, (10.0, 10.0, 50.0, 50.0), (20.0, 20.0, 100.0, 80.0));
+        assert_eq!(crate::undo::obj_bounds(&c.slides.borrow()[0].objects[0]), (20.0, 20.0, 100.0, 80.0));
+        assert!(c.undo());
+        assert_eq!(crate::undo::obj_bounds(&c.slides.borrow()[0].objects[0]), (10.0, 10.0, 50.0, 50.0));
+
+        c.rotate_object(0, 0, 0.0, 45.0);
+        assert_eq!(c.slides.borrow()[0].objects[0].rotation(), 45.0);
+        assert!(c.undo());
+        assert_eq!(c.slides.borrow()[0].objects[0].rotation(), 0.0);
+    }
+
+    #[test]
+    fn align_and_distribute_objects_with_undo() {
+        use crate::undo::{AlignMode, DistributeMode};
+        let mut s = slide("S1");
+        s.objects.push(SlideObject::Rect { x: 10.0, y: 10.0, w: 20.0, h: 20.0, rotation: 0.0 });
+        s.objects.push(SlideObject::Rect { x: 50.0, y: 30.0, w: 20.0, h: 20.0, rotation: 0.0 });
+        s.objects.push(SlideObject::Rect { x: 100.0, y: 50.0, w: 20.0, h: 20.0, rotation: 0.0 });
+        let c = DecksController::new(vec![s], vec![]);
+
+        c.align_objects(0, &[0, 1, 2], AlignMode::Left);
+        assert_eq!(c.slides.borrow()[0].objects[0].x(), 10.0);
+        assert_eq!(c.slides.borrow()[0].objects[1].x(), 10.0);
+        assert_eq!(c.slides.borrow()[0].objects[2].x(), 10.0);
+        assert!(c.undo());
+        assert_eq!(c.slides.borrow()[0].objects[2].x(), 100.0);
+
+        c.distribute_objects(0, &[0, 1, 2], DistributeMode::Horizontal);
+        assert_eq!(c.slides.borrow()[0].objects[0].x(), 10.0);
+        assert_eq!(c.slides.borrow()[0].objects[1].x(), 55.0);
+        assert_eq!(c.slides.borrow()[0].objects[2].x(), 100.0);
+        assert!(c.undo());
+        assert_eq!(c.slides.borrow()[0].objects[1].x(), 50.0);
+    }
+
+    #[test]
+    fn z_order_object_with_undo() {
+        use crate::undo::ZOrderOp;
+        let mut s = slide("S1");
+        s.objects.push(SlideObject::Rect { x: 10.0, y: 10.0, w: 20.0, h: 20.0, rotation: 0.0 });
+        s.objects.push(SlideObject::Circle { x: 50.0, y: 50.0, r: 10.0, rotation: 0.0 });
+        let c = DecksController::new(vec![s], vec![]);
+
+        c.z_order_object(0, 0, ZOrderOp::BringToFront);
+        assert!(matches!(c.slides.borrow()[0].objects[1], SlideObject::Rect { .. }));
+        assert!(c.undo());
+        assert!(matches!(c.slides.borrow()[0].objects[0], SlideObject::Rect { .. }));
     }
 }
