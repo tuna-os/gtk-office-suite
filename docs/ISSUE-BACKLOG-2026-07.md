@@ -1,12 +1,18 @@
 # Scoped Issue Backlog
 
-Date: 2026-07-21  
+Date: 2026-08-11 (progress snapshot)
 Milestone: [Product quality and daily-driver readiness](https://github.com/tuna-os/gtk-office-suite/milestone/2)
 
 This is the execution index for the
 [Product and Quality Roadmap](PRODUCT-QUALITY-ROADMAP-2026-07.md). Issues are
 ordered by dependency, not by issue number alone. The coordinating issue is
 [#95](https://github.com/tuna-os/gtk-office-suite/issues/95).
+
+## Progress snapshot — 2026-08-11
+
+Phase 0 truth/data-safety work is complete: [#96](https://github.com/tuna-os/gtk-office-suite/issues/96) through [#102](https://github.com/tuna-os/gtk-office-suite/issues/102) are closed. Tables' first daily-driver authoring slice, [#113](https://github.com/tuna-os/gtk-office-suite/issues/113), is also closed.
+
+The next gate is the shared proving layer: [#103](https://github.com/tuna-os/gtk-office-suite/issues/103) for GTK-free canonical controllers, followed by [#104](https://github.com/tuna-os/gtk-office-suite/issues/104) for deterministic GUI journeys and state snapshots. [#105](https://github.com/tuna-os/gtk-office-suite/issues/105) and [#108](https://github.com/tuna-os/gtk-office-suite/issues/108) remain release-confidence dependencies; feature-depth issues should not claim completion without those evidence layers.
 
 ## Phase 0 — Truth and data safety
 
