@@ -70,4 +70,13 @@ mod tests {
     fn unknown_action_has_no_label() {
         assert_eq!(label_for("app.does-not-exist"), None);
     }
+
+    #[test]
+    fn labeled_actions_preserve_registration_order() {
+        register_labels(&[("app.zz-last", "Z"), ("app.aa-first", "A")]);
+        let names: Vec<String> = labeled_actions().into_iter().map(|e| e.name).collect();
+        let pz = names.iter().position(|n| n == "app.zz-last").unwrap();
+        let pa = names.iter().position(|n| n == "app.aa-first").unwrap();
+        assert!(pz < pa, "registration order must be preserved: {names:?}");
+    }
 }

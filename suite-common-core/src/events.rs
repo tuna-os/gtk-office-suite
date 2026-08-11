@@ -57,7 +57,7 @@ pub enum Hint {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::cell::Cell;
+    use std::cell::{Cell, RefCell};
 
     struct FlagListener { called: Rc<Cell<bool>> }
     impl Listener<Hint> for FlagListener {
@@ -80,5 +80,40 @@ mod tests {
     fn test_broadcast_no_listeners_does_not_panic() {
         let bc: Broadcaster<Hint> = Broadcaster::new();
         bc.broadcast(Hint::UndoStateChanged { can_undo: true, can_redo: false });
+    }
+
+    #[test]
+    fn broadcast_delivers_hint_to_all_listeners() {
+        struct Recorder {
+            hints: Rc<RefCell<Vec<Hint>>>,
+        }
+        impl Listener<Hint> for Recorder {
+            fn on_event(&self, hint: &Hint) {
+                self.hints.borrow_mut().push(hint.clone());
+            }
+        }
+
+        let bc = Broadcaster::new();
+        let a = Rc::new(RefCell::new(Vec::new()));
+        let b = Rc::new(RefCell::new(Vec::new()));
+        bc.listen(Rc::new(Recorder { hints: a.clone() }));
+        bc.listen(Rc::new(Recorder { hints: b.clone() }));
+
+        bc.broadcast(Hint::CellSelected {
+            sheet: 1,
+            row: 2,
+            col: 3,
+        });
+        assert_eq!(a.borrow().len(), 1, "every listener must be notified");
+        assert_eq!(b.borrow().len(), 1, "every listener must be notified");
+        let delivered = a.borrow()[0].clone();
+        match delivered {
+            Hint::CellSelected { sheet, row, col } => {
+                assert_eq!(sheet, 1);
+                assert_eq!(row, 2);
+                assert_eq!(col, 3);
+            }
+            other => panic!("wrong hint delivered: {other:?}"),
+        }
     }
 }
