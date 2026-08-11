@@ -383,3 +383,4 @@ pub fn make_spell_menu(word: &str, suggestions: &[String]) -> gio::Menu {
     menu.append_section(None, &act);
     menu
 }
+
