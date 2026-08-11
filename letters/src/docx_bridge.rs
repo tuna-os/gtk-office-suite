@@ -205,14 +205,6 @@ mod tests {
         *INIT.get_or_init(|| gtk::init().is_ok())
     }
 
-    /// Skip the test (early return) when no display is available; the
-    /// gui-tests/smoke job runs these under Xvfb where they must pass.
-    fn skip_if_no_display() {
-        if !ensure_gtk_initialized() {
-            eprintln!("skipping: no display for GTK");
-        }
-    }
-
     #[test]
     fn split_paragraphs_tracks_offsets_and_detects_style_tags() {
         if !ensure_gtk_initialized() {
