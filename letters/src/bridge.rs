@@ -393,6 +393,67 @@ mod tests {
     use super::*;
     use letters_core::model::StylePatch;
 
+    // ── line-spacing tag mapping (pure, no GTK) ──────────────────────
+
+    #[test]
+    fn line_spacing_tag_name_maps_known_values() {
+        // Default single spacing renders tag-less.
+        assert_eq!(line_spacing_tag_name(1.0), None);
+        assert_eq!(line_spacing_tag_name(1.15), Some("line-spacing-1.15"));
+        assert_eq!(line_spacing_tag_name(1.5), Some("line-spacing-1.5"));
+        assert_eq!(line_spacing_tag_name(2.0), Some("line-spacing-2.0"));
+    }
+
+    #[test]
+    fn line_spacing_tag_name_tolerates_fp_drift() {
+        // Callers pass f32 values from GSettings/Document; small
+        // representation error must still hit the intended tag.
+        let near_115 = 1.15f32 - f32::EPSILON * 4.0;
+        let near_15 = 1.5f32 + f32::EPSILON * 4.0;
+        let near_20 = 2.0f32 - f32::EPSILON * 4.0;
+        assert_eq!(line_spacing_tag_name(near_115), Some("line-spacing-1.15"));
+        assert_eq!(line_spacing_tag_name(near_15), Some("line-spacing-1.5"));
+        assert_eq!(line_spacing_tag_name(near_20), Some("line-spacing-2.0"));
+    }
+
+    #[test]
+    fn line_spacing_tag_name_unknown_returns_none() {
+        assert_eq!(line_spacing_tag_name(1.3), None);
+        assert_eq!(line_spacing_tag_name(3.0), None);
+        assert_eq!(line_spacing_tag_name(-1.0), None);
+    }
+
+    #[test]
+    fn line_spacing_from_tag_name_maps_known_values() {
+        for &tag in &[
+            "line-spacing-1.0",
+            "line-spacing-1.15",
+            "line-spacing-1.5",
+            "line-spacing-2.0",
+        ] {
+            let value = line_spacing_from_tag_name(tag);
+            assert!(value.is_some(), "{tag} should map to a spacing");
+            // tag → value → tag must be stable; the default 1.0 spacing is
+            // the one documented case that renders tag-less.
+            let back = line_spacing_tag_name(value.unwrap());
+            let expected = if tag == "line-spacing-1.0" {
+                None
+            } else {
+                Some(tag)
+            };
+            assert_eq!(back, expected, "round trip for {tag}");
+        }
+    }
+
+    #[test]
+    fn line_spacing_from_tag_name_unknown_returns_none() {
+        assert_eq!(line_spacing_from_tag_name("line-spacing-1.3"), None);
+        assert_eq!(line_spacing_from_tag_name("line-spacing-2.5"), None);
+        assert_eq!(line_spacing_from_tag_name(""), None);
+        assert_eq!(line_spacing_from_tag_name("bold"), None);
+        assert_eq!(line_spacing_from_tag_name("line-spacing"), None);
+    }
+
     /// Run a GTK-dependent closure on GTK's single main thread. GTK objects may
     /// only be created from the thread that called `gtk::init`, and `gtk::init`
     /// succeeds at most once per process, so all GTK tests share one exclusive

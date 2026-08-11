@@ -2493,3 +2493,84 @@ fn apply_md_pattern(buf: &gtk::TextBuffer, before: &str, delimiter: &str, inner:
     buf.insert(&mut space_pos, " ");
     buf.end_user_action();
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // ── crash-recovery doc ids (pure, no GTK) ─────────────────────────
+
+    #[test]
+    fn next_doc_id_is_unique() {
+        let a = next_doc_id();
+        let b = next_doc_id();
+        let c = next_doc_id();
+        assert_ne!(a, b);
+        assert_ne!(b, c);
+        assert_ne!(a, c);
+    }
+
+    #[test]
+    fn next_doc_id_has_pid_prefix_and_incrementing_counter() {
+        let prefix = format!("{}-", std::process::id());
+        let a = next_doc_id();
+        let b = next_doc_id();
+        assert!(a.starts_with(&prefix), "unexpected id {a}");
+        assert!(b.starts_with(&prefix), "unexpected id {b}");
+        let n_a: u64 = a.rsplit('-').next().unwrap().parse().unwrap();
+        let n_b: u64 = b.rsplit('-').next().unwrap().parse().unwrap();
+        assert_eq!(n_b, n_a + 1);
+    }
+
+    #[test]
+    fn autosave_state_dir_points_into_letters_subdir() {
+        let dir = autosave_state_dir();
+        assert_eq!(dir.file_name().and_then(|s| s.to_str()), Some("letters"));
+    }
+
+    #[test]
+    fn autosave_state_dir_env_fallbacks() {
+        // One test so the process-global env mutations below never race
+        // another test's view of HOME/XDG_STATE_HOME (cargo runs the tests
+        // of a binary in one process). Restored on drop even if an assert
+        // fails, so later tests keep a clean environment.
+        struct Restore(Option<std::ffi::OsString>, Option<std::ffi::OsString>);
+        impl Drop for Restore {
+            fn drop(&mut self) {
+                match &self.0 {
+                    Some(v) => std::env::set_var("XDG_STATE_HOME", v),
+                    None => std::env::remove_var("XDG_STATE_HOME"),
+                }
+                match &self.1 {
+                    Some(v) => std::env::set_var("HOME", v),
+                    None => std::env::remove_var("HOME"),
+                }
+            }
+        }
+        let _restore = Restore(std::env::var_os("XDG_STATE_HOME"), std::env::var_os("HOME"));
+
+        // XDG_STATE_HOME wins when set.
+        std::env::set_var("XDG_STATE_HOME", "/custom/state");
+        std::env::set_var("HOME", "/custom/home");
+        assert_eq!(
+            autosave_state_dir(),
+            std::path::PathBuf::from("/custom/state/letters")
+        );
+
+        // Falls back to $HOME/.local/state without XDG_STATE_HOME.
+        std::env::remove_var("XDG_STATE_HOME");
+        std::env::set_var("HOME", "/custom/home");
+        assert_eq!(
+            autosave_state_dir(),
+            std::path::PathBuf::from("/custom/home/.local/state/letters")
+        );
+
+        // Last resort is /tmp when neither is set.
+        std::env::remove_var("XDG_STATE_HOME");
+        std::env::remove_var("HOME");
+        assert_eq!(
+            autosave_state_dir(),
+            std::path::PathBuf::from("/tmp/letters")
+        );
+    }
+}
