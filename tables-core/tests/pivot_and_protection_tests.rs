@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 use tables_core::controller::WorkbookController;
-use tables_core::sheet::{CellProtection, PivotAggFunc, PivotDataField, PivotField, PivotTableSpec};
+use tables_core::sheet::{PivotAggFunc, PivotDataField, PivotField, PivotTableSpec};
 
 #[test]
 fn test_pivot_table_evaluation_and_placement() {

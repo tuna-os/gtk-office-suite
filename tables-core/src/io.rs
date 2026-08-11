@@ -477,7 +477,7 @@ pub fn save_sheets_to_xlsx_bytes(
                 LegendPosition::Bottom => chart.legend().set_position(ChartLegendPosition::Bottom),
                 LegendPosition::Left => chart.legend().set_position(ChartLegendPosition::Left),
                 LegendPosition::Right => chart.legend().set_position(ChartLegendPosition::Right),
-            }
+            };
 
             sheet
                 .insert_chart(ch.anchor.0 as u32, ch.anchor.1 as u16, &chart)
@@ -837,7 +837,7 @@ fn tables_core_default_col_width() -> f64 {
 /// Read embedded charts back from an xlsx (ours or a Calc rewrite).
 /// Best-effort: unknown chart kinds and foreign anchoring are skipped.
 pub fn read_charts_from_xlsx(path: &str) -> Vec<crate::sheet::ChartSpec> {
-    use crate::sheet::{parse_cell_ref, ChartKind, ChartSpec};
+    use crate::sheet::{parse_cell_ref, ChartKind, ChartSpec, LegendPosition};
     let Ok(f) = std::fs::File::open(path) else {
         return Vec::new();
     };
@@ -943,9 +943,15 @@ pub fn read_charts_from_xlsx(path: &str) -> Vec<crate::sheet::ChartSpec> {
         out.push(ChartSpec {
             kind,
             title,
+            x_axis_title: None,
+            y_axis_title: None,
+            legend_position: LegendPosition::Right,
+            series: Vec::new(),
             cat: cat.unwrap_or(val),
             val,
             anchor: anchors.get(ci).copied().unwrap_or((0, 0)),
+            width_px: 480.0,
+            height_px: 280.0,
         });
     }
     out
@@ -954,7 +960,7 @@ pub fn read_charts_from_xlsx(path: &str) -> Vec<crate::sheet::ChartSpec> {
 #[cfg(test)]
 mod chart_tests {
     use super::*;
-    use crate::sheet::{ChartKind, ChartSpec};
+    use crate::sheet::{ChartKind, ChartSpec, LegendPosition};
 
     #[test]
     fn chart_round_trips_through_xlsx() {
@@ -971,9 +977,15 @@ mod chart_tests {
         sh.charts.push(ChartSpec {
             kind: ChartKind::Bar,
             title: "Regions".into(),
+            x_axis_title: None,
+            y_axis_title: None,
+            legend_position: LegendPosition::Right,
+            series: Vec::new(),
             cat: (1, 0, 3),
             val: (1, 1, 3),
             anchor: (5, 3),
+            width_px: 480.0,
+            height_px: 280.0,
         });
         save_sheets_to_xlsx(path.to_str().unwrap(), &[sh]).unwrap();
         let charts = read_charts_from_xlsx(path.to_str().unwrap());
@@ -997,9 +1009,15 @@ mod chart_tests {
             sh.charts.push(ChartSpec {
                 kind,
                 title: String::new(),
+                x_axis_title: None,
+                y_axis_title: None,
+                legend_position: LegendPosition::Right,
+                series: Vec::new(),
                 cat: (0, 0, 0),
                 val: (0, 1, 0),
                 anchor: (2, 0),
+                width_px: 480.0,
+                height_px: 280.0,
             });
             save_sheets_to_xlsx(path.to_str().unwrap(), &[sh]).unwrap();
             let charts = read_charts_from_xlsx(path.to_str().unwrap());
