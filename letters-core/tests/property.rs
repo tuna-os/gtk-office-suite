@@ -124,4 +124,19 @@ proptest! {
             let _ = doc.style_at(offset);
         }
     }
+
+    /// Unicode must survive the persistence boundary as well as in-memory
+    /// edits: combining marks, emoji, CJK, and RTL scalar values all belong in
+    /// the regression corpus.
+    #[test]
+    fn docx_round_trip_preserves_unicode_text(text in unicode_text_strategy()) {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("unicode.docx");
+        let doc = Document::from_plain_text(&text);
+
+        letters_core::docx::write(&doc, path.to_str().unwrap()).unwrap();
+        let read_back = letters_core::docx::read(path.to_str().unwrap()).unwrap();
+
+        prop_assert_eq!(read_back.to_plain_text(), doc.to_plain_text());
+    }
 }

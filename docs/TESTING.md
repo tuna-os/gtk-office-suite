@@ -90,5 +90,12 @@ Rules of engagement:
 - Above ~70 hand-written tests, breadth comes from the LO-authored
   corpora (`lo_parity.rs`), which are ratcheted and cover many features
   per file at lower CI cost.
+
 - Display-precision differences (Calc CSV rounding, Impress soft line
   breaks) are normalized in the test, not in the engines.
+
+The formula oracle compares supported formula results after LibreOffice
+recalculation. Exact comparisons are used for text, integers, and booleans;
+floating-point results use an absolute tolerance of `0.01` to avoid treating
+formatting or implementation rounding as a functional mismatch. Importer
+fuzzing separately exercises malformed ZIP/XML inputs; see [`fuzz/README.md`](../fuzz/README.md).

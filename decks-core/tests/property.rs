@@ -23,6 +23,18 @@ fn text_strategy() -> impl Strategy<Value = String> {
     prop::collection::vec("[a-z]{1,8}", 1..5).prop_map(|words| words.join(" "))
 }
 
+fn unicode_text_strategy() -> impl Strategy<Value = String> {
+    prop::collection::vec(
+        prop_oneof![
+            Just('a'), Just('\u{0301}'),
+            prop::char::range('\u{4e00}', '\u{4eff}'),
+            prop::char::range('\u{05d0}', '\u{05ea}'),
+            prop::char::range('\u{1f600}', '\u{1f64f}'),
+        ],
+        1..12,
+    ).prop_map(|chars| chars.into_iter().collect())
+}
+
 fn slide_strategy() -> impl Strategy<Value = Vec<String>> {
     prop::collection::vec(text_strategy(), 0..3)
 }
@@ -76,5 +88,22 @@ proptest! {
             }).collect();
             prop_assert_eq!(actual_texts, expected_texts);
         }
+    }
+
+    #[test]
+    fn pptx_round_trip_preserves_unicode_text(
+        texts in prop::collection::vec(unicode_text_strategy(), 1..4)
+    ) {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("unicode.pptx");
+        let deck = build_deck(&[texts.clone()]);
+
+        write_pptx(path.to_str().unwrap(), &deck).unwrap();
+        let read_back = read_pptx(path.to_str().unwrap()).unwrap();
+        let actual: Vec<&str> = read_back.slides[0].objects.iter().filter_map(|o| match o {
+            SlideObject::TextBox { text, .. } => Some(text.as_str()),
+            _ => None,
+        }).collect();
+        prop_assert_eq!(actual, texts.iter().map(String::as_str).collect::<Vec<_>>());
     }
 }
