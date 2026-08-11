@@ -113,4 +113,57 @@ mod tests {
         assert!(out.contains("height: 210"));
         assert!(out.contains("#table("), "table body still present after the directive");
     }
+
+    #[test]
+    fn typst_table_emits_cells_in_row_major_order() {
+        let mut e = TablesEngine::new(2, 2).unwrap();
+        e.set_cell_text(0, 0, "r1c1");
+        e.set_cell_text(0, 1, "r1c2");
+        e.set_cell_text(1, 0, "r2c1");
+        e.set_cell_text(1, 1, "r2c2");
+        let out = to_typst(&e);
+        // Cells stay in row-major order even though the column count is
+        // currently wrong (see issue #176).
+        assert!(
+            out.contains("[r1c1], [r1c2],"),
+            "row 1 not row-major: {out}"
+        );
+        assert!(
+            out.contains("[r2c1], [r2c2],"),
+            "row 2 not row-major: {out}"
+        );
+    }
+
+    #[test]
+    fn typst_table_single_cell_grid_is_a_valid_table() {
+        let mut e = TablesEngine::new(1, 1).unwrap();
+        e.set_cell_text(0, 0, "solo");
+        let out = to_typst(&e);
+        assert!(out.starts_with("#table("), "missing table header: {out}");
+        assert!(out.contains("[solo]"), "cell missing: {out}");
+        assert!(
+            out.trim_end().ends_with(')'),
+            "missing closing paren: {out}"
+        );
+    }
+
+    /// Regression pin for #176: multi-column grids must declare the real
+    /// column count. Currently \`typst_table\` hardcodes \`columns: 1\`, so
+    /// this assertion fails — the \`#[should_panic]\` marker keeps the suite
+    /// green and must be removed when the one-line fix lands (same pattern
+    /// as the Tavern#73 brew_env regression test).
+    #[test]
+    #[should_panic(expected = "typst export bug #176: multi-column grid emitted as single column")]
+    fn typst_table_multi_column_grid_declares_real_column_count() {
+        let mut e = TablesEngine::new(2, 3).unwrap();
+        e.set_cell_text(0, 0, "r1c1");
+        e.set_cell_text(0, 1, "r1c2");
+        e.set_cell_text(0, 2, "r1c3");
+        e.set_cell_text(1, 0, "r2c1");
+        let out = to_typst(&e);
+        assert!(
+            out.contains("columns: 3"),
+            "typst export bug #176: multi-column grid emitted as single column — got {out:?}"
+        );
+    }
 }
