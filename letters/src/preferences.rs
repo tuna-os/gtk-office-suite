@@ -130,3 +130,42 @@ impl LettersPreferences {
         LettersPreferences { window: prefs }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::{format_index_for_extension, FORMAT_EXTENSIONS, FORMAT_NAMES};
+
+    #[test]
+    fn known_extensions_map_to_stable_indices() {
+        // Indices are persisted as the `default-format` GSettings string —
+        // they must stay aligned with FORMAT_NAMES order.
+        assert_eq!(format_index_for_extension("odt"), 0);
+        assert_eq!(format_index_for_extension("docx"), 1);
+        assert_eq!(format_index_for_extension("md"), 2);
+        assert_eq!(format_index_for_extension("html"), 3);
+        assert_eq!(format_index_for_extension("txt"), 4);
+        assert_eq!(format_index_for_extension("rtf"), 5);
+    }
+
+    #[test]
+    fn unknown_extension_falls_back_to_first_format() {
+        assert_eq!(format_index_for_extension("pdf"), 0);
+        assert_eq!(format_index_for_extension(""), 0);
+    }
+
+    #[test]
+    fn matching_is_exact_and_case_sensitive() {
+        // Persisted values are lowercase; a shifted case must NOT silently
+        // map to a different index (which would reorder the default format).
+        assert_eq!(format_index_for_extension("DOCX"), 0);
+        assert_eq!(format_index_for_extension("MD"), 0);
+        assert_eq!(format_index_for_extension(" ODT"), 0);
+    }
+
+    #[test]
+    fn format_tables_are_parallel() {
+        // The two consts are documented as 1:1 — index into either with the
+        // same selection index.
+        assert_eq!(FORMAT_NAMES.len(), FORMAT_EXTENSIONS.len());
+    }
+}
