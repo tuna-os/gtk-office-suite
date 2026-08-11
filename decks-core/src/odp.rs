@@ -667,4 +667,66 @@ mod tests {
         assert!(matches!(&rt.slides[0].objects[0],
             SlideObject::TextBox { text, .. } if text == "line one\nline two"));
     }
+    // ── Pure helpers ─────────────────────────────────────────────────────
+
+    #[test]
+    fn esc_escapes_xml_specials() {
+        assert_eq!(esc("a&b<c>d\"e"), "a&amp;b&lt;c&gt;d&quot;e");
+        assert_eq!(esc("plain"), "plain");
+        assert_eq!(esc(""), "");
+    }
+
+    #[test]
+    fn text_style_emits_attribute_per_flag() {
+        let st = RunStyle {
+            bold: true,
+            italic: true,
+            underline: true,
+            strikethrough: true,
+            ..Default::default()
+        };
+        let out = text_style(&st);
+        assert!(out.contains("fo:font-weight=\"bold\""), "got {out}");
+        assert!(out.contains("fo:font-style=\"italic\""), "got {out}");
+        assert!(
+            out.contains("style:text-underline-style=\"solid\""),
+            "got {out}"
+        );
+        assert!(
+            out.contains("style:text-line-through-style=\"solid\""),
+            "got {out}"
+        );
+    }
+
+    #[test]
+    fn text_style_size_color_and_default() {
+        assert_eq!(text_style(&RunStyle::default()), "");
+        let st = RunStyle {
+            font_size_hp: Some(24), // 24 half-points = 12pt
+            color: Some("ff0000".into()),
+            ..Default::default()
+        };
+        let out = text_style(&st);
+        assert!(out.contains("fo:font-size=\"12pt\""), "got {out}");
+        assert!(out.contains("fo:color=\"#ff0000\""), "got {out}");
+    }
+
+    #[test]
+    fn parse_length_pt_converts_supported_units() {
+        assert_eq!(parse_length_pt("12pt"), Some(12.0));
+        assert!((parse_length_pt("1cm").unwrap() - 72.0 / 2.54).abs() < 1e-9);
+        assert!((parse_length_pt("10mm").unwrap() - 72.0 / 25.4 * 10.0).abs() < 1e-9);
+        assert_eq!(parse_length_pt("1in"), Some(72.0));
+        // Whitespace is trimmed before parsing.
+        assert!((parse_length_pt(" 2.5cm ").unwrap() - 2.5 * 72.0 / 2.54).abs() < 1e-9);
+    }
+
+    #[test]
+    fn parse_length_pt_rejects_garbage() {
+        assert_eq!(parse_length_pt("12px"), None); // unknown unit
+        assert_eq!(parse_length_pt("abc"), None); // non-numeric
+        assert_eq!(parse_length_pt("pt"), None); // missing number
+        assert_eq!(parse_length_pt(""), None);
+        assert_eq!(parse_length_pt("1.5CM"), None); // units are case-sensitive
+    }
 }
