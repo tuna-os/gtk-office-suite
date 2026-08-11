@@ -124,3 +124,52 @@ fn main() {
     });
     suite.run();
 }
+
+// ─── Dead-module drift guard (tuna-os/gtk-office-suite#196) ─────────────────
+// letters/src/export.rs was never declared as a module, so its 14 #[cfg(test)]
+// tests silently never compiled and provided zero coverage. This guard fails
+// CI if any new src/*.rs file is added without a matching `mod <name>;`
+// declaration in this file, so dead files can no longer accumulate silently.
+#[cfg(test)]
+mod dead_module_guard {
+    use std::collections::HashSet;
+    use std::path::Path;
+
+    #[test]
+    fn every_src_rs_file_is_declared_as_a_module() {
+        // Modules known to be dead but not yet removed. export.rs duplicates
+        // engine.rs's compiled Typst/PDF export (issue #196); it is
+        // allowlisted pending the maintainer's wire-or-delete decision so this
+        // guard still catches any NEW undeclared module.
+        const KNOWN_UNDECLARED: &[&str] = &["export"];
+
+        let src_dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("src");
+        let declared: HashSet<String> = include_str!("main.rs")
+            .lines()
+            .filter_map(|line| line.trim().strip_prefix("mod "))
+            .filter_map(|rest| rest.split_whitespace().next())
+            .map(|name| name.trim_end_matches(';').to_string())
+            .collect();
+
+        let undeclared: Vec<String> = std::fs::read_dir(&src_dir)
+            .expect("letters/src should be readable")
+            .filter_map(Result::ok)
+            .map(|entry| entry.path())
+            .filter(|path| path.extension().is_some_and(|ext| ext == "rs"))
+            .filter_map(|path| {
+                let stem = path.file_stem()?.to_string_lossy().into_owned();
+                if stem == "main" || declared.contains(&stem) || KNOWN_UNDECLARED.contains(&stem.as_str()) {
+                    None
+                } else {
+                    Some(stem)
+                }
+            })
+            .collect();
+
+        assert!(
+            undeclared.is_empty(),
+            "letters/src/*.rs files without a `mod <name>;` declaration in main.rs: {undeclared:?}. \
+             Add the module declaration (wiring the code into the build) or delete the dead file."
+        );
+    }
+}
