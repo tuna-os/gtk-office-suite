@@ -1196,9 +1196,15 @@ impl TablesWindow {
                         let chart = ChartSpec {
                             kind,
                             title: String::new(),
+                            x_axis_title: None,
+                            y_axis_title: None,
+                            legend_position: tables_core::sheet::LegendPosition::Right,
+                            series: Vec::new(),
                             cat: (first, 0, last),
                             val: (first, col, last),
                             anchor: (last + 2, col),
+                            width_px: 480.0,
+                            height_px: 280.0,
                         };
                         ctl.borrow_mut().mutate_sheet("Insert Chart", move |sheet| {
                             sheet.charts.push(chart);
