@@ -205,6 +205,8 @@ mod tests {
         *INIT.get_or_init(|| gtk::init().is_ok())
     }
 
+    /// Skip the test (early return) when no display is available; the
+    /// gui-tests/smoke job runs these under Xvfb where they must pass.
     fn skip_if_no_display() {
         if !ensure_gtk_initialized() {
             eprintln!("skipping: no display for GTK");
@@ -213,7 +215,10 @@ mod tests {
 
     #[test]
     fn split_paragraphs_tracks_offsets_and_detects_style_tags() {
-        skip_if_no_display();
+        if !ensure_gtk_initialized() {
+            eprintln!("skipping: no display for GTK");
+            return;
+        }
         let buf = gtk::TextBuffer::new(None);
         buf.set_text("line1\nline2");
 
@@ -237,7 +242,10 @@ mod tests {
 
     #[test]
     fn split_paragraphs_detects_custom_style_prefix() {
-        skip_if_no_display();
+        if !ensure_gtk_initialized() {
+            eprintln!("skipping: no display for GTK");
+            return;
+        }
         let buf = gtk::TextBuffer::new(None);
         buf.set_text("custom-styled");
         let table = buf.tag_table();
@@ -254,7 +262,10 @@ mod tests {
 
     #[test]
     fn buffer_round_trips_to_docx_and_back() {
-        skip_if_no_display();
+        if !ensure_gtk_initialized() {
+            eprintln!("skipping: no display for GTK");
+            return;
+        }
         let buf = gtk::TextBuffer::new(None);
         buf.set_text("Hello docx bridge\nSecond paragraph");
 
