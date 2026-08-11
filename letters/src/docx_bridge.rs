@@ -175,6 +175,47 @@ mod tests {
     use super::{split_paragraphs, tag_to_style_id, write_buffer_to_docx_with_layout};
     use gtk4::{self as gtk, prelude::*};
 
+    /// Run a GTK-dependent closure on GTK's single main thread. GTK objects may
+    /// only be created from the thread that called `gtk::init`, and `gtk::init`
+    /// succeeds at most once per process, so all GTK tests share one exclusive
+    /// worker thread. When GTK cannot initialize (headless CI without a
+    /// display) this returns `false` and the caller skips, rather than
+    /// panicking like `#[gtk::test]` does.
+    fn gtk_test<F>(f: F) -> bool
+    where
+        F: FnOnce() + Send + 'static,
+    {
+        use std::panic;
+        use std::sync::mpsc;
+        use std::sync::OnceLock;
+
+        static MAIN: OnceLock<Option<gtk::glib::ThreadPool>> = OnceLock::new();
+        let pool = MAIN
+            .get_or_init(|| {
+                let pool = gtk::glib::ThreadPool::exclusive(1).ok()?;
+                let (tx, rx) = mpsc::channel();
+                pool.push(move || {
+                    let _ = tx.send(gtk::init().is_ok());
+                })
+                .ok()?;
+                match rx.recv().ok()? {
+                    true => Some(pool),
+                    false => None,
+                }
+            })
+            .as_ref();
+        let Some(pool) = pool else {
+            eprintln!("skipping GTK test: no display");
+            return false;
+        };
+        let (tx, rx) = mpsc::sync_channel(1);
+        let _ = pool.push(move || {
+            let _ = tx.send(panic::catch_unwind(f));
+        });
+        let _ = rx.recv();
+        true
+    }
+
     #[test]
     fn tag_to_style_id_maps_all_heading_and_special_tags() {
         assert_eq!(tag_to_style_id("h1"), "Heading1");
@@ -196,63 +237,75 @@ mod tests {
         assert_eq!(tag_to_style_id(""), "");
     }
 
-    #[gtk::test]
+    #[test]
     fn split_paragraphs_tracks_offsets_and_detects_style_tags() {
-        let buf = gtk::TextBuffer::new(None);
-        buf.set_text("line1\nline2");
+        if !gtk_test(|| {
+            let buf = gtk::TextBuffer::new(None);
+            buf.set_text("line1\nline2");
 
-        // Tag the first line as h1.
-        let table = buf.tag_table();
-        let h1 = gtk::TextTag::builder().name("h1").build();
-        table.add(&h1);
-        let start = buf.start_iter();
-        let end = buf.iter_at_offset(5);
-        buf.apply_tag(&h1, &start, &end);
-        
-        let paras = split_paragraphs(&buf, "line1\nline2");
-        assert_eq!(paras.len(), 2);
-        assert_eq!(paras[0].text, "line1");
-        assert_eq!(paras[0].offset, 0);
-        assert_eq!(paras[0].style_id, "Heading1");
-        assert_eq!(paras[1].text, "line2");
-        assert_eq!(paras[1].offset, 6); // 5 bytes + newline
-        assert_eq!(paras[1].style_id, "");
+            // Tag the first line as h1.
+            let table = buf.tag_table();
+            let h1 = gtk::TextTag::builder().name("h1").build();
+            table.add(&h1);
+            let start = buf.start_iter();
+            let end = buf.iter_at_offset(5);
+            buf.apply_tag(&h1, &start, &end);
+
+            let paras = split_paragraphs(&buf, "line1\nline2");
+            assert_eq!(paras.len(), 2);
+            assert_eq!(paras[0].text, "line1");
+            assert_eq!(paras[0].offset, 0);
+            assert_eq!(paras[0].style_id, "Heading1");
+            assert_eq!(paras[1].text, "line2");
+            assert_eq!(paras[1].offset, 6); // 5 bytes + newline
+            assert_eq!(paras[1].style_id, "");
+        }) {
+            return;
+        }
     }
 
-    #[gtk::test]
+    #[test]
     fn split_paragraphs_detects_custom_style_prefix() {
-        let buf = gtk::TextBuffer::new(None);
-        buf.set_text("custom-styled");
-        let table = buf.tag_table();
-        let tag = gtk::TextTag::builder().name("custom-foo").build();
-        table.add(&tag);
-        let start = buf.start_iter();
-        let end = buf.end_iter();
-        buf.apply_tag(&tag, &start, &end);
+        if !gtk_test(|| {
+            let buf = gtk::TextBuffer::new(None);
+            buf.set_text("custom-styled");
+            let table = buf.tag_table();
+            let tag = gtk::TextTag::builder().name("custom-foo").build();
+            table.add(&tag);
+            let start = buf.start_iter();
+            let end = buf.end_iter();
+            buf.apply_tag(&tag, &start, &end);
 
-        let paras = split_paragraphs(&buf, "custom-styled");
-        assert_eq!(paras.len(), 1);
-        assert_eq!(paras[0].style_id, "foo"); // "custom-" prefix stripped
+            let paras = split_paragraphs(&buf, "custom-styled");
+            assert_eq!(paras.len(), 1);
+            assert_eq!(paras[0].style_id, "foo"); // "custom-" prefix stripped
+        }) {
+            return;
+        }
     }
 
-    #[gtk::test]
+    #[test]
     fn buffer_round_trips_to_docx_and_back() {
-        let buf = gtk::TextBuffer::new(None);
-        buf.set_text("Hello docx bridge\nSecond paragraph");
+        if !gtk_test(|| {
+            let buf = gtk::TextBuffer::new(None);
+            buf.set_text("Hello docx bridge\nSecond paragraph");
 
-        let path = std::env::temp_dir()
-            .join(format!("letters-docx-bridge-{}.docx", std::process::id()));
-        let path_str = path.to_string_lossy().to_string();
+            let path = std::env::temp_dir()
+                .join(format!("letters-docx-bridge-{}.docx", std::process::id()));
+            let path_str = path.to_string_lossy().to_string();
 
-        let res = write_buffer_to_docx_with_layout(&path_str, &buf, None, &[]);
-        assert!(res.is_ok(), "write_buffer_to_docx_with_layout failed: {:?}", res.err());
+            let res = write_buffer_to_docx_with_layout(&path_str, &buf, None, &[]);
+            assert!(res.is_ok(), "write_buffer_to_docx_with_layout failed: {:?}", res.err());
 
-        let read_doc = letters_core::docx::read(&path_str);
-        assert!(read_doc.is_ok(), "read back failed: {:?}", read_doc.err());
-        let plain = read_doc.unwrap().to_plain_text();
-        assert!(plain.contains("Hello docx bridge"), "missing first paragraph in {plain:?}");
-        assert!(plain.contains("Second paragraph"), "missing second paragraph in {plain:?}");
+            let read_doc = letters_core::docx::read(&path_str);
+            assert!(read_doc.is_ok(), "read back failed: {:?}", read_doc.err());
+            let plain = read_doc.unwrap().to_plain_text();
+            assert!(plain.contains("Hello docx bridge"), "missing first paragraph in {plain:?}");
+            assert!(plain.contains("Second paragraph"), "missing second paragraph in {plain:?}");
 
-        let _ = std::fs::remove_file(&path_str);
+            let _ = std::fs::remove_file(&path_str);
+        }) {
+            return;
+        }
     }
 }
