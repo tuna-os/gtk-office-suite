@@ -1,6 +1,6 @@
 # Product and Quality Roadmap
 
-Date: 2026-07-21
+Date: 2026-08-11 (progress snapshot)
 
 Execution is tracked in the [scoped issue backlog](ISSUE-BACKLOG-2026-07.md)
 and coordinating [GitHub issue #95](https://github.com/tuna-os/gtk-office-suite/issues/95).
@@ -29,35 +29,25 @@ GNOME interaction design, state management, and adapters around those tools.
 
 ## Current assessment
 
-The core format test suite is healthy: `cargo test --workspace --all-targets`
-passes, including the installed LibreOffice oracle tests. The run on 2026-07-21
-took about four minutes from a cold dependency build. It also emitted a large
-warning set, including dead GUI fields and deprecated GTK APIs.
+The core format test suite remains healthy: `cargo test --workspace --all-targets`
+passes, including the installed LibreOffice oracle tests. That result is useful
+evidence for the engines, but it is not a daily-driver signoff by itself.
 
-Product confidence is lower than the green core suite suggests:
+The milestone now has a separated progress signal:
 
-1. Tables' live workbook and undo manager own different `SheetState` values.
-   GUI edits never execute the table undo commands, so the registered undo and
-   redo actions operate on a detached snapshot.
-2. Tables presents multiple sheets but uses one calculation engine. Switching
-   sheets synchronizes the selected sheet from that shared engine, allowing
-   one sheet's data to overwrite another.
-3. Tables does not track dirty state or confirm before closing. Decks has the
-   same data-loss risk. Letters has the only close guard.
-4. Decks installs imported slides on open but does not install the imported
-   master collection, losing master content in the live editor and later save.
-5. Most preferences are inert controls. Tables and Decks ignore their settings
-   argument; in Letters, only spell checking is persisted. Auto-save controls
-   exist without an auto-save implementation.
-6. Letters' pagination measures the buffer as one unstyled Pango layout,
-   estimates a uniform line height, and splits pages using line-derived byte
-   offsets. It is not yet a WYSIWYG pagination/layout engine.
-7. Tables starts at 100 rows by 26 columns, truncates displayed cell text to 14
-   characters, uses hard-coded light colors, and computes its first visible
-   column using the default width even after columns are resized.
-8. The large window modules (`letters` 2,181 lines, `tables` 1,467, `decks`
-   1,312) mix state, actions, dialogs, rendering, and persistence. This makes
-   integration defects easy to introduce and difficult to test without a GUI.
+| Area | Current evidence | Coordination state |
+|---|---|---|
+| Capability reporting | Layered scorecard and validator from [#96](https://github.com/tuna-os/gtk-office-suite/issues/96) | Complete |
+| Tables state safety | Canonical workbook/undo, sheet isolation, and daily-driver authoring from [#97](https://github.com/tuna-os/gtk-office-suite/issues/97), [#98](https://github.com/tuna-os/gtk-office-suite/issues/98), and [#113](https://github.com/tuna-os/gtk-office-suite/issues/113) | Complete; controller extraction remains in [#103](https://github.com/tuna-os/gtk-office-suite/issues/103) |
+| Shared lifecycle | Dirty state, atomic save, close guard, autosave, and recovery from [#99](https://github.com/tuna-os/gtk-office-suite/issues/99) | Complete; GUI journey evidence remains in [#104](https://github.com/tuna-os/gtk-office-suite/issues/104) |
+| Decks state safety | Imported masters and mappings preserved from [#100](https://github.com/tuna-os/gtk-office-suite/issues/100) | Complete; direct manipulation remains in [#115](https://github.com/tuna-os/gtk-office-suite/issues/115) |
+| Preferences and warnings | Preferences are wired and warning debt is gated by [#101](https://github.com/tuna-os/gtk-office-suite/issues/101) and [#102](https://github.com/tuna-os/gtk-office-suite/issues/102) | Complete |
+| User-journey confidence | GUI smoke and core tests exist, but deterministic state snapshots, corpus loss budgets, and published CI capability evidence are still open in [#104](https://github.com/tuna-os/gtk-office-suite/issues/104), [#105](https://github.com/tuna-os/gtk-office-suite/issues/105), and [#108](https://github.com/tuna-os/gtk-office-suite/issues/108) | Next release-blocking foundation |
+
+Known product-depth gaps remain deliberately scoped rather than presented as
+green: styled WYSIWYG pagination in Letters ([#109](https://github.com/tuna-os/gtk-office-suite/issues/109)), scalable Tables storage and performance ([#112](https://github.com/tuna-os/gtk-office-suite/issues/112)), and Decks manipulation/theme workflows ([#115](https://github.com/tuna-os/gtk-office-suite/issues/115), [#116](https://github.com/tuna-os/gtk-office-suite/issues/116)).
+
+The next dependency-ordered move is [#103](https://github.com/tuna-os/gtk-office-suite/issues/103) plus [#104](https://github.com/tuna-os/gtk-office-suite/issues/104): make the canonical controllers and GUI state snapshots the shared proving layer before admitting more editor depth. This keeps the roadmap’s “complete” claims tied to the same actions users invoke.
 
 ## Definition of done
 
