@@ -35,9 +35,14 @@ jobs:
       - name: Validate desktop files, schemas, translations, and AppStream
         run: |
           set -euo pipefail
+          schema_dir="$(mktemp -d)"
           for app in letters tables decks; do
             desktop-file-validate "flatpak/org.tunaos.${app}.desktop"
-            glib-compile-schemas --strict --dry-run "flatpak/org.tunaos.${app}.gschema.xml"
+            # glib-compile-schemas only accepts a directory, so validate each
+            # schema in isolation inside a scratch directory.
+            rm -f "${schema_dir}"/*.gschema.xml
+            cp "flatpak/org.tunaos.${app}.gschema.xml" "${schema_dir}/"
+            glib-compile-schemas --strict --dry-run "${schema_dir}"
             appstreamcli validate --no-net "flatpak/org.tunaos.${app}.metainfo.xml"
           done
           msgfmt --check --check-accelerators=_ -o /dev/null po/gtk-office-suite.pot
