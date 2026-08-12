@@ -11,3 +11,4 @@ pub mod props;
 pub mod style;
 pub mod search;
 pub mod print;
+pub mod recent;

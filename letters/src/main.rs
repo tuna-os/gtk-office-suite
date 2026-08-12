@@ -84,6 +84,7 @@ fn main() {
         std::rc::Rc::new(std::cell::RefCell::new(None));
 
     let s = settings.clone();
+    let recent = suite_common::RecentFiles::new(&s);
     let ws = win_store.clone();
     suite.app.connect_activate(move |gtk_app| {
         // Restore dark mode after GTK init
@@ -117,6 +118,7 @@ fn main() {
         let win = store.as_ref().unwrap();
         for file in files {
             if let Some(path) = file.path() {
+                recent.record(file);
                 win.open_path(&path.to_string_lossy());
             }
         }

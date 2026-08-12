@@ -6,3 +6,4 @@ Icon=org.tunaos.decks
 Terminal=false
 Type=Application
 Categories=Office;
+MimeType=application/vnd.openxmlformats-officedocument.presentationml.presentation;application/vnd.oasis.opendocument.presentation;
