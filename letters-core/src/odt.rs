@@ -14,6 +14,18 @@ use std::io::{Read, Write};
 
 const MIMETYPE: &str = "application/vnd.oasis.opendocument.text";
 
+/// Read an ODT with a structured report and package parts that can be copied
+/// through an unrelated edit.
+pub fn read_with_report(path: &str) -> Result<(Document, suite_common_core::interop::CompatibilityReport, suite_common_core::interop::OpaquePackage), String> {
+    let document = read(path)?;
+    let opaque = suite_common_core::interop::OpaquePackage::capture(path, &["mimetype", "META-INF/manifest.xml", "content.xml", "styles.xml", "settings.xml"])?;
+    let mut report = suite_common_core::interop::CompatibilityReport::new("odt");
+    for name in opaque.part_names() {
+        report.record(suite_common_core::interop::UnsupportedFeature::new("uninterpreted-package-part", "Uninterpreted package part", name, suite_common_core::interop::FeatureDisposition::OpaquePassThrough, "will be copied through on an opaque save"));
+    }
+    Ok((document, report, opaque))
+}
+
 fn unescape_text(t: &BytesText) -> String {
     let decoded = t.decode().unwrap_or_default();
     quick_xml::escape::unescape(&decoded)
@@ -318,6 +330,13 @@ pub fn write(doc: &Document, path: &str) -> Result<(), String> {
     z.write_all(styles_xml(doc).as_bytes()).map_err(|e| e.to_string())?;
     let bytes = z.finish().map_err(|e| e.to_string())?.into_inner();
     suite_common_core::atomic_save::atomic_write_bytes(std::path::Path::new(path), &bytes)
+}
+
+/// Write an ODT while preserving package members captured by
+/// [`read_with_report`].
+pub fn write_with_opaque(doc: &Document, path: &str, opaque: &suite_common_core::interop::OpaquePackage) -> Result<(), String> {
+    write(doc, path)?;
+    opaque.append_to(path)
 }
 
 // ── Reading ──────────────────────────────────────────────────────────

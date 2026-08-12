@@ -84,6 +84,26 @@ pub fn read(path: &str) -> Result<Document, String> {
     })
 }
 
+/// Read a DOCX and retain package members this reader does not interpret.
+/// The report is suitable for a structured save-warning UI; the opaque
+/// package can be passed to [`write_with_opaque`] after an unrelated edit.
+pub fn read_with_report(path: &str) -> Result<(Document, suite_common_core::interop::CompatibilityReport, suite_common_core::interop::OpaquePackage), String> {
+    let document = read(path)?;
+    let opaque = suite_common_core::interop::OpaquePackage::capture(
+        path,
+        &["[Content_Types].xml", "_rels/.rels", "word/document.xml", "word/_rels/document.xml.rels"],
+    )?;
+    let mut report = suite_common_core::interop::CompatibilityReport::new("docx");
+    for name in opaque.part_names() {
+        report.record(suite_common_core::interop::UnsupportedFeature::new(
+            "uninterpreted-package-part", "Uninterpreted package part", name,
+            suite_common_core::interop::FeatureDisposition::OpaquePassThrough,
+            "will be copied through on an opaque save",
+        ));
+    }
+    Ok((document, report, opaque))
+}
+
 /// Page geometry from the docx section properties, when present.
 fn read_page_geometry(doc: &rdocx::Document) -> Option<PageGeometry> {
     let sect = doc.section_properties()?;
@@ -257,6 +277,16 @@ pub fn write(doc: &Document, path: &str) -> Result<(), String> {
         .to_bytes()
         .map_err(|e| format!("Cannot save {}: {}", path, e))?;
     suite_common_core::atomic_save::atomic_write_bytes(std::path::Path::new(path), &bytes)
+}
+
+/// Write a DOCX and append previously captured, non-conflicting package parts.
+pub fn write_with_opaque(
+    doc: &Document,
+    path: &str,
+    opaque: &suite_common_core::interop::OpaquePackage,
+) -> Result<(), String> {
+    write(doc, path)?;
+    opaque.append_to(path)
 }
 
 /// Map one rdocx paragraph (body or table cell) into a model paragraph.
