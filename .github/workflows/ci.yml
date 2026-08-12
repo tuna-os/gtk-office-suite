@@ -12,6 +12,13 @@ env:
   CARGO_TERM_COLOR: always
 
 jobs:
+  interop-corpus:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+      - name: Validate versioned office corpus
+        run: python3 interop/validate_corpus.py
+
   # Unit tests + clippy on Ubuntu 24.04 (has GTK 4.14 + libadwaita 1.5)
   test:
     runs-on: ubuntu-24.04

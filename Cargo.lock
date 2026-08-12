@@ -3801,7 +3801,10 @@ dependencies = [
  "chrono",
  "num-format",
  "regex",
+ "serde",
+ "serde_json",
  "tempfile",
+ "zip",
 ]
 
 [[package]]

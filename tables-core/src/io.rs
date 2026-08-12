@@ -201,11 +201,36 @@ pub fn load_xlsx_workbook(path: &str) -> Result<(TablesEngine, Vec<SheetModel>),
     Ok((engine, sheets))
 }
 
+/// Spreadsheet import with a structured compatibility report and opaque
+/// package members retained for a subsequent safe save.
+pub fn load_xlsx_workbook_with_report(path: &str) -> Result<(TablesEngine, Vec<SheetModel>, suite_common_core::interop::CompatibilityReport, suite_common_core::interop::OpaquePackage), String> {
+    let (engine, sheets) = load_xlsx_workbook(path)?;
+    let opaque = suite_common_core::interop::OpaquePackage::capture(path, &["[Content_Types].xml", "_rels/.rels", "xl/workbook.xml", "xl/_rels/workbook.xml.rels"])?;
+    let mut report = suite_common_core::interop::CompatibilityReport::new("xlsx");
+    for name in opaque.part_names() {
+        report.record(suite_common_core::interop::UnsupportedFeature::new("uninterpreted-package-part", "Uninterpreted package part", name, suite_common_core::interop::FeatureDisposition::OpaquePassThrough, "will be copied through on an opaque save"));
+    }
+    Ok((engine, sheets, report, opaque))
+}
+
 /// Save sheet data to an XLSX file. Numbers are written as numbers,
 /// everything else as strings; formulas (from `engine`, first sheet)
 /// are written as real formulas so they survive into other suites.
 pub fn save_sheets_to_xlsx(path: &str, sheets: &[SheetModel]) -> Result<(), String> {
     save_sheets_to_xlsx_with_engine(path, sheets, None)
+}
+
+/// Save a workbook and retain captured unsupported package members. Existing
+/// generated members win, so a changed supported part cannot be overwritten
+/// by stale opaque bytes.
+pub fn save_sheets_to_xlsx_with_opaque(
+    path: &str,
+    sheets: &[SheetModel],
+    engine: Option<&TablesEngine>,
+    opaque: &suite_common_core::interop::OpaquePackage,
+) -> Result<(), String> {
+    save_sheets_to_xlsx_with_engine(path, sheets, engine)?;
+    opaque.append_to(path)
 }
 
 pub fn save_sheets_to_xlsx_with_engine(

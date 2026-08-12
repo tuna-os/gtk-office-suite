@@ -127,8 +127,13 @@ roadmap-dependent), external file references (decision: likely never),
 
 ### Tier 3 — Advanced
 
-Animations beyond transitions (I7-heavy), embedded audio/video (decision
-needed), Impress-template import (I3-style corpus).
+Presenter state (current/next/notes/timer/display target) is covered by the
+GTK-free contract in `decks-core/src/presenter.rs`; the presenter window and
+external-display journey remain release work per
+[`docs/adr/0004-decks-advanced-workflows.md`](adr/0004-decks-advanced-workflows.md).
+Animations beyond admitted transitions, embedded audio/video, comments, and
+Impress-template import are explicitly scoped by that ADR and require corpus
+fixtures before they can become parity claims.
 
 ---
 
