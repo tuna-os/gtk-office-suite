@@ -40,6 +40,7 @@ fn main() {
     suite.app.set_accels_for_action("app.preferences", &["<Control>comma"]);
     let win_store = std::rc::Rc::new(std::cell::RefCell::new(None::<window::TablesWindow>));
     let pw_store = parent_win.clone();
+    let recent = suite_common::RecentFiles::new(&gio::Settings::new("org.tunaos.tables"));
     let ws = win_store.clone();
     suite.app.connect_activate(move |app| {
         let mut store = ws.borrow_mut();
@@ -68,6 +69,7 @@ fn main() {
         let win = store.as_ref().unwrap();
         for file in files {
             if let Some(path) = file.path() {
+                recent.record(file);
                 if let Err(e) = win.open_path(&path.to_string_lossy()) {
                     eprintln!("open failed: {e}");
                 }

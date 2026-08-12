@@ -57,5 +57,6 @@
       <summary>Recently used command-palette actions</summary>
       <description>Most-recent-first action names, used for palette ranking.</description>
     </key>
+    <key name="recent-files" type="as"><default>[]</default><summary>Recently opened presentations</summary><description>At most ten file URIs, with missing files pruned on read.</description></key>
   </schema>
 </schemalist>

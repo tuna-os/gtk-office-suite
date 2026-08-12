@@ -12,10 +12,12 @@
 
 pub mod file_dialogs;
 pub mod toast_manager;
+pub mod recent;
 pub use suite_common_core::{actions, palette, format, undo, events, string_pool, units, props, style, search, print, atomic_save, autosave};
 
 pub use file_dialogs::FileDialogHelper;
 pub use toast_manager::ToastManager;
+pub use recent::RecentFiles;
 
 // The crate is named `libadwaita` in Cargo.toml; imported as `adw` for conciseness.
 use libadwaita as adw;
