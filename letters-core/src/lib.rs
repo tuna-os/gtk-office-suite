@@ -11,6 +11,6 @@ pub mod odt;
 pub mod review;
 pub mod session;
 
-pub use model::{Alignment, Document, ListKind, Paragraph, ParaStyle, Run, RunStyle, StylePatch};
+pub use model::{Alignment, Document, ListKind, PageGeometry, Paragraph, ParagraphLayout, ParaStyle, Run, RunStyle, StylePatch, TableCell};
 pub use session::DocumentSession;
 pub use review::{base_direction, table_of_contents, BidiDirection, ChangeKind, Comment, ReviewId, ReviewState, TextRange, TocEntry, TrackedChange};

@@ -273,6 +273,8 @@ fn docx_page_geometry_round_trips() {
         margin_bottom_pt: 54.0,
         margin_left_pt: 90.0,
         margin_right_pt: 45.0,
+        columns: 1,
+        column_gap_pt: 18.0,
     });
     docx::write(&d, path.to_str().unwrap()).expect("write");
     let rt = docx::read(path.to_str().unwrap()).expect("read");

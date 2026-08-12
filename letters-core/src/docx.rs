@@ -119,6 +119,8 @@ fn read_page_geometry(doc: &rdocx::Document) -> Option<PageGeometry> {
         margin_bottom_pt: sect.margin_bottom.map(|v| v.0 as f64 / 20.0).unwrap_or(default.margin_bottom_pt),
         margin_left_pt: sect.margin_left.map(|v| v.0 as f64 / 20.0).unwrap_or(default.margin_left_pt),
         margin_right_pt: sect.margin_right.map(|v| v.0 as f64 / 20.0).unwrap_or(default.margin_right_pt),
+        columns: default.columns,
+        column_gap_pt: default.column_gap_pt,
     })
 }
 
@@ -175,8 +177,8 @@ pub fn write(doc: &Document, path: &str) -> Result<(), String> {
         let para = &paras[i];
         i += 1;
         let mut p = match para.style.list {
-            ListKind::Bullet => out.add_bullet_list_item("", 0),
-            ListKind::Numbered => out.add_numbered_list_item("", 0),
+            ListKind::Bullet => out.add_bullet_list_item("", para.style.list_level as usize),
+            ListKind::Numbered => out.add_numbered_list_item("", para.style.list_level as usize),
             ListKind::None => out.add_paragraph(""),
         };
         if let Some(level) = para.style.heading {
@@ -308,13 +310,13 @@ fn map_paragraph(doc: &rdocx::Document, p: &rdocx::ParagraphRef<'_>) -> Paragrap
         _ => None,
     };
     let page_break_before = p.is_page_break_before();
-    let list = match p.numbering() {
-        Some((num_id, _level)) => match doc.numbering_is_bullet(num_id) {
+    let (list, list_level) = match p.numbering() {
+        Some((num_id, level)) => (match doc.numbering_is_bullet(num_id) {
             Some(false) => ListKind::Numbered,
             // Unknown num_id defaults to bullet — the safer visual guess.
             _ => ListKind::Bullet,
-        },
-        None => ListKind::None,
+        }, level as u8),
+        None => (ListKind::None, 0),
     };
 
     // Per-run link URLs from hyperlink spans (indexes into the runs vec).
@@ -391,6 +393,7 @@ fn map_paragraph(doc: &rdocx::Document, p: &rdocx::ParagraphRef<'_>) -> Paragrap
     let mut para = Paragraph {
         style: ParaStyle {
             heading, alignment, list, code_block, block_quote,
+            list_level,
             named_style, page_break_before,
             line_spacing: p.line_spacing_multiple().map(|m| m as f32).unwrap_or(1.0),
             ..Default::default()

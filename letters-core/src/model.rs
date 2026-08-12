@@ -105,8 +105,28 @@ pub struct ParaStyle {
     pub heading: Option<u8>,
     pub alignment: Alignment,
     pub list: ListKind,
+    /// Nesting depth for list items. Zero is the top-level list.
+    #[serde(default)]
+    pub list_level: u8,
+    /// Optional first number for a numbered list item (restart support).
+    #[serde(default)]
+    pub list_start: Option<u32>,
     /// Line spacing multiplier (1.0, 1.15, 1.5, 2.0).
     pub line_spacing: f32,
+    /// Paragraph layout values in points. Tabs are absolute stops from the
+    /// paragraph's left edge, also in points.
+    #[serde(default)]
+    pub space_before_pt: f64,
+    #[serde(default)]
+    pub space_after_pt: f64,
+    #[serde(default)]
+    pub left_indent_pt: f64,
+    #[serde(default)]
+    pub right_indent_pt: f64,
+    #[serde(default)]
+    pub first_line_indent_pt: f64,
+    #[serde(default)]
+    pub tab_stops_pt: Vec<f64>,
     /// Code-block membership: Some(language) marks this paragraph as a line
     /// of a code block ("" = no language). Consecutive code paragraphs with
     /// the same language form one block; paragraphs never contain newlines,
@@ -139,7 +159,7 @@ pub struct TableCell {
 
 impl Default for ParaStyle {
     fn default() -> Self {
-        Self { heading: None, alignment: Alignment::Left, list: ListKind::None, line_spacing: 1.0, code_block: None, block_quote: false, html_block: false, page_break_before: false, named_style: None, table_cell: None }
+        Self { heading: None, alignment: Alignment::Left, list: ListKind::None, list_level: 0, list_start: None, line_spacing: 1.0, space_before_pt: 0.0, space_after_pt: 0.0, left_indent_pt: 0.0, right_indent_pt: 0.0, first_line_indent_pt: 0.0, tab_stops_pt: Vec::new(), code_block: None, block_quote: false, html_block: false, page_break_before: false, named_style: None, table_cell: None }
     }
 }
 
@@ -245,7 +265,14 @@ pub struct PageGeometry {
     pub margin_bottom_pt: f64,
     pub margin_left_pt: f64,
     pub margin_right_pt: f64,
+    #[serde(default = "default_columns")]
+    pub columns: u8,
+    #[serde(default = "default_column_gap")]
+    pub column_gap_pt: f64,
 }
+
+fn default_columns() -> u8 { 1 }
+fn default_column_gap() -> f64 { 18.0 }
 
 impl Default for PageGeometry {
     /// A4 portrait with 1-inch margins.
@@ -257,6 +284,8 @@ impl Default for PageGeometry {
             margin_bottom_pt: 72.0,
             margin_left_pt: 72.0,
             margin_right_pt: 72.0,
+            columns: 1,
+            column_gap_pt: 18.0,
         }
     }
 }
@@ -272,6 +301,8 @@ impl PageGeometry {
             && close(self.margin_bottom_pt, other.margin_bottom_pt)
             && close(self.margin_left_pt, other.margin_left_pt)
             && close(self.margin_right_pt, other.margin_right_pt)
+            && self.columns == other.columns
+            && close(self.column_gap_pt, other.column_gap_pt)
     }
 }
 
@@ -432,6 +463,111 @@ impl Document {
             p.style.heading = level;
         }
     }
+
+    pub fn set_paragraph_layout(&mut self, para_idx: usize, layout: ParagraphLayout) {
+        if let Some(style) = self.paragraphs.get_mut(para_idx).map(|p| &mut p.style) {
+            style.space_before_pt = layout.space_before_pt.max(0.0);
+            style.space_after_pt = layout.space_after_pt.max(0.0);
+            style.left_indent_pt = layout.left_indent_pt.max(0.0);
+            style.right_indent_pt = layout.right_indent_pt.max(0.0);
+            style.first_line_indent_pt = layout.first_line_indent_pt;
+            style.tab_stops_pt = layout.tab_stops_pt;
+        }
+    }
+
+    pub fn set_list_item(&mut self, para_idx: usize, kind: ListKind, level: u8, start: Option<u32>) {
+        if let Some(style) = self.paragraphs.get_mut(para_idx).map(|p| &mut p.style) {
+            style.list = kind;
+            style.list_level = level;
+            style.list_start = start.filter(|n| *n > 0);
+        }
+    }
+
+    pub fn table_dimensions(&self, table: u32) -> Option<(u32, u32)> {
+        let cells = self.paragraphs.iter().filter_map(|p| p.style.table_cell)
+            .filter(|c| c.table == table).collect::<Vec<_>>();
+        if cells.is_empty() { return None; }
+        Some((cells.iter().map(|c| c.row).max()? + 1, cells.iter().map(|c| c.col).max()? + 1))
+    }
+
+    /// Insert rows in a tagged document table, carrying existing paragraphs
+    /// with their cells and creating empty paragraphs for the new cells.
+    pub fn insert_table_rows(&mut self, table: u32, at: u32, count: u32) -> bool {
+        let Some((rows, cols)) = self.table_dimensions(table) else { return false; };
+        if at > rows || count == 0 { return false; }
+        for p in &mut self.paragraphs {
+            if let Some(mut cell) = p.style.table_cell.filter(|c| c.table == table) {
+                if cell.row >= at { cell.row += count; p.style.table_cell = Some(cell); }
+            }
+        }
+        let new_cells = (0..count).flat_map(|row| (0..cols).map(move |col| Paragraph {
+            style: ParaStyle { table_cell: Some(TableCell { table, row: at + row, col }), ..Default::default() },
+            runs: Vec::new(),
+        }));
+        self.paragraphs.extend(new_cells);
+        true
+    }
+
+    pub fn insert_table_cols(&mut self, table: u32, at: u32, count: u32) -> bool {
+        let Some((_rows, cols)) = self.table_dimensions(table) else { return false; };
+        if at > cols || count == 0 { return false; }
+        for p in &mut self.paragraphs {
+            if let Some(mut cell) = p.style.table_cell.filter(|c| c.table == table) {
+                if cell.col >= at { cell.col += count; p.style.table_cell = Some(cell); }
+            }
+        }
+        let rows = self.table_dimensions(table).map(|(r, _)| r).unwrap_or(0);
+        self.paragraphs.extend((0..rows).flat_map(|row| (0..count).map(move |col| Paragraph {
+            style: ParaStyle { table_cell: Some(TableCell { table, row, col: at + col }), ..Default::default() },
+            runs: Vec::new(),
+        })));
+        true
+    }
+
+    pub fn delete_table_rows(&mut self, table: u32, at: u32, count: u32) -> bool {
+        let Some((rows, _)) = self.table_dimensions(table) else { return false; };
+        if count == 0 || at >= rows || count > rows - at { return false; }
+        let end = at + count;
+        self.paragraphs.retain_mut(|p| {
+            let Some(mut cell) = p.style.table_cell.filter(|c| c.table == table) else { return true; };
+            if (at..end).contains(&cell.row) { return false; }
+            if cell.row >= end { cell.row -= count; p.style.table_cell = Some(cell); }
+            true
+        });
+        true
+    }
+
+    pub fn delete_table_cols(&mut self, table: u32, at: u32, count: u32) -> bool {
+        let Some((_, cols)) = self.table_dimensions(table) else { return false; };
+        if count == 0 || at >= cols || count > cols - at { return false; }
+        let end = at + count;
+        self.paragraphs.retain_mut(|p| {
+            let Some(mut cell) = p.style.table_cell.filter(|c| c.table == table) else { return true; };
+            if (at..end).contains(&cell.col) { return false; }
+            if cell.col >= end { cell.col -= count; p.style.table_cell = Some(cell); }
+            true
+        });
+        true
+    }
+
+    /// Return the next cell in row-major order, useful for Tab/Shift-Tab
+    /// navigation without exposing the flat paragraph representation.
+    pub fn next_table_cell(&self, table: u32, row: u32, col: u32, backwards: bool) -> Option<TableCell> {
+        let (rows, cols) = self.table_dimensions(table)?;
+        let index = (row * cols + col) as i64 + if backwards { -1 } else { 1 };
+        if index < 0 || index >= (rows * cols) as i64 { return None; }
+        Some(TableCell { table, row: index as u32 / cols, col: index as u32 % cols })
+    }
+}
+
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct ParagraphLayout {
+    pub space_before_pt: f64,
+    pub space_after_pt: f64,
+    pub left_indent_pt: f64,
+    pub right_indent_pt: f64,
+    pub first_line_indent_pt: f64,
+    pub tab_stops_pt: Vec<f64>,
 }
 
 // ── Cursor style readout (status bar) ─────────────────────────────────
@@ -508,5 +644,55 @@ mod readout_tests {
     #[test]
     fn single_paragraph_style_only() {
         assert_eq!(style_readout(&["h1", "h2"]), "Heading 1");
+    }
+}
+
+#[cfg(test)]
+mod structured_editing_tests {
+    use super::*;
+
+    #[test]
+    fn nested_lists_and_restart_are_explicit_model_state() {
+        let mut doc = Document::from_plain_text("parent\nchild\nrestart");
+        doc.set_list_item(0, ListKind::Numbered, 0, Some(4));
+        doc.set_list_item(1, ListKind::Bullet, 1, None);
+        doc.set_list_item(2, ListKind::Numbered, 0, Some(1));
+        assert_eq!(doc.paragraphs[0].style.list_start, Some(4));
+        assert_eq!(doc.paragraphs[1].style.list_level, 1);
+        assert_eq!(doc.paragraphs[2].style.list_level, 0);
+    }
+
+    #[test]
+    fn table_rows_and_columns_are_editable_without_flattening_cells() {
+        let mut doc = Document::from_plain_text("");
+        doc.paragraphs[0].style.table_cell = Some(TableCell { table: 7, row: 0, col: 0 });
+        doc.paragraphs[0].runs = vec![Run::plain("A")];
+        doc.paragraphs.push(Paragraph {
+            style: ParaStyle { table_cell: Some(TableCell { table: 7, row: 0, col: 1 }), ..Default::default() },
+            runs: vec![Run::plain("B")],
+        });
+        assert_eq!(doc.table_dimensions(7), Some((1, 2)));
+        assert!(doc.insert_table_rows(7, 1, 1));
+        assert!(doc.insert_table_cols(7, 1, 1));
+        assert_eq!(doc.table_dimensions(7), Some((2, 3)));
+        assert!(doc.paragraphs.iter().any(|p| p.style.table_cell == Some(TableCell { table: 7, row: 1, col: 1 })));
+        assert_eq!(doc.next_table_cell(7, 0, 0, false), Some(TableCell { table: 7, row: 0, col: 1 }));
+        assert!(doc.delete_table_rows(7, 1, 1));
+        assert!(doc.delete_table_cols(7, 1, 1));
+        assert_eq!(doc.table_dimensions(7), Some((1, 2)));
+    }
+
+    #[test]
+    fn paragraph_layout_clamps_negative_spacing_and_keeps_tabs() {
+        let mut doc = Document::from_plain_text("layout");
+        doc.set_paragraph_layout(0, ParagraphLayout {
+            space_before_pt: -2.0, space_after_pt: 8.0, left_indent_pt: 24.0,
+            right_indent_pt: 12.0, first_line_indent_pt: -18.0, tab_stops_pt: vec![72.0, 144.0],
+        });
+        let style = &doc.paragraphs[0].style;
+        assert_eq!(style.space_before_pt, 0.0);
+        assert_eq!(style.left_indent_pt, 24.0);
+        assert_eq!(style.first_line_indent_pt, -18.0);
+        assert_eq!(style.tab_stops_pt, vec![72.0, 144.0]);
     }
 }

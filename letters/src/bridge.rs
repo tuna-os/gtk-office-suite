@@ -232,6 +232,10 @@ fn capture_list_marker(para: &mut Paragraph) {
         return;
     };
     para.style.list = kind;
+    // Four spaces represent one nesting level in the editable buffer. The
+    // model keeps the level separately so DOCX/ODT round-trips do not depend
+    // on literal whitespace in the paragraph text.
+    para.style.list_level = (text.len() - text.trim_start().len()) as u8 / 4;
     // Remove `strip` chars from the front of the run list.
     let mut remaining = strip;
     while remaining > 0 {
@@ -259,13 +263,14 @@ pub fn render_to_buffer(doc: &Document, buf: &gtk::TextBuffer) {
         }
         let para_start = insert.offset();
         match para.style.list {
-            letters_core::ListKind::Bullet => buf.insert(&mut insert, "- "),
+            letters_core::ListKind::Bullet => buf.insert(&mut insert, &format!("{}- ", "    ".repeat(para.style.list_level as usize))),
             letters_core::ListKind::Numbered => {
-                // Number within the current consecutive numbered group.
+                // Number within the current consecutive numbered group at
+                // this nesting level; list_start explicitly restarts it.
                 let n = doc.paragraphs[..i].iter().rev()
-                    .take_while(|p| p.style.list == letters_core::ListKind::Numbered)
-                    .count() + 1;
-                buf.insert(&mut insert, &format!("{n}. "));
+                    .take_while(|p| p.style.list == letters_core::ListKind::Numbered && p.style.list_level == para.style.list_level)
+                    .count() as u32 + para.style.list_start.unwrap_or(1);
+                buf.insert(&mut insert, &format!("{}{}. ", "    ".repeat(para.style.list_level as usize), n));
             }
             letters_core::ListKind::None => {}
         }
