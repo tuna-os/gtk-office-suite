@@ -70,6 +70,10 @@ impl CellBorder {
     }
 }
 
+impl Default for CellBorder {
+    fn default() -> Self { Self::none() }
+}
+
 pub fn col_label(c: usize) -> String {
     let mut n = c; let mut s = String::new();
     loop { let d = (n % 26) as u8; s.insert(0, (b'A' + d) as char); n /= 26; if n == 0 { break; } n -= 1; }
@@ -543,6 +547,32 @@ pub struct SheetModel {
     pub sheet_id: u32,
 }
 
+fn insert_matrix_rows<T: Default>(matrix: &mut Vec<Vec<T>>, at: usize, count: usize, cols: usize) {
+    matrix.splice(at..at, (0..count).map(|_| (0..cols).map(|_| T::default()).collect()));
+}
+
+fn delete_matrix_rows<T>(matrix: &mut Vec<Vec<T>>, at: usize, end: usize) {
+    matrix.drain(at..end);
+}
+
+fn insert_matrix_cols<T: Default>(matrix: &mut [Vec<T>], at: usize, count: usize) {
+    for row in matrix {
+        row.splice(at..at, std::iter::repeat_with(T::default).take(count));
+    }
+}
+
+fn delete_matrix_cols<T>(matrix: &mut [Vec<T>], at: usize, end: usize) {
+    for row in matrix { row.drain(at..end); }
+}
+
+fn shift_set(values: &std::collections::HashSet<usize>, at: usize, delta: isize)
+    -> std::collections::HashSet<usize>
+{
+    values.iter().map(|&value| {
+        if value >= at { value.checked_add_signed(delta).unwrap_or(at) } else { value }
+    }).collect()
+}
+
 impl SheetModel {
     pub fn new(name: &str, rows: usize, cols: usize, sheet_id: u32) -> Self {
         SheetModel {
@@ -572,6 +602,115 @@ impl SheetModel {
             page_setup: suite_common_core::print::PageSetup::default(),
             sheet_id,
         }
+    }
+
+    /// Insert blank rows while preserving every row-oriented sheet feature.
+    /// Keeping this operation in the model prevents the UI and importers from
+    /// silently shifting values without shifting their formats or metadata.
+    pub fn insert_rows(&mut self, at: usize, count: usize) {
+        assert!(at <= self.rows);
+        if count == 0 { return; }
+        insert_matrix_rows(&mut self.data, at, count, self.cols);
+        insert_matrix_rows(&mut self.formulas, at, count, self.cols);
+        insert_matrix_rows(&mut self.formats, at, count, self.cols);
+        insert_matrix_rows(&mut self.borders, at, count, self.cols);
+        insert_matrix_rows(&mut self.cell_protections, at, count, self.cols);
+        insert_matrix_rows(&mut self.validations, at, count, self.cols);
+        self.row_heights.splice(at..at, std::iter::repeat_n(ROW_HEIGHT, count));
+        self.rows += count;
+        self.shift_row_metadata(at, count as isize);
+    }
+
+    pub fn delete_rows(&mut self, at: usize, count: usize) {
+        assert!(at <= self.rows && count <= self.rows - at);
+        if count == 0 { return; }
+        let end = at + count;
+        delete_matrix_rows(&mut self.data, at, end);
+        delete_matrix_rows(&mut self.formulas, at, end);
+        delete_matrix_rows(&mut self.formats, at, end);
+        delete_matrix_rows(&mut self.borders, at, end);
+        delete_matrix_rows(&mut self.cell_protections, at, end);
+        delete_matrix_rows(&mut self.validations, at, end);
+        self.row_heights.drain(at..end);
+        self.rows -= count;
+        self.shift_row_metadata(at, -(count as isize));
+    }
+
+    /// Insert blank columns and shift ranges, anchors, validations and
+    /// conditional formatting with the cells they describe.
+    pub fn insert_cols(&mut self, at: usize, count: usize) {
+        assert!(at <= self.cols);
+        if count == 0 { return; }
+        insert_matrix_cols(&mut self.data, at, count);
+        insert_matrix_cols(&mut self.formulas, at, count);
+        insert_matrix_cols(&mut self.formats, at, count);
+        insert_matrix_cols(&mut self.borders, at, count);
+        insert_matrix_cols(&mut self.cell_protections, at, count);
+        insert_matrix_cols(&mut self.validations, at, count);
+        self.col_widths.splice(at..at, std::iter::repeat_n(COL_WIDTH, count));
+        self.cols += count;
+        self.shift_col_metadata(at, count as isize);
+    }
+
+    pub fn delete_cols(&mut self, at: usize, count: usize) {
+        assert!(at <= self.cols && count <= self.cols - at);
+        if count == 0 { return; }
+        let end = at + count;
+        delete_matrix_cols(&mut self.data, at, end);
+        delete_matrix_cols(&mut self.formulas, at, end);
+        delete_matrix_cols(&mut self.formats, at, end);
+        delete_matrix_cols(&mut self.borders, at, end);
+        delete_matrix_cols(&mut self.cell_protections, at, end);
+        delete_matrix_cols(&mut self.validations, at, end);
+        self.col_widths.drain(at..end);
+        self.cols -= count;
+        self.shift_col_metadata(at, -(count as isize));
+    }
+
+    fn shift_row_metadata(&mut self, at: usize, delta: isize) {
+        let shift = |value: &mut usize| {
+            if *value >= at { *value = value.checked_add_signed(delta).unwrap_or(at); }
+        };
+        shift(&mut self.selected_row); shift(&mut self.sel_end_row);
+        self.hidden_rows = shift_set(&self.hidden_rows, at, delta);
+        self.hidden_rows_manual = shift_set(&self.hidden_rows_manual, at, delta);
+        for range in &mut self.merges { shift(&mut range.0); shift(&mut range.2); }
+        for rule in &mut self.cond_rules { shift(&mut rule.range.0); shift(&mut rule.range.2); }
+        for chart in &mut self.charts {
+            shift(&mut chart.anchor.0); shift(&mut chart.cat.0); shift(&mut chart.cat.2);
+            shift(&mut chart.val.0); shift(&mut chart.val.2);
+            for series in &mut chart.series {
+                shift(&mut series.cat.0); shift(&mut series.cat.2);
+                shift(&mut series.val.0); shift(&mut series.val.2);
+            }
+        }
+        for pivot in &mut self.pivot_tables {
+            shift(&mut pivot.source_range.0); shift(&mut pivot.source_range.2);
+            shift(&mut pivot.target_cell.0);
+        }
+        if let Some(area) = &mut self.print_area { shift(&mut area.0); shift(&mut area.2); }
+    }
+
+    fn shift_col_metadata(&mut self, at: usize, delta: isize) {
+        let shift = |value: &mut usize| {
+            if *value >= at { *value = value.checked_add_signed(delta).unwrap_or(at); }
+        };
+        shift(&mut self.selected_col); shift(&mut self.sel_end_col);
+        self.hidden_cols = shift_set(&self.hidden_cols, at, delta);
+        for range in &mut self.merges { shift(&mut range.1); shift(&mut range.3); }
+        for rule in &mut self.cond_rules { shift(&mut rule.range.1); shift(&mut rule.range.3); }
+        for chart in &mut self.charts {
+            shift(&mut chart.anchor.1); shift(&mut chart.cat.1); shift(&mut chart.val.1);
+            for series in &mut chart.series { shift(&mut series.cat.1); shift(&mut series.val.1); }
+        }
+        for pivot in &mut self.pivot_tables {
+            shift(&mut pivot.source_range.1); shift(&mut pivot.source_range.3);
+            shift(&mut pivot.target_cell.1);
+            for field in &mut pivot.row_fields { shift(&mut field.col_index); }
+            for field in &mut pivot.col_fields { shift(&mut field.col_index); }
+            for field in &mut pivot.data_fields { shift(&mut field.col_index); }
+        }
+        if let Some(area) = &mut self.print_area { shift(&mut area.1); shift(&mut area.3); }
     }
 
     /// Whether `row` should be skipped by rendering/hit-testing — hidden
@@ -709,6 +848,52 @@ mod selection_tests {
         s.data[2][1] = "x".into();
         s.data[2][2] = " 30 ".into();
         s
+    }
+
+    #[test]
+    fn structural_row_edits_preserve_parallel_cell_state_and_ranges() {
+        let mut s = sheet();
+        s.formulas[1][1] = true;
+        s.formats[1][1] = NumberFormat::new(suite_common_core::format::NumberFormatKind::Percent(1));
+        s.merges.push((1, 1, 2, 2));
+        s.cond_rules.push(CondRule {
+            range: (1, 1, 2, 2), op: CondOp::Greater, value: 1.0, value2: 0.0,
+            fill: "ff0000".into(),
+        });
+        s.select_cell(1, 1);
+        s.insert_rows(1, 2);
+        assert_eq!(s.rows, 12);
+        assert_eq!(s.data[3][1], "10");
+        assert!(s.formulas[3][1]);
+        assert_eq!(s.merges[0], (3, 1, 4, 2));
+        assert_eq!(s.cond_rules[0].range, (3, 1, 4, 2));
+        assert_eq!((s.selected_row, s.selected_col), (3, 1));
+        // Remove the two rows just inserted at index 1, not the row the
+        // value was shifted onto.
+        s.delete_rows(1, 2);
+        assert_eq!(s.rows, 10);
+        assert_eq!(s.data[1][1], "10");
+        assert!(s.formulas[1][1]);
+    }
+
+    #[test]
+    fn structural_column_edits_shift_widths_and_chart_ranges() {
+        let mut s = sheet();
+        s.set_col_width(1, 140.0);
+        s.charts.push(ChartSpec {
+            kind: ChartKind::Line, title: String::new(), x_axis_title: None,
+            y_axis_title: None, legend_position: LegendPosition::None,
+            series: Vec::new(), cat: (0, 1, 3), val: (0, 2, 3), anchor: (0, 1),
+            width_px: 300.0, height_px: 200.0,
+        });
+        s.insert_cols(1, 2);
+        assert_eq!(s.cols, 12);
+        assert_eq!(s.col_width(3), 140.0);
+        assert_eq!(s.charts[0].anchor.1, 3);
+        assert_eq!(s.charts[0].cat.1, 3);
+        assert_eq!(s.charts[0].val.1, 4);
+        s.delete_cols(2, 2);
+        assert_eq!(s.charts[0].anchor.1, 1);
     }
 
     #[test]
