@@ -1946,11 +1946,13 @@ fn make_find_replace_widget(tv: &adw::TabView) -> (gtk::SearchBar, gtk::SearchEn
     let find_prev = gtk::Button::new();
     find_prev.set_icon_name("go-up-symbolic");
     find_prev.set_tooltip_text(Some(&suite_common::i18n("Previous match (Shift+Enter)")));
+    find_prev.update_property(&[gtk::accessible::Property::Label("Previous match")]);
     find_prev.add_css_class("flat");
 
     let find_next = gtk::Button::new();
     find_next.set_icon_name("go-down-symbolic");
     find_next.set_tooltip_text(Some(&suite_common::i18n("Next match (Enter)")));
+    find_next.update_property(&[gtk::accessible::Property::Label("Next match")]);
     find_next.add_css_class("flat");
 
     let replace_btn = gtk::Button::with_label(&suite_common::i18n("Replace"));
@@ -1965,12 +1967,14 @@ fn make_find_replace_widget(tv: &adw::TabView) -> (gtk::SearchBar, gtk::SearchEn
         .label("Aa")
         .tooltip_text(suite_common::i18n("Case sensitive"))
         .build();
+    case_toggle.update_property(&[gtk::accessible::Property::Label("Case sensitive")]);
     case_toggle.add_css_class("flat");
 
     let close_btn = gtk::Button::builder()
         .icon_name("window-close-symbolic")
         .tooltip_text("Close (Escape)")
         .build();
+    close_btn.update_property(&[gtk::accessible::Property::Label("Close search bar")]);
     close_btn.add_css_class("flat");
 
     // Shared search state
