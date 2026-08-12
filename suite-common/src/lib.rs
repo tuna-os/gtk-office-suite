@@ -232,6 +232,16 @@ fn show_about_dialog() {
 /// and collapsible into a real menu.
 pub type ToolbarItem = (&'static str, &'static str, &'static str);
 
+/// Shared GNOME adaptive-shell contract.
+pub const TOUCH_TARGET_SP: i32 = 44;
+pub const NARROW_WIDTH_SP: f64 = 500.0;
+pub const MEDIUM_WIDTH_SP: f64 = 800.0;
+pub const WIDE_AUDIT_WIDTH_SP: f64 = 1280.0;
+
+pub fn apply_touch_target(widget: &impl IsA<gtk::Widget>) {
+    widget.set_size_request(TOUCH_TARGET_SP, TOUCH_TARGET_SP);
+}
+
 /// A responsive toolbar with a primary (always-visible) section and an
 /// extended section that collapses into a "More" menu on narrow windows.
 ///
@@ -275,6 +285,7 @@ impl SuiteToolbar {
             }
             b.set_tooltip_text(Some(tooltip));
             b.set_action_name(Some(action));
+            apply_touch_target(&b);
             b
         };
 
@@ -391,7 +402,7 @@ impl SuiteWindow {
         // Medium (≤ 800sp): the extended toolbar section folds into "More".
         let medium_bp = adw::Breakpoint::new(adw::BreakpointCondition::new_length(
             adw::BreakpointConditionLengthType::MaxWidth,
-            800.0,
+            MEDIUM_WIDTH_SP,
             adw::LengthUnit::Sp,
         ));
         medium_bp.add_setter(&toolbar.extended_box, "visible", Some(&false.to_value()));
@@ -403,7 +414,7 @@ impl SuiteWindow {
         // setters (hide sidebars, compact formula bar, etc.) post-construction.
         let narrow_bp = adw::Breakpoint::new(adw::BreakpointCondition::new_length(
             adw::BreakpointConditionLengthType::MaxWidth,
-            500.0,
+            NARROW_WIDTH_SP,
             adw::LengthUnit::Sp,
         ));
         narrow_bp.add_setter(&toolbar.extended_box, "visible", Some(&false.to_value()));
