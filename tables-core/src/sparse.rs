@@ -99,7 +99,10 @@ mod tests {
         grid.insert_cols(2, 1);
         assert_eq!(grid.get(3, 1).map(String::as_str), Some("value"));
         grid.delete_rows(2, 1);
-        grid.delete_cols(1, 1);
+        grid.delete_cols(0, 1);
         assert_eq!(grid.get(2, 0).map(String::as_str), Some("value"));
+        // Deleting the column the cell lives in drops the cell entirely.
+        grid.delete_cols(0, 1);
+        assert_eq!(grid.get(2, 0), None);
     }
 }

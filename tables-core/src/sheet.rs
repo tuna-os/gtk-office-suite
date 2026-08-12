@@ -569,7 +569,7 @@ fn shift_set(values: &std::collections::HashSet<usize>, at: usize, delta: isize)
     -> std::collections::HashSet<usize>
 {
     values.iter().map(|&value| {
-        (if value >= at { value.checked_add_signed(delta).unwrap_or(at) } else { value })
+        if value >= at { value.checked_add_signed(delta).unwrap_or(at) } else { value }
     }).collect()
 }
 
@@ -616,7 +616,7 @@ impl SheetModel {
         insert_matrix_rows(&mut self.borders, at, count, self.cols);
         insert_matrix_rows(&mut self.cell_protections, at, count, self.cols);
         insert_matrix_rows(&mut self.validations, at, count, self.cols);
-        self.row_heights.splice(at..at, std::iter::repeat(ROW_HEIGHT).take(count));
+        self.row_heights.splice(at..at, std::iter::repeat_n(ROW_HEIGHT, count));
         self.rows += count;
         self.shift_row_metadata(at, count as isize);
     }
@@ -647,7 +647,7 @@ impl SheetModel {
         insert_matrix_cols(&mut self.borders, at, count);
         insert_matrix_cols(&mut self.cell_protections, at, count);
         insert_matrix_cols(&mut self.validations, at, count);
-        self.col_widths.splice(at..at, std::iter::repeat(COL_WIDTH).take(count));
+        self.col_widths.splice(at..at, std::iter::repeat_n(COL_WIDTH, count));
         self.cols += count;
         self.shift_col_metadata(at, count as isize);
     }
@@ -868,7 +868,10 @@ mod selection_tests {
         assert_eq!(s.merges[0], (3, 1, 4, 2));
         assert_eq!(s.cond_rules[0].range, (3, 1, 4, 2));
         assert_eq!((s.selected_row, s.selected_col), (3, 1));
-        s.delete_rows(2, 2);
+        // Remove the two rows just inserted at index 1, not the row the
+        // value was shifted onto.
+        s.delete_rows(1, 2);
+        assert_eq!(s.rows, 10);
         assert_eq!(s.data[1][1], "10");
         assert!(s.formulas[1][1]);
     }
