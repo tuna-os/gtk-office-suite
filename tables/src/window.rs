@@ -760,7 +760,7 @@ impl TablesWindow {
                     let st = s.borrow_mut();
                     let val = st.sheet().data[row][col].clone();
                     // Compute cell x-offset using per-column widths
-                    let cell_x = ROW_HEADER_WIDTH + (0..col).map(|cc| st.sheet().col_width(cc)).sum::<f64>();
+                    let cell_x = tables_core::sheet::col_x(col, 0.0, st.sheet());
                     let cell_w = st.sheet().col_width(col);
                     drop(st);
                     // Position entry overlay at cell. Re-borrows fresh

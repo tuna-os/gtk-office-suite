@@ -1,6 +1,7 @@
 // grid_render.rs — Cairo grid drawing for the spreadsheet canvas.
 use libadwaita as adw;
 use gtk4::cairo::Context;
+use gtk4::pango::{self, EllipsizeMode};
 use std::cell::RefCell;
 use std::rc::Rc;
 use tables_core::sheet::{SheetModel, CellBorder, BorderStyle, SortDirection, col_label};
@@ -266,14 +267,24 @@ pub fn draw_grid(
                 cr.stroke().unwrap();
             }
 
-            // Text — through the cell's number format for display.
+            // Text — through the cell's number format and a bounded Pango
+            // layout.  Clipping/ellipsizing keeps long values inside their
+            // cell while still allowing readable text when a column grows.
             let val = sheet.cell(r, c);
             if !val.is_empty() {
                 cr.set_source_rgb(cell_text.0, cell_text.1, cell_text.2);
-                cr.move_to(cx + 4.0, cy + 19.0);
                 let formatted = sheet.formats[r][c].format(val);
-                let display: String = formatted.chars().take(14).collect();
-                let _ = cr.show_text(&display);
+                let layout = pangocairo::functions::create_layout(cr);
+                layout.set_text(&formatted);
+                layout.set_width(((cw - 8.0).max(1.0) * pango::SCALE as f64) as i32);
+                layout.set_ellipsize(EllipsizeMode::End);
+                layout.set_single_paragraph_mode(true);
+                cr.save().unwrap();
+                cr.rectangle(cx + 3.0, cy + 2.0, (cw - 6.0).max(1.0), (rh - 4.0).max(1.0));
+                cr.clip();
+                cr.move_to(cx + 4.0, cy + 5.0);
+                pangocairo::functions::show_layout(cr, &layout);
+                cr.restore().unwrap();
             }
             cx += cw;
         }
