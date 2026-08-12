@@ -72,7 +72,7 @@ impl LayoutConfig {
 }
 
 /// Paginate a text buffer into pages using PangoLayout measurement.
-/// Uses Pango to measure line count and estimate heights.
+/// Uses Pango to measure line heights and positions accurately across styled runs.
 pub fn paginate(
     buf: &gtk::TextBuffer,
     config: &LayoutConfig,
@@ -91,50 +91,65 @@ pub fn paginate(
     layout.set_text(&text);
     layout.set_width((content_width_pts * pango::SCALE as f64) as i32);
 
-    // Estimate line height from the layout's first line
     let line_count = layout.line_count() as usize;
-    let total_height = layout.size().1 as f64 / pango::SCALE as f64;
-    let est_line_height = if line_count > 0 {
-        total_height / line_count as f64
-    } else {
-        14.0 // fallback: ~11pt font * 1.27
-    };
-
-    let lines_per_page = (content_height_pts / est_line_height).max(1.0) as usize;
-    if lines_per_page == 0 {
-        return vec![Page { index: 0, start_offset: 0, end_offset: text.len() as i32, line_count }];
+    if line_count == 0 {
+        return vec![Page { index: 0, start_offset: 0, end_offset: snap_to_char_boundary(&text, text.len()) as i32, line_count: 0 }];
     }
 
     let mut pages = Vec::new();
-    let total_chunks = line_count.div_ceil(lines_per_page);
+    let mut page_start_line = 0usize;
+    let mut current_page_height = 0.0f64;
+    let mut page_idx = 0usize;
 
-    for page_idx in 0..total_chunks {
-        let line_start = page_idx * lines_per_page;
-        let line_end = ((page_idx + 1) * lines_per_page).min(line_count);
-        let page_lines = line_end - line_start;
-
-        // Approximate byte offsets from line positions
-        // Lines in UTF-8: walk the text counting newlines
-        let start_offset = line_number_to_byte_offset(&text, line_start);
-        let end_offset = if page_idx + 1 >= total_chunks {
-            text.len() as i32
+    for i in 0..line_count {
+        let line_height = if let Some(line) = layout.line(i as i32) {
+            let extents = line.extents().1;
+            (extents.height() as f64 / pango::SCALE as f64).max(1.0)
         } else {
-            line_number_to_byte_offset(&text, line_end)
+            14.0
         };
 
+        if current_page_height + line_height > content_height_pts && i > page_start_line {
+            let start_offset = line_number_to_byte_offset(&text, page_start_line);
+            let end_offset = line_number_to_byte_offset(&text, i);
+            pages.push(Page {
+                index: page_idx,
+                start_offset,
+                end_offset,
+                line_count: i - page_start_line,
+            });
+            page_idx += 1;
+            page_start_line = i;
+            current_page_height = line_height;
+        } else {
+            current_page_height += line_height;
+        }
+    }
+
+    if page_start_line < line_count {
+        let start_offset = line_number_to_byte_offset(&text, page_start_line);
+        let end_offset = snap_to_char_boundary(&text, text.len()) as i32;
         pages.push(Page {
             index: page_idx,
             start_offset,
             end_offset,
-            line_count: page_lines,
+            line_count: line_count - page_start_line,
         });
     }
 
     pages
 }
 
-/// Convert a 0-based line number to a byte offset in the text.
-/// Lines are separated by '\n'.
+/// Snap any raw byte offset to a valid UTF-8 character boundary.
+pub fn snap_to_char_boundary(text: &str, mut offset: usize) -> usize {
+    offset = offset.min(text.len());
+    while offset > 0 && !text.is_char_boundary(offset) {
+        offset -= 1;
+    }
+    offset
+}
+
+/// Convert a 0-based line number to a byte offset in the text, snapped to char boundary.
 fn line_number_to_byte_offset(text: &str, line_num: usize) -> i32 {
     if line_num == 0 { return 0; }
     let mut found = 0usize;
@@ -142,11 +157,11 @@ fn line_number_to_byte_offset(text: &str, line_num: usize) -> i32 {
         if b == b'\n' {
             found += 1;
             if found >= line_num {
-                return (i + 1) as i32; // position after the newline
+                return snap_to_char_boundary(text, i + 1) as i32;
             }
         }
     }
-    text.len() as i32
+    snap_to_char_boundary(text, text.len()) as i32
 }
 
 #[cfg(test)]
@@ -246,5 +261,16 @@ mod tests {
         assert_eq!(line_number_to_byte_offset(text, 1), 2);
         assert_eq!(line_number_to_byte_offset(text, 2), 3);
         assert_eq!(line_number_to_byte_offset(text, 3), text.len() as i32);
+    }
+
+    #[test]
+    fn snap_to_char_boundary_handles_multibyte_utf8() {
+        let text = "🦀emoji test 🌸";
+        // '🦀' is 4 bytes (indices 0..4)
+        assert_eq!(snap_to_char_boundary(text, 0), 0);
+        assert_eq!(snap_to_char_boundary(text, 1), 0);
+        assert_eq!(snap_to_char_boundary(text, 2), 0);
+        assert_eq!(snap_to_char_boundary(text, 3), 0);
+        assert_eq!(snap_to_char_boundary(text, 4), 4);
     }
 }
