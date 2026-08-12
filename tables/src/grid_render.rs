@@ -29,16 +29,12 @@ const ROW_HEADER_WIDTH: f64 = 50.0;
 const COL_HEADER_HEIGHT: f64 = 26.0;
 const HEADER_BG: (f64, f64, f64) = (0.95, 0.95, 0.95);
 const HEADER_BG_DARK: (f64, f64, f64) = (0.25, 0.25, 0.25);
-const SELECTION_COLOR: (f64, f64, f64) = (0.21, 0.52, 0.89);
-const ACTIVE_CELL_BORDER: (f64, f64, f64) = (0.13, 0.38, 0.77);
 const GRID_LINE: (f64, f64, f64) = (0.85, 0.85, 0.85);
 const GRID_LINE_DARK: (f64, f64, f64) = (0.35, 0.35, 0.35);
 const CANVAS_BG: (f64, f64, f64) = (0.5, 0.5, 0.5);
 const CANVAS_BG_DARK: (f64, f64, f64) = (0.15, 0.15, 0.15);
 const CELL_BG: (f64, f64, f64) = (1.0, 1.0, 1.0);
 const CELL_BG_DARK: (f64, f64, f64) = (0.18, 0.18, 0.18);
-const CELL_TEXT: (f64, f64, f64) = (0.0, 0.0, 0.0);
-const CELL_TEXT_DARK: (f64, f64, f64) = (0.92, 0.92, 0.92);
 const HEADER_TEXT: (f64, f64, f64) = (0.3, 0.3, 0.3);
 const HEADER_TEXT_DARK: (f64, f64, f64) = (0.8, 0.8, 0.8);
 const RANGE_WASH: (f64, f64, f64) = (0.8, 0.85, 0.95);
@@ -52,6 +48,19 @@ pub fn draw_border_edges(cr: &Context, x: f64, y: f64, w: f64, h: f64, border: &
     draw_border_line(cr, &border.bottom, x, y + h, x + w, y + h, is_dark);
     draw_border_line(cr, &border.left, x, y, x, y + h, is_dark);
     draw_border_line(cr, &border.right, x + w, y, x + w, y + h, is_dark);
+}
+
+fn draw_pango_text(cr: &Context, text: &str, x: f64, y: f64) {
+    let layout = pangocairo::functions::create_layout(cr);
+    layout.set_text(text);
+    cr.move_to(x, y);
+    pangocairo::functions::show_layout(cr, &layout);
+}
+
+fn pango_text_width(cr: &Context, text: &str) -> f64 {
+    let layout = pangocairo::functions::create_layout(cr);
+    layout.set_text(text);
+    layout.pixel_size().0 as f64
 }
 
 fn draw_border_line(cr: &Context, style: &BorderStyle, x1: f64, y1: f64, x2: f64, y2: f64, is_dark: bool) {
@@ -112,7 +121,7 @@ const FORMULA_REF_COLORS: [(f64, f64, f64); 5] = [
 pub fn draw_grid(
     cr: &Context, state: &Rc<RefCell<crate::window::AppState>>,
     width: f64, height: f64, scroll_x: f64, scroll_y: f64, show_gridlines: bool,
-    formula_refs: &[(usize, usize, usize, usize)],
+    formula_refs: &[(usize, usize, usize, usize)], accent: (f64, f64, f64),
 ) {
     let st = state.borrow();
     let sheet = &st.sheets[st.active_sheet].borrow();
@@ -121,7 +130,7 @@ pub fn draw_grid(
     let hdr_text = if is_dark { HEADER_TEXT_DARK } else { HEADER_TEXT };
     let grid_line = if is_dark { GRID_LINE_DARK } else { GRID_LINE };
     let cell_bg = if is_dark { CELL_BG_DARK } else { CELL_BG };
-    let cell_text = if is_dark { CELL_TEXT_DARK } else { CELL_TEXT };
+    let cell_text = suite_common::canvas_foreground(is_dark);
     let range_wash = if is_dark { RANGE_WASH_DARK } else { RANGE_WASH };
     let canvas_bg = if is_dark { CANVAS_BG_DARK } else { CANVAS_BG };
 
@@ -153,9 +162,8 @@ pub fn draw_grid(
         if cx > width { break; }
         let label = col_label(c);
         cr.set_source_rgb(hdr_text.0, hdr_text.1, hdr_text.2);
-        let ext = cr.text_extents(&label).unwrap();
-        cr.move_to(cx + (cw - ext.width()) / 2.0, 18.0);
-        let _ = cr.show_text(&label);
+        let text_width = pango_text_width(cr, &label);
+        draw_pango_text(cr, &label, cx + (cw - text_width) / 2.0, 4.0);
         // Sort indicator (#113: "visible criteria" — a small triangle
         // pointing the sort direction, standard spreadsheet convention).
         if let Some((sc, dir)) = sheet.sorted_col {
@@ -190,9 +198,8 @@ pub fn draw_grid(
         if ry > height { break; }
         cr.set_source_rgb(hdr_text.0, hdr_text.1, hdr_text.2);
         let label = (r + 1).to_string();
-        let ext = cr.text_extents(&label).unwrap();
-        cr.move_to(ROW_HEADER_WIDTH - 6.0 - ext.width(), ry + 18.0);
-        let _ = cr.show_text(&label);
+        let text_width = pango_text_width(cr, &label);
+        draw_pango_text(cr, &label, ROW_HEADER_WIDTH - 6.0 - text_width, ry + 4.0);
     }
     cr.restore().unwrap();
 
@@ -261,7 +268,7 @@ pub fn draw_grid(
 
             // Active cell border
             if is_sel {
-                cr.set_source_rgb(ACTIVE_CELL_BORDER.0, ACTIVE_CELL_BORDER.1, ACTIVE_CELL_BORDER.2);
+                cr.set_source_rgb(accent.0, accent.1, accent.2);
                 cr.set_line_width(2.0);
                 cr.rectangle(cx, cy, cw, rh);
                 cr.stroke().unwrap();
@@ -301,7 +308,7 @@ pub fn draw_grid(
     cr.save().unwrap();
     cr.rectangle(ROW_HEADER_WIDTH, COL_HEADER_HEIGHT, width - ROW_HEADER_WIDTH, height - COL_HEADER_HEIGHT);
     cr.clip();
-    cr.set_source_rgb(SELECTION_COLOR.0, SELECTION_COLOR.1, SELECTION_COLOR.2);
+    cr.set_source_rgb(accent.0, accent.1, accent.2);
     cr.set_line_width(2.0);
     cr.rectangle(x0, y0, x1 - x0, y1 - y0);
     cr.stroke().unwrap();
@@ -309,7 +316,7 @@ pub fn draw_grid(
     // Fill handle (#113): a small solid square at the selection's
     // bottom-right corner, same shared geometry hit_fill_handle() tests
     // presses against — see tables_core::sheet::fill_handle_center.
-    cr.set_source_rgb(SELECTION_COLOR.0, SELECTION_COLOR.1, SELECTION_COLOR.2);
+    cr.set_source_rgb(accent.0, accent.1, accent.2);
     cr.rectangle(
         x1 - tables_core::sheet::FILL_HANDLE_HALF,
         y1 - tables_core::sheet::FILL_HANDLE_HALF,

@@ -21,3 +21,11 @@ def test_adaptive_design_records_theme_and_keyboard_policy():
     adr = (ROOT / "docs" / "adr" / "0006-adaptive-editor-shell.md").read_text()
     for required in ("Pango", "high-contrast", "command palette", "44sp"):
         assert required in adr
+
+
+def test_shared_theme_policy_is_available_to_custom_renderers():
+    assert "pub fn accent_rgb" in COMMON
+    assert "pub fn canvas_foreground" in COMMON
+    grid = (ROOT / "tables" / "src" / "grid_render.rs").read_text()
+    assert "suite_common::accent_rgb" in (ROOT / "tables" / "src" / "window.rs").read_text()
+    assert "draw_pango_text" in grid

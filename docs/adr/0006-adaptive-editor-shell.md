@@ -25,3 +25,9 @@ Letters, Tables, and Decks inherit the contract. GUI journeys should capture
 all three apps at 400, 800, and 1280px under light, dark, and a high-contrast
 theme. Keyboard navigation and the command palette are the fallback path for
 every action hidden by an adaptive breakpoint.
+
+The selected GNOME patterns are the adaptive-layout and header-bar patterns
+from `gnome-gui-spec`, with the shared `AdwToolbarView`/raised toolbar as the
+cross-suite shell. Tables additionally uses the theme accent named color for
+selection outlines and Pango layouts for all custom grid text. This keeps the
+canvas aligned with the shell instead of maintaining an app-specific palette.

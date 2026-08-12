@@ -242,6 +242,25 @@ pub fn apply_touch_target(widget: &impl IsA<gtk::Widget>) {
     widget.set_size_request(TOUCH_TARGET_SP, TOUCH_TARGET_SP);
 }
 
+/// Read the active libadwaita accent through GTK's stable named-color API.
+/// Custom Cairo renderers must not invent a second accent palette: this keeps
+/// canvas selection and contextual controls aligned with the shell theme.
+#[allow(deprecated)]
+pub fn accent_rgb(widget: &impl IsA<gtk::Widget>) -> (f64, f64, f64) {
+    use gtk::prelude::StyleContextExt;
+    widget
+        .style_context()
+        .lookup_color("accent_bg_color")
+        .map(|c| (c.red() as f64, c.green() as f64, c.blue() as f64))
+        .unwrap_or((0.0, 0.5, 1.0))
+}
+
+/// Theme-aware foreground color for canvas text. Keep the fallback contrast
+/// explicit for high-contrast themes where a named color may be unavailable.
+pub fn canvas_foreground(is_dark: bool) -> (f64, f64, f64) {
+    if is_dark { (0.94, 0.94, 0.94) } else { (0.08, 0.08, 0.08) }
+}
+
 /// A responsive toolbar with a primary (always-visible) section and an
 /// extended section that collapses into a "More" menu on narrow windows.
 ///

@@ -145,9 +145,11 @@ impl TablesWindow {
             let da_v = v_adj.clone();
             let gl = show_gridlines.clone();
             let da_refs = formula_refs.clone();
+            let accent_area = drawing_area.clone();
             drawing_area.set_draw_func(move |_da, cr, width, height| {
                 draw_grid(cr, &da_state, width as f64, height as f64,
-                          da_h.value(), da_v.value(), gl.get(), &da_refs.borrow());
+                          da_h.value(), da_v.value(), gl.get(), &da_refs.borrow(),
+                          suite_common::accent_rgb(&accent_area));
             });
             let gl = show_gridlines.clone();
             let da = drawing_area.clone();
@@ -738,15 +740,16 @@ impl TablesWindow {
                             // (the same AppState RefCell as `st`), so drop
                             // both -- not just `sh` -- before calling it.
                             drop(sh); drop(st);
-                            draw_grid(cr, &s2, width as f64, height as f64, h2.value(), v2.value(), gl2.get(), &refs2.borrow());
+                            draw_grid(cr, &s2, width as f64, height as f64, h2.value(), v2.value(), gl2.get(), &refs2.borrow(), suite_common::accent_rgb(&da2));
                             // Restore normal draw func
                             let s3 = s2.clone();
                             let h3 = h2.clone();
                             let v3 = v2.clone();
                             let gl3 = gl2.clone();
                             let refs3 = refs2.clone();
+                            let accent_da = da2.clone();
                             da2.set_draw_func(move |_, cr, w, h| {
-                                draw_grid(cr, &s3, w as f64, h as f64, h3.value(), v3.value(), gl3.get(), &refs3.borrow());
+                                draw_grid(cr, &s3, w as f64, h as f64, h3.value(), v3.value(), gl3.get(), &refs3.borrow(), suite_common::accent_rgb(&accent_da));
                             });
                         });
                         da.queue_draw();
