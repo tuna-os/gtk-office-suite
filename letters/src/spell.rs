@@ -233,8 +233,8 @@ fn generate_candidates(word: &str) -> Vec<String> {
         let s: String = chars[..i].iter().chain(&chars[i+1..]).collect();
         v.push(s);
     }
-    // Transpositions
-    for i in 0..n-1 {
+    // Transpositions (saturating: an empty word has no adjacent pair to swap)
+    for i in 0..n.saturating_sub(1) {
         let mut c = chars.clone();
         c.swap(i, i+1);
         v.push(c.into_iter().collect());
@@ -380,7 +380,23 @@ mod tests {
         assert_eq!(generate_candidates("cat").len(), 31);
         // n=5 "hello": 5 + 4 + 3 ('e'→'i'/'a', 'o'→'u') + 6×6 = 48.
         assert_eq!(generate_candidates("hello").len(), 48);
-        // NOTE: generate_candidates("") panics with subtraction overflow in
-        // the transposition loop (0..n-1 with n=0) — tracked in #172.
+    }
+
+    #[test]
+    fn generate_candidates_handles_empty_word() {
+        // n=0: no deletions, no transpositions (the 0..n-1 underflow of #172),
+        // no substitutions — only the 1×6 insertion loop applies.
+        let c = generate_candidates("");
+        assert_eq!(c.len(), 6);
+        for want in ["e", "s", "l", "r", "n", "t"] {
+            assert!(c.iter().any(|s| s == want), "missing candidate {want}");
+        }
+    }
+
+    #[test]
+    fn generate_candidates_handles_single_char_word() {
+        // n=1 is the other transposition-loop boundary: 1 deletion + 0
+        // transpositions + 1 substitution ('a'→'e') + 2×6 insertions = 14.
+        assert_eq!(generate_candidates("a").len(), 14);
     }
 }
