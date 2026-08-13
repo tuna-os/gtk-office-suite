@@ -436,6 +436,17 @@ impl Document {
 
     /// Apply a style patch to every character in [start, end).
     pub fn apply_run_style(&mut self, start: usize, end: usize, patch: &StylePatch) {
+        self.restyle_range(start, end, |style| patch.apply_to(style));
+    }
+
+    /// Replace the style of every character in [start, end) outright. Used
+    /// when typed text must adopt a style rather than merge into it (e.g.
+    /// replacing a styled selection).
+    pub fn set_run_style(&mut self, start: usize, end: usize, style: &RunStyle) {
+        self.restyle_range(start, end, |target| *target = style.clone());
+    }
+
+    fn restyle_range(&mut self, start: usize, end: usize, edit: impl Fn(&mut RunStyle)) {
         if end <= start { return; }
         let (spi, spo) = self.locate(start);
         let (epi, epo) = self.locate(end);
@@ -449,7 +460,7 @@ impl Document {
             let tail = self.paragraphs[pi].split_at(to);
             let mut mid = self.paragraphs[pi].split_at(from);
             for run in &mut mid.runs {
-                patch.apply_to(&mut run.style);
+                edit(&mut run.style);
             }
             self.paragraphs[pi].runs.extend(mid.runs);
             self.paragraphs[pi].runs.extend(tail.runs);

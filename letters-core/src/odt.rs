@@ -362,10 +362,23 @@ fn attr_val(e: &quick_xml::events::BytesStart, name: &str) -> Option<String> {
 /// styles into model styles keyed by style name.
 struct AutoStyles {
     text: std::collections::HashMap<String, RunStyle>,
-    para: std::collections::HashMap<String, (Alignment, bool, f32, f64, f64, f64, f64, f64)>,
+    para: std::collections::HashMap<String, AutoParaStyle>,
     /// Automatic paragraph style → its style:parent-style-name (LO
     /// rewrites named styles as autos inheriting from the built-in).
     para_parent: std::collections::HashMap<String, String>,
+}
+
+/// Paragraph-level values read off one automatic style. Lengths are points.
+#[derive(Clone, Copy, Debug, Default)]
+struct AutoParaStyle {
+    alignment: Alignment,
+    page_break_before: bool,
+    line_spacing: f32,
+    space_before_pt: f64,
+    space_after_pt: f64,
+    left_indent_pt: f64,
+    right_indent_pt: f64,
+    first_line_indent_pt: f64,
 }
 
 fn parse_auto_styles(xml: &str) -> AutoStyles {
@@ -468,10 +481,16 @@ fn parse_auto_styles(xml: &str) -> AutoStyles {
                                 .map(|pct| pct / 100.0)
                                 .unwrap_or(1.0);
                             let length = |name: &str| attr_val(&e, name).and_then(|v| parse_length_pt(&v)).unwrap_or(0.0);
-                            out.para.insert(name, (align, brk, spacing,
-                                length("fo:space-before"), length("fo:space-after"),
-                                length("fo:margin-left"), length("fo:margin-right"),
-                                length("fo:text-indent")));
+                            out.para.insert(name, AutoParaStyle {
+                                alignment: align,
+                                page_break_before: brk,
+                                line_spacing: spacing,
+                                space_before_pt: length("fo:space-before"),
+                                space_after_pt: length("fo:space-after"),
+                                left_indent_pt: length("fo:margin-left"),
+                                right_indent_pt: length("fo:margin-right"),
+                                first_line_indent_pt: length("fo:text-indent"),
+                            });
                         }
                     }
                     _ => {}
@@ -538,15 +557,15 @@ pub fn read(path: &str) -> Result<Document, String> {
                         style.heading = Some(lvl.clamp(1, 6));
                     }
                     if let Some(name) = attr_val(&e, "text:style-name") {
-                        if let Some((align, brk, spacing, before, after, left, right, first)) = auto.para.get(&name) {
-                            style.alignment = *align;
-                            style.page_break_before = *brk;
-                            style.line_spacing = *spacing;
-                            style.space_before_pt = *before;
-                            style.space_after_pt = *after;
-                            style.left_indent_pt = *left;
-                            style.right_indent_pt = *right;
-                            style.first_line_indent_pt = *first;
+                        if let Some(auto_para) = auto.para.get(&name) {
+                            style.alignment = auto_para.alignment;
+                            style.page_break_before = auto_para.page_break_before;
+                            style.line_spacing = auto_para.line_spacing;
+                            style.space_before_pt = auto_para.space_before_pt;
+                            style.space_after_pt = auto_para.space_after_pt;
+                            style.left_indent_pt = auto_para.left_indent_pt;
+                            style.right_indent_pt = auto_para.right_indent_pt;
+                            style.first_line_indent_pt = auto_para.first_line_indent_pt;
                         }
                         // Direct built-in name, or an automatic style
                         // inheriting from one (LO's rewrite pattern).
@@ -645,30 +664,32 @@ pub fn read(path: &str) -> Result<Document, String> {
         let mut reader = Reader::from_str(&styles);
         let mut in_header = false;
         let mut in_footer = false;
-        let mut read_page_layout = |e: &quick_xml::events::BytesStart| {
-            let w = attr_val(e, "fo:page-width").and_then(|v| parse_length_pt(&v));
-            let h = attr_val(e, "fo:page-height").and_then(|v| parse_length_pt(&v));
-            if let (Some(width_pt), Some(height_pt)) = (w, h) {
-                let d = PageGeometry::default();
-                let m = |name: &str, fallback: f64| {
-                    attr_val(e, name).and_then(|v| parse_length_pt(&v)).unwrap_or(fallback)
-                };
-                doc.page = Some(PageGeometry {
-                    width_pt,
-                    height_pt,
-                    margin_top_pt: m("fo:margin-top", d.margin_top_pt),
-                    margin_bottom_pt: m("fo:margin-bottom", d.margin_bottom_pt),
-            margin_left_pt: m("fo:margin-left", d.margin_left_pt),
-            margin_right_pt: m("fo:margin-right", d.margin_right_pt),
-            columns: d.columns,
-            column_gap_pt: d.column_gap_pt,
-                });
-            }
+        // Returns the geometry instead of writing to `doc` so the borrow ends
+        // with the call; `style:columns` needs `doc.page` mutably right after.
+        let read_page_layout = |e: &quick_xml::events::BytesStart| -> Option<PageGeometry> {
+            let width_pt = attr_val(e, "fo:page-width").and_then(|v| parse_length_pt(&v))?;
+            let height_pt = attr_val(e, "fo:page-height").and_then(|v| parse_length_pt(&v))?;
+            let d = PageGeometry::default();
+            let m = |name: &str, fallback: f64| {
+                attr_val(e, name).and_then(|v| parse_length_pt(&v)).unwrap_or(fallback)
+            };
+            Some(PageGeometry {
+                width_pt,
+                height_pt,
+                margin_top_pt: m("fo:margin-top", d.margin_top_pt),
+                margin_bottom_pt: m("fo:margin-bottom", d.margin_bottom_pt),
+                margin_left_pt: m("fo:margin-left", d.margin_left_pt),
+                margin_right_pt: m("fo:margin-right", d.margin_right_pt),
+                columns: d.columns,
+                column_gap_pt: d.column_gap_pt,
+            })
         };
         loop {
             match reader.read_event() {
                 Ok(Event::Empty(e)) if e.name().as_ref() == b"style:page-layout-properties" => {
-                    read_page_layout(&e);
+                    if let Some(page) = read_page_layout(&e) {
+                        doc.page = Some(page);
+                    }
                 }
                 Ok(Event::Empty(e)) if e.name().as_ref() == b"style:columns" => {
                     if let Some(page) = doc.page.as_mut() {
@@ -681,7 +702,11 @@ pub fn read(path: &str) -> Result<Document, String> {
                 Ok(Event::Start(e)) => match e.name().as_ref() {
                     b"style:header" => in_header = true,
                     b"style:footer" => in_footer = true,
-                    b"style:page-layout-properties" => read_page_layout(&e),
+                    b"style:page-layout-properties" => {
+                        if let Some(page) = read_page_layout(&e) {
+                            doc.page = Some(page);
+                        }
+                    }
                     _ => {}
                 },
                 Ok(Event::End(e)) => match e.name().as_ref() {

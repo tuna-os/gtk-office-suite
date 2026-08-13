@@ -40,9 +40,14 @@ impl StructuredEditor {
 
     pub fn insert_text(&mut self, text: &str) {
         if let Some((start, end)) = self.selection.take() {
+            // Typing over a selection keeps the replaced text's style, as
+            // word processors do. The style must be captured before the
+            // delete: emptying a paragraph leaves no run to inherit from.
+            let style = self.document.style_at(start);
             self.document.delete_range(start, end);
             self.document.insert_text(start, text);
             self.cursor = start + text.chars().count();
+            self.document.set_run_style(start, self.cursor, &style);
         } else {
             self.document.insert_text(self.cursor, text);
             self.cursor += text.chars().count();
@@ -109,7 +114,7 @@ mod tests {
         editor.insert_text("world");
         assert_eq!(editor.document().to_plain_text(), "world");
         assert_eq!(editor.cursor(), 5);
-        assert_eq!(editor.document().style_at(0).bold, true);
+        assert!(editor.document().style_at(0).bold);
     }
 
     #[test]

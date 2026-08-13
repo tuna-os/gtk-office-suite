@@ -177,8 +177,8 @@ pub fn write(doc: &Document, path: &str) -> Result<(), String> {
         let para = &paras[i];
         i += 1;
         let mut p = match para.style.list {
-            ListKind::Bullet => out.add_bullet_list_item("", para.style.list_level as usize),
-            ListKind::Numbered => out.add_numbered_list_item("", para.style.list_level as usize),
+            ListKind::Bullet => out.add_bullet_list_item("", u32::from(para.style.list_level)),
+            ListKind::Numbered => out.add_numbered_list_item("", u32::from(para.style.list_level)),
             ListKind::None => out.add_paragraph(""),
         };
         if let Some(level) = para.style.heading {
