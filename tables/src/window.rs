@@ -99,23 +99,6 @@ impl TablesWindow {
         let state = controller.borrow().state.clone();
         let current_path = controller.borrow().file_path.clone();
 
-        // Test-only state snapshot (#104): only registered when
-        // GTK_OFFICE_TEST_MODE is set, so it doesn't exist as an attack
-        // surface or discoverable action in a normal/production run.
-        // Activating it writes a JSON snapshot of the active sheet's
-        // top-left 100x26 cells to the path in GTK_OFFICE_SNAPSHOT_PATH —
-        // GUI tests read that file instead of scraping AT-SPI cell text.
-        if std::env::var_os("GTK_OFFICE_TEST_MODE").is_some() {
-            let ctl = controller.clone();
-            let act = gtk4::gio::SimpleAction::new("test-snapshot", None);
-            act.connect_activate(move |_, _| {
-                let Ok(path) = std::env::var("GTK_OFFICE_SNAPSHOT_PATH") else { return };
-                let snap = tables_core::snapshot::snapshot(&ctl.borrow(), 0..100, 0..26);
-                let _ = std::fs::write(path, snap.to_json());
-            });
-            app.add_action(&act);
-        }
-
         let settings = gio::Settings::new("org.tunaos.tables");
         let autosave_slot = Rc::new(suite_common::autosave::AutosaveSlot::new(
             autosave_state_dir(), next_doc_id(),
@@ -143,15 +126,47 @@ impl TablesWindow {
         drawing_area.update_property(&[gtk4::accessible::Property::Label("Spreadsheet grid")]);
         update_grid_a11y(&drawing_area, "A", 0, "");
 
+        // Test-only state snapshot (#104): only registered when
+        // GTK_OFFICE_TEST_MODE is set, so it doesn't exist as an attack
+        // surface or discoverable action in a normal/production run.
+        // Activating it writes a JSON snapshot of the active sheet's
+        // top-left 100x26 cells to the path in GTK_OFFICE_SNAPSHOT_PATH —
+        // GUI tests read that file instead of scraping AT-SPI cell text.
+        //
+        // Registered here (after the drawing area exists) so the snapshot can
+        // also report the canvas origin: AT-SPI mis-reports the position of
+        // widgets nested in boxes (#132), so mouse-driven journeys need GTK's
+        // own answer rather than a hardcoded chrome height that shifts with
+        // toolbar metrics.
+        if std::env::var_os("GTK_OFFICE_TEST_MODE").is_some() {
+            let ctl = controller.clone();
+            let snap_area = drawing_area.clone();
+            let act = gtk4::gio::SimpleAction::new("test-snapshot", None);
+            act.connect_activate(move |_, _| {
+                let Ok(path) = std::env::var("GTK_OFFICE_SNAPSHOT_PATH") else { return };
+                let mut snap = tables_core::snapshot::snapshot(&ctl.borrow(), 0..100, 0..26);
+                snap.grid_origin = snap_area
+                    .root()
+                    .and_then(|root| {
+                        snap_area.compute_point(&root, &gtk4::graphene::Point::new(0.0, 0.0))
+                    })
+                    .map(|pt| (pt.x() as i32, pt.y() as i32));
+                let _ = std::fs::write(path, snap.to_json());
+            });
+            app.add_action(&act);
+        }
+
         {
             let da_state = state.clone();
             let da_h = h_adj.clone();
             let da_v = v_adj.clone();
             let gl = show_gridlines.clone();
             let da_refs = formula_refs.clone();
+            let accent_area = drawing_area.clone();
             drawing_area.set_draw_func(move |_da, cr, width, height| {
                 draw_grid(cr, &da_state, width as f64, height as f64,
-                          da_h.value(), da_v.value(), gl.get(), &da_refs.borrow());
+                          da_h.value(), da_v.value(), gl.get(), &da_refs.borrow(),
+                          suite_common::accent_rgb(&accent_area));
             });
             let gl = show_gridlines.clone();
             let da = drawing_area.clone();
@@ -742,15 +757,16 @@ impl TablesWindow {
                             // (the same AppState RefCell as `st`), so drop
                             // both -- not just `sh` -- before calling it.
                             drop(sh); drop(st);
-                            draw_grid(cr, &s2, width as f64, height as f64, h2.value(), v2.value(), gl2.get(), &refs2.borrow());
+                            draw_grid(cr, &s2, width as f64, height as f64, h2.value(), v2.value(), gl2.get(), &refs2.borrow(), suite_common::accent_rgb(&da2));
                             // Restore normal draw func
                             let s3 = s2.clone();
                             let h3 = h2.clone();
                             let v3 = v2.clone();
                             let gl3 = gl2.clone();
                             let refs3 = refs2.clone();
+                            let accent_da = da2.clone();
                             da2.set_draw_func(move |_, cr, w, h| {
-                                draw_grid(cr, &s3, w as f64, h as f64, h3.value(), v3.value(), gl3.get(), &refs3.borrow());
+                                draw_grid(cr, &s3, w as f64, h as f64, h3.value(), v3.value(), gl3.get(), &refs3.borrow(), suite_common::accent_rgb(&accent_da));
                             });
                         });
                         da.queue_draw();
