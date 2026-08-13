@@ -1015,36 +1015,54 @@ class TablesSnapshotSmoke(BaseGUITestCase):
         self.assertIsNone(self.process.poll(), "tables crashed writing a snapshot")
 
 
-class TablesFillHandleSmoke(BaseGUITestCase):
+class TablesCanvasCoordsMixin:
+    """Screen coordinates for mouse journeys on the Tables grid.
+
+    The grid's own layout constants (tables-core::sheet's ROW_HEADER_WIDTH
+    50, COL_HEADER_HEIGHT 26, ROW_HEIGHT 28, COL_WIDTH 90) are fixed, but
+    the canvas *origin* is not: it sits below the header/toolbar/name-box
+    chrome, whose height moves with toolbar metrics (the 44sp touch targets
+    in #118 shifted it). AT-SPI can't be asked either — it mis-reports the
+    position of widgets nested in box containers (#132; the virtual cell
+    nodes have the right size but the wrong position). So the app reports
+    the canvas origin in the #104 test snapshot and these tests read it,
+    instead of hardcoding a chrome height that silently rots. Under
+    matchbox the window is fullscreen at 0,0, so the window-relative origin
+    doubles as the screen origin (same assumption as DecksSelectionSmoke's
+    canvas_at hint).
+    """
+
+    ROW_HEADER_WIDTH = 50
+    COL_HEADER_HEIGHT = 26
+    ROW_HEIGHT = 28
+    COL_WIDTH = 90
+
+    def canvas_origin(self) -> tuple[float, float]:
+        origin = self.trigger_snapshot("org.tunaos.tables").get("grid_origin")
+        self.assertIsNotNone(
+            origin, "snapshot has no grid_origin — is the grid canvas realized?")
+        return float(origin["x"]), float(origin["y"])
+
+
+class TablesFillHandleSmoke(TablesCanvasCoordsMixin, BaseGUITestCase):
     """Fill handle (#113): dragging the handle at a selection's bottom-
     right corner tiles its content downward — a real mouse drag, not
     keyboard-only, verified against the #104 state snapshot rather than
     AT-SPI cell text/position (this grid's virtual cell nodes share the
     same container-position bridge gap as #132 — size is right, position
     isn't — so this test computes screen coordinates from the grid's own
-    fixed layout constants instead of trusting AT-SPI node position)."""
+    layout constants plus the snapshot-reported canvas origin instead of
+    trusting AT-SPI node position)."""
 
     app_name = "tables"
-
-    # Canvas origin: below the header/name-box UI chrome, left-aligned
-    # under matchbox's fullscreen layout. Empirically measured via
-    # screenshot against tables-core::sheet's ROW_HEADER_WIDTH (50),
-    # COL_HEADER_HEIGHT (26), ROW_HEIGHT (28), COL_WIDTH (90) — not an
-    # AT-SPI-reported position.
-    CANVAS_X = 0
-    CANVAS_Y = 128
-    ROW_HEADER_WIDTH = 50
-    COL_HEADER_HEIGHT = 26
-    ROW_HEIGHT = 28
-    COL_WIDTH = 90
 
     def setUp(self):
         self._snapshot_path = self.isolate_snapshot(prefix="tables-fill-")
         super().setUp()
 
-    def _cell_bottom_right(self, row: int, col: int) -> tuple[float, float]:
-        x = self.CANVAS_X + self.ROW_HEADER_WIDTH + (col + 1) * self.COL_WIDTH
-        y = self.CANVAS_Y + self.COL_HEADER_HEIGHT + (row + 1) * self.ROW_HEIGHT
+    def _cell_bottom_right(self, origin: tuple[float, float], row: int, col: int) -> tuple[float, float]:
+        x = origin[0] + self.ROW_HEADER_WIDTH + (col + 1) * self.COL_WIDTH
+        y = origin[1] + self.COL_HEADER_HEIGHT + (row + 1) * self.ROW_HEIGHT
         return x, y
 
     def test_drag_fill_handle_down_tiles_the_value(self):
@@ -1070,8 +1088,9 @@ class TablesFillHandleSmoke(BaseGUITestCase):
         rawinput.keyCombo("Return")
         time.sleep(0.3)
 
-        hx, hy = self._cell_bottom_right(0, 0)
-        _, target_y = self._cell_bottom_right(3, 0)
+        origin = self.canvas_origin()
+        hx, hy = self._cell_bottom_right(origin, 0, 0)
+        _, target_y = self._cell_bottom_right(origin, 3, 0)
         self.drag(hx, hy, hx, target_y)
         time.sleep(0.5)
 
@@ -1146,7 +1165,7 @@ class TablesFormulaReferenceHighlightSmoke(BaseGUITestCase):
         self.assertIsNone(self.process.poll(), "tables crashed typing a formula with references")
 
 
-class TablesSortIndicatorSmoke(BaseGUITestCase):
+class TablesSortIndicatorSmoke(TablesCanvasCoordsMixin, BaseGUITestCase):
     """Sort (#113's "visible criteria"): clicking a column header toggles
     sort on that column, drawn as a small triangle in the header — clicking
     again reverses direction, a third time clears it. Verified via the
@@ -1156,19 +1175,13 @@ class TablesSortIndicatorSmoke(BaseGUITestCase):
 
     app_name = "tables"
 
-    CANVAS_X = 0
-    CANVAS_Y = 128
-    ROW_HEADER_WIDTH = 50
-    COL_HEADER_HEIGHT = 26
-    COL_WIDTH = 90
-
     def setUp(self):
         self._snapshot_path = self.isolate_snapshot(prefix="tables-sort-")
         super().setUp()
 
-    def _col_header_center(self, col: int) -> tuple[float, float]:
-        x = self.CANVAS_X + self.ROW_HEADER_WIDTH + col * self.COL_WIDTH + self.COL_WIDTH / 2
-        y = self.CANVAS_Y + self.COL_HEADER_HEIGHT / 2
+    def _col_header_center(self, origin: tuple[float, float], col: int) -> tuple[float, float]:
+        x = origin[0] + self.ROW_HEADER_WIDTH + col * self.COL_WIDTH + self.COL_WIDTH / 2
+        y = origin[1] + self.COL_HEADER_HEIGHT / 2
         return x, y
 
     def _sorted_col(self):
@@ -1204,8 +1217,9 @@ class TablesSortIndicatorSmoke(BaseGUITestCase):
         # (row/col header intersection, outside the header-click handler's
         # `wx > ROW_HEADER_WIDTH` zone, so it can't itself trigger a sort)
         # between clicks so each mousemove is a genuine move.
-        x, y = self._col_header_center(0)
-        corner_x, corner_y = self.CANVAS_X + self.ROW_HEADER_WIDTH / 2, self.CANVAS_Y + self.COL_HEADER_HEIGHT / 2
+        origin = self.canvas_origin()
+        x, y = self._col_header_center(origin, 0)
+        corner_x, corner_y = origin[0] + self.ROW_HEADER_WIDTH / 2, origin[1] + self.COL_HEADER_HEIGHT / 2
 
         rawinput.click(int(x), int(y))
         time.sleep(0.5)

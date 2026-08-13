@@ -48,6 +48,18 @@ pub struct WorkbookSnapshot {
     pub active_sheet_index: usize,
     pub sheet_names: Vec<String>,
     pub sheet: SheetSnapshot,
+    /// Top-left of the grid canvas in window coordinates, filled in by the
+    /// app layer (`tables/src/window.rs`) because only it can ask GTK where
+    /// the drawing area landed. `None` when the canvas isn't realized yet.
+    ///
+    /// Mouse-driven GUI journeys (fill-handle drag, header click) need the
+    /// canvas origin to turn a cell address into a screen pixel, and AT-SPI
+    /// reports the wrong position for widgets nested in box containers
+    /// (upstream GTK4 bridge gap, #132). They used to hardcode a measured
+    /// chrome height, which silently breaks whenever toolbar metrics change
+    /// (e.g. the 44sp touch targets in #118) — reporting it here keeps those
+    /// tests pinned to the real layout instead.
+    pub grid_origin: Option<(i32, i32)>,
 }
 
 /// Snapshot the active sheet's cells within `rows` x `cols`, skipping
@@ -95,7 +107,7 @@ pub fn snapshot(
         sorted_col,
     };
 
-    WorkbookSnapshot { active_sheet_index, sheet_names, sheet }
+    WorkbookSnapshot { active_sheet_index, sheet_names, sheet, grid_origin: None }
 }
 
 fn escape_json(s: &str) -> String {
@@ -167,10 +179,15 @@ impl WorkbookSnapshot {
             Some((c, asc)) => format!("{{\"col\":{c},\"ascending\":{asc}}}"),
             None => "null".to_string(),
         };
+        let grid_origin = match self.grid_origin {
+            Some((x, y)) => format!("{{\"x\":{x},\"y\":{y}}}"),
+            None => "null".to_string(),
+        };
         format!(
-            "{{\"active_sheet_index\":{},\"sheet_names\":[{}],\"sheet\":{{\"name\":{},\"cells\":[{}],\"hidden_rows\":[{}],\"hidden_cols\":[{}],\"selection\":[{},{},{},{}],\"sorted_col\":{}}}}}",
+            "{{\"active_sheet_index\":{},\"sheet_names\":[{}],\"grid_origin\":{},\"sheet\":{{\"name\":{},\"cells\":[{}],\"hidden_rows\":[{}],\"hidden_cols\":[{}],\"selection\":[{},{},{},{}],\"sorted_col\":{}}}}}",
             self.active_sheet_index,
             sheet_names,
+            grid_origin,
             json_str(&self.sheet.name),
             cells,
             hidden_rows,
@@ -259,5 +276,16 @@ mod tests {
         let snap = snapshot(&c, 0..3, 0..2);
         assert_eq!(snap.sheet.sorted_col, Some((0, true)));
         assert!(snap.to_json().contains("\"sorted_col\":{\"col\":0,\"ascending\":true}"));
+    }
+
+    #[test]
+    fn snapshot_reports_grid_origin_when_the_app_layer_supplies_it() {
+        let c = WorkbookController::new(2, 2).unwrap();
+        let mut snap = snapshot(&c, 0..2, 0..2);
+        assert_eq!(snap.grid_origin, None);
+        assert!(snap.to_json().contains("\"grid_origin\":null"));
+
+        snap.grid_origin = Some((0, 138));
+        assert!(snap.to_json().contains("\"grid_origin\":{\"x\":0,\"y\":138}"));
     }
 }

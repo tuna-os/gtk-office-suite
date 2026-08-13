@@ -95,23 +95,6 @@ impl TablesWindow {
         let state = controller.borrow().state.clone();
         let current_path = controller.borrow().file_path.clone();
 
-        // Test-only state snapshot (#104): only registered when
-        // GTK_OFFICE_TEST_MODE is set, so it doesn't exist as an attack
-        // surface or discoverable action in a normal/production run.
-        // Activating it writes a JSON snapshot of the active sheet's
-        // top-left 100x26 cells to the path in GTK_OFFICE_SNAPSHOT_PATH —
-        // GUI tests read that file instead of scraping AT-SPI cell text.
-        if std::env::var_os("GTK_OFFICE_TEST_MODE").is_some() {
-            let ctl = controller.clone();
-            let act = gtk4::gio::SimpleAction::new("test-snapshot", None);
-            act.connect_activate(move |_, _| {
-                let Ok(path) = std::env::var("GTK_OFFICE_SNAPSHOT_PATH") else { return };
-                let snap = tables_core::snapshot::snapshot(&ctl.borrow(), 0..100, 0..26);
-                let _ = std::fs::write(path, snap.to_json());
-            });
-            app.add_action(&act);
-        }
-
         let settings = gio::Settings::new("org.tunaos.tables");
         let autosave_slot = Rc::new(suite_common::autosave::AutosaveSlot::new(
             autosave_state_dir(), next_doc_id(),
@@ -138,6 +121,36 @@ impl TablesWindow {
         drawing_area.set_accessible_role(gtk4::AccessibleRole::Table);
         drawing_area.update_property(&[gtk4::accessible::Property::Label("Spreadsheet grid")]);
         update_grid_a11y(&drawing_area, "A", 0, "");
+
+        // Test-only state snapshot (#104): only registered when
+        // GTK_OFFICE_TEST_MODE is set, so it doesn't exist as an attack
+        // surface or discoverable action in a normal/production run.
+        // Activating it writes a JSON snapshot of the active sheet's
+        // top-left 100x26 cells to the path in GTK_OFFICE_SNAPSHOT_PATH —
+        // GUI tests read that file instead of scraping AT-SPI cell text.
+        //
+        // Registered here (after the drawing area exists) so the snapshot can
+        // also report the canvas origin: AT-SPI mis-reports the position of
+        // widgets nested in boxes (#132), so mouse-driven journeys need GTK's
+        // own answer rather than a hardcoded chrome height that shifts with
+        // toolbar metrics.
+        if std::env::var_os("GTK_OFFICE_TEST_MODE").is_some() {
+            let ctl = controller.clone();
+            let snap_area = drawing_area.clone();
+            let act = gtk4::gio::SimpleAction::new("test-snapshot", None);
+            act.connect_activate(move |_, _| {
+                let Ok(path) = std::env::var("GTK_OFFICE_SNAPSHOT_PATH") else { return };
+                let mut snap = tables_core::snapshot::snapshot(&ctl.borrow(), 0..100, 0..26);
+                snap.grid_origin = snap_area
+                    .root()
+                    .and_then(|root| {
+                        snap_area.compute_point(&root, &gtk4::graphene::Point::new(0.0, 0.0))
+                    })
+                    .map(|pt| (pt.x() as i32, pt.y() as i32));
+                let _ = std::fs::write(path, snap.to_json());
+            });
+            app.add_action(&act);
+        }
 
         {
             let da_state = state.clone();
