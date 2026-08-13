@@ -70,6 +70,13 @@ machine to pin the nixpkgs input and commit the result (tracked as follow-up).
 
 ## Architecture
 
+> **Which `suite-common`?** Two other repos in the org also carry this name
+> (a standalone Python/meson library, and `suite-common-rust` — a smaller,
+> separately-maintained Rust crate). **This workspace's `suite-common/` is
+> the canonical, actively-developed shared Rust crate**; see
+> [tunaos#517](https://github.com/tuna-os/tunaos/issues/517) for the
+> collision this note resolves.
+
 ```
 gtk-office-suite/
 ├── suite-common/        # Shared crate (mapped to LibreOffice's svl/ layer)
