@@ -124,6 +124,11 @@ fn para_style_props(st: &ParaStyle) -> String {
     if (st.line_spacing - 1.0).abs() > 0.01 {
         props.push_str(&format!(" fo:line-height=\"{:.0}%\"", st.line_spacing * 100.0));
     }
+    if st.space_before_pt.abs() > 0.01 { props.push_str(&format!(" fo:space-before=\"{:.2}pt\"", st.space_before_pt)); }
+    if st.space_after_pt.abs() > 0.01 { props.push_str(&format!(" fo:space-after=\"{:.2}pt\"", st.space_after_pt)); }
+    if st.left_indent_pt.abs() > 0.01 { props.push_str(&format!(" fo:margin-left=\"{:.2}pt\"", st.left_indent_pt)); }
+    if st.right_indent_pt.abs() > 0.01 { props.push_str(&format!(" fo:margin-right=\"{:.2}pt\"", st.right_indent_pt)); }
+    if st.first_line_indent_pt.abs() > 0.01 { props.push_str(&format!(" fo:text-indent=\"{:.2}pt\"", st.first_line_indent_pt)); }
     props
 }
 
@@ -261,9 +266,11 @@ fn styles_xml(doc: &Document) -> String {
             "<style:page-layout-properties \
              fo:page-width=\"{:.2}pt\" fo:page-height=\"{:.2}pt\" \
              fo:margin-top=\"{:.2}pt\" fo:margin-bottom=\"{:.2}pt\" \
-             fo:margin-left=\"{:.2}pt\" fo:margin-right=\"{:.2}pt\"/>",
+             fo:margin-left=\"{:.2}pt\" fo:margin-right=\"{:.2}pt\">\
+             <style:columns fo:column-count=\"{}\" fo:column-gap=\"{:.2}pt\"/>\
+             </style:page-layout-properties>",
             pg.width_pt, pg.height_pt, pg.margin_top_pt, pg.margin_bottom_pt,
-            pg.margin_left_pt, pg.margin_right_pt
+            pg.margin_left_pt, pg.margin_right_pt, pg.columns.max(1), pg.column_gap_pt
         ),
         None => "<style:page-layout-properties/>".to_string(),
     };
@@ -355,10 +362,23 @@ fn attr_val(e: &quick_xml::events::BytesStart, name: &str) -> Option<String> {
 /// styles into model styles keyed by style name.
 struct AutoStyles {
     text: std::collections::HashMap<String, RunStyle>,
-    para: std::collections::HashMap<String, (Alignment, bool, f32)>,
+    para: std::collections::HashMap<String, AutoParaStyle>,
     /// Automatic paragraph style → its style:parent-style-name (LO
     /// rewrites named styles as autos inheriting from the built-in).
     para_parent: std::collections::HashMap<String, String>,
+}
+
+/// Paragraph-level values read off one automatic style. Lengths are points.
+#[derive(Clone, Copy, Debug, Default)]
+struct AutoParaStyle {
+    alignment: Alignment,
+    page_break_before: bool,
+    line_spacing: f32,
+    space_before_pt: f64,
+    space_after_pt: f64,
+    left_indent_pt: f64,
+    right_indent_pt: f64,
+    first_line_indent_pt: f64,
 }
 
 fn parse_auto_styles(xml: &str) -> AutoStyles {
@@ -460,7 +480,17 @@ fn parse_auto_styles(xml: &str) -> AutoStyles {
                                 .and_then(|v| v.trim_end_matches('%').parse::<f32>().ok())
                                 .map(|pct| pct / 100.0)
                                 .unwrap_or(1.0);
-                            out.para.insert(name, (align, brk, spacing));
+                            let length = |name: &str| attr_val(&e, name).and_then(|v| parse_length_pt(&v)).unwrap_or(0.0);
+                            out.para.insert(name, AutoParaStyle {
+                                alignment: align,
+                                page_break_before: brk,
+                                line_spacing: spacing,
+                                space_before_pt: length("fo:space-before"),
+                                space_after_pt: length("fo:space-after"),
+                                left_indent_pt: length("fo:margin-left"),
+                                right_indent_pt: length("fo:margin-right"),
+                                first_line_indent_pt: length("fo:text-indent"),
+                            });
                         }
                     }
                     _ => {}
@@ -512,6 +542,7 @@ pub fn read(path: &str) -> Result<Document, String> {
     let mut span_stack: Vec<RunStyle> = Vec::new();
     let mut link_stack: Vec<String> = Vec::new();
     let mut list_kind = ListKind::None;
+    let mut list_level: u8 = 0;
 
     loop {
         match reader.read_event() {
@@ -526,10 +557,15 @@ pub fn read(path: &str) -> Result<Document, String> {
                         style.heading = Some(lvl.clamp(1, 6));
                     }
                     if let Some(name) = attr_val(&e, "text:style-name") {
-                        if let Some((align, brk, spacing)) = auto.para.get(&name) {
-                            style.alignment = *align;
-                            style.page_break_before = *brk;
-                            style.line_spacing = *spacing;
+                        if let Some(auto_para) = auto.para.get(&name) {
+                            style.alignment = auto_para.alignment;
+                            style.page_break_before = auto_para.page_break_before;
+                            style.line_spacing = auto_para.line_spacing;
+                            style.space_before_pt = auto_para.space_before_pt;
+                            style.space_after_pt = auto_para.space_after_pt;
+                            style.left_indent_pt = auto_para.left_indent_pt;
+                            style.right_indent_pt = auto_para.right_indent_pt;
+                            style.first_line_indent_pt = auto_para.first_line_indent_pt;
                         }
                         // Direct built-in name, or an automatic style
                         // inheriting from one (LO's rewrite pattern).
@@ -547,6 +583,7 @@ pub fn read(path: &str) -> Result<Document, String> {
                         }
                     }
                     style.list = list_kind;
+                    style.list_level = list_level.saturating_sub(1);
                     para = Some(Paragraph { style, runs: Vec::new() });
                 }
                 b"text:span" => {
@@ -564,9 +601,8 @@ pub fn read(path: &str) -> Result<Document, String> {
                     let name = attr_val(&e, "text:style-name").unwrap_or_default();
                     list_kind = if name.contains('N') && !name.contains("LB") {
                         ListKind::Numbered
-                    } else {
-                        ListKind::Bullet
-                    };
+                    } else { ListKind::Bullet };
+                    list_level = list_level.saturating_add(1);
                 }
                 _ => {}
             },
@@ -581,7 +617,7 @@ pub fn read(path: &str) -> Result<Document, String> {
                     push_text(&mut para, &span_stack, &link_stack, "\t");
                 }
                 b"text:p" | b"text:h" if in_body => {
-                    let style = ParaStyle { list: list_kind, ..Default::default() };
+                    let style = ParaStyle { list: list_kind, list_level: list_level.saturating_sub(1), ..Default::default() };
                     doc.paragraphs.push(Paragraph { style, runs: Vec::new() });
                 }
                 _ => {}
@@ -610,7 +646,10 @@ pub fn read(path: &str) -> Result<Document, String> {
                 b"text:a" => {
                     link_stack.pop();
                 }
-                b"text:list" => list_kind = ListKind::None,
+                b"text:list" => {
+                    list_level = list_level.saturating_sub(1);
+                    if list_level == 0 { list_kind = ListKind::None; }
+                },
                 b"office:text" => in_body = false,
                 _ => {}
             },
@@ -625,33 +664,49 @@ pub fn read(path: &str) -> Result<Document, String> {
         let mut reader = Reader::from_str(&styles);
         let mut in_header = false;
         let mut in_footer = false;
-        let mut read_page_layout = |e: &quick_xml::events::BytesStart| {
-            let w = attr_val(e, "fo:page-width").and_then(|v| parse_length_pt(&v));
-            let h = attr_val(e, "fo:page-height").and_then(|v| parse_length_pt(&v));
-            if let (Some(width_pt), Some(height_pt)) = (w, h) {
-                let d = PageGeometry::default();
-                let m = |name: &str, fallback: f64| {
-                    attr_val(e, name).and_then(|v| parse_length_pt(&v)).unwrap_or(fallback)
-                };
-                doc.page = Some(PageGeometry {
-                    width_pt,
-                    height_pt,
-                    margin_top_pt: m("fo:margin-top", d.margin_top_pt),
-                    margin_bottom_pt: m("fo:margin-bottom", d.margin_bottom_pt),
-                    margin_left_pt: m("fo:margin-left", d.margin_left_pt),
-                    margin_right_pt: m("fo:margin-right", d.margin_right_pt),
-                });
-            }
+        // Returns the geometry instead of writing to `doc` so the borrow ends
+        // with the call; `style:columns` needs `doc.page` mutably right after.
+        let read_page_layout = |e: &quick_xml::events::BytesStart| -> Option<PageGeometry> {
+            let width_pt = attr_val(e, "fo:page-width").and_then(|v| parse_length_pt(&v))?;
+            let height_pt = attr_val(e, "fo:page-height").and_then(|v| parse_length_pt(&v))?;
+            let d = PageGeometry::default();
+            let m = |name: &str, fallback: f64| {
+                attr_val(e, name).and_then(|v| parse_length_pt(&v)).unwrap_or(fallback)
+            };
+            Some(PageGeometry {
+                width_pt,
+                height_pt,
+                margin_top_pt: m("fo:margin-top", d.margin_top_pt),
+                margin_bottom_pt: m("fo:margin-bottom", d.margin_bottom_pt),
+                margin_left_pt: m("fo:margin-left", d.margin_left_pt),
+                margin_right_pt: m("fo:margin-right", d.margin_right_pt),
+                columns: d.columns,
+                column_gap_pt: d.column_gap_pt,
+            })
         };
         loop {
             match reader.read_event() {
                 Ok(Event::Empty(e)) if e.name().as_ref() == b"style:page-layout-properties" => {
-                    read_page_layout(&e);
+                    if let Some(page) = read_page_layout(&e) {
+                        doc.page = Some(page);
+                    }
+                }
+                Ok(Event::Empty(e)) if e.name().as_ref() == b"style:columns" => {
+                    if let Some(page) = doc.page.as_mut() {
+                        page.columns = attr_val(&e, "fo:column-count")
+                            .and_then(|v| v.parse::<u8>().ok()).unwrap_or(1).max(1);
+                        page.column_gap_pt = attr_val(&e, "fo:column-gap")
+                            .and_then(|v| parse_length_pt(&v)).unwrap_or(page.column_gap_pt);
+                    }
                 }
                 Ok(Event::Start(e)) => match e.name().as_ref() {
                     b"style:header" => in_header = true,
                     b"style:footer" => in_footer = true,
-                    b"style:page-layout-properties" => read_page_layout(&e),
+                    b"style:page-layout-properties" => {
+                        if let Some(page) = read_page_layout(&e) {
+                            doc.page = Some(page);
+                        }
+                    }
                     _ => {}
                 },
                 Ok(Event::End(e)) => match e.name().as_ref() {
@@ -858,10 +913,27 @@ mod tests {
             margin_bottom_pt: 54.0,
             margin_left_pt: 90.0,
             margin_right_pt: 45.0,
+            columns: 1,
+            column_gap_pt: 18.0,
         });
         let rt = round_trip(&d);
         let pg = rt.page.expect("page geometry lost");
         assert!(pg.approx_eq(&d.page.unwrap()), "geometry drifted: {pg:?}");
+    }
+
+    #[test]
+    fn structured_paragraph_layout_survives() {
+        let mut d = Document::from_plain_text("layout");
+        d.paragraphs[0].style.space_before_pt = 6.0;
+        d.paragraphs[0].style.space_after_pt = 9.0;
+        d.paragraphs[0].style.left_indent_pt = 24.0;
+        d.paragraphs[0].style.first_line_indent_pt = -12.0;
+        let rt = round_trip(&d);
+        let st = &rt.paragraphs[0].style;
+        assert!((st.space_before_pt - 6.0).abs() < 0.01);
+        assert!((st.space_after_pt - 9.0).abs() < 0.01);
+        assert!((st.left_indent_pt - 24.0).abs() < 0.01);
+        assert!((st.first_line_indent_pt + 12.0).abs() < 0.01);
     }
 
     #[test]

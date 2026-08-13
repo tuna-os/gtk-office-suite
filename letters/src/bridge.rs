@@ -220,10 +220,16 @@ pub const FOOTNOTES_KEY: &str = "letters-footnotes";
 /// ListKind. Strip the marker and set the kind when capturing.
 fn capture_list_marker(para: &mut Paragraph) {
     let text = para.text();
-    let (kind, strip) = if text.starts_with("- ") {
+    // Four spaces represent one nesting level in the editable buffer, so the
+    // marker is matched after the indent. The model keeps the level
+    // separately, so DOCX/ODT round-trips do not depend on literal
+    // whitespace in the paragraph text.
+    let indent = text.len() - text.trim_start_matches(' ').len();
+    let body = &text[indent..];
+    let (kind, marker) = if body.starts_with("- ") {
         (letters_core::ListKind::Bullet, 2)
-    } else if let Some(dot) = text.find(". ") {
-        if dot > 0 && text[..dot].chars().all(|c| c.is_ascii_digit()) {
+    } else if let Some(dot) = body.find(". ") {
+        if dot > 0 && body[..dot].chars().all(|c| c.is_ascii_digit()) {
             (letters_core::ListKind::Numbered, dot + 2)
         } else {
             return;
@@ -232,8 +238,9 @@ fn capture_list_marker(para: &mut Paragraph) {
         return;
     };
     para.style.list = kind;
-    // Remove `strip` chars from the front of the run list.
-    let mut remaining = strip;
+    para.style.list_level = (indent / 4) as u8;
+    // Remove the indent and marker chars from the front of the run list.
+    let mut remaining = indent + marker;
     while remaining > 0 {
         let Some(first) = para.runs.first_mut() else { break };
         let n = first.text.chars().count();
@@ -259,13 +266,14 @@ pub fn render_to_buffer(doc: &Document, buf: &gtk::TextBuffer) {
         }
         let para_start = insert.offset();
         match para.style.list {
-            letters_core::ListKind::Bullet => buf.insert(&mut insert, "- "),
+            letters_core::ListKind::Bullet => buf.insert(&mut insert, &format!("{}- ", "    ".repeat(para.style.list_level as usize))),
             letters_core::ListKind::Numbered => {
-                // Number within the current consecutive numbered group.
+                // Number within the current consecutive numbered group at
+                // this nesting level; list_start explicitly restarts it.
                 let n = doc.paragraphs[..i].iter().rev()
-                    .take_while(|p| p.style.list == letters_core::ListKind::Numbered)
-                    .count() + 1;
-                buf.insert(&mut insert, &format!("{n}. "));
+                    .take_while(|p| p.style.list == letters_core::ListKind::Numbered && p.style.list_level == para.style.list_level)
+                    .count() as u32 + para.style.list_start.unwrap_or(1);
+                buf.insert(&mut insert, &format!("{}{}. ", "    ".repeat(para.style.list_level as usize), n));
             }
             letters_core::ListKind::None => {}
         }
@@ -452,6 +460,41 @@ mod tests {
         assert_eq!(line_spacing_from_tag_name(""), None);
         assert_eq!(line_spacing_from_tag_name("bold"), None);
         assert_eq!(line_spacing_from_tag_name("line-spacing"), None);
+    }
+
+    // ── list markers (pure, no GTK) ───────────────────────────────────
+
+    fn captured(text: &str) -> Paragraph {
+        let mut para = Paragraph { style: Default::default(), runs: vec![Run::plain(text)] };
+        capture_list_marker(&mut para);
+        para
+    }
+
+    #[test]
+    fn capture_list_marker_reads_nesting_indent() {
+        use letters_core::ListKind;
+
+        let top = captured("- top");
+        assert_eq!(top.style.list, ListKind::Bullet);
+        assert_eq!(top.style.list_level, 0);
+        assert_eq!(top.text(), "top");
+
+        // The indent render_to_buffer emits for a nested item must come back
+        // as a level, not as literal spaces in the paragraph text.
+        let nested = captured("        - deep");
+        assert_eq!(nested.style.list, ListKind::Bullet);
+        assert_eq!(nested.style.list_level, 2);
+        assert_eq!(nested.text(), "deep");
+
+        let numbered = captured("    3. item");
+        assert_eq!(numbered.style.list, ListKind::Numbered);
+        assert_eq!(numbered.style.list_level, 1);
+        assert_eq!(numbered.text(), "item");
+
+        // Prose that merely contains ". " stays a plain paragraph.
+        let prose = captured("Hello. World");
+        assert_eq!(prose.style.list, ListKind::None);
+        assert_eq!(prose.text(), "Hello. World");
     }
 
     /// Run a GTK-dependent closure on GTK's single main thread. GTK objects may
