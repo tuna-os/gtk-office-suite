@@ -112,9 +112,6 @@ pub(crate) fn show_format_cells_dialog(
     dialog.present(parent.as_ref());
 }
 
-/// Keep the grid's accessible description in sync with the active cell so
-/// assistive tech and AT-SPI tests can read grid state.
-
 /// Conditional Formatting dialog: operator + threshold(s) + fill color,
 /// applied to the current selection (ADR 0003 §4 — cell-value rules).
 pub(crate) fn show_conditional_format_dialog(
@@ -212,12 +209,6 @@ pub(crate) fn show_conditional_format_dialog(
 /// name, not just a cell reference — see the name box's connect_activate
 /// handler) rather than a separate management UI; deleting a name is
 /// deferred until there's a concrete need for it.
-
-/// Define a workbook-scoped named range covering the current selection
-/// (#113). Jump back to a defined name via the name box (typing its
-/// name, not just a cell reference — see the name box's connect_activate
-/// handler) rather than a separate management UI; deleting a name is
-/// deferred until there's a concrete need for it.
 pub(crate) fn show_define_name_dialog(
     controller: &Rc<RefCell<WorkbookController>>,
     parent: Option<&adw::ApplicationWindow>,
@@ -271,10 +262,6 @@ pub(crate) fn show_define_name_dialog(
     dialog.set_child(Some(&grid));
     dialog.present(parent);
 }
-
-/// Page setup for PDF export (#113): paper size, orientation, and a
-/// single uniform margin (real apps allow per-side margins; this keeps
-/// the dialog to one control per concern for a first slice).
 
 /// Page setup for PDF export (#113): paper size, orientation, and a
 /// single uniform margin (real apps allow per-side margins; this keeps
@@ -362,10 +349,6 @@ pub(crate) fn show_page_setup_dialog(
     dialog.set_child(Some(&grid));
     dialog.present(parent);
 }
-
-/// Filter rows by a substring match against the currently selected
-/// column (#113). Hiding non-matching rows, not deleting them — see
-/// `WorkbookController::filter_by_value`.
 
 /// Filter rows by a substring match against the currently selected
 /// column (#113). Hiding non-matching rows, not deleting them — see
