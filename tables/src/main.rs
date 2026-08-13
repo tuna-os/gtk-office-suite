@@ -2,6 +2,7 @@ use gtk4::prelude::*;
 use gtk4::gio;
 mod charts;
 mod window;
+mod window_dialogs;
 mod preferences;
 pub mod grid_render;
 pub mod grid_area;
