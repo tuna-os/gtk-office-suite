@@ -142,7 +142,7 @@ mod tests {
     #[test]
     fn missing_media_is_reported_by_slide_and_path() {
         let mut deck = deck();
-        deck.slides[1].objects.push(SlideObject::Image { path: "/missing/video.mp4".into(), x: 0.0, y: 0.0, w: 1.0, h: 1.0 });
+        deck.slides[1].objects.push(SlideObject::Image { path: "/missing/video.mp4".into(), x: 0.0, y: 0.0, w: 1.0, h: 1.0, rotation: 0.0 });
         assert_eq!(missing_media(&deck), vec![MissingMedia { slide_index: 1, path: "/missing/video.mp4".into() }]);
     }
 }
