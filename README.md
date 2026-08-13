@@ -6,7 +6,7 @@ A LibreOffice-inspired office suite written in Rust with GTK4 and libadwaita, sh
 
 **Three apps:** Letters (word processor), Tables (spreadsheet), Decks (presentations).  
 **Stack:** Rust + gtk4-rs 0.11 + libadwaita 0.9 + GNOME 50 runtime.  
-**Status:** post-v1.0 — measured LibreOffice parity (ratcheted corpora: CommonMark 630/652, LO-Letters 109/109, LO-Decks 9/9, OpenFormula 107/107), Ctrl+K command palette, and per-app live status surfaces. See [docs/PARITY.md](docs/PARITY.md) for the feature-by-feature truth table.
+**Status:** post-v1.0 — measured LibreOffice parity (ratcheted corpora: CommonMark 630/652, LO-Letters 109/109, LO-Decks 9/9, OpenFormula 107/107), Ctrl+K command palette, and per-app live status surfaces. See [docs/PARITY.md](docs/PARITY.md) for the feature-by-feature truth table, and [ROADMAP.md](ROADMAP.md) for direction and priorities.
 
 ---
 
