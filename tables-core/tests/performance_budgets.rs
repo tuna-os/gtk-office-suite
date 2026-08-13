@@ -73,11 +73,11 @@ fn recalc_fixture() -> TablesEngine {
         let value = (row + 1).to_string();
         engine
             .model
-            .set_user_input(0, row as i32 + 1, 1, value)
+            .set_user_input(0, row + 1, 1, value)
             .expect("seed value");
         engine
             .model
-            .set_user_input(0, row as i32 + 1, 2, format!("=A{}*2", row + 1))
+            .set_user_input(0, row + 1, 2, format!("=A{}*2", row + 1))
             .expect("seed formula");
     }
     engine
