@@ -18,7 +18,7 @@ gtk-office-suite is the org's flagship **end-user product bet** and a cornerston
 - **Measured parity** (ratcheted corpora, docs/PARITY.md): CommonMark 630/652, LO-Letters 109/109, LO-Decks 9/9, OpenFormula 107/107.
 - Ctrl+K command palette; per-app live status surfaces; GUI smoke journeys deterministic (#187).
 - 21 open issues; daily merged PRs (08-11: GTK-free canonical controllers #186, fuzz coverage #185).
-- ⚠️ **No ROADMAP.md at repo root** — internal planning exists (IMPLEMENTATION-QUEUE.md, docs/IMPLEMENTATION-PLAN.md, docs/PARITY.md) but no public, dated, prioritized direction (filed tunaos#1359).
+- ✅ **ROADMAP.md published** (this file, tunaos#1359) — internal planning (IMPLEMENTATION-QUEUE.md, docs/IMPLEMENTATION-PLAN.md, docs/PARITY.md) now has a public, dated, prioritized surface, linked from README.
 - ⚠️ **GUI-layer God-files**: window.rs 2.6K/2.5K/1.6K LOC in tables/letters/decks (#168) — architectural debt before feature velocity scales.
 
 ### Priorities
@@ -50,7 +50,7 @@ gtk-office-suite is the org's flagship **end-user product bet** and a cornerston
 | Letters structured editing + pagination completeness | architect | #109, #110 | 🟡 In progress |
 | Tables virtual grid + performance budgets | architect | #112 | 🟡 In progress |
 | GUI God-file decomposition started | architect | #168 | ⬜ Not started |
-| ROADMAP.md published and linked from README / org coverage (#1295) | strategist | tunaos#1359 | 🟡 In progress |
+| ROADMAP.md published and linked from README / org coverage (#1295) | strategist | tunaos#1359 | ✅ Done |
 
 ### Q4 2026 (October–December) — "Ship it properly"
 
@@ -73,4 +73,4 @@ gtk-office-suite is the org's flagship **end-user product bet** and a cornerston
 See [docs/CONTRIBUTING.md](./docs/CONTRIBUTING.md) and [docs/DEVELOPMENT.md](./docs/DEVELOPMENT.md) for build setup (Rust + GTK4/libadwaita, Nix flake included). Pick an issue labeled `good first issue` or comment on a goal you would like to own.
 
 ---
-*Maintained by the strategist agent (tuna-os hive) — seed revision, refine with maintainer input.*
+*Maintained by the strategist agent (tuna-os hive). Last self-review: 2026-08-13 — fixed stale self-references (this doc previously described itself as not existing).*
