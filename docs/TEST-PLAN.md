@@ -51,7 +51,7 @@ rsync -a <local-checkout>/ <host>:/var/home/<user>/dev/hanthor/hanthor-rust/ --e
 | `charts.rs` | `test_bar` | Bar chart surface creation |
 | `charts.rs` | `test_pie` | Pie chart surface creation |
 
-**Status:** Cannot run locally (missing `libadwaita-1`, `libgtk-4`). Must run on himachal.
+**Status:** Cannot run locally (missing `libadwaita-1`, `libgtk-4`). Must run on the build machine.
 
 ### Letters (3 tests — needs GTK4 libs to link)
 
@@ -61,7 +61,7 @@ rsync -a <local-checkout>/ <host>:/var/home/<user>/dev/hanthor/hanthor-rust/ --e
 | `engine.rs` | `test_markdown_to_typst` | Markdown→Typst conversion |
 | `engine.rs` | *(third test)* | Document model operations |
 
-**Status:** Cannot run locally. Must run on himachal.
+**Status:** Cannot run locally. Must run on the build machine.
 
 ### Decks (1 test — needs GTK4 libs to link)
 
@@ -69,21 +69,21 @@ rsync -a <local-checkout>/ <host>:/var/home/<user>/dev/hanthor/hanthor-rust/ --e
 |------|------|-----------------|
 | `engine.rs` | `test_pptx_roundtrip` | PPTX write→read preserves slides, objects, positions |
 
-**Status:** Cannot run locally. Must run on himachal.
+**Status:** Cannot run locally. Must run on the build machine.
 
 ---
 
-## Verification Commands (run on himachal)
+## Verification Commands (run on the build machine)
 
 ```bash
 # In toolbox:
 toolbox run --container finupdate
 
 # Sync code first:
-rsync -a /var/home/james/dev/tuna-os/gtk-office-suite/ himachal:/var/home/james/dev/tuna-os/gtk-office-suite/ --exclude target --exclude .git --exclude .flatpak-builder*
+rsync -a <local-checkout>/ <host>:/var/home/<user>/dev/tuna-os/gtk-office-suite/ --exclude target --exclude .git --exclude .flatpak-builder*
 
-# On himachal, inside toolbox:
-cd /var/home/james/dev/tuna-os/gtk-office-suite
+# On the build machine, inside toolbox:
+cd ~/dev/tuna-os/gtk-office-suite
 cargo test --workspace
 
 # Expected:
