@@ -15,8 +15,8 @@ zspell = { version = "0.5", features = ["unstable-suggestions"] }
 suite-common = { path = "../suite-common" }
 letters-core = { path = "../letters-core" }
 suite-export = { path = "../suite-export" }
-rdocx = { git = "https://github.com/hanthor/rdocx.git", rev = "3929421" }
-rdocx-oxml = "0.4.0"
+rdocx = "0.4.1"
+rdocx-oxml = "0.4.1"
 serde_json = "1"
 
 [[bin]]
