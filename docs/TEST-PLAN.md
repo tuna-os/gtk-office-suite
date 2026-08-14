@@ -1,22 +1,22 @@
 # Test Verification Plan — Issue #21
 
-> All tests exist but can ONLY run on the build machine (`himachal`) which has GTK4 dev libraries.
+> All tests exist but can ONLY run on the build machine which has GTK4 dev libraries.
 > This document tracks what we need to verify before claiming v1.0 is truly complete.
 
 ---
 
-## Build Machine (himachal)
+## Build Machine
 
 Per handoff document:
 - SSH accessible
 - `toolbox run --container finupdate` — Fedora 43 toolbox with GTK4 dev deps
 - `flatpak run org.flatpak.Builder` for Flatpak builds
 - Rust toolchain via `rustup` inside toolbox
-- Workspace at `/var/home/james/dev/hanthor/hanthor-rust/`
+- Workspace: the gtk-office-suite checkout (and its sibling repos)
 
-**Sync command:**
+**Sync command (from a local checkout to the build machine):**
 ```bash
-rsync -a /home/james/dev/hanthor/hanthor-rust/ himachal:/var/home/james/dev/hanthor/hanthor-rust/ --exclude target --exclude .git --exclude .flatpak-builder*
+rsync -a <local-checkout>/ <host>:/var/home/<user>/dev/hanthor/hanthor-rust/ --exclude target --exclude .git --exclude .flatpak-builder*
 ```
 
 **Note:** The workspace was renamed to `gtk-office-suite`. Need to update the build machine path or sync to the new name.

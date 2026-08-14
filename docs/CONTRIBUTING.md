@@ -18,8 +18,8 @@
 
 | Repo | Path | When to consult |
 |------|------|----------------|
-| LibreOffice core | `/var/home/james/dev/libreoffice-core/` | Before implementing ANY new feature — check how LO does it |
-| IronCalc | `/var/home/james/dev/ironcalc-ref/` | Tables formula engine, cell model |
+| LibreOffice core | `~/dev/libreoffice-core/` (local sparse checkout) | Before implementing ANY new feature — check how LO does it |
+| IronCalc | `~/dev/ironcalc-ref/` (local clone) | Tables formula engine, cell model |
 | gnome-gui-spec | `https://github.com/hanthor/gnome-gui-spec` | Widget selection, GNOME HIG compliance |
 
 ### Skills Available
@@ -48,7 +48,7 @@ Check [IMPLEMENTATION-QUEUE.md](../IMPLEMENTATION-QUEUE.md) for effort estimates
 ### 2. Research Before Implementing
 
 For any new feature:
-1. **Check LO**: `grep -rn "FeatureName" /var/home/james/dev/libreoffice-core/sc/` or `sd/`
+1. **Check LO**: `grep -rn "FeatureName" ~/dev/libreoffice-core/sc/` or `sd/`
 2. **Check our patterns**: Search `AGENT-REFERENCE-LIBRARY.md` for the pattern number
 3. **Check crates**: Search `crates.io` before writing custom code
 4. **Check GNOME HIG**: Consult `docs/GNOME-GUIDELINES.md` for widget rules

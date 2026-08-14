@@ -200,16 +200,16 @@ just kill-all            # Stop everything
 # Start Broadway daemon on host
 gtk4-broadwayd --port 8085 :5
 
-# Build inside toolbox
-toolbox run --container finupdate cargo build --manifest-path /var/home/james/dev/tuna-os/gtk-office-suite/Cargo.toml --workspace
+# Build inside toolbox (run from the gtk-office-suite checkout)
+toolbox run --container finupdate cargo build --manifest-path $PWD/Cargo.toml --workspace
 
 # Run Letters inside toolbox with Broadway backend
 toolbox run --container finupdate \
     env DBUS_SESSION_BUS_ADDRESS="" \
-    GSETTINGS_SCHEMA_DIR=/var/home/james/dev/tuna-os/gtk-office-suite/flatpak \
+    GSETTINGS_SCHEMA_DIR=$PWD/flatpak \
     GDK_BACKEND=broadway \
     BROADWAY_DISPLAY=:5 \
-    /var/home/james/dev/tuna-os/gtk-office-suite/target/debug/letters
+    $PWD/target/debug/letters
 ```
 
 3. **Inspect DOM:** Navigate to `http://localhost:8085`, open DevTools (F12). You'll see real `<div>`, `<input>`, and `<label>` nodes for toolbar buttons, the editor area, and status bar.

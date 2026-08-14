@@ -139,7 +139,7 @@ sd/ (Draw/Impress)        →     decks/
   presenter                    transition.rs
 ```
 
-**Reference:** LibreOffice source at `/var/home/james/dev/libreoffice-core/` (sparse checkout: `sc/`, `sd/`, `svl/`, `editeng/`).
+**Reference:** LibreOffice source in a local checkout (e.g. `~/dev/libreoffice-core/`, sparse checkout: `sc/`, `sd/`, `svl/`, `editeng/`).
 
 ---
 
