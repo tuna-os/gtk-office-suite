@@ -556,7 +556,7 @@ mod tests {
         // renderer (margins, header/footer {page} substitution) end to end.
         let surface =
             cairo::ImageSurface::create(cairo::Format::ARgb32, 400, 500).expect("image surface");
-        let cr = cairo::Context::new(&surface);
+        let cr = cairo::Context::new(&surface).expect("cairo context");
         for idx in [0usize, 2usize] {
             draw_page_to_cairo(
                 &cr,
