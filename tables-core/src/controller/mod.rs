@@ -6,6 +6,7 @@
 //! - `controller.rs` — [`WorkbookController`], the edit facade GUI code drives
 //! - `mod.rs` — module wiring
 
+#[allow(clippy::module_inception)] // controller module contains a controller submodule (split of controller.rs)
 mod controller;
 mod state;
 
