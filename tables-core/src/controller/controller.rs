@@ -1,445 +1,15 @@
-// controller.rs — canonical workbook state and user-facing edit controller.
-// SPDX-License-Identifier: GPL-3.0-or-later
-
-use std::cell::{Ref, RefCell, RefMut};
+use std::cell::RefCell;
 use std::collections::HashSet;
 use std::rc::Rc;
 
 use suite_common_core::events::{Broadcaster, Hint, Listener};
 use suite_common_core::undo::{Command, UndoManager};
 
-use crate::engine::TablesEngine;
 use crate::fill::{extend_fill, infer_fill, FillDirection};
 use crate::fragment::Fragment;
 use crate::sheet::{col_label, SheetModel, SortDirection};
 
-/// Canonical mutable state for a Tables window.
-///
-/// GTK views may observe this state, but edits must go through
-/// [`WorkbookController`] so the calculation engine, rendered sheet, and undo
-/// history cannot drift apart.
-pub struct WorkbookState {
-    pub sheets: Vec<Rc<RefCell<SheetModel>>>,
-    pub active_sheet: usize,
-    pub engine: TablesEngine,
-}
-
-impl WorkbookState {
-    pub fn new(rows: usize, cols: usize) -> Result<Self, String> {
-        let engine = TablesEngine::new(rows, cols)?;
-        let sheet_id = engine.sheet_id_at(0).unwrap_or(0);
-        let sheet = SheetModel::new("Sheet1", rows, cols, sheet_id);
-        Ok(Self {
-            sheets: vec![Rc::new(RefCell::new(sheet))],
-            active_sheet: 0,
-            engine,
-        })
-    }
-
-    /// Resolve a stable sheet identity to its current position. Sheets are
-    /// never deleted out from under a live GUI reference without also being
-    /// dropped from `sheets`, so this stays in lockstep with the engine.
-    pub fn sheet_index_for_id(&self, sheet_id: u32) -> Option<usize> {
-        self.sheets
-            .iter()
-            .position(|sheet| sheet.borrow().sheet_id == sheet_id)
-    }
-
-    pub fn sheet(&self) -> Ref<'_, SheetModel> {
-        self.sheets[self.active_sheet].borrow()
-    }
-
-    pub fn sheet_mut(&self) -> RefMut<'_, SheetModel> {
-        self.sheets[self.active_sheet].borrow_mut()
-    }
-
-    /// The editable input for a cell, preserving formulas rather than their
-    /// calculated display value.
-    pub fn cell_input(&self, row: usize, col: usize) -> String {
-        self.engine
-            .formula(row, col)
-            .map(|formula| format!("={formula}"))
-            .unwrap_or_else(|| self.engine.cell(row, col))
-    }
-
-    fn set_cell_input(&mut self, row: usize, col: usize, input: &str) {
-        self.engine.set_cell_text(row, col, input);
-        self.sync_active_sheet();
-    }
-
-    fn set_cell_inputs<'a>(&mut self, inputs: impl IntoIterator<Item = (usize, usize, &'a str)>) {
-        for (row, col, input) in inputs {
-            self.engine.set_cell_text(row, col, input);
-        }
-        self.engine.evaluate();
-        self.sync_active_sheet();
-    }
-
-    fn set_cell_input_on_sheet(&mut self, sheet: usize, row: usize, col: usize, input: &str) {
-        let previous = self.active_sheet;
-        self.engine
-            .set_active_sheet(sheet)
-            .expect("valid worksheet index");
-        self.active_sheet = sheet;
-        self.set_cell_input(row, col, input);
-        self.engine
-            .set_active_sheet(previous)
-            .expect("valid worksheet index");
-        self.active_sheet = previous;
-    }
-
-    fn set_cell_inputs_on_sheet<'a>(
-        &mut self,
-        sheet: usize,
-        inputs: impl IntoIterator<Item = (usize, usize, &'a str)>,
-    ) {
-        let previous = self.active_sheet;
-        self.engine
-            .set_active_sheet(sheet)
-            .expect("valid worksheet index");
-        self.active_sheet = sheet;
-        self.set_cell_inputs(inputs);
-        self.engine
-            .set_active_sheet(previous)
-            .expect("valid worksheet index");
-        self.active_sheet = previous;
-    }
-
-    pub fn add_sheet(&mut self, name: String, rows: usize, cols: usize) -> Result<usize, String> {
-        let index = self.engine.add_sheet(&name)?;
-        let sheet_id = self.engine.sheet_id_at(index).unwrap_or(index as u32);
-        self.sheets.push(Rc::new(RefCell::new(SheetModel::new(
-            &name, rows, cols, sheet_id,
-        ))));
-        Ok(index)
-    }
-
-    pub fn switch_sheet(&mut self, index: usize) -> Result<(), String> {
-        if index >= self.sheets.len() {
-            return Err(format!("Sheet index {index} does not exist"));
-        }
-        self.engine.set_active_sheet(index)?;
-        self.active_sheet = index;
-        self.sync_active_sheet();
-        Ok(())
-    }
-
-    /// Rename a sheet in both the engine and its live presentation model.
-    pub fn rename_sheet(&mut self, index: usize, name: &str) -> Result<(), String> {
-        if index >= self.sheets.len() {
-            return Err(format!("Sheet index {index} does not exist"));
-        }
-        self.engine.rename_sheet(index, name)?;
-        self.sheets[index].borrow_mut().name = name.to_string();
-        Ok(())
-    }
-
-    /// Delete a sheet. Fails if it is the only sheet. Undo history entries
-    /// that targeted the deleted sheet become inert no-ops rather than
-    /// corrupting a different sheet (they resolve by sheet_id, and the id
-    /// no longer exists).
-    pub fn delete_sheet(&mut self, index: usize) -> Result<(), String> {
-        if index >= self.sheets.len() {
-            return Err(format!("Sheet index {index} does not exist"));
-        }
-        self.engine.delete_sheet(index)?;
-        self.sheets.remove(index);
-        self.active_sheet = self.engine.active_sheet();
-        self.sync_active_sheet();
-        Ok(())
-    }
-
-    /// Reorder sheets. `new_order` must be a permutation of current indices.
-    pub fn reorder_sheets(&mut self, new_order: &[usize]) -> Result<(), String> {
-        self.engine.reorder_sheets(new_order)?;
-        self.sheets = new_order.iter().map(|&i| self.sheets[i].clone()).collect();
-        self.active_sheet = self.engine.active_sheet();
-        Ok(())
-    }
-
-    fn sync_active_sheet(&mut self) {
-        let active = self.active_sheet;
-        self.sheets[active]
-            .borrow_mut()
-            .sync_from_engine(&self.engine);
-    }
-}
-
-struct CellInputCommand {
-    sheet_id: u32,
-    row: usize,
-    col: usize,
-    old_input: String,
-    new_input: String,
-}
-
-struct SheetSnapshotCommand {
-    sheet_id: u32,
-    before: SheetModel,
-    after: SheetModel,
-    description: &'static str,
-}
-
-impl Command<WorkbookState> for SheetSnapshotCommand {
-    fn apply(&self, state: &mut WorkbookState) {
-        if let Some(index) = state.sheet_index_for_id(self.sheet_id) {
-            *state.sheets[index].borrow_mut() = self.after.clone();
-        }
-    }
-
-    fn undo(&self, state: &mut WorkbookState) {
-        if let Some(index) = state.sheet_index_for_id(self.sheet_id) {
-            *state.sheets[index].borrow_mut() = self.before.clone();
-        }
-    }
-
-    fn description(&self) -> &str {
-        self.description
-    }
-}
-
-impl Command<WorkbookState> for CellInputCommand {
-    fn apply(&self, state: &mut WorkbookState) {
-        if let Some(index) = state.sheet_index_for_id(self.sheet_id) {
-            state.set_cell_input_on_sheet(index, self.row, self.col, &self.new_input);
-        }
-    }
-
-    fn undo(&self, state: &mut WorkbookState) {
-        if let Some(index) = state.sheet_index_for_id(self.sheet_id) {
-            state.set_cell_input_on_sheet(index, self.row, self.col, &self.old_input);
-        }
-    }
-
-    fn description(&self) -> &str {
-        "Edit Cell"
-    }
-}
-
-struct CellInputChange {
-    row: usize,
-    col: usize,
-    old_input: String,
-    new_input: String,
-}
-
-struct CellBatchCommand {
-    sheet_id: u32,
-    changes: Vec<CellInputChange>,
-    description: &'static str,
-}
-
-/// Create-a-named-range as one undo step (undo = delete it again). Errors
-/// from a stale apply/undo — e.g. redoing after something else deleted
-/// the name — are swallowed rather than panicking, same posture as
-/// CellBatchCommand's sheet_index_for_id lookups: undo/redo commands
-/// degrade gracefully when the state they target has moved on.
-struct DefinedNameCommand {
-    name: String,
-    formula: String,
-}
-
-impl Command<WorkbookState> for DefinedNameCommand {
-    fn apply(&self, state: &mut WorkbookState) {
-        let _ = state.engine.model.new_defined_name(&self.name, None, &self.formula);
-    }
-    fn undo(&self, state: &mut WorkbookState) {
-        let _ = state.engine.model.delete_defined_name(&self.name, None);
-    }
-    fn description(&self) -> &str {
-        "Define Name"
-    }
-}
-
-/// Set which rows are hidden by a column-value filter, as one undo step.
-/// Degrades gracefully (no-op) if the target sheet has since been
-/// deleted — same posture as the other undo commands here.
-struct FilterCommand {
-    sheet_id: u32,
-    before: HashSet<usize>,
-    after: HashSet<usize>,
-}
-
-impl Command<WorkbookState> for FilterCommand {
-    fn apply(&self, state: &mut WorkbookState) {
-        if let Some(idx) = state.sheet_index_for_id(self.sheet_id) {
-            state.sheets[idx].borrow_mut().hidden_rows = self.after.clone();
-        }
-    }
-    fn undo(&self, state: &mut WorkbookState) {
-        if let Some(idx) = state.sheet_index_for_id(self.sheet_id) {
-            state.sheets[idx].borrow_mut().hidden_rows = self.before.clone();
-        }
-    }
-    fn description(&self) -> &str {
-        "Filter Rows"
-    }
-}
-
-/// Manual row/column hiding (#113), independent of [`FilterCommand`] —
-/// see `SheetModel::hidden_rows_manual`'s doc comment for why they're
-/// kept separate.
-struct HideRowsCommand {
-    sheet_id: u32,
-    before: HashSet<usize>,
-    after: HashSet<usize>,
-}
-
-impl Command<WorkbookState> for HideRowsCommand {
-    fn apply(&self, state: &mut WorkbookState) {
-        if let Some(idx) = state.sheet_index_for_id(self.sheet_id) {
-            state.sheets[idx].borrow_mut().hidden_rows_manual = self.after.clone();
-        }
-    }
-    fn undo(&self, state: &mut WorkbookState) {
-        if let Some(idx) = state.sheet_index_for_id(self.sheet_id) {
-            state.sheets[idx].borrow_mut().hidden_rows_manual = self.before.clone();
-        }
-    }
-    fn description(&self) -> &str {
-        "Hide Rows"
-    }
-}
-
-struct HideColsCommand {
-    sheet_id: u32,
-    before: HashSet<usize>,
-    after: HashSet<usize>,
-}
-
-impl Command<WorkbookState> for HideColsCommand {
-    fn apply(&self, state: &mut WorkbookState) {
-        if let Some(idx) = state.sheet_index_for_id(self.sheet_id) {
-            state.sheets[idx].borrow_mut().hidden_cols = self.after.clone();
-        }
-    }
-    fn undo(&self, state: &mut WorkbookState) {
-        if let Some(idx) = state.sheet_index_for_id(self.sheet_id) {
-            state.sheets[idx].borrow_mut().hidden_cols = self.before.clone();
-        }
-    }
-    fn description(&self) -> &str {
-        "Hide Columns"
-    }
-}
-
-struct PrintAreaCommand {
-    sheet_id: u32,
-    before: Option<(usize, usize, usize, usize)>,
-    after: Option<(usize, usize, usize, usize)>,
-}
-
-impl Command<WorkbookState> for PrintAreaCommand {
-    fn apply(&self, state: &mut WorkbookState) {
-        if let Some(idx) = state.sheet_index_for_id(self.sheet_id) {
-            state.sheets[idx].borrow_mut().print_area = self.after;
-        }
-    }
-    fn undo(&self, state: &mut WorkbookState) {
-        if let Some(idx) = state.sheet_index_for_id(self.sheet_id) {
-            state.sheets[idx].borrow_mut().print_area = self.before;
-        }
-    }
-    fn description(&self) -> &str {
-        "Set Print Area"
-    }
-}
-
-struct PageSetupCommand {
-    sheet_id: u32,
-    before: suite_common_core::print::PageSetup,
-    after: suite_common_core::print::PageSetup,
-}
-
-impl Command<WorkbookState> for PageSetupCommand {
-    fn apply(&self, state: &mut WorkbookState) {
-        if let Some(idx) = state.sheet_index_for_id(self.sheet_id) {
-            state.sheets[idx].borrow_mut().page_setup = self.after.clone();
-        }
-    }
-    fn undo(&self, state: &mut WorkbookState) {
-        if let Some(idx) = state.sheet_index_for_id(self.sheet_id) {
-            state.sheets[idx].borrow_mut().page_setup = self.before.clone();
-        }
-    }
-    fn description(&self) -> &str {
-        "Page Setup"
-    }
-}
-
-struct SortCommand {
-    sheet_id: u32,
-    before_inputs: Vec<Vec<String>>,
-    after_inputs: Vec<Vec<String>>,
-    before_sheet: SheetModel,
-    after_sheet: SheetModel,
-}
-
-impl SortCommand {
-    fn restore(
-        state: &mut WorkbookState,
-        sheet_index: usize,
-        inputs: &[Vec<String>],
-        sheet: &SheetModel,
-    ) {
-        *state.sheets[sheet_index].borrow_mut() = sheet.clone();
-        state.set_cell_inputs_on_sheet(
-            sheet_index,
-            inputs.iter().enumerate().flat_map(|(row, values)| {
-                values
-                    .iter()
-                    .enumerate()
-                    .map(move |(col, input)| (row, col, input.as_str()))
-            }),
-        );
-    }
-}
-
-impl Command<WorkbookState> for SortCommand {
-    fn apply(&self, state: &mut WorkbookState) {
-        if let Some(index) = state.sheet_index_for_id(self.sheet_id) {
-            Self::restore(state, index, &self.after_inputs, &self.after_sheet);
-        }
-    }
-
-    fn undo(&self, state: &mut WorkbookState) {
-        if let Some(index) = state.sheet_index_for_id(self.sheet_id) {
-            Self::restore(state, index, &self.before_inputs, &self.before_sheet);
-        }
-    }
-
-    fn description(&self) -> &str {
-        "Sort"
-    }
-}
-
-impl Command<WorkbookState> for CellBatchCommand {
-    fn apply(&self, state: &mut WorkbookState) {
-        if let Some(index) = state.sheet_index_for_id(self.sheet_id) {
-            state.set_cell_inputs_on_sheet(
-                index,
-                self.changes
-                    .iter()
-                    .map(|change| (change.row, change.col, change.new_input.as_str())),
-            );
-        }
-    }
-
-    fn undo(&self, state: &mut WorkbookState) {
-        if let Some(index) = state.sheet_index_for_id(self.sheet_id) {
-            state.set_cell_inputs_on_sheet(
-                index,
-                self.changes
-                    .iter()
-                    .map(|change| (change.row, change.col, change.old_input.as_str())),
-            );
-        }
-    }
-
-    fn description(&self) -> &str {
-        self.description
-    }
-}
+use super::state::*;
 
 /// Owns the undo history for the exact state observed by the GUI.
 pub struct WorkbookController {
@@ -461,7 +31,12 @@ impl WorkbookController {
         let state = Rc::new(RefCell::new(WorkbookState::new(rows, cols)?));
         let mut undo = UndoManager::new(state.clone());
         undo.broadcaster = Some(Rc::new(Broadcaster::new()));
-        Ok(Self { state, undo, dirty: false, file_path: Rc::new(RefCell::new(None)) })
+        Ok(Self {
+            state,
+            undo,
+            dirty: false,
+            file_path: Rc::new(RefCell::new(None)),
+        })
     }
 
     pub fn listen_history(&self, listener: Rc<dyn Listener<Hint>>) {
@@ -542,7 +117,10 @@ impl WorkbookController {
     }
 
     pub fn add_pivot_table(&mut self, pivot: crate::sheet::PivotTableSpec) {
-        let (rows, cols) = (self.state.borrow().sheet().rows, self.state.borrow().sheet().cols);
+        let (rows, cols) = (
+            self.state.borrow().sheet().rows,
+            self.state.borrow().sheet().cols,
+        );
         let evaluated_data = self.evaluate_pivot_table(&pivot);
         let (start_r, start_c) = pivot.target_cell;
 
@@ -599,19 +177,33 @@ impl WorkbookController {
             for df in &pivot.data_fields {
                 let values: Vec<f64> = row_indices
                     .iter()
-                    .filter_map(|&r| sheet.data[r].get(df.col_index).and_then(|v| v.parse::<f64>().ok()))
+                    .filter_map(|&r| {
+                        sheet.data[r]
+                            .get(df.col_index)
+                            .and_then(|v| v.parse::<f64>().ok())
+                    })
                     .collect();
 
                 let res = match df.func {
                     PivotAggFunc::Sum => values.iter().sum::<f64>(),
                     PivotAggFunc::Count => values.len() as f64,
                     PivotAggFunc::Average => {
-                        if values.is_empty() { 0.0 } else { values.iter().sum::<f64>() / values.len() as f64 }
+                        if values.is_empty() {
+                            0.0
+                        } else {
+                            values.iter().sum::<f64>() / values.len() as f64
+                        }
                     }
                     PivotAggFunc::Min => values.iter().copied().fold(f64::INFINITY, f64::min),
                     PivotAggFunc::Max => values.iter().copied().fold(f64::NEG_INFINITY, f64::max),
                 };
-                let val_str = if res.is_infinite() { "0".into() } else if res.fract() == 0.0 { (res as i64).to_string() } else { format!("{:.2}", res) };
+                let val_str = if res.is_infinite() {
+                    "0".into()
+                } else if res.fract() == 0.0 {
+                    (res as i64).to_string()
+                } else {
+                    format!("{:.2}", res)
+                };
                 line.push(val_str);
             }
             grid.push(line);
@@ -680,8 +272,11 @@ impl WorkbookController {
             .collect();
         drop(state);
         if !changes.is_empty() {
-            self.undo
-                .execute(Box::new(CellBatchCommand { sheet_id, changes, description: "Paste Cells" }));
+            self.undo.execute(Box::new(CellBatchCommand {
+                sheet_id,
+                changes,
+                description: "Paste Cells",
+            }));
         }
     }
 
@@ -693,7 +288,9 @@ impl WorkbookController {
     /// becomes `=A2`, `=$A$1` stays put — see `TablesEngine::extend_input`).
     /// No-op if the drag lands inside the selection.
     pub fn fill(&mut self, sel: (usize, usize, usize, usize), drag_row: usize, drag_col: usize) {
-        let Some((direction, distance)) = infer_fill(sel, drag_row, drag_col) else { return };
+        let Some((direction, distance)) = infer_fill(sel, drag_row, drag_col) else {
+            return;
+        };
         let (top, left, bottom, right) = sel;
         let state = self.state.borrow();
         let sheet_id = state.sheet().sheet_id;
@@ -726,7 +323,13 @@ impl WorkbookController {
                         let old_input = state.cell_input(row, c);
                         if old_input != input {
                             let formula_source = is_formula.then(|| (top + i % source.len(), c));
-                            changes.push(Change { row, col: c, old_input, new_input: input, formula_source });
+                            changes.push(Change {
+                                row,
+                                col: c,
+                                old_input,
+                                new_input: input,
+                                formula_source,
+                            });
                         }
                     }
                 }
@@ -746,7 +349,13 @@ impl WorkbookController {
                         let old_input = state.cell_input(r, col);
                         if old_input != input {
                             let formula_source = is_formula.then(|| (r, left + i % source.len()));
-                            changes.push(Change { row: r, col, old_input, new_input: input, formula_source });
+                            changes.push(Change {
+                                row: r,
+                                col,
+                                old_input,
+                                new_input: input,
+                                formula_source,
+                            });
                         }
                     }
                 }
@@ -768,7 +377,13 @@ impl WorkbookController {
                         let old_input = state.cell_input(row, c);
                         if old_input != input {
                             let formula_source = is_formula.then(|| (top + i % source.len(), c));
-                            changes.push(Change { row, col: c, old_input, new_input: input, formula_source });
+                            changes.push(Change {
+                                row,
+                                col: c,
+                                old_input,
+                                new_input: input,
+                                formula_source,
+                            });
                         }
                     }
                 }
@@ -788,7 +403,13 @@ impl WorkbookController {
                         let old_input = state.cell_input(r, col);
                         if old_input != input {
                             let formula_source = is_formula.then(|| (r, left + i % source.len()));
-                            changes.push(Change { row: r, col, old_input, new_input: input, formula_source });
+                            changes.push(Change {
+                                row: r,
+                                col,
+                                old_input,
+                                new_input: input,
+                                formula_source,
+                            });
                         }
                     }
                 }
@@ -799,18 +420,29 @@ impl WorkbookController {
             let mut state = self.state.borrow_mut();
             for change in changes.iter_mut() {
                 if let Some(source) = change.formula_source {
-                    change.new_input =
-                        state.engine.extend_input(&change.new_input, source, (change.row, change.col));
+                    change.new_input = state.engine.extend_input(
+                        &change.new_input,
+                        source,
+                        (change.row, change.col),
+                    );
                 }
             }
         }
         let changes: Vec<CellInputChange> = changes
             .into_iter()
-            .map(|c| CellInputChange { row: c.row, col: c.col, old_input: c.old_input, new_input: c.new_input })
+            .map(|c| CellInputChange {
+                row: c.row,
+                col: c.col,
+                old_input: c.old_input,
+                new_input: c.new_input,
+            })
             .collect();
         if !changes.is_empty() {
-            self.undo
-                .execute(Box::new(CellBatchCommand { sheet_id, changes, description: "Fill" }));
+            self.undo.execute(Box::new(CellBatchCommand {
+                sheet_id,
+                changes,
+                description: "Fill",
+            }));
         }
     }
 
@@ -820,7 +452,11 @@ impl WorkbookController {
     /// work: workbook scope only (no per-sheet-scoped names yet), and no
     /// GTK wiring — see tables-core/src/controller.rs's define_name for
     /// why that's deferred rather than rushed.
-    pub fn define_name(&mut self, name: &str, sel: (usize, usize, usize, usize)) -> Result<(), String> {
+    pub fn define_name(
+        &mut self,
+        name: &str,
+        sel: (usize, usize, usize, usize),
+    ) -> Result<(), String> {
         let (top, left, bottom, right) = sel;
         let state = self.state.borrow();
         let sheet_name = state.sheet().name.clone();
@@ -842,8 +478,15 @@ impl WorkbookController {
         // &mut self (it's read-only in effect, but the upstream signature
         // requires it), so this needs its own borrow_mut, separate from
         // and after the read-only borrow above.
-        self.state.borrow_mut().engine.model.is_valid_defined_name(name, None, &formula)?;
-        self.execute(Box::new(DefinedNameCommand { name: name.to_string(), formula }));
+        self.state
+            .borrow_mut()
+            .engine
+            .model
+            .is_valid_defined_name(name, None, &formula)?;
+        self.execute(Box::new(DefinedNameCommand {
+            name: name.to_string(),
+            formula,
+        }));
         Ok(())
     }
 
@@ -877,7 +520,11 @@ impl WorkbookController {
         drop(sheet);
         drop(state);
         if before != after {
-            self.execute(Box::new(FilterCommand { sheet_id, before, after }));
+            self.execute(Box::new(FilterCommand {
+                sheet_id,
+                before,
+                after,
+            }));
         }
     }
 
@@ -890,7 +537,11 @@ impl WorkbookController {
         let before = state.sheet().hidden_rows.clone();
         drop(state);
         if !before.is_empty() {
-            self.execute(Box::new(FilterCommand { sheet_id, before, after: HashSet::new() }));
+            self.execute(Box::new(FilterCommand {
+                sheet_id,
+                before,
+                after: HashSet::new(),
+            }));
         }
     }
 
@@ -908,7 +559,11 @@ impl WorkbookController {
         drop(sheet);
         drop(state);
         if before != after {
-            self.execute(Box::new(HideRowsCommand { sheet_id, before, after }));
+            self.execute(Box::new(HideRowsCommand {
+                sheet_id,
+                before,
+                after,
+            }));
         }
     }
 
@@ -920,7 +575,11 @@ impl WorkbookController {
         let before = state.sheet().hidden_rows_manual.clone();
         drop(state);
         if !before.is_empty() {
-            self.execute(Box::new(HideRowsCommand { sheet_id, before, after: HashSet::new() }));
+            self.execute(Box::new(HideRowsCommand {
+                sheet_id,
+                before,
+                after: HashSet::new(),
+            }));
         }
     }
 
@@ -937,7 +596,11 @@ impl WorkbookController {
         drop(sheet);
         drop(state);
         if before != after {
-            self.execute(Box::new(HideColsCommand { sheet_id, before, after }));
+            self.execute(Box::new(HideColsCommand {
+                sheet_id,
+                before,
+                after,
+            }));
         }
     }
 
@@ -949,7 +612,11 @@ impl WorkbookController {
         let before = state.sheet().hidden_cols.clone();
         drop(state);
         if !before.is_empty() {
-            self.execute(Box::new(HideColsCommand { sheet_id, before, after: HashSet::new() }));
+            self.execute(Box::new(HideColsCommand {
+                sheet_id,
+                before,
+                after: HashSet::new(),
+            }));
         }
     }
 
@@ -962,7 +629,11 @@ impl WorkbookController {
         drop(state);
         let after = Some(sel);
         if before != after {
-            self.execute(Box::new(PrintAreaCommand { sheet_id, before, after }));
+            self.execute(Box::new(PrintAreaCommand {
+                sheet_id,
+                before,
+                after,
+            }));
         }
     }
 
@@ -973,7 +644,11 @@ impl WorkbookController {
         let before = state.sheet().print_area;
         drop(state);
         if before.is_some() {
-            self.execute(Box::new(PrintAreaCommand { sheet_id, before, after: None }));
+            self.execute(Box::new(PrintAreaCommand {
+                sheet_id,
+                before,
+                after: None,
+            }));
         }
     }
 
@@ -985,7 +660,11 @@ impl WorkbookController {
         let before = state.sheet().page_setup.clone();
         drop(state);
         if before != setup {
-            self.execute(Box::new(PageSetupCommand { sheet_id, before, after: setup }));
+            self.execute(Box::new(PageSetupCommand {
+                sheet_id,
+                before,
+                after: setup,
+            }));
         }
     }
 
@@ -1049,7 +728,11 @@ impl WorkbookController {
                         (Ok(l), Ok(r)) => l.partial_cmp(&r).unwrap_or(std::cmp::Ordering::Equal),
                         _ => left_text.to_lowercase().cmp(&right_text.to_lowercase()),
                     };
-                    if new_direction == Ascending { cmp } else { cmp.reverse() }
+                    if new_direction == Ascending {
+                        cmp
+                    } else {
+                        cmp.reverse()
+                    }
                 }
             }
         });
@@ -1142,6 +825,7 @@ impl WorkbookController {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::engine::TablesEngine;
 
     #[test]
     fn live_cell_edit_undo_and_redo_share_canonical_state() {
@@ -1324,7 +1008,10 @@ mod tests {
         assert_eq!(names.len(), 1);
         assert_eq!(names[0].name, "Total");
         assert_eq!(names[0].formula, "Sheet1!$A$1:$B$3");
-        assert!(names[0].sheet_id.is_none(), "workbook-scoped name must have no sheet_id");
+        assert!(
+            names[0].sheet_id.is_none(),
+            "workbook-scoped name must have no sheet_id"
+        );
     }
 
     #[test]
@@ -1332,7 +1019,10 @@ mod tests {
         let mut controller = WorkbookController::new(6, 6).unwrap();
         controller.define_name("Rate", (2, 3, 2, 3)).unwrap();
         let state = controller.state.borrow();
-        assert_eq!(state.engine.model.workbook.defined_names[0].formula, "Sheet1!$D$3");
+        assert_eq!(
+            state.engine.model.workbook.defined_names[0].formula,
+            "Sheet1!$D$3"
+        );
     }
 
     #[test]
@@ -1349,20 +1039,54 @@ mod tests {
         let mut controller = WorkbookController::new(6, 6).unwrap();
         assert!(controller.define_name("2invalid", (0, 0, 0, 0)).is_err());
         assert!(!controller.can_undo());
-        assert!(controller.state.borrow().engine.model.workbook.defined_names.is_empty());
+        assert!(controller
+            .state
+            .borrow()
+            .engine
+            .model
+            .workbook
+            .defined_names
+            .is_empty());
     }
 
     #[test]
     fn define_name_undo_removes_it_and_redo_restores_it() {
         let mut controller = WorkbookController::new(6, 6).unwrap();
         controller.define_name("Total", (0, 0, 0, 0)).unwrap();
-        assert_eq!(controller.state.borrow().engine.model.workbook.defined_names.len(), 1);
+        assert_eq!(
+            controller
+                .state
+                .borrow()
+                .engine
+                .model
+                .workbook
+                .defined_names
+                .len(),
+            1
+        );
 
         assert!(controller.undo());
-        assert!(controller.state.borrow().engine.model.workbook.defined_names.is_empty());
+        assert!(controller
+            .state
+            .borrow()
+            .engine
+            .model
+            .workbook
+            .defined_names
+            .is_empty());
 
         assert!(controller.redo());
-        assert_eq!(controller.state.borrow().engine.model.workbook.defined_names.len(), 1);
+        assert_eq!(
+            controller
+                .state
+                .borrow()
+                .engine
+                .model
+                .workbook
+                .defined_names
+                .len(),
+            1
+        );
     }
 
     #[test]
@@ -1399,7 +1123,10 @@ mod tests {
         assert!(!sheet.is_row_hidden(0)); // apple
         assert!(sheet.is_row_hidden(1)); // banana
         for r in 2..10 {
-            assert!(!sheet.is_row_hidden(r), "blank row {r} should never be hidden by a filter");
+            assert!(
+                !sheet.is_row_hidden(r),
+                "blank row {r} should never be hidden by a filter"
+            );
         }
     }
 
@@ -1507,8 +1234,14 @@ mod tests {
         controller.unhide_all_rows();
         let state = controller.state.borrow();
         let sheet = state.sheet();
-        assert!(sheet.is_row_hidden(1), "filter-hidden row must survive unhide_all_rows");
-        assert!(!sheet.is_row_hidden(3), "manually-hidden row must be revealed");
+        assert!(
+            sheet.is_row_hidden(1),
+            "filter-hidden row must survive unhide_all_rows"
+        );
+        assert!(
+            !sheet.is_row_hidden(3),
+            "manually-hidden row must be revealed"
+        );
     }
 
     #[test]
@@ -1557,13 +1290,19 @@ mod tests {
         assert_eq!(controller.state.borrow().sheet().print_area, None);
 
         controller.set_print_area((0, 0, 2, 1));
-        assert_eq!(controller.state.borrow().sheet().print_area, Some((0, 0, 2, 1)));
+        assert_eq!(
+            controller.state.borrow().sheet().print_area,
+            Some((0, 0, 2, 1))
+        );
 
         assert!(controller.undo());
         assert_eq!(controller.state.borrow().sheet().print_area, None);
 
         assert!(controller.redo());
-        assert_eq!(controller.state.borrow().sheet().print_area, Some((0, 0, 2, 1)));
+        assert_eq!(
+            controller.state.borrow().sheet().print_area,
+            Some((0, 0, 2, 1))
+        );
     }
 
     #[test]
@@ -1574,7 +1313,10 @@ mod tests {
         assert_eq!(controller.state.borrow().sheet().print_area, None);
 
         assert!(controller.undo()); // undoes clear
-        assert_eq!(controller.state.borrow().sheet().print_area, Some((0, 0, 2, 1)));
+        assert_eq!(
+            controller.state.borrow().sheet().print_area,
+            Some((0, 0, 2, 1))
+        );
     }
 
     #[test]
@@ -1597,14 +1339,23 @@ mod tests {
     fn set_page_setup_is_undoable_and_redoable() {
         use suite_common_core::print::{Orientation, PageSetup};
         let mut controller = WorkbookController::new(6, 6).unwrap();
-        assert_eq!(controller.state.borrow().sheet().page_setup, PageSetup::default());
+        assert_eq!(
+            controller.state.borrow().sheet().page_setup,
+            PageSetup::default()
+        );
 
-        let landscape = PageSetup { orientation: Orientation::Landscape, ..PageSetup::default() };
+        let landscape = PageSetup {
+            orientation: Orientation::Landscape,
+            ..PageSetup::default()
+        };
         controller.set_page_setup(landscape.clone());
         assert_eq!(controller.state.borrow().sheet().page_setup, landscape);
 
         assert!(controller.undo());
-        assert_eq!(controller.state.borrow().sheet().page_setup, PageSetup::default());
+        assert_eq!(
+            controller.state.borrow().sheet().page_setup,
+            PageSetup::default()
+        );
 
         assert!(controller.redo());
         assert_eq!(controller.state.borrow().sheet().page_setup, landscape);
@@ -1877,7 +1628,11 @@ mod tests {
         controller.edit_cell(0, 0, "=Sheet1!A1*2");
         assert_eq!(controller.state.borrow().sheet().cell(0, 0), "10");
 
-        controller.state.borrow_mut().rename_sheet(0, "Inputs").unwrap();
+        controller
+            .state
+            .borrow_mut()
+            .rename_sheet(0, "Inputs")
+            .unwrap();
         assert_eq!(controller.state.borrow().sheets[0].borrow().name, "Inputs");
         assert_eq!(controller.state.borrow().sheet().cell(0, 0), "10");
 
@@ -1936,9 +1691,17 @@ mod tests {
             state.switch_sheet(1).unwrap();
         }
         controller.edit_cell(0, 0, "sheet2-value");
-        controller.state.borrow_mut().rename_sheet(1, "Totals").unwrap();
+        controller
+            .state
+            .borrow_mut()
+            .rename_sheet(1, "Totals")
+            .unwrap();
         // Front-load the renamed sheet.
-        controller.state.borrow_mut().reorder_sheets(&[1, 0]).unwrap();
+        controller
+            .state
+            .borrow_mut()
+            .reorder_sheets(&[1, 0])
+            .unwrap();
 
         let dir = tempfile::tempdir().unwrap();
         let path = dir.path().join("reorder-rename.xlsx");
@@ -1976,7 +1739,11 @@ mod tests {
         }
         controller.edit_cell(0, 0, "on-sheet-2");
 
-        controller.state.borrow_mut().reorder_sheets(&[1, 0]).unwrap();
+        controller
+            .state
+            .borrow_mut()
+            .reorder_sheets(&[1, 0])
+            .unwrap();
         let state = controller.state.borrow();
         assert_eq!(state.sheets[0].borrow().name, "Sheet2");
         assert_eq!(state.sheets[0].borrow().cell(0, 0), "on-sheet-2");
@@ -1986,7 +1753,10 @@ mod tests {
     #[test]
     fn dirty_tracks_every_mutating_action_and_clears_only_on_mark_clean() {
         let mut controller = WorkbookController::new(2, 2).unwrap();
-        assert!(!controller.is_dirty(), "a fresh workbook should not be dirty");
+        assert!(
+            !controller.is_dirty(),
+            "a fresh workbook should not be dirty"
+        );
 
         controller.edit_cell(0, 0, "5");
         assert!(controller.is_dirty());
@@ -1998,11 +1768,17 @@ mod tests {
         controller.edit_cell(0, 1, "6");
         controller.mark_clean();
         assert!(controller.undo());
-        assert!(controller.is_dirty(), "undo must dirty a just-saved workbook");
+        assert!(
+            controller.is_dirty(),
+            "undo must dirty a just-saved workbook"
+        );
 
         controller.mark_clean();
         assert!(controller.redo());
-        assert!(controller.is_dirty(), "redo must dirty a just-saved workbook");
+        assert!(
+            controller.is_dirty(),
+            "redo must dirty a just-saved workbook"
+        );
     }
 
     #[test]
@@ -2016,6 +1792,9 @@ mod tests {
         controller.edit_cell(1, 0, "1");
         controller.mark_clean();
         controller.toggle_sort(0);
-        assert!(controller.is_dirty(), "sort is a mutation and must dirty the workbook");
+        assert!(
+            controller.is_dirty(),
+            "sort is a mutation and must dirty the workbook"
+        );
     }
 }
