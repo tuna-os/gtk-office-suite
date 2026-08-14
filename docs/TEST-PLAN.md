@@ -1,22 +1,22 @@
 # Test Verification Plan — Issue #21
 
-> All tests exist but can ONLY run on the build machine (`himachal`) which has GTK4 dev libraries.
+> All tests exist but can ONLY run on a machine with GTK4 dev libraries installed.
 > This document tracks what we need to verify before claiming v1.0 is truly complete.
 
 ---
 
-## Build Machine (himachal)
+## Build Machine
 
 Per handoff document:
 - SSH accessible
 - `toolbox run --container finupdate` — Fedora 43 toolbox with GTK4 dev deps
 - `flatpak run org.flatpak.Builder` for Flatpak builds
 - Rust toolchain via `rustup` inside toolbox
-- Workspace at `/var/home/james/dev/hanthor/hanthor-rust/`
+- Workspace at `~/dev/gtk-office-suite/`
 
 **Sync command:**
 ```bash
-rsync -a /home/james/dev/hanthor/hanthor-rust/ himachal:/var/home/james/dev/hanthor/hanthor-rust/ --exclude target --exclude .git --exclude .flatpak-builder*
+rsync -a ~/dev/gtk-office-suite/ <build-host>:~/dev/gtk-office-suite/ --exclude target --exclude .git --exclude .flatpak-builder*
 ```
 
 **Note:** The workspace was renamed to `gtk-office-suite`. Need to update the build machine path or sync to the new name.
@@ -51,7 +51,7 @@ rsync -a /home/james/dev/hanthor/hanthor-rust/ himachal:/var/home/james/dev/hant
 | `charts.rs` | `test_bar` | Bar chart surface creation |
 | `charts.rs` | `test_pie` | Pie chart surface creation |
 
-**Status:** Cannot run locally (missing `libadwaita-1`, `libgtk-4`). Must run on himachal.
+**Status:** Cannot run locally (missing `libadwaita-1`, `libgtk-4`). Must run on a machine with GTK4 dev libraries.
 
 ### Letters (3 tests — needs GTK4 libs to link)
 
@@ -61,7 +61,7 @@ rsync -a /home/james/dev/hanthor/hanthor-rust/ himachal:/var/home/james/dev/hant
 | `engine.rs` | `test_markdown_to_typst` | Markdown→Typst conversion |
 | `engine.rs` | *(third test)* | Document model operations |
 
-**Status:** Cannot run locally. Must run on himachal.
+**Status:** Cannot run locally. Must run on a machine with GTK4 dev libraries.
 
 ### Decks (1 test — needs GTK4 libs to link)
 
@@ -69,21 +69,21 @@ rsync -a /home/james/dev/hanthor/hanthor-rust/ himachal:/var/home/james/dev/hant
 |------|------|-----------------|
 | `engine.rs` | `test_pptx_roundtrip` | PPTX write→read preserves slides, objects, positions |
 
-**Status:** Cannot run locally. Must run on himachal.
+**Status:** Cannot run locally. Must run on a machine with GTK4 dev libraries.
 
 ---
 
-## Verification Commands (run on himachal)
+## Verification Commands
 
 ```bash
 # In toolbox:
 toolbox run --container finupdate
 
 # Sync code first:
-rsync -a /var/home/james/dev/tuna-os/gtk-office-suite/ himachal:/var/home/james/dev/tuna-os/gtk-office-suite/ --exclude target --exclude .git --exclude .flatpak-builder*
+rsync -a ~/dev/gtk-office-suite/ <build-host>:~/dev/gtk-office-suite/ --exclude target --exclude .git --exclude .flatpak-builder*
 
-# On himachal, inside toolbox:
-cd /var/home/james/dev/tuna-os/gtk-office-suite
+# On the build host, inside toolbox:
+cd ~/dev/gtk-office-suite
 cargo test --workspace
 
 # Expected:

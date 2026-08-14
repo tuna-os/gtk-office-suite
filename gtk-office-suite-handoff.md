@@ -91,9 +91,9 @@ All three apps compile in workspace (`cargo check --workspace`). Flatpaks build 
 | **gtk4-rs examples** | `/tmp/gtk4-rs/examples/` | `column_view_datagrid/` — GtkColumnView data grid pattern |
 
 ### Files to read for context
-- `/home/james/dev/hanthor/hanthor-rust/IMPLEMENTATION-QUEUE.md` — Prioritized issue list with effort estimates
-- `/home/james/dev/hanthor/hanthor-rust/AGENT-REFERENCE-LIBRARY.md` — Pattern catalog with code examples
-- `/home/james/dev/hanthor/hanthor-rust/AGENT-GNOME-REFERENCE.md` — GNOME Rust reference app documentation
+- `~/dev/gtk-office-suite/IMPLEMENTATION-QUEUE.md` — Prioritized issue list with effort estimates
+- `~/dev/gtk-office-suite/AGENT-REFERENCE-LIBRARY.md` — Pattern catalog with code examples
+- `~/dev/gtk-office-suite/AGENT-GNOME-REFERENCE.md` — GNOME Rust reference app documentation
 
 ### GitHub Issues (36 open in v1.0 milestone)
 
@@ -109,12 +109,12 @@ Key unaddressed issues:
 
 ### Build machine
 
-**himachal** — remote build/test machine. SSH accessible. Has:
+**Build machine** — remote build/test host (SSH accessible). Has:
 - `toolbox run --container finupdate` — Fedora 43 toolbox with GTK4 dev deps
 - `flatpak run org.flatpak.Builder` for Flatpak builds
 - Rust toolchain via `rustup` inside toolbox
-- Workspace at `/var/home/james/dev/hanthor/hanthor-rust/`
-- To sync: `rsync -a /home/james/dev/hanthor/hanthor-rust/ himachal:/var/home/james/dev/hanthor/hanthor-rust/ --exclude target --exclude .git --exclude .flatpak-builder*`
+- Workspace at `~/dev/gtk-office-suite/`
+- To sync: `rsync -a ~/dev/gtk-office-suite/ <build-host>:~/dev/gtk-office-suite/ --exclude target --exclude .git --exclude .flatpak-builder*`
 
 ---
 
@@ -136,5 +136,5 @@ Key unaddressed issues:
 
 - `search.manatee-basking.ts.net` — internal SearXNG instance (Tailscale)
 - `github.com/tuna-os` — org where repo lives
-- `/var/home/james/` — home dir on himachal (build machine)
-- himachal hostname and IP redacted
+- `~/` — home dir on the build machine
+- Build-host hostname and IP redacted

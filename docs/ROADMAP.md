@@ -106,7 +106,7 @@ without a test that fails first.
 
 ## Standing infrastructure notes
 
-- Builds: himachal `gtkbuild` distrobox (18 cores, ~10s warm) is the
+- Builds: the `gtkbuild` distrobox on the build host (18 cores, ~10s warm) is the
   app-binary builder; binaries rsync back and pass smoke locally.
 - Screenshots: the `Screenshots` workflow regenerates the README
   walkthrough weekly from `tests/gui/walkthrough.py` + the demo docs.

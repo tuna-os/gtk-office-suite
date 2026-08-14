@@ -35,7 +35,7 @@ Features added after the v1.0 tag and GitHub release.
 ### Infrastructure
 - 15+ Rust crates leveraged (ironcalc_base, calamine, rust_xlsxwriter, num-format,
   chrono, image, zip, quick-xml, pulldown-cmark, pangocairo, regex, cairo-rs, rdocx, zspell)
-- LibreOffice source at /var/home/james/dev/libreoffice-core/ used as architecture reference
+- LibreOffice source at ~/dev/libreoffice-core/ used as architecture reference
 - 52 GitHub issues closed total
 - 10 remaining issues are v2 enhancements
 

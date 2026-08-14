@@ -18,7 +18,7 @@ Uses a Vision Language Model (Gemini 2.5 Flash or Gemma-4-31B via Lemonade) to v
 
 ```bash
 # Build and install Flatpaks
-cd /var/home/james/dev/tuna-os/gtk-office-suite
+cd <repo-root>
 flatpak run org.flatpak.Builder --force-clean --install --user --ccache \
   --disable-rofiles-fuse build-dir flatpak/org.tunaos.letters.json
 
