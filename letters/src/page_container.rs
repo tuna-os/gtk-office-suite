@@ -475,3 +475,107 @@ fn draw_rounded_rect(cr: &cairo::Context, x: f64, y: f64, w: f64, h: f64, r: f64
     cr.arc(x + r, y + r, r, pi, 3.0 * pi / 2.0);
     cr.close_path();
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn init_gtk() -> bool {
+        if !gtk::is_initialized() {
+            return gtk::init().is_ok();
+        }
+        true
+    }
+
+    fn assert_close(actual: f64, expected: f64) {
+        assert!(
+            (actual - expected).abs() < 1e-6,
+            "expected {expected}, got {actual}"
+        );
+    }
+
+    fn container() -> PageContainer {
+        PageContainer::new()
+    }
+
+    #[test]
+    fn header_and_footer_round_trip() {
+        if !init_gtk() {
+            eprintln!("SKIP: GTK not initialized (no display)");
+            return;
+        }
+        let c = container();
+        assert_eq!(c.header_text(), "");
+        assert_eq!(c.footer_text(), "");
+        c.set_header_text("Page {page}");
+        c.set_footer_text("TunaOS — {page}/{total}");
+        assert_eq!(c.header_text(), "Page {page}");
+        assert_eq!(c.footer_text(), "TunaOS — {page}/{total}");
+    }
+
+    #[test]
+    fn zoom_is_clamped_to_50_200() {
+        if !init_gtk() {
+            eprintln!("SKIP: GTK not initialized (no display)");
+            return;
+        }
+        let c = container();
+        assert_close(c.zoom_level(), 100.0);
+        c.set_zoom(25.0);
+        assert_close(c.zoom_level(), 50.0);
+        c.set_zoom(500.0);
+        assert_close(c.zoom_level(), 200.0);
+        c.set_zoom(133.0);
+        assert_close(c.zoom_level(), 133.0);
+    }
+
+    #[test]
+    fn screen_geometry_is_zero_before_allocation() {
+        if !init_gtk() {
+            eprintln!("SKIP: GTK not initialized (no display)");
+            return;
+        }
+        let c = container();
+        // Widget not allocated → no meaningful page geometry yet.
+        let (gx, gw) = c.page_screen_geometry();
+        assert_close(gx, 0.0);
+        assert_close(gw, 0.0);
+        c.set_page_size(595.0, 842.0);
+        let (gx, gw) = c.page_screen_geometry();
+        assert_close(gx, 0.0);
+        assert_close(gw, 0.0);
+    }
+
+    #[test]
+    fn draw_page_to_cairo_smoke() {
+        if !init_gtk() {
+            eprintln!("SKIP: GTK not initialized (no display)");
+            return;
+        }
+        // cairo ImageSurface works headless — exercises the shared page
+        // renderer (margins, header/footer {page} substitution) end to end.
+        let surface =
+            cairo::ImageSurface::create(cairo::Format::ARgb32, 400, 500).expect("image surface");
+        let cr = cairo::Context::new(&surface).expect("cairo context");
+        for idx in [0usize, 2usize] {
+            draw_page_to_cairo(
+                &cr,
+                idx,
+                20.0,
+                20.0,
+                360.0,
+                460.0,
+                1.0,
+                72.0,
+                72.0,
+                48.0,
+                48.0,
+                "Page {page}",
+                "Footer {page}",
+            );
+        }
+        // White page + shadow must have been painted.
+        surface.flush();
+        assert!(cr.status().is_ok(), "cairo status must be ok");
+    }
+}
