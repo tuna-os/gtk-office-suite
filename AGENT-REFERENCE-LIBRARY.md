@@ -12,7 +12,7 @@
 | **Loupe** (Image Viewer) | `/tmp/loupe/` | Rust gtk4-rs | `GtkDrawingArea` + Cairo, `CompositeTemplate`, subclass pattern, fullscreen `ShyBin`, `EventControllerScroll/Motion` |
 | **GNOME Tour** | `/tmp/gnome-tour/` | Rust gtk4-rs | `AdwCarousel` + `AdwCarouselIndicatorDots`, overlay buttons |
 | **Papers** (Document Viewer) | `/tmp/papers/` | Rust + C | `find_sidebar.rs`, `search_box.rs`, `sidebar.rs`, undo/redo, `DocumentView` |
-| **Finupdate** (System Updater) | `/home/james/dev/hanthor/finupdate/` | Rust gtk4-rs + relm4 | `ShortcutsWindow`, `GtkDrawingArea`, progress bars |
+| **Finupdate** (System Updater) | `~/dev/finupdate/` | Rust gtk4-rs + relm4 | `ShortcutsWindow`, `GtkDrawingArea`, progress bars |
 | **gtk4-rs examples** | `/tmp/` (need clone) | Rust | Official examples for DrawingArea, TextView, etc. |
 
 ---
@@ -487,7 +487,7 @@ formualizer-workbook = "0.3"  # check latest version at crates.io
 - Cell editing overlay (GtkEntry positioned over cell)
 - Merged cells, custom borders, number formatting
 
-**Reference implementation:** `/home/james/dev/hanthor/hanthor-rust/tables/src/window.rs` — the parallel worker already has the Cairo grid skeleton with selection and formula bar.
+**Reference implementation:** `~/dev/gtk-office-suite/tables/src/window.rs` — the parallel worker already has the Cairo grid skeleton with selection and formula bar.
 
 ### 17. IronCalc — Alternative Rust Spreadsheet Engine
 
