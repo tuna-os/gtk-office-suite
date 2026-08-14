@@ -276,12 +276,6 @@ dependencies = [
 
 [[package]]
 name = "bitflags"
-version = "1.3.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "bef38d45163c2f1dde094a7dfd33ccf595c92905c8f8f4fdc18d06fb1037718a"
-
-[[package]]
-name = "bitflags"
 version = "2.13.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b4388bee8683e3d04af747c73422af53102d2bd24d9eadb6cbc100baef4b43f8"
@@ -379,7 +373,7 @@ version = "0.22.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5cc8d9aa793480744cd9a0524fef1a2e197d9eaa0f739cde19d16aba530dcb95"
 dependencies = [
- "bitflags 2.13.0",
+ "bitflags",
  "cairo-sys-rs",
  "glib",
  "libc",
@@ -941,7 +935,7 @@ dependencies = [
  "bit_field",
  "half",
  "lebe",
- "miniz_oxide",
+ "miniz_oxide 0.8.9",
  "rayon-core",
  "smallvec",
  "zune-inflate",
@@ -1020,7 +1014,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "843fba2746e448b37e26a819579957415c8cef339bf08564fe8b7ddbd959573c"
 dependencies = [
  "crc32fast",
- "miniz_oxide",
+ "miniz_oxide 0.8.9",
  "zlib-rs",
 ]
 
@@ -1050,6 +1044,15 @@ name = "font-types"
 version = "0.11.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5b38ad915f6dadd993ced50848a8291a543bd41ca62bc10740d5e64e2ab4cfd7"
+dependencies = [
+ "bytemuck",
+]
+
+[[package]]
+name = "font-types"
+version = "0.12.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "75382bc7392ef10aad10935f92fc3db36d2d4dad0e5d96d8d65e04f89a07ec39"
 dependencies = [
  "bytemuck",
 ]
@@ -1322,7 +1325,7 @@ version = "0.22.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c207e04e51605dcf7b2924c41591b3a10e1438eaac5bcf448fb91f325381104a"
 dependencies = [
- "bitflags 2.13.0",
+ "bitflags",
  "futures-channel",
  "futures-core",
  "futures-executor",
@@ -1376,7 +1379,7 @@ dependencies = [
  "hashbrown 0.17.1",
  "log",
  "peniko",
- "png 0.18.1",
+ "png",
  "skrifa",
  "smallvec",
  "vello_common 0.0.9",
@@ -1520,6 +1523,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "harfrust"
+version = "0.12.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c03d949a14aa089bbb282f7dd76a498a7f684428e4257202efc119ec010376f9"
+dependencies = [
+ "bitflags",
+ "bytemuck",
+ "read-fonts 0.41.0",
+ "smallvec",
+]
+
+[[package]]
 name = "hashbrown"
 version = "0.14.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1596,7 +1611,7 @@ version = "0.7.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f2613d0406898995042d0794c4245b2f2fba1246490c8ac593769bba6551129d"
 dependencies = [
- "bitflags 2.13.0",
+ "bitflags",
  "hayro-cmap",
  "hayro-syntax",
  "kurbo",
@@ -1672,7 +1687,7 @@ checksum = "a0b3db92c4917aad24ff30d61413a9a7509ae88b27aee1ae34eff881e1d2723a"
 dependencies = [
  "flate2",
  "hayro-syntax",
- "pdf-writer 0.15.0",
+ "pdf-writer",
 ]
 
 [[package]]
@@ -1938,7 +1953,7 @@ dependencies = [
  "image-webp",
  "moxcms",
  "num-traits",
- "png 0.18.1",
+ "png",
  "qoi",
  "ravif",
  "rayon",
@@ -2108,8 +2123,8 @@ dependencies = [
  "image-webp",
  "imagesize",
  "indexmap",
- "pdf-writer 0.15.0",
- "png 0.18.1",
+ "pdf-writer",
+ "png",
  "rayon",
  "rustc-hash",
  "rustybuzz",
@@ -2117,7 +2132,7 @@ dependencies = [
  "skrifa",
  "smallvec",
  "subsetter",
- "tiny-skia-path 0.12.0",
+ "tiny-skia-path",
  "xmp-writer",
  "yoke",
  "zune-jpeg",
@@ -2135,7 +2150,7 @@ dependencies = [
  "resvg",
  "skrifa",
  "smallvec",
- "tiny-skia 0.12.0",
+ "tiny-skia",
  "usvg",
 ]
 
@@ -2175,7 +2190,7 @@ dependencies = [
  "pangocairo",
  "pulldown-cmark",
  "rdocx",
- "rdocx-oxml 0.4.1",
+ "rdocx-oxml",
  "serde_json",
  "suite-common",
  "suite-export",
@@ -2398,6 +2413,15 @@ checksum = "1fa76a2c86f704bdb222d66965fb3d63269ce38518b83cb0575fca855ebb6316"
 dependencies = [
  "adler2",
  "simd-adler32",
+]
+
+[[package]]
+name = "miniz_oxide"
+version = "0.9.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b63fbc4a50860e98e7b2aa7804ded1db5cbc3aff9193adaff57a6931bf7c4b4c"
+dependencies = [
+ "adler2",
 ]
 
 [[package]]
@@ -2681,23 +2705,11 @@ dependencies = [
 
 [[package]]
 name = "pdf-writer"
-version = "0.14.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "92a79477295a713c2ed425aa82a8b5d20cec3fdee203706cbe6f3854880c1c81"
-dependencies = [
- "bitflags 2.13.0",
- "itoa",
- "memchr",
- "ryu",
-]
-
-[[package]]
-name = "pdf-writer"
 version = "0.15.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f5e456864a7a304047bff84977dc6fb162bd956475d40ba50b2dcecaada7f753"
 dependencies = [
- "bitflags 2.13.0",
+ "bitflags",
  "itoa",
  "memchr",
  "ryu",
@@ -2826,28 +2838,15 @@ dependencies = [
 
 [[package]]
 name = "png"
-version = "0.17.16"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "82151a2fc869e011c153adc57cf2789ccb8d9906ce52c0b39a6b5697749d7526"
-dependencies = [
- "bitflags 1.3.2",
- "crc32fast",
- "fdeflate",
- "flate2",
- "miniz_oxide",
-]
-
-[[package]]
-name = "png"
 version = "0.18.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "60769b8b31b2a9f263dae2776c37b1b28ae246943cf719eb6946a1db05128a61"
 dependencies = [
- "bitflags 2.13.0",
+ "bitflags",
  "crc32fast",
  "fdeflate",
  "flate2",
- "miniz_oxide",
+ "miniz_oxide 0.8.9",
 ]
 
 [[package]]
@@ -2958,7 +2957,7 @@ checksum = "4b45fcc2344c680f5025fe57779faef368840d0bd1f42f216291f0dc4ace4744"
 dependencies = [
  "bit-set",
  "bit-vec",
- "bitflags 2.13.0",
+ "bitflags",
  "num-traits",
  "rand 0.9.4",
  "rand_chacha 0.9.0",
@@ -2985,7 +2984,7 @@ version = "0.13.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e9f068eba8e7071c5f9511831b44f32c740d5adf574e990f946ddb53db2f314e"
 dependencies = [
- "bitflags 2.13.0",
+ "bitflags",
  "getopts",
  "memchr",
  "pulldown-cmark-escape",
@@ -3024,15 +3023,6 @@ name = "quick-error"
 version = "2.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a993555f31e5a609f617c12db6250dedcac1b0a85076912c436e6fc9b2c8e6a3"
-
-[[package]]
-name = "quick-xml"
-version = "0.37.5"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "331e97a1af0bf59823e6eadffe373d7b27f485be8748f71471c662c1f269b7fb"
-dependencies = [
- "memchr",
-]
 
 [[package]]
 name = "quick-xml"
@@ -3215,13 +3205,14 @@ dependencies = [
 
 [[package]]
 name = "rdocx"
-version = "0.1.2"
-source = "git+https://github.com/hanthor/rdocx.git?rev=3929421#3929421e36f6d9c4b9d56ca399ac5934ac0c2a7e"
+version = "0.4.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c5c178421f4f9461fab8a64646741d759cc6e9e12c44a75815df1ea09d9d5210"
 dependencies = [
  "rdocx-html",
  "rdocx-layout",
  "rdocx-opc",
- "rdocx-oxml 0.1.2",
+ "rdocx-oxml",
  "rdocx-pdf",
  "regex",
  "thiserror 2.0.18",
@@ -3229,20 +3220,22 @@ dependencies = [
 
 [[package]]
 name = "rdocx-html"
-version = "0.1.2"
-source = "git+https://github.com/hanthor/rdocx.git?rev=3929421#3929421e36f6d9c4b9d56ca399ac5934ac0c2a7e"
+version = "0.4.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c6708d945db7820acc55322de8ed71e0d3eb7ffa8775829694c99bdedf9c900f"
 dependencies = [
- "rdocx-oxml 0.1.2",
+ "rdocx-oxml",
 ]
 
 [[package]]
 name = "rdocx-layout"
-version = "0.1.2"
-source = "git+https://github.com/hanthor/rdocx.git?rev=3929421#3929421e36f6d9c4b9d56ca399ac5934ac0c2a7e"
+version = "0.4.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "792109cacca50ef8240d48cd28fc6dac8eef6c32379d5f7634a686f0c4405811"
 dependencies = [
  "fontdb",
- "rdocx-oxml 0.1.2",
- "rustybuzz",
+ "harfrust",
+ "rdocx-oxml",
  "thiserror 2.0.18",
  "ttf-parser",
  "unicode-linebreak",
@@ -3250,23 +3243,13 @@ dependencies = [
 
 [[package]]
 name = "rdocx-opc"
-version = "0.1.2"
-source = "git+https://github.com/hanthor/rdocx.git?rev=3929421#3929421e36f6d9c4b9d56ca399ac5934ac0c2a7e"
+version = "0.4.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "eda29010df43e34ffe1a18d5d42201b0b14d79c4173ff9474b2d9530bdb39ced"
 dependencies = [
- "quick-xml 0.37.5",
+ "quick-xml 0.41.0",
  "thiserror 2.0.18",
  "zip",
-]
-
-[[package]]
-name = "rdocx-oxml"
-version = "0.1.2"
-source = "git+https://github.com/hanthor/rdocx.git?rev=3929421#3929421e36f6d9c4b9d56ca399ac5934ac0c2a7e"
-dependencies = [
- "itoa",
- "quick-xml 0.37.5",
- "regex",
- "thiserror 2.0.18",
 ]
 
 [[package]]
@@ -3283,14 +3266,15 @@ dependencies = [
 
 [[package]]
 name = "rdocx-pdf"
-version = "0.1.2"
-source = "git+https://github.com/hanthor/rdocx.git?rev=3929421#3929421e36f6d9c4b9d56ca399ac5934ac0c2a7e"
+version = "0.4.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "07cf94146dac7451682f03b10a44a8d1aee11f6d83ecc268cd677210b243899f"
 dependencies = [
- "miniz_oxide",
- "pdf-writer 0.14.0",
+ "miniz_oxide 0.9.1",
+ "pdf-writer",
  "rdocx-layout",
  "subsetter",
- "tiny-skia 0.11.4",
+ "tiny-skia",
  "ttf-parser",
 ]
 
@@ -3301,7 +3285,18 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c4ed38b89c2c77ff968c524145ad65fb010f38af5c7a224b53b81d47ac2daa81"
 dependencies = [
  "bytemuck",
- "font-types",
+ "font-types 0.11.3",
+]
+
+[[package]]
+name = "read-fonts"
+version = "0.41.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "046a7d674daf459825b32f5062056d6882db0d2f5a479fbd76ccfc870ac18709"
+dependencies = [
+ "bytemuck",
+ "font-types 0.12.3",
+ "once_cell",
 ]
 
 [[package]]
@@ -3310,7 +3305,7 @@ version = "0.5.18"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ed2bf2547551a7053d6fdfafda3f938979645c44812fbfcda098faae3f1a362d"
 dependencies = [
- "bitflags 2.13.0",
+ "bitflags",
 ]
 
 [[package]]
@@ -3382,7 +3377,7 @@ dependencies = [
  "pico-args",
  "rgb",
  "svgtypes",
- "tiny-skia 0.12.0",
+ "tiny-skia",
  "usvg",
  "zune-jpeg",
 ]
@@ -3457,7 +3452,7 @@ version = "1.1.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b6fe4565b9518b83ef4f91bb47ce29620ca828bd32cb7e408f0062e9930ba190"
 dependencies = [
- "bitflags 2.13.0",
+ "bitflags",
  "errno",
  "libc",
  "linux-raw-sys",
@@ -3488,7 +3483,7 @@ version = "0.20.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "fd3c7c96f8a08ee34eff8857b11b49b07d71d1c3f4e88f8a88d4c9e9f90b1702"
 dependencies = [
- "bitflags 2.13.0",
+ "bitflags",
  "bytemuck",
  "core_maths",
  "log",
@@ -3677,7 +3672,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0c34617370ae968efb7161bb2beb517d9084659aae19e24b89e3db25b46e4564"
 dependencies = [
  "bytemuck",
- "read-fonts",
+ "read-fonts 0.39.2",
 ]
 
 [[package]]
@@ -4047,21 +4042,6 @@ dependencies = [
 
 [[package]]
 name = "tiny-skia"
-version = "0.11.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "83d13394d44dae3207b52a326c0c85a8bf87f1541f23b0d143811088497b09ab"
-dependencies = [
- "arrayref",
- "arrayvec",
- "bytemuck",
- "cfg-if",
- "log",
- "png 0.17.16",
- "tiny-skia-path 0.11.4",
-]
-
-[[package]]
-name = "tiny-skia"
 version = "0.12.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "47ffee5eaaf5527f630fb0e356b90ebdec84d5d18d937c5e440350f88c5a91ea"
@@ -4071,19 +4051,8 @@ dependencies = [
  "bytemuck",
  "cfg-if",
  "log",
- "png 0.18.1",
- "tiny-skia-path 0.12.0",
-]
-
-[[package]]
-name = "tiny-skia-path"
-version = "0.11.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9c9e7fc0c2e86a30b117d0462aa261b72b7a99b7ebd7deb3a14ceda95c5bdc93"
-dependencies = [
- "arrayref",
- "bytemuck",
- "strict-num",
+ "png",
+ "tiny-skia-path",
 ]
 
 [[package]]
@@ -4295,7 +4264,7 @@ version = "0.15.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "bcee505dac6702dd1c5e65aa2e94a6179d19ee09e2e5637d7313db91765dc4e0"
 dependencies = [
- "bitflags 2.13.0",
+ "bitflags",
 ]
 
 [[package]]
@@ -4407,7 +4376,7 @@ checksum = "12becd02464849f1507f3c4ef3f401a4d28d5938cc74b6acc6f1d703458bf393"
 dependencies = [
  "arrayvec",
  "az",
- "bitflags 2.13.0",
+ "bitflags",
  "bumpalo",
  "ciborium",
  "codex",
@@ -4432,7 +4401,7 @@ dependencies = [
  "palette",
  "percent-encoding",
  "phf 0.13.1",
- "png 0.18.1",
+ "png",
  "rayon",
  "regex",
  "regex-syntax",
@@ -4777,7 +4746,7 @@ dependencies = [
  "siphasher",
  "strict-num",
  "svgtypes",
- "tiny-skia-path 0.12.0",
+ "tiny-skia-path",
  "ttf-parser",
  "unicode-bidi",
  "unicode-script",
@@ -4820,7 +4789,7 @@ dependencies = [
  "hashbrown 0.17.1",
  "log",
  "peniko",
- "png 0.18.1",
+ "png",
  "smallvec",
  "thiserror 2.0.18",
 ]
@@ -4837,7 +4806,7 @@ dependencies = [
  "hashbrown 0.17.1",
  "log",
  "peniko",
- "png 0.18.1",
+ "png",
  "smallvec",
  "thiserror 2.0.18",
 ]
@@ -4851,7 +4820,7 @@ dependencies = [
  "bytemuck",
  "glifo",
  "hashbrown 0.17.1",
- "png 0.18.1",
+ "png",
  "vello_common 0.0.8",
 ]
 
@@ -5000,7 +4969,7 @@ version = "0.239.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8c9d90bb93e764f6beabf1d02028c70a2156a6583e63ac4218dd07ef733368b0"
 dependencies = [
- "bitflags 2.13.0",
+ "bitflags",
 ]
 
 [[package]]
@@ -5204,11 +5173,11 @@ version = "0.48.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "cb731d4c4d93eacc69a1ad2f270f905788a98e4a3438267bcafbe08d3431c8d8"
 dependencies = [
- "font-types",
+ "font-types 0.11.3",
  "indexmap",
  "kurbo",
  "log",
- "read-fonts",
+ "read-fonts 0.39.2",
 ]
 
 [[package]]
