@@ -37,12 +37,11 @@ without a test that fails first.
    (bridge round-trip test green); the PARITY red was stale. The
    remaining aesthetic step (native list rendering instead of literal
    markers in the buffer) folds into the grid-paste-as-table work.
-4. **rdocx upstream follow-up** — fork-side done 2026-07-18: the
-   ParagraphRef::line_spacing_multiple getter landed on hanthor/rdocx
-   (rev 6f91a40, pin bumped) and docx line spacing round-trips with an
-   LO oracle test. Still upstream-gated: merge the fork's getters into
-   tensorbee/rdocx#6, then publish letters-core/decks-core to crates.io
-   and drop the git pin.
+4. **rdocx upstream follow-up** — done: the fork's getters landed in
+   tensorbee/rdocx and rdocx 0.4.1 is published on crates.io; letters
+   now depends on the crates.io release (gtk-office-suite#214) instead
+   of the hanthor/rdocx git pin. Docx line spacing round-trips with an
+   LO oracle test.
 
 ## Near — rounds out the product
 

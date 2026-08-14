@@ -31,4 +31,4 @@ Testing: docs/TESTING.md. Decisions: docs/adr/.
 4. **Core crates build clippy-clean** (`-D warnings`, enforced in CI).
 5. **Engine choices are settled** (IronCalc, rdocx, pulldown-cmark,
    zip+quick-xml, zspell, Typst). rdocx gaps are fixed upstream in
-   hanthor/rdocx, not worked around here.
+   tensorbee/rdocx, not worked around here.

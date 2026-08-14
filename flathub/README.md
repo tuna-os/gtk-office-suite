@@ -11,9 +11,8 @@ network build-args, and trim `--filesystem=host:ro` to `xdg-documents`.
        python3 flatpak-cargo-generator.py Cargo.lock -o cargo-sources.json
        # from https://github.com/flatpak/flatpak-builder-tools/tree/master/cargo
 
-   Note: the rdocx git pin (hanthor/rdocx) is resolved by the generator;
-   publishing letters-core/rdocx to crates.io first (upstream PR
-   tensorbee/rdocx#6) simplifies this.
+   Note: rdocx now resolves from crates.io (0.4.1, tensorbee/rdocx);
+   the previous git pin to hanthor/rdocx is gone (gtk-office-suite#214).
 
 2. Local verification build:
 
