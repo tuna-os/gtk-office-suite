@@ -12,6 +12,20 @@ keywords = ["pdf", "typst", "export"]
 # every Flatpak user). Heavy dependency, so it lives in its own crate
 # rather than in the core crates.
 [dependencies]
+# typst-library (pulled in transitively) depends unconditionally on
+# hayagriva for #bibliography() support, which depends on citationberg
+# 0.7.0 for CSL-style parsing. citationberg hard-pins quick-xml with
+# `^0.38.1` (0.x caret = patch-only), so it resolves quick-xml 0.38.4 —
+# vulnerable to RUSTSEC-2026-0194/0195 (quadratic-complexity and
+# namespace-processing DoS), fixed upstream in quick-xml >= 0.41.0.
+# citationberg has not released a version compatible with the fixed
+# quick-xml as of 2026-08-14 (latest is still 0.7.0, same as when
+# 0.38.1 was pinned) — accepted as upstream-blocked, tracked in #225.
+# No code in this repo emits `#bibliography()`/citations (verified: no
+# match for "bibliography"/"citationberg"/"hayagriva"/"#cite"/"csl" in
+# any .rs file), so the vulnerable path is compiled in but not
+# currently exercised by suite_export::compile_pdf's generated Typst
+# source — revisit this note if citation support is ever added.
 typst-as-lib = { version = "0.16", features = ["typst-kit-fonts", "typst-kit-embed-fonts"] }
 typst-pdf = "0.15"
 
