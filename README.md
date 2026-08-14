@@ -101,7 +101,7 @@ gtk-office-suite/
 | `svl/numformat.hxx` — SvNumberFormatter | `NumberFormat`, `NumberFormatKind` | `suite-common/src/format.rs` |
 | `svl/SfxBroadcaster.hxx` — SfxBroadcaster, SfxListener | `Broadcaster<H>`, `Listener<H>` | `suite-common/src/events.rs` |
 | `editeng/borderline.hxx` — SvxBorderLineStyle | `CellBorder`, `BorderStyle` | `tables/src/window.rs` |
-| LO source for reference | `/var/home/james/dev/libreoffice-core/` | Sparse checkout: `sc/`, `sd/`, `svl/`, `editeng/` |
+| LO source for reference | https://git.libreoffice.org/core | Sparse checkout: `sc/`, `sd/`, `svl/`, `editeng/` |
 
 ---
 
@@ -109,12 +109,12 @@ gtk-office-suite/
 
 | Project | Path | Purpose |
 |---------|------|---------|
-| **LibreOffice core** | `/var/home/james/dev/libreoffice-core/` | Full feature catalogs, architecture, undo/number-format/border patterns |
-| **IronCalc** | `/var/home/james/dev/ironcalc-ref/` | Spreadsheet engine used in Tables |
+| **LibreOffice core** | https://git.libreoffice.org/core | Full feature catalogs, architecture, undo/number-format/border patterns |
+| **IronCalc** | https://github.com/ironcalc/ironcalc | Spreadsheet engine used in Tables |
 | **Rnote** | `https://github.com/flxzt/rnote` | Rust/GTK4 canvas drawing, undo/redo, selection patterns |
 | **Loupe** | `https://gitlab.gnome.org/GNOME/loupe` | GNOME image viewer — Cairo, DrawingArea, fullscreen, gestures |
 | **Papers** | `https://gitlab.gnome.org/GNOME/papers` | GNOME document viewer — find sidebar, search box |
-| **gnome-gui-spec** | `https://github.com/hanthor/gnome-gui-spec` | GNOME HIG patterns, Blueprint/XML examples |
+| **GNOME HIG** | `https://developer.gnome.org/hig/` | GNOME HIG patterns, Blueprint/XML examples |
 
 ---
 
