@@ -222,7 +222,8 @@ gtk-office-suite/
 
 ### Testing
 - Test data model code in `engine.rs` and `format.rs` (pure Rust, no GTK)
-- Window-level tests require GTK4 runtime — run on build machine (`himachal`)
+- Window-level tests require a GTK4 runtime — run them in CI or on a machine
+  with GTK4 installed
 - Use `cargo check` for fast feedback; `cargo test` on the build machine
 
 ---
@@ -234,7 +235,6 @@ gtk-office-suite/
 - **Release:** https://github.com/tuna-os/gtk-office-suite/releases/tag/v1.0
 - **GNOME HIG:** https://developer.gnome.org/hig/
 - **gtk4-rs docs:** https://gtk-rs.org/gtk4-rs/stable/latest/docs/gtk4/
-- **LibreOffice reference:** `/var/home/james/dev/libreoffice-core/`
 
 ## License
 
