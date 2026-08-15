@@ -72,8 +72,8 @@ doc.save(path).expect("Save failed");
 ## Installation
 
 ```bash
-git clone https://github.com/tuna-os/hanthor-rust.git
-cd hanthor-rust
+git clone https://github.com/tuna-os/gtk-office-suite.git
+cd gtk-office-suite
 cargo build --release
 ./target/release/letters
 ```
