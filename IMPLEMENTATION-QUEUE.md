@@ -35,7 +35,7 @@ build/test, so nothing below was implemented — this is investigation only,
 for whoever picks up the wiring with a working `cargo build`/GTK environment).
 
 **What's real (`letters-core/src/structured.rs`, 135 lines):**
-`StructuredEditing` wraps a `Document` with cursor/selection/`table_cell`
+`StructuredEditor` wraps a `Document` with cursor/selection/`table_cell`
 state and exposes `insert_table_rows`/`insert_table_cols`/
 `delete_table_rows`/`delete_table_cols`/`move_table_cell`,
 `set_list_item(paragraph, kind, level, start)` (nesting via `level`, restart
@@ -65,7 +65,7 @@ GTK-free, unit-testable model — exactly what `CLAUDE.md`'s architecture rule
 (654 lines, the actual GTK-buffer↔document bridge) only exposes whole-buffer
 batch operations — `capture_from_buffer(&TextBuffer) -> Document` and
 `render_to_buffer(&Document, &TextBuffer)`. There is no incremental mapping
-from "cursor is inside table N, row R, col C" (what `StructuredEditing`
+from "cursor is inside table N, row R, col C" (what `StructuredEditor`
 needs to act on) to a live `GtkTextBuffer` position. Building that mapping —
 plus a real table-grid widget to replace the Markdown-text placeholder — is
 the actual size of this issue, not a signal-handler stub.
@@ -74,7 +74,7 @@ the actual size of this issue, not a signal-handler stub.
 independently verified against this repo's velocity):
 
 1. Add incremental cursor↔`Document`-position tracking to `bridge.rs` (or a
-   new module) so `StructuredEditing::table_cell()` can be kept in sync with
+   new module) so `StructuredEditor::table_cell()` can be kept in sync with
    real buffer edits, not just a batch capture. **Foundational — everything
    below depends on it.** (~2d)
 2. Replace `insert-table`'s Markdown-text dump with a real table widget (grid
