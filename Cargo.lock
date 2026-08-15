@@ -5487,8 +5487,3 @@ checksum = "27bc9d5b815bc103f142aa054f561d9187d191692ec7c2d1e2b4737f8dbd7296"
 dependencies = [
  "zune-core",
 ]
-
-[[patch.unused]]
-name = "ironcalc_base"
-version = "0.7.1"
-source = "git+https://github.com/ironcalc/IronCalc?rev=2f539370#2f539370489872ddac0d452e4d93d7c402cb4be3"
