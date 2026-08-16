@@ -20,7 +20,7 @@
 |------|------|----------------|
 | LibreOffice core | `~/dev/libreoffice-core/` | Before implementing ANY new feature — check how LO does it |
 | IronCalc | `~/dev/ironcalc-ref/` | Tables formula engine, cell model |
-| gnome-gui-spec | `https://github.com/hanthor/gnome-gui-spec` | Widget selection, GNOME HIG compliance |
+| gnome-gui-spec | `https://github.com/tuna-os/suite-common` | Widget selection, GNOME HIG compliance |
 
 ### Skills Available
 

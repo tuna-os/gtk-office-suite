@@ -131,6 +131,6 @@ AdwApplicationWindow
 ## Reference
 
 - **GNOME HIG:** https://developer.gnome.org/hig/
-- **gnome-gui-spec:** https://github.com/hanthor/gnome-gui-spec/blob/main/GNOME-GUI-SPEC.md
+- **gnome-gui-spec:** https://github.com/tuna-os/suite-common/blob/main/GNOME-GUI-SPEC.md
 - **AGENT-GNOME-REFERENCE.md:** Project-specific reference of GNOME Rust app patterns
 - **LibreOffice Impress sidebar:** 7-deck sidebar for property panels (Properties, Transition, Animation, Master Slides, Gallery, Navigator, Styles)

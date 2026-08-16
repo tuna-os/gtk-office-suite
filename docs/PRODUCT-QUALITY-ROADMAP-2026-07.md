@@ -228,7 +228,7 @@ journey using both its preferred open format and the common Microsoft format.
 
 ### Phase 3 — GNOME-native polish
 
-Use [hanthor/gnome-gui-spec](https://github.com/hanthor/gnome-gui-spec) skills,
+Use [tuna-os/suite-common](https://github.com/tuna-os/suite-common) skills,
 intent maps, and application audits for design review and scaffolding, together
 with this repository's `vision-check` and `broadway-inspect` verification
 skills. Treat current upstream GNOME HIG and libadwaita documentation as the
