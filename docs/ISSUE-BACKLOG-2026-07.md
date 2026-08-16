@@ -96,7 +96,7 @@ complete workflows and correct spatial bounds.
 
 ### GNOME audit and scaffolding resources
 
-Use [hanthor/gnome-gui-spec](https://github.com/hanthor/gnome-gui-spec) as the
+Use [tuna-os/suite-common](https://github.com/tuna-os/suite-common) as the
 agent-facing skill and pattern resource for GNOME design audits, intent mapping,
 widget selection, and UI scaffolding. Start with its `SKILL.md` and
 `INTENT-MAP.md`, then select only the relevant component skill or application
@@ -134,6 +134,6 @@ qualification gate and consumes the evidence published by #96 and #108.
    local implementation.
 5. New scope enters through #95 and the roadmap, with dependencies and a test
    instrument identified before implementation.
-6. GNOME-facing work starts with the relevant `hanthor/gnome-gui-spec` skill or
+6. GNOME-facing work starts with the relevant `tuna-os/suite-common` skill or
    audit and records which pattern was applied; visual and interaction tests
    still prove the result in this suite.

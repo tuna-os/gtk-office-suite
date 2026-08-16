@@ -80,5 +80,5 @@ git commit -m "fix(gnome-hig): <category> — <summary of fixes>"
 
 ## Source Repositories
 
-- **Tool for GNOME audits**: https://github.com/hanthor/gnome-gui-spec
+- **Tool for GNOME audits**: https://github.com/tuna-os/suite-common
 - **Office suite being audited**: https://github.com/tuna-os/gtk-office-suite
