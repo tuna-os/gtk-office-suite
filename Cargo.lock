@@ -2190,7 +2190,7 @@ dependencies = [
  "pangocairo",
  "pulldown-cmark",
  "rdocx",
- "rdocx-oxml",
+ "rdocx-oxml 0.6.0",
  "serde_json",
  "suite-common",
  "suite-export",
@@ -2597,10 +2597,30 @@ dependencies = [
 ]
 
 [[package]]
-name = "oxml-layout"
-version = "0.1.3"
+name = "oxml-core"
+version = "0.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "31a1d5462125778cd7429649a1325f731bce6e36a68f6ed6f4334ac0b52b7b0d"
+checksum = "f6cabf8aba771ef1c551beeb3b163450be744dbb33d89f3d943fd49479d0bd74"
+dependencies = [
+ "quick-xml 0.41.0",
+ "thiserror 2.0.18",
+]
+
+[[package]]
+name = "oxml-drawing"
+version = "0.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "743fff470594c239d042d5967b504fbd4896a3951581e6d13e69a82cc3bb605c"
+dependencies = [
+ "oxml-core 0.3.0",
+ "quick-xml 0.41.0",
+]
+
+[[package]]
+name = "oxml-layout"
+version = "0.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "75421bbb0d172ceb47ebfe081376d336e7670078ac36714f15a313e954aed486"
 dependencies = [
  "fontdb",
  "harfrust",
@@ -2611,15 +2631,15 @@ dependencies = [
 
 [[package]]
 name = "oxml-media"
-version = "0.1.3"
+version = "0.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b1b811490c2f66b01a2d569dd5c5dba3c49f70d3f5bf6dcd15b4c963082adbf2"
+checksum = "84e3de9aabb798926cc6df706c8961bb782a54fe7d69ec7eba707a7fa9a89cd8"
 
 [[package]]
 name = "oxml-opc"
-version = "0.1.3"
+version = "0.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9350c0c8366f74d0855fcf05e2a8f1d4ec84ffbfafec23b6b864d36a51aea878"
+checksum = "db4e694661807e1355c2eb73125fd6cdc3fe9b40a502a7f6b749a5bf676d5531"
 dependencies = [
  "quick-xml 0.41.0",
  "thiserror 2.0.18",
@@ -2628,9 +2648,9 @@ dependencies = [
 
 [[package]]
 name = "oxml-pdf"
-version = "0.1.3"
+version = "0.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f3352c703f2feeaad86bd527b8c66d7d5670d7527fdbcb1d96087e92cef63e0c"
+checksum = "fdfeccb264478c14b81fede4ddb4b344de5a0c364856c5b4df93f7b82653e94d"
 dependencies = [
  "miniz_oxide 0.9.1",
  "oxml-layout",
@@ -3261,39 +3281,39 @@ dependencies = [
 
 [[package]]
 name = "rdocx"
-version = "0.6.0"
+version = "0.7.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7d1638060276c15ef20bca8a6359338b09fa8dbbf3b097d7a80f0ebfe8eff453"
+checksum = "2d6c622996389a6ec5fabf49689b49b28f4f69df3287b14e505d52b7777319ee"
 dependencies = [
- "oxml-core",
+ "oxml-core 0.3.0",
  "oxml-layout",
  "oxml-media",
  "oxml-opc",
  "oxml-pdf",
  "rdocx-html",
  "rdocx-layout",
- "rdocx-oxml",
+ "rdocx-oxml 0.7.0",
  "regex",
  "thiserror 2.0.18",
 ]
 
 [[package]]
 name = "rdocx-html"
-version = "0.6.0"
+version = "0.7.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ecaba37a8f14fc80a0247c22b84a7840047b6ccae9db516cfc269f678d7cb7c0"
+checksum = "f3e4d0b4c78b63adc1a17212b82b504c5475649eb3066bdb0b2cee304aadb643"
 dependencies = [
- "rdocx-oxml",
+ "rdocx-oxml 0.7.0",
 ]
 
 [[package]]
 name = "rdocx-layout"
-version = "0.6.0"
+version = "0.7.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6972a380d0b271257c6ad3903c0a237a326632689b4c1a391e7260ba54739d3b"
+checksum = "51ae56cf5f4b614ccf363e4d9c26dc0a5177183d900d0efd812cc6de0f83eda1"
 dependencies = [
  "oxml-layout",
- "rdocx-oxml",
+ "rdocx-oxml 0.7.0",
  "unicode-linebreak",
 ]
 
@@ -3304,7 +3324,21 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c4f6cd9207ef9cfe9848eab23e27cd3a57e051b54caf8bd8625d6c8294e84d3b"
 dependencies = [
  "itoa",
- "oxml-core",
+ "oxml-core 0.1.3",
+ "quick-xml 0.41.0",
+ "regex",
+ "thiserror 2.0.18",
+]
+
+[[package]]
+name = "rdocx-oxml"
+version = "0.7.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e48d963812dee21e919603079e845105f3847eba5b377857279f6d793a53934d"
+dependencies = [
+ "itoa",
+ "oxml-core 0.3.0",
+ "oxml-drawing",
  "quick-xml 0.41.0",
  "regex",
  "thiserror 2.0.18",
