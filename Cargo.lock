@@ -3456,9 +3456,9 @@ dependencies = [
 
 [[package]]
 name = "rust_xlsxwriter"
-version = "0.98.0"
+version = "0.98.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1a8265065e1520bdd68a1783d8c18c532387e766f13443fb1ac457320a3e3518"
+checksum = "e291f3208e0ed430e5c49d240adbf2935a94bbbf5fed945bbf096cf024585355"
 dependencies = [
  "zip",
 ]
