@@ -16,7 +16,7 @@ suite-common = { path = "../suite-common" }
 letters-core = { path = "../letters-core" }
 suite-export = { path = "../suite-export" }
 rdocx = "0.7.0"
-rdocx-oxml = "0.6.0"
+rdocx-oxml = "0.7.0"
 serde_json = "1"
 
 [[bin]]
