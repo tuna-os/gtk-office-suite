@@ -8,6 +8,8 @@ use adw::prelude::{AlertDialogExt, AlertDialogExtManual, AdwDialogExt};
 use std::cell::RefCell;
 use std::rc::Rc;
 
+use crate::actions::{connect_list_continuation, connect_markdown_macros, register_formatting_tags};
+use crate::dialogs::{active_buffer, get_textview, make_find_replace_widget, show_header_footer_dialog};
 use crate::page_container::PageContainer;
 
 // ── Crash-recovery snapshots ─────────────────────────────────────────────
@@ -382,6 +384,16 @@ impl LettersWindow {
             ("app.insertlink", &suite_common::i18n("Insert Link…")),
             ("app.insertimage", &suite_common::i18n("Insert Image…")),
             ("app.insert-table", &suite_common::i18n("Insert Table…")),
+            ("app.table-insert-row-above", &suite_common::i18n("Insert Row Above")),
+            ("app.table-insert-row-below", &suite_common::i18n("Insert Row Below")),
+            ("app.table-insert-col-left", &suite_common::i18n("Insert Column Left")),
+            ("app.table-insert-col-right", &suite_common::i18n("Insert Column Right")),
+            ("app.table-delete-row", &suite_common::i18n("Delete Row")),
+            ("app.table-delete-col", &suite_common::i18n("Delete Column")),
+            ("app.list-indent", &suite_common::i18n("Indent List")),
+            ("app.list-outdent", &suite_common::i18n("Outdent List")),
+            ("app.list-restart-numbering", &suite_common::i18n("Restart Numbering")),
+            ("app.insert-page-break", &suite_common::i18n("Insert Page Break")),
             ("app.cycle-line-spacing", &suite_common::i18n("Cycle Line Spacing")),
             ("app.cycle-columns", &suite_common::i18n("Cycle Column Layout")),
             ("app.increase-font", &suite_common::i18n("Increase Font Size")),
@@ -403,7 +415,7 @@ impl LettersWindow {
             ("app.style-h6", &suite_common::i18n("Paragraph Style: Heading 6")),
             ("app.style-code", &suite_common::i18n("Paragraph Style: Code")),
             ("app.style-quote", &suite_common::i18n("Paragraph Style: Block Quote")),
-                    ("app.insert-footnote", &suite_common::i18n("Insert Footnote\u{2026}")),
+            ("app.insert-footnote", &suite_common::i18n("Insert Footnote\u{2026}")),
             ("app.autosave-now", &suite_common::i18n("Save Crash-Recovery Snapshot Now")),
         ]);
 
@@ -746,7 +758,23 @@ impl LettersWindow {
 
         // ── Actions ────────────────────────────────────────────────
         Self::register_actions(&tab_view, &stack, &word_count_label, &style_label, &win, app, &settings);
-        Self::register_formatting_actions(&tab_view, app);
+        crate::actions::register_formatting_actions(&tab_view, app);
+        crate::actions::register_structured_actions(&tab_view, app);
+
+        // ── Drag and Drop file opening ────────────────────────────
+        {
+            let tv_for_drop = tab_view.clone();
+            let settings_for_drop = settings.clone();
+            suite_common::attach_file_drop_target(&win, move |paths| {
+                for path in paths {
+                    let path_str = path.to_string_lossy().to_string();
+                    if let Some(buf) = active_buffer(&tv_for_drop) {
+                        let _ = crate::bridge::load_file_to_buffer(&path_str, &buf);
+                        suite_common::push_recent_file(&settings_for_drop, &path_str);
+                    }
+                }
+            });
+        }
 
         // ── Print action ──────────────────────────────────────────
         {
@@ -1076,38 +1104,6 @@ impl LettersWindow {
             app.set_accels_for_action("app.insert-footnote", &["<Primary><Alt>f"]);
         }
 
-        // Insert Table
-        {
-            let tv = tab_view.clone();
-            let a = gtk::gio::SimpleAction::new("insert-table", None);
-            a.connect_activate(move |_, _| {
-                if let Some(buf) = active_buffer(&tv) {
-                    let rows = 3;
-                    let cols = 3;
-                    let mut md = String::new();
-                    // Header row
-                    md.push('|');
-                    for c in 0..cols { md.push_str(&format!(" Header {} |", c+1)); }
-                    md.push('\n');
-                    // Separator
-                    md.push('|');
-                    for _ in 0..cols { md.push_str(" --- |"); }
-                    md.push('\n');
-                    // Data rows
-                    for r in 0..rows {
-                        md.push('|');
-                        for c in 0..cols { md.push_str(&format!(" Cell {}.{} |", r+1, c+1)); }
-                        md.push('\n');
-                    }
-                    let ins = buf.selection_bounds()
-                        .map(|(i,_)| i).unwrap_or_else(|| buf.start_iter());
-                    let mut pos = ins;
-                    buf.insert(&mut pos, &md);
-                }
-            });
-            app.add_action(&a);
-        }
-
         // ── Page layout setting listeners ────────────────────────
         {
             let r = ruler_widget.clone();
@@ -1181,6 +1177,7 @@ impl LettersWindow {
         // set — refresh the window title now that it exists.
         self.window.set_title(Some(&format!("{name} — Letters")));
         page.set_needs_attention(false);
+        suite_common::push_recent_file(&self.settings, path);
         self.stack.set_visible_child_name("editor");
         let wc = self.word_count_label.clone();
         let sl = self.style_label.clone();
@@ -1594,217 +1591,7 @@ fn connect_style_readout(buf: &gtk::TextBuffer, label: &gtk4::Label) {
     });
 }
 
-fn active_buffer(tv: &adw::TabView) -> Option<gtk::TextBuffer> {
-    tv.selected_page()
-        .and_then(|p| get_textview(&p.child()))
-        .map(|tv| tv.buffer())
-}
-
-/// Apply a named GtkTextTag to the current selection or cursor position.
-fn apply_tag_to_active(tv: &adw::TabView, tag_name: &str) {
-    if let Some(buf) = active_buffer(tv) {
-        if let Some(tag) = buf.tag_table().lookup(tag_name) {
-            let sel = buf.selection_bounds();
-            if let Some((start, end)) = sel {
-                buf.apply_tag(&tag, &start, &end);
-            }
-        }
-    }
-}
-
-/// Toggle a named GtkTextTag on the current selection.
-fn toggle_tag(tv: &adw::TabView, tag_name: &str) {
-    if let Some(buf) = active_buffer(tv) {
-        if let Some(tag) = buf.tag_table().lookup(tag_name) {
-            let sel = buf.selection_bounds();
-            if let Some((start, end)) = sel {
-                // Get all tags at the start of the selection and check if ours is present
-                let tags_at_cursor = start.tags();
-                let has = tags_at_cursor.iter().any(|t| t.name().as_deref() == Some(tag_name));
-                if has {
-                    buf.remove_tag(&tag, &start, &end);
-                } else {
-                    buf.apply_tag(&tag, &start, &end);
-                }
-            }
-        }
-    }
-}
-
-// ── Formatting action handlers ────────────────────────────────────────
-
-fn toggle_inline_bold(tv: &adw::TabView)  { toggle_tag(tv, "bold"); }
-fn toggle_inline_italic(tv: &adw::TabView) { toggle_tag(tv, "italic"); }
-fn toggle_inline_underline(tv: &adw::TabView) { toggle_tag(tv, "underline"); }
-fn toggle_inline_strikethrough(tv: &adw::TabView) { toggle_tag(tv, "strikethrough"); }
-fn toggle_highlight(tv: &adw::TabView) { toggle_tag(tv, "highlight"); }
-
-impl LettersWindow {
-    fn register_formatting_actions(tv: &adw::TabView, app: &adw::Application) {
-        // Inline formatting
-        type ToggleHandler = fn(&adw::TabView);
-        let pairs: &[(&str, ToggleHandler)] = &[
-            ("bold", toggle_inline_bold),
-            ("italic", toggle_inline_italic),
-            ("underline", toggle_inline_underline),
-            ("strikethrough", toggle_inline_strikethrough),
-            ("highlight", toggle_highlight),
-        ];
-        for (name, handler) in pairs {
-            let tv = tv.clone();
-            let a = gtk::gio::SimpleAction::new(name, None);
-            a.connect_activate(move |_, _| handler(&tv));
-            app.add_action(&a);
-        }
-
-        // Shortcuts for B/I/U
-        app.set_accels_for_action("app.bold", &["<Primary>b"]);
-        app.set_accels_for_action("app.italic", &["<Primary>i"]);
-        app.set_accels_for_action("app.underline", &["<Primary>u"]);
-
-        // Lists
-        {
-            let tv = tv.clone();
-            let a = gtk::gio::SimpleAction::new("bullet-list", None);
-            a.connect_activate(move |_, _| { toggle_list(&tv, "bullet"); });
-            app.add_action(&a);
-        }
-        {
-            let tv = tv.clone();
-            let a = gtk::gio::SimpleAction::new("numbered-list", None);
-            a.connect_activate(move |_, _| { toggle_list(&tv, "numbered"); });
-            app.add_action(&a);
-        }
-        app.set_accels_for_action("app.bullet-list", &["<Primary><Shift>8"]);
-        app.set_accels_for_action("app.numbered-list", &["<Primary><Shift>7"]);
-
-        // Alignment
-        let align_names: &[&str] = &["align-left", "align-center", "align-right", "align-justify"];
-        for name in align_names {
-            let tv = tv.clone();
-            let a = gtk::gio::SimpleAction::new(name, None);
-            let name = *name;
-            a.connect_activate(move |_, _| {
-                if let Some(buf) = active_buffer(&tv) {
-                    // Get cursor position from selection bounds
-                    let bounds = buf.selection_bounds();
-                    let (anchor, _) = bounds.unwrap_or_else(|| {
-                        (buf.start_iter(), buf.start_iter())
-                    });
-                    let mut line_start = anchor;
-                    line_start.backward_line();
-                    let mut line_end = anchor;
-                    line_end.forward_line();
-                    // Remove all alignment tags from this line first
-                    for an in &["align-left", "align-center", "align-right", "align-justify"] {
-                        if let Some(at) = buf.tag_table().lookup(an) {
-                            buf.remove_tag(&at, &line_start, &line_end);
-                        }
-                    }
-                    // Apply the requested alignment
-                    if let Some(tag) = buf.tag_table().lookup(name) {
-                        buf.apply_tag(&tag, &line_start, &line_end);
-                    }
-                }
-            });
-            app.add_action(&a);
-        }
-        app.set_accels_for_action("app.align-left", &["<Primary>l"]);
-        app.set_accels_for_action("app.align-center", &["<Primary>e"]);
-        app.set_accels_for_action("app.align-right", &["<Primary>r"]);
-        app.set_accels_for_action("app.align-justify", &["<Primary>j"]);
-
-        // Font size
-        {
-            let tv = tv.clone();
-            let a = gtk::gio::SimpleAction::new("increase-font", None);
-            a.connect_activate(move |_, _| {
-                if let Some(buf) = active_buffer(&tv) {
-                    // Apply a larger scale tag
-                    if let Some(tag) = buf.tag_table().lookup("font-larger") {
-                        let sel = buf.selection_bounds();
-                        if let Some((start, end)) = sel {
-                            buf.apply_tag(&tag, &start, &end);
-                        }
-                    }
-                }
-            });
-            app.add_action(&a);
-        }
-        {
-            let tv = tv.clone();
-            let a = gtk::gio::SimpleAction::new("decrease-font", None);
-            a.connect_activate(move |_, _| {
-                if let Some(buf) = active_buffer(&tv) {
-                    if let Some(tag) = buf.tag_table().lookup("font-smaller") {
-                        let sel = buf.selection_bounds();
-                        if let Some((start, end)) = sel {
-                            buf.apply_tag(&tag, &start, &end);
-                        }
-                    }
-                }
-            });
-            app.add_action(&a);
-        }
-        app.set_accels_for_action("app.increase-font", &["<Primary><Shift>greater"]);
-        app.set_accels_for_action("app.decrease-font", &["<Primary><Shift>less"]);
-
-        // Styles
-        let styles: &[(&str, &str)] = &[
-            ("style-p", ""),
-            ("style-h1", "h1"), ("style-h2", "h2"), ("style-h3", "h3"),
-            ("style-h4", "h4"), ("style-h5", "h5"), ("style-h6", "h6"),
-            ("style-code", "code"), ("style-quote", "blockquote"),
-        ];
-        for (action_name, tag_name) in styles {
-            let tv = tv.clone();
-            let a = gtk::gio::SimpleAction::new(action_name, None);
-            let tag_name = *tag_name;
-            a.connect_activate(move |_, _| {
-                if !tag_name.is_empty() {
-                    apply_tag_to_active(&tv, tag_name);
-                }
-            });
-            app.add_action(&a);
-        }
-    }
-}
-
 // ── Save logic ───────────────────────────────────────────────────────
-
-// ── Save logic ───────────────────────────────────────────────────────
-
-fn show_header_footer_dialog(pc: &crate::page_container::PageContainer) {
-    let dialog = adw::AlertDialog::new(
-        Some("Headers and footers"),
-        Some("Use {page} for automatic page numbering."),
-    );
-    // Build a custom content with header and footer entries
-    let content = gtk4::Box::new(gtk4::Orientation::Vertical, 12);
-    content.set_margin_top(12); content.set_margin_bottom(12);
-    content.set_margin_start(12); content.set_margin_end(12);
-
-    let hdr_entry = gtk4::Entry::builder().placeholder_text("Header text").build();
-    let ftr_entry = gtk4::Entry::builder().placeholder_text("Footer text").build();
-    content.append(&gtk4::Label::new(Some("Header")));
-    content.append(&hdr_entry);
-    content.append(&gtk4::Label::new(Some("Footer")));
-    content.append(&ftr_entry);
-    dialog.set_extra_child(Some(&content));
-
-    dialog.add_responses(&[("cancel", "_Cancel"), ("apply", "_Apply")]);
-    dialog.set_default_response(Some("apply"));
-    dialog.set_response_appearance("apply", adw::ResponseAppearance::Suggested);
-
-    let parent = pc.root().and_downcast::<adw::ApplicationWindow>();
-    let pc = pc.clone();
-    dialog.choose(parent.as_ref(), None::<&gtk4::gio::Cancellable>, move |response| {
-        if response.as_str() == "apply" {
-            pc.set_header_text(&hdr_entry.text());
-            pc.set_footer_text(&ftr_entry.text());
-        }
-    });
-}
 
 /// Save `page`'s document to its already-known file path, if it has one.
 /// Returns `false` (no-op) for a never-saved tab — callers fall back to a
@@ -1825,6 +1612,8 @@ fn save_page(page: &adw::TabPage) -> bool {
         if let Err(e) = crate::bridge::save_buffer_to_file(&buf, &path_str) {
             eprintln!("save failed: {e}");
         }
+        let settings = gio::Settings::new("org.tunaos.letters");
+        suite_common::push_recent_file(&settings, &path_str);
         buf.set_modified(false);
     }
     page.set_needs_attention(false);
@@ -1915,587 +1704,6 @@ fn make_tab_menu() -> gio::Menu {
     s3.append(Some("_Close"), Some("win.close-current-page"));
     m.append_section(Some("Close"), &s3);
     m
-}
-
-// ── Find & Replace overlay ──────────────────────────────────────────
-
-struct FindState {
-    matches: Vec<(gtk::TextIter, gtk::TextIter)>,
-    current: usize,
-}
-
-/// Build the find/replace search bar that overlays the content area.
-/// Uses GtkSearchBar per GNOME HIG (not a stacked bar).
-fn make_find_replace_widget(tv: &adw::TabView) -> (gtk::SearchBar, gtk::SearchEntry) {
-    let tv = tv.clone();
-
-    let search_entry = gtk::SearchEntry::new();
-    search_entry.set_placeholder_text(Some("Find\u{2026}"));
-    search_entry.set_hexpand(true);
-    search_entry.update_property(&[gtk::accessible::Property::Label("Find")]);
-
-    let replace_entry = gtk::Entry::new();
-    replace_entry.set_placeholder_text(Some("Replace\u{2026}"));
-    replace_entry.update_property(&[gtk::accessible::Property::Label("Replace with")]);
-
-    let match_label = gtk::Label::new(Some(""));
-    match_label.add_css_class("dim-label");
-    match_label.set_margin_start(4);
-    match_label.set_margin_end(4);
-
-    let find_prev = gtk::Button::new();
-    find_prev.set_icon_name("go-up-symbolic");
-    find_prev.set_tooltip_text(Some(&suite_common::i18n("Previous match (Shift+Enter)")));
-    find_prev.update_property(&[gtk::accessible::Property::Label("Previous match")]);
-    find_prev.add_css_class("flat");
-
-    let find_next = gtk::Button::new();
-    find_next.set_icon_name("go-down-symbolic");
-    find_next.set_tooltip_text(Some(&suite_common::i18n("Next match (Enter)")));
-    find_next.update_property(&[gtk::accessible::Property::Label("Next match")]);
-    find_next.add_css_class("flat");
-
-    let replace_btn = gtk::Button::with_label(&suite_common::i18n("Replace"));
-    replace_btn.set_tooltip_text(Some(&suite_common::i18n("Replace current match")));
-    replace_btn.add_css_class("flat");
-
-    let replace_all_btn = gtk::Button::with_label(&suite_common::i18n("Replace All"));
-    replace_all_btn.set_tooltip_text(Some(&suite_common::i18n("Replace all matches")));
-    replace_all_btn.add_css_class("flat");
-
-    let case_toggle = gtk::ToggleButton::builder()
-        .label("Aa")
-        .tooltip_text(suite_common::i18n("Case sensitive"))
-        .build();
-    case_toggle.update_property(&[gtk::accessible::Property::Label("Case sensitive")]);
-    case_toggle.add_css_class("flat");
-
-    let close_btn = gtk::Button::builder()
-        .icon_name("window-close-symbolic")
-        .tooltip_text("Close (Escape)")
-        .build();
-    close_btn.update_property(&[gtk::accessible::Property::Label("Close search bar")]);
-    close_btn.add_css_class("flat");
-
-    // Shared search state
-    let state = Rc::new(RefCell::new(FindState { matches: Vec::new(), current: 0 }));
-
-    // Shared widgets for closures
-    let search_data = Rc::new((search_entry.clone(), match_label.clone(), case_toggle.clone()));
-
-    // ── Helper: run search, populate matches, highlight ─────
-    let run_search: Rc<Box<dyn Fn()>> = {
-        let tv = tv.clone();
-        let state = state.clone();
-        let sd = search_data.clone();
-        Rc::new(Box::new(move || {
-            let query = sd.0.text().to_string();
-            let ml = &sd.1;
-            let ct = &sd.2;
-            if query.is_empty() {
-                ml.set_label("");
-                state.borrow_mut().matches.clear();
-                state.borrow_mut().current = 0;
-                if let Some(buf) = active_buffer(&tv) {
-                    for tag_name in &["search-match", "search-current"] {
-                        if let Some(tag) = buf.tag_table().lookup(tag_name) {
-                            buf.remove_tag(&tag, &buf.start_iter(), &buf.end_iter());
-                        }
-                    }
-                }
-                return;
-            }
-            if let Some(buf) = active_buffer(&tv) {
-                let flags = if ct.is_active() {
-                    gtk::TextSearchFlags::TEXT_ONLY
-                } else {
-                    gtk::TextSearchFlags::CASE_INSENSITIVE
-                };
-                // Clear previous highlights
-                for tag_name in &["search-match", "search-current"] {
-                    if let Some(tag) = buf.tag_table().lookup(tag_name) {
-                        buf.remove_tag(&tag, &buf.start_iter(), &buf.end_iter());
-                    }
-                }
-                // Find all matches
-                let mut matches = Vec::new();
-                let mut iter = buf.start_iter();
-                while let Some((start, end)) = iter.forward_search(&query, flags, None) {
-                    matches.push((start, end));
-                    iter = end;
-                }
-                let count = matches.len();
-                state.borrow_mut().matches = matches;
-                state.borrow_mut().current = 0;
-                ml.set_label(&format!("{}/{}", if count > 0 { 1 } else { 0 }, count));
-                // Highlight all matches
-                if let Some(tag) = buf.tag_table().lookup("search-match") {
-                    for (s, e) in state.borrow().matches.iter() {
-                        buf.apply_tag(&tag, s, e);
-                    }
-                }
-                // Highlight current match
-                if let Some(tag) = buf.tag_table().lookup("search-current") {
-                    if let Some((s, e)) = state.borrow().matches.first() {
-                        buf.apply_tag(&tag, s, e);
-                        buf.select_range(s, e);
-                        scroll_to_cursor(&tv);
-                    }
-                }
-            }
-        }))
-    };
-
-    // ── On each keystroke ────────────────────────────────────
-    {
-        let rs = run_search.clone();
-        search_entry.connect_search_changed(move |_| {
-            rs();
-        });
-    }
-
-    // ── Case toggle ──────────────────────────────────────────
-    {
-        let rs = run_search.clone();
-        case_toggle.connect_toggled(move |_| {
-            rs();
-        });
-    }
-
-    // ── Find Next ────────────────────────────────────────────
-    {
-        let tv = tv.clone();
-        let state = state.clone();
-        let ml = match_label.clone();
-        find_next.connect_clicked(move |_| {
-            navigate_match(&tv, &state, &ml, 1);
-        });
-    }
-
-    // ── Find Previous ────────────────────────────────────────
-    {
-        let tv = tv.clone();
-        let state = state.clone();
-        let ml = match_label.clone();
-        find_prev.connect_clicked(move |_| {
-            navigate_match(&tv, &state, &ml, -1);
-        });
-    }
-
-    // ── Replace current match ────────────────────────────────
-    {
-        let tv = tv.clone();
-        let state = state.clone();
-        let re = replace_entry.clone();
-        let rs = run_search.clone();
-        replace_btn.connect_clicked(move |_| {
-            let replacement = re.text().to_string();
-            let st = state.borrow();
-            if st.matches.is_empty() { return; }
-            if let Some((start, end)) = st.matches.get(st.current) {
-                if let Some(buf) = active_buffer(&tv) {
-                    let mut s = *start;
-                    let mut e = *end;
-                    buf.begin_user_action();
-                    buf.delete(&mut s, &mut e);
-                    buf.insert(&mut s, &replacement);
-                    buf.end_user_action();
-                }
-            }
-            drop(st);
-            rs();
-        });
-    }
-
-    // ── Replace All ──────────────────────────────────────────
-    {
-        let tv = tv.clone();
-        let state = state.clone();
-        let re = replace_entry.clone();
-        let rs = run_search.clone();
-        replace_all_btn.connect_clicked(move |_| {
-            let replacement = re.text().to_string();
-            let st = state.borrow();
-            let matches = st.matches.clone();
-            drop(st);
-            if matches.is_empty() { return; }
-            if let Some(buf) = active_buffer(&tv) {
-                buf.begin_user_action();
-                for (s, e) in matches.into_iter().rev() {
-                    let mut start = s;
-                    let mut end = e;
-                    buf.delete(&mut start, &mut end);
-                    buf.insert(&mut start, &replacement);
-                }
-                buf.end_user_action();
-            }
-            rs();
-        });
-    }
-
-    // ── Close button ─────────────────────────────────────────
-    // ── Layout ───────────────────────────────────────────────
-    let hbox = gtk::Box::new(gtk::Orientation::Horizontal, 4);
-    hbox.set_margin_start(6);
-    hbox.set_margin_end(6);
-    hbox.set_margin_top(2);
-    hbox.set_margin_bottom(2);
-    hbox.append(&search_entry);
-    hbox.append(&replace_entry);
-    hbox.append(&match_label);
-    hbox.append(&find_prev);
-    hbox.append(&find_next);
-    hbox.append(&replace_btn);
-    hbox.append(&replace_all_btn);
-    hbox.append(&case_toggle);
-    hbox.append(&close_btn);
-
-    let search_bar = gtk::SearchBar::new();
-    search_bar.set_child(Some(&hbox));
-    search_bar.set_search_mode(false);
-    search_bar.set_show_close_button(false);
-    search_bar.connect_entry(&search_entry);
-
-    // Wire close button
-    {
-        let sb = search_bar.clone();
-        close_btn.connect_clicked(move |_| {
-            sb.set_search_mode(false);
-        });
-    }
-
-    // Enter in search field = find next
-    {
-        search_entry.connect_activate(move |_| {
-            find_next.activate();
-        });
-    }
-
-    (search_bar, search_entry)
-}
-
-/// Scroll the active text view so the cursor is visible.
-/// Navigate to the next/previous match and update highlights.
-fn navigate_match(tv: &adw::TabView, state: &RefCell<FindState>, ml: &gtk::Label, direction: i32) {
-    let mut st = state.borrow_mut();
-    if st.matches.is_empty() { return; }
-    let n = st.matches.len() as i32;
-    let new_idx = ((st.current as i32 + direction).rem_euclid(n)) as usize;
-    st.current = new_idx;
-    let m = st.matches[new_idx];
-    drop(st);
-    if let Some(buf) = active_buffer(tv) {
-        if let Some(tag) = buf.tag_table().lookup("search-current") {
-            buf.remove_tag(&tag, &buf.start_iter(), &buf.end_iter());
-        }
-        if let Some(tag) = buf.tag_table().lookup("search-current") {
-            buf.apply_tag(&tag, &m.0, &m.1);
-        }
-        buf.select_range(&m.0, &m.1);
-        scroll_to_cursor(tv);
-    }
-    ml.set_label(&format!("{}/{}", new_idx + 1, n));
-}
-
-fn scroll_to_cursor(tv: &adw::TabView) {
-    if let Some(page) = tv.selected_page() {
-        if let Some(textview) = get_textview(&page.child()) {
-            let buf = textview.buffer();
-            let mark = buf.get_insert();
-            textview.scroll_to_mark(&mark, 0.0, true, 0.0, 0.0);
-        }
-    }
-}
-
-// ── TextTag registration ────────────────────────────────────────────────
-
-pub fn register_formatting_tags(buffer: &gtk::TextBuffer) {
-    let tb = buffer.tag_table();
-    macro_rules! add { ($tag:expr) => { tb.add(&$tag); }}
-    add!(gtk::TextTag::builder().name("bold").weight(700).build());
-    add!(gtk::TextTag::builder().name("italic").style(gtk4::pango::Style::Italic).build());
-    add!(gtk::TextTag::builder().name("underline").underline(gtk4::pango::Underline::Single).build());
-    add!(gtk::TextTag::builder().name("strikethrough").strikethrough(true).build());
-    add!(gtk::TextTag::builder().name("highlight").background("#FFFF00").build());
-    add!(gtk::TextTag::builder().name("h1").scale(2.0).weight(700).build());
-    add!(gtk::TextTag::builder().name("h2").scale(1.5).weight(700).build());
-    add!(gtk::TextTag::builder().name("h3").scale(1.17).weight(700).build());
-    add!(gtk::TextTag::builder().name("h4").scale(1.0).weight(700).build());
-    add!(gtk::TextTag::builder().name("h5").scale(0.83).weight(700).build());
-    add!(gtk::TextTag::builder().name("h6").scale(0.67).weight(700).build());
-    add!(gtk::TextTag::builder().name("h-title").scale(2.36).weight(700).build());
-    add!(gtk::TextTag::builder().name("h-subtitle").scale(1.36).weight(400).foreground("#666666").build());
-    add!(gtk::TextTag::builder().name("normal").build());
-    // Line spacing tags
-    add!(gtk::TextTag::builder().name("line-spacing-1.0").pixels_inside_wrap(0).pixels_above_lines(0).pixels_below_lines(0).build());
-    add!(gtk::TextTag::builder().name("line-spacing-1.15").pixels_inside_wrap(2).pixels_above_lines(0).pixels_below_lines(0).build());
-    add!(gtk::TextTag::builder().name("line-spacing-1.5").pixels_inside_wrap(6).pixels_above_lines(2).pixels_below_lines(2).build());
-    add!(gtk::TextTag::builder().name("line-spacing-2.0").pixels_inside_wrap(12).pixels_above_lines(4).pixels_below_lines(4).build());
-    add!(gtk::TextTag::builder().name("code").family("Monospace").background("#F0F0F0").foreground("#333333").build());
-    add!(gtk::TextTag::builder().name("blockquote").left_margin(40).style(gtk4::pango::Style::Italic).foreground("#666666").build());
-    // Alignment tags
-    add!(gtk::TextTag::builder().name("align-left").justification(gtk::Justification::Left).build());
-    add!(gtk::TextTag::builder().name("align-center").justification(gtk::Justification::Center).build());
-    add!(gtk::TextTag::builder().name("align-right").justification(gtk::Justification::Right).build());
-    add!(gtk::TextTag::builder().name("align-justify").justification(gtk::Justification::Fill).build());
-    // Font size tags
-    add!(gtk::TextTag::builder().name("font-larger").scale(1.2).build());
-    add!(gtk::TextTag::builder().name("font-smaller").scale(0.833).build());
-    // Search highlight tags
-    add!(gtk::TextTag::builder().name("search-match").background("#FFFF00").build());
-    add!(gtk::TextTag::builder().name("search-current").background("#FF9800").build());
-}
-
-// ── List helpers ─────────────────────────────────────────────────────
-
-fn line_text(buf: &gtk::TextBuffer, iter: &gtk::TextIter) -> String {
-    let mut start = *iter;
-    start.backward_line();
-    let mut end = *iter;
-    end.forward_line();
-    buf.text(&start, &end, false).to_string()
-}
-
-fn toggle_list(tv: &adw::TabView, kind: &str) {
-    if let Some(buf) = active_buffer(tv) {
-        let bounds = buf.selection_bounds();
-        let (ins, _) = bounds.unwrap_or((buf.start_iter(), buf.start_iter()));
-        let text = line_text(&buf, &ins);
-        // Check if already a list item
-        let has_bullet = text.trim_start().starts_with('\u{2022}')
-            || text.trim_start().starts_with("- ");
-        let has_number = text.trim_start().starts_with(|c: char| c.is_ascii_digit())
-            && text.trim_start().contains(". ");
-
-        buf.begin_user_action();
-        let mut start = ins; start.backward_line();
-        let mut end = ins; end.forward_line();
-
-        if (kind == "bullet" && has_bullet) || (kind == "numbered" && has_number) {
-            // Remove list prefix - delete from line start to after prefix
-            let line = line_text(&buf, &ins);
-            let trimmed = line.trim_start();
-            let prefix_end = if kind == "bullet" {
-                trimmed.find(|c| c != '\u{2022}' && c != ' ').unwrap_or(0)
-            } else {
-                trimmed.find(". ").map(|i| i + 2).unwrap_or(0)
-            };
-            let indent = line.len() - trimmed.len();
-            let del_len = indent + prefix_end;
-            if del_len > 0 {
-                let mut del_end = start;
-                del_end.forward_chars(del_len as i32);
-                if del_end > start { buf.delete(&mut start, &mut del_end); }
-            }
-        } else {
-            // Insert list prefix
-            let prefix = if kind == "bullet" { "\u{2022} " } else { "1. " };
-            buf.insert(&mut start, prefix);
-        }
-        buf.end_user_action();
-    }
-}
-
-/// Connect list auto-continuation on Enter for a new buffer.
-/// Uses EventControllerKey on the TextView to detect Enter.
-fn connect_list_continuation(editor: &gtk::TextView, buf: &gtk::TextBuffer) {
-    let buf = buf.clone();
-    let ctrl = gtk::EventControllerKey::new();
-    ctrl.connect_key_pressed(move |_, key, _code, _state| {
-        if key == gtk::gdk::Key::Return || key == gtk::gdk::Key::KP_Enter {
-            let bounds = buf.selection_bounds();
-            let (ins, _) = bounds.unwrap_or((buf.start_iter(), buf.start_iter()));
-            let mut line_start = ins;
-            line_start.backward_line();
-            let mut line_end = ins;
-            line_end.forward_line();
-            let line = buf.text(&line_start, &line_end, false);
-            let trimmed = line.trim_start();
-
-            // Bullet list continuation
-            if trimmed.starts_with("\u{2022}") || trimmed.starts_with("- ") {
-                let indent = line.len() - trimmed.len();
-                let marker = "\u{2022} ";
-                let after_marker = trimmed
-                    .strip_prefix("\u{2022}").or_else(|| trimmed.strip_prefix("- "))
-                    .unwrap_or("").trim_start();
-                if after_marker.is_empty() {
-                    return glib::Propagation::Proceed;
-                }
-                let prefix = format!("{}{}", " ".repeat(indent), marker);
-                buf.insert(&mut line_end, &prefix);
-                return glib::Propagation::Stop;
-            }
-
-            // Numbered list continuation
-            if trimmed.starts_with(|c: char| c.is_ascii_digit()) && trimmed.contains(". ") {
-                let num_str: String = trimmed.chars().take_while(|c| c.is_ascii_digit()).collect();
-                let after_num = &trimmed[num_str.len()..];
-                let rest = after_num.strip_prefix(". ").unwrap_or("");
-                if let Ok(n) = num_str.parse::<usize>() {
-                    if rest.is_empty() {
-                        return glib::Propagation::Proceed;
-                    }
-                    let indent = line.len() - trimmed.len();
-                    let new_prefix = format!("{}{}. ", " ".repeat(indent), n + 1);
-                    buf.insert(&mut line_end, &new_prefix);
-                    return glib::Propagation::Stop;
-                }
-            }
-        }
-        glib::Propagation::Proceed
-    });
-    editor.add_controller(ctrl);
-}
-
-// ── Markdown macros ──────────────────────────────────────────────────
-// Auto-formatting on Space/Enter: converts markdown syntax to rich text.
-
-fn connect_markdown_macros(buf: &gtk::TextBuffer) {
-    let buf = buf.clone();
-    buf.connect_insert_text(move |buf, pos, text| {
-        // Only trigger on Space (inline patterns) and Enter (block patterns)
-        if text != " " && text != "\n" && text != "\r\n" { return; }
-
-        let insert_pos = pos.offset();
-
-        // ── Inline patterns (on Space) ──────────────────────────────
-        if text == " " {
-            // Check 2-10 chars before cursor for markdown patterns
-            let start = if insert_pos >= 10 { insert_pos - 10 } else { 0 };
-            let mut iter = buf.start_iter();
-            iter.set_offset(start);
-            let mut end = buf.start_iter();
-            end.set_offset(insert_pos);
-            let before = buf.text(&iter, &end, false).to_string();
-
-            // Bold: **text** 
-            if let Some(inner) = extract_md_pattern(&before, "**", "**") {
-                apply_md_pattern(buf, &before, "**", inner, "bold");
-                return;
-            }
-            // Italic: *text*
-            if let Some(inner) = extract_md_pattern(&before, "*", "*") {
-                apply_md_pattern(buf, &before, "*", inner, "italic");
-                return;
-            }
-            // Strikethrough: ~~text~~
-            if let Some(inner) = extract_md_pattern(&before, "~~", "~~") {
-                apply_md_pattern(buf, &before, "~~", inner, "strikethrough");
-                return;
-            }
-            // Inline code: `text`
-            if let Some(inner) = extract_md_pattern(&before, "`", "`") {
-                apply_md_pattern(buf, &before, "`", inner, "code");
-                return;
-            }
-        }
-
-        // ── Block patterns (on Enter) ──────────────────────────────
-        if text == "\n" || text == "\r\n" {
-            let mut line_iter = buf.start_iter();
-            line_iter.set_offset(insert_pos);
-            let mut line_start = line_iter;
-            line_start.backward_line();
-            let mut line_end = line_iter;
-            line_end.forward_line();
-            let line = buf.text(&line_start, &line_end, false);
-            let trimmed = line.trim_start();
-
-            // Heading: # ## ###
-            for level in 1..=6 {
-                let prefix = format!("{} ", "#".repeat(level));
-                if trimmed.starts_with(&prefix) {
-                    let tag_name = format!("h{}", level);
-                    let _content = trimmed[prefix.len()..].to_string();
-                    let indent = line.len() - trimmed.len();
-                    buf.begin_user_action();
-                    // Delete the markdown prefix
-                    let mut del_start = line_start;
-                    del_start.forward_chars(indent as i32 + prefix.len() as i32);
-                    buf.delete(&mut line_start, &mut del_start);
-                    // Apply heading tag
-                    if let Some(tag) = buf.tag_table().lookup(&tag_name) {
-                        let start = line_start; // now at content start
-                        let mut end = line_end;
-                        end.backward_char(); // exclude trailing newline
-                        buf.apply_tag(&tag, &start, &end);
-                    }
-                    buf.end_user_action();
-                    return;
-                }
-            }
-
-            // Blockquote: >
-            if trimmed.starts_with("> ") {
-                let indent = line.len() - trimmed.len();
-                buf.begin_user_action();
-                let mut del_start = line_start;
-                del_start.forward_chars(indent as i32 + 2);
-                buf.delete(&mut line_start, &mut del_start);
-                if let Some(tag) = buf.tag_table().lookup("blockquote") {
-                    let start = line_start;
-                    let mut end = line_end;
-                    end.backward_char();
-                    buf.apply_tag(&tag, &start, &end);
-                }
-                buf.end_user_action();
-            }
-        }
-    });
-}
-
-/// Extract content between two delimiters in the text before cursor.
-/// Returns the inner text if the pattern is found at the end of the string.
-fn extract_md_pattern<'a>(before: &'a str, open: &str, close: &str) -> Option<&'a str> {
-    // The pattern should be at the end: "something **text** "
-    let trimmed = before.trim_end();
-    // Check for space before pattern (word boundary)
-    if !trimmed.ends_with(close) { return None; }
-    let close_pos = trimmed.len() - close.len();
-    if close_pos < open.len() { return None; }
-    let before_close = &trimmed[..close_pos];
-    if !before_close.ends_with(open) { return None; }
-    let open_pos = before_close.len() - open.len();
-    if open_pos == 0 || before_close.as_bytes()[open_pos - 1] == b' ' {
-        let inner = &before_close[open_pos + open.len()..];
-        if !inner.is_empty() {
-            return Some(inner);
-        }
-    }
-    None
-}
-
-/// Apply a markdown pattern: delete the markers, insert clean text, apply tag.
-fn apply_md_pattern(buf: &gtk::TextBuffer, before: &str, delimiter: &str, inner: &str, tag_name: &str) {
-    let offset = before.len() as i32;
-    let del_len = (delimiter.len() * 2 + inner.len()) as i32;
-    let start_off = offset - del_len;
-
-    buf.begin_user_action();
-    // Delete the markdown syntax (delimiters + inner text)
-    let mut start = buf.start_iter();
-    start.set_offset(start_off);
-    let mut end = buf.start_iter();
-    end.set_offset(offset);
-    buf.delete(&mut start, &mut end);
-    // Insert clean text
-    let mut pos = buf.start_iter();
-    pos.set_offset(start_off);
-    buf.insert(&mut pos, inner);
-    // Apply the formatting tag
-    if let Some(tag) = buf.tag_table().lookup(tag_name) {
-        let mut tag_start = buf.start_iter();
-        tag_start.set_offset(start_off);
-        let mut tag_end = buf.start_iter();
-        tag_end.set_offset(start_off + inner.len() as i32);
-        buf.apply_tag(&tag, &tag_start, &tag_end);
-    }
-    // Insert trailing space
-    let mut space_pos = buf.start_iter();
-    space_pos.set_offset(start_off + inner.len() as i32);
-    buf.insert(&mut space_pos, " ");
-    buf.end_user_action();
 }
 
 #[cfg(test)]

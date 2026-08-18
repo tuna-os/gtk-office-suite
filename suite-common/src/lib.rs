@@ -12,7 +12,7 @@
 
 pub mod file_dialogs;
 pub mod toast_manager;
-pub use suite_common_core::{actions, palette, format, undo, events, string_pool, units, props, style, search, print, atomic_save, autosave};
+pub use suite_common_core::{actions, palette, format, undo, events, string_pool, units, props, style, search, print, atomic_save, autosave, recent, templates, session};
 
 pub use file_dialogs::FileDialogHelper;
 pub use toast_manager::ToastManager;
@@ -149,6 +149,41 @@ impl SuiteApp {
         });
         app.add_action(&act_palette);
 
+        let act_help = gio::SimpleAction::new("help", None);
+        let app_weak = app.downgrade();
+        act_help.connect_activate(move |_, _| {
+            if let Some(app) = app_weak.upgrade() {
+                show_help_dialog(app.active_window().as_ref());
+            }
+        });
+        app.add_action(&act_help);
+
+        let act_new_template = gio::SimpleAction::new("new-from-template", None);
+        let app_weak = app.downgrade();
+        act_new_template.connect_activate(move |_, _| {
+            if let Some(app) = app_weak.upgrade() {
+                let app_id = app.application_id().unwrap_or_default();
+                let app_name = app_id.split('.').last().unwrap_or("letters").to_string();
+                let app_for_tmpl = app.clone();
+                show_templates_dialog(app.active_window().as_ref(), &app_name, move |_name, _content| {
+                    app_for_tmpl.activate_action("new-document", None);
+                });
+            }
+        });
+        app.add_action(&act_new_template);
+
+        let act_clear_recent = gio::SimpleAction::new("clear-recent-files", None);
+        let app_weak = app.downgrade();
+        act_clear_recent.connect_activate(move |_, _| {
+            if let Some(app) = app_weak.upgrade() {
+                if let Some(app_id) = app.application_id() {
+                    let settings = gio::Settings::new(&app_id);
+                    clear_recent_files(&settings);
+                }
+            }
+        });
+        app.add_action(&act_clear_recent);
+
         let act_quit = gio::SimpleAction::new("quit", None);
         let app_weak = app.downgrade();
         act_quit.connect_activate(move |_, _| {
@@ -160,23 +195,28 @@ impl SuiteApp {
 
         // ---- Keyboard accelerators ----
         app.set_accels_for_action("app.new",        &["<Control>n"]);
+        app.set_accels_for_action("app.new-from-template", &["<Control><Shift>n"]);
         app.set_accels_for_action("app.open",        &["<Control>o"]);
         app.set_accels_for_action("app.save",        &["<Control>s"]);
         app.set_accels_for_action("app.save-as",     &["<Control><Shift>s"]);
         app.set_accels_for_action("app.preferences", &["<Control>comma"]);
         app.set_accels_for_action("app.shortcuts",   &["<Control>question"]);
+        app.set_accels_for_action("app.help",        &["F1"]);
         app.set_accels_for_action("app.quit",        &["<Control>q"]);
         app.set_accels_for_action("app.command-palette", &["<Control>k"]);
 
         actions::register_labels(&[
             ("app.command-palette", "Command Palette"),
             ("app.new", "New Document"),
+            ("app.new-from-template", "New from Template…"),
             ("app.open", "Open…"),
             ("app.save", "Save"),
             ("app.save-as", "Save As…"),
             ("app.preferences", "Preferences"),
             ("app.about", "About"),
+            ("app.help", "Help"),
             ("app.shortcuts", "Keyboard Shortcuts"),
+            ("app.clear-recent-files", "Clear Recent Files"),
             ("app.toggle-dark-mode", "Toggle Dark Mode"),
             ("app.quit", "Quit"),
         ]);
@@ -207,6 +247,171 @@ impl SuiteApp {
             sm.set_color_scheme(adw::ColorScheme::ForceDark);
         }
     }
+}
+
+/// Show a contextual help dialog explaining formats, interoperability, crash recovery, and shortcuts.
+pub fn show_help_dialog(parent: Option<&adw::ApplicationWindow>) {
+    let dialog = adw::AlertDialog::new(
+        Some(&i18n("Help & System Diagnostics")),
+        Some(&i18n("Overview of supported formats, crash recovery, and shortcuts.")),
+    );
+
+    let content = gtk::Box::new(gtk::Orientation::Vertical, 12);
+    content.set_margin_start(16);
+    content.set_margin_end(16);
+    content.set_margin_top(12);
+    content.set_margin_bottom(12);
+
+    let formats_group = adw::PreferencesGroup::builder()
+        .title(i18n("Supported Formats & Interoperability"))
+        .description(i18n("Native OpenDocument (.odt, .ods, .odp) and Microsoft Office (.docx, .xlsx, .pptx) with lossless round-tripping and Markdown/plain-text import/export."))
+        .build();
+    content.append(&formats_group);
+
+    let recovery_group = adw::PreferencesGroup::builder()
+        .title(i18n("Crash Recovery & Autosave"))
+        .description(i18n("Documents are safely captured to atomic recovery slots in XDG state directory. If the app terminates unexpectedly, the next session will offer automatic restoration."))
+        .build();
+    content.append(&recovery_group);
+
+    let shortcuts_group = adw::PreferencesGroup::builder()
+        .title(i18n("Keyboard Shortcuts & Command Palette"))
+        .description(i18n("Press Ctrl+K anytime to open the searchable Command Palette, or Ctrl+? for the complete Keyboard Shortcuts table."))
+        .build();
+    content.append(&shortcuts_group);
+
+    dialog.set_extra_child(Some(&content));
+    dialog.add_response("close", &i18n("_Close"));
+    dialog.set_default_response(Some("close"));
+    dialog.present(parent.map(|w| w.upcast_ref::<gtk::Widget>()));
+}
+
+/// Show a template picker dialog for creating new documents from predefined templates.
+pub fn show_templates_dialog<F>(parent: Option<&adw::ApplicationWindow>, app_name: &str, on_select: F)
+where
+    F: Fn(&'static str, &'static str) + 'static,
+{
+    let templates = suite_common_core::templates::templates_for_app(app_name);
+    let dialog = adw::Dialog::builder()
+        .title(i18n("New from Template"))
+        .content_width(520)
+        .content_height(400)
+        .build();
+
+    let list = gtk::ListBox::new();
+    list.set_selection_mode(gtk::SelectionMode::Single);
+    list.add_css_class("boxed-list");
+    list.set_margin_start(12);
+    list.set_margin_end(12);
+    list.set_margin_top(12);
+    list.set_margin_bottom(12);
+
+    let scroll = gtk::ScrolledWindow::new();
+    scroll.set_child(Some(&list));
+    scroll.set_vexpand(true);
+
+    for (idx, tmpl) in templates.iter().enumerate() {
+        let row_box = gtk::Box::new(gtk::Orientation::Horizontal, 12);
+        row_box.set_margin_start(12);
+        row_box.set_margin_end(12);
+        row_box.set_margin_top(8);
+        row_box.set_margin_bottom(8);
+
+        let icon = gtk::Image::from_icon_name(tmpl.icon_name);
+        icon.set_pixel_size(32);
+        row_box.append(&icon);
+
+        let text_box = gtk::Box::new(gtk::Orientation::Vertical, 2);
+        text_box.set_hexpand(true);
+        let title = gtk::Label::new(Some(&i18n(tmpl.name)));
+        title.set_halign(gtk::Align::Start);
+        title.add_css_class("heading");
+        let desc = gtk::Label::new(Some(&i18n(tmpl.description)));
+        desc.set_halign(gtk::Align::Start);
+        desc.add_css_class("dim-label");
+        desc.add_css_class("caption");
+        desc.set_wrap(true);
+        text_box.append(&title);
+        text_box.append(&desc);
+        row_box.append(&text_box);
+
+        let row = gtk::ListBoxRow::new();
+        row.set_child(Some(&row_box));
+        unsafe { row.set_data("template-idx", idx); }
+        list.append(&row);
+    }
+
+    let on_select = std::rc::Rc::new(on_select);
+    let dlg = dialog.clone();
+    let on_sel = on_select.clone();
+    list.connect_row_activated(move |_, row| {
+        let idx = unsafe { row.data::<usize>("template-idx").map(|p| *p.as_ref()) };
+        if let Some(idx) = idx {
+            if let Some(tmpl) = templates.get(idx) {
+                dlg.close();
+                on_sel(tmpl.name, tmpl.content);
+            }
+        }
+    });
+
+    let main_box = gtk::Box::new(gtk::Orientation::Vertical, 6);
+    let header = adw::HeaderBar::new();
+    main_box.append(&header);
+    main_box.append(&scroll);
+    dialog.set_child(Some(&main_box));
+
+    dialog.present(parent.map(|w| w.upcast_ref::<gtk::Widget>()));
+}
+
+/// Attach a file drop target to a widget to handle opening dragged files.
+pub fn attach_file_drop_target<F>(widget: &impl IsA<gtk::Widget>, on_files_dropped: F) -> gtk::DropTarget
+where
+    F: Fn(Vec<std::path::PathBuf>) + 'static,
+{
+    let target = gtk::DropTarget::new(gtk4::gdk::FileList::static_type(), gtk4::gdk::DragAction::COPY);
+    target.connect_drop(move |_, val, _, _| {
+        if let Ok(file_list) = val.get::<gtk4::gdk::FileList>() {
+            let paths: Vec<std::path::PathBuf> = file_list
+                .files()
+                .into_iter()
+                .filter_map(|f| f.path())
+                .collect();
+            if !paths.is_empty() {
+                on_files_dropped(paths);
+                return true;
+            }
+        }
+        false
+    });
+    widget.add_controller(target.clone());
+    target
+}
+
+/// Read recent files from GSettings, pruning non-existent files.
+pub fn get_recent_files(settings: &gio::Settings) -> Vec<String> {
+    let files: Vec<String> = settings
+        .strv("recent-files")
+        .iter()
+        .map(|s| s.to_string())
+        .filter(|p| std::path::Path::new(p).exists())
+        .collect();
+    files
+}
+
+/// Push a file to the recent-files GSettings list (most recent first, up to 10).
+pub fn push_recent_file(settings: &gio::Settings, path: &str) {
+    let mut files = get_recent_files(settings);
+    files.retain(|p| p != path);
+    files.insert(0, path.to_string());
+    files.truncate(10);
+    let strv: Vec<&str> = files.iter().map(|s| s.as_str()).collect();
+    let _ = settings.set_strv("recent-files", &strv);
+}
+
+/// Clear recent files in GSettings (privacy wipe).
+pub fn clear_recent_files(settings: &gio::Settings) {
+    let empty: [&str; 0] = [];
+    let _ = settings.set_strv("recent-files", &empty);
 }
 
 /// Show a generic about dialog (apps override with their own metadata).
@@ -522,6 +727,7 @@ pub fn make_header_bar() -> adw::HeaderBar {
 
     let file_section = gio::Menu::new();
     file_section.append(Some(&i18n("_New")), Some("app.new"));
+    file_section.append(Some(&i18n("New from _template\u{2026}")), Some("app.new-from-template"));
     file_section.append(Some(&i18n("_Open\u{2026}")), Some("app.open"));
     file_section.append(Some(&i18n("_Save")), Some("app.save"));
     file_section.append(Some(&i18n("Save _as\u{2026}")), Some("app.save-as"));
@@ -535,6 +741,7 @@ pub fn make_header_bar() -> adw::HeaderBar {
     menu.append_section(Some(&i18n("Edit")), &edit_section);
 
     let help_section = gio::Menu::new();
+    help_section.append(Some(&i18n("_Help")), Some("app.help"));
     help_section.append(Some(&i18n("_Keyboard shortcuts")), Some("app.shortcuts"));
     help_section.append(Some(&i18n("_About")), Some("app.about"));
     menu.append_section(Some(&i18n("Help")), &help_section);

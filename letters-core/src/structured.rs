@@ -91,6 +91,47 @@ impl StructuredEditor {
         self.document.delete_table_cols(table, at, count)
     }
 
+    pub fn insert_table(&mut self, rows: u32, cols: u32) {
+        let table_id = self.document.paragraphs.iter()
+            .filter_map(|p| p.style.table_cell.map(|c| c.table))
+            .max().unwrap_or(0) + 1;
+        let mut new_paras = Vec::new();
+        for r in 0..rows {
+            for c in 0..cols {
+                new_paras.push(crate::model::Paragraph {
+                    style: crate::model::ParaStyle {
+                        table_cell: Some(TableCell { table: table_id, row: r, col: c }),
+                        ..Default::default()
+                    },
+                    runs: vec![crate::model::Run::plain(format!("Cell {}.{}", r + 1, c + 1))],
+                });
+            }
+        }
+        self.document.paragraphs.extend(new_paras);
+    }
+
+    pub fn indent_list_item(&mut self, paragraph: usize) {
+        if let Some(p) = self.document.paragraphs.get_mut(paragraph) {
+            if p.style.list != ListKind::None {
+                p.style.list_level = (p.style.list_level + 1).min(8);
+            }
+        }
+    }
+
+    pub fn outdent_list_item(&mut self, paragraph: usize) {
+        if let Some(p) = self.document.paragraphs.get_mut(paragraph) {
+            if p.style.list != ListKind::None {
+                p.style.list_level = p.style.list_level.saturating_sub(1);
+            }
+        }
+    }
+
+    pub fn insert_page_break(&mut self, paragraph: usize) {
+        if let Some(p) = self.document.paragraphs.get_mut(paragraph) {
+            p.style.page_break_before = true;
+        }
+    }
+
     /// Move the keyboard focus through a table in row-major order. At either
     /// edge the focus stays put and returns false, matching Tab/Shift-Tab UI
     /// behavior when there is no adjacent cell.

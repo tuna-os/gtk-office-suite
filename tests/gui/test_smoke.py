@@ -1635,3 +1635,64 @@ class DecksSmoke(BaseGUITestCase):
             time.sleep(0.3)
         self.assertIn("slide 1 of", canvas.description,
                       f"canvas description: {canvas.description!r}")
+
+
+class LettersStructuredEditingSmoke(BaseGUITestCase):
+    """Structured editing: tables, lists, and page layout journeys (#110)."""
+
+    app_name = "letters"
+
+    def test_insert_table_and_structured_actions(self):
+        import subprocess
+
+        self.app.child(name="New Document", roleName="push button").do_action(0)
+        time.sleep(1.5)
+
+        # Trigger insert-table action
+        subprocess.run(["gapplication", "action", "org.tunaos.letters", "insert-table"])
+        time.sleep(1.0)
+
+        editor = self.app.child(roleName="text")
+        self.assertIn("Header 1", editor.text, "table was not inserted into editor")
+        self.assertIn("Cell 1.1", editor.text, "table data cells missing")
+
+        # Trigger table insert row below
+        subprocess.run(["gapplication", "action", "org.tunaos.letters", "table-insert-row-below"])
+        time.sleep(0.5)
+
+        # Test list indentation action
+        subprocess.run(["gapplication", "action", "org.tunaos.letters", "bullet-list"])
+        time.sleep(0.5)
+        subprocess.run(["gapplication", "action", "org.tunaos.letters", "list-indent"])
+        time.sleep(0.5)
+        subprocess.run(["gapplication", "action", "org.tunaos.letters", "list-outdent"])
+        time.sleep(0.5)
+
+        # Test page break insertion
+        subprocess.run(["gapplication", "action", "org.tunaos.letters", "insert-page-break"])
+        time.sleep(0.5)
+
+        self.assertIsNone(self.process.poll(), "letters crashed during structured editing actions")
+
+
+class SuitePlatformIntegrationSmoke(BaseGUITestCase):
+    """Platform integration: recent files, templates, help, and shortcuts (#119)."""
+
+    app_name = "letters"
+
+    def test_help_and_template_actions(self):
+        import subprocess
+
+        # Help dialog action
+        subprocess.run(["gapplication", "action", "org.tunaos.letters", "help"])
+        time.sleep(1.0)
+
+        # Shortcuts dialog action
+        subprocess.run(["gapplication", "action", "org.tunaos.letters", "show-shortcuts"])
+        time.sleep(1.0)
+
+        # Clear recent files action
+        subprocess.run(["gapplication", "action", "org.tunaos.letters", "clear-recent-files"])
+        time.sleep(0.5)
+
+        self.assertIsNone(self.process.poll(), "letters crashed during platform integration actions")

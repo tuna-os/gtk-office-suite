@@ -396,6 +396,20 @@ pub fn insert_footnote_marker(buf: &gtk::TextBuffer, insert: &mut gtk::TextIter,
     buf.insert_with_tags_by_name(insert, &format!("[{}]", idx + 1), &[&name]);
 }
 
+/// Apply a structured editing operation directly to the GtkTextBuffer through
+/// letters_core::StructuredEditor, preserving document structure and cursor position.
+pub fn apply_structured_edit<F>(buf: &gtk::TextBuffer, edit: F)
+where
+    F: FnOnce(&mut letters_core::structured::StructuredEditor),
+{
+    let doc = capture_from_buffer(buf);
+    let mut editor = letters_core::structured::StructuredEditor::new(doc);
+    let cursor_offset = buf.selection_bounds().map(|(i, _)| i.offset() as usize).unwrap_or(0);
+    editor.set_cursor(cursor_offset);
+    edit(&mut editor);
+    render_to_buffer(editor.document(), buf);
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

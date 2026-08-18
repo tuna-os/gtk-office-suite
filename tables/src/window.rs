@@ -1516,6 +1516,46 @@ impl TablesWindow {
         suite_common::bind_window_geometry(&suite_win.window, &settings);
         *win_ref.borrow_mut() = Some(suite_win.window.clone());
 
+        {
+            let win_weak = suite_win.window.downgrade();
+            let s = state.clone();
+            let sm = sheet_model.clone();
+            let sw = sheet_switcher.clone();
+            let fx = fx_entry.clone();
+            let stk = stack.clone();
+            let cp = current_path.clone();
+            let da = drawing_area.clone();
+            let rf = refresh_sel.clone();
+            suite_common::attach_file_drop_target(&suite_win.window, move |paths| {
+                if let Some(first) = paths.first() {
+                    let path_str = first.to_string_lossy().to_string();
+                    if let Ok((engine, sheets)) = load_xlsx_workbook(&path_str) {
+                        let names = sheets.iter().map(|s| s.name.clone()).collect::<Vec<_>>();
+                        {
+                            let mut st = s.borrow_mut();
+                            st.engine = engine;
+                            st.sheets = sheets.into_iter().map(|sheet| Rc::new(RefCell::new(sheet))).collect();
+                            st.active_sheet = 0;
+                        }
+                        sm.splice(0, sm.n_items(), &[]);
+                        for name in &names { sm.append(name); }
+                        sw.set_selected(0);
+                        fx.set_text("");
+                        stk.set_visible_child_name("editor");
+                        *cp.borrow_mut() = Some(first.clone());
+                        let name = first.file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_default();
+                        if let Some(w) = win_weak.upgrade() {
+                            w.set_title(Some(&format!("{name} — Tables")));
+                        }
+                        let settings = gtk4::gio::Settings::new("org.tunaos.tables");
+                        suite_common::push_recent_file(&settings, &path_str);
+                        rf();
+                        da.queue_draw();
+                    }
+                }
+            });
+        }
+
         suite_win.add_top_bar(&fx_bar);
         suite_win.set_content(&stack);
         suite_win.add_bottom_bar(&sheet_bar);
@@ -1777,6 +1817,8 @@ impl TablesWindow {
                                 let ss = s.borrow();
                                 match save_engine_to_xlsx(&path_str, &ss) {
                                     Ok(()) => {
+                                        let settings = gtk4::gio::Settings::new("org.tunaos.tables");
+                                        suite_common::push_recent_file(&settings, &path.to_string_lossy());
                                         drop(ss);
                                         *path_state.borrow_mut() = Some(path);
                                         ctl.borrow_mut().mark_clean();
@@ -1814,6 +1856,8 @@ impl TablesWindow {
                 };
                 match save_engine_to_xlsx(&path.to_string_lossy(), &s.borrow()) {
                     Ok(()) => {
+                        let settings = gtk4::gio::Settings::new("org.tunaos.tables");
+                        suite_common::push_recent_file(&settings, &path.to_string_lossy());
                         ctl.borrow_mut().mark_clean();
                         let _ = slot.clear();
                     }
@@ -2169,6 +2213,8 @@ impl TablesWindow {
                 .unwrap_or_default();
             self.window.set_title(Some(&format!("{name} — Tables")));
             *self.current_path.borrow_mut() = Some(std::path::PathBuf::from(path));
+            let settings = gtk4::gio::Settings::new("org.tunaos.tables");
+            suite_common::push_recent_file(&settings, path);
             self.drawing_area.queue_draw();
             return Ok(());
         }
@@ -2201,6 +2247,8 @@ impl TablesWindow {
             .unwrap_or_default();
         self.window.set_title(Some(&format!("{name} — Tables")));
         *self.current_path.borrow_mut() = Some(std::path::PathBuf::from(path));
+        let settings = gtk4::gio::Settings::new("org.tunaos.tables");
+        suite_common::push_recent_file(&settings, path);
         self.drawing_area.queue_draw();
         Ok(())
     }
