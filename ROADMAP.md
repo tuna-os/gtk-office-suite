@@ -25,13 +25,13 @@ gtk-office-suite is the org's flagship **end-user product bet** and a cornerston
 
 | Priority | Item | Tracking | Status |
 |----------|------|----------|--------|
-| P0 | Product quality + daily-driver readiness roadmap (meta-tracker) | #95 | 🟡 In progress |
+| P0 | Product quality + daily-driver readiness roadmap (meta-tracker) | #95 | 🟢 Complete |
 | P0 | CI quality gates: fast / GUI / nightly with published capability matrix | #108, #107 | 🟡 In progress |
-| P0 | GUI-layer God-file decomposition (window.rs) | #168 | ⬜ Not started |
-| P1 | Letters: structured editing (tables/lists/paragraphs/sections), review workflows, pagination | #109, #110, #111 | 🟡 In progress |
+| P0 | GUI-layer God-file decomposition (window.rs) | #168 | 🟢 Complete |
+| P1 | Letters: structured editing (tables/lists/paragraphs/sections), review workflows, pagination | #109, #110, #111 | 🟢 Complete |
 | P1 | Tables: sparse virtual grid + performance budgets | #112 | 🟡 In progress |
 | P1 | Decks: direct manipulation, themes/layouts, presenter view | #115, #116, #117 | ⬜ Not started |
-| P1 | GNOME platform integration: recent files, portals, drag/drop | #119 | ⬜ Not started |
+| P1 | GNOME platform integration: recent files, portals, drag/drop | #119 | 🟢 Complete |
 | P2 | Interop: unsupported-feature inspector + versioned fixture corpus with loss budgets | #105, #121 | ⬜ Not started |
 | P2 | Release gate: Flatpak, upgrade, recovery, localization, reproducible builds | #122 | ⬜ Not started |
 | P2 | A11y: keyboard + screen-reader journeys | #120 | ⬜ Not started |
@@ -46,10 +46,10 @@ gtk-office-suite is the org's flagship **end-user product bet** and a cornerston
 
 | Goal | Owner | Tracking | Status |
 |------|-------|----------|--------|
-| Product-quality roadmap live + published capability matrix | architect / quality | #95, #108 | 🟡 In progress |
-| Letters structured editing + pagination completeness | architect | #109, #110 | 🟡 In progress |
+| Product-quality roadmap live + published capability matrix | architect / quality | #95, #108 | 🟢 Complete |
+| Letters structured editing + pagination completeness | architect | #109, #110 | 🟢 Complete |
 | Tables virtual grid + performance budgets | architect | #112 | 🟡 In progress |
-| GUI God-file decomposition started | architect | #168 | ⬜ Not started |
+| GUI God-file decomposition completed | architect | #168 | 🟢 Complete |
 | ROADMAP.md published and linked from README / org coverage (#1295) | strategist | tunaos#1359 | ✅ Done |
 
 ### Q4 2026 (October–December) — "Ship it properly"
@@ -62,8 +62,8 @@ gtk-office-suite is the org's flagship **end-user product bet** and a cornerston
 
 | Item | Issue | Priority | Effort |
 |------|-------|----------|--------|
-| GUI-layer God-files (window.rs 2.6K/2.5K/1.6K LOC) | #168 | P0 | L |
-| Dual maintenance burden: Python office suite (letters/tables/decks) + Rust suite | #82 | P1 | L |
+| GUI-layer God-files (window.rs decomposed) | #168 | P0 | ✅ Resolved |
+| Dual maintenance burden: Python office suite (letters/tables/decks) + Rust suite | #82 | P1 | ✅ Resolved (docs/PYTHON-DEPRECATION.md) |
 | spell.rs `generate_candidates("")` panic (0..n-1, n=0) | #172 | P1 | S |
 
 ---

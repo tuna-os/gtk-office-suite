@@ -12,6 +12,10 @@ mod docx_bridge;
 mod styles;
 mod layout;
 mod print_preview;
+mod dialogs;
+mod find_replace;
+mod formatting;
+mod list_controller;
 
 fn main() {
     let suite = suite_common::SuiteApp::new("org.tunaos.letters");

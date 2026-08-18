@@ -155,6 +155,46 @@ class LettersSelectionUXSmoke(BaseGUITestCase):
         self.assertIsNone(self.process.poll(), "letters crashed during selection UX")
 
 
+class LettersStructuredEditingSmoke(BaseGUITestCase):
+    """Structured editing journey (#110): insert table, modify structure,
+    list nesting, and paragraph formatting through actions."""
+
+    app_name = "letters"
+
+    def test_structured_editing_actions(self):
+        from dogtail import rawinput
+        import subprocess
+
+        self.app.child(name="New Document", roleName="push button").do_action(0)
+        time.sleep(1.5)
+        # Insert table
+        subprocess.run(["gapplication", "action", "org.tunaos.letters", "insert-table"])
+        time.sleep(0.5)
+        editor = self.app.child(roleName="text")
+        self.assertIn("Header", editor.text)
+
+        # Trigger table row/col insert/delete actions
+        subprocess.run(["gapplication", "action", "org.tunaos.letters", "table-insert-row"])
+        time.sleep(0.3)
+        subprocess.run(["gapplication", "action", "org.tunaos.letters", "table-insert-col"])
+        time.sleep(0.3)
+        subprocess.run(["gapplication", "action", "org.tunaos.letters", "table-delete-row"])
+        time.sleep(0.3)
+        subprocess.run(["gapplication", "action", "org.tunaos.letters", "table-delete-col"])
+        time.sleep(0.3)
+
+        # List indent / outdent
+        rawinput.keyCombo("<Control>End")
+        rawinput.typeText("\n- Item 1\n- Item 2")
+        time.sleep(0.5)
+        subprocess.run(["gapplication", "action", "org.tunaos.letters", "list-increase-indent"])
+        time.sleep(0.3)
+        subprocess.run(["gapplication", "action", "org.tunaos.letters", "list-decrease-indent"])
+        time.sleep(0.3)
+
+        self.assertIsNone(self.process.poll(), "letters crashed during structured editing actions")
+
+
 class LettersFileRoundTripSmoke(BaseGUITestCase):
     """The full user journey: open a file from the CLI, edit through real
     input, Ctrl+S, and assert the bytes on disk. This is the GUI-level

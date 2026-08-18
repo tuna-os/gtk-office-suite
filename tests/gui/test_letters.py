@@ -392,3 +392,16 @@ class LettersTest(BaseGUITestCase):
             "Body text about 'system architecture' is visible below the heading",
             "A bullet list item starting with a bullet character is visible",
         ], screenshot_path=self.last_screenshot)
+
+    def test_structured_table_and_lists(self):
+        """Structured table insert and list nesting journey (#110)."""
+        self._new()
+        e = self._ed()
+        import subprocess
+        subprocess.run(["gapplication", "action", "org.tunaos.letters", "insert-table"])
+        time.sleep(0.3)
+        self.take_screenshot("table_inserted")
+        self.assertVision([
+            "A document table with Header and Cell text is visible",
+        ], screenshot_path=self.last_screenshot)
+

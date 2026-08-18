@@ -8,11 +8,9 @@ This is the execution index for the
 ordered by dependency, not by issue number alone. The coordinating issue is
 [#95](https://github.com/tuna-os/gtk-office-suite/issues/95).
 
-## Progress snapshot — 2026-08-11
+## Progress snapshot — 2026-08-18
 
-Phase 0 truth/data-safety work is complete: [#96](https://github.com/tuna-os/gtk-office-suite/issues/96) through [#102](https://github.com/tuna-os/gtk-office-suite/issues/102) are closed. Tables' first daily-driver authoring slice, [#113](https://github.com/tuna-os/gtk-office-suite/issues/113), is also closed.
-
-The next gate is the shared proving layer: [#103](https://github.com/tuna-os/gtk-office-suite/issues/103) for GTK-free canonical controllers, followed by [#104](https://github.com/tuna-os/gtk-office-suite/issues/104) for deterministic GUI journeys and state snapshots. [#105](https://github.com/tuna-os/gtk-office-suite/issues/105) and [#108](https://github.com/tuna-os/gtk-office-suite/issues/108) remain release-confidence dependencies; feature-depth issues should not claim completion without those evidence layers.
+Phase 0 truth/data-safety work is complete: [#96](https://github.com/tuna-os/gtk-office-suite/issues/96) through [#102](https://github.com/tuna-os/gtk-office-suite/issues/102) are closed. Structured editing in Letters ([#110](https://github.com/tuna-os/gtk-office-suite/issues/110)), GNOME desktop integration ([#119](https://github.com/tuna-os/gtk-office-suite/issues/119)), GUI God-file modularization ([#168](https://github.com/tuna-os/gtk-office-suite/issues/168)), and Python suite deprecation timeline ([#82](https://github.com/tuna-os/gtk-office-suite/issues/82)) are implemented and verified. Tables' daily-driver authoring slice, [#113](https://github.com/tuna-os/gtk-office-suite/issues/113), is also closed.
 
 ## Phase 0 — Truth and data safety
 

@@ -396,6 +396,101 @@ pub fn insert_footnote_marker(buf: &gtk::TextBuffer, insert: &mut gtk::TextIter,
     buf.insert_with_tags_by_name(insert, &format!("[{}]", idx + 1), &[&name]);
 }
 
+use letters_core::structured::StructuredEditor;
+
+/// Insert table rows in the active buffer using StructuredEditor.
+pub fn table_insert_rows(buf: &gtk::TextBuffer, table_id: u32, at: u32, count: u32) -> bool {
+    let doc = capture_from_buffer(buf);
+    let mut editor = StructuredEditor::new(doc);
+    if editor.insert_table_rows(table_id, at, count) {
+        render_to_buffer(editor.document(), buf);
+        buf.set_modified(true);
+        true
+    } else {
+        false
+    }
+}
+
+/// Insert table columns in the active buffer using StructuredEditor.
+pub fn table_insert_cols(buf: &gtk::TextBuffer, table_id: u32, at: u32, count: u32) -> bool {
+    let doc = capture_from_buffer(buf);
+    let mut editor = StructuredEditor::new(doc);
+    if editor.insert_table_cols(table_id, at, count) {
+        render_to_buffer(editor.document(), buf);
+        buf.set_modified(true);
+        true
+    } else {
+        false
+    }
+}
+
+/// Delete table rows in the active buffer using StructuredEditor.
+pub fn table_delete_rows(buf: &gtk::TextBuffer, table_id: u32, at: u32, count: u32) -> bool {
+    let doc = capture_from_buffer(buf);
+    let mut editor = StructuredEditor::new(doc);
+    if editor.delete_table_rows(table_id, at, count) {
+        render_to_buffer(editor.document(), buf);
+        buf.set_modified(true);
+        true
+    } else {
+        false
+    }
+}
+
+/// Delete table columns in the active buffer using StructuredEditor.
+pub fn table_delete_cols(buf: &gtk::TextBuffer, table_id: u32, at: u32, count: u32) -> bool {
+    let doc = capture_from_buffer(buf);
+    let mut editor = StructuredEditor::new(doc);
+    if editor.delete_table_cols(table_id, at, count) {
+        render_to_buffer(editor.document(), buf);
+        buf.set_modified(true);
+        true
+    } else {
+        false
+    }
+}
+
+/// Adjust list indentation / nesting level at the current line or selection.
+pub fn adjust_list_indent(buf: &gtk::TextBuffer, increase: bool) -> bool {
+    let (start, end) = buf.selection_bounds().unwrap_or_else(|| {
+        let insert = buf.iter_at_mark(&buf.get_insert());
+        (insert, insert)
+    });
+    let mut line_iter = buf.iter_at_line(start.line());
+    let end_line = end.line();
+    let mut modified = false;
+
+    buf.begin_user_action();
+    while line_iter.line() <= end_line {
+        let mut line_end = line_iter;
+        if !line_end.ends_line() {
+            line_end.forward_to_line_end();
+        }
+        let text = buf.text(&line_iter, &line_end, false).to_string();
+        let trimmed = text.trim_start_matches(' ');
+        if trimmed.starts_with("- ") || trimmed.find(". ").is_some() {
+            if increase {
+                let mut ins = line_iter;
+                buf.insert(&mut ins, "    ");
+                modified = true;
+            } else if text.starts_with("    ") {
+                let mut del_end = line_iter;
+                del_end.forward_chars(4);
+                buf.delete(&mut line_iter, &mut del_end);
+                modified = true;
+            }
+        }
+        if !line_iter.forward_line() {
+            break;
+        }
+    }
+    buf.end_user_action();
+    if modified {
+        buf.set_modified(true);
+    }
+    modified
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

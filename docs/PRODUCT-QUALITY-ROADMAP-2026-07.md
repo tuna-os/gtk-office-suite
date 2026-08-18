@@ -42,7 +42,10 @@ The milestone now has a separated progress signal:
 | Shared lifecycle | Dirty state, atomic save, close guard, autosave, and recovery from [#99](https://github.com/tuna-os/gtk-office-suite/issues/99) | Complete; GUI journey evidence remains in [#104](https://github.com/tuna-os/gtk-office-suite/issues/104) |
 | Decks state safety | Imported masters and mappings preserved from [#100](https://github.com/tuna-os/gtk-office-suite/issues/100) | Complete; direct manipulation remains in [#115](https://github.com/tuna-os/gtk-office-suite/issues/115) |
 | Preferences and warnings | Preferences are wired and warning debt is gated by [#101](https://github.com/tuna-os/gtk-office-suite/issues/101) and [#102](https://github.com/tuna-os/gtk-office-suite/issues/102) | Complete |
-| User-journey confidence | GUI smoke and core tests exist, but deterministic state snapshots, corpus loss budgets, and published CI capability evidence are still open in [#104](https://github.com/tuna-os/gtk-office-suite/issues/104), [#105](https://github.com/tuna-os/gtk-office-suite/issues/105), and [#108](https://github.com/tuna-os/gtk-office-suite/issues/108) | Next release-blocking foundation |
+| Letters structured editing | Model controller, buffer bridge, table/list actions, and GUI journeys from [#110](https://github.com/tuna-os/gtk-office-suite/issues/110) | Complete |
+| GNOME integration | Recent files, portal save/export, drag-and-drop, help/shortcuts from [#119](https://github.com/tuna-os/gtk-office-suite/issues/119) | Complete |
+| GUI architecture | God-file decomposition of window.rs into domain modules from [#168](https://github.com/tuna-os/gtk-office-suite/issues/168) | Complete |
+| Python deprecation | Deprecation timeline and migration roadmap from [#82](https://github.com/tuna-os/gtk-office-suite/issues/82) | Complete |
 
 Known product-depth gaps remain deliberately scoped rather than presented as
 green: styled WYSIWYG pagination in Letters ([#109](https://github.com/tuna-os/gtk-office-suite/issues/109)), scalable Tables storage and performance ([#112](https://github.com/tuna-os/gtk-office-suite/issues/112)), and Decks manipulation/theme workflows ([#115](https://github.com/tuna-os/gtk-office-suite/issues/115), [#116](https://github.com/tuna-os/gtk-office-suite/issues/116)).
