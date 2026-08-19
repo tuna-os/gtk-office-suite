@@ -1447,29 +1447,6 @@ fn autosave_all_tabs(tv: &adw::TabView) {
     }
 }
 
-// ── Active buffer helper ─────────────────────────────────────────────
-
-/// Walk from a TabPage child through PageContainer → ScrolledWindow → TextView.
-fn get_textview(widget: &impl IsA<gtk::Widget>) -> Option<gtk::TextView> {
-    // Depth-first search: the tab child IS the PageContainer, and fixed-depth
-    // chains silently break when the widget tree changes (which is exactly
-    // what happened — save was returning None for every tab).
-    fn find(w: &gtk::Widget) -> Option<gtk::TextView> {
-        if let Ok(tv) = w.clone().downcast::<gtk::TextView>() {
-            return Some(tv);
-        }
-        let mut child = w.first_child();
-        while let Some(c) = child {
-            if let Some(tv) = find(&c) {
-                return Some(tv);
-            }
-            child = c.next_sibling();
-        }
-        None
-    }
-    find(widget.as_ref().upcast_ref::<gtk::Widget>())
-}
-
 // ── Page setup helpers ────────────────────────────────────────────────
 
 fn load_page_setup_from_settings(settings: &gio::Settings) -> Option<gtk::PageSetup> {
