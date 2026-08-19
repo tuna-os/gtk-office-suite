@@ -3,9 +3,8 @@
 
 use gtk4::{self as gtk, glib, prelude::*};
 use libadwaita as adw;
-use suite_common::i18n;
 
-use crate::dialogs::{active_buffer, get_textview};
+use crate::dialogs::active_buffer;
 
 /// Register all text formatting tags with the buffer's tag table.
 pub fn register_formatting_tags(buffer: &gtk::TextBuffer) {
