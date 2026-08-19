@@ -409,6 +409,12 @@ impl LettersWindow {
             ("app.style-quote", &suite_common::i18n("Paragraph Style: Block Quote")),
                     ("app.insert-footnote", &suite_common::i18n("Insert Footnote\u{2026}")),
             ("app.autosave-now", &suite_common::i18n("Save Crash-Recovery Snapshot Now")),
+            ("app.list-increase-indent", &suite_common::i18n("Increase List Indent")),
+            ("app.list-decrease-indent", &suite_common::i18n("Decrease List Indent")),
+            ("app.table-insert-row", &suite_common::i18n("Insert Table Row")),
+            ("app.table-insert-col", &suite_common::i18n("Insert Table Column")),
+            ("app.table-delete-row", &suite_common::i18n("Delete Table Row")),
+            ("app.table-delete-col", &suite_common::i18n("Delete Table Column")),
         ]);
 
         let primary_toolbar: Vec<suite_common::ToolbarItem> = vec![
