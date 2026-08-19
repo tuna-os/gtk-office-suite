@@ -165,7 +165,7 @@ impl SuiteApp {
         act_new_template.connect_activate(move |_, _| {
             if let Some(app) = app_weak.upgrade() {
                 let app_id = app.application_id().unwrap_or_default();
-                let app_name = app_id.split('.').last().unwrap_or("letters").to_string();
+                let app_name = app_id.split('.').next_back().unwrap_or("letters").to_string();
                 let app_for_tmpl = app.clone();
                 let active = app.active_window();
                 let win = active.as_ref().and_then(|w| w.downcast_ref::<adw::ApplicationWindow>());
