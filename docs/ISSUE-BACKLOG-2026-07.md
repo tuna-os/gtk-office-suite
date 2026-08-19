@@ -58,7 +58,7 @@ the completed instruments enforceable.
 ### Letters
 
 - [#109 — WYSIWYG styled pagination and Unicode offsets](https://github.com/tuna-os/gtk-office-suite/issues/109)
-- [#110 — Tables, lists, paragraphs, and sections](https://github.com/tuna-os/gtk-office-suite/issues/110)
+- [x] [#110 — Tables, lists, paragraphs, and sections](https://github.com/tuna-os/gtk-office-suite/issues/110)
 - [#111 — Comments, tracked changes, TOC, and bidi](https://github.com/tuna-os/gtk-office-suite/issues/111)
 
 #109 and #110 follow the Letters controller work in #103. #111 follows both
@@ -87,7 +87,7 @@ admitting costly animation/media formats.
 ## Phase 3 — GNOME-native product polish
 
 - [#118 — Adaptive, contextual, theme-correct editor design](https://github.com/tuna-os/gtk-office-suite/issues/118)
-- [#119 — Recent files, templates, portals, drag/drop, and help](https://github.com/tuna-os/gtk-office-suite/issues/119)
+- [x] [#119 — Recent files, templates, portals, drag/drop, and help](https://github.com/tuna-os/gtk-office-suite/issues/119)
 - [#120 — Complete keyboard and screen-reader journeys](https://github.com/tuna-os/gtk-office-suite/issues/120)
 
 #118 coordinates rather than duplicates existing HIG issues #73–#80 and
