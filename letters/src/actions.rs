@@ -151,8 +151,10 @@ pub fn toggle_list(tv: &adw::TabView, kind: &str) {
 }
 
 /// Register formatting actions, accelerators, and palette labels.
+type FormatHandler = fn(&adw::TabView);
+
 pub fn register_formatting_actions(tv: &adw::TabView, app: &adw::Application) {
-    let pairs: &[(&str, fn(&adw::TabView))] = &[
+    let pairs: &[(&str, FormatHandler)] = &[
         ("bold", |tv| toggle_tag(tv, "bold")),
         ("italic", |tv| toggle_tag(tv, "italic")),
         ("underline", |tv| toggle_tag(tv, "underline")),
@@ -161,7 +163,7 @@ pub fn register_formatting_actions(tv: &adw::TabView, app: &adw::Application) {
     ];
     for (name, handler) in pairs {
         let tv = tv.clone();
-        let a = gtk::gio::SimpleAction::new(*name, None);
+        let a = gtk::gio::SimpleAction::new(name, None);
         a.connect_activate(move |_, _| handler(&tv));
         app.add_action(&a);
     }
@@ -190,7 +192,7 @@ pub fn register_formatting_actions(tv: &adw::TabView, app: &adw::Application) {
     let align_names: &[&str] = &["align-left", "align-center", "align-right", "align-justify"];
     for name in align_names {
         let tv = tv.clone();
-        let a = gtk::gio::SimpleAction::new(*name, None);
+        let a = gtk::gio::SimpleAction::new(name, None);
         let name = *name;
         a.connect_activate(move |_, _| {
             if let Some(buf) = active_buffer(&tv) {
@@ -224,7 +226,7 @@ pub fn register_formatting_actions(tv: &adw::TabView, app: &adw::Application) {
     ];
     for (action_name, tag_name) in styles {
         let tv = tv.clone();
-        let a = gtk::gio::SimpleAction::new(*action_name, None);
+        let a = gtk::gio::SimpleAction::new(action_name, None);
         let tag_name = *tag_name;
         a.connect_activate(move |_, _| {
             if !tag_name.is_empty() {

@@ -11,18 +11,10 @@ use suite_common::i18n;
 use crate::page_container::PageContainer;
 
 /// State for the Find and Replace bar.
+#[derive(Default)]
 pub struct FindState {
     pub matches: Vec<(i32, i32)>, // (start_offset, end_offset)
     pub current_idx: usize,
-}
-
-impl Default for FindState {
-    fn default() -> Self {
-        Self {
-            matches: Vec::new(),
-            current_idx: 0,
-        }
-    }
 }
 
 /// Helper to get the active GtkTextBuffer from an AdwTabView.
@@ -62,11 +54,11 @@ pub fn show_header_footer_dialog(pc: &PageContainer) {
 
     let hdr_entry = gtk::Entry::builder()
         .placeholder_text(i18n("Header text"))
-        .text(&pc.header_text())
+        .text(pc.header_text())
         .build();
     let ftr_entry = gtk::Entry::builder()
         .placeholder_text(i18n("Footer text"))
-        .text(&pc.footer_text())
+        .text(pc.footer_text())
         .build();
 
     content.append(&gtk::Label::new(Some(&i18n("Header"))));
@@ -90,6 +82,7 @@ pub fn show_header_footer_dialog(pc: &PageContainer) {
 }
 
 /// Show a dialog for inserting a custom dimension table.
+#[allow(dead_code)]
 pub fn show_insert_table_dialog(tv: &adw::TabView) {
     let dialog = adw::AlertDialog::new(
         Some(&i18n("Insert Table")),
@@ -308,7 +301,6 @@ pub fn make_find_replace_widget(tv: &adw::TabView) -> (gtk::SearchBar, gtk::Sear
     {
         let tv = tv.clone();
         let state = state.clone();
-        let ml = match_label.clone();
         let se = search_entry.clone();
         let re = replace_entry.clone();
         replace_btn.connect_clicked(move |_| {
