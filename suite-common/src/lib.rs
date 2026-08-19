@@ -153,7 +153,8 @@ impl SuiteApp {
         let app_weak = app.downgrade();
         act_help.connect_activate(move |_, _| {
             if let Some(app) = app_weak.upgrade() {
-                show_help_dialog(app.active_window().as_ref());
+                let win = app.active_window().as_ref().and_then(|w| w.downcast_ref::<adw::ApplicationWindow>());
+                show_help_dialog(win);
             }
         });
         app.add_action(&act_help);
@@ -165,7 +166,8 @@ impl SuiteApp {
                 let app_id = app.application_id().unwrap_or_default();
                 let app_name = app_id.split('.').last().unwrap_or("letters").to_string();
                 let app_for_tmpl = app.clone();
-                show_templates_dialog(app.active_window().as_ref(), &app_name, move |_name, _content| {
+                let win = app.active_window().as_ref().and_then(|w| w.downcast_ref::<adw::ApplicationWindow>());
+                show_templates_dialog(win, &app_name, move |_name, _content| {
                     app_for_tmpl.activate_action("new-document", None);
                 });
             }
@@ -405,13 +407,13 @@ pub fn push_recent_file(settings: &gio::Settings, path: &str) {
     files.insert(0, path.to_string());
     files.truncate(10);
     let strv: Vec<&str> = files.iter().map(|s| s.as_str()).collect();
-    let _ = settings.set_strv("recent-files", &strv);
+    let _ = settings.set_strv("recent-files", strv.as_slice());
 }
 
 /// Clear recent files in GSettings (privacy wipe).
 pub fn clear_recent_files(settings: &gio::Settings) {
     let empty: [&str; 0] = [];
-    let _ = settings.set_strv("recent-files", &empty);
+    let _ = settings.set_strv("recent-files", empty.as_slice());
 }
 
 /// Show a generic about dialog (apps override with their own metadata).
