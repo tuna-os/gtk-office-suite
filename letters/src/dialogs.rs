@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 use gtk4::{self as gtk, prelude::*};
+use adw::prelude::*;
 use libadwaita as adw;
 use std::cell::RefCell;
 use std::rc::Rc;
@@ -324,7 +325,7 @@ pub fn make_find_replace_widget(tv: &adw::TabView) -> (gtk::SearchBar, gtk::Sear
                     buf.insert(&mut ms, &rep);
                     buf.end_user_action();
                     // Re-trigger search
-                    se.emit_search_changed();
+                    se.emit_by_name::<()>(\"search-changed\", &[]);
                 }
             }
         });
@@ -352,7 +353,7 @@ pub fn make_find_replace_widget(tv: &adw::TabView) -> (gtk::SearchBar, gtk::Sear
                     cur = ms;
                 }
                 buf.end_user_action();
-                se.emit_search_changed();
+                se.emit_by_name::<()>(\"search-changed\", &[]);
             }
         });
     }
@@ -397,9 +398,8 @@ pub fn navigate_match(tv: &adw::TabView, state: &RefCell<FindState>, ml: &gtk::L
 pub fn scroll_to_cursor(tv: &adw::TabView) {
     if let Some(page) = tv.selected_page() {
         if let Some(text_view) = get_textview(&page.child()) {
-            if let Some(mark) = text_view.buffer().insert_mark() {
-                text_view.scroll_to_mark(&mark, 0.1, false, 0.0, 0.0);
-            }
+            let mark = text_view.buffer().get_insert();
+            text_view.scroll_to_mark(&mark, 0.1, false, 0.0, 0.0);
         }
     }
 }

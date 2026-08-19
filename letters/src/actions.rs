@@ -36,9 +36,9 @@ pub fn register_formatting_tags(buffer: &gtk::TextBuffer) {
         ("search-current", &[]),
     ];
 
-    for (name, _) in tags {
+    for &(name, _) in tags {
         if tag_table.lookup(name).is_none() {
-            let tag = match *name {
+            let tag = match name {
                 "bold" => gtk::TextTag::builder().name(name).weight(700).build(),
                 "italic" => gtk::TextTag::builder().name(name).style(gtk4::pango::Style::Italic).build(),
                 "underline" => gtk::TextTag::builder().name(name).underline(gtk4::pango::Underline::Single).build(),
