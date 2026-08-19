@@ -456,7 +456,9 @@ pub fn adjust_list_indent(buf: &gtk::TextBuffer, increase: bool) -> bool {
         let insert = buf.iter_at_mark(&buf.get_insert());
         (insert, insert)
     });
-    let mut line_iter = buf.iter_at_line(start.line());
+    let mut line_iter = buf
+        .iter_at_line(start.line())
+        .expect("iter at start line for list indent");
     let end_line = end.line();
     let mut modified = false;
 

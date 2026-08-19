@@ -28,6 +28,7 @@ mod imp {
         pub page_count: Cell<usize>,
         pub header_text: std::cell::RefCell<String>,
         pub footer_text: std::cell::RefCell<String>,
+        pub show_page_numbers: Cell<bool>,
         pub zoom_level: Cell<f64>,
         pub column_count: Cell<u32>,
         /// Pointer is over the widget — margin guides show only then
@@ -58,6 +59,7 @@ mod imp {
             self.page_count.set(1);
             self.zoom_level.set(100.0);
             self.column_count.set(1);
+            self.show_page_numbers.set(true);
         }
         fn dispose(&self) {
             let obj = self.obj();
@@ -187,7 +189,12 @@ mod imp {
                     cr.set_dash(&[], 0.0);
                     cr.set_source_rgba(0.5, 0.5, 0.5, 0.7);
                     cr.set_font_size(9.0);
-                    let ftr = footer.replace("{page}", &(page_idx + 1).to_string());
+                    let page_repl = if self.show_page_numbers.get() {
+                        (page_idx + 1).to_string()
+                    } else {
+                        String::new()
+                    };
+                    let ftr = footer.replace("{page}", &page_repl);
                     let ftr_ext = cr.text_extents(&ftr).ok();
                     let fw = ftr_ext.map(|e| e.width()).unwrap_or(50.0);
                     cr.move_to(px + (sw - fw) / 2.0, page_y + sh - mb + 12.0);
@@ -344,6 +351,17 @@ impl PageContainer {
     /// Get the current footer text template.
     pub fn footer_text(&self) -> String {
         self.imp().footer_text.borrow().clone()
+    }
+
+    /// Whether page numbers are rendered in the footer ({page} substitution).
+    pub fn show_page_numbers(&self) -> bool {
+        self.imp().show_page_numbers.get()
+    }
+
+    /// Toggle rendering of page numbers in the footer.
+    pub fn set_show_page_numbers(&self, show: bool) {
+        self.imp().show_page_numbers.set(show);
+        self.queue_resize();
     }
 
     /// Set zoom level (50-200).

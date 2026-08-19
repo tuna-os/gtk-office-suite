@@ -4,7 +4,7 @@
 
 use gtk4::{self as gtk, gio, prelude::*};
 use libadwaita as adw;
-use adw::prelude::{AdwDialogExt, AlertDialogExt, AlertDialogExtManual};
+use adw::prelude::*;
 
 pub fn load_page_setup_from_settings(settings: &gio::Settings) -> Option<gtk::PageSetup> {
     let name = settings.string("page-paper-name");
