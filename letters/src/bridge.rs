@@ -561,7 +561,7 @@ mod tests {
         gtk_test(|| {
         let fresh = || {
             let buf = gtk::TextBuffer::new(None);
-            crate::window::register_formatting_tags(&buf);
+            crate::actions::register_formatting_tags(&buf);
             buf
         };
 
