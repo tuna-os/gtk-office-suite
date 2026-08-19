@@ -325,7 +325,7 @@ pub fn make_find_replace_widget(tv: &adw::TabView) -> (gtk::SearchBar, gtk::Sear
                     buf.insert(&mut ms, &rep);
                     buf.end_user_action();
                     // Re-trigger search
-                    se.emit_by_name::<()>(\"search-changed\", &[]);
+                    se.emit_by_name::<()>("search-changed", &[]);
                 }
             }
         });
@@ -353,7 +353,7 @@ pub fn make_find_replace_widget(tv: &adw::TabView) -> (gtk::SearchBar, gtk::Sear
                     cur = ms;
                 }
                 buf.end_user_action();
-                se.emit_by_name::<()>(\"search-changed\", &[]);
+                se.emit_by_name::<()>("search-changed", &[]);
             }
         });
     }
