@@ -2190,7 +2190,7 @@ dependencies = [
  "pangocairo",
  "pulldown-cmark",
  "rdocx",
- "rdocx-oxml",
+ "rdocx-oxml 0.7.0",
  "serde_json",
  "suite-common",
  "suite-export",
@@ -2587,10 +2587,33 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "04744f49eae99ab78e0d5c0b603ab218f515ea8cfe5a456d7629ad883a3b6e7d"
 
 [[package]]
+name = "oxml-chart"
+version = "0.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "651d296ca97b00b44d664b08650b4952bdecaaacc1275feb9337100011534a5d"
+dependencies = [
+ "oxml-core 0.4.0",
+ "oxml-drawing 0.4.0",
+ "oxml-layout",
+ "oxml-sml",
+ "quick-xml 0.41.0",
+]
+
+[[package]]
 name = "oxml-core"
 version = "0.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f6cabf8aba771ef1c551beeb3b163450be744dbb33d89f3d943fd49479d0bd74"
+dependencies = [
+ "quick-xml 0.41.0",
+ "thiserror 2.0.18",
+]
+
+[[package]]
+name = "oxml-core"
+version = "0.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5c4833f7dc95167414011b6bc0da4559ae5a0cb34ce9e6c8dbcde6bcd897cd47"
 dependencies = [
  "quick-xml 0.41.0",
  "thiserror 2.0.18",
@@ -2602,15 +2625,25 @@ version = "0.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "743fff470594c239d042d5967b504fbd4896a3951581e6d13e69a82cc3bb605c"
 dependencies = [
- "oxml-core",
+ "oxml-core 0.3.0",
+ "quick-xml 0.41.0",
+]
+
+[[package]]
+name = "oxml-drawing"
+version = "0.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7723714b7906260c0566862069f020989a9ce58d1c51a24563ac63fef05a15af"
+dependencies = [
+ "oxml-core 0.4.0",
  "quick-xml 0.41.0",
 ]
 
 [[package]]
 name = "oxml-layout"
-version = "0.3.0"
+version = "0.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "75421bbb0d172ceb47ebfe081376d336e7670078ac36714f15a313e954aed486"
+checksum = "83880893e05aec395c53f2dd1d9cbcd5dac62732f266178d2c0b855705ccdda9"
 dependencies = [
  "fontdb",
  "harfrust",
@@ -2621,15 +2654,15 @@ dependencies = [
 
 [[package]]
 name = "oxml-media"
-version = "0.3.0"
+version = "0.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "84e3de9aabb798926cc6df706c8961bb782a54fe7d69ec7eba707a7fa9a89cd8"
+checksum = "d53d11c5f5765648f81728af56d40901cdf184d8dbe8a14ececdb6c66c9e3b3a"
 
 [[package]]
 name = "oxml-opc"
-version = "0.3.0"
+version = "0.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "db4e694661807e1355c2eb73125fd6cdc3fe9b40a502a7f6b749a5bf676d5531"
+checksum = "da6e7f47e669e7b0f1a2938c5e28aebc4ddf0ee6c0a4e86f0cda083ebb16f82f"
 dependencies = [
  "quick-xml 0.41.0",
  "thiserror 2.0.18",
@@ -2638,9 +2671,9 @@ dependencies = [
 
 [[package]]
 name = "oxml-pdf"
-version = "0.3.0"
+version = "0.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "fdfeccb264478c14b81fede4ddb4b344de5a0c364856c5b4df93f7b82653e94d"
+checksum = "2a123f546df115a20ef6509386de37a056b54482f6c1603b778012b9e3008595"
 dependencies = [
  "miniz_oxide 0.9.1",
  "oxml-layout",
@@ -2650,6 +2683,17 @@ dependencies = [
  "tiny-skia",
  "ttf-parser",
  "zune-jpeg",
+]
+
+[[package]]
+name = "oxml-sml"
+version = "0.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4f785183c0efb691df9807ae099418f60463c69f18644e6082c1a6829de2ca40"
+dependencies = [
+ "oxml-opc",
+ "quick-xml 0.41.0",
+ "thiserror 2.0.18",
 ]
 
 [[package]]
@@ -3271,39 +3315,46 @@ dependencies = [
 
 [[package]]
 name = "rdocx"
-version = "0.7.0"
+version = "0.8.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2d6c622996389a6ec5fabf49689b49b28f4f69df3287b14e505d52b7777319ee"
+checksum = "cd03583c28794b6177d12897c0925df4105abea343b5a868bc5d22d7bed806cc"
 dependencies = [
- "oxml-core",
+ "oxml-chart",
+ "oxml-core 0.4.0",
+ "oxml-drawing 0.4.0",
  "oxml-layout",
  "oxml-media",
  "oxml-opc",
  "oxml-pdf",
+ "oxml-sml",
+ "quick-xml 0.41.0",
  "rdocx-html",
  "rdocx-layout",
- "rdocx-oxml",
+ "rdocx-oxml 0.8.0",
  "regex",
+ "serde_json",
  "thiserror 2.0.18",
 ]
 
 [[package]]
 name = "rdocx-html"
-version = "0.7.0"
+version = "0.8.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f3e4d0b4c78b63adc1a17212b82b504c5475649eb3066bdb0b2cee304aadb643"
+checksum = "233e28f3e3d532e3ad89185d3d3b8e6bbad47946350c1e0585264435963dc44d"
 dependencies = [
- "rdocx-oxml",
+ "rdocx-oxml 0.8.0",
 ]
 
 [[package]]
 name = "rdocx-layout"
-version = "0.7.0"
+version = "0.8.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "51ae56cf5f4b614ccf363e4d9c26dc0a5177183d900d0efd812cc6de0f83eda1"
+checksum = "c0e5da1d5bd6f328450d7532ae591f82aa59bfda73d78f3e7f38f6e34937664c"
 dependencies = [
+ "oxml-chart",
+ "oxml-drawing 0.4.0",
  "oxml-layout",
- "rdocx-oxml",
+ "rdocx-oxml 0.8.0",
  "unicode-linebreak",
 ]
 
@@ -3314,8 +3365,22 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e48d963812dee21e919603079e845105f3847eba5b377857279f6d793a53934d"
 dependencies = [
  "itoa",
- "oxml-core",
- "oxml-drawing",
+ "oxml-core 0.3.0",
+ "oxml-drawing 0.3.0",
+ "quick-xml 0.41.0",
+ "regex",
+ "thiserror 2.0.18",
+]
+
+[[package]]
+name = "rdocx-oxml"
+version = "0.8.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "49c26e6dc7e8946c6c285a9c2dd1e0fd38d4f006b0169f6519b666f509655eea"
+dependencies = [
+ "itoa",
+ "oxml-core 0.4.0",
+ "oxml-drawing 0.4.0",
  "quick-xml 0.41.0",
  "regex",
  "thiserror 2.0.18",
