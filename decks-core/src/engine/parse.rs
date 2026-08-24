@@ -812,13 +812,16 @@ fn resolve_and_extract_picture(
     let mut buffer = Vec::new();
     image_file.read_to_end(&mut buffer).ok()?;
 
-    let extension = Path::new(&full_zip_path).extension()?.to_str()?;
-    let temp_dir = std::env::temp_dir();
-    let unique_name = format!("decks_img_{}.{}", embed_id, extension);
-    let output_path = temp_dir.join(unique_name);
-    
-    let mut out = File::create(&output_path).ok()?;
-    out.write_all(&buffer).ok()?;
+    // gh-268: the previous code wrote to a predictable /tmp/decks_img_<embed_id>.<ext>
+    // path whose middle (embed_id) and suffix (extension) both came from the
+    // untrusted document. A crafted PPTX could point the write anywhere via `..`
+    // or a pre-created symlink. NamedTempFile gives O_EXCL + O_NOFOLLOW + an
+    // unpredictable name in one step.
+    let mut tmp = tempfile::NamedTempFile::new().ok()?;
+    tmp.write_all(&buffer).ok()?;
+    // Keep the temp file alive for the lifetime of the SlideObject; the model
+    // reads it back later. NamedTempFile deletes on drop, so persist it.
+    let (_, output_path) = tmp.keep().ok()?;
 
     Some(SlideObject::Image {
         path: output_path.to_string_lossy().to_string(),
