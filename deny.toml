@@ -1,0 +1,29 @@
+# cargo-deny configuration (gtk-office-suite#269).
+#
+# The repository previously had no RustSec advisory gate: nothing consulted
+# the advisory DB, so unmaintained/vulnerable crates were invisible rather
+# than accepted. This file adds the gate. Known-vulnerable and yanked crates
+# are denied; unmaintained/unsound notices are gated at 'all' scope EXCEPT
+# the ones documented below as upstream-blocked (no patched release exists,
+# and migration is upstream's call — see #269).
+
+[advisories]
+yanked = "deny"
+unmaintained = "all"
+unsound = "all"
+ignore = [
+    # Font stack: ttf-parser and rustybuzz parse/shape font data embedded in
+    # .docx/.pptx/.odt files (attacker-supplied binary input), but both are
+    # unmaintained with no patched release; successors (skrifa/harfrust) are
+    # only reachable through typst/usvg, so migration is upstream's call.
+    { id = "RUSTSEC-2026-0192", reason = "ttf-parser unmaintained, no patched release; reached via fontdb/oxml-layout/typst/usvg — upstream successor skrifa (see #269)" },
+    { id = "RUSTSEC-2026-0206", reason = "rustybuzz unmaintained, no patched release; reached via krilla/typst-layout/usvg — upstream successor harfrust (see #269)" },
+    # quick-xml: already tracked in #225 (fixed in 0.38.5; current lock has 0.41.0).
+    { id = "RUSTSEC-2026-0194", reason = "quick-xml DoS, fixed in 0.38.5; current lock is 0.41.0 — keep ignore in case a transitive pin regresses" },
+    { id = "RUSTSEC-2026-0195", reason = "quick-xml DoS, fixed in 0.38.5; current lock is 0.41.0 — keep ignore in case a transitive pin regresses" },
+    # syntect (syntax highlighting) pulls both; not in the untrusted-input path.
+    { id = "RUSTSEC-2025-0141", reason = "bincode development ceased, no patched release; via syntect — build/display only" },
+    { id = "RUSTSEC-2024-0320", reason = "yaml-rust unmaintained, no patched release; via syntect — display only" },
+    # Build-time proc-macro; does not ship in binaries.
+    { id = "RUSTSEC-2024-0436", reason = "paste unmaintained proc-macro; via biblatex/hayagriva/rav1e — build-time only" },
+]
