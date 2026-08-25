@@ -333,12 +333,23 @@ fn map_paragraph(doc: &rdocx::Document, p: &rdocx::ParagraphRef<'_>) -> Paragrap
         // image path is always locally readable.
         if let Some((rel_id, alt)) = r.inline_image() {
             if let Some(bytes) = doc.image_data(rel_id) {
-                let dir = std::env::temp_dir().join("letters-images");
-                let _ = std::fs::create_dir_all(&dir);
-                let mut hasher = std::collections::hash_map::DefaultHasher::new();
-                std::hash::Hash::hash(&bytes, &mut hasher);
-                let path = dir.join(format!("{:x}.png", std::hash::Hasher::finish(&hasher)));
-                let _ = std::fs::write(&path, &bytes);
+                // gh-268: the previous code wrote to a predictable
+                // /tmp/letters-images/<content-hash>.png via fs::write, which
+                // follows a pre-created symlink — a local user could point the
+                // write anywhere. NamedTempFile gives O_EXCL + O_NOFOLLOW + an
+                // unpredictable name; keep the file alive and hand the model
+                // its path (deleted on drop once the model is done).
+                let mut tmp = match tempfile::NamedTempFile::new() {
+                    Ok(t) => t,
+                    Err(_) => continue,
+                };
+                if std::io::Write::write_all(&mut tmp, &bytes).is_err() {
+                    continue;
+                }
+                let (_, path) = match tmp.keep() {
+                    Ok(p) => p,
+                    Err(_) => continue,
+                };
                 runs.push(Run {
                     text: alt.unwrap_or("").to_string(),
                     style: RunStyle {

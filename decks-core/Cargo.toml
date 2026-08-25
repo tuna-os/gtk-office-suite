@@ -12,9 +12,11 @@ suite-common-core = { path = "../suite-common-core" }
 letters-core = { path = "../letters-core" }
 zip = "8.0"
 quick-xml = "0.41"
+# NamedTempFile for extracted images (gh-268): production code writes
+# document-embedded images to /tmp, which must not use predictable paths.
+tempfile = "3"
 
 [dev-dependencies]
-tempfile = "3"
 proptest = "1"
 
 [lib]
