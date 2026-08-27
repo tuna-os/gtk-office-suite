@@ -1,140 +1,38 @@
 name: Publish Flatpaks
 
-# Build the three apps as Flatpak OCI images for x86_64 and aarch64, push
-# them to GHCR, and update the TunaOS Flatpak index (tunaos.org/flatpak) so
-# `flatpak install tuna-os org.tunaos.<app>` serves current builds on
-# either architecture.
-# Also attaches installable .flatpak bundles to the triggering release.
-#
-# Each arch builds natively on its own runner rather than cross-building via
-# QEMU -- Blacksmith runners don't come with binfmt_misc/qemu-user
-# preregistered the way GitHub-hosted runners do, so bwrap inside the
-# cross-arch build fails with "Exec format error".
+# Build/publish body lives in tuna-os/.github's reusable publish-flatpak.yml
+# (tunaos#1183 recommendation #2). This file just keeps the repo's own
+# trigger policy and fans the three apps out over the reusable workflow via
+# a caller-side matrix -- `uses:` jobs support `strategy.matrix` same as any
+# other job.
 
 on:
   push:
     tags: ['v*']
   workflow_dispatch:
+    inputs:
+      publish:
+        description: Push to GHCR and update the central index (leave off for a build-only validation run)
+        type: boolean
+        default: false
 
 permissions:
   contents: write
   packages: write
 
 jobs:
-  build-oci:
-    name: Build OCI — ${{ matrix.app }} (${{ matrix.arch }})
-    runs-on: ${{ matrix.arch == 'aarch64' && 'ubuntu-24.04-arm' || 'ubuntu-24.04' }}
-    strategy:
-      fail-fast: false
-      matrix:
-        app: [letters, tables, decks]
-        arch: [x86_64, aarch64]
-    container:
-      image: ghcr.io/flathub-infra/flatpak-github-actions:gnome-50
-      options: --privileged
-    steps:
-      - uses: actions/checkout@v7
-
-      - name: Build
-        uses: flatpak/flatpak-github-actions/flatpak-builder@v6
-        with:
-          manifest-path: flatpak/org.tunaos.${{ matrix.app }}.json
-          cache-key: flatpak-publish-${{ matrix.app }}-${{ github.sha }}-${{ matrix.arch }}
-          bundle: ${{ matrix.app }}-${{ matrix.arch }}.flatpak
-          upload-artifact: false
-          arch: ${{ matrix.arch }}
-
-      - name: Export OCI
-        run: |
-          flatpak build-bundle --oci --arch=${{ matrix.arch }} repo ${{ matrix.app }}-${{ matrix.arch }}.oci org.tunaos.${{ matrix.app }}
-
-      - name: Upload OCI artifact
-        uses: actions/upload-artifact@v7
-        with:
-          name: ${{ matrix.app }}-${{ matrix.arch }}-oci
-          path: ${{ matrix.app }}-${{ matrix.arch }}.oci/
-          retention-days: 1
-
-      - name: Upload bundle artifact
-        uses: actions/upload-artifact@v7
-        with:
-          name: ${{ matrix.app }}-${{ matrix.arch }}-bundle
-          path: ${{ matrix.app }}-${{ matrix.arch }}.flatpak
-          retention-days: 7
-
   publish:
-    name: Publish — ${{ matrix.app }}
-    needs: build-oci
-    runs-on: ubuntu-24.04
     strategy:
-      # The index update is a git push to tuna-os/docs; serialize so the
-      # three apps don't race each other.
-      max-parallel: 1
       matrix:
         app: [letters, tables, decks]
-    steps:
-      - uses: actions/checkout@v7
-
-      - uses: actions/download-artifact@v8
-        with:
-          name: ${{ matrix.app }}-x86_64-oci
-          # upload-artifact flattens a single-directory `path` to the
-          # artifact root, so both arches must download into distinct
-          # subdirectories -- `path: .` for both put x86_64's and
-          # aarch64's index.json/blobs in the same place, clobbering
-          # each other.
-          path: ${{ matrix.app }}-x86_64.oci
-
-      - uses: actions/download-artifact@v8
-        with:
-          name: ${{ matrix.app }}-aarch64-oci
-          path: ${{ matrix.app }}-aarch64.oci
-
-      - name: Push OCI to GHCR
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          # Blacksmith runners' default container auth path
-          # (/run/containers/$UID/auth.json) isn't writable; point skopeo
-          # at a location under RUNNER_TEMP instead.
-          REGISTRY_AUTH_FILE: ${{ runner.temp }}/auth.json
-        run: |
-          echo "${{ env.GITHUB_TOKEN }}" | skopeo login ghcr.io -u "${{ github.actor }}" --password-stdin
-          skopeo copy oci:${{ matrix.app }}-x86_64.oci docker://ghcr.io/tuna-os/${{ matrix.app }}:latest-x86_64
-          skopeo copy oci:${{ matrix.app }}-aarch64.oci docker://ghcr.io/tuna-os/${{ matrix.app }}:latest-aarch64
-
-      # Canonical, single-source update-index.py (tuna-os/tunaos#1183), wrapped
-      # with a retry-safe clone/commit/push (tuna-os/tunaos#2104) instead of
-      # this repo's previous separate clone + push-once steps -- max-parallel:
-      # 1 only serialized this repo's own 3 apps against each other, not
-      # against the other 5 tuna-os repos publishing to the same index.
-      - name: Update central index (x86_64)
-        uses: tuna-os/.github/.github/actions/publish-flatpak-index@main
-        with:
-          oci-dir: ${{ matrix.app }}-x86_64.oci
-          repo-name: tuna-os/${{ matrix.app }}
-          tags: latest
-          token: ${{ secrets.FLATPAK_INDEX_TOKEN }}
-
-      - name: Update central index (aarch64)
-        uses: tuna-os/.github/.github/actions/publish-flatpak-index@main
-        with:
-          oci-dir: ${{ matrix.app }}-aarch64.oci
-          repo-name: tuna-os/${{ matrix.app }}
-          tags: latest
-          token: ${{ secrets.FLATPAK_INDEX_TOKEN }}
-
-  release-bundles:
-    name: Attach bundles to release
-    needs: publish
-    if: startsWith(github.ref, 'refs/tags/')
-    runs-on: ubuntu-24.04
-    steps:
-      - uses: actions/download-artifact@v8
-        with:
-          pattern: '*-bundle'
-          merge-multiple: true
-      - name: Upload to release
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          gh release upload "${GITHUB_REF_NAME}" *.flatpak --clobber --repo "${GITHUB_REPOSITORY}"
+    uses: tuna-os/.github/.github/workflows/publish-flatpak.yml@main
+    with:
+      app-id: org.tunaos.${{ matrix.app }}
+      manifest-path: flatpak/org.tunaos.${{ matrix.app }}.json
+      repo-name: tuna-os/${{ matrix.app }}
+      attach-bundles: true
+      # Not `A && B || C`: if B (inputs.publish) is false that's falsy, so
+      # `||` would fall through to C and publish anyway regardless of the
+      # toggle (caught by testing on mariner, tuna-os/mariner#17).
+      publish: ${{ (github.event_name != 'workflow_dispatch' && github.event_name != 'pull_request') || (github.event_name == 'workflow_dispatch' && inputs.publish) }}
+    secrets: inherit
