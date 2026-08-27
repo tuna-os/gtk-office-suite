@@ -6,6 +6,18 @@
 
 ## Before You Start
 
+### Choose the Active Project
+
+`tuna-os/gtk-office-suite` is the canonical implementation and tracker for
+Letters, Tables, and Decks. Open new feature proposals and ordinary bug reports
+in this repository, then submit their implementation here.
+
+The standalone Python repositories are in a feature freeze and accept only
+critical security or data-loss fixes. Use the
+[support and contribution routing table](PYTHON-DEPRECATION.md#support-and-contribution-routing)
+to route legacy-only reports, including cases where a legacy repository is
+already archived.
+
 ### Read These Files First
 
 1. **[README.md](../README.md)** — project overview, architecture, feature status
