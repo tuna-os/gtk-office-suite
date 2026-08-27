@@ -20,6 +20,21 @@ To eliminate the dual-maintenance burden across multiple standalone repositories
 
 ---
 
+## Support and Contribution Routing
+
+The [retirement gate](#retirement-gate) and
+[timeline](#deprecation-timeline) remain the source of truth for migration
+status and dates; use the destinations below to route current work.
+
+| Audience or request | Destination | Scope |
+|---------------------|-------------|-------|
+| Users and ordinary bug reports | [`tuna-os/gtk-office-suite` issues](https://github.com/tuna-os/gtk-office-suite/issues) | Support for the actively maintained Letters, Tables, and Decks applications. |
+| Packagers and migration coordination | [`tuna-os/gtk-office-suite` issues](https://github.com/tuna-os/gtk-office-suite/issues), linked to the relevant component in the [ledger](#component-ledger) | Package identity, distribution cutover, upgrade, or rollback evidence. Letters evidence is tracked in [#263](https://github.com/tuna-os/gtk-office-suite/issues/263). |
+| Contributors and feature proposals | This repository's [contributing guide](CONTRIBUTING.md) and [issue tracker](https://github.com/tuna-os/gtk-office-suite/issues) | All new features and ordinary fixes belong in the Rust workspace. |
+| Critical security or data-loss fix affecting only legacy Python code | The affected legacy repository: [`letters`](https://github.com/tuna-os/letters), [`tables`](https://github.com/tuna-os/tables), [`decks`](https://github.com/tuna-os/decks), or [`suite-common`](https://github.com/tuna-os/suite-common) | Feature development is frozen. If the repository is archived or cannot accept reports, open an issue in the canonical tracker and identify the legacy component. |
+
+---
+
 ## Retirement Gate
 
 Deprecation, repository archival, and distribution migration are separate
