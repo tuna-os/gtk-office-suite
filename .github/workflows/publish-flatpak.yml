@@ -102,51 +102,26 @@ jobs:
           skopeo copy oci:${{ matrix.app }}-x86_64.oci docker://ghcr.io/tuna-os/${{ matrix.app }}:latest-x86_64
           skopeo copy oci:${{ matrix.app }}-aarch64.oci docker://ghcr.io/tuna-os/${{ matrix.app }}:latest-aarch64
 
-      - name: Clone index repo
-        env:
-          FLATPAK_INDEX_TOKEN: ${{ secrets.FLATPAK_INDEX_TOKEN }}
-        run: |
-          git clone --depth 1 \
-            https://github.com/tuna-os/docs.git \
-            index-repo
-          # Use header-based auth so the token never lands in the remote URL
-          # (avoids leaks via .git/config, `git remote -v`, and process listings).
-          git -C index-repo config --local http.extraheader \
-            "AUTHORIZATION: basic $(printf 'x-access-token:%s' "$FLATPAK_INDEX_TOKEN" | base64)"
-
-      # Canonical, single-source update-index.py (tuna-os/tunaos#1183) instead
-      # of this repo's own byte-copy -- see tuna-os/.github#18. Same script,
-      # same CLI, just hosted once; the weekly drift-check in tuna-os/.github
-      # verifies repos still carrying a local copy stay byte-identical to
-      # this until they migrate.
+      # Canonical, single-source update-index.py (tuna-os/tunaos#1183), wrapped
+      # with a retry-safe clone/commit/push (tuna-os/tunaos#2104) instead of
+      # this repo's previous separate clone + push-once steps -- max-parallel:
+      # 1 only serialized this repo's own 3 apps against each other, not
+      # against the other 5 tuna-os repos publishing to the same index.
       - name: Update central index (x86_64)
-        uses: tuna-os/.github/.github/actions/update-flatpak-index@main
+        uses: tuna-os/.github/.github/actions/publish-flatpak-index@main
         with:
           oci-dir: ${{ matrix.app }}-x86_64.oci
-          index-file: index-repo/static/flatpak/index/static
           repo-name: tuna-os/${{ matrix.app }}
           tags: latest
+          token: ${{ secrets.FLATPAK_INDEX_TOKEN }}
 
       - name: Update central index (aarch64)
-        uses: tuna-os/.github/.github/actions/update-flatpak-index@main
+        uses: tuna-os/.github/.github/actions/publish-flatpak-index@main
         with:
           oci-dir: ${{ matrix.app }}-aarch64.oci
-          index-file: index-repo/static/flatpak/index/static
           repo-name: tuna-os/${{ matrix.app }}
           tags: latest
-
-      - name: Push index changes
-        run: |
-          cd index-repo
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add static/flatpak/index/static
-          if git diff --cached --quiet; then
-            echo "No index changes"
-          else
-            git commit -m "chore(flatpak): update ${{ matrix.app }} OCI index (x86_64 + aarch64)"
-            git push origin main
-          fi
+          token: ${{ secrets.FLATPAK_INDEX_TOKEN }}
 
   release-bundles:
     name: Attach bundles to release
