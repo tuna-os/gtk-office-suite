@@ -11,7 +11,7 @@ license = "GPL-3.0-or-later"
 suite-common-core = { path = "../suite-common-core" }
 letters-core = { path = "../letters-core" }
 zip = "8.0"
-quick-xml = "0.42"
+quick-xml = "0.41"
 # NamedTempFile for extracted images (gh-268): production code writes
 # document-embedded images to /tmp, which must not use predictable paths.
 tempfile = "3"
