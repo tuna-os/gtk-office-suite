@@ -231,8 +231,8 @@ fn parse_length_pt(v: &str) -> Option<f64> {
 
 fn attr(e: &quick_xml::events::BytesStart, name: &str) -> Option<String> {
     e.attributes().filter_map(|a| a.ok()).find_map(|a| {
-        if a.key.as_ref() == name.as_bytes() {
-            Some(String::from_utf8_lossy(&a.value).to_string())
+        if a.key.into_inner() == name {
+            Some(a.value.to_string())
         } else {
             None
         }
@@ -258,11 +258,11 @@ pub fn read(path: &str) -> Result<Deck, String> {
         loop {
             match reader.read_event() {
                 Ok(Event::Start(e)) | Ok(Event::Empty(e)) => match e.name().as_ref() {
-                    b"style:style" => {
+                    "style:style" => {
                         cur = attr(&e, "style:name")
                             .zip(attr(&e, "style:family"));
                     }
-                    b"style:text-properties" => {
+                    "style:text-properties" => {
                         if let Some((name, family)) = &cur {
                             if family == "text" {
                                 let mut st = RunStyle::default();
@@ -297,7 +297,7 @@ pub fn read(path: &str) -> Result<Deck, String> {
                             }
                         }
                     }
-                    b"style:drawing-page-properties" => {
+                    "style:drawing-page-properties" => {
                         if let Some((name, family)) = &cur {
                             if family == "drawing-page" {
                                 if let Some(c) = attr(&e, "draw:fill-color") {
@@ -311,7 +311,7 @@ pub fn read(path: &str) -> Result<Deck, String> {
                 // Reset at the style's end so text-properties nested in
                 // later siblings (LO's text:list-style levels reuse the
                 // same names) can't clobber the real definition.
-                Ok(Event::End(e)) if e.name().as_ref() == b"style:style" => cur = None,
+                Ok(Event::End(e)) if e.name().as_ref() == "style:style" => cur = None,
                 Ok(Event::Eof) => break,
                 Err(_) => break,
                 _ => {}
@@ -345,7 +345,7 @@ pub fn read(path: &str) -> Result<Deck, String> {
     loop {
         match reader.read_event() {
             Ok(Event::Start(ref e)) => match e.name().as_ref() {
-                b"draw:page" => {
+                "draw:page" => {
                     let bg = attr(e, "draw:style-name")
                         .and_then(|n| page_bg.get(&n).cloned())
                         .unwrap_or_else(|| "#ffffff".into());
@@ -357,32 +357,32 @@ pub fn read(path: &str) -> Result<Deck, String> {
                         master_idx: Some(0),
                     });
                 }
-                b"presentation:notes" => in_notes = true,
-                b"draw:frame" => frame = Some(geo(e)),
-                b"draw:text-box" => textbox = Some((Vec::new(), Vec::new())),
+                "presentation:notes" => in_notes = true,
+                "draw:frame" => frame = Some(geo(e)),
+                "draw:text-box" => textbox = Some((Vec::new(), Vec::new())),
                 // Impress converts pptx text boxes to custom-shapes with
                 // text:p directly inside (no draw:text-box wrapper).
-                b"draw:custom-shape" => {
+                "draw:custom-shape" => {
                     frame = Some(geo(e));
                     textbox = Some((Vec::new(), Vec::new()));
                     shape_type = None;
                 }
-                b"draw:enhanced-geometry" => {
+                "draw:enhanced-geometry" => {
                     if let Some(t) = attr(e, "draw:type") {
                         shape_type = Some(t);
                     }
                 }
-                b"text:p" => {
+                "text:p" => {
                     if let Some((lines, _)) = textbox.as_mut() {
                         lines.push(String::new());
                     }
                     in_text = true;
                 }
-                b"text:span" => {
+                "text:span" => {
                     span_style = attr(e, "text:style-name")
                         .and_then(|n| text_styles.get(&n).cloned());
                 }
-                b"draw:rect" => {
+                "draw:rect" => {
                     if let Some(s) = slide.as_mut() {
                         if !in_notes {
                             let (x, y, w, h) = geo(e);
@@ -390,7 +390,7 @@ pub fn read(path: &str) -> Result<Deck, String> {
                         }
                     }
                 }
-                b"draw:ellipse" | b"draw:circle" => {
+                "draw:ellipse" | "draw:circle" => {
                     if let Some(s) = slide.as_mut() {
                         if !in_notes {
                             let (x, y, w, h) = geo(e);
@@ -402,18 +402,18 @@ pub fn read(path: &str) -> Result<Deck, String> {
                 _ => {}
             },
             Ok(Event::Empty(ref e)) => match e.name().as_ref() {
-                b"draw:enhanced-geometry" => {
+                "draw:enhanced-geometry" => {
                     if let Some(t) = attr(e, "draw:type") {
                         shape_type = Some(t);
                     }
                 }
-                b"draw:rect" => {
+                "draw:rect" => {
                     if let (Some(s), false) = (slide.as_mut(), in_notes) {
                         let (x, y, w, h) = geo(e);
                         s.objects.push(SlideObject::Rect { x, y, w, h, rotation: 0.0 });
                     }
                 }
-                b"draw:ellipse" | b"draw:circle" => {
+                "draw:ellipse" | "draw:circle" => {
                     if let (Some(s), false) = (slide.as_mut(), in_notes) {
                         let (x, y, w, h) = geo(e);
                         let r = (w.max(h)) / 2.0;
@@ -455,9 +455,9 @@ pub fn read(path: &str) -> Result<Deck, String> {
                 }
             }
             Ok(Event::End(ref e)) => match e.name().as_ref() {
-                b"text:p" => in_text = false,
-                b"text:span" => span_style = None,
-                b"draw:text-box" => {
+                "text:p" => in_text = false,
+                "text:span" => span_style = None,
+                "draw:text-box" => {
                     if let (Some((lines, runs)), Some((x, y, w, h))) =
                         (textbox.take(), frame)
                     {
@@ -483,8 +483,8 @@ pub fn read(path: &str) -> Result<Deck, String> {
                         }
                     }
                 }
-                b"draw:frame" => frame = None,
-                b"draw:custom-shape" => {
+                "draw:frame" => frame = None,
+                "draw:custom-shape" => {
                     if let (Some((lines, runs)), Some((x, y, w, h))) = (textbox.take(), frame.take()) {
                         let text = lines.join("\n");
                         if let Some(s) = slide.as_mut() {
@@ -505,8 +505,8 @@ pub fn read(path: &str) -> Result<Deck, String> {
                     }
                     shape_type = None;
                 }
-                b"presentation:notes" => in_notes = false,
-                b"draw:page" => {
+                "presentation:notes" => in_notes = false,
+                "draw:page" => {
                     if let Some(s) = slide.take() {
                         deck.slides.push(s);
                     }
