@@ -504,7 +504,7 @@ formualizer-workbook = "0.3"  # check latest version at crates.io
 | Maturity | Production (2026) | Beta |
 | API ergonomics | Cargo-idiomatic | Pythonic |
 
-**Verdict:** Formualizer is the better choice for Tables. It's more mature, has more functions, and the Arrow backend will scale better.
+**Verdict:** IronCalc was selected as the formula engine for Tables due to its explicit MIT/Apache 2.0 dual-licensing, simple API ergonomics, and active integration in `tables-core/src/engine.rs`.
 
 ### 18. Column Auto-Fit on Double-Click (Spreadsheet Pattern)
 

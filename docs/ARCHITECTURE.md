@@ -199,9 +199,9 @@ Slide navigation (arrows in present mode)
 | `undo.rs` | 250 | Split by command category (object, slide, format) |
 
 **Current status:**
-- Decks `window.rs`: 650 lines → acceptable (recently refactored from 946)
-- Tables `window.rs`: 1,420 lines → needs refactor (target: split SheetModel + rendering)
-- Letters `window.rs`: 1,820 lines → largest, needs refactor
+- Decks `window.rs`: 1,779 lines
+- Tables `window.rs`: 2,281 lines
+- Letters `window.rs`: 1,765 lines
 
 ---
 
