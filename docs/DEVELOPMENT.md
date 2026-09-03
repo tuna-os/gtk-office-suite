@@ -12,7 +12,7 @@ and libadwaita ≥ 1.5 dev headers.
 
 ```bash
 # Debian/Ubuntu
-sudo apt-get install libgtk-4-dev libadwaita-1-dev
+sudo apt-get install libgtk-4-dev libadwaita-1-dev libglib2.0-bin
 
 # check
 cargo check --workspace
