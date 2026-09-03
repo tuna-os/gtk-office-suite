@@ -51,10 +51,17 @@ gtk-office-suite is the org's flagship **end-user product bet** and a cornerston
 | Tables virtual grid + performance budgets | architect | #112 | 🟡 In progress |
 | GUI God-file decomposition started | architect | #168 | ⬜ Not started |
 | ROADMAP.md published and linked from README / org coverage (#1295) | strategist | tunaos#1359 | ✅ Done |
-
 ### Q4 2026 (October–December) — "Ship it properly"
 
-<Sketch: release gate (#122) with Flatpak distribution + reproducible builds, Decks presenter/export scope, interop loss budgets, A11y journeys. Move up when Q4 starts.>
+**Theme**: complete end-to-end product release readiness, Flatpak distribution, and accessibility compliance.
+
+| Goal | Owner | Tracking | Status |
+|------|-------|----------|--------|
+| Flatpak reproducible release gate + checksum verification | architect / quality | #122 | ⬜ Not started |
+| Decks presenter mode, transition engine & export scope | architect | #115, #116, #117 | ⬜ Not started |
+| Interop unsupported-feature inspector + loss budget fixtures | architect / strategist | #105, #121 | ⬜ Not started |
+| AT-SPI screen-reader audit gate & keyboard navigation journeys | architect / quality | #120 | ⬜ Not started |
+| GNOME platform integration (recent files, portals, drag/drop) | architect | #119 | ⬜ Not started |
 
 ---
 
