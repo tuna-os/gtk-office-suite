@@ -14,3 +14,6 @@ flatpak/gschemas.compiled
 /target/
 fuzz/artifacts/
 fuzz/corpus/
+
+# Credentials and secrets
+.token
