@@ -8,7 +8,7 @@ network build-args, and trim `--filesystem=host:ro` to `xdg-documents`.
 
 1. Generate offline cargo sources against the tagged Cargo.lock:
 
-       python3 flatpak-cargo-generator.py Cargo.lock -o cargo-sources.json
+       python3 flatpak-cargo-generator.py Cargo.lock -o flathub/cargo-sources.json
        # from https://github.com/flatpak/flatpak-builder-tools/tree/master/cargo
 
    Note: the rdocx git pin (tuna-os/rdocx) is resolved by the generator;
