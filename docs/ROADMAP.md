@@ -103,6 +103,9 @@ without a test that fails first.
 - ✅ **Flathub prep**: metainfo (screenshots/releases/launchable)
   validates pedantic-clean; flathub/ manifests build from tag v1.1.0.
   The submission PR itself is a human action (see flathub/README.md).
+- 📋 **Headless CLI & Serverless API**: expose standalone `letters-convert`,
+  `tables-convert`, and `decks-convert` binaries for headless conversion and
+  CI validation pipelines (see [Headless Conversion Strategy](HEADLESS-CONVERSION-STRATEGY.md)).
 
 ## Standing infrastructure notes
 
