@@ -2,7 +2,26 @@
 
 The suite uses gettext with the single domain `gtk-office-suite`.
 User-facing strings are wrapped in `suite_common::i18n()` at the call
-site. Regenerate the template with:
+site.
+
+## Prerequisites
+
+Regenerating the translation template requires GNU `gettext` tools (`xgettext` and `msguniq`) or the Rust `xtr` tool:
+
+```bash
+# Debian / Ubuntu
+sudo apt-get install gettext
+
+# Fedora / RHEL
+sudo dnf install gettext
+
+# Optional Rust-native extraction tool
+cargo install xtr
+```
+
+## Workflow
+
+Regenerate the template with:
 
     scripts/update-pot.sh
 
@@ -11,3 +30,4 @@ pot to `po/<lang>.po`, translating, and listing `<lang>` in
 `po/LINGUAS`. `.mo` files install to `<prefix>/share/locale/<lang>/
 LC_MESSAGES/gtk-office-suite.mo` (the Flatpak manifests handle this
 once .po files exist).
+
