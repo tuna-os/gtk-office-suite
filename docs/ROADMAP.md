@@ -112,3 +112,7 @@ without a test that fails first.
   walkthrough weekly from `tests/gui/walkthrough.py` + the demo docs.
 - Testing bar: see TESTING.md — oracle floor 25/20/20, red-first waves,
   corpus growth beyond ~70 hand-written oracle tests.
+
+## Ecosystem & Plugins (Q4 2026 / Q1 2027)
+
+- **WASM & IPC Plugin Extension Architecture**: Sandboxed WebAssembly host integration (`wasmtime`) in `suite-common-core` alongside out-of-process IPC sidecar support for third-party document transformations, macros, and ecosystem extensions. See [docs/WASM-PLUGIN-SPEC.md](WASM-PLUGIN-SPEC.md) and Issue #391.
