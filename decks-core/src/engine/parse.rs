@@ -4,18 +4,18 @@
 // Split out of engine.rs (issue #247).
 
 pub(crate) fn unescape_text(t: &BytesText) -> String {
-    let decoded = t.decode().unwrap_or_default();
-    quick_xml::escape::unescape(&decoded)
+    // quick-xml 0.42 dropped `decode()`: event payloads are already `&str`.
+    quick_xml::escape::unescape(t)
         .map(|s| s.into_owned())
-        .unwrap_or_else(|_| decoded.into_owned())
+        .unwrap_or_else(|_| t.to_string())
 }
 
 pub(crate) fn resolve_general_ref(r: &BytesRef) -> String {
     if let Ok(Some(c)) = r.resolve_char_ref() {
         return c.to_string();
     }
-    let name = r.decode().unwrap_or_default();
-    quick_xml::escape::resolve_predefined_entity(&name)
+    let name: &str = r;
+    quick_xml::escape::resolve_predefined_entity(name)
         .map(|s| s.to_string())
         .unwrap_or_else(|| format!("&{name};"))
 }
@@ -30,21 +30,20 @@ use quick_xml::events::{Event, BytesStart, BytesRef, BytesText};
 use quick_xml::Reader;
 use letters_core::model::{Run, RunStyle};
 
-fn parse_coords<B: std::io::BufRead>(
+fn parse_coords(
     e: &BytesStart,
-    reader: &Reader<B>,
-    k1: &[u8],
-    k2: &[u8]
+    k1: &str,
+    k2: &str
 ) -> (Option<f64>, Option<f64>) {
     let mut v1 = None;
     let mut v2 = None;
     for attr in e.attributes().flatten() {
         if attr.key.as_ref() == k1 {
-            if let Ok(val) = attr.decode_and_unescape_value(reader.decoder()) {
+            if let Ok(val) = attr.normalized_value(quick_xml::XmlVersion::Implicit1_0) {
                 v1 = val.parse::<f64>().ok();
             }
         } else if attr.key.as_ref() == k2 {
-            if let Ok(val) = attr.decode_and_unescape_value(reader.decoder()) {
+            if let Ok(val) = attr.normalized_value(quick_xml::XmlVersion::Implicit1_0) {
                 v2 = val.parse::<f64>().ok();
             }
         }
@@ -52,10 +51,10 @@ fn parse_coords<B: std::io::BufRead>(
     (v1, v2)
 }
 
-fn parse_blip_embed<B: std::io::BufRead>(e: &BytesStart, reader: &Reader<B>) -> Option<String> {
+fn parse_blip_embed(e: &BytesStart) -> Option<String> {
     for attr in e.attributes().flatten() {
-        if attr.key.as_ref() == b"r:embed" {
-            if let Ok(val) = attr.decode_and_unescape_value(reader.decoder()) {
+        if attr.key.as_ref() == "r:embed" {
+            if let Ok(val) = attr.normalized_value(quick_xml::XmlVersion::Implicit1_0) {
                 return Some(val.into_owned());
             }
         }
@@ -63,10 +62,10 @@ fn parse_blip_embed<B: std::io::BufRead>(e: &BytesStart, reader: &Reader<B>) -> 
     None
 }
 
-fn parse_prst_geom<B: std::io::BufRead>(e: &BytesStart, reader: &Reader<B>) -> Option<String> {
+fn parse_prst_geom(e: &BytesStart) -> Option<String> {
     for attr in e.attributes().flatten() {
-        if attr.key.as_ref() == b"prst" {
-            if let Ok(val) = attr.decode_and_unescape_value(reader.decoder()) {
+        if attr.key.as_ref() == "prst" {
+            if let Ok(val) = attr.normalized_value(quick_xml::XmlVersion::Implicit1_0) {
                 return Some(val.into_owned());
             }
         }
@@ -74,10 +73,10 @@ fn parse_prst_geom<B: std::io::BufRead>(e: &BytesStart, reader: &Reader<B>) -> O
     None
 }
 
-fn is_tx_box_attr<B: std::io::BufRead>(e: &BytesStart, reader: &Reader<B>) -> bool {
+fn is_tx_box_attr(e: &BytesStart) -> bool {
     for attr in e.attributes().flatten() {
-        if attr.key.as_ref() == b"txBox" {
-            if let Ok(val) = attr.decode_and_unescape_value(reader.decoder()) {
+        if attr.key.as_ref() == "txBox" {
+            if let Ok(val) = attr.normalized_value(quick_xml::XmlVersion::Implicit1_0) {
                 return val.as_ref() == "1";
             }
         }
@@ -138,20 +137,20 @@ pub fn read_pptx(path: &str) -> Result<Deck, String> {
             match reader.read_event_into(&mut buf) {
                 Ok(Event::Start(ref e)) | Ok(Event::Empty(ref e)) => {
                     let name = e.name();
-                    if name.as_ref() == b"Relationship" {
+                    if name.as_ref() == "Relationship" {
                         let mut id = None;
                         let mut target = None;
                         let mut is_slide = false;
                         for attr in e.attributes().flatten() {
                             match attr.key.as_ref() {
-                                b"Id" => {
-                                    id = attr.decode_and_unescape_value(reader.decoder()).ok().map(|v| v.into_owned());
+                                "Id" => {
+                                    id = attr.normalized_value(quick_xml::XmlVersion::Implicit1_0).ok().map(|v| v.into_owned());
                                 }
-                                b"Target" => {
-                                    target = attr.decode_and_unescape_value(reader.decoder()).ok().map(|v| v.into_owned());
+                                "Target" => {
+                                    target = attr.normalized_value(quick_xml::XmlVersion::Implicit1_0).ok().map(|v| v.into_owned());
                                 }
-                                b"Type" => {
-                                    if let Ok(v) = attr.decode_and_unescape_value(reader.decoder()) {
+                                "Type" => {
+                                    if let Ok(v) = attr.normalized_value(quick_xml::XmlVersion::Implicit1_0) {
                                         if v.contains("relationships/slide") {
                                             is_slide = true;
                                         }
@@ -185,10 +184,10 @@ pub fn read_pptx(path: &str) -> Result<Deck, String> {
             match reader.read_event_into(&mut buf) {
                 Ok(Event::Start(ref e)) | Ok(Event::Empty(ref e)) => {
                     let name = e.name();
-                    if name.as_ref() == b"p:sldId" {
+                    if name.as_ref() == "p:sldId" {
                         for attr in e.attributes().flatten() {
-                            if attr.key.as_ref() == b"r:id" {
-                                if let Ok(val) = attr.decode_and_unescape_value(reader.decoder()) {
+                            if attr.key.as_ref() == "r:id" {
+                                if let Ok(val) = attr.normalized_value(quick_xml::XmlVersion::Implicit1_0) {
                                     ordered_slide_rids.push(val.into_owned());
                                 }
                             }
@@ -247,14 +246,14 @@ pub fn read_pptx(path: &str) -> Result<Deck, String> {
                 match reader.read_event_into(&mut buf) {
                     Ok(Event::Start(ref e)) | Ok(Event::Empty(ref e)) => {
                         let name = e.name();
-                        if name.as_ref() == b"Relationship" {
+                        if name.as_ref() == "Relationship" {
                             let mut id = None;
                             let mut target = None;
                             for attr in e.attributes().flatten() {
-                                if attr.key.as_ref() == b"Id" {
-                                    id = attr.decode_and_unescape_value(reader.decoder()).ok().map(|v| v.into_owned());
-                                } else if attr.key.as_ref() == b"Target" {
-                                    target = attr.decode_and_unescape_value(reader.decoder()).ok().map(|v| v.into_owned());
+                                if attr.key.as_ref() == "Id" {
+                                    id = attr.normalized_value(quick_xml::XmlVersion::Implicit1_0).ok().map(|v| v.into_owned());
+                                } else if attr.key.as_ref() == "Target" {
+                                    target = attr.normalized_value(quick_xml::XmlVersion::Implicit1_0).ok().map(|v| v.into_owned());
                                 }
                             }
                             if let (Some(id_val), Some(target_val)) = (id, target) {
@@ -289,8 +288,8 @@ pub fn read_pptx(path: &str) -> Result<Deck, String> {
                     Ok(Event::Start(ref e)) => {
                         let name = e.name();
                         match name.as_ref() {
-                            b"p:bg" => in_bg = true,
-                            b"p:sp" => {
+                            "p:bg" => in_bg = true,
+                            "p:sp" => {
                                 current_shape = Some(PendingShape {
                                     is_tx_box: false,
                                     has_tx_body: false,
@@ -304,7 +303,7 @@ pub fn read_pptx(path: &str) -> Result<Deck, String> {
                                     prst: None,
                                 });
                             }
-                            b"p:pic" => {
+                            "p:pic" => {
                                 current_picture = Some(PendingPicture {
                                     embed_id: None,
                                     x: None,
@@ -313,8 +312,8 @@ pub fn read_pptx(path: &str) -> Result<Deck, String> {
                                     h: None,
                                 });
                             }
-                            b"a:off" => {
-                                let (x, y) = parse_coords(e, &reader, b"x", b"y");
+                            "a:off" => {
+                                let (x, y) = parse_coords(e, "x", "y");
                                 if let Some(shape) = current_shape.as_mut() {
                                     if x.is_some() { shape.x = x; }
                                     if y.is_some() { shape.y = y; }
@@ -323,8 +322,8 @@ pub fn read_pptx(path: &str) -> Result<Deck, String> {
                                     if y.is_some() { pic.y = y; }
                                 }
                             }
-                            b"a:ext" => {
-                                let (w, h) = parse_coords(e, &reader, b"cx", b"cy");
+                            "a:ext" => {
+                                let (w, h) = parse_coords(e, "cx", "cy");
                                 if let Some(shape) = current_shape.as_mut() {
                                     if w.is_some() { shape.w = w; }
                                     if h.is_some() { shape.h = h; }
@@ -333,38 +332,38 @@ pub fn read_pptx(path: &str) -> Result<Deck, String> {
                                     if h.is_some() { pic.h = h; }
                                 }
                             }
-                            b"a:prstGeom" => {
+                            "a:prstGeom" => {
                                 if let Some(shape) = current_shape.as_mut() {
-                                    if let Some(prst) = parse_prst_geom(e, &reader) {
+                                    if let Some(prst) = parse_prst_geom(e) {
                                         shape.prst = Some(prst);
                                     }
                                 }
                             }
-                            b"p:cNvSpPr" => {
-                                if is_tx_box_attr(e, &reader) {
+                            "p:cNvSpPr" => {
+                                if is_tx_box_attr(e) {
                                     if let Some(shape) = current_shape.as_mut() {
                                         shape.is_tx_box = true;
                                     }
                                 }
                             }
-                            b"p:txBody" => {
+                            "p:txBody" => {
                                 if let Some(shape) = current_shape.as_mut() {
                                     shape.has_tx_body = true;
                                 }
                             }
-                            b"a:blip" => {
+                            "a:blip" => {
                                 if let Some(pic) = current_picture.as_mut() {
-                                    if let Some(embed) = parse_blip_embed(e, &reader) {
+                                    if let Some(embed) = parse_blip_embed(e) {
                                         pic.embed_id = Some(embed);
                                     }
                                 }
                             }
-                            b"a:t" => {
+                            "a:t" => {
                                 in_text_element = true;
                             }
-                            b"a:rPr" => {
+                            "a:rPr" => {
                                 if let Some(shape) = current_shape.as_mut() {
-                                    shape.cur_style = parse_run_style(e, &reader);
+                                    shape.cur_style = parse_run_style(e);
                                 }
                                 in_rpr = true;
                             }
@@ -374,19 +373,19 @@ pub fn read_pptx(path: &str) -> Result<Deck, String> {
                     Ok(Event::Empty(ref e)) => {
                         let name = e.name();
                         match name.as_ref() {
-                            b"a:rPr" => {
+                            "a:rPr" => {
                                 if let Some(shape) = current_shape.as_mut() {
-                                    shape.cur_style = parse_run_style(e, &reader);
+                                    shape.cur_style = parse_run_style(e);
                                 }
                             }
-                            b"a:srgbClr" if in_rpr || in_bg => {
+                            "a:srgbClr" if in_rpr || in_bg => {
                                 if let Some(val) = e
                                     .attributes()
                                     .filter_map(|a| a.ok())
-                                    .find(|a| a.key.as_ref() == b"val")
+                                    .find(|a| a.key.as_ref() == "val")
                                 {
                                     let hex =
-                                        String::from_utf8_lossy(&val.value).to_lowercase();
+                                        val.value.to_lowercase();
                                     if in_rpr {
                                         if let Some(shape) = current_shape.as_mut() {
                                             shape.cur_style.color = Some(hex);
@@ -396,8 +395,8 @@ pub fn read_pptx(path: &str) -> Result<Deck, String> {
                                     }
                                 }
                             }
-                            b"a:off" => {
-                                let (x, y) = parse_coords(e, &reader, b"x", b"y");
+                            "a:off" => {
+                                let (x, y) = parse_coords(e, "x", "y");
                                 if let Some(shape) = current_shape.as_mut() {
                                     if x.is_some() { shape.x = x; }
                                     if y.is_some() { shape.y = y; }
@@ -406,8 +405,8 @@ pub fn read_pptx(path: &str) -> Result<Deck, String> {
                                     if y.is_some() { pic.y = y; }
                                 }
                             }
-                            b"a:ext" => {
-                                let (w, h) = parse_coords(e, &reader, b"cx", b"cy");
+                            "a:ext" => {
+                                let (w, h) = parse_coords(e, "cx", "cy");
                                 if let Some(shape) = current_shape.as_mut() {
                                     if w.is_some() { shape.w = w; }
                                     if h.is_some() { shape.h = h; }
@@ -416,36 +415,36 @@ pub fn read_pptx(path: &str) -> Result<Deck, String> {
                                     if h.is_some() { pic.h = h; }
                                 }
                             }
-                            b"a:prstGeom" => {
+                            "a:prstGeom" => {
                                 if let Some(shape) = current_shape.as_mut() {
-                                    if let Some(prst) = parse_prst_geom(e, &reader) {
+                                    if let Some(prst) = parse_prst_geom(e) {
                                         shape.prst = Some(prst);
                                     }
                                 }
                             }
-                            b"p:cNvSpPr" => {
-                                if is_tx_box_attr(e, &reader) {
+                            "p:cNvSpPr" => {
+                                if is_tx_box_attr(e) {
                                     if let Some(shape) = current_shape.as_mut() {
                                         shape.is_tx_box = true;
                                     }
                                 }
                             }
-                            b"a:blip" => {
+                            "a:blip" => {
                                 if let Some(pic) = current_picture.as_mut() {
-                                    if let Some(embed) = parse_blip_embed(e, &reader) {
+                                    if let Some(embed) = parse_blip_embed(e) {
                                         pic.embed_id = Some(embed);
                                     }
                                 }
                             }
-                            b"a:srgbClr" if in_bg => {
+                            "a:srgbClr" if in_bg => {
                                 if let Some(val) = e
                                     .attributes()
                                     .filter_map(|a| a.ok())
-                                    .find(|a| a.key.as_ref() == b"val")
+                                    .find(|a| a.key.as_ref() == "val")
                                 {
                                     background = format!(
                                         "#{}",
-                                        String::from_utf8_lossy(&val.value).to_lowercase()
+                                        val.value.to_lowercase()
                                     );
                                 }
                             }
@@ -454,13 +453,13 @@ pub fn read_pptx(path: &str) -> Result<Deck, String> {
                     }
                     Ok(Event::End(ref e)) => {
                         let name = e.name();
-                        if name.as_ref() == b"p:bg" {
+                        if name.as_ref() == "p:bg" {
                             in_bg = false;
                         }
-                        if name.as_ref() == b"a:rPr" {
+                        if name.as_ref() == "a:rPr" {
                             in_rpr = false;
                         }
-                        if name.as_ref() == b"p:sp" {
+                        if name.as_ref() == "p:sp" {
                             if let Some(shape) = current_shape.take() {
                                 let x = shape.x.unwrap_or(0.0) / 9525.0;
                                 let y = shape.y.unwrap_or(0.0) / 9525.0;
@@ -486,7 +485,7 @@ pub fn read_pptx(path: &str) -> Result<Deck, String> {
                                     }
                                 }
                             }
-                        } else if name.as_ref() == b"p:pic" {
+                        } else if name.as_ref() == "p:pic" {
                             if let Some(pic) = current_picture.take() {
                                 if let Some(embed_id) = pic.embed_id {
                                     let x = pic.x.unwrap_or(0.0) / 9525.0;
@@ -499,7 +498,7 @@ pub fn read_pptx(path: &str) -> Result<Deck, String> {
                                     }
                                 }
                             }
-                        } else if name.as_ref() == b"a:t" {
+                        } else if name.as_ref() == "a:t" {
                             in_text_element = false;
                         }
                     }
@@ -681,8 +680,8 @@ pub fn parse_master_shapes(xml: &str) -> (Option<String>, Vec<SlideObject>) {
     while let Ok(ev) = reader.read_event_into(&mut buf) {
         match ev {
             Event::Start(ref e) | Event::Empty(ref e) => match e.name().as_ref() {
-                b"p:bg" => in_bg = true,
-                b"p:sp" => {
+                "p:bg" => in_bg = true,
+                "p:sp" => {
                     cur = Some(Pending {
                         x: 0.0,
                         y: 0.0,
@@ -693,14 +692,14 @@ pub fn parse_master_shapes(xml: &str) -> (Option<String>, Vec<SlideObject>) {
                         text: Vec::new(),
                     });
                 }
-                b"p:ph" => {
+                "p:ph" => {
                     if let Some(p) = cur.as_mut() {
                         p.has_ph = true;
                     }
                 }
-                b"a:off" => {
+                "a:off" => {
                     if let Some(p) = cur.as_mut() {
-                        let (x, y) = parse_coords(e, &reader, b"x", b"y");
+                        let (x, y) = parse_coords(e, "x", "y");
                         if let Some(x) = x {
                             p.x = x / 9525.0;
                         }
@@ -709,9 +708,9 @@ pub fn parse_master_shapes(xml: &str) -> (Option<String>, Vec<SlideObject>) {
                         }
                     }
                 }
-                b"a:ext" => {
+                "a:ext" => {
                     if let Some(p) = cur.as_mut() {
-                        let (w, h) = parse_coords(e, &reader, b"cx", b"cy");
+                        let (w, h) = parse_coords(e, "cx", "cy");
                         if let Some(w) = w {
                             p.w = w / 9525.0;
                         }
@@ -720,28 +719,28 @@ pub fn parse_master_shapes(xml: &str) -> (Option<String>, Vec<SlideObject>) {
                         }
                     }
                 }
-                b"a:prstGeom" => {
+                "a:prstGeom" => {
                     if let Some(p) = cur.as_mut() {
-                        p.prst = parse_prst_geom(e, &reader);
+                        p.prst = parse_prst_geom(e);
                     }
                 }
-                b"a:t" => in_text = true,
-                b"a:srgbClr" if in_bg => {
+                "a:t" => in_text = true,
+                "a:srgbClr" if in_bg => {
                     if let Some(val) = e
                         .attributes()
                         .filter_map(|a| a.ok())
-                        .find(|a| a.key.as_ref() == b"val")
+                        .find(|a| a.key.as_ref() == "val")
                     {
                         background =
-                            Some(format!("#{}", String::from_utf8_lossy(&val.value).to_lowercase()));
+                            Some(format!("#{}", val.value.to_lowercase()));
                     }
                 }
                 _ => {}
             },
             Event::End(ref e) => match e.name().as_ref() {
-                b"p:bg" => in_bg = false,
-                b"a:t" => in_text = false,
-                b"p:sp" => {
+                "p:bg" => in_bg = false,
+                "a:t" => in_text = false,
+                "p:sp" => {
                     if let Some(p) = cur.take() {
                         if !p.has_ph && p.w > 0.0 && p.h > 0.0 {
                             let has_text = p.text.iter().any(|t| !t.trim().is_empty());

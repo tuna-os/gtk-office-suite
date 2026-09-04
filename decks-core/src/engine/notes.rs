@@ -49,17 +49,17 @@ pub(super) fn extract_notes_text(xml: &str) -> String {
     loop {
         match reader.read_event_into(&mut buf) {
             Ok(Event::Start(ref e)) => match e.name().as_ref() {
-                b"p:sp" => { in_sp = true; sp_is_body = false; }
-                b"a:t" if sp_is_body => in_t = true,
+                "p:sp" => { in_sp = true; sp_is_body = false; }
+                "a:t" if sp_is_body => in_t = true,
                 _ => {}
             },
-            Ok(Event::Empty(ref e)) if e.name().as_ref() == b"a:br" && sp_is_body => {
+            Ok(Event::Empty(ref e)) if e.name().as_ref() == "a:br" && sp_is_body => {
                 current.push('\n');
             }
-            Ok(Event::Empty(ref e)) if e.name().as_ref() == b"p:ph" && in_sp => {
+            Ok(Event::Empty(ref e)) if e.name().as_ref() == "p:ph" && in_sp => {
                 for attr in e.attributes().flatten() {
-                    if attr.key.as_ref() == b"type" {
-                        if let Ok(v) = attr.decode_and_unescape_value(reader.decoder()) {
+                    if attr.key.as_ref() == "type" {
+                        if let Ok(v) = attr.normalized_value(quick_xml::XmlVersion::Implicit1_0) {
                             if v == "body" { sp_is_body = true; }
                         }
                     }
@@ -72,11 +72,11 @@ pub(super) fn extract_notes_text(xml: &str) -> String {
                 current.push_str(&resolve_general_ref(r));
             }
             Ok(Event::End(ref e)) => match e.name().as_ref() {
-                b"a:t" => in_t = false,
-                b"a:p" if sp_is_body => {
+                "a:t" => in_t = false,
+                "a:p" if sp_is_body => {
                     if !current.is_empty() { parts.push(std::mem::take(&mut current)); }
                 }
-                b"p:sp" => { in_sp = false; sp_is_body = false; }
+                "p:sp" => { in_sp = false; sp_is_body = false; }
                 _ => {}
             },
             Ok(Event::Eof) => break,
@@ -90,16 +90,16 @@ pub(super) fn extract_notes_text(xml: &str) -> String {
 
 /// Parse b/i/u/strike attributes from an a:rPr element into the shared
 /// RunStyle (same WYSIWYG primitive Letters uses).
-pub(super) fn parse_run_style(e: &BytesStart, reader: &Reader<&[u8]>) -> RunStyle {
+pub(super) fn parse_run_style(e: &BytesStart) -> RunStyle {
     let mut st = RunStyle::default();
     for attr in e.attributes().flatten() {
-        let val = attr.decode_and_unescape_value(reader.decoder()).unwrap_or_default();
+        let val = attr.normalized_value(quick_xml::XmlVersion::Implicit1_0).unwrap_or_default();
         match attr.key.as_ref() {
-            b"b" => st.bold = val == "1" || val == "true",
-            b"i" => st.italic = val == "1" || val == "true",
-            b"u" => st.underline = val != "none" && !val.is_empty(),
-            b"strike" => st.strikethrough = val != "noStrike" && !val.is_empty(),
-            b"sz" => {
+            "b" => st.bold = val == "1" || val == "true",
+            "i" => st.italic = val == "1" || val == "true",
+            "u" => st.underline = val != "none" && !val.is_empty(),
+            "strike" => st.strikethrough = val != "noStrike" && !val.is_empty(),
+            "sz" => {
                 if let Ok(hundredths) = val.parse::<u32>() {
                     st.font_size_hp = Some((hundredths / 50) as u16);
                 }

@@ -27,10 +27,10 @@ pub fn read_with_report(path: &str) -> Result<(Document, suite_common_core::inte
 }
 
 fn unescape_text(t: &BytesText) -> String {
-    let decoded = t.decode().unwrap_or_default();
-    quick_xml::escape::unescape(&decoded)
+    // quick-xml 0.42 dropped `decode()`: event payloads are already `&str`.
+    quick_xml::escape::unescape(t)
         .map(|s| s.into_owned())
-        .unwrap_or_else(|_| decoded.into_owned())
+        .unwrap_or_else(|_| t.to_string())
 }
 
 // quick-xml 0.41 stopped inlining `&entity;`/`&#NN;` references into
@@ -41,8 +41,8 @@ fn resolve_general_ref(r: &BytesRef) -> String {
     if let Ok(Some(c)) = r.resolve_char_ref() {
         return c.to_string();
     }
-    let name = r.decode().unwrap_or_default();
-    quick_xml::escape::resolve_predefined_entity(&name)
+    let name: &str = r;
+    quick_xml::escape::resolve_predefined_entity(name)
         .map(|s| s.to_string())
         .unwrap_or_else(|| format!("&{name};"))
 }
@@ -350,8 +350,8 @@ pub fn write_with_opaque(doc: &Document, path: &str, opaque: &suite_common_core:
 
 fn attr_val(e: &quick_xml::events::BytesStart, name: &str) -> Option<String> {
     e.attributes().filter_map(|a| a.ok()).find_map(|a| {
-        if a.key.as_ref() == name.as_bytes() {
-            Some(String::from_utf8_lossy(&a.value).to_string())
+        if a.key.into_inner() == name {
+            Some(a.value.to_string())
         } else {
             None
         }
@@ -390,7 +390,7 @@ fn parse_auto_styles(xml: &str) -> AutoStyles {
         match reader.read_event() {
             Ok(Event::Start(e)) | Ok(Event::Empty(e)) => {
                 match e.name().as_ref() {
-                    b"style:style" => {
+                    "style:style" => {
                         cur_name = attr_val(&e, "style:name");
                         cur_family = attr_val(&e, "style:family").unwrap_or_default();
                         if cur_family == "paragraph" {
@@ -401,7 +401,7 @@ fn parse_auto_styles(xml: &str) -> AutoStyles {
                             }
                         }
                     }
-                    b"style:text-properties" => {
+                    "style:text-properties" => {
                         if let (Some(name), "text") = (cur_name.clone(), cur_family.as_str()) {
                             let mut st = RunStyle::default();
                             if attr_val(&e, "fo:font-weight").as_deref() == Some("bold") {
@@ -467,7 +467,7 @@ fn parse_auto_styles(xml: &str) -> AutoStyles {
                             out.text.insert(name, st);
                         }
                     }
-                    b"style:paragraph-properties" => {
+                    "style:paragraph-properties" => {
                         if let (Some(name), "paragraph") = (cur_name.clone(), cur_family.as_str()) {
                             let align = match attr_val(&e, "fo:text-align").as_deref() {
                                 Some("center") => Alignment::Center,
@@ -547,10 +547,10 @@ pub fn read(path: &str) -> Result<Document, String> {
     loop {
         match reader.read_event() {
             Ok(Event::Start(e)) => match e.name().as_ref() {
-                b"office:text" => in_body = true,
-                b"text:p" | b"text:h" if in_body => {
+                "office:text" => in_body = true,
+                "text:p" | "text:h" if in_body => {
                     let mut style = ParaStyle::default();
-                    if e.name().as_ref() == b"text:h" {
+                    if e.name().as_ref() == "text:h" {
                         let lvl = attr_val(&e, "text:outline-level")
                             .and_then(|v| v.parse::<u8>().ok())
                             .unwrap_or(1);
@@ -586,16 +586,16 @@ pub fn read(path: &str) -> Result<Document, String> {
                     style.list_level = list_level.saturating_sub(1);
                     para = Some(Paragraph { style, runs: Vec::new() });
                 }
-                b"text:span" => {
+                "text:span" => {
                     let st = attr_val(&e, "text:style-name")
                         .and_then(|n| auto.text.get(&n).cloned())
                         .unwrap_or_default();
                     span_stack.push(st);
                 }
-                b"text:a" => {
+                "text:a" => {
                     link_stack.push(attr_val(&e, "xlink:href").unwrap_or_default());
                 }
-                b"text:list" if in_body => {
+                "text:list" if in_body => {
                     // Bullet vs numbered comes from the list style name we
                     // write; LO-authored lists fall back to bullet.
                     let name = attr_val(&e, "text:style-name").unwrap_or_default();
@@ -607,16 +607,16 @@ pub fn read(path: &str) -> Result<Document, String> {
                 _ => {}
             },
             Ok(Event::Empty(e)) => match e.name().as_ref() {
-                b"text:s" if para.is_some() => {
+                "text:s" if para.is_some() => {
                     let n = attr_val(&e, "text:c")
                         .and_then(|v| v.parse::<usize>().ok())
                         .unwrap_or(1);
                     push_text(&mut para, &span_stack, &link_stack, &" ".repeat(n));
                 }
-                b"text:tab" if para.is_some() => {
+                "text:tab" if para.is_some() => {
                     push_text(&mut para, &span_stack, &link_stack, "\t");
                 }
-                b"text:p" | b"text:h" if in_body => {
+                "text:p" | "text:h" if in_body => {
                     let style = ParaStyle { list: list_kind, list_level: list_level.saturating_sub(1), ..Default::default() };
                     doc.paragraphs.push(Paragraph { style, runs: Vec::new() });
                 }
@@ -635,22 +635,22 @@ pub fn read(path: &str) -> Result<Document, String> {
                 }
             }
             Ok(Event::End(e)) => match e.name().as_ref() {
-                b"text:p" | b"text:h" => {
+                "text:p" | "text:h" => {
                     if let Some(p) = para.take() {
                         doc.paragraphs.push(p);
                     }
                 }
-                b"text:span" => {
+                "text:span" => {
                     span_stack.pop();
                 }
-                b"text:a" => {
+                "text:a" => {
                     link_stack.pop();
                 }
-                b"text:list" => {
+                "text:list" => {
                     list_level = list_level.saturating_sub(1);
                     if list_level == 0 { list_kind = ListKind::None; }
                 },
-                b"office:text" => in_body = false,
+                "office:text" => in_body = false,
                 _ => {}
             },
             Ok(Event::Eof) => break,
@@ -686,12 +686,12 @@ pub fn read(path: &str) -> Result<Document, String> {
         };
         loop {
             match reader.read_event() {
-                Ok(Event::Empty(e)) if e.name().as_ref() == b"style:page-layout-properties" => {
+                Ok(Event::Empty(e)) if e.name().as_ref() == "style:page-layout-properties" => {
                     if let Some(page) = read_page_layout(&e) {
                         doc.page = Some(page);
                     }
                 }
-                Ok(Event::Empty(e)) if e.name().as_ref() == b"style:columns" => {
+                Ok(Event::Empty(e)) if e.name().as_ref() == "style:columns" => {
                     if let Some(page) = doc.page.as_mut() {
                         page.columns = attr_val(&e, "fo:column-count")
                             .and_then(|v| v.parse::<u8>().ok()).unwrap_or(1).max(1);
@@ -700,9 +700,9 @@ pub fn read(path: &str) -> Result<Document, String> {
                     }
                 }
                 Ok(Event::Start(e)) => match e.name().as_ref() {
-                    b"style:header" => in_header = true,
-                    b"style:footer" => in_footer = true,
-                    b"style:page-layout-properties" => {
+                    "style:header" => in_header = true,
+                    "style:footer" => in_footer = true,
+                    "style:page-layout-properties" => {
                         if let Some(page) = read_page_layout(&e) {
                             doc.page = Some(page);
                         }
@@ -710,8 +710,8 @@ pub fn read(path: &str) -> Result<Document, String> {
                     _ => {}
                 },
                 Ok(Event::End(e)) => match e.name().as_ref() {
-                    b"style:header" => in_header = false,
-                    b"style:footer" => in_footer = false,
+                    "style:header" => in_header = false,
+                    "style:footer" => in_footer = false,
                     _ => {}
                 },
                 Ok(Event::Text(t)) => {
