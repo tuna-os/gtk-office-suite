@@ -67,9 +67,8 @@ class BaseGUITestCase(unittest.TestCase):
         at a fresh temp file, auto-removed after the test. Returns the
         path — trigger the action with `gapplication action <id>
         test-snapshot`, then read/json.load() the path afterward."""
-        import tempfile
-        path = tempfile.mktemp(prefix=prefix, suffix=".json")
-        self.addCleanup(lambda: os.path.exists(path) and os.remove(path))
+        d = self.temp_dir(prefix)
+        path = os.path.join(d, "snapshot.json")
         self.launch_env = {
             **getattr(self, "launch_env", {}),
             "GTK_OFFICE_TEST_MODE": "1",
