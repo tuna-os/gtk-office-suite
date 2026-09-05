@@ -1,6 +1,6 @@
 # gtk-office-suite Roadmap
 
-**Last updated**: 2026-08-11 | **Maintainer**: tuna-os (hanthor) / architect agent
+**Last updated**: 2026-09-04 | **Maintainer**: tuna-os (hanthor) / strategist agent
 
 ---
 
@@ -12,7 +12,7 @@ gtk-office-suite is the org's flagship **end-user product bet** and a cornerston
 
 ---
 
-## Current Status (August 2026)
+## Current Status (September 2026)
 
 - **Post-v1.0**: all three apps (Letters, Tables, Decks) build, run, and ship as Flatpaks.
 - **Measured parity** (ratcheted corpora, docs/PARITY.md): CommonMark 630/652, LO-Letters 109/109, LO-Decks 9/9, OpenFormula 107/107.
@@ -32,6 +32,7 @@ gtk-office-suite is the org's flagship **end-user product bet** and a cornerston
 | P1 | Tables: sparse virtual grid + performance budgets | #112 | 🟡 In progress |
 | P1 | Decks: direct manipulation, themes/layouts, presenter view | #115, #116, #117 | ⬜ Not started |
 | P1 | GNOME platform integration: recent files, portals, drag/drop | #119 | ⬜ Not started |
+| P1 | Desktop suite WASM/IPC plugin extension architecture & ecosystem marketplace | #391 | ⬜ Not started |
 | P2 | Interop: unsupported-feature inspector + versioned fixture corpus with loss budgets | #105, #121 | ⬜ Not started |
 | P2 | Release gate: Flatpak, upgrade, recovery, localization, reproducible builds | #122 | ⬜ Not started |
 | P2 | A11y: keyboard + screen-reader journeys | #120 | ⬜ Not started |
@@ -52,9 +53,17 @@ gtk-office-suite is the org's flagship **end-user product bet** and a cornerston
 | GUI God-file decomposition started | architect | #168 | ⬜ Not started |
 | ROADMAP.md published and linked from README / org coverage (#1295) | strategist | tunaos#1359 | ✅ Done |
 
-### Q4 2026 (October–December) — "Ship it properly"
+### Q4 2026 (October–December) — "Ship it properly & Ecosystem Expansion"
 
-<Sketch: release gate (#122) with Flatpak distribution + reproducible builds, Decks presenter/export scope, interop loss budgets, A11y journeys. Move up when Q4 starts.>
+**Theme**: complete release verification gates and open ecosystem extensibility.
+
+| Goal | Owner | Tracking | Status |
+|------|-------|----------|--------|
+| Flatpak distribution release gate + reproducible build verification | release / ops | #122 | ⬜ Planned |
+| WASM & IPC plugin extension architecture sandbox and marketplace manifest spec | architect / strategist | #391 | ⬜ Planned |
+| Decks presenter mode, canvas themes, and PDF/ODP export parity | architect | #115, #116 | ⬜ Planned |
+| Interoperability loss-budget suite & feature degradation inspector | quality | #105, #121 | ⬜ Planned |
+| AT-SPI accessibility automation & screen-reader verification journeys | accessibility | #120 | ⬜ Planned |
 
 ---
 
@@ -73,4 +82,5 @@ gtk-office-suite is the org's flagship **end-user product bet** and a cornerston
 See [docs/CONTRIBUTING.md](./docs/CONTRIBUTING.md) and [docs/DEVELOPMENT.md](./docs/DEVELOPMENT.md) for build setup (Rust + GTK4/libadwaita, Nix flake included). Pick an issue labeled `good first issue` or comment on a goal you would like to own.
 
 ---
-*Maintained by the strategist agent (tuna-os hive). Last self-review: 2026-08-13 — fixed stale self-references (this doc previously described itself as not existing).*
+*Maintained by the strategist agent (tuna-os hive). Last self-review: 2026-09-04 — updated Q4 2026 roadmap with WASM/IPC extension ecosystem plan (#391).*
+
