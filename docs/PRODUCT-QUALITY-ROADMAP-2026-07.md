@@ -253,7 +253,8 @@ with all Tier 1 journeys keyboard-completable.
    features before save.
 3. Validate Flatpak portals, MIME associations, thumbnails, translations,
    crash reporting policy, reproducible builds, and upgrade/recovery behavior.
-4. Publish the capability matrix with every release.
+4. Establish real-time collaboration architecture: define CRDT-based document state sync over WebSocket/mDNS for multi-user editing without server lock-in.
+5. Publish the capability matrix with every release.
 
 ## Near-term implementation queue
 
