@@ -2190,7 +2190,7 @@ dependencies = [
  "pangocairo",
  "pulldown-cmark",
  "rdocx",
- "rdocx-oxml 0.11.1",
+ "rdocx-oxml 0.12.0",
  "serde_json",
  "suite-common",
  "suite-export",
@@ -2598,9 +2598,9 @@ dependencies = [
 
 [[package]]
 name = "oxml-core"
-version = "0.8.0"
+version = "0.9.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "edb0dc61f40688701668e3b474ea6db949236ef6bc4451f669de5867c1f28028"
+checksum = "8f8fd1f9f0da068a7cbc7e17fb39f92ec4aadbefb750034d072ea349b306a0f0"
 dependencies = [
  "quick-xml 0.41.0",
  "thiserror 2.0.18",
@@ -2618,11 +2618,11 @@ dependencies = [
 
 [[package]]
 name = "oxml-drawing"
-version = "0.8.0"
+version = "0.9.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "29c10dd3f21dc4bab74f74a5c987bd9e7c72dc72534b9f32728fa7aaf9977c57"
+checksum = "9b22874d9464632c7dd2807559380f976d5d371ec4a4f104669c6a59d028d3b8"
 dependencies = [
- "oxml-core 0.8.0",
+ "oxml-core 0.9.0",
  "quick-xml 0.41.0",
 ]
 
@@ -3352,13 +3352,13 @@ dependencies = [
 
 [[package]]
 name = "rdocx-oxml"
-version = "0.11.1"
+version = "0.12.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3760508e875c5a6a96efc90c58c1d4271c404cad02086e333e145aff5538dd46"
+checksum = "eb661542456882b1dd08e7240021f0677730d80d2407b00b0b6266fe30dc0f13"
 dependencies = [
  "itoa",
- "oxml-core 0.8.0",
- "oxml-drawing 0.8.0",
+ "oxml-core 0.9.0",
+ "oxml-drawing 0.9.0",
  "quick-xml 0.41.0",
  "regex",
  "thiserror 2.0.18",
