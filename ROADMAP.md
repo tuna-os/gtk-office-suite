@@ -1,6 +1,6 @@
 # gtk-office-suite Roadmap
 
-**Last updated**: 2026-08-11 | **Maintainer**: tuna-os (hanthor) / architect agent
+**Last updated**: 2026-09-04 | **Maintainer**: tuna-os (hanthor) / architect agent
 
 ---
 
@@ -12,12 +12,12 @@ gtk-office-suite is the org's flagship **end-user product bet** and a cornerston
 
 ---
 
-## Current Status (August 2026)
+## Current Status (September 2026)
 
 - **Post-v1.0**: all three apps (Letters, Tables, Decks) build, run, and ship as Flatpaks.
 - **Measured parity** (ratcheted corpora, docs/PARITY.md): CommonMark 630/652, LO-Letters 109/109, LO-Decks 9/9, OpenFormula 107/107.
 - Ctrl+K command palette; per-app live status surfaces; GUI smoke journeys deterministic (#187).
-- 21 open issues; daily merged PRs (08-11: GTK-free canonical controllers #186, fuzz coverage #185).
+- Updated core stack: quick-xml 0.42 str API migration (#298), GTK-rs 0.22 family alignment (pango/cairo/pangocairo 0.22.9), Flatpak publish workflow consolidation (#277), and testing guidance standardization (#311).
 - ✅ **ROADMAP.md published** (this file, tunaos#1359) — internal planning (IMPLEMENTATION-QUEUE.md, docs/IMPLEMENTATION-PLAN.md, docs/PARITY.md) now has a public, dated, prioritized surface, linked from README.
 - ⚠️ **GUI-layer God-files**: window.rs 2.6K/2.5K/1.6K LOC in tables/letters/decks (#168) — architectural debt before feature velocity scales.
 
@@ -54,7 +54,14 @@ gtk-office-suite is the org's flagship **end-user product bet** and a cornerston
 
 ### Q4 2026 (October–December) — "Ship it properly"
 
-<Sketch: release gate (#122) with Flatpak distribution + reproducible builds, Decks presenter/export scope, interop loss budgets, A11y journeys. Move up when Q4 starts.>
+**Theme**: complete Flatpak release gates, interop loss budgets, GNOME integration, and AT-SPI accessibility audit compliance.
+
+| Goal | Owner | Tracking | Status |
+|------|-------|----------|--------|
+| Flatpak release gate, reproducible builds, and crash recovery | architect / operations | #122 | 🟡 In progress |
+| GNOME platform integration (portals, recent files, drag/drop) | architect | #119 | 🟡 In progress |
+| Document interoperability loss budgets and feature inspector | quality / architect | #105, #121 | 🟡 In progress |
+| AT-SPI screen-reader audit & keyboard accessibility gate | quality / strategist | #120 | 🟡 In progress |
 
 ---
 
@@ -73,4 +80,4 @@ gtk-office-suite is the org's flagship **end-user product bet** and a cornerston
 See [docs/CONTRIBUTING.md](./docs/CONTRIBUTING.md) and [docs/DEVELOPMENT.md](./docs/DEVELOPMENT.md) for build setup (Rust + GTK4/libadwaita, Nix flake included). Pick an issue labeled `good first issue` or comment on a goal you would like to own.
 
 ---
-*Maintained by the strategist agent (tuna-os hive). Last self-review: 2026-08-13 — fixed stale self-references (this doc previously described itself as not existing).*
+*Maintained by the strategist agent (tuna-os hive). Last self-review: 2026-09-04 — updated status and Q4 release goals.*
