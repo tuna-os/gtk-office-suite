@@ -85,6 +85,21 @@ def main() -> int:
     lock = ROOT / "Cargo.lock"
     if not lock.is_file():
         fail("Cargo.lock is required for a reproducible release")
+
+    # Architecture boundary check: track oversized modules with explicit ceilings
+    module_ceilings = {
+        "letters/src/window.rs": 1800,
+        "tables/src/window.rs": 2300,
+        "decks/src/window.rs": 1800,
+        "suite-common/src/lib.rs": 1250,
+    }
+    for rel_path, max_lines in module_ceilings.items():
+        file_path = ROOT / rel_path
+        if file_path.is_file():
+            line_count = len(file_path.read_text().splitlines())
+            if line_count > max_lines:
+                fail(f"{rel_path} exceeds maximum line ceiling ({line_count} > {max_lines})")
+
     assets += [potfiles, ROOT / "po" / "gtk-office-suite.pot", lock]
     digest = hashlib.sha256()
     for path in sorted(assets):

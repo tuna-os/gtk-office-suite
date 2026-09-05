@@ -171,3 +171,21 @@ def test_check_app_metainfo_no_release(tmp_path, monkeypatch):
         '</component>')
     with pytest.raises(AssertionError, match="screenshot or release"):
         rg.check_app("letters")
+
+
+def test_module_size_ceiling_exceeded(tmp_path, monkeypatch):
+    _install(monkeypatch, tmp_path)
+    for app in rg.APPS:
+        _make_app_dir(tmp_path, app)
+    (tmp_path / "po").mkdir(exist_ok=True)
+    (tmp_path / "po" / "POTFILES").write_text("")
+    (tmp_path / "po" / "gtk-office-suite.pot").write_text("")
+    (tmp_path / "Cargo.lock").write_text("")
+
+    letters_win = tmp_path / "letters" / "src" / "window.rs"
+    letters_win.parent.mkdir(parents=True, exist_ok=True)
+    letters_win.write_text("\n" * 1900)
+
+    with pytest.raises(AssertionError, match="exceeds maximum line ceiling"):
+        rg.main()
+
