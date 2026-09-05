@@ -253,7 +253,8 @@ with all Tier 1 journeys keyboard-completable.
    features before save.
 3. Validate Flatpak portals, MIME associations, thumbnails, translations,
    crash reporting policy, reproducible builds, and upgrade/recovery behavior.
-4. Publish the capability matrix with every release.
+4. Expose headless document conversion CLI binaries (`letters-convert`, `tables-convert`, `decks-convert`) utilizing `suite-common-core` engine abstractions for serverless and scriptable file processing without requiring a display server (Xvfb/Wayland).
+5. Publish the capability matrix with every release.
 
 ## Near-term implementation queue
 
