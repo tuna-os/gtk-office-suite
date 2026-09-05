@@ -32,6 +32,7 @@ already archived.
 |------|------|----------------|
 | LibreOffice core | `~/dev/libreoffice-core/` | Before implementing ANY new feature — check how LO does it |
 | IronCalc | `~/dev/ironcalc-ref/` | Tables formula engine, cell model |
+| Plugin Architecture Specification | `docs/adr/0007-plugin-architecture-roadmap.md` | Designing WASM or IPC extension interfaces |
 | gnome-gui-spec | `https://github.com/tuna-os/suite-common/blob/main/GNOME-GUI-SPEC.md` (`/tmp/gnome-gui-spec/`) | Widget selection, GNOME HIG compliance |
 
 ### Skills Available
