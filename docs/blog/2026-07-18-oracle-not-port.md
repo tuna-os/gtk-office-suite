@@ -35,8 +35,8 @@ regress; raising it is the definition of progress):
 1. **LO-authored corpora.** Test scenarios are written as HTML; headless
    Writer converts them to .docx *at test time*; our engine must extract
    the same text and styles from what LibreOffice wrote. Nothing is
-   vendored — the corpus regenerates on every run. 104 scenarios for
-   Letters, currently 104/104. For Decks, where there's no cheap authoring
+   vendored — the corpus regenerates on every run. 109 scenarios for
+   Letters, currently 109/109. For Decks, where there's no cheap authoring
    input, scenarios go *through* the oracle: we write .pptx, Impress
    imports and re-exports it in its own grammar, our reader reads
    LibreOffice's version back. 9/9, including styled runs and speaker notes.
@@ -47,9 +47,9 @@ regress; raising it is the definition of progress):
 
 3. **Vendored permissive corpora.** The CommonMark spec's 652 examples run
    as a round-trip-idempotence torture test for the document model
-   (594/652), and 107 table-driven cases keyed to ODF OpenFormula measure
-   the spreadsheet engine (98/107 — the nine reds are a precise upstream
-   contribution list for IronCalc, every one a clean `#NAME?`).
+   (630/652 — target met; the remaining 22 are escape/entity/autolink edge
+   cases), and 107 table-driven cases keyed to ODF OpenFormula measure the
+   spreadsheet engine — now 107/107.
 
 The corpus pays for itself constantly. It caught table text being silently
 dropped by our DOCX reader, speaker notes that had never once survived a
@@ -86,16 +86,15 @@ off a scoreboard instead of taking on faith.
 
 | Measure | Value |
 |---|---|
-| LibreOffice-authored parity — Letters | 104/104 |
+| LibreOffice-authored parity — Letters | 109/109 |
 | LibreOffice-authored parity — Decks | 9/9 |
-| OpenFormula conformance — Tables | 98/107 |
-| CommonMark round-trip idempotence | 594/652 |
-| DOCX round-trip fidelity suite | 13/13 |
-| soffice oracles (Writer/Calc/Impress, both directions) | green, gating |
-| Workspace tests | 148, zero failures |
+| OpenFormula conformance — Tables | 107/107 |
+| CommonMark round-trip idempotence | 630/652 (target met) |
 
 Every number prints into the CI job summary on every push, and none of
-them is allowed to go down.
+them is allowed to go down. Full feature-by-feature detail, including the
+soffice-oracle and DOCX round-trip instruments, is in
+[docs/PARITY.md](../PARITY.md).
 
 ## Steal this
 
@@ -106,5 +105,7 @@ hundred lines of test harness, and it converts "we aim to be compatible"
 into a number that moves.
 
 *Code: [tuna-os/gtk-office-suite](https://github.com/tuna-os/gtk-office-suite)
-(Apache-2.0/GPL-3.0). The document model is being prepared for crates.io as
-`letters-core` once its git dependencies land in upstream releases.*
+(GPL-3.0-or-later). Three of its core crates — suite-common-core,
+suite-export, tables-core — are already on crates.io; `letters-core` isn't
+yet, though the git-pinned dependencies that used to block it are gone
+(`rdocx` and `ironcalc_base` are now ordinary crates.io versions).*
