@@ -3,6 +3,7 @@ use adw::prelude::AdwDialogExt;
 use gtk4::{gio, prelude::*};
 mod bridge;
 mod window;
+mod doc_tab;
 mod dialogs;
 mod actions;
 mod engine;
