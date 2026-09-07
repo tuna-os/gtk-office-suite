@@ -3,7 +3,7 @@
 How to set up, build, run, and change this codebase. For testing specifics
 see [TESTING.md](TESTING.md); for module layout see
 [ARCHITECTURE.md](ARCHITECTURE.md); agents start at the repo-root
-[CLAUDE.md](../CLAUDE.md).
+[AGENTS.md](../AGENTS.md).
 
 ## Setup
 
