@@ -12,7 +12,6 @@
 
 use gtk4::{self as gtk, gio, glib, prelude::*};
 use libadwaita as adw;
-use adw::prelude::{AlertDialogExt, AdwDialogExt};
 use std::cell::RefCell;
 use std::rc::Rc;
 
@@ -81,14 +80,12 @@ pub(crate) fn open_failure_message(path: &str, error: &str) -> String {
 /// empty editor titled with that file's name and pointed at that file's path —
 /// one Ctrl+S away from overwriting the original with nothing (#447). Tables
 /// has always shown a dialog here; this brings Letters in line.
-pub(crate) fn report_open_failure(parent: &impl IsA<gtk::Widget>, path: &str, error: &str) {
-    let dialog = adw::AlertDialog::builder()
-        .heading(suite_common::i18n("Could not open document"))
-        .body(open_failure_message(path, error))
-        .build();
-    dialog.add_response("ok", &suite_common::i18n("OK"));
-    dialog.set_default_response(Some("ok"));
-    dialog.present(Some(parent));
+pub(crate) fn report_open_failure(parent: Option<&adw::ApplicationWindow>, path: &str, error: &str) {
+    suite_common::show_error_dialog(
+        parent,
+        &suite_common::i18n("Could not open document"),
+        &open_failure_message(path, error),
+    );
 }
 
 /// Show a freshly loaded document's page setup in its page view.
