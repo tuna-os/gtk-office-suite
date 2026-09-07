@@ -13,6 +13,10 @@ concurrency:
   group: gui-tests-${{ github.ref }}
   cancel-in-progress: true
 
+# Least privilege: these jobs only read the repository (#349).
+permissions:
+  contents: read
+
 jobs:
   # Deterministic AT-SPI smoke tests. These GATE: no `|| true`, no VLM.
   # If they fail, an app does not launch or basic input is broken.
