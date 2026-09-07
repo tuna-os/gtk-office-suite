@@ -309,6 +309,25 @@ impl PageContainer {
         self.queue_resize();
     }
 
+    /// Current page size in points. Mirrors `set_page_size`; the setters here
+    /// had no getters, which left the geometry unobservable from outside the
+    /// widget and so untestable.
+    pub fn page_size(&self) -> (f64, f64) {
+        let imp = self.imp();
+        (imp.page_width.get(), imp.page_height.get())
+    }
+
+    /// Current margins in points, in `set_margins` order.
+    pub fn margins(&self) -> (f64, f64, f64, f64) {
+        let imp = self.imp();
+        (
+            imp.margin_top.get(),
+            imp.margin_bottom.get(),
+            imp.margin_left.get(),
+            imp.margin_right.get(),
+        )
+    }
+
     pub fn set_margins(&self, top: f64, bottom: f64, left: f64, right: f64) {
         let imp = self.imp();
         imp.margin_top.set(top);
@@ -361,6 +380,11 @@ impl PageContainer {
     pub fn set_column_count(&self, count: u32) {
         self.imp().column_count.set(count.max(1));
         self.queue_resize();
+    }
+
+    /// Current column count. Mirrors `set_column_count`.
+    pub fn column_count(&self) -> u32 {
+        self.imp().column_count.get()
     }
 
     pub fn load_from_settings(&self, settings: &gio::Settings) {

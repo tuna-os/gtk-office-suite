@@ -53,6 +53,32 @@ fn tab_data_get(w: &gtk::Widget) -> Option<TabData> { unsafe { w.data::<TabData>
 
 // ── Make a tab's document widget ──────────────────────────────────────
 
+/// Show a freshly loaded document's page setup in its page view.
+///
+/// `capture_from_buffer` reads header, footer and page geometry off the
+/// buffer, so saving is already correct without this — but until the
+/// container is told, the page renders at default geometry with empty
+/// header/footer areas, so a document that has them looks like it does not
+/// (#438). Every open route needs this, which is why it is a function rather
+/// than a few lines inlined at one of them.
+fn apply_page_setup_from_buffer(container: &PageContainer, buf: &gtk::TextBuffer) {
+    let (header, footer) = crate::bridge::buffer_header_footer(buf);
+    container.set_header_text(&header.unwrap_or_default());
+    container.set_footer_text(&footer.unwrap_or_default());
+    // Geometry is optional: a markdown file has none, and a document without
+    // it should keep the container's defaults rather than be forced to zero.
+    if let Some(page) = crate::bridge::buffer_page_geometry(buf) {
+        container.set_page_size(page.width_pt, page.height_pt);
+        container.set_margins(
+            page.margin_top_pt,
+            page.margin_bottom_pt,
+            page.margin_left_pt,
+            page.margin_right_pt,
+        );
+        container.set_column_count(page.columns.max(1) as u32);
+    }
+}
+
 fn make_doc_widget(settings: Option<&gio::Settings>) -> (PageContainer, gtk::TextBuffer) {
     let buffer = gtk::TextBuffer::new(None);
     register_formatting_tags(&buffer);
@@ -1164,6 +1190,7 @@ impl LettersWindow {
             eprintln!("open failed: {e}");
             return;
         }
+        apply_page_setup_from_buffer(&container, &buf);
         let td = TabData::new();
         td.0.borrow_mut().file = Some(std::path::PathBuf::from(path));
         tab_data_set(&container, td);
@@ -1209,6 +1236,7 @@ impl LettersWindow {
 
             let (container, buf) = make_doc_widget(Some(&self.settings));
             crate::bridge::render_to_buffer(&doc, &buf);
+            apply_page_setup_from_buffer(&container, &buf);
             // render_to_buffer ends with buf.set_modified(false) (it's also
             // used for a normal file open); recovered content is unsaved
             // by definition, so mark it dirty right back so the close guard
@@ -1761,5 +1789,93 @@ mod tests {
             autosave_state_dir(),
             std::path::PathBuf::from("/tmp/letters")
         );
+    }
+
+    // ── page setup reaches the view (#438) ────────────────────────────────
+    // Saving was fixed separately; these cover the other direction, that an
+    // opened document's header/footer/geometry are actually shown.
+
+    use suite_common::gtk_test::run as gtk_test;
+
+    fn geometry() -> letters_core::model::PageGeometry {
+        letters_core::model::PageGeometry {
+            width_pt: 612.0,
+            height_pt: 792.0,
+            margin_top_pt: 36.0,
+            margin_bottom_pt: 48.0,
+            margin_left_pt: 54.0,
+            margin_right_pt: 60.0,
+            columns: 2,
+            column_gap_pt: 18.0,
+        }
+    }
+
+    #[test]
+    fn header_and_footer_reach_the_page_view() {
+        gtk_test(|| {
+            let container = PageContainer::new();
+            let buf = gtk::TextBuffer::new(None);
+            let mut doc = letters_core::model::Document::from_plain_text("body");
+            doc.header = Some("Quarterly Report".into());
+            doc.footer = Some("Page {page}".into());
+            crate::bridge::render_to_buffer(&doc, &buf);
+
+            apply_page_setup_from_buffer(&container, &buf);
+            assert_eq!(container.header_text(), "Quarterly Report");
+            assert_eq!(container.footer_text(), "Page {page}");
+        });
+    }
+
+    #[test]
+    fn page_geometry_reaches_the_page_view() {
+        gtk_test(|| {
+            let container = PageContainer::new();
+            let buf = gtk::TextBuffer::new(None);
+            let mut doc = letters_core::model::Document::from_plain_text("body");
+            doc.page = Some(geometry());
+            crate::bridge::render_to_buffer(&doc, &buf);
+
+            apply_page_setup_from_buffer(&container, &buf);
+            assert_eq!(container.page_size(), (612.0, 792.0), "page size must follow the document");
+            assert_eq!(container.margins(), (36.0, 48.0, 54.0, 60.0), "margins too");
+            assert_eq!(container.column_count(), 2, "and the column count");
+        });
+    }
+
+    /// A document with no header must clear the view, not leave the previous
+    /// document's text showing in a reused container.
+    #[test]
+    fn opening_a_document_without_a_header_clears_the_view() {
+        gtk_test(|| {
+            let container = PageContainer::new();
+            container.set_header_text("Left over from before");
+            container.set_footer_text("Also stale");
+
+            let buf = gtk::TextBuffer::new(None);
+            let doc = letters_core::model::Document::from_plain_text("no chrome");
+            crate::bridge::render_to_buffer(&doc, &buf);
+
+            apply_page_setup_from_buffer(&container, &buf);
+            assert_eq!(container.header_text(), "", "stale header must be cleared");
+            assert_eq!(container.footer_text(), "", "stale footer must be cleared");
+        });
+    }
+
+    /// A document with no geometry keeps the container's defaults rather than
+    /// being forced to a zero-sized page.
+    #[test]
+    fn absent_geometry_leaves_container_defaults_alone() {
+        gtk_test(|| {
+            let container = PageContainer::new();
+            container.set_page_size(595.0, 842.0);
+            let before = container.page_size();
+
+            let buf = gtk::TextBuffer::new(None);
+            let doc = letters_core::model::Document::from_plain_text("markdown has no geometry");
+            crate::bridge::render_to_buffer(&doc, &buf);
+
+            apply_page_setup_from_buffer(&container, &buf);
+            assert_eq!(container.page_size(), before, "defaults must survive");
+        });
     }
 }
