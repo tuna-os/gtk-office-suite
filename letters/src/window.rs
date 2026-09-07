@@ -876,7 +876,7 @@ impl LettersWindow {
     pub fn open_path(&self, path: &str) {
         let (container, buf) = make_doc_widget(Some(&self.settings));
         if let Err(e) = crate::bridge::load_file_to_buffer(path, &buf) {
-            report_open_failure(&self.window, path, &e);
+            report_open_failure(Some(&self.window), path, &e);
             return;
         }
         apply_page_setup_from_buffer(&container, &buf);
@@ -1029,7 +1029,7 @@ impl LettersWindow {
                             // pointed at its path, so the next Ctrl+S wrote an
                             // empty document over the unreadable original.
                             if let Err(e) = crate::bridge::load_file_to_buffer(&path_str, &buf) {
-                                report_open_failure(&w_err, &path_str, &e);
+                                report_open_failure(Some(&w_err), &path_str, &e);
                                 return;
                             }
                             apply_page_setup_from_buffer(&container, &buf);
