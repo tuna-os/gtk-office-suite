@@ -38,7 +38,18 @@ impl Listener<Hint> for HistoryActionListener {
 }
 
 // File I/O lives in tables_core::io; window code only adapts AppState.
-use tables_core::io::{load_file_into_engine, load_xlsx_workbook};
+use tables_core::io::load_workbook;
+
+/// Attach the chart and conditional-formatting sidecars an xlsx package
+/// carries to the first sheet. Both readers return empty for non-xlsx input,
+/// so this is a no-op for ods/xls/csv rather than a special case at each
+/// call site.
+fn attach_xlsx_sidecars(path: &str, sheets: &[Rc<RefCell<SheetModel>>]) {
+    let Some(first) = sheets.first() else { return };
+    let mut sheet = first.borrow_mut();
+    sheet.charts = tables_core::io::read_charts_from_xlsx(path);
+    sheet.cond_rules = tables_core::io::read_cond_rules_from_xlsx(path);
+}
 
 fn save_engine_to_xlsx(path: &str, state: &AppState) -> Result<(), String> {
     let sheets: Vec<SheetModel> = state.sheets.iter().map(|s| s.borrow().clone()).collect();
@@ -1529,7 +1540,7 @@ impl TablesWindow {
             suite_common::attach_file_drop_target(&suite_win.window, move |paths| {
                 if let Some(first) = paths.first() {
                     let path_str = first.to_string_lossy().to_string();
-                    if let Ok((engine, sheets)) = load_xlsx_workbook(&path_str) {
+                    if let Ok((engine, sheets)) = load_workbook(&path_str) {
                         let names = sheets.iter().map(|s| s.name.clone()).collect::<Vec<_>>();
                         {
                             let mut st = s.borrow_mut();
@@ -1727,37 +1738,34 @@ impl TablesWindow {
                         if let Ok(file) = result {
                             if let Some(path) = file.path() {
                                 let path_str = path.to_string_lossy().to_string();
-                                // Bind the result before matching on it --
-                                // a `match`'s scrutinee temporaries live for
-                                // the whole match, so `s.borrow_mut()` used
-                                // inline here would still be held (and panic)
-                                // when the Ok arm re-borrows `s` below.
-                                let load_result = load_file_into_engine(&path_str, &mut s.borrow_mut().engine);
-                                match load_result {
-                                    Ok((rows, cols)) => {
+                                // `load_workbook` owns the extension dispatch
+                                // so the dialog, drag-and-drop and CLI open all
+                                // accept the same formats, and multi-sheet
+                                // workbooks keep every sheet rather than
+                                // collapsing to a single "Sheet1".
+                                match load_workbook(&path_str) {
+                                    Ok((engine, sheets)) => {
+                                        let names = sheets
+                                            .iter()
+                                            .map(|sheet| sheet.name.clone())
+                                            .collect::<Vec<_>>();
                                         // Scoped so the RefMut guard drops before
                                         // set_selected() below: GtkDropDown fires
                                         // selected-notify synchronously, and that
                                         // handler also borrows this same state.
                                         {
                                             let mut ss = s.borrow_mut();
-                                            // Replace with loaded data
-                                            let sheet_id = ss.engine.sheet_id_at(0).unwrap_or(0);
-                                            let mut sheet = SheetModel::new(
-                                                "Sheet1", rows.max(DEFAULT_ROWS),
-                                                cols.max(DEFAULT_COLS), sheet_id);
-                                            sheet.sync_from_engine(&ss.engine);
-                                            sheet.charts =
-                                                tables_core::io::read_charts_from_xlsx(&path_str);
-                                            sheet.cond_rules =
-                                                tables_core::io::read_cond_rules_from_xlsx(&path_str);
-                                            ss.sheets.clear();
-                                            ss.sheets.push(Rc::new(RefCell::new(sheet)));
+                                            ss.engine = engine;
+                                            ss.sheets = sheets
+                                                .into_iter()
+                                                .map(|sheet| Rc::new(RefCell::new(sheet)))
+                                                .collect();
+                                            attach_xlsx_sidecars(&path_str, &ss.sheets);
                                             ss.active_sheet = 0;
                                         }
                                         // Update sheet switcher
                                         sm.splice(0, sm.n_items(), &[]);
-                                        sm.append("Sheet1");
+                                        for name in &names { sm.append(name); }
                                         sd.set_selected(0);
                                         fx.set_text("");
                                         st.set_visible_child_name("editor");
@@ -1854,10 +1862,11 @@ impl TablesWindow {
                     app_for_save.activate_action("save-file-as", None);
                     return;
                 };
-                match save_engine_to_xlsx(&path.to_string_lossy(), &s.borrow()) {
+                let path_str = path.to_string_lossy().to_string();
+                match save_engine_to_xlsx(&path_str, &s.borrow()) {
                     Ok(()) => {
                         let settings = gtk4::gio::Settings::new("org.tunaos.tables");
-                        suite_common::push_recent_file(&settings, &path.to_string_lossy());
+                        suite_common::push_recent_file(&settings, &path_str);
                         ctl.borrow_mut().mark_clean();
                         let _ = slot.clear();
                     }
@@ -2181,69 +2190,33 @@ impl TablesWindow {
     /// Open a spreadsheet file directly (CLI / file-manager open).
     /// Mirrors the open-file-dialog success path.
     pub fn open_path(&self, path: &str) -> Result<(), String> {
-        if std::path::Path::new(path)
-            .extension()
-            .and_then(|extension| extension.to_str())
-            .is_some_and(|extension| extension.eq_ignore_ascii_case("xlsx"))
+        // Format dispatch lives in tables_core::io::load_workbook so every
+        // open route (CLI, dialog, drag-and-drop) supports the same formats.
+        let (engine, sheets) = load_workbook(path)?;
+        let names = sheets
+            .iter()
+            .map(|sheet| sheet.name.clone())
+            .collect::<Vec<_>>();
         {
-            let (engine, sheets) = load_xlsx_workbook(path)?;
-            let names = sheets
-                .iter()
-                .map(|sheet| sheet.name.clone())
-                .collect::<Vec<_>>();
-            {
-                let mut state = self.state.borrow_mut();
-                state.engine = engine;
-                state.sheets = sheets
-                    .into_iter()
-                    .map(|sheet| Rc::new(RefCell::new(sheet)))
-                    .collect();
-                state.active_sheet = 0;
-            }
-            self.sheet_model.splice(0, self.sheet_model.n_items(), &[]);
-            for name in names {
-                self.sheet_model.append(&name);
-            }
-            self.sheet_switcher.set_selected(0);
-            self.fx_entry.set_text("");
-            self.stack.set_visible_child_name("editor");
-            let name = std::path::Path::new(path)
-                .file_name()
-                .map(|name| name.to_string_lossy().to_string())
-                .unwrap_or_default();
-            self.window.set_title(Some(&format!("{name} — Tables")));
-            *self.current_path.borrow_mut() = Some(std::path::PathBuf::from(path));
-            let settings = gtk4::gio::Settings::new("org.tunaos.tables");
-            suite_common::push_recent_file(&settings, path);
-            self.drawing_area.queue_draw();
-            return Ok(());
-        }
-        // Bind before matching — a `?`'s implicit match holds the
-        // borrow_mut() guard through the whole expression.  Separate the
-        // call from the `?` so the guard drops at the `;` and the next
-        // block can re-borrow without panicking (#139 file-open path).
-        let load_result = load_file_into_engine(path, &mut self.state.borrow_mut().engine);
-        let (rows, cols) = load_result?;
-        {
-            let mut ss = self.state.borrow_mut();
-            let sheet_id = ss.engine.sheet_id_at(0).unwrap_or(0);
-            let mut sheet =
-                SheetModel::new("Sheet1", rows.max(DEFAULT_ROWS), cols.max(DEFAULT_COLS), sheet_id);
-            sheet.sync_from_engine(&ss.engine);
-            sheet.charts = tables_core::io::read_charts_from_xlsx(path);
-            sheet.cond_rules = tables_core::io::read_cond_rules_from_xlsx(path);
-            ss.sheets.clear();
-            ss.sheets.push(Rc::new(RefCell::new(sheet)));
-            ss.active_sheet = 0;
+            let mut state = self.state.borrow_mut();
+            state.engine = engine;
+            state.sheets = sheets
+                .into_iter()
+                .map(|sheet| Rc::new(RefCell::new(sheet)))
+                .collect();
+            attach_xlsx_sidecars(path, &state.sheets);
+            state.active_sheet = 0;
         }
         self.sheet_model.splice(0, self.sheet_model.n_items(), &[]);
-        self.sheet_model.append("Sheet1");
+        for name in names {
+            self.sheet_model.append(&name);
+        }
         self.sheet_switcher.set_selected(0);
         self.fx_entry.set_text("");
         self.stack.set_visible_child_name("editor");
         let name = std::path::Path::new(path)
             .file_name()
-            .map(|n| n.to_string_lossy().to_string())
+            .map(|name| name.to_string_lossy().to_string())
             .unwrap_or_default();
         self.window.set_title(Some(&format!("{name} — Tables")));
         *self.current_path.borrow_mut() = Some(std::path::PathBuf::from(path));
