@@ -5,6 +5,23 @@
 
 use gtk4::{self as gtk, prelude::*};
 
+/// A pango context that can actually measure text.
+///
+/// `pango::Context::new()` has no font map attached, so every measurement it
+/// returns is zero and `paginate` reports one page for a document of any
+/// length. All three callers built their context that way, which meant Print
+/// emitted a single page, Print Preview showed a single page, and Save As to
+/// docx never wrote a page break — a 300-paragraph document paginated to 1
+/// page instead of 8 (#447).
+///
+/// Attaching the pangocairo font map is enough; it does not need a realized
+/// widget, so pagination works from any thread that has GTK initialised.
+pub fn measuring_context() -> gtk4::pango::Context {
+    let context = gtk4::pango::Context::new();
+    context.set_font_map(Some(&pangocairo::FontMap::default()));
+    context
+}
+
 /// A page calculated by the layout engine.
 #[derive(Debug, Clone)]
 pub struct Page {
@@ -167,6 +184,7 @@ fn line_number_to_byte_offset(text: &str, line_num: usize) -> i32 {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use suite_common::gtk_test::run as gtk_test;
 
     /// Build a LayoutConfig with fixed margins; only page size/columns vary.
     fn config(page_width_pt: f64, page_height_pt: f64, column_count: u32) -> LayoutConfig {
@@ -272,5 +290,61 @@ mod tests {
         assert_eq!(snap_to_char_boundary(text, 2), 0);
         assert_eq!(snap_to_char_boundary(text, 3), 0);
         assert_eq!(snap_to_char_boundary(text, 4), 4);
+    }
+
+    // ── pagination needs a font map (#447) ────────────────────────────────
+
+    fn long_buffer() -> gtk::TextBuffer {
+        let buf = gtk::TextBuffer::new(None);
+        let body = "A long document paragraph with several words.\n".repeat(300);
+        buf.set_text(&body);
+        buf
+    }
+
+    /// The context Print, Print Preview and Save As all use must be able to
+    /// measure text. Without a font map every measurement is zero, so a
+    /// document of any length paginates to a single page — which is what all
+    /// three features did.
+    #[test]
+    fn measuring_context_has_a_font_map() {
+        gtk_test(|| {
+            assert!(
+                measuring_context().font_map().is_some(),
+                "no font map: pagination will report one page for every document"
+            );
+        });
+    }
+
+    /// The behavioural half: a document that plainly spans several pages must
+    /// paginate to several pages. This fails against `pango::Context::new()`.
+    #[test]
+    fn a_long_document_paginates_to_several_pages() {
+        gtk_test(|| {
+            let buf = long_buffer();
+            let config = LayoutConfig::default();
+            let pages = paginate(&buf, &config, &measuring_context());
+            assert!(
+                pages.len() > 1,
+                "300 paragraphs paginated to {} page(s); a context with no font map \
+                 measures every line as zero-height and fits everything on one page",
+                pages.len()
+            );
+        });
+    }
+
+    /// And the pages must actually partition the document rather than all
+    /// starting at zero.
+    #[test]
+    fn paginated_pages_advance_through_the_document() {
+        gtk_test(|| {
+            let buf = long_buffer();
+            let config = LayoutConfig::default();
+            let pages = paginate(&buf, &config, &measuring_context());
+            let starts: Vec<i32> = pages.iter().map(|p| p.start_offset).collect();
+            assert!(
+                starts.windows(2).all(|w| w[1] > w[0]),
+                "page starts do not advance: {starts:?}"
+            );
+        });
     }
 }
