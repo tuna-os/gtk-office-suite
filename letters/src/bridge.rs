@@ -254,6 +254,11 @@ fn page_sidecar(buf: &gtk::TextBuffer) -> Option<PageGeometry> {
     unsafe { buf.data::<Option<PageGeometry>>(PAGE_KEY).and_then(|p| *p.as_ref()) }
 }
 
+/// Read the page geometry currently attached to `buf`, if it has one.
+pub fn buffer_page_geometry(buf: &gtk::TextBuffer) -> Option<PageGeometry> {
+    page_sidecar(buf)
+}
+
 /// Read the header/footer currently attached to `buf`.
 pub fn buffer_header_footer(buf: &gtk::TextBuffer) -> (Option<String>, Option<String>) {
     (header_sidecar(buf), footer_sidecar(buf))
