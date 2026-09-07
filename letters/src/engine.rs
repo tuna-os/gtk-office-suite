@@ -59,8 +59,18 @@ pub fn write(path: &str, doc: &Document) -> Result<(), String> {
             }
             docx.save(path).map_err(|e| format!("Cannot save .docx {}: {}", path, e))
         }
-        "odt" | "rtf" => {
-            // Use pandoc CLI (optional fallback)
+        "odt" => {
+            // Never pandoc. letters-core has a real ODT writer, and shelling
+            // out to a tool that is not installed on CI, in the Flatpak, or on
+            // most users' machines is how Save As came to write nothing at all
+            // while reporting success (#447).
+            let parsed = letters_core::markdown::parse(text);
+            letters_core::odt::write(&parsed, path)
+        }
+        "rtf" => {
+            // Still pandoc: there is no in-tree RTF writer. The error is
+            // returned rather than swallowed, so a missing pandoc now surfaces
+            // as a dialog instead of a save that silently did nothing.
             let out = std::process::Command::new("pandoc")
                 .args(["-f", "markdown", "-t", &ext, "-o", path, "--wrap=none"])
                 .stdin(std::process::Stdio::piped())
@@ -315,5 +325,36 @@ mod tests {
         );
 
         let _ = std::fs::remove_file(&out);
+    }
+
+    /// Writing .odt must produce a real ODF package with no external tool.
+    ///
+    /// This branch used to shell out to `pandoc`, which is not installed in
+    /// CI, in the Flatpak, or on most machines — so it returned an error that
+    /// Save As then discarded, writing nothing while reporting success (#447).
+    /// The file-corpus journeys caught it: every .odt fixture timed out
+    /// waiting for a file that was never created, while .docx passed.
+    #[test]
+    fn writing_odt_produces_an_odf_package_without_pandoc() {
+        let dir = std::env::temp_dir().join(format!("letters-odt-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("out.odt");
+
+        let doc = Document::from_text("Hello *world*.\n\nSecond paragraph.");
+        write(path.to_str().unwrap(), &doc).expect("odt write must not need pandoc");
+
+        let bytes = std::fs::read(&path).expect("odt file must exist");
+        // ODF is a zip package; "PK" is the local file header signature.
+        assert_eq!(&bytes[..2], b"PK", "not a zip package");
+        assert!(bytes.len() > 200, "suspiciously small odt: {} bytes", bytes.len());
+
+        // And it must be readable back as ODT rather than being markdown with
+        // the wrong extension.
+        let read_back = letters_core::odt::read(path.to_str().unwrap())
+            .expect("our own ODT reader must accept it");
+        assert!(read_back.to_plain_text().contains("Second paragraph"),
+                "content lost: {:?}", read_back.to_plain_text());
+
+        let _ = std::fs::remove_dir_all(&dir);
     }
 }
