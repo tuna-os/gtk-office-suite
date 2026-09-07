@@ -98,7 +98,17 @@ jobs:
           python3 -m pip install --break-system-packages mss
 
       - name: Run smoke tests
-        run: tests/gui/run_gui_tests.sh test_smoke.py ${{ steps.affected.outputs.filter }}
+        run: tests/gui/run_gui_tests.sh test_smoke.py ${{ steps.affected.outputs.filter }} --junitxml=smoke-results.xml
+
+      - name: Retain GUI failure evidence
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: gui-smoke-evidence
+          path: |
+            tests/gui/smoke-results.xml
+            tests/gui/failure_artifacts/
+          retention-days: 14
 
       - name: Run buffer-bridge round-trip tests (Xvfb)
         run: xvfb-run -a cargo test -p letters bridge

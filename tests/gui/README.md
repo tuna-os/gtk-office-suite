@@ -15,3 +15,24 @@ so no diagnostic backdoor is present in production launches.
 On failure, the base class retains the screenshot, AT-SPI tree, application
 log, input trace, and snapshot (when configured) under
 `tests/gui/failure_artifacts/`.
+# Repeated crash and flake campaigns
+
+Build current binaries first, then run existing journeys repeatedly in a
+replayable order. Every failed attempt remains a failure even if later attempts
+pass. Output directories must be new; each retains revision, binary hashes,
+seed, per-attempt logs, JUnit and failure artifacts.
+
+```sh
+python3 tests/gui/stress.py --repeat 20 --seed 20260907 --output /tmp/office-baseline
+python3 tests/gui/stress.py --repeat 1 --matrix display --output /tmp/office-displays
+```
+
+The display matrix requests 400/800/1280 logical pixels, light/dark/high contrast
+and 1x/2x scaling. It needs Xvfb, Matchbox, xdotool and gsettings-desktop-schemas
+in addition to the existing GUI dependencies. `--app tables` limits the campaign
+to one app; `--timeout` bounds each attempt. This repeats existing tests; seeded
+stateful edits and save-fault injection are tracked separately in #442.
+
+The `GUI crash and flake campaign` workflow runs baseline repetitions weekly and
+supports manual baseline/display campaigns. These expose failures, not retry
+them away. The broader architecture and release criteria are tracked in #443.

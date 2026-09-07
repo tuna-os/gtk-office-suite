@@ -67,8 +67,7 @@ class BaseGUITestCase(unittest.TestCase):
         at a fresh temp file, auto-removed after the test. Returns the
         path — trigger the action with `gapplication action <id>
         test-snapshot`, then read/json.load() the path afterward."""
-        d = self.temp_dir(prefix)
-        path = os.path.join(d, "snapshot.json")
+        path = os.path.join(self.temp_dir(prefix), "snapshot.json")
         self.launch_env = {
             **getattr(self, "launch_env", {}),
             "GTK_OFFICE_TEST_MODE": "1",
@@ -105,12 +104,30 @@ class BaseGUITestCase(unittest.TestCase):
         if not os.path.exists(self.bin_path):
             raise RuntimeError(f"Binary not found at {self.bin_path}. Run 'cargo build' first.")
 
-        # Clear any leftover processes
-        subprocess.run(["pkill", "-x", self.app_name], stderr=subprocess.DEVNULL)
         # Launch app under GDK_BACKEND=x11
         env = os.environ.copy()
         env["GDK_BACKEND"] = "x11"
+        isolated = self.temp_dir("office-app-")
+        for kind in ("CONFIG", "DATA", "STATE", "CACHE"):
+            directory = os.path.join(isolated, kind.lower())
+            os.makedirs(directory)
+            env[f"XDG_{kind}_HOME"] = directory
+        env["GSETTINGS_BACKEND"] = "keyfile"
         env.update(getattr(self, "launch_env", {}))
+        self.launch_env = env
+        # Configure the same isolated settings store the application reads.
+        # GTK_THEME alone is not sufficient for libadwaita color-scheme policy.
+        if "GUI_TEST_THEME" in os.environ:
+            theme = os.environ["GUI_TEST_THEME"]
+            for schema, key, value in (
+                ("org.gnome.desktop.interface", "color-scheme",
+                 "prefer-dark" if theme == "Adwaita:dark" else "prefer-light"),
+                ("org.gnome.desktop.a11y.interface", "high-contrast",
+                 "true" if theme == "HighContrast" else "false"),
+                ("org.gnome.desktop.interface", "enable-animations", "false"),
+            ):
+                subprocess.run(["gsettings", "set", schema, key, value],
+                               env=env, check=True, capture_output=True, timeout=5)
         self.process = subprocess.Popen(
             [self.bin_path] + list(getattr(self, "launch_args", [])),
             env=env,
@@ -119,8 +136,14 @@ class BaseGUITestCase(unittest.TestCase):
             text=True
         )
 
+        # Cleanup also runs if setUp fails before tearDown can run.
+        self.addCleanup(self._stop_process)
         # Wait for application node in AT-SPI tree
-        self.app = self.wait_for_app(self.app_name)
+        try:
+            self.app = self.wait_for_app(self.app_name)
+        except Exception:
+            self._capture_failure_artifacts()
+            raise
         self._input_trace = []
         self._activate_window()
         self.last_screenshot = None
@@ -137,8 +160,8 @@ class BaseGUITestCase(unittest.TestCase):
             "LANG": "C.UTF-8",
             "LC_ALL": "C.UTF-8",
             "TZ": "UTC",
-            "GTK_THEME": "Adwaita",
-            "GDK_SCALE": "1",
+            "GTK_THEME": os.environ.get("GUI_TEST_THEME", "Adwaita"),
+            "GDK_SCALE": os.environ.get("GUI_TEST_SCALE", "1"),
             "GDK_DPI_SCALE": "1",
             "GTK_ENABLE_ANIMATIONS": "0",
             "SOURCE_DATE_EPOCH": "0",
@@ -236,19 +259,24 @@ class BaseGUITestCase(unittest.TestCase):
         rawinput.click = _dogtail_click
         rawinput.keyCombo = _dogtail_key_combo
         rawinput.typeText = _dogtail_type_text
-        if hasattr(self, "process") and self.process:
+        self._stop_process()
+
+    def _stop_process(self):
+        if hasattr(self, "process") and self.process and self.process.poll() is None:
             self.process.terminate()
             try:
                 self.process.wait(timeout=2)
             except subprocess.TimeoutExpired:
                 self.process.kill()
+                self.process.wait(timeout=2)
 
     def _capture_failure_artifacts(self):
         """Retain enough to debug a failure without re-running it:
         screenshot, app stdout/stderr, AT-SPI tree dump, the input trace
         (every synthetic click/key/type call this test made), and the
         state snapshot file if the test used GTK_OFFICE_SNAPSHOT_PATH."""
-        artifacts_dir = os.path.join(self.gui_dir, "failure_artifacts",
+        artifacts_dir = os.path.join(os.environ.get("GUI_TEST_ARTIFACT_DIR",
+                                                     os.path.join(self.gui_dir, "failure_artifacts")),
                                       f"{type(self).__name__}.{self._testMethodName}")
         try:
             os.makedirs(artifacts_dir, exist_ok=True)
@@ -289,7 +317,7 @@ class BaseGUITestCase(unittest.TestCase):
         except Exception as e:
             print(f"Warning: app log capture failed: {e}")
 
-        snapshot_path = os.environ.get("GTK_OFFICE_SNAPSHOT_PATH")
+        snapshot_path = getattr(self, "launch_env", {}).get("GTK_OFFICE_SNAPSHOT_PATH")
         if snapshot_path and os.path.exists(snapshot_path):
             try:
                 import shutil

@@ -18,6 +18,15 @@ permissions:
   contents: read
 
 jobs:
+  python-tests:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+      - name: Install test runner
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq python3-pytest
+      - name: Test validators, GUI collection, and stress orchestration
+        run: python3 -m pytest tests/test_*.py -q
+
   interop-corpus:
     runs-on: ubuntu-24.04
     steps:

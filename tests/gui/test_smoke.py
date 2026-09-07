@@ -718,7 +718,7 @@ class TablesNameBoxSmoke(BaseGUITestCase):
         self.assertIsNone(self.process.poll(), "tables crashed during keyboard selection")
 
 
-class TablesNamedRangeSmoke(BaseGUITestCase):
+class TablesNamedRangeNavigationSmoke(BaseGUITestCase):
     """Named ranges (#113): Define Name captures the current selection;
     typing that name into the name box (instead of a cell reference)
     jumps back to and re-selects the whole range, verified via the
