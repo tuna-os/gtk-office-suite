@@ -17,7 +17,7 @@ pub fn show_print_preview(
 ) {
     let config = crate::layout::LayoutConfig::from_settings(settings);
     let text = buf.text(&buf.start_iter(), &buf.end_iter(), false).to_string();
-    let pango_ctx = gtk4::pango::Context::new();
+    let pango_ctx = crate::layout::measuring_context();
     let pages = crate::layout::paginate(buf, &config, &pango_ctx);
     let total_pages = pages.len().max(1);
 

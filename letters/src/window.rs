@@ -500,7 +500,7 @@ impl LettersWindow {
             a.connect_activate(move |_, _| {
                 if let Some(buf) = active_buffer(&tv) {
                     let config = crate::layout::LayoutConfig::from_settings(&s);
-                    let ctx = gtk4::pango::Context::new();
+                    let ctx = crate::layout::measuring_context();
                     let pages = crate::layout::paginate(&buf, &config, &ctx);
                     let text = buf.text(&buf.start_iter(), &buf.end_iter(), false).to_string();
                     // Read header/footer from PageContainer
@@ -1108,7 +1108,7 @@ impl LettersWindow {
                                             let config = crate::layout::LayoutConfig::from_settings(
                                                 &gtk4::gio::Settings::new("org.tunaos.letters")
                                             );
-                                            let ctx = gtk4::pango::Context::new();
+                                            let ctx = crate::layout::measuring_context();
                                             let pages = crate::layout::paginate(&buf, &config, &ctx);
                                             let text = buf.text(&buf.start_iter(), &buf.end_iter(), false).to_string();
                                             let page_breaks: Vec<usize> = pages.iter().skip(1).map(|p| {
