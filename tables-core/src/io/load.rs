@@ -197,6 +197,10 @@ pub fn load_xlsx_workbook(path: &str) -> Result<(TablesEngine, Vec<SheetModel>),
         source.push((values, formulas));
     }
 
+    // Same floor as every other load path: a small workbook must still open
+    // onto a usable grid rather than one sized exactly to its content (#447).
+    let max_rows = max_rows.max(crate::sheet::DEFAULT_ROWS);
+    let max_cols = max_cols.max(crate::sheet::DEFAULT_COLS);
     let mut engine = TablesEngine::new(max_rows, max_cols)?;
     engine.rename_sheet(0, &names[0])?;
     for name in names.iter().skip(1) {
@@ -210,7 +214,12 @@ pub fn load_xlsx_workbook(path: &str) -> Result<(TablesEngine, Vec<SheetModel>),
         engine.set_active_sheet(index)?;
         let (rows, cols) = load_xlsx_ranges_into_engine(&values, &formulas, &mut engine);
         let sheet_id = engine.sheet_id_at(index).unwrap_or(index as u32);
-        let mut sheet = SheetModel::new(name, rows.max(1), cols.max(1), sheet_id);
+        let mut sheet = SheetModel::new(
+            name,
+            rows.max(crate::sheet::DEFAULT_ROWS),
+            cols.max(crate::sheet::DEFAULT_COLS),
+            sheet_id,
+        );
         sheet.sync_from_engine(&engine);
         if let Some(props) = sheet_props.get(name) {
             // Written back out as manually-hidden rather than reproducing
@@ -291,8 +300,16 @@ fn build_named_workbook(source: Vec<(String, calamine::Range<Data>)>)
     if source.is_empty() {
         return Err("No sheets found".into());
     }
-    let max_rows = source.iter().map(|(_, range)| range_extent(range).0).max().unwrap_or(1);
-    let max_cols = source.iter().map(|(_, range)| range_extent(range).1).max().unwrap_or(1);
+    // Floor the grid at the default editing size. Sizing purely to content
+    // gives a three-row sheet for a three-row file, with nowhere to type: the
+    // user cannot click, navigate to, or scroll to a cell past the last one
+    // that already holds data (#447). Every other load path has always applied
+    // this floor; the workbook loaders did not.
+    use crate::sheet::{DEFAULT_COLS, DEFAULT_ROWS};
+    let max_rows = source.iter().map(|(_, range)| range_extent(range).0).max()
+        .unwrap_or(0).max(DEFAULT_ROWS);
+    let max_cols = source.iter().map(|(_, range)| range_extent(range).1).max()
+        .unwrap_or(0).max(DEFAULT_COLS);
     let names: Vec<String> = source.iter().map(|(name, _)| name.clone()).collect();
     let mut engine = TablesEngine::new(max_rows.max(1), max_cols.max(1))?;
     engine.rename_sheet(0, &names[0])?;
@@ -304,7 +321,7 @@ fn build_named_workbook(source: Vec<(String, calamine::Range<Data>)>)
         engine.set_active_sheet(index)?;
         let (rows, cols) = load_range_into_engine(&range, &mut engine);
         let sheet_id = engine.sheet_id_at(index).unwrap_or(index as u32);
-        let mut sheet = SheetModel::new(&name, rows, cols, sheet_id);
+        let mut sheet = SheetModel::new(&name, rows.max(DEFAULT_ROWS), cols.max(DEFAULT_COLS), sheet_id);
         sheet.sync_from_engine(&engine);
         sheets.push(sheet);
     }
@@ -758,5 +775,71 @@ mod tests {
 
         let empty: Range<Data> = Range::from_sparse(vec![]);
         assert_eq!(range_extent(&empty), (0, 0), "an empty range needs no grid");
+    }
+
+    // ── a loaded workbook opens onto a usable grid (#447) ─────────────────
+    // Sizing the sheet to its content exactly leaves nowhere to type: a
+    // three-row file gave a three-row grid, so the user could not click,
+    // navigate to, or scroll to any cell past the last one holding data. The
+    // corpus journeys caught it as "timed out waiting for A10 selected for
+    // edit" — A10 did not exist.
+
+    #[test]
+    fn a_small_xlsx_opens_onto_a_full_size_grid() {
+        use crate::sheet::{DEFAULT_COLS, DEFAULT_ROWS};
+        let dir = tempfile::tempdir().unwrap();
+        let path = make_test_xlsx(&dir, "Small");
+
+        let (engine, sheets) = load_xlsx_workbook(&path).expect("load");
+        assert!(
+            sheets[0].rows >= DEFAULT_ROWS && sheets[0].cols >= DEFAULT_COLS,
+            "sheet is {}x{}, smaller than the {DEFAULT_ROWS}x{DEFAULT_COLS} editing grid",
+            sheets[0].rows, sheets[0].cols
+        );
+        assert!(engine.rows >= DEFAULT_ROWS, "engine grid too small: {}", engine.rows);
+        // The content is still where it was.
+        assert_eq!(engine.cell(0, 0), "hello");
+    }
+
+    #[test]
+    fn a_small_ods_opens_onto_a_full_size_grid() {
+        use crate::sheet::{DEFAULT_COLS, DEFAULT_ROWS};
+        let path = ods_fixture();
+        let (engine, sheets) = load_ods_workbook(path.to_str().unwrap()).expect("load");
+        assert!(
+            sheets[0].rows >= DEFAULT_ROWS && sheets[0].cols >= DEFAULT_COLS,
+            "sheet is {}x{}, smaller than the editing grid",
+            sheets[0].rows, sheets[0].cols
+        );
+        assert!(engine.rows >= DEFAULT_ROWS);
+    }
+
+    /// Row 9 (A10) must be addressable after opening a small file — the exact
+    /// cell the corpus journey navigates to.
+    #[test]
+    fn cell_a10_is_addressable_after_opening_a_small_workbook() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = make_test_xlsx(&dir, "Small");
+        let (mut engine, sheets) = load_xlsx_workbook(&path).expect("load");
+        assert!(sheets[0].rows > 9, "row 10 does not exist: {} rows", sheets[0].rows);
+        engine.set_active_sheet(0).unwrap();
+        engine.set_cell_text(9, 0, "typed into A10");
+        assert_eq!(engine.cell(9, 0), "typed into A10");
+    }
+
+    /// A workbook larger than the default grid keeps its own size rather than
+    /// being clamped down to it.
+    #[test]
+    fn a_workbook_larger_than_the_default_grid_keeps_its_size() {
+        use crate::sheet::DEFAULT_ROWS;
+        use calamine::{Cell, Range};
+        let tall = DEFAULT_ROWS + 40;
+        let range = Range::from_sparse(vec![
+            Cell::new((0, 0), Data::String("top".into())),
+            Cell::new((tall as u32 - 1, 0), Data::String("bottom".into())),
+        ]);
+        let (engine, sheets) = build_named_workbook(vec![("Tall".into(), range)]).unwrap();
+        assert!(sheets[0].rows >= tall, "clamped to {} rows, need {tall}", sheets[0].rows);
+        assert_eq!(engine.cell(tall - 1, 0), "bottom");
     }
 }
