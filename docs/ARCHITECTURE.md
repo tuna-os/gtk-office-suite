@@ -200,9 +200,9 @@ Slide navigation (arrows in present mode)
 
 **Current status:**
 - Decks `window.rs`: 1,779 lines → needs refactor (target: split canvas/toolbar/sidebar)
-- Tables `window.rs`: 2,281 lines → needs refactor (target: split SheetModel + rendering)
-- Letters `window.rs`: 1,765 lines → needs refactor (target: split toolbar/sidebar/editor)
-- Suite-common `lib.rs`: 1,193 lines → needs refactor
+- Tables `window.rs`: 2,313 lines → needs refactor (target: split SheetModel + rendering)
+- Letters `window.rs`: 1,881 lines → needs refactor (target: split toolbar/sidebar/editor)
+- Suite-common `lib.rs`: 1,191 lines → needs refactor
 
 ---
 
