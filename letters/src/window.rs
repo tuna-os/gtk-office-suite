@@ -957,13 +957,13 @@ impl LettersWindow {
         let tv = tab_view.clone();
         let a = gtk::gio::SimpleAction::new("edit-headers", None);
         a.connect_activate(move |_, _| {
-            if let Some(_buf) = active_buffer(&tv) {
+            if let Some(buf) = active_buffer(&tv) {
                 // Find the PageContainer and show an edit dialog
                 let page = tv.selected_page();
                 if let Some(page) = page {
                     let child = page.child();
                     if let Some(pc) = child.first_child().and_then(|c| c.downcast::<crate::page_container::PageContainer>().ok()) {
-                        show_header_footer_dialog(&pc);
+                        show_header_footer_dialog(&pc, &buf);
                     }
                 }
             }

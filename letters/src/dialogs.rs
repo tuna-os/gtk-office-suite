@@ -40,7 +40,12 @@ pub fn get_textview(widget: &impl IsA<gtk::Widget>) -> Option<gtk::TextView> {
 }
 
 /// Show the header and footer configuration dialog.
-pub fn show_header_footer_dialog(pc: &PageContainer) {
+///
+/// Takes the tab's buffer as well as its PageContainer: the container renders
+/// the header on screen and in print, but only the buffer carries it into a
+/// save. Writing to the container alone — as this dialog used to — meant the
+/// user's header was visible, printable, and never written to the file (#438).
+pub fn show_header_footer_dialog(pc: &PageContainer, buf: &gtk::TextBuffer) {
     let dialog = adw::AlertDialog::new(
         Some(&i18n("Headers and Footers")),
         Some(&i18n("Use {page} for automatic page numbering.")),
@@ -52,13 +57,16 @@ pub fn show_header_footer_dialog(pc: &PageContainer) {
     content.set_margin_start(12);
     content.set_margin_end(12);
 
+    // Seed from the buffer, which is the copy that persists; fall back to the
+    // container for a document whose header was set before this session.
+    let (buf_header, buf_footer) = crate::bridge::buffer_header_footer(buf);
     let hdr_entry = gtk::Entry::builder()
         .placeholder_text(i18n("Header text"))
-        .text(pc.header_text())
+        .text(buf_header.unwrap_or_else(|| pc.header_text().to_string()))
         .build();
     let ftr_entry = gtk::Entry::builder()
         .placeholder_text(i18n("Footer text"))
-        .text(pc.footer_text())
+        .text(buf_footer.unwrap_or_else(|| pc.footer_text().to_string()))
         .build();
 
     content.append(&gtk::Label::new(Some(&i18n("Header"))));
@@ -73,10 +81,15 @@ pub fn show_header_footer_dialog(pc: &PageContainer) {
 
     let parent = pc.root().and_downcast::<adw::ApplicationWindow>();
     let pc = pc.clone();
+    let buf = buf.clone();
     dialog.choose(parent.as_ref(), None::<&gtk::gio::Cancellable>, move |response| {
         if response.as_str() == "apply" {
-            pc.set_header_text(&hdr_entry.text());
-            pc.set_footer_text(&ftr_entry.text());
+            let (header, footer) = (hdr_entry.text(), ftr_entry.text());
+            pc.set_header_text(&header);
+            pc.set_footer_text(&footer);
+            // The container shows it; the buffer is what gets saved.
+            crate::bridge::set_buffer_header_footer(&buf, &header, &footer);
+            buf.set_modified(true);
         }
     });
 }
