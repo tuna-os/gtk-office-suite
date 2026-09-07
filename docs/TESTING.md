@@ -27,7 +27,7 @@ judging — these must never flake.
 
 ```bash
 # one-time deps (Ubuntu)
-sudo apt-get install xvfb dbus at-spi2-core python3-dogtail \
+sudo apt-get install xvfb dbus at-spi2-core matchbox-window-manager python3-dogtail \
   python3-pytest python3-pil python3-requests
 python3 -m pip install --break-system-packages mss
 
