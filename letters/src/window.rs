@@ -12,6 +12,9 @@ use crate::actions::{connect_list_continuation, connect_markdown_macros, registe
 use crate::dialogs::{active_buffer, get_textview, make_find_replace_widget, show_header_footer_dialog};
 use crate::page_container::PageContainer;
 
+mod saving;
+use saving::{close_all_dirty_pages, do_save, SaveOutcome};
+
 // ── Crash-recovery snapshots ─────────────────────────────────────────────
 // One AutosaveSlot per tab (not per window, unlike Tables/Decks): each tab
 // is its own document, so each needs its own doc_id and its own slot.
@@ -614,8 +617,12 @@ impl LettersWindow {
                     move |response: glib::GString| {
                         match response.as_str() {
                             "save" => {
-                                if let Some(td) = tab_data_get(&child) { td.0.borrow_mut().closing_after_save = true; }
-                                do_save(&tv2, &st2);
+                                let page = tv2.page(&child);
+                                let saved_page = page.clone();
+                                saving::save_with_prompt(&page, false, move |outcome| {
+                                    tv2.close_page_finish(&saved_page, outcome == SaveOutcome::Saved);
+                                    if tv2.n_pages() == 0 { st2.set_visible_child_name("empty"); }
+                                });
                             }
                             "discard" => {
                                 clear_tab_autosave(&child);
@@ -1337,69 +1344,16 @@ impl LettersWindow {
             app.add_action(&a);
         }
 
-        // Save As
+        // Save As captures the selected tab before opening its chooser.
         {
-            let tv = tv.clone(); let w = win.clone();
-            let a = gtk::gio::SimpleAction::new("save-file-as", None);
-            let s = settings.clone();
-            a.connect_activate(move |_, _| {
-                let tv = tv.clone(); let w = w.clone();
-                let dlg = gtk::FileDialog::new();
-                let f = gtk::FileFilter::new();
-                f.add_pattern("*.md"); f.add_pattern("*.txt"); f.add_pattern("*.docx"); f.add_pattern("*.odt");
-                f.set_name(Some("Documents"));
-                let fl = gio::ListStore::new::<gtk::FileFilter>();
-                fl.append(&f);
-                dlg.set_filters(Some(&fl));
-                let default_ext = s.string("default-format");
-                dlg.set_initial_name(Some(&format!("Untitled.{}", if default_ext.is_empty() { "odt" } else { &default_ext })));
-                dlg.save(Some(&w), None::<&gio::Cancellable>,
-                    move |result: Result<gio::File, glib::Error>| {
-                        if let Ok(file) = result {
-                            if let Some(path) = file.path() {
-                                if let Some(page) = tv.selected_page() {
-                                    let child = page.child();
-                                    let buf = get_textview(&child)
-                                        .map(|tv| tv.buffer());
-                                    if let Some(buf) = buf {
-                                        let path_str = path.to_string_lossy().to_string();
-                                        let is_docx = path.extension().and_then(|e| e.to_str()).map(|e| e == "docx").unwrap_or(false);
-                                        if is_docx {
-                                            let config = crate::layout::LayoutConfig::from_settings(
-                                                &gtk4::gio::Settings::new("org.tunaos.letters")
-                                            );
-                                            let ctx = gtk4::pango::Context::new();
-                                            let pages = crate::layout::paginate(&buf, &config, &ctx);
-                                            let text = buf.text(&buf.start_iter(), &buf.end_iter(), false).to_string();
-                                            let page_breaks: Vec<usize> = pages.iter().skip(1).map(|p| {
-                                                text[..p.start_offset as usize].lines().count()
-                                            }).collect();
-                                            let _ = crate::docx_bridge::write_buffer_to_docx_with_layout(
-                                                &path_str, &buf, None, &page_breaks
-                                            );
-                                        } else {
-                                            let text = buf.text(&buf.start_iter(), &buf.end_iter(), false);
-                                            let doc = crate::engine::Document::from_text(&text);
-                                            let _ = crate::engine::write(&path_str, &doc);
-                                        }
-                                        buf.set_modified(false);
-                                    }
-                                    page.set_needs_attention(false);
-                                    if let Some(name) = file.basename() { page.set_title(&name.display().to_string()); }
-                                    if let Some(path) = file.path() {
-                                        if let Some(s) = path.to_str() { page.set_tooltip(s); }
-                                    }
-                                    if let Some(td) = tab_data_get(&child) {
-                                        td.0.borrow_mut().file = file.path();
-                                    }
-                                    clear_tab_autosave(&child);
-                                }
-                            }
-                        }
-                    },
-                );
+            let tv = tv.clone();
+            let action = gtk::gio::SimpleAction::new("save-file-as", None);
+            action.connect_activate(move |_, _| {
+                if let Some(page) = tv.selected_page() {
+                    saving::save_with_prompt(&page, true, |_| {});
+                }
             });
-            app.add_action(&a);
+            app.add_action(&action);
         }
 
         // ── Autosave: periodic per-tab crash-recovery snapshot ──────────
@@ -1570,99 +1524,12 @@ fn connect_style_readout(buf: &gtk::TextBuffer, label: &gtk4::Label) {
 
 // ── Save logic ───────────────────────────────────────────────────────
 
-/// Save `page`'s document to its already-known file path, if it has one.
-/// Returns `false` (no-op) for a never-saved tab — callers fall back to a
-/// Save As prompt in that case. Clears both the buffer's GTK-level modified
-/// flag and the tab's `needs-attention` so later edits re-trigger dirty
-/// tracking correctly (leaving the GTK flag stuck `true` after a save would
-/// mean the next edit doesn't re-fire `modified-changed`, silently defeating
-/// the close guard).
-fn save_page(page: &adw::TabPage) -> bool {
-    let child = page.child();
-    let Some(td) = tab_data_get(&child) else { return false };
-    let path = td.0.borrow().file.clone();
-    let Some(path) = path else { return false };
-    // All formats route through letters-core via the bridge; formatting
-    // survives in both markdown and docx now.
-    if let Some(buf) = get_textview(&child).map(|tv| tv.buffer()) {
-        let path_str = path.to_string_lossy().to_string();
-        if let Err(e) = crate::bridge::save_buffer_to_file(&buf, &path_str) {
-            eprintln!("save failed: {e}");
-        }
-        let settings = gio::Settings::new("org.tunaos.letters");
-        suite_common::push_recent_file(&settings, &path_str);
-        buf.set_modified(false);
-    }
-    page.set_needs_attention(false);
-    if let Some(name) = path.file_name().and_then(|s| s.to_str()) {
-        page.set_title(name);
-    }
-    let _ = td.0.borrow().autosave_slot.clear();
-    true
-}
-
 /// Clear a tab's autosave slot — call on Discard as well as on save,
 /// since a discarded tab shouldn't be offered back as "recovered" either.
 fn clear_tab_autosave(child: &gtk::Widget) {
     if let Some(td) = tab_data_get(child) {
         let _ = td.0.borrow().autosave_slot.clear();
     }
-}
-
-fn do_save(tv: &adw::TabView, _stack: &gtk4::Stack) {
-    if let Some(page) = tv.selected_page() {
-        if !page.needs_attention() { return; }
-        save_page(&page);
-    }
-}
-
-/// Save every dirty page in `queue`, prompting Save As for any tab that has
-/// never been saved to a path, then close the window. A cancelled Save As
-/// aborts the whole close (window stays open, remaining queue is dropped) —
-/// the safe default, matching the per-tab close guard's Cancel behavior.
-fn close_all_dirty_pages(
-    win: adw::ApplicationWindow,
-    tv: adw::TabView,
-    mut queue: std::collections::VecDeque<adw::TabPage>,
-    force_close: Rc<std::cell::Cell<bool>>,
-) {
-    while let Some(page) = queue.pop_front() {
-        if save_page(&page) {
-            continue;
-        }
-        let dlg = gtk::FileDialog::new();
-        let f = gtk::FileFilter::new();
-        f.add_pattern("*.md"); f.add_pattern("*.txt"); f.add_pattern("*.docx"); f.add_pattern("*.odt");
-        f.set_name(Some("Documents"));
-        let fl = gio::ListStore::new::<gtk::FileFilter>();
-        fl.append(&f);
-        dlg.set_filters(Some(&fl));
-        dlg.set_initial_name(Some(&page.title()));
-        let win2 = win.clone();
-        let tv2 = tv.clone();
-        let force_close2 = force_close.clone();
-        let page2 = page.clone();
-        dlg.save(Some(&win), None::<&gio::Cancellable>, move |result| {
-            let Ok(file) = result else { return };
-            let Some(path) = file.path() else { return };
-            let child = page2.child();
-            if let Some(buf) = get_textview(&child).map(|tv| tv.buffer()) {
-                let path_str = path.to_string_lossy().to_string();
-                if let Err(e) = crate::bridge::save_buffer_to_file(&buf, &path_str) {
-                    eprintln!("save failed: {e}");
-                }
-                buf.set_modified(false);
-            }
-            page2.set_needs_attention(false);
-            if let Some(name) = file.basename() { page2.set_title(&name.display().to_string()); }
-            if let Some(td) = tab_data_get(&child) { td.0.borrow_mut().file = file.path(); }
-            clear_tab_autosave(&child);
-            close_all_dirty_pages(win2, tv2, queue, force_close2);
-        });
-        return;
-    }
-    force_close.set(true);
-    win.close();
 }
 
 // ── Tab context menu ─────────────────────────────────────────────────

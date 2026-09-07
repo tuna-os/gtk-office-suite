@@ -10,7 +10,6 @@ mod preferences;
 mod page_container;
 mod ruler;
 mod spell;
-mod docx_bridge;
 mod styles;
 mod layout;
 mod print_preview;
