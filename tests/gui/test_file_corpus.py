@@ -12,6 +12,7 @@ import re
 import shutil
 import subprocess
 import sys
+import time
 
 from framework import BaseGUITestCase
 
@@ -75,7 +76,7 @@ class FileCorpusJourney(BaseGUITestCase):
         if self.fixture["expected"] == "error":
             self.wait_for_condition(
                 lambda: self.app.findChildren(lambda node: any(
-                    phrase in node.name.lower() for phrase in ("could not", "cannot open", "failed to", "unable to", "unsupported", "invalid file"))),
+                    phrase in node.name.lower() for phrase in ("could not", "cannot open", "failed to", "unable to", "unsupported", "invalid file", "error opening"))),
                 description="visible file-open error",
             )
             self.assertIsNone(self.process.poll(), "malformed file crashed the app")
@@ -98,6 +99,9 @@ class FileCorpusJourney(BaseGUITestCase):
             rawinput.keyCombo("<Control>End")
             rawinput.typeText(" corpus edit sentinel")
         elif self.app_name == "tables":
+            # The name-box focus change is asynchronous after the initial
+            # snapshot; give GTK one frame before sending the reference.
+            time.sleep(0.3)
             rawinput.keyCombo("<Control>g")
             rawinput.typeText("A10")
             rawinput.keyCombo("Return")
