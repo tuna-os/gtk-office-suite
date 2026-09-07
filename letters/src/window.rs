@@ -53,6 +53,36 @@ fn tab_data_get(w: &gtk::Widget) -> Option<TabData> { unsafe { w.data::<TabData>
 
 // ── Make a tab's document widget ──────────────────────────────────────
 
+/// Body text for a failed document open.
+///
+/// Kept separate from the dialog so the wording is unit-testable: the phrase
+/// matters, because a file the app cannot read must say so in words a user
+/// recognises as a failure rather than leaving them with a blank editor.
+fn open_failure_message(path: &str, error: &str) -> String {
+    let name = std::path::Path::new(path)
+        .file_name()
+        .map(|name| name.to_string_lossy().to_string())
+        .unwrap_or_else(|| path.to_string());
+    format!("{name}\n\n{error}")
+}
+
+/// Tell the user a document could not be opened.
+///
+/// Letters previously only wrote these to stderr. In the file-dialog path it
+/// then carried on and built the tab anyway, so an unreadable file produced an
+/// empty editor titled with that file's name and pointed at that file's path —
+/// one Ctrl+S away from overwriting the original with nothing (#447). Tables
+/// has always shown a dialog here; this brings Letters in line.
+fn report_open_failure(parent: &impl IsA<gtk::Widget>, path: &str, error: &str) {
+    let dialog = adw::AlertDialog::builder()
+        .heading(suite_common::i18n("Could not open document"))
+        .body(open_failure_message(path, error))
+        .build();
+    dialog.add_response("ok", &suite_common::i18n("OK"));
+    dialog.set_default_response(Some("ok"));
+    dialog.present(Some(parent));
+}
+
 /// Show a freshly loaded document's page setup in its page view.
 ///
 /// `capture_from_buffer` reads header, footer and page geometry off the
@@ -1187,7 +1217,7 @@ impl LettersWindow {
     pub fn open_path(&self, path: &str) {
         let (container, buf) = make_doc_widget(Some(&self.settings));
         if let Err(e) = crate::bridge::load_file_to_buffer(path, &buf) {
-            eprintln!("open failed: {e}");
+            report_open_failure(&self.window, path, &e);
             return;
         }
         apply_page_setup_from_buffer(&container, &buf);
@@ -1327,6 +1357,7 @@ impl LettersWindow {
                 let fl = gio::ListStore::new::<gtk::FileFilter>();
                 fl.append(&f);
                 dlg.set_filters(Some(&fl));
+                let w_err = w.clone();
                 dlg.open(Some(&w), None::<&gio::Cancellable>,
                     move |result: Result<gio::File, glib::Error>| {
                         if let Ok(file) = result {
@@ -1334,9 +1365,15 @@ impl LettersWindow {
                             let name = file.basename().map(|p| p.display().to_string()).unwrap_or_default();
                             let (container, buf) = make_doc_widget(Some(&s));
                             let path_str = path.to_string_lossy().to_string();
+                            // Bail before building the tab. Carrying on gave an
+                            // empty editor titled with this file's name and
+                            // pointed at its path, so the next Ctrl+S wrote an
+                            // empty document over the unreadable original.
                             if let Err(e) = crate::bridge::load_file_to_buffer(&path_str, &buf) {
-                                eprintln!("open failed: {e}");
+                                report_open_failure(&w_err, &path_str, &e);
+                                return;
                             }
+                            apply_page_setup_from_buffer(&container, &buf);
                             let td = TabData::new();
                             td.0.borrow_mut().file = Some(path);
                             tab_data_set(&container, td);
@@ -1877,5 +1914,42 @@ mod tests {
             apply_page_setup_from_buffer(&container, &buf);
             assert_eq!(container.page_size(), before, "defaults must survive");
         });
+    }
+
+    // ── failed opens are reported, not swallowed (#447) ───────────────────
+
+    /// The message names the file, so a user with several documents open can
+    /// tell which one failed.
+    #[test]
+    fn open_failure_message_names_the_file_and_the_reason() {
+        let msg = open_failure_message("/home/u/docs/quarterly.docx", "not a zip archive");
+        assert!(msg.contains("quarterly.docx"), "should name the file: {msg}");
+        assert!(msg.contains("not a zip archive"), "should give the reason: {msg}");
+        assert!(!msg.contains("/home/u/docs"), "the full path is noise in a dialog: {msg}");
+    }
+
+    /// A path with no file name still produces something addressed to a human
+    /// rather than an empty dialog.
+    #[test]
+    fn open_failure_message_falls_back_to_the_whole_path() {
+        let msg = open_failure_message("/", "is a directory");
+        assert!(msg.contains("is a directory"));
+        assert!(!msg.trim().is_empty());
+    }
+
+    /// The corpus journey in #447 looks for a visible node whose name contains
+    /// one of a set of failure phrases. The heading has to keep matching one of
+    /// them, so pin it here rather than discovering a rename in a GUI run.
+    #[test]
+    fn open_failure_heading_matches_the_corpus_journey_phrases() {
+        let heading = suite_common::i18n("Could not open document").to_lowercase();
+        let accepted = [
+            "could not", "cannot open", "failed to",
+            "unable to", "unsupported", "invalid file", "error opening",
+        ];
+        assert!(
+            accepted.iter().any(|phrase| heading.contains(phrase)),
+            "heading {heading:?} matches none of the phrases the corpus test accepts"
+        );
     }
 }
