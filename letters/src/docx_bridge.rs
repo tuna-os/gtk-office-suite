@@ -174,46 +174,8 @@ fn split_runs_from_buffer(buf: &gtk::TextBuffer, para_offset: i32, para_text: &s
 mod tests {
     use super::{split_paragraphs, tag_to_style_id, write_buffer_to_docx_with_layout};
     use gtk4::{self as gtk, prelude::*};
+    use suite_common::gtk_test::run as gtk_test;
 
-    /// Run a GTK-dependent closure on GTK's single main thread. GTK objects may
-    /// only be created from the thread that called `gtk::init`, and `gtk::init`
-    /// succeeds at most once per process, so all GTK tests share one exclusive
-    /// worker thread. When GTK cannot initialize (headless CI without a
-    /// display) this skips (logs and returns without running the closure),
-    /// rather than panicking like `#[gtk::test]` does.
-    fn gtk_test<F>(f: F)
-    where
-        F: FnOnce() + Send + std::panic::UnwindSafe + 'static,
-    {
-        use std::panic;
-        use std::sync::mpsc;
-        use std::sync::OnceLock;
-
-        static MAIN: OnceLock<Option<gtk::glib::ThreadPool>> = OnceLock::new();
-        let pool = MAIN
-            .get_or_init(|| {
-                let pool = gtk::glib::ThreadPool::exclusive(1).ok()?;
-                let (tx, rx) = mpsc::channel();
-                pool.push(move || {
-                    let _ = tx.send(gtk::init().is_ok());
-                })
-                .ok()?;
-                match rx.recv().ok()? {
-                    true => Some(pool),
-                    false => None,
-                }
-            })
-            .as_ref();
-        let Some(pool) = pool else {
-            eprintln!("skipping GTK test: no display");
-            return;
-        };
-        let (tx, rx) = mpsc::sync_channel(1);
-        let _ = pool.push(move || {
-            let _ = tx.send(panic::catch_unwind(f));
-        });
-        let _ = rx.recv();
-    }
 
     #[test]
     fn tag_to_style_id_maps_all_heading_and_special_tags() {

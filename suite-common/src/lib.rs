@@ -11,6 +11,7 @@
 //   ToastManager      — toast notification system for save/error feedback
 
 pub mod file_dialogs;
+pub mod gtk_test;
 pub mod toast_manager;
 pub use suite_common_core::{actions, palette, format, undo, events, string_pool, units, props, style, search, print, atomic_save, autosave, recent, templates, session};
 
@@ -1123,13 +1124,10 @@ mod tests {
 
     #[test]
     fn test_empty_state_created() {
-        // Skip if GTK not available (no display server in test CI)
-        if gtk4::init().is_err() || !gtk4::is_initialized() {
-            eprintln!("SKIP: GTK not initialized (no display)");
-            return;
-        }
-        let state = make_empty_state("Title", "Description", "icon", "Open");
-        assert_eq!(state.width_request(), -1);
+        crate::gtk_test::run(|| {
+            let state = make_empty_state("Title", "Description", "icon", "Open");
+            assert_eq!(state.width_request(), -1);
+        });
     }
 }
 
