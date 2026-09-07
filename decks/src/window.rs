@@ -848,7 +848,32 @@ impl DecksWindow {
             ("app.add-shape", "Add Shape"),
             ("app.add-image", "Add Image…"),
             ("app.present", "Present"),
+            ("app.undo", "Undo"),
+            ("app.redo", "Redo"),
         ]);
+
+        // Expose the canonical controller history to Gio automation as well
+        // as the keyboard path below.  Keeping both routes on the same
+        // controller prevents tests and accessibility tools from exercising a
+        // different, stale document state.
+        for (name, is_undo) in [("undo", true), ("redo", false)] {
+            let controller = controller.clone();
+            let cs = canvas.clone();
+            let sl = slide_list.clone();
+            let ss = slides.clone();
+            let cs_ref = current_slide.clone();
+            let masters = masters.clone();
+            let act = gio::SimpleAction::new(name, None);
+            act.connect_activate(move |_, _| {
+                let changed = if is_undo { controller.undo() } else { controller.redo() };
+                if changed {
+                    cs.queue_draw();
+                    let snapshot = ss.borrow().clone();
+                    rebuild_slide_list(&sl, &snapshot, &masters.borrow(), cs_ref.get());
+                }
+            });
+            app.add_action(&act);
+        }
 
         // "Add Text Box"
         {
