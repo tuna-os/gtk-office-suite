@@ -51,7 +51,34 @@ fn attach_xlsx_sidecars(path: &str, sheets: &[Rc<RefCell<SheetModel>>]) {
     sheet.cond_rules = tables_core::io::read_cond_rules_from_xlsx(path);
 }
 
+/// Message shown when a save target is a format Tables cannot write.
+fn unsupported_save_format_message(path: &str) -> String {
+    let name = std::path::Path::new(path)
+        .file_name()
+        .map(|name| name.to_string_lossy().to_string())
+        .unwrap_or_else(|| path.to_string());
+    format!(
+        "{}\n\n{}: {} → {}",
+        suite_common::i18n(
+            "Tables can open this file but cannot write it. Saving would replace it with an \
+             Excel workbook under its current name, leaving a file that no longer matches its \
+             own extension."
+        ),
+        suite_common::i18n("Use Save As instead"),
+        name,
+        tables_core::io::xlsx_save_as_name(path),
+    )
+}
+
 fn save_engine_to_xlsx(path: &str, state: &AppState) -> Result<(), String> {
+    // Tables imports xls/ods/csv/tsv but writes only xlsx. Every save path —
+    // Ctrl+S, Save As, and the close guard's "Save" button — funnels through
+    // this one helper, so the refusal lives here rather than at each of the
+    // three call sites: a call site that forgets the check then fails loudly
+    // instead of silently destroying the user's file (#439).
+    if !tables_core::io::is_writable_format(path) {
+        return Err(unsupported_save_format_message(path));
+    }
     let sheets: Vec<SheetModel> = state.sheets.iter().map(|s| s.borrow().clone()).collect();
     tables_core::io::save_sheets_to_xlsx_with_engine(path, &sheets, Some(&state.engine))
 }
@@ -1813,7 +1840,16 @@ impl TablesWindow {
                 let fl = gio::ListStore::new::<gtk4::FileFilter>();
                 fl.append(&f);
                 dlg.set_filters(Some(&fl));
-                dlg.set_initial_name(Some("Untitled.xlsx"));
+                // Suggest the open document's own name under a writable
+                // extension — "report.ods" offers "report.xlsx". Offering
+                // "Untitled.xlsx" to someone saving out of a read-only format
+                // is how a file loses track of which document it came from.
+                let suggested = path_state
+                    .borrow()
+                    .as_ref()
+                    .map(|path| tables_core::io::xlsx_save_as_name(&path.to_string_lossy()))
+                    .unwrap_or_else(|| "Untitled.xlsx".to_string());
+                dlg.set_initial_name(Some(&suggested));
                 let s = s.clone(); let ctl = ctl.clone();
                 let w2 = w.clone(); let path_state = path_state.clone();
                 let slot = slot.clone();
@@ -1862,7 +1898,30 @@ impl TablesWindow {
                     app_for_save.activate_action("save-file-as", None);
                     return;
                 };
+                // An imported read-only format cannot be saved in place. Say so
+                // and route straight to Save As, which is pre-filled with the
+                // same name under a writable extension.
                 let path_str = path.to_string_lossy().to_string();
+                if !tables_core::io::is_writable_format(&path_str) {
+                    let prompt = adw::AlertDialog::builder()
+                        .heading(suite_common::i18n("Cannot save in this format"))
+                        .body(unsupported_save_format_message(&path_str))
+                        .build();
+                    prompt.add_response("cancel", &suite_common::i18n("Cancel"));
+                    prompt.add_response("save-as", &suite_common::i18n("Save As…"));
+                    prompt.set_response_appearance(
+                        "save-as", adw::ResponseAppearance::Suggested);
+                    prompt.set_default_response(Some("save-as"));
+                    prompt.set_close_response("cancel");
+                    let app_for_prompt = app_for_save.clone();
+                    prompt.connect_response(None, move |_, response| {
+                        if response == "save-as" {
+                            app_for_prompt.activate_action("save-file-as", None);
+                        }
+                    });
+                    prompt.present(Some(&w));
+                    return;
+                }
                 match save_engine_to_xlsx(&path_str, &s.borrow()) {
                     Ok(()) => {
                         let settings = gtk4::gio::Settings::new("org.tunaos.tables");

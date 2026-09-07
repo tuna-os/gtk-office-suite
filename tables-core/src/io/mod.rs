@@ -8,14 +8,17 @@
 // - `charts.rs` — read embedded charts back from xlsx
 // - `condrules.rs` — read conditional-formatting rules back from xlsx
 // - `props.rs` — per-sheet properties (hidden rows/cols, page setup)
+// - `format.rs` — which formats we can write, as opposed to read
 
 mod charts;
 mod condrules;
+mod format;
 mod load;
 mod props;
 mod save;
 
 pub use charts::read_charts_from_xlsx;
+pub use format::{is_writable_format, xlsx_save_as_name};
 pub use condrules::read_cond_rules_from_xlsx;
 pub use load::{load_file_into_engine, load_ods_workbook, load_workbook, load_xls_workbook,
     load_xlsx_workbook, load_xlsx_workbook_with_report};
