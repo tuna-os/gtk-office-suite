@@ -1,0 +1,52 @@
+name: Real-file open edit reopen
+
+on:
+  pull_request:
+    paths:
+      - 'interop/**'
+      - 'tests/gui/**'
+      - '.github/workflows/file-corpus.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  corpus:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        app: [letters, tables, decks]
+    steps:
+      - uses: actions/checkout@v7
+      - name: Install office producer and GUI dependencies
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq libreoffice libgtk-4-dev libadwaita-1-dev \
+            xvfb dbus at-spi2-core matchbox-window-manager xdotool gsettings-desktop-schemas \
+            python3-dogtail python3-pytest python3-pil python3-requests
+          python3 -m pip install --break-system-packages mss
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo build --locked --bin ${{ matrix.app }}
+      - name: Generate and validate actual documents
+        run: |
+          python3 -m unittest discover -s tests -p 'test_open_corpus.py'
+          python3 interop/build_open_corpus.py target/open-corpus
+      - name: Open edit save copy and reopen
+        env:
+          GUI_FILE_CORPUS: ${{ github.workspace }}/target/open-corpus/manifest.json
+          GUI_TEST_ARTIFACT_DIR: ${{ github.workspace }}/target/file-corpus-evidence
+        run: tests/gui/run_gui_tests.sh test_file_corpus.py -k '${{ matrix.app }}' --junitxml='${{ github.workspace }}/target/file-corpus.xml'
+      - name: Retain fixtures provenance failures and results
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: file-corpus-${{ matrix.app }}-${{ github.run_id }}
+          path: |
+            target/open-corpus/
+            target/file-corpus-evidence/
+            target/file-corpus.xml
+          retention-days: 30
