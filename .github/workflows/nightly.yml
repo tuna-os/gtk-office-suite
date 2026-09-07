@@ -18,6 +18,10 @@ on:
 env:
   CARGO_TERM_COLOR: always
 
+# Least privilege: these jobs only read the repository (#349).
+permissions:
+  contents: read
+
 jobs:
   # LibreOffice interop oracle: every .docx letters-core writes must open
   # in LibreOffice Writer and extract identical text (both directions).
