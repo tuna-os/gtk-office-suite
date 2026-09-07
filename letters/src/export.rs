@@ -25,7 +25,9 @@ pub fn markdown_to_typst(md: &str) -> String {
 
 pub fn save_typst(text: &str, path: &str) -> Result<(), String> {
     let src = format!("#set page(width: auto, height: auto, margin: 2cm)\n#set text(font: \"Sans\", size: 11pt)\n\n{}", markdown_to_typst(text));
-    std::fs::write(path, &src).map_err(|e| format!("{}", e))
+    // Same reasoning as the document writers: this is a user-chosen path that
+    // may already hold a file worth keeping.
+    suite_common::atomic_save::atomic_write_bytes(std::path::Path::new(path), src.as_bytes())
 }
 
 /// Compile a Typst source file to PDF via the in-process engine.

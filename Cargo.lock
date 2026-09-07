@@ -3892,6 +3892,8 @@ dependencies = [
 name = "suite-export"
 version = "0.1.0"
 dependencies = [
+ "suite-common-core",
+ "tempfile",
  "typst-as-lib",
  "typst-pdf",
 ]
