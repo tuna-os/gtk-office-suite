@@ -578,15 +578,7 @@ impl Default for Ruler {
 mod tests {
     use super::*;
 
-    /// Initialize GTK for widget tests. On headless runners without a
-    /// display server `gtk::init()` fails — tests then skip (matching the
-    /// suite-common pattern) instead of panicking.
-    fn init_gtk() -> bool {
-        if !gtk::is_initialized() {
-            return gtk::init().is_ok();
-        }
-        true
-    }
+    use suite_common::gtk_test::run as gtk_test;
 
     fn assert_close(actual: f64, expected: f64) {
         assert!(
@@ -599,93 +591,114 @@ mod tests {
         Ruler::new()
     }
 
+    /// A fresh Ruler is A4 with one-inch side margins and no indents, set in
+    /// `ObjectImpl::constructed`. The previous version of this test asserted
+    /// zero geometry throughout and an identity mapping — that described a
+    /// Ruler with no defaults at all, and stopped being true when
+    /// `constructed` began setting A4. It never failed because the whole
+    /// module aborted before reaching it (#304).
     #[test]
-    fn defaults_have_zero_geometry() {
-        if !init_gtk() {
-            eprintln!("SKIP: GTK not initialized (no display)");
-            return;
-        }
-        let r = ruler();
-        assert_close(r.margin_left(), 0.0);
-        assert_close(r.margin_right(), 0.0);
-        assert_close(r.first_line_indent(), 0.0);
-        assert_close(r.left_indent(), 0.0);
-        // Page width unset → degenerate identity mapping.
-        let (o, s) = r.mapping();
-        assert_close(o, 0.0);
-        assert_close(s, 1.0);
-        assert_close(r.pt_to_x(100.0), 100.0);
-        assert_close(r.x_to_pt(100.0), 100.0);
+    fn defaults_are_a4_with_one_inch_margins() {
+        gtk_test(|| {
+            let r = ruler();
+            assert_close(r.imp().page_width.get(), 595.0);
+            assert_close(r.margin_left(), 72.0);
+            assert_close(r.margin_right(), 72.0);
+            assert_close(r.first_line_indent(), 0.0);
+            assert_close(r.left_indent(), 0.0);
+        });
+    }
+
+    /// An unallocated Ruler has zero width, so the width-derived scale is
+    /// zero. Worth pinning: it is the state every Ruler is in before its
+    /// first allocation, and `pt_to_x` collapsing every point to the origin
+    /// is a real (if transient) behaviour rather than an accident.
+    #[test]
+    fn unallocated_ruler_has_a_zero_scale_mapping() {
+        gtk_test(|| {
+            let r = ruler();
+            let (origin, scale) = r.mapping();
+            assert_close(origin, 0.0);
+            assert_close(scale, 0.0);
+            assert_close(r.pt_to_x(100.0), 0.0);
+        });
+    }
+
+    /// Page width of zero is the documented degenerate case, and is the one
+    /// that yields an identity mapping.
+    #[test]
+    fn zero_page_width_gives_an_identity_mapping() {
+        gtk_test(|| {
+            let r = ruler();
+            r.set_page_width(0.0);
+            let (origin, scale) = r.mapping();
+            assert_close(origin, 0.0);
+            assert_close(scale, 1.0);
+            assert_close(r.pt_to_x(100.0), 100.0);
+            assert_close(r.x_to_pt(100.0), 100.0);
+        });
     }
 
     #[test]
     fn margins_and_indents_round_trip() {
-        if !init_gtk() {
-            eprintln!("SKIP: GTK not initialized (no display)");
-            return;
-        }
-        let r = ruler();
-        r.set_page_width(612.0);
-        r.set_margins(72.0, 54.0);
-        r.set_indents(36.0, 48.0);
-        assert_close(r.margin_left(), 72.0);
-        assert_close(r.margin_right(), 54.0);
-        assert_close(r.first_line_indent(), 36.0);
-        assert_close(r.left_indent(), 48.0);
+        gtk_test(|| {
+            let r = ruler();
+            r.set_page_width(612.0);
+            r.set_margins(72.0, 54.0);
+            r.set_indents(36.0, 48.0);
+            assert_close(r.margin_left(), 72.0);
+            assert_close(r.margin_right(), 54.0);
+            assert_close(r.first_line_indent(), 36.0);
+            assert_close(r.left_indent(), 48.0);
+        });
     }
 
     #[test]
     fn metric_toggle_sticks() {
-        if !init_gtk() {
-            eprintln!("SKIP: GTK not initialized (no display)");
-            return;
-        }
-        let r = ruler();
-        assert!(!r.imp().use_metric.get(), "default should be imperial");
-        r.set_metric(true);
-        assert!(r.imp().use_metric.get());
-        r.set_metric(false);
-        assert!(!r.imp().use_metric.get());
+        gtk_test(|| {
+            let r = ruler();
+            assert!(!r.imp().use_metric.get(), "default should be imperial");
+            r.set_metric(true);
+            assert!(r.imp().use_metric.get());
+            r.set_metric(false);
+            assert!(!r.imp().use_metric.get());
+        });
     }
 
     #[test]
     fn screen_page_drives_mapping() {
-        if !init_gtk() {
-            eprintln!("SKIP: GTK not initialized (no display)");
-            return;
-        }
-        let r = ruler();
-        r.set_page_width(612.0);
-        r.set_screen_page(50.0, 600.0);
-        let (origin, scale) = r.mapping();
-        assert_close(origin, 50.0);
-        assert_close(scale, 600.0 / 612.0);
-        // Page edges map to the screen page edges.
-        assert_close(r.pt_to_x(0.0), 50.0);
-        assert_close(r.pt_to_x(612.0), 650.0);
-        // Inverse conversion round-trips.
-        assert_close(r.x_to_pt(50.0), 0.0);
-        assert_close(r.x_to_pt(650.0), 612.0);
-        assert_close(r.x_to_pt(r.pt_to_x(300.0)), 300.0);
+        gtk_test(|| {
+            let r = ruler();
+            r.set_page_width(612.0);
+            r.set_screen_page(50.0, 600.0);
+            let (origin, scale) = r.mapping();
+            assert_close(origin, 50.0);
+            assert_close(scale, 600.0 / 612.0);
+            // Page edges map to the screen page edges.
+            assert_close(r.pt_to_x(0.0), 50.0);
+            assert_close(r.pt_to_x(612.0), 650.0);
+            // Inverse conversion round-trips.
+            assert_close(r.x_to_pt(50.0), 0.0);
+            assert_close(r.x_to_pt(650.0), 612.0);
+            assert_close(r.x_to_pt(r.pt_to_x(300.0)), 300.0);
+        });
     }
 
     #[test]
     fn tab_stops_produce_tab_array() {
-        if !init_gtk() {
-            eprintln!("SKIP: GTK not initialized (no display)");
-            return;
-        }
-        let r = ruler();
-        assert!(r.get_tab_array().is_none(), "no tabs → no array");
-        r.set_margins(72.0, 0.0);
-        r.set_tab_stops(&[72.0, 144.0, 216.0]);
-        let arr = r.get_tab_array().expect("tabs set → array present");
-        let (aligns, locs) = arr.tabs();
-        assert_eq!(aligns.len(), 3);
-        assert_eq!(locs.len(), 3);
-        assert_eq!(aligns[0], gtk4::pango::TabAlign::Left);
-        // Tab positions are pango-scaled and offset by the left margin.
-        let expected = ((72.0 - 72.0) * pango::SCALE as f64) as i32;
-        assert_eq!(locs[0], expected);
+        gtk_test(|| {
+            let r = ruler();
+            assert!(r.get_tab_array().is_none(), "no tabs → no array");
+            r.set_margins(72.0, 0.0);
+            r.set_tab_stops(&[72.0, 144.0, 216.0]);
+            let arr = r.get_tab_array().expect("tabs set → array present");
+            let (aligns, locs) = arr.tabs();
+            assert_eq!(aligns.len(), 3);
+            assert_eq!(locs.len(), 3);
+            assert_eq!(aligns[0], gtk4::pango::TabAlign::Left);
+            // Tab positions are pango-scaled and offset by the left margin.
+            let expected = ((72.0 - 72.0) * pango::SCALE as f64) as i32;
+            assert_eq!(locs[0], expected);
+        });
     }
 }
