@@ -1077,6 +1077,7 @@ impl LettersWindow {
                 dlg.set_filters(Some(&fl));
                 let default_ext = s.string("default-format");
                 dlg.set_initial_name(Some(&format!("Untitled.{}", if default_ext.is_empty() { "odt" } else { &default_ext })));
+                let w2 = w.clone();
                 dlg.save(Some(&w), None::<&gio::Cancellable>,
                     move |result: Result<gio::File, glib::Error>| {
                         if let Ok(file) = result {
@@ -1087,8 +1088,23 @@ impl LettersWindow {
                                         .map(|tv| tv.buffer());
                                     if let Some(buf) = buf {
                                         let path_str = path.to_string_lossy().to_string();
-                                        let is_docx = path.extension().and_then(|e| e.to_str()).map(|e| e == "docx").unwrap_or(false);
-                                        if is_docx {
+                                        let extension = path
+                                            .extension()
+                                            .and_then(|e| e.to_str())
+                                            .unwrap_or("")
+                                            .to_ascii_lowercase();
+                                        // ODT used to fall through to
+                                        // engine::write, which shells out to
+                                        // `pandoc` — absent on essentially
+                                        // every user's machine and in CI. The
+                                        // error was discarded, so Save As to
+                                        // .odt wrote nothing while reporting
+                                        // success. Ctrl+S has always used the
+                                        // bridge's real ODT writer; Save As
+                                        // now uses it too (#447).
+                                        let saved = if extension == "odt" {
+                                            crate::bridge::save_buffer_to_file(&buf, &path_str)
+                                        } else if extension == "docx" {
                                             let config = crate::layout::LayoutConfig::from_settings(
                                                 &gtk4::gio::Settings::new("org.tunaos.letters")
                                             );
@@ -1098,13 +1114,24 @@ impl LettersWindow {
                                             let page_breaks: Vec<usize> = pages.iter().skip(1).map(|p| {
                                                 text[..p.start_offset as usize].lines().count()
                                             }).collect();
-                                            let _ = crate::docx_bridge::write_buffer_to_docx_with_layout(
+                                            crate::docx_bridge::write_buffer_to_docx_with_layout(
                                                 &path_str, &buf, None, &page_breaks
-                                            );
+                                            )
                                         } else {
                                             let text = buf.text(&buf.start_iter(), &buf.end_iter(), false);
                                             let doc = crate::engine::Document::from_text(&text);
-                                            let _ = crate::engine::write(&path_str, &doc);
+                                            crate::engine::write(&path_str, &doc)
+                                        };
+                                        // A failed save must not look like a
+                                        // successful one. Marking the buffer
+                                        // clean, retitling the tab and
+                                        // clearing the autosave slot on a
+                                        // write that never happened is how a
+                                        // document gets closed without a
+                                        // prompt and lost outright.
+                                        if let Err(e) = saved {
+                                            report_save_failure(&w2, &path_str, &e);
+                                            return;
                                         }
                                         buf.set_modified(false);
                                     }
@@ -1148,6 +1175,26 @@ impl LettersWindow {
             }
         }
     }
+}
+
+/// Tell the user a document could not be saved.
+///
+/// Every save path used to discard its error with `let _ =` and then mark the
+/// buffer clean anyway, so a write that never happened looked exactly like a
+/// successful one — and the tab could then be closed without a prompt, taking
+/// the work with it (#447).
+fn report_save_failure(parent: &impl IsA<gtk::Widget>, path: &str, error: &str) {
+    let name = std::path::Path::new(path)
+        .file_name()
+        .map(|name| name.to_string_lossy().to_string())
+        .unwrap_or_else(|| path.to_string());
+    let dialog = adw::AlertDialog::builder()
+        .heading(suite_common::i18n("Could not save document"))
+        .body(format!("{name}\n\n{error}"))
+        .build();
+    dialog.add_response("ok", &suite_common::i18n("OK"));
+    dialog.set_default_response(Some("ok"));
+    dialog.present(Some(parent));
 }
 
 fn autosave_all_tabs(tv: &adw::TabView) {
@@ -1311,7 +1358,15 @@ fn save_page(page: &adw::TabPage) -> bool {
     if let Some(buf) = get_textview(&child).map(|tv| tv.buffer()) {
         let path_str = path.to_string_lossy().to_string();
         if let Err(e) = crate::bridge::save_buffer_to_file(&buf, &path_str) {
-            eprintln!("save failed: {e}");
+            // Report and stop: leaving the buffer dirty and the autosave slot
+            // intact is what keeps the work recoverable. Returning false also
+            // makes the close guard abort rather than close the tab.
+            if let Some(root) = child.root().and_downcast::<adw::ApplicationWindow>() {
+                report_save_failure(&root, &path_str, &e);
+            } else {
+                eprintln!("save failed: {e}");
+            }
+            return false;
         }
         let settings = gio::Settings::new("org.tunaos.letters");
         suite_common::push_recent_file(&settings, &path_str);
