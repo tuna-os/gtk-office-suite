@@ -216,9 +216,9 @@ pub fn capture_from_buffer(buf: &gtk::TextBuffer) -> Document {
             .map(|p| p.as_ref().clone())
             .unwrap_or_default()
     };
-    let header = buffer_sidecar::<Option<String>>(buf, HEADER_KEY).flatten();
-    let footer = buffer_sidecar::<Option<String>>(buf, FOOTER_KEY).flatten();
-    let page = buffer_sidecar::<Option<PageGeometry>>(buf, PAGE_KEY).flatten();
+    let header = header_sidecar(buf);
+    let footer = footer_sidecar(buf);
+    let page = page_sidecar(buf);
     Document { paragraphs, footnotes, header, footer, page }
 }
 
@@ -231,21 +231,32 @@ pub const FOOTER_KEY: &str = "letters-footer";
 /// Buffer data key holding the document's page geometry, if it has one.
 pub const PAGE_KEY: &str = "letters-page";
 
-/// Read a value previously attached to `buf` under `key`, cloning it out.
-///
-/// `None` means the key was never set — a buffer that was never rendered
-/// from a Document — which is distinct from a key set to `Some(None)`, i.e. a
-/// document that genuinely has no header.
-fn buffer_sidecar<T: Clone + 'static>(buf: &gtk::TextBuffer, key: &str) -> Option<T> {
-    unsafe { buf.data::<T>(key).map(|p| p.as_ref().clone()) }
+// GObject data is an untyped pointer: reading a key back at a type other than
+// the one it was written with is undefined behaviour, not a panic, and no test
+// will catch it. So each key gets one reader and the type appears exactly
+// once per key — rather than a generic helper any future caller could
+// instantiate at the wrong type.
+//
+// The outer `Option` distinguishes "key never set" (a buffer that was never
+// rendered from a Document) from a document that genuinely has no header;
+// both flatten to `None`, but only the former is worth keeping separate for
+// anyone extending this.
+
+fn header_sidecar(buf: &gtk::TextBuffer) -> Option<String> {
+    unsafe { buf.data::<Option<String>>(HEADER_KEY).and_then(|p| p.as_ref().clone()) }
+}
+
+fn footer_sidecar(buf: &gtk::TextBuffer) -> Option<String> {
+    unsafe { buf.data::<Option<String>>(FOOTER_KEY).and_then(|p| p.as_ref().clone()) }
+}
+
+fn page_sidecar(buf: &gtk::TextBuffer) -> Option<PageGeometry> {
+    unsafe { buf.data::<Option<PageGeometry>>(PAGE_KEY).and_then(|p| *p.as_ref()) }
 }
 
 /// Read the header/footer currently attached to `buf`.
 pub fn buffer_header_footer(buf: &gtk::TextBuffer) -> (Option<String>, Option<String>) {
-    (
-        buffer_sidecar::<Option<String>>(buf, HEADER_KEY).flatten(),
-        buffer_sidecar::<Option<String>>(buf, FOOTER_KEY).flatten(),
-    )
+    (header_sidecar(buf), footer_sidecar(buf))
 }
 
 /// Update just the header/footer, leaving the rest of the buffer's document
