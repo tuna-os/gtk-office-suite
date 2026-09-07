@@ -57,6 +57,21 @@ units) ← `suite-common` (GTK helpers: dialogs, toasts, SuiteApp/SuiteWindow)
   # letters lo_parity 109/109
   ```
 
+  Two traps if your LibreOffice is the Flathub one:
+
+  - Its sandbox may not honour `--filesystem=host`, so it cannot read the
+    temp files these tests write and every conversion fails with "source file
+    could not be loaded". Point `TMPDIR` somewhere it can see:
+    `TMPDIR=~/.var/app/org.libreoffice.LibreOffice/data/tmp REQUIRE_SOFFICE=1 cargo test ...`
+  - Run these suites with `--test-threads=1`. Concurrent `soffice` instances
+    contend over the shared user profile and silently produce no output, so a
+    parallel run fails a scattering of tests with "No such file or directory"
+    that all pass serially. That is the harness, not your change.
+
+  Note the skip-guard checks `soffice --version`, which succeeds even when
+  conversion cannot work — so a misconfigured LibreOffice makes these suites
+  *hang and fail* rather than skip.
+
 ## Gotchas that have bitten before
 
 - GTK4 custom widgets: allocate children in `size_allocate`, never in
