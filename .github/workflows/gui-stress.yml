@@ -1,0 +1,63 @@
+name: GUI crash and flake campaign
+
+on:
+  schedule:
+    - cron: '0 3 * * 0'
+  workflow_dispatch:
+    inputs:
+      matrix:
+        description: Display coverage
+        type: choice
+        options: [baseline, display]
+        default: baseline
+      repeat:
+        description: Attempts per application and display configuration
+        default: '3'
+      seed:
+        description: Replayable scenario-order seed
+        default: '20260907'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: gui-stress-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  journeys:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    strategy:
+      fail-fast: false
+      matrix:
+        app: [letters, tables, decks]
+    steps:
+      - uses: actions/checkout@v7
+      - name: Install build and GUI dependencies
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq libgtk-4-dev libadwaita-1-dev \
+            xvfb dbus at-spi2-core matchbox-window-manager xdotool gsettings-desktop-schemas \
+            python3-dogtail python3-pytest python3-pil python3-requests
+          python3 -m pip install --break-system-packages mss
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Build current application
+        run: cargo build --locked --bin ${{ matrix.app }}
+      - name: Run every attempt and retain failures
+        env:
+          CAMPAIGN_MATRIX: ${{ inputs.matrix || 'baseline' }}
+          CAMPAIGN_REPEAT: ${{ inputs.repeat || '3' }}
+          CAMPAIGN_SEED: ${{ inputs.seed || '20260907' }}
+        run: |
+          python3 tests/gui/stress.py --app '${{ matrix.app }}' \
+            --matrix "$CAMPAIGN_MATRIX" --repeat "$CAMPAIGN_REPEAT" \
+            --seed "$CAMPAIGN_SEED" --output target/gui-stress
+      - name: Upload campaign evidence even on failure
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: gui-stress-${{ matrix.app }}-${{ github.run_id }}
+          path: target/gui-stress/
+          retention-days: 30
