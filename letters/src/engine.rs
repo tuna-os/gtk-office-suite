@@ -1,98 +1,10 @@
-// engine.rs — Document model and file I/O for Letters.
+// engine.rs — Legacy PDF export helpers for Letters.
 // SPDX-License-Identifier: GPL-3.0-or-later
 //
-// Architecture:
-//   Document — plain-text model (Markdown is the canonical format)
-//   read()   — load from file path, detect format
-//   write()  — save to file path with format conversion
-//   Export PDF via Typst CLI (see export.rs)
-//
-// DOCX read/write now uses native rdocx crate (no pandoc dependency).
-// For formatting-preserving DOCX I/O, use docx_bridge directly on GtkTextBuffer.
+// Document loading/saving uses letters-core through bridge.rs. Keeping a
+// second plain-text save pipeline here caused Save As to discard formatting.
 
 use std::fs;
-use std::path::Path;
-use rdocx::Document as RDocxDoc;
-
-/// A document represented as Markdown text.
-pub struct Document {
-    pub text: String,
-}
-
-impl Document {
-    pub fn from_text(text: &str) -> Self {
-        Self { text: text.to_string() }
-    }
-}
-
-// ── Write ────────────────────────────────────────────────────────────
-
-/// Write a Document to a file. Format determined by extension:
-/// - `.md` — Markdown (canonical)
-/// - `.txt` — plain text
-/// - `.html` — HTML
-/// - `.docx` — creates via rdocx (native, no pandoc)
-pub fn write(path: &str, doc: &Document) -> Result<(), String> {
-    let p = Path::new(path);
-    let ext = p.extension().and_then(|e| e.to_str()).unwrap_or("md").to_lowercase();
-    let text = &doc.text;
-
-    match ext.as_str() {
-        "md" | "txt" => {
-            fs::write(path, text).map_err(|e| format!("Cannot write {}: {}", path, e))
-        }
-        "html" | "htm" => {
-            use pulldown_cmark::{Parser, html};
-            let parser = Parser::new(text);
-            let mut html_buf = String::new();
-            html::push_html(&mut html_buf, parser);
-            let full = format!(
-                "<!DOCTYPE html><html><head><meta charset=\"UTF-8\"><title>Document</title></head><body>\n{}\n</body></html>",
-                html_buf
-            );
-            fs::write(path, &full).map_err(|e| format!("Cannot write {}: {}", path, e))
-        }
-        "docx" => {
-            let mut docx = RDocxDoc::new();
-            for line in text.lines() {
-                docx.add_paragraph(line);
-            }
-            docx.save(path).map_err(|e| format!("Cannot save .docx {}: {}", path, e))
-        }
-        "odt" => {
-            // Never pandoc. letters-core has a real ODT writer, and shelling
-            // out to a tool that is not installed on CI, in the Flatpak, or on
-            // most users' machines is how Save As came to write nothing at all
-            // while reporting success (#447).
-            let parsed = letters_core::markdown::parse(text);
-            letters_core::odt::write(&parsed, path)
-        }
-        "rtf" => {
-            // Still pandoc: there is no in-tree RTF writer. The error is
-            // returned rather than swallowed, so a missing pandoc now surfaces
-            // as a dialog instead of a save that silently did nothing.
-            let out = std::process::Command::new("pandoc")
-                .args(["-f", "markdown", "-t", &ext, "-o", path, "--wrap=none"])
-                .stdin(std::process::Stdio::piped())
-                .spawn()
-                .map_err(|e| format!("pandoc not found (install pandoc for .{} export): {}", ext, e));
-            if let Ok(mut child) = out {
-                use std::io::Write;
-                if let Some(mut stdin) = child.stdin.take() {
-                    stdin.write_all(text.as_bytes()).map_err(|e| format!("Write error: {}", e))?;
-                }
-                let status = child.wait().map_err(|e| format!("Wait error: {}", e))?;
-                if !status.success() {
-                    return Err(format!("pandoc conversion failed (exit: {:?})", status.code()));
-                }
-                Ok(())
-            } else {
-                Err(out.unwrap_err())
-            }
-        }
-        _ => Err(format!("Unsupported format: .{}", ext)),
-    }
-}
 
 // ── Export helpers ───────────────────────────────────────────────────
 
@@ -152,12 +64,6 @@ fn html_to_typst_simple(html: &str) -> String {
 mod tests {
     use super::*;
 
-    #[test]
-    fn test_document_roundtrip() {
-        let text = "# Hello\n\nThis is **bold** and *italic*.";
-        let doc = Document::from_text(text);
-        assert_eq!(doc.text, text);
-    }
 
     #[test]
     fn test_markdown_to_typst_basic() {
@@ -168,31 +74,7 @@ mod tests {
         assert!(typst.contains("_italic_"));
     }
 
-    #[test]
-    fn test_docx_write_then_read_via_core() {
-        let text = "# Test Title\n\nHello from Antigravity test.";
-        let doc = Document::from_text(text);
 
-        let temp_dir = std::env::temp_dir();
-        let path = temp_dir.join("test_doc.docx");
-        let path_str = path.to_string_lossy();
-
-        let write_res = write(&path_str, &doc);
-        assert!(write_res.is_ok(), "Write docx failed: {:?}", write_res.err());
-
-        // Production reads go through letters_core::docx (see bridge::load_file_to_buffer).
-        let read_doc = letters_core::docx::read(&path_str);
-        assert!(read_doc.is_ok(), "Read docx failed: {:?}", read_doc.err());
-        assert!(read_doc.unwrap().to_plain_text().contains("Hello from Antigravity test"));
-
-        let _ = std::fs::remove_file(&path);
-    }
-
-    #[test]
-    fn test_document_empty() {
-        let doc = Document::from_text("");
-        assert_eq!(doc.text, "");
-    }
 
     #[test]
     fn test_markdown_to_typst_heading_levels() {
@@ -325,36 +207,5 @@ mod tests {
         );
 
         let _ = std::fs::remove_file(&out);
-    }
-
-    /// Writing .odt must produce a real ODF package with no external tool.
-    ///
-    /// This branch used to shell out to `pandoc`, which is not installed in
-    /// CI, in the Flatpak, or on most machines — so it returned an error that
-    /// Save As then discarded, writing nothing while reporting success (#447).
-    /// The file-corpus journeys caught it: every .odt fixture timed out
-    /// waiting for a file that was never created, while .docx passed.
-    #[test]
-    fn writing_odt_produces_an_odf_package_without_pandoc() {
-        let dir = std::env::temp_dir().join(format!("letters-odt-{}", std::process::id()));
-        std::fs::create_dir_all(&dir).unwrap();
-        let path = dir.join("out.odt");
-
-        let doc = Document::from_text("Hello *world*.\n\nSecond paragraph.");
-        write(path.to_str().unwrap(), &doc).expect("odt write must not need pandoc");
-
-        let bytes = std::fs::read(&path).expect("odt file must exist");
-        // ODF is a zip package; "PK" is the local file header signature.
-        assert_eq!(&bytes[..2], b"PK", "not a zip package");
-        assert!(bytes.len() > 200, "suspiciously small odt: {} bytes", bytes.len());
-
-        // And it must be readable back as ODT rather than being markdown with
-        // the wrong extension.
-        let read_back = letters_core::odt::read(path.to_str().unwrap())
-            .expect("our own ODT reader must accept it");
-        assert!(read_back.to_plain_text().contains("Second paragraph"),
-                "content lost: {:?}", read_back.to_plain_text());
-
-        let _ = std::fs::remove_dir_all(&dir);
     }
 }
