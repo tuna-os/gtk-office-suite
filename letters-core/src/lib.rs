@@ -12,7 +12,7 @@ pub mod review;
 pub mod session;
 pub mod structured;
 
-pub use model::{Alignment, Document, ListKind, PageGeometry, Paragraph, ParagraphLayout, ParaStyle, Run, RunStyle, StylePatch, TableCell};
+pub use model::{Alignment, Document, ListKind, PageGeometry, Paragraph, ParagraphLayout, ParaStyle, Run, RunStyle, StylePatch, TableCell, style_readout};
 pub use review::{base_direction, table_of_contents, BidiDirection, ChangeKind, Comment, ReviewId, ReviewState, TextRange, TocEntry, TrackedChange};
 pub use session::DocumentSession;
 pub use structured::StructuredEditor;

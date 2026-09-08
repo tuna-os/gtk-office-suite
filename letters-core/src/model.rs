@@ -569,6 +569,83 @@ impl Document {
         if index < 0 || index >= (rows * cols) as i64 { return None; }
         Some(TableCell { table, row: index as u32 / cols, col: index as u32 % cols })
     }
+
+    /// Find all occurrences of `query` in this document's plain text.
+    ///
+    /// Returns a list of `(start, end)` **character** offset pairs (global,
+    /// matching GtkTextBuffer's offset model and this model's own
+    /// `char_len`/`delete_range`/`insert_text`). The offsets can be fed
+    /// directly to `delete_range` / `insert_text` or to GTK's
+    /// `iter_at_offset`.
+    ///
+    /// `suite_common_core::search` reports byte offsets, which differ from
+    /// character offsets the moment the document contains non-ASCII text, so
+    /// they are converted here rather than at each call site.
+    ///
+    /// Paragraph breaks are a single character (offset += 1 per break), so a
+    /// match that spans a paragraph break is possible with regex — paragraph
+    /// breaks are `'\n'`, which literal patterns can target too.
+    pub fn find_in_document(
+        &self,
+        query: &suite_common_core::search::SearchQuery,
+    ) -> Vec<(usize, usize)> {
+        let text = self.to_plain_text();
+        Self::char_ranges(&text, query)
+    }
+
+    /// Character-offset ranges of every match of `query` in `text`.
+    fn char_ranges(
+        text: &str,
+        query: &suite_common_core::search::SearchQuery,
+    ) -> Vec<(usize, usize)> {
+        use suite_common_core::search::byte_to_char_offset;
+        suite_common_core::search::search(text, query)
+            .into_iter()
+            .map(|m| (byte_to_char_offset(text, m.start), byte_to_char_offset(text, m.end)))
+            .collect()
+    }
+
+    /// Replace the first occurrence of `query` with `replacement`.
+    ///
+    /// Returns `true` if a replacement was made, `false` if there was no match.
+    /// The document is mutated in place; run styles at the replaced span are
+    /// lost (the replacement text is plain/unstyled). For a styled replacement,
+    /// callers should apply `apply_run_style` after this call.
+    pub fn replace_first(
+        &mut self,
+        query: &suite_common_core::search::SearchQuery,
+        replacement: &str,
+    ) -> bool {
+        let text = self.to_plain_text();
+        match Self::char_ranges(&text, query).into_iter().next() {
+            Some((start, end)) => {
+                self.delete_range(start, end);
+                self.insert_text(start, replacement);
+                true
+            }
+            None => false,
+        }
+    }
+
+    /// Replace all non-overlapping occurrences of `query` with `replacement`.
+    ///
+    /// Returns the number of replacements made. Replacements are applied
+    /// right-to-left to keep earlier offsets valid through the whole pass.
+    pub fn replace_all(
+        &mut self,
+        query: &suite_common_core::search::SearchQuery,
+        replacement: &str,
+    ) -> usize {
+        let text = self.to_plain_text();
+        let matches = Self::char_ranges(&text, query);
+        let count = matches.len();
+        // Iterate right-to-left so each earlier offset stays valid.
+        for (start, end) in matches.into_iter().rev() {
+            self.delete_range(start, end);
+            self.insert_text(start, replacement);
+        }
+        count
+    }
 }
 
 #[derive(Clone, Debug, Default, PartialEq)]
@@ -705,5 +782,170 @@ mod structured_editing_tests {
         assert_eq!(style.left_indent_pt, 24.0);
         assert_eq!(style.first_line_indent_pt, -18.0);
         assert_eq!(style.tab_stops_pt, vec![72.0, 144.0]);
+    }
+}
+
+#[cfg(test)]
+mod find_replace_tests {
+    use super::*;
+    use suite_common_core::search::SearchQuery;
+
+    // ── find_in_document ─────────────────────────────────────────────────
+
+    #[test]
+    fn find_returns_correct_offsets_in_single_paragraph() {
+        let doc = Document::from_plain_text("the cat sat on the cat mat");
+        let q = SearchQuery::new("cat");
+        let matches = doc.find_in_document(&q);
+        assert_eq!(matches.len(), 2, "expected 2 occurrences: {matches:?}");
+        assert_eq!(matches[0], (4, 7));
+        assert_eq!(matches[1], (19, 22));
+    }
+
+    #[test]
+    fn find_is_case_insensitive_by_default() {
+        let doc = Document::from_plain_text("Hello HELLO hello");
+        let q = SearchQuery::new("hello");
+        assert_eq!(doc.find_in_document(&q).len(), 3);
+    }
+
+    #[test]
+    fn find_case_sensitive_skips_wrong_case() {
+        let doc = Document::from_plain_text("Hello HELLO hello");
+        let q = SearchQuery::new("hello").case_sensitive(true);
+        let matches = doc.find_in_document(&q);
+        assert_eq!(matches.len(), 1);
+        assert_eq!(matches[0].0, 12); // third occurrence
+    }
+
+    #[test]
+    fn find_across_paragraphs_uses_global_offsets() {
+        // "one\ntwo" — paragraph break is offset 3, 't' at offset 4.
+        let doc = Document::from_plain_text("one\ntwo");
+        let q = SearchQuery::new("two");
+        let matches = doc.find_in_document(&q);
+        assert_eq!(matches.len(), 1);
+        assert_eq!(matches[0], (4, 7));
+    }
+
+    #[test]
+    fn find_empty_query_returns_no_matches() {
+        let doc = Document::from_plain_text("some text");
+        let q = SearchQuery::new("");
+        assert!(doc.find_in_document(&q).is_empty());
+    }
+
+    // ── replace_first ────────────────────────────────────────────────────
+
+    #[test]
+    fn replace_first_replaces_only_first_occurrence() {
+        let mut doc = Document::from_plain_text("cat and cat");
+        let q = SearchQuery::new("cat");
+        assert!(doc.replace_first(&q, "dog"));
+        assert_eq!(doc.to_plain_text(), "dog and cat");
+    }
+
+    #[test]
+    fn replace_first_returns_false_on_no_match() {
+        let mut doc = Document::from_plain_text("hello");
+        let q = SearchQuery::new("xyz");
+        assert!(!doc.replace_first(&q, "yyy"));
+        assert_eq!(doc.to_plain_text(), "hello");
+    }
+
+    #[test]
+    fn replace_first_with_longer_text_adjusts_document() {
+        let mut doc = Document::from_plain_text("hi");
+        let q = SearchQuery::new("hi");
+        assert!(doc.replace_first(&q, "hello world"));
+        assert_eq!(doc.to_plain_text(), "hello world");
+    }
+
+    // ── replace_all ──────────────────────────────────────────────────────
+
+    #[test]
+    fn replace_all_returns_count_and_replaces_all() {
+        let mut doc = Document::from_plain_text("foo foo foo");
+        let q = SearchQuery::new("foo");
+        let n = doc.replace_all(&q, "bar");
+        assert_eq!(n, 3);
+        assert_eq!(doc.to_plain_text(), "bar bar bar");
+    }
+
+    #[test]
+    fn replace_all_returns_zero_on_no_match() {
+        let mut doc = Document::from_plain_text("hello world");
+        let q = SearchQuery::new("xyz");
+        assert_eq!(doc.replace_all(&q, "yyy"), 0);
+        assert_eq!(doc.to_plain_text(), "hello world");
+    }
+
+    #[test]
+    fn replace_all_case_insensitive_replaces_all_variants() {
+        let mut doc = Document::from_plain_text("Cat CAT cat");
+        let q = SearchQuery::new("cat"); // case-insensitive by default
+        let n = doc.replace_all(&q, "dog");
+        assert_eq!(n, 3);
+        assert_eq!(doc.to_plain_text(), "dog dog dog");
+    }
+
+    #[test]
+    fn replace_all_across_paragraphs() {
+        // "ab\nab" — two paragraphs, each starting with "ab"
+        let mut doc = Document::from_plain_text("ab\nab");
+        let q = SearchQuery::new("ab");
+        let n = doc.replace_all(&q, "XY");
+        assert_eq!(n, 2);
+        assert_eq!(doc.to_plain_text(), "XY\nXY");
+    }
+
+    // ── non-ASCII offsets ────────────────────────────────────────────────
+    // `search` reports byte offsets while the document model addresses text in
+    // characters; the two diverge as soon as a document contains non-ASCII
+    // text. These tests pin the conversion.
+
+    #[test]
+    fn find_reports_character_offsets_not_byte_offsets() {
+        // "naïve " is 7 bytes but 6 characters.
+        let doc = Document::from_plain_text("naïve cat");
+        let q = SearchQuery::new("cat");
+        assert_eq!(doc.find_in_document(&q), [(6, 9)]);
+    }
+
+    #[test]
+    fn replace_first_after_non_ascii_text_does_not_corrupt() {
+        let mut doc = Document::from_plain_text("naïve cat");
+        let q = SearchQuery::new("cat");
+        assert!(doc.replace_first(&q, "dog"));
+        assert_eq!(doc.to_plain_text(), "naïve dog");
+    }
+
+    #[test]
+    fn replace_all_with_non_ascii_matches() {
+        let mut doc = Document::from_plain_text("café au café");
+        let q = SearchQuery::new("café");
+        assert_eq!(doc.replace_all(&q, "thé"), 2);
+        assert_eq!(doc.to_plain_text(), "thé au thé");
+    }
+
+    #[test]
+    fn replace_all_across_paragraphs_with_non_ascii() {
+        let mut doc = Document::from_plain_text("é ab
+é ab");
+        let q = SearchQuery::new("ab");
+        assert_eq!(doc.replace_all(&q, "XY"), 2);
+        assert_eq!(doc.to_plain_text(), "é XY
+é XY");
+    }
+
+    #[test]
+    fn replace_preserves_styles_outside_the_replaced_span() {
+        let mut doc = Document::from_plain_text("bold cat tail");
+        doc.apply_run_style(0, 4, &StylePatch { bold: Some(true), ..Default::default() });
+        let q = SearchQuery::new("cat");
+        assert!(doc.replace_first(&q, "dog"));
+        assert_eq!(doc.to_plain_text(), "bold dog tail");
+        assert!(doc.style_at(0).bold, "leading bold run must survive the replacement");
+        assert!(!doc.style_at(5).bold, "replacement text is unstyled");
     }
 }

@@ -10,7 +10,7 @@
 // list kinds translate to/from the editor's literal "- " / "N. " markers.
 
 use gtk4::{self as gtk, prelude::*};
-use letters_core::model::{Document, Paragraph, Run, RunStyle};
+use letters_core::model::{Document, PageGeometry, Paragraph, Run, RunStyle};
 
 const RUN_TAGS: [&str; 6] = ["bold", "italic", "underline", "strikethrough", "highlight", "code"];
 
@@ -204,17 +204,93 @@ pub fn capture_from_buffer(buf: &gtk::TextBuffer) -> Document {
     capture_list_marker(&mut current);
     paragraphs.push(current);
 
-    // The footnote texts ride on the buffer (set by render/insert).
+    // Footnotes, header, footer and page geometry are document state that has
+    // no representation in the text buffer, so they ride on the buffer itself
+    // (set by render/insert) rather than being reconstructed from the text.
+    // Returning `None` for them here — as this function used to — discarded
+    // them on every save, because `save_buffer_to_path` writes exactly the
+    // Document this returns and both the ODT and DOCX writers emit all three
+    // (#438).
     let footnotes: Vec<String> = unsafe {
         buf.data::<Vec<String>>(FOOTNOTES_KEY)
             .map(|p| p.as_ref().clone())
             .unwrap_or_default()
     };
-    Document { paragraphs, footnotes, header: None, footer: None, page: None }
+    let header = header_sidecar(buf);
+    let footer = footer_sidecar(buf);
+    let page = page_sidecar(buf);
+    Document { paragraphs, footnotes, header, footer, page }
 }
 
 /// Buffer data key holding the document's footnote texts.
 pub const FOOTNOTES_KEY: &str = "letters-footnotes";
+/// Buffer data key holding the document's header text, if it has one.
+pub const HEADER_KEY: &str = "letters-header";
+/// Buffer data key holding the document's footer text, if it has one.
+pub const FOOTER_KEY: &str = "letters-footer";
+/// Buffer data key holding the document's page geometry, if it has one.
+pub const PAGE_KEY: &str = "letters-page";
+
+// GObject data is an untyped pointer: reading a key back at a type other than
+// the one it was written with is undefined behaviour, not a panic, and no test
+// will catch it. So each key gets one reader and the type appears exactly
+// once per key — rather than a generic helper any future caller could
+// instantiate at the wrong type.
+//
+// The outer `Option` distinguishes "key never set" (a buffer that was never
+// rendered from a Document) from a document that genuinely has no header;
+// both flatten to `None`, but only the former is worth keeping separate for
+// anyone extending this.
+
+fn header_sidecar(buf: &gtk::TextBuffer) -> Option<String> {
+    unsafe { buf.data::<Option<String>>(HEADER_KEY).and_then(|p| p.as_ref().clone()) }
+}
+
+fn footer_sidecar(buf: &gtk::TextBuffer) -> Option<String> {
+    unsafe { buf.data::<Option<String>>(FOOTER_KEY).and_then(|p| p.as_ref().clone()) }
+}
+
+fn page_sidecar(buf: &gtk::TextBuffer) -> Option<PageGeometry> {
+    unsafe { buf.data::<Option<PageGeometry>>(PAGE_KEY).and_then(|p| *p.as_ref()) }
+}
+
+/// Read the page geometry currently attached to `buf`, if it has one.
+pub fn buffer_page_geometry(buf: &gtk::TextBuffer) -> Option<PageGeometry> {
+    page_sidecar(buf)
+}
+
+/// Read the header/footer currently attached to `buf`.
+pub fn buffer_header_footer(buf: &gtk::TextBuffer) -> (Option<String>, Option<String>) {
+    (header_sidecar(buf), footer_sidecar(buf))
+}
+
+/// Update just the header/footer, leaving the rest of the buffer's document
+/// state alone.
+///
+/// Empty text means "no header", not an empty one: the ODT and DOCX writers
+/// both emit a header block for `Some("")`, so treating a cleared entry as
+/// `Some("")` would put an empty header into every saved file.
+pub fn set_buffer_header_footer(buf: &gtk::TextBuffer, header: &str, footer: &str) {
+    let present = |text: &str| (!text.is_empty()).then(|| text.to_string());
+    unsafe {
+        buf.set_data(HEADER_KEY, present(header));
+        buf.set_data(FOOTER_KEY, present(footer));
+    }
+}
+
+/// Attach the document state that the text buffer cannot represent.
+///
+/// Called by `render_to_buffer`, and by anything else that replaces a
+/// buffer's document wholesale, so a later `capture_from_buffer` can put the
+/// Document back together.
+pub fn set_buffer_sidecars(doc: &Document, buf: &gtk::TextBuffer) {
+    unsafe {
+        buf.set_data(FOOTNOTES_KEY, doc.footnotes.clone());
+        buf.set_data(HEADER_KEY, doc.header.clone());
+        buf.set_data(FOOTER_KEY, doc.footer.clone());
+        buf.set_data(PAGE_KEY, doc.page);
+    }
+}
 
 /// The editor shows lists as literal "- " / "N. " markers; the model wants
 /// ListKind. Strip the marker and set the kind when capturing.
@@ -257,7 +333,7 @@ fn capture_list_marker(para: &mut Paragraph) {
 
 /// Replace the buffer's content with a rendered Document.
 pub fn render_to_buffer(doc: &Document, buf: &gtk::TextBuffer) {
-    unsafe { buf.set_data(FOOTNOTES_KEY, doc.footnotes.clone()) };
+    set_buffer_sidecars(doc, buf);
     buf.set_text("");
     let mut insert = buf.start_iter();
     for (i, para) in doc.paragraphs.iter().enumerate() {
@@ -413,6 +489,7 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
+    use suite_common::gtk_test::run as gtk_test;
     use letters_core::model::StylePatch;
 
     // ── line-spacing tag mapping (pure, no GTK) ──────────────────────
@@ -509,46 +586,6 @@ mod tests {
         let prose = captured("Hello. World");
         assert_eq!(prose.style.list, ListKind::None);
         assert_eq!(prose.text(), "Hello. World");
-    }
-
-    /// Run a GTK-dependent closure on GTK's single main thread. GTK objects may
-    /// only be created from the thread that called `gtk::init`, and `gtk::init`
-    /// succeeds at most once per process, so all GTK tests share one exclusive
-    /// worker thread. When GTK cannot initialize (headless CI without a
-    /// display) this skips (logs and returns without running the closure),
-    /// rather than panicking like `#[gtk::test]` does.
-    fn gtk_test<F>(f: F)
-    where
-        F: FnOnce() + Send + std::panic::UnwindSafe + 'static,
-    {
-        use std::panic;
-        use std::sync::mpsc;
-        use std::sync::OnceLock;
-
-        static MAIN: OnceLock<Option<gtk::glib::ThreadPool>> = OnceLock::new();
-        let pool = MAIN
-            .get_or_init(|| {
-                let pool = gtk::glib::ThreadPool::exclusive(1).ok()?;
-                let (tx, rx) = mpsc::channel();
-                pool.push(move || {
-                    let _ = tx.send(gtk::init().is_ok());
-                })
-                .ok()?;
-                match rx.recv().ok()? {
-                    true => Some(pool),
-                    false => None,
-                }
-            })
-            .as_ref();
-        let Some(pool) = pool else {
-            eprintln!("skipping GTK test: no display");
-            return;
-        };
-        let (tx, rx) = mpsc::sync_channel(1);
-        let _ = pool.push(move || {
-            let _ = tx.send(panic::catch_unwind(f));
-        });
-        let _ = rx.recv();
     }
 
     fn round_trip(buf: &gtk::TextBuffer, doc: &Document) -> Document {
@@ -663,6 +700,169 @@ single");
         assert_eq!(rt.style_at(6).link.as_deref(), Some("https://gnome.org"));
         assert_eq!(rt.style_at(0).link, None);
         assert_eq!(rt.style_at(12).link, None);
+        });
+    }
+
+    // ── non-buffer document state (#438) ─────────────────────────────────
+    // Header, footer and page geometry have no representation in the text
+    // buffer. `capture_from_buffer` used to hardcode all three to `None`,
+    // and `save_buffer_to_path` saves exactly what it returns — so every
+    // save silently dropped them, even though both the ODT and DOCX writers
+    // emit all three.
+
+    fn geometry() -> letters_core::model::PageGeometry {
+        letters_core::model::PageGeometry {
+            width_pt: 595.0,
+            height_pt: 842.0,
+            margin_top_pt: 72.0,
+            margin_bottom_pt: 72.0,
+            margin_left_pt: 54.0,
+            margin_right_pt: 54.0,
+            columns: 2,
+            column_gap_pt: 18.0,
+        }
+    }
+
+    #[test]
+    fn header_and_footer_survive_a_buffer_round_trip() {
+        gtk_test(|| {
+            let buf = gtk::TextBuffer::new(None);
+            let mut doc = Document::from_plain_text("body text");
+            doc.header = Some("Quarterly Report".into());
+            doc.footer = Some("Page {page}".into());
+
+            let captured = round_trip(&buf, &doc);
+            assert_eq!(captured.header.as_deref(), Some("Quarterly Report"));
+            assert_eq!(captured.footer.as_deref(), Some("Page {page}"));
+            assert_eq!(captured.to_plain_text(), "body text");
+        });
+    }
+
+    #[test]
+    fn page_geometry_survives_a_buffer_round_trip() {
+        gtk_test(|| {
+            let buf = gtk::TextBuffer::new(None);
+            let mut doc = Document::from_plain_text("body");
+            doc.page = Some(geometry());
+
+            let captured = round_trip(&buf, &doc);
+            let page = captured.page.expect("page geometry must survive the round trip");
+            assert_eq!(page, geometry());
+        });
+    }
+
+    /// The state must survive *editing*, not merely an untouched round trip —
+    /// that is the case a user actually hits: open a document with a header,
+    /// type a word, save.
+    #[test]
+    fn non_buffer_state_survives_an_edit() {
+        gtk_test(|| {
+            let buf = gtk::TextBuffer::new(None);
+            let mut doc = Document::from_plain_text("before");
+            doc.header = Some("Kept".into());
+            doc.footer = Some("Also kept".into());
+            doc.page = Some(geometry());
+            render_to_buffer(&doc, &buf);
+
+            let mut end = buf.end_iter();
+            buf.insert(&mut end, " and after");
+
+            let captured = capture_from_buffer(&buf);
+            assert_eq!(captured.to_plain_text(), "before and after");
+            assert_eq!(captured.header.as_deref(), Some("Kept"));
+            assert_eq!(captured.footer.as_deref(), Some("Also kept"));
+            assert_eq!(captured.page, Some(geometry()));
+        });
+    }
+
+    /// A document with no header must capture as `None`, not as an empty
+    /// string — the writers treat the two differently, and `Some("")` would
+    /// emit an empty header block into every saved file.
+    #[test]
+    fn absent_header_stays_absent() {
+        gtk_test(|| {
+            let buf = gtk::TextBuffer::new(None);
+            let doc = Document::from_plain_text("no header here");
+            let captured = round_trip(&buf, &doc);
+            assert_eq!(captured.header, None);
+            assert_eq!(captured.footer, None);
+            assert_eq!(captured.page, None);
+        });
+    }
+
+    /// A buffer that was never rendered from a Document has no sidecars at
+    /// all. Capturing it must not panic and must report absence.
+    #[test]
+    fn buffer_without_sidecars_captures_cleanly() {
+        gtk_test(|| {
+            let buf = gtk::TextBuffer::new(None);
+            buf.set_text("typed straight into an empty buffer");
+            let captured = capture_from_buffer(&buf);
+            assert_eq!(captured.to_plain_text(), "typed straight into an empty buffer");
+            assert_eq!(captured.header, None);
+            assert_eq!(captured.footer, None);
+            assert_eq!(captured.page, None);
+            assert!(captured.footnotes.is_empty());
+        });
+    }
+
+    /// Re-rendering a different document must replace the previous
+    /// document's state, not leave the old header attached to the new one.
+    #[test]
+    fn rendering_a_new_document_replaces_the_previous_state() {
+        gtk_test(|| {
+            let buf = gtk::TextBuffer::new(None);
+            let mut first = Document::from_plain_text("first");
+            first.header = Some("Old header".into());
+            first.page = Some(geometry());
+            render_to_buffer(&first, &buf);
+
+            let second = Document::from_plain_text("second");
+            let captured = round_trip(&buf, &second);
+            assert_eq!(captured.to_plain_text(), "second");
+            assert_eq!(captured.header, None, "the previous document's header must not leak");
+            assert_eq!(captured.page, None, "nor its page geometry");
+        });
+    }
+
+    /// The header/footer dialog writes through this helper. An empty entry
+    /// means "no header": `Some("")` would make both writers emit an empty
+    /// header block into every saved file.
+    #[test]
+    fn setting_an_empty_header_clears_it_rather_than_storing_a_blank() {
+        gtk_test(|| {
+            let buf = gtk::TextBuffer::new(None);
+            let mut doc = Document::from_plain_text("body");
+            doc.header = Some("Existing".into());
+            render_to_buffer(&doc, &buf);
+
+            set_buffer_header_footer(&buf, "", "");
+            let captured = capture_from_buffer(&buf);
+            assert_eq!(captured.header, None, "a cleared entry must remove the header");
+            assert_eq!(captured.footer, None);
+        });
+    }
+
+    /// Editing the header without touching the text must persist, and must
+    /// leave the page geometry alone.
+    #[test]
+    fn dialog_edits_reach_the_captured_document() {
+        gtk_test(|| {
+            let buf = gtk::TextBuffer::new(None);
+            let mut doc = Document::from_plain_text("body");
+            doc.page = Some(geometry());
+            render_to_buffer(&doc, &buf);
+
+            set_buffer_header_footer(&buf, "New header", "New footer");
+            let captured = capture_from_buffer(&buf);
+            assert_eq!(captured.header.as_deref(), Some("New header"));
+            assert_eq!(captured.footer.as_deref(), Some("New footer"));
+            assert_eq!(captured.page, Some(geometry()), "geometry must be untouched");
+            assert_eq!(
+                buffer_header_footer(&buf),
+                (Some("New header".into()), Some("New footer".into())),
+                "the dialog reads back what it wrote"
+            );
         });
     }
 }

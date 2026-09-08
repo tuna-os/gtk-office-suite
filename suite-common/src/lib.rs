@@ -11,6 +11,7 @@
 //   ToastManager      — toast notification system for save/error feedback
 
 pub mod file_dialogs;
+pub mod gtk_test;
 pub mod toast_manager;
 pub use suite_common_core::{actions, palette, format, undo, events, string_pool, units, props, style, search, print, atomic_save, autosave, recent, templates, session};
 
@@ -254,6 +255,27 @@ impl SuiteApp {
 }
 
 /// Show a contextual help dialog explaining formats, interoperability, crash recovery, and shortcuts.
+/// Tell the user an operation failed, in a dialog they must acknowledge.
+///
+/// All three apps had places that reported a failure with `eprintln!` and
+/// nothing else — most consequentially a document that would not open, where
+/// the user is left looking at an empty window with no indication that
+/// anything went wrong (#447). stderr is not a user interface: under a
+/// Flatpak or a desktop launcher nobody ever sees it.
+///
+/// `heading` should name the failure in words that read as a failure; the
+/// GUI journeys match on phrases like "could not" / "cannot open" / "failed
+/// to", and an accessible name that avoids all of them is invisible to them.
+pub fn show_error_dialog(parent: Option<&adw::ApplicationWindow>, heading: &str, body: &str) {
+    let dialog = adw::AlertDialog::builder()
+        .heading(heading)
+        .body(body)
+        .build();
+    dialog.add_response("ok", &i18n("OK"));
+    dialog.set_default_response(Some("ok"));
+    dialog.present(parent);
+}
+
 pub fn show_help_dialog(parent: Option<&adw::ApplicationWindow>) {
     let dialog = adw::AlertDialog::new(
         Some(&i18n("Help & System Diagnostics")),
@@ -1123,13 +1145,10 @@ mod tests {
 
     #[test]
     fn test_empty_state_created() {
-        // Skip if GTK not available (no display server in test CI)
-        if gtk4::init().is_err() || !gtk4::is_initialized() {
-            eprintln!("SKIP: GTK not initialized (no display)");
-            return;
-        }
-        let state = make_empty_state("Title", "Description", "icon", "Open");
-        assert_eq!(state.width_request(), -1);
+        crate::gtk_test::run(|| {
+            let state = make_empty_state("Title", "Description", "icon", "Open");
+            assert_eq!(state.width_request(), -1);
+        });
     }
 }
 

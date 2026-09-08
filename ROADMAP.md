@@ -1,5 +1,10 @@
 # gtk-office-suite Roadmap
 
+The current execution plan is [Roadmap to dependable daily use](docs/readiness-2026-09/README.md),
+tracked in [#443](https://github.com/tuna-os/gtk-office-suite/issues/443).
+It prioritizes crash reproduction, save/recovery safety and verified user journeys.
+The dated ledger below is historical and does not certify present behavior.
+
 **Last updated**: 2026-08-11 | **Maintainer**: tuna-os (hanthor) / architect agent
 
 ---
@@ -64,7 +69,7 @@ gtk-office-suite is the org's flagship **end-user product bet** and a cornerston
 |------|-------|----------|--------|
 | GUI-layer God-files (window.rs 2.6K/2.5K/1.6K LOC) | #168 | P0 | L |
 | Dual maintenance burden: Python office suite (letters/tables/decks) + Rust suite | #82 | P1 | L |
-| spell.rs `generate_candidates("")` panic (0..n-1, n=0) | #172 | P1 | S |
+| ~~spell.rs `generate_candidates("")` panic (0..n-1, n=0)~~ — ✅ fixed, `saturating_sub(1)` in the transposition loop | #172 | P1 | S |
 
 ---
 

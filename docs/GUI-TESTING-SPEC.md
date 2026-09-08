@@ -3,6 +3,10 @@
 > End-to-end GUI test automation for all three apps (Letters, Tables, Decks)
 > using Dogtail + QEMU virtual machine on GitHub CI.
 
+> [!NOTE]
+> This document specifies an architectural proposal for full-desktop QEMU VM testing on CI.
+> For the current canonical GUI test execution framework, runner scripts, and Xvfb setup, see [`docs/TESTING.md`](TESTING.md).
+
 ---
 
 ## Motivation

@@ -43,13 +43,13 @@ fn write_text_box<W: std::io::Write>(
     writer.write_event(Event::Start(BytesStart::new("a:xfrm")))?;
     
     let mut off = BytesStart::new("a:off");
-    off.push_attribute(("x", ((x * 9525.0) as i64).to_string().as_str()));
-    off.push_attribute(("y", ((y * 9525.0) as i64).to_string().as_str()));
+    off.push_attribute(("x", ((x * 9525.0).round() as i64).to_string().as_str()));
+    off.push_attribute(("y", ((y * 9525.0).round() as i64).to_string().as_str()));
     writer.write_event(Event::Empty(off))?;
     
     let mut ext = BytesStart::new("a:ext");
-    ext.push_attribute(("cx", ((w * 9525.0) as i64).to_string().as_str()));
-    ext.push_attribute(("cy", ((h * 9525.0) as i64).to_string().as_str()));
+    ext.push_attribute(("cx", ((w * 9525.0).round() as i64).to_string().as_str()));
+    ext.push_attribute(("cy", ((h * 9525.0).round() as i64).to_string().as_str()));
     writer.write_event(Event::Empty(ext))?;
     
     writer.write_event(Event::End(BytesEnd::new("a:xfrm")))?;
@@ -134,13 +134,13 @@ fn write_rect<W: std::io::Write>(
     writer.write_event(Event::Start(BytesStart::new("a:xfrm")))?;
     
     let mut off = BytesStart::new("a:off");
-    off.push_attribute(("x", ((x * 9525.0) as i64).to_string().as_str()));
-    off.push_attribute(("y", ((y * 9525.0) as i64).to_string().as_str()));
+    off.push_attribute(("x", ((x * 9525.0).round() as i64).to_string().as_str()));
+    off.push_attribute(("y", ((y * 9525.0).round() as i64).to_string().as_str()));
     writer.write_event(Event::Empty(off))?;
     
     let mut ext = BytesStart::new("a:ext");
-    ext.push_attribute(("cx", ((w * 9525.0) as i64).to_string().as_str()));
-    ext.push_attribute(("cy", ((h * 9525.0) as i64).to_string().as_str()));
+    ext.push_attribute(("cx", ((w * 9525.0).round() as i64).to_string().as_str()));
+    ext.push_attribute(("cy", ((h * 9525.0).round() as i64).to_string().as_str()));
     writer.write_event(Event::Empty(ext))?;
     
     writer.write_event(Event::End(BytesEnd::new("a:xfrm")))?;
@@ -186,13 +186,13 @@ fn write_circle<W: std::io::Write>(
     writer.write_event(Event::Start(BytesStart::new("a:xfrm")))?;
     
     let mut off = BytesStart::new("a:off");
-    off.push_attribute(("x", (((x - r) * 9525.0) as i64).to_string().as_str()));
-    off.push_attribute(("y", (((y - r) * 9525.0) as i64).to_string().as_str()));
+    off.push_attribute(("x", (((x - r) * 9525.0).round() as i64).to_string().as_str()));
+    off.push_attribute(("y", (((y - r) * 9525.0).round() as i64).to_string().as_str()));
     writer.write_event(Event::Empty(off))?;
     
     let mut ext = BytesStart::new("a:ext");
-    ext.push_attribute(("cx", ((2.0 * r * 9525.0) as i64).to_string().as_str()));
-    ext.push_attribute(("cy", ((2.0 * r * 9525.0) as i64).to_string().as_str()));
+    ext.push_attribute(("cx", ((2.0 * r * 9525.0).round() as i64).to_string().as_str()));
+    ext.push_attribute(("cy", ((2.0 * r * 9525.0).round() as i64).to_string().as_str()));
     writer.write_event(Event::Empty(ext))?;
     
     writer.write_event(Event::End(BytesEnd::new("a:xfrm")))?;
@@ -250,13 +250,13 @@ fn write_image<W: std::io::Write>(
     writer.write_event(Event::Start(BytesStart::new("a:xfrm")))?;
     
     let mut off = BytesStart::new("a:off");
-    off.push_attribute(("x", ((x * 9525.0) as i64).to_string().as_str()));
-    off.push_attribute(("y", ((y * 9525.0) as i64).to_string().as_str()));
+    off.push_attribute(("x", ((x * 9525.0).round() as i64).to_string().as_str()));
+    off.push_attribute(("y", ((y * 9525.0).round() as i64).to_string().as_str()));
     writer.write_event(Event::Empty(off))?;
     
     let mut ext = BytesStart::new("a:ext");
-    ext.push_attribute(("cx", ((w * 9525.0) as i64).to_string().as_str()));
-    ext.push_attribute(("cy", ((h * 9525.0) as i64).to_string().as_str()));
+    ext.push_attribute(("cx", ((w * 9525.0).round() as i64).to_string().as_str()));
+    ext.push_attribute(("cy", ((h * 9525.0).round() as i64).to_string().as_str()));
     writer.write_event(Event::Empty(ext))?;
     
     writer.write_event(Event::End(BytesEnd::new("a:xfrm")))?;
@@ -525,4 +525,78 @@ pub fn write_pptx_bytes(deck: &Deck) -> Result<Vec<u8>, String> {
     }
 
     zip.finish().map_err(|e| e.to_string()).map(|c| c.into_inner())
+}
+
+#[cfg(test)]
+mod emu_rounding_tests {
+    use super::*;
+    use crate::engine::parse::read_pptx;
+
+    /// One slide holding a single text box at (`at`, `at`).
+    fn deck_with_box(text: &str, at: f64, w: f64, h: f64) -> Deck {
+        Deck {
+            slides: vec![Slide {
+                title: String::new(),
+                background: String::new(),
+                notes: String::new(),
+                master_idx: None,
+                objects: vec![SlideObject::TextBox {
+                    text: text.into(),
+                    x: at, y: at, w, h,
+                    rotation: 0.0,
+                    runs: vec![],
+                }],
+            }],
+            ..Default::default()
+        }
+    }
+
+    /// PPTX stores geometry in EMU, which are integral, so a conversion from
+    /// our floating-point points is inherently lossy. It must at least be
+    /// *centred*: `as i64` truncates toward zero, which loses up to a whole
+    /// EMU and always in the same direction, so a deck drifts a little further
+    /// up and left every time it is saved.
+    ///
+    /// 2 cm is 75.5905511811 pt, which is 719999.9999… EMU. Truncated that is
+    /// 719999 and reads back as 75.59044…; rounded it is 720000 and reads back
+    /// exactly. The file-corpus journeys compare positions for equality after
+    /// a save-and-reopen, so this showed up there as every Decks fixture
+    /// failing at the reopen step (#447).
+    #[test]
+    fn a_two_centimetre_offset_survives_a_pptx_round_trip_exactly() {
+        let two_cm = 75.590_551_181_1_f64;
+        let deck = deck_with_box("geometry", two_cm, 200.0, 50.0);
+
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("emu.pptx");
+        write_pptx(path.to_str().unwrap(), &deck).expect("write");
+        let read_back = read_pptx(path.to_str().unwrap()).expect("read");
+
+        let (x, y) = crate::undo::obj_position(&read_back.slides[0].objects[0]);
+        assert!(
+            (x - two_cm).abs() < 1e-6 && (y - two_cm).abs() < 1e-6,
+            "position drifted: wrote ({two_cm}, {two_cm}), read ({x}, {y})"
+        );
+    }
+
+    /// Saving repeatedly must not walk the geometry anywhere. With truncation
+    /// the error is one-directional, so it accumulates; with rounding it does
+    /// not.
+    #[test]
+    fn geometry_does_not_drift_across_repeated_saves() {
+        let start = 75.590_551_181_1_f64;
+        let mut deck = deck_with_box("drift", start, 100.0, 40.0);
+
+        let dir = tempfile::tempdir().unwrap();
+        for generation in 0..8 {
+            let path = dir.path().join(format!("gen{generation}.pptx"));
+            write_pptx(path.to_str().unwrap(), &deck).expect("write");
+            deck = read_pptx(path.to_str().unwrap()).expect("read");
+        }
+        let (x, y) = crate::undo::obj_position(&deck.slides[0].objects[0]);
+        assert!(
+            (x - start).abs() < 1e-6 && (y - start).abs() < 1e-6,
+            "drifted over eight saves: {start} -> ({x}, {y})"
+        );
+    }
 }

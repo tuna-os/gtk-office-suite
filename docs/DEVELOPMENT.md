@@ -3,7 +3,7 @@
 How to set up, build, run, and change this codebase. For testing specifics
 see [TESTING.md](TESTING.md); for module layout see
 [ARCHITECTURE.md](ARCHITECTURE.md); agents start at the repo-root
-[CLAUDE.md](../CLAUDE.md).
+[AGENTS.md](../AGENTS.md).
 
 ## Setup
 
@@ -12,7 +12,7 @@ and libadwaita ≥ 1.5 dev headers.
 
 ```bash
 # Debian/Ubuntu
-sudo apt-get install libgtk-4-dev libadwaita-1-dev
+sudo apt-get install libgtk-4-dev libadwaita-1-dev libglib2.0-bin
 
 # check
 cargo check --workspace

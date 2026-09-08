@@ -1,6 +1,7 @@
 use gtk4::prelude::*;
 use gtk4::gio;
 mod window;
+mod persistence;
 mod export;
 mod canvas;
 mod canvas_area;
@@ -79,8 +80,22 @@ fn main() {
         let win = store.as_ref().unwrap();
         for file in files {
             if let Some(path) = file.path() {
-                if let Err(e) = win.open_path(&path.to_string_lossy()) {
-                    eprintln!("open failed: {e}");
+                let path_str = path.to_string_lossy().to_string();
+                if let Err(e) = win.open_path(&path_str) {
+                    // stderr is not a user interface: launched from a file
+                    // manager or a Flatpak, an unreadable file used to open
+                    // an empty window with no explanation at all (#447).
+                    let name = std::path::Path::new(&path_str)
+                        .file_name()
+                        .map(|name| name.to_string_lossy().to_string())
+                        .unwrap_or_else(|| path_str.clone());
+                    suite_common::show_error_dialog(
+                        Some(&win.window),
+                        &suite_common::i18n("Could not open file"),
+                        &format!("{name}
+
+{e}"),
+                    );
                 }
             }
         }

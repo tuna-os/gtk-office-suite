@@ -5,303 +5,16 @@
 use gtk4::{self as gtk, gio, glib, prelude::*};
 use libadwaita as adw;
 use adw::prelude::{AlertDialogExt, AlertDialogExtManual, AdwDialogExt};
-use std::cell::RefCell;
-use std::rc::Rc;
 
-use crate::actions::{connect_list_continuation, connect_markdown_macros, register_formatting_tags};
 use crate::dialogs::{active_buffer, get_textview, make_find_replace_widget, show_header_footer_dialog};
-use crate::page_container::PageContainer;
+use crate::doc_tab::{
+    apply_page_setup_from_buffer, autosave_state_dir, make_doc_widget, report_open_failure,
+    tab_data_get, tab_data_set, TabData,
+};
 
 mod saving;
 use saving::{close_all_dirty_pages, do_save, SaveOutcome};
 
-// ── Crash-recovery snapshots ─────────────────────────────────────────────
-// One AutosaveSlot per tab (not per window, unlike Tables/Decks): each tab
-// is its own document, so each needs its own doc_id and its own slot.
-static NEXT_DOC_ID: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
-fn next_doc_id() -> String {
-    let n = NEXT_DOC_ID.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-    format!("{}-{n}", std::process::id())
-}
-
-fn autosave_state_dir() -> std::path::PathBuf {
-    // glib::user_state_dir() needs the "v2_72" feature this workspace's
-    // glib binding doesn't enable — do the XDG fallback ourselves.
-    let base = std::env::var_os("XDG_STATE_HOME")
-        .map(std::path::PathBuf::from)
-        .or_else(|| std::env::var_os("HOME").map(|h| std::path::PathBuf::from(h).join(".local/state")))
-        .unwrap_or_else(|| std::path::PathBuf::from("/tmp"));
-    base.join("letters")
-}
-
-// ── Per-tab state via widget Qdata ─────────────────────────────────────
-// Session identity (file/closing/autosave) is canonical, GTK-free state —
-// letters_core::DocumentSession (#103). The tab's actual document
-// *content* is still the GtkTextBuffer itself; there's no GTK-free
-// representation of that today (a larger design question than this
-// slice), so TabData only owns identity, not content.
-
-#[derive(Clone)]
-struct TabData(Rc<RefCell<TabDataInner>>);
-type TabDataInner = letters_core::DocumentSession;
-impl TabData {
-    fn new() -> Self {
-        TabData(Rc::new(RefCell::new(TabDataInner::new(Rc::new(
-            suite_common::autosave::AutosaveSlot::new(autosave_state_dir(), next_doc_id()),
-        )))))
-    }
-}
-fn tab_data_set(w: &impl IsA<gtk::Widget>, d: TabData) { unsafe { w.upcast_ref::<gtk::Widget>().set_data("tab-data", d); } }
-fn tab_data_get(w: &gtk::Widget) -> Option<TabData> { unsafe { w.data::<TabData>("tab-data").map(|p| p.as_ref().clone()) } }
-
-// ── Make a tab's document widget ──────────────────────────────────────
-
-fn make_doc_widget(settings: Option<&gio::Settings>) -> (PageContainer, gtk::TextBuffer) {
-    let buffer = gtk::TextBuffer::new(None);
-    register_formatting_tags(&buffer);
-    let editor = gtk::TextView::with_buffer(&buffer);
-    connect_list_continuation(&editor, &buffer);
-    connect_markdown_macros(&buffer);
-    editor.set_wrap_mode(gtk::WrapMode::Word);
-    editor.set_left_margin(24); editor.set_right_margin(24);
-    editor.set_top_margin(16); editor.set_bottom_margin(16);
-    editor.set_vexpand(true); editor.set_hexpand(true);
-    // Focus the editor whenever its tab becomes visible; otherwise keystrokes
-    // fall through to the window and the find SearchBar captures them.
-    editor.connect_map(|ed| {
-        let ed = ed.clone();
-        glib::idle_add_local_once(move || { ed.grab_focus(); });
-    });
-    // Transparent background so PageContainer's white page shows through (no black block in dark mode)
-    let css_provider = gtk::CssProvider::new();
-    let font_css = settings
-        .map(|s| s.string("font"))
-        .filter(|f| !f.is_empty())
-        .map(|f| gtk4::pango::FontDescription::from_string(&f))
-        .filter(|desc| desc.size() > 0)
-        .map(|desc| {
-            let family = desc.family().map(|f| f.to_string()).unwrap_or_else(|| "sans-serif".into());
-            let size_pt = desc.size() as f64 / gtk4::pango::SCALE as f64;
-            format!("textview, textview text {{ font-family: \"{family}\"; font-size: {size_pt}pt; }}")
-        })
-        .unwrap_or_default();
-    // The page is always white regardless of app theme (see above), so
-    // the text color must be pinned dark too — otherwise dark mode's
-    // light theme-default text color renders white-on-white and the
-    // whole document becomes invisible while still fully editable.
-    css_provider.load_from_string(&format!(
-        "textview, textview text, scrolledwindow {{ background: transparent; }} \
-         textview text {{ color: rgba(0, 0, 0, 0.85); }} {font_css}"
-    ));
-    gtk::style_context_add_provider_for_display(&editor.display(), &css_provider, gtk::STYLE_PROVIDER_PRIORITY_APPLICATION + 1);
-    // Spell-check via zspell (hunspell-compatible, pure Rust).
-    // Applies red wavy underline to misspelled words, re-checks on edits.
-    let spell_enabled = settings.map(|s| s.boolean("spell-check-enabled")).unwrap_or(true);
-    if spell_enabled {
-        crate::spell::SpellChecker::new(&buffer).start();
-    }
-    // Restore line spacing from GSettings
-    if let Some(s) = settings {
-        let ls = s.double("line-spacing");
-        let tag_name = if ls >= 1.8 { "line-spacing-2.0" }
-            else if ls >= 1.4 { "line-spacing-1.5" }
-            else if ls >= 1.1 { "line-spacing-1.15" }
-            else { "line-spacing-1.0" };
-        if let Some(tag) = buffer.tag_table().lookup(tag_name) {
-            let start = buffer.start_iter();
-            let end = buffer.end_iter();
-            buffer.apply_tag(&tag, &start, &end);
-        }
-    }
-    // Drag-and-drop for images from file manager
-    {
-        let buf = buffer.clone();
-        let drop = gtk::DropTarget::new(gio::File::static_type(), gtk4::gdk::DragAction::COPY);
-        drop.connect_drop(move |_target, value, _x, _y| {
-            if let Ok(file) = value.get::<gio::File>() {
-                if let Some(path) = file.path() {
-                    let name = path.file_name()
-                        .and_then(|n| n.to_str()).unwrap_or("image");
-                    let path_str = path.to_string_lossy();
-                    let md = format!("![{}]({})", name, path_str);
-                    let ins = buf.selection_bounds()
-                        .map(|(i,_)| i).unwrap_or_else(|| buf.start_iter());
-                    let mut pos = ins;
-                    buf.insert(&mut pos, &md);
-                }
-            }
-            true
-        });
-        editor.add_controller(drop);
-    }
-    // Cross-app clipboard (DESIGN-UI): Ctrl+C offers the suite fragment
-    // (styled runs) alongside HTML and plain text; Ctrl+V prefers it.
-    // Capture phase so we can supersede the TextView's built-in
-    // plain-text handling only when suite content is involved.
-    {
-        let buf = buffer.clone();
-        let ed = editor.clone();
-        let key = gtk::EventControllerKey::new();
-        key.set_propagation_phase(gtk::PropagationPhase::Capture);
-        key.connect_key_pressed(move |_, keyval, _code, mods| {
-            let ctrl = mods.contains(gtk4::gdk::ModifierType::CONTROL_MASK);
-            if ctrl && keyval == gtk4::gdk::Key::c {
-                if let Some((start, end)) = buf.selection_bounds() {
-                    let doc = crate::bridge::capture_from_buffer(&buf);
-                    let frag = letters_core::fragment::from_selection(
-                        &doc,
-                        start.offset() as usize,
-                        end.offset() as usize,
-                    );
-                    let provider = suite_common::clipboard::provider(
-                        letters_core::fragment::MIME,
-                        &frag.to_json(),
-                        &frag.to_html(),
-                        &frag.to_plain(),
-                    );
-                    let _ = ed.clipboard().set_content(Some(&provider));
-                    return gtk4::glib::Propagation::Stop;
-                }
-                return gtk4::glib::Propagation::Proceed;
-            }
-            if ctrl && keyval == gtk4::gdk::Key::v {
-                let clipboard = ed.clipboard();
-                if suite_common::clipboard::offers(&clipboard, letters_core::fragment::MIME) {
-                    let buf = buf.clone();
-                    suite_common::clipboard::read_string(
-                        &clipboard,
-                        letters_core::fragment::MIME,
-                        move |json| {
-                            if let Some(frag) = json
-                                .as_deref()
-                                .and_then(letters_core::fragment::Fragment::from_json)
-                            {
-                                insert_fragment(&buf, &frag);
-                            }
-                        },
-                    );
-                    return gtk4::glib::Propagation::Stop;
-                }
-                return gtk4::glib::Propagation::Proceed;
-            }
-            gtk4::glib::Propagation::Proceed
-        });
-        editor.add_controller(key);
-    }
-
-    // Selection format popover: context reveals capability (DESIGN-UI §1).
-    // Non-autohide so it never steals focus from the editor; buttons fire
-    // the same app actions as the toolbar.
-    {
-        let pop = gtk::Popover::new();
-        pop.set_parent(&editor);
-        pop.set_autohide(false);
-        pop.set_position(gtk::PositionType::Top);
-        let row = gtk::Box::new(gtk::Orientation::Horizontal, 0);
-        row.add_css_class("linked");
-        for (icon, tooltip, action) in [
-            ("format-text-bold-symbolic", "Bold", "app.bold"),
-            ("format-text-italic-symbolic", "Italic", "app.italic"),
-            ("format-text-underline-symbolic", "Underline", "app.underline"),
-            ("format-text-strikethrough-symbolic", "Strikethrough", "app.strikethrough"),
-            ("color-select-symbolic", "Highlight", "app.highlight"),
-            ("insert-link-symbolic", "Insert link", "app.insertlink"),
-        ] {
-            let b = gtk::Button::from_icon_name(icon);
-            b.add_css_class("flat");
-            b.set_tooltip_text(Some(tooltip));
-            b.set_action_name(Some(action));
-            row.append(&b);
-        }
-        pop.set_child(Some(&row));
-
-        let ed = editor.clone();
-        let pop2 = pop.clone();
-        buffer.connect_mark_set(move |buf, _iter, mark| {
-            let name = mark.name();
-            let name = name.as_deref();
-            if name != Some("insert") && name != Some("selection_bound") {
-                return;
-            }
-            if let Some((start, _end)) = buf.selection_bounds() {
-                let loc = ed.iter_location(&start);
-                let (x, y) = ed.buffer_to_window_coords(
-                    gtk::TextWindowType::Widget, loc.x(), loc.y());
-                pop2.set_pointing_to(Some(&gtk4::gdk::Rectangle::new(
-                    x, y, 1, loc.height())));
-                if !pop2.is_visible() {
-                    pop2.popup();
-                }
-            } else if pop2.is_visible() {
-                pop2.popdown();
-            }
-        });
-        let pop3 = pop.clone();
-        editor.connect_destroy(move |_| pop3.unparent());
-    }
-
-    let scroll = gtk::ScrolledWindow::new();
-    scroll.set_child(Some(&editor));
-    scroll.set_vexpand(true); scroll.set_hexpand(true);
-    // Transparent background so PageContainer's white page shows through
-    gtk::style_context_add_provider_for_display(&scroll.display(), &css_provider, gtk::STYLE_PROVIDER_PRIORITY_APPLICATION + 1);
-    let container = PageContainer::new();
-    if let Some(s) = settings {
-        container.load_from_settings(s);
-    }
-    scroll.set_parent(&container);
-    container.set_vexpand(true); container.set_hexpand(true);
-    // Zoom via Ctrl+Scroll
-    {
-        let pc = container.clone();
-        let s = settings.cloned();
-        let scroll_ctrl = gtk::EventControllerScroll::new(gtk::EventControllerScrollFlags::VERTICAL);
-        scroll_ctrl.connect_scroll(move |ctrl, _dx, dy| {
-            // Check if Ctrl is held
-            let state = ctrl.current_event_state();
-            if !state.contains(gtk4::gdk::ModifierType::CONTROL_MASK) {
-                return glib::Propagation::Proceed;
-            }
-            let current = pc.zoom_level();
-            let delta = if dy > 0.0 { -10.0 } else { 10.0 };
-            let new_zoom = (current + delta).clamp(50.0, 200.0);
-            pc.set_zoom(new_zoom);
-            if let Some(ref s) = s { let _ = s.set_double("zoom-level", new_zoom); }
-            glib::Propagation::Stop
-        });
-        editor.add_controller(scroll_ctrl);
-    }
-    // Pagination: recalculate page count on buffer changes (debounced)
-    if let Some(s) = settings {
-        let s = s.clone();
-        let pc = container.clone();
-        let ed = editor.clone();
-        let timer = std::rc::Rc::new(std::cell::RefCell::new(None::<glib::SourceId>));
-        let pages_store = std::rc::Rc::new(std::cell::RefCell::new(Vec::<crate::layout::Page>::new()));
-        let ps = pages_store.clone();
-        let t = timer.clone();
-        let b2 = buffer.clone();
-        buffer.connect_changed(move |_| {
-            if let Some(id) = t.borrow_mut().take() { id.remove(); }
-            let buf = b2.clone();
-            let pc = pc.clone();
-            let ed = ed.clone();
-            let s = s.clone();
-            let t2 = t.clone();
-            let ps2 = ps.clone();
-            let id = glib::timeout_add_local(std::time::Duration::from_millis(500), move || {
-                let config = crate::layout::LayoutConfig::from_settings(&s);
-                let pages = crate::layout::paginate(&buf, &config, &ed.pango_context());
-                pc.set_page_count(pages.len());
-                ps2.borrow_mut().clone_from(&pages);
-                t2.borrow_mut().take();
-                glib::ControlFlow::Break
-            });
-            *t.borrow_mut() = Some(id);
-        });
-    }
-    (container, buffer)
-}
 
 // ── LettersWindow ───────────────────────────────────────────────────────
 
@@ -792,7 +505,7 @@ impl LettersWindow {
             a.connect_activate(move |_, _| {
                 if let Some(buf) = active_buffer(&tv) {
                     let config = crate::layout::LayoutConfig::from_settings(&s);
-                    let ctx = gtk4::pango::Context::new();
+                    let ctx = crate::layout::measuring_context();
                     let pages = crate::layout::paginate(&buf, &config, &ctx);
                     let text = buf.text(&buf.start_iter(), &buf.end_iter(), false).to_string();
                     // Read header/footer from PageContainer
@@ -964,13 +677,13 @@ impl LettersWindow {
         let tv = tab_view.clone();
         let a = gtk::gio::SimpleAction::new("edit-headers", None);
         a.connect_activate(move |_, _| {
-            if let Some(_buf) = active_buffer(&tv) {
+            if let Some(buf) = active_buffer(&tv) {
                 // Find the PageContainer and show an edit dialog
                 let page = tv.selected_page();
                 if let Some(page) = page {
                     let child = page.child();
                     if let Some(pc) = child.first_child().and_then(|c| c.downcast::<crate::page_container::PageContainer>().ok()) {
-                        show_header_footer_dialog(&pc);
+                        show_header_footer_dialog(&pc, &buf);
                     }
                 }
             }
@@ -1168,9 +881,10 @@ impl LettersWindow {
     pub fn open_path(&self, path: &str) {
         let (container, buf) = make_doc_widget(Some(&self.settings));
         if let Err(e) = crate::bridge::load_file_to_buffer(path, &buf) {
-            eprintln!("open failed: {e}");
+            report_open_failure(Some(&self.window), path, &e);
             return;
         }
+        apply_page_setup_from_buffer(&container, &buf);
         let td = TabData::new();
         td.0.borrow_mut().file = Some(std::path::PathBuf::from(path));
         tab_data_set(&container, td);
@@ -1216,6 +930,7 @@ impl LettersWindow {
 
             let (container, buf) = make_doc_widget(Some(&self.settings));
             crate::bridge::render_to_buffer(&doc, &buf);
+            apply_page_setup_from_buffer(&container, &buf);
             // render_to_buffer ends with buf.set_modified(false) (it's also
             // used for a normal file open); recovered content is unsaved
             // by definition, so mark it dirty right back so the close guard
@@ -1306,6 +1021,7 @@ impl LettersWindow {
                 let fl = gio::ListStore::new::<gtk::FileFilter>();
                 fl.append(&f);
                 dlg.set_filters(Some(&fl));
+                let w_err = w.clone();
                 dlg.open(Some(&w), None::<&gio::Cancellable>,
                     move |result: Result<gio::File, glib::Error>| {
                         if let Ok(file) = result {
@@ -1313,9 +1029,15 @@ impl LettersWindow {
                             let name = file.basename().map(|p| p.display().to_string()).unwrap_or_default();
                             let (container, buf) = make_doc_widget(Some(&s));
                             let path_str = path.to_string_lossy().to_string();
+                            // Bail before building the tab. Carrying on gave an
+                            // empty editor titled with this file's name and
+                            // pointed at its path, so the next Ctrl+S wrote an
+                            // empty document over the unreadable original.
                             if let Err(e) = crate::bridge::load_file_to_buffer(&path_str, &buf) {
-                                eprintln!("open failed: {e}");
+                                report_open_failure(Some(&w_err), &path_str, &e);
+                                return;
                             }
+                            apply_page_setup_from_buffer(&container, &buf);
                             let td = TabData::new();
                             td.0.borrow_mut().file = Some(path);
                             tab_data_set(&container, td);
@@ -1380,6 +1102,7 @@ impl LettersWindow {
     }
 }
 
+
 fn autosave_all_tabs(tv: &adw::TabView) {
     for i in 0..tv.n_pages() {
         let page = tv.nth_page(i);
@@ -1438,7 +1161,7 @@ fn save_page_setup_to_settings(settings: &gio::Settings, ps: &gtk::PageSetup) {
 /// editor's named tags; grids land as tab-separated lines (a real
 /// cell-tagged table paste needs the buffer table support tracked in
 /// PARITY's bridge gaps).
-fn insert_fragment(buf: &gtk::TextBuffer, frag: &letters_core::fragment::Fragment) {
+pub(crate) fn insert_fragment(buf: &gtk::TextBuffer, frag: &letters_core::fragment::Fragment) {
     use letters_core::fragment::Fragment;
     match frag {
         Fragment::Text(paras) => {
@@ -1548,85 +1271,4 @@ fn make_tab_menu() -> gio::Menu {
     s3.append(Some("_Close"), Some("win.close-current-page"));
     m.append_section(Some("Close"), &s3);
     m
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    // ── crash-recovery doc ids (pure, no GTK) ─────────────────────────
-
-    #[test]
-    fn next_doc_id_is_unique() {
-        let a = next_doc_id();
-        let b = next_doc_id();
-        let c = next_doc_id();
-        assert_ne!(a, b);
-        assert_ne!(b, c);
-        assert_ne!(a, c);
-    }
-
-    #[test]
-    fn next_doc_id_has_pid_prefix_and_incrementing_counter() {
-        let prefix = format!("{}-", std::process::id());
-        let a = next_doc_id();
-        let b = next_doc_id();
-        assert!(a.starts_with(&prefix), "unexpected id {a}");
-        assert!(b.starts_with(&prefix), "unexpected id {b}");
-        let n_a: u64 = a.rsplit('-').next().unwrap().parse().unwrap();
-        let n_b: u64 = b.rsplit('-').next().unwrap().parse().unwrap();
-        assert_eq!(n_b, n_a + 1);
-    }
-
-    #[test]
-    fn autosave_state_dir_points_into_letters_subdir() {
-        let dir = autosave_state_dir();
-        assert_eq!(dir.file_name().and_then(|s| s.to_str()), Some("letters"));
-    }
-
-    #[test]
-    fn autosave_state_dir_env_fallbacks() {
-        // One test so the process-global env mutations below never race
-        // another test's view of HOME/XDG_STATE_HOME (cargo runs the tests
-        // of a binary in one process). Restored on drop even if an assert
-        // fails, so later tests keep a clean environment.
-        struct Restore(Option<std::ffi::OsString>, Option<std::ffi::OsString>);
-        impl Drop for Restore {
-            fn drop(&mut self) {
-                match &self.0 {
-                    Some(v) => std::env::set_var("XDG_STATE_HOME", v),
-                    None => std::env::remove_var("XDG_STATE_HOME"),
-                }
-                match &self.1 {
-                    Some(v) => std::env::set_var("HOME", v),
-                    None => std::env::remove_var("HOME"),
-                }
-            }
-        }
-        let _restore = Restore(std::env::var_os("XDG_STATE_HOME"), std::env::var_os("HOME"));
-
-        // XDG_STATE_HOME wins when set.
-        std::env::set_var("XDG_STATE_HOME", "/custom/state");
-        std::env::set_var("HOME", "/custom/home");
-        assert_eq!(
-            autosave_state_dir(),
-            std::path::PathBuf::from("/custom/state/letters")
-        );
-
-        // Falls back to $HOME/.local/state without XDG_STATE_HOME.
-        std::env::remove_var("XDG_STATE_HOME");
-        std::env::set_var("HOME", "/custom/home");
-        assert_eq!(
-            autosave_state_dir(),
-            std::path::PathBuf::from("/custom/home/.local/state/letters")
-        );
-
-        // Last resort is /tmp when neither is set.
-        std::env::remove_var("XDG_STATE_HOME");
-        std::env::remove_var("HOME");
-        assert_eq!(
-            autosave_state_dir(),
-            std::path::PathBuf::from("/tmp/letters")
-        );
-    }
 }

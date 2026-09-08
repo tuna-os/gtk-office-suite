@@ -11,6 +11,12 @@ concurrency:
 env:
   CARGO_TERM_COLOR: always
 
+# Least privilege: every job here only reads the repository. Nothing posts
+# comments, pushes tags, or publishes packages, so the default write-capable
+# token was more authority than any step needs (#349).
+permissions:
+  contents: read
+
 jobs:
   interop-corpus:
     runs-on: ubuntu-24.04
@@ -18,6 +24,65 @@ jobs:
       - uses: actions/checkout@v7
       - name: Validate versioned office corpus
         run: python3 interop/validate_corpus.py
+
+  # The Python tooling had unit tests and a parity validator that nothing ran
+  # (#313). `interop-corpus` above runs one validator; these are the tests *of*
+  # the validators, plus the parity gate that conformance/validate_parity.py's
+  # own docstring says is meant to run in PR CI.
+  python-checks:
+    name: Python validators and their tests
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          # E4 below diffs docs/PARITY.md against the base branch, which needs
+          # more than the default single-commit checkout.
+          fetch-depth: 0
+
+      - name: Install pytest
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq python3-pytest
+
+      - name: Unit tests for the release-gate and parity validators
+        run: |
+          python3 -m pytest -q \
+            tests/test_release_gate.py \
+            tests/test_validate_parity.py \
+            tests/adaptive_editor_contract.py
+
+      # E1-E3: green rows cite evidence, referenced paths exist, journey-gated
+      # features are not green on model-only evidence.
+      - name: Parity scorecard structure
+        run: python3 conformance/validate_parity.py
+
+      # E4: no silent green -> non-green regression, and no jump to green
+      # without new evidence. Only meaningful against a base branch.
+      - name: Parity scorecard transitions vs base
+        if: github.event_name == 'pull_request'
+        run: |
+          git show "origin/${{ github.base_ref }}:docs/PARITY.md" > /tmp/base-parity.md
+          python3 conformance/validate_parity.py --base /tmp/base-parity.md
+
+  # RustSec advisory gate. `deny.toml` has existed since #271 but nothing ever
+  # ran it, so the configured policy was documentation rather than a gate
+  # (#269, #330).
+  #
+  # Only `check advisories` — `deny.toml` configures the [advisories] section
+  # and nothing else, so a bare `cargo deny check` would apply default
+  # bans/licenses/sources policy that this project has never agreed to.
+  #
+  # Expect this job to be the one that goes red without a code change: the
+  # advisory database updates independently of this repository, so a newly
+  # published advisory against an existing dependency fails the next run. That
+  # is the point of the gate. Triage the advisory — upgrade, or add an `ignore`
+  # entry to `deny.toml` with a reason — rather than removing this job.
+  advisories:
+    name: RustSec advisory gate
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+      - uses: EmbarkStudios/cargo-deny-action@v2
+        with:
+          command: check advisories
 
   # Unit tests + clippy on Ubuntu 24.04 (has GTK 4.14 + libadwaita 1.5)
   test:

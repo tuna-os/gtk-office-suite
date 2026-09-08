@@ -1,5 +1,9 @@
 # Roadmap
 
+Current execution: [September readiness plan](readiness-2026-09/README.md),
+with dependency-ordered issues and acceptance tests in
+[#443](https://github.com/tuna-os/gtk-office-suite/issues/443).
+
 > The post-v1 feature ledger below is retained as historical context. The
 > current product, interoperability, and confidence plan is
 > [Product and Quality Roadmap (2026-07-21)](PRODUCT-QUALITY-ROADMAP-2026-07.md).

@@ -22,29 +22,8 @@ use decks_core::{read_deck, write_deck, write_deck_bytes, DecksController};
 /// the closure that will eventually call it is created).
 type ThumbUpdater = Rc<RefCell<Option<Box<dyn Fn()>>>>;
 
-// ── Crash-recovery snapshots ─────────────────────────────────────────────
-static NEXT_DOC_ID: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
-fn next_doc_id() -> String {
-    let n = NEXT_DOC_ID.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-    format!("{}-{n}", std::process::id())
-}
+use crate::persistence::{autosave_format_hint, autosave_state_dir, next_doc_id};
 
-fn autosave_state_dir() -> std::path::PathBuf {
-    // glib::user_state_dir() needs the "v2_72" feature this workspace's
-    // glib binding doesn't enable — do the XDG fallback ourselves.
-    let base = std::env::var_os("XDG_STATE_HOME")
-        .map(std::path::PathBuf::from)
-        .or_else(|| std::env::var_os("HOME").map(|h| std::path::PathBuf::from(h).join(".local/state")))
-        .unwrap_or_else(|| std::path::PathBuf::from("/tmp"));
-    base.join("decks")
-}
-
-fn autosave_format_hint(path: &Option<String>) -> String {
-    match path {
-        Some(p) if p.to_lowercase().ends_with(".odp") => "odp".to_string(),
-        _ => "pptx".to_string(),
-    }
-}
 
 // ── DecksWindow ──────────────────────────────────────────────────────────
 
@@ -848,7 +827,32 @@ impl DecksWindow {
             ("app.add-shape", "Add Shape"),
             ("app.add-image", "Add Image…"),
             ("app.present", "Present"),
+            ("app.undo", "Undo"),
+            ("app.redo", "Redo"),
         ]);
+
+        // Expose the canonical controller history to Gio automation as well
+        // as the keyboard path below.  Keeping both routes on the same
+        // controller prevents tests and accessibility tools from exercising a
+        // different, stale document state.
+        for (name, is_undo) in [("undo", true), ("redo", false)] {
+            let controller = controller.clone();
+            let cs = canvas.clone();
+            let sl = slide_list.clone();
+            let ss = slides.clone();
+            let cs_ref = current_slide.clone();
+            let masters = masters.clone();
+            let act = gio::SimpleAction::new(name, None);
+            act.connect_activate(move |_, _| {
+                let changed = if is_undo { controller.undo() } else { controller.redo() };
+                if changed {
+                    cs.queue_draw();
+                    let snapshot = ss.borrow().clone();
+                    rebuild_slide_list(&sl, &snapshot, &masters.borrow(), cs_ref.get());
+                }
+            });
+            app.add_action(&act);
+        }
 
         // "Add Text Box"
         {
