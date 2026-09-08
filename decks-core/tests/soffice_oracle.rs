@@ -23,18 +23,29 @@ fn require_or_skip() -> bool {
 fn convert(input: &std::path::Path, to: &str) -> Result<std::path::PathBuf, String> {
     let dir = input.parent().unwrap();
     let profile = dir.join("lo-profile");
+    // Convert into a subdirectory, never alongside the input. A same-format
+    // rewrite (pptx -> pptx, used by the master-slide test) would otherwise
+    // ask LibreOffice to write its output over the file it is reading, which
+    // some versions tolerate and others refuse outright with
+    // "SfxBaseModel::impl_store ... Error Area:Sfx Class:Write". That made the
+    // suite pass or fail depending on the installed LibreOffice rather than on
+    // this project's code.
+    let out_dir = dir.join(format!("converted-{to}"));
+    std::fs::create_dir_all(&out_dir).map_err(|e| e.to_string())?;
     let out = Command::new("soffice")
         .arg("--headless")
         .arg(format!("-env:UserInstallation=file://{}", profile.display()))
         .args(["--convert-to", to, "--outdir"])
-        .arg(dir)
+        .arg(&out_dir)
         .arg(input)
         .output()
         .map_err(|e| e.to_string())?;
     if !out.status.success() {
         return Err(format!("soffice failed: {}", String::from_utf8_lossy(&out.stderr)));
     }
-    let converted = input.with_extension(to);
+    let converted = out_dir
+        .join(input.file_name().ok_or("input has no file name")?)
+        .with_extension(to);
     if converted.exists() {
         Ok(converted)
     } else {
