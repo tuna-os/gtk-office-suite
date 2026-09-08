@@ -1,6 +1,7 @@
 use gtk4::prelude::*;
 use gtk4::gio;
 mod window;
+mod persistence;
 mod export;
 mod canvas;
 mod canvas_area;

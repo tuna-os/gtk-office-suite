@@ -247,6 +247,92 @@ class LettersCloseGuardSmoke(BaseGUITestCase):
         self.assertIn("unsaved letters content", saved, f"saved file: {saved!r}")
 
 
+class LettersSaveFailureSmoke(BaseGUITestCase):
+    """Failed writes must never retire edits or the last recovery checkpoint."""
+
+    app_name = "letters"
+
+    def setUp(self):
+        self._dir = self.temp_dir(prefix="letters-save-failure-")
+        self._source = os.path.join(self._dir, "source")
+        os.mkdir(self._source)
+        self._path = os.path.join(self._source, "document.md")
+        with open(self._path, "w") as stream:
+            stream.write("original")
+        self.launch_args = [self._path]
+        self._state = self.isolate_autosave_state()
+        self.isolate_snapshot()
+        self.isolate_gsettings()
+        super().setUp()
+
+    def _edit_and_checkpoint(self):
+        from dogtail import rawinput
+        self.wait_for_node(roleName="text")
+        rawinput.keyCombo("<Control>End")
+        rawinput.typeText(" unsaved edit")
+
+        def edited():
+            snapshot = self.trigger_snapshot("org.tunaos.letters")
+            text = "".join(run["text"] for para in snapshot["paragraphs"] for run in para["runs"])
+            return snapshot if "unsaved edit" in text else None
+
+        self._edited = self.wait_for_condition(edited, description="edited document snapshot")
+        self.gapplication_action("org.tunaos.letters", "autosave-now")
+        from pathlib import Path
+        self.wait_for_condition(lambda: list(Path(self._state).rglob("*.snapshot")),
+                                description="recovery checkpoint")
+        self._checkpoint = {path: path.read_bytes() for path in Path(self._state).rglob("*.snapshot*")}
+
+    def _make_destination_unavailable(self):
+        # Deterministic even as root: the old parent no longer exists.
+        # Keep the original file in a renamed directory for byte comparison.
+        self._backup = os.path.join(self._dir, "backup")
+        os.rename(self._source, self._backup)
+
+    def _assert_error_preserves_work(self):
+        self.wait_for_node(name="Could not save document")
+        self.assertIsNone(self.process.poll())
+        self.assertEqual(self.trigger_snapshot("org.tunaos.letters"), self._edited)
+        for path, content in self._checkpoint.items():
+            self.assertEqual(path.read_bytes(), content, f"recovery checkpoint changed: {path}")
+        with open(os.path.join(self._backup, "document.md")) as stream:
+            self.assertEqual(stream.read(), "original")
+
+    def test_failed_save_retains_edits_and_close_guard(self):
+        self._edit_and_checkpoint()
+        self._make_destination_unavailable()
+        self.gapplication_action("org.tunaos.letters", "save-file")
+        self._assert_error_preserves_work()
+        self.wait_for_node(name="OK", roleName="push button").do_action(0)
+        self.wait_for_node(name="Close", roleName="push button").do_action(0)
+        self.wait_for_node(name="Save All", roleName="push button")
+        self.assertIsNone(self.process.poll(), "failed save incorrectly cleared the close guard")
+
+    def test_save_all_failure_keeps_window_and_checkpoint(self):
+        self._edit_and_checkpoint()
+        self._make_destination_unavailable()
+        self.wait_for_node(name="Close", roleName="push button").do_action(0)
+        self.wait_for_node(name="Save All", roleName="push button").do_action(0)
+        self._assert_error_preserves_work()
+
+    def test_save_as_cancel_keeps_original_identity_and_unsaved_work(self):
+        from dogtail import tree
+        self._edit_and_checkpoint()
+        self.gapplication_action("org.tunaos.letters", "save-file-as")
+        cancel = self.wait_for_condition(
+            lambda: tree.root.findChild(lambda node: node.name == "Cancel" and node.roleName == "push button"),
+            description="Save As cancel button",
+        )
+        cancel.do_action(0)
+        # Ordinary save must still target the original path after cancellation.
+        self.gapplication_action("org.tunaos.letters", "save-file")
+        def saved():
+            with open(self._path) as stream:
+                return "unsaved edit" in stream.read()
+        self.wait_for_condition(saved, description="save to original path after cancellation")
+        self.assertEqual(self.trigger_snapshot("org.tunaos.letters"), self._edited)
+
+
 class LettersAutosaveSmoke(BaseGUITestCase):
     """Crash-recovery snapshot lifecycle (issue #99), per-tab this time:
     Letters can have several dirty tabs at once, so a crash with two dirty

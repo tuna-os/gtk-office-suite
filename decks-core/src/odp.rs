@@ -123,22 +123,22 @@ fn content_xml(deck: &Deck) -> String {
                         )
                     };
                     pages.push_str(&format!(
-                        "<draw:frame svg:x=\"{x:.2}pt\" svg:y=\"{y:.2}pt\" \
-                         svg:width=\"{w:.2}pt\" svg:height=\"{h:.2}pt\">\
+                        "<draw:frame svg:x=\"{x}pt\" svg:y=\"{y}pt\" \
+                         svg:width=\"{w}pt\" svg:height=\"{h}pt\">\
                          <draw:text-box>{inner}</draw:text-box></draw:frame>"
                     ));
                 }
                 SlideObject::Rect { x, y, w, h, .. } => {
                     pages.push_str(&format!(
-                        "<draw:rect svg:x=\"{x:.2}pt\" svg:y=\"{y:.2}pt\" \
-                         svg:width=\"{w:.2}pt\" svg:height=\"{h:.2}pt\"/>"
+                        "<draw:rect svg:x=\"{x}pt\" svg:y=\"{y}pt\" \
+                         svg:width=\"{w}pt\" svg:height=\"{h}pt\"/>"
                     ));
                 }
                 SlideObject::Circle { x, y, r, .. } => {
                     let (cx, cy, d) = (x - r, y - r, r * 2.0);
                     pages.push_str(&format!(
-                        "<draw:ellipse svg:x=\"{cx:.2}pt\" svg:y=\"{cy:.2}pt\" \
-                         svg:width=\"{d:.2}pt\" svg:height=\"{d:.2}pt\"/>"
+                        "<draw:ellipse svg:x=\"{cx}pt\" svg:y=\"{cy}pt\" \
+                         svg:width=\"{d}pt\" svg:height=\"{d}pt\"/>"
                     ));
                 }
                 // Images need packaged media; deferred (matches pptx v1 scope
@@ -731,5 +731,66 @@ mod tests {
         assert_eq!(parse_length_pt("pt"), None); // missing number
         assert_eq!(parse_length_pt(""), None);
         assert_eq!(parse_length_pt("1.5CM"), None); // units are case-sensitive
+    }
+
+    /// ODP wrote coordinates as `{x:.2}pt`, so 2 cm — 56.692913 pt — was
+    /// stored as "56.69pt" and read back as 56.69. Every object shifted on
+    /// every save, and the shift was one-directional, so it accumulated.
+    ///
+    /// Rust's default float formatting emits the shortest string that parses
+    /// back to the identical f64, so full precision is also the shortest
+    /// faithful representation — this is not a "write more digits" hack.
+    #[test]
+    fn a_two_centimetre_offset_survives_an_odp_round_trip_exactly() {
+        let two_cm = 2.0 * 72.0 / 2.54;
+        let deck = deck_with_box("geometry", two_cm);
+
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("geometry.odp");
+        write(&deck, path.to_str().unwrap()).expect("write odp");
+        let back = read(path.to_str().unwrap()).expect("read odp");
+
+        let (x, y) = crate::undo::obj_position(&back.slides[0].objects[0]);
+        assert!(
+            (x - two_cm).abs() < 1e-9 && (y - two_cm).abs() < 1e-9,
+            "drifted: wrote ({two_cm}, {two_cm}), read ({x}, {y})"
+        );
+    }
+
+    /// The accumulating half: repeated saves must not walk the geometry.
+    #[test]
+    fn odp_geometry_does_not_drift_across_repeated_saves() {
+        let start = 2.0 * 72.0 / 2.54;
+        let mut deck = deck_with_box("drift", start);
+        let dir = tempfile::tempdir().unwrap();
+        for generation in 0..8 {
+            let path = dir.path().join(format!("gen{generation}.odp"));
+            write(&deck, path.to_str().unwrap()).expect("write");
+            deck = read(path.to_str().unwrap()).expect("read");
+        }
+        let (x, y) = crate::undo::obj_position(&deck.slides[0].objects[0]);
+        assert!(
+            (x - start).abs() < 1e-9 && (y - start).abs() < 1e-9,
+            "drifted over eight saves: {start} -> ({x}, {y})"
+        );
+    }
+
+    /// One slide holding a single text box at (`at`, `at`).
+    fn deck_with_box(text: &str, at: f64) -> Deck {
+        Deck {
+            slides: vec![Slide {
+                title: String::new(),
+                background: String::new(),
+                notes: String::new(),
+                master_idx: None,
+                objects: vec![SlideObject::TextBox {
+                    text: text.into(),
+                    x: at, y: at, w: 200.0, h: 50.0,
+                    rotation: 0.0,
+                    runs: vec![],
+                }],
+            }],
+            ..Default::default()
+        }
     }
 }
