@@ -34,6 +34,13 @@ jobs:
       - name: Generate and validate actual documents
         run: |
           python3 -m unittest discover -s tests -p 'test_open_corpus.py'
+          # Swatinem/rust-cache restores target/, so a previous run's
+          # target/open-corpus comes back with it. build_open_corpus.py
+          # deliberately refuses to write into an existing output directory
+          # (it must never scribble over a user's documents), so without this
+          # the job fails with FileExistsError on every run after the first
+          # one that populated the cache.
+          rm -rf target/open-corpus
           python3 interop/build_open_corpus.py target/open-corpus
       - name: Open edit save copy and reopen
         env:
