@@ -1,0 +1,58 @@
+name: Release gate
+
+on:
+  pull_request:
+    paths:
+      - 'flatpak/**'
+      - 'flathub/**'
+      - 'po/**'
+      - 'scripts/release_gate.py'
+      - 'docs/RELEASE.md'
+      - 'Cargo.lock'
+      - '.github/workflows/release-gate.yml'
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  contract:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - name: Set reproducibility timestamp
+        run: echo "SOURCE_DATE_EPOCH=$(git show -s --format=%ct \"$GITHUB_SHA\")" >> "$GITHUB_ENV"
+      - name: Install release validators
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq appstream desktop-file-utils gettext libglib2.0-bin
+      - name: Validate source release contract
+        run: python3 scripts/release_gate.py
+      - name: Validate desktop files, schemas, translations, and AppStream
+        run: |
+          set -euo pipefail
+          schema_dir="$(mktemp -d)"
+          for app in letters tables decks; do
+            desktop-file-validate "flatpak/org.tunaos.${app}.desktop"
+            # glib-compile-schemas only accepts a directory, so validate each
+            # schema in isolation inside a scratch directory.
+            rm -f "${schema_dir}"/*.gschema.xml
+            cp "flatpak/org.tunaos.${app}.gschema.xml" "${schema_dir}/"
+            glib-compile-schemas --strict --dry-run "${schema_dir}"
+            appstreamcli validate --no-net "flatpak/org.tunaos.${app}.metainfo.xml"
+          done
+          msgfmt --check --check-accelerators=_ -o /dev/null po/gtk-office-suite.pot
+      - name: Produce release input checksums
+        run: |
+          mkdir -p release-evidence
+          find flatpak flathub po -type f -print0 | sort -z | xargs -0 sha256sum > release-evidence/release-inputs.sha256
+          sha256sum Cargo.lock scripts/release_gate.py docs/RELEASE.md >> release-evidence/release-inputs.sha256
+      - uses: actions/upload-artifact@v7
+        with:
+          name: release-contract-${{ github.sha }}
+          path: release-evidence/release-inputs.sha256
+          retention-days: 90

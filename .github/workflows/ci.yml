@@ -1,0 +1,152 @@
+name: CI
+
+on: [push, pull_request]
+
+# Rapid alpha pushes: newer commits supersede queued/running CI for the
+# same ref instead of stacking up and starving the runner pool.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+
+# Least privilege: every job here only reads the repository. Nothing posts
+# comments, pushes tags, or publishes packages, so the default write-capable
+# token was more authority than any step needs (#349).
+permissions:
+  contents: read
+
+jobs:
+  interop-corpus:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+      - name: Validate versioned office corpus
+        run: python3 interop/validate_corpus.py
+
+  # The Python tooling had unit tests and a parity validator that nothing ran
+  # (#313). `interop-corpus` above runs one validator; these are the tests *of*
+  # the validators, plus the parity gate that conformance/validate_parity.py's
+  # own docstring says is meant to run in PR CI.
+  python-checks:
+    name: Python validators and their tests
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          # E4 below diffs docs/PARITY.md against the base branch, which needs
+          # more than the default single-commit checkout.
+          fetch-depth: 0
+
+      - name: Install pytest
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq python3-pytest
+
+      - name: Unit tests for the release-gate and parity validators
+        run: |
+          python3 -m pytest -q \
+            tests/test_release_gate.py \
+            tests/test_validate_parity.py \
+            tests/adaptive_editor_contract.py
+
+      # E1-E3: green rows cite evidence, referenced paths exist, journey-gated
+      # features are not green on model-only evidence.
+      - name: Parity scorecard structure
+        run: python3 conformance/validate_parity.py
+
+      # E4: no silent green -> non-green regression, and no jump to green
+      # without new evidence. Only meaningful against a base branch.
+      - name: Parity scorecard transitions vs base
+        if: github.event_name == 'pull_request'
+        run: |
+          git show "origin/${{ github.base_ref }}:docs/PARITY.md" > /tmp/base-parity.md
+          python3 conformance/validate_parity.py --base /tmp/base-parity.md
+
+  # RustSec advisory gate. `deny.toml` has existed since #271 but nothing ever
+  # ran it, so the configured policy was documentation rather than a gate
+  # (#269, #330).
+  #
+  # Only `check advisories` — `deny.toml` configures the [advisories] section
+  # and nothing else, so a bare `cargo deny check` would apply default
+  # bans/licenses/sources policy that this project has never agreed to.
+  #
+  # Expect this job to be the one that goes red without a code change: the
+  # advisory database updates independently of this repository, so a newly
+  # published advisory against an existing dependency fails the next run. That
+  # is the point of the gate. Triage the advisory — upgrade, or add an `ignore`
+  # entry to `deny.toml` with a reason — rather than removing this job.
+  advisories:
+    name: RustSec advisory gate
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+      - uses: EmbarkStudios/cargo-deny-action@v2
+        with:
+          command: check advisories
+
+  # Unit tests + clippy on Ubuntu 24.04 (has GTK 4.14 + libadwaita 1.5)
+  test:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Install GTK4 + libadwaita dev libraries
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq libgtk-4-dev libadwaita-1-dev
+
+      - name: Install Rust stable
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install cargo-nextest
+        uses: taiki-e/install-action@nextest
+
+      - name: cargo check
+        run: cargo check --workspace
+
+      - name: cargo clippy (deny warnings, all crates)
+        run: cargo clippy --workspace --all-targets -- -D warnings
+
+      # nextest doesn't run doctests (a known limitation) — cargo test
+      # --doc covers those separately. #108: JUnit output published as
+      # an artifact even on failure, so a failing run's per-test detail
+      # survives past the job's own log retention.
+      - name: cargo nextest run
+        run: cargo nextest run --workspace --profile ci
+
+      - name: cargo test --doc
+        run: cargo test --doc --workspace
+
+      - name: Upload JUnit test results
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: junit-results
+          path: target/nextest/ci/junit.xml
+          retention-days: 14
+
+  # LibreOffice interop oracle and coverage moved to nightly.yml (#108):
+  # installing LibreOffice + running the full oracle/parity corpus on
+  # every single push/PR is what turned this session's 10 renovate PRs
+  # into a 26-run GitHub Actions queue backlog. Still runs daily plus
+  # on-demand via workflow_dispatch — see nightly.yml for the reasoning.
+
+  # Flatpak builds — uses Flatpak SDK container (no Rust needed)
+  flatpak:
+    runs-on: ubuntu-24.04
+    needs: [test]
+    strategy:
+      matrix:
+        app: [letters, tables, decks]
+    container:
+      image: ghcr.io/flathub-infra/flatpak-github-actions:gnome-50
+      options: --privileged
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Build Flatpak — org.tunaos.${{ matrix.app }}
+        uses: flatpak/flatpak-github-actions/flatpak-builder@v6
+        with:
+          bundle: ${{ matrix.app }}.flatpak
+          manifest-path: flatpak/org.tunaos.${{ matrix.app }}.json
+          cache-key: flatpak-${{ matrix.app }}-${{ github.sha }}

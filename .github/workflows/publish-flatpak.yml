@@ -1,0 +1,38 @@
+name: Publish Flatpaks
+
+# Build/publish body lives in tuna-os/.github's reusable publish-flatpak.yml
+# (tunaos#1183 recommendation #2). This file just keeps the repo's own
+# trigger policy and fans the three apps out over the reusable workflow via
+# a caller-side matrix -- `uses:` jobs support `strategy.matrix` same as any
+# other job.
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      publish:
+        description: Push to GHCR and update the central index (leave off for a build-only validation run)
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+  packages: write
+
+jobs:
+  publish:
+    strategy:
+      matrix:
+        app: [letters, tables, decks]
+    uses: tuna-os/.github/.github/workflows/publish-flatpak.yml@main
+    with:
+      app-id: org.tunaos.${{ matrix.app }}
+      manifest-path: flatpak/org.tunaos.${{ matrix.app }}.json
+      repo-name: tuna-os/${{ matrix.app }}
+      attach-bundles: true
+      # Not `A && B || C`: if B (inputs.publish) is false that's falsy, so
+      # `||` would fall through to C and publish anyway regardless of the
+      # toggle (caught by testing on mariner, tuna-os/mariner#17).
+      publish: ${{ (github.event_name != 'workflow_dispatch' && github.event_name != 'pull_request') || (github.event_name == 'workflow_dispatch' && inputs.publish) }}
+    secrets: inherit
