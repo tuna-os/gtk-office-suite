@@ -201,6 +201,38 @@ test-gui-all: build
     pkill -x decks 2>/dev/null || true
     pkill -x tables 2>/dev/null || true
 
+# ── Recorded journey evidence ──────────────────────────────────────────
+#
+# Records every journey it runs and builds the same evidence bundle CI
+# attaches to a pull request. Needs the GUI dependencies plus ffmpeg;
+# `just verify-container` runs it in the CI image instead, with nothing
+# to install.
+
+# Record journeys locally and build evidence/ (default: all smoke journeys)
+verify journey="test_smoke.py":
+    #!/usr/bin/env bash
+    set -euo pipefail
+    rm -rf {{workspace}}/tests/gui/videos {{workspace}}/evidence
+    GUI_TEST_VIDEO=all \
+    GUI_TEST_VIDEO_DIR={{workspace}}/tests/gui/videos \
+        {{workspace}}/tests/gui/run_gui_tests.sh {{journey}}
+    python3 {{workspace}}/tests/gui/collect_evidence.py \
+        {{workspace}}/tests/gui/videos --out {{workspace}}/evidence \
+        --title "Local verification: {{journey}}"
+    cat {{workspace}}/evidence/summary.md
+
+# Same thing inside the CI container image (reproduces a CI result)
+verify-container journey="test_smoke.py":
+    {{workspace}}/tests/gui/container/run.sh bash -lc \
+        'cargo build --bin letters --bin tables --bin decks && \
+         GUI_TEST_VIDEO=all GUI_TEST_VIDEO_DIR=/workspace/tests/gui/videos \
+           tests/gui/run_gui_tests.sh {{journey}} && \
+         python3 tests/gui/collect_evidence.py tests/gui/videos --out /workspace/evidence'
+
+# Build the GUI test container image locally
+gui-container-build:
+    {{workspace}}/tests/gui/container/run.sh --build echo "image built: gtk-office-gui-test:local"
+
 # ── Cleanup ────────────────────────────────────────────────────────────
 
 kill-all:

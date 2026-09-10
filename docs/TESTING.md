@@ -43,6 +43,15 @@ them shallow; depth belongs in tier 1.
 
 Known limitation: use system `/usr/bin/python3` (the runner does this) —
 apt's dogtail 0.9.11 lives in dist-packages and differs from pip dogtail 2.x.
+If the interpreter those packages were built for is not `/usr/bin/python3`
+on your machine, point `GUI_TEST_PYTHON` at the one that is.
+
+Journeys can record themselves. `GUI_TEST_VIDEO=all` keeps a clip of every
+journey, `failures` keeps only the ones that failed, and
+`tests/gui/collect_evidence.py` turns a directory of clips into GIFs and a
+summary. `just verify 'test_smoke.py -k Letters'` does both. The recording
+never influences a verdict — see
+[CI-VIDEO-EVIDENCE.md](CI-VIDEO-EVIDENCE.md).
 
 ## Tier 3 — VLM visual audit (non-gating, scheduled)
 
@@ -59,6 +68,8 @@ and need `GEMINI_API_KEY`. Locally they skip without a key.
 | `ci.yml` | push, PR | yes | cargo check, clippy, unit tests; coverage on main; Flatpak builds |
 | `gui-tests.yml` → `smoke` | push/PR to main | yes | tier 2 under Xvfb |
 | `gui-tests.yml` → `vlm-audit` | daily 06:00 UTC, manual | no | tier 3 + screenshot artifacts |
+| `gui-container.yml` | container file changes, weekly, manual | yes (for itself) | builds/verifies/publishes the GUI test image |
+| `feature-verification.yml` | `verify-video` label, manual | yes | records journeys in the container, posts the clips on the PR |
 
 The versioned office interoperability contract lives in
 [`interop/corpus.json`](../interop/corpus.json). Its cheap structural check
