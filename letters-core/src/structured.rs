@@ -150,6 +150,67 @@ impl StructuredEditor {
         self.document.delete_table_cols(cell.table, cell.col, 1)
     }
 
+    // ── Cursor-relative list and page-break commands ────────────────
+    // The paragraph-indexed versions below stay for callers that know
+    // which paragraph they mean (tests, format adapters). Everything
+    // driven by a menu item or a shortcut goes through these, because the
+    // only paragraph such a command can mean is the one the caret is in —
+    // the GUI used to pass a hardcoded 0 and edit the first paragraph of
+    // the document instead.
+
+    /// Paragraph the caret is in.
+    pub fn cursor_paragraph(&self) -> usize {
+        self.document.paragraph_at(self.cursor)
+    }
+
+    /// Turn the cursor's paragraph into a list item of `kind`, or back into
+    /// body text when it already is one — the toggle a "Bullet List" button
+    /// performs. Returns the kind the paragraph ended up with.
+    pub fn toggle_list_at_cursor(&mut self, kind: ListKind) -> ListKind {
+        let idx = self.cursor_paragraph();
+        let current = self.document.paragraphs.get(idx).map(|p| p.style.list).unwrap_or(ListKind::None);
+        let next = if current == kind { ListKind::None } else { kind };
+        let level = self.document.paragraphs.get(idx).map(|p| p.style.list_level).unwrap_or(0);
+        self.document.set_list_item(idx, next, if next == ListKind::None { 0 } else { level }, None);
+        next
+    }
+
+    pub fn indent_list_at_cursor(&mut self) -> bool {
+        let idx = self.cursor_paragraph();
+        let before = self.document.paragraphs.get(idx).map(|p| p.style.list_level);
+        self.indent_list_item(idx);
+        before != self.document.paragraphs.get(idx).map(|p| p.style.list_level)
+    }
+
+    pub fn outdent_list_at_cursor(&mut self) -> bool {
+        let idx = self.cursor_paragraph();
+        let before = self.document.paragraphs.get(idx).map(|p| p.style.list_level);
+        self.outdent_list_item(idx);
+        before != self.document.paragraphs.get(idx).map(|p| p.style.list_level)
+    }
+
+    /// Restart numbering at 1 on the cursor's paragraph. Only meaningful
+    /// inside a numbered list, so it reports whether it applied.
+    pub fn restart_numbering_at_cursor(&mut self) -> bool {
+        let idx = self.cursor_paragraph();
+        let Some(para) = self.document.paragraphs.get(idx) else { return false };
+        if para.style.list != ListKind::Numbered {
+            return false;
+        }
+        let level = para.style.list_level;
+        self.document.set_list_item(idx, ListKind::Numbered, level, Some(1));
+        true
+    }
+
+    /// Toggle "start this paragraph on a new page" on the cursor's
+    /// paragraph, and report the state it ended in.
+    pub fn toggle_page_break_at_cursor(&mut self) -> bool {
+        let idx = self.cursor_paragraph();
+        let Some(para) = self.document.paragraphs.get_mut(idx) else { return false };
+        para.style.page_break_before = !para.style.page_break_before;
+        para.style.page_break_before
+    }
+
     pub fn indent_list_item(&mut self, paragraph: usize) {
         if let Some(p) = self.document.paragraphs.get_mut(paragraph) {
             if p.style.list != ListKind::None {
@@ -313,6 +374,77 @@ mod tests {
             .position(|p| p.style.table_cell.is_some()).unwrap();
         assert!(editor.document().paragraphs[first..first + cells.len()]
             .iter().all(|p| p.style.table_cell.is_some()), "cells must be consecutive");
+    }
+
+    #[test]
+    fn list_commands_act_on_the_cursors_paragraph() {
+        // The GUI used to pass a hardcoded 0 here, so every one of these
+        // edited the document's first paragraph no matter where the caret
+        // was.
+        let mut editor = three_paragraphs();
+        editor.set_cursor(editor.document().paragraph_offset(1));
+
+        assert_eq!(editor.toggle_list_at_cursor(ListKind::Bullet), ListKind::Bullet);
+        assert_eq!(editor.document().paragraphs[1].style.list, ListKind::Bullet);
+        assert_eq!(editor.document().paragraphs[0].style.list, ListKind::None);
+
+        assert!(editor.indent_list_at_cursor());
+        assert_eq!(editor.document().paragraphs[1].style.list_level, 1);
+        assert!(editor.outdent_list_at_cursor());
+        assert_eq!(editor.document().paragraphs[1].style.list_level, 0);
+    }
+
+    #[test]
+    fn toggling_the_same_list_kind_turns_it_off() {
+        let mut editor = three_paragraphs();
+        editor.set_cursor(editor.document().paragraph_offset(1));
+        editor.toggle_list_at_cursor(ListKind::Bullet);
+        assert_eq!(editor.toggle_list_at_cursor(ListKind::Bullet), ListKind::None);
+        assert_eq!(editor.document().paragraphs[1].style.list, ListKind::None);
+        assert_eq!(editor.document().paragraphs[1].style.list_level, 0,
+                   "leaving a list also leaves its nesting");
+    }
+
+    #[test]
+    fn switching_list_kind_keeps_the_nesting_level() {
+        let mut editor = three_paragraphs();
+        editor.set_cursor(editor.document().paragraph_offset(1));
+        editor.toggle_list_at_cursor(ListKind::Bullet);
+        editor.indent_list_at_cursor();
+        assert_eq!(editor.toggle_list_at_cursor(ListKind::Numbered), ListKind::Numbered);
+        assert_eq!(editor.document().paragraphs[1].style.list_level, 1);
+    }
+
+    #[test]
+    fn indenting_outside_a_list_changes_nothing() {
+        let mut editor = three_paragraphs();
+        editor.set_cursor(editor.document().paragraph_offset(1));
+        assert!(!editor.indent_list_at_cursor());
+        assert!(!editor.outdent_list_at_cursor());
+        assert!(!editor.restart_numbering_at_cursor(), "nothing to renumber in body text");
+    }
+
+    #[test]
+    fn restart_numbering_applies_only_to_numbered_items() {
+        let mut editor = three_paragraphs();
+        editor.set_cursor(editor.document().paragraph_offset(1));
+        editor.toggle_list_at_cursor(ListKind::Bullet);
+        assert!(!editor.restart_numbering_at_cursor());
+        editor.toggle_list_at_cursor(ListKind::Numbered);
+        assert!(editor.restart_numbering_at_cursor());
+        assert_eq!(editor.document().paragraphs[1].style.list_start, Some(1));
+    }
+
+    #[test]
+    fn page_break_toggles_on_the_cursors_paragraph() {
+        let mut editor = three_paragraphs();
+        editor.set_cursor(editor.document().paragraph_offset(2));
+        assert!(editor.toggle_page_break_at_cursor());
+        assert!(editor.document().paragraphs[2].style.page_break_before);
+        assert!(!editor.document().paragraphs[0].style.page_break_before);
+        // Inserting one is how a user removes one: the same command.
+        assert!(!editor.toggle_page_break_at_cursor());
+        assert!(!editor.document().paragraphs[2].style.page_break_before);
     }
 
     #[test]

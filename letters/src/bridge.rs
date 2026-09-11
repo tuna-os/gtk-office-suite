@@ -96,6 +96,8 @@ pub fn capture_from_buffer(buf: &gtk::TextBuffer) -> Document {
     .filter_map(|(a, n)| table.lookup(n).map(|t| (a, t)))
     .collect();
 
+    let page_break_tag = table.lookup(PAGE_BREAK_TAG);
+
     let line_spacing_tags: Vec<(f32, gtk::TextTag)> =
         ["line-spacing-1.15", "line-spacing-1.5", "line-spacing-2.0", "line-spacing-1.0"]
             .into_iter()
@@ -126,6 +128,17 @@ pub fn capture_from_buffer(buf: &gtk::TextBuffer) -> Document {
                 if iter.has_tag(tag) {
                     current.style.line_spacing = *spacing;
                     break;
+                }
+            }
+            // A page break is paragraph state with no text of its own. It
+            // rides on a tag for the same reason headings and alignment
+            // do: anything written into the text would be indistinguishable
+            // from a user typing the same characters, and capture would
+            // have to guess. Without this the break was lost on the next
+            // capture, so it never reached a saved DOCX or ODT.
+            if let Some(tag) = &page_break_tag {
+                if iter.has_tag(tag) {
+                    current.style.page_break_before = true;
                 }
             }
             at_line_start = false;
@@ -280,6 +293,11 @@ fn capture_tables(paragraphs: &mut Vec<Paragraph>) {
     }
     *paragraphs = out;
 }
+
+/// GtkTextTag marking a paragraph that starts on a new page. Registered
+/// by `register_formatting_tags`, which also gives it the space and rule
+/// that make the break visible in the editor.
+pub const PAGE_BREAK_TAG: &str = "page-break";
 
 /// Buffer data key holding the document's footnote texts.
 pub const FOOTNOTES_KEY: &str = "letters-footnotes";
@@ -518,6 +536,9 @@ pub fn render_to_buffer(doc: &Document, buf: &gtk::TextBuffer) {
         }
         if let Some(name) = line_spacing_tag_name(para.style.line_spacing) {
             para_tags.push(name.to_string());
+        }
+        if para.style.page_break_before {
+            para_tags.push(PAGE_BREAK_TAG.to_string());
         }
         for name in para_tags {
             let start = buf.iter_at_offset(para_start);
@@ -838,6 +859,68 @@ mod tests {
             assert!(doc.paragraphs.iter().filter(|p| p.style.table_cell.is_none())
                         .all(|p| !p.text().contains('|')),
                     "no literal grid text should survive as prose: {doc:?}");
+        });
+    }
+
+    #[test]
+    fn page_breaks_survive_the_buffer_round_trip() {
+        // Before the tag existed, render dropped page_break_before and
+        // capture could not recover it, so a break inserted in the editor
+        // never reached a saved DOCX or ODT — both of which write it.
+        gtk_test(|| {
+            let buf = gtk::TextBuffer::new(None);
+            crate::actions::register_formatting_tags(&buf);
+            let mut doc = Document::from_plain_text("first page\nsecond page");
+            doc.paragraphs[1].style.page_break_before = true;
+            let rt = round_trip(&buf, &doc);
+            assert!(!rt.paragraphs[0].style.page_break_before);
+            assert!(rt.paragraphs[1].style.page_break_before, "page break lost");
+            assert_eq!(rt.to_plain_text(), "first page\nsecond page",
+                       "a page break adds no text of its own");
+        });
+    }
+
+    #[test]
+    fn toggling_a_list_adds_one_marker_and_leaves_other_paragraphs_alone() {
+        // The editor renders a list item's marker; the action must not
+        // write one too. "- • item" on screen (and "• item" in the saved
+        // document) is what two writers looked like.
+        gtk_test(|| {
+            let buf = gtk::TextBuffer::new(None);
+            crate::actions::register_formatting_tags(&buf);
+            render_to_buffer(&Document::from_plain_text("first\nsecond"), &buf);
+            let second = buf.iter_at_line(1).expect("second line");
+            buf.place_cursor(&second);
+
+            apply_structured_edit(&buf, |editor| {
+                editor.toggle_list_at_cursor(letters_core::ListKind::Bullet);
+            });
+
+            let shown = buf.text(&buf.start_iter(), &buf.end_iter(), false).to_string();
+            assert_eq!(shown, "first\n- second", "one rendered marker, on the caret's line");
+            let doc = capture_from_buffer(&buf);
+            assert_eq!(doc.paragraphs[0].style.list, letters_core::ListKind::None);
+            assert_eq!(doc.paragraphs[1].style.list, letters_core::ListKind::Bullet);
+            assert_eq!(doc.paragraphs[1].text(), "second", "the marker is not document text");
+        });
+    }
+
+    #[test]
+    fn inserting_a_page_break_marks_the_cursors_paragraph() {
+        gtk_test(|| {
+            let buf = gtk::TextBuffer::new(None);
+            crate::actions::register_formatting_tags(&buf);
+            render_to_buffer(&Document::from_plain_text("intro\nchapter two"), &buf);
+            buf.place_cursor(&buf.iter_at_line(1).expect("second line"));
+
+            apply_structured_edit(&buf, |editor| {
+                editor.toggle_page_break_at_cursor();
+            });
+
+            let doc = capture_from_buffer(&buf);
+            assert!(doc.paragraphs[1].style.page_break_before);
+            assert_eq!(doc.to_plain_text(), "intro\nchapter two",
+                       "no literal '---' paragraph is inserted");
         });
     }
 
