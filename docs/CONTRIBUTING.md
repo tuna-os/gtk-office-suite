@@ -126,6 +126,9 @@ cargo check --workspace
 # Full test suite (needs GTK4 runtime — run on build machine)
 cargo test -p tables
 cargo test -p suite-common --lib
+
+# ODF interop tests (requires LibreOffice Writer and Impress installed)
+REQUIRE_SOFFICE=1 cargo test -p decks-core -p letters-core
 ```
 
 **What to test:**
@@ -133,6 +136,7 @@ cargo test -p suite-common --lib
 - `format.rs` — formatting logic (pure Rust, testable anywhere)
 - `undo.rs` — command apply/undo (pure Rust)
 - Window-level tests require GTK runtime — implement as integration tests
+- ODF read/write paths must pass oracle parity checks (`REQUIRE_SOFFICE=1`)
 
 ### 7. Before Committing
 
