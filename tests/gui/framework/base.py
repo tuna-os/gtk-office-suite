@@ -158,6 +158,52 @@ class BaseGUITestCase(unittest.TestCase):
         self._activate_window()
         self.last_screenshot = None
 
+    def relaunch_app(self, crash=False, launch_args=None):
+        """Close the running app and start it again, returning the new
+        AT-SPI application node.
+
+        Journeys that restart the app used to inline this, and every inline
+        copy shared one gap: the replacement process was never handed to
+        `owned_processes.register`. `tearDown` terminates `self.process`,
+        which is whichever copy is current, so a journey that restarted
+        twice left the middle one running — unregistered, so the pre-launch
+        sweep would not reap it either. One surviving copy owns the
+        GApplication bus name, and every later journey's window then belongs
+        to a process from an earlier test.
+
+        `crash=True` kills instead of asking politely, which is what the
+        recovery journeys want: SIGTERM runs the close guard and clears the
+        autosave snapshots that those journeys exist to find.
+        """
+        previous = getattr(self, "process", None)
+        if previous is not None:
+            if crash:
+                previous.kill()
+            else:
+                previous.terminate()
+            try:
+                previous.wait(timeout=5)
+            except subprocess.TimeoutExpired:
+                previous.kill()
+                previous.wait(timeout=5)
+
+        env = os.environ.copy()
+        env["GDK_BACKEND"] = "x11"
+        env.update(getattr(self, "launch_env", {}))
+        self.process = subprocess.Popen(
+            [self.bin_path] + list(
+                getattr(self, "launch_args", ()) if launch_args is None else launch_args
+            ),
+            env=env,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+        )
+        _register_launched(self.app_name, self.process)
+        self.app = self.wait_for_app(self.app_name)
+        self._activate_window()
+        return self.app
+
     def configure_deterministic_environment(self):
         """Set shared, test-only launch defaults for reproducible journeys.
 

@@ -377,17 +377,7 @@ class LettersAutosaveSmoke(BaseGUITestCase):
 
         # Simulate a crash: kill the process directly, bypassing the close
         # guard, so the snapshots are never cleared by a clean exit.
-        self.process.kill()
-        self.process.wait(timeout=5)
-
-        env = os.environ.copy()
-        env["GDK_BACKEND"] = "x11"
-        env.update(self.launch_env)
-        self.process = subprocess.Popen(
-            [self.bin_path], env=env,
-            stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
-        )
-        self.app = self.wait_for_app(self.app_name)
+        self.relaunch_app(crash=True)
         time.sleep(2.0)
 
         frame = self.app.child(roleName="frame")
@@ -446,17 +436,7 @@ class LettersPreferenceBindingSmoke(BaseGUITestCase):
         time.sleep(0.5)
         self.assertFalse(self._toolbar_visible(), "toolbar did not hide live when show-toolbar was set false")
 
-        self.process.terminate()
-        self.process.wait(timeout=5)
-
-        env = os.environ.copy()
-        env["GDK_BACKEND"] = "x11"
-        env.update(self.launch_env)
-        self.process = subprocess.Popen(
-            [self.bin_path], env=env,
-            stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
-        )
-        self.app = self.wait_for_app(self.app_name)
+        self.relaunch_app()
         time.sleep(1.5)
         self.app.child(name="New Document", roleName="push button").do_action(0)
         time.sleep(1.5)
@@ -702,19 +682,9 @@ class TablesAutosaveSmoke(BaseGUITestCase):
         self.assertEqual(len(self._snapshot_files()), 1, "autosave-now must have written a snapshot")
 
         # Simulate a crash: kill the process directly, bypassing the close
-        # guard entirely, so the snapshot is never cleared by a clean exit.
-        self.process.kill()
-        self.process.wait(timeout=5)
-
-        # Relaunch against the same state dir and expect recovery.
-        env = os.environ.copy()
-        env["GDK_BACKEND"] = "x11"
-        env.update(self.launch_env)
-        self.process = subprocess.Popen(
-            [self.bin_path], env=env,
-            stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
-        )
-        self.app = self.wait_for_app(self.app_name)
+        # guard entirely, so the snapshot is never cleared by a clean exit,
+        # then relaunch against the same state dir and expect recovery.
+        self.relaunch_app(crash=True)
         time.sleep(1.5)
 
         frame = self.app.child(roleName="frame")
@@ -787,15 +757,7 @@ class TablesUndoSaveReopenSmoke(BaseGUITestCase):
             sheet_xml = book.read("xl/worksheets/sheet1.xml").decode()
         self.assertIn("<f>2+3</f>", sheet_xml)
 
-        self.process.terminate()
-        self.process.wait(timeout=3)
-        env = os.environ.copy()
-        env["GDK_BACKEND"] = "x11"
-        self.process = subprocess.Popen(
-            [self.bin_path, self._doc], env=env,
-            stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
-        )
-        self.app = self.wait_for_app(self.app_name)
+        self.relaunch_app(launch_args=[self._doc])
         time.sleep(1.2)
         rawinput.keyCombo("<Control>g")
         time.sleep(0.5)
@@ -2062,17 +2024,7 @@ class DecksAutosaveSmoke(BaseGUITestCase):
 
         # Simulate a crash: kill the process directly, bypassing the close
         # guard, so the snapshot is never cleared by a clean exit.
-        self.process.kill()
-        self.process.wait(timeout=5)
-
-        env = os.environ.copy()
-        env["GDK_BACKEND"] = "x11"
-        env.update(self.launch_env)
-        self.process = subprocess.Popen(
-            [self.bin_path], env=env,
-            stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
-        )
-        self.app = self.wait_for_app(self.app_name)
+        self.relaunch_app(crash=True)
         time.sleep(1.5)
 
         frame = self.app.child(roleName="frame")
@@ -2428,3 +2380,64 @@ class LettersSaveFormatSmoke(BaseGUITestCase):
             os.path.exists(out_path), "a format with no writer was written anyway"
         )
         self.assertIsNone(self.process.poll(), "letters exited on a refused save")
+
+
+class HarnessRepeatedLaunchSmoke(BaseGUITestCase):
+    """Launching and closing the same app repeatedly must leave exactly one
+    live copy behind, never a pile of them (#354).
+
+    The roadmap asks for the harness's own isolation to be tested with
+    repeated launch/close, and the reason is specific: the apps are
+    `GtkApplication`s, so the first surviving copy owns the bus name and
+    every later launch hands its window back to *that* process. A journey
+    then passes or fails against a process some earlier test started, and
+    the failure surfaces somewhere else entirely.
+
+    The close is a real one (SIGTERM, so the app runs its own shutdown),
+    not a kill, because a shutdown path that hangs is the way a copy
+    survives in practice.
+    """
+
+    app_name = "letters"
+    CYCLES = 4
+
+    def test_repeated_launch_and_close_never_accumulates_copies(self):
+        from framework.owned_processes import owned
+
+        pids = [self.process.pid]
+        self.assertIsNotNone(self.app.child(roleName="frame"))
+
+        for cycle in range(1, self.CYCLES + 1):
+            previous = self.process
+            self.relaunch_app()
+
+            self.assertIsNotNone(
+                previous.poll(), f"cycle {cycle}: the previous copy is still running"
+            )
+            self.assertIsNone(
+                self.process.poll(), f"cycle {cycle}: the new copy exited at startup"
+            )
+            self.assertNotIn(
+                self.process.pid, pids, f"cycle {cycle}: reused pid, so nothing restarted"
+            )
+            pids.append(self.process.pid)
+
+            # A window per launch, and it must be this launch's window: a
+            # frame handed back by a surviving older copy is the exact
+            # failure being tested for, and it looks identical from here
+            # apart from which process is alive.
+            self.assertIsNotNone(
+                self.app.child(roleName="frame"), f"cycle {cycle}: no window after relaunch"
+            )
+
+            # The harness may only reap what it registered (#241), so an
+            # unregistered replacement is a leak with no owner. This is the
+            # assertion that fails if a relaunch stops registering.
+            live = owned(self.app_name)
+            self.assertEqual(
+                [process.pid for process in live],
+                [self.process.pid],
+                f"cycle {cycle}: the harness owns {len(live)} live copies, expected 1",
+            )
+
+        self.assertEqual(len(set(pids)), self.CYCLES + 1)

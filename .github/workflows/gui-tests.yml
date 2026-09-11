@@ -62,34 +62,16 @@ jobs:
               else
                 changed=$(git diff --name-only "$base" "$HEAD_SHA")
                 echo "Changed files:"; echo "$changed"
-                shared=0
-                echo "$changed" | grep -qE '^(suite-common|suite-common-core|suite-export)/|^tests/gui/(framework/|conftest|run_gui_tests\.sh)|^Cargo\.(toml|lock)$' && shared=1
-                apps=""
-                if [ "$shared" = "1" ]; then
-                  echo "Shared crate or test-harness change: testing all apps."
-                else
-                  echo "$changed" | grep -qE '^letters(-core)?/' && apps="$apps Letters"
-                  echo "$changed" | grep -qE '^tables(-core)?/' && apps="$apps Tables"
-                  echo "$changed" | grep -qE '^decks(-core)?/' && apps="$apps Decks"
-                fi
-                if [ "$shared" = "1" ] || [ -z "$apps" ]; then
-                  echo "filter=" >> "$GITHUB_OUTPUT"
-                  # A bare `a && b && echo` here is the step's last command, so
-                  # when it evaluates false (shared=1) its non-zero status kills
-                  # the step under `bash -e` — after it has already decided
-                  # correctly. Keep it a real conditional.
-                  if [ -z "$apps" ] && [ "$shared" != "1" ]; then
-                    echo "No recognized app path changed: testing all apps (fail-safe)."
-                  fi
-                else
-                  # The bare expression, without the -k or its quoting: the
-                  # step that runs pytest turns it into a real argument, so
-                  # no quoting has to survive a round trip through a step
-                  # output and a second shell parse.
-                  filter=$(echo "$apps" | xargs | sed 's/ / or /g')
-                  echo "filter=$filter" >> "$GITHUB_OUTPUT"
-                  echo "Testing only: $filter"
-                fi
+                # The classification lives in a script rather than inline
+                # here so that its conservative fallbacks can be tested:
+                # picking too few apps produces a green run that never
+                # launched the app the change broke, which no amount of
+                # reading this YAML would catch. See
+                # tests/test_journey_selection.py. It prints the -k
+                # expression on stdout (empty means every app) and the
+                # reason on stderr, so the log still says what it decided.
+                filter=$(printf '%s\n' "$changed" | tests/gui/select_journeys.sh)
+                echo "filter=$filter" >> "$GITHUB_OUTPUT"
               fi ;;
           esac
 

@@ -176,5 +176,176 @@ class ReadinessBudget(unittest.TestCase):
         )
 
 
+def _is_serving(display):
+    """Whether anything answers X requests on `display`.
+
+    Asked of the display rather than of the process table on purpose: the
+    harness is forbidden from identifying processes by name (#241), and so
+    is its own test. A missing xdpyinfo is reported rather than read as "no
+    display", because that would turn every assertion here into a
+    tautology.
+    """
+    try:
+        finished = subprocess.run(
+            ["xdpyinfo", "-display", display],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            timeout=30,
+        )
+    except FileNotFoundError as missing:
+        raise AssertionError(
+            "xdpyinfo is needed to tell a live display from a dead one "
+            "(Debian/Ubuntu: x11-utils)"
+        ) from missing
+    return finished.returncode == 0
+
+
+def _a_display_nobody_is_serving():
+    """A display number nothing answers on, so connecting to it must fail."""
+    for number in range(90, 120):
+        if not _is_serving(f":{number}"):
+            return f":{number}"
+    raise AssertionError("no free display number between :90 and :119")
+
+
+class InjectedSetupFailures(unittest.TestCase):
+    """Setup must fail visibly and clean up after itself (#354).
+
+    The failure this guards against is not a crash — it is setup deciding
+    everything is fine and handing the journeys a display that is not
+    there. That used to be a blind `sleep 1`, after which an Xvfb that
+    never started left DISPLAY pointing at nothing and the journeys failed
+    minutes later with timeouts that said nothing about the cause.
+
+    Each case breaks one specific part of setup and asserts three things:
+    the runner exits nonzero, its message names the actual cause, and the
+    EXIT trap still ran — the roadmap asks for cleanup on setup failure
+    specifically, which is the path most likely to leak because it is the
+    path nobody exercises on purpose.
+    """
+
+    RUNNER = os.path.join(
+        os.path.dirname(os.path.abspath(__file__)), "gui", "run_gui_tests.sh"
+    )
+
+    def setUp(self):
+        # The runner's temporary schema directory and display-number file
+        # are both mktemp'd into TMPDIR, so a private TMPDIR turns "did the
+        # trap run?" into a directory listing instead of a hunt for
+        # process names.
+        self.tmp = tempfile.mkdtemp(prefix="setup-failure-")
+        self.addCleanup(shutil.rmtree, self.tmp, True)
+        self.helpers = os.path.join(self.tmp, "bin")
+        os.mkdir(self.helpers)
+
+    def _stub(self, name, script):
+        """Put an executable earlier on PATH than the real one."""
+        path = os.path.join(self.helpers, name)
+        with open(path, "w", encoding="utf-8") as handle:
+            handle.write(script)
+        os.chmod(path, 0o755)
+
+    def _run_setup(self, **overrides):
+        env = dict(os.environ)
+        env["TMPDIR"] = self.tmp
+        env["PATH"] = self.helpers + os.pathsep + env["PATH"]
+        # One second, because every one of these runs is *supposed* to
+        # exhaust its budget: the point is the report, not the wait.
+        env["GUI_TEST_READY_SECONDS"] = "1"
+        env.update(overrides)
+        # A file rather than a pipe: a leaked child inherits the runner's
+        # stdout, and a pipe is not closed until every holder of it exits —
+        # so the one case where setup leaks its Xvfb would look like a
+        # runner that never finished, and the assertion that names the leak
+        # would never get to run. The log says what happened either way.
+        log = os.path.join(self.tmp, "runner.log")
+        with open(log, "w", encoding="utf-8") as handle:
+            finished = subprocess.run(
+                [self.RUNNER, "test_smoke.py"],
+                env=env,
+                stdout=handle,
+                stderr=subprocess.STDOUT,
+                timeout=180,
+            )
+        with open(log, encoding="utf-8", errors="replace") as handle:
+            finished.output = handle.read()
+        return finished
+
+    # Ours, not setup's: the stub directory and the files we ask it to
+    # write. Anything else in TMPDIR is something setup failed to remove.
+    OURS = ("bin", "runner.log", "probed-display")
+
+    def _leftovers(self):
+        """What setup left in TMPDIR, ignoring what we put there."""
+        return sorted(name for name in os.listdir(self.tmp) if name not in self.OURS)
+
+    def test_an_inherited_display_that_answers_nothing_is_reported(self):
+        dead = _a_display_nobody_is_serving()
+        finished = self._run_setup(GUI_TEST_REUSE_DISPLAY="1", DISPLAY=dead)
+        self.assertNotEqual(finished.returncode, 0, finished.output)
+        self.assertIn(f"no X display at {dead}", finished.output)
+        # Naming which of the two paths was taken is the whole value of the
+        # message: "DISPLAY was inherited" versus "Xvfb did not come up"
+        # point at different machines' worth of debugging.
+        self.assertIn("GUI_TEST_REUSE_DISPLAY is set", finished.output)
+        self.assertEqual(self._leftovers(), [])
+
+    def test_a_requested_display_number_already_in_use_is_reported(self):
+        taken = _a_display_nobody_is_serving()
+        occupant = subprocess.Popen(
+            ["Xvfb", taken, "-screen", "0", "320x240x24"],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+        self.addCleanup(occupant.wait)
+        self.addCleanup(occupant.terminate)
+        deadline = time.time() + 60
+        while not _is_serving(taken):
+            self.assertLess(time.time(), deadline, "the occupying Xvfb never started")
+            time.sleep(0.1)
+
+        finished = self._run_setup(GUI_TEST_DISPLAY_NUM=taken.lstrip(":"))
+
+        self.assertNotEqual(finished.returncode, 0, finished.output)
+        # Before -displayfd this case did not fail at all: the second run
+        # joined the first run's display and the two runs' windows shared a
+        # screen, with one run's keystrokes landing in the other's editor.
+        self.assertIn("our Xvfb exited before it was ready", finished.output)
+        self.assertIn("is it already in use?", finished.output)
+        self.assertEqual(self._leftovers(), [])
+
+    def test_a_display_that_never_answers_reaps_the_server_we_started(self):
+        # Break the readiness probe rather than the server: setup gets as
+        # far as starting its own Xvfb and allocating a number, then fails.
+        # That is the one failure path with something of ours left running
+        # to leak.
+        record = os.path.join(self.tmp, "probed-display")
+        self._stub(
+            "xdpyinfo",
+            '#!/bin/sh\nprintf "%s\\n" "$DISPLAY" >> "{record}"\nexit 1\n'.format(record=record),
+        )
+
+        finished = self._run_setup()
+
+        self.assertNotEqual(finished.returncode, 0, finished.output)
+        self.assertIn("no X display at", finished.output)
+        self.assertIn("Xvfb did not come up", finished.output)
+        self.assertTrue(os.path.exists(record), "setup never probed the display")
+        with open(record, encoding="utf-8") as handle:
+            allocated = handle.readline().strip()
+        self.assertTrue(allocated.startswith(":"), f"unexpected display {allocated!r}")
+
+        # The server setup started must not outlive it.
+        deadline = time.time() + 30
+        while _is_serving(allocated):
+            self.assertLess(
+                time.time(),
+                deadline,
+                f"setup left its own Xvfb serving {allocated} after failing",
+            )
+            time.sleep(0.1)
+        self.assertEqual(self._leftovers(), [])
+
+
 if __name__ == "__main__":
     unittest.main()
