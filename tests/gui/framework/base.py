@@ -288,6 +288,40 @@ class BaseGUITestCase(unittest.TestCase):
             time.sleep(min(interval, max(0.0, deadline - time.monotonic())))
         self.fail(f"Timed out after {timeout}s waiting for {description}")
 
+    def wait_until(self, observe, matches, timeout=10.0, interval=0.05,
+                   description="state"):
+        """Poll `observe()` until `matches(value)`, then return that value.
+
+        Unlike `wait_for_condition`, a timeout here reports the **last
+        value actually observed** (#354). That is the difference between
+        "Timed out waiting for the recalculated sum" and knowing it was
+        still showing `Sum 50 · Count 2` — one sends you looking at the
+        formula engine, the other tells you the third cell had not
+        committed yet.
+
+        Prefer this over `time.sleep(n); assertIn(...)`. A fixed wait is a
+        bet on the app being finished, and a bet that pays off on an idle
+        laptop loses on a loaded runner: measured with
+        `GUI_TEST_SLEEP_SCALE=0.25`, three journeys failed purely because
+        their waits were too short, each with a message that read like a
+        product defect.
+        """
+        deadline = time.monotonic() + timeout
+        last = None
+        while True:
+            try:
+                last = observe()
+                if matches(last):
+                    return last
+            except Exception as exc:
+                last = f"<{type(exc).__name__}: {exc}>"
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                break
+            time.sleep(min(interval, remaining))
+        self.fail(f"Timed out after {timeout}s waiting for {description}; "
+                  f"last observed: {last!r}")
+
     def wait_for_node(self, **criteria):
         """Wait until an AT-SPI child matching criteria is exposed."""
         return self.wait_for_condition(
