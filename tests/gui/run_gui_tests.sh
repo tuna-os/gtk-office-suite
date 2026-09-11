@@ -31,14 +31,15 @@ export GTK_MODULES=gail:atk-bridge
 # tests run on your own X session for debugging.
 if [ -z "${GUI_TEST_REUSE_DISPLAY:-}" ]; then
     XVFB_DISPLAY_NUM="${GUI_TEST_DISPLAY_NUM:-99}"
-    Xvfb ":${XVFB_DISPLAY_NUM}" -screen 0 1920x1080x24 &
+    # GUI_TEST_SCREEN_SIZE is both the Xvfb geometry and what the recorder
+    # is told to capture, so a stress campaign's narrow/wide display
+    # matrix (tests/gui/stress.py) only has to set one variable and the
+    # video still matches the screen.
+    export GUI_TEST_SCREEN_SIZE="${GUI_TEST_SCREEN_SIZE:-1920x1080}"
+    Xvfb ":${XVFB_DISPLAY_NUM}" -screen "0" "${GUI_TEST_SCREEN_SIZE}x24" &
     XVFB_PID=$!
     trap 'kill ${XVFB_PID:-} 2>/dev/null || true' EXIT
     export DISPLAY=":${XVFB_DISPLAY_NUM}"
-    # Tell the screen recorder the geometry directly: ffmpeg's x11grab has
-    # to be given a capture size up front, and asking X for it needs
-    # xdpyinfo, which is not installed everywhere these tests run.
-    export GUI_TEST_SCREEN_SIZE="${GUI_TEST_SCREEN_SIZE:-1920x1080}"
     sleep 1
 fi
 
@@ -66,7 +67,17 @@ PYTHON_BIN="${GUI_TEST_PYTHON:-/usr/bin/python3}"
 
 # AT-SPI needs a session bus; dbus-run-session gives us a private one.
 # dogtail refuses to start unless toolkit-accessibility is enabled in that session.
+# The light/dark preference is a session setting, so it is set inside the
+# private bus rather than exported: libadwaita reads it from the portal/
+# settings daemon, not from the environment. "default" leaves the session
+# as it comes, which is what every ordinary run wants.
+export GUI_TEST_COLOR_SCHEME_RESOLVED="${GUI_TEST_COLOR_SCHEME:-default}"
+
 exec dbus-run-session -- bash -c '
     gsettings set org.gnome.desktop.interface toolkit-accessibility true
+    if [ "$GUI_TEST_COLOR_SCHEME_RESOLVED" != "default" ]; then
+        gsettings set org.gnome.desktop.interface color-scheme \
+            "$GUI_TEST_COLOR_SCHEME_RESOLVED"
+    fi
     exec "$0" -m pytest "$@" -v --tb=short
 ' "$PYTHON_BIN" "$@"

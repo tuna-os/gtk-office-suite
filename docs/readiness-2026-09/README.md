@@ -73,7 +73,12 @@ acceptance contract by itself.
 
 - Shared atomic save: regression tests reproduced stale-temp-symlink overwrite and permission widening. Exclusive temporary files, permissions, owned cleanup and Unix directory sync implemented locally. On updated main: 89 shared-core unit tests plus one parity-conformance test passed. Full format/GUI integration is still pending.
 - GUI harness: private schemas/XDG/display allocation, owned process cleanup, correct snapshot artifact source; duplicate named-range test exposed under a unique class name. The still-skipped #137 reproduction needs live verification.
-- Repeated journey runner: `tests/gui/stress.py` records seeds, revision, binary hashes, every attempt, logs and JUnit; supports baseline and 18 display configurations per app. It repeats existing journeys; stateful random edits and save-fault injection are next.
+- Repeated journey runner: `tests/gui/stress.py` is on main and runs nightly (`.github/workflows/gui-stress.yml`) in the GUI
+  container. It records seeds, revision, binary SHA-256, every attempt's order, verdict, log, JUnit and artifacts, classifies
+  failures (product crash / assertion / timeout / infrastructure), reports the first-attempt failure rate, and never retries.
+  Its first display-matrix run found #516 (Tables loses the name box below the narrow breakpoint, so `Ctrl+G` silently does
+  nothing at 400px). It repeats existing journeys; stateful random edits and save-fault injection are next. The corpus and
+  engine work from the same slice is still on PR #445.
 - Dependency-free Python tests and CI wiring cover validators, duplicate collection and stress orchestration. GUI failure artifacts are uploaded even when smoke fails.
 
 Run after building current binaries and installing Xvfb, Matchbox, xdotool and the documented GUI dependencies:

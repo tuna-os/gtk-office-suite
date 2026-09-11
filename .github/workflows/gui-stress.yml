@@ -1,0 +1,138 @@
+name: GUI stress campaign
+
+# Repeats the real AT-SPI journeys many times, in a recorded order, and
+# publishes what happened (tests/gui/stress.py, #442).
+#
+# Why a separate nightly workflow: the smoke gate answers "does this
+# change break a journey", which it can only do by running each journey
+# once. The question this asks is different — how often does a journey
+# that passes once pass — and answering it costs an hour, not five
+# minutes. Keeping them apart means the PR gate stays fast and the
+# campaign stays honest: no retries, every attempt recorded, any
+# first-attempt failure fails the run.
+
+on:
+  schedule:
+    - cron: '0 3 * * *'   # nightly, before the 6am GUI suite
+  workflow_dispatch:
+    inputs:
+      repeat:
+        description: 'Repetitions of the selection'
+        required: false
+        default: '10'
+      seed:
+        description: 'Ordering seed (blank derives one and records it)'
+        required: false
+        default: ''
+      matrix:
+        description: 'Display matrix: none or display'
+        required: false
+        default: 'none'
+      select:
+        description: 'pytest -k expression, e.g. "Tables"'
+        required: false
+        default: ''
+
+concurrency:
+  group: gui-stress-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  image:
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      packages: write
+    outputs:
+      ref: ${{ steps.resolve.outputs.ref }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # Same image the recorded journeys use (gui-container.yml), so a
+      # campaign result and a verification video describe the same
+      # environment. Building it here as a fallback means this workflow
+      # works before that one has ever published.
+      - id: resolve
+        env:
+          REPOSITORY: ${{ github.repository }}
+        run: |
+          ref="ghcr.io/${REPOSITORY}/gui-test:main"
+          if docker manifest inspect "$ref" >/dev/null 2>&1; then
+            echo "Using published image $ref"
+          else
+            echo "No published image yet; building and publishing $ref"
+            docker build -t "$ref" -f tests/gui/container/Containerfile tests/gui/container
+            docker push "$ref"
+          fi
+          echo "ref=$ref" >> "$GITHUB_OUTPUT"
+
+  campaign:
+    needs: image
+    runs-on: ubuntu-24.04
+    timeout-minutes: 300
+    container:
+      image: ${{ needs.image.outputs.ref }}
+      # GTK and Xvfb share memory through /dev/shm; the container default
+      # of 64MB makes rendering fail in ways that look like app bugs.
+      options: --shm-size=1g
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Build app binaries
+        run: cargo build --bin letters --bin tables --bin decks
+
+      # Every context value reaches the script through the environment,
+      # never through `${{ }}` inside it: an input is attacker-controlled
+      # text and expression interpolation pastes it in before bash parses
+      # a single quote (#492).
+      - name: Run the campaign
+        id: campaign
+        env:
+          REPEAT: ${{ github.event.inputs.repeat || '10' }}
+          SEED: ${{ github.event.inputs.seed }}
+          MATRIX: ${{ github.event.inputs.matrix || 'none' }}
+          SELECT: ${{ github.event.inputs.select }}
+        run: |
+          set --
+          [ -n "$SEED" ] && set -- "$@" --seed "$SEED"
+          [ -n "$SELECT" ] && set -- "$@" --select "$SELECT"
+          python3 tests/gui/stress.py \
+            --repeat "$REPEAT" --matrix "$MATRIX" \
+            --output "$GITHUB_WORKSPACE/campaign" "$@"
+
+      # Always: a campaign's failures are its output, so the evidence
+      # must survive the run that produced them. Videos and failure
+      # artifacts are already inside the campaign directory, filed under
+      # the attempt that produced them.
+      - name: Upload campaign evidence
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: gui-stress-campaign
+          path: campaign
+          retention-days: 30
+          if-no-files-found: warn
+
+      - name: Summary
+        if: always()
+        run: |
+          manifest="$GITHUB_WORKSPACE/campaign/manifest.json"
+          [ -f "$manifest" ] || { echo "No manifest: the campaign did not start."; exit 0; }
+          {
+            echo '### GUI stress campaign'
+            echo
+            echo '```json'
+            python3 -c "import json,sys;print(json.dumps(json.load(open(sys.argv[1])).get('summary', {}), indent=2))" "$manifest"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"

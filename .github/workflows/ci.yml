@@ -49,6 +49,7 @@ jobs:
             tests/test_validate_parity.py \
             tests/test_gui_evidence.py \
             tests/test_validate_capabilities.py \
+            tests/test_gui_stress.py \
             tests/adaptive_editor_contract.py
 
       # E1-E3: green rows cite evidence, referenced paths exist, journey-gated

@@ -24,7 +24,14 @@ Controller state machines generate valid commands and assert invariants after ev
 
 ## Delivery and gates
 
-- [ ] Repeated journey runner with replayable seed/order, display matrix, per-attempt timeout/log/JUnit/artifacts and nonzero aggregate failure.
+- [x] Repeated journey runner with replayable seed/order, display matrix, per-attempt timeout/log/JUnit/artifacts and nonzero
+      aggregate failure — `tests/gui/stress.py`, run nightly by `.github/workflows/gui-stress.yml` in the same container
+      the recorded journeys use. A campaign records the revision, the app binaries' SHA-256, the seed, each attempt's
+      order, verdict, duration, JUnit report, log and retained artifacts, and classifies every failure as product crash,
+      assertion mismatch, timeout, infrastructure or unclassified. There is no retry: a green rerun does not unfail the
+      first attempt. Display axis covers 400/800/1280/1920 widths, light and dark, and scale 1 and 2; **high contrast is
+      not covered** — it needs a theme the container does not ship, and an env var that changes nothing would be a worse
+      lie than a visible gap.
 - [ ] Fixed regression seeds on every PR; a bounded random-seed campaign nightly; larger soak and complete matrix on the release candidate.
 - [ ] Stateful sequences per app; cross-app clipboard and multi-window close/save races.
 - [ ] Save/recovery fault injection at each transaction boundary; bounded malformed-file fuzzing with minimized fixtures.
