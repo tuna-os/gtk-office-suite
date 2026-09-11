@@ -155,7 +155,7 @@ jobs:
       # A record job that died before uploading (build failure, container
       # pull failure) still gets a comment saying so — silence would read
       # as "not run yet".
-      - uses: actions/download-artifact@v7
+      - uses: actions/download-artifact@v8
         continue-on-error: true
         with:
           name: feature-verification
