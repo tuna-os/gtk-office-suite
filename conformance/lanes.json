@@ -1,0 +1,58 @@
+{
+  "_comment": [
+    "Which CI job collects which test-id namespace (#313).",
+    "",
+    "The ledger's evidence check (C3) compares each cited test against an",
+    "inventory of what a lane collected, and a lane only speaks for the",
+    "namespaces it declares \u2014 so an id in a namespace *no* lane covers was",
+    "skipped by every lane and silently accepted. Demonstrated: a claim",
+    "citing 'tests/nonexistent/test_phantom.py::PhantomSuite::test_nothing_runs_this'",
+    "passed the GUI lane with 'CAPABILITY LEDGER OK'.",
+    "",
+    "validate_capabilities.py --lanes checks every cited id against this",
+    "map, which needs no test run, and each lane asserts its own row",
+    "against what it actually collected so the map cannot drift into",
+    "fiction.",
+    "A namespace is a prefix of a test id, and it has to be no broader than what the lane really runs: 'tests/' would vouch for every path under it, including one nothing collects."
+  ],
+  "lanes": [
+    {
+      "job": "test",
+      "workflow": ".github/workflows/ci.yml",
+      "collects": "nextest JUnit for the whole Rust workspace",
+      "namespaces": [
+        "letters-core::",
+        "tables-core::",
+        "decks-core::",
+        "suite-common-core::",
+        "suite-common::",
+        "suite-export::",
+        "letters::",
+        "tables::",
+        "decks::"
+      ]
+    },
+    {
+      "job": "smoke",
+      "workflow": ".github/workflows/gui-tests.yml",
+      "collects": "pytest collection of the AT-SPI journeys",
+      "namespaces": [
+        "tests/gui/"
+      ]
+    },
+    {
+      "job": "python-checks",
+      "workflow": ".github/workflows/ci.yml",
+      "collects": "pytest collection of the validator and harness tests it names",
+      "namespaces": [
+        "tests/adaptive_editor_contract.py::",
+        "tests/test_gui_evidence.py::",
+        "tests/test_gui_harness.py::",
+        "tests/test_gui_stress.py::",
+        "tests/test_release_gate.py::",
+        "tests/test_validate_capabilities.py::",
+        "tests/test_validate_parity.py::"
+      ]
+    }
+  ]
+}

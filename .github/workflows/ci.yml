@@ -64,8 +64,37 @@ jobs:
       # running — that is how the #507 crash reproduction went missing).
       # The evidence-vs-reality checks need collected tests, so they run
       # in the lanes that collect them.
-      - name: Capability ledger structure
-        run: python3 conformance/validate_capabilities.py
+      #
+      # --lanes adds the check that needs no test run: every cited test is
+      # in a namespace some lane actually collects. Without it an id in a
+      # namespace *no* lane covers was skipped by every lane and accepted
+      # — a claim citing tests/nonexistent/... passed the GUI lane with
+      # "CAPABILITY LEDGER OK" (#313).
+      - name: Capability ledger structure and lane coverage
+        run: python3 conformance/validate_capabilities.py --lanes conformance/lanes.json
+
+      # This lane collects the validator and harness tests, so it is the
+      # one that can check the ledger's claims about them — the `tests/`
+      # namespace had no lane at all, and `ci.recorded-journey-evidence`
+      # cites it.
+      - name: Capability ledger vs. the validator tests this lane collects
+        run: |
+          # One -q: verbosity is (-v) minus (-q), and unlike the GUI
+          # runner this adds no -v, so a second -q drops below the node-id
+          # listing to per-file counts — which parses as zero tests.
+          python3 -m pytest --collect-only -q \
+            tests/test_release_gate.py \
+            tests/test_validate_parity.py \
+            tests/test_gui_evidence.py \
+            tests/test_validate_capabilities.py \
+            tests/test_gui_stress.py \
+            tests/test_gui_harness.py \
+            tests/adaptive_editor_contract.py > python-collected.txt
+          python3 conformance/collect_test_inventory.py \
+            --pytest "tests=python-collected.txt" --out python-inventory.json
+          python3 conformance/validate_capabilities.py \
+            --lanes conformance/lanes.json --lane python-checks \
+            --collected python-inventory.json
 
       # E4: no silent green -> non-green regression, and no jump to green
       # without new evidence. Only meaningful against a base branch.
@@ -155,6 +184,7 @@ jobs:
             --junit "=target/nextest/ci/junit.xml" \
             --out rust-inventory.json --results-out rust-results.json
           python3 conformance/validate_capabilities.py \
+            --lanes conformance/lanes.json --lane test \
             --collected rust-inventory.json --results rust-results.json
 
       - name: Upload JUnit test results

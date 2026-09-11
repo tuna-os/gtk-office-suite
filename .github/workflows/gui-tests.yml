@@ -141,7 +141,9 @@ jobs:
           tests/gui/run_gui_tests.sh test_smoke.py --collect-only -q -q > collected.txt
           python3 conformance/collect_test_inventory.py \
             --pytest "tests/gui=collected.txt" --out gui-inventory.json
-          python3 conformance/validate_capabilities.py --collected gui-inventory.json
+          python3 conformance/validate_capabilities.py \
+            --lanes conformance/lanes.json --lane smoke \
+            --collected gui-inventory.json
 
       - name: Upload failure artifacts
         if: failure()

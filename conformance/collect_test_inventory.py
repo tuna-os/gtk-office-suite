@@ -142,9 +142,15 @@ def main(argv=None) -> int:
         prefix, _, path = spec.partition("=")
         if not path:
             parser.error(f"--pytest expects PREFIX=FILE, got {spec!r}")
-        covers.append(f"{prefix.rstrip('/')}/")
         with open(path) as f:
-            tests += parse_pytest(f.read(), prefix)
+            collected = parse_pytest(f.read(), prefix)
+        tests += collected
+        # The namespaces are the files actually collected, not the
+        # directory they live under. A lane that runs a named list of
+        # files under tests/ does not speak for all of tests/ — declaring
+        # the directory let it vouch for tests/gui/ and even for paths
+        # nothing collects, which is the hole #313's lane map closes.
+        covers += sorted({f"{test.split('::')[0]}::" for test in collected})
     for spec in args.junit:
         prefix, _, path = spec.partition("=")
         if not path:
