@@ -41,7 +41,7 @@ Controller state machines generate valid commands and assert invariants after ev
       left two paragraphs claiming the same cell — and stayed parked rather than narrowing the generator to route around
       it; fixing #532 then exposed four more defects behind it, including a panic in `Document::locate` on a document
       whose every paragraph was a deleted cell. The cross-app clipboard and the multi-window races are not started.
-- [ ] Save/recovery fault injection at each transaction boundary; bounded malformed-file fuzzing with minimized fixtures.
+- [~] Save/recovery fault injection at each transaction boundary; bounded malformed-file fuzzing with minimized fixtures. The save transaction is instrumented: `suite-common-core/src/atomic_save.rs::fault` arms any of the six boundaries of a durable write, and any arrival at one, then a sweep asserts what the caller was promised at each. It replaced a test that made a write fail by chmod-ing the directory to 0555, which proves nothing when the suite runs as root — the write simply succeeded and the assertion never fired. It found that the two-atomic-write autosave slot could pair the new bytes with the previous generation's identity (see `recovery.md`). Malformed-file fuzzing is not started.
 - [ ] Always retain stderr/backtrace, core dump where supported, screenshot, AT-SPI tree, last snapshot, action trace and saved output fixtures on failure.
 - [ ] Track first-attempt failure rate and classify product crash, assertion mismatch, timeout, infrastructure setup and nondeterministic rendering separately.
 - [ ] No retry-until-green, weakened assertion, reduced generator alphabet or silent skip counts as a fix. Diagnostic reruns retain the original failure.

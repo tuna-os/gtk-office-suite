@@ -17,6 +17,159 @@ use crate::atomic_save::atomic_write_bytes;
 use std::fs;
 use std::path::{Path, PathBuf};
 
+/// Snapshot envelope: one generation of one document in one file, so one
+/// atomic write commits it.
+///
+/// The slot used to write bytes and metadata as two atomic writes. Each
+/// was individually atomic, which is not the same as the pair being
+/// atomic: a failure or a crash between them left the new bytes beside
+/// the previous generation's identity, and recovery then offered the new
+/// content under the old path and format. Observed directly under fault
+/// injection — `"generation two"` paired with `/tmp/first.md`, kind `md`
+/// — which is a silent wrong-file restore, worse than a visibly lost one
+/// (#442, `docs/readiness-2026-09/recovery.md`).
+///
+/// Layout, all integers little-endian:
+///
+/// ```text
+/// 0   11  magic, whose last byte is the format version
+/// 11   4  kind length
+/// 15   4  path length, or NO_PATH for a document that was never saved
+/// 19   8  data length
+/// 27   4  CRC-32 of the payload that follows
+/// 31   …  kind bytes, then path bytes, then data bytes
+/// ```
+///
+/// The path is stored as its native OS bytes on Unix, so a path holding a
+/// newline or invalid UTF-8 round-trips exactly — the previous
+/// newline-delimited text metadata corrupted both. The checksum catches a
+/// truncated or damaged snapshot so recovery declines it instead of
+/// handing a half file to a format reader.
+mod envelope {
+    use super::SnapshotMeta;
+    use std::path::PathBuf;
+
+    const MAGIC: &[u8; 11] = b"OFFICESNAP";
+    const HEADER: usize = 31;
+    /// Distinct from a zero-length path, which is not a valid identity.
+    const NO_PATH: u32 = u32::MAX;
+
+    pub fn encode(bytes: &[u8], meta: &SnapshotMeta) -> Result<Vec<u8>, String> {
+        let kind = meta.kind.as_bytes();
+        let path = match meta.original_path.as_deref() {
+            None => None,
+            Some(p) => Some(path_bytes(p)?),
+        };
+        let path_len = match &path {
+            None => NO_PATH,
+            Some(p) => u32::try_from(p.len()).map_err(|_| "snapshot path is too long".to_string())?,
+        };
+
+        let mut payload = Vec::with_capacity(kind.len() + path.as_ref().map_or(0, Vec::len) + bytes.len());
+        payload.extend_from_slice(kind);
+        if let Some(p) = &path {
+            payload.extend_from_slice(p);
+        }
+        payload.extend_from_slice(bytes);
+
+        let mut out = Vec::with_capacity(HEADER + payload.len());
+        out.extend_from_slice(MAGIC);
+        out.extend_from_slice(
+            &u32::try_from(kind.len())
+                .map_err(|_| "snapshot kind is too long".to_string())?
+                .to_le_bytes(),
+        );
+        out.extend_from_slice(&path_len.to_le_bytes());
+        out.extend_from_slice(&(bytes.len() as u64).to_le_bytes());
+        out.extend_from_slice(&crc32(&payload).to_le_bytes());
+        out.extend_from_slice(&payload);
+        Ok(out)
+    }
+
+    /// None for anything this build cannot vouch for: a foreign magic, a
+    /// truncated file, a failed checksum. Recovery declines rather than
+    /// guesses — the alternative is handing a damaged buffer to a format
+    /// reader and calling the result the user's document.
+    pub fn decode(raw: &[u8]) -> Option<(Vec<u8>, SnapshotMeta)> {
+        if raw.len() < HEADER || &raw[..11] != MAGIC {
+            return None;
+        }
+        let kind_len = u32::from_le_bytes(raw[11..15].try_into().ok()?) as usize;
+        let path_field = u32::from_le_bytes(raw[15..19].try_into().ok()?);
+        let data_len = usize::try_from(u64::from_le_bytes(raw[19..27].try_into().ok()?)).ok()?;
+        let expected_crc = u32::from_le_bytes(raw[27..31].try_into().ok()?);
+
+        let path_len = if path_field == NO_PATH { 0 } else { path_field as usize };
+        let payload = raw.get(HEADER..)?;
+        if payload.len() != kind_len.checked_add(path_len)?.checked_add(data_len)? {
+            return None;
+        }
+        if crc32(payload) != expected_crc {
+            return None;
+        }
+
+        let kind = std::str::from_utf8(&payload[..kind_len]).ok()?.to_string();
+        let original_path = if path_field == NO_PATH {
+            None
+        } else {
+            Some(path_from_bytes(&payload[kind_len..kind_len + path_len])?)
+        };
+        let data = payload[kind_len + path_len..].to_vec();
+        Some((data, SnapshotMeta { original_path, kind }))
+    }
+
+    #[cfg(unix)]
+    fn path_bytes(path: &std::path::Path) -> Result<Vec<u8>, String> {
+        use std::os::unix::ffi::OsStrExt;
+        Ok(path.as_os_str().as_bytes().to_vec())
+    }
+
+    /// Off Unix there is no lossless byte form for a path, so a
+    /// non-UTF-8 one is rejected outright rather than mangled into
+    /// something recovery would reopen as a different file.
+    #[cfg(not(unix))]
+    fn path_bytes(path: &std::path::Path) -> Result<Vec<u8>, String> {
+        path.to_str()
+            .map(|s| s.as_bytes().to_vec())
+            .ok_or_else(|| "snapshot path is not valid Unicode on this platform".to_string())
+    }
+
+    #[cfg(unix)]
+    fn path_from_bytes(bytes: &[u8]) -> Option<PathBuf> {
+        use std::os::unix::ffi::OsStrExt;
+        Some(PathBuf::from(std::ffi::OsStr::from_bytes(bytes)))
+    }
+
+    #[cfg(not(unix))]
+    fn path_from_bytes(bytes: &[u8]) -> Option<PathBuf> {
+        Some(PathBuf::from(std::str::from_utf8(bytes).ok()?))
+    }
+
+    const CRC_TABLE: [u32; 256] = {
+        let mut table = [0u32; 256];
+        let mut i = 0;
+        while i < 256 {
+            let mut crc = i as u32;
+            let mut bit = 0;
+            while bit < 8 {
+                crc = if crc & 1 == 1 { (crc >> 1) ^ 0xEDB8_8320 } else { crc >> 1 };
+                bit += 1;
+            }
+            table[i] = crc;
+            i += 1;
+        }
+        table
+    };
+
+    fn crc32(bytes: &[u8]) -> u32 {
+        let mut crc = 0xFFFF_FFFFu32;
+        for &b in bytes {
+            crc = CRC_TABLE[((crc ^ b as u32) & 0xFF) as usize] ^ (crc >> 8);
+        }
+        !crc
+    }
+}
+
 /// Metadata persisted alongside a snapshot so recovery can reassociate it
 /// with the original document — or offer it as a recovered "Untitled"
 /// document if it was never saved anywhere.
@@ -62,14 +215,20 @@ impl AutosaveSlot {
     pub fn write(&self, bytes: &[u8], meta: &SnapshotMeta) -> Result<(), String> {
         fs::create_dir_all(&self.state_dir)
             .map_err(|e| format!("Cannot create {}: {e}", self.state_dir.display()))?;
-        atomic_write_bytes(&self.data_path(), bytes)?;
-        let path_line = meta
-            .original_path
-            .as_ref()
-            .map(|p| p.to_string_lossy().to_string())
-            .unwrap_or_default();
-        let meta_bytes = format!("{path_line}\n{}", meta.kind);
-        atomic_write_bytes(&self.meta_path(), meta_bytes.as_bytes())
+        // One atomic write, so the bytes and the identity that interprets
+        // them commit together or not at all. See `mod envelope`.
+        let encoded = envelope::encode(bytes, meta)?;
+        atomic_write_bytes(&self.data_path(), &encoded)?;
+        // A snapshot written by an older build left a separate metadata
+        // file beside this one. `read` prefers the envelope regardless, so
+        // this is housekeeping rather than correctness — and best-effort
+        // for the same reason: failing a snapshot over a leftover file
+        // would trade a real problem for a cosmetic one.
+        let legacy = self.meta_path();
+        if legacy.exists() {
+            let _ = fs::remove_file(&legacy);
+        }
+        Ok(())
     }
 
     /// Remove the snapshot — call this on a successful real save and on an
@@ -86,7 +245,18 @@ impl AutosaveSlot {
     /// Read back the snapshot bytes and metadata, if both files are present
     /// and well-formed.
     pub fn read(&self) -> Option<(Vec<u8>, SnapshotMeta)> {
-        let bytes = fs::read(self.data_path()).ok()?;
+        let raw = fs::read(self.data_path()).ok()?;
+        if let Some(found) = envelope::decode(&raw) {
+            return Some(found);
+        }
+        // A snapshot left by a build that wrote the two-file layout. Read
+        // it rather than discard it: the user crashed on the old build and
+        // upgraded, and their unsaved work is in there. New writes replace
+        // it with an envelope.
+        self.read_legacy_pair(raw)
+    }
+
+    fn read_legacy_pair(&self, bytes: Vec<u8>) -> Option<(Vec<u8>, SnapshotMeta)> {
         let meta_raw = fs::read_to_string(self.meta_path()).ok()?;
         let mut lines = meta_raw.splitn(2, '\n');
         let path_line = lines.next().unwrap_or_default();
@@ -108,13 +278,135 @@ pub fn find_orphaned_snapshots(state_dir: &Path) -> Vec<String> {
         .filter_map(|e| e.ok())
         .filter_map(|e| e.file_name().to_str().map(str::to_string))
         .filter_map(|name| name.strip_suffix(DATA_SUFFIX).map(str::to_string))
-        .filter(|doc_id| state_dir.join(format!("{doc_id}{META_SUFFIX}")).exists())
+        // Readable, not merely present. A snapshot whose envelope is
+        // truncated or fails its checksum is not offered for recovery,
+        // and neither is a legacy data file whose metadata never landed:
+        // there is no way to tell the caller what format it is in.
+        .filter(|doc_id| AutosaveSlot::new(state_dir, doc_id.clone()).read().is_some())
         .collect()
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    use crate::atomic_save::fault;
+
+    /// A snapshot is one generation of one document: its bytes and the
+    /// identity needed to interpret them. A failure anywhere in the write
+    /// must leave the slot holding one whole generation or nothing —
+    /// never the new bytes beside the previous generation's identity,
+    /// which recovery would reopen as the wrong file in the wrong format.
+    ///
+    /// This is the test that caught the two-atomic-write slot: it read
+    /// back `"generation two"` paired with `/tmp/first.md`, kind `md`.
+    #[test]
+    fn no_failure_in_a_snapshot_write_can_pair_two_generations() {
+        let first = SnapshotMeta { original_path: Some(PathBuf::from("/tmp/first.md")), kind: "md".into() };
+        let second = SnapshotMeta { original_path: Some(PathBuf::from("/tmp/second.odt")), kind: "odt".into() };
+
+        for boundary in fault::ALL {
+            for arrival in 1..=3 {
+                let dir = tempfile::tempdir().unwrap();
+                let slot = AutosaveSlot::new(dir.path(), "doc-1");
+                slot.write(b"generation one", &first).unwrap();
+
+                let result = {
+                    let _armed = fault::arm_nth(boundary, arrival);
+                    slot.write(b"generation two", &second)
+                };
+
+                match slot.read() {
+                    // No snapshot at all is a valid outcome: recovery
+                    // offers nothing rather than something wrong.
+                    None => {}
+                    Some((bytes, meta)) => {
+                        let whole = (bytes == b"generation one" && meta == first)
+                            || (bytes == b"generation two" && meta == second);
+                        assert!(
+                            whole,
+                            "{boundary:?}/{arrival} produced a mismatched generation: \
+                             {:?} paired with {meta:?} (write returned {result:?})",
+                            String::from_utf8_lossy(&bytes)
+                        );
+                    }
+                }
+            }
+        }
+    }
+
+    /// Identities the newline-delimited text metadata could not survive.
+    /// A path holding a newline used to be read back truncated at it —
+    /// recovery would then restore into a different file — and a
+    /// non-UTF-8 path was mangled by `to_string_lossy` into one that does
+    /// not exist.
+    #[cfg(unix)]
+    #[test]
+    fn awkward_paths_round_trip_exactly() {
+        use std::ffi::OsStr;
+        use std::os::unix::ffi::OsStrExt;
+
+        let awkward = [
+            PathBuf::from("/tmp/two\nlines.md"),
+            PathBuf::from(OsStr::from_bytes(b"/tmp/not\xffutf8.md")),
+            PathBuf::from("/tmp/\u{0441}\u{043f}\u{0438}\u{0441}\u{043e}\u{043a} \u{1f4dd}.odt"),
+        ];
+        for path in awkward {
+            let dir = tempfile::tempdir().unwrap();
+            let slot = AutosaveSlot::new(dir.path(), "doc-1");
+            let meta = SnapshotMeta { original_path: Some(path.clone()), kind: "md".into() };
+            slot.write(b"unsaved work", &meta).unwrap();
+
+            let (bytes, read_back) = slot.read().expect("snapshot should be readable");
+            assert_eq!(bytes, b"unsaved work");
+            assert_eq!(read_back.original_path.as_deref(), Some(path.as_path()));
+        }
+    }
+
+    /// A snapshot that lost bytes to a full disk or a damaged filesystem
+    /// is declined, not handed to a format reader as the user's document.
+    #[test]
+    fn a_damaged_snapshot_is_declined_rather_than_half_restored() {
+        let dir = tempfile::tempdir().unwrap();
+        let slot = AutosaveSlot::new(dir.path(), "doc-1");
+        slot.write(b"unsaved work", &SnapshotMeta { original_path: None, kind: "md".into() }).unwrap();
+        let path = dir.path().join("doc-1.snapshot");
+
+        let whole = fs::read(&path).unwrap();
+        fs::write(&path, &whole[..whole.len() - 3]).unwrap();
+        assert!(slot.read().is_none(), "a truncated snapshot must not be offered");
+        assert!(find_orphaned_snapshots(dir.path()).is_empty());
+
+        let mut flipped = whole.clone();
+        *flipped.last_mut().unwrap() ^= 0xFF;
+        fs::write(&path, &flipped).unwrap();
+        assert!(slot.read().is_none(), "a corrupted snapshot must not be offered");
+    }
+
+    /// A snapshot written by the previous two-file build still recovers:
+    /// the user crashed on the old build and upgraded, and their unsaved
+    /// work is sitting in that pair.
+    #[test]
+    fn a_snapshot_from_the_previous_layout_is_still_recovered() {
+        let dir = tempfile::tempdir().unwrap();
+        fs::write(dir.path().join("doc-1.snapshot"), b"old unsaved work").unwrap();
+        fs::write(dir.path().join("doc-1.snapshot.meta"), "/tmp/report.md\nmd").unwrap();
+
+        let slot = AutosaveSlot::new(dir.path(), "doc-1");
+        let (bytes, meta) = slot.read().expect("the legacy pair is readable");
+        assert_eq!(bytes, b"old unsaved work");
+        assert_eq!(meta.original_path, Some(PathBuf::from("/tmp/report.md")));
+        assert_eq!(meta.kind, "md");
+        assert_eq!(find_orphaned_snapshots(dir.path()), vec!["doc-1".to_string()]);
+
+        // Writing replaces it, leaving no stale metadata to be preferred
+        // over the generation just committed.
+        slot.write(b"new", &SnapshotMeta { original_path: None, kind: "odt".into() }).unwrap();
+        assert!(!dir.path().join("doc-1.snapshot.meta").exists());
+        let (bytes, meta) = slot.read().unwrap();
+        assert_eq!(bytes, b"new");
+        assert_eq!(meta, SnapshotMeta { original_path: None, kind: "odt".into() });
+    }
 
     #[test]
     fn write_then_read_round_trips_bytes_and_meta() {
