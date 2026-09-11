@@ -26,7 +26,7 @@ if command -v xtr >/dev/null 2>&1; then
     TMP=$(mktemp)
     for src in "${SRCS[@]}"; do
         if [[ -f "$src" ]]; then
-            xtr --keywords i18n -o "$TMP" "$src" 2>/dev/null || true
+            xtr --keywords i18n --keywords ni18n -o "$TMP" "$src" 2>/dev/null || true
         fi
     done
     if [[ -s "$TMP" ]]; then
@@ -34,14 +34,14 @@ if command -v xtr >/dev/null 2>&1; then
         msguniq "$TMP" -o "$OUT" 2>/dev/null || cp "$TMP" "$OUT"
     else
         echo "warning: xtr produced no output; trying xgettext" >&2
-        xgettext --language=C --keyword=i18n --from-code=UTF-8 \
+        xgettext --language=C --keyword=i18n --keyword=ni18n:1,2 --from-code=UTF-8 \
             --package-name=gtk-office-suite --add-comments=TRANSLATORS \
             -o "$OUT" "${SRCS[@]}"
     fi
     rm -f "$TMP"
 else
     # shellcheck disable=SC2086
-    xgettext --language=C --keyword=i18n --from-code=UTF-8 \
+    xgettext --language=C --keyword=i18n --keyword=ni18n:1,2 --from-code=UTF-8 \
         --package-name=gtk-office-suite --add-comments=TRANSLATORS \
         -o "$OUT" "${SRCS[@]}"
 fi

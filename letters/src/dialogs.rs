@@ -134,22 +134,6 @@ pub fn show_insert_table_dialog(tv: &adw::TabView) {
             let rows = rows_spin.value() as u32;
             let cols = cols_spin.value() as u32;
             if let Some(buf) = active_buffer(&tv) {
-                let mut md = String::new();
-                md.push('|');
-                for c in 0..cols { md.push_str(&format!(" Header {} |", c + 1)); }
-                md.push('\n');
-                md.push('|');
-                for _ in 0..cols { md.push_str(" --- |"); }
-                md.push('\n');
-                for r in 0..rows {
-                    md.push('|');
-                    for c in 0..cols { md.push_str(&format!(" Cell {}.{} |", r + 1, c + 1)); }
-                    md.push('\n');
-                }
-                let ins = buf.selection_bounds().map(|(i, _)| i).unwrap_or_else(|| buf.start_iter());
-                let mut pos = ins;
-                buf.insert(&mut pos, &md);
-
                 crate::bridge::apply_structured_edit(&buf, |editor| {
                     editor.insert_table(rows, cols);
                 });

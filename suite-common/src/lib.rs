@@ -40,6 +40,13 @@ pub fn i18n(s: &str) -> String {
     gettextrs::gettext(s)
 }
 
+/// Translate a countable user-facing string. Languages differ in how many
+/// plural forms they have and where the boundaries fall, so the count must
+/// reach gettext rather than being decided here with an `if n == 1`.
+pub fn ni18n(singular: &str, plural: &str, n: u64) -> String {
+    gettextrs::ngettext(singular, plural, n as u32)
+}
+
 /// Initialize gettext for the suite. Called once from SuiteApp::new.
 /// Locale files install to <prefix>/share/locale (Flatpak: /app).
 fn init_i18n() {

@@ -219,7 +219,66 @@ pub fn capture_from_buffer(buf: &gtk::TextBuffer) -> Document {
     let header = header_sidecar(buf);
     let footer = footer_sidecar(buf);
     let page = page_sidecar(buf);
+    capture_tables(&mut paragraphs);
     Document { paragraphs, footnotes, header, footer, page }
+}
+
+/// Fold rendered pipe grids back into table-cell paragraphs.
+///
+/// A separate pass rather than part of the character walk above: a table
+/// is only recognizable once a whole line is known (a row line means
+/// nothing until the *next* line proves to be a delimiter), and the walk
+/// deliberately knows nothing beyond the character in hand.
+///
+/// Without this, `render_to_buffer` → `capture_from_buffer` turned every
+/// table into literal "| a | b |" prose — which is how a table inserted
+/// into the editor used to reach DOCX as text and vanish as a table.
+fn capture_tables(paragraphs: &mut Vec<Paragraph>) {
+    use letters_core::table_text;
+
+    let mut out: Vec<Paragraph> = Vec::with_capacity(paragraphs.len());
+    let mut table_id = 0u32;
+    let mut i = 0;
+    while i < paragraphs.len() {
+        let header_cells = table_text::parse_row(&paragraphs[i].text());
+        let delimiter_ok = paragraphs
+            .get(i + 1)
+            .is_some_and(|p| table_text::is_delimiter_line(&p.text()));
+        let Some(header_cells) = header_cells.filter(|_| delimiter_ok) else {
+            out.push(std::mem::take(&mut paragraphs[i]));
+            i += 1;
+            continue;
+        };
+        // A table's column count is its header's. A body row with a
+        // different count is not part of this table — stopping there keeps
+        // the grid rectangular, which every reader of (row, col) assumes.
+        let cols = header_cells.len();
+        table_id += 1;
+        let mut row = 0u32;
+        let push_row = |out: &mut Vec<Paragraph>, para: &Paragraph, ranges: &[std::ops::Range<usize>], row: u32| {
+            for (col, range) in ranges.iter().enumerate() {
+                out.push(Paragraph {
+                    style: letters_core::ParaStyle {
+                        table_cell: Some(letters_core::TableCell { table: table_id, row, col: col as u32 }),
+                        ..Default::default()
+                    },
+                    runs: table_text::slice_runs(&para.runs, range),
+                });
+            }
+        };
+        push_row(&mut out, &paragraphs[i], &header_cells, row);
+        i += 2; // header + delimiter
+        while i < paragraphs.len() {
+            let Some(ranges) = table_text::parse_row(&paragraphs[i].text()) else { break };
+            if ranges.len() != cols || table_text::is_delimiter_line(&paragraphs[i].text()) {
+                break;
+            }
+            row += 1;
+            push_row(&mut out, &paragraphs[i], &ranges, row);
+            i += 1;
+        }
+    }
+    *paragraphs = out;
 }
 
 /// Buffer data key holding the document's footnote texts.
@@ -331,12 +390,59 @@ fn capture_list_marker(para: &mut Paragraph) {
     }
 }
 
+/// Flatten a document's paragraphs into the lines the editor shows.
+///
+/// Everything is one line per paragraph, except a table: its cells are
+/// paragraphs in the model but a *grid* on screen, so each row's cells
+/// collapse into one pipe line and a delimiter line follows the header.
+/// `capture_tables` reverses exactly this.
+fn render_lines(doc: &Document) -> Vec<std::borrow::Cow<'_, Paragraph>> {
+    use letters_core::table_text;
+    use std::borrow::Cow;
+
+    let mut lines: Vec<Cow<Paragraph>> = Vec::with_capacity(doc.paragraphs.len());
+    let mut i = 0;
+    while i < doc.paragraphs.len() {
+        let Some(cell) = doc.paragraphs[i].style.table_cell else {
+            lines.push(Cow::Borrowed(&doc.paragraphs[i]));
+            i += 1;
+            continue;
+        };
+        let table = cell.table;
+        let end = doc.paragraphs[i..]
+            .iter()
+            .position(|p| p.style.table_cell.is_none_or(|c| c.table != table))
+            .map_or(doc.paragraphs.len(), |n| i + n);
+        let cells = &doc.paragraphs[i..end];
+        let cols = cells.iter().filter_map(|p| p.style.table_cell).map(|c| c.col).max().unwrap_or(0) + 1;
+
+        // Cells arrive in row-major order (the model keeps them that way);
+        // chunking by the column count is what turns them back into rows.
+        for (row, chunk) in cells.chunks(cols as usize).enumerate() {
+            let row_cells: Vec<Vec<letters_core::Run>> = chunk.iter().map(|p| p.runs.clone()).collect();
+            lines.push(Cow::Owned(Paragraph {
+                style: letters_core::ParaStyle::default(),
+                runs: table_text::layout_row_runs(&row_cells),
+            }));
+            if row == 0 {
+                lines.push(Cow::Owned(Paragraph {
+                    style: letters_core::ParaStyle::default(),
+                    runs: vec![letters_core::Run::plain(table_text::delimiter_line(cols as usize))],
+                }));
+            }
+        }
+        i = end;
+    }
+    lines
+}
+
 /// Replace the buffer's content with a rendered Document.
 pub fn render_to_buffer(doc: &Document, buf: &gtk::TextBuffer) {
     set_buffer_sidecars(doc, buf);
     buf.set_text("");
     let mut insert = buf.start_iter();
-    for (i, para) in doc.paragraphs.iter().enumerate() {
+    let lines = render_lines(doc);
+    for (i, para) in lines.iter().map(|p| p.as_ref()).enumerate() {
         if i > 0 {
             buf.insert(&mut insert, "\n");
         }
@@ -480,10 +586,24 @@ where
 {
     let doc = capture_from_buffer(buf);
     let mut editor = letters_core::structured::StructuredEditor::new(doc);
-    let cursor_offset = buf.selection_bounds().map(|(i, _)| i.offset() as usize).unwrap_or(0);
+    // The caret, not the selection start: `unwrap_or(0)` for an unselected
+    // buffer — which is what this used to do — told every structured
+    // command that the cursor was at the very start of the document, so
+    // "Insert Table" put its table before the first character no matter
+    // where the user was typing.
+    let cursor_offset = buf.iter_at_mark(&buf.get_insert()).offset().max(0) as usize;
     editor.set_cursor(cursor_offset);
+    if let Some((start, end)) = buf.selection_bounds() {
+        editor.select(start.offset().max(0) as usize, end.offset().max(0) as usize);
+    }
     edit(&mut editor);
     render_to_buffer(editor.document(), buf);
+
+    // Re-rendering replaces the buffer's contents, which drops the caret at
+    // the start. Put it back where the edit left it so typing continues in
+    // the new table's first cell rather than at the top of the document.
+    let restored = (editor.cursor() as i32).min(buf.char_count());
+    buf.place_cursor(&buf.iter_at_offset(restored));
 }
 
 #[cfg(test)]
@@ -591,6 +711,134 @@ mod tests {
     fn round_trip(buf: &gtk::TextBuffer, doc: &Document) -> Document {
         render_to_buffer(doc, buf);
         capture_from_buffer(buf)
+    }
+
+    /// A document holding one table with the given cell texts, plus a
+    /// paragraph of prose after it.
+    fn doc_with_table(rows: &[&[&str]]) -> Document {
+        let mut doc = Document::from_plain_text("after the table");
+        let table = doc.insert_table_at(0, rows.len() as u32, rows[0].len() as u32);
+        for (r, row) in rows.iter().enumerate() {
+            for (c, text) in row.iter().enumerate() {
+                let idx = doc.paragraphs.iter().position(|p| {
+                    p.style.table_cell
+                        == Some(letters_core::TableCell { table, row: r as u32, col: c as u32 })
+                }).expect("cell exists");
+                doc.paragraphs[idx].runs = vec![Run::plain(*text)];
+            }
+        }
+        doc
+    }
+
+    #[test]
+    fn tables_survive_the_buffer_round_trip() {
+        // Before tables had a buffer mapping, a document's cells came back
+        // as literal "| a | b |" prose — so a table inserted in the editor
+        // reached DOCX as text and stopped being a table at all (#438).
+        gtk_test(|| {
+            let buf = gtk::TextBuffer::new(None);
+            crate::actions::register_formatting_tags(&buf);
+            let doc = doc_with_table(&[&["Name", "Qty"], &["Bolts", "12"]]);
+            let rt = round_trip(&buf, &doc);
+
+            assert_eq!(rt.paragraphs.len(), doc.paragraphs.len());
+            let table = rt.paragraphs[0].style.table_cell.expect("first paragraph is a cell").table;
+            assert_eq!(rt.table_dimensions(table), Some((2, 2)));
+            let texts: Vec<String> = rt.paragraphs.iter()
+                .filter(|p| p.style.table_cell.is_some()).map(|p| p.text()).collect();
+            assert_eq!(texts, vec!["Name", "Qty", "Bolts", "12"]);
+            assert_eq!(rt.paragraphs.last().unwrap().text(), "after the table");
+            assert!(rt.paragraphs.last().unwrap().style.table_cell.is_none());
+        });
+    }
+
+    #[test]
+    fn the_editor_shows_a_table_as_a_pipe_grid() {
+        gtk_test(|| {
+            let buf = gtk::TextBuffer::new(None);
+            crate::actions::register_formatting_tags(&buf);
+            render_to_buffer(&doc_with_table(&[&["Name", "Qty"], &["Bolts", "12"]]), &buf);
+            let text = buf.text(&buf.start_iter(), &buf.end_iter(), false).to_string();
+            assert_eq!(
+                text,
+                "| Name | Qty |\n| --- | --- |\n| Bolts | 12 |\nafter the table"
+            );
+        });
+    }
+
+    #[test]
+    fn cell_styles_survive_the_round_trip() {
+        gtk_test(|| {
+            let buf = gtk::TextBuffer::new(None);
+            crate::actions::register_formatting_tags(&buf);
+            let mut doc = doc_with_table(&[&["Name", "Qty"], &["Bolts", "12"]]);
+            doc.paragraphs[0].runs = vec![Run {
+                text: "Name".into(),
+                style: RunStyle { bold: true, ..Default::default() },
+            }];
+            let rt = round_trip(&buf, &doc);
+            assert_eq!(rt.paragraphs[0].text(), "Name");
+            assert!(rt.paragraphs[0].runs[0].style.bold, "bold inside a cell must survive");
+            assert!(!rt.paragraphs[1].runs.first().is_some_and(|r| r.style.bold),
+                    "the separator must not carry the cell's style into the next cell");
+        });
+    }
+
+    #[test]
+    fn unicode_cells_round_trip() {
+        gtk_test(|| {
+            let buf = gtk::TextBuffer::new(None);
+            crate::actions::register_formatting_tags(&buf);
+            let doc = doc_with_table(&[&["日本語", "e👍"], &["combining é", "مرحبا"]]);
+            let rt = round_trip(&buf, &doc);
+            let texts: Vec<String> = rt.paragraphs.iter()
+                .filter(|p| p.style.table_cell.is_some()).map(|p| p.text()).collect();
+            assert_eq!(texts, vec!["日本語", "e👍", "combining é", "مرحبا"]);
+        });
+    }
+
+    #[test]
+    fn prose_containing_pipes_is_not_captured_as_a_table() {
+        gtk_test(|| {
+            let buf = gtk::TextBuffer::new(None);
+            crate::actions::register_formatting_tags(&buf);
+            // No delimiter line: two ordinary paragraphs that happen to
+            // look table-ish. Swallowing them would lose the user's text.
+            buf.set_text("| a | b |\n| c | d |");
+            let doc = capture_from_buffer(&buf);
+            assert!(doc.paragraphs.iter().all(|p| p.style.table_cell.is_none()));
+            assert_eq!(doc.paragraphs.len(), 2);
+            assert_eq!(doc.paragraphs[0].text(), "| a | b |");
+        });
+    }
+
+    #[test]
+    fn inserting_a_table_through_the_editor_produces_exactly_one_table() {
+        // The journey the recorded GUI test covers, at the bridge level:
+        // one Insert Table gives one table, at the cursor, and no literal
+        // grid text left behind as prose.
+        gtk_test(|| {
+            let buf = gtk::TextBuffer::new(None);
+            crate::actions::register_formatting_tags(&buf);
+            buf.set_text("intro paragraph");
+            buf.place_cursor(&buf.end_iter());
+
+            apply_structured_edit(&buf, |editor| {
+                editor.insert_table(2, 2);
+            });
+
+            let doc = capture_from_buffer(&buf);
+            let tables: std::collections::BTreeSet<u32> = doc.paragraphs.iter()
+                .filter_map(|p| p.style.table_cell.map(|c| c.table)).collect();
+            assert_eq!(tables.len(), 1, "exactly one table: {doc:?}");
+            let table = *tables.iter().next().unwrap();
+            assert_eq!(doc.table_dimensions(table), Some((2, 2)));
+            assert_eq!(doc.paragraphs[0].text(), "intro paragraph",
+                       "the table goes after the cursor's paragraph, not before it");
+            assert!(doc.paragraphs.iter().filter(|p| p.style.table_cell.is_none())
+                        .all(|p| !p.text().contains('|')),
+                    "no literal grid text should survive as prose: {doc:?}");
+        });
     }
 
     #[test]
