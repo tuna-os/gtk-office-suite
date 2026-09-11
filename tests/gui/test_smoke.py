@@ -703,9 +703,15 @@ class TablesUndoSaveReopenSmoke(BaseGUITestCase):
         import zipfile
 
         time.sleep(1.0)
+        # Ctrl+G is not synchronous at every window size: below the narrow
+        # breakpoint it opens the Go to Cell dialog (#516) instead of
+        # focusing the name box, and typing before the dialog is up goes
+        # nowhere. Wait for whichever one took focus.
         rawinput.keyCombo("<Control>g")
+        time.sleep(0.5)
         rawinput.typeText("A1")
         rawinput.keyCombo("Return")
+        time.sleep(0.5)
         rawinput.typeText("=2+3")
         rawinput.keyCombo("Return")
         rawinput.keyCombo("<Control>z")
@@ -727,8 +733,10 @@ class TablesUndoSaveReopenSmoke(BaseGUITestCase):
         self.app = self.wait_for_app(self.app_name)
         time.sleep(1.2)
         rawinput.keyCombo("<Control>g")
+        time.sleep(0.5)
         rawinput.typeText("A1")
         rawinput.keyCombo("Return")
+        time.sleep(0.5)
         rawinput.keyCombo("Escape")
         rawinput.keyCombo("Right")
         rawinput.keyCombo("Left")

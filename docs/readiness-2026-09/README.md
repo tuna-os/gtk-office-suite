@@ -76,9 +76,10 @@ acceptance contract by itself.
 - Repeated journey runner: `tests/gui/stress.py` is on main and runs nightly (`.github/workflows/gui-stress.yml`) in the GUI
   container. It records seeds, revision, binary SHA-256, every attempt's order, verdict, log, JUnit and artifacts, classifies
   failures (product crash / assertion / timeout / infrastructure), reports the first-attempt failure rate, and never retries.
-  Its first display-matrix run found #516 (Tables loses the name box below the narrow breakpoint, so `Ctrl+G` silently does
-  nothing at 400px). It repeats existing journeys; stateful random edits and save-fault injection are next. The corpus and
-  engine work from the same slice is still on PR #445.
+  Its first display-matrix run found #516 (Tables lost the name box below the narrow breakpoint, so `Ctrl+G` had nothing to
+  focus and silently swallowed every keystroke at 400px); that is fixed, and a full matrix pass then turned up further
+  narrow-width gaps (#520), so the nightly stays on the baseline display until those close. It repeats existing journeys; stateful random edits and save-fault injection are next. The corpus and engine
+  work from the same slice is still on PR #445.
 - Dependency-free Python tests and CI wiring cover validators, duplicate collection and stress orchestration. GUI failure artifacts are uploaded even when smoke fails.
 
 Run after building current binaries and installing Xvfb, Matchbox, xdotool and the documented GUI dependencies:

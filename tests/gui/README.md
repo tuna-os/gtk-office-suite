@@ -51,6 +51,6 @@ output directory, which keeps both results.
 `.github/workflows/gui-stress.yml` runs a bounded campaign nightly in the same
 container the recorded journeys use, and takes `repeat`, `seed`, `matrix` and
 `select` on manual dispatch. The nightly schedule uses the baseline display
-only: the matrix currently reproduces #516 (Tables' name box is hidden below
-the narrow breakpoint, so `Ctrl+G` silently does nothing at 400px), and a
-known-red nightly teaches people to ignore it.
+only, and the matrix stays opt-in until the narrow-width findings it keeps
+turning up are closed: #516 is fixed, but a full 47-journey matrix pass still
+reports more (see #520). A known-red nightly teaches people to ignore it.
