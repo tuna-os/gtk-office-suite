@@ -147,7 +147,13 @@ jobs:
 
   publish:
     needs: record
-    if: always() && needs.record.result != 'skipped'
+    # A cancelled record job is a superseded run, not a result: the
+    # concurrency group cancels the older run the moment a newer event (a
+    # label, a push) starts one. Publishing from it wrote "no evidence
+    # produced" into the pull-request body, which is a false statement
+    # about the change — the newer run happened to overwrite it, but a
+    # newer run that failed would have left the lie standing.
+    if: always() && (needs.record.result == 'success' || needs.record.result == 'failure')
     runs-on: ubuntu-24.04
     permissions:
       contents: write        # push clips to the ci-evidence branch
@@ -225,16 +231,12 @@ jobs:
             python3 tests/gui/pr_comment.py downloaded/evidence/evidence.json \
               --media-base "$MEDIA_BASE" --journey "$JOURNEY" --out comment.md
           else
-            {
-              echo '<!-- gui-feature-verification -->'
-              echo "### Feature verification — ⚠️ no evidence produced"
-              echo
-              echo "The recording job finished as \`$RECORD_RESULT\` without an"
-              echo "evidence bundle, so there is nothing to show for \`$JOURNEY\`."
-              echo "That is a harness result, not a verdict about this change."
-              echo
-              echo "[Workflow run]($RUN_URL)"
-            } > comment.md
+            reason="The recording job finished as \`$RECORD_RESULT\` without an"
+            reason="$reason evidence bundle, so there is nothing to show. That is a"
+            reason="$reason harness result, not a verdict about this change."
+            reason="$reason See the [workflow run]($RUN_URL)."
+            python3 tests/gui/pr_comment.py --journey "$JOURNEY" \
+              --no-evidence-reason "$reason" --out comment.md
           fi
           cat comment.md >> "$GITHUB_STEP_SUMMARY"
 

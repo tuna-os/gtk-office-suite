@@ -12,6 +12,7 @@ libfuzzer-sys = "0.4"
 letters-core = { path = "../letters-core" }
 tables-core = { path = "../tables-core" }
 decks-core = { path = "../decks-core" }
+tempfile = "3"
 
 [[bin]]
 name = "letters_docx"
@@ -30,6 +31,48 @@ bench = false
 [[bin]]
 name = "decks_pptx"
 path = "fuzz_targets/decks_pptx.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "letters_odt"
+path = "fuzz_targets/letters_odt.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "letters_markdown"
+path = "fuzz_targets/letters_markdown.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "decks_odp"
+path = "fuzz_targets/decks_odp.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "decks_master_shapes"
+path = "fuzz_targets/decks_master_shapes.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "tables_ods"
+path = "fuzz_targets/tables_ods.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "tables_xlsx_parts"
+path = "fuzz_targets/tables_xlsx_parts.rs"
 test = false
 doc = false
 bench = false

@@ -2,14 +2,15 @@
 
 use libfuzzer_sys::fuzz_target;
 
+// `NamedTempFile` rather than a name built from the pid and the input
+// length: that scheme collides between libFuzzer workers handling
+// equal-length inputs in one process, and a collision looks like a crash
+// that will not reproduce.
 fuzz_target!(|data: &[u8]| {
-    let path = std::env::temp_dir().join(format!(
-        "gtk-office-letters-{}-{}.docx",
-        std::process::id(),
-        data.len()
-    ));
-    if std::fs::write(&path, data).is_ok() {
-        let _ = letters_core::docx::read(path.to_str().unwrap());
-        let _ = std::fs::remove_file(path);
+    let Ok(file) = tempfile::Builder::new().suffix(".docx").tempfile() else { return };
+    if std::fs::write(file.path(), data).is_err() {
+        return;
     }
+    let Some(path) = file.path().to_str() else { return };
+    let _ = letters_core::docx::read(path);
 });

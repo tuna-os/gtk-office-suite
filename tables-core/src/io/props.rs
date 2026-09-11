@@ -128,7 +128,16 @@ pub fn read_sheet_props_from_xlsx(
                 let min: Option<usize> = xml_attr(tag, "min").and_then(|v| v.parse().ok());
                 let max: Option<usize> = xml_attr(tag, "max").and_then(|v| v.parse().ok());
                 if let (Some(min), Some(max)) = (min, max) {
-                    for c in min..=max {
+                    // Columns are 1-based, so 0 is not a column: it used to
+                    // underflow `c - 1` (a panic in debug, `usize::MAX` in
+                    // release, which then recorded a nonsense hidden column).
+                    // And the range is clamped to the grid's own width: a
+                    // file claiming 4 billion hidden columns is not
+                    // describing a spreadsheet, and looping over it hangs
+                    // rather than refusing (#442).
+                    let first = min.max(1);
+                    let last = max.min(crate::sheet::SHEET_MAX_COLS);
+                    for c in first..=last {
                         props.hidden_cols.insert(c - 1); // 1-based → 0-based
                     }
                 }
@@ -143,7 +152,11 @@ pub fn read_sheet_props_from_xlsx(
                     continue;
                 }
                 if let Some(r) = xml_attr(tag, "r").and_then(|v| v.parse::<usize>().ok()) {
-                    props.hidden_rows.insert(r - 1); // 1-based → 0-based
+                    // Rows are 1-based for the same reason, with the same
+                    // underflow if a file says row 0.
+                    if (1..=crate::sheet::SHEET_MAX_ROWS).contains(&r) {
+                        props.hidden_rows.insert(r - 1); // 1-based → 0-based
+                    }
                 }
             }
         }
