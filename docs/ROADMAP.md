@@ -104,6 +104,11 @@ without a test that fails first.
   validates pedantic-clean; flathub/ manifests build from tag v1.1.0.
   The submission PR itself is a human action (see flathub/README.md).
 
+## Q4 2026 Strategy — Headless CLI & Enterprise Distribution
+
+- 🎯 **Headless CLI document conversion binaries**: Expose GTK-free conversion entrypoints powered by `suite-common-core`, `letters-core`, `tables-core`, and `decks-core` to enable server-side document batch processing (`letters-cli`, `tables-cli`, `decks-cli`) without display server dependencies.
+- 🎯 **Enterprise OCI distribution pipeline**: Package headless CLI binaries as lightweight OCI runtime containers for CI/CD document generation and headless batch validation pipelines.
+
 ## Standing infrastructure notes
 
 - Builds: the `gtkbuild` distrobox on the build host (18 cores, ~10s warm) is the
