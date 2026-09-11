@@ -19,6 +19,19 @@ _dogtail_click = rawinput.click
 _dogtail_key_combo = rawinput.keyCombo
 _dogtail_type_text = rawinput.typeText
 
+class _SecondApp:
+    """A second application running beside the primary one."""
+
+    def __init__(self, name, process, app, win_id):
+        self.name = name
+        self.process = process
+        self.app = app
+        self.win_id = win_id
+
+    def __repr__(self):
+        return f"<_SecondApp {self.name} pid={self.process.pid} win={self.win_id}>"
+
+
 class BaseGUITestCase(unittest.TestCase):
     app_name = None  # to be overridden by subclasses
 
@@ -478,12 +491,18 @@ class BaseGUITestCase(unittest.TestCase):
             return
         if win_id is None:
             return
+        # `_win_id` is the *current* input target, not a constant: a
+        # cross-application journey moves it between two running apps with
+        # `focus_app`. The closures below read the attribute on every call
+        # rather than capturing it, so switching focus needs no re-patching.
         self._win_id = win_id
+        self._primary_win_id = win_id
 
         def reactivate():
             try:
-                subprocess.run(["xdotool", "windowactivate", "--sync", win_id],
-                                capture_output=True, timeout=2)
+                subprocess.run(
+                    ["xdotool", "windowactivate", "--sync", self._win_id],
+                    capture_output=True, timeout=2)
             except (FileNotFoundError, subprocess.TimeoutExpired):
                 pass
 
@@ -514,7 +533,7 @@ class BaseGUITestCase(unittest.TestCase):
                             tokens.append(rawinput.keyNameAliases.get(tok.lower(), tok))
             reactivate()
             subprocess.run(
-                ["xdotool", "key", "--window", win_id, "+".join(tokens)],
+                ["xdotool", "key", "--window", self._win_id, "+".join(tokens)],
                 capture_output=True, timeout=5,
             )
 
@@ -522,13 +541,103 @@ class BaseGUITestCase(unittest.TestCase):
             trace("type_text", text=text)
             reactivate()
             subprocess.run(
-                ["xdotool", "type", "--window", win_id, "--", text],
+                ["xdotool", "type", "--window", self._win_id, "--", text],
                 capture_output=True, timeout=10,
             )
 
         rawinput.click = click
         rawinput.keyCombo = key_combo
         rawinput.typeText = type_text
+
+    # ── A second application (#442 cross-app clipboard) ────────────────
+    # The X11 clipboard is a negotiation between two live processes: one
+    # owns the selection, the other asks it for a format. Nothing about
+    # that is exercised by one app copying and pasting to itself, which is
+    # what every clipboard journey did before this. The fragment
+    # *conversions* are pure functions with their own unit tests; what
+    # needed a second process was the transfer.
+
+    def launch_second_app(self, app_name: str, launch_args=()):
+        """Launch another suite application beside the primary one.
+
+        Returns a handle with `.name`, `.process`, `.app` (AT-SPI node) and
+        `.win_id`. Registered for cleanup, so a failing journey does not
+        leave a window on the display for the next test to type into.
+        """
+        target_dir = os.environ.get("CARGO_TARGET_DIR") or os.path.join(
+            self.workspace_dir, "target")
+        bin_path = os.path.join(target_dir, "debug", app_name)
+        if not os.path.exists(bin_path):
+            raise RuntimeError(f"Binary not found at {bin_path}. Run 'cargo build' first.")
+
+        subprocess.run(["pkill", "-x", app_name], stderr=subprocess.DEVNULL)
+
+        env = os.environ.copy()
+        env["GDK_BACKEND"] = "x11"
+        env.update(getattr(self, "launch_env", {}))
+        process = subprocess.Popen(
+            [bin_path] + list(launch_args), env=env,
+            stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
+        )
+
+        def terminate():
+            if process.poll() is None:
+                process.terminate()
+                try:
+                    process.wait(timeout=2)
+                except subprocess.TimeoutExpired:
+                    process.kill()
+        self.addCleanup(terminate)
+
+        app = self.wait_for_app(app_name)
+        win_id = self.wait_for_condition(
+            lambda: self._window_for_pid(process.pid),
+            description=f"an X window for {app_name}",
+        )
+
+        handle = _SecondApp(app_name, process, app, win_id)
+        self._second_apps = getattr(self, "_second_apps", [])
+        self._second_apps.append(handle)
+        return handle
+
+    def _window_for_pid(self, pid: int):
+        try:
+            result = subprocess.run(
+                ["xdotool", "search", "--pid", str(pid)],
+                capture_output=True, text=True, timeout=5,
+            )
+        except (FileNotFoundError, subprocess.TimeoutExpired):
+            return None
+        ids = [w for w in result.stdout.split() if w]
+        return ids[-1] if ids else None
+
+    def focus_app(self, target=None):
+        """Point synthetic input at `target` (a `launch_second_app` handle),
+        or back at the primary app when called with no argument.
+
+        Returns the AT-SPI node for the focused app, so a journey reads as
+        `editor = self.focus_app(letters).child(roleName="text")`.
+        """
+        win_id = target.win_id if target is not None else getattr(
+            self, "_primary_win_id", getattr(self, "_win_id", None))
+        if win_id is None:
+            self.fail("no window to focus: input was never bound to one")
+        self._win_id = win_id
+        subprocess.run(["xdotool", "windowactivate", "--sync", win_id],
+                        capture_output=True, timeout=5)
+        return target.app if target is not None else self.app
+
+    def assert_still_running(self, *targets):
+        """Every app involved is still alive. A clipboard transfer that
+        crashes the *owner* is as much a failure as one that loses data,
+        and the receiving app's assertion would not notice."""
+        crashed = []
+        if self.process.poll() is not None:
+            crashed.append(f"{self.app_name} (exit {self.process.poll()})")
+        for t in targets:
+            if t.process.poll() is not None:
+                crashed.append(f"{t.name} (exit {t.process.poll()})")
+        self.assertFalse(crashed, f"process(es) died: {', '.join(crashed)}")
 
     def drag(self, x1: float, y1: float, x2: float, y2: float, button: int = 1):
         """Press-move-release from (x1, y1) to (x2, y2), window-local
