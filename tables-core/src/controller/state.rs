@@ -167,6 +167,29 @@ pub(super) struct CellInputCommand {
     pub(super) new_input: String,
 }
 
+/// Put a recorded sheet back, without putting its *name* back.
+///
+/// These snapshots are whole `SheetModel`s, so the name rides along with
+/// the content — but the name is identity, owned by `rename_sheet` and
+/// the engine, and is never what a recorded command changed. Restoring
+/// it meant that undoing a sort after renaming a sheet brought the old
+/// name back in the presentation model while the engine kept the new
+/// one: the tab said one thing, every formula referring to that sheet
+/// meant the other. Found by the seeded command sequences in
+/// tables-core/tests/stateful.rs (#442).
+fn restore_sheet_at(state: &WorkbookState, index: usize, recorded: &SheetModel) {
+    let mut sheet = state.sheets[index].borrow_mut();
+    let name = std::mem::take(&mut sheet.name);
+    *sheet = recorded.clone();
+    sheet.name = name;
+}
+
+fn restore(state: &mut WorkbookState, sheet_id: u32, recorded: &SheetModel) {
+    if let Some(index) = state.sheet_index_for_id(sheet_id) {
+        restore_sheet_at(state, index, recorded);
+    }
+}
+
 pub(super) struct SheetSnapshotCommand {
     pub(super) sheet_id: u32,
     pub(super) before: SheetModel,
@@ -176,15 +199,11 @@ pub(super) struct SheetSnapshotCommand {
 
 impl Command<WorkbookState> for SheetSnapshotCommand {
     fn apply(&self, state: &mut WorkbookState) {
-        if let Some(index) = state.sheet_index_for_id(self.sheet_id) {
-            *state.sheets[index].borrow_mut() = self.after.clone();
-        }
+        restore(state, self.sheet_id, &self.after);
     }
 
     fn undo(&self, state: &mut WorkbookState) {
-        if let Some(index) = state.sheet_index_for_id(self.sheet_id) {
-            *state.sheets[index].borrow_mut() = self.before.clone();
-        }
+        restore(state, self.sheet_id, &self.before);
     }
 
     fn description(&self) -> &str {
@@ -379,7 +398,7 @@ impl SortCommand {
         inputs: &[Vec<String>],
         sheet: &SheetModel,
     ) {
-        *state.sheets[sheet_index].borrow_mut() = sheet.clone();
+        restore_sheet_at(state, sheet_index, sheet);
         state.set_cell_inputs_on_sheet(
             sheet_index,
             inputs.iter().enumerate().flat_map(|(row, values)| {
