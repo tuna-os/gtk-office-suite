@@ -198,3 +198,33 @@ read the setting with a bare `gsettings` subprocess and so reported the
 *harness's* environment, not the app's — it showed a leak even after the
 fix. Reading through `launch_env`, the way the app is launched, is what
 makes the measurement mean anything.
+
+## A timeout that is only just long enough
+
+The display handshake this work introduced replaced blind sleeps with
+bounded predicates — the right shape — but sized each budget at 100 polls
+of 0.1s. Ten seconds passed every run it was developed against, and then
+failed a cold CI runner:
+
+```
+21:13:03  setup starts
+21:13:13  GUI setup failed: Xvfb never reported a display number.
+21:13:16  The XKEYBOARD keymap compiler (xkbcomp) reports: ...
+```
+
+Xvfb announced itself three seconds *after* setup declared it dead. The
+predicate was correct and the budget was not, which is the worst
+combination to debug: the error names the right condition and blames the
+wrong cause, on a machine that is merely slower than the one that wrote
+it.
+
+Setup now shares one budget, `GUI_TEST_READY_SECONDS` (default 60), across
+all three waits — the `-displayfd` number, the display answering
+`xdpyinfo`, and matchbox claiming `_NET_SUPPORTING_WM_CHECK`. Each still
+breaks the instant its condition holds, so the change costs a fast machine
+nothing: a full smoke run's setup is still immediate, and a server that
+dies outright is still reported at once by the `kill -0` check rather than
+waiting out the budget. `ReadinessBudget` in `tests/test_gui_harness.py`
+holds the line, because the regression is invisible in a passing run:
+it fails on a default under 30s and on any wait that carries its own
+hardcoded count.

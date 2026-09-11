@@ -7,6 +7,7 @@ AT-SPI and imaging dependencies.
 
 import importlib.util
 import os
+import re
 import shutil
 import subprocess
 import tempfile
@@ -123,6 +124,54 @@ class NoGlobalKilling(unittest.TestCase):
             offenders,
             [],
             "the GUI harness must clean up only the processes it started:\n"
+            + "\n".join(offenders),
+        )
+
+
+class ReadinessBudget(unittest.TestCase):
+    """Setup's waits must be sized for the slowest machine, not the one
+    that happened to run them.
+
+    The first version of the display handshake polled 100 times at 0.1s and
+    called it a failure after 10s. It passed every run it was written
+    against and then failed a cold CI runner, which printed Xvfb's own
+    startup banner three seconds *after* setup had given up — a timeout
+    just long enough to pass once is indistinguishable from a correct one
+    until it blocks somebody's pull request. Each wait breaks as soon as
+    its condition holds, so a large budget costs a fast machine nothing;
+    only a hardcoded small one costs anything at all.
+    """
+
+    MINIMUM_SECONDS = 30
+    SCRIPT = os.path.join(
+        os.path.dirname(os.path.abspath(__file__)), "gui", "run_gui_tests.sh"
+    )
+
+    def _script(self):
+        with open(self.SCRIPT, encoding="utf-8") as handle:
+            return handle.read()
+
+    def test_the_default_budget_is_not_marginal(self):
+        found = re.findall(
+            r'GUI_TEST_READY_SECONDS="\$\{GUI_TEST_READY_SECONDS:-(\d+)\}"', self._script()
+        )
+        self.assertEqual(len(found), 1, "expected exactly one default readiness budget")
+        self.assertGreaterEqual(
+            int(found[0]),
+            self.MINIMUM_SECONDS,
+            "a readiness wait that expires in seconds is a flake waiting to happen",
+        )
+
+    def test_no_wait_carries_its_own_hardcoded_count(self):
+        offenders = [
+            f"{number}: {line.strip()}"
+            for number, line in enumerate(self._script().splitlines(), 1)
+            if re.search(r"seq 1 \d", line.split("#", 1)[0])
+        ]
+        self.assertEqual(
+            offenders,
+            [],
+            "every setup wait must share the one configurable budget:\n"
             + "\n".join(offenders),
         )
 

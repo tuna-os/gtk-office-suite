@@ -25,6 +25,17 @@ cp "$REPO_ROOT"/flatpak/*.gschema.xml "$SCHEMA_DIR/"
 glib-compile-schemas "$SCHEMA_DIR"
 export GSETTINGS_SCHEMA_DIR="$SCHEMA_DIR"
 
+# How long setup waits for the display and the window manager to come up.
+# Each of the waits below polls every 0.1s and breaks the moment its
+# condition holds, so a warm machine is not slowed by a generous budget —
+# but a cold CI runner genuinely takes longer than the 10s this used to
+# allow, and it failed the run while Xvfb was still starting (it printed
+# its own xkbcomp banner three seconds *after* setup gave up). A timeout
+# that is only just long enough is a flake; size it for the slowest
+# machine and let the predicate decide when to stop waiting.
+GUI_TEST_READY_SECONDS="${GUI_TEST_READY_SECONDS:-60}"
+GUI_TEST_READY_TICKS="$(( GUI_TEST_READY_SECONDS * 10 ))"
+
 export GDK_BACKEND=x11
 export GTK_A11Y=atspi
 # dogtail's a11y check accepts this env var (GTK4 itself ignores GTK_MODULES).
@@ -75,7 +86,7 @@ if [ -z "${GUI_TEST_REUSE_DISPLAY:-}" ]; then
     # Xvfb writes the number once it is ready to accept connections, so this
     # waits for readiness and the allocation in one step.
     XVFB_DISPLAY_NUM=""
-    for _ in $(seq 1 100); do
+    for _ in $(seq 1 "$GUI_TEST_READY_TICKS"); do
         XVFB_DISPLAY_NUM="$(tr -d '[:space:]' < "$DISPLAY_NUM_FILE")"
         [ -n "$XVFB_DISPLAY_NUM" ] && break
         # Our own server dying is the collision case: report it as such
@@ -93,7 +104,7 @@ if [ -z "${GUI_TEST_REUSE_DISPLAY:-}" ]; then
         exit 1
     fi
     if [ -z "$XVFB_DISPLAY_NUM" ]; then
-        echo "GUI setup failed: Xvfb never reported a display number." >&2
+        echo "GUI setup failed: Xvfb never reported a display number within ${GUI_TEST_READY_SECONDS}s." >&2
         exit 1
     fi
     export DISPLAY=":${XVFB_DISPLAY_NUM}"
@@ -108,14 +119,14 @@ fi
 # pointing at nothing and the journeys failed later with a timeout that
 # said nothing about the cause. #241 asks setup to fail when the display is
 # unavailable, and to say so.
-for _ in $(seq 1 100); do
+for _ in $(seq 1 "$GUI_TEST_READY_TICKS"); do
     if xdpyinfo -display "$DISPLAY" >/dev/null 2>&1; then
         break
     fi
     sleep 0.1
 done
 if ! xdpyinfo -display "$DISPLAY" >/dev/null 2>&1; then
-    echo "GUI setup failed: no X display at ${DISPLAY} after 10s." >&2
+    echo "GUI setup failed: no X display at ${DISPLAY} after ${GUI_TEST_READY_SECONDS}s." >&2
     if [ -z "${GUI_TEST_REUSE_DISPLAY:-}" ]; then
         echo "Xvfb did not come up; is display ${XVFB_DISPLAY_NUM} already in use?" >&2
     else
@@ -141,14 +152,14 @@ if [ -z "${GUI_TEST_REUSE_DISPLAY:-}" ] && command -v matchbox-window-manager >/
     # _NET_SUPPORTING_WM_CHECK; until that is set, a GTK toplevel can map
     # without ever receiving X input focus and every synthetic keystroke in
     # the journey goes nowhere (#354: bounded predicates, not sleeps).
-    for _ in $(seq 1 100); do
+    for _ in $(seq 1 "$GUI_TEST_READY_TICKS"); do
         if xprop -root _NET_SUPPORTING_WM_CHECK 2>/dev/null | grep -q "window id"; then
             break
         fi
         sleep 0.1
     done
     if ! xprop -root _NET_SUPPORTING_WM_CHECK 2>/dev/null | grep -q "window id"; then
-        echo "GUI setup failed: matchbox did not claim ${DISPLAY} within 10s." >&2
+        echo "GUI setup failed: matchbox did not claim ${DISPLAY} within ${GUI_TEST_READY_SECONDS}s." >&2
         exit 1
     fi
 fi
