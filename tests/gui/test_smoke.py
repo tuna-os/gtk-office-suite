@@ -2441,3 +2441,83 @@ class HarnessRepeatedLaunchSmoke(BaseGUITestCase):
             )
 
         self.assertEqual(len(set(pids)), self.CYCLES + 1)
+
+
+class TablesChartDialogSmoke(BaseGUITestCase):
+    """The chart dialog opens, previews the selected column, and inserts.
+
+    Added with the extraction of that dialog out of `TablesWindow::new`
+    (`tables/src/chart_dialog.rs`): moving 119 lines of dialog construction
+    to another module is exactly the change that can leave a dialog that
+    compiles and never appears, and nothing was asserting this one. It
+    needs numeric data in the selected column — the dialog returns without
+    presenting when there is none, which is also worth pinning.
+    """
+
+    app_name = "tables"
+
+    def test_insert_chart_opens_the_dialog_and_inserts_onto_the_sheet(self):
+        from dogtail import rawinput
+        import subprocess
+
+        aid = "org.tunaos.tables"
+        subprocess.run(["gapplication", "action", aid, "new-document"])
+        time.sleep(1.5)
+
+        # Labels in column A, numbers in column B: the dialog charts the
+        # selected column against column A.
+        for cell, text in (("A1", "North"), ("A2", "South"), ("A3", "East")):
+            rawinput.keyCombo("<Control>g")
+            time.sleep(0.2)
+            rawinput.typeText(cell)
+            rawinput.keyCombo("Return")
+            time.sleep(0.3)
+            rawinput.typeText(text)
+            rawinput.keyCombo("Return")
+            time.sleep(0.3)
+        for cell, text in (("B1", "12"), ("B2", "34"), ("B3", "56")):
+            rawinput.keyCombo("<Control>g")
+            time.sleep(0.2)
+            rawinput.typeText(cell)
+            rawinput.keyCombo("Return")
+            time.sleep(0.3)
+            rawinput.typeText(text)
+            rawinput.keyCombo("Return")
+            time.sleep(0.3)
+        rawinput.keyCombo("<Control>g")
+        time.sleep(0.2)
+        rawinput.typeText("B2")
+        rawinput.keyCombo("Return")
+        time.sleep(0.4)
+        rawinput.keyCombo("Escape")
+        time.sleep(0.3)
+
+        subprocess.run(["gapplication", "action", aid, "insert-chart"])
+
+        insert = self.wait_until(
+            lambda: [c for c in self.app.findChildren(
+                lambda c: c.roleName == "push button"
+                and "Insert into Sheet" in (c.name or ""))],
+            lambda found: bool(found),
+            timeout=10.0,
+            description="the chart dialog's Insert button",
+        )[0]
+        # The type chooser is the dialog's other half; if only the button
+        # showed up, the dialog was built but not populated.
+        types = [c for c in self.app.findChildren(
+            lambda c: c.roleName == "combo box")]
+        self.assertTrue(types, "chart dialog has no type chooser")
+
+        insert.do_action(0)
+        time.sleep(1.0)
+        self.assertIsNone(self.process.poll(), "tables crashed inserting a chart")
+        # Inserting closes the dialog, which is how the action reports that
+        # it wrote a chart onto the sheet.
+        self.wait_until(
+            lambda: [c for c in self.app.findChildren(
+                lambda c: c.roleName == "push button"
+                and "Insert into Sheet" in (c.name or ""))],
+            lambda found: not found,
+            timeout=10.0,
+            description="the chart dialog to close after inserting",
+        )
