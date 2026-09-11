@@ -83,10 +83,16 @@ jobs:
       - uses: dtolnay/rust-toolchain@nightly
       - name: Install cargo-fuzz
         run: cargo install cargo-fuzz --locked
+      # Every path a document can enter the suite through, not just the
+      # OOXML three: the ODF read side had no target at all, and the
+      # readers that return no Result (the best-effort xlsx parts,
+      # markdown::parse, parse_master_shapes) can only fail by panicking.
       - name: Run bounded importer fuzz smoke
         run: |
           set -o pipefail
-          for target in letters_docx tables_xlsx decks_pptx; do
+          for target in letters_docx letters_odt letters_markdown \
+                        tables_xlsx tables_xlsx_parts tables_ods \
+                        decks_pptx decks_odp decks_master_shapes; do
             cargo fuzz run "$target" --sanitizer none -- \
               -runs=100 -max_len=1048576 -timeout=10 -rss_limit_mb=512
           done

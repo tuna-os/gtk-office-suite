@@ -5,6 +5,13 @@ use suite_common_core::format::NumberFormat;
 
 pub const DEFAULT_ROWS: usize = 100;
 pub const DEFAULT_COLS: usize = 26;
+
+/// The spreadsheet grid's own limits, from the XLSX specification. Used to
+/// bound what a file is allowed to claim: a worksheet declaring a hidden
+/// column range up to 4,294,967,296 is not describing a spreadsheet, and a
+/// reader that loops over it hangs instead of refusing (#442).
+pub const SHEET_MAX_ROWS: usize = 1_048_576;
+pub const SHEET_MAX_COLS: usize = 16_384;
 pub const ROW_HEIGHT: f64 = 28.0;
 pub const COL_WIDTH: f64 = 90.0;
 pub const ROW_HEADER_WIDTH: f64 = 50.0;

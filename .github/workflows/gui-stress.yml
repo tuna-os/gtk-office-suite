@@ -109,6 +109,21 @@ jobs:
           cargo test -p decks-core --test stateful -- --ignored seed_campaign
           cargo test -p letters-core --test stateful -- --ignored seed_campaign
 
+      # The malformed-input campaigns are the same instrument pointed at
+      # files instead of commands: seeded, replayable, and a failure names
+      # the seed. The PR lane runs a fixed slice of these; here the base
+      # moves with the run number so consecutive nights explore different
+      # mutations. A find is made permanent by minimizing it into the
+      # crate's tests/crashes/ directory, which the PR lane replays.
+      - name: Malformed-input campaign
+        env:
+          MALFORMED_SEED_BASE: ${{ github.run_number }}000000
+          MALFORMED_SEED_COUNT: '20000'
+        run: |
+          cargo test -p letters-core --test malformed_inputs -- --ignored seed_campaign
+          cargo test -p decks-core --test malformed_inputs -- --ignored seed_campaign
+          cargo test -p tables-core --test malformed_inputs -- --ignored seed_campaign
+
       # Every context value reaches the script through the environment,
       # never through `${{ }}` inside it: an input is attacker-controlled
       # text and expression interpolation pastes it in before bash parses

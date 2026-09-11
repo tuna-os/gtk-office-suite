@@ -21,10 +21,28 @@ Architecture: readers return complete semantic document state plus source-packag
       preallocated — preallocating from a declared size *is* the allocation the bomb is asking for.
       `{letters,decks}-core/tests/hostile_packages.rs` build hostile archives in memory and assert the production
       readers refuse them, that an oversized *optional* part is skipped rather than fatal, and that ordinary documents
-      still open. Malformed/truncated corpus cases and retained minimized fuzz failures are still open: the cargo-fuzz
-      targets in `fuzz/` cover docx/xlsx/pptx only, run 100 iterations a night with `--sanitizer none`, and have no seed
-      corpus and no mechanism to turn a finding into a committed regression. The ODF read side has no fuzz target at
-      all.
+      still open.
+      **Malformed/truncated corpus cases and retained minimized fuzz failures are done.**
+      `{letters,decks,tables}-core/tests/malformed_inputs.rs` are deterministic, seeded, PR-lane harnesses: structural
+      hostility cases (bounded deep nesting, truncation mid-element and mid-attribute, entity expansion, non-finite and
+      out-of-range numeric attributes, thousands of objects or rules in one part) plus two mutation modes — the packaged
+      bytes, and one part's XML repackaged into a valid archive so every seed reaches the parser rather than dying at
+      the zip layer (measured: only 503 of 2,000 package mutations produced a readable archive). Each harness was
+      verified to *detect* a panic by injecting one, because a no-panic test that cannot see a panic asserts nothing.
+      It found **three real defects in `read_sheet_props_from_xlsx`** on its first run: `<col min="0">` and
+      `<row r="0">` underflowed a 1-based to 0-based conversion (a panic in debug, `usize::MAX` in release, recording a
+      nonsense hidden index), and `<col min="1" max="4294967295">` looped over the whole range — a hang rather than a
+      crash, measured at over 30 seconds before being killed, now clamped to the grid's own limits
+      (`SHEET_MAX_ROWS`/`SHEET_MAX_COLS`).
+      Each crate has a `tests/crashes/` directory whose every file is replayed on every pull request: that is the
+      retention mechanism, and the replay test prints its count so an empty directory cannot be mistaken for a missing
+      wire. The libFuzzer lane grew from three targets to nine, adding odt, odp, ods, the three best-effort xlsx part
+      readers, `markdown::parse` and `parse_master_shapes`; its temporary-file names now come from `NamedTempFile`
+      rather than pid-plus-length, which collided between workers handling equal-length inputs and would have looked
+      like a crash that did not reproduce.
+      Still open here: `--sanitizer none` means ASan and UBSan findings are not caught, there is still no seed corpus
+      (libFuzzer starts from noise rather than from real documents), and unbounded nesting depth needs the
+      out-of-process lane because a stack overflow aborts rather than unwinding and cannot be caught in-process.
 - [ ] Treat missing oracle as failure in required interop/release lanes (REQUIRE_SOFFICE=1), never as observed compatibility.
 - [ ] Promote a format feature only when model, live journey and independent-reader evidence all exist.
 
