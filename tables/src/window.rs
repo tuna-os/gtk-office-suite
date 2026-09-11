@@ -130,17 +130,38 @@ impl TablesWindow {
             app.add_action(&act);
         }
 
+        // Column auto-fit (double-clicking a header divider) needs a
+        // cairo context to measure text in, so it can only run inside a
+        // draw. It is requested here and consumed by the draw func
+        // below, rather than by swapping in a one-shot draw func: a
+        // draw func that replaces itself frees the closure that is
+        // running, and one that captures its own DrawingArea makes the
+        // widget own itself, so dispose recurses into already-freed
+        // memory (#507).
+        let pending_autofit: Rc<Cell<Option<usize>>> = Rc::new(Cell::new(None));
+
         {
             let da_state = state.clone();
             let da_h = h_adj.clone();
             let da_v = v_adj.clone();
             let gl = show_gridlines.clone();
             let da_refs = formula_refs.clone();
-            let accent_area = drawing_area.clone();
-            drawing_area.set_draw_func(move |_da, cr, width, height| {
+            let autofit = pending_autofit.clone();
+            // The accent color comes from the widget handed to the
+            // closure, never from a captured clone of it — see above.
+            drawing_area.set_draw_func(move |da, cr, width, height| {
+                if let Some(col) = autofit.take() {
+                    let st = da_state.borrow();
+                    let mut sh = st.sheet_mut();
+                    auto_fit_column(cr, &mut sh, col, da_h.value());
+                    // draw_grid() re-borrows the same AppState RefCell,
+                    // so drop both guards, not just the sheet's.
+                    drop(sh);
+                    drop(st);
+                }
                 draw_grid(cr, &da_state, width as f64, height as f64,
                           da_h.value(), da_v.value(), gl.get(), &da_refs.borrow(),
-                          suite_common::accent_rgb(&accent_area));
+                          suite_common::accent_rgb(da));
             });
             let gl = show_gridlines.clone();
             let da = drawing_area.clone();
@@ -220,7 +241,13 @@ impl TablesWindow {
         stats_label.add_css_class("dim-label");
         stats_label.set_hexpand(true);
         stats_label.set_halign(gtk4::Align::End);
-        stats_label.update_property(&[gtk4::accessible::Property::Label("Selection statistics")]);
+        // Describe, don't rename: a GtkLabel exposes its own text as its
+        // accessible name, and overriding that with a static string made
+        // a screen reader announce "Selection statistics" while never
+        // reading the sum, average or count it exists to report.
+        stats_label.update_property(&[gtk4::accessible::Property::Description(
+            "Selection statistics",
+        )]);
 
         let refresh_sel: Rc<dyn Fn()> = {
             let s = state.clone();
@@ -701,8 +728,7 @@ impl TablesWindow {
             let da = drawing_area.clone();
             let h = h_adj.clone();
             let v = v_adj.clone();
-            let gl = show_gridlines.clone();
-            let refs = formula_refs.clone();
+            let autofit = pending_autofit.clone();
             let dbl = gtk4::GestureClick::new();
             dbl.set_button(1);
             dbl.set_touch_only(false);
@@ -716,33 +742,9 @@ impl TablesWindow {
                     let sh = st.sheet();
                     if let Some(col) = hit_col_divider(wx, wy, h.value(), &sh) {
                         drop(sh); drop(st);
-                        // Auto-fit by temporarily setting draw func to measure
-                        let s2 = s.clone();
-                        let h2 = h.clone();
-                        let v2 = v.clone();
-                        let da2 = da.clone();
-                        let gl2 = gl.clone();
-                        let refs2 = refs.clone();
-                        da.set_draw_func(move |_area, cr, width, height| {
-                            let st = s2.borrow_mut();
-                            let mut sh = st.sheet_mut();
-                            auto_fit_column(cr, &mut sh, col, h2.value());
-                            // draw_grid() immediately re-borrows `s2`
-                            // (the same AppState RefCell as `st`), so drop
-                            // both -- not just `sh` -- before calling it.
-                            drop(sh); drop(st);
-                            draw_grid(cr, &s2, width as f64, height as f64, h2.value(), v2.value(), gl2.get(), &refs2.borrow(), suite_common::accent_rgb(&da2));
-                            // Restore normal draw func
-                            let s3 = s2.clone();
-                            let h3 = h2.clone();
-                            let v3 = v2.clone();
-                            let gl3 = gl2.clone();
-                            let refs3 = refs2.clone();
-                            let accent_da = da2.clone();
-                            da2.set_draw_func(move |_, cr, w, h| {
-                                draw_grid(cr, &s3, w as f64, h as f64, h3.value(), v3.value(), gl3.get(), &refs3.borrow(), suite_common::accent_rgb(&accent_da));
-                            });
-                        });
+                        // Ask the permanent draw func to measure and
+                        // fit this column on its next pass.
+                        autofit.set(Some(col));
                         da.queue_draw();
                         return;
                     }

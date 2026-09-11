@@ -251,9 +251,9 @@ impl GridArea {
 
         *self.imp().col_widths.borrow_mut() = col_widths.to_vec();
 
-        // Persistent flat child list, grown by appending and linked via
-        // update_next_accessible_sibling (rebuilding the chain leaves
-        // the AT-SPI bridge with stale references — it then reports no
+        // Persistent flat child list, grown by appending and linked
+        // into the existing chain (rebuilding the chain leaves the
+        // AT-SPI bridge with stale references — it then reports no
         // children at all). Cells are addressed row-major over a column
         // count that only grows; row/col labels are re-assigned on
         // geometry changes and surplus cells are hidden.
@@ -274,9 +274,23 @@ impl GridArea {
             let cell =
                 CellAccessible::new(self, len / grid_cols.max(1), len % grid_cols.max(1));
             self.imp().cells.borrow_mut().push(cell.clone());
+            // Linking uses set_accessible_parent(parent, next_sibling), not
+            // gtk_accessible_update_next_accessible_sibling: that function
+            // fetches the parent accessible with
+            // gtk_at_context_get_accessible_parent() -- documented and
+            // implemented as transfer none, a weak pointer -- and then
+            // g_object_unref()s it (gtk/gtkaccessible.c, every GTK from
+            // 4.10 through main). Each call therefore drops a reference
+            // this process never owned, and after enough of them the
+            // GridArea is finalized while still parented
+            // ("has a parent GtkOverlay during dispose"), which is the
+            // use-after-free behind #507. set_accessible_parent() sets both
+            // the parent and the next sibling through the same ATContext
+            // setters with no stray unref, so the chain the AT-SPI bridge
+            // reads is identical.
             cell.set_accessible_parent(Some(self), None::<&CellAccessible>);
             if let Some(prev) = prev {
-                prev.update_next_accessible_sibling(Some(&cell));
+                prev.set_accessible_parent(Some(self), Some(&cell));
             }
         }
         self.imp().cols.set(grid_cols);
