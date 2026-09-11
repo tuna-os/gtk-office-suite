@@ -91,23 +91,63 @@ impl StructuredEditor {
         self.document.delete_table_cols(table, at, count)
     }
 
-    pub fn insert_table(&mut self, rows: u32, cols: u32) {
-        let table_id = self.document.paragraphs.iter()
-            .filter_map(|p| p.style.table_cell.map(|c| c.table))
-            .max().unwrap_or(0) + 1;
-        let mut new_paras = Vec::new();
-        for r in 0..rows {
-            for c in 0..cols {
-                new_paras.push(crate::model::Paragraph {
-                    style: crate::model::ParaStyle {
-                        table_cell: Some(TableCell { table: table_id, row: r, col: c }),
-                        ..Default::default()
-                    },
-                    runs: vec![crate::model::Run::plain(format!("Cell {}.{}", r + 1, c + 1))],
-                });
-            }
+    /// Insert an empty `rows` × `cols` table at the cursor and return its
+    /// id, leaving the cursor in its first cell.
+    ///
+    /// The cells start empty. An earlier version filled them with "Cell
+    /// 1.1"-style placeholders, which a user then had to delete from every
+    /// cell of every table they inserted.
+    pub fn insert_table(&mut self, rows: u32, cols: u32) -> u32 {
+        // The table goes on the line *after* the paragraph the caret is in,
+        // so the text you were writing stays above it — except in an empty
+        // paragraph, where it takes that line and leaves the empty one
+        // below to keep typing in. Splitting a paragraph mid-sentence
+        // around a table is a separate behavior and not what any menu item
+        // here promises.
+        let cursor_para = self.document.paragraph_at(self.cursor);
+        let at = if self.document.paragraphs.get(cursor_para).is_some_and(|p| p.text().is_empty()) {
+            cursor_para
+        } else {
+            cursor_para + 1
+        };
+        let table = self.document.insert_table_at(at, rows, cols);
+        if rows > 0 && cols > 0 {
+            self.table_cell = Some(TableCell { table, row: 0, col: 0 });
+            self.cursor = self.document.paragraph_offset(at);
+            self.selection = None;
         }
-        self.document.paragraphs.extend(new_paras);
+        table
+    }
+
+    /// The cell the cursor is in, if any. GUI commands ask this rather
+    /// than assuming which table they are editing.
+    pub fn cursor_cell(&self) -> Option<TableCell> {
+        self.document.table_cell_at(self.cursor)
+    }
+
+    // ── Cursor-relative table commands ──────────────────────────────
+    // Each is a no-op returning false when the cursor is not in a table,
+    // so a menu item invoked with the caret in ordinary text cannot
+    // scramble some unrelated table elsewhere in the document.
+
+    pub fn insert_row_at_cursor(&mut self, below: bool) -> bool {
+        let Some(cell) = self.cursor_cell() else { return false };
+        self.document.insert_table_rows(cell.table, if below { cell.row + 1 } else { cell.row }, 1)
+    }
+
+    pub fn insert_col_at_cursor(&mut self, after: bool) -> bool {
+        let Some(cell) = self.cursor_cell() else { return false };
+        self.document.insert_table_cols(cell.table, if after { cell.col + 1 } else { cell.col }, 1)
+    }
+
+    pub fn delete_row_at_cursor(&mut self) -> bool {
+        let Some(cell) = self.cursor_cell() else { return false };
+        self.document.delete_table_rows(cell.table, cell.row, 1)
+    }
+
+    pub fn delete_col_at_cursor(&mut self) -> bool {
+        let Some(cell) = self.cursor_cell() else { return false };
+        self.document.delete_table_cols(cell.table, cell.col, 1)
     }
 
     pub fn indent_list_item(&mut self, paragraph: usize) {
@@ -156,6 +196,123 @@ mod tests {
         assert_eq!(editor.document().to_plain_text(), "world");
         assert_eq!(editor.cursor(), 5);
         assert!(editor.document().style_at(0).bold);
+    }
+
+    /// A document of three paragraphs with the cursor in the middle one.
+    fn three_paragraphs() -> StructuredEditor {
+        let doc = Document::from_plain_text("before\nmiddle\nafter");
+        StructuredEditor::new(doc)
+    }
+
+    #[test]
+    fn insert_table_lands_at_the_cursor_not_at_the_end() {
+        let mut editor = three_paragraphs();
+        editor.set_cursor(editor.document().paragraph_offset(1));
+        let table = editor.insert_table(2, 2);
+
+        let kinds: Vec<Option<u32>> = editor.document().paragraphs.iter()
+            .map(|p| p.style.table_cell.map(|c| c.table)).collect();
+        assert_eq!(kinds, vec![None, None, Some(table), Some(table), Some(table), Some(table), None],
+                   "the table belongs on the line after 'middle', not at the end");
+        assert_eq!(editor.document().table_dimensions(table), Some((2, 2)));
+    }
+
+    #[test]
+    fn insert_table_in_an_empty_paragraph_takes_that_line() {
+        // A new document is one empty paragraph; a table inserted there
+        // should not leave a blank first line above itself.
+        let mut editor = StructuredEditor::new(Document::new());
+        let table = editor.insert_table(2, 2);
+        assert_eq!(editor.document().paragraphs[0].style.table_cell.map(|c| c.table), Some(table));
+    }
+
+    #[test]
+    fn inserted_cells_start_empty() {
+        // Placeholder text ("Cell 1.1") would have to be deleted from every
+        // cell of every inserted table before the user could type.
+        let mut editor = three_paragraphs();
+        let table = editor.insert_table(2, 2);
+        assert!(editor.document().paragraphs.iter()
+            .filter(|p| p.style.table_cell.is_some_and(|c| c.table == table))
+            .all(|p| p.text().is_empty()));
+    }
+
+    #[test]
+    fn insert_table_leaves_the_cursor_in_the_first_cell() {
+        let mut editor = three_paragraphs();
+        editor.set_cursor(editor.document().paragraph_offset(1));
+        let table = editor.insert_table(2, 2);
+        assert_eq!(editor.cursor_cell(), Some(TableCell { table, row: 0, col: 0 }));
+    }
+
+    #[test]
+    fn each_inserted_table_gets_its_own_id() {
+        let mut editor = three_paragraphs();
+        let first = editor.insert_table(2, 2);
+        editor.set_cursor(editor.document().char_len());
+        let second = editor.insert_table(2, 2);
+        assert_ne!(first, second);
+        assert_eq!(editor.document().table_dimensions(first), Some((2, 2)));
+        assert_eq!(editor.document().table_dimensions(second), Some((2, 2)));
+    }
+
+    #[test]
+    fn row_and_column_commands_follow_the_cursor() {
+        let mut editor = three_paragraphs();
+        let table = editor.insert_table(2, 2);
+        // Cursor in the last cell (row 1, col 1).
+        let last = editor.document().paragraphs.iter()
+            .position(|p| p.style.table_cell == Some(TableCell { table, row: 1, col: 1 })).unwrap();
+        editor.set_cursor(editor.document().paragraph_offset(last));
+
+        assert!(editor.insert_row_at_cursor(true));
+        assert_eq!(editor.document().table_dimensions(table), Some((3, 2)));
+        assert!(editor.insert_col_at_cursor(false));
+        assert_eq!(editor.document().table_dimensions(table), Some((3, 3)));
+        assert!(editor.delete_row_at_cursor());
+        assert!(editor.delete_col_at_cursor());
+        assert_eq!(editor.document().table_dimensions(table), Some((2, 2)));
+    }
+
+    #[test]
+    fn table_commands_outside_a_table_do_nothing() {
+        // Not a silent no-op by accident: the menu items are always
+        // sensitive, and the old code answered them by rewriting table 1
+        // wherever it happened to be.
+        let mut editor = three_paragraphs();
+        let table = editor.insert_table(2, 2);
+        editor.set_cursor(editor.document().char_len());
+        let before = editor.document().clone();
+
+        assert!(!editor.insert_row_at_cursor(true));
+        assert!(!editor.insert_col_at_cursor(true));
+        assert!(!editor.delete_row_at_cursor());
+        assert!(!editor.delete_col_at_cursor());
+        assert_eq!(editor.document(), &before);
+        assert_eq!(editor.document().table_dimensions(table), Some((2, 2)));
+    }
+
+    #[test]
+    fn table_cells_stay_contiguous_and_row_major_after_edits() {
+        // Adjacency is the table: a reader of the flat paragraph list
+        // recovers the grid from consecutive cells sharing an id.
+        let mut editor = three_paragraphs();
+        editor.set_cursor(0);
+        let table = editor.insert_table(2, 2);
+        // The cursor is left in the new table's first cell; add a row from
+        // there, which is what the menu item does.
+        assert!(editor.insert_row_at_cursor(true));
+
+        let cells: Vec<(u32, u32)> = editor.document().paragraphs.iter()
+            .filter_map(|p| p.style.table_cell)
+            .filter(|c| c.table == table)
+            .map(|c| (c.row, c.col)).collect();
+        assert_eq!(cells, vec![(0, 0), (0, 1), (1, 0), (1, 1), (2, 0), (2, 1)]);
+
+        let first = editor.document().paragraphs.iter()
+            .position(|p| p.style.table_cell.is_some()).unwrap();
+        assert!(editor.document().paragraphs[first..first + cells.len()]
+            .iter().all(|p| p.style.table_cell.is_some()), "cells must be consecutive");
     }
 
     #[test]

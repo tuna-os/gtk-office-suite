@@ -237,6 +237,17 @@ pub fn register_formatting_actions(tv: &adw::TabView, app: &adw::Application) {
 }
 
 /// Register structured editing actions: tables, list indentation, restart numbering, page breaks.
+/// The table edits the menu offers, all relative to the cursor's cell.
+#[derive(Clone, Copy)]
+enum TableOp {
+    InsertRowAbove,
+    InsertRowBelow,
+    DeleteRow,
+    InsertColLeft,
+    InsertColRight,
+    DeleteCol,
+}
+
 pub fn register_structured_actions(tv: &adw::TabView, app: &adw::Application) {
     // ── Table insertion ──
     {
@@ -244,126 +255,48 @@ pub fn register_structured_actions(tv: &adw::TabView, app: &adw::Application) {
         let a = gtk::gio::SimpleAction::new("insert-table", None);
         a.connect_activate(move |_, _| {
             if let Some(buf) = active_buffer(&tv) {
-                let rows = 3;
-                let cols = 3;
-                let mut md = String::new();
-                md.push('|');
-                for c in 0..cols { md.push_str(&format!(" Header {} |", c + 1)); }
-                md.push('\n');
-                md.push('|');
-                for _ in 0..cols { md.push_str(" --- |"); }
-                md.push('\n');
-                for r in 0..rows {
-                    md.push('|');
-                    for c in 0..cols { md.push_str(&format!(" Cell {}.{} |", r + 1, c + 1)); }
-                    md.push('\n');
-                }
-                let ins = buf.selection_bounds().map(|(i, _)| i).unwrap_or_else(|| buf.start_iter());
-                let mut pos = ins;
-                buf.insert(&mut pos, &md);
-
+                // One operation on the document, rendered back by the
+                // bridge. Writing the pipe grid straight into the buffer
+                // *and* calling the editor — which is what this did — put
+                // the table in twice: once as literal text the model read
+                // back as prose, once as real cells appended at the end of
+                // the document (#438).
                 crate::bridge::apply_structured_edit(&buf, |editor| {
-                    editor.insert_table(rows, cols);
+                    editor.insert_table(3, 3);
                 });
             }
         });
         app.add_action(&a);
     }
 
-    // ── Table Row Operations ──
-    {
+    // ── Table row/column operations ──
+    // Each targets the table the cursor is in and does nothing elsewhere.
+    // They used to edit the buffer text by hand *and* call the editor with
+    // a hardcoded table id of 1 and a hardcoded row/column of 0, so they
+    // rewrote whichever table happened to be first in the document while
+    // also inserting a literal "| New Cell 1 |" line wherever the caret
+    // was — including between a header and its delimiter row.
+    for (name, op) in [
+        ("table-insert-row-above", TableOp::InsertRowAbove),
+        ("table-insert-row-below", TableOp::InsertRowBelow),
+        ("table-delete-row", TableOp::DeleteRow),
+        ("table-insert-col-left", TableOp::InsertColLeft),
+        ("table-insert-col-right", TableOp::InsertColRight),
+        ("table-delete-col", TableOp::DeleteCol),
+    ] {
         let tv = tv.clone();
-        let a = gtk::gio::SimpleAction::new("table-insert-row-above", None);
-        a.connect_activate(move |_, _| {
-            if let Some(buf) = active_buffer(&tv) {
-                let ins = buf.selection_bounds().map(|(i, _)| i).unwrap_or_else(|| buf.start_iter());
-                let line = line_text(&buf, &ins);
-                let cols = line.chars().filter(|c| *c == '|').count().saturating_sub(1).max(1);
-                let mut new_row = String::from("|");
-                for c in 0..cols { new_row.push_str(&format!(" New Cell {} |", c + 1)); }
-                new_row.push('\n');
-                let mut start = ins; start.backward_line();
-                buf.insert(&mut start, &new_row);
-
-                crate::bridge::apply_structured_edit(&buf, |editor| {
-                    let _ = editor.insert_table_rows(1, 0, 1);
-                });
-            }
-        });
-        app.add_action(&a);
-    }
-    {
-        let tv = tv.clone();
-        let a = gtk::gio::SimpleAction::new("table-insert-row-below", None);
-        a.connect_activate(move |_, _| {
-            if let Some(buf) = active_buffer(&tv) {
-                let ins = buf.selection_bounds().map(|(i, _)| i).unwrap_or_else(|| buf.start_iter());
-                let line = line_text(&buf, &ins);
-                let cols = line.chars().filter(|c| *c == '|').count().saturating_sub(1).max(1);
-                let mut new_row = String::from("|");
-                for c in 0..cols { new_row.push_str(&format!(" New Cell {} |", c + 1)); }
-                new_row.push('\n');
-                let mut end = ins; end.forward_line();
-                buf.insert(&mut end, &new_row);
-
-                crate::bridge::apply_structured_edit(&buf, |editor| {
-                    let _ = editor.insert_table_rows(1, 1, 1);
-                });
-            }
-        });
-        app.add_action(&a);
-    }
-    {
-        let tv = tv.clone();
-        let a = gtk::gio::SimpleAction::new("table-delete-row", None);
-        a.connect_activate(move |_, _| {
-            if let Some(buf) = active_buffer(&tv) {
-                let ins = buf.selection_bounds().map(|(i, _)| i).unwrap_or_else(|| buf.start_iter());
-                let mut start = ins; start.backward_line();
-                let mut end = ins; end.forward_line();
-                if end > start {
-                    buf.delete(&mut start, &mut end);
-                }
-                crate::bridge::apply_structured_edit(&buf, |editor| {
-                    let _ = editor.delete_table_rows(1, 0, 1);
-                });
-            }
-        });
-        app.add_action(&a);
-    }
-
-    // ── Table Column Operations ──
-    {
-        let tv = tv.clone();
-        let a = gtk::gio::SimpleAction::new("table-insert-col-left", None);
+        let a = gtk::gio::SimpleAction::new(name, None);
         a.connect_activate(move |_, _| {
             if let Some(buf) = active_buffer(&tv) {
                 crate::bridge::apply_structured_edit(&buf, |editor| {
-                    let _ = editor.insert_table_cols(1, 0, 1);
-                });
-            }
-        });
-        app.add_action(&a);
-    }
-    {
-        let tv = tv.clone();
-        let a = gtk::gio::SimpleAction::new("table-insert-col-right", None);
-        a.connect_activate(move |_, _| {
-            if let Some(buf) = active_buffer(&tv) {
-                crate::bridge::apply_structured_edit(&buf, |editor| {
-                    let _ = editor.insert_table_cols(1, 1, 1);
-                });
-            }
-        });
-        app.add_action(&a);
-    }
-    {
-        let tv = tv.clone();
-        let a = gtk::gio::SimpleAction::new("table-delete-col", None);
-        a.connect_activate(move |_, _| {
-            if let Some(buf) = active_buffer(&tv) {
-                crate::bridge::apply_structured_edit(&buf, |editor| {
-                    let _ = editor.delete_table_cols(1, 0, 1);
+                    let _ = match op {
+                        TableOp::InsertRowAbove => editor.insert_row_at_cursor(false),
+                        TableOp::InsertRowBelow => editor.insert_row_at_cursor(true),
+                        TableOp::DeleteRow => editor.delete_row_at_cursor(),
+                        TableOp::InsertColLeft => editor.insert_col_at_cursor(false),
+                        TableOp::InsertColRight => editor.insert_col_at_cursor(true),
+                        TableOp::DeleteCol => editor.delete_col_at_cursor(),
+                    };
                 });
             }
         });

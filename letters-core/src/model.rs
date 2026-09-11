@@ -494,6 +494,83 @@ impl Document {
         }
     }
 
+    /// Index of the paragraph containing `offset`.
+    pub fn paragraph_at(&self, offset: usize) -> usize {
+        self.locate(offset).0
+    }
+
+    /// Global character offset of a paragraph's first character.
+    pub fn paragraph_offset(&self, para_idx: usize) -> usize {
+        self.paragraphs
+            .iter()
+            .take(para_idx.min(self.paragraphs.len()))
+            .map(|p| p.char_len() + 1) // + the paragraph break
+            .sum()
+    }
+
+    /// The table cell `offset` sits in, if it is inside a table. This is
+    /// how a GUI command ("insert a row below") learns what the cursor is
+    /// pointing at, instead of assuming a table id.
+    pub fn table_cell_at(&self, offset: usize) -> Option<TableCell> {
+        self.paragraphs.get(self.paragraph_at(offset)).and_then(|p| p.style.table_cell)
+    }
+
+    /// An id no existing table uses.
+    pub fn next_table_id(&self) -> u32 {
+        self.paragraphs.iter().filter_map(|p| p.style.table_cell.map(|c| c.table)).max().unwrap_or(0) + 1
+    }
+
+    /// Insert a `rows` × `cols` table whose cells start at paragraph
+    /// `para_idx`, and return its id.
+    ///
+    /// Inserting where the cursor is — rather than appending at the end of
+    /// the document, which is what an earlier version did — is what makes
+    /// "Insert Table" put a table where the user is looking. The cells are
+    /// laid down contiguously in row-major order because that adjacency
+    /// *is* the table: `table_cell` tags a flat paragraph list, and every
+    /// reader (render, DOCX writer, navigation) recovers the grid from it.
+    pub fn insert_table_at(&mut self, para_idx: usize, rows: u32, cols: u32) -> u32 {
+        let table = self.next_table_id();
+        if rows == 0 || cols == 0 {
+            return table;
+        }
+        let at = para_idx.min(self.paragraphs.len());
+        let cells: Vec<Paragraph> = (0..rows)
+            .flat_map(|row| (0..cols).map(move |col| (row, col)))
+            .map(|(row, col)| Paragraph {
+                style: ParaStyle { table_cell: Some(TableCell { table, row, col }), ..Default::default() },
+                runs: Vec::new(),
+            })
+            .collect();
+        self.paragraphs.splice(at..at, cells);
+        table
+    }
+
+    /// Put a table's paragraphs back in contiguous row-major order at the
+    /// position of its first cell. The row/column operations below renumber
+    /// cells in place and push the new ones onto the end of the document;
+    /// without this the table's paragraphs would be interleaved with the
+    /// text that follows it, which no reader of the flat list can undo.
+    fn reflow_table(&mut self, table: u32) {
+        let first = self.paragraphs.iter().position(|p| p.style.table_cell.is_some_and(|c| c.table == table));
+        let Some(first) = first else { return };
+        let mut cells: Vec<Paragraph> = Vec::new();
+        let mut rest: Vec<Paragraph> = Vec::new();
+        for p in self.paragraphs.drain(..) {
+            if p.style.table_cell.is_some_and(|c| c.table == table) {
+                cells.push(p);
+            } else {
+                rest.push(p);
+            }
+        }
+        cells.sort_by_key(|p| {
+            let c = p.style.table_cell.expect("partitioned on table membership");
+            (c.row, c.col)
+        });
+        rest.splice(first..first, cells);
+        self.paragraphs = rest;
+    }
+
     pub fn table_dimensions(&self, table: u32) -> Option<(u32, u32)> {
         let cells = self.paragraphs.iter().filter_map(|p| p.style.table_cell)
             .filter(|c| c.table == table).collect::<Vec<_>>();
@@ -516,6 +593,7 @@ impl Document {
             runs: Vec::new(),
         }));
         self.paragraphs.extend(new_cells);
+        self.reflow_table(table);
         true
     }
 
@@ -532,6 +610,7 @@ impl Document {
             style: ParaStyle { table_cell: Some(TableCell { table, row, col: at + col }), ..Default::default() },
             runs: Vec::new(),
         })));
+        self.reflow_table(table);
         true
     }
 

@@ -1724,40 +1724,102 @@ class DecksSmoke(BaseGUITestCase):
 
 
 class LettersStructuredEditingSmoke(BaseGUITestCase):
-    """Structured editing: tables, lists, and page layout journeys (#110)."""
+    """Structured editing: tables, lists, and page layout journeys (#110).
+
+    These assert the *document*, not the editor's text. Asserting text let
+    the insert-table journey pass while the action wrote a literal
+    "| Header 1 |" grid into the buffer and separately appended a second,
+    real table to the model — two tables and a paragraph of pipes, from one
+    Insert Table (#438). A model assertion cannot be satisfied that way.
+    """
 
     app_name = "letters"
 
+    def setUp(self):
+        self._snapshot_path = self.isolate_snapshot(prefix="letters-structured-")
+        super().setUp()
+
+    def _tables(self, snapshot):
+        """{table id: {(row, col): cell text}} from a document snapshot."""
+        tables = {}
+        for para in snapshot["paragraphs"]:
+            cell = para["style"].get("table_cell")
+            if not cell:
+                continue
+            text = "".join(run["text"] for run in para["runs"])
+            tables.setdefault(cell["table"], {})[(cell["row"], cell["col"])] = text
+        return tables
+
+    def _prose(self, snapshot):
+        return [
+            "".join(run["text"] for run in para["runs"])
+            for para in snapshot["paragraphs"]
+            if not para["style"].get("table_cell")
+        ]
+
     def test_insert_table_and_structured_actions(self):
-        import subprocess
+        from dogtail import rawinput
 
-        self.app.child(name="New Document", roleName="push button").do_action(0)
-        time.sleep(1.5)
+        self.wait_for_node(name="New Document", roleName="push button").do_action(0)
+        self.wait_for_node(roleName="text")
+        # The word count is the app's own confirmation that the editor
+        # exists and is taking input. Without waiting for it, a slow tab
+        # creation meant the keystrokes — and then insert-table, which
+        # needs an active buffer — arrived before there was a document to
+        # put them in, and the journey failed further down with a
+        # misleading "no table" timeout.
+        self.wait_for_node(name="0 words", roleName="label")
+        rawinput.typeText("intro")
+        self.wait_for_node(name="1 word", roleName="label")
 
-        # Trigger insert-table action
-        subprocess.run(["gapplication", "action", "org.tunaos.letters", "insert-table"])
-        time.sleep(1.0)
+        self.gapplication_action("org.tunaos.letters", "insert-table")
 
-        editor = self.app.child(roleName="text")
-        self.assertIn("Header 1", editor.text, "table was not inserted into editor")
-        self.assertIn("Cell 1.1", editor.text, "table data cells missing")
+        def table_snapshot():
+            snapshot = self.trigger_snapshot("org.tunaos.letters")
+            return snapshot if self._tables(snapshot) else None
 
-        # Trigger table insert row below
-        subprocess.run(["gapplication", "action", "org.tunaos.letters", "table-insert-row-below"])
-        time.sleep(0.5)
+        snapshot = self.wait_for_condition(
+            table_snapshot, description="a table in the document")
+        tables = self._tables(snapshot)
+        self.assertEqual(len(tables), 1, f"one Insert Table must make one table: {tables}")
+        cells = next(iter(tables.values()))
+        self.assertEqual(
+            sorted(cells), [(r, c) for r in range(3) for c in range(3)],
+            "a 3x3 grid, addressed by row and column",
+        )
+        self.assertTrue(all(text == "" for text in cells.values()),
+                        f"new cells start empty, ready to type in: {cells}")
+        self.assertIn("intro", self._prose(snapshot),
+                      "the paragraph the user was writing must survive")
+        self.assertFalse([p for p in self._prose(snapshot) if "|" in p],
+                         "no literal pipe grid may be left behind as prose")
 
-        # Test list indentation action
-        subprocess.run(["gapplication", "action", "org.tunaos.letters", "bullet-list"])
-        time.sleep(0.5)
-        subprocess.run(["gapplication", "action", "org.tunaos.letters", "list-indent"])
-        time.sleep(0.5)
-        subprocess.run(["gapplication", "action", "org.tunaos.letters", "list-outdent"])
-        time.sleep(0.5)
+        # What the user sees: the buffer has no table widget, so a table is
+        # shown as a pipe grid — the first row is the header, so a 3x3
+        # table is a header line, a delimiter line and two body lines —
+        # directly below the paragraph they were writing.
+        shown = self.wait_for_node(roleName="text").text
+        self.assertEqual(
+            shown.splitlines(),
+            ["intro", "|  |  |  |", "| --- | --- | --- |", "|  |  |  |", "|  |  |  |"],
+            f"unexpected editor contents: {shown!r}",
+        )
 
-        # Test page break insertion
-        subprocess.run(["gapplication", "action", "org.tunaos.letters", "insert-page-break"])
-        time.sleep(0.5)
+        # A row added from inside the table grows that table.
+        self.gapplication_action("org.tunaos.letters", "table-insert-row-below")
+        grown = self.wait_for_condition(
+            lambda: self.trigger_snapshot("org.tunaos.letters"),
+            description="a snapshot after adding a row",
+        )
+        rows = {row for (row, _col) in next(iter(self._tables(grown).values()))}
+        self.assertEqual(sorted(rows), [0, 1, 2, 3], "insert-row-below adds one row")
 
+        # The remaining structured actions must not disturb the table or crash.
+        for action in ("bullet-list", "list-indent", "list-outdent", "insert-page-break"):
+            self.gapplication_action("org.tunaos.letters", action)
+        after = self.trigger_snapshot("org.tunaos.letters")
+        self.assertEqual(len(self._tables(after)), 1,
+                         "list and page-break actions must not create or lose a table")
         self.assertIsNone(self.process.poll(), "letters crashed during structured editing actions")
 
 

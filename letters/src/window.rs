@@ -1194,8 +1194,12 @@ pub(crate) fn insert_fragment(buf: &gtk::TextBuffer, frag: &letters_core::fragme
 
 fn update_word_count(buf: &gtk::TextBuffer, wc: &gtk4::Label) {
     let text = buf.text(&buf.start_iter(), &buf.end_iter(), false);
-    let n = text.split_whitespace().count();
-    wc.set_text(&format!("{} words", n));
+    // letters-core decides what counts as a word: the buffer also holds
+    // list markers and the pipes of a rendered table, and a whitespace
+    // split counted those, so an empty 3x3 table read as "11 words".
+    let n = letters_core::editor_word_count(&text);
+    // "1 words" shipped in the status bar because this was a bare format!.
+    wc.set_text(&format!("{} {}", n, suite_common::ni18n("word", "words", n as u64)));
 }
 
 fn connect_word_count(buf: &gtk::TextBuffer, wc: &gtk4::Label) {

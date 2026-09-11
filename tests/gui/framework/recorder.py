@@ -91,6 +91,12 @@ class ScreenRecorder:
             "-draw_mouse", "1",
             "-framerate", str(self.fps),
             "-video_size", size,
+            # Timestamp each grab by the clock rather than by frame count.
+            # A busy journey (AT-SPI plus GTK redraws) makes x11grab miss
+            # grabs; numbering them instead produced a video that played
+            # back several times too fast — a 9-second journey arriving as
+            # a 2-second clip, which misrepresents what the run did.
+            "-use_wallclock_as_timestamps", "1",
             "-i", self.display,
             # x264 needs even dimensions; an odd Xvfb geometry would
             # otherwise fail the encode at the very end of a run, when
@@ -98,6 +104,10 @@ class ScreenRecorder:
             "-vf", "scale=trunc(iw/2)*2:trunc(ih/2)*2",
             "-c:v", "libx264", "-preset", "veryfast", "-crf", "28",
             "-pix_fmt", "yuv420p",
+            # Constant rate built *from* those wallclock timestamps: a gap
+            # between grabs becomes a held frame, so the clip's length is
+            # the journey's length.
+            "-fps_mode", "cfr", "-r", str(self.fps),
             self.output_path,
         ]
         try:

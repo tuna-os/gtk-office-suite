@@ -5,6 +5,7 @@
 
 use letters_core::docx;
 use letters_core::model::*;
+use letters_core::StructuredEditor;
 
 fn round_trip(doc: &Document) -> Document {
     let dir = tempfile::tempdir().unwrap();
@@ -217,6 +218,37 @@ fn table_structure_survives() {
     assert!(cells.contains(&(0, 0, "a1".into())), "{cells:?}");
     assert!(cells.contains(&(1, 1, "b2".into())), "{cells:?}");
     assert!(rt.to_plain_text().contains("intro"));
+}
+
+#[test]
+fn a_table_inserted_in_the_editor_survives_docx() {
+    // Closes the chain the editor actually walks: Insert Table -> model ->
+    // DOCX -> model. The cells' own round trip is covered above; what this
+    // adds is that what the *command* produces is a table a reader can
+    // still see. (rdocx exposes tables separately from the paragraph
+    // stream, so a reopened table lands after the body text — position is
+    // deliberately not asserted here.)
+    let mut editor = StructuredEditor::new(Document::from_plain_text("intro"));
+    editor.set_cursor(5);
+    let table = editor.insert_table(2, 2);
+    let doc = editor.document();
+    let first = doc.paragraphs.iter()
+        .position(|p| p.style.table_cell.is_some()).expect("cells exist");
+    let mut doc = doc.clone();
+    for (offset, text) in ["a", "b", "c", "d"].iter().enumerate() {
+        doc.paragraphs[first + offset].runs = vec![Run::plain(*text)];
+    }
+    assert_eq!(doc.table_dimensions(table), Some((2, 2)));
+
+    let rt = round_trip(&doc);
+    let cells: Vec<(u32, u32, String)> = rt.paragraphs.iter()
+        .filter_map(|p| p.style.table_cell.map(|tc| (tc.row, tc.col, p.text())))
+        .collect();
+    assert_eq!(cells, vec![
+        (0, 0, "a".into()), (0, 1, "b".into()),
+        (1, 0, "c".into()), (1, 1, "d".into()),
+    ]);
+    assert!(rt.paragraphs.iter().any(|p| p.text() == "intro" && p.style.table_cell.is_none()));
 }
 
 #[test]
