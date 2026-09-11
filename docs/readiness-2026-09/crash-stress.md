@@ -40,7 +40,19 @@ Controller state machines generate valid commands and assert invariants after ev
       (`letters-core/tests/stateful.rs`) was parked on #532 — a newline inside a table cell split the cell paragraph and
       left two paragraphs claiming the same cell — and stayed parked rather than narrowing the generator to route around
       it; fixing #532 then exposed four more defects behind it, including a panic in `Document::locate` on a document
-      whose every paragraph was a deleted cell. The cross-app clipboard and the multi-window races are not started.
+      whose every paragraph was a deleted cell.
+      **The cross-app clipboard is now covered** (`CrossAppClipboardSmoke` in
+      `tests/gui/test_smoke.py`): the harness can launch a second application beside the primary one
+      and move synthetic input between their windows, which is what the X11 clipboard actually needs
+      — one live process owns the selection and another asks it for a format, and a single app
+      copying to itself never exercises that. Tables → Letters and Letters → Tables both round-trip,
+      and each direction was verified to *detect* a broken transfer by making the source app publish
+      nothing and confirming the journey failed. A third journey records what happens when the
+      copying app exits first: with no clipboard manager in the container the selection is gone and
+      the paste is a silent no-op, asserted as "nothing, and no crash" rather than wished away.
+      The multi-window races are still not started, and are a different problem: the apps are
+      single-instance (`HANDLES_OPEN`), so a second window of the *same* app is not a second
+      process and the second-app support does not reach it.
 - [~] Save/recovery fault injection at each transaction boundary; bounded malformed-file fuzzing with minimized fixtures. The save transaction is instrumented: `suite-common-core/src/atomic_save.rs::fault` arms any of the six boundaries of a durable write, and any arrival at one, then a sweep asserts what the caller was promised at each. It replaced a test that made a write fail by chmod-ing the directory to 0555, which proves nothing when the suite runs as root — the write simply succeeded and the assertion never fired. It found that the two-atomic-write autosave slot could pair the new bytes with the previous generation's identity (see `recovery.md`). Malformed-file fuzzing is now started: `{letters,decks,tables}-core/tests/malformed_inputs.rs`
       run seeded structural and mutation cases on every pull request and at campaign scale nightly,
       each crate replays every retained crash input from its `tests/crashes/` directory, and the

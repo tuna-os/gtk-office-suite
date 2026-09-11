@@ -1016,6 +1016,164 @@ class LettersClipboardSmoke(BaseGUITestCase):
         self.assertIsNone(self.process.poll(), "letters crashed during clipboard round trip")
 
 
+class CrossAppClipboardSmoke(BaseGUITestCase):
+    """Two live applications, one X11 selection (#442).
+
+    The suite's clipboard design is one fragment format shared by all
+    three apps, and its *conversions* are pure functions with their own
+    unit tests. What none of that covers is the transfer: on X11 the
+    clipboard is a negotiation between two processes, where one owns the
+    selection and the other asks it for a format. A single app copying and
+    pasting to itself — which is what every clipboard journey did until
+    now — never exercises that at all.
+
+    Tables is the primary app here and Letters the second, because a grid
+    fragment arriving in a word processor is the conversion most likely to
+    be wrong: it is the only pair where the source and destination models
+    genuinely differ.
+    """
+
+    app_name = "tables"
+
+    def setUp(self):
+        self.isolate_xdg()
+        super().setUp()
+
+    def _put_cell(self, ref, value):
+        from dogtail import rawinput
+        rawinput.keyCombo("<Control>g")
+        time.sleep(0.2)
+        rawinput.typeText(ref)
+        rawinput.keyCombo("Return")
+        time.sleep(0.3)
+        rawinput.typeText(value)
+        rawinput.keyCombo("Return")
+        time.sleep(0.3)
+
+    def _select_cell(self, ref):
+        from dogtail import rawinput
+        rawinput.keyCombo("<Control>g")
+        time.sleep(0.2)
+        rawinput.typeText(ref)
+        rawinput.keyCombo("Return")
+        time.sleep(0.3)
+        rawinput.keyCombo("Escape")
+        time.sleep(0.3)
+
+    def test_a_grid_copied_in_tables_pastes_into_letters(self):
+        from dogtail import rawinput
+        import subprocess
+
+        subprocess.run(["gapplication", "action", "org.tunaos.tables", "new-document"])
+        time.sleep(1.5)
+        self._put_cell("A1", "alpha")
+        self._put_cell("B1", "beta")
+        self._select_cell("A1")
+        rawinput.keyCombo("<Control>c")
+        time.sleep(0.8)
+
+        letters = self.launch_second_app("letters")
+        self.focus_app(letters)
+        time.sleep(0.5)
+        letters.app.child(name="New Document", roleName="push button").do_action(0)
+        time.sleep(1.5)
+        rawinput.keyCombo("<Control>v")
+        time.sleep(1.5)
+
+        editor = letters.app.child(roleName="text")
+        self.assertIn(
+            "alpha", editor.text or "",
+            f"a cell copied in Tables did not arrive in Letters: {editor.text!r}",
+        )
+        # Both processes, not just the receiver: a transfer that crashes
+        # the selection owner is as much a failure as one that loses data,
+        # and the assertion above would not notice.
+        self.assert_still_running(letters)
+
+    def test_text_copied_in_letters_pastes_into_tables(self):
+        from dogtail import rawinput
+        import subprocess
+
+        letters = self.launch_second_app("letters")
+        self.focus_app(letters)
+        time.sleep(0.5)
+        letters.app.child(name="New Document", roleName="push button").do_action(0)
+        time.sleep(1.5)
+        rawinput.typeText("gamma")
+        time.sleep(0.5)
+        rawinput.keyCombo("<Control>a")
+        time.sleep(0.3)
+        rawinput.keyCombo("<Control>c")
+        time.sleep(0.8)
+
+        self.focus_app()
+        subprocess.run(["gapplication", "action", "org.tunaos.tables", "new-document"])
+        time.sleep(1.5)
+        self._select_cell("A1")
+        rawinput.keyCombo("<Control>v")
+        time.sleep(1.5)
+        rawinput.keyCombo("Right")
+        rawinput.keyCombo("Left")
+        time.sleep(0.5)
+
+        grid = self.app.child(name="Spreadsheet grid")
+        self.assertIn(
+            "gamma", grid.description or "",
+            f"text copied in Letters did not arrive in Tables: {grid.description!r}",
+        )
+        self.assert_still_running(letters)
+
+    def test_the_clipboard_survives_the_copying_app_being_closed(self):
+        """X11 hands the selection to the owning *process*: close it and
+        the content is gone unless something persisted it. A user copies
+        in Tables, closes Tables, then pastes in Letters — so whatever
+        this suite does here, it should be known rather than discovered.
+
+        This asserts the honest outcome and not a wish: either the content
+        survives, or the paste is a no-op. What it refuses to accept is a
+        crash, or a paste that inserts garbage.
+        """
+        from dogtail import rawinput
+        import subprocess
+
+        subprocess.run(["gapplication", "action", "org.tunaos.tables", "new-document"])
+        time.sleep(1.5)
+        self._put_cell("A1", "orphaned")
+        self._select_cell("A1")
+        rawinput.keyCombo("<Control>c")
+        time.sleep(0.8)
+
+        letters = self.launch_second_app("letters")
+        self.focus_app(letters)
+        time.sleep(0.5)
+        letters.app.child(name="New Document", roleName="push button").do_action(0)
+        time.sleep(1.5)
+
+        # Now close the owner and paste into the survivor.
+        self.process.terminate()
+        self.process.wait(timeout=5)
+        time.sleep(1.0)
+        self.focus_app(letters)
+        rawinput.keyCombo("<Control>v")
+        time.sleep(1.5)
+
+        text = letters.app.child(roleName="text").text or ""
+        self.assertIsNone(
+            letters.process.poll(),
+            "Letters crashed pasting from a clipboard whose owner had exited",
+        )
+        print(f"clipboard after owner exit: {text!r}")
+        if "orphaned" not in text:
+            # Recorded, not asserted away: with no clipboard manager in the
+            # container this is the expected X11 behaviour, and the journey
+            # exists to prove it degrades quietly rather than crashing.
+            self.assertEqual(
+                text.strip(), "",
+                "paste after the owner exited inserted something that was "
+                f"neither the copied content nor nothing: {text!r}",
+            )
+
+
 class TablesA11yCellsSmoke(BaseGUITestCase):
     """Virtual a11y children (issue #87): the grid exposes each used
     cell as a real AT-SPI node with role, name, and selection state —
