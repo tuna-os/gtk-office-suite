@@ -1,6 +1,6 @@
 # gtk-office-suite Roadmap
 
-**Last updated**: 2026-08-11 | **Maintainer**: tuna-os (hanthor) / architect agent
+**Last updated**: 2026-09-11 | **Maintainer**: tuna-os (hanthor) / strategist agent
 
 ---
 
@@ -12,14 +12,14 @@ gtk-office-suite is the org's flagship **end-user product bet** and a cornerston
 
 ---
 
-## Current Status (August 2026)
+## Current Status (September 2026)
 
 - **Post-v1.0**: all three apps (Letters, Tables, Decks) build, run, and ship as Flatpaks.
 - **Measured parity** (ratcheted corpora, docs/PARITY.md): CommonMark 630/652, LO-Letters 109/109, LO-Decks 9/9, OpenFormula 107/107.
 - Ctrl+K command palette; per-app live status surfaces; GUI smoke journeys deterministic (#187).
-- 21 open issues; daily merged PRs (08-11: GTK-free canonical controllers #186, fuzz coverage #185).
-- ✅ **ROADMAP.md published** (this file, tunaos#1359) — internal planning (IMPLEMENTATION-QUEUE.md, docs/IMPLEMENTATION-PLAN.md, docs/PARITY.md) now has a public, dated, prioritized surface, linked from README.
-- ⚠️ **GUI-layer God-files**: window.rs 2.6K/2.5K/1.6K LOC in tables/letters/decks (#168) — architectural debt before feature velocity scales.
+- Daily merged PRs and continuous GTK-free core refactoring.
+- ✅ **ROADMAP.md published** — internal planning now has a public, dated, prioritized surface, linked from README.
+- ⚠️ **Enterprise Security & Distribution Gap**: document-level encryption, XML digital signatures, and standardized fleet management policies (dconf lockdown) are key priorities for enterprise readiness.
 
 ### Priorities
 
@@ -27,14 +27,14 @@ gtk-office-suite is the org's flagship **end-user product bet** and a cornerston
 |----------|------|----------|--------|
 | P0 | Product quality + daily-driver readiness roadmap (meta-tracker) | #95 | 🟡 In progress |
 | P0 | CI quality gates: fast / GUI / nightly with published capability matrix | #108, #107 | 🟡 In progress |
-| P0 | GUI-layer God-file decomposition (window.rs) | #168 | ⬜ Not started |
+| P0 | Document Security: client-side encryption (PBKDF2/AES-GCM) & XML signatures | — | 📋 Planned |
 | P1 | Letters: structured editing (tables/lists/paragraphs/sections), review workflows, pagination | #109, #110, #111 | 🟡 In progress |
 | P1 | Tables: sparse virtual grid + performance budgets | #112 | 🟡 In progress |
 | P1 | Decks: direct manipulation, themes/layouts, presenter view | #115, #116, #117 | ⬜ Not started |
-| P1 | GNOME platform integration: recent files, portals, drag/drop | #119 | ⬜ Not started |
+| P1 | Headless CLI Conversion Binaries (`suite-convert`) for server/automation workflows | — | 📋 Planned |
+| P2 | GNOME platform integration: recent files, portals, drag/drop | #119 | ⬜ Not started |
 | P2 | Interop: unsupported-feature inspector + versioned fixture corpus with loss budgets | #105, #121 | ⬜ Not started |
 | P2 | Release gate: Flatpak, upgrade, recovery, localization, reproducible builds | #122 | ⬜ Not started |
-| P2 | A11y: keyboard + screen-reader journeys | #120 | ⬜ Not started |
 
 ---
 
@@ -49,12 +49,18 @@ gtk-office-suite is the org's flagship **end-user product bet** and a cornerston
 | Product-quality roadmap live + published capability matrix | architect / quality | #95, #108 | 🟡 In progress |
 | Letters structured editing + pagination completeness | architect | #109, #110 | 🟡 In progress |
 | Tables virtual grid + performance budgets | architect | #112 | 🟡 In progress |
-| GUI God-file decomposition started | architect | #168 | ⬜ Not started |
-| ROADMAP.md published and linked from README / org coverage (#1295) | strategist | tunaos#1359 | ✅ Done |
+| ROADMAP.md published and linked from README / org coverage | strategist | — | ✅ Done |
 
-### Q4 2026 (October–December) — "Ship it properly"
+### Q4 2026 (October–December) — "Enterprise Readiness & Distribution"
 
-<Sketch: release gate (#122) with Flatpak distribution + reproducible builds, Decks presenter/export scope, interop loss budgets, A11y journeys. Move up when Q4 starts.>
+**Theme**: enterprise security, headless document processing, and reproducible Flatpak distribution.
+
+| Goal | Owner | Tracking | Status |
+|------|-------|----------|--------|
+| Client-side document encryption & XML-DSig digital signatures in `suite-common-core` | architect / security | — | 📋 Planned |
+| Headless document conversion CLI binaries (`suite-convert`) across formats | architect | — | 📋 Planned |
+| Flatpak reproducible build pipelines & enterprise dconf policy lockdown | operations | #122 | 📋 Planned |
+| Automated AT-SPI screen reader audit gate for accessibility compliance | quality | #120 | 📋 Planned |
 
 ---
 
@@ -62,9 +68,9 @@ gtk-office-suite is the org's flagship **end-user product bet** and a cornerston
 
 | Item | Issue | Priority | Effort |
 |------|-------|----------|--------|
-| GUI-layer God-files (window.rs 2.6K/2.5K/1.6K LOC) | #168 | P0 | L |
-| Dual maintenance burden: Python office suite (letters/tables/decks) + Rust suite | #82 | P1 | L |
-| spell.rs `generate_candidates("")` panic (0..n-1, n=0) | #172 | P1 | S |
+| GUI-layer God-files (window.rs LOC cleanup) | #168 | P0 | L |
+| Dual maintenance burden cleanup | #82 | P1 | L |
+| spell.rs `generate_candidates("")` boundary handling | #172 | P1 | S |
 
 ---
 
@@ -73,4 +79,4 @@ gtk-office-suite is the org's flagship **end-user product bet** and a cornerston
 See [docs/CONTRIBUTING.md](./docs/CONTRIBUTING.md) and [docs/DEVELOPMENT.md](./docs/DEVELOPMENT.md) for build setup (Rust + GTK4/libadwaita, Nix flake included). Pick an issue labeled `good first issue` or comment on a goal you would like to own.
 
 ---
-*Maintained by the strategist agent (tuna-os hive). Last self-review: 2026-08-13 — fixed stale self-references (this doc previously described itself as not existing).*
+*Maintained by the strategist agent (tuna-os hive).*
