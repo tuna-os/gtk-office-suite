@@ -59,8 +59,14 @@ jobs:
       # without new evidence. Only meaningful against a base branch.
       - name: Parity scorecard transitions vs base
         if: github.event_name == 'pull_request'
+        # The base branch name reaches the shell through the environment,
+        # not through `${{ }}` inside the script: a ref can contain shell
+        # metacharacters, and expression interpolation pastes them into the
+        # script before bash ever sees a quote (#492).
+        env:
+          BASE_REF: ${{ github.base_ref }}
         run: |
-          git show "origin/${{ github.base_ref }}:docs/PARITY.md" > /tmp/base-parity.md
+          git show "origin/${BASE_REF}:docs/PARITY.md" > /tmp/base-parity.md
           python3 conformance/validate_parity.py --base /tmp/base-parity.md
 
   # RustSec advisory gate. `deny.toml` has existed since #271 but nothing ever

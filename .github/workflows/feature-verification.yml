@@ -84,8 +84,10 @@ jobs:
       # it here as a fallback means the very first run of this workflow
       # works before that one has ever published.
       - id: resolve
+        env:
+          REPOSITORY: ${{ github.repository }}
         run: |
-          ref="ghcr.io/${{ github.repository }}/gui-test:main"
+          ref="ghcr.io/${REPOSITORY}/gui-test:main"
           if docker manifest inspect "$ref" >/dev/null 2>&1; then
             echo "Using published image $ref"
           else
@@ -177,7 +179,10 @@ jobs:
             echo "No evidence to publish."
             exit 0
           fi
-          slot="pr-${PR:-manual}"
+          case "$PR" in
+            ''|*[!0-9]*) slot="pr-manual" ;;   # a typed input is not a path
+            *) slot="pr-$PR" ;;
+          esac
           work="$(mktemp -d)"
           git clone --depth 1 --branch ci-evidence \
             "https://x-access-token:${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" \
