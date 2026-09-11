@@ -24,11 +24,12 @@ use super::model::*;
 use super::notes::{extract_notes_text, parse_run_style};
 
 use std::fs::File;
-use std::io::{Read, Write};
+use std::io::Write;
 use std::path::Path;
 use quick_xml::events::{Event, BytesStart, BytesRef, BytesText};
 use quick_xml::Reader;
 use letters_core::model::{Run, RunStyle};
+use suite_common_core::zip_guard::{BoundedArchive, ZipBudget};
 
 fn parse_coords(
     e: &BytesStart,
@@ -110,22 +111,38 @@ struct PendingPicture {
 pub fn read_pptx(path: &str) -> Result<Deck, String> {
     let file = File::open(path).map_err(|e| format!("Cannot open file: {}", e))?;
     let mut archive = zip::ZipArchive::new(file).map_err(|e| format!("Invalid zip archive: {}", e))?;
+    // A PPTX arrives from a download or an attachment. Every part below is
+    // read under one budget, so neither a single member claiming to
+    // decompress to gigabytes nor a hundred medium ones can exhaust memory
+    // (#442). The budget is shared across the whole archive on purpose: a
+    // per-part limit that resets would be no limit at all.
+    let mut budget = ZipBudget::default();
+    budget.check_entry_count(archive.len())?;
 
     // 1. Read presentation.xml to count slides and get their rIds
-    let mut presentation_xml = String::new();
-    if let Ok(mut file) = archive.by_name("ppt/presentation.xml") {
-        file.read_to_string(&mut presentation_xml).unwrap_or(0);
-    } else {
-        return Err("Not a valid PPTX (missing ppt/presentation.xml)".into());
-    }
+    // A missing part means "not a PPTX"; a part past the read budget means
+    // "this file is too large to open". Telling the user the first when the
+    // second happened sends them looking for the wrong problem.
+    let presentation_xml = archive
+        .part_to_string("ppt/presentation.xml", &mut budget)
+        .map_err(|e| {
+            if e.is_missing() {
+                "Not a valid PPTX (missing ppt/presentation.xml)".to_string()
+            } else {
+                e.to_string()
+            }
+        })?;
 
     // 2. Read presentation.xml.rels to resolve slide relationship IDs to paths
-    let mut rels_xml = String::new();
-    if let Ok(mut file) = archive.by_name("ppt/_rels/presentation.xml.rels") {
-        file.read_to_string(&mut rels_xml).unwrap_or(0);
-    } else {
-        return Err("Not a valid PPTX (missing ppt/_rels/presentation.xml.rels)".into());
-    }
+    let rels_xml = archive
+        .part_to_string("ppt/_rels/presentation.xml.rels", &mut budget)
+        .map_err(|e| {
+            if e.is_missing() {
+                "Not a valid PPTX (missing ppt/_rels/presentation.xml.rels)".to_string()
+            } else {
+                e.to_string()
+            }
+        })?;
 
     // Scan relationships using quick-xml to map rId -> target
     let mut slide_paths = std::collections::BTreeMap::new();
@@ -220,22 +237,16 @@ pub fn read_pptx(path: &str) -> Result<Deck, String> {
             None => format!("ppt/slides/slide{}.xml", slide_index + 1),
         };
 
-        let mut slide_xml = String::new();
-        if let Ok(mut file) = archive.by_name(&target_path) {
-            file.read_to_string(&mut slide_xml).unwrap_or(0);
-        } else {
+        let Ok(slide_xml) = archive.part_to_string(&target_path, &mut budget) else {
             continue;
-        }
+        };
 
         // Check if there's a slide relationship file (for images)
         let slide_dir = Path::new(&target_path).parent().unwrap_or(Path::new("ppt/slides"));
         let slide_filename = Path::new(&target_path).file_name().unwrap_or_default().to_string_lossy();
         let slide_rels_path = format!("{}/_rels/{}.rels", slide_dir.to_string_lossy(), slide_filename);
         
-        let mut slide_rels_xml = String::new();
-        if let Ok(mut file) = archive.by_name(&slide_rels_path) {
-            file.read_to_string(&mut slide_rels_xml).unwrap_or(0);
-        }
+        let slide_rels_xml = archive.optional_part_to_string(&slide_rels_path, &mut budget);
 
         let mut slide_image_rels = std::collections::HashMap::new();
         if !slide_rels_xml.is_empty() {
@@ -493,7 +504,13 @@ pub fn read_pptx(path: &str) -> Result<Deck, String> {
                                     let w = pic.w.unwrap_or(0.0) / 9525.0;
                                     let h = pic.h.unwrap_or(0.0) / 9525.0;
                                     
-                                    if let Some(obj) = resolve_and_extract_picture(&embed_id, x, y, w, h, &slide_image_rels, &mut archive) {
+                                    if let Some(obj) = resolve_and_extract_picture(
+                                        &embed_id,
+                                        PictureRect { x, y, w, h },
+                                        &slide_image_rels,
+                                        &mut archive,
+                                        &mut budget,
+                                    ) {
                                         objects.push(obj);
                                     }
                                 }
@@ -536,10 +553,7 @@ pub fn read_pptx(path: &str) -> Result<Deck, String> {
             if target.contains("notesSlide") {
                 let rel = target.trim_start_matches("../");
                 let notes_path = format!("ppt/{}", rel);
-                let mut notes_xml = String::new();
-                if let Ok(mut f) = archive.by_name(&notes_path) {
-                    f.read_to_string(&mut notes_xml).unwrap_or(0);
-                }
+                let notes_xml = archive.optional_part_to_string(&notes_path, &mut budget);
                 if !notes_xml.is_empty() {
                     notes = extract_notes_text(&notes_xml);
                 }
@@ -569,19 +583,15 @@ pub fn read_pptx(path: &str) -> Result<Deck, String> {
     {
         let mut layout_to_idx: std::collections::HashMap<String, usize> =
             std::collections::HashMap::new();
-        let read_part = |archive: &mut zip::ZipArchive<File>, name: &str| -> String {
-            let mut s = String::new();
-            if let Ok(mut f) = archive.by_name(name) {
-                f.read_to_string(&mut s).unwrap_or(0);
-            }
-            s
+        let read_part = |archive: &mut zip::ZipArchive<File>, budget: &mut ZipBudget, name: &str| -> String {
+            archive.optional_part_to_string(name, budget)
         };
         for (i, layout_path) in slide_layout_paths.iter().enumerate() {
             let Some(layout_path) = layout_path else { continue };
             let idx = if let Some(&idx) = layout_to_idx.get(layout_path) {
                 idx
             } else {
-                let layout_xml = read_part(&mut archive, layout_path);
+                let layout_xml = read_part(&mut archive, &mut budget, layout_path);
                 if layout_xml.is_empty() {
                     continue;
                 }
@@ -594,6 +604,7 @@ pub fn read_pptx(path: &str) -> Result<Deck, String> {
                     .to_string();
                 let rels = read_part(
                     &mut archive,
+                    &mut budget,
                     &format!("{}/_rels/{}.rels", dir.to_string_lossy(), file),
                 );
                 let master_xml = rels
@@ -602,7 +613,7 @@ pub fn read_pptx(path: &str) -> Result<Deck, String> {
                     .filter_map(|s| s.split('"').next())
                     .find(|t| t.contains("slideMaster"))
                     .map(|t| format!("ppt/{}", t.trim_start_matches("../")))
-                    .map(|p| read_part(&mut archive, &p))
+                    .map(|p| read_part(&mut archive, &mut budget, &p))
                     .unwrap_or_default();
 
                 let (master_bg, mut shapes) = parse_master_shapes(&master_xml);
@@ -797,19 +808,31 @@ pub fn parse_master_shapes(xml: &str) -> (Option<String>, Vec<SlideObject>) {
     (background, shapes)
 }
 
+/// Where a picture sits on the slide, in points. Four loose `f64`s in a
+/// row were easy to transpose at the call site and pushed the argument
+/// list past what clippy will accept once the read budget joined it.
+struct PictureRect {
+    x: f64,
+    y: f64,
+    w: f64,
+    h: f64,
+}
+
 fn resolve_and_extract_picture(
     embed_id: &str,
-    x: f64, y: f64, w: f64, h: f64,
+    rect: PictureRect,
     rels: &std::collections::HashMap<String, String>,
     archive: &mut zip::ZipArchive<File>,
+    budget: &mut ZipBudget,
 ) -> Option<SlideObject> {
+    let PictureRect { x, y, w, h } = rect;
     let target = rels.get(embed_id)?;
     let relative_path = target.trim_start_matches("../");
     let full_zip_path = format!("ppt/{}", relative_path);
 
-    let mut image_file = archive.by_name(&full_zip_path).ok()?;
-    let mut buffer = Vec::new();
-    image_file.read_to_end(&mut buffer).ok()?;
+    // An image is the largest part a real deck has and the easiest to lie
+    // about, so it draws on the same budget as the XML parts.
+    let buffer = archive.part_to_bytes(&full_zip_path, budget).ok()?;
 
     // gh-268: the previous code wrote to a predictable /tmp/decks_img_<embed_id>.<ext>
     // path whose middle (embed_id) and suffix (extension) both came from the

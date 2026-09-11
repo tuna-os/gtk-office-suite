@@ -8,6 +8,8 @@
 //
 // Extracted from tables/src/window.rs so it is unit-testable without GTK.
 
+use suite_common_core::zip_guard::{BoundedArchive, ZipBudget};
+
 
 /// Per-sheet presentation state (#113) that calamine doesn't expose:
 /// hidden rows/columns and page setup. Read directly from each sheet's
@@ -57,24 +59,14 @@ fn parse_rels(xml: &str) -> std::collections::HashMap<String, String> {
 /// rels part.
 fn resolve_sheet_parts(
     zip: &mut zip::ZipArchive<std::fs::File>,
+    budget: &mut ZipBudget,
 ) -> std::collections::HashMap<String, String> {
-    use std::io::Read as _;
-    let mut workbook_xml = String::new();
-    if zip
-        .by_name("xl/workbook.xml")
-        .and_then(|mut f| f.read_to_string(&mut workbook_xml).map_err(Into::into))
-        .is_err()
-    {
+    let Ok(workbook_xml) = zip.part_to_string("xl/workbook.xml", budget) else {
         return std::collections::HashMap::new();
-    }
-    let mut rels_xml = String::new();
-    if zip
-        .by_name("xl/_rels/workbook.xml.rels")
-        .and_then(|mut f| f.read_to_string(&mut rels_xml).map_err(Into::into))
-        .is_err()
-    {
+    };
+    let Ok(rels_xml) = zip.part_to_string("xl/_rels/workbook.xml.rels", budget) else {
         return std::collections::HashMap::new();
-    }
+    };
     let rels = parse_rels(&rels_xml);
 
     let mut out = std::collections::HashMap::new();
@@ -103,7 +95,6 @@ pub fn read_sheet_props_from_xlsx(
     path: &str,
     names: &[String],
 ) -> std::collections::HashMap<String, SheetXlsxProps> {
-    use std::io::Read as _;
     let mut out = std::collections::HashMap::new();
     let Ok(f) = std::fs::File::open(path) else {
         return out;
@@ -111,18 +102,19 @@ pub fn read_sheet_props_from_xlsx(
     let Ok(mut zip) = zip::ZipArchive::new(f) else {
         return out;
     };
-    let parts = resolve_sheet_parts(&mut zip);
+    // Bounded reads: best-effort must not extend to decompressing whatever
+    // an untrusted package asks for (#442).
+    let mut budget = ZipBudget::default();
+    if budget.check_entry_count(zip.len()).is_err() {
+        return out;
+    }
+    let parts = resolve_sheet_parts(&mut zip, &mut budget);
 
     for name in names {
         let Some(part) = parts.get(name) else { continue };
-        let mut xml = String::new();
-        if zip
-            .by_name(part)
-            .and_then(|mut f| f.read_to_string(&mut xml).map_err(Into::into))
-            .is_err()
-        {
+        let Ok(xml) = zip.part_to_string(part, &mut budget) else {
             continue;
-        }
+        };
 
         let mut props = SheetXlsxProps::default();
 

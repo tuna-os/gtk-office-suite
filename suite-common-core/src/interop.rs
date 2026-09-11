@@ -10,6 +10,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::fs::File;
 use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
+use crate::zip_guard::ZipBudget;
 use zip::write::SimpleFileOptions;
 use zip::{ZipArchive, ZipWriter};
 
@@ -122,6 +123,12 @@ impl OpaquePackage {
     pub fn capture(path: impl AsRef<Path>, recognized: &[&str]) -> Result<Self, String> {
         let file = File::open(path.as_ref()).map_err(|e| format!("open package: {e}"))?;
         let mut archive = ZipArchive::new(file).map_err(|e| format!("read package: {e}"))?;
+        // Opaque capture reads every member this suite does not recognise,
+        // which makes it the widest decompression surface in the codebase:
+        // it is reached by all six `*_with_report` readers and it keeps what
+        // it reads. It is bounded for the same reason (#442).
+        let mut budget = ZipBudget::default();
+        budget.check_entry_count(archive.len())?;
         let mut parts = BTreeMap::new();
         for index in 0..archive.len() {
             let mut entry = archive.by_index(index).map_err(|e| format!("read package entry: {e}"))?;
@@ -129,8 +136,9 @@ impl OpaquePackage {
             if entry.is_dir() || recognized.iter().any(|known| *known == name) {
                 continue;
             }
-            let mut bytes = Vec::new();
-            entry.read_to_end(&mut bytes).map_err(|e| format!("read {name}: {e}"))?;
+            let bytes = budget
+                .read_entry(&mut entry, &name)
+                .map_err(|e| format!("read {name}: {e}"))?;
             parts.insert(name, bytes);
         }
         Ok(Self { parts })
@@ -183,7 +191,7 @@ fn temporary_path(path: &Path) -> PathBuf {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use zip::write::SimpleFileOptions;
+use zip::write::SimpleFileOptions;
 
     #[test]
     fn report_is_structured_and_classifies_destructive_features() {
