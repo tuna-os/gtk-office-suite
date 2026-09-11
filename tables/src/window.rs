@@ -916,6 +916,26 @@ impl TablesWindow {
             sm.splice(0, sm.n_items(), &refs);
         }
 
+        // The sheet operations as app actions, so they exist somewhere
+        // other than a button that the narrow breakpoint hides (#520).
+        // Each one emits its button's `clicked`: the handlers below stay
+        // the single implementation, and an action can never drift from
+        // what the button does.
+        {
+            for (name, button) in [
+                ("add-sheet", &add_btn),
+                ("rename-sheet", &rename_sheet_btn),
+                ("move-sheet-left", &move_sheet_left_btn),
+                ("move-sheet-right", &move_sheet_right_btn),
+                ("delete-sheet", &delete_sheet_btn),
+            ] {
+                let btn = button.clone();
+                let act = gtk4::gio::SimpleAction::new(name, None);
+                act.connect_activate(move |_, _| btn.emit_clicked());
+                app.add_action(&act);
+            }
+        }
+
         // Rename sheet
         {
             let ctl = controller.clone();
@@ -1519,6 +1539,11 @@ impl TablesWindow {
             ("app.undo", &suite_common::i18n("Undo")),
             ("app.redo", &suite_common::i18n("Redo")),
             ("app.goto-cell", &suite_common::i18n("Go to Cell…")),
+            ("app.add-sheet", &suite_common::i18n("Add Sheet")),
+            ("app.rename-sheet", &suite_common::i18n("Rename Sheet…")),
+            ("app.move-sheet-left", &suite_common::i18n("Move Sheet Left")),
+            ("app.move-sheet-right", &suite_common::i18n("Move Sheet Right")),
+            ("app.delete-sheet", &suite_common::i18n("Delete Sheet…")),
         ]);
 
         let extended_toolbar: Vec<suite_common::ToolbarItem> = vec![
@@ -1591,9 +1616,15 @@ impl TablesWindow {
             let f = glib::Value::from(&false);
             suite_win.narrow_breakpoint.add_setter(&name_box, "visible", Some(&f));
             suite_win.narrow_breakpoint.add_setter(&fx_label, "visible", Some(&f));
-            // Hide the sheet management buttons (add/rename/move/delete)
-            // but keep the dropdown switcher.
-            for btn in [&add_btn, &rename_sheet_btn, &move_sheet_left_btn,
+            // Hide the *secondary* sheet buttons (rename/move/delete) and
+            // keep the dropdown switcher and Add. Adding a sheet is the
+            // primary action of this bar and one circular button fits
+            // even at 400px; the others stay reachable through the
+            // command palette, which the actions above register. Hiding a
+            // control is only a layout decision when the thing it does
+            // is still possible — otherwise the capability goes with the
+            // widget (#520, and #516 before it).
+            for btn in [&rename_sheet_btn, &move_sheet_left_btn,
                          &move_sheet_right_btn, &delete_sheet_btn] {
                 suite_win.narrow_breakpoint.add_setter(btn, "visible", Some(&f));
             }

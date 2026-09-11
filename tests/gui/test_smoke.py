@@ -498,6 +498,12 @@ class TablesMultiSheetSmoke(BaseGUITestCase):
 
     app_name = "tables"
 
+    def setUp(self):
+        # Registers the #104 snapshot action before launch; the
+        # sheet-actions test reads sheet_names from it.
+        self._snapshot_path = self.isolate_snapshot(prefix="tables-multisheet-")
+        super().setUp()
+
     def test_add_sheet_keeps_data_isolated_across_switches(self):
         from dogtail import rawinput
         import subprocess
@@ -529,6 +535,38 @@ class TablesMultiSheetSmoke(BaseGUITestCase):
         grid = self.app.child(name="Spreadsheet grid")
         self.assertIn("2", grid.description, f"Sheet1 grid: {grid.description!r}")
         self.assertNotIn("6", grid.description, "Sheet2's value leaked into Sheet1")
+
+    def test_sheet_operations_survive_a_hidden_toolbar(self):
+        """The sheet operations exist as actions, not only as buttons.
+
+        Below the narrow breakpoint the rename/move/delete buttons are
+        hidden — a layout decision — and at 400px the Add button was
+        hidden too, which left no way to manage sheets at all (#520).
+        Driving the actions directly is how the capability is asserted
+        independently of which buttons a given width happens to show;
+        this runs at every width the display matrix uses.
+        """
+        import json
+        import subprocess
+
+        aid = "org.tunaos.tables"
+        snapshot_path = self._snapshot_path
+        subprocess.run(["gapplication", "action", aid, "new-document"])
+        time.sleep(1.5)
+
+        def sheet_names():
+            subprocess.run(["gapplication", "action", aid, "test-snapshot"])
+            time.sleep(0.5)
+            with open(snapshot_path) as handle:
+                return json.load(handle)["sheet_names"]
+
+        self.assertEqual(len(sheet_names()), 1, "expected one sheet to start")
+        subprocess.run(["gapplication", "action", aid, "add-sheet"])
+        time.sleep(0.8)
+        self.assertEqual(len(sheet_names()), 2, "add-sheet action did not add a sheet")
+        subprocess.run(["gapplication", "action", aid, "move-sheet-left"])
+        time.sleep(0.8)
+        self.assertIsNone(self.process.poll(), "tables crashed running a sheet action")
 
 
 class TablesCloseGuardSmoke(BaseGUITestCase):
