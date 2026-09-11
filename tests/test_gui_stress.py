@@ -242,12 +242,25 @@ class CLITests(unittest.TestCase):
                 stress.main(["--output", existing])
             self.assertNotEqual(caught.exception.code, 0)
 
-    def test_free_display_number_skips_locked_displays(self):
-        import tempfile
-        import unittest.mock as mock
-        taken = {"/tmp/.X90-lock", "/tmp/.X11-unix/X91"}
-        with mock.patch("os.path.exists", side_effect=lambda p: p in taken):
-            self.assertEqual(stress.free_display_number(90), 92)
+    def test_a_setup_failure_is_classified_as_infrastructure(self):
+        """An attempt that never started a journey is not evidence about the
+        apps. The runner's own setup failures used to score as
+        "unclassified", which reads like a product problem."""
+        self.assertEqual(
+            stress.classify("GUI setup failed: no X display at :99 after 10s.",
+                            [], 1, False),
+            stress.CLASS_INFRASTRUCTURE,
+        )
+
+    def test_the_campaign_leaves_display_allocation_to_the_runner(self):
+        """stress.py used to scan /tmp for a free display number and pass it
+        as GUI_TEST_DISPLAY_NUM, working around a runner that would
+        otherwise fail into an existing display. The runner now asks Xvfb
+        to allocate one (-displayfd), which is race-free where a scan is
+        not: two campaigns scanning at once pick the same number."""
+        source = open(stress.__file__, encoding="utf-8").read()
+        self.assertNotIn("free_display_number", source)
+        self.assertNotIn("GUI_TEST_DISPLAY_NUM", source)
 
 
 if __name__ == "__main__":

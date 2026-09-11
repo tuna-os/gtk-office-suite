@@ -127,6 +127,11 @@ CRASH_MARKERS = (
 # Setup that never got as far as running a journey. These are real
 # failures of the campaign, but they are not evidence about the apps.
 INFRASTRUCTURE_MARKERS = (
+    # What run_gui_tests.sh prints when the display, the window manager or
+    # the schemas could not be set up. Without this an attempt that never
+    # started a journey scored as "unclassified" rather than as the
+    # infrastructure failure it is.
+    "GUI setup failed",
     "Fatal server error",
     "Cannot open display",
     "error: could not compile",
@@ -186,24 +191,6 @@ def parse_junit(path: str) -> tuple:
 # ── environment ──────────────────────────────────────────────────────
 
 
-def free_display_number(start: int = 90, limit: int = 200) -> int:
-    """First X display number with no lock file and no socket.
-
-    Attempts run one after another, but a killed predecessor can leave
-    :99 locked — and the runner's Xvfb then fails into whatever display
-    that lock belongs to. Picking a free number per attempt keeps one
-    abandoned campaign from quietly invalidating the next.
-    """
-    for num in range(start, limit):
-        if os.path.exists(f"/tmp/.X{num}-lock"):
-            continue
-        if os.path.exists(f"/tmp/.X11-unix/X{num}"):
-            continue
-        return num
-    raise RuntimeError("no free X display number between "
-                       f"{start} and {limit}")
-
-
 def binary_digests() -> dict:
     """sha256 of the app binaries under test, so a manifest names them.
 
@@ -253,7 +240,6 @@ def collect(selection: list, select: str | None, python_bin: str | None) -> list
     # listing while two gives the node ids.
     args += ["--collect-only", "-q", "-q"]
     env = dict(os.environ)
-    env["GUI_TEST_DISPLAY_NUM"] = str(free_display_number())
     if python_bin:
         env["GUI_TEST_PYTHON"] = python_bin
     with tempfile.NamedTemporaryFile("w+", suffix=".txt") as sink:
@@ -318,7 +304,6 @@ def run_attempt(attempt: Attempt, output: str, timeout: int,
 
     env = dict(os.environ)
     env.update(attempt.config.env())
-    env["GUI_TEST_DISPLAY_NUM"] = str(free_display_number())
     env["GUI_TEST_VIDEO"] = video
     env["GUI_TEST_VIDEO_DIR"] = os.path.join(attempt_dir, "videos")
     if python_bin:
