@@ -131,9 +131,17 @@ impl TablesEngine {
                 cells
             })
             .collect();
-        // Rebuilding assigns fresh IronCalc sheet_ids, so the old active
-        // sheet's id will not exist in the new model. Track identity by
-        // position within `new_order` instead.
+        // Rebuilding would assign fresh IronCalc sheet_ids, so the ids are
+        // captured here and restored below. Sheet identity has to survive
+        // a reorder: the undo history and every presentation model key on
+        // sheet_id, so fresh ids leave recorded commands pointing at
+        // sheets that no longer exist — and the next add_sheet is handed
+        // one of the abandoned ids, giving two sheets the same identity
+        // and sending an undo to the wrong one. Found by the seeded
+        // command sequences in tables-core/tests/stateful.rs (#442).
+        let sheet_ids: Vec<u32> = (0..sheet_count)
+            .map(|i| self.sheet_id_at(i).unwrap_or(i as u32))
+            .collect();
         let active_old_index = self.active_sheet;
 
         // The placeholder name only needs to be valid and 'static; it is
@@ -146,6 +154,15 @@ impl TablesEngine {
             model.add_sheet(&names[old_idx])?;
         }
         self.model = model;
+
+        // Carry each sheet's identity to its new position. IronCalc
+        // allocates the next id as max(existing) + 1, so restoring the
+        // originals cannot collide with a later add_sheet.
+        for (new_idx, &old_idx) in new_order.iter().enumerate() {
+            if let Some(worksheet) = self.model.workbook.worksheets.get_mut(new_idx) {
+                worksheet.sheet_id = sheet_ids[old_idx];
+            }
+        }
 
         for (new_idx, &old_idx) in new_order.iter().enumerate() {
             for (r, c, input) in &inputs[old_idx] {
