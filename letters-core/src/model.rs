@@ -360,7 +360,11 @@ impl Document {
             }
             remaining -= len + 1; // +1 for the paragraph break
         }
-        let last = self.paragraphs.len() - 1;
+        // An empty document has no paragraph to land in. It is a state
+        // the editing commands avoid (`ensure_non_empty`), but locating
+        // an offset must not be the thing that panics when one slips
+        // through — every offset lookup in the model routes through here.
+        let Some(last) = self.paragraphs.len().checked_sub(1) else { return (0, 0) };
         (last, self.paragraphs[last].char_len())
     }
 
@@ -427,9 +431,29 @@ impl Document {
         } else {
             let tail = self.paragraphs[epi].split_at(epo);
             self.paragraphs[spi].split_at(spo); // discard rest of start para
+            // A table cell is a paragraph, and a table is its cells: remove
+            // one and the grid has a hole that reflow cannot close and no
+            // renderer, writer or screen reader can interpret. A selection
+            // dragged across a table therefore empties the cells it covers
+            // and leaves the structure standing — the same thing a word
+            // processor does, and the only option here that keeps the
+            // document readable. Deleting the table itself is what the
+            // row and column commands are for (#532's campaign).
+            let mut kept: Vec<Paragraph> = Vec::new();
+            for paragraph in self.paragraphs.drain(spi + 1..=epi) {
+                if paragraph.style.table_cell.is_some() {
+                    let mut emptied = paragraph;
+                    emptied.runs.clear();
+                    kept.push(emptied);
+                }
+            }
+            // The start paragraph keeps whatever survived the split;
+            // anything that followed it inside a table comes back
+            // emptied, in order.
+            let insert_at = spi + 1;
+            self.paragraphs.splice(insert_at..insert_at, kept);
             self.paragraphs[spi].runs.extend(tail.runs);
             self.paragraphs[spi].normalize();
-            self.paragraphs.drain(spi + 1..=epi);
         }
         self.ensure_non_empty();
     }
@@ -513,6 +537,28 @@ impl Document {
     /// pointing at, instead of assuming a table id.
     pub fn table_cell_at(&self, offset: usize) -> Option<TableCell> {
         self.paragraphs.get(self.paragraph_at(offset)).and_then(|p| p.style.table_cell)
+    }
+
+    /// First and last paragraph indices (inclusive) holding `table`'s
+    /// cells, or None when the document has no such table. Cells are kept
+    /// contiguous by `reflow_table`, so this is a range, not a scatter.
+    pub fn table_paragraph_range(&self, table: u32) -> Option<(usize, usize)> {
+        let mut first = None;
+        let mut last = None;
+        for (index, paragraph) in self.paragraphs.iter().enumerate() {
+            if paragraph.style.table_cell.is_some_and(|c| c.table == table) {
+                first.get_or_insert(index);
+                last = Some(index);
+            }
+        }
+        Some((first?, last?))
+    }
+
+    /// The paragraph holding a given cell, if the table has it.
+    pub fn cell_paragraph(&self, cell: TableCell) -> Option<usize> {
+        self.paragraphs
+            .iter()
+            .position(|p| p.style.table_cell == Some(cell))
     }
 
     /// An id no existing table uses.
@@ -624,6 +670,9 @@ impl Document {
             if cell.row >= end { cell.row -= count; p.style.table_cell = Some(cell); }
             true
         });
+        // A document that was nothing but this table is now empty, and an
+        // empty document has nowhere to put the caret.
+        self.ensure_non_empty();
         true
     }
 
@@ -637,6 +686,7 @@ impl Document {
             if cell.col >= end { cell.col -= count; p.style.table_cell = Some(cell); }
             true
         });
+        self.ensure_non_empty();
         true
     }
 

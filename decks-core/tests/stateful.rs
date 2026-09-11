@@ -432,6 +432,15 @@ fn run_seed(seed: u64, steps: usize) -> Result<(), String> {
             .and_then(|()| check_invariants(&controller));
         if let Err(reason) = outcome {
             let minimal = minimize(&trace, step);
+            // Report the *minimized* trace's own reason. Dropping
+            // commands can leave a shorter sequence that fails a
+            // different way, and printing the original run's message
+            // beside it sends the reader looking for a symptom the
+            // listed commands do not produce.
+            let reason = match replay(&minimal) {
+                Err((_, minimal_reason)) => minimal_reason,
+                Ok(()) => reason,
+            };
             return Err(format!(
                 "seed {seed} failed at step {step}: {reason}\n\
                  minimized to {} command(s):\n{}",

@@ -38,7 +38,67 @@ impl StructuredEditor {
         self.cursor = end;
     }
 
+    /// Insert text at the caret, replacing the selection if there is one.
+    ///
+    /// A newline inside a table cell is not a paragraph break. Every cell
+    /// is exactly one paragraph — `Document::reflow_table` sorts cells by
+    /// (row, col) and `table_dimensions` reads the grid off the maximum
+    /// row and column, both of which need each cell to appear once — so
+    /// splitting a cell's paragraph produced two paragraphs claiming the
+    /// same cell and a table nothing downstream could read (#532). What
+    /// happens instead:
+    ///
+    ///   * Enter on its own moves the caret to the next cell, in
+    ///     row-major order, and leaves it alone at the last one. Nothing
+    ///     is inserted; the document does not change.
+    ///   * A newline arriving inside longer text — a paste — becomes a
+    ///     space, so the pasted content lands in the cell it was aimed at
+    ///     instead of tearing the table apart.
+    ///
+    /// Neither silently swallows the input, which is what made the third
+    /// option — refusing the keystroke — worse than either. A cell that
+    /// holds several paragraphs is a different editing surface than this
+    /// model's one-line-per-row grid, and belongs with #438's table work.
     pub fn insert_text(&mut self, text: &str) {
+        if text.contains('\n') {
+            // The cell that matters is the one the text lands in, which is
+            // the selection's start when there is a selection: selecting
+            // forwards out of a table leaves the caret past the table, so
+            // keying off `self.cursor` let a newline through and split the
+            // cell paragraph the replacement was written into.
+            let at = self.selection.map_or(self.cursor, |(start, _)| start);
+            if let Some(cell) = self.document.table_cell_at(at) {
+                if text == "\n" {
+                    // Enter over a selection still removes it, as the
+                    // keystroke does everywhere else; only the paragraph
+                    // break is what this cell cannot have.
+                    self.delete_selection();
+                    self.move_caret_to_next_cell(cell);
+                } else {
+                    self.insert_flat(&text.replace('\n', " "));
+                }
+                return;
+            }
+        }
+        self.insert_flat(text);
+    }
+
+    /// Put the caret at the start of the cell after `cell`, or leave it
+    /// where it is when that was the last one.
+    fn move_caret_to_next_cell(&mut self, cell: TableCell) {
+        let Some(next) = self
+            .document
+            .next_table_cell(cell.table, cell.row, cell.col, false)
+        else {
+            return;
+        };
+        let Some(paragraph) = self.document.cell_paragraph(next) else { return };
+        self.cursor = self.document.paragraph_offset(paragraph);
+        self.table_cell = Some(next);
+        self.selection = None;
+    }
+
+    fn insert_flat(&mut self, text: &str) {
         if let Some((start, end)) = self.selection.take() {
             // Typing over a selection keeps the replaced text's style, as
             // word processors do. The style must be captured before the
@@ -105,7 +165,19 @@ impl StructuredEditor {
         // around a table is a separate behavior and not what any menu item
         // here promises.
         let cursor_para = self.document.paragraph_at(self.cursor);
-        let at = if self.document.paragraphs.get(cursor_para).is_some_and(|p| p.text().is_empty()) {
+        let at = if let Some(cell) = self.cursor_cell() {
+            // The caret is inside another table. This model has no nested
+            // tables, and splicing the new cells in after the caret's
+            // paragraph would drop them into the middle of the existing
+            // table's run — leaving cells of two tables interleaved, which
+            // `reflow_table` cannot sort out and no reader of the flat
+            // paragraph list can interpret. Put the new table after the
+            // one the caret is in (#532's campaign).
+            self.document
+                .table_paragraph_range(cell.table)
+                .map(|(_, last)| last + 1)
+                .unwrap_or(cursor_para + 1)
+        } else if self.document.paragraphs.get(cursor_para).is_some_and(|p| p.text().is_empty()) {
             cursor_para
         } else {
             cursor_para + 1
@@ -132,22 +204,54 @@ impl StructuredEditor {
 
     pub fn insert_row_at_cursor(&mut self, below: bool) -> bool {
         let Some(cell) = self.cursor_cell() else { return false };
-        self.document.insert_table_rows(cell.table, if below { cell.row + 1 } else { cell.row }, 1)
+        let did = self.document.insert_table_rows(cell.table, if below { cell.row + 1 } else { cell.row }, 1);
+        self.clamp_cursor();
+        did
     }
 
     pub fn insert_col_at_cursor(&mut self, after: bool) -> bool {
         let Some(cell) = self.cursor_cell() else { return false };
-        self.document.insert_table_cols(cell.table, if after { cell.col + 1 } else { cell.col }, 1)
+        let did = self.document.insert_table_cols(cell.table, if after { cell.col + 1 } else { cell.col }, 1);
+        self.clamp_cursor();
+        did
     }
 
     pub fn delete_row_at_cursor(&mut self) -> bool {
         let Some(cell) = self.cursor_cell() else { return false };
-        self.document.delete_table_rows(cell.table, cell.row, 1)
+        let did = self.document.delete_table_rows(cell.table, cell.row, 1);
+        self.clamp_cursor();
+        did
     }
 
     pub fn delete_col_at_cursor(&mut self) -> bool {
         let Some(cell) = self.cursor_cell() else { return false };
-        self.document.delete_table_cols(cell.table, cell.col, 1)
+        let did = self.document.delete_table_cols(cell.table, cell.col, 1);
+        self.clamp_cursor();
+        did
+    }
+
+    /// Bring the caret (and any selection) back inside the document.
+    ///
+    /// Deleting a row or a column removes whole paragraphs, so a caret
+    /// that sat after them is left pointing past the end — every later
+    /// offset lookup then clamps somewhere arbitrary, and the first edit
+    /// after a delete lands in the wrong place. Cheap to do here, at the
+    /// few commands that can shrink the document, and impossible to
+    /// forget the way "remember to clamp at the call site" is (#532's
+    /// campaign).
+    fn clamp_cursor(&mut self) {
+        let len = self.document.char_len();
+        self.cursor = self.cursor.min(len);
+        if let Some((start, end)) = self.selection {
+            if start >= len || end > len {
+                self.selection = if start.min(len) < end.min(len) {
+                    Some((start.min(len), end.min(len)))
+                } else {
+                    None
+                };
+            }
+        }
+        self.table_cell = self.document.table_cell_at(self.cursor);
     }
 
     // ── Cursor-relative list and page-break commands ────────────────

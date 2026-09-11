@@ -354,6 +354,15 @@ fn run_seed(seed: u64, steps: usize) -> Result<(), String> {
         apply(&mut editor, &command);
         if let Err(reason) = check_invariants(&editor) {
             let minimal = minimize(&trace, step);
+            // Report the *minimized* trace's own reason. Dropping
+            // commands can leave a shorter sequence that fails a
+            // different way, and printing the original run's message
+            // beside it sends the reader looking for a symptom the
+            // listed commands do not produce.
+            let reason = match replay(&minimal) {
+                Err((_, minimal_reason)) => minimal_reason,
+                Ok(()) => reason,
+            };
             return Err(format!(
                 "seed {seed} failed at step {step}: {reason}\n\
                  minimized to {} command(s):\n{}",
@@ -372,15 +381,7 @@ fn run_seed(seed: u64, steps: usize) -> Result<(), String> {
 
 // ── tests ────────────────────────────────────────────────────────────
 
-/// Ignored, and why: every seed that generates a table reaches #532
-/// within a few dozen steps — pressing Enter inside a cell duplicates
-/// that cell, which the table invariant rejects. The generator is *not*
-/// narrowed to route around it: shrinking the alphabet to get a green
-/// test is the failure mode the crash campaign exists to prevent, and it
-/// is how a defect stops being visible. This turns green the day #532 is
-/// fixed, which is the point.
 #[test]
-#[ignore = "blocked on #532: Enter inside a table cell duplicates the cell"]
 fn fixed_seeds_hold_the_invariants() {
     let mut failures = Vec::new();
     for &seed in FIXED_SEEDS {
@@ -432,11 +433,8 @@ fn the_table_invariant_rejects_a_broken_table() {
     );
 }
 
-/// The minimal reproduction of #532, kept as an executable note beside
-/// the campaign that found it. A two-command trace is what a bug report
-/// should be; the 200-command seed it came from is not.
+/// The two-command reproduction of #532, now a regression guard.
 #[test]
-#[ignore = "known defect #532: un-ignore with the fix"]
 fn enter_inside_a_table_cell_does_not_duplicate_it() {
     let mut editor = fresh();
     editor.insert_table(2, 3);
@@ -458,11 +456,157 @@ fn enter_inside_a_table_cell_does_not_duplicate_it() {
     check_invariants(&editor).expect("the table survives a newline");
 }
 
+#[test]
+fn enter_in_a_cell_moves_to_the_next_cell_and_stops_at_the_last() {
+    let mut editor = fresh();
+    let table = editor.insert_table(2, 2);
+    let cell = editor.cursor_cell().expect("the caret starts in the first cell");
+    assert_eq!((cell.table, cell.row, cell.col), (table, 0, 0));
+
+    for expected in [(0, 1), (1, 0), (1, 1)] {
+        editor.insert_text("\n");
+        let cell = editor.cursor_cell().expect("still in the table");
+        assert_eq!((cell.row, cell.col), expected, "Enter walks the grid row-major");
+    }
+
+    // The last cell is the end of the walk, not a place to grow a table
+    // from: Enter there leaves the caret alone rather than inventing a row.
+    editor.insert_text("\n");
+    let cell = editor.cursor_cell().expect("still in the table");
+    assert_eq!((cell.row, cell.col), (1, 1));
+    check_invariants(&editor).expect("nothing was inserted");
+}
+
+#[test]
+fn a_multi_line_paste_into_a_cell_becomes_one_line() {
+    let mut editor = fresh();
+    editor.insert_table(1, 2);
+    editor.insert_text("first\nsecond");
+
+    let cells: Vec<String> = editor
+        .document()
+        .paragraphs
+        .iter()
+        .filter(|p| p.style.table_cell.is_some())
+        .map(|p| p.text())
+        .collect();
+    assert_eq!(cells, vec!["first second".to_string(), String::new()]);
+    check_invariants(&editor).expect("the table survives a pasted newline");
+}
+
+#[test]
+fn a_newline_outside_a_table_still_splits_the_paragraph() {
+    // The guard is scoped to cells; ordinary text keeps working the way
+    // every other test in the workspace expects.
+    let mut editor = fresh();
+    editor.set_cursor(5);
+    editor.insert_text("\nsecond");
+    assert_eq!(editor.document().paragraphs.len(), 2);
+    assert_eq!(editor.document().to_plain_text(), "intro\nsecond");
+}
+
+#[test]
+fn enter_over_a_selection_that_leaves_the_table_keeps_the_cell_whole() {
+    // Selecting forwards out of a table puts the caret past the table
+    // while the *insertion* point is still in a cell. Keying the newline
+    // guard off the caret let this split the cell paragraph the
+    // replacement was written into, which is #532 by another route.
+    let mut editor = fresh();
+    editor.insert_table(2, 2);
+    let cell = editor.cursor_cell().expect("the caret starts in a cell");
+    let start = editor.cursor();
+    editor.select(start, editor.document().char_len());
+    editor.insert_text("\n");
+
+    check_invariants(&editor).expect("the table survives the replacement");
+    let caret = editor.cursor_cell().expect("the caret stayed in the table");
+    assert_ne!(
+        (caret.row, caret.col),
+        (cell.row, cell.col),
+        "Enter still walks to the next cell"
+    );
+}
+
+#[test]
+fn a_selection_across_a_table_empties_its_cells_instead_of_removing_them() {
+    // Removing a cell paragraph leaves the grid with a hole that
+    // `reflow_table` cannot close, so a selection dragged over a table
+    // clears the text and leaves the structure standing.
+    let mut editor = fresh();
+    editor.insert_table(2, 2);
+    editor.insert_text("a");
+    editor.select(0, editor.document().char_len());
+    editor.delete_selection();
+
+    check_invariants(&editor).expect("the table is still a table");
+    let cells = editor
+        .document()
+        .paragraphs
+        .iter()
+        .filter(|p| p.style.table_cell.is_some())
+        .count();
+    assert_eq!(cells, 4, "every cell is still there, emptied");
+}
+
+#[test]
+fn deleting_the_last_row_of_a_table_leaves_an_editable_document() {
+    // A document that is nothing but one table has no paragraphs left
+    // once its rows go, and locating any offset in an empty document
+    // used to underflow before anything could clamp the caret.
+    let mut editor = fresh();
+    editor.insert_table(1, 1);
+    // Drop the paragraph `insert_table` left beside the table, so the
+    // table really is the whole document.
+    let table_only: Vec<_> = editor
+        .document()
+        .paragraphs
+        .iter()
+        .filter(|p| p.style.table_cell.is_some())
+        .cloned()
+        .collect();
+    let mut document = Document::from_plain_text("");
+    document.paragraphs = table_only;
+    let mut editor = StructuredEditor::new(document);
+    editor.set_cursor(0);
+    assert!(editor.delete_row_at_cursor());
+
+    editor.set_cursor(editor.document().char_len());
+    editor.insert_text("after");
+    assert_eq!(editor.document().to_plain_text(), "after");
+    check_invariants(&editor).expect("the document is still editable");
+}
+
+#[test]
+fn a_table_inserted_from_inside_a_table_lands_after_it() {
+    // There are no nested tables in this model, and splicing the new
+    // cells in beside the caret's paragraph dropped them into the middle
+    // of the enclosing table's run — two tables interleaved, which
+    // `reflow_table` cannot sort out.
+    let mut editor = fresh();
+    let first = editor.insert_table(2, 2);
+    let second = editor.insert_table(2, 2);
+    assert_ne!(first, second);
+
+    check_invariants(&editor).expect("both tables are readable");
+    let (_, first_last) = editor
+        .document()
+        .table_paragraph_range(first)
+        .expect("the first table is still there");
+    let (second_first, _) = editor
+        .document()
+        .table_paragraph_range(second)
+        .expect("the second table exists");
+    assert!(
+        first_last < second_first,
+        "the tables do not interleave: {first_last} < {second_first}"
+    );
+}
+
 /// The nightly campaign's entry point. Ignored by default so the PR lane
 /// stays fast; run with
 /// `cargo test -p letters-core --test stateful -- --ignored`.
 #[test]
-#[ignore = "campaign-scale, and blocked on #532; run from the nightly stress workflow"]
+#[ignore = "campaign-scale; run from the nightly stress workflow"]
 fn seed_campaign() {
     let base: u64 = std::env::var("STATEFUL_SEED_BASE")
         .ok()
