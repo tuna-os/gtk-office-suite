@@ -20,6 +20,10 @@ import sys
 MARKER = "<!-- gui-feature-verification -->"
 END_MARKER = "<!-- /gui-feature-verification -->"
 
+#: Clips embedded beyond the lead one. A full smoke run records ~48
+#: journeys; a body holding all of them is a body nobody reads.
+EMBED_LIMIT = 5
+
 
 def build(bundle: dict, media_base: str = "", journey: str = "") -> str:
     entries = bundle.get("entries", [])
@@ -54,6 +58,9 @@ def build(bundle: dict, media_base: str = "", journey: str = "") -> str:
         if media_base:
             base = media_base.rstrip("/")
             shown = [e for e in entries if e.get("gif")]
+            # Failures first, so the cap below can only ever drop passing
+            # journeys. A dropped failure is the one thing this must not do.
+            shown.sort(key=lambda e: e.get("outcome") != "failed")
             # One clip plays without a click. A body where every clip is
             # behind a <details> is a body where nobody watches any of
             # them, which defeats the point of recording them. A failure
@@ -70,10 +77,15 @@ def build(bundle: dict, media_base: str = "", journey: str = "") -> str:
                     "",
                 ]
             rest = [e for e in shown if e is not lead]
-            if rest:
-                lines += [f"<details><summary>The other {len(rest)} "
+            # Embedding every clip of a full smoke run means ~48 of them,
+            # which buries the description the clips are meant to support.
+            # The table above already accounts for all of them, and the
+            # artifacts hold every file; what goes inline is a sample.
+            embedded, overflow = rest[:EMBED_LIMIT], rest[EMBED_LIMIT:]
+            if embedded:
+                lines += [f"<details><summary>{len(embedded)} more "
                           f"recorded journey(s)</summary>", ""]
-                for e in rest:
+                for e in embedded:
                     lines += [
                         f"**`{e['test']}`** — {e.get('outcome', 'recorded')}",
                         "",
@@ -83,6 +95,13 @@ def build(bundle: dict, media_base: str = "", journey: str = "") -> str:
                         "",
                     ]
                 lines += ["</details>", ""]
+            if overflow:
+                lines += [
+                    f"The remaining {len(overflow)} clip(s) are in the "
+                    f"workflow artifacts rather than inline — every journey "
+                    f"is still listed in the table above.",
+                    "",
+                ]
         else:
             lines += [
                 "Videos are attached to the workflow run as artifacts "

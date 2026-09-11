@@ -174,6 +174,48 @@ class TheLeadClipPlaysWithoutAClick(unittest.TestCase):
         self.assertIn("![A](https://media.test/x/A.gif)", body)
 
 
+class ABodyNobodyReadsIsNotEvidence(unittest.TestCase):
+    """A full smoke run records ~48 journeys. Embedding every clip buries
+    the description the clips are meant to support."""
+
+    def bundle(self, entries):
+        return {"entries": entries, "revision": "abc", "run_url": "https://e/1"}
+
+    def entry(self, name, outcome="passed"):
+        return {"test": name, "outcome": outcome, "video": f"{name}.mp4",
+                "gif": f"{name}.gif", "duration_seconds": 1.0}
+
+    def test_a_long_run_embeds_a_sample_and_says_so(self):
+        entries = [self.entry(f"J{i:02d}") for i in range(48)]
+        body = pr_comment.build(self.bundle(entries),
+                                media_base="https://media.test/x")
+        embedded = body.count("![")
+        self.assertEqual(embedded, 1 + pr_comment.EMBED_LIMIT)
+        self.assertIn("remaining", body)
+        # Every journey is still accounted for in the table.
+        for i in range(48):
+            self.assertIn(f"`J{i:02d}`", body)
+
+    def test_a_short_run_embeds_everything_and_claims_no_overflow(self):
+        entries = [self.entry(f"J{i}") for i in range(3)]
+        body = pr_comment.build(self.bundle(entries),
+                                media_base="https://media.test/x")
+        self.assertEqual(body.count("!["), 3)
+        self.assertNotIn("remaining", body)
+
+    def test_failures_are_never_the_clips_dropped_by_the_cap(self):
+        entries = [self.entry(f"J{i:02d}") for i in range(48)]
+        entries[40] = self.entry("J40", "failed")
+        entries[41] = self.entry("J41", "failed")
+        body = pr_comment.build(self.bundle(entries),
+                                media_base="https://media.test/x")
+        self.assertIn("![J40](", body)
+        self.assertIn("![J41](", body)
+        # And the failure leads, ahead of any passing journey.
+        before_details = body.split("<details>")[0]
+        self.assertIn("![J40](", before_details)
+
+
 class SpliceIntoPullRequestBody(unittest.TestCase):
     """The evidence goes into the pull-request description, and the
     description is something a person also writes in. Only the marked
