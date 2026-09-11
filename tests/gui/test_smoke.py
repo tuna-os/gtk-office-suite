@@ -12,7 +12,6 @@ output.
 
 import os
 import time
-import unittest
 
 from framework import BaseGUITestCase
 
@@ -810,14 +809,13 @@ class TablesNamedRangeStatsSmoke(BaseGUITestCase):
     Renamed from TablesNamedRangeSmoke, which a second class of that name
     further down this file silently replaced — so this journey had not run
     since that class was added, and the suite quietly traded a crash
-    reproduction for a passing test. Unlike its namesake it jumps to a far
-    cell (Z9) before returning to the named range, and that step aborts
-    Tables with `malloc(): unaligned fastbin chunk detected` (#507,
-    reproduced 3/3).
+    reproduction for a passing test.
 
-    Marked expected-failure rather than deleted or skipped: it runs on
-    every push, so the day #507 is fixed this turns into an unexpected
-    success and says so, instead of waiting for someone to remember it."""
+    Unlike its namesake it jumps to a far cell (Z9) before returning to
+    the named range, which grows the grid's virtual-cell extent and used
+    to abort Tables with `malloc(): unaligned fastbin chunk detected`
+    (#507). Keep the far jump: it is the regression guard for that
+    crash."""
 
     app_name = "tables"
 
@@ -832,7 +830,6 @@ class TablesNamedRangeStatsSmoke(BaseGUITestCase):
         rawinput.keyCombo("Return")
         time.sleep(0.3)
 
-    @unittest.expectedFailure  # #507: the far jump corrupts the heap.
     def test_define_name_then_jump_to_it_via_name_box(self):
         from dogtail import rawinput, tree
         import subprocess
@@ -848,6 +845,11 @@ class TablesNamedRangeStatsSmoke(BaseGUITestCase):
         time.sleep(0.2)
         rawinput.typeText("A1")
         rawinput.keyCombo("Return")
+        time.sleep(0.3)
+        # A name-box jump hands focus to fx, so Escape first: without it
+        # Shift+Down extends nothing and Define Name captures a single
+        # cell instead of A1:A3 (same step as the sibling journey).
+        rawinput.keyCombo("Escape")
         time.sleep(0.3)
         rawinput.keyCombo("<Shift>Down")
         rawinput.keyCombo("<Shift>Down")
@@ -1402,16 +1404,13 @@ class TablesNamedRangeSmoke(BaseGUITestCase):
     jumps back to and re-selects the whole range. Verified via the #104
     state snapshot's selection field rather than AT-SPI cell text.
 
-    This deliberately does NOT jump to a far cell (e.g. Z9) before
-    jumping back to the named range — doing so grows then shrinks this
-    grid's virtual-cell accessible extent, which reliably crashes the
-    app with a SIGSEGV on the very next AT-SPI-registry interaction,
-    even one as unrelated as an ordinary D-Bus action call (not just a
-    live dogtail tree walk). Confirmed independently of this feature
-    with keyboard input alone; filed as #137 (worse than #132's wrong
-    coordinates — this one's a hard crash). See
-    test_jump_far_and_back_to_named_range_crashes_137 below for the
-    documented repro, skipped rather than fixed here."""
+    Keeps to a near selection; the far-jump variant (Z9 and back, which
+    grows then shrinks the grid's virtual-cell accessible extent) lives
+    in test_jump_far_and_back_to_a_range_no_longer_crashes below and in
+    TablesNamedRangeStatsSmoke. Both used to abort the app on the next
+    AT-SPI interaction (#137/#507) — GTK's
+    gtk_accessible_update_next_accessible_sibling() unrefs a parent
+    accessible it does not own — and both now pass."""
 
     app_name = "tables"
 
@@ -1485,20 +1484,14 @@ class TablesNamedRangeSmoke(BaseGUITestCase):
         self.assertEqual(tuple(snap["sheet"]["selection"]), (0, 0, 2, 0), f"snapshot: {snap}")
         self.assertIsNone(self.process.poll(), "tables crashed defining/jumping to a named range")
 
-    @unittest.skip(
-        "SIGSEGV: jumping to a cell far from the origin (growing this "
-        "grid's virtual-cell AT-SPI accessible extent), then back to a "
-        "small selection (shrinking it), then any AT-SPI-registry "
-        "interaction at all — even an unrelated D-Bus action call, not "
-        "just a live tree walk — crashes the app. 100% reproducible "
-        "with keyboard input alone, independent of the named-ranges "
-        "feature itself (which is why this repro doesn't use Define "
-        "Name). Filed as #137 (tables/src/grid_area.rs's CellAccessible "
-        "bridge; needs a GObject-lifetime-aware pass, not a quick "
-        "patch — same family as #132 but a hard crash, not just wrong "
-        "coordinates). Revisit once #137 is fixed."
-    )
-    def test_jump_far_and_back_to_named_range_crashes_137(self):
+    def test_jump_far_and_back_to_a_range_no_longer_crashes(self):
+        """Regression guard for #137/#507: jumping to a cell far from
+        the origin (growing the grid's virtual-cell AT-SPI extent), then
+        back to a small selection (shrinking it), then any
+        AT-SPI-registry interaction at all — here an ordinary D-Bus
+        action call — used to kill the app. Reproduces with keyboard
+        input alone, independent of named ranges, which is why this
+        repro does not use Define Name."""
         import subprocess
         from dogtail import rawinput
 
@@ -1520,7 +1513,10 @@ class TablesNamedRangeSmoke(BaseGUITestCase):
         time.sleep(0.5)
         subprocess.run(["gapplication", "action", aid, "test-snapshot"])
         time.sleep(0.5)
-        self.assertIsNone(self.process.poll(), "expected to crash per #137 — fixed?")
+        self.assertIsNone(
+            self.process.poll(),
+            "tables died after a far jump and back — #137/#507 regression",
+        )
 
 
 class DecksSnapshotSmoke(BaseGUITestCase):

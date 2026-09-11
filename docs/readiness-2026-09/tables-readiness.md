@@ -14,7 +14,14 @@ WorkbookController remains the sole mutation gateway. Stable sheet identities bi
 - [ ] Two-sheet journey: edit/formula → rename/reorder/delete/undo → switch → save → reopen; no cross-sheet overwrite or retargeted history.
 - [ ] Exercise row/column edits, fill, sort/filter, named ranges and protection through actual GUI actions plus controller invariants.
 - [ ] Resolve the Unicode XLSX property regression tracked in #377/#371/#358/#324 using minimized fixtures; do not weaken the generator just to turn CI green.
-- [ ] Verify sparse-grid scaling and accessibility far-navigation regression (#137 is closed but the current smoke file still contains a skipped reproduction).
+- [x] Verify sparse-grid scaling and accessibility far-navigation regression: the skipped #137 reproduction now runs as
+      `TablesNamedRangeSmoke::test_jump_far_and_back_to_a_range_no_longer_crashes`, alongside the far-jump named-range
+      journey that reproduced #507. Root cause was not grid lifetime bookkeeping but GTK itself:
+      `gtk_accessible_update_next_accessible_sibling()` unrefs the parent accessible it obtained from
+      `gtk_at_context_get_accessible_parent()`, which is transfer-none (a weak pointer), in every GTK from 4.10 through
+      main. Each call dropped a reference the app never owned, so a wide enough virtual-cell chain finalized the
+      `GridArea` while it was still parented. Both apps now link children with `set_accessible_parent(parent, sibling)`,
+      which writes the same ATContext fields without the stray unref.
 - [ ] Treat advanced analysis per the accepted ADR: prove supported pivots/charts/protection through the live controller and formats; explicitly surface upstream-dependent array limits.
 
 Dependencies: P0 save durability, #354, #374, #400. Exit: passing XLSX create/edit/save/reopen journeys and honest import/export capabilities for every offered extension; no unsupported format is silently overwritten.

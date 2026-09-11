@@ -206,20 +206,21 @@
       "id": "tables.named-range.jump",
       "app": "tables",
       "title": "Jump to a named range from the name box",
-      "scope": "Define Name captures the selection; typing the name in the name box returns to it. The far-jump path aborts the application.",
+      "scope": "Define Name captures the selection; typing the name in the name box returns to it, including after a jump far from the origin.",
       "issue": 507,
-      "status": "failing",
-      "revision": "b01fbf1ff75d2325ea45de7c8341ff472118bb11",
+      "status": "verified",
+      "revision": "62e14357271e28b837400724e3b737c6409647c3",
       "requires": [
         "gui"
       ],
       "evidence": {
         "gui": [
           "tests/gui/test_smoke.py::TablesNamedRangeSmoke::test_define_name_then_jump_to_it_via_name_box",
+          "tests/gui/test_smoke.py::TablesNamedRangeSmoke::test_jump_far_and_back_to_a_range_no_longer_crashes",
           "tests/gui/test_smoke.py::TablesNamedRangeStatsSmoke::test_define_name_then_jump_to_it_via_name_box"
         ]
       },
-      "note": "The second journey reproduces #507 (heap corruption after a far jump) 3/3 and runs as a marked expected failure. The capability is not verified while that holds."
+      "note": "The stats journey and the far-jump guard both exercise the path that used to abort the app (#507): GTK's gtk_accessible_update_next_accessible_sibling() drops a reference to a parent accessible it does not own, so the grid was finalized while still parented."
     }
   ],
   "waivers": []

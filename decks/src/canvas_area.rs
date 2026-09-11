@@ -189,11 +189,11 @@ impl Default for CanvasArea {
 
 impl CanvasArea {
     /// Mirror the current slide's objects as virtual a11y children.
-    /// Accessibles are persistent: appended children are linked in with
-    /// update_next_accessible_sibling (the dynamic-children protocol —
-    /// rebuilding the whole chain leaves the bridge holding stale
-    /// references and it reports no children at all); surplus children
-    /// are hidden, never destroyed.
+    /// Accessibles are persistent: appended children are linked into
+    /// the existing chain (the dynamic-children protocol — rebuilding
+    /// the whole chain leaves the bridge holding stale references and
+    /// it reports no children at all); surplus children are hidden,
+    /// never destroyed.
     pub fn sync_objects(&self, objects: &[SlideObject], selected: Option<usize>) {
         loop {
             let (len, prev) = {
@@ -205,9 +205,20 @@ impl CanvasArea {
             }
             let acc = ObjectAccessible::new(self, len);
             self.imp().objects.borrow_mut().push(acc.clone());
+            // Linking uses set_accessible_parent(parent, next_sibling),
+            // never gtk_accessible_update_next_accessible_sibling():
+            // that function g_object_unref()s the parent accessible it
+            // fetched with gtk_at_context_get_accessible_parent(), which
+            // is transfer none (a weak pointer), in every GTK from 4.10
+            // through main. Each call drops a reference this process
+            // never owned, so the CanvasArea is eventually finalized
+            // while still parented — the use-after-free behind #507.
+            // set_accessible_parent() goes through the same ATContext
+            // setters with no stray unref, so the chain the AT-SPI
+            // bridge reads is identical.
             acc.set_accessible_parent(Some(self), None::<&ObjectAccessible>);
             if let Some(prev) = prev {
-                prev.update_next_accessible_sibling(Some(&acc));
+                prev.set_accessible_parent(Some(self), Some(&acc));
             }
         }
         let list = self.imp().objects.borrow();
