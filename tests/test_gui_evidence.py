@@ -132,5 +132,93 @@ class CommentTests(unittest.TestCase):
         self.assertNotIn("✅", body)
 
 
+class TheLeadClipPlaysWithoutAClick(unittest.TestCase):
+    """A body where every clip is behind a <details> is a body where
+    nobody watches any of them."""
+
+    def bundle(self, entries):
+        return {"entries": entries, "revision": "abc123def4567890",
+                "run_url": "https://example/run/1"}
+
+    def entry(self, name, outcome="passed"):
+        return {"test": name, "outcome": outcome, "video": f"{name}.mp4",
+                "gif": f"{name}.gif", "duration_seconds": 3.0}
+
+    def test_the_first_clip_is_not_collapsed(self):
+        body = pr_comment.build(
+            self.bundle([self.entry("A"), self.entry("B")]),
+            media_base="https://media.test/x")
+        before_details = body.split("<details>")[0]
+        self.assertIn("![A](https://media.test/x/A.gif)", before_details)
+
+    def test_the_remaining_clips_are_collapsed(self):
+        body = pr_comment.build(
+            self.bundle([self.entry("A"), self.entry("B")]),
+            media_base="https://media.test/x")
+        self.assertIn("<details>", body)
+        after_details = body.split("<details>")[1]
+        self.assertIn("![B](https://media.test/x/B.gif)", after_details)
+
+    def test_a_failure_is_the_clip_shown_first(self):
+        body = pr_comment.build(
+            self.bundle([self.entry("A"), self.entry("B", "failed")]),
+            media_base="https://media.test/x")
+        before_details = body.split("<details>")[0]
+        self.assertIn("![B](https://media.test/x/B.gif)", before_details)
+        self.assertNotIn("![A]", before_details)
+
+    def test_a_single_journey_adds_no_details_block_at_all(self):
+        body = pr_comment.build(self.bundle([self.entry("A")]),
+                                media_base="https://media.test/x")
+        self.assertNotIn("<details>", body)
+        self.assertIn("![A](https://media.test/x/A.gif)", body)
+
+
+class SpliceIntoPullRequestBody(unittest.TestCase):
+    """The evidence goes into the pull-request description, and the
+    description is something a person also writes in. Only the marked
+    region may ever be rewritten."""
+
+    BLOCK = f"{pr_comment.MARKER}\nEVIDENCE v1\n{pr_comment.END_MARKER}"
+    NEWER = f"{pr_comment.MARKER}\nEVIDENCE v2\n{pr_comment.END_MARKER}"
+
+    def test_a_body_with_no_block_gets_one_appended(self):
+        out = pr_comment.splice("My description.", self.BLOCK)
+        self.assertTrue(out.startswith("My description."))
+        self.assertIn("EVIDENCE v1", out)
+
+    def test_a_second_run_replaces_rather_than_duplicates(self):
+        once = pr_comment.splice("My description.", self.BLOCK)
+        twice = pr_comment.splice(once, self.NEWER)
+        self.assertEqual(twice.count(pr_comment.MARKER), 1)
+        self.assertNotIn("EVIDENCE v1", twice)
+        self.assertIn("EVIDENCE v2", twice)
+
+    def test_prose_on_both_sides_of_the_block_survives(self):
+        body = f"Intro.\n\n{self.BLOCK}\n\nTrailing note."
+        out = pr_comment.splice(body, self.NEWER)
+        self.assertIn("Intro.", out)
+        self.assertIn("Trailing note.", out)
+        self.assertNotIn("EVIDENCE v1", out)
+
+    def test_a_start_marker_with_no_end_is_replaced_to_the_end(self):
+        # What an older run's output looks like. Left alone it would grow a
+        # second copy of the evidence on every push.
+        body = f"Intro.\n\n{pr_comment.MARKER}\nsprawl\nmore sprawl\n"
+        out = pr_comment.splice(body, self.NEWER)
+        self.assertEqual(out.count(pr_comment.MARKER), 1)
+        self.assertNotIn("sprawl", out)
+        self.assertTrue(out.startswith("Intro."))
+
+    def test_an_empty_body_does_not_get_a_leading_rule(self):
+        out = pr_comment.splice("", self.BLOCK)
+        self.assertTrue(out.startswith(pr_comment.MARKER), out)
+
+    def test_build_emits_both_markers_so_splice_can_find_them(self):
+        body = pr_comment.build({"entries": []})
+        self.assertIn(pr_comment.MARKER, body)
+        self.assertIn(pr_comment.END_MARKER, body)
+
+
 if __name__ == "__main__":
     unittest.main()
