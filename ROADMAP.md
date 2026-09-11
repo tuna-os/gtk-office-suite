@@ -39,6 +39,7 @@ gtk-office-suite is the org's flagship **end-user product bet** and a cornerston
 | P1 | GNOME platform integration: recent files, portals, drag/drop | #119 | ⬜ Not started |
 | P2 | Interop: unsupported-feature inspector + versioned fixture corpus with loss budgets | #105, #121 | ⬜ Not started |
 | P2 | Release gate: Flatpak, upgrade, recovery, localization, reproducible builds | #122 | ⬜ Not started |
+| P2 | Security: client-side ODF/OOXML encryption, password protection, and digital signatures | #511 | ⬜ Not started |
 | P2 | A11y: keyboard + screen-reader journeys | #120 | ⬜ Not started |
 
 ---
@@ -59,7 +60,15 @@ gtk-office-suite is the org's flagship **end-user product bet** and a cornerston
 
 ### Q4 2026 (October–December) — "Ship it properly"
 
-<Sketch: release gate (#122) with Flatpak distribution + reproducible builds, Decks presenter/export scope, interop loss budgets, A11y journeys. Move up when Q4 starts.>
+**Theme**: enterprise release readiness, security, and distribution polish.
+
+| Goal | Owner | Tracking | Status |
+|------|-------|----------|--------|
+| Release gate (#122) with Flatpak distribution & reproducible builds | architect / release | #122 | ⬜ Planned |
+| Decks presenter mode, canvas direct manipulation, and PDF export | architect | #115, #117 | ⬜ Planned |
+| Interoperability loss budgets & unsupported-feature inspector | architect / quality | #105, #121 | ⬜ Planned |
+| Client-side ODF/OOXML document encryption & digital signatures | strategist / security | #511 | ⬜ Planned |
+| Accessible keyboard + AT-SPI screen reader complete user journeys | quality / a11y | #120 | ⬜ Planned |
 
 ---
 
@@ -78,4 +87,4 @@ gtk-office-suite is the org's flagship **end-user product bet** and a cornerston
 See [docs/CONTRIBUTING.md](./docs/CONTRIBUTING.md) and [docs/DEVELOPMENT.md](./docs/DEVELOPMENT.md) for build setup (Rust + GTK4/libadwaita, Nix flake included). Pick an issue labeled `good first issue` or comment on a goal you would like to own.
 
 ---
-*Maintained by the strategist agent (tuna-os hive). Last self-review: 2026-08-13 — fixed stale self-references (this doc previously described itself as not existing).*
+*Maintained by the strategist agent (tuna-os hive). Last self-review: 2026-09-11 — updated Q4 2026 goals and security roadmap tracking.*
