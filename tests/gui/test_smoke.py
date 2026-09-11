@@ -1042,6 +1042,57 @@ class TablesNamedRangeStatsSmoke(TablesCellEntryMixin, BaseGUITestCase):
         self.assertIsNone(self.process.poll(), "tables crashed jumping to a named range")
 
 
+class TablesNameBoxAccessibilitySmoke(TablesCellEntryMixin, BaseGUITestCase):
+    """A name-box jump has to announce where it landed.
+
+    The grid's accessible description is what a screen reader reads out,
+    and it only ever named the last *committed* cell: jumping by cell
+    reference or to a defined name moved the selection and said nothing,
+    so a keyboard-and-screen-reader user had no way to know where they
+    were. It is also the signal the GUI journeys were missing, which is
+    why three of them depended on fixed waits (#354).
+    """
+
+    app_name = "tables"
+
+    def test_jumping_by_cell_reference_announces_the_new_cell(self):
+        from dogtail import rawinput
+        import subprocess
+
+        subprocess.run(["gapplication", "action", "org.tunaos.tables", "new-document"])
+        self._wait_for_a_new_document()
+        self._put("B2", "seven")
+
+        # Jump somewhere empty and far from both A1 and the written cell,
+        # so neither a stale description nor a coincidence can pass this.
+        rawinput.keyCombo("<Control>g")
+        self.wait_until(lambda: self._focused("Cell reference"), bool,
+                        description="the name box to take focus")
+        rawinput.typeText("D7")
+        rawinput.keyCombo("Return")
+        description = self.wait_until(
+            self._grid,
+            lambda text: "D7" in text,
+            description="the grid to announce the jumped-to cell",
+        )
+        self.assertIn("cell D7", description, f"grid: {description!r}")
+        self.assertNotIn("B2", description, "the grid still announced the previous cell")
+
+        # And jumping onto a cell that holds something announces its value.
+        rawinput.keyCombo("<Control>g")
+        self.wait_until(lambda: self._focused("Cell reference"), bool,
+                        description="the name box to take focus")
+        rawinput.typeText("B2")
+        rawinput.keyCombo("Return")
+        description = self.wait_until(
+            self._grid,
+            lambda text: "B2" in text,
+            description="the grid to announce the cell jumped back to",
+        )
+        self.assertIn("cell B2: seven", description, f"grid: {description!r}")
+        self.assertIsNone(self.process.poll(), "tables exited during a name-box jump")
+
+
 class TablesClipboardSmoke(BaseGUITestCase):
     """Suite-clipboard glue: Ctrl+C publishes the fragment MIME and
     Ctrl+V pastes it back with formulas still live. (The cross-app

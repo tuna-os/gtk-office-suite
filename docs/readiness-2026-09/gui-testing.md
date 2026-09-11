@@ -142,12 +142,19 @@ not obvious:
   own accessible name mirrors the selection, so the gesture is retried
   against that outcome instead.
 
-One observability gap is worth recording as product work rather than test
-work: **the grid's accessible description does not follow a name-box jump**
-— it reports only the last *committed* cell, so "the selection moved" has
-no accessible signal. That is why these journeys reach for fixed waits in
-the first place. A selection-changed signal on the grid would let the
-remaining Tables waits become predicates too.
+One observability gap turned out to be a product defect, and is now
+fixed: **the grid's accessible description did not follow a name-box
+jump** — it reported only the last *committed* cell. Jumping by cell
+reference or to a defined name moved the selection and announced nothing,
+so a screen-reader user was never told where they had landed.
+`refresh_grid_a11y` already existed and its own documentation warns about
+exactly this staleness for sheet switches; the name box was the path that
+still had it, and `jump_to_reference` now calls it.
+`TablesNameBoxAccessibilitySmoke` asserts it, and fails against the
+unfixed binary with `last observed: 'cell B2: seven'` after a jump to D7.
+
+That also supplies the signal the remaining Tables waits need, so they can
+become predicates rather than fixed intervals.
 
 The other 228 sleeps are not load-bearing at a quarter of their length,
 which does not make them safe to simply shorten — it makes them dead
