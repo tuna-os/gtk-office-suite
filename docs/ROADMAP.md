@@ -104,6 +104,14 @@ without a test that fails first.
   validates pedantic-clean; flathub/ manifests build from tag v1.1.0.
   The submission PR itself is a human action (see flathub/README.md).
 
+## Q4 2026 — Enterprise & Architecture Strategy (Active Horizon)
+
+- 🟡 **God-file Decomposition (#168)**: Extract remaining business & format state out of `window.rs` binaries into pure GTK-free domain controllers within `suite-common-core`.
+- 🟡 **Headless Conversion CLI (`suite-convert`, #541, #546)**: Provide batch processing and document pipeline conversion CLI binaries (`suite-convert`) for CI/CD, headless server, and WASM/IPC plugin environments.
+- 🟡 **Enterprise Fleet Administration (#534)**: Deliver dconf configuration management schemas, administrative policy locks, and automated deployment templates for managed enterprise desktops.
+- 🟡 **Privacy-First AI Protocol (#548)**: Integrate local LLM context extraction engines without sending document payloads off-device.
+- 🟡 **Offline-First Collaborative Sync (#545)**: Implement peer-to-peer CRDT document synchronization for multi-user editing over local networks.
+
 ## Standing infrastructure notes
 
 - Builds: the `gtkbuild` distrobox on the build host (18 cores, ~10s warm) is the
@@ -112,3 +120,4 @@ without a test that fails first.
   walkthrough weekly from `tests/gui/walkthrough.py` + the demo docs.
 - Testing bar: see TESTING.md — oracle floor 25/20/20, red-first waves,
   corpus growth beyond ~70 hand-written oracle tests.
+
