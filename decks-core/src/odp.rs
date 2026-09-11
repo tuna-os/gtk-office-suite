@@ -11,9 +11,10 @@
 use letters_core::model::{Run, RunStyle};
 use quick_xml::events::Event;
 use quick_xml::Reader;
-use std::io::{Read, Write};
+use std::io::Write;
 
 use crate::engine::{Deck, MasterSlide, Slide, SlideObject};
+use suite_common_core::zip_guard::{BoundedArchive, ZipBudget};
 
 const MIMETYPE: &str = "application/vnd.oasis.opendocument.presentation";
 
@@ -243,11 +244,13 @@ fn attr(e: &quick_xml::events::BytesStart, name: &str) -> Option<String> {
 pub fn read(path: &str) -> Result<Deck, String> {
     let file = std::fs::File::open(path).map_err(|e| e.to_string())?;
     let mut zip = zip::ZipArchive::new(file).map_err(|e| e.to_string())?;
-    let mut content = String::new();
-    zip.by_name("content.xml")
-        .map_err(|_| "no content.xml — not an ODP?".to_string())?
-        .read_to_string(&mut content)
-        .map_err(|e| e.to_string())?;
+    // Bounded like every other package read: an ODP is an untrusted
+    // download, and content.xml is the part a bomb would hide in (#442).
+    let mut budget = ZipBudget::default();
+    budget.check_entry_count(zip.len())?;
+    let content = zip.part_to_string("content.xml", &mut budget).map_err(|e| {
+        if e.is_missing() { "no content.xml — not an ODP?".to_string() } else { e.to_string() }
+    })?;
 
     // First pass: text styles and drawing-page backgrounds.
     let mut text_styles: std::collections::HashMap<String, RunStyle> = Default::default();

@@ -10,7 +10,21 @@ Architecture: readers return complete semantic document state plus source-packag
 - [ ] Test supported text/styles/images/links/notes/geometry/formulas/sheet order in both directions through LibreOffice.
 - [ ] Verify opaque relationships/content types after unrelated edits; refuse unsafe partial pass-through.
 - [ ] GUI cancel on a loss warning preserves original bytes and dirty state.
-- [ ] Harden ZIP/XML/image readers with size/count/decompression limits and malformed/truncated corpus cases; retain minimized fuzz failures.
+- [~] Harden ZIP/XML/image readers with size/count/decompression limits and malformed/truncated corpus cases; retain
+      minimized fuzz failures. **Limits are done**: `suite-common-core/src/zip_guard.rs` holds one set of bounds —
+      member count, uncompressed bytes per member, and uncompressed bytes across the whole archive — and every package
+      reader in the suite now reads through it (odt, odp, pptx, the three best-effort xlsx readers, and
+      `OpaquePackage::capture`, which is the widest surface because it reads every member the format reader did not
+      claim). Before this, all seventeen entry reads called `read_to_end`/`read_to_string` with no bound, so a
+      40-kilobyte file could ask a reader for gigabytes. The bound comes from `Read::take` rather than the archive's
+      declared size, because a bomb simply lies about that, and the buffer is grown incrementally rather than
+      preallocated — preallocating from a declared size *is* the allocation the bomb is asking for.
+      `{letters,decks}-core/tests/hostile_packages.rs` build hostile archives in memory and assert the production
+      readers refuse them, that an oversized *optional* part is skipped rather than fatal, and that ordinary documents
+      still open. Malformed/truncated corpus cases and retained minimized fuzz failures are still open: the cargo-fuzz
+      targets in `fuzz/` cover docx/xlsx/pptx only, run 100 iterations a night with `--sanitizer none`, and have no seed
+      corpus and no mechanism to turn a finding into a committed regression. The ODF read side has no fuzz target at
+      all.
 - [ ] Treat missing oracle as failure in required interop/release lanes (REQUIRE_SOFFICE=1), never as observed compatibility.
 - [ ] Promote a format feature only when model, live journey and independent-reader evidence all exist.
 

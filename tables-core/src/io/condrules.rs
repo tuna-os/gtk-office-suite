@@ -20,16 +20,20 @@ pub fn read_cond_rules_from_xlsx(path: &str) -> Vec<crate::sheet::CondRule> {
     let Ok(mut zip) = zip::ZipArchive::new(f) else {
         return Vec::new();
     };
-    use std::io::Read as _;
+    use suite_common_core::zip_guard::{BoundedArchive, ZipBudget};
+
+    // Bounded reads: this is a best-effort reader over an untrusted
+    // package, and "best effort" must not extend to decompressing whatever
+    // the file asks for (#442).
+    let mut budget = ZipBudget::default();
+    if budget.check_entry_count(zip.len()).is_err() {
+        return Vec::new();
+    }
 
     // dxf index → fill RGB, from styles.xml (order of <dxf> elements).
     let mut dxf_fills: Vec<Option<String>> = Vec::new();
     {
-        let mut styles = String::new();
-        if zip
-            .by_name("xl/styles.xml")
-            .map(|mut f| f.read_to_string(&mut styles))
-            .is_ok()
+        let styles = zip.optional_part_to_string("xl/styles.xml", &mut budget);
         {
             if let Some(dxfs) = styles.split("<dxfs").nth(1) {
                 let dxfs = dxfs.split("</dxfs>").next().unwrap_or("");
@@ -53,14 +57,9 @@ pub fn read_cond_rules_from_xlsx(path: &str) -> Vec<crate::sheet::CondRule> {
         }
     }
 
-    let mut sheet_xml = String::new();
-    if zip
-        .by_name("xl/worksheets/sheet1.xml")
-        .map(|mut f| f.read_to_string(&mut sheet_xml))
-        .is_err()
-    {
+    let Ok(sheet_xml) = zip.part_to_string("xl/worksheets/sheet1.xml", &mut budget) else {
         return Vec::new();
-    }
+    };
 
     let mut out = Vec::new();
     for block in sheet_xml.split("<conditionalFormatting").skip(1) {

@@ -12,6 +12,7 @@ pub mod style;
 pub mod search;
 pub mod print;
 pub mod interop;
+pub mod zip_guard;
 pub mod recent;
 pub mod templates;
 pub mod session;

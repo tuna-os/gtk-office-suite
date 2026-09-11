@@ -10,7 +10,8 @@
 use crate::model::*;
 use quick_xml::events::{BytesRef, BytesText, Event};
 use quick_xml::Reader;
-use std::io::{Read, Write};
+use std::io::Write;
+use suite_common_core::zip_guard::{BoundedArchive, ZipBudget};
 
 const MIMETYPE: &str = "application/vnd.oasis.opendocument.text";
 
@@ -522,15 +523,15 @@ fn parse_length_pt(v: &str) -> Option<f64> {
 pub fn read(path: &str) -> Result<Document, String> {
     let file = std::fs::File::open(path).map_err(|e| e.to_string())?;
     let mut zip = zip::ZipArchive::new(file).map_err(|e| e.to_string())?;
-    let mut content = String::new();
-    zip.by_name("content.xml")
-        .map_err(|_| "no content.xml — not an ODT?".to_string())?
-        .read_to_string(&mut content)
-        .map_err(|e| e.to_string())?;
-    let mut styles = String::new();
-    if let Ok(mut f) = zip.by_name("styles.xml") {
-        let _ = f.read_to_string(&mut styles);
-    }
+    // An ODT arrives from a download or an attachment; its parts are read
+    // under a budget so a member that claims to decompress to gigabytes is
+    // refused rather than allocated (#442).
+    let mut budget = ZipBudget::default();
+    budget.check_entry_count(zip.len())?;
+    let content = zip.part_to_string("content.xml", &mut budget).map_err(|e| {
+        if e.is_missing() { "no content.xml — not an ODT?".to_string() } else { e.to_string() }
+    })?;
+    let styles = zip.optional_part_to_string("styles.xml", &mut budget);
 
     let auto = parse_auto_styles(&content);
 

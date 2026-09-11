@@ -1,82 +1,115 @@
 # Architecture — GTK Office Suite
 
-> Detailed architecture, module layout, and LibreOffice pattern mappings.
-> For GNOME HIG compliance rules, see [GNOME-GUIDELINES.md](GNOME-GUIDELINES.md).
+> Detailed architecture, module layout, dependency inventory, and the
+> LibreOffice patterns this codebase borrows from. For a newcomer's
+> orientation start with the [README](../README.md); for GNOME HIG
+> compliance rules see [GNOME-GUIDELINES.md](GNOME-GUIDELINES.md); for
+> the conventions you are expected to follow when writing code see
+> [CONTRIBUTING.md](CONTRIBUTING.md).
+
+---
+
+## The core/GTK split
+
+The organising principle of the whole workspace: **every app is two
+crates.** A `*-core` crate holds the document model, the file formats and
+the undo commands and has no GTK dependency at all; a binary crate on top
+holds the windows, widgets and rendering.
+
+That boundary is load-bearing, not cosmetic:
+
+- The document models are testable without a display, which is why the
+  property tests, round-trip tests, seeded command campaigns and oracle
+  comparisons all live in the core crates.
+- The core crates can be published to crates.io and used without GTK.
+- A bug is either in the model or in the view, and the crate boundary
+  usually says which before you start reading.
+
+The rule that keeps it honest: **a GTK window never owns authoritative
+document state.** See [Canonical Document Controllers](#canonical-document-controllers--threading-rules)
+below.
+
+> **Which `suite-common`?** Two other repositories in the organisation
+> carry this name — a standalone Python/meson library, and
+> `suite-common-rust`, a smaller separately-maintained Rust crate.
+> **This workspace's `suite-common/` is the canonical, actively-developed
+> shared Rust crate.** See
+> [tunaos#517](https://github.com/tuna-os/tunaos/issues/517) for the
+> collision this note resolves.
 
 ---
 
 ## Workspace Structure
 
+Nine crates. Line counts are indicative of weight, not targets.
+
+| Crate | GTK? | Published | Holds |
+|---|---|---|---|
+| `suite-common-core` | no | yes | Undo, number formats, styles, property pool, search, print, units, atomic saves, autosave, ZIP bounds, interop reports |
+| `suite-common` | yes | no | Command palette, shortcuts dialog, file dialogs, toasts, GTK test helpers |
+| `suite-export` | no | yes | PDF export |
+| `letters-core` | no | no | Document model, DOCX/ODT/Markdown I/O, structured editing, sessions |
+| `letters` | yes | no | Window, tabs, GtkTextView bridge, ruler, styles |
+| `tables-core` | no | yes | Sheet model, IronCalc engine wrapper, XLSX/ODS/CSV I/O, workbook controller |
+| `tables` | yes | no | Window, Cairo grid, charts, dialogs |
+| `decks-core` | no | no | Deck model, PPTX/ODP I/O, object commands, decks controller |
+| `decks` | yes | no | Window, slide canvas, sidebar, transitions, present mode |
+
 ```
 gtk-office-suite/
-├── suite-common/       # Shared library crate
-│   └── src/
-│       ├── lib.rs      # Module declarations + re-exports
-│       ├── undo.rs     # Generic Command<T> + UndoManager<T>
-│       ├── format.rs   # NumberFormat engine
-│       ├── events.rs   # Broadcaster<H> + Listener<H>
-│       ├── file_dialogs.rs
-│       └── toast_manager.rs
+├── suite-common-core/src/   # atomic_save.rs  autosave.rs  zip_guard.rs
+│                            # undo.rs  format.rs  style.rs  props.rs
+│                            # search.rs  print.rs  units.rs  interop.rs
+│                            # session.rs  templates.rs  recent.rs  palette.rs
+├── suite-common/src/        # lib.rs  file_dialogs.rs  toast_manager.rs
+│                            # gtk_test.rs
+├── suite-export/src/
 │
-├── letters/            # Word processor binary
-│   └── src/
-│       ├── main.rs
-│       ├── window.rs   # LettersWindow (1,820 lines — large, needs refactor)
-│       ├── engine.rs   # Document model, format conversion
-│       ├── export.rs   # Typst/PDF export
-│       ├── styles.rs   # GtkTextTag management
-│       └── ruler.rs    # Horizontal ruler widget
+├── letters-core/src/        # model.rs  structured.rs  docx.rs  odt.rs
+│                            # markdown.rs  session.rs  fragment.rs
+├── letters/src/             # window.rs  bridge.rs  actions.rs  doc_tab.rs
+│                            # styles.rs  ruler.rs
 │
-├── tables/             # Spreadsheet binary
-│   └── src/
-│       ├── main.rs
-│       ├── window.rs   # TablesWindow + SheetModel + draw_grid (refactored: ~1,200)
-│       ├── engine.rs   # TablesEngine wrapping IronCalc
-│       ├── charts.rs   # Cairo chart rendering (Bar, Line, Pie)
-│       ├── export.rs   # Typst/PDF export
-│       └── undo.rs     # Table-specific undo commands
+├── tables-core/src/         # sheet.rs  engine.rs  controller/  io/
+├── tables/src/              # window.rs  grid_area.rs  charts.rs
 │
-├── decks/              # Presentations binary
-│   └── src/
-│       ├── main.rs
-│       ├── window.rs   # DecksWindow (refactored: ~650 lines)
-│       ├── engine.rs   # PPTX I/O, Slide/SlideObject model
-│       ├── canvas.rs   # Slide rendering + image loading + hit testing
-│       ├── toolbar.rs  # Toolbar builder
-│       ├── sidebar.rs  # Slide list rebuild
-│       ├── undo.rs     # Deck-specific undo commands
-│       ├── transition.rs  # Slide transition animations
-│       └── export.rs   # Typst/PDF export
+├── decks-core/src/          # engine/  odp.rs  undo.rs  controller.rs
+├── decks/src/               # window.rs  canvas.rs  canvas_area.rs
+│                            # sidebar.rs  toolbar.rs  transition.rs
 │
-├── flatpak/            # Flatpak packaging
-│   ├── org.tunaos.letters.json
-│   ├── org.tunaos.letters.metainfo.xml
-│   ├── org.tunaos.letters.desktop
-│   ├── org.tunaos.tables.json
-│   ├── org.tunaos.tables.metainfo.xml
-│   ├── org.tunaos.tables.desktop
-│   ├── org.tunaos.decks.json
-│   ├── org.tunaos.decks.metainfo.xml
-│   ├── org.tunaos.decks.desktop
-│   └── icons/
-│       ├── org.tunaos.letters.svg
-│       ├── org.tunaos.tables.svg
-│       └── org.tunaos.decks.svg
-│
-├── tests/              # Integration tests
-├── docs/               # Documentation
-│   ├── research/       # Architecture research notes
-│   ├── audit-phase3.md
-│   └── audit-phase4.md
-│
-├── Cargo.toml          # Workspace root
-├── justfile            # Build/test/lint shortcuts
-├── README.md
-├── CHANGELOG.md
-├── AGENT-REFERENCE-LIBRARY.md    # Pattern catalog for AI agents
-├── AGENT-GNOME-REFERENCE.md      # GNOME app reference doc
-└── IMPLEMENTATION-QUEUE.md       # Status tracking
+├── tests/                   # gui/ (AT-SPI journeys, container, stress)
+│                            # Python harness tests
+├── interop/                 # Reviewable interop corpus (unzipped package XML)
+├── conformance/             # Capability ledger and validators
+├── fuzz/                    # cargo-fuzz targets (separate workspace)
+├── flatpak/                 # Manifests, metainfo, desktop files, schemas, icons
+├── flathub/                 # Flathub-layout manifests (submission prep)
+├── po/                      # Translations
+├── runbooks/  scripts/  skills/
+└── docs/                    # This directory
 ```
+
+### Module size guidance
+
+| File | Soft limit | Split into |
+|---|---|---|
+| `window.rs` | 600 | `canvas.rs`, `toolbar.rs`, `sidebar.rs` |
+| `engine.rs` | 500 | `read.rs` + `write.rs` for format I/O |
+| `undo.rs` | 250 | By command category (object, slide, format) |
+
+Over the limit today, and known to be (measured, not estimated):
+
+| File | Lines |
+|---|---|
+| `tables/src/window.rs` | 2,329 |
+| `decks/src/window.rs` | 1,783 |
+| `letters/src/window.rs` | 1,278 |
+| `tables-core/src/sheet.rs` | 1,222 |
+| `suite-common/src/lib.rs` | 1,219 |
+| `letters/src/bridge.rs` | 1,199 |
+
+These are real debt, not a style preference: the reentrancy crashes fixed
+in v2.1.0 all lived in files this size.
 
 ---
 
@@ -89,8 +122,8 @@ gtk-office-suite/
 | Rich text | GtkTextView + TextTags (not WebKit) | Native GTK, no JS dependency, lighter Flatpak |
 | File I/O | calamine + rust_xlsxwriter (Tables), pulldown-cmark + rdocx (Letters), zip + quick-xml (Decks) | Most mature Rust libraries per format |
 | Document format | Markdown (Letters canonical) | Simple text storage, renders via pulldown-cmark |
-| Undo architecture | Generic Command<T> trait in suite-common | Matches LO's SfxUndoAction, reusable across all apps |
-| Number formatting | suite-common NumberFormat, num-format crate | Matches LO's SvNumberFormatter, locale-aware |
+| Undo architecture | Generic `Command<T>` trait in `suite-common-core` | Matches LO's SfxUndoAction, reusable across all apps, and GTK-free so it is testable headlessly |
+| Number formatting | `suite-common-core` NumberFormat, num-format crate | Matches LO's SvNumberFormatter, locale-aware |
 
 ---
 
@@ -139,7 +172,24 @@ sd/ (Draw/Impress)        →     decks/
   presenter                    transition.rs
 ```
 
+Where the shared-layer equivalents actually live today (the tree above
+predates the `*-core` split):
+
+| LibreOffice | Our equivalent | File |
+|---|---|---|
+| `svl/undo.hxx` — SfxUndoAction, SfxUndoManager | `Command<T>`, `UndoManager<T>` | `suite-common-core/src/undo.rs` |
+| `svl/numformat.hxx` — SvNumberFormatter | `NumberFormat`, `NumberFormatKind` | `suite-common-core/src/format.rs` |
+| `svl/SfxBroadcaster.hxx` — SfxBroadcaster, SfxListener | `Broadcaster<H>`, `Listener<H>` | `suite-common-core/src/events.rs` |
+| `svl/style.hxx` — SfxStyleSheet | style inheritance | `suite-common-core/src/style.rs` |
+| `svl/poolitem.hxx` — SfxItemPool | property pool | `suite-common-core/src/props.rs` |
+| `editeng/borderline.hxx` — SvxBorderLineStyle | `CellBorder`, `BorderStyle` | `tables/src/window.rs` |
+
 **Reference:** LibreOffice source at `~/dev/libreoffice-core/` (sparse checkout: `sc/`, `sd/`, `svl/`, `editeng/`).
+
+A note on how LibreOffice is used: as an **oracle**, not a porting target.
+The parity corpora run real Writer and Impress and compare against what
+they produce, rather than against a hand-written belief about what they
+would produce. See ["An oracle, not a port"](blog/2026-07-18-oracle-not-port.md).
 
 ---
 
@@ -190,19 +240,49 @@ Slide navigation (arrows in present mode)
 
 ---
 
-## Module Size Guidelines
+## Dependency inventory
 
-| File | Max Lines | Action if exceeds |
-|------|-----------|-------------------|
-| `window.rs` | 600 | Split into `canvas.rs`, `toolbar.rs`, `sidebar.rs` |
-| `engine.rs` | 500 | Split into `read.rs` + `write.rs` for format I/O |
-| `undo.rs` | 250 | Split by command category (object, slide, format) |
+External crates, by what they are relied on for. The rule is in
+[Crate Selection Rules](#crate-selection-rules) below: never re-implement
+a format parser, formula engine, or graphics library.
 
-**Current status:**
-- Decks `window.rs`: 1,779 lines → needs refactor (target: split canvas/toolbar/sidebar)
-- Tables `window.rs`: 2,313 lines → needs refactor (target: split SheetModel + rendering)
-- Letters `window.rs`: 1,881 lines → needs refactor (target: split toolbar/sidebar/editor)
-- Suite-common `lib.rs`: 1,191 lines → needs refactor
+| Crate | Used by | Relied on for |
+|---|---|---|
+| `ironcalc_base` | tables-core | Formula engine and evaluation |
+| `calamine` | tables-core | XLSX, XLS, ODS reading |
+| `rust_xlsxwriter` | tables-core | XLSX writing |
+| `rdocx`, `rdocx-oxml` | letters-core, letters | DOCX read/write |
+| `pulldown-cmark` | letters-core, letters, decks | Markdown parsing |
+| `quick-xml` | letters-core, decks-core, decks | ODF/OOXML XML — a pull parser, which is why deep nesting and entity expansion are not a hazard |
+| `zip` | every core crate | ODF/OOXML package containers (bounded by `suite_common_core::zip_guard`) |
+| `typst-as-lib`, `typst-pdf` | suite-export | PDF generation |
+| `num-format`, `chrono` | suite-common-core | Locale-aware numbers, date parsing |
+| `regex` | suite-common-core, tables-core | Search, data validation |
+| `serde`, `serde_json` | several | Settings, clipboard fragments, reports |
+| `tempfile` | several | Atomic saves, test fixtures |
+| `zspell` | letters | Spell checking |
+| `cairo-rs`, `pango`, `pangocairo` | letters, tables, decks | Text measurement and rendering |
+| `image` | decks | JPEG/WebP/GIF decoding |
+| `gettext-rs` | suite-common | Translations |
+
+Development-only: `proptest` (round-trip properties), `libfuzzer-sys` (in
+the separate `fuzz/` workspace), plus `dogtail`, `pytest` and `ffmpeg` for
+the GUI journeys.
+
+---
+
+## Reference implementations
+
+Consulted for patterns; none of this is vendored.
+
+| Project | Why it is useful here |
+|---|---|
+| [LibreOffice core](https://git.libreoffice.org/core) | Feature catalogs, shared-layer architecture, undo/number-format/border patterns. Also the parity oracle. |
+| [IronCalc](https://github.com/ironcalc/ironcalc) | The formula engine Tables uses |
+| [Rnote](https://github.com/flxzt/rnote) | Rust/GTK4 canvas drawing, undo/redo, selection |
+| [Loupe](https://gitlab.gnome.org/GNOME/loupe) | Cairo, DrawingArea, fullscreen, gestures |
+| [Papers](https://gitlab.gnome.org/GNOME/papers) | Find sidebar, search box |
+| [GNOME HIG](https://developer.gnome.org/hig/) | Widget and layout patterns |
 
 ---
 

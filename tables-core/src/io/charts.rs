@@ -19,6 +19,13 @@ pub fn read_charts_from_xlsx(path: &str) -> Vec<crate::sheet::ChartSpec> {
     let Ok(mut zip) = zip::ZipArchive::new(f) else {
         return Vec::new();
     };
+    // Bounded reads: best-effort must not extend to decompressing whatever
+    // an untrusted package asks for (#442).
+    use suite_common_core::zip_guard::{BoundedArchive, ZipBudget};
+    let mut budget = ZipBudget::default();
+    if budget.check_entry_count(zip.len()).is_err() {
+        return Vec::new();
+    }
 
     // A1-style absolute range "Sheet1!$A$2:$A$5" → (first_row, col, last_row).
     fn parse_range(r: &str) -> Option<(usize, usize, usize)> {
@@ -41,15 +48,9 @@ pub fn read_charts_from_xlsx(path: &str) -> Vec<crate::sheet::ChartSpec> {
         .filter(|n| n.starts_with("xl/drawings/drawing") && n.ends_with(".xml"))
         .collect();
     for name in &drawing_names {
-        let mut xml = String::new();
-        use std::io::Read as _;
-        if zip
-            .by_name(name)
-            .map(|mut f| f.read_to_string(&mut xml))
-            .is_err()
-        {
+        let Ok(xml) = zip.part_to_string(name, &mut budget) else {
             continue;
-        }
+        };
         // First <xdr:from> per anchor: <xdr:col>N</xdr:col><xdr:row>N</xdr:row>
         for from in xml.split("<xdr:from>").skip(1) {
             let grab = |tag: &str| -> Option<usize> {
@@ -75,15 +76,9 @@ pub fn read_charts_from_xlsx(path: &str) -> Vec<crate::sheet::ChartSpec> {
         .collect();
     let mut out = Vec::new();
     for (ci, name) in chart_names.iter().enumerate() {
-        let mut xml = String::new();
-        use std::io::Read as _;
-        if zip
-            .by_name(name)
-            .map(|mut f| f.read_to_string(&mut xml))
-            .is_err()
-        {
+        let Ok(xml) = zip.part_to_string(name, &mut budget) else {
             continue;
-        }
+        };
         let kind = if xml.contains("<c:barChart") {
             ChartKind::Bar
         } else if xml.contains("<c:lineChart") {
