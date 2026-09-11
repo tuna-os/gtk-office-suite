@@ -65,7 +65,7 @@ jobs:
             cargo --version
             pkg-config --modversion gtk4 libadwaita-1
             ffmpeg -version | head -1
-            command -v Xvfb matchbox-window-manager xdotool xdpyinfo \
+            command -v Xvfb matchbox-window-manager xdotool xdpyinfo xprop \
                        glib-compile-schemas gapplication dbus-run-session
             python3 -c "import dogtail, mss, PIL, pytest; print(\"python deps ok\")"
 
