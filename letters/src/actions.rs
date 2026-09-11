@@ -33,6 +33,7 @@ pub fn register_formatting_tags(buffer: &gtk::TextBuffer) {
         ("line-spacing-2.0", &[]),
         ("search-match", &[]),
         ("search-current", &[]),
+        (crate::bridge::PAGE_BREAK_TAG, &[]),
     ];
 
     for &(name, _) in tags {
@@ -51,6 +52,16 @@ pub fn register_formatting_tags(buffer: &gtk::TextBuffer) {
                 "h5" => gtk::TextTag::builder().name(name).weight(700).scale(1.0).build(),
                 "h6" => gtk::TextTag::builder().name(name).weight(700).scale(0.9).build(),
                 "blockquote" => gtk::TextTag::builder().name(name).left_margin(24).style(gtk4::pango::Style::Italic).build(),
+                // A page break has no text of its own, so it has to be
+                // visible as space above the paragraph it starts — the
+                // paragraph tag *is* the break (see bridge.rs), and an
+                // invisible one would leave the user with no way to see
+                // or remove what they inserted.
+                crate::bridge::PAGE_BREAK_TAG => gtk::TextTag::builder()
+                    .name(name)
+                    .pixels_above_lines(28)
+                    .paragraph_background("#e6e6e6")
+                    .build(),
                 "align-left" => gtk::TextTag::builder().name(name).justification(gtk::Justification::Left).build(),
                 "align-center" => gtk::TextTag::builder().name(name).justification(gtk::Justification::Center).build(),
                 "align-right" => gtk::TextTag::builder().name(name).justification(gtk::Justification::Right).build(),
@@ -96,57 +107,23 @@ pub fn toggle_tag(tv: &adw::TabView, tag_name: &str) {
     }
 }
 
-pub fn line_text(buf: &gtk::TextBuffer, iter: &gtk::TextIter) -> String {
-    let mut start = *iter;
-    start.backward_line();
-    let mut end = *iter;
-    end.forward_line();
-    buf.text(&start, &end, false).to_string()
-}
-
+/// Toggle the cursor's paragraph between body text and a list item.
+///
+/// Model only: this used to insert a literal "\u{2022} " bullet into the
+/// buffer *and* set the list kind on paragraph 0. The bridge renders a
+/// list item's marker itself ("- " / "N. "), so the inserted bullet
+/// survived capture as document text and the editor showed "- \u{2022} item"
+/// — while the paragraph the user was actually on kept its old style.
 pub fn toggle_list(tv: &adw::TabView, kind: &str) {
-    if let Some(buf) = active_buffer(tv) {
-        let bounds = buf.selection_bounds();
-        let (ins, _) = bounds.unwrap_or((buf.start_iter(), buf.start_iter()));
-        let text = line_text(&buf, &ins);
-        let has_bullet = text.trim_start().starts_with('\u{2022}')
-            || text.trim_start().starts_with("- ");
-        let has_number = text.trim_start().starts_with(|c: char| c.is_ascii_digit())
-            && text.trim_start().contains(". ");
-
-        buf.begin_user_action();
-        let mut start = ins; start.backward_line();
-
-        if (kind == "bullet" && has_bullet) || (kind == "numbered" && has_number) {
-            let line = line_text(&buf, &ins);
-            let trimmed = line.trim_start();
-            let prefix_end = if kind == "bullet" {
-                trimmed.find(|c| c != '\u{2022}' && c != ' ').unwrap_or(0)
-            } else {
-                trimmed.find(". ").map(|i| i + 2).unwrap_or(0)
-            };
-            let indent = line.len() - trimmed.len();
-            let del_len = indent + prefix_end;
-            if del_len > 0 {
-                let mut del_end = start;
-                del_end.forward_chars(del_len as i32);
-                if del_end > start { buf.delete(&mut start, &mut del_end); }
-            }
-        } else {
-            let prefix = if kind == "bullet" { "\u{2022} " } else { "1. " };
-            buf.insert(&mut start, prefix);
-        }
-        buf.end_user_action();
-
-        crate::bridge::apply_structured_edit(&buf, |editor| {
-            let list_kind = match kind {
-                "bullet" => letters_core::ListKind::Bullet,
-                "numbered" => letters_core::ListKind::Numbered,
-                _ => letters_core::ListKind::None,
-            };
-            editor.set_list_item(0, list_kind, 0, None);
-        });
-    }
+    let Some(buf) = active_buffer(tv) else { return };
+    let list_kind = match kind {
+        "bullet" => letters_core::ListKind::Bullet,
+        "numbered" => letters_core::ListKind::Numbered,
+        _ => return,
+    };
+    crate::bridge::apply_structured_edit(&buf, |editor| {
+        editor.toggle_list_at_cursor(list_kind);
+    });
 }
 
 /// Register formatting actions, accelerators, and palette labels.
@@ -237,6 +214,15 @@ pub fn register_formatting_actions(tv: &adw::TabView, app: &adw::Application) {
 }
 
 /// Register structured editing actions: tables, list indentation, restart numbering, page breaks.
+/// The paragraph-level edits the menu offers, all relative to the caret.
+#[derive(Clone, Copy)]
+enum ParagraphOp {
+    Indent,
+    Outdent,
+    RestartNumbering,
+    TogglePageBreak,
+}
+
 /// The table edits the menu offers, all relative to the cursor's cell.
 #[derive(Clone, Copy)]
 enum TableOp {
@@ -303,66 +289,28 @@ pub fn register_structured_actions(tv: &adw::TabView, app: &adw::Application) {
         app.add_action(&a);
     }
 
-    // ── List Indentation / Nesting ──
-    {
+    // ── List nesting, numbering and page breaks ──
+    // All cursor-relative. Each of these used to pass a hardcoded
+    // paragraph index of 0 — editing the first paragraph of the document
+    // — while separately inserting or deleting literal indent and "---"
+    // text at the caret.
+    for (name, op) in [
+        ("list-indent", ParagraphOp::Indent),
+        ("list-outdent", ParagraphOp::Outdent),
+        ("list-restart-numbering", ParagraphOp::RestartNumbering),
+        ("insert-page-break", ParagraphOp::TogglePageBreak),
+    ] {
         let tv = tv.clone();
-        let a = gtk::gio::SimpleAction::new("list-indent", None);
-        a.connect_activate(move |_, _| {
-            if let Some(buf) = active_buffer(&tv) {
-                let ins = buf.selection_bounds().map(|(i, _)| i).unwrap_or_else(|| buf.start_iter());
-                let mut start = ins; start.backward_line();
-                buf.insert(&mut start, "    ");
-                crate::bridge::apply_structured_edit(&buf, |editor| {
-                    editor.indent_list_item(0);
-                });
-            }
-        });
-        app.add_action(&a);
-    }
-    {
-        let tv = tv.clone();
-        let a = gtk::gio::SimpleAction::new("list-outdent", None);
-        a.connect_activate(move |_, _| {
-            if let Some(buf) = active_buffer(&tv) {
-                let ins = buf.selection_bounds().map(|(i, _)| i).unwrap_or_else(|| buf.start_iter());
-                let mut start = ins; start.backward_line();
-                let line = line_text(&buf, &ins);
-                if line.starts_with("    ") {
-                    let mut del_end = start;
-                    del_end.forward_chars(4);
-                    buf.delete(&mut start, &mut del_end);
-                }
-                crate::bridge::apply_structured_edit(&buf, |editor| {
-                    editor.outdent_list_item(0);
-                });
-            }
-        });
-        app.add_action(&a);
-    }
-    {
-        let tv = tv.clone();
-        let a = gtk::gio::SimpleAction::new("list-restart-numbering", None);
+        let a = gtk::gio::SimpleAction::new(name, None);
         a.connect_activate(move |_, _| {
             if let Some(buf) = active_buffer(&tv) {
                 crate::bridge::apply_structured_edit(&buf, |editor| {
-                    editor.set_list_item(0, letters_core::ListKind::Numbered, 0, Some(1));
-                });
-            }
-        });
-        app.add_action(&a);
-    }
-
-    // ── Page Break ──
-    {
-        let tv = tv.clone();
-        let a = gtk::gio::SimpleAction::new("insert-page-break", None);
-        a.connect_activate(move |_, _| {
-            if let Some(buf) = active_buffer(&tv) {
-                let ins = buf.selection_bounds().map(|(i, _)| i).unwrap_or_else(|| buf.start_iter());
-                let mut pos = ins;
-                buf.insert(&mut pos, "\n\n---\n\n");
-                crate::bridge::apply_structured_edit(&buf, |editor| {
-                    editor.insert_page_break(0);
+                    let _ = match op {
+                        ParagraphOp::Indent => editor.indent_list_at_cursor(),
+                        ParagraphOp::Outdent => editor.outdent_list_at_cursor(),
+                        ParagraphOp::RestartNumbering => editor.restart_numbering_at_cursor(),
+                        ParagraphOp::TogglePageBreak => editor.toggle_page_break_at_cursor(),
+                    };
                 });
             }
         });

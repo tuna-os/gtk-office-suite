@@ -1814,13 +1814,61 @@ class LettersStructuredEditingSmoke(BaseGUITestCase):
         rows = {row for (row, _col) in next(iter(self._tables(grown).values()))}
         self.assertEqual(sorted(rows), [0, 1, 2, 3], "insert-row-below adds one row")
 
-        # The remaining structured actions must not disturb the table or crash.
-        for action in ("bullet-list", "list-indent", "list-outdent", "insert-page-break"):
-            self.gapplication_action("org.tunaos.letters", action)
-        after = self.trigger_snapshot("org.tunaos.letters")
-        self.assertEqual(len(self._tables(after)), 1,
-                         "list and page-break actions must not create or lose a table")
         self.assertIsNone(self.process.poll(), "letters crashed during structured editing actions")
+
+    def test_list_and_page_break_apply_to_the_cursors_paragraph(self):
+        """List and page-break commands edit where the caret is (#438).
+
+        Each of these used to write its own marker text into the buffer and
+        set the style on paragraph 0, so the document collected literal
+        bullets and "---" lines while the paragraph the user was on kept
+        its old style.
+        """
+        from dogtail import rawinput
+
+        self.wait_for_node(name="New Document", roleName="push button").do_action(0)
+        self.wait_for_node(roleName="text")
+        self.wait_for_node(name="0 words", roleName="label")
+        rawinput.typeText("first")
+        rawinput.keyCombo("Return")
+        rawinput.typeText("second")
+        self.wait_for_node(name="2 words", roleName="label")
+
+        self.gapplication_action("org.tunaos.letters", "bullet-list")
+        self.gapplication_action("org.tunaos.letters", "list-indent")
+        self.gapplication_action("org.tunaos.letters", "insert-page-break")
+
+        def second_is_an_indented_bullet():
+            snapshot = self.trigger_snapshot("org.tunaos.letters")
+            styles = [p["style"] for p in snapshot["paragraphs"]]
+            if len(styles) != 2 or styles[1].get("list") != "Bullet":
+                return None
+            return snapshot
+
+        snapshot = self.wait_for_condition(
+            second_is_an_indented_bullet,
+            description="the caret's paragraph becoming a bullet item")
+
+        first, second = (p["style"] for p in snapshot["paragraphs"])
+        texts = ["".join(r["text"] for r in p["runs"]) for p in snapshot["paragraphs"]]
+        self.assertEqual(texts, ["first", "second"],
+                         "markers and page breaks are style, never document text")
+        self.assertEqual(first.get("list"), "None", "the first paragraph was not the caret's")
+        self.assertEqual(second.get("list_level"), 1, "list-indent nests one level")
+        self.assertTrue(second.get("page_break_before"), "the break lands on the caret's paragraph")
+        self.assertFalse(first.get("page_break_before"))
+
+        # On screen: exactly one marker, indented one level (four spaces).
+        shown = self.wait_for_node(roleName="text").text
+        self.assertEqual(shown.splitlines(), ["first", "    - second"],
+                         f"unexpected editor contents: {shown!r}")
+
+        self.gapplication_action("org.tunaos.letters", "list-outdent")
+        outdented = self.wait_for_condition(
+            lambda: self.trigger_snapshot("org.tunaos.letters"),
+            description="a snapshot after outdenting")
+        self.assertEqual(outdented["paragraphs"][1]["style"].get("list_level"), 0)
+        self.assertIsNone(self.process.poll(), "letters crashed during list editing")
 
 
 class SuitePlatformIntegrationSmoke(BaseGUITestCase):
