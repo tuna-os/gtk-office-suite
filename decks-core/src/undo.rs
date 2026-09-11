@@ -74,6 +74,27 @@ pub fn obj_bounds(obj: &SlideObject) -> (f64, f64, f64, f64) {
     }
 }
 
+/// Move an object so the top-left of its *bounding box* lands at
+/// (nx, ny), leaving its size alone.
+///
+/// A circle stores its centre while every other object stores its
+/// corner, which is why `obj_bounds` and `set_obj_bounds` both convert.
+/// Align and distribute work entirely in bounding-box space and used to
+/// write those coordinates straight into the raw field with
+/// `set_obj_position`, which moved every circle up and left by its
+/// radius — on apply, and again on each undo, so repeated align/undo
+/// cycles walked it off the slide. Found by the seeded command
+/// sequences in decks-core/tests/stateful.rs (#442).
+pub fn set_obj_origin(obj: &mut SlideObject, nx: f64, ny: f64) {
+    match obj {
+        SlideObject::Circle { x, y, r, .. } => {
+            *x = nx + *r;
+            *y = ny + *r;
+        }
+        _ => set_obj_position(obj, nx, ny),
+    }
+}
+
 /// Set bounding rectangle of any object (x, y, w, h).
 pub fn set_obj_bounds(obj: &mut SlideObject, nx: f64, ny: f64, nw: f64, nh: f64) {
     match obj {
@@ -181,7 +202,7 @@ impl Command<Vec<Slide>> for AlignObjectsCmd {
         if self.slide_idx < slides.len() {
             for (&idx, &(nx, ny)) in self.indices.iter().zip(self.new_positions.iter()) {
                 if let Some(obj) = slides[self.slide_idx].objects.get_mut(idx) {
-                    set_obj_position(obj, nx, ny);
+                    set_obj_origin(obj, nx, ny);
                 }
             }
         }
@@ -190,7 +211,7 @@ impl Command<Vec<Slide>> for AlignObjectsCmd {
         if self.slide_idx < slides.len() {
             for (&idx, &(ox, oy)) in self.indices.iter().zip(self.old_positions.iter()) {
                 if let Some(obj) = slides[self.slide_idx].objects.get_mut(idx) {
-                    set_obj_position(obj, ox, oy);
+                    set_obj_origin(obj, ox, oy);
                 }
             }
         }
