@@ -804,12 +804,20 @@ class TablesNameBoxSmoke(BaseGUITestCase):
         self.assertIsNone(self.process.poll(), "tables crashed during keyboard selection")
 
 
-class TablesNamedRangeSmoke(BaseGUITestCase):
-    """Named ranges (#113): Define Name captures the current selection;
-    typing that name into the name box (instead of a cell reference)
-    jumps back to and re-selects the whole range, verified via the
-    stats label's live range readout (same one keyboard range-selection
-    already exercises)."""
+class TablesNamedRangeStatsSmoke(BaseGUITestCase):
+    """Named ranges (#113) verified through the stats label's range readout.
+
+    Renamed from TablesNamedRangeSmoke, which a second class of that name
+    further down this file silently replaced — so this journey had not run
+    since that class was added, and the suite quietly traded a crash
+    reproduction for a passing test. Unlike its namesake it jumps to a far
+    cell (Z9) before returning to the named range, and that step aborts
+    Tables with `malloc(): unaligned fastbin chunk detected` (#507,
+    reproduced 3/3).
+
+    Marked expected-failure rather than deleted or skipped: it runs on
+    every push, so the day #507 is fixed this turns into an unexpected
+    success and says so, instead of waiting for someone to remember it."""
 
     app_name = "tables"
 
@@ -824,6 +832,7 @@ class TablesNamedRangeSmoke(BaseGUITestCase):
         rawinput.keyCombo("Return")
         time.sleep(0.3)
 
+    @unittest.expectedFailure  # #507: the far jump corrupts the heap.
     def test_define_name_then_jump_to_it_via_name_box(self):
         from dogtail import rawinput, tree
         import subprocess

@@ -48,12 +48,22 @@ jobs:
             tests/test_release_gate.py \
             tests/test_validate_parity.py \
             tests/test_gui_evidence.py \
+            tests/test_validate_capabilities.py \
             tests/adaptive_editor_contract.py
 
       # E1-E3: green rows cite evidence, referenced paths exist, journey-gated
       # features are not green on model-only evidence.
       - name: Parity scorecard structure
         run: python3 conformance/validate_parity.py
+
+      # C1/C5/C6: the capability ledger says what it must, its waivers are
+      # dated and owned, and no GUI test class or method is defined twice
+      # (a duplicate silently replaces the first and its tests stop
+      # running — that is how the #507 crash reproduction went missing).
+      # The evidence-vs-reality checks need collected tests, so they run
+      # in the lanes that collect them.
+      - name: Capability ledger structure
+        run: python3 conformance/validate_capabilities.py
 
       # E4: no silent green -> non-green regression, and no jump to green
       # without new evidence. Only meaningful against a base branch.
@@ -123,6 +133,21 @@ jobs:
 
       - name: cargo test --doc
         run: cargo test --doc --workspace
+
+      # C3/C4 for the Rust layers: the ledger's claims must name tests
+      # this run actually collected, and none of them may have been
+      # skipped or failed. The JUnit report nextest already writes says
+      # both, so this costs a second and uses the results of the run that
+      # just happened rather than a re-derivation. The report names the
+      # crates it covers, so it checks the Rust ids and stays quiet about
+      # the journeys, which the GUI lane checks.
+      - name: Capability ledger vs. the tests that ran
+        run: |
+          python3 conformance/collect_test_inventory.py \
+            --junit "=target/nextest/ci/junit.xml" \
+            --out rust-inventory.json --results-out rust-results.json
+          python3 conformance/validate_capabilities.py \
+            --collected rust-inventory.json --results rust-results.json
 
       - name: Upload JUnit test results
         if: always()
