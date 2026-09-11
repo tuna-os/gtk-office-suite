@@ -125,7 +125,7 @@ fn read_page_geometry(doc: &rdocx::Document) -> Option<PageGeometry> {
 }
 
 /// Write a Document to a .docx file.
-pub fn write(doc: &Document, path: &str) -> Result<(), String> {
+pub fn write(doc: &Document, path: impl AsRef<std::path::Path>) -> Result<(), String> {
     let mut out = rdocx::Document::new();
     // Footnote texts first: model index → docx id.
     let footnote_ids: Vec<i32> = doc.footnotes.iter().map(|t| out.add_footnote(t)).collect();
@@ -277,16 +277,17 @@ pub fn write(doc: &Document, path: &str) -> Result<(), String> {
     }
     let bytes = out
         .to_bytes()
-        .map_err(|e| format!("Cannot save {}: {}", path, e))?;
-    suite_common_core::atomic_save::atomic_write_bytes(std::path::Path::new(path), &bytes)
+        .map_err(|e| format!("Cannot save {}: {}", path.as_ref().display(), e))?;
+    suite_common_core::atomic_save::atomic_write_bytes(path.as_ref(), &bytes)
 }
 
 /// Write a DOCX and append previously captured, non-conflicting package parts.
 pub fn write_with_opaque(
     doc: &Document,
-    path: &str,
+    path: impl AsRef<std::path::Path>,
     opaque: &suite_common_core::interop::OpaquePackage,
 ) -> Result<(), String> {
+    let path = path.as_ref();
     write(doc, path)?;
     opaque.append_to(path)
 }

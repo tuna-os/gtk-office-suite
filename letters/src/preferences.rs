@@ -6,15 +6,24 @@ use libadwaita as adw;
 use adw::prelude::*;
 use gtk4::gio;
 
-const FORMAT_NAMES: &[&str] = &["ODT (OpenDocument)", "DOCX (Office Open XML)",
-    "Markdown", "HTML", "Plain Text", "RTF (Rich Text)"];
-/// Extensions matching FORMAT_NAMES 1:1 — index into either with the same
-/// selection, and this is what's persisted to the `default-format` key
-/// (a stable string, not an index that would shift if the list reorders).
-const FORMAT_EXTENSIONS: &[&str] = &["odt", "docx", "md", "html", "txt", "rtf"];
+/// The offered formats come from the writer itself, so this list cannot
+/// promise something Letters has no writer for. It used to be hand-written
+/// and included "HTML" and "RTF (Rich Text)": picking either pre-filled
+/// `Untitled.html` / `Untitled.rtf` in Save As, and the save then wrote
+/// Markdown bytes under that name (#436). HTML now has a real writer; RTF
+/// has none anywhere in the suite, so it is no longer offered.
+fn format_names() -> Vec<&'static str> {
+    letters_core::save::SaveFormat::ALL.iter().map(|f| f.label()).collect()
+}
+
+/// The extension persisted to the `default-format` key — a stable string,
+/// not an index that would shift if the list reorders.
+fn format_extensions() -> Vec<&'static str> {
+    letters_core::save::SaveFormat::ALL.iter().map(|f| f.extension()).collect()
+}
 
 fn format_index_for_extension(ext: &str) -> u32 {
-    FORMAT_EXTENSIONS.iter().position(|e| *e == ext).unwrap_or(0) as u32
+    format_extensions().iter().position(|e| *e == ext).unwrap_or(0) as u32
 }
 
 pub struct LettersPreferences {
@@ -29,7 +38,7 @@ impl LettersPreferences {
         let general = suite_common::make_preferences_page("General", "emblem-system-symbolic");
 
         let doc_group = suite_common::make_preferences_group("Document", "Default save format");
-        let format_names = gtk4::StringList::new(FORMAT_NAMES);
+        let format_names = gtk4::StringList::new(&format_names());
         let format_row = adw::ComboRow::builder()
             .title("Default format")
             .subtitle("Preselected filter in the Save As dialog for a new document")
@@ -39,7 +48,7 @@ impl LettersPreferences {
         {
             let s = settings.clone();
             format_row.connect_selected_notify(move |row| {
-                if let Some(ext) = FORMAT_EXTENSIONS.get(row.selected() as usize) {
+                if let Some(ext) = format_extensions().get(row.selected() as usize) {
                     s.set_string("default-format", ext)
                         .unwrap_or_else(|e| eprintln!("GSettings write failed: {}", e));
                 }
@@ -133,24 +142,33 @@ impl LettersPreferences {
 
 #[cfg(test)]
 mod tests {
-    use super::{format_index_for_extension, FORMAT_EXTENSIONS, FORMAT_NAMES};
+    use super::{format_extensions, format_index_for_extension, format_names};
 
     #[test]
     fn known_extensions_map_to_stable_indices() {
-        // Indices are persisted as the `default-format` GSettings string —
-        // they must stay aligned with FORMAT_NAMES order.
+        // Indices index into both lists; the extension is what is
+        // persisted to `default-format`.
         assert_eq!(format_index_for_extension("odt"), 0);
         assert_eq!(format_index_for_extension("docx"), 1);
         assert_eq!(format_index_for_extension("md"), 2);
         assert_eq!(format_index_for_extension("html"), 3);
         assert_eq!(format_index_for_extension("txt"), 4);
-        assert_eq!(format_index_for_extension("rtf"), 5);
     }
 
     #[test]
     fn unknown_extension_falls_back_to_first_format() {
         assert_eq!(format_index_for_extension("pdf"), 0);
         assert_eq!(format_index_for_extension(""), 0);
+    }
+
+    /// RTF was offered here with no writer behind it anywhere in the
+    /// suite, so choosing it pre-filled `Untitled.rtf` and the save wrote
+    /// Markdown under that name (#436). A stale `default-format` of "rtf"
+    /// now simply falls back to the first format.
+    #[test]
+    fn rtf_is_no_longer_offered_and_a_stale_setting_falls_back() {
+        assert!(!format_extensions().contains(&"rtf"));
+        assert_eq!(format_index_for_extension("rtf"), 0);
     }
 
     #[test]
@@ -164,8 +182,20 @@ mod tests {
 
     #[test]
     fn format_tables_are_parallel() {
-        // The two consts are documented as 1:1 — index into either with the
-        // same selection index.
-        assert_eq!(FORMAT_NAMES.len(), FORMAT_EXTENSIONS.len());
+        assert_eq!(format_names().len(), format_extensions().len());
+    }
+
+    /// The point of building both lists from `SaveFormat::ALL`: anything
+    /// this window offers has a writer that accepts that extension.
+    #[test]
+    fn every_offered_format_has_a_writer() {
+        for extension in format_extensions() {
+            assert_eq!(
+                letters_core::save::SaveFormat::from_extension(extension)
+                    .map(|format| format.extension()),
+                Some(extension),
+                "{extension} is offered but has no writer"
+            );
+        }
     }
 }
