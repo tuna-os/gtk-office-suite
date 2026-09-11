@@ -549,37 +549,28 @@ pub fn render_to_buffer(doc: &Document, buf: &gtk::TextBuffer) {
 }
 
 /// Read any supported file through letters-core into the buffer.
+///
+/// The dispatch lives beside the writer's in `letters_core::save`, which
+/// is permissive here on purpose — an unfamiliar extension still opens —
+/// but no longer runs a `.txt` file through the Markdown parser (#436).
 pub fn load_file_to_buffer(path: &str, buf: &gtk::TextBuffer) -> Result<(), String> {
-    let ext = std::path::Path::new(path)
-        .extension().and_then(|e| e.to_str()).unwrap_or("").to_lowercase();
-    let doc = match ext.as_str() {
-        "docx" => letters_core::docx::read(path)?,
-        "odt" => letters_core::odt::read(path)?,
-        _ => {
-            let text = std::fs::read_to_string(path).map_err(|e| format!("Cannot read {path}: {e}"))?;
-            letters_core::markdown::parse(&text)
-        }
-    };
+    let doc = letters_core::save::read(std::path::Path::new(path))?;
     render_to_buffer(&doc, buf);
     Ok(())
 }
 
 /// Save the buffer through letters-core in the format the path implies.
-pub fn save_buffer_to_file(buf: &gtk::TextBuffer, path: &str) -> Result<(), String> {
-    let doc = capture_from_buffer(buf);
-    let ext = std::path::Path::new(path)
-        .extension().and_then(|e| e.to_str()).unwrap_or("").to_lowercase();
-    match ext.as_str() {
-        "docx" => letters_core::docx::write(&doc, path),
-        "odt" => letters_core::odt::write(&doc, path),
-        _ => {
-            let md = letters_core::markdown::serialize(&doc);
-            suite_common::atomic_save::atomic_write_bytes(
-                std::path::Path::new(path),
-                md.as_bytes(),
-            )
-        }
-    }
+/// Capture the buffer as a document and write it in the format `path`
+/// names, reporting what that format could not carry.
+///
+/// The format decision itself lives in `letters_core::save` — this used to
+/// be a two-arm match with a Markdown catch-all, so every extension it did
+/// not name received Markdown bytes (#436).
+pub fn save_buffer_to_file(
+    buf: &gtk::TextBuffer,
+    path: &std::path::Path,
+) -> Result<suite_common::interop::CompatibilityReport, String> {
+    letters_core::save::write(&capture_from_buffer(buf), path)
 }
 
 /// Insert the visible "[n]" marker for footnote index `idx`, tagged

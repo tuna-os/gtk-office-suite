@@ -31,13 +31,13 @@ fn save_page_to_path(page: &adw::TabPage, path: &Path) -> SaveOutcome {
     let Some(buf) = get_textview(&child).map(|view| view.buffer()) else {
         return SaveOutcome::Failed(suite_common::i18n("Document editor is unavailable."));
     };
-    let Some(path_str) = path.to_str() else {
-        return SaveOutcome::Failed(suite_common::i18n(
-            "This filename cannot be represented as UTF-8.",
-        ));
-    };
-    let result = td.0.borrow_mut().save_to(path.to_path_buf(), |_| {
-        crate::bridge::save_buffer_to_file(&buf, path_str)
+    // The report comes back out of the session transaction, which only
+    // passes through `Result<(), String>`: the write has to stay inside
+    // `save_to` so a failure cannot advance the savepoint.
+    let mut report = None;
+    let result = td.0.borrow_mut().save_to(path.to_path_buf(), |path| {
+        report = Some(crate::bridge::save_buffer_to_file(&buf, path)?);
+        Ok(())
     });
     let commit = match result {
         Ok(commit) => commit,
@@ -49,12 +49,44 @@ fn save_page_to_path(page: &adw::TabPage, path: &Path) -> SaveOutcome {
     if let Some(name) = path.file_name().and_then(|name| name.to_str()) {
         page.set_title(name);
     }
-    page.set_tooltip(path_str);
-    suite_common::push_recent_file(&gio::Settings::new("org.tunaos.letters"), path_str);
+    page.set_tooltip(&path.to_string_lossy());
+    // The recent-files list is stored as UTF-8 strings in GSettings, so a
+    // path that is not UTF-8 saves normally and simply does not appear
+    // there — better than refusing the save, which is what Letters used to
+    // do for any such name.
+    if let Some(path_str) = path.to_str() {
+        suite_common::push_recent_file(&gio::Settings::new("org.tunaos.letters"), path_str);
+    }
     if let Some(warning) = commit.recovery_warning {
         show_message(page, "Document saved; recovery cleanup failed", &warning);
     }
+    if let Some(report) = report {
+        if let Some(message) = loss_message(&report) {
+            show_message(page, "Saved, with formatting this format cannot hold", &message);
+        }
+    }
     SaveOutcome::Saved
+}
+
+/// What the chosen format dropped, or `None` when it held everything.
+///
+/// The report is built from the document's actual contents (see
+/// `letters_core::save`), so this stays quiet for an unstyled document
+/// saved as plain text rather than warning on every `.txt` save.
+fn loss_message(report: &suite_common::interop::CompatibilityReport) -> Option<String> {
+    let dropped: Vec<String> = report
+        .destructive_features()
+        .iter()
+        .map(|feature| format!("\u{2022} {}", suite_common::i18n(&feature.label)))
+        .collect();
+    if dropped.is_empty() {
+        return None;
+    }
+    Some(format!(
+        "{}\n\n{}",
+        suite_common::i18n("The file was written, but this format cannot hold:"),
+        dropped.join("\n")
+    ))
 }
 
 fn save_page(page: &adw::TabPage) -> SaveOutcome {
@@ -87,8 +119,10 @@ pub(super) fn save_with_prompt(
     }
     let dialog = gtk::FileDialog::new();
     let filter = gtk::FileFilter::new();
-    for suffix in ["md", "txt", "docx", "odt"] {
-        filter.add_suffix(suffix);
+    // Straight from the writer's own list, so the dialog cannot offer a
+    // format that has no writer behind it (#436).
+    for format in letters_core::save::SaveFormat::ALL {
+        filter.add_suffix(format.extension());
     }
     filter.set_name(Some(&suite_common::i18n("Documents")));
     let filters = gio::ListStore::new::<gtk::FileFilter>();
@@ -100,16 +134,17 @@ pub(super) fn save_with_prompt(
         .and_then(|path| path.file_name())
         .map(|name| name.to_string_lossy().into_owned())
         .unwrap_or_else(|| {
+            // An unset key — or one left holding a format Letters no
+            // longer writes, such as the "rtf" the Preferences window used
+            // to offer — falls back to ODT rather than pre-filling a name
+            // the save would then refuse.
             let settings = gio::Settings::new("org.tunaos.letters");
-            let extension = settings.string("default-format");
-            format!(
-                "Untitled.{}",
-                if extension.is_empty() {
-                    "odt"
-                } else {
-                    &extension
-                }
+            let extension = letters_core::save::SaveFormat::from_extension(
+                &settings.string("default-format"),
             )
+            .unwrap_or(letters_core::save::SaveFormat::Odt)
+            .extension();
+            format!("Untitled.{extension}")
         });
     dialog.set_initial_name(Some(&name));
     let parent = page.child().root().and_downcast::<gtk::Window>();

@@ -2101,3 +2101,89 @@ class SuitePlatformIntegrationSmoke(BaseGUITestCase):
         time.sleep(0.5)
 
         self.assertIsNone(self.process.poll(), "letters crashed during platform integration actions")
+
+
+class LettersSaveFormatSmoke(BaseGUITestCase):
+    """Real GTK journey: the extension the user types decides the bytes.
+
+    Letters used to resolve the save format with a two-arm match and a
+    Markdown catch-all, so `notes.txt` received `# Heading` and `**bold**`
+    and `page.html` — pre-filled by the "HTML" default-format preference —
+    received Markdown too (#436). These journeys go through the real Save
+    As chooser, because the defect was in what the app did with the name
+    the chooser returned, not in the writer underneath.
+    """
+
+    app_name = "letters"
+
+    def setUp(self):
+        self._dir = self.temp_dir(prefix="letters-save-format-")
+        self._doc = os.path.join(self._dir, "journey.md")
+        with open(self._doc, "w") as f:
+            f.write("# Quarterly report\n\n**bold** and plain\n")
+        self.launch_args = [self._doc]
+        super().setUp()
+
+    def _save_as(self, name):
+        """Drive Save As to `name` inside this test's directory."""
+        from dogtail import tree
+
+        out_path = os.path.join(self._dir, name)
+        self.gapplication_action("org.tunaos.letters", "save-file-as")
+        name_entry = self.wait_for_condition(
+            lambda: tree.root.findChild(
+                lambda n: n.name == "Name:" and n.roleName == "text"
+            ),
+            description="the Save As name entry",
+        )
+        name_entry.text = out_path
+        time.sleep(0.3)
+        tree.root.findChild(
+            lambda n: n.name == "Save" and n.roleName == "push button"
+        ).do_action(0)
+        return out_path
+
+    def test_saving_as_plain_text_writes_text_not_markdown(self):
+        # The document really is rich: markdown opened into headings and a
+        # bold run, so the editor shows no markup.
+        editor = self.app.child(roleName="text")
+        self.assertNotIn("**", editor.text, f"editor text: {editor.text!r}")
+
+        out_path = self._save_as("notes.txt")
+        self.wait_for_file(out_path)
+        # The dialog reports the formatting the format cannot hold, rather
+        # than dropping it silently.
+        self.wait_for_node(name="Saved, with formatting this format cannot hold")
+
+        with open(out_path) as f:
+            saved = f.read()
+        self.assertIn("Quarterly report", saved, f"saved file: {saved!r}")
+        self.assertIn("bold and plain", saved, f"saved file: {saved!r}")
+        self.assertNotIn("**", saved, f"markdown emphasis leaked into .txt: {saved!r}")
+        self.assertNotIn("#", saved, f"markdown heading leaked into .txt: {saved!r}")
+        self.assertIsNone(self.process.poll(), "letters exited during a save")
+
+    def test_saving_as_html_writes_html_not_markdown(self):
+        out_path = self._save_as("page.html")
+        self.wait_for_file(out_path)
+
+        with open(out_path) as f:
+            saved = f.read()
+        self.assertTrue(
+            saved.startswith("<!DOCTYPE html>"), f"saved file: {saved[:80]!r}"
+        )
+        self.assertIn("<h1>Quarterly report</h1>", saved, f"saved file: {saved!r}")
+        self.assertIn("<strong>bold</strong>", saved, f"saved file: {saved!r}")
+        self.assertNotIn("**bold**", saved, f"markdown leaked into .html: {saved!r}")
+        self.assertIsNone(self.process.poll(), "letters exited during a save")
+
+    def test_an_unwritable_format_is_refused_and_writes_nothing(self):
+        # RTF was offered as a default format with no writer behind it. An
+        # extension Letters cannot write must now say so and leave the disk
+        # alone, instead of putting Markdown under that name.
+        out_path = self._save_as("report.rtf")
+        self.wait_for_node(name="Could not save document")
+        self.assertFalse(
+            os.path.exists(out_path), "a format with no writer was written anyway"
+        )
+        self.assertIsNone(self.process.poll(), "letters exited on a refused save")

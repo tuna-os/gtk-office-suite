@@ -319,7 +319,7 @@ const MANIFEST: &str = "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\
 /// Write the document as .odt. Built fully in memory, then placed
 /// atomically (see suite_common_core::atomic_save) — a rename before the
 /// ZipWriter flushes its central directory would leave a corrupt archive.
-pub fn write(doc: &Document, path: &str) -> Result<(), String> {
+pub fn write(doc: &Document, path: impl AsRef<std::path::Path>) -> Result<(), String> {
     let buf = std::io::Cursor::new(Vec::new());
     let mut z = zip::ZipWriter::new(buf);
     // Per ODF spec the mimetype entry comes first and uncompressed.
@@ -337,12 +337,13 @@ pub fn write(doc: &Document, path: &str) -> Result<(), String> {
     z.start_file("styles.xml", opt).map_err(|e| e.to_string())?;
     z.write_all(styles_xml(doc).as_bytes()).map_err(|e| e.to_string())?;
     let bytes = z.finish().map_err(|e| e.to_string())?.into_inner();
-    suite_common_core::atomic_save::atomic_write_bytes(std::path::Path::new(path), &bytes)
+    suite_common_core::atomic_save::atomic_write_bytes(path.as_ref(), &bytes)
 }
 
 /// Write an ODT while preserving package members captured by
 /// [`read_with_report`].
-pub fn write_with_opaque(doc: &Document, path: &str, opaque: &suite_common_core::interop::OpaquePackage) -> Result<(), String> {
+pub fn write_with_opaque(doc: &Document, path: impl AsRef<std::path::Path>, opaque: &suite_common_core::interop::OpaquePackage) -> Result<(), String> {
+    let path = path.as_ref();
     write(doc, path)?;
     opaque.append_to(path)
 }
