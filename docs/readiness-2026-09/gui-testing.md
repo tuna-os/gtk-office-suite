@@ -47,24 +47,29 @@ Confirmed harness gaps: fixed :99 display, shared /tmp schemas, EXIT traps bypas
       pytest and setup failures propagate — `if: always()` uploads in
       `ci.yml` and `gui-tests.yml`; the runner is not `exec`ed, so its exit
       status is forwarded and its EXIT trap still runs.
-- [ ] Test harness isolation itself with injected failures, concurrent runs,
-      an unrelated app sentinel, and repeated launch/close — **partly
-      done**: the unrelated-app sentinel and the concurrent-run case are
-      covered (`tests/test_gui_harness.py`, and three simultaneous runner
-      invocations each allocating a distinct display). Injected setup
-      failures and repeated launch/close are not. `GUI_TEST_SLEEP_SCALE`
-      is a related instrument: it perturbs the harness's own timing to
-      find where the journeys depend on it.
+- [x] Test harness isolation itself with injected failures, concurrent runs,
+      an unrelated app sentinel, and repeated launch/close —
+      `tests/test_gui_harness.py` holds the unrelated-app sentinel, the
+      process-ownership property, the readiness budgets and
+      `InjectedSetupFailures`, which breaks one part of setup at a time and
+      asserts the runner exits nonzero, names the cause, and still cleans
+      up. `HarnessRepeatedLaunchSmoke` runs four launch/close cycles and
+      asserts exactly one live copy is owned after each.
+      `GUI_TEST_SLEEP_SCALE` is a related instrument: it perturbs the
+      harness's own timing to find where the journeys depend on it.
 - [x] Required journeys: all-app create/open/edit/undo/redo/save/reopen;
       Save As/cancel/error; dirty close; kill/recover/restart; two-app
-      clipboard; keyboard/screen-reader workflows — 54 journeys, recorded
-      on video per pull request. Save As error and cancel arrived with
-      #436, the two-app clipboard with #552.
-- [ ] Run changed-app journeys on PRs; shared/harness/unknown paths
+      clipboard; keyboard/screen-reader workflows — every app covered, 58
+      journeys recorded on video per pull request. Save As error and cancel
+      arrived with #436, the two-app clipboard with #552.
+- [x] Run changed-app journeys on PRs; shared/harness/unknown paths
       conservatively run all apps. No VLM judgments in required gates —
-      the path-based selection exists in `gui-tests.yml` and `vlm-audit` is
-      not a required gate; the conservative fallback has no test of its own
-      yet.
+      the classification moved out of `gui-tests.yml` into
+      `tests/gui/select_journeys.sh` so it can be tested, and
+      `tests/test_journey_selection.py` covers every fallback: shared
+      crate, workspace lockfile, harness path (the selector included),
+      unrecognised path, and an empty diff. `vlm-audit` is not a required
+      gate.
 
 ## The display collision this closed
 
@@ -98,11 +103,12 @@ use?") instead of silently sharing.
 attempt that never started a journey is classified as infrastructure rather
 than as an unexplained product result.
 
-Six of the ten items are complete and three are partly complete; the item
-list above says which, and what is left. This issue stays open for the
-remaining work: per-test isolation by default, the `time.sleep` calls inside
-the journeys, injected setup failures and repeated launch/close, and a test
-for the conservative journey-selection fallback.
+Nine of the ten items are complete. The one that is not is the sleep
+conversion: the runner's setup sleeps are gone and the three journeys that
+measurably depended on a fixed wait use predicates, but the remaining
+`time.sleep` calls in the other journeys — measurably not load-bearing, see
+below — are still there. This issue stays open for that mechanical
+follow-up.
 
 ## Which fixed waits were actually load-bearing
 
@@ -228,3 +234,55 @@ waiting out the budget. `ReadinessBudget` in `tests/test_gui_harness.py`
 holds the line, because the regression is invisible in a passing run:
 it fails on a default under 30s and on any wait that carries its own
 hardcoded count.
+
+## Testing the harness by breaking it
+
+Two of these items asked for tests of the harness rather than of the apps,
+and both name the same kind of defect: a check that reports success without
+having checked.
+
+`InjectedSetupFailures` breaks one piece of setup per case and asserts all
+three things that matter — nonzero exit, a message naming the actual cause,
+and cleanup. The cases are an inherited `DISPLAY` that answers nothing, an
+explicitly requested display number already in use, and a readiness probe
+that never succeeds while setup's own Xvfb is running. The third is the
+interesting one: it is the only failure path with something of ours left
+running to leak, and it asserts the server is gone afterwards by asking the
+*display* whether anything still serves it — the harness may not identify
+processes by name (#241), and neither may its own tests.
+
+Cleanup is checked by giving the runner a private `TMPDIR` and listing it
+afterwards. Both of the runner's temporary things — the per-run schema
+directory and the display-number file — are mktemp'd into it, so "did the
+EXIT trap run on the setup-failure path?" becomes a directory listing
+instead of a hunt. That path is the one most likely to leak, because it is
+the one nobody exercises on purpose.
+
+`HarnessRepeatedLaunchSmoke` does four launch/close cycles. The apps are
+`GtkApplication`s, so one surviving copy owns the bus name and hands its
+window to every later launch — a journey then passes or fails against a
+process some earlier test started, and the failure surfaces somewhere else
+entirely. Writing it found exactly that hazard in the harness: all five
+journeys that restarted an app inlined the launch and none registered the
+replacement with `owned_processes`. `tearDown` terminates `self.process`,
+whichever copy is current, so a journey that restarted twice left the
+middle one running, unregistered and therefore invisible to the pre-launch
+sweep as well. `relaunch_app` is now the one path, it registers, and the
+five inline copies are gone. One of them had also dropped the test's
+`launch_env`, so it relaunched against the real XDG stores while its own
+first launch was isolated.
+
+The journey-selection fallback could not be tested at all while it lived
+inline in `gui-tests.yml`. Getting selection wrong in the cheap direction
+is loud — a filter naming an app that does not exist collects nothing and
+the run fails. The other direction is silent: too few apps still produces a
+green run, just one that never launched the app the change broke. So the
+classification moved into `select_journeys.sh`, which reads changed paths
+and prints the `-k` expression, and the tests cover the fallbacks.
+
+One of those tests is load-bearing in a way worth recording: on a diff that
+names no app, dropping a path from the shared pattern lands in the
+unrecognised-path fallback and runs everything anyway, so the first version
+of these tests passed against a selector that no longer recognised the
+harness at all. Pairing each shared or harness path with an app path is
+what makes the pattern itself observable.
