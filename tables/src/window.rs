@@ -316,30 +316,18 @@ impl TablesWindow {
             drawing_area.add_controller(right);
         }
 
-        // Ctrl+G focuses the name box for a keyboard-only jump.
-        {
-            let nb = name_box.clone();
-            let act = gtk4::gio::SimpleAction::new("goto-cell", None);
-            act.connect_activate(move |_, _| {
-                nb.grab_focus();
-                nb.select_region(0, -1);
-            });
-            app.add_action(&act);
-            app.set_accels_for_action("app.goto-cell", &["<Primary>g"]);
-        }
-
-        // Name box: Enter jumps to the typed reference, or — if it isn't
-        // a bare cell reference — to a matching defined name's range
-        // (#113 named ranges), case-insensitive like Excel's name box.
-        {
+        // Jumping to a reference: the name box's Enter and Ctrl+G both go
+        // through here, so a jump means the same thing however it was
+        // asked for. Accepts a bare cell reference or — case-insensitively,
+        // like Excel's name box — a defined name's range (#113).
+        let jump_to_reference: Rc<dyn Fn(&str) -> bool> = {
             let s = state.clone();
             let ctl = controller.clone();
             let da = drawing_area.clone();
             let refresh = refresh_sel.clone();
             let fx = fx_entry.clone();
-            name_box.connect_activate(move |nb| {
-                let text = nb.text();
-                let target = tables_core::sheet::parse_cell_ref(&text).map(|(r, c)| (r, c, r, c)).or_else(|| {
+            Rc::new(move |text: &str| {
+                let target = tables_core::sheet::parse_cell_ref(text).map(|(r, c)| (r, c, r, c)).or_else(|| {
                     let ctl = ctl.borrow();
                     let names = &ctl.state.borrow().engine.model.workbook.defined_names;
                     names
@@ -347,20 +335,79 @@ impl TablesWindow {
                         .find(|n| n.name.eq_ignore_ascii_case(text.trim()))
                         .and_then(|n| tables_core::sheet::parse_defined_name_range(&n.formula))
                 });
-                if let Some((top, left, bottom, right)) = target {
-                    {
-                        let st = s.borrow();
-                        let mut sh = st.sheet_mut();
-                        let (max_r, max_c) = (sh.rows.saturating_sub(1), sh.cols.saturating_sub(1));
-                        sh.select_cell(top.min(max_r), left.min(max_c));
-                        if (top, left) != (bottom, right) {
-                            sh.extend_selection(bottom.min(max_r), right.min(max_c));
-                        }
+                let Some((top, left, bottom, right)) = target else { return false };
+                {
+                    let st = s.borrow();
+                    let mut sh = st.sheet_mut();
+                    let (max_r, max_c) = (sh.rows.saturating_sub(1), sh.cols.saturating_sub(1));
+                    sh.select_cell(top.min(max_r), left.min(max_c));
+                    if (top, left) != (bottom, right) {
+                        sh.extend_selection(bottom.min(max_r), right.min(max_c));
                     }
-                    refresh();
-                    da.queue_draw();
-                    fx.grab_focus();
                 }
+                refresh();
+                da.queue_draw();
+                fx.grab_focus();
+                true
+            })
+        };
+
+        // Ctrl+G focuses the name box for a keyboard-only jump — unless
+        // the window is too narrow for the name box, which the shared
+        // breakpoint below hides. grab_focus() on a hidden widget is a
+        // silent no-op, so before this the shortcut swallowed the jump
+        // and every keystroke after it (#516); at narrow widths it opens
+        // the same jump as a dialog instead.
+        {
+            let nb = name_box.clone();
+            let jump = jump_to_reference.clone();
+            let root = drawing_area.clone();
+            let act = gtk4::gio::SimpleAction::new("goto-cell", None);
+            act.connect_activate(move |_, _| {
+                // WidgetExt, not EntryExt: GtkEntry has its own
+                // `is_visible` for password masking.
+                if gtk4::prelude::WidgetExt::is_visible(&nb) {
+                    nb.grab_focus();
+                    nb.select_region(0, -1);
+                    return;
+                }
+                let entry = gtk4::Entry::builder()
+                    .text(nb.text())
+                    .activates_default(true)
+                    .build();
+                entry.update_property(&[gtk4::accessible::Property::Label("Cell reference")]);
+                let dlg = adw::AlertDialog::builder()
+                    .heading(suite_common::i18n("Go to Cell"))
+                    .body(suite_common::i18n("Type a cell reference or a defined name."))
+                    .build();
+                dlg.set_extra_child(Some(&entry));
+                dlg.add_response("cancel", &suite_common::i18n("Cancel"));
+                dlg.add_response("go", &suite_common::i18n("Go"));
+                dlg.set_response_appearance("go", adw::ResponseAppearance::Suggested);
+                dlg.set_default_response(Some("go"));
+                dlg.set_close_response("cancel");
+                // Focus the entry, not the default button: a dialog that
+                // opens with the buttons focused looks ready to type into
+                // and is not — the keystrokes go nowhere and Enter jumps
+                // to whatever the entry was prefilled with.
+                dlg.set_focus(Some(&entry));
+                let jump = jump.clone();
+                dlg.connect_response(None, move |_, resp| {
+                    if resp == "go" {
+                        jump(&entry.text());
+                    }
+                });
+                dlg.present(root.root().as_ref());
+            });
+            app.add_action(&act);
+            app.set_accels_for_action("app.goto-cell", &["<Primary>g"]);
+        }
+
+        // Name box: Enter jumps to the typed reference or defined name.
+        {
+            let jump = jump_to_reference.clone();
+            name_box.connect_activate(move |nb| {
+                jump(&nb.text());
             });
         }
 

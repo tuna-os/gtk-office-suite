@@ -12,7 +12,9 @@ WorkbookController remains the sole mutation gateway. Stable sheet identities bi
 - [ ] Reproduce CSV/ODS/XLS open → edit → Ctrl+S; preserve the original and offer a correctly suffixed Save As when unsupported.
 - [ ] Test formulas, cached values, styles, charts, rules, names, protection and hidden/filter state against a declared XLSX loss budget.
 - [ ] Two-sheet journey: edit/formula → rename/reorder/delete/undo → switch → save → reopen; no cross-sheet overwrite or retargeted history.
-- [ ] Exercise row/column edits, fill, sort/filter, named ranges and protection through actual GUI actions plus controller invariants.
+- [ ] Exercise row/column edits, fill, sort/filter, named ranges and protection through actual GUI actions plus controller
+      invariants. (Named ranges and the name box now also pass at 400px width: `Ctrl+G` opens a Go to Cell dialog when the
+      narrow breakpoint hides the name box — #516, found by the display matrix.)
 - [ ] Resolve the Unicode XLSX property regression tracked in #377/#371/#358/#324 using minimized fixtures; do not weaken the generator just to turn CI green.
 - [x] Verify sparse-grid scaling and accessibility far-navigation regression: the skipped #137 reproduction now runs as
       `TablesNamedRangeSmoke::test_jump_far_and_back_to_a_range_no_longer_crashes`, alongside the far-jump named-range
