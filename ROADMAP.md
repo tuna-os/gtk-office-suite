@@ -54,7 +54,14 @@ gtk-office-suite is the org's flagship **end-user product bet** and a cornerston
 
 ### Q4 2026 (October–December) — "Ship it properly"
 
-<Sketch: release gate (#122) with Flatpak distribution + reproducible builds, Decks presenter/export scope, interop loss budgets, A11y journeys. Move up when Q4 starts.>
+**Theme**: Enterprise release readiness, reproducible Flatpak distribution, and automated quality gates.
+
+| Goal | Owner | Tracking | Status |
+|------|-------|----------|--------|
+| Standardized release gate (#122) with automated Flatpak reproducible builds & GSettings validation | architect / quality | #578 | 🟡 In progress |
+| Document interoperability loss-budget inspector & fixture verification | architect | #105, #121 | ⬜ Not started |
+| Decks presenter mode, layout themes, and multi-display export scope | architect | #115, #116 | ⬜ Not started |
+| Full AT-SPI keyboard & screen-reader accessibility validation | quality | #120 | ⬜ Not started |
 
 ---
 
