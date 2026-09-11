@@ -216,6 +216,45 @@ class ABodyNobodyReadsIsNotEvidence(unittest.TestCase):
         self.assertIn("![J40](", before_details)
 
 
+class NoEvidenceBlockIsStillAReplaceableBlock(unittest.TestCase):
+    """The no-evidence fallback used to be built by echo lines inside the
+    workflow, which emitted the start marker and not the end one. A block
+    the next run cannot replace cleanly is worse than no block."""
+
+    REASON = "The recording job finished as `cancelled` without a bundle."
+
+    def test_it_carries_both_markers(self):
+        body = pr_comment.build({"entries": []}, no_evidence_reason=self.REASON)
+        self.assertIn(pr_comment.MARKER, body)
+        self.assertIn(pr_comment.END_MARKER, body)
+
+    def test_it_states_the_reason_rather_than_a_generic_line(self):
+        body = pr_comment.build({"entries": []}, no_evidence_reason=self.REASON)
+        self.assertIn("cancelled", body)
+        self.assertIn("⚠️", body)
+        self.assertNotIn("✅", body)
+
+    def test_a_real_run_replaces_it_completely(self):
+        no_evidence = pr_comment.build({"entries": []}, no_evidence_reason=self.REASON)
+        body = pr_comment.splice("My description.", no_evidence)
+        real = pr_comment.build(
+            {"entries": [{"test": "A.test_b", "outcome": "passed",
+                          "video": "a.mp4", "gif": "a.gif",
+                          "duration_seconds": 2.0}]},
+            media_base="https://media.test/x")
+        updated = pr_comment.splice(body, real)
+        self.assertNotIn("cancelled", updated)
+        self.assertNotIn("⚠️", updated)
+        self.assertIn("![A.test_b]", updated)
+        self.assertTrue(updated.startswith("My description."))
+
+    def test_without_a_reason_the_wording_is_unchanged(self):
+        # The pre-existing "ran but recorded nothing" case, which is a
+        # different thing from "the job did not produce a bundle".
+        body = pr_comment.build({"entries": []})
+        self.assertIn("No journey was recorded", body)
+
+
 class SpliceIntoPullRequestBody(unittest.TestCase):
     """The evidence goes into the pull-request description, and the
     description is something a person also writes in. Only the marked

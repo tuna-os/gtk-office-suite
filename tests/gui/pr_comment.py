@@ -25,11 +25,14 @@ END_MARKER = "<!-- /gui-feature-verification -->"
 EMBED_LIMIT = 5
 
 
-def build(bundle: dict, media_base: str = "", journey: str = "") -> str:
+def build(bundle: dict, media_base: str = "", journey: str = "",
+          no_evidence_reason: str = "") -> str:
     entries = bundle.get("entries", [])
     failed = [e for e in entries if e.get("outcome") == "failed"]
 
-    if not entries:
+    if not entries and no_evidence_reason:
+        headline = "⚠️ No evidence produced"
+    elif not entries:
         headline = "⚠️ No journey was recorded"
     elif failed:
         headline = f"❌ {len(failed)} of {len(entries)} recorded journeys failed"
@@ -42,8 +45,9 @@ def build(bundle: dict, media_base: str = "", journey: str = "") -> str:
 
     if not entries:
         lines += [
-            "The run produced no recordings. That is a harness result, not a "
-            "verdict about the change — see the workflow log.",
+            no_evidence_reason
+            or "The run produced no recordings. That is a harness result, not "
+               "a verdict about the change — see the workflow log.",
             "",
         ]
     else:
@@ -158,17 +162,27 @@ def main(argv=None) -> int:
     parser.add_argument("--block", default="",
                         help="file holding an already-rendered block, instead "
                              "of rendering one from an evidence bundle")
+    parser.add_argument("--no-evidence-reason", default="",
+                        help="render a no-evidence block with this explanation, "
+                             "instead of rendering from a bundle. Goes through "
+                             "build() like any other block, so it carries both "
+                             "markers — a block with a start marker and no end "
+                             "marker is a block the next run cannot replace "
+                             "cleanly.")
     args = parser.parse_args(argv)
 
     if args.block:
         with open(args.block) as f:
             body = f.read()
+    elif args.no_evidence_reason:
+        body = build({"entries": []}, journey=args.journey,
+                     no_evidence_reason=args.no_evidence_reason)
     elif args.evidence_json:
         with open(args.evidence_json) as f:
             bundle = json.load(f)
         body = build(bundle, args.media_base, args.journey)
     else:
-        parser.error("pass an evidence bundle or --block")
+        parser.error("pass an evidence bundle, --block, or --no-evidence-reason")
     if args.splice_into:
         with open(args.splice_into) as f:
             body = splice(f.read(), body)
