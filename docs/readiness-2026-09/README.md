@@ -22,7 +22,7 @@ Letters, Tables and Decks must reliably complete create/open → edit → undo/r
 
 ## Dependency-ordered execution
 
-- [ ] #437 — durable shared saves
+- [x] #437 — durable shared saves
 - [ ] #436 — Letters save transactions
 - [ ] #241 — GTK test thread/display ownership
 - [ ] #354 — deterministic GUI infrastructure
