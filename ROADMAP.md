@@ -34,6 +34,7 @@ gtk-office-suite is the org's flagship **end-user product bet** and a cornerston
 | P1 | GNOME platform integration: recent files, portals, drag/drop | #119 | ⬜ Not started |
 | P2 | Interop: unsupported-feature inspector + versioned fixture corpus with loss budgets | #105, #121 | ⬜ Not started |
 | P2 | Release gate: Flatpak, upgrade, recovery, localization, reproducible builds | #122 | ⬜ Not started |
+| P2 | Collaborative Sync: offline-first CRDT state protocol & session transport | #544 | ⬜ Not started |
 | P2 | A11y: keyboard + screen-reader journeys | #120 | ⬜ Not started |
 
 ---
@@ -52,9 +53,14 @@ gtk-office-suite is the org's flagship **end-user product bet** and a cornerston
 | GUI God-file decomposition started | architect | #168 | ⬜ Not started |
 | ROADMAP.md published and linked from README / org coverage (#1295) | strategist | tunaos#1359 | ✅ Done |
 
-### Q4 2026 (October–December) — "Ship it properly"
+### Q4 2026 (October–December) — "Ship it properly & Collaborative Ecosystem"
 
-<Sketch: release gate (#122) with Flatpak distribution + reproducible builds, Decks presenter/export scope, interop loss budgets, A11y journeys. Move up when Q4 starts.>
+| Goal | Owner | Tracking | Status |
+|------|-------|----------|--------|
+| Flatpak distribution, upgrade safety & reproducible release builds | architect / release | #122 | ⬜ Planned |
+| Unsupported-feature inspector & versioned document loss budgets | quality / architect | #105, #121 | ⬜ Planned |
+| Automated AT-SPI screen-reader audit gate & keyboard journeys | quality / a11y | #120 | ⬜ Planned |
+| Collaborative Sync: GTK-free CRDT delta engine & session protocol | architect / strategist | #544 | ⬜ Planned |
 
 ---
 
