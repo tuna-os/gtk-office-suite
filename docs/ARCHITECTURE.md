@@ -67,7 +67,8 @@ gtk-office-suite/
 ├── docs/               # Documentation
 │   ├── research/       # Architecture research notes
 │   ├── audit-phase3.md
-│   └── audit-phase4.md
+│   ├── audit-phase4.md
+│   └── ENTERPRISE-DEPLOYMENT.md # Enterprise fleet administration & dconf policy architecture
 │
 ├── Cargo.toml          # Workspace root
 ├── justfile            # Build/test/lint shortcuts
