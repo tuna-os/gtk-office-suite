@@ -14,6 +14,10 @@ from PIL import Image
 from dogtail import tree, rawinput
 
 from . import recorder as screen_recorder
+from .owned_processes import (
+    register as _register_launched,
+    terminate_owned as _terminate_owned,
+)
 
 _dogtail_click = rawinput.click
 _dogtail_key_combo = rawinput.keyCombo
@@ -124,8 +128,11 @@ class BaseGUITestCase(unittest.TestCase):
         if not os.path.exists(self.bin_path):
             raise RuntimeError(f"Binary not found at {self.bin_path}. Run 'cargo build' first.")
 
-        # Clear any leftover processes
-        subprocess.run(["pkill", "-x", self.app_name], stderr=subprocess.DEVNULL)
+        # Clear leftovers this harness itself launched. Never `pkill -x`:
+        # that matched by name across the whole machine, so a journey could
+        # kill a developer's own running copy of the app — unsaved work and
+        # all — or another run's process on a different display (#241).
+        _terminate_owned(self.app_name)
 
         # Start recording before the app launches: a startup crash or a
         # window that never appears is exactly the failure whose video is
@@ -143,6 +150,7 @@ class BaseGUITestCase(unittest.TestCase):
             stderr=subprocess.PIPE,
             text=True
         )
+        _register_launched(self.app_name, self.process)
 
         # Wait for application node in AT-SPI tree
         self.app = self.wait_for_app(self.app_name)
@@ -570,7 +578,7 @@ class BaseGUITestCase(unittest.TestCase):
         if not os.path.exists(bin_path):
             raise RuntimeError(f"Binary not found at {bin_path}. Run 'cargo build' first.")
 
-        subprocess.run(["pkill", "-x", app_name], stderr=subprocess.DEVNULL)
+        _terminate_owned(app_name)
 
         env = os.environ.copy()
         env["GDK_BACKEND"] = "x11"
@@ -579,6 +587,7 @@ class BaseGUITestCase(unittest.TestCase):
             [bin_path] + list(launch_args), env=env,
             stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
         )
+        _register_launched(app_name, process)
 
         def terminate():
             if process.poll() is None:

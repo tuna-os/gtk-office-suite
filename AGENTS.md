@@ -8,10 +8,20 @@ ship vehicle. Human-oriented docs: `docs/DEVELOPMENT.md`, `docs/TESTING.md`.
 
 ```bash
 cargo build --bin letters --bin tables --bin decks   # build apps
-cargo test --workspace                               # unit tests (~90, fast)
+xvfb-run -a cargo test --workspace                   # unit tests (~90, fast)
 tests/gui/run_gui_tests.sh test_smoke.py             # GUI smoke tests (~10s, needs Xvfb deps)
 cargo clippy --workspace                             # lint (many pre-existing warnings)
 just verify 'test_smoke.py -k Letters'               # journeys + recorded video evidence
+```
+
+`xvfb-run` on the unit tests because the workspace contains GTK widget
+tests, and GTK cannot initialise without a display. With no display they
+fail rather than skip: a skip that counts as a pass is how 36 of them
+stopped running in CI unnoticed (#241). On a machine where you genuinely
+cannot give them one, say so explicitly and they are skipped:
+
+```bash
+SUITE_GTK_TESTS=skip cargo test --workspace
 ```
 
 Running an app outside Flatpak needs compiled GSettings schemas or it aborts:

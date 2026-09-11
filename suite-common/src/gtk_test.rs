@@ -16,6 +16,17 @@
 // This module is test support that ships in the library rather than under
 // `#[cfg(test)]`, because the binaries' own test modules cannot see a
 // dependency's test-only code.
+//
+// It used to skip — and *pass* — whenever GTK could not initialise, which
+// read as reasonable and was not: the PR `test` job ran
+// `cargo nextest run --workspace` with no display, so all 36 GTK widget
+// tests in Letters skipped on every pull request while the harness reported
+// "95 passed; 0 failed; 0 ignored". Nothing could see it, the ledger gate
+// included: a skip that counts as a pass is invisible to a report that
+// checks for skipped tests. A display-less run must now say so
+// (`SUITE_GTK_TESTS=skip`); otherwise a widget test with no display fails,
+// which is what #241 means by "do not mask GTK initialization failure with
+// test skips".
 
 use std::panic;
 use std::sync::mpsc;
@@ -25,6 +36,23 @@ use std::sync::OnceLock;
 /// with no usable display), so every later call skips instead of retrying an
 /// init that cannot succeed.
 static GTK_THREAD: OnceLock<Option<gtk4::glib::ThreadPool>> = OnceLock::new();
+
+/// Set to `skip` by a run that has no display and accepts not covering the
+/// widget layer — a developer's laptop without an X server, say. CI sets up
+/// Xvfb instead, so a missing display there is a bug in the workflow and
+/// fails rather than passing quietly.
+pub const SKIP_VARIABLE: &str = "SUITE_GTK_TESTS";
+
+/// Split out from the environment read so the policy can be asserted
+/// without writing a process-global variable — a test that set
+/// `SUITE_GTK_TESTS` would be visible to every test running beside it.
+fn value_opts_out(value: &str) -> bool {
+    value.eq_ignore_ascii_case("skip")
+}
+
+fn skipping_is_allowed() -> bool {
+    std::env::var(SKIP_VARIABLE).is_ok_and(|value| value_opts_out(&value))
+}
 
 fn gtk_thread() -> Option<&'static gtk4::glib::ThreadPool> {
     GTK_THREAD
@@ -46,11 +74,13 @@ fn gtk_thread() -> Option<&'static gtk4::glib::ThreadPool> {
 /// Run `f` on the process's single GTK thread, propagating a panic inside `f`
 /// as a failure of the calling test.
 ///
-/// When GTK cannot initialise the closure is skipped and the test passes. That
-/// is deliberate: these are widget tests, a machine with no display cannot run
-/// them, and the alternative — every GTK test failing on such a machine — is
-/// noise that trains people to ignore the suite. Coverage of the *logic* under
-/// these widgets belongs in the GTK-free core crates, where it runs everywhere.
+/// When GTK cannot initialise this **fails** the test, unless the run has
+/// declared itself display-less by setting `SUITE_GTK_TESTS=skip`. A machine
+/// with no display genuinely cannot run a widget test, but it has to be the
+/// run that says so: defaulting to a silent pass is how these tests stopped
+/// running in CI without anyone noticing. Coverage of the *logic* under
+/// these widgets still belongs in the GTK-free core crates, where it runs
+/// everywhere.
 ///
 /// ```ignore
 /// #[test]
@@ -66,7 +96,14 @@ where
     F: FnOnce() + Send + panic::UnwindSafe + 'static,
 {
     let Some(pool) = gtk_thread() else {
-        eprintln!("SKIP: GTK could not be initialised (no display)");
+        assert!(
+            skipping_is_allowed(),
+            "GTK could not be initialised, so this widget test could not run. \
+             Give the run a display (`xvfb-run -a cargo test ...`), or set \
+             {SKIP_VARIABLE}=skip to declare this run display-less and skip \
+             the GTK widget tests deliberately."
+        );
+        eprintln!("SKIP: GTK could not be initialised and {SKIP_VARIABLE}=skip is set");
         return;
     };
     let (tx, rx) = mpsc::sync_channel(1);
@@ -91,6 +128,32 @@ pub fn is_available() -> bool {
 
 #[cfg(test)]
 mod tests {
+    /// The canary for #241: one clearly-named failure when a run has no
+    /// display and did not say so, instead of every widget test quietly
+    /// passing. This is what a CI job that forgets Xvfb now trips over.
+    #[test]
+    fn gtk_widget_tests_require_a_display_unless_the_run_opts_out() {
+        assert!(
+            super::is_available() || super::skipping_is_allowed(),
+            "GTK could not be initialised and {}=skip is not set, so every GTK \
+             widget test in this run would have been unable to run. Give the \
+             run a display (`xvfb-run -a ...`) or opt out explicitly.",
+            super::SKIP_VARIABLE
+        );
+    }
+
+    #[test]
+    fn only_the_skip_value_opts_out() {
+        assert!(super::value_opts_out("skip"));
+        assert!(super::value_opts_out("SKIP"));
+        // A truthy-looking value is not the opt-out: the variable names a
+        // deliberate choice, and guessing at "1" or "true" would let a
+        // stray environment quietly disable the widget layer again.
+        for value in ["1", "true", "yes", "", "skipping"] {
+            assert!(!super::value_opts_out(value), "value {value:?}");
+        }
+    }
+
     /// Every call must land on the same thread, or widgets created by one test
     /// would be unusable from the next.
     #[test]

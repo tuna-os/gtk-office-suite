@@ -10,8 +10,21 @@ modules of each app). This is where TDD happens: new parsing, formatting,
 undo, layout, or model logic starts as a failing test here.
 
 ```bash
-cargo test --workspace          # everything
-cargo test -p suite-common-core # core only — no GTK headers needed
+xvfb-run -a cargo test --workspace  # everything
+cargo test -p suite-common-core     # core only — no GTK headers, no display
+```
+
+Tier 1 is not entirely GTK-free: the workspace also holds widget tests that
+go through `suite_common::gtk_test::run`, which needs a display to
+initialise GTK — hence `xvfb-run` on the whole-workspace form. Those tests
+**fail** without one rather than skipping. That is deliberate: they used to
+skip and pass, so the PR job ran them with no display and 36 of them
+stopped running while the harness still reported `0 ignored` (#241). If you
+genuinely cannot give the run a display, opt out explicitly and they are
+skipped:
+
+```bash
+SUITE_GTK_TESTS=skip cargo test --workspace
 ```
 
 If you can't unit-test a behavior because it's welded to a widget, that's

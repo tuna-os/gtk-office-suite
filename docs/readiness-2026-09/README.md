@@ -24,7 +24,7 @@ Letters, Tables and Decks must reliably complete create/open → edit → undo/r
 
 - [x] #437 — durable shared saves
 - [x] #436 — Letters save transactions
-- [ ] #241 — GTK test thread/display ownership
+- [x] #241 — GTK test thread/display ownership
 - [ ] #354 — deterministic GUI infrastructure
 - [ ] #313 — CI validator and test gates
 - [ ] #442 — crash and flake campaign
