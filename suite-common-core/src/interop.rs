@@ -8,8 +8,9 @@
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet};
 use std::fs::File;
-use std::io::{Read, Write};
-use std::path::{Path, PathBuf};
+use std::io::{Cursor, Read, Write};
+use std::path::Path;
+use crate::atomic_save::atomic_write_bytes;
 use crate::zip_guard::ZipBudget;
 use zip::write::SimpleFileOptions;
 use zip::{ZipArchive, ZipWriter};
@@ -150,7 +151,16 @@ impl OpaquePackage {
 
     /// Add captured members to a newly generated package. Existing generated
     /// members always win; this prevents stale opaque data from replacing an
-    /// intentional user edit. A temporary archive avoids partial saves.
+    /// intentional user edit.
+    ///
+    /// The rebuilt package is assembled in memory and handed to
+    /// `atomic_write_bytes`, the same contract every format writer follows:
+    /// this used to be the one save path that wrote its own temporary, and
+    /// it did so at a fully predictable name with `File::create`, which
+    /// follows symlinks. Going through `atomic_save` buys exclusive
+    /// temporary creation, permission preservation, data and directory
+    /// sync, and cleanup on failure — on a path that ends every
+    /// opaque-preserving save.
     pub fn append_to(&self, path: impl AsRef<Path>) -> Result<(), String> {
         if self.parts.is_empty() { return Ok(()); }
         let path = path.as_ref();
@@ -159,39 +169,33 @@ impl OpaquePackage {
         let existing: BTreeSet<String> = (0..source.len())
             .filter_map(|i| source.by_index(i).ok().map(|entry| entry.name().to_string()))
             .collect();
-        let temporary = temporary_path(path);
-        let output = File::create(&temporary).map_err(|e| format!("create temporary package: {e}"))?;
-        let mut writer = ZipWriter::new(output);
-        let options = SimpleFileOptions::default().compression_method(zip::CompressionMethod::Deflated);
-        for index in 0..source.len() {
-            let mut entry = source.by_index(index).map_err(|e| format!("read generated entry: {e}"))?;
-            if entry.is_dir() { continue; }
-            let name = entry.name().to_string();
-            let mut bytes = Vec::new();
-            entry.read_to_end(&mut bytes).map_err(|e| format!("read generated {name}: {e}"))?;
-            writer.start_file(&name, options).map_err(|e| format!("write generated {name}: {e}"))?;
-            writer.write_all(&bytes).map_err(|e| format!("write generated {name}: {e}"))?;
+        let mut buffer = Vec::new();
+        {
+            let mut writer = ZipWriter::new(Cursor::new(&mut buffer));
+            let options = SimpleFileOptions::default().compression_method(zip::CompressionMethod::Deflated);
+            for index in 0..source.len() {
+                let mut entry = source.by_index(index).map_err(|e| format!("read generated entry: {e}"))?;
+                if entry.is_dir() { continue; }
+                let name = entry.name().to_string();
+                let mut bytes = Vec::new();
+                entry.read_to_end(&mut bytes).map_err(|e| format!("read generated {name}: {e}"))?;
+                writer.start_file(&name, options).map_err(|e| format!("write generated {name}: {e}"))?;
+                writer.write_all(&bytes).map_err(|e| format!("write generated {name}: {e}"))?;
+            }
+            for (name, bytes) in &self.parts {
+                if existing.contains(name) { continue; }
+                writer.start_file(name, options).map_err(|e| format!("write opaque {name}: {e}"))?;
+                writer.write_all(bytes).map_err(|e| format!("write opaque {name}: {e}"))?;
+            }
+            writer.finish().map_err(|e| format!("finish package: {e}"))?;
         }
-        for (name, bytes) in &self.parts {
-            if existing.contains(name) { continue; }
-            writer.start_file(name, options).map_err(|e| format!("write opaque {name}: {e}"))?;
-            writer.write_all(bytes).map_err(|e| format!("write opaque {name}: {e}"))?;
-        }
-        writer.finish().map_err(|e| format!("finish package: {e}"))?;
-        std::fs::rename(&temporary, path).map_err(|e| format!("replace package: {e}"))
+        atomic_write_bytes(path, &buffer)
     }
-}
-
-fn temporary_path(path: &Path) -> PathBuf {
-    let mut temporary = path.to_path_buf();
-    temporary.set_extension(format!("{}-opaque-tmp", path.extension().and_then(|e| e.to_str()).unwrap_or("package")));
-    temporary
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-use zip::write::SimpleFileOptions;
 
     #[test]
     fn report_is_structured_and_classifies_destructive_features() {
@@ -240,5 +244,59 @@ use zip::write::SimpleFileOptions;
         let mut bytes = Vec::new();
         item.read_to_end(&mut bytes).unwrap();
         assert_eq!(bytes, b"opaque extension");
+    }
+
+    /// `append_to` used to create its temporary with `File::create` at a
+    /// fully predictable name (`report.odt` → `report.odt-opaque-tmp`).
+    /// `File::create` follows symlinks, so anything pre-created at that
+    /// name was opened and truncated — the exact hazard `atomic_save` has
+    /// guarded since #437, on the path every opaque-preserving save ends
+    /// with.
+    #[cfg(unix)]
+    #[test]
+    fn appending_opaque_parts_does_not_follow_a_stale_temporary_symlink() {
+        use std::io::Write as _;
+        let dir = tempfile::tempdir().unwrap();
+        let package = dir.path().join("report.odt");
+        let unrelated = dir.path().join("unrelated.txt");
+        std::fs::write(&unrelated, b"must survive").unwrap();
+
+        // A package with one recognised part, so capture has something to
+        // keep and append_to has something to add.
+        {
+            let file = File::create(&package).unwrap();
+            let mut writer = ZipWriter::new(file);
+            writer.start_file("content.xml", SimpleFileOptions::default()).unwrap();
+            writer.write_all(b"<x/>").unwrap();
+            writer.start_file("extras/keep.bin", SimpleFileOptions::default()).unwrap();
+            writer.write_all(b"opaque").unwrap();
+            writer.finish().unwrap();
+        }
+        let opaque = OpaquePackage::capture(&package, &["content.xml"]).unwrap();
+        assert_eq!(opaque.len(), 1);
+
+        // Regenerate the package, then plant the symlink the old temporary
+        // name would have opened.
+        {
+            let file = File::create(&package).unwrap();
+            let mut writer = ZipWriter::new(file);
+            writer.start_file("content.xml", SimpleFileOptions::default()).unwrap();
+            writer.write_all(b"<x/>").unwrap();
+            writer.finish().unwrap();
+        }
+        let stale = dir.path().join("report.odt-opaque-tmp");
+        std::os::unix::fs::symlink(&unrelated, &stale).unwrap();
+
+        opaque.append_to(&package).unwrap();
+
+        assert_eq!(
+            std::fs::read(&unrelated).unwrap(),
+            b"must survive",
+            "a save followed a symlink and truncated an unrelated file"
+        );
+        assert!(stale.is_symlink(), "the save removed a file it did not create");
+        // And the opaque part still made it into the package.
+        let restored = OpaquePackage::capture(&package, &["content.xml"]).unwrap();
+        assert_eq!(restored.len(), 1);
     }
 }

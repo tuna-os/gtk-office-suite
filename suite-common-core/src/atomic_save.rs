@@ -169,6 +169,9 @@ pub fn atomic_write_bytes(path: &Path, bytes: &[u8]) -> Result<(), String> {
 mod tests {
     use super::*;
 
+    /// Serializes the one test that changes the process working directory.
+    static CWD_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
     #[cfg(unix)]
     #[test]
     fn save_does_not_follow_a_stale_temporary_symlink() {
@@ -361,4 +364,144 @@ mod tests {
         let err = atomic_write_bytes(Path::new("/"), b"data").unwrap_err();
         assert!(err.contains("no file name"), "got: {err}");
     }
+
+    /// Saving is process-wide safe under concurrency, not just crash-safe.
+    /// Two things could break here and neither shows up in a single-threaded
+    /// test: two savers could pick the same temporary name and interleave
+    /// their writes into it, and a reader could catch the destination
+    /// mid-write. So writers race on one path while a reader watches, and
+    /// every observation must be one whole payload — never a prefix, a
+    /// blend, or an empty file.
+    #[test]
+    fn concurrent_savers_never_expose_a_partial_or_blended_file() {
+        use std::sync::atomic::{AtomicBool, Ordering};
+        use std::sync::Arc;
+
+        const WRITERS: usize = 6;
+        const ROUNDS: usize = 40;
+        // Large enough that a non-atomic write could not plausibly land in
+        // one operation, and distinct per writer so a blend is detectable.
+        const SIZE: usize = 256 * 1024;
+
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("contended.bin");
+        let payloads: Vec<Vec<u8>> =
+            (0..WRITERS).map(|w| vec![b'a' + w as u8; SIZE]).collect();
+        fs::write(&path, &payloads[0]).unwrap();
+
+        let done = Arc::new(AtomicBool::new(false));
+        let reader = {
+            let path = path.clone();
+            let done = Arc::clone(&done);
+            let payloads = payloads.clone();
+            std::thread::spawn(move || {
+                let mut observations = 0usize;
+                while !done.load(Ordering::Relaxed) {
+                    match fs::read(&path) {
+                        Ok(seen) => {
+                            assert!(
+                                payloads.contains(&seen),
+                                "a reader saw {} bytes that are not any writer's whole payload",
+                                seen.len()
+                            );
+                            observations += 1;
+                        }
+                        // The destination always exists here; anything else
+                        // is a real defect.
+                        Err(e) => panic!("destination vanished mid-save: {e}"),
+                    }
+                }
+                observations
+            })
+        };
+
+        let writers: Vec<_> = (0..WRITERS)
+            .map(|w| {
+                let path = path.clone();
+                let payload = payloads[w].clone();
+                std::thread::spawn(move || {
+                    for _ in 0..ROUNDS {
+                        atomic_write_bytes(&path, &payload).unwrap();
+                    }
+                })
+            })
+            .collect();
+        for writer in writers {
+            writer.join().unwrap();
+        }
+        done.store(true, Ordering::Relaxed);
+        let observations = reader.join().unwrap();
+        assert!(observations > 0, "the reader never got to look");
+
+        // Nothing is left behind: the destination and nothing else.
+        let leftovers: Vec<_> = fs::read_dir(dir.path())
+            .unwrap()
+            .filter_map(|e| e.ok().map(|e| e.file_name()))
+            .filter(|name| name != "contended.bin")
+            .collect();
+        assert!(leftovers.is_empty(), "temporary files survived: {leftovers:?}");
+        assert!(payloads.contains(&fs::read(&path).unwrap()));
+    }
+
+    /// `atomic_write_bytes` resolves the temporary's directory from the
+    /// destination, so a path with no parent component has to fall back to
+    /// the working directory rather than trying to create a temporary in
+    /// "". A bare file name is what a caller passes after `cd`-ing, and a
+    /// document opened from a command line argument arrives exactly so.
+    #[test]
+    fn a_bare_relative_file_name_saves_into_the_working_directory() {
+        // `set_current_dir` is process-wide, so this is the one test that
+        // touches it and it holds the lock while it does.
+        let _guard = CWD_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        let dir = tempfile::tempdir().unwrap();
+        let original = std::env::current_dir().unwrap();
+        std::env::set_current_dir(dir.path()).unwrap();
+
+        let bare = atomic_write_bytes(Path::new("bare.txt"), b"no parent");
+        let nested = fs::create_dir(dir.path().join("sub"))
+            .map_err(|e| e.to_string())
+            .and_then(|()| atomic_write_bytes(Path::new("sub/nested.txt"), b"relative parent"));
+
+        std::env::set_current_dir(&original).unwrap();
+
+        bare.unwrap();
+        nested.unwrap();
+        assert_eq!(fs::read(dir.path().join("bare.txt")).unwrap(), b"no parent");
+        assert_eq!(
+            fs::read(dir.path().join("sub/nested.txt")).unwrap(),
+            b"relative parent"
+        );
+    }
+
+    /// Paths on Unix are bytes, not text. A file named by a byte sequence
+    /// that is not valid UTF-8 — which a user can create, and which a
+    /// non-UTF-8 locale or a file copied off a foreign filesystem produces
+    /// routinely — must save like any other, and must not be lossily
+    /// re-encoded into a *different* file on the way.
+    #[cfg(unix)]
+    #[test]
+    fn a_non_utf8_path_saves_to_that_exact_path() {
+        use std::ffi::OsStr;
+        use std::os::unix::ffi::OsStrExt;
+
+        let dir = tempfile::tempdir().unwrap();
+        // 0xFF is never valid UTF-8; `to_string_lossy` turns it into U+FFFD,
+        // so a lossy round-trip would write to a neighbouring name instead.
+        let name = OsStr::from_bytes(b"r\xffport.odt");
+        let path = dir.path().join(name);
+
+        atomic_write_bytes(&path, b"first").unwrap();
+        assert_eq!(fs::read(&path).unwrap(), b"first");
+        // Overwrite too: that is the path that reads the destination's
+        // metadata and renames over it.
+        atomic_write_bytes(&path, b"second").unwrap();
+        assert_eq!(fs::read(&path).unwrap(), b"second");
+
+        let names: Vec<_> = fs::read_dir(dir.path())
+            .unwrap()
+            .filter_map(|e| e.ok().map(|e| e.file_name()))
+            .collect();
+        assert_eq!(names, vec![name.to_os_string()], "saved beside the requested path");
+    }
+
 }
