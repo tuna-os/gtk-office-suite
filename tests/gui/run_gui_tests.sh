@@ -35,6 +35,10 @@ if [ -z "${GUI_TEST_REUSE_DISPLAY:-}" ]; then
     XVFB_PID=$!
     trap 'kill ${XVFB_PID:-} 2>/dev/null || true' EXIT
     export DISPLAY=":${XVFB_DISPLAY_NUM}"
+    # Tell the screen recorder the geometry directly: ffmpeg's x11grab has
+    # to be given a capture size up front, and asking X for it needs
+    # xdpyinfo, which is not installed everywhere these tests run.
+    export GUI_TEST_SCREEN_SIZE="${GUI_TEST_SCREEN_SIZE:-1920x1080}"
     sleep 1
 fi
 
@@ -53,9 +57,16 @@ if [ -z "${GUI_TEST_REUSE_DISPLAY:-}" ] && command -v matchbox-window-manager >/
     sleep 1
 fi
 
+# The interpreter is pinned to the system one because dogtail and the GTK
+# introspection bindings are distro packages, not pip installs — but an
+# environment whose /usr/bin/python3 is not the one those packages were
+# built for (a toolbox, a rebased image) can point GUI_TEST_PYTHON at the
+# matching interpreter instead of failing at import time.
+PYTHON_BIN="${GUI_TEST_PYTHON:-/usr/bin/python3}"
+
 # AT-SPI needs a session bus; dbus-run-session gives us a private one.
 # dogtail refuses to start unless toolkit-accessibility is enabled in that session.
 exec dbus-run-session -- bash -c '
     gsettings set org.gnome.desktop.interface toolkit-accessibility true
-    exec /usr/bin/python3 -m pytest "$@" -v --tb=short
-' _ "$@"
+    exec "$0" -m pytest "$@" -v --tb=short
+' "$PYTHON_BIN" "$@"

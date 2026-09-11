@@ -13,6 +13,8 @@ import requests
 from PIL import Image
 from dogtail import tree, rawinput
 
+from . import recorder as screen_recorder
+
 _dogtail_click = rawinput.click
 _dogtail_key_combo = rawinput.keyCombo
 _dogtail_type_text = rawinput.typeText
@@ -100,13 +102,23 @@ class BaseGUITestCase(unittest.TestCase):
         # populating launch_env before calling super().setUp().
         self.configure_deterministic_environment()
 
-        # Path to compiled binary
-        self.bin_path = os.path.join(self.workspace_dir, "target", "debug", self.app_name)
+        # Path to compiled binary. CARGO_TARGET_DIR is honoured so a run
+        # inside the test container can keep its artifacts out of a host
+        # checkout's target/ (different toolchain, different glibc).
+        target_dir = os.environ.get("CARGO_TARGET_DIR") or os.path.join(
+            self.workspace_dir, "target")
+        self.bin_path = os.path.join(target_dir, "debug", self.app_name)
         if not os.path.exists(self.bin_path):
             raise RuntimeError(f"Binary not found at {self.bin_path}. Run 'cargo build' first.")
 
         # Clear any leftover processes
         subprocess.run(["pkill", "-x", self.app_name], stderr=subprocess.DEVNULL)
+
+        # Start recording before the app launches: a startup crash or a
+        # window that never appears is exactly the failure whose video is
+        # worth having, and it happens in the first second.
+        self._start_recording()
+
         # Launch app under GDK_BACKEND=x11
         env = os.environ.copy()
         env["GDK_BACKEND"] = "x11"
@@ -147,6 +159,99 @@ class BaseGUITestCase(unittest.TestCase):
         if os.path.exists(font_config):
             defaults["FONTCONFIG_FILE"] = font_config
         self.launch_env = {**defaults, **getattr(self, "launch_env", {})}
+
+    # ── Video evidence ─────────────────────────────────────────────────
+    # A journey asserts what the app did; the recording shows it. CI keeps
+    # the video for failures (what went wrong) and, when asked, for passes
+    # (feature-verification evidence attached to a pull request).
+    #
+    #   GUI_TEST_VIDEO=off|failures|all   default: off, or all when
+    #                                     GUI_TEST_VIDEO_DIR is set
+    #   GUI_TEST_VIDEO_DIR=<dir>          default: tests/gui/videos
+    #
+    # Recording never affects a verdict: a missing ffmpeg or a recorder
+    # that fails to start prints a warning and the journey runs unchanged.
+
+    def _video_mode(self) -> str:
+        mode = os.environ.get("GUI_TEST_VIDEO", "").strip().lower()
+        if not mode:
+            return "all" if os.environ.get("GUI_TEST_VIDEO_DIR") else "off"
+        if mode in ("1", "true", "yes", "on"):
+            return "all"
+        if mode in ("0", "false", "no", "none"):
+            return "off"
+        if mode not in ("off", "failures", "all"):
+            print(f"Warning: unknown GUI_TEST_VIDEO={mode!r}; recording disabled")
+            return "off"
+        return mode
+
+    def _video_dir(self) -> str:
+        return os.environ.get("GUI_TEST_VIDEO_DIR",
+                              os.path.join(self.gui_dir, "videos"))
+
+    def _start_recording(self):
+        self._recorder = None
+        self._recording_started = None
+        if self._video_mode() == "off":
+            return
+        name = f"{type(self).__name__}.{self._testMethodName}"
+        path = os.path.join(self._video_dir(), f"{name}.mp4")
+        rec = screen_recorder.ScreenRecorder(path)
+        if not rec.start():
+            print(f"Warning: screen recording unavailable ({rec.error})")
+            return
+        self._recorder = rec
+        self._recording_started = time.monotonic()
+        # unittest skips tearDown when setUp raises, but still runs
+        # cleanups — without this, an app that never reaches the AT-SPI
+        # tree would leave ffmpeg running and lose the very recording
+        # that shows why.
+        self.addCleanup(self._finish_recording_if_running)
+
+    def _finish_recording_if_running(self):
+        """Setup-failure path: keep the clip, the run never got a verdict."""
+        if getattr(self, "_recorder", None) is not None:
+            self._finish_recording(failed=True)
+
+    def _finish_recording(self, failed: bool):
+        rec = getattr(self, "_recorder", None)
+        if rec is None:
+            return
+        self._recorder = None
+        keep = failed or self._video_mode() == "all"
+        path = rec.stop(keep=keep)
+        if not path:
+            if keep and rec.error:
+                print(f"Warning: no video retained ({rec.error})")
+            return
+
+        # Sidecar metadata so the evidence collector can label each clip
+        # with its journey and outcome without re-running anything.
+        meta = {
+            "test": f"{type(self).__name__}.{self._testMethodName}",
+            "app": self.app_name,
+            "outcome": "failed" if failed else "passed",
+            "video": os.path.basename(path),
+            "wall_seconds": round(time.monotonic() - (self._recording_started or time.monotonic()), 2),
+            "revision": os.environ.get("GITHUB_SHA", ""),
+        }
+        try:
+            with open(os.path.splitext(path)[0] + ".json", "w") as f:
+                json.dump(meta, f, indent=2)
+        except OSError as e:
+            print(f"Warning: could not write video metadata: {e}")
+        print(f"Recorded {meta['outcome']} journey to {path}")
+
+        if failed:
+            artifacts_dir = os.path.join(
+                self.gui_dir, "failure_artifacts",
+                f"{type(self).__name__}.{self._testMethodName}")
+            try:
+                import shutil
+                os.makedirs(artifacts_dir, exist_ok=True)
+                shutil.copy(path, os.path.join(artifacts_dir, "journey.mp4"))
+            except OSError as e:
+                print(f"Warning: could not copy failure video: {e}")
 
     def wait_for_condition(self, predicate, timeout=10.0, interval=0.05,
                            description="condition"):
@@ -231,8 +336,10 @@ class BaseGUITestCase(unittest.TestCase):
             raise
 
     def tearDown(self):
-        if getattr(self, "_test_failed", False):
+        failed = getattr(self, "_test_failed", False)
+        if failed:
             self._capture_failure_artifacts()
+        self._finish_recording(failed)
         rawinput.click = _dogtail_click
         rawinput.keyCombo = _dogtail_key_combo
         rawinput.typeText = _dogtail_type_text

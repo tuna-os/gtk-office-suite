@@ -1,0 +1,256 @@
+name: Feature verification video
+
+# Runs real GUI journeys in the test container, records each one, and
+# posts the result — with the clips playable inline — on the pull request.
+#
+# Why: a roadmap item is "done" when the application does the thing, not
+# when a unit test of a model passes. This produces that evidence as a
+# by-product of a test run, so what the comment shows is exactly what was
+# asserted, on the same display, in the same run.
+#
+# It is opt-in per pull request (add the `verify-video` label) because a
+# recorded journey run costs several minutes; the deterministic smoke
+# gate in gui-tests.yml still runs on every push.
+
+on:
+  pull_request:
+    types: [labeled, synchronize, reopened]
+  workflow_dispatch:
+    inputs:
+      journey:
+        description: 'pytest selection, e.g. "test_smoke.py -k Letters"'
+        required: false
+        default: 'test_smoke.py'
+      pr:
+        description: 'Pull request number to comment on (optional)'
+        required: false
+        default: ''
+
+concurrency:
+  group: feature-verification-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  # Fork pull requests have a read-only token: they cannot pull a private
+  # package, publish media, or comment. Skipping with a reason is honest;
+  # a half-run that silently posts nothing is not.
+  gate:
+    runs-on: ubuntu-24.04
+    outputs:
+      run: ${{ steps.decide.outputs.run }}
+    steps:
+      - id: decide
+        env:
+          EVENT: ${{ github.event_name }}
+          LABELS: ${{ toJSON(github.event.pull_request.labels.*.name) }}
+          SAME_REPO: ${{ github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository }}
+        run: |
+          if [ "$EVENT" = "workflow_dispatch" ]; then
+            echo "run=true" >> "$GITHUB_OUTPUT"; exit 0
+          fi
+          if [ "$SAME_REPO" != "true" ]; then
+            echo "Fork pull request: skipping (no token to publish evidence)."
+            echo "run=false" >> "$GITHUB_OUTPUT"; exit 0
+          fi
+          if echo "$LABELS" | grep -q '"verify-video"'; then
+            echo "run=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "Label 'verify-video' not present: skipping."
+            echo "run=false" >> "$GITHUB_OUTPUT"
+          fi
+
+  image:
+    needs: gate
+    if: needs.gate.outputs.run == 'true'
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      packages: write
+    outputs:
+      ref: ${{ steps.resolve.outputs.ref }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # The image is a main-branch artifact (gui-container.yml). Building
+      # it here as a fallback means the very first run of this workflow
+      # works before that one has ever published.
+      - id: resolve
+        run: |
+          ref="ghcr.io/${{ github.repository }}/gui-test:main"
+          if docker manifest inspect "$ref" >/dev/null 2>&1; then
+            echo "Using published image $ref"
+          else
+            echo "No published image yet; building and publishing $ref"
+            docker build -t "$ref" -f tests/gui/container/Containerfile tests/gui/container
+            docker push "$ref"
+          fi
+          echo "ref=$ref" >> "$GITHUB_OUTPUT"
+
+  record:
+    needs: image
+    runs-on: ubuntu-24.04
+    container:
+      image: ${{ needs.image.outputs.ref }}
+      # GTK and Xvfb share memory through /dev/shm; the container default
+      # of 64MB is enough to make rendering fail in ways that look like
+      # application bugs.
+      options: --shm-size=1g
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Build app binaries
+        run: cargo build --bin letters --bin tables --bin decks
+
+      - name: Run recorded journeys
+        id: journeys
+        env:
+          JOURNEY: ${{ github.event.inputs.journey || 'test_smoke.py' }}
+          GUI_TEST_VIDEO: all
+          GUI_TEST_VIDEO_DIR: ${{ github.workspace }}/tests/gui/videos
+        # $JOURNEY is deliberately unquoted: it is a pytest argument list.
+        # It is passed through the environment rather than interpolated
+        # into the script, so it cannot inject shell commands.
+        run: tests/gui/run_gui_tests.sh $JOURNEY
+
+      - name: Collect evidence
+        if: always()
+        env:
+          JOURNEY: ${{ github.event.inputs.journey || 'test_smoke.py' }}
+        run: |
+          python3 tests/gui/collect_evidence.py tests/gui/videos \
+            --out evidence --title "Feature verification: $JOURNEY"
+
+      - name: Upload evidence
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: feature-verification
+          path: |
+            evidence
+            tests/gui/failure_artifacts
+          retention-days: 14
+          if-no-files-found: warn
+
+  publish:
+    needs: record
+    if: always() && needs.record.result != 'skipped'
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write        # push clips to the ci-evidence branch
+      pull-requests: write   # post/update the verification comment
+    steps:
+      - uses: actions/checkout@v7
+
+      # A record job that died before uploading (build failure, container
+      # pull failure) still gets a comment saying so — silence would read
+      # as "not run yet".
+      - uses: actions/download-artifact@v7
+        continue-on-error: true
+        with:
+          name: feature-verification
+          path: downloaded
+
+      # GitHub renders an image in a comment only from a URL it can fetch,
+      # and there is no API for attaching one. An orphan branch holding
+      # just the clips is the smallest thing that works, and keeping only
+      # the newest run per pull request stops it from growing without
+      # bound.
+      - name: Publish clips to the ci-evidence branch
+        id: media
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR: ${{ github.event.pull_request.number || github.event.inputs.pr }}
+        run: |
+          set -euo pipefail
+          if [ ! -d downloaded/evidence ] || [ -z "$(ls -A downloaded/evidence 2>/dev/null)" ]; then
+            echo "No evidence to publish."
+            exit 0
+          fi
+          slot="pr-${PR:-manual}"
+          work="$(mktemp -d)"
+          git clone --depth 1 --branch ci-evidence \
+            "https://x-access-token:${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" \
+            "$work" 2>/dev/null || {
+              git clone --depth 1 \
+                "https://x-access-token:${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" "$work"
+              git -C "$work" checkout --orphan ci-evidence
+              git -C "$work" rm -rq --cached . || true
+              rm -rf "$work"/* 2>/dev/null || true
+              printf '%s\n' \
+                '# CI evidence' '' \
+                'Recorded GUI journeys attached to pull request comments.' \
+                'Generated by .github/workflows/feature-verification.yml; not source.' \
+                > "$work/README.md"
+            }
+          rm -rf "${work:?}/${slot}"
+          mkdir -p "$work/$slot/${GITHUB_RUN_ID}"
+          cp downloaded/evidence/*.gif downloaded/evidence/*.mp4 \
+             "$work/$slot/${GITHUB_RUN_ID}/" 2>/dev/null || true
+          git -C "$work" config user.name "gui-evidence-bot"
+          git -C "$work" config user.email "actions@github.com"
+          git -C "$work" add -A
+          if git -C "$work" diff --cached --quiet; then
+            echo "Nothing new to publish."
+          else
+            git -C "$work" commit -qm "evidence: $slot run ${GITHUB_RUN_ID}"
+            git -C "$work" push -q origin ci-evidence
+          fi
+          echo "base=https://raw.githubusercontent.com/${GITHUB_REPOSITORY}/ci-evidence/${slot}/${GITHUB_RUN_ID}" >> "$GITHUB_OUTPUT"
+
+      - name: Build comment body
+        env:
+          JOURNEY: ${{ github.event.inputs.journey || 'test_smoke.py' }}
+          MEDIA_BASE: ${{ steps.media.outputs.base }}
+          RECORD_RESULT: ${{ needs.record.result }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          if [ -f downloaded/evidence/evidence.json ]; then
+            python3 tests/gui/pr_comment.py downloaded/evidence/evidence.json \
+              --media-base "$MEDIA_BASE" --journey "$JOURNEY" --out comment.md
+          else
+            {
+              echo '<!-- gui-feature-verification -->'
+              echo "### Feature verification — ⚠️ no evidence produced"
+              echo
+              echo "The recording job finished as \`$RECORD_RESULT\` without an"
+              echo "evidence bundle, so there is nothing to show for \`$JOURNEY\`."
+              echo "That is a harness result, not a verdict about this change."
+              echo
+              echo "[Workflow run]($RUN_URL)"
+            } > comment.md
+          fi
+          cat comment.md >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Post or update the verification comment
+        if: github.event.pull_request.number || github.event.inputs.pr
+        uses: actions/github-script@v7
+        env:
+          PR: ${{ github.event.pull_request.number || github.event.inputs.pr }}
+        with:
+          script: |
+            const fs = require('fs');
+            const body = fs.readFileSync('comment.md', 'utf8');
+            const issue_number = Number(process.env.PR);
+            const marker = '<!-- gui-feature-verification -->';
+            const { data: comments } = await github.rest.issues.listComments({
+              ...context.repo, issue_number, per_page: 100,
+            });
+            const existing = comments.find(c => c.body && c.body.includes(marker));
+            if (existing) {
+              await github.rest.issues.updateComment({
+                ...context.repo, comment_id: existing.id, body });
+            } else {
+              await github.rest.issues.createComment({
+                ...context.repo, issue_number, body });
+            }

@@ -94,11 +94,30 @@ jobs:
       - name: Install GUI test dependencies
         run: |
           sudo apt-get install -y -qq xvfb dbus at-spi2-core matchbox-window-manager xdotool \
-            python3-dogtail python3-pytest python3-pil python3-requests
+            x11-utils ffmpeg python3-dogtail python3-pytest python3-pil python3-requests
           python3 -m pip install --break-system-packages mss
 
+      # GUI_TEST_VIDEO=failures records every journey and keeps only the
+      # clips of the ones that failed. A smoke failure means an app did
+      # not launch or input did not land — questions a log rarely answers
+      # and thirty seconds of video usually does. Recording is free of
+      # verdicts: a missing ffmpeg would warn, not fail.
       - name: Run smoke tests
+        env:
+          GUI_TEST_VIDEO: failures
+          GUI_TEST_VIDEO_DIR: ${{ github.workspace }}/tests/gui/videos
         run: tests/gui/run_gui_tests.sh test_smoke.py ${{ steps.affected.outputs.filter }}
+
+      - name: Upload failure artifacts
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: smoke-failure-artifacts
+          path: |
+            tests/gui/failure_artifacts
+            tests/gui/videos
+          retention-days: 14
+          if-no-files-found: ignore
 
       - name: Run buffer-bridge round-trip tests (Xvfb)
         run: xvfb-run -a cargo test -p letters bridge

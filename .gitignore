@@ -1,7 +1,14 @@
 .flatpak-cache/
 tests/gui/*.png
 tests/gui/failure_artifacts/
+# Recorded journeys and the evidence bundles built from them
+tests/gui/videos/
+evidence/
 conformance/scorecard-latest.md
+
+# Python bytecode and pytest state from local test runs
+__pycache__/
+.pytest_cache/
 
 # Agent runtime artifacts
 .pi/goals/

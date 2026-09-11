@@ -11,6 +11,7 @@ cargo build --bin letters --bin tables --bin decks   # build apps
 cargo test --workspace                               # unit tests (~90, fast)
 tests/gui/run_gui_tests.sh test_smoke.py             # GUI smoke tests (~10s, needs Xvfb deps)
 cargo clippy --workspace                             # lint (many pre-existing warnings)
+just verify 'test_smoke.py -k Letters'               # journeys + recorded video evidence
 ```
 
 Running an app outside Flatpak needs compiled GSettings schemas or it aborts:
@@ -44,6 +45,11 @@ units) ← `suite-common` (GTK helpers: dialogs, toasts, SuiteApp/SuiteWindow)
   gates; VLM audit is scheduled + non-gating). Never add `|| true` to a test
   step — that is how three launch-blocking bugs shipped undetected in June
   2026 (see PR #86).
+- Journeys can record themselves (`GUI_TEST_VIDEO=all|failures`). The smoke
+  gate keeps a video of every failure; labelling a PR `verify-video` runs the
+  journeys in the test container and posts the clips on the PR. See
+  `docs/CI-VIDEO-EVIDENCE.md`. Recording never decides a verdict: a clip is
+  evidence about a result, an assertion is the result.
 - **A green PR check does not mean ODF interop passed.** `ci.yml` does not set
   `REQUIRE_SOFFICE`, and the `ubuntu-24.04` runner has no LibreOffice, so both
   `lo_parity` suites *skip* rather than pass. Only `nightly.yml` sets

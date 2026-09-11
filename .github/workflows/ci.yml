@@ -47,6 +47,7 @@ jobs:
           python3 -m pytest -q \
             tests/test_release_gate.py \
             tests/test_validate_parity.py \
+            tests/test_gui_evidence.py \
             tests/adaptive_editor_contract.py
 
       # E1-E3: green rows cite evidence, referenced paths exist, journey-gated

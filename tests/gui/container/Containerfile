@@ -1,0 +1,70 @@
+# GUI test container: builds the apps and runs the AT-SPI journeys with
+# screen recording, in CI and on a developer machine.
+#
+# Why an image instead of apt steps in a workflow: the journeys depend on
+# a precise environment (a window manager, an a11y bus, fonts, an X
+# server, a video encoder). When that environment is assembled per job,
+# every run is a fresh chance for an upstream package change to alter
+# behavior, and a developer cannot reproduce a CI failure locally without
+# hand-copying the workflow's apt lines. One image is the single
+# definition of "the environment these tests are true in".
+#
+# Build:  docker build -t gui-test tests/gui/container
+# Use:    tests/gui/container/run.sh tests/gui/run_gui_tests.sh test_smoke.py
+FROM ubuntu:24.04
+
+LABEL org.opencontainers.image.source=https://github.com/tuna-os/gtk-office-suite
+LABEL org.opencontainers.image.description="GTK4 build + AT-SPI GUI journey + screen recording environment for gtk-office-suite"
+LABEL org.opencontainers.image.licenses=GPL-3.0-or-later
+
+ENV DEBIAN_FRONTEND=noninteractive
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+      # Build the Rust apps
+      build-essential pkg-config git curl ca-certificates \
+      libgtk-4-dev libadwaita-1-dev libssl-dev \
+      # GSettings schemas (glib-compile-schemas) and `gapplication`, which
+      # the journeys use to invoke app actions
+      libglib2.0-bin libglib2.0-dev-bin gsettings-desktop-schemas \
+      # Virtual display, window manager, synthetic input, a11y bus.
+      # matchbox is not optional: without a window manager GTK4 toplevels
+      # never take X input focus and synthetic keys are silently dropped.
+      xvfb x11-utils xdotool matchbox-window-manager dbus dbus-x11 \
+      at-spi2-core libgl1-mesa-dri \
+      # Screen recording and the still/GIF conversions built from it
+      ffmpeg \
+      # Deterministic text rendering. Cantarell is the GNOME UI font the
+      # apps expect; without it screenshots differ from the real product.
+      fonts-cantarell fonts-dejavu-core fonts-liberation2 fonts-noto-core \
+      # AT-SPI driving and image handling. dogtail must come from apt:
+      # this harness targets 0.9.11's API, not pip dogtail 2.x.
+      python3 python3-pip python3-dogtail python3-pytest python3-pil \
+      python3-requests \
+    && rm -rf /var/lib/apt/lists/*
+
+# mss (screen capture) has no Ubuntu package.
+RUN pip3 install --no-cache-dir --break-system-packages mss==9.0.2
+
+# Rust, pinned so an image rebuild does not silently change compiler
+# behavior underneath a red/green comparison.
+ARG RUST_VERSION=1.94.1
+ENV RUSTUP_HOME=/usr/local/rustup \
+    CARGO_HOME=/usr/local/cargo \
+    PATH=/usr/local/cargo/bin:$PATH
+RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs \
+      | sh -s -- -y --no-modify-path --profile minimal \
+        --default-toolchain "${RUST_VERSION}" --component clippy \
+    && chmod -R a+w "$CARGO_HOME" "$RUSTUP_HOME"
+
+# Shared harness defaults. run_gui_tests.sh still starts its own Xvfb and
+# D-Bus session; these only make the container's own idea of the
+# environment match what the journeys assume.
+ENV GDK_BACKEND=x11 \
+    GTK_A11Y=atspi \
+    LIBGL_ALWAYS_SOFTWARE=1 \
+    LANG=C.UTF-8 \
+    LC_ALL=C.UTF-8 \
+    TZ=UTC \
+    PYTHONUNBUFFERED=1
+
+WORKDIR /workspace
