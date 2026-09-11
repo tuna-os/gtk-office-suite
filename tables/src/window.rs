@@ -346,6 +346,20 @@ impl TablesWindow {
                     }
                 }
                 refresh();
+                // The grid's accessible description has to follow the jump.
+                // Without this it kept naming the last *committed* cell, so
+                // jumping by cell reference or to a defined name announced
+                // nothing — a screen-reader user was never told where they
+                // had landed. `refresh_grid_a11y`'s own documentation
+                // warns about exactly this staleness for sheet switches;
+                // the name box was the path that still had it.
+                //
+                // It is also the observable the GUI journeys were missing:
+                // with no signal that the selection moved, they had to wait
+                // a fixed interval and hope, which is how three of them
+                // came to fail under load with messages that read like
+                // Tables bugs (#354).
+                refresh_grid_a11y(&da, &s);
                 da.queue_draw();
                 fx.grab_focus();
                 true
