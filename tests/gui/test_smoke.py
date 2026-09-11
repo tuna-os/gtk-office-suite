@@ -2252,6 +2252,75 @@ class LettersStructuredEditingSmoke(BaseGUITestCase):
         self.assertIsNone(self.process.poll(), "letters crashed during list editing")
 
 
+class _SettingsIsolationProbe:
+    """A journey's settings must not reach the next journey, or the machine.
+
+    Only 2 of 38 journey classes used to isolate GSettings, so the rest
+    launched against the real XDG stores — and dconf keeps its storage in
+    `$XDG_CONFIG_HOME/dconf/user`, which the private D-Bus session does not
+    redirect. Measured with this pair before isolation became a default:
+
+        A: starts at false    <- left over from a *previous run*
+        B: starts at false    <- A's change leaked into B
+
+    and after:
+
+        A: starts at true
+        B: starts at true
+
+    So a journey that touched a preference rewrote the machine's real
+    settings and every later journey inherited them. CI's fresh runners
+    hid it; the stress campaign's randomised order would have surfaced it
+    as a flake with no visible cause (#354).
+
+    Two classes rather than two methods because the leak crossed journeys.
+    Each assertion stands alone — both expect the schema default — so
+    neither depends on the other having run, while together they catch the
+    regression.
+    """
+
+    app_name = "letters"
+
+    SETTING = ("org.tunaos.letters", "show-toolbar")
+
+    def _read(self):
+        """The value as the launched app sees it, not as this process does."""
+        import subprocess
+        env = os.environ.copy()
+        env.update(self.launch_env)
+        result = subprocess.run(["gsettings", "get", *self.SETTING],
+                                capture_output=True, text=True, env=env)
+        return (result.stdout.strip() or result.stderr.strip())
+
+    def _start_clean_then_change(self):
+        import subprocess
+        self.assertEqual(self._read(), "true",
+                         "this journey did not start from the schema default")
+        env = os.environ.copy()
+        env.update(self.launch_env)
+        subprocess.run(["gsettings", "set", *self.SETTING, "false"],
+                       env=env, check=True)
+        self.assertEqual(self._read(), "false", "the change did not take")
+
+
+class LettersSettingsIsolationSmoke(_SettingsIsolationProbe, BaseGUITestCase):
+    """First half: start from the default, then change it."""
+
+    def test_a_journey_starts_from_the_schema_default_and_may_change_it(self):
+        self._start_clean_then_change()
+
+
+class LettersSettingsIsolationFollowerSmoke(_SettingsIsolationProbe, BaseGUITestCase):
+    """Second half: the journey after one that changed a setting."""
+
+    def test_a_later_journey_does_not_inherit_the_change(self):
+        self.assertEqual(
+            self._read(), "true",
+            "a previous journey's setting reached this one — isolation is not "
+            "in effect, so journeys share (and rewrite) real user settings",
+        )
+
+
 class SuitePlatformIntegrationSmoke(BaseGUITestCase):
     """Platform integration: recent files, templates, help, and shortcuts (#119)."""
 
