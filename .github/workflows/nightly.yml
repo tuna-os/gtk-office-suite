@@ -64,15 +64,18 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v7
-      - name: Install GTK4 deps
-        run: sudo apt-get update -qq && sudo apt-get install -y -qq libgtk-4-dev libadwaita-1-dev
+      # Coverage runs the same workspace as the PR job, GTK widget tests
+      # included, so it needs the same display. Measuring coverage of tests
+      # that skipped reports a number for code nothing executed (#241).
+      - name: Install GTK4 deps and Xvfb
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq libgtk-4-dev libadwaita-1-dev xvfb
       - uses: dtolnay/rust-toolchain@stable
       - name: Install llvm-cov
         run: cargo install cargo-llvm-cov --quiet
       - name: Install llvm-tools
         run: rustup component add llvm-tools-preview
       - name: Run coverage
-        run: cargo llvm-cov --workspace --summary-only
+        run: xvfb-run -a cargo llvm-cov --workspace --summary-only
 
   fuzz-smoke:
     name: Fuzz importer smoke tests

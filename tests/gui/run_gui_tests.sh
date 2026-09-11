@@ -40,7 +40,28 @@ if [ -z "${GUI_TEST_REUSE_DISPLAY:-}" ]; then
     XVFB_PID=$!
     trap 'kill ${XVFB_PID:-} 2>/dev/null || true' EXIT
     export DISPLAY=":${XVFB_DISPLAY_NUM}"
-    sleep 1
+fi
+
+# Wait for the display to actually answer, and fail the run if it never
+# does. This was a blind `sleep 1`: an Xvfb that could not start — display
+# number already taken, missing binary, no /tmp/.X11-unix — left DISPLAY
+# pointing at nothing and the journeys failed later with a timeout that
+# said nothing about the cause. #241 asks setup to fail when the display is
+# unavailable, and to say so.
+for _ in $(seq 1 100); do
+    if xdpyinfo -display "$DISPLAY" >/dev/null 2>&1; then
+        break
+    fi
+    sleep 0.1
+done
+if ! xdpyinfo -display "$DISPLAY" >/dev/null 2>&1; then
+    echo "GUI setup failed: no X display at ${DISPLAY} after 10s." >&2
+    if [ -z "${GUI_TEST_REUSE_DISPLAY:-}" ]; then
+        echo "Xvfb did not come up; is display ${XVFB_DISPLAY_NUM} already in use?" >&2
+    else
+        echo "GUI_TEST_REUSE_DISPLAY is set, so DISPLAY was inherited rather than started." >&2
+    fi
+    exit 1
 fi
 
 # A window manager is required for GTK4 toplevels to receive X input focus

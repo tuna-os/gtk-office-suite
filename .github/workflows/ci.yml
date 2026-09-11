@@ -50,6 +50,7 @@ jobs:
             tests/test_gui_evidence.py \
             tests/test_validate_capabilities.py \
             tests/test_gui_stress.py \
+            tests/test_gui_harness.py \
             tests/adaptive_editor_contract.py
 
       # E1-E3: green rows cite evidence, referenced paths exist, journey-gated
@@ -108,10 +109,16 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
-      - name: Install GTK4 + libadwaita dev libraries
+      # Xvfb because the workspace contains GTK widget tests. Without a
+      # display `suite_common::gtk_test::run` cannot initialise GTK, and
+      # this job used to run the whole workspace with none: all 36 GTK
+      # widget tests in Letters skipped on every pull request while the
+      # harness reported "0 ignored", so neither the log nor the ledger
+      # gate below could see it (#241).
+      - name: Install GTK4 + libadwaita dev libraries and Xvfb
         run: |
           sudo apt-get update -qq
-          sudo apt-get install -y -qq libgtk-4-dev libadwaita-1-dev
+          sudo apt-get install -y -qq libgtk-4-dev libadwaita-1-dev xvfb
 
       - name: Install Rust stable
         uses: dtolnay/rust-toolchain@stable
@@ -130,10 +137,10 @@ jobs:
       # an artifact even on failure, so a failing run's per-test detail
       # survives past the job's own log retention.
       - name: cargo nextest run
-        run: cargo nextest run --workspace --profile ci
+        run: xvfb-run -a cargo nextest run --workspace --profile ci
 
       - name: cargo test --doc
-        run: cargo test --doc --workspace
+        run: xvfb-run -a cargo test --doc --workspace
 
       # C3/C4 for the Rust layers: the ledger's claims must name tests
       # this run actually collected, and none of them may have been
