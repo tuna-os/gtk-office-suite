@@ -37,7 +37,9 @@ Controller state machines generate valid commands and assert invariants after ev
       (`tables-core/tests/stateful.rs`: 16 fixed seeds on every PR, 400 seeds a night; it found two identity bugs
       and #527 on its first runs, all three now fixed). Letters has the same harness (`letters-core/tests/stateful.rs`) but its fixed-seed
       test is ignored, blocked on #532 — Enter inside a table cell duplicates the cell — rather than narrowing the
-      generator to route around it. Decks, the cross-app clipboard and the multi-window races are not started.
+      generator to route around it. Decks is done and green (`decks-core/tests/stateful.rs`), and found that align and
+      distribute mis-positioned circles by their radius on apply and again on every undo. The cross-app clipboard and the
+      multi-window races are not started.
 - [ ] Save/recovery fault injection at each transaction boundary; bounded malformed-file fuzzing with minimized fixtures.
 - [ ] Always retain stderr/backtrace, core dump where supported, screenshot, AT-SPI tree, last snapshot, action trace and saved output fixtures on failure.
 - [ ] Track first-attempt failure rate and classify product crash, assertion mismatch, timeout, infrastructure setup and nondeterministic rendering separately.

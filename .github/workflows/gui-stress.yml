@@ -100,11 +100,16 @@ jobs:
       # nights explore different sequences instead of re-proving the same
       # ones; the seed is printed by any failure, and adding it to
       # FIXED_SEEDS is how a find becomes permanent.
+      # letters-core's campaign is absent on purpose: it is ignored while
+      # #532 stands, and a step that runs nothing is worse than no step,
+      # because it looks like coverage.
       - name: Stateful controller campaign
         env:
           STATEFUL_SEED_BASE: ${{ github.run_number }}000000
           STATEFUL_SEED_COUNT: '400'
-        run: cargo test -p tables-core --test stateful -- --ignored seed_campaign
+        run: |
+          cargo test -p tables-core --test stateful -- --ignored seed_campaign
+          cargo test -p decks-core --test stateful -- --ignored seed_campaign
 
       # Every context value reaches the script through the environment,
       # never through `${{ }}` inside it: an input is attacker-controlled
