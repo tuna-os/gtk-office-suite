@@ -36,22 +36,31 @@ jobs:
       # "run it all," never "skip it."
       - name: Determine affected apps
         id: affected
+        # Every GitHub context value arrives through the environment. A
+        # `${{ }}` expression inside the script is pasted in before bash
+        # parses it, so a ref or event field containing shell
+        # metacharacters would run as code (#492).
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          PUSH_BEFORE: ${{ github.event.before }}
+          HEAD_SHA: ${{ github.sha }}
         run: |
-          case "${{ github.event_name }}" in
+          case "$EVENT_NAME" in
             schedule|workflow_dispatch)
               echo "filter=" >> "$GITHUB_OUTPUT"
               echo "Scheduled/manual run: testing all apps." ;;
             *)
-              if [ "${{ github.event_name }}" = "pull_request" ]; then
-                base="${{ github.event.pull_request.base.sha }}"
+              if [ "$EVENT_NAME" = "pull_request" ]; then
+                base="$PR_BASE_SHA"
               else
-                base="${{ github.event.before }}"
+                base="$PUSH_BEFORE"
               fi
               if [ -z "$base" ] || ! git cat-file -e "$base" 2>/dev/null; then
                 echo "filter=" >> "$GITHUB_OUTPUT"
                 echo "No usable base commit: testing all apps."
               else
-                changed=$(git diff --name-only "$base" "${{ github.sha }}")
+                changed=$(git diff --name-only "$base" "$HEAD_SHA")
                 echo "Changed files:"; echo "$changed"
                 shared=0
                 echo "$changed" | grep -qE '^(suite-common|suite-common-core|suite-export)/|^tests/gui/(framework/|conftest|run_gui_tests\.sh)|^Cargo\.(toml|lock)$' && shared=1
@@ -73,8 +82,12 @@ jobs:
                     echo "No recognized app path changed: testing all apps (fail-safe)."
                   fi
                 else
+                  # The bare expression, without the -k or its quoting: the
+                  # step that runs pytest turns it into a real argument, so
+                  # no quoting has to survive a round trip through a step
+                  # output and a second shell parse.
                   filter=$(echo "$apps" | xargs | sed 's/ / or /g')
-                  echo "filter=-k \"$filter\"" >> "$GITHUB_OUTPUT"
+                  echo "filter=$filter" >> "$GITHUB_OUTPUT"
                   echo "Testing only: $filter"
                 fi
               fi ;;
@@ -106,7 +119,13 @@ jobs:
         env:
           GUI_TEST_VIDEO: failures
           GUI_TEST_VIDEO_DIR: ${{ github.workspace }}/tests/gui/videos
-        run: tests/gui/run_gui_tests.sh test_smoke.py ${{ steps.affected.outputs.filter }}
+          JOURNEY_FILTER: ${{ steps.affected.outputs.filter }}
+        run: |
+          set --
+          if [ -n "$JOURNEY_FILTER" ]; then
+            set -- -k "$JOURNEY_FILTER"
+          fi
+          tests/gui/run_gui_tests.sh test_smoke.py "$@"
 
       - name: Upload failure artifacts
         if: failure()
@@ -146,7 +165,9 @@ jobs:
       - uses: Swatinem/rust-cache@v2
 
       - name: Build binary
-        run: cargo build --bin ${{ matrix.app }}
+        env:
+          APP: ${{ matrix.app }}
+        run: cargo build --bin "$APP"
 
       - name: Install GUI test dependencies
         run: |
@@ -159,7 +180,8 @@ jobs:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           GEMINI_API_KEY_2: ${{ secrets.GEMINI_API_KEY_2 }}
           VLM_BACKEND: gemini
-        run: tests/gui/run_gui_tests.sh test_${{ matrix.app }}.py
+          APP: ${{ matrix.app }}
+        run: tests/gui/run_gui_tests.sh "test_${APP}.py"
 
       - name: Upload screenshots
         uses: actions/upload-artifact@v7
