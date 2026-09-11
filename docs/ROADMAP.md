@@ -104,6 +104,10 @@ without a test that fails first.
   validates pedantic-clean; flathub/ manifests build from tag v1.1.0.
   The submission PR itself is a human action (see flathub/README.md).
 
+## Mid-Term Architecture Roadmap (Q4 2026 / 2027)
+
+- **WASM and IPC Plugin Extension Architecture**: Standardize sandboxed WASM runtime (`suite-common-core`) and out-of-process IPC plugin hosts across Letters, Tables, and Decks. Enables custom export filters, spreadsheet domain functions, and custom document rendering without compromising core stability or security.
+
 ## Standing infrastructure notes
 
 - Builds: the `gtkbuild` distrobox on the build host (18 cores, ~10s warm) is the
