@@ -1,6 +1,6 @@
 # gtk-office-suite Roadmap
 
-**Last updated**: 2026-09-10 | **Maintainer**: tuna-os (hanthor) / strategist agent
+**Last updated**: 2026-09-10 | **Maintainer**: tuna-os
 
 ---
 
@@ -14,71 +14,60 @@ gtk-office-suite is the org's flagship **end-user product bet** and a cornerston
 
 ## Current Status (September 2026)
 
-- **Post-v1.0**: all three apps (Letters, Tables, Decks) build, run, and ship as Flatpaks.
-- **Measured parity** (ratcheted corpora, docs/PARITY.md): CommonMark 630/652, LO-Letters 109/109, LO-Decks 9/9, OpenFormula 107/107.
-- Ctrl+K command palette; per-app live status surfaces; GUI smoke journeys deterministic (#187).
-- Architectural refactor active: GTK-free canonical controllers and GTK4 God-file decomposition (`window.rs`).
-- ✅ **ROADMAP.md published** (this file) — public, dated, prioritized surface linked from README.
+- **Post-v1.0 Production Readiness**: All three applications (Letters, Tables, Decks) build cleanly, pass unit test suites (~90 tests), and ship as Flatpaks.
+- **Measured Format Parity** (`docs/PARITY.md`): LO-Letters 109/109, LO-Decks 9/9 (soffice oracle 28), CommonMark 630/652, OpenFormula 107/107.
+- **Dependency & Platform Modernization**: Upgraded `quick-xml` to 0.42 and `rdocx-oxml` to 0.12.0. Renovate org presets adopted without code-owner paging.
+- **Testing & Release Safety**: Enforcement of strict non-gating/gating split in `ci.yml` and `nightly.yml` (e.g. `REQUIRE_SOFFICE=1` explicitly required for full ODF validation).
 
-### Priorities
+---
 
-| Priority | Item | Tracking | Status |
-|----------|------|----------|--------|
-| P0 | Product quality + daily-driver readiness roadmap (meta-tracker) | #95 | 🟡 In progress |
-| P0 | CI quality gates: fast / GUI / nightly with published capability matrix | #108, #107 | 🟡 In progress |
-| P0 | GUI-layer God-file decomposition (`window.rs`) | #168 | 🟡 In progress |
-| P1 | Letters: structured editing (tables/lists/paragraphs/sections), review workflows, pagination | #109, #110, #111 | 🟡 In progress |
-| P1 | Tables: sparse virtual grid + performance budgets | #112 | 🟡 In progress |
-| P1 | Decks: direct manipulation, themes/layouts, presenter view | #115, #116, #117 | ⬜ Not started |
-| P1 | Headless CLI document conversion binaries (`letters-convert`, `tables-convert`, `decks-convert`) | | ⬜ Planned |
-| P1 | GNOME platform integration: recent files, portals, drag/drop | #119 | ⬜ Not started |
-| P2 | Interop: unsupported-feature inspector + versioned fixture corpus with loss budgets | #105, #121 | ⬜ Not started |
-| P2 | Release gate: Flatpak distribution, upgrade, recovery, localization, reproducible builds | #122 | 🟡 In progress |
-| P2 | A11y: keyboard + AT-SPI screen-reader automated journeys | #120 | ⬜ Not started |
+## Strategic Roadmap Priorities (Q4 2026)
+
+| Priority | Strategic Item | Target Horizon | Status |
+|----------|----------------|----------------|--------|
+| P0 | Q4 2026 Flatpak Distribution & Release Quality Gate | Q4 2026 (Near-term) | 🟡 In progress |
+| P0 | Screen Reader (AT-SPI) Automated Accessibility Audit Gate | Q4 2026 (Near-term) | 🟡 In progress |
+| P1 | Headless Document Conversion CLI Binaries (`letters-cli`, `tables-cli`, `decks-cli`) | Q4 2026 (Near-term) | 🟡 In progress |
+| P1 | Document Interoperability Loss-Budget & Unsupported Feature Inspector Framework | Q4 2026 / Q1 2027 | ⬜ Planned |
+| P1 | Client-Side Document Encryption, Digital Signatures & PDF/A Archiving | Q4 2026 / Q1 2027 | ⬜ Planned |
 
 ---
 
 ## Quarterly Goals
 
-### Q3 2026 (July–September) — "Daily-driver editing"
+### Q3 2026 (July–September) — "Daily-Driver Core & Dependency Modernization"
 
-**Theme**: make Letters/Tables/Decks genuinely usable for daily work.
+**Theme**: Solidify GTK-free core architecture and dependency stack.
 
-| Goal | Owner | Tracking | Status |
-|------|-------|----------|--------|
-| Product-quality roadmap live + published capability matrix | architect / quality | #95, #108 | 🟡 In progress |
-| Letters structured editing + pagination completeness | architect | #109, #110 | 🟡 In progress |
-| Tables virtual grid + performance budgets | architect | #112 | 🟡 In progress |
-| GUI God-file decomposition started | architect | #168 | 🟡 In progress |
-| ROADMAP.md published and linked from README / org coverage | strategist | tunaos#1359 | ✅ Done |
+| Goal | Tracking | Status |
+|------|----------|--------|
+| `quick-xml` 0.42 & `rdocx-oxml` 0.12.0 migration | #298, #331 | ✅ Completed |
+| Shared Renovate org presets & non-paging code ownership | #402 | ✅ Completed |
+| GTK-free crate separation enforcement (`suite-common-core`) | `AGENTS.md` | ✅ Completed |
 
-### Q4 2026 (October–December) — "Release Gate & Distribution Readiness"
+### Q4 2026 (October–December) — "Distribution, Accessibility & Enterprise Readiness"
 
-**Theme**: Enforce strict release quality, reproducible builds, and ecosystem adoption.
+**Theme**: Harden release gates, accessibility standards, headless workflows, and document safety.
 
-| Goal | Owner | Tracking | Status |
-|------|-------|----------|--------|
-| Q4 2026 Release Gate: reproducible Flatpaks, recovery, and A11y compliance | strategist / release | #122 | 🟡 In progress |
-| Document Interoperability Loss Budgets & LibreOffice Oracle test gate | strategist / quality | #105, #121 | ⬜ Planned |
-| Headless Document Conversion CLI binaries for batch & serverless pipelines | strategist / architect | | ⬜ Planned |
-| Desktop Suite WASM/IPC plugin extension architecture & SDK specification | strategist / architect | | ⬜ Planned |
+| Goal | Focus Area | Status |
+|------|------------|--------|
+| **Release Gate & Reproducible Builds** | Automated Flatpak bundle validation, delta updates, and atomic recovery | 🟡 In progress |
+| **Automated Accessibility Gate** | Dogtail AT-SPI screen reader journey validation in CI | 🟡 In progress |
+| **Headless Conversion CLI** | Serverless/CLI document rendering without GTK display dependency | 🟡 In progress |
+| **Document Security & Archiving** | Client-side encryption, PGP/X.509 signatures, and PDF/A export | ⬜ Planned |
 
 ---
 
-## Technical Debt Backlog
+## Technical Debt & Architecture Refactoring
 
-| Item | Issue | Priority | Effort |
-|------|-------|----------|--------|
-| GUI-layer God-files (window.rs 2.6K/2.5K/1.6K LOC) | #168 | P0 | L |
-| Dual maintenance burden: Python office suite (letters/tables/decks) + Rust suite | #82 | P1 | L |
-| spell.rs `generate_candidates("")` panic (0..n-1, n=0) | #172 | P1 | S |
+| Item | Priority | Scope |
+|------|----------|-------|
+| GUI-layer God-file decomposition (`window.rs` across letters/tables/decks) | P0 | Refactor window signal wiring into GTK-free controllers |
+| Legacy Python office suite deprecation & sunset | P1 | Remove leftover python suite references and scripts |
+| Headless CLI binary isolation | P1 | Extract CLI conversion targets without GTK dependency |
 
 ---
 
 ## How to Contribute
 
 See [docs/CONTRIBUTING.md](./docs/CONTRIBUTING.md) and [docs/DEVELOPMENT.md](./docs/DEVELOPMENT.md) for build setup (Rust + GTK4/libadwaita, Nix flake included). Pick an issue labeled `good first issue` or comment on a goal you would like to own.
-
----
-*Maintained by the strategist agent (tuna-os hive). Last self-review: 2026-09-10 — updated Q4 2026 release gate and strategic priorities.*
-
