@@ -384,5 +384,201 @@ class TheRealLaneMap(unittest.TestCase):
                                     f"lane {lane['job']!r} declares the whole tests/ tree")
 
 
+class ReleaseRevision(unittest.TestCase):
+    """A release may not be certified by evidence a pull request never ran.
+
+    The LibreOffice oracle needs LibreOffice installed, so it runs on a
+    schedule and on format changes — never at every revision. Nothing
+    connected that to a release: a tag inherited a verdict reached on
+    different code, and the ledger recorded the claim as verified without
+    noting that the two revisions disagreed. #313 names this directly.
+    """
+
+    RELEASE = "b" * 40
+    LANES = {"lanes": [
+        {"job": "test", "runs_on_every_revision": True,
+         "namespaces": ["letters-core::"]},
+        {"job": "oracle", "runs_on_every_revision": False,
+         "namespaces": ["letters-core::soffice_oracle::"]},
+    ]}
+
+    def _ledger(self, revision, test="letters-core::soffice_oracle::round_trip"):
+        return {"features": [{
+            "id": "suite.oracle", "status": "verified", "revision": revision,
+            "evidence": {"format": [test]},
+        }]}
+
+    def test_evidence_recorded_at_the_release_revision_passes(self):
+        errors = vc.check_release_revision(
+            self._ledger(self.RELEASE), self.LANES, self.RELEASE)
+        self.assertEqual(errors, [])
+
+    def test_a_short_revision_still_matches_the_release(self):
+        errors = vc.check_release_revision(
+            self._ledger(self.RELEASE[:12]), self.LANES, self.RELEASE)
+        self.assertEqual(errors, [])
+
+    def test_evidence_from_another_revision_is_refused(self):
+        errors = vc.check_release_revision(
+            self._ledger("a" * 40), self.LANES, self.RELEASE)
+        self.assertEqual(len(errors), 1, errors)
+        self.assertIn("does not run on every revision", errors[0])
+        self.assertIn("would certify code that lane never saw", errors[0])
+
+    def test_evidence_with_no_revision_at_all_is_refused(self):
+        errors = vc.check_release_revision(self._ledger(""), self.LANES, self.RELEASE)
+        self.assertEqual(len(errors), 1, errors)
+        self.assertIn("(nothing)", errors[0])
+
+    def test_a_claim_resting_only_on_every_revision_lanes_is_not_asked(self):
+        """The rule is about lanes that can be stale, not about all claims:
+        requiring every claim to be re-verified at each release would make
+        the gate unusable, and it would say nothing about staleness."""
+        ledger = {"features": [{
+            "id": "letters.thing", "status": "verified", "revision": "a" * 40,
+            "evidence": {"model": ["letters-core::mod::tests::name"]},
+        }], }
+        ledger["features"].append(self._ledger(self.RELEASE)["features"][0])
+        self.assertEqual(
+            vc.check_release_revision(ledger, self.LANES, self.RELEASE), [])
+
+    def test_a_lane_nobody_cites_makes_the_check_vacuous_and_is_refused(self):
+        """Otherwise this passes by having nothing to check — the failure
+        mode the rest of this validator exists to prevent."""
+        ledger = {"features": [{
+            "id": "letters.thing", "status": "verified", "revision": "a" * 40,
+            "evidence": {"model": ["letters-core::mod::tests::name"]},
+        }]}
+        errors = vc.check_release_revision(ledger, self.LANES, self.RELEASE)
+        self.assertEqual(len(errors), 1, errors)
+        self.assertIn("no claim cites it", errors[0])
+
+    def test_a_lane_that_does_not_declare_the_property_is_refused(self):
+        """A new lane must not slip in as trustworthy by omitting the
+        field: absence would otherwise read as "runs everywhere"."""
+        lanes = copy.deepcopy(self.LANES)
+        del lanes["lanes"][1]["runs_on_every_revision"]
+        errors = vc.check_release_revision(
+            self._ledger(self.RELEASE), lanes, self.RELEASE)
+        self.assertEqual(len(errors), 1, errors)
+        self.assertIn("does not say whether it runs on every revision", errors[0])
+
+    def test_a_map_where_every_lane_claims_every_revision_is_refused(self):
+        lanes = {"lanes": [{"job": "test", "runs_on_every_revision": True,
+                            "namespaces": ["letters-core::"]}]}
+        errors = vc.check_release_revision(
+            self._ledger(self.RELEASE), lanes, self.RELEASE)
+        self.assertEqual(len(errors), 1, errors)
+        self.assertIn("would certify nothing", errors[0])
+
+
+class LaneExcludes(unittest.TestCase):
+    """A lane may declare a namespace it does not run.
+
+    nextest's JUnit names the crate, so a `letters-core::` inventory
+    swallows `letters-core::soffice_oracle::...` too. On a pull request,
+    where LibreOffice is not installed, those tests do not even skip — they
+    return early and report *ok*. So without this the lane offers a pass
+    from a run with no LibreOffice in it as evidence for a claim only the
+    nightly oracle can support.
+    """
+
+    EXCLUDES = ("letters-core::soffice_oracle::",)
+    INVENTORY = {"tests": ["letters-core::mod::tests::name"],
+                 "covers": ["letters-core::"]}
+
+    def _ledger(self):
+        return {"features": [{
+            "id": "suite.oracle", "status": "verified", "revision": "a" * 40,
+            "evidence": {"format": ["letters-core::soffice_oracle::round_trip"]},
+        }]}
+
+    def test_an_excluded_test_is_not_judged_missing(self):
+        self.assertEqual(
+            vc.check_collected(self._ledger(), self.INVENTORY, False, self.EXCLUDES), [])
+
+    def test_without_the_exclusion_it_is_judged_missing(self):
+        errors = vc.check_collected(self._ledger(), self.INVENTORY, False)
+        self.assertEqual(len(errors), 1, errors)
+        self.assertIn("no collected test matches", errors[0])
+
+    def test_an_excluded_pass_is_not_offered_as_this_lanes_evidence(self):
+        """The dangerous direction: the lane reports a pass for a test that
+        returned early, and the ledger would accept it."""
+        results = {"letters-core::soffice_oracle::round_trip": "passed"}
+        self.assertEqual(
+            vc.check_results(self._ledger(), results, set(), ["letters-core::"],
+                             self.EXCLUDES), [])
+        # And it is still missing as far as this lane's inventory goes, so
+        # nothing here silently counts it.
+        self.assertEqual(
+            vc.check_collected(self._ledger(), self.INVENTORY, False, self.EXCLUDES), [])
+
+    def test_an_excluded_test_that_skipped_is_not_held_against_the_claim(self):
+        results = {"letters-core::soffice_oracle::round_trip": "skipped"}
+        self.assertEqual(
+            vc.check_results(self._ledger(), results, set(), ["letters-core::"],
+                             self.EXCLUDES), [])
+
+    def test_without_the_exclusion_a_skip_sinks_the_claim(self):
+        results = {"letters-core::soffice_oracle::round_trip": "skipped"}
+        errors = vc.check_results(self._ledger(), results, set(), ["letters-core::"])
+        self.assertEqual(len(errors), 1, errors)
+        self.assertIn("was skipped", errors[0])
+
+
+class TheRealReleaseRule(unittest.TestCase):
+    """The committed map and ledger have to work with the committed rule,
+    or the check passes in the tests and fails in CI."""
+
+    def _lanes(self):
+        return json.loads((REPO_ROOT / "conformance/lanes.json").read_text())
+
+    def test_every_lane_says_whether_it_runs_on_every_revision(self):
+        for lane in self._lanes()["lanes"]:
+            self.assertIsInstance(
+                lane.get("runs_on_every_revision"), bool,
+                f"lane {lane['job']!r} does not declare runs_on_every_revision")
+
+    def test_at_least_one_lane_cannot_certify_a_release_on_its_own(self):
+        """If every lane ran on every revision the rule would be vacuous —
+        and the oracle lane genuinely does not."""
+        stale = [lane for lane in self._lanes()["lanes"]
+                 if not lane["runs_on_every_revision"]]
+        self.assertTrue(stale, "no lane is marked as not running on every revision")
+
+    def test_the_real_ledger_cites_every_such_lane(self):
+        ledger = json.loads((REPO_ROOT / "conformance/capabilities.json").read_text())
+        lanes = self._lanes()
+        cited = {
+            lane["job"]
+            for lane in lanes["lanes"]
+            if not lane["runs_on_every_revision"]
+            for feature in ledger["features"]
+            for tests in (feature.get("evidence") or {}).values()
+            for test in tests
+            if test.startswith(tuple(lane["namespaces"]))
+        }
+        uncited = [lane["job"] for lane in lanes["lanes"]
+                   if not lane["runs_on_every_revision"] and lane["job"] not in cited]
+        self.assertEqual(uncited, [], "a lane the release rule watches certifies nothing")
+
+    def test_the_real_ledger_passes_at_the_revision_it_records(self):
+        ledger = json.loads((REPO_ROOT / "conformance/capabilities.json").read_text())
+        lanes = self._lanes()
+        stale = [lane for lane in lanes["lanes"] if not lane["runs_on_every_revision"]]
+        namespaces = tuple(n for lane in stale for n in lane["namespaces"])
+        recorded = {
+            feature["revision"]
+            for feature in ledger["features"]
+            for tests in (feature.get("evidence") or {}).values()
+            for test in tests
+            if test.startswith(namespaces)
+        }
+        self.assertEqual(len(recorded), 1, f"expected one oracle revision, got {recorded}")
+        self.assertEqual(
+            vc.check_release_revision(ledger, lanes, recorded.pop()), [])
+
+
 if __name__ == "__main__":
     unittest.main()

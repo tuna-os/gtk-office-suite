@@ -13,7 +13,8 @@
     "map, which needs no test run, and each lane asserts its own row",
     "against what it actually collected so the map cannot drift into",
     "fiction.",
-    "A namespace is a prefix of a test id, and it has to be no broader than what the lane really runs: 'tests/' would vouch for every path under it, including one nothing collects."
+    "A namespace is a prefix of a test id, and it has to be no broader than what the lane really runs: 'tests/' would vouch for every path under it, including one nothing collects.",
+    "Each lane declares runs_on_every_revision. A lane that does not run on every revision can have evidence older than the code being released, so --release-revision refuses to certify a release with claims resting on such a lane unless its evidence was recorded at that exact revision. The field is required: a new lane cannot slip in as trustworthy by omitting it."
   ],
   "lanes": [
     {
@@ -30,7 +31,20 @@
         "letters::",
         "tables::",
         "decks::"
-      ]
+      ],
+      "triggers": [
+        "pull_request",
+        "push"
+      ],
+      "excludes": [
+        "decks-core::lo_parity::",
+        "decks-core::soffice_oracle::",
+        "letters-core::lo_parity::",
+        "letters-core::soffice_oracle::",
+        "tables-core::soffice_oracle::"
+      ],
+      "excludes_reason": "These targets need LibreOffice installed. This lane does not have it, and without REQUIRE_SOFFICE the tests return early and report *ok* \u2014 measured: with no soffice on PATH, we_read_soffice_output prints 'skipping: soffice not installed' and nextest records a pass. A crate-level namespace would therefore let this lane offer those passes as live evidence for a claim only the oracle lane can support.",
+      "runs_on_every_revision": true
     },
     {
       "job": "smoke",
@@ -38,7 +52,12 @@
       "collects": "pytest collection of the AT-SPI journeys",
       "namespaces": [
         "tests/gui/"
-      ]
+      ],
+      "triggers": [
+        "pull_request",
+        "push"
+      ],
+      "runs_on_every_revision": true
     },
     {
       "job": "python-checks",
@@ -53,7 +72,31 @@
         "tests/test_release_gate.py::",
         "tests/test_validate_capabilities.py::",
         "tests/test_validate_parity.py::"
-      ]
+      ],
+      "triggers": [
+        "pull_request",
+        "push"
+      ],
+      "runs_on_every_revision": true
+    },
+    {
+      "job": "oracle",
+      "workflow": ".github/workflows/nightly.yml",
+      "triggers": [
+        "schedule",
+        "workflow_dispatch",
+        "pull_request (only when format/model code changes)"
+      ],
+      "collects": "the LibreOffice oracle and the LibreOffice-authored parity corpus",
+      "namespaces": [
+        "decks-core::lo_parity::",
+        "decks-core::soffice_oracle::",
+        "letters-core::lo_parity::",
+        "letters-core::soffice_oracle::",
+        "tables-core::soffice_oracle::"
+      ],
+      "runs_on_every_revision": false,
+      "runs_on_every_revision_reason": "Scheduled daily, plus pull requests that touch format or model code. Neither guarantees a run at the revision being released: the schedule sees whatever main was at 05:00, and the path filter sees nothing at all when a release changes only packaging."
     }
   ]
 }

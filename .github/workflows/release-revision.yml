@@ -1,0 +1,47 @@
+name: Release revision
+
+# #313: "nightly-only execution must not certify a different release
+# revision."
+#
+# The LibreOffice oracle and the parity corpus need LibreOffice installed,
+# so they do not run at every revision — nightly.yml runs them daily
+# against whatever main was at 05:00, plus on pull requests that touch
+# format or model code. A tag cut at any other time inherits a verdict
+# reached on different code, and nothing noticed: when this was written the
+# last successful nightly had certified b92a82e while main was five merges
+# further on.
+#
+# Tags only, deliberately. This asks "is the expensive evidence current for
+# what we are about to publish?", which is a question only a release has.
+# Pull requests get the structural ledger checks from ci.yml.
+#
+# docs/RELEASE.md says how to satisfy it: dispatch nightly.yml at the
+# release commit and record the revision it passed at. The fix is never to
+# lower a claim's status or relax the rule.
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      revision:
+        description: 'Revision to test the ledger against (default: this ref)'
+        required: false
+        default: ''
+
+permissions:
+  contents: read
+
+jobs:
+  scheduled-evidence-is-current:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+      - name: Refuse to certify a release with stale scheduled evidence
+        env:
+          REQUESTED: ${{ inputs.revision }}
+        run: |
+          revision="${REQUESTED:-$GITHUB_SHA}"
+          echo "Validating the ledger against ${revision}"
+          python3 conformance/validate_capabilities.py \
+            --lanes conformance/lanes.json \
+            --release-revision "$revision"

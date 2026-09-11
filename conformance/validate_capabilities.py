@@ -97,6 +97,13 @@ def check_structure(ledger: dict) -> list:
     return errors
 
 
+def _same_revision(recorded: str, other: str) -> bool:
+    """Whether two revisions name the same commit, allowing short forms."""
+    if not recorded or not other:
+        return False
+    return other.startswith(recorded) or recorded.startswith(other)
+
+
 def check_revisions(ledger: dict, head: str | None) -> list:
     """C2: verified claims carry the revision they were observed at."""
     errors = []
@@ -107,7 +114,7 @@ def check_revisions(ledger: dict, head: str | None) -> list:
         fid = feature.get("id")
         if not revision:
             errors.append(f"{fid}: verified without naming the revision the evidence came from")
-        elif head and not head.startswith(revision) and not revision.startswith(head):
+        elif head and not _same_revision(revision, head):
             errors.append(
                 f"{fid}: evidence recorded at {revision[:12]}, validating {head[:12]} — "
                 "re-run the evidence or lower the status"
@@ -115,7 +122,16 @@ def check_revisions(ledger: dict, head: str | None) -> list:
     return errors
 
 
-def check_collected(ledger: dict, inventory: dict, require_coverage: bool) -> list:
+def lane_row(lanes: dict, job: str) -> dict:
+    """The lane map's row for `job`, or an empty one."""
+    for lane in (lanes or {}).get("lanes", []):
+        if lane.get("job") == job:
+            return lane
+    return {}
+
+
+def check_collected(ledger: dict, inventory: dict, require_coverage: bool,
+                    excluded=()) -> list:
     """C3: every referenced test exists in what CI collected.
 
     An inventory declares the id namespaces it covers, so the job that ran
@@ -127,9 +143,18 @@ def check_collected(ledger: dict, inventory: dict, require_coverage: bool) -> li
     errors = []
     collected = set(inventory.get("tests", []))
     covers = tuple(inventory.get("covers", []))
+    excluded = tuple(excluded)
     for feature in ledger.get("features", []):
         for layer, tests in (feature.get("evidence") or {}).items():
             for test in tests:
+                # A namespace this lane declares it does not run is not
+                # this lane's to judge, even though a crate-level `covers`
+                # swallows it (see lanes.json's excludes). Without this the
+                # oracle targets' early return — which reports *ok*, not
+                # skipped, when LibreOffice is absent — would count as
+                # evidence here.
+                if excluded and test.startswith(excluded):
+                    continue
                 covered = not covers or test.startswith(covers)
                 if not covered:
                     if require_coverage:
@@ -203,7 +228,90 @@ def check_lane_declaration(lanes: dict, job: str, inventory: dict) -> list:
     return errors
 
 
-def check_results(ledger: dict, results: dict, layers: set, covers=()) -> list:
+def check_release_revision(ledger: dict, lanes: dict, revision: str) -> list:
+    """A release may not be certified by evidence a pull request never ran.
+
+    The LibreOffice oracle and the parity corpus need LibreOffice
+    installed, so they run nightly against whatever `main` was at 05:00,
+    plus on pull requests that touch format or model code — neither of
+    which is a run at the revision being released. Nothing connected that to a release: a tag cut
+    at noon inherited a verdict reached on different code, and the ledger
+    recorded the claim as verified without saying the two revisions
+    disagreed. #313 asks for exactly this: "nightly-only execution must not
+    certify a different release revision".
+
+    So for every claim resting on a lane the map says does not run on
+    every revision, the recorded revision has to be the revision being
+    released. The fix when this fires is to run that lane at the
+    release revision (nightly.yml accepts workflow_dispatch) and record
+    what it found — not to lower the bar.
+
+    A lane like that which no claim cites is also an error. Otherwise this
+    check passes by having nothing to check, which is the failure mode the
+    rest of this file exists to prevent.
+    """
+    rows = (lanes or {}).get("lanes", [])
+    undeclared = [
+        lane.get("job") for lane in rows
+        if not isinstance(lane.get("runs_on_every_revision"), bool)
+    ]
+    if undeclared:
+        return [
+            f"lane {job!r} does not say whether it runs on every revision, so a "
+            "release cannot tell whether its evidence is current "
+            "(conformance/lanes.json: runs_on_every_revision)"
+            for job in undeclared
+        ]
+    scheduled = [lane for lane in rows if not lane["runs_on_every_revision"]]
+    if not scheduled:
+        return [
+            "every lane claims to run on every revision, so a release-revision check "
+            "would certify nothing — declare the lanes that do not "
+            "(conformance/lanes.json)"
+        ]
+
+    errors = []
+    cited_lanes = set()
+    for lane in scheduled:
+        namespaces = tuple(lane.get("namespaces", []))
+        job = lane.get("job")
+        if not namespaces:
+            errors.append(
+                f"lane {job!r} does not run on every revision but declares no namespaces"
+            )
+            continue
+        for feature in ledger.get("features", []):
+            tests = [
+                test
+                for tests in (feature.get("evidence") or {}).values()
+                for test in tests
+                if test.startswith(namespaces)
+            ]
+            if not tests:
+                continue
+            cited_lanes.add(job)
+            recorded = str(feature.get("revision", "")).strip()
+            if not _same_revision(recorded, revision):
+                errors.append(
+                    f"{feature.get('id')}: rests on the {job!r} lane, which does not run "
+                    f"on every revision, and its evidence "
+                    f"was recorded at {recorded[:12] or '(nothing)'} — releasing "
+                    f"{revision[:12]} would certify code that lane never saw. Run it at "
+                    f"the release revision and record what it found."
+                )
+    for lane in scheduled:
+        if lane.get("job") not in cited_lanes and lane.get("namespaces"):
+            errors.append(
+                f"lane {lane.get('job')!r} does not run on every revision and no claim "
+                "cites it, "
+                "so this check has nothing to verify — either cite its evidence or stop "
+                "declaring the lane"
+            )
+    return errors
+
+
+def check_results(ledger: dict, results: dict, layers: set, covers=(),
+                  excluded=()) -> list:
     """C4: a skipped or failing test is not evidence.
 
     `covers` scopes the check to the namespaces the report speaks for, the
@@ -212,6 +320,7 @@ def check_results(ledger: dict, results: dict, layers: set, covers=()) -> list:
     """
     errors = []
     covers = tuple(covers)
+    excluded = tuple(excluded)
     for feature in ledger.get("features", []):
         if feature.get("status") != "verified":
             continue
@@ -220,6 +329,8 @@ def check_results(ledger: dict, results: dict, layers: set, covers=()) -> list:
                 continue
             for test in tests:
                 if covers and not test.startswith(covers):
+                    continue
+                if excluded and test.startswith(excluded):
                     continue
                 outcome = results.get(test)
                 if outcome is None:
@@ -328,6 +439,10 @@ def main(argv=None) -> int:
     parser.add_argument("--lane",
                         help="with --lanes and --collected: also assert this job's "
                              "declared namespaces match what it actually collected")
+    parser.add_argument("--release-revision",
+                        help="with --lanes: refuse to certify this revision with claims "
+                             "whose evidence comes from a lane that does not run on "
+                             "pull requests unless it was recorded at this revision")
     args = parser.parse_args(argv)
 
     ledger = load_ledger(args.ledger)
@@ -341,16 +456,21 @@ def main(argv=None) -> int:
     lanes = json.loads(args.lanes.read_text()) if args.lanes else None
     if lanes is not None:
         errors += check_lane_coverage(ledger, lanes)
+    if args.release_revision:
+        if lanes is None:
+            parser.error("--release-revision needs --lanes to know which lanes are scheduled")
+        errors += check_release_revision(ledger, lanes, args.release_revision)
+    excluded = tuple(lane_row(lanes, args.lane).get("excludes", [])) if args.lane else ()
     if args.collected:
         inventory = load_inventory(args.collected)
-        errors += check_collected(ledger, inventory, args.require_coverage)
+        errors += check_collected(ledger, inventory, args.require_coverage, excluded)
         if lanes is not None and args.lane:
             errors += check_lane_declaration(lanes, args.lane, inventory)
     if args.results:
         with open(args.results) as f:
             results = json.load(f)
         covers = load_inventory(args.collected).get("covers", []) if args.collected else []
-        errors += check_results(ledger, results, layers, covers)
+        errors += check_results(ledger, results, layers, covers, excluded)
 
     if errors:
         print("CAPABILITY LEDGER VALIDATION FAILED")
@@ -366,6 +486,8 @@ def main(argv=None) -> int:
         checked += ", revisions"
     if lanes is not None:
         checked += ", lane coverage"
+    if args.release_revision:
+        checked += f", release revision {args.release_revision[:12]}"
     if args.collected:
         checked += ", collected tests"
     if args.results:
