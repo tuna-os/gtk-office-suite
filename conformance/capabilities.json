@@ -4,7 +4,7 @@
     "Capability evidence ledger (#441). One entry per advertised capability,",
     "naming the tests that prove it at each layer and the revision they were",
     "observed at. conformance/validate_capabilities.py checks these against",
-    "the tests CI actually collected — a test id that no longer exists, or a",
+    "the tests CI actually collected \u2014 a test id that no longer exists, or a",
     "layer with no test, fails the build rather than quietly meaning nothing.",
     "",
     "Statuses: verified (evidence at every required layer, observed passing),",
@@ -221,6 +221,24 @@
         ]
       },
       "note": "The stats journey and the far-jump guard both exercise the path that used to abort the app (#507): GTK's gtk_accessible_update_next_accessible_sibling() drops a reference to a parent accessible it does not own, so the grid was finalized while still parented."
+    },
+    {
+      "id": "tables.name-box.announces-destination",
+      "app": "tables",
+      "title": "A name-box jump announces the cell it lands on",
+      "scope": "Jumping by cell reference or to a defined name updates the grid's accessible description to name the destination cell and its value, so a screen reader says where the selection moved.",
+      "issue": 400,
+      "status": "verified",
+      "revision": "9f390d83bda0e657f53d7d6e581de4d580300273",
+      "requires": [
+        "gui"
+      ],
+      "evidence": {
+        "gui": [
+          "tests/gui/test_smoke.py::TablesNameBoxAccessibilitySmoke::test_jumping_by_cell_reference_announces_the_new_cell"
+        ]
+      },
+      "note": "The description previously named only the last committed cell, so a jump announced nothing. refresh_grid_a11y already existed and five call sites used it; jump_to_reference was the one that did not. Against the unfixed binary the journey fails with \"last observed: 'cell B2: seven'\" after a jump to D7, so the evidence detects the defect rather than passing beside it."
     }
   ],
   "waivers": []
