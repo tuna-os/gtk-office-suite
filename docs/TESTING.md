@@ -44,7 +44,8 @@ sudo apt-get install xvfb dbus at-spi2-core matchbox-window-manager python3-dogt
   python3-pytest python3-pil python3-requests
 python3 -m pip install --break-system-packages mss
 
-# run (starts Xvfb itself if you have no display; uses yours if you do)
+# run (always starts its own private Xvfb on a display it allocates;
+# GUI_TEST_REUSE_DISPLAY=1 to watch it on yours instead)
 tests/gui/run_gui_tests.sh test_smoke.py
 ```
 
@@ -57,7 +58,14 @@ them shallow; depth belongs in tier 1.
 Known limitation: use system `/usr/bin/python3` (the runner does this) —
 apt's dogtail 0.9.11 lives in dist-packages and differs from pip dogtail 2.x.
 If the interpreter those packages were built for is not `/usr/bin/python3`
-on your machine, point `GUI_TEST_PYTHON` at the one that is.
+on your machine, point `GUI_TEST_PYTHON` at the one that is. The symptom is
+`ImportError: cannot import name '_gi'` at collection, and the extension
+module's filename names the version it wants:
+
+```bash
+ls /usr/lib/python3/dist-packages/gi/_gi.cpython-*.so   # e.g. ...-312-...
+GUI_TEST_PYTHON=/usr/bin/python3.12 tests/gui/run_gui_tests.sh test_smoke.py
+```
 
 Journeys can record themselves. `GUI_TEST_VIDEO=all` keeps a clip of every
 journey, `failures` keeps only the ones that failed, and

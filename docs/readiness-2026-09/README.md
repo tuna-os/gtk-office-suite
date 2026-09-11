@@ -89,4 +89,21 @@ python3 tests/gui/stress.py --repeat 20 --seed 20260907 --output /tmp/office-str
 python3 tests/gui/stress.py --repeat 1 --matrix display --seed 20260907 --output /tmp/office-stress-display
 ```
 
-Output directories must be new. These commands exercise the real applications and may take substantial time. The current host lacks Xvfb/Matchbox and toolbox startup fails; syntax/orchestration checks do not count as a completed GUI campaign. The implementation is committed on separate PR branches and remains unmerged; the GUI campaign still requires a working test environment.
+Output directories must be new. These commands exercise the real
+applications and may take substantial time; syntax and orchestration checks
+do not count as a completed GUI campaign.
+
+The note that used to stand here — that the host lacked Xvfb/Matchbox and
+that toolbox startup failed — is out of date. Xvfb, Matchbox, xdotool,
+at-spi2-core, ffmpeg and dogtail are all present; the only obstacle was
+that `gi` is built for a different Python than `/usr/bin/python3`, which is
+exactly what `GUI_TEST_PYTHON` exists for:
+
+```sh
+GUI_TEST_PYTHON=/usr/bin/python3.12 tests/gui/run_gui_tests.sh test_smoke.py
+```
+
+Find the right interpreter from the extension module's own filename —
+`ls /usr/lib/python3/dist-packages/gi/_gi.cpython-*.so` names the version it
+was built for. GUI journeys, and therefore GUI verification of GUI changes,
+run here.

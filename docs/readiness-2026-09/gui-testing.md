@@ -23,10 +23,13 @@ Confirmed harness gaps: fixed :99 display, shared /tmp schemas, EXIT traps bypas
       state on setup/test failures — `_capture_failure_artifacts`, and
       `addCleanup`/`tearDown` for every launched process.
 - [ ] Replace sleeps with bounded state predicates; timeout reports the last
-      observed state — **partly done**: the runner's remaining setup sleeps
-      are gone (display readiness and WM ownership are now predicates). The
-      `time.sleep` calls inside the journeys themselves are not, and are
-      the largest remaining flake surface.
+      observed state — **partly done**: the runner's setup sleeps are gone,
+      `BaseGUITestCase.wait_until` reports the last observed value on
+      timeout, and the three journeys that measurably depended on a fixed
+      wait now use predicates. The remaining `time.sleep` calls in the
+      other journeys are measurably *not* load-bearing (see below), so
+      they are dead weight rather than a flake risk, and converting them is
+      a mechanical follow-up.
 - [x] Detect duplicate test definitions before collection; reconcile and
       reactivate the #137 regression after live verification —
       `conformance/validate_capabilities.py` (C6) rejects a duplicate class
@@ -46,7 +49,9 @@ Confirmed harness gaps: fixed :99 display, shared /tmp schemas, EXIT traps bypas
       done**: the unrelated-app sentinel and the concurrent-run case are
       covered (`tests/test_gui_harness.py`, and three simultaneous runner
       invocations each allocating a distinct display). Injected setup
-      failures and repeated launch/close are not.
+      failures and repeated launch/close are not. `GUI_TEST_SLEEP_SCALE`
+      is a related instrument: it perturbs the harness's own timing to
+      find where the journeys depend on it.
 - [x] Required journeys: all-app create/open/edit/undo/redo/save/reopen;
       Save As/cancel/error; dirty close; kill/recover/restart; two-app
       clipboard; keyboard/screen-reader workflows — 54 journeys, recorded
@@ -95,3 +100,55 @@ list above says which, and what is left. This issue stays open for the
 remaining work: per-test isolation by default, the `time.sleep` calls inside
 the journeys, injected setup failures and repeated launch/close, and a test
 for the conservative journey-selection fallback.
+
+## Which fixed waits were actually load-bearing
+
+The journeys held 231 `time.sleep` calls — 163 seconds of unconditional
+waiting per run. Shortening them on a hunch is how a real race gets
+papered over, so `GUI_TEST_SLEEP_SCALE` (conftest; default 1.0, patches
+nothing) scales every fixed wait, and a run at 0.25 says empirically which
+ones the journeys depend on:
+
+| run | before | after |
+|---|---|---|
+| `GUI_TEST_SLEEP_SCALE=1` | 54 passed in 276s | 54 passed in 266s |
+| `GUI_TEST_SLEEP_SCALE=0.25` | **3 failed**, 51 passed in 134s | **54 passed** in 134s |
+
+Three of 54. Every one was a Tables journey, and every one failed with a
+message that pointed at the product rather than at the clock:
+
+* `TablesMultiSheetSmoke` — `'2' not found in 'cell A1: 6'`, which reads
+  as the data-isolation bug the journey exists to catch. The dropdown had
+  not opened, so Up/Return went nowhere and it never left Sheet2.
+* `TablesNamedRangeStatsSmoke` — `'Sum 60' not found in 'A1:A3 · Sum 50 ·
+  Avg 25 · Count 2'`, which reads as a formula-engine defect. The Define
+  Name dialog was still up when Ctrl+G fired, so the keys went to the
+  dialog.
+* `TablesFilterSmoke` — `hidden_rows: []`, which reads as filtering not
+  working. The filter had not been applied when the snapshot was sampled.
+
+All three now use predicates. The whole suite passes at 0.25 as well as at
+1.0, and the three journeys pass at 0.25 across three consecutive runs on
+their own. The observables were established
+by probing the live AT-SPI tree rather than guessed, and two of them were
+not obvious:
+
+* Return does **not** advance the active cell in the Tables grid, so the
+  name-box jump is genuinely required for each cell. An earlier attempt to
+  type down a column put both values in A1 — caught immediately, because
+  `wait_until` reported `last observed: 'cell A1: 20'`.
+* GtkDropDown's popup list is not exposed in the app's AT-SPI tree at all,
+  so there is nothing to wait *for* before driving it. The sheet switcher's
+  own accessible name mirrors the selection, so the gesture is retried
+  against that outcome instead.
+
+One observability gap is worth recording as product work rather than test
+work: **the grid's accessible description does not follow a name-box jump**
+— it reports only the last *committed* cell, so "the selection moved" has
+no accessible signal. That is why these journeys reach for fixed waits in
+the first place. A selection-changed signal on the grid would let the
+remaining Tables waits become predicates too.
+
+The other 228 sleeps are not load-bearing at a quarter of their length,
+which does not make them safe to simply shorten — it makes them dead
+weight to be replaced with predicates where they precede an assertion.

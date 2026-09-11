@@ -522,19 +522,46 @@ class TablesMultiSheetSmoke(BaseGUITestCase):
 
         rawinput.typeText("=3+3")
         rawinput.keyCombo("Return")
-        time.sleep(0.5)
-        grid = self.app.child(name="Spreadsheet grid")
-        self.assertIn("6", grid.description, f"Sheet2 grid: {grid.description!r}")
+        # The grid's own accessible description is the observable, so wait
+        # for the recalculated value rather than for a fixed 0.5s.
+        self.wait_until(
+            lambda: self.app.child(name="Spreadsheet grid").description,
+            lambda text: "6" in text,
+            description="Sheet2's grid to show the recalculated 6",
+        )
 
         # Switch back to Sheet1 via the dropdown and confirm its own value.
-        switcher.child(name="Sheet2", roleName="toggle button").do_action(0)
-        time.sleep(0.3)
-        rawinput.keyCombo("Up")
-        rawinput.keyCombo("Return")
-        time.sleep(0.5)
-        grid = self.app.child(name="Spreadsheet grid")
-        self.assertIn("2", grid.description, f"Sheet1 grid: {grid.description!r}")
-        self.assertNotIn("6", grid.description, "Sheet2's value leaked into Sheet1")
+        #
+        # GtkDropDown's popup list is not exposed in the app's AT-SPI tree
+        # (probed: opening it adds no node anywhere), so there is nothing
+        # to wait *for* before pressing Up/Return — and with the old fixed
+        # 0.3s, a slow open meant the keys went nowhere, the journey stayed
+        # on Sheet2, and it failed with "'2' not found in 'cell A1: 6'":
+        # a message that reads like the data-isolation bug this journey
+        # exists to catch, rather than a dropdown that had not opened yet.
+        #
+        # What *is* observable is the outcome — the switcher's accessible
+        # name mirrors the selected sheet — so the gesture is retried until
+        # the selection actually lands. Up at the top of a two-sheet list
+        # stays put, so repeating it cannot overshoot.
+        def select_the_sheet_before_this_one():
+            switcher.child(roleName="toggle button").do_action(0)
+            rawinput.keyCombo("Up")
+            rawinput.keyCombo("Return")
+            return self.app.child(roleName="combo box").name
+
+        self.wait_until(
+            select_the_sheet_before_this_one,
+            lambda name: name == "Sheet1",
+            interval=0.6,
+            description="the sheet switcher to report Sheet1 selected",
+        )
+        description = self.wait_until(
+            lambda: self.app.child(name="Spreadsheet grid").description,
+            lambda text: "2" in text,
+            description="Sheet1's grid to show its own value after the switch",
+        )
+        self.assertNotIn("6", description, "Sheet2's value leaked into Sheet1")
 
     def test_sheet_operations_survive_a_hidden_toolbar(self):
         """The sheet operations exist as actions, not only as buttons.
@@ -849,7 +876,61 @@ class TablesNameBoxSmoke(BaseGUITestCase):
         self.assertIsNone(self.process.poll(), "tables crashed during keyboard selection")
 
 
-class TablesNamedRangeStatsSmoke(BaseGUITestCase):
+class TablesCellEntryMixin:
+    """Writing a cell in Tables, confirmed at every step.
+
+    Every wait in here used to be a fixed sleep. Measured with
+    `GUI_TEST_SLEEP_SCALE=0.25`, that lost values outright and the
+    journeys failed with messages that read like product defects — a
+    missing cell surfaced as `'Sum 60' not found in 'A1:A3 · Sum 50 ·
+    Avg 25 · Count 2'`, which points at the formula engine rather than at
+    two cells of three having been written.
+
+    The observables, established by probing the live AT-SPI tree:
+
+    * the two text entries are "Cell reference" (the name box) and
+      "Formula input" (fx), and which one has focus says where the
+      keystrokes are going;
+    * Ctrl+G moves focus to the name box, and a completed jump hands it
+      back to fx;
+    * the grid's accessible description names the cell it last committed
+      ("cell A2: 20"), which confirms the write.
+
+    Return does not advance the active cell in this grid, so the name-box
+    jump is genuinely required for each cell.
+    """
+
+    def _grid(self):
+        return self.app.child(name="Spreadsheet grid").description
+
+    def _focused(self, label):
+        node = self.app.child(name=label, roleName="text")
+        return bool(node and node.focused)
+
+    def _wait_for_a_new_document(self):
+        """A new document starts with A1 active; that is the ready signal."""
+        return self.wait_until(self._grid, lambda text: "cell A1" in text,
+                               description="a new document with A1 active")
+
+    def _put(self, ref, value):
+        from dogtail import rawinput
+        rawinput.keyCombo("<Control>g")
+        self.wait_until(lambda: self._focused("Cell reference"), bool,
+                        description="the name box to take focus")
+        rawinput.typeText(ref)
+        rawinput.keyCombo("Return")
+        self.wait_until(lambda: self._focused("Formula input"), bool,
+                        description=f"the jump to {ref} to hand focus back to fx")
+        rawinput.typeText(value)
+        rawinput.keyCombo("Return")
+        self.wait_until(
+            self._grid,
+            lambda text: f"cell {ref}: {value}" in text,
+            description=f"{ref} to hold {value}",
+        )
+
+
+class TablesNamedRangeStatsSmoke(TablesCellEntryMixin, BaseGUITestCase):
     """Named ranges (#113) verified through the stats label's range readout.
 
     Renamed from TablesNamedRangeSmoke, which a second class of that name
@@ -865,68 +946,99 @@ class TablesNamedRangeStatsSmoke(BaseGUITestCase):
 
     app_name = "tables"
 
-    def _put(self, ref, value):
-        from dogtail import rawinput
-        rawinput.keyCombo("<Control>g")
-        time.sleep(0.2)
-        rawinput.typeText(ref)
-        rawinput.keyCombo("Return")
-        time.sleep(0.3)
-        rawinput.typeText(value)
-        rawinput.keyCombo("Return")
-        time.sleep(0.3)
-
     def test_define_name_then_jump_to_it_via_name_box(self):
         from dogtail import rawinput, tree
         import subprocess
 
         subprocess.run(["gapplication", "action", "org.tunaos.tables", "new-document"])
-        time.sleep(1.5)
+        self._wait_for_a_new_document()
         self._put("A1", "10")
         self._put("A2", "20")
         self._put("A3", "30")
-        # Select A1:A3 (Enter above leaves the active cell on A4 —
-        # jump back to A1 first, matching the keyboard-selection test).
+        # Select A1:A3. Jump back to A1 first — Return does not move the
+        # active cell in this grid, so after the writes above it is still
+        # on A3.
         rawinput.keyCombo("<Control>g")
-        time.sleep(0.2)
+        self.wait_until(lambda: self._focused("Cell reference"), bool,
+                        description="the name box to take focus")
         rawinput.typeText("A1")
         rawinput.keyCombo("Return")
-        time.sleep(0.3)
-        # A name-box jump hands focus to fx, so Escape first: without it
-        # Shift+Down extends nothing and Define Name captures a single
-        # cell instead of A1:A3 (same step as the sibling journey).
+        # A name-box jump hands focus to fx with the cell's contents
+        # loaded, so Escape first: without it Shift+Down extends nothing
+        # and Define Name captures a single cell instead of A1:A3 (same
+        # step as the sibling journey).
+        #
+        # Both halves have to be observed, and at a quarter of the old
+        # fixed waits neither was: Escape landed before fx had focus, the
+        # selection keys then went into fx, and an empty fx was committed
+        # over A1 — leaving `Sum 50 · Count 2` for a range the readout
+        # still called A1:A3. That looked like a summing bug.
+        self.wait_until(lambda: self._focused("Formula input"), bool,
+                        description="the jump to A1 to hand focus back to fx")
         rawinput.keyCombo("Escape")
-        time.sleep(0.3)
+        self.wait_until(lambda: not self._focused("Formula input"), bool,
+                        description="Escape to return focus to the grid")
         rawinput.keyCombo("<Shift>Down")
         rawinput.keyCombo("<Shift>Down")
-        time.sleep(0.5)
+        # The readout naming the extended range is the signal the
+        # selection landed, and it is what Define Name will capture.
+        self.wait_until(
+            lambda: next((c.name for c in self.app.findChildren(
+                lambda c: c.roleName == "label") if "Sum" in c.name), None),
+            lambda label: label is not None and "A1:A3" in label,
+            description="the selection to extend to A1:A3",
+        )
 
         subprocess.run(["gapplication", "action", "org.tunaos.tables", "define-name"])
-        time.sleep(0.8)
-        name_entry = tree.root.findChild(lambda n: n.name == "Name" and n.roleName == "text")
+        name_entry = self.wait_until(
+            lambda: tree.root.findChild(
+                lambda n: n.name == "Name" and n.roleName == "text"),
+            lambda node: node is not None,
+            description="the Define Name dialog",
+        )
         name_entry.text = "MyRange"
-        time.sleep(0.2)
-        confirm = tree.root.findChild(lambda n: n.name == "Define" and n.roleName == "push button")
-        confirm.do_action(0)
-        time.sleep(0.5)
+        tree.root.findChild(
+            lambda n: n.name == "Define" and n.roleName == "push button").do_action(0)
+        # The dialog going away is the signal the name was defined; acting
+        # on the name box while it is still up sends the keys to it.
+        self.wait_until(
+            lambda: tree.root.findChild(
+                lambda n: n.name == "Define" and n.roleName == "push button",
+                retry=False, requireResult=False),
+            lambda node: node is None,
+            description="the Define Name dialog to close",
+        )
 
-        # Jump elsewhere, then back to the range by name.
-        rawinput.keyCombo("<Control>g")
-        time.sleep(0.2)
-        rawinput.typeText("Z9")
-        rawinput.keyCombo("Return")
-        time.sleep(0.5)
-        rawinput.keyCombo("<Control>g")
-        time.sleep(0.2)
-        rawinput.typeText("MyRange")
-        rawinput.keyCombo("Return")
-        time.sleep(0.5)
+        # Jump elsewhere, then back to the range by name. Both jumps use
+        # the same focus handshake as `_put`: the name box has to have
+        # focus before the reference is typed, or it goes to fx.
+        for reference in ("Z9", "MyRange"):
+            rawinput.keyCombo("<Control>g")
+            self.wait_until(lambda: self._focused("Cell reference"), bool,
+                            description="the name box to take focus")
+            rawinput.typeText(reference)
+            rawinput.keyCombo("Return")
+            self.wait_until(
+                lambda: self._focused("Formula input"), bool,
+                description=f"the jump to {reference} to hand focus back to fx",
+            )
 
-        labels = [c.name for c in self.app.findChildren(lambda c: c.roleName == "label")]
-        stats = [l for l in labels if "Sum" in l]
-        self.assertTrue(stats, f"no stats label found; labels: {labels}")
-        self.assertIn("A1:A3", stats[0], f"stats: {stats[0]!r}")
-        self.assertIn("Sum 60", stats[0])
+        # The readout has to catch up with the jump *and* the
+        # recalculation, so wait for it rather than sampling once: on a
+        # timeout `wait_until` reports what it last saw, which is the
+        # difference between "the sum is wrong" and "the sum was not
+        # computed yet".
+        def stats_label():
+            labels = [c.name for c in self.app.findChildren(lambda c: c.roleName == "label")]
+            return next((l for l in labels if "Sum" in l), None)
+
+        stats = self.wait_until(
+            stats_label,
+            lambda label: label is not None and "A1:A3" in label and "Sum 60" in label,
+            description="the stats readout to show A1:A3 summing to 60",
+        )
+        self.assertIn("A1:A3", stats, f"stats: {stats!r}")
+        self.assertIn("Sum 60", stats)
         self.assertIsNone(self.process.poll(), "tables crashed jumping to a named range")
 
 
@@ -1538,7 +1650,7 @@ class TablesSortIndicatorSmoke(TablesCanvasCoordsMixin, BaseGUITestCase):
         self.assertIsNone(self.process.poll(), "tables crashed cycling sort")
 
 
-class TablesFilterSmoke(BaseGUITestCase):
+class TablesFilterSmoke(TablesCellEntryMixin, BaseGUITestCase):
     """Row filtering (#113): the Filter by Column dialog hides rows that
     don't match, verified via the #104 state snapshot's hidden_rows list
     (not AT-SPI cell text/position — same rationale as
@@ -1557,48 +1669,57 @@ class TablesFilterSmoke(BaseGUITestCase):
 
         aid = "org.tunaos.tables"
         subprocess.run(["gapplication", "action", aid, "new-document"])
-        time.sleep(1.0)
+        self._wait_for_a_new_document()
 
         for row, value in enumerate(["apple", "banana", "apple"]):
-            rawinput.keyCombo("<Control>g")
-            time.sleep(0.2)
-            rawinput.typeText(f"A{row + 1}")
-            rawinput.keyCombo("Return")
-            time.sleep(0.3)
-            rawinput.typeText(value)
-            rawinput.keyCombo("Return")
-            time.sleep(0.3)
+            self._put(f"A{row + 1}", value)
 
-        # Selection is on column A after the loop above (A4) — open the
-        # filter dialog and filter to "apple".
+        # The snapshot is written on demand, so re-take it until it shows
+        # the state being waited for. Sampling it once after a fixed 0.5s
+        # is what made this journey fail with `hidden_rows: []` — the
+        # filter had simply not been applied yet, which reads as "filtering
+        # does not work".
+        def snapshot():
+            subprocess.run(["gapplication", "action", aid, "test-snapshot"])
+            with open(self._snapshot_path) as f:
+                return json.load(f)
+
+        # Selection is on column A after the loop above — open the filter
+        # dialog and filter to "apple".
         subprocess.run(["gapplication", "action", aid, "filter-by-column"])
-        time.sleep(0.8)
-        value_entry = tree.root.findChild(lambda n: n.name == "Filter value" and n.roleName == "text")
+        value_entry = self.wait_until(
+            lambda: tree.root.findChild(
+                lambda n: n.name == "Filter value" and n.roleName == "text"),
+            lambda node: node is not None,
+            description="the Filter by Column dialog",
+        )
         value_entry.text = "apple"
-        time.sleep(0.2)
-        confirm = tree.root.findChild(lambda n: n.name == "Filter" and n.roleName == "push button")
-        confirm.do_action(0)
-        time.sleep(0.5)
+        tree.root.findChild(
+            lambda n: n.name == "Filter" and n.roleName == "push button").do_action(0)
 
-        subprocess.run(["gapplication", "action", aid, "test-snapshot"])
-        time.sleep(0.5)
-        self.assertTrue(os.path.exists(self._snapshot_path), "snapshot file was not written")
-        with open(self._snapshot_path) as f:
-            snap = json.load(f)
         # Every other row is empty and so also fails the "apple" match —
-        # only assert on the 3 rows this test actually populated.
+        # only assert on the 3 rows this test actually populated. A
+        # snapshot file that never appears surfaces here as the last
+        # observed value, `<FileNotFoundError: ...>`.
+        snap = self.wait_until(
+            snapshot,
+            lambda snap: 1 in set(snap["sheet"]["hidden_rows"]),
+            interval=0.3,
+            description="the filter to hide the non-matching row",
+        )
+        self.assertTrue(os.path.exists(self._snapshot_path), "snapshot file was not written")
         hidden = set(snap["sheet"]["hidden_rows"])
         self.assertIn(1, hidden, f"snapshot: {snap}")
         self.assertNotIn(0, hidden, f"snapshot: {snap}")
         self.assertNotIn(2, hidden, f"snapshot: {snap}")
 
         subprocess.run(["gapplication", "action", aid, "clear-filter"])
-        time.sleep(0.5)
-        subprocess.run(["gapplication", "action", aid, "test-snapshot"])
-        time.sleep(0.5)
-        with open(self._snapshot_path) as f:
-            snap = json.load(f)
-        self.assertEqual(snap["sheet"]["hidden_rows"], [], f"snapshot: {snap}")
+        self.wait_until(
+            snapshot,
+            lambda snap: snap["sheet"]["hidden_rows"] == [],
+            interval=0.3,
+            description="clear-filter to unhide every row",
+        )
         self.assertIsNone(self.process.poll(), "tables crashed during filter/clear-filter")
 
 
