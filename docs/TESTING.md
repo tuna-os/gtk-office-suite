@@ -61,6 +61,28 @@ scheduled `vlm-audit` CI job with `continue-on-error` — informative for
 visual/HIG regressions, never a merge blocker, because model judgments flake
 and need `GEMINI_API_KEY`. Locally they skip without a key.
 
+## The capability ledger (what is actually proven)
+
+`conformance/capabilities.json` records, per capability, which tests prove
+it at which layer and the revision that was observed at.
+`conformance/validate_capabilities.py` checks those claims against the
+tests CI actually collected and their recorded outcomes, so evidence
+cannot quietly stop meaning anything:
+
+```bash
+python3 conformance/validate_capabilities.py          # structure, waivers, duplicates
+python3 conformance/collect_test_inventory.py --junit "=target/nextest/ci/junit.xml" \
+    --out inv.json --results-out res.json
+python3 conformance/validate_capabilities.py --collected inv.json --results res.json
+```
+
+A renamed or deleted test, a layer with no test, a skipped or failing test
+behind a `verified` claim, an expired waiver, or two test classes sharing a
+name all fail the build. Add an entry when you can name the tests that
+prove a capability *and* the revision you watched them pass on; leave the
+status at `implemented-unverified` until then. `docs/PARITY.md` remains the
+human-facing scorecard — the ledger is what a reviewer can check.
+
 ## CI map
 
 | Workflow | Trigger | Gates? | Contents |
@@ -70,6 +92,10 @@ and need `GEMINI_API_KEY`. Locally they skip without a key.
 | `gui-tests.yml` → `vlm-audit` | daily 06:00 UTC, manual | no | tier 3 + screenshot artifacts |
 | `gui-container.yml` | container file changes, weekly, manual | yes (for itself) | builds/verifies/publishes the GUI test image |
 | `feature-verification.yml` | `verify-video` label, manual | yes | records journeys in the container, posts the clips on the PR |
+
+The capability ledger is checked in three places: structure in the fast PR
+lane, against collected Rust tests and their outcomes in `ci.yml`'s test
+job, and against collected journeys in `gui-tests.yml`'s smoke job.
 
 The versioned office interoperability contract lives in
 [`interop/corpus.json`](../interop/corpus.json). Its cheap structural check

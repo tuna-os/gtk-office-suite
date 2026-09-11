@@ -127,6 +127,22 @@ jobs:
           fi
           tests/gui/run_gui_tests.sh test_smoke.py "$@"
 
+      # C3 for the GUI layer: a journey the ledger cites must still be
+      # collected under that name. Collection is cheap and runs after the
+      # journeys themselves, so a rename shows up as a ledger failure
+      # rather than as evidence that quietly stopped meaning anything.
+      - name: Capability ledger vs. collected journeys
+        if: always()
+        run: |
+          # -q twice: the runner appends its own -v, and pytest's
+          # verbosity is (-v count) minus (-q count) — one -q only cancels
+          # it back to the tree listing, two gives the node ids this
+          # parses.
+          tests/gui/run_gui_tests.sh test_smoke.py --collect-only -q -q > collected.txt
+          python3 conformance/collect_test_inventory.py \
+            --pytest "tests/gui=collected.txt" --out gui-inventory.json
+          python3 conformance/validate_capabilities.py --collected gui-inventory.json
+
       - name: Upload failure artifacts
         if: failure()
         uses: actions/upload-artifact@v7

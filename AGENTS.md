@@ -45,6 +45,12 @@ units) ← `suite-common` (GTK helpers: dialogs, toasts, SuiteApp/SuiteWindow)
   gates; VLM audit is scheduled + non-gating). Never add `|| true` to a test
   step — that is how three launch-blocking bugs shipped undetected in June
   2026 (see PR #86).
+- Claiming a capability works means adding it to `conformance/capabilities.json`
+  with the tests that prove it and the revision you watched them pass on;
+  `conformance/validate_capabilities.py` checks those ids against the tests CI
+  collected, so a renamed test breaks the build instead of silently proving
+  nothing (#441). It also rejects two test classes sharing a name — that is how
+  a crash reproduction went missing for months (#507).
 - Journeys can record themselves (`GUI_TEST_VIDEO=all|failures`). The smoke
   gate keeps a video of every failure; labelling a PR `verify-video` runs the
   journeys in the test container and posts the clips on the PR. See

@@ -1,0 +1,226 @@
+{
+  "schema": 1,
+  "_comment": [
+    "Capability evidence ledger (#441). One entry per advertised capability,",
+    "naming the tests that prove it at each layer and the revision they were",
+    "observed at. conformance/validate_capabilities.py checks these against",
+    "the tests CI actually collected — a test id that no longer exists, or a",
+    "layer with no test, fails the build rather than quietly meaning nothing.",
+    "",
+    "Statuses: verified (evidence at every required layer, observed passing),",
+    "implemented-unverified (code exists, evidence does not yet), failing,",
+    "deferred (out of admitted scope for now; needs a waiver).",
+    "",
+    "Layers mirror the instruments in docs/PARITY.md: model = I1 core unit",
+    "tests, format = I2-I4 round trips and oracles, bridge = I5 buffer",
+    "round trips on the GTK main thread, gui = I6 AT-SPI journeys.",
+    "",
+    "This ledger starts with the capabilities whose evidence was produced at",
+    "the current revision. It is deliberately not backfilled from PARITY.md:",
+    "an entry here asserts that someone watched these tests pass on a named",
+    "Test ids are the ones the tooling prints: nextest's binary id plus the test path (letters-core::structured::tests::x for a crate's lib tests, letters-core::docx::x for its tests/docx.rs target, letters::bin/letters::bridge::tests::x for a binary's), and the repo-relative pytest node id for a journey.",
+    "revision, which is exactly the claim the old checkboxes could not make."
+  ],
+  "features": [
+    {
+      "id": "letters.tables.insert",
+      "app": "letters",
+      "title": "Insert Table places one table at the cursor",
+      "scope": "One 3x3 table with empty cells, inserted on the line after the caret's paragraph (or in it when that paragraph is empty). No literal grid text is left as prose.",
+      "issue": 438,
+      "status": "verified",
+      "revision": "2d3ddfeae005ba26d41cf30968de99cc4b4f4df4",
+      "requires": [
+        "model",
+        "bridge",
+        "gui",
+        "format"
+      ],
+      "evidence": {
+        "model": [
+          "letters-core::structured::tests::insert_table_lands_at_the_cursor_not_at_the_end",
+          "letters-core::structured::tests::insert_table_in_an_empty_paragraph_takes_that_line",
+          "letters-core::structured::tests::inserted_cells_start_empty",
+          "letters-core::structured::tests::each_inserted_table_gets_its_own_id"
+        ],
+        "bridge": [
+          "letters::bin/letters::bridge::tests::inserting_a_table_through_the_editor_produces_exactly_one_table",
+          "letters::bin/letters::bridge::tests::the_editor_shows_a_table_as_a_pipe_grid"
+        ],
+        "gui": [
+          "tests/gui/test_smoke.py::LettersStructuredEditingSmoke::test_insert_table_and_structured_actions"
+        ],
+        "format": [
+          "letters-core::docx::a_table_inserted_in_the_editor_survives_docx"
+        ]
+      }
+    },
+    {
+      "id": "letters.tables.buffer-mapping",
+      "app": "letters",
+      "title": "Tables survive the document/buffer round trip",
+      "scope": "Table cells render as a pipe grid and capture back as (table, row, col) paragraphs with per-cell run styles, including CJK, emoji and RTL text. Prose containing pipes stays prose.",
+      "issue": 438,
+      "status": "verified",
+      "revision": "2d3ddfeae005ba26d41cf30968de99cc4b4f4df4",
+      "requires": [
+        "model",
+        "bridge"
+      ],
+      "evidence": {
+        "model": [
+          "letters-core::table_text::tests::styled_cells_survive_a_render_capture_round_trip",
+          "letters-core::table_text::tests::layout_round_trips_unicode_cells",
+          "letters-core::table_text::tests::prose_containing_a_pipe_is_not_a_row",
+          "letters-core::structured::tests::table_cells_stay_contiguous_and_row_major_after_edits"
+        ],
+        "bridge": [
+          "letters::bin/letters::bridge::tests::tables_survive_the_buffer_round_trip",
+          "letters::bin/letters::bridge::tests::cell_styles_survive_the_round_trip",
+          "letters::bin/letters::bridge::tests::unicode_cells_round_trip",
+          "letters::bin/letters::bridge::tests::prose_containing_pipes_is_not_captured_as_a_table"
+        ]
+      }
+    },
+    {
+      "id": "letters.tables.row-column-commands",
+      "app": "letters",
+      "title": "Table row and column commands act on the cursor's table",
+      "scope": "Insert/delete row and column operate on the table containing the caret, and do nothing when the caret is outside a table.",
+      "issue": 438,
+      "status": "verified",
+      "revision": "2d3ddfeae005ba26d41cf30968de99cc4b4f4df4",
+      "requires": [
+        "model",
+        "gui"
+      ],
+      "evidence": {
+        "model": [
+          "letters-core::structured::tests::row_and_column_commands_follow_the_cursor",
+          "letters-core::structured::tests::table_commands_outside_a_table_do_nothing"
+        ],
+        "gui": [
+          "tests/gui/test_smoke.py::LettersStructuredEditingSmoke::test_insert_table_and_structured_actions"
+        ]
+      }
+    },
+    {
+      "id": "letters.lists.cursor-commands",
+      "app": "letters",
+      "title": "List commands apply to the caret's paragraph",
+      "scope": "Bullet/numbered toggle, indent, outdent and restart-numbering act on the paragraph containing the caret and render exactly one marker. Indenting body text does nothing.",
+      "issue": 438,
+      "status": "verified",
+      "revision": "1940687adbdecd804f45690a7449e17c886b96ce",
+      "requires": [
+        "model",
+        "bridge",
+        "gui"
+      ],
+      "evidence": {
+        "model": [
+          "letters-core::structured::tests::list_commands_act_on_the_cursors_paragraph",
+          "letters-core::structured::tests::toggling_the_same_list_kind_turns_it_off",
+          "letters-core::structured::tests::switching_list_kind_keeps_the_nesting_level",
+          "letters-core::structured::tests::indenting_outside_a_list_changes_nothing",
+          "letters-core::structured::tests::restart_numbering_applies_only_to_numbered_items"
+        ],
+        "bridge": [
+          "letters::bin/letters::bridge::tests::toggling_a_list_adds_one_marker_and_leaves_other_paragraphs_alone"
+        ],
+        "gui": [
+          "tests/gui/test_smoke.py::LettersStructuredEditingSmoke::test_list_and_page_break_apply_to_the_cursors_paragraph"
+        ]
+      }
+    },
+    {
+      "id": "letters.page-break.cursor-command",
+      "app": "letters",
+      "title": "Page breaks are paragraph state that survives a round trip",
+      "scope": "Insert Page Break toggles page_break_before on the caret's paragraph, adds no document text, and survives capture through the page-break tag.",
+      "issue": 438,
+      "status": "verified",
+      "revision": "1940687adbdecd804f45690a7449e17c886b96ce",
+      "requires": [
+        "model",
+        "bridge",
+        "gui"
+      ],
+      "evidence": {
+        "model": [
+          "letters-core::structured::tests::page_break_toggles_on_the_cursors_paragraph"
+        ],
+        "bridge": [
+          "letters::bin/letters::bridge::tests::page_breaks_survive_the_buffer_round_trip",
+          "letters::bin/letters::bridge::tests::inserting_a_page_break_marks_the_cursors_paragraph"
+        ],
+        "gui": [
+          "tests/gui/test_smoke.py::LettersStructuredEditingSmoke::test_list_and_page_break_apply_to_the_cursors_paragraph"
+        ]
+      }
+    },
+    {
+      "id": "letters.word-count",
+      "app": "letters",
+      "title": "Word count counts writing, not presentation",
+      "scope": "List markers and rendered table grids are excluded; the label uses a plural form from gettext.",
+      "issue": 438,
+      "status": "verified",
+      "revision": "2d3ddfeae005ba26d41cf30968de99cc4b4f4df4",
+      "requires": [
+        "model",
+        "gui"
+      ],
+      "evidence": {
+        "model": [
+          "letters-core::word_count::tests::an_empty_table_contributes_nothing",
+          "letters-core::word_count::tests::list_markers_are_not_words",
+          "letters-core::word_count::tests::table_cells_count_their_own_words",
+          "letters-core::word_count::tests::prose_with_a_pipe_is_still_prose"
+        ],
+        "gui": [
+          "tests/gui/test_smoke.py::LettersSmoke::test_new_document_and_type_updates_word_count"
+        ]
+      }
+    },
+    {
+      "id": "ci.recorded-journey-evidence",
+      "app": "suite",
+      "title": "GUI journeys record what they assert",
+      "scope": "Every journey can be recorded from the display its assertions ran against; failures keep their clip; the evidence bundle reports an unlabelled clip as unknown, never as a pass.",
+      "issue": 441,
+      "status": "verified",
+      "revision": "4525d543fbee8e8b59f1136804007903e5b1d801",
+      "requires": [
+        "model"
+      ],
+      "evidence": {
+        "model": [
+          "tests/test_gui_evidence.py::MetadataTests::test_missing_sidecar_falls_back_to_the_filename",
+          "tests/test_gui_evidence.py::SummaryMarkdownTests::test_failure_is_visible_in_the_summary",
+          "tests/test_gui_evidence.py::CommentTests::test_no_recordings_is_not_reported_as_success"
+        ]
+      }
+    },
+    {
+      "id": "tables.named-range.jump",
+      "app": "tables",
+      "title": "Jump to a named range from the name box",
+      "scope": "Define Name captures the selection; typing the name in the name box returns to it. The far-jump path aborts the application.",
+      "issue": 507,
+      "status": "failing",
+      "revision": "b01fbf1ff75d2325ea45de7c8341ff472118bb11",
+      "requires": [
+        "gui"
+      ],
+      "evidence": {
+        "gui": [
+          "tests/gui/test_smoke.py::TablesNamedRangeSmoke::test_define_name_then_jump_to_it_via_name_box",
+          "tests/gui/test_smoke.py::TablesNamedRangeStatsSmoke::test_define_name_then_jump_to_it_via_name_box"
+        ]
+      },
+      "note": "The second journey reproduces #507 (heap corruption after a far jump) 3/3 and runs as a marked expected failure. The capability is not verified while that holds."
+    }
+  ],
+  "waivers": []
+}
