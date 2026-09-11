@@ -104,6 +104,10 @@ without a test that fails first.
   validates pedantic-clean; flathub/ manifests build from tag v1.1.0.
   The submission PR itself is a human action (see flathub/README.md).
 
+## Future Horizon — Extensibility & SDK
+
+- **WASM/IPC Plugin Architecture**: Define sandboxed WebAssembly extension host APIs in `suite-common-core` to enable third-party plugins (custom document filters, formula packs, UI actions) without memory safety risks in Flatpak packaging.
+
 ## Standing infrastructure notes
 
 - Builds: the `gtkbuild` distrobox on the build host (18 cores, ~10s warm) is the
