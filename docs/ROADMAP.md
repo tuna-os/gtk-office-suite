@@ -6,12 +6,28 @@
 > That roadmap supersedes check-mark-only completeness and requires model,
 > GUI-journey, data-safety, and interoperability evidence.
 
-State as of 2026-07-18: the surfacing wave, format-parity stragglers, and
-the oracle expansion are done (see PARITY.md for the row-by-row truth;
-TESTING.md for the coverage bar: 65 oracle tests, CommonMark 630/652,
-13 smoke, all gates green). What follows is what's left, ordered by
-leverage. Every item names its proving instrument — nothing lands
-without a test that fails first.
+State as of 2026-09-11: Core format parity, ODF/OOXML oracle suites, and GTK4/libadwaita UX foundations are established. Strategic focus for Q4 2026 shifts to enterprise deployment, ecosystem extensibility, and automated accessibility verification.
+
+## Q4 2026 Strategic Focus & Ecosystem Roadmap
+
+1. **Enterprise Fleet & Managed Policy Administration Framework**
+   - Provide centralized management schemas via `dconf` / GSettings for enterprise IT deployment.
+   - Enforce lockdown policies (disabling external web calls, restricting plugin execution, enforcing document encryption defaults).
+   - *Proving Instrument*: Integration test suite verifying policy enforcement across `suite-common` settings loading.
+
+2. **WASM / D-Bus Host Plugin & Extensibility SDK**
+   - Expose safe, sandboxed plugin interfaces for document automation and export filters without compromising memory safety.
+   - Deliver WASM runtime host integration (`wasmtime`) in pure Rust crates alongside D-Bus IPC connectors for desktop extensions.
+   - *Proving Instrument*: End-to-end plugin execution smoke test verifying AST document modification via WASM boundary.
+
+3. **Automated AT-SPI Screen Reader Audit & Compliance Gate**
+   - Expand automated CI accessibility testing using AT-SPI / `dogtail` harness beyond virtual a11y children to full UI tree navigation.
+   - Guarantee Orca screen reader compatibility across complex custom widgets (Letters ruler, Tables cell grid, Decks canvas).
+   - *Proving Instrument*: Deterministic AT-SPI GUI test suite executing on Xvfb/a11y bus.
+
+---
+
+## Retained Historical Ledger (v1.0 & v1.1 Milestones)
 
 ## Now — next few sessions
 
