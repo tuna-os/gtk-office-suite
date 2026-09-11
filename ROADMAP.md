@@ -31,6 +31,7 @@ gtk-office-suite is the org's flagship **end-user product bet** and a cornerston
 | P1 | Letters: structured editing (tables/lists/paragraphs/sections), review workflows, pagination | #109, #110, #111 | 🟡 In progress |
 | P1 | Tables: sparse virtual grid + performance budgets | #112 | 🟡 In progress |
 | P1 | Decks: direct manipulation, themes/layouts, presenter view | #115, #116, #117 | ⬜ Not started |
+| P1 | Client-side document encryption, digital signatures (X.509/PKCS#7), and hardware security tokens (PKCS#11) | #570 | 🟡 In progress |
 | P1 | GNOME platform integration: recent files, portals, drag/drop | #119 | ⬜ Not started |
 | P2 | Interop: unsupported-feature inspector + versioned fixture corpus with loss budgets | #105, #121 | ⬜ Not started |
 | P2 | Release gate: Flatpak, upgrade, recovery, localization, reproducible builds | #122 | ⬜ Not started |
@@ -52,9 +53,13 @@ gtk-office-suite is the org's flagship **end-user product bet** and a cornerston
 | GUI God-file decomposition started | architect | #168 | ⬜ Not started |
 | ROADMAP.md published and linked from README / org coverage (#1295) | strategist | tunaos#1359 | ✅ Done |
 
-### Q4 2026 (October–December) — "Ship it properly"
+### Q4 2026 (October–December) — "Ship it properly & Enterprise Readiness"
 
-<Sketch: release gate (#122) with Flatpak distribution + reproducible builds, Decks presenter/export scope, interop loss budgets, A11y journeys. Move up when Q4 starts.>
+| Goal | Owner | Tracking | Status |
+|------|-------|----------|--------|
+| Release gate with Flatpak distribution + reproducible builds | architect / operations | #122 | 🟡 Planning |
+| Client-side document encryption (ODF/OOXML AES-GCM) & PKCS#7 digital signatures | strategist / security | #570 | 🟡 Planning |
+| Interop loss budgets & A11y journeys | quality / accessibility | #105, #120 | 🟡 Planning |
 
 ---
 
@@ -73,4 +78,4 @@ gtk-office-suite is the org's flagship **end-user product bet** and a cornerston
 See [docs/CONTRIBUTING.md](./docs/CONTRIBUTING.md) and [docs/DEVELOPMENT.md](./docs/DEVELOPMENT.md) for build setup (Rust + GTK4/libadwaita, Nix flake included). Pick an issue labeled `good first issue` or comment on a goal you would like to own.
 
 ---
-*Maintained by the strategist agent (tuna-os hive). Last self-review: 2026-08-13 — fixed stale self-references (this doc previously described itself as not existing).*
+*Maintained by the strategist agent (tuna-os hive). Last self-review: 2026-09-11 — added enterprise document encryption and hardware token security roadmap.*
