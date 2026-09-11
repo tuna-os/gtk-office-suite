@@ -163,9 +163,39 @@ class BaseGUITestCase(unittest.TestCase):
 
         This is deliberately environment-only: production binaries do not
         gain a test mode or a diagnostic action merely because the harness
-        exists. Tests that need isolated settings/state can layer
-        isolate_gsettings or isolate_autosave_state on top.
+        exists.
+
+        Isolation is among the defaults, not something a journey opts into.
+        Only 2 of 38 journey classes called `isolate_gsettings`, so the
+        rest launched against the real XDG stores — and GSettings' dconf
+        backend keeps its storage in `$XDG_CONFIG_HOME/dconf/user`, which
+        a private D-Bus session does not redirect. Measured with three
+        probe journeys in one run:
+
+            A: before = false     <- left over from a *previous run*
+            A: after  = false
+            B: sees   = false     <- A's change leaked into B
+            C: sees   = true      <- the one journey that isolated
+
+        So a journey that touched a preference rewrote the machine's real
+        settings, every later journey in the run inherited it, and the next
+        run started from whatever the last one left. CI's fresh runners are
+        why this stayed invisible; the stress campaign's randomised order
+        would surface it as a flake with no visible cause (#354).
+
+        A journey that calls `isolate_gsettings`, `isolate_autosave_state`
+        or `isolate_xdg` still works unchanged: those set `launch_env`
+        before `setUp` runs, and explicit `launch_env` wins over these
+        defaults.
         """
+        # One disposable root per test, removed with the test.
+        xdg_root = self.temp_dir("xdg-")
+        xdg = {name: os.path.join(xdg_root, name)
+               for name in ("config", "data", "cache", "state")}
+        for path in xdg.values():
+            os.makedirs(path, exist_ok=True)
+        self._xdg_root = xdg_root
+        self._xdg = xdg
         defaults = {
             "LANG": "C.UTF-8",
             "LC_ALL": "C.UTF-8",
@@ -175,6 +205,14 @@ class BaseGUITestCase(unittest.TestCase):
             "GDK_DPI_SCALE": "1",
             "GTK_ENABLE_ANIMATIONS": "0",
             "SOURCE_DATE_EPOCH": "0",
+            "XDG_CONFIG_HOME": xdg["config"],
+            "XDG_DATA_HOME": xdg["data"],
+            "XDG_CACHE_HOME": xdg["cache"],
+            "XDG_STATE_HOME": xdg["state"],
+            # dconf's store is not redirected by the private bus; the
+            # keyfile backend under an isolated XDG_CONFIG_HOME is what
+            # actually contains a journey's settings.
+            "GSETTINGS_BACKEND": "keyfile",
         }
         font_config = os.path.join(self.framework_dir, "fonts.conf")
         if os.path.exists(font_config):

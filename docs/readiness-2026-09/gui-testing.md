@@ -13,11 +13,14 @@ Confirmed harness gaps: fixed :99 display, shared /tmp schemas, EXIT traps bypas
       manager's `_NET_SUPPORTING_WM_CHECK`, and exits 1 naming the cause
       when any of it fails. `xprop` joined the container's dependency
       check-list.
-- [ ] Isolate defaults for every test, retaining explicit recovery/restart
-      overrides — **partly done**: the shared `/tmp/gtk-office-schemas` is
-      now a per-run temporary directory. Per-test XDG/GSettings isolation
-      is still opt-in (`isolate_gsettings`, `isolate_autosave_state`) rather
-      than the default.
+- [x] Isolate defaults for every test, retaining explicit recovery/restart
+      overrides — the shared `/tmp/gtk-office-schemas` is a per-run
+      temporary directory, and every journey now launches with its own
+      `XDG_CONFIG_HOME`/`DATA`/`CACHE`/`STATE` and the keyfile GSettings
+      backend. `isolate_gsettings`, `isolate_autosave_state` and
+      `isolate_xdg` still work for the journeys that name them: they set
+      `launch_env` before `setUp`, and explicit `launch_env` wins over the
+      defaults. See below for what the default was hiding.
 - [x] Register cleanup immediately after process launch; preserve
       stdout/stderr, AT-SPI tree, screenshot, input trace and normalized
       state on setup/test failures — `_capture_failure_artifacts`, and
@@ -159,3 +162,39 @@ become predicates rather than fixed intervals.
 The other 228 sleeps are not load-bearing at a quarter of their length,
 which does not make them safe to simply shorten — it makes them dead
 weight to be replaced with predicates where they precede an assertion.
+
+## What opt-in isolation was hiding
+
+Only **2 of 38** journey classes called `isolate_gsettings`, so the rest
+launched against the real XDG stores. The private D-Bus session does not
+help: GSettings' dconf backend keeps its storage in
+`$XDG_CONFIG_HOME/dconf/user`, which no bus setting redirects. Measured
+with two probe journeys reading the preference *as the launched app sees
+it*:
+
+| | before | after |
+|---|---|---|
+| first journey starts at | `false` — left by a *previous run* | `true` — the schema default |
+| it changes the value to | `false` | `false` |
+| next journey starts at | `false` — inherited | `true` |
+
+So a journey that touched a preference rewrote the machine's real settings,
+every later journey in the run inherited them, and the next run started
+from whatever the last one left. On a developer's machine that silently
+edits their actual app preferences; on CI the fresh runner hid it
+completely. The stress campaign's randomised journey order would have
+surfaced it as a flake with no visible cause.
+
+`configure_deterministic_environment` now gives every test its own XDG
+root and the keyfile backend, so isolation is a default rather than
+something a journey remembers to ask for.
+`LettersSettingsIsolationSmoke` and its follower assert it — each expects
+the schema default, so neither depends on the other having run, while
+together they catch the regression. Against the unisolated harness the
+follower fails with the inherited `false`.
+
+One probe-design note worth keeping: the first version of this measurement
+read the setting with a bare `gsettings` subprocess and so reported the
+*harness's* environment, not the app's — it showed a leak even after the
+fix. Reading through `launch_env`, the way the app is launched, is what
+makes the measurement mean anything.
