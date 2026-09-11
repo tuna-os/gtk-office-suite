@@ -468,19 +468,13 @@ fn seed_campaign() {
 
 // ── findings this harness produced, kept as executable notes ─────────
 
-/// Reordering sheets rebuilds the IronCalc model from names and cell
-/// inputs alone (`TablesEngine::reorder_sheets`), so anything the engine
-/// holds besides those is dropped. Defined names are the visible case: a
-/// named range survives every other operation and disappears when the
-/// user drags a sheet tab.
-///
-/// Not fixed in this slice — the fix is a real reorder in the engine or
-/// a full round trip of engine state, which is larger than the identity
-/// bugs this file was written to find. Filed as #527; this test
-/// documents it as the failing behavior it is rather than leaving it
-/// undiscovered.
+/// Reordering sheets used to rebuild the IronCalc model from names and
+/// cell inputs alone, dropping everything else the engine held —
+/// defined names most visibly: a named range survived every other
+/// operation and vanished when the user dragged a sheet tab (#527).
+/// `TablesEngine::reorder_sheets` now moves the worksheets instead, so
+/// nothing is recreated and nothing is left behind.
 #[test]
-#[ignore = "known defect #527: un-ignore with the fix"]
 fn reordering_sheets_keeps_defined_names() {
     let mut controller = WorkbookController::new(ROWS, COLS).expect("fresh controller");
     controller

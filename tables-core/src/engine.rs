@@ -94,11 +94,20 @@ impl TablesEngine {
         Ok(())
     }
 
-    /// Rebuild the workbook with worksheets in `new_order` (a permutation of
-    /// current indices). IronCalc has no native sheet-move operation, so this
-    /// replays every cell's input text into a fresh model in the new order.
-    /// Cross-sheet formulas reference sheets by name, not position, so they
-    /// keep resolving correctly across the rebuild.
+    /// Move worksheets into `new_order` (a permutation of current indices).
+    ///
+    /// This used to rebuild the workbook from scratch, replaying every
+    /// cell's input text into a fresh model, on the premise that IronCalc
+    /// had no native sheet-move operation. It does: `Model::move_sheet`,
+    /// which lifts the worksheet out and reinserts it, then re-parses
+    /// every formula from the stored text so the sheet indices inside
+    /// parsed references are rebuilt against the new positions.
+    ///
+    /// The rebuild carried only names and cell inputs across, so it
+    /// silently discarded everything else the model held — defined names
+    /// most visibly (#527), and sheet ids, which is how a reorder used to
+    /// hand two sheets the same identity (#442). Moving sheets keeps all
+    /// of it, because nothing is recreated.
     pub fn reorder_sheets(&mut self, new_order: &[usize]) -> Result<(), String> {
         let sheet_count = self.sheet_count();
         if new_order.len() != sheet_count {
@@ -111,71 +120,30 @@ impl TablesEngine {
             }
         }
 
-        let names: Vec<String> = (0..sheet_count)
-            .map(|i| self.sheet_name_at(i).unwrap_or_default())
-            .collect();
-        let inputs: Vec<Vec<(usize, usize, String)>> = (0..sheet_count)
-            .map(|i| {
-                let mut cells = Vec::new();
-                for r in 0..self.rows {
-                    for c in 0..self.cols {
-                        let input = self
-                            .formula_at(i, r, c)
-                            .map(|f| format!("={f}"))
-                            .unwrap_or_else(|| self.cell_at(i, r, c));
-                        if !input.is_empty() {
-                            cells.push((r, c, input));
-                        }
-                    }
-                }
-                cells
-            })
-            .collect();
-        // Rebuilding would assign fresh IronCalc sheet_ids, so the ids are
-        // captured here and restored below. Sheet identity has to survive
-        // a reorder: the undo history and every presentation model key on
-        // sheet_id, so fresh ids leave recorded commands pointing at
-        // sheets that no longer exist — and the next add_sheet is handed
-        // one of the abandoned ids, giving two sheets the same identity
-        // and sending an undo to the wrong one. Found by the seeded
-        // command sequences in tables-core/tests/stateful.rs (#442).
-        let sheet_ids: Vec<u32> = (0..sheet_count)
-            .map(|i| self.sheet_id_at(i).unwrap_or(i as u32))
-            .collect();
         let active_old_index = self.active_sheet;
 
-        // The placeholder name only needs to be valid and 'static; it is
-        // immediately overwritten with the real (non-'static) target name,
-        // which `rename_sheet_by_index` copies into an owned `String`.
-        let mut model = Model::new_empty("Sheet1", "en", "UTC", "en")
-            .map_err(|e| format!("Failed to rebuild workbook: {e}"))?;
-        model.rename_sheet_by_index(0, &names[new_order[0]])?;
-        for &old_idx in &new_order[1..] {
-            model.add_sheet(&names[old_idx])?;
-        }
-        self.model = model;
-
-        // Carry each sheet's identity to its new position. IronCalc
-        // allocates the next id as max(existing) + 1, so restoring the
-        // originals cannot collide with a later add_sheet.
-        for (new_idx, &old_idx) in new_order.iter().enumerate() {
-            if let Some(worksheet) = self.model.workbook.worksheets.get_mut(new_idx) {
-                worksheet.sheet_id = sheet_ids[old_idx];
+        // Selection sort against the target order: `current[position]` is
+        // the original index of whatever sits there now, so each step
+        // moves the sheet that belongs at `target` into place and the
+        // prefix is never disturbed again.
+        let mut current: Vec<usize> = (0..sheet_count).collect();
+        for (target, &wanted) in new_order.iter().enumerate() {
+            let from = current
+                .iter()
+                .position(|&original| original == wanted)
+                .expect("new_order was checked to be a permutation");
+            if from != target {
+                self.model.move_sheet(from as u32, target as u32)?;
+                let moved = current.remove(from);
+                current.insert(target, moved);
             }
         }
 
-        for (new_idx, &old_idx) in new_order.iter().enumerate() {
-            for (r, c, input) in &inputs[old_idx] {
-                let rr = *r as i32 + 1;
-                let cc = *c as i32 + 1;
-                let _ = self.model.set_user_input(new_idx as u32, rr, cc, input.clone());
-            }
-        }
-        self.model.evaluate();
         self.active_sheet = new_order
             .iter()
             .position(|&old_idx| old_idx == active_old_index)
             .unwrap_or(0);
+        self.model.evaluate();
         Ok(())
     }
 

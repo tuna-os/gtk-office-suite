@@ -34,8 +34,8 @@ Controller state machines generate valid commands and assert invariants after ev
       lie than a visible gap.
 - [ ] Fixed regression seeds on every PR; a bounded random-seed campaign nightly; larger soak and complete matrix on the release candidate.
 - [~] Stateful sequences per app; cross-app clipboard and multi-window close/save races. Tables is done and green
-      (`tables-core/tests/stateful.rs`: 16 fixed seeds on every PR, 400 seeds a night, and it found two identity bugs
-      plus #527 on its first runs). Letters has the same harness (`letters-core/tests/stateful.rs`) but its fixed-seed
+      (`tables-core/tests/stateful.rs`: 16 fixed seeds on every PR, 400 seeds a night; it found two identity bugs
+      and #527 on its first runs, all three now fixed). Letters has the same harness (`letters-core/tests/stateful.rs`) but its fixed-seed
       test is ignored, blocked on #532 — Enter inside a table cell duplicates the cell — rather than narrowing the
       generator to route around it. Decks, the cross-app clipboard and the multi-window races are not started.
 - [ ] Save/recovery fault injection at each transaction boundary; bounded malformed-file fuzzing with minimized fixtures.
