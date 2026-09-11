@@ -73,11 +73,18 @@ PYTHON_BIN="${GUI_TEST_PYTHON:-/usr/bin/python3}"
 # as it comes, which is what every ordinary run wants.
 export GUI_TEST_COLOR_SCHEME_RESOLVED="${GUI_TEST_COLOR_SCHEME:-default}"
 
-exec dbus-run-session -- bash -c '
+# Not `exec`: exec replaces this shell, and with it the EXIT trap that
+# kills the Xvfb and the window manager started above. Every run then
+# leaked an X server and a matchbox process — invisible in a single run,
+# and dozens of stranded servers after a stress campaign, each holding a
+# display number the next run has to step around.
+status=0
+dbus-run-session -- bash -c '
     gsettings set org.gnome.desktop.interface toolkit-accessibility true
     if [ "$GUI_TEST_COLOR_SCHEME_RESOLVED" != "default" ]; then
         gsettings set org.gnome.desktop.interface color-scheme \
             "$GUI_TEST_COLOR_SCHEME_RESOLVED"
     fi
     exec "$0" -m pytest "$@" -v --tb=short
-' "$PYTHON_BIN" "$@"
+' "$PYTHON_BIN" "$@" || status=$?
+exit "$status"
