@@ -25,3 +25,5 @@ fuzz/corpus/
 # Credentials and secrets
 .token
 /fuzz/target/
+/fuzz/corpus/
+/fuzz/artifacts/

@@ -77,24 +77,53 @@ jobs:
   fuzz-smoke:
     name: Fuzz importer smoke tests
     runs-on: ubuntu-24.04
-    timeout-minutes: 20
+    timeout-minutes: 40
     steps:
       - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@nightly
       - name: Install cargo-fuzz
         run: cargo install cargo-fuzz --locked
+
+      # A document package is a ZIP: a local header, a central directory and
+      # a matching CRC have to be right before a reader looks at one byte of
+      # XML. libFuzzer starting from nothing does not reach that inside a
+      # bounded run, so without seeds these targets spent their whole budget
+      # failing to produce a readable archive.
+      #
+      # The seeds come from this suite's own writers rather than committed
+      # binaries: they cannot drift from what the writers produce, the
+      # generators are reviewable source, and each generator reads every
+      # seed back and fails if its own reader rejects one.
+      - name: Generate the seed corpus
+        run: |
+          set -o pipefail
+          cargo run -p letters-core --example fuzz_seed_corpus -- fuzz/corpus
+          cargo run -p decks-core   --example fuzz_seed_corpus -- fuzz/corpus
+          cargo run -p tables-core  --example fuzz_seed_corpus -- fuzz/corpus
+          find fuzz/corpus -type f | wc -l | xargs echo "seed files:"
+
       # Every path a document can enter the suite through, not just the
       # OOXML three: the ODF read side had no target at all, and the
       # readers that return no Result (the best-effort xlsx parts,
       # markdown::parse, parse_master_shapes) can only fail by panicking.
+      #
+      # AddressSanitizer, not `--sanitizer none`. The four core crates
+      # contain no `unsafe` at all, so on its own that choice was
+      # defensible — but what they hand attacker-controlled bytes to is
+      # not this suite's code. The decompression stack underneath is Rust
+      # reimplementations of C libraries, and they are `unsafe`-heavy:
+      # zlib-rs (451 occurrences), libbz2-rs-sys (142), lzma-rust2 (16),
+      # miniz_oxide (4). A decompressor fed hostile input is the classic
+      # memory-safety target, and running it unsanitised is where a real
+      # finding would go unnoticed.
       - name: Run bounded importer fuzz smoke
         run: |
           set -o pipefail
           for target in letters_docx letters_odt letters_markdown \
                         tables_xlsx tables_xlsx_parts tables_ods \
                         decks_pptx decks_odp decks_master_shapes; do
-            cargo fuzz run "$target" --sanitizer none -- \
-              -runs=100 -max_len=1048576 -timeout=10 -rss_limit_mb=512
+            cargo fuzz run "$target" --sanitizer address -- \
+              -runs=1000 -max_len=1048576 -timeout=10 -rss_limit_mb=2048
           done
       - name: Upload minimized fuzz artifacts
         if: always()
