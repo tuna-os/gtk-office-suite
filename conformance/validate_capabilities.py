@@ -146,6 +146,63 @@ def check_collected(ledger: dict, inventory: dict, require_coverage: bool) -> li
     return errors
 
 
+def check_lane_coverage(ledger: dict, lanes: dict) -> list:
+    """C3b: every cited test falls in a namespace some CI lane collects.
+
+    C3 compares cited tests against what a lane collected, but a lane only
+    speaks for the namespaces it declares — so an id in a namespace *no*
+    lane covers was skipped by every lane and accepted. Demonstrated on a
+    real ledger: a claim citing
+    `tests/nonexistent/test_phantom.py::PhantomSuite::test_nothing_runs_this`
+    passed the GUI lane with "CAPABILITY LEDGER OK".
+
+    `--require-coverage` catches it, but only when run against every
+    lane's inventory at once — the job its documentation describes, which
+    does not exist. This asks the same question of a committed map
+    instead, so it needs no test run and can gate every pull request.
+    """
+    covered = tuple(
+        namespace
+        for lane in lanes.get("lanes", [])
+        for namespace in lane.get("namespaces", [])
+    )
+    if not covered:
+        return ["lane map declares no namespaces, so it can vouch for nothing"]
+    errors = []
+    for feature in ledger.get("features", []):
+        for layer, tests in (feature.get("evidence") or {}).items():
+            for test in tests:
+                if not test.startswith(covered):
+                    errors.append(
+                        f"{feature.get('id')}: {layer} names {test!r}, which is in no "
+                        "namespace any CI lane collects — nothing would notice if it "
+                        "disappeared (see conformance/lanes.json)"
+                    )
+    return errors
+
+
+def check_lane_declaration(lanes: dict, job: str, inventory: dict) -> list:
+    """The lane map has to match what the lane really collected.
+
+    Without this the map is a promise nothing keeps: a row could claim a
+    job covers a namespace it stopped collecting, and C3b above would go
+    on trusting it.
+    """
+    rows = [lane for lane in lanes.get("lanes", []) if lane.get("job") == job]
+    if not rows:
+        return [f"lane map has no row for job {job!r}, so its coverage is undeclared"]
+    actual = tuple(inventory.get("covers", []))
+    errors = []
+    for row in rows:
+        for namespace in row.get("namespaces", []):
+            if not any(a.startswith(namespace) or namespace.startswith(a) for a in actual):
+                errors.append(
+                    f"lane {job!r} is declared to collect {namespace!r}, but this run "
+                    f"collected {list(actual)!r} — the lane map is out of date"
+                )
+    return errors
+
+
 def check_results(ledger: dict, results: dict, layers: set, covers=()) -> list:
     """C4: a skipped or failing test is not evidence.
 
@@ -265,6 +322,12 @@ def main(argv=None) -> int:
     parser.add_argument("--require-coverage", action="store_true",
                         help="with --collected: fail on any test id no lane collects")
     parser.add_argument("--gui-test-dir", type=Path, default=GUI_TEST_DIR)
+    parser.add_argument("--lanes", type=Path,
+                        help="lane map (conformance/lanes.json): every cited test must "
+                             "be in a namespace some CI lane collects")
+    parser.add_argument("--lane",
+                        help="with --lanes and --collected: also assert this job's "
+                             "declared namespaces match what it actually collected")
     args = parser.parse_args(argv)
 
     ledger = load_ledger(args.ledger)
@@ -275,8 +338,14 @@ def main(argv=None) -> int:
     errors += check_revisions(ledger, args.head)
     errors += check_waivers(ledger, date.today())
     errors += check_duplicate_tests(args.gui_test_dir)
+    lanes = json.loads(args.lanes.read_text()) if args.lanes else None
+    if lanes is not None:
+        errors += check_lane_coverage(ledger, lanes)
     if args.collected:
-        errors += check_collected(ledger, load_inventory(args.collected), args.require_coverage)
+        inventory = load_inventory(args.collected)
+        errors += check_collected(ledger, inventory, args.require_coverage)
+        if lanes is not None and args.lane:
+            errors += check_lane_declaration(lanes, args.lane, inventory)
     if args.results:
         with open(args.results) as f:
             results = json.load(f)
@@ -295,6 +364,8 @@ def main(argv=None) -> int:
     checked = "structure"
     if args.head:
         checked += ", revisions"
+    if lanes is not None:
+        checked += ", lane coverage"
     if args.collected:
         checked += ", collected tests"
     if args.results:

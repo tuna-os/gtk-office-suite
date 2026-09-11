@@ -303,5 +303,86 @@ class RealLedgerTests(unittest.TestCase):
             self.assertEqual(vc.main(["--ledger", path]), 1)
 
 
+class LaneCoverage(unittest.TestCase):
+    """C3b: a cited test in a namespace no lane collects is a finding.
+
+    The hole this closes, demonstrated on the real ledger before the
+    check existed: a claim citing
+    `tests/nonexistent/test_phantom.py::PhantomSuite::test_nothing_runs_this`
+    passed the GUI lane with "CAPABILITY LEDGER OK", because the GUI
+    inventory covers `tests/gui/` and an id outside a lane's namespace is
+    skipped rather than judged. Every lane skipped it.
+    """
+
+    LANES = {"lanes": [
+        {"job": "test", "namespaces": ["letters-core::"]},
+        {"job": "smoke", "namespaces": ["tests/gui/"]},
+    ]}
+
+    def ledger(self, test):
+        return {"features": [{"id": "f", "evidence": {"gui": [test]}}]}
+
+    def test_a_test_in_a_covered_namespace_passes(self):
+        errors = vc.check_lane_coverage(
+            self.ledger("tests/gui/test_smoke.py::A::test_b"), self.LANES)
+        self.assertEqual(errors, [])
+
+    def test_a_test_no_lane_collects_is_rejected(self):
+        errors = vc.check_lane_coverage(
+            self.ledger("tests/nonexistent/test_phantom.py::A::test_b"), self.LANES)
+        self.assertEqual(len(errors), 1, errors)
+        self.assertIn("no namespace any CI lane collects", errors[0])
+
+    def test_a_map_that_declares_nothing_vouches_for_nothing(self):
+        errors = vc.check_lane_coverage(
+            self.ledger("tests/gui/test_smoke.py::A::test_b"), {"lanes": []})
+        self.assertEqual(len(errors), 1, errors)
+        self.assertIn("can vouch for nothing", errors[0])
+
+
+class LaneDeclaration(unittest.TestCase):
+    """The map has to match what the lane really collected, or it is a
+    promise nothing keeps: a row could claim a namespace the job stopped
+    collecting and the coverage check would go on trusting it."""
+
+    LANES = {"lanes": [{"job": "smoke", "namespaces": ["tests/gui/"]}]}
+
+    def test_a_declaration_the_run_backs_up_passes(self):
+        errors = vc.check_lane_declaration(
+            self.LANES, "smoke", {"covers": ["tests/gui/test_smoke.py::"]})
+        self.assertEqual(errors, [])
+
+    def test_a_declaration_the_run_does_not_back_up_is_rejected(self):
+        errors = vc.check_lane_declaration(
+            self.LANES, "smoke", {"covers": ["letters-core::"]})
+        self.assertEqual(len(errors), 1, errors)
+        self.assertIn("the lane map is out of date", errors[0])
+
+    def test_a_job_with_no_row_is_rejected(self):
+        errors = vc.check_lane_declaration(
+            self.LANES, "brand-new-lane", {"covers": ["tests/gui/test_smoke.py::"]})
+        self.assertEqual(len(errors), 1, errors)
+        self.assertIn("undeclared", errors[0])
+
+
+class TheRealLaneMap(unittest.TestCase):
+    """The committed map has to actually cover the committed ledger —
+    otherwise the check passes in the tests and fails in CI."""
+
+    def test_every_claim_in_the_real_ledger_is_in_a_declared_namespace(self):
+        ledger = json.loads((REPO_ROOT / "conformance/capabilities.json").read_text())
+        lanes = json.loads((REPO_ROOT / "conformance/lanes.json").read_text())
+        self.assertEqual(vc.check_lane_coverage(ledger, lanes), [])
+
+    def test_no_lane_declares_a_bare_directory_under_tests(self):
+        """`tests/` would vouch for every path beneath it, including one
+        nothing collects — which is the hole, not the fix."""
+        lanes = json.loads((REPO_ROOT / "conformance/lanes.json").read_text())
+        for lane in lanes["lanes"]:
+            for namespace in lane["namespaces"]:
+                self.assertNotEqual(namespace, "tests/",
+                                    f"lane {lane['job']!r} declares the whole tests/ tree")
+
+
 if __name__ == "__main__":
     unittest.main()
