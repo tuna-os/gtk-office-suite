@@ -33,7 +33,11 @@ Controller state machines generate valid commands and assert invariants after ev
       not covered** — it needs a theme the container does not ship, and an env var that changes nothing would be a worse
       lie than a visible gap.
 - [ ] Fixed regression seeds on every PR; a bounded random-seed campaign nightly; larger soak and complete matrix on the release candidate.
-- [ ] Stateful sequences per app; cross-app clipboard and multi-window close/save races.
+- [~] Stateful sequences per app; cross-app clipboard and multi-window close/save races. Tables is done and green
+      (`tables-core/tests/stateful.rs`: 16 fixed seeds on every PR, 400 seeds a night, and it found two identity bugs
+      plus #527 on its first runs). Letters has the same harness (`letters-core/tests/stateful.rs`) but its fixed-seed
+      test is ignored, blocked on #532 — Enter inside a table cell duplicates the cell — rather than narrowing the
+      generator to route around it. Decks, the cross-app clipboard and the multi-window races are not started.
 - [ ] Save/recovery fault injection at each transaction boundary; bounded malformed-file fuzzing with minimized fixtures.
 - [ ] Always retain stderr/backtrace, core dump where supported, screenshot, AT-SPI tree, last snapshot, action trace and saved output fixtures on failure.
 - [ ] Track first-attempt failure rate and classify product crash, assertion mismatch, timeout, infrastructure setup and nondeterministic rendering separately.

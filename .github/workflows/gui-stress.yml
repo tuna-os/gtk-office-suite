@@ -92,6 +92,20 @@ jobs:
       - name: Build app binaries
         run: cargo build --bin letters --bin tables --bin decks
 
+      # The controller campaigns are GTK-free and quick, but they are the
+      # same instrument as the journey campaign below — seeded sequences,
+      # no retries, a failure that names its seed — so they belong to the
+      # same nightly rather than to the PR lane, where only the fixed
+      # seeds run. The seed base moves with the run number so consecutive
+      # nights explore different sequences instead of re-proving the same
+      # ones; the seed is printed by any failure, and adding it to
+      # FIXED_SEEDS is how a find becomes permanent.
+      - name: Stateful controller campaign
+        env:
+          STATEFUL_SEED_BASE: ${{ github.run_number }}000000
+          STATEFUL_SEED_COUNT: '400'
+        run: cargo test -p tables-core --test stateful -- --ignored seed_campaign
+
       # Every context value reaches the script through the environment,
       # never through `${{ }}` inside it: an input is attacker-controlled
       # text and expression interpolation pastes it in before bash parses
