@@ -4,7 +4,7 @@ September audit at `e7e4df6`; retain this issue as recovery owner. Depends on #4
 
 Use one document-session lifecycle with an explicit revision/savepoint and outcomes for save/cancel/failure. Recovery is a separate checkpoint, never a successful user save. Keep the last verified checkpoint until a newer checkpoint commits, a real save succeeds, or the user explicitly discards it.
 
-AutosaveSlot used to store bytes and metadata in separate atomic writes. Each write was atomic, which is not the same as the pair being atomic: fault injection at every boundary of the write (`suite-common-core/src/atomic_save.rs::fault`) read back `"generation two"` paired with `/tmp/first.md`, kind `md` — after a Save As, recovery would have offered the new content under the old path and format. That is a silent wrong-file restore, and it is now one atomic write of one versioned envelope. Tables/Decks still select only the first snapshot, and window autosave callbacks still ignore errors.
+AutosaveSlot used to store bytes and metadata in separate atomic writes. Each write was atomic, which is not the same as the pair being atomic: fault injection at every boundary of the write (`suite-common-core/src/atomic_save.rs::fault`) read back `"generation two"` paired with `/tmp/first.md`, kind `md` — after a Save As, recovery would have offered the new content under the old path and format. That is a silent wrong-file restore, and it is now one atomic write of one versioned envelope. Tables and Decks no longer stop at the first snapshot, and the window autosave callbacks no longer ignore errors — see the rows below for what each of those does and does not now cover.
 
 - [x] Versioned single-generation envelope (or atomic manifest pointing to immutable generation files) binds bytes, format, identity, revision and checksum — `suite-common-core/src/autosave.rs::envelope`, one atomic write, CRC-32 over the payload, magic whose last byte is the version. Snapshots written by the previous two-file build are still read so an upgrade mid-crash does not discard unsaved work. A revision counter is **not** in the envelope: nothing in the suite has one yet, and a field always written zero would look like coverage.
 - [x] Correctly round-trip newline/non-UTF8 paths or explicitly reject unsupported identities without corrupting metadata — the path is stored as its native OS bytes on Unix, so a newline or invalid UTF-8 round-trips exactly; off Unix a non-Unicode path is rejected at write time rather than mangled. The previous newline-delimited text metadata truncated the first at the newline and `to_string_lossy`-mangled the second into a path that does not exist.
@@ -38,7 +38,42 @@ AutosaveSlot used to store bytes and metadata in separate atomic writes. Each wr
       last row below; Letters already does it per tab.
 - [ ] Preserve imported non-buffer metadata and model state; no recovery format silently strips supported content.
 - [ ] Restart after recovery and before the next autosave does not lose the recovered checkpoint.
-- [ ] Surface snapshot/write/cleanup errors; keep dirty state on failed commit.
+- [~] Surface snapshot/write/cleanup errors; keep dirty state on failed commit.
+      **Snapshot write failures now reach the user.** Every autosave write
+      site in the three apps read `let _ = slot.write(&bytes, &meta);` — five
+      of them. A snapshot write fails for ordinary reasons (a read-only home,
+      a full disk, a sandbox denying the state directory) and when it did,
+      autosave did nothing for the rest of the session while the user went on
+      believing their unsaved work was protected. They found out at the
+      crash, which is the one moment the feature exists for.
+      The decision of when to speak is
+      `suite_common_core::autosave::AutosaveNotices`, which is GTK-free and
+      tested: the first failure of a streak, a reminder every tenth failed
+      attempt after that (roughly five minutes at the shipped 30-second
+      timer), and one notice when it starts working again. Reporting every
+      failure would raise a notice 120 times an hour, which is a notice
+      nobody reads. `suite_common::autosave_notice::AutosaveNotifier` turns
+      those answers into toasts, so each call site gained one line rather
+      than a copy of the policy.
+      **Tables had nowhere to put a notice at all.** It carried no
+      `AdwToastOverlay` and no `add_toast` call anywhere in the crate: the
+      one `adw::Toast` in the file — "Invalid input — value rejected" — was
+      built, given a timeout, and dropped un-shown, so a rejected cell value
+      told the user nothing. It has an overlay now and that toast is
+      actually posted.
+      Verified in the real apps rather than only in unit tests:
+      `TablesAutosaveFailureSmoke` and `LettersAutosaveFailureSmoke` make the
+      write fail by pointing `XDG_STATE_HOME` at a regular file (ENOTDIR,
+      which fails for root too — a permission bit would not, and
+      `crash-stress.md` records a previous test that chmod-ed to 0555 and
+      therefore asserted nothing), then assert the notice is on screen. Both
+      fail against the unwired code.
+      Still open: **cleanup errors.** `clear_tab_autosave` still drops its
+      error, so a saved or discarded document whose slot could not be cleared
+      is silently offered back as "recovered" on the next launch. Different
+      consequence, different message, not done here. And "keep dirty state on
+      failed commit" is the save transaction rather than the snapshot — #436
+      and #437 own it.
 - [~] Inject failures before/after each checkpoint/rename and kill the real app; verify old-or-new complete state, never a mismatched generation. The headless half is done: `atomic_save::fault` arms any of the six boundaries of a durable write (temp create, permission preservation, data write, data sync, rename, directory sync) and any arrival at one, so "fail the second commit of this transaction" is expressible. A sweep asserts that every pre-commit boundary leaves the destination byte-identical with no temporary left behind, that the one post-rename boundary reports the replacement rather than claiming a rollback, and that no boundary or arrival in a snapshot write can pair two generations. The hook is `cfg(test)` only — a release build contains no branch to take. Killing the real app under the GUI harness is still open.
 - [ ] Cover multiple windows, multiple documents, renamed/missing originals, unsaved documents, duplicate recovery attempts and schema upgrades.
 

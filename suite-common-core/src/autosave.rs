@@ -266,6 +266,71 @@ impl AutosaveSlot {
     }
 }
 
+/// How often a still-failing autosave says so again, counted in failed
+/// attempts. With the shipped 30-second timer that is roughly every five
+/// minutes: often enough that somebody who missed the first notice learns
+/// before losing an afternoon, rare enough not to be the reason they stop
+/// reading notices.
+const REPEAT_EVERY: u32 = 10;
+
+/// Whether an autosave failure has been told to the user yet.
+///
+/// Every autosave write site in the three apps used to read
+/// `let _ = slot.write(&bytes, &meta);`. A snapshot write can fail for
+/// ordinary reasons — a read-only home, a full disk, a sandbox denying the
+/// state directory — and when it did, autosave silently did nothing for the
+/// rest of the session while the user went on believing their unsaved work
+/// was protected. They found out at the crash, which is the one moment the
+/// feature exists for.
+///
+/// Reporting every failure instead is no better: autosave runs on a timer,
+/// so a permanently unwritable directory would raise a notice every thirty
+/// seconds, and a notice that appears 120 times an hour is one nobody reads.
+/// This keeps the decision — first failure of a streak, a reminder every
+/// `REPEAT_EVERY` after that, and one notice when it starts working again —
+/// out of the three GUI call sites and somewhere it can be tested.
+#[derive(Debug, Default)]
+pub struct AutosaveNotices {
+    consecutive_failures: u32,
+}
+
+impl AutosaveNotices {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Record a failed snapshot write. Returns the message to show, or
+    /// `None` when this failure is one the user has already been told about.
+    pub fn failed(&mut self, reason: &str) -> Option<String> {
+        self.consecutive_failures += 1;
+        let first = self.consecutive_failures == 1;
+        let reminder = self.consecutive_failures.is_multiple_of(REPEAT_EVERY);
+        if !first && !reminder {
+            return None;
+        }
+        // Names the consequence before the cause: "could not write" invites
+        // a shrug, "your unsaved work is not being protected" does not.
+        Some(format!(
+            "Autosave is failing — unsaved work is not being protected. Save manually. ({reason})"
+        ))
+    }
+
+    /// Record a successful snapshot write. Returns a message only if the
+    /// user was previously told autosave was failing, so an ordinary session
+    /// stays silent.
+    pub fn succeeded(&mut self) -> Option<String> {
+        let was_failing = self.consecutive_failures > 0;
+        self.consecutive_failures = 0;
+        was_failing.then(|| "Autosave is working again.".to_string())
+    }
+
+    /// Whether autosave is currently failing — for a caller that wants to
+    /// show state rather than an event.
+    pub fn is_failing(&self) -> bool {
+        self.consecutive_failures > 0
+    }
+}
+
 /// Scan `state_dir` for snapshots left behind by a crash — call this once
 /// at app launch, before the session's own autosave timer has run. Returns
 /// the `doc_id` of each complete (data + meta) snapshot found; a data file
@@ -483,6 +548,71 @@ mod tests {
         let when = std::time::UNIX_EPOCH + std::time::Duration::from_secs(1_700_000_000 - seconds_ago);
         let file = fs::File::options().write(true).open(slot.data_path()).unwrap();
         file.set_times(fs::FileTimes::new().set_modified(when)).unwrap();
+    }
+
+    /// The first failure must be reported: silence here is the defect this
+    /// type exists to fix.
+    #[test]
+    fn the_first_failure_is_reported() {
+        let mut notices = AutosaveNotices::new();
+        let said = notices.failed("Permission denied").expect("the first failure must be told");
+        assert!(said.contains("not being protected"), "names the consequence: {said}");
+        assert!(said.contains("Permission denied"), "carries the reason: {said}");
+        assert!(notices.is_failing());
+    }
+
+    /// And the second through ninth must not: the timer fires every thirty
+    /// seconds, and a notice shown 120 times an hour is one nobody reads.
+    #[test]
+    fn a_failure_already_reported_is_not_reported_again() {
+        let mut notices = AutosaveNotices::new();
+        notices.failed("disk full").unwrap();
+        for attempt in 2..REPEAT_EVERY {
+            assert!(
+                notices.failed("disk full").is_none(),
+                "attempt {attempt} repeated a notice the user already has",
+            );
+        }
+    }
+
+    /// Somebody who missed the first notice must still find out, so a
+    /// standing failure reminds them — on a schedule, not on every attempt.
+    #[test]
+    fn a_standing_failure_reminds_the_user_periodically() {
+        let mut notices = AutosaveNotices::new();
+        let reported: Vec<u32> = (1..=REPEAT_EVERY * 3)
+            .filter(|_| notices.failed("read-only file system").is_some())
+            .collect();
+        // The attempts, not just how many: a count passes for an off-by-one
+        // that reminds on the wrong schedule, which is how a "roughly every
+        // five minutes" claim quietly becomes something else.
+        assert_eq!(reported, vec![1, REPEAT_EVERY, REPEAT_EVERY * 2, REPEAT_EVERY * 3]);
+    }
+
+    /// A session where autosave works says nothing at all. A feature that
+    /// announces its own success every thirty seconds is noise.
+    #[test]
+    fn success_is_silent_unless_it_follows_a_failure() {
+        let mut notices = AutosaveNotices::new();
+        for _ in 0..5 {
+            assert!(notices.succeeded().is_none(), "a working autosave is quiet");
+        }
+        notices.failed("Permission denied").unwrap();
+        assert_eq!(notices.succeeded().as_deref(), Some("Autosave is working again."));
+        assert!(!notices.is_failing());
+    }
+
+    /// Recovery resets the streak, so a second outage is announced as its
+    /// own rather than being swallowed as part of the first.
+    #[test]
+    fn a_second_outage_is_reported_like_the_first() {
+        let mut notices = AutosaveNotices::new();
+        notices.failed("disk full").unwrap();
+        notices.succeeded().unwrap();
+        assert!(
+            notices.failed("disk full").is_some(),
+            "the user was told it recovered, so they must be told it broke again",
+        );
     }
 
     #[test]
