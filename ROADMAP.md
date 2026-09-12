@@ -87,6 +87,7 @@ document processing. Sketch until Q4 starts; the live execution plan remains
 | Decks presenter view & export rendering parity | architect | #117 | ⬜ Planned |
 | Interop loss budgets & unsupported-feature inspector | quality | #105, #121 | ⬜ Planned |
 | A11y: keyboard + screen-reader journeys | quality | #120 | ⬜ Planned |
+| Offline-first cloud storage sync & GVFS provider adapter architecture (RFC 0002) | strategist / architect | #677 | ⬜ Planned |
 
 ---
 

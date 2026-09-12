@@ -13,3 +13,4 @@ status line as the record of the reasoning.
 | RFC | Title | Status |
 |---|---|---|
 | [0001](0001-crdt-collaboration.md) | CRDT collaboration for Letters, Tables and Decks | draft |
+| [0002](0002-cloud-sync-adapters.md) | Offline-first cloud storage sync & GVFS provider adapter architecture | draft |
