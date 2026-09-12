@@ -21,7 +21,36 @@ permissions:
   packages: write
 
 jobs:
+  # A tag used to publish Flatpaks regardless of what the evidence workflows
+  # said: release-revision.yml and the stress campaign ran *beside* this one,
+  # so a release the ledger refused to certify, and a revision nobody had
+  # soaked, shipped anyway. #442 asks for a larger soak and the complete
+  # matrix on the release candidate and for a release that lacks one to be
+  # refused; a refusal that arrives after publication is neither.
+  #
+  # Both gates are skipped on workflow_dispatch, which exists for build-only
+  # validation and already publishes nothing by default.
+  evidence:
+    if: github.event_name == 'push'
+    uses: ./.github/workflows/release-revision.yml
+
+  soak:
+    if: github.event_name == 'push'
+    uses: ./.github/workflows/release-soak.yml
+    permissions:
+      contents: read
+      packages: write
+
   publish:
+    needs: [evidence, soak]
+    # A *skipped* gate must not block the manual build-only path, but a
+    # failed one must block the tag. `needs` alone would skip this job in
+    # both cases, and `always()` would publish through a failure — so name
+    # the two results explicitly.
+    if: >-
+      ${{ !cancelled()
+          && needs.evidence.result != 'failure'
+          && needs.soak.result != 'failure' }}
     strategy:
       matrix:
         app: [letters, tables, decks]
