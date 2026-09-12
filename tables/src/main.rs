@@ -1,6 +1,7 @@
 use gtk4::prelude::*;
 use gtk4::gio;
 mod charts;
+mod chart_dialog;
 mod window;
 mod persistence;
 mod window_dialogs;
