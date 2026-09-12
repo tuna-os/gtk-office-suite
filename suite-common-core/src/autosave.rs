@@ -284,25 +284,62 @@ impl AutosaveSlot {
 /// made. Ties on mtime — two snapshots written inside one filesystem
 /// timestamp tick, which a crash makes likely — break on `doc_id`, so the
 /// order is total rather than merely usually-stable.
+/// Has a real save already captured everything this snapshot holds?
+///
+/// A snapshot is cleared when the document is saved, but that clear can
+/// fail — a read-only state directory, a full disk — and the failure used to
+/// be discarded (`let _ = slot.clear()`). The stale snapshot then sat there
+/// and the next launch offered the user's *already-saved* work back as
+/// "recovered": a dialog about losing nothing, for a document safely on
+/// disk. Whatever the user chose, the snapshot was not cleared then either,
+/// so it came back every launch.
+///
+/// Reporting the failed clear would not have helped much — it happens at the
+/// moment of a *successful* save, about a temporary file the user cannot act
+/// on. What they actually experience is the false offer, so that is what is
+/// suppressed: if the file the snapshot describes is strictly newer than the
+/// snapshot, the save that produced it came after, and the snapshot has
+/// nothing left to recover.
+///
+/// Every uncertain case offers the snapshot anyway. A document never saved
+/// to a path (`original_path: None`) has nothing to compare against; a path
+/// that no longer exists may have been moved rather than saved; equal
+/// timestamps are ambiguous at one-second filesystem granularity; and an
+/// unreadable snapshot mtime is no evidence at all. Offering work the user
+/// does not need costs them one dialog. Discarding work they do need costs
+/// them the work.
+fn superseded_by_a_real_save(meta: &SnapshotMeta, written: Option<std::time::SystemTime>) -> bool {
+    let Some(written) = written else { return false };
+    let Some(path) = meta.original_path.as_ref() else { return false };
+    let Ok(saved) = fs::metadata(path).and_then(|m| m.modified()) else { return false };
+    saved > written
+}
+
 pub fn find_orphaned_snapshots(state_dir: &Path) -> Vec<String> {
     let Ok(entries) = fs::read_dir(state_dir) else { return Vec::new() };
     let mut found: Vec<(std::time::SystemTime, String)> = entries
         .filter_map(|e| e.ok())
         .filter_map(|e| e.file_name().to_str().map(str::to_string))
         .filter_map(|name| name.strip_suffix(DATA_SUFFIX).map(str::to_string))
-        // Readable, not merely present. A snapshot whose envelope is
-        // truncated or fails its checksum is not offered for recovery,
-        // and neither is a legacy data file whose metadata never landed:
-        // there is no way to tell the caller what format it is in.
-        .filter(|doc_id| AutosaveSlot::new(state_dir, doc_id.clone()).read().is_some())
-        .map(|doc_id| {
-            // A snapshot whose mtime cannot be read sorts as oldest rather
-            // than being dropped: unreadable metadata about recoverable
-            // bytes is a reason to offer it last, not to discard it.
-            let written = fs::metadata(AutosaveSlot::new(state_dir, doc_id.clone()).data_path())
-                .and_then(|m| m.modified())
-                .unwrap_or(std::time::UNIX_EPOCH);
-            (written, doc_id)
+        .filter_map(|doc_id| {
+            let slot = AutosaveSlot::new(state_dir, doc_id.clone());
+            // Readable, not merely present. A snapshot whose envelope is
+            // truncated or fails its checksum is not offered for recovery,
+            // and neither is a legacy data file whose metadata never
+            // landed: there is no way to tell the caller what format it is
+            // in.
+            let (_bytes, meta) = slot.read()?;
+            // `None` when the mtime cannot be read. Kept distinct from
+            // "very old" on purpose: such a snapshot sorts as oldest rather
+            // than being dropped — unreadable metadata about recoverable
+            // bytes is a reason to offer it last, not to discard it — and
+            // it is never treated as superseded, because a timestamp
+            // comparison against a missing timestamp is not evidence.
+            let written = fs::metadata(slot.data_path()).and_then(|m| m.modified()).ok();
+            if superseded_by_a_real_save(&meta, written) {
+                return None;
+            }
+            Some((written.unwrap_or(std::time::UNIX_EPOCH), doc_id))
         })
         .collect();
     found.sort_by(|(a_time, a_id), (b_time, b_id)| {
@@ -316,6 +353,91 @@ mod tests {
     use super::*;
 
     use crate::atomic_save::fault;
+
+    /// Write a snapshot, then make the file it describes look saved *after*
+    /// it. Helper for the supersession cases below.
+    fn snapshot_then_touch_saved_file(
+        offset: std::time::Duration,
+        forward: bool,
+    ) -> (tempfile::TempDir, Vec<String>) {
+        let dir = tempfile::tempdir().unwrap();
+        let saved = dir.path().join("report.md");
+        std::fs::write(&saved, b"the saved document").unwrap();
+        let meta = SnapshotMeta { original_path: Some(saved.clone()), kind: "md".into() };
+        let slot = AutosaveSlot::new(dir.path().to_path_buf(), "doc-1");
+        slot.write(b"unsaved edits", &meta).unwrap();
+
+        let written = std::fs::metadata(slot.data_path()).unwrap().modified().unwrap();
+        let stamp = if forward { written + offset } else { written - offset };
+        std::fs::File::options()
+            .write(true)
+            .open(&saved)
+            .unwrap()
+            .set_modified(stamp)
+            .unwrap();
+
+        let found = find_orphaned_snapshots(dir.path());
+        (dir, found)
+    }
+
+    /// The false-recovery offer this rule exists to stop: the document was
+    /// saved, the clear of its snapshot failed, and the next launch used to
+    /// offer already-saved work back as "recovered".
+    #[test]
+    fn a_snapshot_the_saved_file_has_overtaken_is_not_offered() {
+        let (_dir, found) = snapshot_then_touch_saved_file(std::time::Duration::from_secs(5), true);
+        assert!(
+            found.is_empty(),
+            "a save newer than the snapshot leaves nothing to recover, so it must \
+             not be offered; got {found:?}"
+        );
+    }
+
+    /// The ordinary dirty-document case, which must keep working: edits made
+    /// after the last save.
+    #[test]
+    fn a_snapshot_newer_than_the_saved_file_is_still_offered() {
+        let (_dir, found) = snapshot_then_touch_saved_file(std::time::Duration::from_secs(5), false);
+        assert_eq!(found, vec!["doc-1".to_string()], "unsaved edits must still be offered");
+    }
+
+    /// One-second filesystem granularity makes equal timestamps ambiguous,
+    /// and ambiguity is resolved toward the user's work.
+    #[test]
+    fn an_equally_timed_snapshot_is_offered_rather_than_assumed_saved() {
+        let (_dir, found) = snapshot_then_touch_saved_file(std::time::Duration::ZERO, true);
+        assert_eq!(
+            found, vec!["doc-1".to_string()],
+            "equal timestamps are not evidence of a later save"
+        );
+    }
+
+    /// A path that has gone may have been moved or deleted rather than
+    /// saved over, so the snapshot is still the only copy of that work.
+    #[test]
+    fn a_snapshot_whose_file_no_longer_exists_is_still_offered() {
+        let dir = tempfile::tempdir().unwrap();
+        let meta = SnapshotMeta {
+            original_path: Some(dir.path().join("moved-away.md")),
+            kind: "md".into(),
+        };
+        AutosaveSlot::new(dir.path().to_path_buf(), "doc-1")
+            .write(b"unsaved edits", &meta)
+            .unwrap();
+        assert_eq!(find_orphaned_snapshots(dir.path()), vec!["doc-1".to_string()]);
+    }
+
+    /// A document that was never saved anywhere has nothing to compare
+    /// against — the case crash recovery matters most for.
+    #[test]
+    fn a_never_saved_snapshot_is_always_offered() {
+        let dir = tempfile::tempdir().unwrap();
+        let meta = SnapshotMeta { original_path: None, kind: "md".into() };
+        AutosaveSlot::new(dir.path().to_path_buf(), "doc-1")
+            .write(b"never saved anywhere", &meta)
+            .unwrap();
+        assert_eq!(find_orphaned_snapshots(dir.path()), vec!["doc-1".to_string()]);
+    }
 
     /// A snapshot is one generation of one document: its bytes and the
     /// identity needed to interpret them. A failure anywhere in the write
