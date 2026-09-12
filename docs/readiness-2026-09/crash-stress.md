@@ -32,7 +32,28 @@ Controller state machines generate valid commands and assert invariants after ev
       first attempt. Display axis covers 400/800/1280/1920 widths, light and dark, and scale 1 and 2; **high contrast is
       not covered** — it needs a theme the container does not ship, and an env var that changes nothing would be a worse
       lie than a visible gap.
-- [ ] Fixed regression seeds on every PR; a bounded random-seed campaign nightly; larger soak and complete matrix on the release candidate.
+- [~] Fixed regression seeds on every PR; a bounded random-seed campaign nightly; larger soak and complete
+      matrix on the release candidate. Two of those three hold, and the bare unchecked box was hiding both
+      what exists and what is actually left.
+      **Fixed seeds on every pull request: done** for the model and controller layers.
+      `{tables,decks,letters}-core/tests/stateful.rs` each carry a `FIXED_SEEDS` list — sixteen seeds,
+      run by `fixed_seeds_hold_the_invariants`, which is not `#[ignore]` and therefore runs in the `test`
+      lane on every revision. The list documents its own growth rule: a campaign that finds a failing seed
+      adds it there, so the regression becomes permanent instead of something the nightly might hit again.
+      The generator is a hand-written SplitMix64 rather than `rand`, precisely so a seed quoted in a
+      failure message reproduces the run for anyone, forever, and cannot be changed by a version bump.
+      **A bounded random-seed campaign nightly: done.** `gui-stress.yml` runs `seed_campaign` in all three
+      crates with `STATEFUL_SEED_COUNT=400`, and `STATEFUL_SEED_BASE` derived from the run number — so each
+      night covers a *different* 400 seeds rather than re-running the same ones, and the GUI campaign
+      itself (`tests/gui/stress.py`) derives its ordering seed from the clock and records it.
+      **Still open, and the real remaining work: the release candidate.** Nothing runs a larger soak or the
+      complete display matrix at a tag, and nothing refuses to certify a release that lacks one —
+      `release-revision.yml` enforces that kind of rule for the LibreOffice oracle already, so the
+      precedent and the mechanism both exist; the stress campaign is simply not wired into it.
+      Also open but not for want of mechanism: the GUI campaign has **no fixed regression seeds**, because
+      no GUI campaign failure has been recorded to pin. Adding an arbitrary fixed seed to the pull-request
+      gate would cost minutes per revision to re-run journeys in a shuffled order that never found
+      anything — a ritual rather than a regression test. The seed to pin is the one that first fails.
 - [~] Stateful sequences per app; cross-app clipboard and multi-window close/save races. All three apps are done and
       green, each running fixed seeds on every PR and 400 seeds a night. Tables (`tables-core/tests/stateful.rs`) found
       two identity bugs and #527 on its first runs. Decks (`decks-core/tests/stateful.rs`) found that align and
