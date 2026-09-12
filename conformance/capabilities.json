@@ -282,6 +282,27 @@
           "tests/test_journey_selection.py::SelectsTheChangedApps::test_one_app_runs_only_that_app"
         ]
       }
+    },
+    {
+      "id": "suite.libreoffice.interop-oracle",
+      "app": "suite",
+      "title": "LibreOffice reads what we write, and we read what it writes",
+      "scope": "Text, styling and formulas survive a round trip through LibreOffice Writer, Calc and Impress in both directions, for docx/odt/xlsx/odp, plus the LibreOffice-authored parity corpus ratchet. Needs LibreOffice installed and REQUIRE_SOFFICE=1, so it runs in the nightly oracle lane and never on a pull request.",
+      "issue": 313,
+      "status": "verified",
+      "revision": "b92a82ea073cafe2ad3c5cafb4076c017ec28eef",
+      "requires": [
+        "format"
+      ],
+      "evidence": {
+        "format": [
+          "letters-core::soffice_oracle::we_read_soffice_output",
+          "letters-core::soffice_oracle::we_read_soffice_odt_output",
+          "letters-core::lo_parity::libreoffice_parity_ratchet",
+          "tables-core::soffice_oracle::calc_recalculates_our_formulas",
+          "decks-core::lo_parity::libreoffice_parity_ratchet"
+        ]
+      }
     }
   ],
   "waivers": []

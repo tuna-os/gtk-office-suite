@@ -20,6 +20,35 @@ Builds use the checked-in `Cargo.lock`, pinned Flatpak runtime, and
 runtime should produce the same source-input digest; binary differences must
 be investigated before publication.
 
+## Interop evidence must be current
+
+The LibreOffice oracle and the LibreOffice-authored parity corpus need
+LibreOffice installed, so they do not run on every revision: `nightly.yml`
+runs them daily against whatever `main` was at 05:00, and on pull requests
+that touch format or model code. A tag cut at any other time inherits a
+verdict reached on **different code**.
+
+So on a tag, `.github/workflows/release-revision.yml` runs
+
+```bash
+python3 conformance/validate_capabilities.py \
+  --lanes conformance/lanes.json --release-revision "$GITHUB_SHA"
+```
+
+which refuses the release if any claim resting on a lane marked
+`runs_on_every_revision: false` records a different revision. Before
+tagging:
+
+1. dispatch `nightly.yml` (`workflow_dispatch`) at the release commit;
+2. when it passes, set that commit's SHA as the `revision` of the affected
+   claims in `conformance/capabilities.json`;
+3. tag.
+
+If it fails, the fix is to run the lane at the release revision — not to
+lower the claim's status or relax the rule. A lane the rule watches that no
+claim cites is also refused, so the check cannot pass by having nothing to
+check.
+
 ## Upgrade and recovery policy
 
 Flatpak updates preserve each app's GSettings, recent-file URI policy, and
@@ -37,8 +66,9 @@ to diagnostic metadata, with paths and document text redacted.
 
 ## Known limits
 
-The release gate proves packaging and platform contracts, not LibreOffice
-feature parity. See `docs/PARITY.md` and the generated capability matrix for
+The release gate proves packaging and platform contracts, and that the
+LibreOffice interop evidence was recorded at the revision being released —
+not LibreOffice feature parity itself. See `docs/PARITY.md` and the generated capability matrix for
 format-specific loss budgets. The GUI smoke journey remains the authority for
 launch, open/save, portal, and keyboard behavior; the Flatpak job must run it
 against the installed app when the runner provides a display server.

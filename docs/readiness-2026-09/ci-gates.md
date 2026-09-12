@@ -18,19 +18,31 @@ Reuse this issue for validator-test wiring, coordinated with #241 (GTK execution
       coverage job had no display either. Both now run under
       `xvfb-run`, and a widget test without a display fails.
       See [gtk-threading.md](gtk-threading.md).
-- [ ] Trigger interop on changed format/model/bridge/save code and require
+- [x] Trigger interop on changed format/model/bridge/save code and require
       it for release; nightly-only execution must not certify a different
-      release revision — `interop-corpus` runs on every PR; the
-      release-revision rule is not enforced yet.
+      release revision — `interop-corpus` runs on every PR, the LibreOffice
+      oracle now also runs on pull requests that touch format or model code
+      (`nightly.yml`), and on a tag
+      `release-revision.yml` refuses to certify a release whose oracle
+      evidence was recorded at another revision. See
+      below for what that was hiding.
 - [ ] Separate fast core, GUI and nightly/release lanes; cache builds, bound
       runtime, publish JUnit/artifacts and collect skip reasons — the lanes
       and the `if: always()` artifact uploads exist; skip *reasons* are not
       collected, though #241 removed the skips that mattered most by making
       them failures.
 - [ ] Wire corpus validation, parity validation, validator self-tests and
-      release contract into required checks — all four run; whether they are
-      *required* is a branch-protection setting, not visible from the
-      repository.
+      release contract into required checks — three of the four run on
+      every pull request; whether they are *required* is a
+      branch-protection setting, not visible from the repository. The
+      release contract is the exception and it is worse than unrequired:
+      `release-gate.yml` only triggers on `flatpak/**`, `flathub/**`,
+      `po/**`, `Cargo.lock` and its own path, so ordinary pull requests
+      never run it — and `scripts/release_gate.py` is **currently failing
+      on `main`**: `tables/src/window.rs` is 2343 lines against a 2300-line
+      ceiling. It crossed at `5c7f436` (2329) and nothing noticed, because
+      nothing runs it. Raising the ceiling would be relaxing the gate to
+      get green, so it is recorded here rather than patched in passing.
 - [x] Prove enforcement by deliberately breaking a referenced test, fixture
       and required evidence entry — the validators have negative unit tests
       for each, and the end-to-end wiring is now proved too: see below.
@@ -85,3 +97,70 @@ version would have shipped:
   inventory of zero tests, which would have made the new check vacuous.
 
 Use warm runtime measurements to set budgets; an aspirational time estimate is not evidence. Existing tests may be reused, but a passing test command that collected zero relevant tests is a failure of the gate.
+
+## The verdict reached on different code
+
+The LibreOffice oracle and the parity corpus need LibreOffice installed, so
+they were nightly-only: they ran against whatever `main` was at 05:00.
+Nothing connected that to a release, and the numbers were not hypothetical
+when this was written:
+
+```
+last successful nightly   b92a82e   2026-09-11 09:17Z   (nightly run 54)
+main                      e517c96   2026-09-11 22:22Z   (five merges later)
+```
+
+A tag cut that evening would have been certified by an oracle run against
+five merges' worth of different code, and the ledger would have recorded the
+claim as verified without anything noticing that the two revisions
+disagreed.
+
+`conformance/lanes.json` now states, per lane, whether it
+`runs_on_every_revision`, and `--release-revision` refuses to certify a
+release with claims resting on a lane where that is false unless the
+evidence carries the release revision. `release-revision.yml` passes
+`$GITHUB_SHA` on tags only, so pull requests are unaffected;
+`docs/RELEASE.md` says how to satisfy it (dispatch the lane at the release
+commit, record what it found).
+
+The property is a declared field rather than something inferred from the
+lane's triggers, because the oracle is no longer purely scheduled — it now
+runs on format-touching pull requests too, and that still does not mean it
+ran at the revision being released. A lane that omits the field is refused
+rather than assumed trustworthy.
+
+Two things this shook out:
+
+- **The check could have passed by having nothing to check.** No claim
+  cited the oracle at all, so the first working version of the rule was
+  vacuous — it validated a ledger in which the expensive lane certified
+  nothing. A lane the rule watches that no claim cites is now itself an
+  error, which is what forced `suite.libreoffice.interop-oracle` into the
+  ledger.
+- **The lane map vouched for tests that pass without running.** The `test`
+  lane declares crate-level namespaces like `letters-core::`, and nextest
+  reports the oracle targets under the same crate. Without LibreOffice
+  those tests do not skip — they return early and report **ok**. Measured
+  by running the test binary with nothing on `PATH`:
+
+  ```
+  running 1 test
+  skipping: soffice not installed
+  test we_read_soffice_output ... ok
+  ```
+
+  So on a pull request the lane offered a pass, from a run with no
+  LibreOffice in it, as live evidence for the one claim only the nightly
+  oracle can support. Lanes can now declare an `excludes` list for
+  namespaces they do not run, and the `test` lane names the oracle targets
+  there. (`REQUIRE_SOFFICE=1` is what turns the absence into a failure, and
+  only the oracle job sets it.)
+
+  This is also why collecting *skip reasons* — #313's other open item —
+  would not have found these: they are not recorded as skips. That item is
+  left open deliberately rather than reported as done.
+
+`--head` was the same shape of dead option as `--require-coverage` before
+it: the staleness check existed, nothing passed it a revision. It still
+applies to every claim, which is why the release rule is scoped to the
+lanes that can actually be stale rather than reusing it.

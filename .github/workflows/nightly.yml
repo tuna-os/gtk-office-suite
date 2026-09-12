@@ -10,10 +10,28 @@ name: Nightly
 # caught within a day, and workflow_dispatch lets anyone force a run
 # immediately (e.g. before merging a change that touches format I/O).
 
+# The oracle also runs on pull requests that change format or model code
+# (#313: "trigger interop on changed format/model/bridge/save code"). A
+# nightly-only oracle means a format change is merged, and possibly
+# released, before anything checks it against LibreOffice; the path filter
+# keeps that cost off every other pull request. It is still not a run at
+# every revision — the schedule sees whatever main was at 05:00 and the
+# filter sees nothing when a release touches only packaging — which is why
+# conformance/lanes.json marks this lane runs_on_every_revision: false and
+# the release gate refuses to certify a release with stale oracle evidence.
 on:
   schedule:
     - cron: '0 5 * * *'   # daily at 5am UTC (before gui-tests.yml's 6am)
   workflow_dispatch:
+  pull_request:
+    paths:
+      - 'letters-core/**'
+      - 'tables-core/**'
+      - 'decks-core/**'
+      - 'suite-export/**'
+      - 'interop/**'
+      - 'Cargo.lock'
+      - '.github/workflows/nightly.yml'
 
 env:
   CARGO_TERM_COLOR: always
@@ -61,6 +79,9 @@ jobs:
           retention-days: 90
 
   coverage:
+    # Nightly cost, not pull-request cost: the oracle is what the path
+    # filter above is for.
+    if: github.event_name != 'pull_request'
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v7
@@ -79,6 +100,9 @@ jobs:
 
   fuzz-smoke:
     name: Fuzz importer smoke tests
+    # Nightly cost, not pull-request cost: the oracle is what the path
+    # filter above is for.
+    if: github.event_name != 'pull_request'
     runs-on: ubuntu-24.04
     timeout-minutes: 40
     steps:
