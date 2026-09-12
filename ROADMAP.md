@@ -57,9 +57,17 @@ gtk-office-suite is the org's flagship **end-user product bet** and a cornerston
 | GUI God-file decomposition started | architect | #168 | ⬜ Not started |
 | ROADMAP.md published and linked from README / org coverage (#1295) | strategist | tunaos#1359 | ✅ Done |
 
-### Q4 2026 (October–December) — "Ship it properly"
+### Q4 2026 (October–December) — "Ship it properly & Enterprise Readiness"
 
-<Sketch: release gate (#122) with Flatpak distribution + reproducible builds, Decks presenter/export scope, interop loss budgets, A11y journeys. Move up when Q4 starts.>
+**Theme**: Turn daily-driver features into certified, dependable release candidates shipped via Flatpak.
+
+| Goal | Owner | Tracking | Status |
+|------|-------|----------|--------|
+| Transactional save safety & multi-doc crash recovery across suite | architect / quality | #436, #437, #322 | 🟡 In progress |
+| Live document interoperability loss-budgets (ODT, DOCX, ODP, PPTX, ODS, XLSX) | architect | #374 | 🟡 In progress |
+| Automated AT-SPI screen reader & keyboard navigation journeys | quality | #400, #120 | 🟡 In progress |
+| Headless document conversion CLI tooling & server pipeline validation | architect | #443 | 🟡 In progress |
+| Release gate: Flatpak reproducible builds, security audit, upgrade signoff | quality / sec-check | #326, #122 | 🟡 In progress |
 
 ---
 
