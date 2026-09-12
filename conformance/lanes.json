@@ -73,6 +73,7 @@
         "tests/test_patched_dependencies.py::",
         "tests/test_release_gate.py::",
         "tests/test_roadmap_figures.py::",
+        "tests/test_skip_reasons.py::",
         "tests/test_validate_capabilities.py::",
         "tests/test_validate_parity.py::"
       ],

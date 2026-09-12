@@ -5,7 +5,12 @@ use letters_core::markdown;
 struct Example { markdown: String, section: String, example: u32 }
 
 #[test]
-#[ignore]
+// Asserts nothing. It prints the same round-trip comparison
+// markdown_corpus.rs ratchets on, for the examples that fail it — the
+// ratchet is the gate, this is how you see what it counted. Running it in
+// CI would add output nothing reads. Run it by hand when the baseline moves:
+// `cargo test -p letters-core --test corpus_debug -- --ignored --nocapture`.
+#[ignore = "diagnostic printer with no assertions; run by hand when the markdown_corpus ratchet moves"]
 fn dump_failures() {
     let raw = include_str!("corpus/commonmark-spec.json");
     let examples: Vec<Example> = serde_json::from_str(raw).unwrap();

@@ -26,11 +26,11 @@ Reuse this issue for validator-test wiring, coordinated with #241 (GTK execution
       `release-revision.yml` refuses to certify a release whose oracle
       evidence was recorded at another revision. See
       below for what that was hiding.
-- [ ] Separate fast core, GUI and nightly/release lanes; cache builds, bound
+- [x] Separate fast core, GUI and nightly/release lanes; cache builds, bound
       runtime, publish JUnit/artifacts and collect skip reasons — the lanes
-      and the `if: always()` artifact uploads exist; skip *reasons* are not
-      collected, though #241 removed the skips that mattered most by making
-      them failures.
+      and the `if: always()` artifact uploads were already there; skip
+      reasons now are too, and collecting them could not be done the
+      obvious way. See [below](#the-skips-a-junit-report-cannot-show).
 - [ ] Wire corpus validation, parity validation, validator self-tests and
       release contract into required checks — three of the four run on
       every pull request; whether they are *required* is a
@@ -156,9 +156,10 @@ Two things this shook out:
   there. (`REQUIRE_SOFFICE=1` is what turns the absence into a failure, and
   only the oracle job sets it.)
 
-  This is also why collecting *skip reasons* — #313's other open item —
-  would not have found these: they are not recorded as skips. That item is
-  left open deliberately rather than reported as done.
+  This is also why collecting *skip reasons* would not have found these:
+  they are not recorded as skips. That item is now done, and the section
+  below is about the other half of the same lesson — the skips a report
+  does not contain.
 
 `--head` was the same shape of dead option as `--require-coverage` before
 it: the staleness check existed, nothing passed it a revision. It still
@@ -201,3 +202,73 @@ Worth stating plainly: both halves of this — the omission and the reason it
 went unnoticed — were in work merged hours earlier in the same session. The
 lesson that a hand-maintained list needs a derived check was available and
 not applied the second time.
+
+## The skips a JUnit report cannot show
+
+The obvious way to collect skip reasons is to read them out of the JUnit
+report the `test` lane already publishes. It does not work, and the reason
+is the same shape as everything else on this page: **the report does not
+contain the skips.** nextest omits `#[ignore]` tests entirely — not as
+`<skipped>`, but as no `<testcase>` at all. Measured on this workspace,
+which has seven ignored tests:
+
+```
+tests="848"  skipped="0"      # on the <testsuites> element
+```
+
+A collector built on that report would have published a
+clean sheet, indefinitely, while seven tests sat out every run — a check
+reporting success without having checked, which is the defect this whole
+area keeps producing.
+
+So the inventory comes from the test *lister*, which does report them:
+
+```
+$ cargo nextest list --workspace --run-ignored all --message-format json
+... "ignored": true ...
+```
+
+The lister says *which*. It does not say *why*: libtest drops the string
+from `#[ignore = "reason"]` and neither `--list` nor nextest's JSON carries
+it. Measured directly on a test binary:
+
+```
+$ ./target/debug/deps/stateful-0e642a1bac66350f --list --ignored
+seed_campaign: test
+
+1 test, 0 benchmarks
+```
+
+The reason is nowhere in it. So the reason has to come from the source, and
+the listing is what keeps the source scan honest — a grep for `#[ignore]`
+alone is exactly the "source-string existence" evidence the ledger rejects.
+Each side covers the other's blind spot, and
+`conformance/collect_skip_reasons.py` rejects all four ways they can
+disagree:
+
+| what it sees | why it is rejected |
+|---|---|
+| ignored, bare `#[ignore]` | a test that sits out every run without saying why is indistinguishable from one that was forgotten |
+| ignored, `#[ignore = ""]` | an explicit empty reason is not a reason |
+| a reason no listed test matches | the test was renamed, deleted or `cfg`'d out; a stale reason reads as current |
+| an empty listing over a tree that has `#[ignore]` in it | the listing is of the wrong workspace, or was taken without `--run-ignored all` — so every check above would hold vacuously |
+
+The last row is the one worth keeping. Without it the collector passes on a
+listing that covers nothing, which is how `--require-coverage` and `--head`
+both went dead earlier on this page.
+
+Matching is per *binary*, not per function name. `seed_campaign` exists in
+two integration targets in each of the three core crates, so a scan keyed
+on the function name would let an explained copy vouch for a bare one. The
+listing names the binary, which names the file, so each attribute is looked
+for only where its own test lives.
+
+Runtime skips — pytest's `skipTest`, nextest's `<skipped>` — *are* in JUnit
+with their message, so the same report folds those in rather than leaving
+two half-reports to reconcile. A runtime skip with no message is an error
+for the same reason a bare `#[ignore]` is.
+
+One bare `#[ignore]` existed when this was written: `dump_failures` in
+`letters-core/tests/corpus_debug.rs`, a diagnostic printer with no
+assertions. It now says so, and says what gates instead — the
+`markdown_corpus.rs` round-trip ratchet it prints the failures of.
