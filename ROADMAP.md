@@ -59,7 +59,14 @@ gtk-office-suite is the org's flagship **end-user product bet** and a cornerston
 
 ### Q4 2026 (October–December) — "Ship it properly"
 
-<Sketch: release gate (#122) with Flatpak distribution + reproducible builds, Decks presenter/export scope, interop loss budgets, A11y journeys. Move up when Q4 starts.>
+**Theme**: Release hardening, reproducible Flatpak distribution, live interop loss-budget enforcement, and enterprise readiness.
+
+| Goal | Owner | Tracking | Status |
+|------|-------|----------|--------|
+| Flatpak reproducible build pipeline & release gate signoff | release / architect | #122, #326, #605 | 🟡 In progress |
+| Live interop loss budget enforcement (ODT/ODP/DOCX/XLSX degradation tracking) | quality / core | #105, #374, #605 | 🟡 In progress |
+| Headless document conversion CLI tooling integration | architect / core | #579, #605 | 🟡 In progress |
+| Automated AT-SPI screen reader accessibility journey gates | quality / a11y | #120, #400 | 🟡 In progress |
 
 ---
 
