@@ -41,9 +41,8 @@ pub struct DecksWindow {
     editor_split: adw::OverlaySplitView,
     file_path: Rc<RefCell<Option<String>>>,
     refresh_hud: Rc<dyn Fn()>,
-    /// This window's own snapshot slot. A field rather than only a
-    /// constructor local because recovery has to write to it before it
-    /// clears the orphan it recovered from — see `recover_from_snapshot`.
+    /// This window's own snapshot slot; recovery writes to it before
+    /// clearing the orphan (see `AutosaveSlot::adopt_recovered`).
     autosave_slot: Rc<suite_common::autosave::AutosaveSlot>,
 }
 
@@ -644,6 +643,7 @@ impl DecksWindow {
         let toast_overlay = adw::ToastOverlay::new();
         toast_overlay.set_child(Some(&main_box));
         suite_win.set_content(&toast_overlay);
+        let autosave_notices = suite_common::autosave_notice::AutosaveNotifier::new(&toast_overlay);
 
         let toolbar = build_decks_toolbar();
         suite_win.add_top_bar(&toolbar);
@@ -1658,6 +1658,7 @@ impl DecksWindow {
             let m = masters.clone();
             let dirty = dirty.clone();
             let slot = autosave_slot.clone();
+            let notices = autosave_notices.clone();
             let path_state = file_path.clone();
             let act = gtk::gio::SimpleAction::new("autosave-now", None);
             act.connect_activate(move |_, _| {
@@ -1672,7 +1673,7 @@ impl DecksWindow {
                         original_path: path.map(std::path::PathBuf::from),
                         kind,
                     };
-                    let _ = slot.write(&bytes, &meta);
+                    notices.record(slot.write(&bytes, &meta));
                 }
             });
             app.add_action(&act);
@@ -1682,6 +1683,7 @@ impl DecksWindow {
             let m = masters.clone();
             let dirty = dirty.clone();
             let slot = autosave_slot.clone();
+            let notices = autosave_notices.clone();
             let path_state = file_path.clone();
             let interval = settings.int("auto-save-interval").max(10) as u32;
             let enabled = settings.boolean("auto-save");
@@ -1696,7 +1698,7 @@ impl DecksWindow {
                                 original_path: path.map(std::path::PathBuf::from),
                                 kind,
                             };
-                            let _ = slot.write(&bytes, &meta);
+                            notices.record(slot.write(&bytes, &meta));
                         }
                     }
                     glib::ControlFlow::Continue
@@ -1759,8 +1761,7 @@ impl DecksWindow {
                 .map(|n| n.to_string_lossy().to_string())
                 .unwrap_or_else(|| "Untitled".to_string());
             self.window.set_title(Some(&format!("{name} (Recovered) — Decks")));
-            // See AutosaveSlot::adopt_recovered for why this precedes the
-            // clear, and what a failed write means.
+            // Order and failure handling: AutosaveSlot::adopt_recovered.
             if self.autosave_slot.adopt_recovered(&bytes, &meta) {
                 let _ = orphan.clear();
             }
