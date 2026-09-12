@@ -2122,41 +2122,54 @@ impl TablesWindow {
     /// after construction, before any explicit CLI-open — an explicit open
     /// target should win over recovering an unrelated document. Returns
     /// true if a snapshot was recovered.
+    ///
+    /// A window holds one workbook, so this recovers one snapshot: the
+    /// newest, which `find_orphaned_snapshots` now returns first. It tries
+    /// each candidate in turn rather than only the first, because a
+    /// candidate that reads back whole can still fail to *load* — an
+    /// xlsx-shaped snapshot the importer rejects, or a temp file that
+    /// cannot be written. Giving up on the first such candidate left every
+    /// later snapshot unoffered, and since the failing one is never
+    /// cleared, it kept winning on every subsequent launch: one unloadable
+    /// snapshot could bury a user's recoverable work indefinitely.
+    /// Snapshots after the one recovered here stay on disk and are offered
+    /// on the next launch, which is as much as a single-document window can
+    /// do without discarding them.
     pub fn recover_from_snapshot(&self) -> bool {
         let state_dir = autosave_state_dir();
-        let Some(orphan_id) = suite_common::autosave::find_orphaned_snapshots(&state_dir).into_iter().next() else {
-            return false;
-        };
-        let orphan = suite_common::autosave::AutosaveSlot::new(state_dir, orphan_id);
-        let Some((bytes, meta)) = orphan.read() else { return false };
-        let tmp = std::env::temp_dir().join(format!("tables-recovery-{}.xlsx", std::process::id()));
-        if std::fs::write(&tmp, &bytes).is_err() {
-            return false;
+        for orphan_id in suite_common::autosave::find_orphaned_snapshots(&state_dir) {
+            let orphan = suite_common::autosave::AutosaveSlot::new(state_dir.clone(), orphan_id);
+            let Some((bytes, meta)) = orphan.read() else { continue };
+            let tmp = std::env::temp_dir().join(format!("tables-recovery-{}.xlsx", std::process::id()));
+            if std::fs::write(&tmp, &bytes).is_err() {
+                continue;
+            }
+            let recovered = self.open_path(&tmp.to_string_lossy()).is_ok();
+            let _ = std::fs::remove_file(&tmp);
+            if !recovered {
+                continue;
+            }
+            // open_path() pointed current_path at the temp recovery file; the
+            // recovered document actually targets the *original* path (or none,
+            // for a document that was never saved before it crashed). It also
+            // leaves the controller's dirty flag untouched (open_path replaces
+            // state directly, bypassing execute()) — force it dirty so the
+            // close guard still offers to save the recovered content.
+            *self.current_path.borrow_mut() = meta.original_path.clone();
+            self.controller.borrow_mut().mark_dirty();
+            let name = meta.original_path.as_ref()
+                .and_then(|p| p.file_name())
+                .map(|n| n.to_string_lossy().to_string())
+                .unwrap_or_else(|| "Untitled".to_string());
+            self.window.set_title(Some(&format!("{name} (Recovered) — Tables")));
+            // The orphan is now reflected in memory; clear its slot so it isn't
+            // offered again on the next launch. If this session crashes again
+            // before a real save, autosave writes a fresh snapshot under this
+            // window's own doc_id.
+            let _ = orphan.clear();
+            return true;
         }
-        let recovered = self.open_path(&tmp.to_string_lossy()).is_ok();
-        let _ = std::fs::remove_file(&tmp);
-        if !recovered {
-            return false;
-        }
-        // open_path() pointed current_path at the temp recovery file; the
-        // recovered document actually targets the *original* path (or none,
-        // for a document that was never saved before it crashed). It also
-        // leaves the controller's dirty flag untouched (open_path replaces
-        // state directly, bypassing execute()) — force it dirty so the
-        // close guard still offers to save the recovered content.
-        *self.current_path.borrow_mut() = meta.original_path.clone();
-        self.controller.borrow_mut().mark_dirty();
-        let name = meta.original_path.as_ref()
-            .and_then(|p| p.file_name())
-            .map(|n| n.to_string_lossy().to_string())
-            .unwrap_or_else(|| "Untitled".to_string());
-        self.window.set_title(Some(&format!("{name} (Recovered) — Tables")));
-        // The orphan is now reflected in memory; clear its slot so it isn't
-        // offered again on the next launch. If this session crashes again
-        // before a real save, autosave writes a fresh snapshot under this
-        // window's own doc_id.
-        let _ = orphan.clear();
-        true
+        false
     }
 
     /// Open a spreadsheet file directly (CLI / file-manager open).
