@@ -50,13 +50,31 @@ Reuse this issue for validator-test wiring, coordinated with #241 (GTK execution
       `[skip ci]` commit needing the check it forbade — is fixed
       separately; this entry is only about what it proved.) The
       release contract is the exception and it is worse than unrequired:
-      `release-gate.yml` only triggers on `flatpak/**`, `flathub/**`,
-      `po/**`, `Cargo.lock` and its own path, so ordinary pull requests
-      never run it — and `scripts/release_gate.py` is **currently failing
-      on `main`**: `tables/src/window.rs` is 2343 lines against a 2300-line
-      ceiling. It crossed at `5c7f436` (2329) and nothing noticed, because
-      nothing runs it. Raising the ceiling would be relaxing the gate to
-      get green, so it is recorded here rather than patched in passing.
+      `release-gate.yml` triggers only on a path list, so ordinary pull
+      requests never run it.
+      That list used to omit the very files the gate polices. It enforces
+      per-module line ceilings — `letters/src/window.rs`,
+      `tables/src/window.rs`, `decks/src/window.rs`,
+      `suite-common/src/lib.rs` — and triggered on none of them, so a pull
+      request that grew one could not run the check that would have
+      rejected it. `tables/src/window.rs` duly crossed its 2300-line
+      ceiling at `5c7f436` (2329) and sat over it on `main`, reaching 2343,
+      until #594 moved the chart dialog out and brought it to 2226. Nothing
+      reported the breach for its whole duration.
+      This was the third instance of one defect — a hand-written path
+      filter in YAML omitting the code it exists to check, after the
+      oracle's missing `suite-common-core` and the journey selector's
+      fallbacks. So the four paths are in the trigger now, and
+      `tests/test_release_gate.py` **derives** the requirement from
+      `release_gate.py`'s own `module_ceilings` rather than restating it:
+      adding a ceiling without a trigger fails, and a parse that finds no
+      ceilings or no filter fails too rather than holding vacuously. Three
+      mutations confirm each direction.
+      An earlier revision of this entry recorded the gate as *currently
+      failing on main*. That was true when written and is not now, which is
+      the trouble with putting a transient status in prose — the line
+      outlived the breach it described. What replaces it is structural: what
+      the trigger covers, and what derives it.
 - [x] Prove enforcement by deliberately breaking a referenced test, fixture
       and required evidence entry — the validators have negative unit tests
       for each, and the end-to-end wiring is now proved too: see below.
