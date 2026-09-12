@@ -5,7 +5,7 @@ tracked in [#443](https://github.com/tuna-os/gtk-office-suite/issues/443).
 It prioritizes crash reproduction, save/recovery safety and verified user journeys.
 The dated ledger below is historical and does not certify present behavior.
 
-**Last updated**: 2026-09-12 | **Maintainer**: tuna-os (hanthor) / architect agent
+**Last updated**: 2026-09-12 | **Maintainer**: tuna-os (hanthor) / strategist agent
 
 ---
 
