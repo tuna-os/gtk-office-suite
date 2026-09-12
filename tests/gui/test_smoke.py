@@ -332,6 +332,69 @@ class LettersSaveFailureSmoke(BaseGUITestCase):
         self.assertEqual(self.trigger_snapshot("org.tunaos.letters"), self._edited)
 
 
+class LettersUnattendedAutosaveSmoke(BaseGUITestCase):
+    """Letters must snapshot on its own, with nobody pressing anything.
+
+    Every other Letters autosave journey calls the `autosave-now` action
+    first, so all of them passed while the shipped app never autosaved at
+    all: `auto-save-interval` defaulted to 0 and `register_autosave`
+    installs its timer only when the interval is positive. They tested the
+    snapshot machinery; none of them tested that it runs.
+
+    So this one never triggers the action. It sets a 10-second interval (the
+    floor the code clamps to — the shipped 60 would just make the journey
+    slow), dirties a document, and waits for a snapshot to appear by itself.
+    The shipped default is checked separately, in
+    `tests/test_autosave_defaults.py`, because a default is about what a new
+    install gets rather than about whether the timer works.
+    """
+
+    app_name = "letters"
+    INTERVAL = 10
+
+    def setUp(self):
+        self._state_dir = self.isolate_autosave_state(prefix="letters-unattended-state-")
+        cfg = self.isolate_gsettings(prefix="letters-unattended-cfg-")
+        # The keyfile backend reads this path; writing it before launch is how
+        # a journey configures an app setting without dconf's shared daemon.
+        keyfile_dir = os.path.join(cfg, "glib-2.0", "settings")
+        os.makedirs(keyfile_dir, exist_ok=True)
+        with open(os.path.join(keyfile_dir, "keyfile"), "w", encoding="utf-8") as handle:
+            handle.write(f"[org/tunaos/letters]\nauto-save-interval={self.INTERVAL}\n")
+        super().setUp()
+
+    def _snapshot_files(self):
+        snap_dir = os.path.join(self._state_dir, "letters")
+        if not os.path.isdir(snap_dir):
+            return []
+        return [f for f in os.listdir(snap_dir) if f.endswith(".snapshot")]
+
+    def test_a_dirty_document_is_snapshotted_without_being_asked(self):
+        import subprocess
+        from dogtail import rawinput
+
+        subprocess.run(["gapplication", "action", "org.tunaos.letters", "new-document"])
+        time.sleep(2.0)
+        rawinput.typeText("work nobody saved")
+        time.sleep(1.0)
+        self.assertEqual(self._snapshot_files(), [],
+                         "precondition: nothing should be snapshotted yet")
+
+        # No autosave-now anywhere in this journey: the timer either fires or
+        # the app is not protecting anything.
+        deadline = time.monotonic() + self.INTERVAL * 2 + 8
+        while time.monotonic() < deadline:
+            if self._snapshot_files():
+                break
+            time.sleep(1.0)
+
+        self.assertEqual(
+            len(self._snapshot_files()), 1,
+            f"no snapshot appeared within {self.INTERVAL * 2 + 8}s at a "
+            f"{self.INTERVAL}s interval: Letters is not autosaving unattended",
+        )
+
+
 class LettersAutosaveSmoke(BaseGUITestCase):
     """Crash-recovery snapshot lifecycle (issue #99), per-tab this time:
     Letters can have several dirty tabs at once, so a crash with two dirty
