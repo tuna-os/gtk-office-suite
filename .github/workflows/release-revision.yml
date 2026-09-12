@@ -21,6 +21,17 @@ name: Release revision
 on:
   push:
     tags: ['v*']
+  # Called by publish-flatpak.yml so the check runs *before* the Flatpaks are
+  # pushed. On its own the tag trigger only failed beside the publish: a tag
+  # whose ledger this job refused to certify was published anyway, which made
+  # the refusal a report rather than a gate.
+  workflow_call:
+    inputs:
+      revision:
+        description: 'Revision to test the ledger against (default: this ref)'
+        required: false
+        type: string
+        default: ''
   workflow_dispatch:
     inputs:
       revision:

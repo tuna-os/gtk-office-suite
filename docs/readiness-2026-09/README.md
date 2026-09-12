@@ -22,20 +22,27 @@ Letters, Tables and Decks must reliably complete create/open → edit → undo/r
 
 ## Dependency-ordered execution
 
-- [x] #437 — durable shared saves
-- [x] #436 — Letters save transactions
-- [x] #241 — GTK test thread/display ownership
-- [ ] #354 — deterministic GUI infrastructure
-- [ ] #313 — CI validator and test gates
-- [ ] #442 — crash and flake campaign
-- [ ] #441 — capability evidence ledger
-- [ ] #322 — recovery lifecycle
-- [ ] #374 — live interoperability loss budgets
-- [ ] #438 — Letters fidelity
-- [ ] #439 — Tables format safety and authoring
-- [ ] #440 — Decks authoring and presentation
-- [ ] #400 — performance, rendering and accessibility evidence
-- [ ] #326 — installed-release signoff
+Each row's marker and figure are counted from the linked readiness
+document's own checklist by
+`tests/test_roadmap_figures.py::ReadinessExecutionList`, so this list cannot
+drift from the work it summarizes. `[x]` means every row in that document is
+ticked, `[~]` that some are, `[ ]` that none are. Edit the document; the
+list follows.
+
+- [x] #437 — durable shared saves — [atomic-save.md](atomic-save.md) 8/8
+- [x] #436 — Letters save transactions — [save-transactions.md](save-transactions.md) 6/6
+- [x] #241 — GTK test thread/display ownership — [gtk-threading.md](gtk-threading.md) 6/6
+- [~] #354 — deterministic GUI infrastructure — [gui-testing.md](gui-testing.md) 9/10
+- [~] #313 — CI validator and test gates — [ci-gates.md](ci-gates.md) 7/8
+- [~] #442 — crash and flake campaign — [crash-stress.md](crash-stress.md) 2/8
+- [~] #441 — capability evidence ledger — [capability-evidence.md](capability-evidence.md) 3/7
+- [~] #322 — recovery lifecycle — [recovery.md](recovery.md) 2/9
+- [~] #374 — live interoperability loss budgets — [interoperability.md](interoperability.md) 0/9
+- [~] #438 — Letters fidelity — [letters-fidelity.md](letters-fidelity.md) 0/6
+- [~] #439 — Tables format safety and authoring — [tables-readiness.md](tables-readiness.md) 1/7
+- [ ] #440 — Decks authoring and presentation — [decks-readiness.md](decks-readiness.md) 0/7
+- [ ] #400 — performance, rendering and accessibility evidence — [performance-accessibility.md](performance-accessibility.md) 0/7
+- [ ] #326 — installed-release signoff — [release.md](release.md) 0/9
 
 | Phase | Execution issue | Exit evidence |
 |---|---|---|

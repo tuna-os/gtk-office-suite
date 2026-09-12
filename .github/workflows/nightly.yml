@@ -28,6 +28,12 @@ on:
       - 'letters-core/**'
       - 'tables-core/**'
       - 'decks-core/**'
+      # Holds interop.rs, atomic_save.rs, zip_guard.rs, format.rs, units.rs
+      # and style.rs — the packaging and save paths the oracle exists to
+      # check. Missing from the first version of this filter, which is why
+      # tests/test_oracle_triggers.py now derives the required list from the
+      # crates the oracle actually tests instead of trusting this one.
+      - 'suite-common-core/**'
       - 'suite-export/**'
       - 'interop/**'
       - 'Cargo.lock'

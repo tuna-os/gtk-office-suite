@@ -32,10 +32,17 @@ use std::panic;
 use std::sync::mpsc;
 use std::sync::OnceLock;
 
-/// Shared worker. `None` once GTK has been found uninitialisable (headless
-/// with no usable display), so every later call skips instead of retrying an
-/// init that cannot succeed.
-static GTK_THREAD: OnceLock<Option<gtk4::glib::ThreadPool>> = OnceLock::new();
+/// Shared worker, or why there isn't one. `Err` once GTK has been found
+/// uninitialisable (headless with no usable display), so every later call
+/// skips instead of retrying an init that cannot succeed.
+///
+/// The reason is kept, not discarded. It used to be a bare `Option`, built
+/// from `gtk4::init().is_ok()`, so a failure arrived as "GTK could not be
+/// initialised" and nothing more — and when that turned up intermittently in
+/// CI on one of two concurrent runs of the same commit, there was nothing in
+/// the message to work from. A check that knows something and throws it away
+/// makes the next occurrence cost as much as the first.
+static GTK_THREAD: OnceLock<Result<gtk4::glib::ThreadPool, String>> = OnceLock::new();
 
 /// Set to `skip` by a run that has no display and accepts not covering the
 /// widget layer — a developer's laptop without an X server, say. CI sets up
@@ -54,18 +61,46 @@ fn skipping_is_allowed() -> bool {
     std::env::var(SKIP_VARIABLE).is_ok_and(|value| value_opts_out(&value))
 }
 
-fn gtk_thread() -> Option<&'static gtk4::glib::ThreadPool> {
+/// What the display looked like when initialisation was attempted, for the
+/// message. An unset `DISPLAY` and a set one that nothing is serving fail
+/// identically inside GTK but need different fixes.
+fn display_for_diagnosis() -> String {
+    describe_display(std::env::var("DISPLAY").ok().as_deref())
+}
+
+/// Split out from the environment read for the same reason as
+/// `value_opts_out`: a test that set `DISPLAY` would be visible to every
+/// test running beside it, including the widget tests.
+fn describe_display(value: Option<&str>) -> String {
+    match value {
+        Some("") => "DISPLAY set but empty".to_string(),
+        Some(value) => format!("DISPLAY={value}"),
+        None => "DISPLAY unset".to_string(),
+    }
+}
+
+fn gtk_thread() -> Result<&'static gtk4::glib::ThreadPool, &'static String> {
     GTK_THREAD
         .get_or_init(|| {
-            let pool = gtk4::glib::ThreadPool::exclusive(1).ok()?;
+            let pool = gtk4::glib::ThreadPool::exclusive(1)
+                .map_err(|e| format!("could not start the GTK test thread: {e}"))?;
             let (tx, rx) = mpsc::channel();
             pool.push(move || {
-                let _ = tx.send(gtk4::init().is_ok());
+                // The error, not a boolean: this is the one place that sees
+                // why GTK refused.
+                let _ = tx.send(gtk4::init().map_err(|e| e.to_string()));
             })
-            .ok()?;
-            match rx.recv().ok()? {
-                true => Some(pool),
-                false => None,
+            .map_err(|e| format!("could not schedule GTK initialisation: {e}"))?;
+            match rx.recv() {
+                Ok(Ok(())) => Ok(pool),
+                Ok(Err(reason)) => Err(format!("gtk::init failed: {reason}")),
+                // The worker dropped the sender without reporting, which
+                // means it died — a GTK abort rather than a refusal.
+                Err(_) => Err(
+                    "the GTK test thread exited without reporting; GTK aborted during \
+                     initialisation rather than returning an error"
+                        .to_string(),
+                ),
             }
         })
         .as_ref()
@@ -95,16 +130,24 @@ pub fn run<F>(f: F)
 where
     F: FnOnce() + Send + panic::UnwindSafe + 'static,
 {
-    let Some(pool) = gtk_thread() else {
-        assert!(
-            skipping_is_allowed(),
-            "GTK could not be initialised, so this widget test could not run. \
-             Give the run a display (`xvfb-run -a cargo test ...`), or set \
-             {SKIP_VARIABLE}=skip to declare this run display-less and skip \
-             the GTK widget tests deliberately."
-        );
-        eprintln!("SKIP: GTK could not be initialised and {SKIP_VARIABLE}=skip is set");
-        return;
+    let pool = match gtk_thread() {
+        Ok(pool) => pool,
+        Err(reason) => {
+            assert!(
+                skipping_is_allowed(),
+                "GTK could not be initialised, so this widget test could not run: \
+                 {reason} ({display}). Give the run a display (`xvfb-run -a cargo \
+                 test ...`), or set {SKIP_VARIABLE}=skip to declare this run \
+                 display-less and skip the GTK widget tests deliberately.",
+                display = display_for_diagnosis(),
+            );
+            eprintln!(
+                "SKIP: GTK could not be initialised ({reason}, {}) and {SKIP_VARIABLE}=skip \
+                 is set",
+                display_for_diagnosis()
+            );
+            return;
+        }
     };
     let (tx, rx) = mpsc::sync_channel(1);
     if pool.push(move || { let _ = tx.send(panic::catch_unwind(f)); }).is_err() {
@@ -123,7 +166,14 @@ where
 /// Whether GTK is usable in this process, for tests that need to assert
 /// something about the skip path itself.
 pub fn is_available() -> bool {
-    gtk_thread().is_some()
+    gtk_thread().is_ok()
+}
+
+/// Why GTK is unusable in this process, or `None` when it is usable. Exposed
+/// so a diagnosis can be reported by whatever is in a position to report it,
+/// rather than only inside a panic message.
+pub fn unavailable_reason() -> Option<&'static str> {
+    gtk_thread().err().map(String::as_str)
 }
 
 #[cfg(test)]
@@ -136,9 +186,11 @@ mod tests {
         assert!(
             super::is_available() || super::skipping_is_allowed(),
             "GTK could not be initialised and {}=skip is not set, so every GTK \
-             widget test in this run would have been unable to run. Give the \
-             run a display (`xvfb-run -a ...`) or opt out explicitly.",
-            super::SKIP_VARIABLE
+             widget test in this run would have been unable to run: {} ({}). \
+             Give the run a display (`xvfb-run -a ...`) or opt out explicitly.",
+            super::SKIP_VARIABLE,
+            super::unavailable_reason().unwrap_or("no reason recorded"),
+            super::display_for_diagnosis(),
         );
     }
 
@@ -151,6 +203,30 @@ mod tests {
         // stray environment quietly disable the widget layer again.
         for value in ["1", "true", "yes", "", "skipping"] {
             assert!(!super::value_opts_out(value), "value {value:?}");
+        }
+    }
+
+    /// The three display states fail identically inside GTK and need
+    /// different fixes, so the message has to tell them apart: an unset
+    /// DISPLAY means "give the run a display", a set one means "the display
+    /// you gave it is not answering".
+    #[test]
+    fn the_message_distinguishes_the_display_states() {
+        assert_eq!(super::describe_display(None), "DISPLAY unset");
+        assert_eq!(super::describe_display(Some("")), "DISPLAY set but empty");
+        assert_eq!(super::describe_display(Some(":99")), "DISPLAY=:99");
+    }
+
+    /// When GTK is usable there is no reason to report, and when it is not
+    /// there must be one — an empty diagnosis is the defect this replaced.
+    #[test]
+    fn unavailability_always_comes_with_a_reason() {
+        match super::unavailable_reason() {
+            None => assert!(super::is_available(), "no reason, but GTK is unavailable"),
+            Some(reason) => {
+                assert!(!super::is_available());
+                assert!(!reason.trim().is_empty(), "unavailable with an empty reason");
+            }
         }
     }
 

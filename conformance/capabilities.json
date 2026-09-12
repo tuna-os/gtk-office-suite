@@ -265,8 +265,8 @@
     {
       "id": "ci.journey-selection-fails-safe",
       "app": "suite",
-      "title": "Journey selection runs every app when it cannot narrow safely",
-      "scope": "A shared crate, the workspace manifest or lockfile, a harness path (the selector included), an unrecognised path and an empty diff all run every app's journeys; a diff naming only one app's paths runs only that app.",
+      "title": "Selection runs what a change could break, or everything",
+      "scope": "A shared crate, the workspace manifest or lockfile, a harness path (the selector included), an unrecognised path and an empty diff all run every app's journeys; a diff naming only one app's paths runs only that app. The LibreOffice oracle's own pull-request filter is held to the same rule: it must cover every crate the oracle tests and every workspace crate those depend on, derived from the manifests rather than copied from the filter.",
       "issue": 354,
       "status": "verified",
       "revision": "062658f6839c361b83194b96e93189528ef97932",
@@ -279,7 +279,61 @@
           "tests/test_journey_selection.py::FallsBackToEveryApp::test_a_harness_change_beats_an_app_change",
           "tests/test_journey_selection.py::FallsBackToEveryApp::test_an_unrecognized_path_runs_everything",
           "tests/test_journey_selection.py::FallsBackToEveryApp::test_an_empty_diff_runs_everything",
-          "tests/test_journey_selection.py::SelectsTheChangedApps::test_one_app_runs_only_that_app"
+          "tests/test_journey_selection.py::SelectsTheChangedApps::test_one_app_runs_only_that_app",
+          "tests/test_oracle_triggers.py::OraclePathFilter::test_every_crate_those_crates_depend_on_is_in_the_filter",
+          "tests/test_oracle_triggers.py::TheFilterIsActuallyRead::test_a_workflow_without_the_trigger_is_an_error_not_an_empty_list"
+        ]
+      }
+    },
+    {
+      "id": "ci.failure-evidence-survives-setup",
+      "app": "suite",
+      "title": "A journey that fails before its body still leaves evidence",
+      "scope": "unittest skips tearDown when setUp raises, and the app is launched in setUp, so the whole class of startup failures used to retain nothing a reader could debug: in CI exactly one file (journey.mp4), and with video off not even a directory. The app's own stderr — where a startup panic names its file and line — was read only by the capture that never ran, so it reached neither the artifacts nor the run log. Capture is now a cleanup, idempotent with the tearDown path, and records per-artifact whether each one landed so a guarded capture cannot retain nothing quietly. It also keeps what the journey wrote, before the temp-directory cleanups that run next delete it, excluding XDG_CACHE_HOME by exact path so a mesa shader cache cannot bury the evidence; and a core dump where the kernel writes one, with core_pattern recorded either way because a pipe handler leaves no file a container can keep. A passing journey still retains nothing, a skipped one is not a failure, and an artifact that was never applicable is not reported as missing.",
+      "issue": 442,
+      "status": "verified",
+      "revision": "bcbbee853793e967823524d632586bb7504d9883",
+      "requires": [
+        "gui"
+      ],
+      "evidence": {
+        "gui": [
+          "tests/gui/test_harness_artifacts.py::StartupFailureArtifacts::test_a_crash_before_the_test_body_still_retains_the_apps_stderr",
+          "tests/gui/test_harness_artifacts.py::StartupFailureArtifacts::test_the_other_artifacts_are_retained_too",
+          "tests/gui/test_harness_artifacts.py::StartupFailureArtifacts::test_the_manifest_says_what_was_and_was_not_captured",
+          "tests/gui/test_harness_artifacts.py::StartupFailureArtifacts::test_a_capture_that_produces_nothing_is_recorded_as_missing",
+          "tests/gui/test_harness_artifacts.py::PassingJourneysLeaveNothing::test_a_passing_journey_retains_no_artifacts",
+          "tests/gui/test_harness_artifacts.py::SkipsAreNotFailures::test_a_skipped_journey_retains_nothing",
+          "tests/gui/test_harness_artifacts.py::SkipsAreNotFailures::test_a_skipped_journey_is_not_recorded_as_a_failed_one",
+          "tests/gui/test_harness_artifacts.py::OutputFixturesAreRetained::test_what_the_journey_wrote_is_kept",
+          "tests/gui/test_harness_artifacts.py::OutputFixturesAreRetained::test_the_reproducible_cache_is_not_dragged_along",
+          "tests/gui/test_harness_artifacts.py::CoreDumpsAreRetainedWhereTheKernelAllows::test_a_segfault_is_reported_either_as_a_core_or_as_a_reason",
+          "tests/gui/test_harness_artifacts.py::CoreDumpsAreRetainedWhereTheKernelAllows::test_a_core_is_never_left_where_the_next_attempt_would_claim_it"
+        ]
+      }
+    },
+    {
+      "id": "ci.skips-name-their-reason",
+      "app": "suite",
+      "title": "Every test that sits out a run says why",
+      "scope": "The skip inventory comes from the test lister, not from JUnit: nextest omits #[ignore] tests from its report entirely, so a JUnit-based collector reports zero skips on a workspace with seven ignored tests. An ignored test with no reason, an empty reason, a reason no listed test matches, and a listing that covers nothing are each rejected; runtime skips contribute their JUnit message. A reason in one target cannot cover a same-named test in another.",
+      "issue": 313,
+      "status": "verified",
+      "revision": "e885f87df17287618fed38073b7072a4203a0504",
+      "requires": [
+        "model"
+      ],
+      "evidence": {
+        "model": [
+          "tests/test_skip_reasons.py::IgnoredTestsNeedReasons::test_a_bare_ignore_is_rejected",
+          "tests/test_skip_reasons.py::IgnoredTestsNeedReasons::test_an_empty_reason_string_is_no_better_than_a_bare_ignore",
+          "tests/test_skip_reasons.py::StaleReasonsAreRejected::test_a_reason_for_a_test_the_listing_never_reports_is_an_error",
+          "tests/test_skip_reasons.py::StaleReasonsAreRejected::test_an_ignored_test_whose_attribute_cannot_be_found_is_an_error",
+          "tests/test_skip_reasons.py::TheListingMustCoverTheWorkspace::test_an_empty_listing_over_a_tree_with_ignores_is_rejected",
+          "tests/test_skip_reasons.py::OneCrateCannotLendAnotherItsReason::test_a_same_named_test_in_another_target_is_not_a_match",
+          "tests/test_skip_reasons.py::RuntimeSkipsComeFromJunit::test_a_runtime_skip_with_no_message_is_an_error",
+          "tests/test_skip_reasons.py::TheRealTreeHasNoUnexplainedIgnores::test_every_ignore_attribute_in_the_tree_carries_a_reason",
+          "tests/test_skip_reasons.py::TheRealTreeHasNoUnexplainedIgnores::test_the_scan_finds_the_ignores_that_are_known_to_be_there"
         ]
       }
     },

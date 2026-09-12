@@ -52,10 +52,23 @@ class BaseGUITestCase(unittest.TestCase):
     # their own tearDown just to remove a temp dir.
 
     def temp_dir(self, prefix="gtk-office-test-"):
-        """A fresh temp directory, auto-removed after the test."""
+        """A fresh temp directory, auto-removed after the test.
+
+        Also recorded, so a failure can retain whatever the journey wrote
+        there. The removal is registered here and the capture is registered
+        later in `setUp`; cleanups run last-registered-first, so the capture
+        gets to read these directories before they are deleted. That holds
+        because every journey calls this *before* `super().setUp()`, which
+        is the documented order above — a directory created after it would
+        be gone by capture time, and the manifest says so rather than
+        guessing.
+        """
         import tempfile
         import shutil
         d = tempfile.mkdtemp(prefix=prefix)
+        if not hasattr(self, "_owned_temp_dirs"):
+            self._owned_temp_dirs = []
+        self._owned_temp_dirs.append(d)
         self.addCleanup(shutil.rmtree, d, ignore_errors=True)
         return d
 
@@ -78,6 +91,11 @@ class BaseGUITestCase(unittest.TestCase):
         }
         for child in ("config", "data", "cache", "state"):
             os.makedirs(os.path.join(d, child), exist_ok=True)
+        # Excluded from failure-artifact capture for the same reason as the
+        # cache in configure_deterministic_environment — see there.
+        if not hasattr(self, "_capture_excluded"):
+            self._capture_excluded = []
+        self._capture_excluded.append(os.path.join(d, "cache"))
         return d
 
     def isolate_snapshot(self, prefix="snapshot-"):
@@ -134,10 +152,55 @@ class BaseGUITestCase(unittest.TestCase):
         # all — or another run's process on a different display (#241).
         _terminate_owned(self.app_name)
 
+        # No verdict yet. `_callTestMethod` sets this True or False; it
+        # stays None if setUp never finishes, which is the case the cleanup
+        # below exists for — a run with no verdict is a failure, not a pass.
+        self._test_failed = None
+        self._input_trace = []
+        if not hasattr(self, "_owned_temp_dirs"):
+            self._owned_temp_dirs = []
+
+        # Let the app dump core if it segfaults. Raised on this process so
+        # the app inherits it, rather than through Popen's preexec_fn, which
+        # the standard library warns is unsafe once threads exist — and
+        # dogtail brings threads. The harness is Python and will not be
+        # dumping cores of its own.
+        #
+        # Where the core lands is the kernel's decision, not ours:
+        # `/proc/sys/kernel/core_pattern` may name a relative file (it lands
+        # in the dumping process's cwd, which the app inherits from the
+        # runner) or may pipe to a handler such as apport, in which case no
+        # file appears and a container cannot change that. The capture reads
+        # the pattern so a missing core is explained rather than silent.
+        self._core_dir = os.getcwd()
+        self._core_before = self._core_files()
+        try:
+            import resource
+            soft, hard = resource.getrlimit(resource.RLIMIT_CORE)
+            if soft != hard:
+                resource.setrlimit(resource.RLIMIT_CORE, (hard, hard))
+        except Exception as e:  # a hardened container may refuse
+            print(f"Warning: could not raise the core dump limit: {e}")
+
         # Start recording before the app launches: a startup crash or a
         # window that never appears is exactly the failure whose video is
         # worth having, and it happens in the first second.
         self._start_recording()
+
+        # Same reasoning as the recorder's own cleanup, for the other six
+        # artifacts: unittest skips tearDown when setUp raises, so a
+        # capture called only from tearDown retains nothing for a startup
+        # failure. Measured before this existed — a binary that panicked on
+        # launch left exactly one file, journey.mp4, and its stderr (a
+        # panic with a file and line) reached neither the artifacts nor the
+        # run log, because the harness reads the process pipes only inside
+        # the capture that never ran. The failure a reader saw was "Timed
+        # out waiting for application 'letters'" over a silent video.
+        #
+        # Registered after the recorder's cleanup so it runs *before* it
+        # (cleanups are LIFO): the app log is read by terminating the
+        # process, and the clip should still be rolling while that happens.
+        self.addCleanup(self._capture_failure_artifacts_if_unresolved)
 
         # Launch app under GDK_BACKEND=x11
         env = os.environ.copy()
@@ -154,7 +217,6 @@ class BaseGUITestCase(unittest.TestCase):
 
         # Wait for application node in AT-SPI tree
         self.app = self.wait_for_app(self.app_name)
-        self._input_trace = []
         self._activate_window()
         self.last_screenshot = None
 
@@ -242,6 +304,15 @@ class BaseGUITestCase(unittest.TestCase):
             os.makedirs(path, exist_ok=True)
         self._xdg_root = xdg_root
         self._xdg = xdg
+        # XDG_CACHE_HOME is excluded from failure-artifact capture, for every
+        # journey: a cache is by definition reproducible, and the GL stack
+        # fills this one with a mesa shader cache — measured at 100 files and
+        # 1.6 MB for a single journey, which would bury the one saved document
+        # that is actually evidence. Recorded as an exact path rather than
+        # matched by name, so this excludes what we created and nothing else.
+        if not hasattr(self, "_capture_excluded"):
+            self._capture_excluded = []
+        self._capture_excluded.append(xdg["cache"])
         defaults = {
             "LANG": "C.UTF-8",
             "LC_ALL": "C.UTF-8",
@@ -470,12 +541,23 @@ class BaseGUITestCase(unittest.TestCase):
         try:
             method()
             self._test_failed = False
+        except unittest.SkipTest:
+            # A skip is neither a pass nor a failure, but for evidence it
+            # behaves like a pass: there is nothing to debug. `SkipTest`
+            # derives from `Exception`, so the handler below used to catch
+            # it and record the journey as failed — which labelled the clip
+            # `"outcome": "failed"` and, once capture became a cleanup,
+            # would have collected a full artifact set for every skipped
+            # journey. `skipTest("GEMINI_API_KEY not set")` in the VLM
+            # helpers is the live case.
+            self._test_failed = False
+            raise
         except Exception:
             self._test_failed = True
             raise
 
     def tearDown(self):
-        failed = getattr(self, "_test_failed", False)
+        failed = getattr(self, "_test_failed", None) is not False
         if failed:
             self._capture_failure_artifacts()
         self._finish_recording(failed)
@@ -489,11 +571,54 @@ class BaseGUITestCase(unittest.TestCase):
             except subprocess.TimeoutExpired:
                 self.process.kill()
 
+    def _core_files(self) -> set:
+        """Core dumps present in the directory the app would dump into.
+
+        Matched by name rather than by reading the pattern's placeholders:
+        the kernel expands %p and friends, so `core`, `core.1234` and
+        `core.letters.1234` are all plausible and all start with `core`.
+        Compared before and after the run so a core left behind by an
+        earlier attempt is never reported as this journey's.
+        """
+        directory = getattr(self, "_core_dir", None) or os.getcwd()
+        try:
+            return {name for name in os.listdir(directory)
+                    if name == "core" or name.startswith("core.")}
+        except OSError:
+            return set()
+
+    def _capture_failure_artifacts_if_unresolved(self):
+        """Cleanup path: capture unless the test actually passed.
+
+        `_test_failed` is None when setUp never finished, which is the whole
+        reason this runs as a cleanup rather than from tearDown. Only an
+        explicit False — a test method that returned — means there is
+        nothing to retain.
+        """
+        if getattr(self, "_test_failed", None) is False:
+            return
+        self._capture_failure_artifacts()
+
     def _capture_failure_artifacts(self):
         """Retain enough to debug a failure without re-running it:
         screenshot, app stdout/stderr, AT-SPI tree dump, the input trace
         (every synthetic click/key/type call this test made), and the
-        state snapshot file if the test used GTK_OFFICE_SNAPSHOT_PATH."""
+        state snapshot file if the test used GTK_OFFICE_SNAPSHOT_PATH.
+
+        Every capture below is individually guarded, because a screenshot
+        that cannot be taken must not cost us the app log. That guarding is
+        also how a capture can quietly retain nothing, so each one records
+        whether it produced a file, and `captured.json` says so in a form
+        something other than a human reading scrollback can check.
+
+        Safe to call twice: tearDown calls it on a failing test and the
+        cleanup calls it when setUp failed, and on a test that fails inside
+        the method both paths are live.
+        """
+        if getattr(self, "_artifacts_captured", False):
+            return
+        self._artifacts_captured = True
+
         artifacts_dir = os.path.join(self.gui_dir, "failure_artifacts",
                                       f"{type(self).__name__}.{self._testMethodName}")
         try:
@@ -502,26 +627,50 @@ class BaseGUITestCase(unittest.TestCase):
             print(f"Warning: could not create artifacts dir: {e}")
             return
 
+        captured = {}
+
+        def record(name, filename, why=None):
+            """Whether one artifact landed, and if not, why not."""
+            path = os.path.join(artifacts_dir, filename)
+            present = os.path.exists(path) and os.path.getsize(path) > 0
+            captured[name] = {"file": filename, "captured": present}
+            if not present:
+                captured[name]["reason"] = why or "produced no file"
+
         try:
             self.take_screenshot("failure", crop=False)
             if self.last_screenshot and os.path.exists(self.last_screenshot):
                 import shutil
                 shutil.copy(self.last_screenshot, os.path.join(artifacts_dir, "screenshot.png"))
+            failure = None
         except Exception as e:
+            failure = str(e)
             print(f"Warning: failure screenshot capture failed: {e}")
+        record("screenshot", "screenshot.png", failure)
 
         try:
             with open(os.path.join(artifacts_dir, "atspi_tree.txt"), "w") as f:
                 f.write(self._dump_atspi_tree())
+            failure = None
         except Exception as e:
+            failure = str(e)
             print(f"Warning: AT-SPI tree dump failed: {e}")
+        record("atspi_tree", "atspi_tree.txt", failure)
 
         try:
             with open(os.path.join(artifacts_dir, "input_trace.json"), "w") as f:
                 json.dump(getattr(self, "_input_trace", []), f, indent=2)
+            failure = None
         except Exception as e:
+            failure = str(e)
             print(f"Warning: input trace dump failed: {e}")
+        record("input_trace", "input_trace.json", failure)
 
+        # The app's own stdout/stderr, which is where a startup panic with a
+        # file and line number lives. It is read by terminating the process
+        # and draining its pipes, so it can only be had once and only here:
+        # nothing else in the harness reads them before the process is
+        # reaped. An app that never reached the AT-SPI tree still has this.
         try:
             if hasattr(self, "process") and self.process and self.process.poll() is None:
                 self.process.terminate()
@@ -532,17 +681,182 @@ class BaseGUITestCase(unittest.TestCase):
                     f.write(out or "")
                     f.write("\n--- stderr ---\n")
                     f.write(err or "")
+                failure = None
+            else:
+                failure = "no app process was launched"
         except Exception as e:
+            failure = str(e)
             print(f"Warning: app log capture failed: {e}")
+        record("app_log", "app.log", failure)
 
         snapshot_path = os.environ.get("GTK_OFFICE_SNAPSHOT_PATH")
-        if snapshot_path and os.path.exists(snapshot_path):
+        if not snapshot_path:
+            captured["state_snapshot"] = {
+                "captured": False,
+                "reason": "this journey does not use GTK_OFFICE_SNAPSHOT_PATH",
+                "applicable": False,
+            }
+        elif not os.path.exists(snapshot_path):
+            captured["state_snapshot"] = {
+                "captured": False,
+                "reason": f"{snapshot_path} does not exist",
+            }
+        else:
             try:
                 import shutil
                 shutil.copy(snapshot_path, os.path.join(artifacts_dir, "state_snapshot.json"))
+                failure = None
             except Exception as e:
+                failure = str(e)
                 print(f"Warning: snapshot artifact copy failed: {e}")
+            record("state_snapshot", "state_snapshot.json", failure)
 
+        # Whatever the journey wrote. A save round trip that produced the
+        # wrong bytes is not debuggable from a screenshot — the file is the
+        # evidence, and it is about to be deleted by the temp-dir cleanups
+        # that run after this one.
+        owned = [d for d in getattr(self, "_owned_temp_dirs", []) if os.path.isdir(d)]
+        missing_dirs = [d for d in getattr(self, "_owned_temp_dirs", [])
+                        if not os.path.isdir(d)]
+        if not getattr(self, "_owned_temp_dirs", []):
+            captured["output_fixtures"] = {
+                "captured": False,
+                "reason": "this journey created no temporary directories",
+                "applicable": False,
+            }
+        else:
+            files = 0
+            total = 0
+            try:
+                import shutil
+                excluded = {os.path.abspath(path)
+                            for path in getattr(self, "_capture_excluded", [])}
+
+                def skip(directory, names):
+                    return {name for name in names
+                            if os.path.abspath(os.path.join(directory, name)) in excluded}
+
+                destination = os.path.join(artifacts_dir, "output")
+                for source in owned:
+                    target = os.path.join(destination, os.path.basename(source))
+                    if os.path.isdir(target):
+                        shutil.rmtree(target)
+                    shutil.copytree(source, target, symlinks=True, ignore=skip)
+                for root, _dirs, names in os.walk(destination):
+                    for name in names:
+                        files += 1
+                        try:
+                            total += os.path.getsize(os.path.join(root, name))
+                        except OSError:
+                            pass
+                failure = None
+            except Exception as e:
+                failure = str(e)
+                print(f"Warning: output fixture capture failed: {e}")
+            captured["output_fixtures"] = {
+                "captured": bool(files),
+                "files": files,
+                "bytes": total,
+                "directories": [os.path.basename(d) for d in owned],
+            }
+            if getattr(self, "_capture_excluded", []):
+                # Named relative to the directory they sit in, so the entry
+                # reads as "xdg-ab12cd/cache" rather than a temp path nobody
+                # can look up after the run.
+                captured["output_fixtures"]["excluded"] = [
+                    os.path.join(os.path.basename(os.path.dirname(path)),
+                                 os.path.basename(path))
+                    for path in self._capture_excluded
+                ]
+            if not files:
+                # Nothing to copy is not a gap. A journey that failed before
+                # it wrote anything — every startup crash, for instance —
+                # legitimately has no output, and reporting that as a missing
+                # artifact is the noise that makes a real gap unreadable. A
+                # copy that *threw* is a different matter and stays missing.
+                captured["output_fixtures"]["reason"] = (
+                    failure or "the journey wrote nothing before it failed")
+                captured["output_fixtures"]["applicable"] = failure is not None
+            if missing_dirs:
+                # Created after the capture was armed, so its removal ran
+                # first. Worth naming: the fix is to create it before
+                # `super().setUp()`, as every other journey does.
+                captured["output_fixtures"]["already_deleted"] = [
+                    os.path.basename(d) for d in missing_dirs
+                ]
+
+        # A core dump, where the kernel allows one. `core_pattern` decides,
+        # and a pipe handler such as apport means there is no file to keep —
+        # recorded with the pattern itself so the gap is explained rather
+        # than looking like a capture that failed.
+        pattern = "unreadable"
+        try:
+            with open("/proc/sys/kernel/core_pattern") as handle:
+                pattern = handle.read().strip()
+        except OSError:
+            pass
+        produced = sorted(self._core_files() - getattr(self, "_core_before", set()))
+        if not produced:
+            captured["core_dump"] = {
+                "captured": False,
+                "core_pattern": pattern,
+                "reason": ("the app did not dump core — it was terminated rather "
+                           "than killed by a signal, or the kernel routed the dump"
+                           if not pattern.startswith("|") else
+                           f"core_pattern pipes to a handler ({pattern}), so no "
+                           "file is written where a container can reach it"),
+                # Not a gap to chase on a normal failure: most journeys fail
+                # by assertion, and an assertion does not dump core.
+                "applicable": False,
+            }
+        else:
+            cap_mb = int(os.environ.get("GUI_TEST_CORE_MAX_MB", "256"))
+            kept = []
+            dropped = []
+            for name in produced:
+                source = os.path.join(self._core_dir, name)
+                try:
+                    size = os.path.getsize(source)
+                except OSError:
+                    size = 0
+                try:
+                    if size <= cap_mb * 1024 * 1024:
+                        import shutil
+                        shutil.move(source, os.path.join(artifacts_dir, name))
+                        kept.append({"file": name, "bytes": size})
+                    else:
+                        # Removed either way: a core left in the launch
+                        # directory would be picked up as the next attempt's.
+                        # Saying so beats a silent drop.
+                        os.unlink(source)
+                        dropped.append({"file": name, "bytes": size})
+                except OSError as e:
+                    print(f"Warning: could not retain core dump {name}: {e}")
+            captured["core_dump"] = {
+                "captured": bool(kept),
+                "core_pattern": pattern,
+                "kept": kept,
+            }
+            if dropped:
+                captured["core_dump"]["dropped_over_cap"] = dropped
+                captured["core_dump"]["reason"] = (
+                    f"larger than GUI_TEST_CORE_MAX_MB={cap_mb}; raise it to keep them")
+
+        # What was and was not retained, in a file rather than in warnings
+        # scrolled past. Without it a capture where every step threw leaves
+        # an almost-empty directory that reads like a failure with nothing
+        # to show, instead of a harness that failed to show it.
+        missing = sorted(name for name, row in captured.items()
+                         if not row["captured"] and row.get("applicable", True))
+        try:
+            with open(os.path.join(artifacts_dir, "captured.json"), "w") as f:
+                json.dump({"artifacts": captured, "missing": missing}, f,
+                          indent=2, sort_keys=True)
+        except OSError as e:
+            print(f"Warning: could not write captured.json: {e}")
+
+        if missing:
+            print(f"Warning: failure artifacts incomplete, missing: {', '.join(missing)}")
         print(f"Failure artifacts retained at {artifacts_dir}")
 
     def _dump_atspi_tree(self, max_depth: int = 12) -> str:

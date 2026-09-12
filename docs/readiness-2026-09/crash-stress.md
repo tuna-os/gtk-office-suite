@@ -32,7 +32,28 @@ Controller state machines generate valid commands and assert invariants after ev
       first attempt. Display axis covers 400/800/1280/1920 widths, light and dark, and scale 1 and 2; **high contrast is
       not covered** — it needs a theme the container does not ship, and an env var that changes nothing would be a worse
       lie than a visible gap.
-- [ ] Fixed regression seeds on every PR; a bounded random-seed campaign nightly; larger soak and complete matrix on the release candidate.
+- [~] Fixed regression seeds on every PR; a bounded random-seed campaign nightly; larger soak and complete
+      matrix on the release candidate. Two of those three hold, and the bare unchecked box was hiding both
+      what exists and what is actually left.
+      **Fixed seeds on every pull request: done** for the model and controller layers.
+      `{tables,decks,letters}-core/tests/stateful.rs` each carry a `FIXED_SEEDS` list — sixteen seeds,
+      run by `fixed_seeds_hold_the_invariants`, which is not `#[ignore]` and therefore runs in the `test`
+      lane on every revision. The list documents its own growth rule: a campaign that finds a failing seed
+      adds it there, so the regression becomes permanent instead of something the nightly might hit again.
+      The generator is a hand-written SplitMix64 rather than `rand`, precisely so a seed quoted in a
+      failure message reproduces the run for anyone, forever, and cannot be changed by a version bump.
+      **A bounded random-seed campaign nightly: done.** `gui-stress.yml` runs `seed_campaign` in all three
+      crates with `STATEFUL_SEED_COUNT=400`, and `STATEFUL_SEED_BASE` derived from the run number — so each
+      night covers a *different* 400 seeds rather than re-running the same ones, and the GUI campaign
+      itself (`tests/gui/stress.py`) derives its ordering seed from the clock and records it.
+      **Still open, and the real remaining work: the release candidate.** Nothing runs a larger soak or the
+      complete display matrix at a tag, and nothing refuses to certify a release that lacks one —
+      `release-revision.yml` enforces that kind of rule for the LibreOffice oracle already, so the
+      precedent and the mechanism both exist; the stress campaign is simply not wired into it.
+      Also open but not for want of mechanism: the GUI campaign has **no fixed regression seeds**, because
+      no GUI campaign failure has been recorded to pin. Adding an arbitrary fixed seed to the pull-request
+      gate would cost minutes per revision to re-run journeys in a shuffled order that never found
+      anything — a ritual rather than a regression test. The seed to pin is the one that first fails.
 - [~] Stateful sequences per app; cross-app clipboard and multi-window close/save races. All three apps are done and
       green, each running fixed seeds on every PR and 400 seeds a night. Tables (`tables-core/tests/stateful.rs`) found
       two identity bugs and #527 on its first runs. Decks (`decks-core/tests/stateful.rs`) found that align and
@@ -58,9 +79,103 @@ Controller state machines generate valid commands and assert invariants after ev
       each crate replays every retained crash input from its `tests/crashes/` directory, and the
       libFuzzer lane covers nine readers instead of three. It found three defects in
       `read_sheet_props_from_xlsx` on its first run, including a hang. See `interoperability.md`.
-- [ ] Always retain stderr/backtrace, core dump where supported, screenshot, AT-SPI tree, last snapshot, action trace and saved output fixtures on failure.
-- [ ] Track first-attempt failure rate and classify product crash, assertion mismatch, timeout, infrastructure setup and nondeterministic rendering separately.
-- [ ] No retry-until-green, weakened assertion, reduced generator alphabet or silent skip counts as a fix. Diagnostic reruns retain the original failure.
-- [ ] Each confirmed crash becomes a deterministic failing regression before the fix; close only with same-seed replay and relevant matrix evidence.
+      The **first nightly campaign run found a fourth**, and it is the one that shows the
+      instrument working end to end: `read_cond_rules_from_xlsx` stripped an ARGB dxf fill's alpha
+      byte with `if c.len() == 8 { c[2..] }`, and both halves count bytes — so a value of eight
+      bytes that is not eight characters was sliced mid-character and panicked. That reader returns
+      no `Result`, so a panic is its only failure mode, and any document with a multi-byte character
+      in that attribute took the app down rather than losing its conditional formatting. Seed
+      1015848, minimized to a 197-byte package in `tables-core/tests/crashes/`, which reproduces it
+      in 0.98s where the campaign needed 19s.
+- [x] Always retain stderr/backtrace, core dump where supported, screenshot, AT-SPI tree, last snapshot, action trace
+      and saved output fixtures on failure. The harness captured six of these, and captured **none of them for the one
+      class of failure where they matter most**: unittest skips `tearDown` when `setUp` raises, the app is launched *in*
+      `setUp`, and the capture was called only from `tearDown`. Measured against a stub binary that panicked on launch —
+      in the CI video mode a startup failure left exactly one file, `journey.mp4`; with video off it left no directory at
+      all. The app's own stderr, carrying a panic with its file and line, reached neither the artifacts nor the run log,
+      because nothing in the harness reads the process pipes except the capture that never ran. What a reader saw was
+      `Timed out after 15.0s waiting for application 'letters' in the AT-SPI registry` over a silent video. The recorder
+      had already been given an `addCleanup` for exactly this reason; the other six artifacts had not.
+      Capture is now a cleanup too, idempotent with the `tearDown` path, and writes `captured.json` saying per artifact
+      whether it landed and why not — a guarded capture could otherwise retain nothing and report it only as a printed
+      warning. A passing journey still retains nothing, which is the regression this change most risked, so a real
+      built app proves that rather than a stub.
+      **Core dumps and saved output fixtures are now covered too**, which completes the row.
+      Output fixtures were the easy half and the more useful one: a save round trip that wrote the
+      wrong bytes is not debuggable from a screenshot, and the file was being deleted by the
+      temp-directory cleanups that run immediately after capture. It survives because cleanups run
+      last-registered-first and `temp_dir` registers its removal *before* `setUp` registers the
+      capture — which holds only because every journey calls `temp_dir` before `super().setUp()`, as
+      the helper's own documentation instructs. A directory created after that is already gone, and
+      the manifest names it under `already_deleted` rather than pretending otherwise.
+      The first version of this dragged in a **mesa shader cache**: 100 files and 1.6 MB for one
+      journey against 101 bytes of actual evidence. `XDG_CACHE_HOME` is now excluded by exact path
+      rather than by name-matching, and the manifest records the exclusion — an artifact set that
+      buries the file you need is barely better than one that lacks it.
+      Core dumps are reported rather than promised, because "where supported" is load-bearing:
+      `/proc/sys/kernel/core_pattern` decides where a dump goes, and a pipe handler such as apport
+      means no file exists for a container to keep. The harness raises `RLIMIT_CORE` on itself so the
+      app inherits it (not through `preexec_fn`, which the standard library warns is unsafe once
+      threads exist, and dogtail brings threads), compares the directory before and after so another
+      attempt's core is never reported as this one's, and records the active pattern either way.
+      Measured against a binary that segfaults on launch: a 331 KB `ELF 64-bit LSB core file` naming
+      the crashed executable, moved into the artifacts rather than left in the launch directory where
+      the next attempt would claim it. Cores above `GUI_TEST_CORE_MAX_MB` (256 by default) are
+      removed with their size recorded, never silently dropped.
+      A journey that wrote nothing is recorded as *not applicable* rather than *missing*: every
+      startup crash legitimately has no output, and reporting that as a gap is what makes a real gap
+      unreadable. Only a capture that threw counts as missing.
+      **The core-dump half is proven locally and not exercised in CI**, which is worth stating because
+      the tick above would otherwise imply more than it should. The step now prints the kernel's setting,
+      and on a GitHub `ubuntu-24.04` runner it reads:
+
+      ```
+      kernel core_pattern: |/usr/lib/systemd/systemd-coredump %P %u %g %s %t 9223372036854775808 %h %d
+      ```
+
+      A pipe, so nothing is written next to the app and the retention path never runs there. The dump is
+      not lost — `systemd-coredump` takes it, and `coredumpctl` can read it — but it lands outside the
+      workspace, under a service a job does not control, and no CI step collects it. So the artifact that
+      matters for a real GTK segfault in CI is still out of reach; what is proven is that the harness
+      retains a core when the kernel writes one (measured locally: a 331 KB `ELF 64-bit LSB core file`)
+      and reports the pattern when it does not. Closing the CI half means collecting from
+      `coredumpctl` after a failing journey, which is a separate piece of work and not yet done.
+- [~] Track first-attempt failure rate and classify product crash, assertion mismatch, timeout, infrastructure setup and nondeterministic rendering separately.
+      `summarize()` reports `first_attempt_failure_rate` over every attempt that ran, and
+      `by_classification` counts product-crash, assertion-mismatch, timeout, infrastructure and
+      unclassified separately. Both are held by tests rather than inspected by eye:
+      `test_failure_rate_counts_every_attempt_once`, `test_classifications_are_reported_separately`
+      and `test_nonzero_exit_with_no_evidence_is_not_silently_a_pass`.
+      Not done: **nondeterministic rendering is not a class of its own.** A frame that differed
+      between two otherwise identical attempts currently lands in `assertion-mismatch` beside a
+      genuine wrong answer, which is the conflation this row asks to avoid — the two have different
+      owners and different fixes. Separating them needs a rendering comparison the harness does not
+      yet make, not just a sixth constant.
+- [~] No retry-until-green, weakened assertion, reduced generator alphabet or silent skip counts as a fix. Diagnostic reruns retain the original failure.
+      Three of the four are enforced, not merely intended. No retry: `stress.py` offers no retry
+      option at all (`test_no_retry_option_is_offered`), every planned attempt is distinct evidence
+      (`test_every_planned_attempt_is_distinct_evidence`), and a failing attempt still counts when a
+      later one passes (`test_a_failing_attempt_still_counts_when_a_later_one_passes`) — so a
+      diagnostic rerun cannot erase the original. No silent skip: `conformance/collect_skip_reasons.py`
+      requires every ignored Rust test to state its reason and rejects a disagreement between the
+      listing and the source, and the validator refuses a skipped result behind a `verified` claim.
+      Not enforced, and honestly only practice: **weakened assertions and narrowed generators.**
+      Nothing mechanical would stop either. What exists is precedent — Letters' stateful campaign
+      stayed parked on #532 rather than routing its generator around the defect, and fixing #532 then
+      exposed four more behind it — and the `FIXED_SEEDS` growth rule, which makes a find permanent
+      instead of something a later run might miss. A check here would have to compare generator
+      alphabets across revisions; it does not exist.
+- [~] Each confirmed crash becomes a deterministic failing regression before the fix; close only with same-seed replay and relevant matrix evidence.
+      The first half now has a worked example rather than a mechanism waiting for one. The
+      `condrules` panic above was reproduced at its seed first, minimized into
+      `tables-core/tests/crashes/`, confirmed to still panic against the unfixed reader, and only
+      then fixed; a unit test asserts the same defect at the reader's own level, and reverting the
+      fix fails both. Every crate's `malformed_inputs.rs` replays its whole `tests/crashes/`
+      directory on every pull request and prints how many inputs it replayed, so an empty directory
+      cannot be mistaken for an unwired check.
+      Not done: nothing **requires** that sequence. A crash could still be fixed without a retained
+      input, and "close only with same-seed replay and relevant matrix evidence" is a review
+      practice with no instrument behind it. `letters-core` and `decks-core` hold no retained inputs
+      yet, which is a true report of no finds rather than a gap.
 
 Initial stability target: zero crashes/data-loss/assertion failures in 20 consecutive runs of each critical journey per app at baseline, plus the admitted display matrix. This is a release threshold, not proof of zero defects; publish run counts, seeds and limitations. Longer overnight controller/fuzz campaigns stay resource-bounded.

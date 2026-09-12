@@ -10,6 +10,16 @@ on:
       - 'docs/RELEASE.md'
       - 'Cargo.lock'
       - '.github/workflows/release-gate.yml'
+      # The modules whose line ceilings this gate enforces. Without them the
+      # gate never ran on a pull request that grew one, which is how
+      # tables/src/window.rs crossed 2300 at 5c7f436 and stayed over on main
+      # until #594. Derived from scripts/release_gate.py's module_ceilings by
+      # tests/test_release_gate.py, so adding a ceiling without a trigger
+      # fails rather than going quiet.
+      - 'letters/src/window.rs'
+      - 'tables/src/window.rs'
+      - 'decks/src/window.rs'
+      - 'suite-common/src/lib.rs'
   push:
     tags: ['v*']
   workflow_dispatch:
