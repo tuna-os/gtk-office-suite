@@ -634,6 +634,54 @@ class TablesCloseGuardSmoke(BaseGUITestCase):
         self.assertGreater(os.path.getsize(out_path), 0)
 
 
+class LettersAutosaveFailureSmoke(BaseGUITestCase):
+    """The per-tab sweep must reach the user too.
+
+    Letters autosaves every dirty tab on one tick, through a notifier
+    threaded into `register_autosave` rather than held by the window — a
+    different path from Tables and Decks, so it is worth its own journey.
+
+    It asserts that a notice appears, and deliberately not that exactly one
+    appears: `AdwToastOverlay` queues toasts and shows one at a time, so the
+    accessibility tree cannot tell one notice from two, and a count here
+    would be a claim this journey has no way to check. The once-per-streak
+    property is asserted where it can actually fail, in
+    `suite_common_core::autosave::AutosaveNotices`' own tests.
+    """
+
+    app_name = "letters"
+
+    def setUp(self):
+        # A regular file where the state directory should be: fails with
+        # ENOTDIR for root as well, which a permission bit would not.
+        holder = self.temp_dir("letters-autosave-blocked-")
+        blocked = os.path.join(holder, "not-a-directory")
+        with open(blocked, "w", encoding="utf-8") as handle:
+            handle.write("occupied\n")
+        self.launch_env = {**getattr(self, "launch_env", {}), "XDG_STATE_HOME": blocked}
+        super().setUp()
+
+    def test_a_failing_per_tab_autosave_tells_the_user(self):
+        import subprocess
+        from dogtail import rawinput
+
+        aid = "org.tunaos.letters"
+        for text in ("first tab content", "second tab content"):
+            subprocess.run(["gapplication", "action", aid, "new-document"])
+            time.sleep(2.0)
+            rawinput.typeText(text)
+            time.sleep(1.0)
+
+        subprocess.run(["gapplication", "action", aid, "autosave-now"])
+        time.sleep(1.0)
+
+        labels = [n.name for n in self.app.findChildren(lambda x: x.roleName in ("label", "static"))]
+        self.assertTrue(
+            any("not being protected" in (name or "") for name in labels),
+            f"the per-tab sweep failed silently; labels on screen: {labels[:12]}",
+        )
+
+
 class TablesAutosaveSmoke(BaseGUITestCase):
     """Crash-recovery snapshot lifecycle (issue #99): a dirty, never-saved
     workbook survives an unclean process kill and is offered back on the
@@ -692,6 +740,73 @@ class TablesAutosaveSmoke(BaseGUITestCase):
         self.assertEqual(self._snapshot_files(), [],
                           "the recovered snapshot must be cleared so it isn't offered again")
 
+
+
+class TablesAutosaveFailureSmoke(BaseGUITestCase):
+    """What the user is told when autosave cannot write at all."""
+
+    app_name = "tables"
+
+    def setUp(self):
+        # XDG_STATE_HOME points at a regular file, so the app's
+        # `create_dir_all` of `<state>/tables` fails with ENOTDIR — for root
+        # as well, which a permission bit would not.
+        holder = self.temp_dir("tables-autosave-blocked-")
+        self._blocked = os.path.join(holder, "not-a-directory")
+        with open(self._blocked, "w", encoding="utf-8") as handle:
+            handle.write("occupied\n")
+        self.launch_env = {**getattr(self, "launch_env", {}), "XDG_STATE_HOME": self._blocked}
+        super().setUp()
+
+    def _snapshot_files(self):
+        return []
+
+    def _edit_a1(self):
+        import subprocess
+        from dogtail import rawinput
+
+        subprocess.run(["gapplication", "action", "org.tunaos.tables", "new-document"])
+        time.sleep(1.5)
+        rawinput.typeText("=6*7")
+        rawinput.keyCombo("Return")
+        time.sleep(0.5)
+
+    def test_an_autosave_that_cannot_write_says_so(self):
+        """Autosave used to fail in silence.
+
+        Every write site in the three apps read `let _ = slot.write(...)`, so
+        a read-only home, a full disk or a sandbox denying the state
+        directory meant autosave did nothing for the whole session while the
+        user went on believing their unsaved work was protected. They found
+        out at the crash — the one moment the feature exists for.
+
+        The write is made to fail by pointing the state directory at a path
+        whose parent is a *regular file*, not by chmod: this suite can run as
+        root, and root ignores directory permissions. `crash-stress.md`
+        records a previous test that made a write fail by chmod-ing to 0555
+        and therefore asserted nothing at all.
+        """
+        import subprocess
+
+        self._edit_a1()
+        subprocess.run(["gapplication", "action", "org.tunaos.tables", "autosave-now"])
+        time.sleep(0.8)
+
+        toast = self._toast_about_autosave()
+        self.assertIsNotNone(
+            toast,
+            "autosave could not write and the window said nothing; "
+            f"labels on screen: {[n.name for n in self.app.findChildren(lambda x: x.roleName == 'label')][:12]}",
+        )
+        self.assertEqual(self._snapshot_files(), [],
+                         "precondition: the write must really have failed")
+
+    def _toast_about_autosave(self):
+        """The toast, found by what it says rather than by widget path."""
+        for node in self.app.findChildren(lambda x: x.roleName in ("label", "static")):
+            if "not being protected" in (node.name or ""):
+                return node
+        return None
 
 class TablesUndoSaveReopenSmoke(BaseGUITestCase):
     """Real GTK journey: edit, undo, redo, save, restart, and reopen."""
