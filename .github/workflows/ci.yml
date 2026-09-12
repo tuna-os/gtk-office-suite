@@ -63,6 +63,7 @@ jobs:
             tests/test_journey_selection.py \
             tests/test_oracle_triggers.py \
             tests/test_patched_dependencies.py \
+            tests/test_roadmap_figures.py \
             tests/adaptive_editor_contract.py
 
       # E1-E3: green rows cite evidence, referenced paths exist, journey-gated
@@ -104,6 +105,7 @@ jobs:
             tests/test_journey_selection.py \
             tests/test_oracle_triggers.py \
             tests/test_patched_dependencies.py \
+            tests/test_roadmap_figures.py \
             tests/adaptive_editor_contract.py > python-collected.txt
           python3 conformance/collect_test_inventory.py \
             --pytest "tests=python-collected.txt" --out python-inventory.json
