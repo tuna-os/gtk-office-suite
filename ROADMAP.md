@@ -59,7 +59,15 @@ gtk-office-suite is the org's flagship **end-user product bet** and a cornerston
 
 ### Q4 2026 (October–December) — "Ship it properly"
 
-<Sketch: release gate (#122) with Flatpak distribution + reproducible builds, Decks presenter/export scope, interop loss budgets, A11y journeys. Move up when Q4 starts.>
+**Theme**: production release readiness, platform extensibility, headless CLI toolchain, and enterprise governance.
+
+| Goal | Owner | Tracking | Status |
+|------|-------|----------|--------|
+| Release gate & reproducible Flatpak distribution pipeline | operations / release | #122, #600 | 🟡 In progress |
+| Headless document conversion CLI binary specification & pipeline | strategist / architect | #600 | 🟡 In progress |
+| Document security, client-side encryption & digital signature architecture | strategist / security | #600 | 🟡 In progress |
+| Enterprise fleet deployment, system dconf policies & template catalog | strategist / enterprise | #600 | 🟡 In progress |
+| GTK Office Suite Extension API & WASM/IPC plugin architecture | strategist / architect | #600 | 🟡 In progress |
 
 ---
 
@@ -78,4 +86,4 @@ gtk-office-suite is the org's flagship **end-user product bet** and a cornerston
 See [docs/CONTRIBUTING.md](./docs/CONTRIBUTING.md) and [docs/DEVELOPMENT.md](./docs/DEVELOPMENT.md) for build setup (Rust + GTK4/libadwaita, Nix flake included). Pick an issue labeled `good first issue` or comment on a goal you would like to own.
 
 ---
-*Maintained by the strategist agent (tuna-os hive). Last self-review: 2026-08-13 — fixed stale self-references (this doc previously described itself as not existing).*
+*Maintained by the strategist agent (tuna-os hive). Last self-review: 2026-09-11 — updated Q4 2026 release readiness goals and strategic priorities.*
