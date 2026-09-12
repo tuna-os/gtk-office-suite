@@ -634,6 +634,99 @@ class TablesCloseGuardSmoke(BaseGUITestCase):
         self.assertGreater(os.path.getsize(out_path), 0)
 
 
+class TablesStaleSnapshotSmoke(BaseGUITestCase):
+    """Already-saved work must not come back as a recovery offer.
+
+    A snapshot is cleared when the document is saved, but that clear was
+    written `let _ = slot.clear()` — a read-only state directory or a full
+    disk left the snapshot behind with the failure discarded. The next launch
+    then offered the user their *already-saved* workbook back as
+    "recovered": a scary dialog about losing nothing. Whatever they chose,
+    the clear failed again, so it returned on every launch.
+
+    Reporting the failed clear would not help much — it happens at the moment
+    of a successful save, about a temporary file nobody can act on — so what
+    is suppressed is the false offer itself: a snapshot the saved file has
+    overtaken has nothing left to recover.
+
+    The journey builds that state the way a failed clear leaves it. Save a
+    real workbook, reopen it, edit, snapshot, then make the saved file newer
+    than the snapshot and crash. The relaunch must come up as an ordinary
+    window, not a recovery.
+    """
+
+    app_name = "tables"
+
+    def setUp(self):
+        self._state_dir = self.isolate_autosave_state(prefix="tables-stale-state-")
+        self._dir = self.temp_dir("tables-stale-docs-")
+        super().setUp()
+
+    def _snapshot_files(self):
+        snap_dir = os.path.join(self._state_dir, "tables")
+        if not os.path.isdir(snap_dir):
+            return []
+        return [f for f in os.listdir(snap_dir) if f.endswith(".snapshot")]
+
+    def _save_a_real_workbook(self):
+        """Save through the close guard, which is the route a journey has to
+        a genuinely written file, and leaves the app closed."""
+        import subprocess
+
+        from dogtail import rawinput, tree
+
+        out_path = os.path.join(self._dir, "quarterly.xlsx")
+        subprocess.run(["gapplication", "action", "org.tunaos.tables", "new-document"])
+        time.sleep(1.5)
+        rawinput.typeText("=6*7")
+        rawinput.keyCombo("Return")
+        time.sleep(0.5)
+
+        self.app.child(name="Close", roleName="push button").do_action(0)
+        time.sleep(0.8)
+        self.app.child(name="Save", roleName="push button").do_action(0)
+        time.sleep(1.0)
+        name_entry = tree.root.findChild(lambda n: n.name == "Name:" and n.roleName == "text")
+        name_entry.text = out_path
+        time.sleep(0.3)
+        tree.root.findChild(lambda n: n.name == "Save" and n.roleName == "push button").do_action(0)
+        self.assertIsNotNone(self.wait_for_process_exit(), "the save did not complete")
+        self.assertTrue(os.path.exists(out_path), "no workbook was written")
+        return out_path
+
+    def test_a_snapshot_the_save_overtook_is_not_offered_as_recovery(self):
+        import subprocess
+
+        from dogtail import rawinput
+
+        out_path = self._save_a_real_workbook()
+
+        # Reopen the saved file so the snapshot records it as the document's
+        # path, then dirty it and snapshot.
+        self.relaunch_app(launch_args=[out_path])
+        time.sleep(2.0)
+        rawinput.typeText("=1+1")
+        rawinput.keyCombo("Return")
+        time.sleep(0.5)
+        subprocess.run(["gapplication", "action", "org.tunaos.tables", "autosave-now"])
+        time.sleep(0.8)
+        self.assertEqual(len(self._snapshot_files()), 1, "precondition: a snapshot exists")
+
+        # What a failed clear leaves behind: the document saved after the
+        # snapshot was taken, and the snapshot still on disk.
+        saved_later = time.time() + 10
+        os.utime(out_path, (saved_later, saved_later))
+
+        self.relaunch_app(crash=True)
+        time.sleep(2.0)
+        frame = self.app.child(roleName="frame")
+        self.assertNotIn(
+            "Recovered", frame.name,
+            "work already on disk was offered back as a recovery: the window "
+            f"came up as {frame.name!r}",
+        )
+
+
 class TablesAutosaveSmoke(BaseGUITestCase):
     """Crash-recovery snapshot lifecycle (issue #99): a dirty, never-saved
     workbook survives an unclean process kill and is offered back on the
