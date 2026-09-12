@@ -35,8 +35,13 @@ READINESS_FILES = {
     "313": "ci-gates.md",
     "354": "gui-testing.md",
 }
-# "- [x] ..." / "- [ ] ..." at the top level of a readiness checklist.
-CHECKBOX = re.compile(r"^- \[([ xX])\]", re.M)
+# "- [x] ...", "- [ ] ..." or "- [~] ..." at the top level of a readiness
+# checklist. The partial marker counts toward the total and not toward done:
+# the two mapped documents happen to use none today, but crash-stress.md,
+# recovery.md, interoperability.md and letters-fidelity.md all do, so a
+# pattern that ignored it would silently undercount the moment one of those
+# gained a figure — a wrong total, arrived at by a check.
+CHECKBOX = re.compile(r"^- \[([ xX~])\]", re.M)
 
 
 def claimed_rows():

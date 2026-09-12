@@ -286,6 +286,27 @@
       }
     },
     {
+      "id": "ci.failure-evidence-survives-setup",
+      "app": "suite",
+      "title": "A journey that fails before its body still leaves evidence",
+      "scope": "unittest skips tearDown when setUp raises, and the app is launched in setUp, so the whole class of startup failures used to retain nothing a reader could debug: in CI exactly one file (journey.mp4), and with video off not even a directory. The app's own stderr — where a startup panic names its file and line — was read only by the capture that never ran, so it reached neither the artifacts nor the run log. Capture is now a cleanup, idempotent with the tearDown path, and records per-artifact whether each one landed so a guarded capture cannot retain nothing quietly. A passing journey still retains nothing.",
+      "issue": 442,
+      "status": "verified",
+      "revision": "PENDING",
+      "requires": [
+        "gui"
+      ],
+      "evidence": {
+        "gui": [
+          "tests/gui/test_harness_artifacts.py::StartupFailureArtifacts::test_a_crash_before_the_test_body_still_retains_the_apps_stderr",
+          "tests/gui/test_harness_artifacts.py::StartupFailureArtifacts::test_the_other_artifacts_are_retained_too",
+          "tests/gui/test_harness_artifacts.py::StartupFailureArtifacts::test_the_manifest_says_what_was_and_was_not_captured",
+          "tests/gui/test_harness_artifacts.py::StartupFailureArtifacts::test_a_capture_that_produces_nothing_is_recorded_as_missing",
+          "tests/gui/test_harness_artifacts.py::PassingJourneysLeaveNothing::test_a_passing_journey_retains_no_artifacts"
+        ]
+      }
+    },
+    {
       "id": "ci.skips-name-their-reason",
       "app": "suite",
       "title": "Every test that sits out a run says why",

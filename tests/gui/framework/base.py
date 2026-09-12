@@ -134,10 +134,31 @@ class BaseGUITestCase(unittest.TestCase):
         # all — or another run's process on a different display (#241).
         _terminate_owned(self.app_name)
 
+        # No verdict yet. `_callTestMethod` sets this True or False; it
+        # stays None if setUp never finishes, which is the case the cleanup
+        # below exists for — a run with no verdict is a failure, not a pass.
+        self._test_failed = None
+        self._input_trace = []
+
         # Start recording before the app launches: a startup crash or a
         # window that never appears is exactly the failure whose video is
         # worth having, and it happens in the first second.
         self._start_recording()
+
+        # Same reasoning as the recorder's own cleanup, for the other six
+        # artifacts: unittest skips tearDown when setUp raises, so a
+        # capture called only from tearDown retains nothing for a startup
+        # failure. Measured before this existed — a binary that panicked on
+        # launch left exactly one file, journey.mp4, and its stderr (a
+        # panic with a file and line) reached neither the artifacts nor the
+        # run log, because the harness reads the process pipes only inside
+        # the capture that never ran. The failure a reader saw was "Timed
+        # out waiting for application 'letters'" over a silent video.
+        #
+        # Registered after the recorder's cleanup so it runs *before* it
+        # (cleanups are LIFO): the app log is read by terminating the
+        # process, and the clip should still be rolling while that happens.
+        self.addCleanup(self._capture_failure_artifacts_if_unresolved)
 
         # Launch app under GDK_BACKEND=x11
         env = os.environ.copy()
@@ -154,7 +175,6 @@ class BaseGUITestCase(unittest.TestCase):
 
         # Wait for application node in AT-SPI tree
         self.app = self.wait_for_app(self.app_name)
-        self._input_trace = []
         self._activate_window()
         self.last_screenshot = None
 
@@ -470,12 +490,23 @@ class BaseGUITestCase(unittest.TestCase):
         try:
             method()
             self._test_failed = False
+        except unittest.SkipTest:
+            # A skip is neither a pass nor a failure, but for evidence it
+            # behaves like a pass: there is nothing to debug. `SkipTest`
+            # derives from `Exception`, so the handler below used to catch
+            # it and record the journey as failed — which labelled the clip
+            # `"outcome": "failed"` and, once capture became a cleanup,
+            # would have collected a full artifact set for every skipped
+            # journey. `skipTest("GEMINI_API_KEY not set")` in the VLM
+            # helpers is the live case.
+            self._test_failed = False
+            raise
         except Exception:
             self._test_failed = True
             raise
 
     def tearDown(self):
-        failed = getattr(self, "_test_failed", False)
+        failed = getattr(self, "_test_failed", None) is not False
         if failed:
             self._capture_failure_artifacts()
         self._finish_recording(failed)
@@ -489,11 +520,38 @@ class BaseGUITestCase(unittest.TestCase):
             except subprocess.TimeoutExpired:
                 self.process.kill()
 
+    def _capture_failure_artifacts_if_unresolved(self):
+        """Cleanup path: capture unless the test actually passed.
+
+        `_test_failed` is None when setUp never finished, which is the whole
+        reason this runs as a cleanup rather than from tearDown. Only an
+        explicit False — a test method that returned — means there is
+        nothing to retain.
+        """
+        if getattr(self, "_test_failed", None) is False:
+            return
+        self._capture_failure_artifacts()
+
     def _capture_failure_artifacts(self):
         """Retain enough to debug a failure without re-running it:
         screenshot, app stdout/stderr, AT-SPI tree dump, the input trace
         (every synthetic click/key/type call this test made), and the
-        state snapshot file if the test used GTK_OFFICE_SNAPSHOT_PATH."""
+        state snapshot file if the test used GTK_OFFICE_SNAPSHOT_PATH.
+
+        Every capture below is individually guarded, because a screenshot
+        that cannot be taken must not cost us the app log. That guarding is
+        also how a capture can quietly retain nothing, so each one records
+        whether it produced a file, and `captured.json` says so in a form
+        something other than a human reading scrollback can check.
+
+        Safe to call twice: tearDown calls it on a failing test and the
+        cleanup calls it when setUp failed, and on a test that fails inside
+        the method both paths are live.
+        """
+        if getattr(self, "_artifacts_captured", False):
+            return
+        self._artifacts_captured = True
+
         artifacts_dir = os.path.join(self.gui_dir, "failure_artifacts",
                                       f"{type(self).__name__}.{self._testMethodName}")
         try:
@@ -502,26 +560,50 @@ class BaseGUITestCase(unittest.TestCase):
             print(f"Warning: could not create artifacts dir: {e}")
             return
 
+        captured = {}
+
+        def record(name, filename, why=None):
+            """Whether one artifact landed, and if not, why not."""
+            path = os.path.join(artifacts_dir, filename)
+            present = os.path.exists(path) and os.path.getsize(path) > 0
+            captured[name] = {"file": filename, "captured": present}
+            if not present:
+                captured[name]["reason"] = why or "produced no file"
+
         try:
             self.take_screenshot("failure", crop=False)
             if self.last_screenshot and os.path.exists(self.last_screenshot):
                 import shutil
                 shutil.copy(self.last_screenshot, os.path.join(artifacts_dir, "screenshot.png"))
+            failure = None
         except Exception as e:
+            failure = str(e)
             print(f"Warning: failure screenshot capture failed: {e}")
+        record("screenshot", "screenshot.png", failure)
 
         try:
             with open(os.path.join(artifacts_dir, "atspi_tree.txt"), "w") as f:
                 f.write(self._dump_atspi_tree())
+            failure = None
         except Exception as e:
+            failure = str(e)
             print(f"Warning: AT-SPI tree dump failed: {e}")
+        record("atspi_tree", "atspi_tree.txt", failure)
 
         try:
             with open(os.path.join(artifacts_dir, "input_trace.json"), "w") as f:
                 json.dump(getattr(self, "_input_trace", []), f, indent=2)
+            failure = None
         except Exception as e:
+            failure = str(e)
             print(f"Warning: input trace dump failed: {e}")
+        record("input_trace", "input_trace.json", failure)
 
+        # The app's own stdout/stderr, which is where a startup panic with a
+        # file and line number lives. It is read by terminating the process
+        # and draining its pipes, so it can only be had once and only here:
+        # nothing else in the harness reads them before the process is
+        # reaped. An app that never reached the AT-SPI tree still has this.
         try:
             if hasattr(self, "process") and self.process and self.process.poll() is None:
                 self.process.terminate()
@@ -532,17 +614,51 @@ class BaseGUITestCase(unittest.TestCase):
                     f.write(out or "")
                     f.write("\n--- stderr ---\n")
                     f.write(err or "")
+                failure = None
+            else:
+                failure = "no app process was launched"
         except Exception as e:
+            failure = str(e)
             print(f"Warning: app log capture failed: {e}")
+        record("app_log", "app.log", failure)
 
         snapshot_path = os.environ.get("GTK_OFFICE_SNAPSHOT_PATH")
-        if snapshot_path and os.path.exists(snapshot_path):
+        if not snapshot_path:
+            captured["state_snapshot"] = {
+                "captured": False,
+                "reason": "this journey does not use GTK_OFFICE_SNAPSHOT_PATH",
+                "applicable": False,
+            }
+        elif not os.path.exists(snapshot_path):
+            captured["state_snapshot"] = {
+                "captured": False,
+                "reason": f"{snapshot_path} does not exist",
+            }
+        else:
             try:
                 import shutil
                 shutil.copy(snapshot_path, os.path.join(artifacts_dir, "state_snapshot.json"))
+                failure = None
             except Exception as e:
+                failure = str(e)
                 print(f"Warning: snapshot artifact copy failed: {e}")
+            record("state_snapshot", "state_snapshot.json", failure)
 
+        # What was and was not retained, in a file rather than in warnings
+        # scrolled past. Without it a capture where every step threw leaves
+        # an almost-empty directory that reads like a failure with nothing
+        # to show, instead of a harness that failed to show it.
+        missing = sorted(name for name, row in captured.items()
+                         if not row["captured"] and row.get("applicable", True))
+        try:
+            with open(os.path.join(artifacts_dir, "captured.json"), "w") as f:
+                json.dump({"artifacts": captured, "missing": missing}, f,
+                          indent=2, sort_keys=True)
+        except OSError as e:
+            print(f"Warning: could not write captured.json: {e}")
+
+        if missing:
+            print(f"Warning: failure artifacts incomplete, missing: {', '.join(missing)}")
         print(f"Failure artifacts retained at {artifacts_dir}")
 
     def _dump_atspi_tree(self, max_depth: int = 12) -> str:

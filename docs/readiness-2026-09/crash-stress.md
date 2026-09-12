@@ -58,7 +58,20 @@ Controller state machines generate valid commands and assert invariants after ev
       each crate replays every retained crash input from its `tests/crashes/` directory, and the
       libFuzzer lane covers nine readers instead of three. It found three defects in
       `read_sheet_props_from_xlsx` on its first run, including a hang. See `interoperability.md`.
-- [ ] Always retain stderr/backtrace, core dump where supported, screenshot, AT-SPI tree, last snapshot, action trace and saved output fixtures on failure.
+- [~] Always retain stderr/backtrace, core dump where supported, screenshot, AT-SPI tree, last snapshot, action trace
+      and saved output fixtures on failure. The harness captured six of these, and captured **none of them for the one
+      class of failure where they matter most**: unittest skips `tearDown` when `setUp` raises, the app is launched *in*
+      `setUp`, and the capture was called only from `tearDown`. Measured against a stub binary that panicked on launch —
+      in the CI video mode a startup failure left exactly one file, `journey.mp4`; with video off it left no directory at
+      all. The app's own stderr, carrying a panic with its file and line, reached neither the artifacts nor the run log,
+      because nothing in the harness reads the process pipes except the capture that never ran. What a reader saw was
+      `Timed out after 15.0s waiting for application 'letters' in the AT-SPI registry` over a silent video. The recorder
+      had already been given an `addCleanup` for exactly this reason; the other six artifacts had not.
+      Capture is now a cleanup too, idempotent with the `tearDown` path, and writes `captured.json` saying per artifact
+      whether it landed and why not — a guarded capture could otherwise retain nothing and report it only as a printed
+      warning. A passing journey still retains nothing, which is the regression this change most risked, so a real
+      built app proves that rather than a stub.
+      Still missing, and not claimed: **core dumps** and **saved output fixtures** (the files a journey wrote).
 - [ ] Track first-attempt failure rate and classify product crash, assertion mismatch, timeout, infrastructure setup and nondeterministic rendering separately.
 - [ ] No retry-until-green, weakened assertion, reduced generator alphabet or silent skip counts as a fix. Diagnostic reruns retain the original failure.
 - [ ] Each confirmed crash becomes a deterministic failing regression before the fix; close only with same-seed replay and relevant matrix evidence.
