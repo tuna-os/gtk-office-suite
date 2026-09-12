@@ -43,6 +43,7 @@ list follows.
 - [ ] #440 — Decks authoring and presentation — [decks-readiness.md](decks-readiness.md) 0/7
 - [ ] #400 — performance, rendering and accessibility evidence — [performance-accessibility.md](performance-accessibility.md) 0/7
 - [ ] #326 — installed-release signoff — [release.md](release.md) 0/9
+- [ ] #650 — headless document conversion CLI — [headless-conversion-spec.md](headless-conversion-spec.md) 0/3
 
 | Phase | Execution issue | Exit evidence |
 |---|---|---|

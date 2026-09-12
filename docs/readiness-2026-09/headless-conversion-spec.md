@@ -57,10 +57,9 @@ suite-common-core (GTK-free: parsing, AST, loss budgets)
 
 ---
 
-## 5. Next Steps & Implementation Phasing
+## 6. Checklist
 
-1. **Phase 1 (Q4 2026)**: Binary skeleton in `crates/suite-convert` consuming `suite-common-core`. Support Markdown and ODT to PDF export.
-2. **Phase 2 (Q4 2026)**: Tables CSV/ODS export integration and Decks slide snapshot rendering.
-3. **Phase 3 (Q1 2027)**: Interop loss-budget validation integration via CLI flag (`--loss-budget`).
+- [ ] Specify `suite-convert` CLI interfaces and subcommands
+- [ ] Define integration points with `letters-core`, `tables-core`, and `decks-core`
+- [ ] Establish interop loss budget enforcement interface via `--loss-budget`
 
----
