@@ -15,6 +15,10 @@ concurrency:
 
 permissions:
   contents: write
+  # `gh pr create` below needs this; without it the step 403s after the
+  # branch has already been pushed, which is a worse failure than the one
+  # it replaced — work done, nothing proposed.
+  pull-requests: write
 
 jobs:
   capture:
@@ -42,7 +46,24 @@ jobs:
       - name: Capture walkthrough
         run: tests/gui/capture_walkthrough.sh docs/screenshots
 
-      - name: Commit updated screenshots
+      # Opens a pull request instead of pushing to main, because pushing to
+      # main cannot work: `main` requires the `test` status check, and this
+      # job's commit carried `[skip ci]`, so the check it needed was the one
+      # thing the commit guaranteed would never run. Every dispatch that
+      # actually had new screenshots to commit died here:
+      #
+      #   remote: error: GH006: Protected branch update failed for refs/heads/main.
+      #   remote: - Required status check "test" is expected.
+      #   ! [remote rejected] main -> main (protected branch hook declined)
+      #
+      # A deadlock, not a flake, and it had been failing since protection
+      # was enabled — silently, because a screenshot run nobody watches
+      # failing on its last step looks the same as one that had nothing to
+      # do. `[skip ci]` is gone for the same reason: the pull request needs
+      # CI to run if it is ever to be mergeable.
+      - name: Open a pull request with the updated screenshots
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           git config user.name "screenshot-bot"
           git config user.email "actions@github.com"
@@ -51,8 +72,36 @@ jobs:
             echo "screenshots unchanged"
             exit 0
           fi
-          git commit -m "docs: refresh walkthrough screenshots [skip ci]"
-          # main may have moved while we built; replay the screenshot
-          # commit on top rather than failing the push.
-          git pull --rebase origin main
-          git push
+
+          # One long-lived branch, force-pushed: successive weekly runs
+          # should replace the pending refresh rather than pile up a branch
+          # and a pull request each. Screenshots are regenerated wholesale,
+          # so there is no history here worth keeping.
+          branch="bot/screenshot-refresh"
+          git commit -m "docs: refresh walkthrough screenshots"
+          git push --force origin "HEAD:refs/heads/$branch"
+
+          # `gh pr create` fails if one is already open for the branch, and
+          # a reused branch usually means there is. Reuse it: the force
+          # push above has already updated what it proposes.
+          existing=$(gh pr list --head "$branch" --state open \
+            --json number --jq '.[0].number // empty')
+          if [ -n "$existing" ]; then
+            echo "Refreshed the screenshots on existing PR #$existing"
+            exit 0
+          fi
+          # Heredoc, not an inline string: a quoted multi-line argument
+          # carries this file's own indentation into the rendered body.
+          cat > /tmp/pr-body.md <<'BODY'
+          Regenerated from the real apps by the Screenshots workflow.
+
+          Font rendering shifts between runner images, so a diff here is not
+          necessarily a UI change — compare the images before merging.
+
+          Opened as a pull request rather than pushed to `main`, which
+          requires the `test` status check.
+          BODY
+          sed -i 's/^          //' /tmp/pr-body.md
+          gh pr create --base main --head "$branch" \
+            --title "docs: refresh walkthrough screenshots" \
+            --body-file /tmp/pr-body.md

@@ -34,7 +34,21 @@ Reuse this issue for validator-test wiring, coordinated with #241 (GTK execution
 - [ ] Wire corpus validation, parity validation, validator self-tests and
       release contract into required checks — three of the four run on
       every pull request; whether they are *required* is a
-      branch-protection setting, not visible from the repository. The
+      branch-protection setting, which the repository cannot read — but a
+      failed run can. A `Screenshots` dispatch on `955f628` tried to push
+      its refresh to `main` and was refused:
+
+      ```
+      remote: error: GH006: Protected branch update failed for refs/heads/main.
+      remote: - Required status check "test" is expected.
+      ```
+
+      So `test` **is** required, observed rather than assumed, and the
+      setting announces itself to anything that tries to bypass it. The
+      other three are still unknown by the same argument, and nothing here
+      tries to push to `main` to find out. (The deadlock that run hit — a
+      `[skip ci]` commit needing the check it forbade — is fixed
+      separately; this entry is only about what it proved.) The
       release contract is the exception and it is worse than unrequired:
       `release-gate.yml` only triggers on `flatpak/**`, `flathub/**`,
       `po/**`, `Cargo.lock` and its own path, so ordinary pull requests
