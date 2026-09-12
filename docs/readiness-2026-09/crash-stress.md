@@ -117,6 +117,21 @@ Controller state machines generate valid commands and assert invariants after ev
       A journey that wrote nothing is recorded as *not applicable* rather than *missing*: every
       startup crash legitimately has no output, and reporting that as a gap is what makes a real gap
       unreadable. Only a capture that threw counts as missing.
+      **The core-dump half is proven locally and not exercised in CI**, which is worth stating because
+      the tick above would otherwise imply more than it should. The step now prints the kernel's setting,
+      and on a GitHub `ubuntu-24.04` runner it reads:
+
+      ```
+      kernel core_pattern: |/usr/lib/systemd/systemd-coredump %P %u %g %s %t 9223372036854775808 %h %d
+      ```
+
+      A pipe, so nothing is written next to the app and the retention path never runs there. The dump is
+      not lost — `systemd-coredump` takes it, and `coredumpctl` can read it — but it lands outside the
+      workspace, under a service a job does not control, and no CI step collects it. So the artifact that
+      matters for a real GTK segfault in CI is still out of reach; what is proven is that the harness
+      retains a core when the kernel writes one (measured locally: a 331 KB `ELF 64-bit LSB core file`)
+      and reports the pattern when it does not. Closing the CI half means collecting from
+      `coredumpctl` after a failing journey, which is a separate piece of work and not yet done.
 - [ ] Track first-attempt failure rate and classify product crash, assertion mismatch, timeout, infrastructure setup and nondeterministic rendering separately.
 - [ ] No retry-until-green, weakened assertion, reduced generator alphabet or silent skip counts as a fix. Diagnostic reruns retain the original failure.
 - [ ] Each confirmed crash becomes a deterministic failing regression before the fix; close only with same-seed replay and relevant matrix evidence.
