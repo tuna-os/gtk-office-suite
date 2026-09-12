@@ -374,6 +374,7 @@ class LettersAutosaveSmoke(BaseGUITestCase):
         time.sleep(0.5)
         self.assertEqual(len(self._snapshot_files()), 2,
                           "both dirty tabs should have snapshotted")
+        recovered_from = set(self._snapshot_files())
 
         # Simulate a crash: kill the process directly, bypassing the close
         # guard, so the snapshots are never cleared by a clean exit.
@@ -382,8 +383,29 @@ class LettersAutosaveSmoke(BaseGUITestCase):
 
         frame = self.app.child(roleName="frame")
         self.assertIn("Recovered", frame.name, f"window did not announce recovery: {frame.name!r}")
-        self.assertEqual(self._snapshot_files(), [],
-                          "both recovered snapshots must be cleared so they aren't offered again")
+        # The assertion below used to read `self._snapshot_files() == []`:
+        # after recovery, nothing on disk. That was a proxy for the thing
+        # actually required — the orphan is not offered a second time — and
+        # it stopped being a safe proxy once recovery began writing the
+        # recovered content to the new window's own slot before clearing the
+        # orphan. Zero files also describes unprotected work, which is what
+        # that spelling was quietly asserting: the old code left the
+        # recovered document with no snapshot until the next timer tick.
+        # So the intent is asserted directly instead, and more strictly: the
+        # recovered orphan is gone, and the recovered work is itself covered.
+        # Waited for rather than sampled after a fixed sleep, because the
+        # `== []` version sampled 1.5s after relaunch and lost that race
+        # under the load of a full batch run — it failed twice in one batch
+        # and passed three consecutive focused runs. A post-condition that
+        # needs a sleep to hold is a post-condition to wait for.
+        present = self.wait_until(
+            lambda: set(self._snapshot_files()),
+            lambda files: not (files & recovered_from),
+            description="both recovered orphans must be cleared so they aren't offered again",
+        )
+        self.assertEqual(len(present), 2,
+                          "both recovered tabs must themselves be protected by a snapshot; "
+                          f"found {sorted(present)}")
 
         seen = set()
         for _ in range(2):
@@ -634,6 +656,169 @@ class TablesCloseGuardSmoke(BaseGUITestCase):
         self.assertGreater(os.path.getsize(out_path), 0)
 
 
+class TablesRecoveryIsItselfProtectedSmoke(BaseGUITestCase):
+    """Recovered work must survive a second crash.
+
+    Recovery used to clear the orphan slot as soon as the content was in
+    memory and leave the next autosave tick to write a replacement — up to a
+    minute later at the shipped interval. Crash inside that window and the
+    work was gone: it had survived one crash and was lost to the next, which
+    is the one thing crash recovery must not do.
+
+    The journey is the sequence that exposes it. Dirty a workbook, snapshot
+    it, crash, relaunch (recovery happens here), then crash *again* without
+    letting any autosave run — no `autosave-now`, and the interval is left
+    long on purpose — and relaunch once more. The content has to still be
+    there.
+    """
+
+    app_name = "tables"
+
+    def setUp(self):
+        self._state_dir = self.isolate_autosave_state(prefix="tables-double-crash-state-")
+        super().setUp()
+
+    def _snapshot_files(self):
+        snap_dir = os.path.join(self._state_dir, "tables")
+        if not os.path.isdir(snap_dir):
+            return []
+        return [f for f in os.listdir(snap_dir) if f.endswith(".snapshot")]
+
+    def test_a_second_crash_right_after_recovery_keeps_the_work(self):
+        import subprocess
+        from dogtail import rawinput
+
+        subprocess.run(["gapplication", "action", "org.tunaos.tables", "new-document"])
+        time.sleep(1.5)
+        rawinput.typeText("=6*7")
+        rawinput.keyCombo("Return")
+        time.sleep(0.5)
+        subprocess.run(["gapplication", "action", "org.tunaos.tables", "autosave-now"])
+        time.sleep(0.5)
+        self.assertEqual(len(self._snapshot_files()), 1, "precondition: one snapshot to recover")
+
+        # First crash and relaunch: this is where recovery runs.
+        self.relaunch_app(crash=True)
+        time.sleep(2.0)
+        frame = self.app.child(roleName="frame")
+        self.assertIn("Recovered", frame.name, f"first relaunch did not recover: {frame.name!r}")
+        self.assertEqual(
+            len(self._snapshot_files()), 1,
+            "after recovery the work must be covered by a snapshot again — this is "
+            "the assertion that fails when recovery clears the orphan and waits "
+            f"for a timer tick; found {self._snapshot_files()}",
+        )
+
+        # Second crash, with no autosave in between: nothing but the write
+        # recovery itself performed can be protecting the document now.
+        self.relaunch_app(crash=True)
+        time.sleep(2.0)
+        frame = self.app.child(roleName="frame")
+        self.assertIn(
+            "Recovered", frame.name,
+            "work that survived one crash was lost to the next: "
+            f"window title after the second relaunch was {frame.name!r}",
+        )
+
+
+class DecksRecoveryIsItselfProtectedSmoke(BaseGUITestCase):
+    """Decks: recovered work must survive a second crash. Same defect and
+    same sequence as the Tables journey above."""
+
+    app_name = "decks"
+
+    def setUp(self):
+        self._state_dir = self.isolate_autosave_state(prefix="decks-double-crash-state-")
+        super().setUp()
+
+    def _snapshot_files(self):
+        snap_dir = os.path.join(self._state_dir, "decks")
+        if not os.path.isdir(snap_dir):
+            return []
+        return [f for f in os.listdir(snap_dir) if f.endswith(".snapshot")]
+
+    def test_a_second_crash_right_after_recovery_keeps_the_work(self):
+        import subprocess
+
+        aid = "org.tunaos.decks"
+        subprocess.run(["gapplication", "action", aid, "new-document"])
+        time.sleep(1.5)
+        subprocess.run(["gapplication", "action", aid, "add-shape"])
+        time.sleep(1.0)
+        subprocess.run(["gapplication", "action", aid, "autosave-now"])
+        time.sleep(0.5)
+        self.assertEqual(len(self._snapshot_files()), 1, "precondition: one snapshot to recover")
+
+        self.relaunch_app(crash=True)
+        time.sleep(2.0)
+        self.assertIn("Recovered", self.app.child(roleName="frame").name,
+                      "first relaunch did not recover")
+        self.assertEqual(
+            len(self._snapshot_files()), 1,
+            "after recovery the deck must be covered by a snapshot again; "
+            f"found {self._snapshot_files()}",
+        )
+
+        self.relaunch_app(crash=True)
+        time.sleep(2.0)
+        frame = self.app.child(roleName="frame")
+        self.assertIn("Recovered", frame.name,
+                      "a deck that survived one crash was lost to the next: "
+                      f"title was {frame.name!r}")
+
+
+class LettersRecoveryIsItselfProtectedSmoke(BaseGUITestCase):
+    """Letters: a recovered tab must survive a second crash.
+
+    Worse here before the fix than in the other two apps, because Letters
+    shipped with its autosave timer switched off — "the next tick will
+    re-snapshot it" was never going to happen at all, so a recovered tab was
+    unprotected for the whole session.
+    """
+
+    app_name = "letters"
+
+    def setUp(self):
+        self._state_dir = self.isolate_autosave_state(prefix="letters-double-crash-state-")
+        super().setUp()
+
+    def _snapshot_files(self):
+        snap_dir = os.path.join(self._state_dir, "letters")
+        if not os.path.isdir(snap_dir):
+            return []
+        return [f for f in os.listdir(snap_dir) if f.endswith(".snapshot")]
+
+    def test_a_second_crash_right_after_recovery_keeps_the_work(self):
+        import subprocess
+        from dogtail import rawinput
+
+        aid = "org.tunaos.letters"
+        subprocess.run(["gapplication", "action", aid, "new-document"])
+        time.sleep(2.0)
+        rawinput.typeText("work that survived one crash")
+        time.sleep(1.0)
+        subprocess.run(["gapplication", "action", aid, "autosave-now"])
+        time.sleep(0.5)
+        self.assertEqual(len(self._snapshot_files()), 1, "precondition: one snapshot to recover")
+
+        self.relaunch_app(crash=True)
+        time.sleep(2.5)
+        self.assertIn("Recovered", self.app.child(roleName="frame").name,
+                      "first relaunch did not recover")
+        self.assertEqual(
+            len(self._snapshot_files()), 1,
+            "after recovery the tab must be covered by a snapshot again; "
+            f"found {self._snapshot_files()}",
+        )
+
+        self.relaunch_app(crash=True)
+        time.sleep(2.5)
+        frame = self.app.child(roleName="frame")
+        self.assertIn("Recovered", frame.name,
+                      "a document that survived one crash was lost to the next: "
+                      f"title was {frame.name!r}")
+
+
 class TablesAutosaveSmoke(BaseGUITestCase):
     """Crash-recovery snapshot lifecycle (issue #99): a dirty, never-saved
     workbook survives an unclean process kill and is offered back on the
@@ -680,6 +865,7 @@ class TablesAutosaveSmoke(BaseGUITestCase):
         subprocess.run(["gapplication", "action", "org.tunaos.tables", "autosave-now"])
         time.sleep(0.5)
         self.assertEqual(len(self._snapshot_files()), 1, "autosave-now must have written a snapshot")
+        recovered_from = set(self._snapshot_files())
 
         # Simulate a crash: kill the process directly, bypassing the close
         # guard entirely, so the snapshot is never cleared by a clean exit,
@@ -689,8 +875,29 @@ class TablesAutosaveSmoke(BaseGUITestCase):
 
         frame = self.app.child(roleName="frame")
         self.assertIn("Recovered", frame.name, f"window did not announce recovery: {frame.name!r}")
-        self.assertEqual(self._snapshot_files(), [],
-                          "the recovered snapshot must be cleared so it isn't offered again")
+        # The assertion below used to read `self._snapshot_files() == []`:
+        # after recovery, nothing on disk. That was a proxy for the thing
+        # actually required — the orphan is not offered a second time — and
+        # it stopped being a safe proxy once recovery began writing the
+        # recovered content to the new window's own slot before clearing the
+        # orphan. Zero files also describes unprotected work, which is what
+        # that spelling was quietly asserting: the old code left the
+        # recovered document with no snapshot until the next timer tick.
+        # So the intent is asserted directly instead, and more strictly: the
+        # recovered orphan is gone, and the recovered work is itself covered.
+        # Waited for rather than sampled after a fixed sleep, because the
+        # `== []` version sampled 1.5s after relaunch and lost that race
+        # under the load of a full batch run — it failed twice in one batch
+        # and passed three consecutive focused runs. A post-condition that
+        # needs a sleep to hold is a post-condition to wait for.
+        present = self.wait_until(
+            lambda: set(self._snapshot_files()),
+            lambda files: not (files & recovered_from),
+            description="the recovered orphan must be cleared so it isn't offered again",
+        )
+        self.assertEqual(len(present), 1,
+                          "the recovered workbook must itself be protected by a snapshot; "
+                          f"found {sorted(present)}")
 
 
 class TablesUndoSaveReopenSmoke(BaseGUITestCase):
@@ -2021,6 +2228,7 @@ class DecksAutosaveSmoke(BaseGUITestCase):
         subprocess.run(["gapplication", "action", "org.tunaos.decks", "autosave-now"])
         time.sleep(0.5)
         self.assertEqual(len(self._snapshot_files()), 1, "autosave-now must have written a snapshot")
+        recovered_from = set(self._snapshot_files())
 
         # Simulate a crash: kill the process directly, bypassing the close
         # guard, so the snapshot is never cleared by a clean exit.
@@ -2029,8 +2237,29 @@ class DecksAutosaveSmoke(BaseGUITestCase):
 
         frame = self.app.child(roleName="frame")
         self.assertIn("Recovered", frame.name, f"window did not announce recovery: {frame.name!r}")
-        self.assertEqual(self._snapshot_files(), [],
-                          "the recovered snapshot must be cleared so it isn't offered again")
+        # The assertion below used to read `self._snapshot_files() == []`:
+        # after recovery, nothing on disk. That was a proxy for the thing
+        # actually required — the orphan is not offered a second time — and
+        # it stopped being a safe proxy once recovery began writing the
+        # recovered content to the new window's own slot before clearing the
+        # orphan. Zero files also describes unprotected work, which is what
+        # that spelling was quietly asserting: the old code left the
+        # recovered document with no snapshot until the next timer tick.
+        # So the intent is asserted directly instead, and more strictly: the
+        # recovered orphan is gone, and the recovered work is itself covered.
+        # Waited for rather than sampled after a fixed sleep, because the
+        # `== []` version sampled 1.5s after relaunch and lost that race
+        # under the load of a full batch run — it failed twice in one batch
+        # and passed three consecutive focused runs. A post-condition that
+        # needs a sleep to hold is a post-condition to wait for.
+        present = self.wait_until(
+            lambda: set(self._snapshot_files()),
+            lambda files: not (files & recovered_from),
+            description="the recovered orphan must be cleared so it isn't offered again",
+        )
+        self.assertEqual(len(present), 1,
+                          "the recovered deck must itself be protected by a snapshot; "
+                          f"found {sorted(present)}")
 
 
 class DecksSmoke(BaseGUITestCase):

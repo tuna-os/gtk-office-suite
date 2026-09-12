@@ -62,6 +62,10 @@ pub struct TablesWindow {
     sheet_model: gtk4::StringList,
     sheet_switcher: gtk4::DropDown,
     current_path: Rc<RefCell<Option<std::path::PathBuf>>>,
+    /// This window's own snapshot slot. A field rather than only a
+    /// constructor local because recovery has to write to it before it
+    /// clears the orphan it recovered from — see `recover_from_snapshot`.
+    autosave_slot: Rc<suite_common::autosave::AutosaveSlot>,
 }
 
 impl TablesWindow {
@@ -2103,6 +2107,7 @@ impl TablesWindow {
         }
 
         Self {
+            autosave_slot: autosave_slot.clone(),
             window: suite_win.window,
             drawing_area,
             fx_entry,
@@ -2162,11 +2167,12 @@ impl TablesWindow {
                 .map(|n| n.to_string_lossy().to_string())
                 .unwrap_or_else(|| "Untitled".to_string());
             self.window.set_title(Some(&format!("{name} (Recovered) — Tables")));
-            // The orphan is now reflected in memory; clear its slot so it isn't
-            // offered again on the next launch. If this session crashes again
-            // before a real save, autosave writes a fresh snapshot under this
-            // window's own doc_id.
-            let _ = orphan.clear();
+            // Protect the recovered content before dropping the orphan it
+            // came from; the order, and what a failed write means, are
+            // explained on AutosaveSlot::adopt_recovered.
+            if self.autosave_slot.adopt_recovered(&bytes, &meta) {
+                let _ = orphan.clear();
+            }
             return true;
         }
         false

@@ -37,7 +37,35 @@ AutosaveSlot used to store bytes and metadata in separate atomic writes. Each wr
       several at once needs the multiple-window/multiple-document work in the
       last row below; Letters already does it per tab.
 - [ ] Preserve imported non-buffer metadata and model state; no recovery format silently strips supported content.
-- [ ] Restart after recovery and before the next autosave does not lose the recovered checkpoint.
+- [x] Restart after recovery and before the next autosave does not lose the recovered checkpoint.
+      All three apps used to clear the orphan slot as soon as the recovered
+      content was in memory and leave the next autosave tick to write a
+      replacement — up to a minute later at the shipped 60-second interval,
+      and never at all in a Letters that shipped with its timer switched
+      off. A crash inside that window lost work that had just survived a
+      crash, which is the one thing recovery must not do.
+      The order is inverted now: `AutosaveSlot::adopt_recovered` writes the
+      recovered content to the new window's own slot and reports whether the
+      orphan may be dropped, so the work is covered continuously. A failed
+      write keeps the orphan, so content whose replacement could not be
+      written is still offered next launch; the cost is that a clean save
+      this session will not clear that orphan — the close path clears the
+      window's own slot, not the one it recovered from — so the same content
+      can be offered once more. Work offered twice is recoverable; work
+      silently dropped is not.
+      `{Tables,Decks,Letters}RecoveryIsItselfProtectedSmoke` crash, recover,
+      then crash again with no autosave in between and require the content
+      to still be there; each fails against the old order. The two branches
+      of `adopt_recovered` are unit-tested in `suite-common-core`, the
+      failure branch included, since "keep the orphan when the write fails"
+      was otherwise only an argument in a comment.
+      Worth recording what this cost in test terms: three existing journeys
+      asserted `snapshot_files() == []` after recovery — nothing on disk —
+      as a proxy for "the orphan is not offered twice". Zero files also
+      describes *unprotected work*, so that spelling was quietly asserting
+      the defect. They now assert the intent directly and more strictly: the
+      recovered orphan is gone, and the recovered document is itself covered.
+      The rewritten assertions still fail against the old code.
 - [ ] Surface snapshot/write/cleanup errors; keep dirty state on failed commit.
 - [~] Inject failures before/after each checkpoint/rename and kill the real app; verify old-or-new complete state, never a mismatched generation. The headless half is done: `atomic_save::fault` arms any of the six boundaries of a durable write (temp create, permission preservation, data write, data sync, rename, directory sync) and any arrival at one, so "fail the second commit of this transaction" is expressible. A sweep asserts that every pre-commit boundary leaves the destination byte-identical with no temporary left behind, that the one post-rename boundary reports the replacement rather than claiming a rollback, and that no boundary or arrival in a snapshot write can pair two generations. The hook is `cfg(test)` only — a release build contains no branch to take. Killing the real app under the GUI harness is still open.
 - [ ] Cover multiple windows, multiple documents, renamed/missing originals, unsaved documents, duplicate recovery attempts and schema upgrades.
