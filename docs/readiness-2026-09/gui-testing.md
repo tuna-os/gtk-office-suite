@@ -224,8 +224,9 @@ combination to debug: the error names the right condition and blames the
 wrong cause, on a machine that is merely slower than the one that wrote
 it.
 
-Setup now shares one budget, `GUI_TEST_READY_SECONDS` (default 60), across
-all three waits — the `-displayfd` number, the display answering
+Setup now has generous budgets — `GUI_TEST_READY_SECONDS` (default 60) for
+the probes, `GUI_TEST_XVFB_SECONDS` (default 60) for the server start —
+across all three waits — the `-displayfd` number, the display answering
 `xdpyinfo`, and matchbox claiming `_NET_SUPPORTING_WM_CHECK`. Each still
 breaks the instant its condition holds, so the change costs a fast machine
 nothing: a full smoke run's setup is still immediate, and a server that
@@ -286,3 +287,24 @@ unrecognised-path fallback and runs everything anyway, so the first version
 of these tests passed against a selector that no longer recognised the
 harness at all. Pairing each shared or harness path with an app path is
 what makes the pattern itself observable.
+
+One budget was not enough, and the reason is worth recording: the harness
+self-tests shorten it so a deliberately broken readiness probe reports
+quickly instead of waiting a minute. While the `-displayfd` handshake
+shared that variable, shortening it also starved Xvfb's own startup — so on
+a cold runner setup failed at the handshake rather than at the gate under
+test, and `test_a_display_that_never_answers_reaps_the_server_we_started`
+went red with
+
+```
+AssertionError: 'no X display at' not found in
+'GUI setup failed: Xvfb never reported a display number within 1s.'
+```
+
+It passed locally and in its own CI run, and failed later on a slower
+machine — the same marginal-timeout shape these tests exist to catch,
+reproduced here by putting a `Xvfb` stub that sleeps three seconds ahead of
+the real one on `PATH`. Starting a server and probing one that has already
+started are different costs, so they now have different budgets, and
+`ReadinessBudget` checks both for a marginal default and asserts they stay
+independent.

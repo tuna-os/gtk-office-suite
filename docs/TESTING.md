@@ -70,9 +70,12 @@ GUI_TEST_PYTHON=/usr/bin/python3.12 tests/gui/run_gui_tests.sh test_smoke.py
 Setup fails loudly rather than handing the journeys a display that is not
 there: it waits for Xvfb to report its number, for the display to answer,
 and for the window manager to claim it, and exits naming whichever step
-failed. `GUI_TEST_READY_SECONDS` (default 60) is the budget for all three —
-each wait breaks the moment its condition holds, so raising it costs a fast
-machine nothing and a slow one gets the room it needs.
+failed. `GUI_TEST_READY_SECONDS` (default 60) budgets the probes and
+`GUI_TEST_XVFB_SECONDS` (default 60) the server start — two knobs because
+starting a server and probing one that already started are different costs,
+and a test that shortens one must not starve the other. Each wait breaks
+the moment its condition holds, so raising either costs a fast machine
+nothing and a slow one gets the room it needs.
 
 Journeys can record themselves. `GUI_TEST_VIDEO=all` keeps a clip of every
 journey, `failures` keeps only the ones that failed, and

@@ -244,7 +244,7 @@
       "id": "ci.gui-setup-fails-visibly",
       "app": "suite",
       "title": "GUI setup fails loudly and cleans up after itself",
-      "scope": "A display that never answers, a requested display number already in use, and a readiness probe that never succeeds each exit nonzero naming the cause; the EXIT trap still removes the run's temporary files and reaps the server setup started. The readiness budget is shared and not marginal.",
+      "scope": "A display that never answers, a requested display number already in use, and a readiness probe that never succeeds each exit nonzero naming the cause; the EXIT trap still removes the run's temporary files and reaps the server setup started. Neither budget is marginal, and they are independent: starting a server and probing one that has already started are different costs, so a test that shortens one cannot starve the other.",
       "issue": 354,
       "status": "verified",
       "revision": "062658f6839c361b83194b96e93189528ef97932",
@@ -256,8 +256,9 @@
           "tests/test_gui_harness.py::InjectedSetupFailures::test_an_inherited_display_that_answers_nothing_is_reported",
           "tests/test_gui_harness.py::InjectedSetupFailures::test_a_requested_display_number_already_in_use_is_reported",
           "tests/test_gui_harness.py::InjectedSetupFailures::test_a_display_that_never_answers_reaps_the_server_we_started",
-          "tests/test_gui_harness.py::ReadinessBudget::test_the_default_budget_is_not_marginal",
-          "tests/test_gui_harness.py::ReadinessBudget::test_no_wait_carries_its_own_hardcoded_count"
+          "tests/test_gui_harness.py::ReadinessBudget::test_every_default_budget_is_not_marginal",
+          "tests/test_gui_harness.py::ReadinessBudget::test_no_wait_carries_its_own_hardcoded_count",
+          "tests/test_gui_harness.py::ReadinessBudget::test_the_budgets_are_independent"
         ]
       }
     },

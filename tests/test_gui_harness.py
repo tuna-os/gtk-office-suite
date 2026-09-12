@@ -151,15 +151,32 @@ class ReadinessBudget(unittest.TestCase):
         with open(self.SCRIPT, encoding="utf-8") as handle:
             return handle.read()
 
-    def test_the_default_budget_is_not_marginal(self):
-        found = re.findall(
-            r'GUI_TEST_READY_SECONDS="\$\{GUI_TEST_READY_SECONDS:-(\d+)\}"', self._script()
-        )
-        self.assertEqual(len(found), 1, "expected exactly one default readiness budget")
-        self.assertGreaterEqual(
-            int(found[0]),
-            self.MINIMUM_SECONDS,
-            "a readiness wait that expires in seconds is a flake waiting to happen",
+    BUDGETS = ("GUI_TEST_READY_SECONDS", "GUI_TEST_XVFB_SECONDS")
+
+    def test_every_default_budget_is_not_marginal(self):
+        script = self._script()
+        for name in self.BUDGETS:
+            with self.subTest(budget=name):
+                found = re.findall(
+                    r'%s="\$\{%s:-(\d+)\}"' % (name, name), script
+                )
+                self.assertEqual(len(found), 1, f"expected exactly one default for {name}")
+                self.assertGreaterEqual(
+                    int(found[0]),
+                    self.MINIMUM_SECONDS,
+                    "a wait that expires in seconds is a flake waiting to happen",
+                )
+
+    def test_the_budgets_are_independent(self):
+        """Starting a server and probing one are different costs, and a test
+        that shortens one must not starve the other — which is exactly how
+        `test_a_display_that_never_answers_reaps_the_server_we_started`
+        failed on a cold runner while passing everywhere else."""
+        script = self._script()
+        self.assertNotIn(
+            'GUI_TEST_XVFB_SECONDS:-${GUI_TEST_READY_SECONDS',
+            script,
+            "the server-start budget must not default to the readiness budget",
         )
 
     def test_no_wait_carries_its_own_hardcoded_count(self):
@@ -249,8 +266,12 @@ class InjectedSetupFailures(unittest.TestCase):
         env = dict(os.environ)
         env["TMPDIR"] = self.tmp
         env["PATH"] = self.helpers + os.pathsep + env["PATH"]
-        # One second, because every one of these runs is *supposed* to
-        # exhaust its budget: the point is the report, not the wait.
+        # One second for the readiness probes, because every one of these
+        # runs is *supposed* to exhaust that budget: the point is the
+        # report, not the wait. The server-start budget is left alone —
+        # shortening it too made this suite fail on a cold runner at the
+        # -displayfd handshake instead of at the gate under test, which is
+        # the same marginal-timeout mistake these tests exist to catch.
         env["GUI_TEST_READY_SECONDS"] = "1"
         env.update(overrides)
         # A file rather than a pipe: a leaked child inherits the runner's

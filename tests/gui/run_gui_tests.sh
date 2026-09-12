@@ -36,6 +36,17 @@ export GSETTINGS_SCHEMA_DIR="$SCHEMA_DIR"
 GUI_TEST_READY_SECONDS="${GUI_TEST_READY_SECONDS:-60}"
 GUI_TEST_READY_TICKS="$(( GUI_TEST_READY_SECONDS * 10 ))"
 
+# Starting a server is a different cost from probing one that has already
+# started, so the -displayfd handshake gets its own budget. They were one
+# variable, and that made a harness self-test wrong rather than merely
+# slow: InjectedSetupFailures shortens the budget so a deliberately broken
+# readiness probe reports quickly, and on a cold runner Xvfb had not
+# announced itself inside that same second — so setup failed at the
+# handshake instead of the gate under test. Two budgets let a test starve
+# one wait without starving the other.
+GUI_TEST_XVFB_SECONDS="${GUI_TEST_XVFB_SECONDS:-60}"
+GUI_TEST_XVFB_TICKS="$(( GUI_TEST_XVFB_SECONDS * 10 ))"
+
 export GDK_BACKEND=x11
 export GTK_A11Y=atspi
 # dogtail's a11y check accepts this env var (GTK4 itself ignores GTK_MODULES).
@@ -86,7 +97,7 @@ if [ -z "${GUI_TEST_REUSE_DISPLAY:-}" ]; then
     # Xvfb writes the number once it is ready to accept connections, so this
     # waits for readiness and the allocation in one step.
     XVFB_DISPLAY_NUM=""
-    for _ in $(seq 1 "$GUI_TEST_READY_TICKS"); do
+    for _ in $(seq 1 "$GUI_TEST_XVFB_TICKS"); do
         XVFB_DISPLAY_NUM="$(tr -d '[:space:]' < "$DISPLAY_NUM_FILE")"
         [ -n "$XVFB_DISPLAY_NUM" ] && break
         # Our own server dying is the collision case: report it as such
@@ -104,7 +115,7 @@ if [ -z "${GUI_TEST_REUSE_DISPLAY:-}" ]; then
         exit 1
     fi
     if [ -z "$XVFB_DISPLAY_NUM" ]; then
-        echo "GUI setup failed: Xvfb never reported a display number within ${GUI_TEST_READY_SECONDS}s." >&2
+        echo "GUI setup failed: Xvfb never reported a display number within ${GUI_TEST_XVFB_SECONDS}s." >&2
         exit 1
     fi
     export DISPLAY=":${XVFB_DISPLAY_NUM}"
