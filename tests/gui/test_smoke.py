@@ -393,9 +393,16 @@ class LettersAutosaveSmoke(BaseGUITestCase):
         # recovered document with no snapshot until the next timer tick.
         # So the intent is asserted directly instead, and more strictly: the
         # recovered orphan is gone, and the recovered work is itself covered.
-        present = set(self._snapshot_files())
-        self.assertEqual(present & recovered_from, set(),
-                          "both recovered orphans must be cleared so they aren't offered again")
+        # Waited for rather than sampled after a fixed sleep, because the
+        # `== []` version sampled 1.5s after relaunch and lost that race
+        # under the load of a full batch run — it failed twice in one batch
+        # and passed three consecutive focused runs. A post-condition that
+        # needs a sleep to hold is a post-condition to wait for.
+        present = self.wait_until(
+            lambda: set(self._snapshot_files()),
+            lambda files: not (files & recovered_from),
+            description="both recovered orphans must be cleared so they aren't offered again",
+        )
         self.assertEqual(len(present), 2,
                           "both recovered tabs must themselves be protected by a snapshot; "
                           f"found {sorted(present)}")
@@ -878,9 +885,16 @@ class TablesAutosaveSmoke(BaseGUITestCase):
         # recovered document with no snapshot until the next timer tick.
         # So the intent is asserted directly instead, and more strictly: the
         # recovered orphan is gone, and the recovered work is itself covered.
-        present = set(self._snapshot_files())
-        self.assertEqual(present & recovered_from, set(),
-                          "the recovered orphan must be cleared so it isn't offered again")
+        # Waited for rather than sampled after a fixed sleep, because the
+        # `== []` version sampled 1.5s after relaunch and lost that race
+        # under the load of a full batch run — it failed twice in one batch
+        # and passed three consecutive focused runs. A post-condition that
+        # needs a sleep to hold is a post-condition to wait for.
+        present = self.wait_until(
+            lambda: set(self._snapshot_files()),
+            lambda files: not (files & recovered_from),
+            description="the recovered orphan must be cleared so it isn't offered again",
+        )
         self.assertEqual(len(present), 1,
                           "the recovered workbook must itself be protected by a snapshot; "
                           f"found {sorted(present)}")
@@ -2233,9 +2247,16 @@ class DecksAutosaveSmoke(BaseGUITestCase):
         # recovered document with no snapshot until the next timer tick.
         # So the intent is asserted directly instead, and more strictly: the
         # recovered orphan is gone, and the recovered work is itself covered.
-        present = set(self._snapshot_files())
-        self.assertEqual(present & recovered_from, set(),
-                          "the recovered orphan must be cleared so it isn't offered again")
+        # Waited for rather than sampled after a fixed sleep, because the
+        # `== []` version sampled 1.5s after relaunch and lost that race
+        # under the load of a full batch run — it failed twice in one batch
+        # and passed three consecutive focused runs. A post-condition that
+        # needs a sleep to hold is a post-condition to wait for.
+        present = self.wait_until(
+            lambda: set(self._snapshot_files()),
+            lambda files: not (files & recovered_from),
+            description="the recovered orphan must be cleared so it isn't offered again",
+        )
         self.assertEqual(len(present), 1,
                           "the recovered deck must itself be protected by a snapshot; "
                           f"found {sorted(present)}")
