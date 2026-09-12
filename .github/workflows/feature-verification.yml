@@ -251,7 +251,7 @@ jobs:
       # github-script, which is all they are good for.
       - name: Read the current pull-request body
         if: github.event.pull_request.number || github.event.inputs.pr
-        uses: actions/github-script@v7
+        uses: actions/github-script@v9
         env:
           PR: ${{ github.event.pull_request.number || github.event.inputs.pr }}
         with:
@@ -272,7 +272,7 @@ jobs:
 
       - name: Write it back
         if: github.event.pull_request.number || github.event.inputs.pr
-        uses: actions/github-script@v7
+        uses: actions/github-script@v9
         env:
           PR: ${{ github.event.pull_request.number || github.event.inputs.pr }}
         with:
