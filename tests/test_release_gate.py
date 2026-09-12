@@ -8,6 +8,7 @@ contract checks fire — no real Flatpak build needed.
 
 import json
 import os
+import re
 import sys
 import xml.etree.ElementTree as ET
 from pathlib import Path
@@ -189,3 +190,89 @@ def test_module_size_ceiling_exceeded(tmp_path, monkeypatch):
     with pytest.raises(AssertionError, match="exceeds maximum line ceiling"):
         rg.main()
 
+
+
+# ── The gate's trigger must cover the files it polices ──────────────────
+#
+# This is the third instance of one defect: a hand-written path filter in
+# YAML that omits the code it exists to check. The oracle's filter left out
+# suite-common-core (tests/test_oracle_triggers.py); the journey selector
+# could pick too few apps (tests/test_journey_selection.py); and this gate
+# enforces per-module line ceilings while `release-gate.yml` triggers on
+# flatpak/, flathub/, po/, Cargo.lock and itself — none of which are the
+# files whose lines it counts.
+#
+# That is not hypothetical. `tables/src/window.rs` crossed its 2300-line
+# ceiling at 5c7f436 and sat over it on main until #594 brought it back to
+# 2226, because no pull request that touched it ever ran the gate. Fixing
+# the count without fixing the trigger leaves the next breach just as
+# silent, so the required list is derived from the ceilings themselves
+# rather than copied alongside them.
+
+WORKFLOW = Path(__file__).resolve().parent.parent / ".github" / "workflows" / "release-gate.yml"
+# `module_ceilings` is a local in main(), so it is read from the source
+# rather than imported. Strict on purpose: a parse that found nothing would
+# make every assertion below hold vacuously, which is the failure this
+# whole area keeps producing.
+CEILING_ENTRY = re.compile(r'^\s*"([^"]+)":\s*(\d+),', re.M)
+PATTERN_LINE = re.compile(r"^\s*-\s*'([^']+)'\s*$", re.M)
+
+
+def ceiling_paths():
+    """The repository paths whose line counts the gate enforces."""
+    source = Path(rg.__file__).read_text()
+    block = source.split("module_ceilings = {", 1)
+    assert len(block) == 2, "release_gate.py no longer declares module_ceilings"
+    body = block[1].split("}", 1)[0]
+    found = CEILING_ENTRY.findall(body)
+    assert found, "module_ceilings parsed as empty, so this test would check nothing"
+    return {path for path, _limit in found}
+
+
+def trigger_paths():
+    """The `paths:` filter under the workflow's pull_request trigger."""
+    text = WORKFLOW.read_text()
+    head, _, _rest = text.partition("\n  push:")
+    assert "pull_request:" in head, f"{WORKFLOW} has no pull_request trigger to read"
+    found = PATTERN_LINE.findall(head)
+    assert found, f"{WORKFLOW}'s pull_request trigger declares no paths"
+    return found
+
+
+def _covered(path: str, patterns: list) -> bool:
+    """Whether any filter pattern would select this path.
+
+    Only the glob forms the filter actually uses are honoured — an exact
+    name, or a `dir/**` prefix. Matching more loosely here would let a
+    pattern appear to cover a file it does not.
+    """
+    for pattern in patterns:
+        if pattern == path:
+            return True
+        if pattern.endswith("/**") and path.startswith(pattern[:-2]):
+            return True
+    return False
+
+
+def test_every_ceiling_file_triggers_the_gate():
+    patterns = trigger_paths()
+    missing = sorted(path for path in ceiling_paths() if not _covered(path, patterns))
+    assert not missing, (
+        "release-gate.yml does not run when these files change, yet the gate "
+        f"enforces a line ceiling on each: {', '.join(missing)}. A ceiling "
+        "nothing triggers on is how tables/src/window.rs sat 43 lines over "
+        "its limit on main without anything noticing."
+    )
+
+
+def test_the_filter_is_actually_read():
+    """A parser that silently found nothing would pass the test above."""
+    patterns = trigger_paths()
+    assert len(patterns) > 3, patterns
+    assert any(p.startswith("flatpak") for p in patterns), patterns
+
+
+def test_the_ceilings_are_actually_read():
+    paths = ceiling_paths()
+    assert "tables/src/window.rs" in paths, paths
+    assert len(paths) >= 4, paths
