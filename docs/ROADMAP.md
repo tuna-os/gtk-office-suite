@@ -108,6 +108,13 @@ without a test that fails first.
   validates pedantic-clean; flathub/ manifests build from tag v1.1.0.
   The submission PR itself is a human action (see flathub/README.md).
 
+## Q4 2026 Strategic Objectives & Quality Assurance Gates
+
+10. **Document Interoperability Loss Budget & Visual Diff Framework**:
+    - Standardize quantitative metrics for formatting preservation, font styling retention, table layout stability, and vector graphic positioning across ODF (ODT/ODP/ODS) and OOXML (DOCX/PPTX/XLSX) round-trip conversions.
+    - Implement automated off-screen cairo rendering visual-diff regression gates in CI to prevent fidelity loss prior to Q4 2026 enterprise releases.
+    - Integrate loss-budget assertion suites into the LibreOffice oracle parity workflow (`REQUIRE_SOFFICE=1`).
+
 ## Standing infrastructure notes
 
 - Builds: the `gtkbuild` distrobox on the build host (18 cores, ~10s warm) is the
