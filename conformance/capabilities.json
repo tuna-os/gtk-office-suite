@@ -289,10 +289,10 @@
       "id": "ci.failure-evidence-survives-setup",
       "app": "suite",
       "title": "A journey that fails before its body still leaves evidence",
-      "scope": "unittest skips tearDown when setUp raises, and the app is launched in setUp, so the whole class of startup failures used to retain nothing a reader could debug: in CI exactly one file (journey.mp4), and with video off not even a directory. The app's own stderr — where a startup panic names its file and line — was read only by the capture that never ran, so it reached neither the artifacts nor the run log. Capture is now a cleanup, idempotent with the tearDown path, and records per-artifact whether each one landed so a guarded capture cannot retain nothing quietly. A passing journey still retains nothing.",
+      "scope": "unittest skips tearDown when setUp raises, and the app is launched in setUp, so the whole class of startup failures used to retain nothing a reader could debug: in CI exactly one file (journey.mp4), and with video off not even a directory. The app's own stderr — where a startup panic names its file and line — was read only by the capture that never ran, so it reached neither the artifacts nor the run log. Capture is now a cleanup, idempotent with the tearDown path, and records per-artifact whether each one landed so a guarded capture cannot retain nothing quietly. It also keeps what the journey wrote, before the temp-directory cleanups that run next delete it, excluding XDG_CACHE_HOME by exact path so a mesa shader cache cannot bury the evidence; and a core dump where the kernel writes one, with core_pattern recorded either way because a pipe handler leaves no file a container can keep. A passing journey still retains nothing, a skipped one is not a failure, and an artifact that was never applicable is not reported as missing.",
       "issue": 442,
       "status": "verified",
-      "revision": "8c53ff52a396ec1eeccd6300fd36b2af0d1c4e57",
+      "revision": "bcbbee853793e967823524d632586bb7504d9883",
       "requires": [
         "gui"
       ],
@@ -302,7 +302,13 @@
           "tests/gui/test_harness_artifacts.py::StartupFailureArtifacts::test_the_other_artifacts_are_retained_too",
           "tests/gui/test_harness_artifacts.py::StartupFailureArtifacts::test_the_manifest_says_what_was_and_was_not_captured",
           "tests/gui/test_harness_artifacts.py::StartupFailureArtifacts::test_a_capture_that_produces_nothing_is_recorded_as_missing",
-          "tests/gui/test_harness_artifacts.py::PassingJourneysLeaveNothing::test_a_passing_journey_retains_no_artifacts"
+          "tests/gui/test_harness_artifacts.py::PassingJourneysLeaveNothing::test_a_passing_journey_retains_no_artifacts",
+          "tests/gui/test_harness_artifacts.py::SkipsAreNotFailures::test_a_skipped_journey_retains_nothing",
+          "tests/gui/test_harness_artifacts.py::SkipsAreNotFailures::test_a_skipped_journey_is_not_recorded_as_a_failed_one",
+          "tests/gui/test_harness_artifacts.py::OutputFixturesAreRetained::test_what_the_journey_wrote_is_kept",
+          "tests/gui/test_harness_artifacts.py::OutputFixturesAreRetained::test_the_reproducible_cache_is_not_dragged_along",
+          "tests/gui/test_harness_artifacts.py::CoreDumpsAreRetainedWhereTheKernelAllows::test_a_segfault_is_reported_either_as_a_core_or_as_a_reason",
+          "tests/gui/test_harness_artifacts.py::CoreDumpsAreRetainedWhereTheKernelAllows::test_a_core_is_never_left_where_the_next_attempt_would_claim_it"
         ]
       }
     },
