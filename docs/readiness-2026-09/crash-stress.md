@@ -79,6 +79,14 @@ Controller state machines generate valid commands and assert invariants after ev
       each crate replays every retained crash input from its `tests/crashes/` directory, and the
       libFuzzer lane covers nine readers instead of three. It found three defects in
       `read_sheet_props_from_xlsx` on its first run, including a hang. See `interoperability.md`.
+      The **first nightly campaign run found a fourth**, and it is the one that shows the
+      instrument working end to end: `read_cond_rules_from_xlsx` stripped an ARGB dxf fill's alpha
+      byte with `if c.len() == 8 { c[2..] }`, and both halves count bytes — so a value of eight
+      bytes that is not eight characters was sliced mid-character and panicked. That reader returns
+      no `Result`, so a panic is its only failure mode, and any document with a multi-byte character
+      in that attribute took the app down rather than losing its conditional formatting. Seed
+      1015848, minimized to a 197-byte package in `tables-core/tests/crashes/`, which reproduces it
+      in 0.98s where the campaign needed 19s.
 - [x] Always retain stderr/backtrace, core dump where supported, screenshot, AT-SPI tree, last snapshot, action trace
       and saved output fixtures on failure. The harness captured six of these, and captured **none of them for the one
       class of failure where they matter most**: unittest skips `tearDown` when `setUp` raises, the app is launched *in*
@@ -132,8 +140,42 @@ Controller state machines generate valid commands and assert invariants after ev
       retains a core when the kernel writes one (measured locally: a 331 KB `ELF 64-bit LSB core file`)
       and reports the pattern when it does not. Closing the CI half means collecting from
       `coredumpctl` after a failing journey, which is a separate piece of work and not yet done.
-- [ ] Track first-attempt failure rate and classify product crash, assertion mismatch, timeout, infrastructure setup and nondeterministic rendering separately.
-- [ ] No retry-until-green, weakened assertion, reduced generator alphabet or silent skip counts as a fix. Diagnostic reruns retain the original failure.
-- [ ] Each confirmed crash becomes a deterministic failing regression before the fix; close only with same-seed replay and relevant matrix evidence.
+- [~] Track first-attempt failure rate and classify product crash, assertion mismatch, timeout, infrastructure setup and nondeterministic rendering separately.
+      `summarize()` reports `first_attempt_failure_rate` over every attempt that ran, and
+      `by_classification` counts product-crash, assertion-mismatch, timeout, infrastructure and
+      unclassified separately. Both are held by tests rather than inspected by eye:
+      `test_failure_rate_counts_every_attempt_once`, `test_classifications_are_reported_separately`
+      and `test_nonzero_exit_with_no_evidence_is_not_silently_a_pass`.
+      Not done: **nondeterministic rendering is not a class of its own.** A frame that differed
+      between two otherwise identical attempts currently lands in `assertion-mismatch` beside a
+      genuine wrong answer, which is the conflation this row asks to avoid — the two have different
+      owners and different fixes. Separating them needs a rendering comparison the harness does not
+      yet make, not just a sixth constant.
+- [~] No retry-until-green, weakened assertion, reduced generator alphabet or silent skip counts as a fix. Diagnostic reruns retain the original failure.
+      Three of the four are enforced, not merely intended. No retry: `stress.py` offers no retry
+      option at all (`test_no_retry_option_is_offered`), every planned attempt is distinct evidence
+      (`test_every_planned_attempt_is_distinct_evidence`), and a failing attempt still counts when a
+      later one passes (`test_a_failing_attempt_still_counts_when_a_later_one_passes`) — so a
+      diagnostic rerun cannot erase the original. No silent skip: `conformance/collect_skip_reasons.py`
+      requires every ignored Rust test to state its reason and rejects a disagreement between the
+      listing and the source, and the validator refuses a skipped result behind a `verified` claim.
+      Not enforced, and honestly only practice: **weakened assertions and narrowed generators.**
+      Nothing mechanical would stop either. What exists is precedent — Letters' stateful campaign
+      stayed parked on #532 rather than routing its generator around the defect, and fixing #532 then
+      exposed four more behind it — and the `FIXED_SEEDS` growth rule, which makes a find permanent
+      instead of something a later run might miss. A check here would have to compare generator
+      alphabets across revisions; it does not exist.
+- [~] Each confirmed crash becomes a deterministic failing regression before the fix; close only with same-seed replay and relevant matrix evidence.
+      The first half now has a worked example rather than a mechanism waiting for one. The
+      `condrules` panic above was reproduced at its seed first, minimized into
+      `tables-core/tests/crashes/`, confirmed to still panic against the unfixed reader, and only
+      then fixed; a unit test asserts the same defect at the reader's own level, and reverting the
+      fix fails both. Every crate's `malformed_inputs.rs` replays its whole `tests/crashes/`
+      directory on every pull request and prints how many inputs it replayed, so an empty directory
+      cannot be mistaken for an unwired check.
+      Not done: nothing **requires** that sequence. A crash could still be fixed without a retained
+      input, and "close only with same-seed replay and relevant matrix evidence" is a review
+      practice with no instrument behind it. `letters-core` and `decks-core` hold no retained inputs
+      yet, which is a true report of no finds rather than a gap.
 
 Initial stability target: zero crashes/data-loss/assertion failures in 20 consecutive runs of each critical journey per app at baseline, plus the admitted display matrix. This is a release threshold, not proof of zero defects; publish run counts, seeds and limitations. Longer overnight controller/fuzz campaigns stay resource-bounded.
