@@ -292,7 +292,7 @@
       "scope": "The skip inventory comes from the test lister, not from JUnit: nextest omits #[ignore] tests from its report entirely, so a JUnit-based collector reports zero skips on a workspace with seven ignored tests. An ignored test with no reason, an empty reason, a reason no listed test matches, and a listing that covers nothing are each rejected; runtime skips contribute their JUnit message. A reason in one target cannot cover a same-named test in another.",
       "issue": 313,
       "status": "verified",
-      "revision": "REVISION",
+      "revision": "e885f87df17287618fed38073b7072a4203a0504",
       "requires": [
         "model"
       ],
