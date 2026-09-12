@@ -40,6 +40,7 @@ gtk-office-suite is the org's flagship **end-user product bet** and a cornerston
 | P2 | Interop: unsupported-feature inspector + versioned fixture corpus with loss budgets | #105, #121 | ⬜ Not started |
 | P2 | Release gate: Flatpak, upgrade, recovery, localization, reproducible builds | #122 | ⬜ Not started |
 | P2 | A11y: keyboard + screen-reader journeys | #120 | ⬜ Not started |
+| P2 | Document Security & Remote Storage: AES-256 GCM encryption, digital signatures, WebDAV sync | #621 | ⬜ Not started |
 
 ---
 
@@ -57,9 +58,9 @@ gtk-office-suite is the org's flagship **end-user product bet** and a cornerston
 | GUI God-file decomposition started | architect | #168 | ⬜ Not started |
 | ROADMAP.md published and linked from README / org coverage (#1295) | strategist | tunaos#1359 | ✅ Done |
 
-### Q4 2026 (October–December) — "Ship it properly"
+### Q4 2026 (October–December) — "Ship it properly & Enterprise Readiness"
 
-<Sketch: release gate (#122) with Flatpak distribution + reproducible builds, Decks presenter/export scope, interop loss budgets, A11y journeys. Move up when Q4 starts.>
+<Sketch: release gate (#122) with Flatpak distribution + reproducible builds, Decks presenter/export scope, interop loss budgets, A11y journeys, client-side document encryption (AES-256 GCM, XMLDSig #621), and WebDAV cloud storage sync integration. Move up when Q4 starts.>
 
 ---
 

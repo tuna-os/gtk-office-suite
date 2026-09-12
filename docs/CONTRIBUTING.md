@@ -179,3 +179,18 @@ When implementing a new feature issue, follow this order:
 | `GtkTextView` has no `connect_key_pressed` | Use `EventControllerKey` on the text view |
 | Ambiguous numeric type `{float}` | Add explicit type: `let x: f64 = ...` |
 | `Cell::get()` requires `T: Copy` | Add `#[derive(Clone, Copy)]` to the enum/struct |
+
+---
+
+## Document Security & Remote Storage Strategy
+
+When contributing features related to document encryption, digital signatures, or remote storage:
+
+1. **Security & Cryptography**:
+   - Keep crypto primitives in `suite-common-core` (GTK-free, pure Rust).
+   - Use standard formats (ODF encryption standard, OOXML Agile Encryption, XMLDSig / XAdES).
+   - Never store unencrypted passphrases in memory longer than necessary; implement `Zeroize` where appropriate.
+
+2. **Remote Storage (WebDAV/Nextcloud)**:
+   - Use asynchronous transport in pure-Rust core modules isolated from GTK UI loops.
+   - Support standard GNOME secret storage (libsecret / Secret Portal) for credential management.
