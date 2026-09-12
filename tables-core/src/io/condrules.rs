@@ -44,8 +44,15 @@ pub fn read_cond_rules_from_xlsx(path: &str) -> Vec<crate::sheet::CondRule> {
                         .and_then(|t| t.split('"').next())
                         .map(|c| {
                             let c = c.to_uppercase();
-                            // ARGB → RGB: drop the alpha byte only.
-                            if c.len() == 8 {
+                            // ARGB → RGB: drop the alpha byte only, and only
+                            // for a genuine 8-digit hex value. `len()` counts
+                            // bytes, so a value holding a multi-byte character
+                            // can be 8 bytes long without being 8 characters —
+                            // slicing it at byte 2 then lands inside a
+                            // character and panics. Found by the nightly
+                            // malformed-input campaign (seed 1015848, retained
+                            // as tests/crashes/dxf-fill-rgb-multibyte-char.xlsx).
+                            if c.len() == 8 && c.bytes().all(|b| b.is_ascii_hexdigit()) {
                                 c[2..].to_string()
                             } else {
                                 c
@@ -176,6 +183,37 @@ mod cond_tests {
         assert_eq!(rules.len(), 1);
         assert_eq!(rules[0].op, CondOp::Between);
         assert!((rules[0].value - 2.0).abs() < 1e-9 && (rules[0].value2 - 8.0).abs() < 1e-9);
+    }
+
+    /// A dxf fill that is eight *bytes* without being eight characters used
+    /// to be sliced at byte 2 — mid-character — and panic. Found by the
+    /// nightly malformed-input campaign and retained as
+    /// `tests/crashes/dxf-fill-rgb-multibyte-char.xlsx`; this is the same
+    /// defect asserted at the reader's own level.
+    #[test]
+    fn a_dxf_fill_that_is_not_hex_is_left_alone_rather_than_sliced() {
+        use std::io::Write;
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("multibyte.xlsx");
+        let rgb = "\u{fffd}FFFF0";
+        assert_eq!(rgb.len(), 8, "eight bytes");
+        assert_eq!(rgb.chars().count(), 6, "but not eight characters");
+        let styles = format!(
+            "<styleSheet><dxfs count=\"1\"><dxf><fill>\
+             <fgColor rgb=\"{rgb}\"/></fill></dxf></dxfs></styleSheet>"
+        );
+
+        let file = std::fs::File::create(&path).unwrap();
+        let mut writer = zip::ZipWriter::new(file);
+        writer
+            .start_file("xl/styles.xml", zip::write::SimpleFileOptions::default())
+            .unwrap();
+        writer.write_all(styles.as_bytes()).unwrap();
+        writer.finish().unwrap();
+
+        // Returning at all is the assertion: this reader has no `Result`,
+        // so a panic is its only possible failure mode.
+        assert!(read_cond_rules_from_xlsx(path.to_str().unwrap()).is_empty());
     }
 
     #[test]
