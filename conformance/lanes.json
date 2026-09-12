@@ -70,6 +70,7 @@
         "tests/test_gui_stress.py::",
         "tests/test_journey_selection.py::",
         "tests/test_oracle_triggers.py::",
+        "tests/test_patched_dependencies.py::",
         "tests/test_release_gate.py::",
         "tests/test_validate_capabilities.py::",
         "tests/test_validate_parity.py::"
