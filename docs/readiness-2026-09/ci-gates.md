@@ -164,3 +164,40 @@ Two things this shook out:
 it: the staleness check existed, nothing passed it a revision. It still
 applies to every claim, which is why the release rule is scoped to the
 lanes that can actually be stale rather than reusing it.
+
+## The filter that listed the wrong crates
+
+The oracle's pull-request trigger shipped with this list:
+
+```
+letters-core/**  tables-core/**  decks-core/**
+suite-export/**  interop/**  Cargo.lock  nightly.yml
+```
+
+`suite-common-core/**` is missing from it, and that crate holds
+`interop.rs`, `atomic_save.rs`, `zip_guard.rs`, `format.rs`, `units.rs` and
+`style.rs` — the packaging and save code the oracle exists to check. A
+change to the ZIP writer could have merged without the oracle ever seeing
+it. All three crates the oracle tests depend on it, so the omission was not
+subtle; it was simply a hand-written list in YAML that nothing checked.
+
+Found by noticing the oracle *not* running on a pull request that touched
+`suite-common/` and asking why rather than moving on. (`suite-common/` is
+GTK glue — file dialogs, toasts, `gtk_test` — and correctly does not
+trigger it. The two crates are easy to confuse, which is part of why a list
+maintained by hand drifts.)
+
+This is the same defect class the journey selector closed: a decision about
+what runs, living somewhere untestable, failing silently in the direction of
+running too little. `tests/test_oracle_triggers.py` now derives the required
+set instead of trusting the list — the crates named by the workflow's own
+`cargo test -p` commands, plus every workspace crate those depend on,
+transitively, read from the manifests. It fails naming
+`suite-common-core` against the old filter, and the parser raises rather
+than returning an empty list when it cannot find the filter, so the check
+cannot pass by finding nothing to check.
+
+Worth stating plainly: both halves of this — the omission and the reason it
+went unnoticed — were in work merged hours earlier in the same session. The
+lesson that a hand-maintained list needs a derived check was available and
+not applied the second time.

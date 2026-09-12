@@ -265,8 +265,8 @@
     {
       "id": "ci.journey-selection-fails-safe",
       "app": "suite",
-      "title": "Journey selection runs every app when it cannot narrow safely",
-      "scope": "A shared crate, the workspace manifest or lockfile, a harness path (the selector included), an unrecognised path and an empty diff all run every app's journeys; a diff naming only one app's paths runs only that app.",
+      "title": "Selection runs what a change could break, or everything",
+      "scope": "A shared crate, the workspace manifest or lockfile, a harness path (the selector included), an unrecognised path and an empty diff all run every app's journeys; a diff naming only one app's paths runs only that app. The LibreOffice oracle's own pull-request filter is held to the same rule: it must cover every crate the oracle tests and every workspace crate those depend on, derived from the manifests rather than copied from the filter.",
       "issue": 354,
       "status": "verified",
       "revision": "062658f6839c361b83194b96e93189528ef97932",
@@ -279,7 +279,9 @@
           "tests/test_journey_selection.py::FallsBackToEveryApp::test_a_harness_change_beats_an_app_change",
           "tests/test_journey_selection.py::FallsBackToEveryApp::test_an_unrecognized_path_runs_everything",
           "tests/test_journey_selection.py::FallsBackToEveryApp::test_an_empty_diff_runs_everything",
-          "tests/test_journey_selection.py::SelectsTheChangedApps::test_one_app_runs_only_that_app"
+          "tests/test_journey_selection.py::SelectsTheChangedApps::test_one_app_runs_only_that_app",
+          "tests/test_oracle_triggers.py::OraclePathFilter::test_every_crate_those_crates_depend_on_is_in_the_filter",
+          "tests/test_oracle_triggers.py::TheFilterIsActuallyRead::test_a_workflow_without_the_trigger_is_an_error_not_an_empty_list"
         ]
       }
     },
