@@ -292,7 +292,7 @@
       "scope": "unittest skips tearDown when setUp raises, and the app is launched in setUp, so the whole class of startup failures used to retain nothing a reader could debug: in CI exactly one file (journey.mp4), and with video off not even a directory. The app's own stderr — where a startup panic names its file and line — was read only by the capture that never ran, so it reached neither the artifacts nor the run log. Capture is now a cleanup, idempotent with the tearDown path, and records per-artifact whether each one landed so a guarded capture cannot retain nothing quietly. A passing journey still retains nothing.",
       "issue": 442,
       "status": "verified",
-      "revision": "PENDING",
+      "revision": "8c53ff52a396ec1eeccd6300fd36b2af0d1c4e57",
       "requires": [
         "gui"
       ],
