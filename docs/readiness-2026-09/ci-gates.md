@@ -7,6 +7,17 @@ Reuse this issue for validator-test wiring, coordinated with #241 (GTK execution
       themselves — the `python-checks` job in `ci.yml`, which runs on every
       push and pull request with no path filter, so a change to the tests
       is itself gated.
+      The list of files it runs is no longer trusted to be complete.
+      `ci.yml` names them one per line, twice — once to run them and once to
+      collect them for the capability inventory — and nothing compared either
+      list with the directory, so a new `tests/test_*.py` passed locally,
+      never ran here, and reported nothing when it broke. "Runs on every push
+      with no path filter" only gates the files somebody remembered to list.
+      `tests/test_ci_test_list.py` now resolves both directions: every
+      top-level test file must appear in every pytest step this workflow has,
+      and every file a step names must exist. The steps are discovered from
+      the workflow rather than named, so a third one is covered the moment it
+      exists.
 - [x] Run model/controller/property tests with locked dependencies; keep
       failures and minimized Unicode regressions visible — `cargo nextest
       run --workspace` with a committed `Cargo.lock`; JUnit uploaded on
