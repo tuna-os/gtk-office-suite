@@ -932,14 +932,19 @@ impl LettersWindow {
             crate::bridge::render_to_buffer(&doc, &buf);
             apply_page_setup_from_buffer(&container, &buf);
             // render_to_buffer ends with buf.set_modified(false) (it's also
-            // used for a normal file open); recovered content is unsaved
-            // by definition, so mark it dirty right back so the close guard
-            // protects it and autosave will re-snapshot it under this tab's
-            // own (fresh) doc_id if this session crashes again too.
+            // used for a normal file open); recovered content is unsaved by
+            // definition, so mark it dirty right back so the close guard
+            // protects it and autosave keeps snapshotting it under this
+            // tab's own doc_id.
             buf.set_modified(true);
 
             let td = TabData::new();
             td.0.borrow_mut().file = meta.original_path.clone();
+            // See AutosaveSlot::adopt_recovered for why this precedes the
+            // clear. It mattered most here: Letters shipped with its autosave
+            // timer switched off, so "the next tick will re-snapshot it" was
+            // never going to happen at all.
+            let protected = td.0.borrow().autosave_slot.adopt_recovered(&bytes, &meta);
             tab_data_set(&container, td);
             let page = self.tab_view.append(&container);
             let name = meta.original_path.as_ref()
@@ -960,7 +965,9 @@ impl LettersWindow {
             connect_style_readout(&buf, &sl);
             update_style_readout(&buf, &sl);
 
-            let _ = orphan.clear();
+            if protected {
+                let _ = orphan.clear();
+            }
             recovered += 1;
         }
         if recovered > 0 {

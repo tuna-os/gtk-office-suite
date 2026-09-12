@@ -231,6 +231,26 @@ impl AutosaveSlot {
         Ok(())
     }
 
+    /// Take over recovered content: write it to this slot, and report
+    /// whether the orphan slot it came from may now be cleared.
+    ///
+    /// The order is the point. All three apps used to clear the orphan as
+    /// soon as the content was in memory and leave the next autosave tick to
+    /// write a replacement — up to a minute later at the shipped interval,
+    /// and never at all in a Letters that shipped with its timer switched
+    /// off. A crash inside that window lost work that had just survived a
+    /// crash, which is the one thing crash recovery must not do.
+    ///
+    /// Returning `false` keeps the orphan on disk, so work whose replacement
+    /// snapshot could not be written is still offered on the next launch.
+    /// The cost is that a clean save this session will not clear that orphan
+    /// — the close path clears the window's own slot, not the one it
+    /// recovered from — so the same content can be offered once more. Work
+    /// offered twice is recoverable; work silently dropped is not.
+    pub fn adopt_recovered(&self, bytes: &[u8], meta: &SnapshotMeta) -> bool {
+        self.write(bytes, meta).is_ok()
+    }
+
     /// Remove the snapshot — call this on a successful real save and on an
     /// explicit discard. Missing files are not an error: nothing to do.
     pub fn clear(&self) -> Result<(), String> {
@@ -313,6 +333,36 @@ pub fn find_orphaned_snapshots(state_dir: &Path) -> Vec<String> {
 
 #[cfg(test)]
 mod tests {
+
+    /// The failure branch is the one worth pinning: when the replacement
+    /// snapshot cannot be written, the caller must be told to keep the
+    /// orphan. Reasoning about that in a comment is not the same as
+    /// checking it.
+    #[test]
+    fn adopting_recovered_content_reports_failure_so_the_orphan_survives() {
+        let meta = SnapshotMeta { original_path: None, kind: "md".into() };
+        // A regular file where the state directory should be: the write
+        // cannot succeed, for root either.
+        let dir = tempfile::tempdir().unwrap();
+        let blocker = dir.path().join("not-a-directory");
+        std::fs::write(&blocker, b"occupied").unwrap();
+        let slot = AutosaveSlot::new(blocker.join("state"), "doc-1");
+        assert!(
+            !slot.adopt_recovered(b"recovered work", &meta),
+            "a failed write must report false so the caller keeps the orphan"
+        );
+    }
+
+    #[test]
+    fn adopting_recovered_content_leaves_it_readable_from_the_new_slot() {
+        let meta = SnapshotMeta { original_path: None, kind: "md".into() };
+        let dir = tempfile::tempdir().unwrap();
+        let slot = AutosaveSlot::new(dir.path().to_path_buf(), "doc-1");
+        assert!(slot.adopt_recovered(b"recovered work", &meta));
+        let (bytes, read_back) = slot.read().expect("the adopted snapshot must read back");
+        assert_eq!(bytes, b"recovered work");
+        assert_eq!(read_back.kind, "md");
+    }
     use super::*;
 
     use crate::atomic_save::fault;
