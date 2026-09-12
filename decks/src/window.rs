@@ -640,6 +640,7 @@ impl DecksWindow {
         let toast_overlay = adw::ToastOverlay::new();
         toast_overlay.set_child(Some(&main_box));
         suite_win.set_content(&toast_overlay);
+        let autosave_notices = suite_common::autosave_notice::AutosaveNotifier::new(&toast_overlay);
 
         let toolbar = build_decks_toolbar();
         suite_win.add_top_bar(&toolbar);
@@ -1654,6 +1655,7 @@ impl DecksWindow {
             let m = masters.clone();
             let dirty = dirty.clone();
             let slot = autosave_slot.clone();
+            let notices = autosave_notices.clone();
             let path_state = file_path.clone();
             let act = gtk::gio::SimpleAction::new("autosave-now", None);
             act.connect_activate(move |_, _| {
@@ -1668,7 +1670,7 @@ impl DecksWindow {
                         original_path: path.map(std::path::PathBuf::from),
                         kind,
                     };
-                    let _ = slot.write(&bytes, &meta);
+                    notices.record(slot.write(&bytes, &meta));
                 }
             });
             app.add_action(&act);
@@ -1678,6 +1680,7 @@ impl DecksWindow {
             let m = masters.clone();
             let dirty = dirty.clone();
             let slot = autosave_slot.clone();
+            let notices = autosave_notices.clone();
             let path_state = file_path.clone();
             let interval = settings.int("auto-save-interval").max(10) as u32;
             let enabled = settings.boolean("auto-save");
@@ -1692,7 +1695,7 @@ impl DecksWindow {
                                 original_path: path.map(std::path::PathBuf::from),
                                 kind,
                             };
-                            let _ = slot.write(&bytes, &meta);
+                            notices.record(slot.write(&bytes, &meta));
                         }
                     }
                     glib::ControlFlow::Continue

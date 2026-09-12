@@ -440,6 +440,13 @@ impl TablesWindow {
             entry.add_controller(key);
         }
 
+        // Tables had no toast overlay at all, so the one `adw::Toast` in this
+        // file was built, given a timeout, and dropped un-shown: the cell
+        // value was rejected and the user was told nothing. Created here
+        // rather than where the content is set, because the closures that
+        // post to it are wired before that point.
+        let toast_overlay = adw::ToastOverlay::new();
+
         // Wire formula bar: Enter commits
         {
             let s = state.clone();
@@ -447,6 +454,7 @@ impl TablesWindow {
             let da = drawing_area.clone();
             let fx = fx_entry.clone();
             let refresh = refresh_sel.clone();
+            let toasts = toast_overlay.clone();
             fx_entry.connect_activate(move |_| {
                 let val = fx.text().to_string();
                 let (r, c) = {
@@ -458,6 +466,7 @@ impl TablesWindow {
                         if !rule.validate(&val) {
                             let toast = adw::Toast::new("Invalid input — value rejected");
                             toast.set_timeout(3);
+                            toasts.add_toast(toast);
                             return;
                         }
                     }
@@ -1502,7 +1511,9 @@ impl TablesWindow {
         }
 
         suite_win.add_top_bar(&fx_bar);
-        suite_win.set_content(&stack);
+        toast_overlay.set_child(Some(&stack));
+        suite_win.set_content(&toast_overlay);
+        let autosave_notices = suite_common::autosave_notice::AutosaveNotifier::new(&toast_overlay);
         suite_win.add_bottom_bar(&sheet_bar);
 
         // ── Responsive breakpoints (fixes #79) ───────────────────────────
@@ -1867,6 +1878,7 @@ impl TablesWindow {
             let s = state.clone();
             let ctl = controller.clone();
             let slot = autosave_slot.clone();
+            let notices = autosave_notices.clone();
             let path_state = current_path.clone();
             let act = gtk4::gio::SimpleAction::new("autosave-now", None);
             act.connect_activate(move |_, _| {
@@ -1878,7 +1890,7 @@ impl TablesWindow {
                         original_path: path_state.borrow().clone(),
                         kind: "xlsx".to_string(),
                     };
-                    let _ = slot.write(&bytes, &meta);
+                    notices.record(slot.write(&bytes, &meta));
                 }
             });
             app.add_action(&act);
@@ -1887,6 +1899,7 @@ impl TablesWindow {
             let s = state.clone();
             let ctl = controller.clone();
             let slot = autosave_slot.clone();
+            let notices = autosave_notices.clone();
             let path_state = current_path.clone();
             let interval = settings.int("auto-save-interval").max(10) as u32;
             let enabled = settings.boolean("auto-save");
@@ -1898,7 +1911,7 @@ impl TablesWindow {
                                 original_path: path_state.borrow().clone(),
                                 kind: "xlsx".to_string(),
                             };
-                            let _ = slot.write(&bytes, &meta);
+                            notices.record(slot.write(&bytes, &meta));
                         }
                     }
                     glib::ControlFlow::Continue
