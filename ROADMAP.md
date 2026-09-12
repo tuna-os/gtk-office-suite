@@ -59,7 +59,15 @@ gtk-office-suite is the org's flagship **end-user product bet** and a cornerston
 
 ### Q4 2026 (October–December) — "Ship it properly"
 
-<Sketch: release gate (#122) with Flatpak distribution + reproducible builds, Decks presenter/export scope, interop loss budgets, A11y journeys. Move up when Q4 starts.>
+**Theme**: enterprise fleet deployment readiness, headless conversion CLI suite, and release distribution hardening.
+
+| Goal | Owner | Tracking | Status |
+|------|-------|----------|--------|
+| Headless document conversion CLI suite (`suite-convert`) | architect / strategy | #535 | 🟡 In progress |
+| Enterprise fleet deployment, dconf policy lockdown, and managed admin framework | strategy / architect | #534 | 🟡 In progress |
+| Flatpak release gate, reproducible builds, and upgrade testing | ops / quality | #122 | ⬜ Not started |
+| AT-SPI accessibility audit gate and screen-reader journey automation | quality / a11y | #120 | ⬜ Not started |
+| Decks presenter view and slide export pipeline | architect | #115 | ⬜ Not started |
 
 ---
 
