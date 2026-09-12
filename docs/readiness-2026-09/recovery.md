@@ -49,8 +49,8 @@ AutosaveSlot used to store bytes and metadata in separate atomic writes. Each wr
       The decision of when to speak is
       `suite_common_core::autosave::AutosaveNotices`, which is GTK-free and
       tested: the first failure of a streak, a reminder every tenth failed
-      attempt after that (roughly five minutes at the shipped 30-second
-      timer), and one notice when it starts working again. Reporting every
+      attempt after that (about ten minutes at the 60-second timer Tables and
+      Decks ship), and one notice when it starts working again. Reporting every
       failure would raise a notice 120 times an hour, which is a notice
       nobody reads. `suite_common::autosave_notice::AutosaveNotifier` turns
       those answers into toasts, so each call site gained one line rather
@@ -68,6 +68,27 @@ AutosaveSlot used to store bytes and metadata in separate atomic writes. Each wr
       `crash-stress.md` records a previous test that chmod-ed to 0555 and
       therefore asserted nothing), then assert the notice is on screen. Both
       fail against the unwired code.
+      Two defects found while checking that figure, neither fixed here.
+      **Letters ships with its autosave timer switched off.** Its
+      `auto-save-interval` default is `0` where Tables and Decks ship `60`,
+      its range allows `0`, and `register_autosave` installs a timer only
+      `if interval > 0` — so a shipped Letters never snapshots on its own,
+      and every crash-recovery guarantee this file describes for it holds
+      only if something invokes the `autosave-now` action. Every Letters
+      autosave journey does exactly that, which is why they pass: they prove
+      the snapshot machinery works and say nothing about whether it ever
+      fires by itself. Fixing it is a one-line default, but turning a
+      feature on for every existing user is its own decision, and it wants a
+      check that compares the three apps' shipped defaults so the next one
+      to drift is caught.
+      **Recovery leaves a window with no protection at all.** All three apps
+      clear the orphan slot as soon as the content is in memory and rely on
+      the next timer tick to write a fresh snapshot — up to a minute later
+      on Tables and Decks, never on Letters. A crash in that window loses
+      work that had already survived one crash. The order should be
+      inverted: write the recovered content to this window's own slot
+      *first*, clear the orphan only once that succeeds, and keep the orphan
+      when it fails. That is the row two above this one.
       Still open: **cleanup errors.** `clear_tab_autosave` still drops its
       error, so a saved or discarded document whose slot could not be cleared
       is silently offered back as "recovered" on the next launch. Different
