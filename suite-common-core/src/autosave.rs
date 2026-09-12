@@ -272,9 +272,21 @@ impl AutosaveSlot {
 /// with no matching meta file (write interrupted mid-way through the two
 /// atomic writes) is skipped rather than offered for recovery, since there's
 /// no way to tell the caller what format it's in.
+///
+/// **Newest snapshot first, and in a total order.** This used to return
+/// `read_dir` order, which is whatever the filesystem hands back: two
+/// launches from the same state directory could offer the user's orphans in
+/// different orders, and its own test had to sort the result to assert
+/// anything — the tell that the function had no order to assert. It matters
+/// because a caller that can only reopen one document at a time (Tables and
+/// Decks hold one per window) is choosing *which* unsaved work the user gets
+/// back, and "whichever the directory listed first" is not a choice anybody
+/// made. Ties on mtime — two snapshots written inside one filesystem
+/// timestamp tick, which a crash makes likely — break on `doc_id`, so the
+/// order is total rather than merely usually-stable.
 pub fn find_orphaned_snapshots(state_dir: &Path) -> Vec<String> {
     let Ok(entries) = fs::read_dir(state_dir) else { return Vec::new() };
-    entries
+    let mut found: Vec<(std::time::SystemTime, String)> = entries
         .filter_map(|e| e.ok())
         .filter_map(|e| e.file_name().to_str().map(str::to_string))
         .filter_map(|name| name.strip_suffix(DATA_SUFFIX).map(str::to_string))
@@ -283,7 +295,20 @@ pub fn find_orphaned_snapshots(state_dir: &Path) -> Vec<String> {
         // and neither is a legacy data file whose metadata never landed:
         // there is no way to tell the caller what format it is in.
         .filter(|doc_id| AutosaveSlot::new(state_dir, doc_id.clone()).read().is_some())
-        .collect()
+        .map(|doc_id| {
+            // A snapshot whose mtime cannot be read sorts as oldest rather
+            // than being dropped: unreadable metadata about recoverable
+            // bytes is a reason to offer it last, not to discard it.
+            let written = fs::metadata(AutosaveSlot::new(state_dir, doc_id.clone()).data_path())
+                .and_then(|m| m.modified())
+                .unwrap_or(std::time::UNIX_EPOCH);
+            (written, doc_id)
+        })
+        .collect();
+    found.sort_by(|(a_time, a_id), (b_time, b_id)| {
+        b_time.cmp(a_time).then_with(|| a_id.cmp(b_id))
+    });
+    found.into_iter().map(|(_written, doc_id)| doc_id).collect()
 }
 
 #[cfg(test)]
@@ -449,15 +474,70 @@ mod tests {
         slot.clear().unwrap();
     }
 
+    /// Write a snapshot and stamp its data file with an explicit mtime, so
+    /// ordering is asserted against a known age rather than against however
+    /// fast the test machine happens to be.
+    fn snapshot_written_at(dir: &Path, doc_id: &str, seconds_ago: u64) {
+        let slot = AutosaveSlot::new(dir, doc_id);
+        slot.write(doc_id.as_bytes(), &SnapshotMeta { original_path: None, kind: "md".into() }).unwrap();
+        let when = std::time::UNIX_EPOCH + std::time::Duration::from_secs(1_700_000_000 - seconds_ago);
+        let file = fs::File::options().write(true).open(slot.data_path()).unwrap();
+        file.set_times(fs::FileTimes::new().set_modified(when)).unwrap();
+    }
+
     #[test]
     fn find_orphaned_snapshots_lists_doc_ids_with_a_complete_snapshot() {
         let dir = tempfile::tempdir().unwrap();
-        AutosaveSlot::new(dir.path(), "a").write(b"1", &SnapshotMeta { original_path: None, kind: "md".into() }).unwrap();
-        AutosaveSlot::new(dir.path(), "b").write(b"2", &SnapshotMeta { original_path: None, kind: "xlsx".into() }).unwrap();
+        snapshot_written_at(dir.path(), "a", 20);
+        snapshot_written_at(dir.path(), "b", 10);
 
-        let mut found = find_orphaned_snapshots(dir.path());
-        found.sort();
-        assert_eq!(found, vec!["a".to_string(), "b".to_string()]);
+        assert_eq!(find_orphaned_snapshots(dir.path()), vec!["b".to_string(), "a".to_string()]);
+    }
+
+    /// A caller that can reopen only one document is choosing which unsaved
+    /// work the user gets back. It must be the most recent, not whichever
+    /// the filesystem listed first.
+    #[test]
+    fn the_newest_snapshot_is_offered_first() {
+        let dir = tempfile::tempdir().unwrap();
+        snapshot_written_at(dir.path(), "oldest", 300);
+        snapshot_written_at(dir.path(), "newest", 1);
+        snapshot_written_at(dir.path(), "middle", 60);
+
+        assert_eq!(
+            find_orphaned_snapshots(dir.path()),
+            vec!["newest".to_string(), "middle".to_string(), "oldest".to_string()],
+        );
+    }
+
+    /// A crash writes snapshots milliseconds apart, so two can share one
+    /// filesystem timestamp. The order still has to be total: otherwise the
+    /// nondeterminism simply moves from the directory listing to the clock.
+    #[test]
+    fn snapshots_written_in_the_same_tick_are_ordered_by_doc_id() {
+        let dir = tempfile::tempdir().unwrap();
+        for doc_id in ["window-3", "window-1", "window-2"] {
+            snapshot_written_at(dir.path(), doc_id, 5);
+        }
+
+        assert_eq!(
+            find_orphaned_snapshots(dir.path()),
+            vec!["window-1".to_string(), "window-2".to_string(), "window-3".to_string()],
+        );
+    }
+
+    /// The order is a property of the snapshots, not of the walk that found
+    /// them: the same directory read twice must answer the same way.
+    #[test]
+    fn the_order_does_not_depend_on_the_directory_listing() {
+        let dir = tempfile::tempdir().unwrap();
+        for (index, doc_id) in ["d", "a", "c", "b"].iter().enumerate() {
+            snapshot_written_at(dir.path(), doc_id, index as u64 * 10);
+        }
+
+        let first = find_orphaned_snapshots(dir.path());
+        assert_eq!(first, vec!["d".to_string(), "a".to_string(), "c".to_string(), "b".to_string()]);
+        assert_eq!(find_orphaned_snapshots(dir.path()), first, "same directory, different answer");
     }
 
     #[test]
