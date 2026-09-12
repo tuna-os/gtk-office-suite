@@ -118,7 +118,17 @@ jobs:
         env:
           GUI_TEST_VIDEO: failures
           GUI_TEST_VIDEO_DIR: ${{ github.workspace }}/tests/gui/videos
-        run: tests/gui/run_gui_tests.sh test_harness_artifacts.py
+        run: |
+          # Printed because the core-dump half of this is conditional on it,
+          # and a conditional claim nobody can see the condition for is the
+          # shape of a check that passes without checking. A relative name
+          # (`core`) means a dump lands next to the app and is retained; a
+          # pipe (`|/usr/share/apport/apport …`) means the kernel hands it to
+          # a handler and there is no file for a container to keep — the
+          # journeys accept either, so this line is how a reader tells which
+          # happened on this runner.
+          echo "kernel core_pattern: $(cat /proc/sys/kernel/core_pattern)"
+          tests/gui/run_gui_tests.sh test_harness_artifacts.py
 
       # C3 for the GUI layer: a journey the ledger cites must still be
       # collected under that name. Collection is cheap and runs after the
