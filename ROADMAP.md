@@ -57,9 +57,17 @@ gtk-office-suite is the org's flagship **end-user product bet** and a cornerston
 | GUI God-file decomposition started | architect | #168 | ⬜ Not started |
 | ROADMAP.md published and linked from README / org coverage (#1295) | strategist | tunaos#1359 | ✅ Done |
 
-### Q4 2026 (October–December) — "Ship it properly"
+### Q4 2026 (October–December) — "Ship it properly & Enterprise Readiness"
 
-<Sketch: release gate (#122) with Flatpak distribution + reproducible builds, Decks presenter/export scope, interop loss budgets, A11y journeys. Move up when Q4 starts.>
+**Theme**: complete release gating, Flatpak reproducible distribution, security governance, enterprise policy control, and plugin extensibility architecture.
+
+| Goal | Owner | Tracking | Status |
+|------|-------|----------|--------|
+| Client-side document encryption & X.509 digital signatures architecture | strategist / architect | #636 | 🟡 Planning |
+| Enterprise fleet deployment & dconf policy configuration framework | strategist / architect | #630 | 🟡 Planning |
+| Extensible desktop plugin & scripting architecture via WASM / IPC | strategist / architect | #631 | 🟡 Planning |
+| Release gate (#122) with Flatpak distribution + reproducible builds | quality / ops | #122 | ⬜ Planned |
+| Interop loss-budget enforcement & A11y verification | quality | #374, #120 | ⬜ Planned |
 
 ---
 
