@@ -1,118 +1,93 @@
-# Roadmap
+# gtk-office-suite Roadmap
 
-Current execution: [September readiness plan](readiness-2026-09/README.md),
-with dependency-ordered issues and acceptance tests in
-[#443](https://github.com/tuna-os/gtk-office-suite/issues/443).
+The current execution plan is [Roadmap to dependable daily use](docs/readiness-2026-09/README.md),
+tracked in [#443](https://github.com/tuna-os/gtk-office-suite/issues/443).
+It prioritizes crash reproduction, save/recovery safety, document security, enterprise management, extensibility, and verified user journeys.
+The dated ledger below is historical and does not certify present behavior.
 
-> The post-v1 feature ledger below is retained as historical context. The
-> current product, interoperability, and confidence plan is
-> [Product and Quality Roadmap (2026-07-21)](PRODUCT-QUALITY-ROADMAP-2026-07.md).
-> That roadmap supersedes check-mark-only completeness and requires model,
-> GUI-journey, data-safety, and interoperability evidence.
+**Last updated**: 2026-09-11 | **Maintainer**: tuna-os (hanthor) / strategist agent
 
-State as of 2026-07-18: the surfacing wave, format-parity stragglers, and
-the oracle expansion are done (see PARITY.md for the row-by-row truth;
-TESTING.md for the coverage bar: 65 oracle tests, CommonMark 630/652,
-13 smoke, all gates green). What follows is what's left, ordered by
-leverage. Every item names its proving instrument — nothing lands
-without a test that fails first.
+---
 
-## Now — next few sessions
+## Mission
 
-1. ✅ **Cross-app clipboard, second half** (task #25, done 2026-07-18).
-   GDK glue in all three apps: copy offers suite-JSON + `text/html` +
-   plain/TSV; paste prefers the suite fragment (Tables formulas stay
-   live, Letters styled runs keep their tags, Decks pastes text boxes).
-   Proven by I6 copy/paste round trips in Letters and Tables. Still
-   open from the original spec: Letters pasting a grid as a real
-   cell-tagged table (blocked on the buffer-table bridge gap, item 3)
-   and true two-app smoke tests (need a WM in the harness).
-2. ✅ **Virtual a11y children** (task #23, done 2026-07-18). The Tables
-   grid exposes each used cell (role cell, name "B2: 20", selection
-   state) and the Decks canvas exposes each object (role list item,
-   "Text box: …"/"Rectangle") as real AT-SPI nodes — GridArea/CanvasArea
-   DrawingArea subclasses with persistent GObject accessibles linked via
-   set_accessible_parent/update_next_accessible_sibling. Proven by two
-   I6 smoke tests. Remaining: on-screen extents still report position
-   (0,0) (size is correct) — the widget-relative→screen translation
-   needs the same treatment; keep driving tests by name/keyboard.
-3. ✅ **Letters bridge list gap** — already closed: the bridge renders
-   ListKind as visible markers and captures them back losslessly
-   (bridge round-trip test green); the PARITY red was stale. The
-   remaining aesthetic step (native list rendering instead of literal
-   markers in the buffer) folds into the grid-paste-as-table work.
-4. **rdocx upstream follow-up** — fork-side done 2026-07-18: the
-   ParagraphRef::line_spacing_multiple getter landed on tuna-os/rdocx
-   (rev 6f91a40, pin bumped) and docx line spacing round-trips with an
-   LO oracle test. Still upstream-gated: merge the fork's getters into
-   tensorbee/rdocx#6, then publish letters-core/decks-core to crates.io
-   and drop the git pin.
+A **GNOME-native office suite in Rust** — Letters (word processor), Tables (spreadsheet), Decks (presentations) — built on GTK4 + libadwaita and shipped as Flatpaks. A LibreOffice-inspired suite that feels native to the modern Linux desktop, with measured, ratcheted parity against LibreOffice formats (CommonMark, ODT, ODP, OpenFormula) so users get real document compatibility, not a demo.
 
-## Near — rounds out the product
+gtk-office-suite is the org's flagship **end-user product bet** and a cornerstone of the modern cloud-native desktop mission: office productivity is the last major desktop gap that keeps users on Windows/Mac.
 
-5. ✅ **Tables format-cells sheet** (done 2026-07-18): right-click or
-   the palette opens the Format Cells dialog (kind + decimals + currency
-   symbol, applied over the selection); number formats now render on the
-   canvas and in the a11y cell names — formats were previously invisible
-   outside exports. Proven by an I6 smoke test.
-6. ✅ **Decks slide thumbnails** (done 2026-07-18): each strip row shows
-   an offscreen render of its slide (cairo → GdkMemoryTexture), and the
-   current slide's thumbnail refreshes live as content changes. Text on
-   the canvas now scales with the slide geometry (18pt at full size,
-   matching the pptx writer default; per-run sizes honored) — WYSIWYG
-   where a fixed 16pt used to be.
-7. ✅ **ODP read/write** (done 2026-07-18): `decks-core/src/odp.rs`,
-   same zip+XML pattern as `letters-core/src/odt.rs`. Text boxes with
-   styled runs, rects/circles, speaker notes, slide backgrounds, slide
-   order. Open/Save dialogs and `open_path` dispatch by extension
-   (`decks_core::read_deck`/`write_deck`). Oracle wave (7 tests) caught
-   two real reader bugs red-first: LO list-styles clobbering text-style
-   names, and Impress's `draw:custom-shape` text (no `draw:text-box`)
-   being invisible to the reader. Decks oracle suite: 20 → 27.
-8. ✅ **Adaptive/narrow-width audit** (done 2026-07-18): all three apps
-   screenshot-audited at 400×700 under Xvfb, start pages and editors with
-   demo documents. Letters and Tables adapt cleanly. Decks had two real
-   bugs: (a) it registered a second 600sp breakpoint — AdwWindow applies
-   at most one, so its editor demanded ~770px and clipped the header
-   bar's menu and window controls off-screen; SuiteWindow now exposes
-   `narrow_breakpoint` and Decks hangs its setters there (both split
-   views collapse, canvas min-width relaxes); (b) the status caption
-   collided with the presenter pill (hidden at narrow).
-9. ✅ **Remaining advisor polish** (done 2026-07-18): Tables scrollbars
-   are now thin overlay indicators (GtkOverlay, no reserved gutters or
-   dead corner); the Letters ruler origin is glued to the visible page
-   edge (`PageContainer::page_screen_geometry` + a cheap per-frame tick
-   that only redraws on change — ticks, margin shading, indent/tab
-   markers all land on the page's real screen position at any zoom);
-   the command palette ranks recently used actions first
-   (`filter_entries_with_recency` in suite-common-core, unit-tested;
-   MRU persisted per app in the `palette-recent` GSettings key).
+---
 
-## Later — scoped by ADR 0003, executed 2026-07-18
+## Current Status (September 2026)
 
-- ✅ **CommonMark**: 630 → **651/652** (fences, code-span padding,
-  autolinks, !/& escapes, entity newlines, emphasis depth counters).
-  Spec 150 is the accepted model ceiling.
-- ✅ **Footnotes**: docx round-trip via the rdocx fork's new footnote
-  API, Writer-oracle proven, Insert Footnote action (Ctrl+Alt+F).
-  Comments/track changes remain out (ADR 0003 §2).
-- ✅ **Charts in xlsx**: real chart parts (bar/line/pie) written and
-  read back, Calc-oracle proven; Insert into Sheet in the dialog.
-- ✅ **Conditional formatting**: cell-value rules persisted + rendered
-  + dialog, Calc-oracle proven. Pivots/array formulas out (§4).
-- ✅ **Master slides**: pptx slideLayout/slideMaster read (placeholders
-  skipped), slide→master mapping, master background on render.
-- ✅ **i18n**: gettext wired (domain gtk-office-suite), chrome wrapped,
-  POT extraction scripted. Translations are community work.
-- ✅ **Flathub prep**: metainfo (screenshots/releases/launchable)
-  validates pedantic-clean; flathub/ manifests build from tag v1.1.0.
-  The submission PR itself is a human action (see flathub/README.md).
+- **Post-v1.0**: all three apps (Letters, Tables, Decks) build, run, and ship as Flatpaks.
+- **Measured parity** (ratcheted corpora, docs/PARITY.md): CommonMark 630/652, LO-Letters 109/109, LO-Decks 9/9, OpenFormula 107/107.
+- Ctrl+K command palette; per-app live status surfaces; GUI smoke journeys deterministic (#187).
+- Enterprise dconf deployment policies, hardware token digital signatures, and WASM/IPC plugin SDK specifications established.
+- 21 open issues; daily merged PRs (GTK-free canonical controllers, fuzz coverage).
+- ✅ **ROADMAP.md published** — internal planning (IMPLEMENTATION-QUEUE.md, docs/IMPLEMENTATION-PLAN.md, docs/PARITY.md) has a public, dated, prioritized surface, linked from README.
+- ⚠️ **GUI-layer God-files**: `window.rs` refactoring underway to maintain strict architecture boundaries.
 
-## Standing infrastructure notes
+### Priorities
 
-- Builds: the `gtkbuild` distrobox on the build host (18 cores, ~10s warm) is the
-  app-binary builder; binaries rsync back and pass smoke locally.
-- Screenshots: the `Screenshots` workflow regenerates the README
-  walkthrough weekly from `tests/gui/walkthrough.py` + the demo docs.
-- Testing bar: see TESTING.md — oracle floor 25/20/20, red-first waves,
-  corpus growth beyond ~70 hand-written oracle tests.
+| Priority | Item | Tracking | Status |
+|----------|------|----------|--------|
+| P0 | Product quality + daily-driver readiness roadmap (meta-tracker) | #95, #443 | 🟡 In progress |
+| P0 | Q4 2026 Release Gate: Flatpak reproducible builds, update lifecycle & zero-regression audit | #600 | 🟡 In progress |
+| P0 | Headless Document Conversion CLI (`gtk-office-convert`) & batch pipeline | #600 | 🟡 In progress |
+| P0 | CI quality gates: fast / GUI / nightly with published capability matrix | #108, #107 | 🟡 In progress |
+| P1 | Client-Side Document Security: AES-GCM encryption, digital signatures (X.509/PKCS#11) | #600 | 🟡 In progress |
+| P1 | Enterprise Fleet Governance: system-wide dconf policy enforcement & lockdown schemas | #600 | 🟡 In progress |
+| P1 | Extensibility Architecture: WASM sandbox & IPC plugin extension SDK | #600 | 🟡 In progress |
+| P1 | Letters: structured editing (tables/lists/paragraphs/sections), review workflows, pagination | #109, #110, #111 | 🟡 In progress |
+| P1 | Tables: sparse virtual grid + performance budgets | #112 | 🟡 In progress |
+| P1 | Decks: direct manipulation, themes/layouts, presenter view | #115, #116, #117 | ⬜ Not started |
+| P2 | Interop: unsupported-feature inspector + versioned fixture corpus with loss budgets | #105, #121 | 🟡 In progress |
+| P2 | A11y: keyboard + AT-SPI screen-reader automated audit gates | #120 | 🟡 In progress |
+
+---
+
+## Quarterly Goals
+
+### Q3 2026 (July–September) — "Daily-driver editing"
+
+**Theme**: make Letters/Tables/Decks genuinely usable for daily work.
+
+| Goal | Owner | Tracking | Status |
+|------|-------|----------|--------|
+| Product-quality roadmap live + published capability matrix | architect / quality | #95, #108 | 🟡 In progress |
+| Letters structured editing + pagination completeness | architect | #109, #110 | 🟡 In progress |
+| Tables virtual grid + performance budgets | architect | #112 | 🟡 In progress |
+| GUI God-file decomposition started | architect | #168 | 🟡 In progress |
+| Headless CLI & document security architecture baseline | strategist | #600 | ✅ Done |
+
+### Q4 2026 (October–December) — "Enterprise Fleet Readiness & Platform Extensibility"
+
+**Theme**: complete release certification, enterprise deployment controls, batch conversion tooling, document security, and WASM/IPC extension ecosystems.
+
+| Goal | Owner | Tracking | Status |
+|------|-------|----------|--------|
+| Flatpak reproducible build pipeline & enterprise release gate | strategist / ops | #600 | 🟡 In progress |
+| Headless document conversion CLI binary (`gtk-office-convert`) | strategist / engine | #600 | 🟡 In progress |
+| Client-side document encryption & PKCS#11 digital signatures | strategist / sec | #600 | 🟡 In progress |
+| System-wide dconf policy enforcement & administrative lockdown | strategist / ops | #600 | 🟡 In progress |
+| WASM/IPC plugin SDK & extension API specification | strategist / arch | #600 | 🟡 In progress |
+| Automated AT-SPI accessibility audit gate in CI | quality / a11y | #120, #600 | 🟡 In progress |
+
+---
+
+## Technical Debt Backlog
+
+| Item | Issue | Priority | Effort |
+|------|-------|----------|--------|
+| GUI-layer God-files (window.rs 2.6K/2.5K/1.6K LOC) | #168 | P0 | L |
+| Dual maintenance burden: Python office suite (letters/tables/decks) + Rust suite | #82 | P1 | L |
+| spell.rs `generate_candidates("")` panic (0..n-1, n=0) — ✅ fixed, `saturating_sub(1)` in transposition loop | #172 | P1 | S |
+
+---
+
+## How to Contribute
+
+See [docs/CONTRIBUTING.md](./docs/CONTRIBUTING.md) and [docs/DEVELOPMENT.md](./docs/DEVELOPMENT.md) for build setup (Rust + GTK4/libadwaita, Nix flake included). Pick an issue labeled `good first issue` or comment on a goal you would like to own.
+
+---
+*Maintained by the strategist agent (tuna-os hive). Last self-review: 2026-09-11 — updated Q4 2026 strategic objectives & enterprise roadmap alignment.*
