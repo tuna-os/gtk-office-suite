@@ -61,6 +61,10 @@ jobs:
             tests/test_gui_stress.py \
             tests/test_gui_harness.py \
             tests/test_journey_selection.py \
+            tests/test_oracle_triggers.py \
+            tests/test_patched_dependencies.py \
+            tests/test_roadmap_figures.py \
+            tests/test_skip_reasons.py \
             tests/adaptive_editor_contract.py
 
       # E1-E3: green rows cite evidence, referenced paths exist, journey-gated
@@ -100,6 +104,10 @@ jobs:
             tests/test_gui_stress.py \
             tests/test_gui_harness.py \
             tests/test_journey_selection.py \
+            tests/test_oracle_triggers.py \
+            tests/test_patched_dependencies.py \
+            tests/test_roadmap_figures.py \
+            tests/test_skip_reasons.py \
             tests/adaptive_editor_contract.py > python-collected.txt
           python3 conformance/collect_test_inventory.py \
             --pytest "tests=python-collected.txt" --out python-inventory.json
@@ -198,12 +206,45 @@ jobs:
             --lanes conformance/lanes.json --lane test \
             --collected rust-inventory.json --results rust-results.json
 
-      - name: Upload JUnit test results
+      # The JUnit report above cannot answer "what sat out this run?".
+      # nextest omits `#[ignore]` tests from it entirely — not as
+      # <skipped>, but as no <testcase> at all — so the report reads
+      # `tests="848" skipped="0"` on a workspace with seven ignored
+      # tests. The lister is what reports them, which is why this step
+      # re-lists rather than reusing the report. The build is warm from
+      # the run above, so listing costs seconds.
+      #
+      # `--run-ignored all` is load-bearing: without it the listing omits
+      # them too and the collector would have nothing to check. It
+      # detects that case rather than passing quietly.
+      - name: Collect skip reasons
+        if: always()
+        run: |
+          cargo nextest list --workspace --run-ignored all \
+            --message-format json > nextest-list.json
+          # Runtime skips come from the JUnit report, which only exists
+          # if the run above got as far as executing tests. Saying so
+          # beats passing a path that is not there: a collector that
+          # shrugged off a missing report would be the same silent hole
+          # this step exists to close.
+          args=(--nextest-list nextest-list.json --out skip-reasons.json)
+          if [ -f target/nextest/ci/junit.xml ]; then
+            args+=(--junit target/nextest/ci/junit.xml)
+          else
+            echo "No JUnit report: the run did not reach the tests, so"
+            echo "runtime skips are absent from this report. Ignored"
+            echo "tests below come from the listing and are still checked."
+          fi
+          python3 conformance/collect_skip_reasons.py "${args[@]}"
+
+      - name: Upload JUnit test results and the skip report
         if: always()
         uses: actions/upload-artifact@v7
         with:
           name: junit-results
-          path: target/nextest/ci/junit.xml
+          path: |
+            target/nextest/ci/junit.xml
+            skip-reasons.json
           retention-days: 14
 
   # LibreOffice interop oracle and coverage moved to nightly.yml (#108):

@@ -5,3 +5,21 @@ resolver = "2"
 [workspace.dependencies]
 gettext-rs = { version = "0.8", features = ["gettext-system"] }
 
+# Patched dependency — remove when upstream fixes this, see docs/DEPENDENCIES.md.
+#
+# oxml-layout (a non-optional dependency of rdocx, via oxml-chart) matches
+# `fontdb::Source` exhaustively. fontdb's variants are gated on fontdb's own
+# features, which a dependent crate cannot see through its own
+# `cfg(feature = ...)`, so the match stops compiling as soon as anything else
+# in the graph enables another fontdb feature. Here `krilla-svg` (via
+# `typst-pdf`, via suite-export) enables `memmap`, which adds
+# `Source::SharedFile` and breaks the build of every app binary:
+#
+#     error[E0004]: non-exhaustive patterns:
+#       `&fontdb::Source::SharedFile(_, _)` not covered
+#       --> oxml-layout-0.11.0/src/font.rs:1885:11
+#
+# Pinned by `rev`, never a branch: a moving ref would make the build
+# irreproducible, which the release gate exists to prevent.
+[patch.crates-io]
+oxml-layout = { git = "https://github.com/tuna-os/rdocx", rev = "46d220426b635d64890d786959d272b2c210fad8" }

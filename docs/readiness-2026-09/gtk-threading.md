@@ -83,3 +83,43 @@ nothing about the cause.
 A serialized harness still creates worker threads, so `--test-threads=1`
 remains insufficient evidence of main-thread correctness — the dispatcher,
 not the thread count, is what makes these tests sound.
+
+## The failure that could not say why
+
+The canary above works: a widget test with no display fails instead of
+passing quietly. What it did not do was say *what* went wrong. `gtk_thread`
+built its shared worker from `gtk4::init().is_ok()` — a boolean — so every
+diagnosis collapsed to one sentence:
+
+```
+GTK could not be initialised, so this widget test could not run.
+```
+
+That was enough while the only cause was "CI forgot Xvfb". It stopped being
+enough when `bridge::tests::non_buffer_state_survives_an_edit` failed in one
+of **two concurrent `test` runs of the same commit** and passed in the
+other: an intermittent initialisation failure, with nothing in the message
+to work from, on a lane that normally has a display.
+
+So the reason is kept rather than discarded. `GTK_THREAD` holds
+`Result<ThreadPool, String>`, each of the four ways initialisation can fail
+says which one it was, and the message carries the `DISPLAY` state beside
+it:
+
+```
+GTK could not be initialised, so this widget test could not run:
+gtk::init failed: Failed to initialize GTK (DISPLAY unset).
+```
+
+`DISPLAY unset`, `DISPLAY set but empty` and `DISPLAY=:99` fail identically
+inside GTK and need different fixes — "give the run a display" versus "the
+display you gave it is not answering" — which is the distinction a bare
+boolean threw away. `unavailable_reason()` exposes the same text so the
+canary reports it too, and `describe_display` is split out from the
+environment read for the same reason `value_opts_out` is: a test that wrote
+`DISPLAY` would be visible to every widget test running beside it.
+
+Deliberately **not** added: a retry. A transient failure might well deserve
+one, but nothing yet says what the transient cause is, and guessing at a
+retry before seeing a cause would paper over whatever this actually is. The
+next occurrence will print its reason; that is the evidence to decide on.
