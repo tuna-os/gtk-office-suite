@@ -24,6 +24,19 @@ RELEASE_GATE = os.path.join(REPO_ROOT, "scripts", "release_gate.py")
 ROW = re.compile(r"^\s*\|\s*`([^`]+\.rs)`\s*\|\s*(\d+)\s*\|\s*(\d+)\s*\|\s*$", re.M)
 # "letters/src/window.rs": 1800,
 CEILING = re.compile(r'^\s*"([^"]+\.rs)":\s*(\d+),', re.M)
+# "(#354, 9/10)" or "(#313, 7/8)" — an issue's progress through its readiness
+# checklist, quoted in prose rather than in a table.
+PROGRESS = re.compile(r"#(\d+),\s*(\d+)/(\d+)\)")
+# The readiness file each execution issue's checklist lives in. Declared here
+# because nothing in the tree declares it, and a wrong mapping must fail
+# loudly: a missing file is an error below, not a skipped check.
+READINESS_FILES = {
+    "241": "gtk-threading.md",
+    "313": "ci-gates.md",
+    "354": "gui-testing.md",
+}
+# "- [x] ..." / "- [ ] ..." at the top level of a readiness checklist.
+CHECKBOX = re.compile(r"^- \[([ xX])\]", re.M)
 
 
 def claimed_rows():
@@ -38,11 +51,67 @@ def claimed_rows():
     return [(path, int(lines), int(ceiling)) for path, lines, ceiling in rows]
 
 
+def claimed_progress():
+    """The `#issue, done/total` figures the roadmap states.
+
+    Raises rather than returning nothing, for the same reason as above.
+    """
+    with open(ROADMAP, encoding="utf-8") as handle:
+        found = PROGRESS.findall(handle.read())
+    assert found, f"{ROADMAP} states no `#issue, done/total` progress figures"
+    return [(issue, int(done), int(total)) for issue, done, total in found]
+
+
+def readiness_checklist(filename):
+    """(checked, total) for one readiness document's top-level checklist."""
+    path = os.path.join(REPO_ROOT, "docs", "readiness-2026-09", filename)
+    with open(path, encoding="utf-8") as handle:
+        boxes = CHECKBOX.findall(handle.read())
+    assert boxes, f"{path} has no checklist items to count"
+    return sum(1 for box in boxes if box in "xX"), len(boxes)
+
+
 def enforced_ceilings():
     with open(RELEASE_GATE, encoding="utf-8") as handle:
         found = CEILING.findall(handle.read())
     assert found, f"{RELEASE_GATE} declares no module ceilings"
     return {path: int(limit) for path, limit in found}
+
+
+class RoadmapProgress(unittest.TestCase):
+    """`#313, 7/8` is a measurement too, and it was the one that was wrong.
+
+    ROADMAP.md claimed 7 of 8 for #313 while ci-gates.md had 6 of 8 ticked —
+    off by one, in the optimistic direction, in a figure added by the very
+    pull request that added this file to stop line counts from decaying. The
+    lesson had been written down and applied to one column of the table only.
+    """
+
+    def test_every_stated_progress_figure_matches_its_checklist(self):
+        for issue, done, total in claimed_progress():
+            with self.subTest(issue=issue):
+                self.assertIn(
+                    issue,
+                    READINESS_FILES,
+                    f"ROADMAP.md quotes progress for #{issue}, but this test does "
+                    "not know which readiness document holds its checklist. Add it "
+                    "to READINESS_FILES rather than dropping the figure.",
+                )
+                actual_done, actual_total = readiness_checklist(READINESS_FILES[issue])
+                self.assertEqual(
+                    (done, total),
+                    (actual_done, actual_total),
+                    f"ROADMAP.md says #{issue} is {done}/{total}; "
+                    f"docs/readiness-2026-09/{READINESS_FILES[issue]} is "
+                    f"{actual_done}/{actual_total}.",
+                )
+
+    def test_every_mapped_readiness_document_exists(self):
+        """A renamed readiness file must fail here, not quietly stop counting."""
+        for issue, filename in READINESS_FILES.items():
+            with self.subTest(issue=issue):
+                path = os.path.join(REPO_ROOT, "docs", "readiness-2026-09", filename)
+                self.assertTrue(os.path.isfile(path), f"{path} does not exist")
 
 
 class RoadmapFigures(unittest.TestCase):
