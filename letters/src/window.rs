@@ -49,6 +49,7 @@ impl LettersWindow {
 
         let toast_overlay = adw::ToastOverlay::new();
         toast_overlay.set_child(Some(&stack));
+        let autosave_notices = suite_common::autosave_notice::AutosaveNotifier::new(&toast_overlay);
         let (status_bar, word_count_label) = suite_common::make_status_bar();
         // Cursor style readout ("Heading 2 · Bold") — DESIGN-UI: the status
         // bar is live, not decorative.
@@ -478,6 +479,7 @@ impl LettersWindow {
 
         // ── Actions ────────────────────────────────────────────────
         Self::register_actions(&tab_view, &stack, &word_count_label, &style_label, &win, app, &settings);
+        Self::register_autosave(&tab_view, app, &settings, &autosave_notices);
         crate::actions::register_formatting_actions(&tab_view, app);
         crate::actions::register_structured_actions(&tab_view, app);
 
@@ -1078,23 +1080,37 @@ impl LettersWindow {
             app.add_action(&action);
         }
 
-        // ── Autosave: periodic per-tab crash-recovery snapshot ──────────
-        // One tick covers every open tab. Serializes through
-        // capture_from_buffer (the same model the bridge uses for a real
-        // save) to JSON — snapshotting doesn't need a real file format,
-        // just a lossless round-trip back into a buffer on recovery.
+    }
+
+    /// Autosave, split out of `register_actions`: it needs the notifier and
+    /// nothing else that function takes, and threading an eighth parameter
+    /// through a function already carrying seven is how a constructor turns
+    /// into a pile.
+    ///
+    /// One tick covers every open tab. Serializes through
+    /// capture_from_buffer (the same model the bridge uses for a real save)
+    /// to JSON — snapshotting doesn't need a real file format, just a
+    /// lossless round-trip back into a buffer on recovery.
+    fn register_autosave(
+        tv: &adw::TabView,
+        app: &adw::Application,
+        settings: &gio::Settings,
+        notices: &std::rc::Rc<suite_common::autosave_notice::AutosaveNotifier>,
+    ) {
         {
             let atv = tv.clone();
+            let notices = notices.clone();
             let a = gtk::gio::SimpleAction::new("autosave-now", None);
-            a.connect_activate(move |_, _| { autosave_all_tabs(&atv); });
+            a.connect_activate(move |_, _| { autosave_all_tabs(&atv, &notices); });
             app.add_action(&a);
         }
         {
             let atv = tv.clone();
+            let notices = notices.clone();
             let interval = settings.int("auto-save-interval");
             if interval > 0 {
                 glib::source::timeout_add_seconds_local(interval.max(10) as u32, move || {
-                    autosave_all_tabs(&atv);
+                    autosave_all_tabs(&atv, &notices);
                     glib::ControlFlow::Continue
                 });
             }
@@ -1103,7 +1119,7 @@ impl LettersWindow {
 }
 
 
-fn autosave_all_tabs(tv: &adw::TabView) {
+fn autosave_all_tabs(tv: &adw::TabView, notices: &suite_common::autosave_notice::AutosaveNotifier) {
     for i in 0..tv.n_pages() {
         let page = tv.nth_page(i);
         if !page.needs_attention() {
@@ -1120,7 +1136,7 @@ fn autosave_all_tabs(tv: &adw::TabView) {
             original_path: td.file.clone(),
             kind: "letters-json".to_string(),
         };
-        let _ = td.autosave_slot.write(&bytes, &meta);
+        notices.record(td.autosave_slot.write(&bytes, &meta));
     }
 }
 
