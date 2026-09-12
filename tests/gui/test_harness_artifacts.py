@@ -20,9 +20,11 @@ non-zero reproduces a startup crash exactly, and is faster and more
 specific than waiting for a real one.
 """
 
+import glob
 import json
 import os
 import shutil
+import subprocess
 import tempfile
 import unittest
 
@@ -188,6 +190,175 @@ class StartupFailureArtifacts(unittest.TestCase):
         # because a tree dump failed is how a single flaky artifact costs
         # you the evidence that mattered.
         self.assertTrue(manifest["artifacts"]["app_log"]["captured"])
+
+
+class OutputFixturesAreRetained(unittest.TestCase):
+    """A save round trip that wrote the wrong bytes is not debuggable from a
+    screenshot. The file is the evidence — and it is about to be deleted by
+    the temp-directory cleanups that run right after the capture.
+
+    That ordering is the whole reason this works: `temp_dir` registers its
+    removal, `setUp` later registers the capture, and cleanups run
+    last-registered-first. Verified, not assumed.
+    """
+
+    def test_what_the_journey_wrote_is_kept(self):
+        class WritesThenFails(BaseGUITestCase):
+            app_name = "letters"
+
+            def setUp(self):
+                self.work = self.temp_dir(prefix="artifact-probe-out-")
+                with open(os.path.join(self.work, "saved.md"), "w") as handle:
+                    handle.write("the bytes the journey produced")
+                super().setUp()
+
+            def test_fails_after_launch(self):
+                self.fail("deliberate, after a real launch")
+
+        directory = os.path.join(ARTIFACTS_ROOT,
+                                 "WritesThenFails.test_fails_after_launch")
+        self.addCleanup(shutil.rmtree, directory, ignore_errors=True)
+        _run_in_isolation(WritesThenFails)
+
+        with open(os.path.join(directory, "captured.json")) as handle:
+            manifest = json.load(handle)
+        fixtures = manifest["artifacts"]["output_fixtures"]
+        self.assertTrue(fixtures["captured"], fixtures)
+
+        matches = glob.glob(os.path.join(directory, "output", "*", "saved.md"))
+        self.assertEqual(len(matches), 1, f"saved.md not retained: {fixtures}")
+        with open(matches[0]) as handle:
+            self.assertEqual(handle.read(), "the bytes the journey produced")
+
+    def test_the_reproducible_cache_is_not_dragged_along(self):
+        """Without this the capture kept a mesa shader cache.
+
+        Measured before the exclusion: 100 files and 1.6 MB for one journey,
+        against 101 bytes of actual evidence. An artifact set that buries the
+        file you need is barely better than one that lacks it.
+        """
+
+        class WritesThenFailsAgain(BaseGUITestCase):
+            app_name = "letters"
+
+            def setUp(self):
+                self.work = self.temp_dir(prefix="artifact-probe-cache-")
+                with open(os.path.join(self.work, "saved.md"), "w") as handle:
+                    handle.write("x")
+                super().setUp()
+
+            def test_fails_after_launch(self):
+                self.fail("deliberate")
+
+        directory = os.path.join(ARTIFACTS_ROOT,
+                                 "WritesThenFailsAgain.test_fails_after_launch")
+        self.addCleanup(shutil.rmtree, directory, ignore_errors=True)
+        _run_in_isolation(WritesThenFailsAgain)
+
+        with open(os.path.join(directory, "captured.json")) as handle:
+            fixtures = json.load(handle)["artifacts"]["output_fixtures"]
+
+        self.assertTrue(any(name.endswith("/cache") for name in fixtures["excluded"]),
+                        f"the cache was not recorded as excluded: {fixtures}")
+        kept = glob.glob(os.path.join(directory, "output", "**"), recursive=True)
+        self.assertEqual(
+            [path for path in kept if "mesa_shader_cache" in path], [],
+            "a shader cache was retained as if it were evidence",
+        )
+
+
+class CoreDumpsAreRetainedWhereTheKernelAllows(unittest.TestCase):
+    """"Where supported" is the load-bearing phrase, so it is reported.
+
+    `/proc/sys/kernel/core_pattern` decides where a core goes, and a pipe
+    handler such as apport means no file exists for a container to keep. The
+    manifest records the pattern either way, so a missing core reads as the
+    kernel's decision rather than as a capture that failed.
+    """
+
+    def setUp(self):
+        self.stub_dir = tempfile.mkdtemp(prefix="artifact-core-")
+        self.addCleanup(shutil.rmtree, self.stub_dir, ignore_errors=True)
+        os.makedirs(os.path.join(self.stub_dir, "debug"))
+        source = os.path.join(self.stub_dir, "crash.c")
+        with open(source, "w") as handle:
+            handle.write("int main(void){int*p=0;*p=1;return 0;}\n")
+        binary = os.path.join(self.stub_dir, "debug", "letters")
+        compiler = shutil.which("cc") or shutil.which("gcc")
+        if not compiler:
+            self.skipTest("no C compiler to build a segfaulting stub with")
+        if subprocess.call([compiler, "-o", binary, source],
+                           stdout=subprocess.DEVNULL,
+                           stderr=subprocess.DEVNULL) != 0:
+            self.skipTest("could not compile the segfaulting stub")
+
+        self._saved = os.environ.get("CARGO_TARGET_DIR")
+        os.environ["CARGO_TARGET_DIR"] = self.stub_dir
+        self.addCleanup(self._restore)
+        self._saved_ready = os.environ.get("GUI_TEST_READY_SECONDS")
+        os.environ["GUI_TEST_READY_SECONDS"] = "5"
+        self.addCleanup(self._restore_ready)
+
+    def _restore(self):
+        if self._saved is None:
+            os.environ.pop("CARGO_TARGET_DIR", None)
+        else:
+            os.environ["CARGO_TARGET_DIR"] = self._saved
+
+    def _restore_ready(self):
+        if self._saved_ready is None:
+            os.environ.pop("GUI_TEST_READY_SECONDS", None)
+        else:
+            os.environ["GUI_TEST_READY_SECONDS"] = self._saved_ready
+
+    def test_a_segfault_is_reported_either_as_a_core_or_as_a_reason(self):
+        class Segfaults(BaseGUITestCase):
+            app_name = "letters"
+
+            def test_never_reached(self):
+                self.fail("unreachable")
+
+        directory = os.path.join(ARTIFACTS_ROOT, "Segfaults.test_never_reached")
+        self.addCleanup(shutil.rmtree, directory, ignore_errors=True)
+        _run_in_isolation(Segfaults)
+
+        with open(os.path.join(directory, "captured.json")) as handle:
+            core = json.load(handle)["artifacts"]["core_dump"]
+
+        # The pattern is always reported, which is what makes the negative
+        # case readable rather than mysterious.
+        self.assertIn("core_pattern", core)
+
+        if core["captured"]:
+            self.assertTrue(core["kept"], core)
+            name = core["kept"][0]["file"]
+            kept = os.path.join(directory, name)
+            self.assertTrue(os.path.exists(kept), f"{name} recorded but absent")
+            self.assertGreater(core["kept"][0]["bytes"], 0)
+            with open(kept, "rb") as handle:
+                self.assertEqual(handle.read(4), b"\x7fELF",
+                                 "the retained core is not an ELF core file")
+        else:
+            # No core is a legitimate outcome; an unexplained one is not.
+            self.assertTrue(core.get("reason"), core)
+
+    def test_a_core_is_never_left_where_the_next_attempt_would_claim_it(self):
+        """A campaign runs the same journeys repeatedly in one directory."""
+
+        class SegfaultsAgain(BaseGUITestCase):
+            app_name = "letters"
+
+            def test_never_reached(self):
+                self.fail("unreachable")
+
+        directory = os.path.join(ARTIFACTS_ROOT, "SegfaultsAgain.test_never_reached")
+        self.addCleanup(shutil.rmtree, directory, ignore_errors=True)
+        _run_in_isolation(SegfaultsAgain)
+
+        left = [name for name in os.listdir(GUI_DIR)
+                if name == "core" or name.startswith("core.")]
+        self.assertEqual(left, [],
+                         f"core dumps left in the launch directory: {left}")
 
 
 class PassingJourneysLeaveNothing(unittest.TestCase):

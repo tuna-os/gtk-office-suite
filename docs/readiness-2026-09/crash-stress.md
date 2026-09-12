@@ -58,7 +58,7 @@ Controller state machines generate valid commands and assert invariants after ev
       each crate replays every retained crash input from its `tests/crashes/` directory, and the
       libFuzzer lane covers nine readers instead of three. It found three defects in
       `read_sheet_props_from_xlsx` on its first run, including a hang. See `interoperability.md`.
-- [~] Always retain stderr/backtrace, core dump where supported, screenshot, AT-SPI tree, last snapshot, action trace
+- [x] Always retain stderr/backtrace, core dump where supported, screenshot, AT-SPI tree, last snapshot, action trace
       and saved output fixtures on failure. The harness captured six of these, and captured **none of them for the one
       class of failure where they matter most**: unittest skips `tearDown` when `setUp` raises, the app is launched *in*
       `setUp`, and the capture was called only from `tearDown`. Measured against a stub binary that panicked on launch —
@@ -71,7 +71,31 @@ Controller state machines generate valid commands and assert invariants after ev
       whether it landed and why not — a guarded capture could otherwise retain nothing and report it only as a printed
       warning. A passing journey still retains nothing, which is the regression this change most risked, so a real
       built app proves that rather than a stub.
-      Still missing, and not claimed: **core dumps** and **saved output fixtures** (the files a journey wrote).
+      **Core dumps and saved output fixtures are now covered too**, which completes the row.
+      Output fixtures were the easy half and the more useful one: a save round trip that wrote the
+      wrong bytes is not debuggable from a screenshot, and the file was being deleted by the
+      temp-directory cleanups that run immediately after capture. It survives because cleanups run
+      last-registered-first and `temp_dir` registers its removal *before* `setUp` registers the
+      capture — which holds only because every journey calls `temp_dir` before `super().setUp()`, as
+      the helper's own documentation instructs. A directory created after that is already gone, and
+      the manifest names it under `already_deleted` rather than pretending otherwise.
+      The first version of this dragged in a **mesa shader cache**: 100 files and 1.6 MB for one
+      journey against 101 bytes of actual evidence. `XDG_CACHE_HOME` is now excluded by exact path
+      rather than by name-matching, and the manifest records the exclusion — an artifact set that
+      buries the file you need is barely better than one that lacks it.
+      Core dumps are reported rather than promised, because "where supported" is load-bearing:
+      `/proc/sys/kernel/core_pattern` decides where a dump goes, and a pipe handler such as apport
+      means no file exists for a container to keep. The harness raises `RLIMIT_CORE` on itself so the
+      app inherits it (not through `preexec_fn`, which the standard library warns is unsafe once
+      threads exist, and dogtail brings threads), compares the directory before and after so another
+      attempt's core is never reported as this one's, and records the active pattern either way.
+      Measured against a binary that segfaults on launch: a 331 KB `ELF 64-bit LSB core file` naming
+      the crashed executable, moved into the artifacts rather than left in the launch directory where
+      the next attempt would claim it. Cores above `GUI_TEST_CORE_MAX_MB` (256 by default) are
+      removed with their size recorded, never silently dropped.
+      A journey that wrote nothing is recorded as *not applicable* rather than *missing*: every
+      startup crash legitimately has no output, and reporting that as a gap is what makes a real gap
+      unreadable. Only a capture that threw counts as missing.
 - [ ] Track first-attempt failure rate and classify product crash, assertion mismatch, timeout, infrastructure setup and nondeterministic rendering separately.
 - [ ] No retry-until-green, weakened assertion, reduced generator alphabet or silent skip counts as a fix. Diagnostic reruns retain the original failure.
 - [ ] Each confirmed crash becomes a deterministic failing regression before the fix; close only with same-seed replay and relevant matrix evidence.
