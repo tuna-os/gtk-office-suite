@@ -32,21 +32,33 @@
 //
 // One failure mode is still open, and this records what has been ruled out
 // so the next occurrence does not start from nothing. Symptom: a single
-// `letters::bridge` widget test fails with GTK refusing to initialise while
-// every other widget test in the same run initialises fine. Four
-// occurrences, four *different* tests, always with `DISPLAY=:0` and a socket
-// present — which is the case `describe_display_and_server` was added to
-// name, and it names it: refused by a live display, not handed a missing
-// one. The fourth verbatim, because it is the one counted against the whole
-// workspace rather than against the widget tests alone:
+// Letters widget test fails with GTK refusing to initialise while every
+// other widget test in the same run initialises fine. Seven occurrences,
+// seven *different* tests, always with `DISPLAY=:0` and a socket present —
+// which
+// is the case `describe_display_and_server` was added to name, and it names
+// it: refused by a live display, not handed a missing one.
 //
-//     FAIL [0.093s] (145/906) letters::bin/letters
-//         bridge::tests::page_breaks_survive_the_buffer_round_trip
-//     Summary [8.573s] 148/906 tests run: 147 passed, 1 failed, 7 skipped
+// That it is the environment and not the code is demonstrated, not
+// inferred. Two runs of one commit — documentation-only, on a branch whose
+// previous head had a clean suite — failed in different places, and each
+// passed the test the other failed:
 //
-// The earlier three sat at 118, 138 and 138 of a comparable total. So every
-// occurrence lands around test 118 to 145 of some 900: nowhere near the end
-// of a run.
+//     run 1:  FAIL (144/915) bridge::tests::document_round_trips_through_buffer
+//     run 2:  FAIL (170/915) doc_tab::tests::header_and_footer_reach_the_page_view
+//             PASS (148/915) bridge::tests::document_round_trips_through_buffer
+//
+// No defect in the code under test can do that.
+//
+// An earlier version of this note claimed the failures were all
+// `letters::bridge` tests in a band of "118 to 145 of some 900", and
+// reasoned from the band that the cause does not build up over a run. The
+// sixth occurrence is `letters::doc_tab` at 170, and the band turned out to
+// be an artifact of the sample: Letters' widget tests *occupy* roughly
+// 118-170 of this workspace's run order, so a failure among them lands
+// there whatever causes it. The band described where the candidates are,
+// not when the failure happens, and the position argument built on it is
+// withdrawn.
 //
 // Ruled out, with the evidence, because both are the obvious guesses:
 //
@@ -54,12 +66,17 @@
 //     widget test opens its own X connection, and a server that ran out of
 //     client slots would explain one failure near the end of a long run.
 //     Measured: eight iterations of the widget tests against one persistent
-//     display, roughly 750 GTK inits, zero refusals — and no occurrence is
-//     near the end of a run anyway, as the positions above say.
-//     `Xvfb -maxclients n`
-//     is the lever if this ever is the cause, and nextest test groups or
-//     `max-threads` is the lever for reducing concurrency — but neither
-//     should be reached for on a hypothesis this measurement contradicts.
+//     display, roughly 750 GTK inits, zero refusals. That is evidence about
+//     a long-lived display, and it is the only evidence here that is — the
+//     position argument that used to stand beside it is withdrawn above.
+//     `Xvfb -maxclients n` is the lever if a client-slot limit is ever
+//     shown to be the cause, and a nextest test group with
+//     `max-threads = 1` over the Letters widget tests is the lever for
+//     reducing how many X connections are open at once. The second is not
+//     a masking fix — it changes scheduling, not assertions, so unlike the
+//     retry it cannot turn a display-less run green — but it costs run
+//     time and rests on a hypothesis nothing here has confirmed, so it
+//     should be a deliberate decision rather than a reflex.
 //
 //   * **Retrying `gtk4::init()`.** This is the tempting fix and it is
 //     actively unsafe. `gtk4::init()` is *not* idempotent after a failure:
@@ -71,10 +88,20 @@
 //     display-less run rather than to one flake. Do not reintroduce
 //     `init_with_retries`.
 //
-// Not yet reproduced faithfully: the failure has only ever been seen in a
-// full-workspace `cargo nextest run`, and the position in the run order is
-// the only clue that the rest of the workspace matters. Reproducing it needs
-// that whole run, which is the next step — not another mitigation.
+// Not yet reproduced outside CI: the failure has only ever been seen in a
+// full-workspace `cargo nextest run` on a runner. With the position
+// argument withdrawn there is no clue left pointing at the rest of the
+// workspace either — what the six samples fit is a per-process chance that
+// one widget test's X connection is refused, which would need many runs to
+// measure rather than one to reproduce.
+//
+// The rate is worth knowing before picking that up: of roughly ten
+// `test`-lane runs across one afternoon's pull requests, four failed this
+// way, and one pull request took three of them consecutively and could not
+// land. At better than one in three this is a gate rather than a
+// curiosity, so the cost of leaving it is paid on every pull request.
+// Whether the failures follow a runner rather than a commit is the
+// question that clustering raises; see gtk-threading.md.
 
 use std::panic;
 use std::sync::mpsc;

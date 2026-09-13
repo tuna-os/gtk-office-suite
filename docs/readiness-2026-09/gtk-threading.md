@@ -132,31 +132,74 @@ What the reasons have since said, and what has been ruled out:
 
 The occurrences print `DISPLAY=:0` with a socket present — "refused by a
 live display rather than handed a missing one", the case
-`describe_display_and_server` was added to name. Four of them, four
-*different* `letters::bridge` tests, while every other widget test in the
-same run initialised fine. The fourth, counted against the whole workspace
-rather than against the widget tests alone:
+`describe_display_and_server` was added to name. Seven so far, each a
+*different* Letters widget test, while every other widget test in the same
+run initialised fine.
+
+**It is a flake, and that is now demonstrated rather than inferred.** Two
+runs of one commit — a documentation-only commit, whose previous head had
+a clean suite — failed in different places, and each run passed the test
+the other failed:
 
 ```
-FAIL [0.093s] (145/906) letters::bin/letters
-    bridge::tests::page_breaks_survive_the_buffer_round_trip
-Summary [8.573s] 148/906 tests run: 147 passed, 1 failed, 7 skipped
+run 1:  FAIL (144/915) letters bridge::tests::document_round_trips_through_buffer
+run 2:  FAIL (170/915) letters doc_tab::tests::header_and_footer_reach_the_page_view
+        PASS (148/915) letters bridge::tests::document_round_trips_through_buffer
+        PASS (155/915) letters bridge::tests::page_breaks_survive_the_buffer_round_trip
 ```
 
-The earlier three sat at 118, 138 and 138 of a comparable total, so every
-occurrence lands around test 118 to 145 of some 900 — nowhere near the end
-of a run.
+That last line is the fourth occurrence's victim passing. No defect in the
+code under test can behave this way; only the environment can.
 
-Connection accumulation is the obvious guess and is contradicted twice
-over. nextest runs a process per test, so each widget test opens its own X
-connection, and a server out of client slots would explain one failure near
-the end of a long run — but no occurrence *is* near the end of a run, and
-eight iterations of the widget tests against one persistent display
-(roughly 750 GTK inits) produced zero refusals.
-`Xvfb -maxclients n` is the lever if this ever turns out to be the cause,
-and nextest test groups or `max-threads` the lever for reducing concurrency,
-but neither should be reached for on a hypothesis this measurement
-contradicts.
+**Two claims made here earlier were wrong, and the correction matters more
+than the claims did.** With four samples this file said the failures were
+all `letters::bridge` tests landing in a band of "118 to 145 of some 900",
+and inferred from the band that the failure is not something that builds up
+over a run. The fifth occurrence (144) fit. The sixth does not: it is
+`letters::doc_tab`, at 170.
+
+The band was an artifact of the sample, not a finding. Letters' widget
+tests *occupy* roughly indices 118–170 of this workspace's run order, so
+any failure among them lands in that range whatever causes it — the band
+described where the candidates are, not when the failure happens. Six
+samples spread across the whole of it, with the failing test differing run
+to run, fit a per-process chance that any one widget test's X connection is
+refused, and carry no information about position at all.
+
+So the position argument against connection accumulation is withdrawn. What
+still stands against it is the measurement: eight iterations of the widget
+tests against one persistent display, roughly 750 GTK inits, zero refusals.
+That is evidence about a long-lived display, and it is the only evidence
+here that is.
+
+The rate is worth recording too, because "intermittent" undersells it: of
+roughly ten `test`-lane runs across one afternoon's pull requests, four
+failed this way. At better than one in three it is a gate, not a
+curiosity.
+
+One pull request took three of those four, consecutively — the two runs
+above plus a third on its base merge, at 157 of 921
+(`bridge::tests::prose_containing_pipes_is_not_captured_as_a_table`). It
+could not land, and nothing about its diff was involved in any of the
+three failures.
+
+That clustering is worth a note rather than a conclusion. If each widget
+test carried an independent chance of refusal, the ~150 of them per run
+and a one-in-three run-failure rate put that chance near 0.2%, and three
+consecutive run failures would be a 1-in-27 coincidence — unlikely, not
+impossible. So it is either bad luck or something about a particular
+runner, and two samples cannot tell those apart. Recorded so the next
+person can check whether the failures follow a runner rather than a
+commit, which is the question the numbers now raise and cannot answer.
+
+`Xvfb -maxclients n` remains the lever if a client-slot limit is ever
+shown to be the cause, and a nextest test group with `max-threads = 1`
+over the Letters widget tests is the lever for reducing how many X
+connections are open at once. The second is not a masking fix — it changes
+scheduling, not assertions, so unlike the retry it cannot turn a
+display-less run green — but it costs run time and rests on a hypothesis
+nothing here has confirmed, so it should be a deliberate decision rather
+than a reflex.
 
 Still open, and the next step is a reproduction rather than another
 mitigation: the failure has only ever appeared in a full-workspace
