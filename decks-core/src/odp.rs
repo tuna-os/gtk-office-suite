@@ -182,6 +182,44 @@ fn text_style(st: &RunStyle) -> String {
     props
 }
 
+/// One picture the package has to carry: where it goes inside the archive,
+/// what it is, and its bytes.
+///
+/// The odp writer dropped `SlideObject::Image` entirely before this — the
+/// pptx path carried pictures and the odp path silently did not, so saving
+/// a deck as odp lost every image in it. That is the same writer/reader
+/// asymmetry as #716's, and like that one it cost the content on any
+/// save-and-reopen, not only on recovery.
+struct Media {
+    zip_path: String,
+    media_type: String,
+    bytes: Vec<u8>,
+}
+
+/// The extension and media type for a picture, from its current extension.
+///
+/// ODF names the type in the manifest, so guessing wrong here is a
+/// mislabelled part rather than a missing one. The pptx writer sidesteps
+/// the question by naming every part `.png` whatever it actually is; this
+/// keeps the real extension and labels it to match, and falls back to PNG
+/// for an extension nobody recognises rather than refusing the save.
+fn media_type_for(path: &str) -> (&'static str, &'static str) {
+    let ext = std::path::Path::new(path)
+        .extension()
+        .and_then(|e| e.to_str())
+        .unwrap_or("")
+        .to_ascii_lowercase();
+    match ext.as_str() {
+        "jpg" | "jpeg" => ("jpg", "image/jpeg"),
+        "gif" => ("gif", "image/gif"),
+        "svg" => ("svg", "image/svg+xml"),
+        "webp" => ("webp", "image/webp"),
+        "bmp" => ("bmp", "image/bmp"),
+        "tif" | "tiff" => ("tiff", "image/tiff"),
+        _ => ("png", "image/png"),
+    }
+}
+
 /// Emit a page's shapes. Shared by the slides in `content.xml` and the
 /// master pages in `styles.xml`, so a shape kind cannot be written on one
 /// and forgotten on the other.
@@ -190,7 +228,11 @@ fn text_style(st: &RunStyle) -> String {
 /// closure that names none: neither format's master reader fills a
 /// decoration's `runs` (the pptx one parses `p:sp` text as plain), so
 /// emitting a `text:span` would be styling nothing reads back.
-fn shapes_xml(shapes: &[SlideObject], style_of: &dyn Fn(&RunStyle) -> usize) -> String {
+fn shapes_xml(
+    shapes: &[SlideObject],
+    style_of: &dyn Fn(&RunStyle) -> usize,
+    media: &mut Vec<Media>,
+) -> Result<String, String> {
     let mut pages = String::new();
         for obj in shapes {
             match obj {
@@ -224,15 +266,29 @@ fn shapes_xml(shapes: &[SlideObject], style_of: &dyn Fn(&RunStyle) -> usize) -> 
                         geometry(cx, cy, d, d, *rotation)
                     ));
                 }
-                // Images need packaged media; deferred (matches pptx v1 scope
-                // notes — the pptx path carries them).
-                SlideObject::Image { .. } => {}
+                SlideObject::Image { path, x, y, w, h, rotation } => {
+                    // Named by position in the package rather than after
+                    // the source file: two decks can hold pictures called
+                    // the same thing, and a name taken from the model is a
+                    // name from a document we did not write.
+                    let (ext, media_type) = media_type_for(path);
+                    let zip_path = format!("Pictures/image{}.{ext}", media.len() + 1);
+                    let bytes = std::fs::read(path)
+                        .map_err(|e| format!("Cannot open image {path}: {e}"))?;
+                    pages.push_str(&format!(
+                        "<draw:frame {}>\
+                         <draw:image xlink:href=\"{zip_path}\" xlink:type=\"simple\" \
+                         xlink:show=\"embed\" xlink:actuate=\"onLoad\"/></draw:frame>",
+                        geometry(*x, *y, *w, *h, *rotation)
+                    ));
+                    media.push(Media { zip_path, media_type: media_type.to_string(), bytes });
+                }
             }
         }
-    pages
+    Ok(pages)
 }
 
-fn content_xml(deck: &Deck) -> String {
+fn content_xml(deck: &Deck, media: &mut Vec<Media>) -> Result<String, String> {
     // Distinct run styles across the deck, in first-use order.
     let mut styles: Vec<RunStyle> = Vec::new();
     for slide in &deck.slides {
@@ -292,7 +348,7 @@ fn content_xml(deck: &Deck) -> String {
                 ))
                 .unwrap_or_default(),
         ));
-        pages.push_str(&shapes_xml(&slide.objects, &style_of));
+        pages.push_str(&shapes_xml(&slide.objects, &style_of, media)?);
         if !slide.notes.is_empty() {
             let notes: String = slide
                 .notes
@@ -308,7 +364,7 @@ fn content_xml(deck: &Deck) -> String {
         pages.push_str("</draw:page>");
     }
 
-    format!(
+    Ok(format!(
         "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\
          <office:document-content \
          xmlns:office=\"urn:oasis:names:tc:opendocument:xmlns:office:1.0\" \
@@ -318,11 +374,12 @@ fn content_xml(deck: &Deck) -> String {
          xmlns:style=\"urn:oasis:names:tc:opendocument:xmlns:style:1.0\" \
          xmlns:fo=\"urn:oasis:names:tc:opendocument:xmlns:xsl-fo-compatible:1.0\" \
          xmlns:svg=\"urn:oasis:names:tc:opendocument:xmlns:svg-compatible:1.0\" \
+         xmlns:xlink=\"http://www.w3.org/1999/xlink\" \
          office:version=\"1.2\">\
          <office:automatic-styles>{auto}</office:automatic-styles>\
          <office:body><office:presentation>{pages}</office:presentation></office:body>\
          </office:document-content>"
-    )
+    ))
 }
 
 // ── Master pages ─────────────────────────────────────────────────────
@@ -382,7 +439,7 @@ fn decode_style_name(token: &str) -> String {
 
 /// `styles.xml` — the page layout, one drawing-page style per master's
 /// background, and the master pages themselves with their decorations.
-fn styles_xml(deck: &Deck) -> String {
+fn styles_xml(deck: &Deck, media: &mut Vec<Media>) -> Result<String, String> {
     let mut auto = String::from(
         "<style:page-layout style:name=\"PM1\">\
          <style:page-layout-properties fo:page-width=\"960pt\" fo:page-height=\"540pt\" \
@@ -407,10 +464,10 @@ fn styles_xml(deck: &Deck) -> String {
             "<style:master-page style:name=\"{}\" style:page-layout-name=\"PM1\"{dp}>{}\
              </style:master-page>",
             esc(&encode_style_name(&master.name)),
-            shapes_xml(&master.shapes, &|_| 0),
+            shapes_xml(&master.shapes, &|_| 0, media)?,
         ));
     }
-    format!(
+    Ok(format!(
         "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\
          <office:document-styles \
          xmlns:office=\"urn:oasis:names:tc:opendocument:xmlns:office:1.0\" \
@@ -420,20 +477,40 @@ fn styles_xml(deck: &Deck) -> String {
          xmlns:style=\"urn:oasis:names:tc:opendocument:xmlns:style:1.0\" \
          xmlns:fo=\"urn:oasis:names:tc:opendocument:xmlns:xsl-fo-compatible:1.0\" \
          xmlns:svg=\"urn:oasis:names:tc:opendocument:xmlns:svg-compatible:1.0\" \
+         xmlns:xlink=\"http://www.w3.org/1999/xlink\" \
          office:version=\"1.2\">\
          <office:styles/>\
          <office:automatic-styles>{auto}</office:automatic-styles>\
          <office:master-styles>{pages}</office:master-styles>\
          </office:document-styles>"
-    )
+    ))
 }
 
-const MANIFEST: &str = "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\
-<manifest:manifest xmlns:manifest=\"urn:oasis:names:tc:opendocument:xmlns:manifest:1.0\" manifest:version=\"1.2\">\
-<manifest:file-entry manifest:full-path=\"/\" manifest:media-type=\"application/vnd.oasis.opendocument.presentation\"/>\
-<manifest:file-entry manifest:full-path=\"content.xml\" manifest:media-type=\"text/xml\"/>\
-<manifest:file-entry manifest:full-path=\"styles.xml\" manifest:media-type=\"text/xml\"/>\
-</manifest:manifest>";
+/// The manifest, which has to name every part in the package — pictures
+/// included. A picture in the archive the manifest does not list is the
+/// failure this function exists to prevent: the bytes are there and a
+/// conforming reader never looks at them.
+fn manifest_xml(media: &[Media]) -> String {
+    let mut entries = String::new();
+    for m in media {
+        entries.push_str(&format!(
+            "<manifest:file-entry manifest:full-path=\"{}\" manifest:media-type=\"{}\"/>",
+            esc(&m.zip_path),
+            esc(&m.media_type),
+        ));
+    }
+    format!(
+        "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\
+         <manifest:manifest \
+         xmlns:manifest=\"urn:oasis:names:tc:opendocument:xmlns:manifest:1.0\" \
+         manifest:version=\"1.2\">\
+         <manifest:file-entry manifest:full-path=\"/\" \
+         manifest:media-type=\"application/vnd.oasis.opendocument.presentation\"/>\
+         <manifest:file-entry manifest:full-path=\"content.xml\" manifest:media-type=\"text/xml\"/>\
+         <manifest:file-entry manifest:full-path=\"styles.xml\" manifest:media-type=\"text/xml\"/>\
+         {entries}</manifest:manifest>"
+    )
+}
 
 /// Write the deck as .odp. Builds the whole archive in memory first, then
 /// places it atomically — a rename before the ZipWriter flushes its central
@@ -457,12 +534,29 @@ pub fn write_bytes(deck: &Deck) -> Result<Vec<u8>, String> {
     .map_err(|e| e.to_string())?;
     z.write_all(MIMETYPE.as_bytes()).map_err(|e| e.to_string())?;
     let opt = zip::write::SimpleFileOptions::default();
+    // The XML is built first because building it is what discovers the
+    // pictures: the manifest has to list them, and it is written before
+    // them in the archive.
+    let mut media: Vec<Media> = Vec::new();
+    let content = content_xml(deck, &mut media)?;
+    let styles = styles_xml(deck, &mut media)?;
     z.start_file("META-INF/manifest.xml", opt).map_err(|e| e.to_string())?;
-    z.write_all(MANIFEST.as_bytes()).map_err(|e| e.to_string())?;
+    z.write_all(manifest_xml(&media).as_bytes()).map_err(|e| e.to_string())?;
     z.start_file("content.xml", opt).map_err(|e| e.to_string())?;
-    z.write_all(content_xml(deck).as_bytes()).map_err(|e| e.to_string())?;
+    z.write_all(content.as_bytes()).map_err(|e| e.to_string())?;
     z.start_file("styles.xml", opt).map_err(|e| e.to_string())?;
-    z.write_all(styles_xml(deck).as_bytes()).map_err(|e| e.to_string())?;
+    z.write_all(styles.as_bytes()).map_err(|e| e.to_string())?;
+    for m in &media {
+        // Stored, not deflated: a PNG or JPEG is already compressed, and
+        // deflating it again spends time to grow the archive.
+        z.start_file(
+            &m.zip_path,
+            zip::write::SimpleFileOptions::default()
+                .compression_method(zip::CompressionMethod::Stored),
+        )
+        .map_err(|e| e.to_string())?;
+        z.write_all(&m.bytes).map_err(|e| e.to_string())?;
+    }
     z.finish().map_err(|e| e.to_string()).map(|c| c.into_inner())
 }
 
@@ -588,6 +682,7 @@ fn parse_pages(
     page_tag: &str,
     page_bg: &std::collections::HashMap<String, String>,
     text_styles: &std::collections::HashMap<String, RunStyle>,
+    resolve_image: &mut dyn FnMut(&str) -> Option<String>,
 ) -> Result<Vec<Page>, String> {
     let mut pages: Vec<Page> = Vec::new();
     let mut uses_master: Option<String> = None;
@@ -638,6 +733,30 @@ fn parse_pages(
                 }
                 "presentation:notes" => in_notes = true,
                 "draw:frame" => frame = Some(geo(e)),
+                // A picture takes its geometry from the frame around it,
+                // the way a text box does. `xlink:href` names a part inside
+                // this package; the resolver turns it into something the
+                // model can point at, and it is injected so that unpacking
+                // a picture stays the caller's business rather than this
+                // walker's.
+                //
+                // We write `<draw:image/>` empty and Impress writes it with
+                // a caption paragraph inside, so it arrives as a Start
+                // there and as an Empty here. Handling only one of the two
+                // is how a picture survives our own round trip and vanishes
+                // out of an Impress-written deck, which is why both arms
+                // carry this.
+                "draw:image" => {
+                    if let (Some(s2), false, Some((x, y, w, h, rotation))) =
+                        (slide.as_mut(), in_notes, frame)
+                    {
+                        if let Some(path) =
+                            attr(e, "xlink:href").and_then(|href| resolve_image(&href))
+                        {
+                            s2.objects.push(SlideObject::Image { path, x, y, w, h, rotation });
+                        }
+                    }
+                }
                 "draw:text-box" => textbox = Some((Vec::new(), Vec::new())),
                 // Impress converts pptx text boxes to custom-shapes with
                 // text:p directly inside (no draw:text-box wrapper).
@@ -697,6 +816,19 @@ fn parse_pages(
                         let (x, y, w, h, rotation) = geo(e);
                         let r = (w.max(h)) / 2.0;
                         s.objects.push(SlideObject::Circle { x: x + w / 2.0, y: y + h / 2.0, r, rotation });
+                    }
+                }
+                // The empty form, which is what this writer emits — see the
+                // Start arm above for why both are needed.
+                "draw:image" => {
+                    if let (Some(s2), false, Some((x, y, w, h, rotation))) =
+                        (slide.as_mut(), in_notes, frame)
+                    {
+                        if let Some(path) =
+                            attr(e, "xlink:href").and_then(|href| resolve_image(&href))
+                        {
+                            s2.objects.push(SlideObject::Image { path, x, y, w, h, rotation });
+                        }
                     }
                 }
                 _ => {}
@@ -802,6 +934,36 @@ fn parse_pages(
     Ok(pages)
 }
 
+/// Unpack one picture from the package and hand back a path the model can
+/// point at.
+///
+/// It goes to an unpredictable temporary file, deliberately. The pptx
+/// reader had this wrong once (gh-268): it wrote to
+/// `/tmp/decks_img_<id>.<ext>` where both the middle and the suffix came
+/// from the document, so a crafted package could steer the write through
+/// `..` or a pre-created symlink. `NamedTempFile` gives O_EXCL, O_NOFOLLOW
+/// and an unguessable name in one step, and `keep()` leaves it in place
+/// because the model reads it back later.
+///
+/// `href` is document-controlled, so it may only name an entry of *this*
+/// archive: the bytes come from `part_to_bytes`, which resolves inside the
+/// zip and draws on the same read budget as the XML parts, so a picture
+/// cannot be the hole a decompression bomb comes through (#442).
+fn extract_picture(
+    href: &str,
+    zip: &mut zip::ZipArchive<std::fs::File>,
+    budget: &mut ZipBudget,
+) -> Option<String> {
+    if href.is_empty() || href.starts_with("../") || href.contains("://") {
+        return None;
+    }
+    let bytes = zip.part_to_bytes(href, budget).ok()?;
+    let mut tmp = tempfile::NamedTempFile::new().ok()?;
+    tmp.write_all(&bytes).ok()?;
+    let (_, kept) = tmp.keep().ok()?;
+    Some(kept.to_string_lossy().to_string())
+}
+
 /// Read an .odp into a Deck.
 pub fn read(path: &str) -> Result<Deck, String> {
     let file = std::fs::File::open(path).map_err(|e| e.to_string())?;
@@ -826,7 +988,11 @@ pub fn read(path: &str) -> Result<Deck, String> {
     // Second pass: the master pages, then the slides that name them.
     let mut masters: Vec<MasterSlide> = Vec::new();
     let mut master_idx_by_name: std::collections::HashMap<String, usize> = Default::default();
-    for page in parse_pages(&styles, "style:master-page", &page_bg, &text_styles)? {
+    let master_pages = {
+        let mut resolve = |href: &str| extract_picture(href, &mut zip, &mut budget);
+        parse_pages(&styles, "style:master-page", &page_bg, &text_styles, &mut resolve)?
+    };
+    for page in master_pages {
         master_idx_by_name.insert(page.slide.title.clone(), masters.len());
         masters.push(MasterSlide {
             name: page.slide.title,
@@ -848,7 +1014,11 @@ pub fn read(path: &str) -> Result<Deck, String> {
     }
 
     let mut deck = Deck { slides: Vec::new(), masters };
-    for page in parse_pages(&content, "draw:page", &page_bg, &text_styles)? {
+    let slide_pages = {
+        let mut resolve = |href: &str| extract_picture(href, &mut zip, &mut budget);
+        parse_pages(&content, "draw:page", &page_bg, &text_styles, &mut resolve)?
+    };
+    for page in slide_pages {
         let mut slide = page.slide;
         slide.master_idx = page
             .uses_master
@@ -1056,14 +1226,200 @@ mod tests {
                 master_idx: Some(0),
             }],
         };
-        let styles = styles_xml(&deck);
+        let styles = styles_xml(&deck, &mut Vec::new()).unwrap();
         assert!(styles.contains("draw:fill-color=\"#204060\""), "{styles}");
         assert!(styles.contains("style:name=\"House_20_Style\""), "{styles}");
         assert!(styles.contains("draw:style-name=\"mdp1\""), "{styles}");
         assert!(
-            content_xml(&deck).contains("draw:master-page-name=\"House_20_Style\""),
+            content_xml(&deck, &mut Vec::new())
+                .unwrap()
+                .contains("draw:master-page-name=\"House_20_Style\""),
             "the slide must name its master, or every slide lands on the first",
         );
+    }
+
+    /// A tiny valid PNG, inline so the tests need no fixture file.
+    fn a_png() -> &'static [u8] {
+        &[
+            0x89, b'P', b'N', b'G', 0x0d, 0x0a, 0x1a, 0x0a,
+            0, 0, 0, 13, b'I', b'H', b'D', b'R', 0, 0, 0, 2, 0, 0, 0, 2, 8, 2, 0, 0, 0,
+            0xfd, 0xd4, 0x9a, 0x73,
+            0, 0, 0, 21, b'I', b'D', b'A', b'T', 0x78, 0x9c, 0x62, 0xfa, 0xcf, 0xc0, 0xc0,
+            0xf0, 0x1f, 0x88, 0xff, 0x33, 0x30, 0x30, 0x00, 0x00, 0x00, 0xff, 0xff,
+            0x03, 0x00, 0x2b, 0x11, 0x04, 0xf9,
+            0, 0, 0, 0, b'I', b'E', b'N', b'D', 0xae, 0x42, 0x60, 0x82,
+        ]
+    }
+
+    fn deck_with_picture(path: &str) -> Deck {
+        Deck {
+            masters: vec![MasterSlide {
+                name: "Default".into(),
+                background: "#ffffff".into(),
+                default_font: "Sans".into(),
+                shapes: vec![],
+            }],
+            slides: vec![Slide {
+                title: "p".into(),
+                background: String::new(),
+                objects: vec![SlideObject::Image {
+                    path: path.to_string(),
+                    x: 10.0,
+                    y: 20.0,
+                    w: 30.0,
+                    h: 40.0,
+                    rotation: 0.0,
+                }],
+                notes: String::new(),
+                master_idx: Some(0),
+            }],
+        }
+    }
+
+    /// The manifest has to name the picture. Bytes in the archive that the
+    /// manifest does not list are a part a conforming reader never opens,
+    /// which is indistinguishable from having dropped the picture — and it
+    /// is the failure a round-trip test through our own reader would miss,
+    /// because our reader goes straight to the href.
+    #[test]
+    fn a_picture_is_listed_in_the_manifest_and_present_in_the_archive() {
+        let dir = tempfile::tempdir().unwrap();
+        let src = dir.path().join("dot.png");
+        std::fs::write(&src, a_png()).unwrap();
+        let bytes = write_bytes(&deck_with_picture(src.to_str().unwrap())).unwrap();
+
+        let mut zip = zip::ZipArchive::new(std::io::Cursor::new(bytes)).unwrap();
+        let names: Vec<String> = zip.file_names().map(str::to_string).collect();
+        assert!(
+            names.iter().any(|n| n == "Pictures/image1.png"),
+            "the picture is not in the archive: {names:?}",
+        );
+
+        let mut manifest = String::new();
+        std::io::Read::read_to_string(
+            &mut zip.by_name("META-INF/manifest.xml").unwrap(),
+            &mut manifest,
+        )
+        .unwrap();
+        assert!(
+            manifest.contains("manifest:full-path=\"Pictures/image1.png\"")
+                && manifest.contains("manifest:media-type=\"image/png\""),
+            "the manifest does not declare the picture: {manifest}",
+        );
+    }
+
+    /// The extension and the declared type have to agree, or the package
+    /// says PNG about a JPEG. The writer keeps the source's extension
+    /// rather than calling everything `.png` the way the pptx writer does.
+    #[test]
+    fn a_pictures_declared_type_matches_its_extension() {
+        for (name, ext, media_type) in [
+            ("a.png", "png", "image/png"),
+            ("a.jpg", "jpg", "image/jpeg"),
+            ("a.JPEG", "jpg", "image/jpeg"),
+            ("a.gif", "gif", "image/gif"),
+            ("a.svg", "svg", "image/svg+xml"),
+            // Not a picture extension we know: labelled PNG rather than
+            // refusing the save, since the alternative is losing the deck.
+            ("a.qqq", "png", "image/png"),
+            ("noextension", "png", "image/png"),
+        ] {
+            assert_eq!(media_type_for(name), (ext, media_type), "for {name}");
+        }
+    }
+
+    /// A second picture must not overwrite the first. Naming parts after
+    /// the source file would collide the moment two pictures shared a
+    /// name, which is why they are numbered by position instead.
+    #[test]
+    fn two_pictures_get_two_parts() {
+        let dir = tempfile::tempdir().unwrap();
+        // Deliberately the same file name in different directories, which
+        // is the collision a source-derived name would hit.
+        let (a, b) = (dir.path().join("one"), dir.path().join("two"));
+        std::fs::create_dir_all(&a).unwrap();
+        std::fs::create_dir_all(&b).unwrap();
+        let (p1, p2) = (a.join("dot.png"), b.join("dot.png"));
+        std::fs::write(&p1, a_png()).unwrap();
+        std::fs::write(&p2, a_png()).unwrap();
+
+        let mut deck = deck_with_picture(p1.to_str().unwrap());
+        deck.slides[0].objects.push(SlideObject::Image {
+            path: p2.to_string_lossy().to_string(),
+            x: 50.0,
+            y: 60.0,
+            w: 30.0,
+            h: 40.0,
+            rotation: 0.0,
+        });
+        let bytes = write_bytes(&deck).unwrap();
+        let zip = zip::ZipArchive::new(std::io::Cursor::new(bytes)).unwrap();
+        let pictures: Vec<&str> =
+            zip.file_names().filter(|n| n.starts_with("Pictures/")).collect();
+        assert_eq!(pictures.len(), 2, "expected two picture parts, got {pictures:?}");
+    }
+
+    /// A missing source file fails the save rather than writing a deck with
+    /// a picture-shaped hole in it. That matches the pptx writer, which has
+    /// always refused, and it is the honest answer for a format whose
+    /// promise is that a save keeps what the deck had.
+    #[test]
+    fn a_picture_whose_file_is_gone_fails_the_save() {
+        let err = write_bytes(&deck_with_picture("/nonexistent/dot.png")).unwrap_err();
+        assert!(err.contains("Cannot open image"), "unhelpful error: {err}");
+    }
+
+    /// Where an unpacked picture lands must not be steerable by the
+    /// document — the gh-268 failure, where the pptx reader built
+    /// `/tmp/decks_img_<id>.<ext>` out of document-supplied pieces.
+    ///
+    /// This asserts the property rather than the guard. Rejecting an href
+    /// with `../` in it reads like the security check and is not one: a
+    /// zip lookup is a name lookup, so `../` resolves to "no such entry"
+    /// with or without the guard, and a test feeding it paths that are not
+    /// in the package would pass whether or not the guard existed. What
+    /// actually keeps this safe is that the *destination* is a fresh
+    /// temporary file and the href only ever selects which archive entry
+    /// to read — so that is what is checked: the path we hand back carries
+    /// nothing from the document, and it is not the source file either.
+    #[test]
+    fn an_unpacked_picture_lands_where_the_document_cannot_choose() {
+        let dir = tempfile::tempdir().unwrap();
+        let src = dir.path().join("distinctive-name.png");
+        std::fs::write(&src, a_png()).unwrap();
+        let path = dir.path().join("deck.odp");
+        write(&deck_with_picture(src.to_str().unwrap()), path.to_str().unwrap()).unwrap();
+
+        let back = read(path.to_str().unwrap()).unwrap();
+        let [SlideObject::Image { path: unpacked, .. }] = back.slides[0].objects.as_slice()
+        else {
+            panic!("expected one picture, got {:?}", back.slides[0].objects)
+        };
+        assert_ne!(unpacked, &src.to_string_lossy().to_string(), "the source was reused");
+        assert!(
+            !unpacked.contains("distinctive-name") && !unpacked.contains("image1"),
+            "the unpacked path is derived from the document: {unpacked}",
+        );
+        assert!(
+            std::path::Path::new(unpacked).starts_with(std::env::temp_dir()),
+            "the picture was unpacked outside the temp dir: {unpacked}",
+        );
+        assert_eq!(std::fs::read(unpacked).unwrap(), a_png(), "wrong bytes unpacked");
+    }
+
+    /// An href naming a part the package does not contain yields nothing,
+    /// rather than a picture-shaped object pointing at an empty file.
+    #[test]
+    fn an_href_naming_no_part_yields_no_picture() {
+        let dir = tempfile::tempdir().unwrap();
+        let src = dir.path().join("dot.png");
+        std::fs::write(&src, a_png()).unwrap();
+        let path = dir.path().join("deck.odp");
+        write(&deck_with_picture(src.to_str().unwrap()), path.to_str().unwrap()).unwrap();
+        let mut zip = zip::ZipArchive::new(std::fs::File::open(&path).unwrap()).unwrap();
+        let mut budget = ZipBudget::default();
+        assert!(extract_picture("Pictures/absent.png", &mut zip, &mut budget).is_none());
+        assert!(extract_picture("", &mut zip, &mut budget).is_none());
     }
 
     #[test]

@@ -827,3 +827,100 @@ fn impress_keeps_the_master_we_write() {
         rt.masters.iter().map(|m| (&m.name, &m.background)).collect::<Vec<_>>(),
     );
 }
+
+// ── Pictures we write into an odp (#322, recovery.md fidelity row) ───
+
+/// A picture is only really in the package if Impress can find it. Our own
+/// reader goes straight to the `xlink:href` it wrote, so it is satisfied by
+/// a package whose manifest never declares the part — and a conforming
+/// reader would never open it. Impress is the reader that tells us.
+///
+/// It crosses formats on purpose: our odp goes through Impress to pptx, and
+/// the pptx reader says whether a picture arrived.
+#[test]
+fn impress_finds_the_picture_we_write_into_an_odp() {
+    if !require_or_skip() { return; }
+    // A 2x2 red PNG, generated inline so no fixture file is needed.
+    let dir = tempfile::tempdir().unwrap();
+    let png_path = dir.path().join("dot.png");
+    let png: &[u8] = &[
+        0x89, b'P', b'N', b'G', 0x0d, 0x0a, 0x1a, 0x0a,
+        0, 0, 0, 13, b'I', b'H', b'D', b'R', 0, 0, 0, 2, 0, 0, 0, 2, 8, 2, 0, 0, 0,
+        0xfd, 0xd4, 0x9a, 0x73,
+        0, 0, 0, 21, b'I', b'D', b'A', b'T', 0x78, 0x9c, 0x62, 0xfa, 0xcf, 0xc0, 0xc0,
+        0xf0, 0x1f, 0x88, 0xff, 0x33, 0x30, 0x30, 0x00, 0x00, 0x00, 0xff, 0xff,
+        0x03, 0x00, 0x2b, 0x11, 0x04, 0xf9,
+        0, 0, 0, 0, b'I', b'E', b'N', b'D', 0xae, 0x42, 0x60, 0x82,
+    ];
+    std::fs::write(&png_path, png).unwrap();
+
+    let mut deck = Deck::new();
+    deck.slides[0].objects.push(SlideObject::Image {
+        path: png_path.to_string_lossy().to_string(),
+        x: 100.0, y: 100.0, w: 200.0, h: 150.0,
+        rotation: 0.0,
+    });
+    let as_odp = dir.path().join("pictured.odp");
+    odp::write(&deck, as_odp.to_str().unwrap()).expect("write odp");
+
+    let as_pptx = convert(&as_odp, "pptx").expect("Impress could not convert our odp to pptx");
+    let rt = read_pptx(as_pptx.to_str().unwrap()).expect("our pptx reader failed");
+    let pictures = rt.slides[0]
+        .objects
+        .iter()
+        .filter(|o| matches!(o, SlideObject::Image { .. }))
+        .count();
+    assert_eq!(
+        pictures, 1,
+        "Impress did not carry our odp's picture across; slide came back as {:?}",
+        rt.slides[0].objects,
+    );
+}
+
+/// And the reverse: a picture Impress packaged into an odp must come back
+/// out of our odp reader. Impress writes `draw:image` with a caption
+/// paragraph inside it, so this is the case that needs the Start arm of the
+/// reader rather than the Empty one our own writer produces.
+#[test]
+fn we_read_the_picture_impress_writes_into_an_odp() {
+    if !require_or_skip() { return; }
+    let dir = tempfile::tempdir().unwrap();
+    let png_path = dir.path().join("dot.png");
+    let png: &[u8] = &[
+        0x89, b'P', b'N', b'G', 0x0d, 0x0a, 0x1a, 0x0a,
+        0, 0, 0, 13, b'I', b'H', b'D', b'R', 0, 0, 0, 2, 0, 0, 0, 2, 8, 2, 0, 0, 0,
+        0xfd, 0xd4, 0x9a, 0x73,
+        0, 0, 0, 21, b'I', b'D', b'A', b'T', 0x78, 0x9c, 0x62, 0xfa, 0xcf, 0xc0, 0xc0,
+        0xf0, 0x1f, 0x88, 0xff, 0x33, 0x30, 0x30, 0x00, 0x00, 0x00, 0xff, 0xff,
+        0x03, 0x00, 0x2b, 0x11, 0x04, 0xf9,
+        0, 0, 0, 0, b'I', b'E', b'N', b'D', 0xae, 0x42, 0x60, 0x82,
+    ];
+    std::fs::write(&png_path, png).unwrap();
+
+    let mut deck = Deck::new();
+    deck.slides[0].objects.push(SlideObject::Image {
+        path: png_path.to_string_lossy().to_string(),
+        x: 100.0, y: 100.0, w: 200.0, h: 150.0,
+        rotation: 0.0,
+    });
+    let src = dir.path().join("src.pptx");
+    write_pptx(src.to_str().unwrap(), &deck).expect("write pptx");
+
+    let as_odp = convert(&src, "odp").expect("Impress could not convert to odp");
+    let rt = odp::read(as_odp.to_str().unwrap()).expect("our odp reader failed");
+    let recovered: Vec<&String> = rt.slides[0]
+        .objects
+        .iter()
+        .filter_map(|o| match o {
+            SlideObject::Image { path, .. } => Some(path),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(
+        recovered.len(), 1,
+        "we did not read the picture out of an Impress-written odp: {:?}",
+        rt.slides[0].objects,
+    );
+    let bytes = std::fs::read(recovered[0]).expect("the unpacked picture is unreadable");
+    assert!(!bytes.is_empty(), "the picture unpacked to an empty file");
+}

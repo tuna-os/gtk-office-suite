@@ -75,8 +75,8 @@ AutosaveSlot used to store bytes and metadata in separate atomic writes. Each wr
       header, footer and page geometry.
       **Decks is now covered by `decks-core/tests/snapshot_fidelity.rs`.**
       Notes, backgrounds, object geometry, run styles, slide order, shape
-      rotation and slide masters all survive both formats, and
-      `snapshot_fidelity.rs` has no `#[ignore]` left. Rotation survived neither until
+      rotation, slide masters and embedded pictures all survive both
+      formats, and `snapshot_fidelity.rs` has no `#[ignore]` left. Rotation survived neither until
       recently: both writers emitted none at all and both readers hardcoded
       zero, so the rotate gesture's result was discarded by any save. pptx
       spells it `a:xfrm/@rot`, one attribute, and was fixed first. ODF has
@@ -140,17 +140,55 @@ AutosaveSlot used to store bytes and metadata in separate atomic writes. Each wr
       that looks where it wrote. Impress drops a master it cannot resolve,
       so handing both formats to Impress and reading back what it rewrote is
       what proves the parts are actually related.
-      What keeps this row `[~]` rather than `[x]`: the odp writer still
-      drops `SlideObject::Image`, which is supported content and a real
-      strip. It needs a packaged media part and a manifest entry, the same
-      shape of work the pptx path already does — the row cannot honestly
-      say "no format strips supported content" until it does. Two smaller
-      ones, recorded so they are not rediscovered as bugs: a master's
-      `default_font` is not carried by either format (pptx would need a
-      theme, ODF a page style this reader does not model), and a master
-      decoration's run styling is not either, in both cases because
-      *neither* reader fills them, so the writers emit nothing rather than
-      writing something nothing reads.
+      **Embedded pictures now survive an odp save too**, which was the
+      last strip in this row. The odp writer dropped `SlideObject::Image`
+      outright while the pptx writer carried it, so saving a deck as odp
+      lost every picture in it — the same asymmetry as the Tables bug
+      above, costing the content on any save-and-reopen rather than only on
+      recovery. Each picture is now a `Pictures/imageN.<ext>` part, stored
+      rather than deflated (a PNG is already compressed), declared in the
+      manifest with the media type its extension implies, and referenced by
+      `draw:image xlink:href` inside the frame. The reader unpacks it to a
+      fresh temporary file, as the pptx reader does.
+      Three things here are worth keeping written down, because each is a
+      test that would otherwise have passed while proving nothing:
+      - **The manifest entry is invisible to our own reader.** Our reader
+        goes straight to the `xlink:href`, so a package whose manifest
+        never declares the picture round-trips perfectly through it — while
+        a conforming reader never opens the part. Mutating the manifest
+        entry away leaves `images_survive_a_snapshot` green and reddens
+        only the manifest unit test and
+        `impress_finds_the_picture_we_write_into_an_odp`. That is what the
+        oracle is for.
+      - **The byte comparison is the assertion.** Both readers hand back a
+        temp-file path, so the path that comes out cannot be the one that
+        went in and a test demanding it would assert the wrong thing.
+        Asserting merely that *an* `Image` came back passes on a writer
+        that packages an empty file, which is exactly what one of the
+        mutations does.
+      - **The `../` href check is not the security boundary**, and the test
+        that looked like it checked one could not fail: a zip lookup is a
+        name lookup, so `../` resolves to "no such entry" with or without
+        the guard. What keeps this safe is that the *destination* is a
+        `NamedTempFile` and the href only selects which archive entry to
+        read, so that is what
+        `an_unpacked_picture_lands_where_the_document_cannot_choose`
+        asserts — and it reddens against a reader that rebuilds the gh-268
+        `/tmp/<document-supplied>` path.
+      A missing source file fails the save rather than writing a deck with
+      a picture-shaped hole, matching the pptx writer. That is the right
+      answer for an explicit save and a debatable one for an autosave
+      snapshot, where it means one deleted image file costs all the unsaved
+      work; both formats behave the same way, so it is recorded here rather
+      than fixed in one of them.
+      What keeps this row `[~]` rather than `[x]`, now that the strips are
+      gone: a master's `default_font` is carried by neither format (pptx
+      would need a theme, ODF a page style this reader does not model), and
+      a master decoration's run styling is not either — in both cases
+      because *neither* reader fills them, so the writers emit nothing
+      rather than writing something nothing reads. Both are symmetric
+      omissions rather than silent strips, but the row's claim is about
+      supported content and these are still gaps.
       A note on how the odp rotation gap was found, because the test design
       hid it: the fidelity tests looped `for kind in FORMATS` and asserted
       inside the loop, which aborts on the first format that fails. While
