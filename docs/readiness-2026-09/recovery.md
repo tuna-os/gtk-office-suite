@@ -298,7 +298,76 @@ AutosaveSlot used to store bytes and metadata in separate atomic writes. Each wr
       Still open in this row, and why it is `[~]` rather than `[x]`: "keep
       dirty state on failed commit" is the save transaction rather than the
       snapshot — #436 and #437 own it.
-- [~] Inject failures before/after each checkpoint/rename and kill the real app; verify old-or-new complete state, never a mismatched generation. The headless half is done: `atomic_save::fault` arms any of the six boundaries of a durable write (temp create, permission preservation, data write, data sync, rename, directory sync) and any arrival at one, so "fail the second commit of this transaction" is expressible. A sweep asserts that every pre-commit boundary leaves the destination byte-identical with no temporary left behind, that the one post-rename boundary reports the replacement rather than claiming a rollback, and that no boundary or arrival in a snapshot write can pair two generations. The hook is `cfg(test)` only — a release build contains no branch to take. Killing the real app under the GUI harness is still open.
+- [~] Inject failures before/after each checkpoint/rename and kill the real app; verify old-or-new complete state, never a mismatched generation. The headless half is done: `atomic_save::fault` arms any of the six boundaries of a durable write (temp create, permission preservation, data write, data sync, rename, directory sync) and any arrival at one, so "fail the second commit of this transaction" is expressible. A sweep asserts that every pre-commit boundary leaves the destination byte-identical with no temporary left behind, that the one post-rename boundary reports the replacement rather than claiming a rollback, and that no boundary or arrival in a snapshot write can pair two generations. The hook is `cfg(test)` only — a release build contains no branch to take.
+      **What a real kill does was then measured rather than assumed, and it
+      found a defect the fault sweep structurally could not.** A SIGKILL
+      during a 600 MiB `atomic_write_bytes` left the destination intact —
+      the atomicity promise held — and left a 78 MiB
+      `.office-save-J6zNaJ` beside it. The prefix appeared exactly once in
+      the whole repository, in the line that creates it, so nothing ever
+      removed one: `tempfile` cleans up on drop, which covers every *error*
+      and no *kill*, because SIGKILL, an OOM kill and a power cut run no
+      destructor. One hidden file the size of the document, in the user's
+      own document directory, per crashed save, forever.
+      That is the shape of gap this row keeps producing: "no temporary left
+      behind" was asserted by a mechanism that guarantees it. A failing
+      write unwinds; only a killed one strands anything, and the sweep
+      cannot kill.
+      `atomic_write_bytes` now sweeps stranded temporaries from the
+      destination directory after a successful save, and whether one is
+      stranded is *asked* rather than guessed. Every live save holds an
+      advisory `flock` on its temporary for as long as it is writing, and
+      the kernel releases that lock when the process dies however it dies —
+      so a temporary nobody can lock is one nobody owns. That is the same
+      mechanism `AutosaveSlot::claim` uses to tell a crashed window's
+      snapshot from a live one's, which is why it is the mechanism used
+      here rather than a second invention.
+      The first version of this used an age proxy instead — "older than a
+      day" standing in for "nobody owns it" — and it was worse in two ways
+      that are worth recording. It left a crash's leftovers for a day, and
+      it could only ever be a guess: a proxy for liveness cannot
+      distinguish a stranded temporary from one a very slow save is still
+      filling. Asking the kernel is both exact and immediate.
+      A short race floor survives from that version, doing a different and
+      real job: a save creates its temporary and *then* locks it, and in
+      the microseconds between, the file is on disk holding no lock, which
+      is exactly what a stranded one looks like. A minute is enormous
+      beside two syscalls, and it only delays cleaning up after a crash by
+      however long the next save takes to arrive.
+      Otherwise deliberately narrow, because this deletes files in a
+      directory the user owns: only regular files (not symlinks, not
+      directories), only names carrying this module's own prefix, only ones
+      nothing holds a lock on. Anything it cannot establish it leaves —
+      including a lock it could not ask about, which is the opposite bias
+      to `has_a_live_owner`'s and for the same reason: failing to prove
+      something is safe is not proof that it is, and here the consequence
+      being gated is a deletion.
+      Verified end to end against a real kill rather than a planted file:
+      SIGKILL during a 600 MiB save left the destination intact and one
+      stranded temporary; a save immediately afterwards kept it (the race
+      floor); a save once it was past the floor removed it.
+      Two of these tests only became real under mutation, both in the same
+      way — they were passing on something other than what they named:
+      - The kind check. Dropping `is_file` changes nothing for a directory,
+        because `remove_file` refuses one anyway; it changes what happens
+        to a *symlink*, which `remove_file` will happily unlink. So the
+        test covers a symlink, and injects the clock rather than backdating
+        the entries, because a symlink's own mtime cannot be set through
+        `std` and a real-time sweep would skip the link for being fresh.
+      - The live-save check. A test that plants a *fresh* unlocked
+        temporary and watches it survive is passing on the race floor, not
+        on the lock, and would protect nothing a minute later. So the test
+        backdates the file past the floor and holds a real lock on it,
+        which leaves the lock as the only thing between the sweep and that
+        file.
+      Still open: killing the real app under the GUI harness. The hook is
+      `cfg(test)`-only by design, so a journey cannot arm a boundary in a
+      release binary, and racing a real save with SIGKILL only reaches the
+      window if the document is big enough to make the write slow — which
+      is not something a journey can type in. A probabilistic sweep of that
+      shape belongs in the nightly stress workflow rather than in a
+      deterministic journey, and the measurement above is what a first pass
+      at it would have produced.
 - [x] Cover multiple windows, multiple documents, renamed/missing originals, unsaved documents, duplicate recovery attempts and schema upgrades. All six have headless lifecycle tests in `suite-common-core/src/autosave.rs` and a real kill/relaunch journey in every app, which is what this row's completion note asks for.
       | scenario | Tables | Letters | Decks | journey |
       |---|---|---|---|---|

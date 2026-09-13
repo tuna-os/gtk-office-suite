@@ -118,6 +118,90 @@ macro_rules! fail_point {
     };
 }
 
+/// The prefix every save temporary carries. Named because two places need
+/// to agree on it: the writer that creates them and the sweep that clears
+/// the ones a crash stranded.
+const TEMP_PREFIX: &str = ".office-save-";
+
+/// A floor on how new a temporary can be and still be swept.
+///
+/// This is not the liveness test — `flock` below is — it closes the gap
+/// *before* the lock exists. A save creates its temporary and then locks
+/// it, and in between the file is on disk with nothing holding it, which
+/// is exactly what a stranded one looks like. A second window sweeping at
+/// that instant would delete a temporary the first window is about to
+/// fill. A minute is enormous next to the microseconds between those two
+/// syscalls, and it only delays cleaning up after a crash by however long
+/// it takes the next save to come along.
+const SWEEP_RACE_FLOOR: std::time::Duration = std::time::Duration::from_secs(60);
+
+/// Remove save temporaries a crash stranded in `dir`.
+///
+/// `atomic_write_bytes` writes to a temporary and renames it over the
+/// destination, and `tempfile` removes that temporary on drop — which
+/// covers every *error*. It covers no *kill*: SIGKILL, an OOM kill and the
+/// power going out run no destructor, so the temporary survives with up to
+/// a whole document's worth of bytes in it, in the user's own document
+/// directory, named with a leading dot so they are unlikely ever to see
+/// it. Nothing removed them, so they accumulated one per crashed save,
+/// forever.
+///
+/// The fault-injection sweep in this module could not have found that: it
+/// makes the write *fail*, and a failing write unwinds and drops the
+/// temporary. Only a real kill leaves one behind. Measured — SIGKILL
+/// during a 600 MiB save left a 78 MiB `.office-save-…` beside an intact
+/// destination — and recorded in
+/// `docs/readiness-2026-09/recovery.md`.
+///
+/// Whether a temporary is stranded is asked, not guessed: every live save
+/// holds an advisory lock on its temporary for as long as it is writing,
+/// and the kernel releases that lock when the process dies however it
+/// dies. So a temporary nobody can lock is one nobody owns. That is the
+/// same mechanism `AutosaveSlot::claim` uses to tell a crashed window's
+/// snapshot from a live one's.
+///
+/// Deliberately narrow, because this deletes files in a directory the user
+/// owns: only regular files, not symlinks and not directories; only names
+/// carrying the prefix *this* module writes; only ones nothing holds a
+/// lock on; and only ones past `SWEEP_RACE_FLOOR`. Anything it cannot
+/// establish, it leaves — including a lock it could not ask about. Errors
+/// are ignored throughout, so an unreadable or read-only directory cannot
+/// fail the save that just succeeded.
+fn sweep_stranded_temps(dir: &Path, now: std::time::SystemTime) {
+    let Ok(entries) = fs::read_dir(dir) else { return };
+    for entry in entries.flatten() {
+        let name = entry.file_name();
+        let Some(name) = name.to_str() else { continue };
+        if !name.starts_with(TEMP_PREFIX) {
+            continue;
+        }
+        // `DirEntry::metadata` does not traverse, so this is the entry
+        // itself: a symlink carrying the prefix is not a temporary we
+        // wrote, and `remove_file` would unlink it happily.
+        let Ok(meta) = entry.metadata() else { continue };
+        if !meta.is_file() {
+            continue;
+        }
+        let past_the_floor = meta
+            .modified()
+            .ok()
+            .and_then(|m| now.duration_since(m).ok())
+            .is_some_and(|age| age >= SWEEP_RACE_FLOOR);
+        if !past_the_floor {
+            continue;
+        }
+        let path = entry.path();
+        let Ok(handle) = fs::OpenOptions::new().read(true).write(true).open(&path) else {
+            continue;
+        };
+        // Ok(true): nothing held it, so nothing owns it. Ok(false): a live
+        // save does. Err: could not ask, so this is not ours to delete.
+        if matches!(crate::autosave::try_lock_exclusive(&handle), Ok(true)) {
+            let _ = fs::remove_file(&path);
+        }
+    }
+}
+
 /// Write `bytes` to `path` atomically: write to a temporary file in the same
 /// directory, flush and sync it to disk, then rename it over the
 /// destination. `rename` within one filesystem is atomic, so a reader can
@@ -134,9 +218,17 @@ pub fn atomic_write_bytes(path: &Path, bytes: &[u8]) -> Result<(), String> {
     // sharing/truncating a temporary file. Drop cleans up only our own file.
     let mut tmp = fail_point!(
         fault::Boundary::CreateTemp,
-        tempfile::Builder::new().prefix(".office-save-").tempfile_in(dir)
+        tempfile::Builder::new().prefix(TEMP_PREFIX).tempfile_in(dir)
     )
     .map_err(|e| format!("Failed to create save file: {e}"))?;
+    // Claim the temporary for as long as this write lasts, so another
+    // window's sweep can tell it apart from one a crash stranded. The
+    // kernel drops this when the process does, however it does, which is
+    // the whole point — a lock that outlived its owner would strand
+    // temporaries just as permanently as no lock at all. Best-effort: a
+    // filesystem that cannot lock must not fail the save, it only means a
+    // sweep will wait out the race floor instead of asking.
+    let _claim = crate::autosave::try_lock_exclusive(tmp.as_file());
     match fs::metadata(path) {
         Ok(metadata) => fail_point!(
             fault::Boundary::Permissions,
@@ -162,6 +254,10 @@ pub fn atomic_write_bytes(path: &Path, bytes: &[u8]) -> Result<(), String> {
         fs::File::open(dir).and_then(|dir| dir.sync_all())
     )
     .map_err(|e| format!("File replaced, but failed to sync its directory: {e}"))?;
+    // Only once the save has succeeded: a sweep is housekeeping, and doing
+    // it first would spend time and risk on the path that still has the
+    // user's document to save.
+    sweep_stranded_temps(dir, std::time::SystemTime::now());
     Ok(())
 }
 
@@ -171,6 +267,227 @@ mod tests {
 
     /// Serializes the one test that changes the process working directory.
     static CWD_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
+    /// Backdate a file past the race floor without waiting a minute.
+    fn backdate(path: &Path, by: std::time::Duration) {
+        let when = std::time::SystemTime::now() - by;
+        let handle = fs::OpenOptions::new().write(true).open(path).unwrap();
+        handle.set_times(fs::FileTimes::new().set_modified(when)).unwrap();
+    }
+
+    /// Plant something that looks exactly like what a crash leaves: a
+    /// prefixed file, old enough to be past the race floor, held by
+    /// nobody.
+    fn plant_stranded(dir: &Path, suffix: &str) -> std::path::PathBuf {
+        let p = dir.join(format!("{TEMP_PREFIX}{suffix}"));
+        fs::write(&p, b"a document's worth of bytes, in spirit").unwrap();
+        backdate(&p, SWEEP_RACE_FLOOR * 2);
+        p
+    }
+
+    /// A crash during a save strands its temporary, and nothing used to
+    /// remove it.
+    ///
+    /// This is the case the fault-injection sweep below cannot reach. It
+    /// makes the write *fail*, and a failing write unwinds and drops the
+    /// temporary — so "no temporary left behind" was true of every error
+    /// and false of every kill. Measured before this existed: SIGKILL
+    /// during a 600 MiB save left a 78 MiB `.office-save-J6zNaJ` next to
+    /// the document, with the destination intact. The atomicity promise
+    /// held; the cleanup promise did not.
+    #[test]
+    fn a_stranded_temporary_is_swept_by_the_next_save() {
+        let dir = tempfile::tempdir().unwrap();
+        let stranded = plant_stranded(dir.path(), "aBcDeF");
+
+        let path = dir.path().join("doc.txt");
+        atomic_write_bytes(&path, b"new document").unwrap();
+
+        assert!(!stranded.exists(), "a crash's leftover temporary was kept forever");
+        assert_eq!(fs::read(&path).unwrap(), b"new document", "the save itself must still land");
+    }
+
+    /// And a temporary a live save is still filling must survive — which
+    /// is the assertion the lock exists for, so the test holds a real
+    /// lock rather than relying on the file being new.
+    ///
+    /// Getting this wrong in the other direction is the worse bug: a
+    /// second window's sweep deleting the temporary the first window is
+    /// mid-write on would turn a tidy-up into data loss. Backdating the
+    /// file past the race floor is what makes the lock the only thing
+    /// standing between the sweep and that file — without it the floor
+    /// alone would pass this test, while protecting nothing a minute
+    /// later.
+    #[cfg(unix)]
+    #[test]
+    fn a_temporary_a_live_save_holds_is_not_swept() {
+        let dir = tempfile::tempdir().unwrap();
+        let live = plant_stranded(dir.path(), "zYxWvU");
+        let held = fs::OpenOptions::new().read(true).write(true).open(&live).unwrap();
+        assert!(
+            matches!(crate::autosave::try_lock_exclusive(&held), Ok(true)),
+            "precondition: this test has to actually hold the lock",
+        );
+
+        atomic_write_bytes(&dir.path().join("doc.txt"), b"new document").unwrap();
+
+        assert!(
+            live.exists(),
+            "the sweep deleted a temporary a concurrent save was still writing",
+        );
+        drop(held);
+    }
+
+    /// The window between creating a temporary and locking it is real: for
+    /// those microseconds the file is on disk holding no lock, which is
+    /// indistinguishable from stranded. The race floor is what covers it,
+    /// so a temporary nobody holds but which is *new* is still left alone.
+    #[test]
+    fn a_brand_new_unlocked_temporary_is_not_swept() {
+        let dir = tempfile::tempdir().unwrap();
+        let fresh = dir.path().join(format!("{TEMP_PREFIX}justBorn"));
+        fs::write(&fresh, b"created, not yet locked").unwrap();
+
+        atomic_write_bytes(&dir.path().join("doc.txt"), b"new document").unwrap();
+
+        assert!(
+            fresh.exists(),
+            "the sweep took a temporary created in the instant before its lock",
+        );
+    }
+
+    /// Something else's old dotfile in the same directory is not ours to
+    /// delete, however unlocked and however old.
+    #[test]
+    fn the_sweep_only_touches_our_own_prefix() {
+        let dir = tempfile::tempdir().unwrap();
+        let others = [".other-editor-swap", "notes.txt", ".hidden-but-not-ours"];
+        for name in others {
+            let p = dir.path().join(name);
+            fs::write(&p, b"not ours").unwrap();
+            backdate(&p, SWEEP_RACE_FLOOR * 2);
+        }
+
+        atomic_write_bytes(&dir.path().join("doc.txt"), b"new document").unwrap();
+
+        for name in others {
+            assert!(dir.path().join(name).exists(), "the sweep deleted {name}");
+        }
+    }
+
+    /// Something that carries the prefix but is not a file we wrote — and
+    /// the save must succeed regardless, since a sweep that cannot remove
+    /// something must never fail a save that already landed.
+    ///
+    /// The symlink is the case that makes `is_file` load-bearing, and it
+    /// took a mutation to notice: dropping the check does *not* change
+    /// what happens to a directory, because `remove_file` refuses one
+    /// anyway. It changes what happens to a symlink, which `remove_file`
+    /// will happily unlink. `DirEntry::metadata` does not traverse, so the
+    /// check sees the link itself rather than its target.
+    ///
+    /// The clock is injected rather than the entries backdated, because a
+    /// symlink's own mtime cannot be set through `std` — and with a
+    /// real-time sweep the race floor would skip the link for being fresh,
+    /// which is how this test would have passed without testing anything.
+    #[cfg(unix)]
+    #[test]
+    fn prefixed_things_we_did_not_write_are_left_alone() {
+        let dir = tempfile::tempdir().unwrap();
+        let target = dir.path().join("someones-file.txt");
+        fs::write(&target, b"must survive").unwrap();
+        let link = dir.path().join(format!("{TEMP_PREFIX}link"));
+        std::os::unix::fs::symlink(&target, &link).unwrap();
+        let decoy = dir.path().join(format!("{TEMP_PREFIX}directory"));
+        fs::create_dir(&decoy).unwrap();
+        fs::write(decoy.join("inside"), b"someone's data").unwrap();
+
+        // Far enough ahead that every entry is past the race floor, so
+        // what is being tested is the kind check and nothing else.
+        sweep_stranded_temps(dir.path(), std::time::SystemTime::now() + SWEEP_RACE_FLOOR * 2);
+
+        assert!(link.is_symlink(), "the sweep unlinked a symlink it did not write");
+        assert_eq!(fs::read(&target).unwrap(), b"must survive");
+        assert!(decoy.is_dir(), "the sweep removed a directory it did not write");
+        assert_eq!(fs::read(decoy.join("inside")).unwrap(), b"someone's data");
+
+        let path = dir.path().join("doc.txt");
+        atomic_write_bytes(&path, b"new document").unwrap();
+        assert_eq!(fs::read(&path).unwrap(), b"new document");
+    }
+
+    /// A save holds a lock on its temporary *while it is writing data* —
+    /// the property the sweep reads. Asserted from outside, because the
+    /// whole mechanism rests on another process being unable to take it.
+    ///
+    /// "While it is writing data" is the careful part, and the first
+    /// version of this test got it wrong. It locked any temporary the
+    /// moment one appeared, which asserts that a temporary is never
+    /// lockable at all — and that is not what the code promises. The order
+    /// is: create the temporary, *then* lock it. Between those two
+    /// statements the file is on disk holding no lock, and a watcher that
+    /// pounces on sight can win that window. It did, on a CI runner, at
+    /// test 497 of 912 in a full parallel workspace run, while passing a
+    /// dozen times in a row locally — load decides who wins.
+    ///
+    /// That window is not a bug to close; it is the window
+    /// `SWEEP_RACE_FLOOR` exists for. So the test waits for evidence that
+    /// the save has got past it: a non-zero length. `write_all` runs after
+    /// the lock is taken, so any non-empty temporary is already locked, and
+    /// a lock acquired on one is a real failure rather than a race.
+    #[cfg(unix)]
+    #[test]
+    fn a_save_in_progress_holds_its_temporary() {
+        let dir = tempfile::tempdir().unwrap();
+        let seen = std::sync::Arc::new(std::sync::Mutex::new(Vec::<bool>::new()));
+        let watcher = {
+            let (dir, seen) = (dir.path().to_path_buf(), seen.clone());
+            std::thread::spawn(move || {
+                let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
+                while std::time::Instant::now() < deadline {
+                    for entry in fs::read_dir(&dir).into_iter().flatten().flatten() {
+                        if !entry.file_name().to_string_lossy().starts_with(TEMP_PREFIX) {
+                            continue;
+                        }
+                        // Empty means the save may not have reached its
+                        // lock yet; that is the documented window, so it
+                        // is not evidence either way. Keep looking.
+                        if entry.metadata().map(|m| m.len()).unwrap_or(0) == 0 {
+                            continue;
+                        }
+                        // The save may have persisted between the listing
+                        // and this open, which is also not evidence.
+                        if let Ok(f) =
+                            fs::OpenOptions::new().read(true).write(true).open(entry.path())
+                        {
+                            let got = crate::autosave::try_lock_exclusive(&f);
+                            seen.lock().unwrap().push(matches!(got, Ok(true)));
+                            return;
+                        }
+                    }
+                }
+            })
+        };
+        // Big enough that the write dominates, so the watcher has time to
+        // catch the temporary with bytes in it.
+        let big = vec![b'x'; 64 * 1024 * 1024];
+        atomic_write_bytes(&dir.path().join("doc.bin"), &big).unwrap();
+        watcher.join().unwrap();
+
+        let attempts = seen.lock().unwrap().clone();
+        // Nothing observed makes this inconclusive, not passing — say so
+        // rather than reporting a pass nobody earned.
+        assert!(
+            !attempts.is_empty(),
+            "the watcher never saw a temporary with bytes in it, so this \
+             proved nothing; raise the buffer size if this recurs",
+        );
+        assert!(
+            attempts.iter().all(|locked| !locked),
+            "a temporary was lockable while its save was writing data, so \
+             the sweep cannot tell a live save from a crashed one",
+        );
+    }
 
     #[cfg(unix)]
     #[test]
