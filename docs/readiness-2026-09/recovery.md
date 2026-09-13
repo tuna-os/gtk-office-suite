@@ -236,11 +236,26 @@ AutosaveSlot used to store bytes and metadata in separate atomic writes. Each wr
       sequence `recover_from_snapshot` performs and asserts a second pass
       finds nothing, or one crash becomes two copies of one document; schema
       upgrades by the legacy-pair test in both directions.
-      **Still open: journeys for multiple documents, a renamed original and
-      a schema upgrade.** Multiple windows, unsaved documents and duplicate
-      recovery have real kill/relaunch journeys for all three apps
-      (`LiveOwnerMixin`, the autosave journeys, and
-      `*RecoveryIsItselfProtectedSmoke`). The other three are asserted only
+      The schema-upgrade journey exists now:
+      `TablesLegacySnapshotUpgradeSmoke` plants a two-file snapshot from the
+      previous build — a hand-built workbook, because anything Tables wrote
+      would be an envelope and would beg the question — starts the real app
+      on it, and asserts the window comes up recovered, naming the original,
+      with the planted cell value actually in the grid and the legacy pair
+      cleared behind it. Unit tests covered that read; nothing had run the
+      whole upgrade path through an app, where recovery has to find the
+      orphan, load a format it did not write, and adopt it into its own
+      envelope slot.
+      It doubles as the end-to-end negative control for the guard above:
+      over-refusing — declining everything the envelope reader declines —
+      silently discards exactly this user's work, and the journey fails when
+      it does (`last observed: 'Tables'`, no recovery at all).
+      **Still open: journeys for multiple documents and a renamed
+      original.** Multiple windows, unsaved documents, duplicate recovery
+      and now schema upgrades have real kill/relaunch journeys
+      (`LiveOwnerMixin`, the autosave journeys,
+      `*RecoveryIsItselfProtectedSmoke`,
+      `TablesLegacySnapshotUpgradeSmoke`). The other two are asserted only
       headlessly, and this row asks for both.
 
 Completion requires headless lifecycle tests plus real kill/relaunch journeys for all three apps. Avoid promising perfect power-loss survival on filesystems whose durability guarantees have not been verified.
