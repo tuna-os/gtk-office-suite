@@ -506,3 +506,183 @@ fn an_empty_deck_gains_nothing_it_never_had() {
         );
     }
 }
+
+/// A master's font has to survive the round trip in both formats, because
+/// the canvas now draws slide text in it (`canvas::master_font_family`).
+/// Before that it was a field written at every construction site and read
+/// at none, so this assertion would have passed on a writer that carried it
+/// and a renderer that ignored it alike.
+#[test]
+fn the_masters_font_survives_a_snapshot() {
+    let mut complaints: Vec<String> = Vec::new();
+    for kind in FORMATS {
+        let deck = Deck {
+            masters: vec![MasterSlide {
+                name: "House Style".into(),
+                background: "#ffffff".into(),
+                // A real face rather than a generic family: "Sans" is the
+                // fallback, so a writer that drops the font entirely would
+                // still come back as "Sans" and look like a pass.
+                default_font: "Liberation Serif".into(),
+                shapes: vec![],
+            }],
+            slides: vec![Slide {
+                title: String::new(),
+                background: String::new(),
+                objects: vec![text_box("body text", 10.0, 10.0)],
+                notes: String::new(),
+                master_idx: Some(0),
+            }],
+        };
+        let back = through_a_snapshot(&deck, kind, "master-font");
+        match back.masters.first() {
+            None => complaints.push(format!("{kind}: no master came back at all")),
+            Some(m) if m.default_font != "Liberation Serif" => complaints.push(format!(
+                "{kind}: the master's font came back as {:?}, not \"Liberation Serif\"",
+                m.default_font
+            )),
+            Some(_) => {}
+        }
+    }
+    assert!(complaints.is_empty(), "{}", complaints.join("\n"));
+}
+
+/// The formats are **not** equivalent here, and this pins the difference so
+/// it stays a known property instead of becoming a surprise.
+///
+/// pptx gives every master its own theme part, so two masters keep two
+/// fonts. ODF, as LibreOffice Impress writes it, keeps one
+/// `style:default-style` for the whole document — measured by converting a
+/// pptx carrying a per-master theme font through Impress and reading the
+/// `.odp` back. So in odp the first master's font becomes the document's
+/// and the others read back as that one.
+///
+/// If someone later teaches the odp writer a per-master carrier that real
+/// readers honour, this test is the one that should fail.
+#[test]
+fn masters_keep_their_own_font_in_pptx_but_share_one_in_odp() {
+    let deck = Deck {
+        masters: vec![
+            MasterSlide {
+                name: "First".into(),
+                background: "#ffffff".into(),
+                default_font: "Liberation Serif".into(),
+                shapes: vec![],
+            },
+            MasterSlide {
+                name: "Second".into(),
+                background: "#ffffff".into(),
+                default_font: "Liberation Mono".into(),
+                shapes: vec![],
+            },
+        ],
+        slides: vec![
+            Slide {
+                title: String::new(),
+                background: String::new(),
+                objects: vec![text_box("on first", 10.0, 10.0)],
+                notes: String::new(),
+                master_idx: Some(0),
+            },
+            Slide {
+                title: String::new(),
+                background: String::new(),
+                objects: vec![text_box("on second", 10.0, 10.0)],
+                notes: String::new(),
+                master_idx: Some(1),
+            },
+        ],
+    };
+
+    let pptx = through_a_snapshot(&deck, "pptx", "two-fonts");
+    let pptx_fonts: Vec<&str> = pptx.masters.iter().map(|m| m.default_font.as_str()).collect();
+    assert!(
+        pptx_fonts.contains(&"Liberation Serif") && pptx_fonts.contains(&"Liberation Mono"),
+        "pptx should keep a font per master, got {pptx_fonts:?}"
+    );
+
+    let odp = through_a_snapshot(&deck, "odp", "two-fonts");
+    let odp_fonts: Vec<&str> = odp.masters.iter().map(|m| m.default_font.as_str()).collect();
+    assert!(
+        !odp_fonts.is_empty() && odp_fonts.iter().all(|f| *f == "Liberation Serif"),
+        "odp has one document font, so every master should read back as the \
+         first master's: got {odp_fonts:?}"
+    );
+}
+
+/// The theme part has to be *declared*, not merely present.
+///
+/// This is a package-shape assertion rather than a round-trip one, and it
+/// is here because nothing available can make it a round-trip. Deleting
+/// the `[Content_Types].xml` override for the theme leaves every test in
+/// this file green **and all 35 oracle tests green** — LibreOffice opens
+/// the package regardless. ECMA-376 still requires the override, and a
+/// stricter consumer (PowerPoint) is entitled to reject a part with no
+/// declared content type, so the requirement is pinned directly.
+///
+/// The same leniency is why masters went out with no theme relationship at
+/// all until now and nothing noticed. Asserting the bytes is the weakest
+/// kind of check in this file; it is used only where a behavioural one
+/// cannot exist.
+#[test]
+fn the_pptx_declares_the_theme_part_it_ships() {
+    let deck = Deck {
+        masters: vec![MasterSlide {
+            name: "House Style".into(),
+            background: "#ffffff".into(),
+            default_font: "Liberation Serif".into(),
+            shapes: vec![],
+        }],
+        slides: vec![Slide {
+            title: String::new(),
+            background: String::new(),
+            objects: vec![],
+            notes: String::new(),
+            master_idx: Some(0),
+        }],
+    };
+    let bytes = decks_core::write_deck_bytes("pptx", &deck).expect("write pptx");
+    let mut zip =
+        zip::ZipArchive::new(std::io::Cursor::new(bytes)).expect("the package should be a zip");
+
+    let mut read = |name: &str| -> String {
+        let mut f = zip.by_name(name).unwrap_or_else(|_| panic!("{name} should be in the package"));
+        let mut s = String::new();
+        std::io::Read::read_to_string(&mut f, &mut s).expect("read part");
+        s
+    };
+
+    let types = read("[Content_Types].xml");
+    assert!(
+        types.contains("/ppt/theme/theme1.xml")
+            && types.contains("application/vnd.openxmlformats-officedocument.theme+xml"),
+        "the theme needs a content-type override: {types}"
+    );
+
+    // And the master has to relate to it, or a reader walking the package
+    // graph never reaches the part at all.
+    let rels = read("ppt/slideMasters/_rels/slideMaster1.xml.rels");
+    assert!(
+        rels.contains("/theme\"") && rels.contains("../theme/theme1.xml"),
+        "the master needs a theme relationship: {rels}"
+    );
+    // The layout must stay rId1, because `master_part_xml` names rId1 as
+    // its layout in fixed text — swap the order and the master points at
+    // its theme as though that were the layout.
+    //
+    // Asserting `rels.contains("rId1")` and `rels.contains("slideLayout1")`
+    // separately is not this check: both hold whichever order they are
+    // written in, and the first version of this test passed against the
+    // swap. The relationship carrying rId1 is what has to be the layout,
+    // so that is what is read out.
+    let rid1_target = rels
+        .split("<Relationship ")
+        .find(|r| r.contains("Id=\"rId1\""))
+        .and_then(|r| r.split("Target=\"").nth(1))
+        .and_then(|t| t.split('"').next())
+        .unwrap_or("<no rId1 at all>");
+    assert!(
+        rid1_target.contains("slideLayout1.xml"),
+        "rId1 must be the layout, not {rid1_target:?}: {rels}"
+    );
+}

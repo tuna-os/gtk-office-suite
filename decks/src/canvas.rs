@@ -254,23 +254,18 @@ pub fn master_for<'a>(
 /// `default_font`, or the renderer's own default when there is no master or
 /// it names nothing.
 ///
-/// This is the only consumer of `MasterSlide::default_font`. Until it
-/// existed the field was written at every construction site and read at
-/// none, so both readers could have parsed a master's font correctly and
-/// nothing would have looked any different — and a round-trip test over it
-/// would have passed while the font it named was never applied. Carrying
-/// the field through the pptx and odp writers is only worth doing once
-/// something honours it.
+/// The blank-and-absent policy itself lives on `MasterSlide::font_family`,
+/// because the renderer and both format writers have to agree on it: a
+/// font carried into a package that the canvas would not have drawn is a
+/// round-trip of something nothing honours, which is the defect this whole
+/// row keeps collecting.
 ///
 /// Chrome keeps its own hardcoded face on purpose: the `<image>` placeholder
 /// label and the "Slide N" empty-slide indicator are this application's
 /// furniture, not the author's content, and a deck whose master asks for a
 /// display face should not restyle them.
 pub fn master_font_family(master: Option<&MasterSlide>) -> &str {
-    master
-        .map(|m| m.default_font.as_str())
-        .filter(|f| !f.trim().is_empty())
-        .unwrap_or("Sans")
+    master.map(|m| m.font_family()).unwrap_or(MasterSlide::DEFAULT_FONT)
 }
 
 /// The pango description slide text is drawn with, at `base_pt` points.

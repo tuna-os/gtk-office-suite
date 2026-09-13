@@ -399,8 +399,13 @@ fn write_master_shapes<W: std::io::Write>(
     Ok(())
 }
 
-/// The `p:clrMap` a `p:sldMaster` is required to carry. Identity mapping —
-/// the suite has no theme, so there is nothing to remap.
+/// The `p:clrMap` a `p:sldMaster` is required to carry.
+///
+/// Identity mapping: it names the theme slots the master's colours come
+/// from, and `theme_part_xml` writes those slots with the conventional
+/// Office values, so mapping each to itself is what the two agree on.
+/// (This said "the suite has no theme, so there is nothing to remap" until
+/// the theme part existed.)
 const CLR_MAP: &str = "<p:clrMap bg1=\"lt1\" tx1=\"dk1\" bg2=\"lt2\" tx2=\"dk2\" \
      accent1=\"accent1\" accent2=\"accent2\" accent3=\"accent3\" accent4=\"accent4\" \
      accent5=\"accent5\" accent6=\"accent6\" hlink=\"hlink\" folHlink=\"folHlink\"/>";
@@ -410,6 +415,68 @@ const PART_NS: [(&str, &str); 3] = [
     ("xmlns:r", "http://schemas.openxmlformats.org/officeDocument/2006/relationships"),
     ("xmlns:p", "http://schemas.openxmlformats.org/presentationml/2006/main"),
 ];
+
+/// `ppt/theme/themeN.xml` — where a pptx keeps a master's default font.
+///
+/// OOXML has no "default font" attribute on a master: the body font lives
+/// in the theme's `a:fontScheme/a:minorFont`, and the heading font in
+/// `a:majorFont`. Decks models one font per master, so both are written
+/// from it — writing only `minorFont` would leave a reader that consults
+/// the major font (headings) falling back to something else, which is a
+/// silent half-carry of the kind this row keeps collecting.
+///
+/// A theme is also **required** rather than optional: ECMA-376 gives every
+/// `p:sldMaster` exactly one theme relationship, and until now the writer
+/// emitted masters with none. Impress opened those packages anyway, which
+/// is why nothing caught it.
+///
+/// `a:clrScheme` and `a:fmtScheme` are present because a `a:themeElements`
+/// missing either is rejected outright by stricter readers; their values
+/// are the identity-ish defaults matching `CLR_MAP`.
+fn theme_part_xml(master: &MasterSlide) -> String {
+    let font = quick_xml::escape::escape(master.font_family());
+    format!(
+        "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>\n\
+         <a:theme xmlns:a=\"http://schemas.openxmlformats.org/drawingml/2006/main\" \
+         name=\"{name}\"><a:themeElements>\
+         <a:clrScheme name=\"Office\">\
+         <a:dk1><a:sysClr val=\"windowText\" lastClr=\"000000\"/></a:dk1>\
+         <a:lt1><a:sysClr val=\"window\" lastClr=\"FFFFFF\"/></a:lt1>\
+         <a:dk2><a:srgbClr val=\"44546A\"/></a:dk2>\
+         <a:lt2><a:srgbClr val=\"E7E6E6\"/></a:lt2>\
+         <a:accent1><a:srgbClr val=\"4472C4\"/></a:accent1>\
+         <a:accent2><a:srgbClr val=\"ED7D31\"/></a:accent2>\
+         <a:accent3><a:srgbClr val=\"A5A5A5\"/></a:accent3>\
+         <a:accent4><a:srgbClr val=\"FFC000\"/></a:accent4>\
+         <a:accent5><a:srgbClr val=\"5B9BD5\"/></a:accent5>\
+         <a:accent6><a:srgbClr val=\"70AD47\"/></a:accent6>\
+         <a:hlink><a:srgbClr val=\"0563C1\"/></a:hlink>\
+         <a:folHlink><a:srgbClr val=\"954F72\"/></a:folHlink>\
+         </a:clrScheme>\
+         <a:fontScheme name=\"Office\">\
+         <a:majorFont><a:latin typeface=\"{font}\"/><a:ea typeface=\"\"/>\
+         <a:cs typeface=\"\"/></a:majorFont>\
+         <a:minorFont><a:latin typeface=\"{font}\"/><a:ea typeface=\"\"/>\
+         <a:cs typeface=\"\"/></a:minorFont>\
+         </a:fontScheme>\
+         <a:fmtScheme name=\"Office\">\
+         <a:fillStyleLst><a:solidFill><a:schemeClr val=\"phClr\"/></a:solidFill>\
+         <a:solidFill><a:schemeClr val=\"phClr\"/></a:solidFill>\
+         <a:solidFill><a:schemeClr val=\"phClr\"/></a:solidFill></a:fillStyleLst>\
+         <a:lnStyleLst><a:ln><a:solidFill><a:schemeClr val=\"phClr\"/></a:solidFill></a:ln>\
+         <a:ln><a:solidFill><a:schemeClr val=\"phClr\"/></a:solidFill></a:ln>\
+         <a:ln><a:solidFill><a:schemeClr val=\"phClr\"/></a:solidFill></a:ln></a:lnStyleLst>\
+         <a:effectStyleLst><a:effectStyle><a:effectLst/></a:effectStyle>\
+         <a:effectStyle><a:effectLst/></a:effectStyle>\
+         <a:effectStyle><a:effectLst/></a:effectStyle></a:effectStyleLst>\
+         <a:bgFillStyleLst><a:solidFill><a:schemeClr val=\"phClr\"/></a:solidFill>\
+         <a:solidFill><a:schemeClr val=\"phClr\"/></a:solidFill>\
+         <a:solidFill><a:schemeClr val=\"phClr\"/></a:solidFill></a:bgFillStyleLst>\
+         </a:fmtScheme></a:themeElements></a:theme>",
+        name = quick_xml::escape::escape(master.name.as_str()),
+        font = font,
+    )
+}
 
 /// `ppt/slideMasters/slideMasterN.xml` — the decorations and the colour map.
 fn master_part_xml(master: &MasterSlide) -> Result<Vec<u8>, String> {
@@ -483,17 +550,33 @@ fn layout_part_xml(master: &MasterSlide) -> Result<Vec<u8>, String> {
     Ok(xml)
 }
 
-/// A relationships part with one relationship, which is all a master and a
-/// layout need to point at each other.
-fn one_rel(kind: &str, target: &str) -> String {
-    format!(
+/// A relationships part carrying `(kind, target)` in order, numbered from
+/// `rId1`.
+///
+/// Order is load-bearing for a master: `master_part_xml` names its layout
+/// as `rId1` in fixed text, so the layout has to come first and the theme
+/// after it.
+fn rels_part(rels: &[(&str, &str)]) -> String {
+    let mut out = String::from(
         "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>\n\
-         <Relationships xmlns=\"http://schemas.openxmlformats.org/package/2006/relationships\">\n\
-         \x20 <Relationship Id=\"rId1\" \
-         Type=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships/{kind}\" \
-         Target=\"{target}\"/>\n\
-         </Relationships>"
-    )
+         <Relationships xmlns=\"http://schemas.openxmlformats.org/package/2006/relationships\">\n",
+    );
+    for (i, (kind, target)) in rels.iter().enumerate() {
+        out.push_str(&format!(
+            "  <Relationship Id=\"rId{}\" \
+             Type=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships/{kind}\" \
+             Target=\"{target}\"/>\n",
+            i + 1
+        ));
+    }
+    out.push_str("</Relationships>");
+    out
+}
+
+/// A relationships part with one relationship, which is all a layout needs
+/// to point back at its master.
+fn one_rel(kind: &str, target: &str) -> String {
+    rels_part(&[(kind, target)])
 }
 
 pub fn write_pptx(path: &str, deck: &Deck) -> Result<(), String> {
@@ -542,7 +625,8 @@ pub fn write_pptx_bytes(deck: &Deck) -> Result<Vec<u8>, String> {
     for k in 0..deck.masters.len() {
         content_types.push_str(&format!(
             "  <Override PartName=\"/ppt/slideMasters/slideMaster{n}.xml\" ContentType=\"application/vnd.openxmlformats-officedocument.presentationml.slideMaster+xml\"/>\n\
-             \x20 <Override PartName=\"/ppt/slideLayouts/slideLayout{n}.xml\" ContentType=\"application/vnd.openxmlformats-officedocument.presentationml.slideLayout+xml\"/>\n",
+             \x20 <Override PartName=\"/ppt/slideLayouts/slideLayout{n}.xml\" ContentType=\"application/vnd.openxmlformats-officedocument.presentationml.slideLayout+xml\"/>\n\
+             \x20 <Override PartName=\"/ppt/theme/theme{n}.xml\" ContentType=\"application/vnd.openxmlformats-officedocument.theme+xml\"/>\n",
             n = k + 1
         ));
     }
@@ -784,10 +868,18 @@ pub fn write_pptx_bytes(deck: &Deck) -> Result<Vec<u8>, String> {
         zip.write_all(&master_part_xml(master)?).map_err(|e| e.to_string())?;
         zip.start_file(format!("ppt/slideMasters/_rels/slideMaster{n}.xml.rels"), options)
             .map_err(|e| e.to_string())?;
+        // Layout first: master_part_xml names it as rId1 in fixed text.
         zip.write_all(
-            one_rel("slideLayout", &format!("../slideLayouts/slideLayout{n}.xml")).as_bytes(),
+            rels_part(&[
+                ("slideLayout", &format!("../slideLayouts/slideLayout{n}.xml")),
+                ("theme", &format!("../theme/theme{n}.xml")),
+            ])
+            .as_bytes(),
         )
         .map_err(|e| e.to_string())?;
+
+        zip.start_file(format!("ppt/theme/theme{n}.xml"), options).map_err(|e| e.to_string())?;
+        zip.write_all(theme_part_xml(master).as_bytes()).map_err(|e| e.to_string())?;
 
         zip.start_file(format!("ppt/slideLayouts/slideLayout{n}.xml"), options)
             .map_err(|e| e.to_string())?;

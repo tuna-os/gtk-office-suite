@@ -27,6 +27,29 @@ pub struct MasterSlide {
     pub shapes: Vec<SlideObject>,
 }
 
+impl MasterSlide {
+    /// The font a master falls back to when it names none.
+    ///
+    /// Deliberately a generic family rather than a real face: it resolves
+    /// on any system, which a named font does not.
+    pub const DEFAULT_FONT: &'static str = "Sans";
+
+    /// The font family this master's text is set in.
+    ///
+    /// `default_font` is a `String`, so a reader that finds no font leaves
+    /// it empty rather than absent — and an empty family is not the same
+    /// request as no family: it asks pango for a face with no name, and
+    /// writes `typeface=""` into a theme, both of which resolve to
+    /// whatever the reader likes instead of to the default we intend. One
+    /// definition of that policy, because the renderer and both writers
+    /// need to agree: a font carried into a package that the canvas would
+    /// not have drawn is a round-trip of something nothing honours.
+    pub fn font_family(&self) -> &str {
+        let named = self.default_font.trim();
+        if named.is_empty() { Self::DEFAULT_FONT } else { named }
+    }
+}
+
 #[derive(Clone, Debug)]
 pub enum SlideObject {
     TextBox {
@@ -80,7 +103,7 @@ impl Deck {
         let default_master = MasterSlide {
             name: "Default".into(),
             background: "#ffffff".into(),
-            default_font: "Sans".into(),
+            default_font: MasterSlide::DEFAULT_FONT.into(),
             shapes: vec![],
         };
         Self {

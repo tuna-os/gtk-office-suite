@@ -438,7 +438,28 @@ fn decode_style_name(token: &str) -> String {
 }
 
 /// `styles.xml` — the page layout, one drawing-page style per master's
-/// background, and the master pages themselves with their decorations.
+/// background, the master pages with their decorations, and the document's
+/// default graphic font.
+///
+/// The font is **document-wide, not per master**, and that is ODF's shape
+/// rather than a shortcut here. Converting a pptx that carries a per-master
+/// theme font through LibreOffice Impress and reading back the `.odp` it
+/// writes shows where Impress puts it:
+///
+/// ```text
+/// <style:default-style style:family="graphic">
+///   <style:text-properties style:font-name="Liberation Serif"/>
+/// ```
+///
+/// One default for the document. Decks models one font per master, so a
+/// deck whose masters name *different* fonts cannot keep them apart in
+/// odp — the first master's font becomes the document's and the rest read
+/// back as that one. `masters_keep_their_own_font_in_pptx_but_share_one_in_odp`
+/// pins that, so the asymmetry is a recorded property rather than a
+/// surprise. Writing per-master presentation styles instead was the
+/// alternative, and it was not taken: nothing was found that reads them
+/// back, so it would have round-tripped through this reader alone — the
+/// exact shape of check this row keeps catching.
 fn styles_xml(deck: &Deck, media: &mut Vec<Media>) -> Result<String, String> {
     let mut auto = String::from(
         "<style:page-layout style:name=\"PM1\">\
@@ -467,6 +488,24 @@ fn styles_xml(deck: &Deck, media: &mut Vec<Media>) -> Result<String, String> {
             shapes_xml(&master.shapes, &|_| 0, media)?,
         ));
     }
+    // ODF wants a font it uses declared as well as referenced; Impress
+    // writes both, and a reference to an undeclared face is what a
+    // conforming reader is entitled to ignore.
+    let font = deck
+        .masters
+        .first()
+        .map(|m| m.font_family())
+        .unwrap_or(MasterSlide::DEFAULT_FONT);
+    let font_decls = format!(
+        "<office:font-face-decls><style:font-face style:name=\"{f}\" \
+         svg:font-family=\"&apos;{f}&apos;\"/></office:font-face-decls>",
+        f = esc(font)
+    );
+    let default_style = format!(
+        "<style:default-style style:family=\"graphic\">\
+         <style:text-properties style:font-name=\"{}\"/></style:default-style>",
+        esc(font)
+    );
     Ok(format!(
         "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\
          <office:document-styles \
@@ -479,7 +518,8 @@ fn styles_xml(deck: &Deck, media: &mut Vec<Media>) -> Result<String, String> {
          xmlns:svg=\"urn:oasis:names:tc:opendocument:xmlns:svg-compatible:1.0\" \
          xmlns:xlink=\"http://www.w3.org/1999/xlink\" \
          office:version=\"1.2\">\
-         <office:styles/>\
+         {font_decls}\
+         <office:styles>{default_style}</office:styles>\
          <office:automatic-styles>{auto}</office:automatic-styles>\
          <office:master-styles>{pages}</office:master-styles>\
          </office:document-styles>"
@@ -584,6 +624,44 @@ fn attr(e: &quick_xml::events::BytesStart, name: &str) -> Option<String> {
             None
         }
     })
+}
+
+/// The document's default graphic font, from
+/// `style:default-style[@style:family="graphic"]/style:text-properties/@style:font-name`.
+///
+/// Scoped to the `graphic` family on purpose: `style:default-style` appears
+/// once per family (paragraph, graphic, table…), and answering with the
+/// first `style:text-properties` in the part would return whichever family
+/// happens to come first in the file.
+fn parse_default_graphic_font(xml: &str) -> Option<String> {
+    if xml.is_empty() {
+        return None;
+    }
+    let mut reader = Reader::from_str(xml);
+    reader.config_mut().trim_text(true);
+    let mut buf = Vec::new();
+    let mut in_graphic_default = false;
+    loop {
+        match reader.read_event_into(&mut buf) {
+            Ok(Event::Start(ref e)) if e.name().as_ref() == "style:default-style" => {
+                in_graphic_default = attr(e, "style:family").as_deref() == Some("graphic");
+            }
+            Ok(Event::End(ref e)) if e.name().as_ref() == "style:default-style" => {
+                in_graphic_default = false;
+            }
+            Ok(Event::Start(ref e)) | Ok(Event::Empty(ref e))
+                if in_graphic_default && e.name().as_ref() == "style:text-properties" =>
+            {
+                if let Some(f) = attr(e, "style:font-name").filter(|f| !f.trim().is_empty()) {
+                    return Some(f);
+                }
+            }
+            Ok(Event::Eof) | Err(_) => break,
+            _ => {}
+        }
+        buf.clear();
+    }
+    None
 }
 
 /// Collect the named text styles and drawing-page backgrounds a part
@@ -985,6 +1063,13 @@ pub fn read(path: &str) -> Result<Deck, String> {
     parse_styles(&content, &mut text_styles, &mut page_bg);
     parse_styles(&styles, &mut text_styles, &mut page_bg);
 
+    // One font for the whole document — see `styles_xml` for why ODF has
+    // no per-master one to read. Every master gets it, so a deck saved and
+    // reopened as odp renders in the font it was saved with even though
+    // masters can no longer differ.
+    let doc_font = parse_default_graphic_font(&styles)
+        .unwrap_or_else(|| MasterSlide::DEFAULT_FONT.into());
+
     // Second pass: the master pages, then the slides that name them.
     let mut masters: Vec<MasterSlide> = Vec::new();
     let mut master_idx_by_name: std::collections::HashMap<String, usize> = Default::default();
@@ -997,10 +1082,7 @@ pub fn read(path: &str) -> Result<Deck, String> {
         masters.push(MasterSlide {
             name: page.slide.title,
             background: page.slide.background,
-            // ODF carries the master's default font in its page styles,
-            // which this reader does not model; the renderer's own default
-            // stands in, as it did before masters were read at all.
-            default_font: "Sans".into(),
+            default_font: doc_font.clone(),
             shapes: page.slide.objects,
         });
     }
@@ -1008,7 +1090,7 @@ pub fn read(path: &str) -> Result<Deck, String> {
         masters.push(MasterSlide {
             name: "Default".into(),
             background: "#ffffff".into(),
-            default_font: "Sans".into(),
+            default_font: doc_font.clone(),
             shapes: vec![],
         });
     }
@@ -1642,5 +1724,93 @@ mod tests {
             }],
             ..Default::default()
         }
+    }
+}
+
+#[cfg(test)]
+mod default_font_tests {
+    use super::parse_default_graphic_font;
+
+    /// Two families carry a font and the graphic one is second, so a reader
+    /// that answers with the first `style:text-properties` in the part
+    /// returns the paragraph font instead. Ordering them this way is the
+    /// whole point of the fixture.
+    #[test]
+    fn the_graphic_family_is_read_not_whichever_comes_first() {
+        let xml = "<office:styles>\
+            <style:default-style style:family=\"paragraph\">\
+            <style:text-properties style:font-name=\"Paragraph Face\"/>\
+            </style:default-style>\
+            <style:default-style style:family=\"graphic\">\
+            <style:text-properties style:font-name=\"Graphic Face\"/>\
+            </style:default-style></office:styles>";
+        assert_eq!(parse_default_graphic_font(xml).as_deref(), Some("Graphic Face"));
+    }
+
+    #[test]
+    fn a_document_with_no_graphic_default_answers_nothing() {
+        let xml = "<office:styles><style:default-style style:family=\"paragraph\">\
+            <style:text-properties style:font-name=\"Paragraph Face\"/>\
+            </style:default-style></office:styles>";
+        assert_eq!(parse_default_graphic_font(xml), None);
+        assert_eq!(parse_default_graphic_font(""), None);
+    }
+
+    #[test]
+    fn a_blank_font_name_is_no_answer_rather_than_a_blank_one() {
+        let xml = "<style:default-style style:family=\"graphic\">\
+            <style:text-properties style:font-name=\"\"/></style:default-style>";
+        assert_eq!(parse_default_graphic_font(xml), None);
+    }
+
+    /// The writer has to declare the face it references: a reference to an
+    /// undeclared font is something a conforming reader may ignore, and
+    /// Impress declares one in `office:font-face-decls` for exactly this
+    /// reason.
+    #[test]
+    fn the_written_styles_declare_the_font_they_reference() {
+        use crate::engine::{Deck, MasterSlide};
+        let deck = Deck {
+            slides: vec![],
+            masters: vec![MasterSlide {
+                name: "M".into(),
+                background: "#ffffff".into(),
+                default_font: "Liberation Serif".into(),
+                shapes: vec![],
+            }],
+        };
+        let xml = super::styles_xml(&deck, &mut Vec::new()).unwrap();
+        assert!(
+            xml.contains("<office:font-face-decls>")
+                && xml.contains("style:font-face style:name=\"Liberation Serif\""),
+            "the face should be declared: {xml}"
+        );
+        assert!(
+            xml.contains("style:font-name=\"Liberation Serif\""),
+            "and referenced: {xml}"
+        );
+    }
+
+    /// A master naming nothing must not write `style:font-name=""` — an
+    /// empty family is a different request from no family, and it is what
+    /// the raw field would have produced.
+    #[test]
+    fn a_master_with_no_font_writes_the_fallback_not_an_empty_name() {
+        use crate::engine::{Deck, MasterSlide};
+        let deck = Deck {
+            slides: vec![],
+            masters: vec![MasterSlide {
+                name: "M".into(),
+                background: "#ffffff".into(),
+                default_font: "   ".into(),
+                shapes: vec![],
+            }],
+        };
+        let xml = super::styles_xml(&deck, &mut Vec::new()).unwrap();
+        assert!(!xml.contains("style:font-name=\"\""), "no empty font name: {xml}");
+        assert!(
+            xml.contains(&format!("style:font-name=\"{}\"", MasterSlide::DEFAULT_FONT)),
+            "the fallback should be written: {xml}"
+        );
     }
 }
