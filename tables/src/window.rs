@@ -66,6 +66,9 @@ pub struct TablesWindow {
     /// constructor local because recovery has to write to it before it
     /// clears the orphan it recovered from — see `recover_from_snapshot`.
     autosave_slot: Rc<suite_common::autosave::AutosaveSlot>,
+    /// Ownership of that slot, held for the window's lifetime so another
+    /// launch does not offer this open workbook as a crash recovery.
+    _autosave_owner: Option<suite_common::autosave::SnapshotOwner>,
 }
 
 impl TablesWindow {
@@ -2120,6 +2123,7 @@ impl TablesWindow {
         }
 
         Self {
+            _autosave_owner: autosave_slot.claim(),
             autosave_slot: autosave_slot.clone(),
             window: suite_win.window,
             drawing_area,

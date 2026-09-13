@@ -967,6 +967,100 @@ class LettersRecoveryIsItselfProtectedSmoke(BaseGUITestCase):
                       f"title was {frame.name!r}")
 
 
+class TablesLiveOwnerSmoke(BaseGUITestCase):
+    """A document open in another window is not a crash to recover.
+
+    Recovery adopts its content into the new window's own slot before
+    clearing the orphan, so an open window now *always* has a snapshot on
+    disk. Without ownership, a second launch reads that as an abandoned
+    crash: it reopens work that is already open, in a second window, from a
+    snapshot the first window is still rewriting underneath it.
+
+    The other live window is stood in for by holding its advisory lock from
+    this test process — which is exactly what ownership means, and avoids
+    fighting GApplication's single-instance behaviour to get two real
+    windows. The pair of relaunches is the point: the same state recovers
+    once the lock is released, so it is the lock doing the suppressing and
+    not some unrelated difference.
+    """
+
+    app_name = "tables"
+
+    def setUp(self):
+        self._state_dir = self.isolate_autosave_state(prefix="tables-live-owner-")
+        super().setUp()
+
+    def _snapshot_dir(self):
+        return os.path.join(self._state_dir, "tables")
+
+    def _snapshots(self):
+        d = self._snapshot_dir()
+        return [f for f in os.listdir(d) if f.endswith(".snapshot")] if os.path.isdir(d) else []
+
+    def _lock_files(self):
+        d = self._snapshot_dir()
+        return [f for f in os.listdir(d) if f.endswith(".lock")] if os.path.isdir(d) else []
+
+    def test_a_snapshot_owned_by_a_live_window_is_not_recovered(self):
+        import fcntl
+        import subprocess
+        from dogtail import rawinput
+
+        subprocess.run(["gapplication", "action", "org.tunaos.tables", "new-document"])
+        time.sleep(1.5)
+        rawinput.typeText("=6*7")
+        rawinput.keyCombo("Return")
+        time.sleep(0.5)
+        subprocess.run(["gapplication", "action", "org.tunaos.tables", "autosave-now"])
+        time.sleep(0.8)
+        self.assertEqual(len(self._snapshots()), 1, "precondition: a snapshot to recover")
+        locks = self._lock_files()
+        self.assertEqual(len(locks), 1,
+                          f"the live window should have claimed its slot; found {locks}")
+        lock_path = os.path.join(self._snapshot_dir(), locks[0])
+
+        # Kill without relaunching. `relaunch_app(crash=True)` would start
+        # a replacement, and that replacement recovers the orphan and
+        # clears it — lock file included — so there would be nothing left
+        # to hold. Two drafts of this test died on that before the
+        # sequence came out right.
+        #
+        # SIGKILL means no cleanup runs, so the snapshot and its lock file
+        # both stay on disk while the claim itself is released by the
+        # kernel. That release is the whole reason this is an advisory lock
+        # rather than a pid written into a file.
+        self.process.kill()
+        self.process.wait(timeout=5)
+        time.sleep(0.5)
+
+        self.assertTrue(os.path.exists(lock_path), f"{lock_path} should survive a crash")
+        holder = open(lock_path, "r+b")
+        self.addCleanup(holder.close)
+        fcntl.flock(holder.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+
+        self.relaunch_app(crash=True)
+        time.sleep(2.0)
+        frame = self.app.child(roleName="frame")
+        self.assertNotIn(
+            "Recovered", frame.name,
+            "a document owned by a live window was offered as a recovery: "
+            f"window came up as {frame.name!r}",
+        )
+        self.assertEqual(len(self._snapshots()), 1,
+                          "the owner's snapshot must be left alone, not cleared")
+
+        # Release it and the same state recovers, which is what makes the
+        # assertion above about ownership rather than about timing.
+        fcntl.flock(holder.fileno(), fcntl.LOCK_UN)
+        self.relaunch_app(crash=True)
+        time.sleep(2.0)
+        frame = self.app.child(roleName="frame")
+        self.assertIn(
+            "Recovered", frame.name,
+            f"releasing the claim should make the work recoverable again: {frame.name!r}",
+        )
+
+
 class TablesStaleSnapshotSmoke(BaseGUITestCase):
     """Already-saved work must not come back as a recovery offer.
 

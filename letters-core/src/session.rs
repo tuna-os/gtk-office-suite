@@ -21,6 +21,11 @@ pub struct DocumentSession {
     pub file: Option<PathBuf>,
     pub closing_after_save: bool,
     pub autosave_slot: Rc<AutosaveSlot>,
+    /// Ownership of the snapshot slot, held for as long as the tab is
+    /// open so that another launch does not offer this document — which
+    /// is open right here — back as a crash recovery. `None` only if the
+    /// claim could not be taken, which `claim()` treats as "carry on".
+    _autosave_owner: Option<suite_common_core::autosave::SnapshotOwner>,
 }
 
 /// A committed user save may still need a recovery-cleanup warning. Cleanup
@@ -31,10 +36,12 @@ pub struct SaveCommit {
 
 impl DocumentSession {
     pub fn new(autosave_slot: Rc<AutosaveSlot>) -> Self {
+        let _autosave_owner = autosave_slot.claim();
         Self {
             file: None,
             closing_after_save: false,
             autosave_slot,
+            _autosave_owner,
         }
     }
 
