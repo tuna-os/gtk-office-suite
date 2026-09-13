@@ -262,9 +262,36 @@ class BaseGUITestCase(unittest.TestCase):
             text=True,
         )
         _register_launched(self.app_name, self.process)
+        self._app_output = None
         self.app = self.wait_for_app(self.app_name)
         self._activate_window()
         return self.app
+
+    def app_output(self):
+        """Stop the app under test and return its `(stdout, stderr)`.
+
+        A journey that asserts on a diagnostic the app writes to stderr has
+        to read that pipe, and the pipe can only be drained once — the
+        artifact capture drains it too, at the end of every failing test.
+        So the drain lives here and the result is cached: whichever of the
+        two asks first does the read and the other gets the same text,
+        rather than a `communicate()` on a process that has been reaped.
+
+        Draining ends the process, so call it after the journey's last
+        interaction with the app.
+        """
+        if getattr(self, "_app_output", None) is None:
+            process = getattr(self, "process", None)
+            if process is None:
+                return None
+            if process.poll() is None:
+                process.terminate()
+            try:
+                self._app_output = process.communicate(timeout=5)
+            except subprocess.TimeoutExpired:
+                process.kill()
+                self._app_output = process.communicate(timeout=5)
+        return self._app_output
 
     def configure_deterministic_environment(self):
         """Set shared, test-only launch defaults for reproducible journeys.
@@ -668,14 +695,14 @@ class BaseGUITestCase(unittest.TestCase):
 
         # The app's own stdout/stderr, which is where a startup panic with a
         # file and line number lives. It is read by terminating the process
-        # and draining its pipes, so it can only be had once and only here:
-        # nothing else in the harness reads them before the process is
-        # reaped. An app that never reached the AT-SPI tree still has this.
+        # and draining its pipes, which can only be done once — so it goes
+        # through `app_output`, which caches the drain and is also what a
+        # journey asserting on a stderr diagnostic calls. An app that never
+        # reached the AT-SPI tree still has this.
         try:
-            if hasattr(self, "process") and self.process and self.process.poll() is None:
-                self.process.terminate()
-            if hasattr(self, "process") and self.process:
-                out, err = self.process.communicate(timeout=2)
+            drained = self.app_output()
+            if drained is not None:
+                out, err = drained
                 with open(os.path.join(artifacts_dir, "app.log"), "w") as f:
                     f.write("--- stdout ---\n")
                     f.write(out or "")

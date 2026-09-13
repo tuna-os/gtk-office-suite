@@ -1586,7 +1586,7 @@ impl TablesWindow {
                 dialog.choose(Some(win), None::<&gio::Cancellable>, move |response: glib::GString| {
                     let Some(win) = win_weak.upgrade() else { return };
                     if response == "discard" {
-                        let _ = slot.clear();
+                        slot.clear_or_report();
                         force_close.set(true);
                         win.close();
                         return;
@@ -1599,7 +1599,7 @@ impl TablesWindow {
                         match save_engine_to_xlsx(&path.to_string_lossy(), &s.borrow()) {
                             Ok(()) => {
                                 ctl.borrow_mut().mark_clean();
-                                let _ = slot.clear();
+                                slot.clear_or_report();
                                 force_close.set(true);
                                 win.close();
                             }
@@ -1634,7 +1634,7 @@ impl TablesWindow {
                                     Ok(()) => {
                                         *path_state.borrow_mut() = Some(path);
                                         ctl.borrow_mut().mark_clean();
-                                        let _ = slot.clear();
+                                        slot.clear_or_report();
                                         force_close.set(true);
                                         win2.close();
                                     }
@@ -1797,7 +1797,7 @@ impl TablesWindow {
                                         drop(ss);
                                         *path_state.borrow_mut() = Some(path);
                                         ctl.borrow_mut().mark_clean();
-                                        let _ = slot.clear();
+                                        slot.clear_or_report();
                                     }
                                     Err(e) => {
                                         let err = adw::AlertDialog::builder()
@@ -1858,7 +1858,7 @@ impl TablesWindow {
                         let settings = gtk4::gio::Settings::new("org.tunaos.tables");
                         suite_common::push_recent_file(&settings, &path_str);
                         ctl.borrow_mut().mark_clean();
-                        let _ = slot.clear();
+                        slot.clear_or_report();
                     }
                     Err(e) => {
                         let err = adw::AlertDialog::builder()
@@ -2188,7 +2188,7 @@ impl TablesWindow {
             // came from; the order, and what a failed write means, are
             // explained on AutosaveSlot::adopt_recovered.
             if self.autosave_slot.adopt_recovered(&bytes, &meta) {
-                let _ = orphan.clear();
+                orphan.clear_or_report();
             }
             return true;
         }
