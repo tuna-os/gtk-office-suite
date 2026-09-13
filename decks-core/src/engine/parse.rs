@@ -654,10 +654,17 @@ pub fn read_pptx(path: &str) -> Result<Deck, String> {
                 let (master_bg, mut shapes) = parse_master_shapes(&master_xml);
                 let (layout_bg, layout_shapes) = parse_master_shapes(&layout_xml);
                 shapes.extend(layout_shapes);
-                let name = Path::new(layout_path)
-                    .file_stem()
-                    .map(|s| s.to_string_lossy().to_string())
-                    .unwrap_or_else(|| "Master".into());
+                // The master's own name if either part records one;
+                // the layout's file stem only as a last resort, which is
+                // all a package written before this existed offers.
+                let name = parse_c_sld_name(&master_xml)
+                    .or_else(|| parse_c_sld_name(&layout_xml))
+                    .unwrap_or_else(|| {
+                        Path::new(layout_path)
+                            .file_stem()
+                            .map(|s| s.to_string_lossy().to_string())
+                            .unwrap_or_else(|| "Master".into())
+                    });
                 masters.push(MasterSlide {
                     name,
                     background: layout_bg
@@ -695,6 +702,36 @@ pub fn read_pptx(path: &str) -> Result<Deck, String> {
     }
 
     Ok(Deck { slides, masters })
+}
+
+/// The `p:cSld/@name` of a slideMaster or slideLayout part.
+///
+/// This is the master's own name, and it is what the writer puts there.
+/// Without it the name fell out of the part's file path — "slideLayout1"
+/// for a deck we wrote, so a master called "House Style" came back under a
+/// name nobody chose, and the sidebar showed it.
+pub fn parse_c_sld_name(xml: &str) -> Option<String> {
+    if xml.is_empty() {
+        return None;
+    }
+    let mut reader = Reader::from_str(xml);
+    reader.config_mut().trim_text(true);
+    let mut buf = Vec::new();
+    while let Ok(ev) = reader.read_event_into(&mut buf) {
+        match ev {
+            Event::Start(ref e) | Event::Empty(ref e) if e.name().as_ref() == "p:cSld" => {
+                return e
+                    .attributes()
+                    .filter_map(|a| a.ok())
+                    .find(|a| a.key.as_ref() == "name")
+                    .map(|a| a.value.to_string())
+                    .filter(|n| !n.is_empty());
+            }
+            Event::Eof => break,
+            _ => {}
+        }
+    }
+    None
 }
 
 /// Parse a slideMaster/slideLayout part: background color and

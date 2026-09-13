@@ -287,53 +287,120 @@ fn slide_order_survives_a_snapshot() {
     }
 }
 
-/// Masters, in both formats — and currently failing in both, which is why
-/// it is ignored with the reason rather than deleted or quietly narrowed.
+/// Masters, in both formats.
 ///
-/// Decks *reads* masters from an imported deck and renders them (the canvas
-/// and the sidebar thumbnails both consult them), but neither writer emits
-/// one: pptx writes no `slideMaster` part at all, odp no master page, and
-/// both readers then synthesise a white default in its place. That is a
-/// writer/reader asymmetry like #716's pointing the other way, and it costs
-/// the design of any imported deck on *every* save, not only on recovery.
+/// Decks *reads* a master from an imported deck and renders it (the canvas
+/// and the sidebar thumbnails both consult it), and for a long time neither
+/// writer emitted one: pptx wrote no `slideMaster` part at all, odp no
+/// `styles.xml`, and both readers then synthesised a white default in its
+/// place. That is a writer/reader asymmetry like #716's pointing the other
+/// way, and it cost the design of any imported deck on *every* save, not
+/// only on recovery. This test was the specification while it was
+/// `#[ignore]`d; it is now the regression guard.
 ///
-/// Implementing it means new slideMaster/slideLayout parts and their rels
-/// for pptx and a styles.xml master page for odp — a feature, not the fix
-/// this change is, and not something to half-land inside it. The test is
-/// the specification: unignore it when a writer starts emitting masters and
-/// it should pass as written. The gap is recorded in
-/// docs/readiness-2026-09/recovery.md, which is why #322's row stays
-/// partial.
+/// It asserts the name and the decorations as well as the background,
+/// because a master that comes back as a nameless empty page with the right
+/// colour is not the master that went in — and because the two formats fail
+/// differently: pptx can lose the whole chain (a slide relates to a layout,
+/// the layout to the master) while odp can lose only the mapping, coming
+/// back with the master present but every slide pointing at the wrong one.
+/// Hence the second master, which nothing points at, and the assertion that
+/// the slide still chose the first.
 #[test]
-#[ignore = "neither writer emits a master yet; #322 row records the gap and this test specifies the fix"]
 fn masters_survive_a_snapshot() {
+    let mut complaints: Vec<String> = Vec::new();
     for kind in FORMATS {
         let deck = Deck {
-            masters: vec![MasterSlide {
-                name: "House".into(),
-                background: "#204060".into(),
-                default_font: "Cantarell".into(),
-                shapes: vec![],
-            }],
-            slides: vec![Slide {
-                title: String::new(),
-                background: String::new(),
-                objects: vec![text_box("on the house master", 10.0, 10.0)],
-                notes: String::new(),
-                master_idx: Some(0),
-            }],
+            masters: vec![
+                MasterSlide {
+                    name: "House Style".into(),
+                    background: "#204060".into(),
+                    default_font: "Cantarell".into(),
+                    shapes: vec![text_box("a footer on the master", 20.0, 500.0)],
+                },
+                MasterSlide {
+                    name: "Second".into(),
+                    background: "#a01020".into(),
+                    default_font: "Cantarell".into(),
+                    shapes: vec![],
+                },
+            ],
+            slides: vec![
+                Slide {
+                    title: String::new(),
+                    background: String::new(),
+                    objects: vec![text_box("on the house master", 10.0, 10.0)],
+                    notes: String::new(),
+                    master_idx: Some(0),
+                },
+                // On the *second* master, which is what makes the mapping
+                // testable: a reader that loses it falls back to master 0,
+                // and a deck where every slide is already on master 0
+                // cannot tell that apart from working.
+                Slide {
+                    title: String::new(),
+                    background: String::new(),
+                    objects: vec![text_box("on the second master", 10.0, 10.0)],
+                    notes: String::new(),
+                    master_idx: Some(1),
+                },
+            ],
         };
         let back = through_a_snapshot(&deck, kind, "masters");
-        assert!(
-            !back.masters.is_empty(),
-            "{kind}: the deck came back with no masters at all",
-        );
-        assert_eq!(
-            back.masters[0].background, "#204060",
-            "{kind}: the master's background came back as {:?}",
-            back.masters[0].background,
-        );
+        if back.masters.is_empty() {
+            complaints.push(format!("{kind}: the deck came back with no masters at all"));
+            continue;
+        }
+        if back.masters[0].background != "#204060" {
+            complaints.push(format!(
+                "{kind}: the master's background came back as {:?}",
+                back.masters[0].background,
+            ));
+        }
+        // A name escaped into an ODF style token ("House_20_Style") and not
+        // unescaped on the way back is the failure this catches.
+        if back.masters[0].name != "House Style" {
+            complaints.push(format!(
+                "{kind}: the master's name came back as {:?}",
+                back.masters[0].name,
+            ));
+        }
+        let decorations: Vec<&str> = back.masters[0]
+            .shapes
+            .iter()
+            .filter_map(|o| match o {
+                SlideObject::TextBox { text, .. } => Some(text.as_str()),
+                _ => None,
+            })
+            .collect();
+        if decorations != vec!["a footer on the master"] {
+            complaints.push(format!(
+                "{kind}: the master's decorations came back as {decorations:?}",
+            ));
+        }
+        // Each slide must still name the master it was on, not merely
+        // find some master in the package.
+        let mapping: Vec<Option<usize>> =
+            back.slides.iter().map(|s| s.master_idx).collect();
+        if mapping != vec![Some(0), Some(1)] {
+            complaints.push(format!(
+                "{kind}: the slides were on masters [0, 1] and came back on {mapping:?}"
+            ));
+        }
+        // And the slide's own content must not have absorbed the master's.
+        let on_slide: Vec<&str> = back.slides[0]
+            .objects
+            .iter()
+            .filter_map(|o| match o {
+                SlideObject::TextBox { text, .. } => Some(text.as_str()),
+                _ => None,
+            })
+            .collect();
+        if on_slide != vec!["on the house master"] {
+            complaints.push(format!("{kind}: the slide's own content came back as {on_slide:?}"));
+        }
     }
+    assert!(complaints.is_empty(), "{}", complaints.join("\n"));
 }
 
 #[test]

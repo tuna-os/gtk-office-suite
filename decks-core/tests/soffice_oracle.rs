@@ -778,3 +778,52 @@ fn we_read_the_rotation_impress_writes_into_an_odp() {
          0 means the transform was declined and the shape came back square"
     );
 }
+
+// ── Masters we write (#322, recovery.md fidelity row) ────────────────
+
+/// A master is only real if Impress honours it. Our own reader can be
+/// satisfied by parts that are related to nothing: the pptx chain is slide
+/// -> layout -> master across three parts and four relationship files, and
+/// a package where any link is missing still round-trips through code that
+/// looks in the same places it wrote.
+///
+/// So this hands both formats to Impress, lets it rewrite the deck in its
+/// own terms, and asks our reader what came back. Impress drops a master
+/// it cannot resolve, which is what makes the assertion worth making.
+#[test]
+fn impress_keeps_the_master_we_write() {
+    if !require_or_skip() { return; }
+    let mut deck = Deck::new();
+    deck.masters[0].name = "House Style".into();
+    deck.masters[0].background = "#204060".into();
+    deck.slides[0].master_idx = Some(0);
+    deck.slides[0].objects.push(SlideObject::TextBox {
+        text: "on the house master".into(),
+        x: 100.0, y: 100.0, w: 400.0, h: 60.0,
+        rotation: 0.0,
+        runs: vec![],
+    });
+
+    let dir = tempfile::tempdir().unwrap();
+    let as_pptx = dir.path().join("mastered.pptx");
+    write_pptx(as_pptx.to_str().unwrap(), &deck).expect("write pptx");
+    let rewritten = convert(&as_pptx, "pptx").expect("Impress could not rewrite our pptx");
+    let rt = read_pptx(rewritten.to_str().unwrap()).expect("read back");
+    assert!(!rt.masters.is_empty(), "Impress dropped the master from our pptx");
+    for s in &rt.slides {
+        let mi = s.master_idx.expect("a slide came back on no master");
+        assert!(mi < rt.masters.len(), "master_idx {mi} out of range");
+    }
+
+    let odp_deck = deck.clone();
+    let as_odp = dir.path().join("mastered.odp");
+    odp::write(&odp_deck, as_odp.to_str().unwrap()).expect("write odp");
+    let rewritten = convert(&as_odp, "odp").expect("Impress could not rewrite our odp");
+    let rt = odp::read(rewritten.to_str().unwrap()).expect("read back");
+    assert!(!rt.masters.is_empty(), "Impress dropped the master from our odp");
+    assert!(
+        rt.masters.iter().any(|m| m.background == "#204060"),
+        "the master's background is gone after an Impress rewrite: {:?}",
+        rt.masters.iter().map(|m| (&m.name, &m.background)).collect::<Vec<_>>(),
+    );
+}

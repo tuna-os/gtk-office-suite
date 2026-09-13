@@ -73,10 +73,10 @@ AutosaveSlot used to store bytes and metadata in separate atomic writes. Each wr
       and `render_to_buffer` reinstalls them through `set_buffer_sidecars`,
       so the recovery path closes the loop. Round-trip tests already cover
       header, footer and page geometry.
-      **Decks is now covered by `decks-core/tests/snapshot_fidelity.rs`, and
-      one gap remains**, which is why this row is partial rather than done.
-      Notes, backgrounds, object geometry, run styles, slide order and shape
-      rotation all survive both formats. Rotation survived neither until
+      **Decks is now covered by `decks-core/tests/snapshot_fidelity.rs`.**
+      Notes, backgrounds, object geometry, run styles, slide order, shape
+      rotation and slide masters all survive both formats, and
+      `snapshot_fidelity.rs` has no `#[ignore]` left. Rotation survived neither until
       recently: both writers emitted none at all and both readers hardcoded
       zero, so the rotate gesture's result was discarded by any save. pptx
       spells it `a:xfrm/@rot`, one attribute, and was fixed first. ODF has
@@ -101,17 +101,56 @@ AutosaveSlot used to store bytes and metadata in separate atomic writes. Each wr
       itself out and passes, which is exactly what happens to the
       round-trip tests when the matrix is mutated to SVG's — they stay
       green and only the two Impress-grounded tests go red.
-      The one that still strips content:
-      - **Masters, in both formats.** Decks reads a master from an imported
-        deck and renders it — the canvas and the sidebar thumbnails both
-        consult it — but neither writer emits one, so the reader synthesises
-        a white default and the deck's design is gone. Like the Tables bug
-        above this is a writer/reader asymmetry, pointing the other way, and
-        it costs an imported deck's design on *every* save rather than only
-        on recovery. `masters_survive_a_snapshot` specifies the fix and is
-        `#[ignore]`d with that reason, so it appears in every run's skip
-        report instead of being a comment nobody reads; unignore it when a
-        writer starts emitting masters.
+      **Masters now survive too, in both formats**, which was the last
+      thing this row was waiting on. Decks read a master from an imported
+      deck and rendered it — the canvas and the sidebar thumbnails both
+      consult it — while neither writer emitted one, so the reader
+      synthesised a white default and the deck's design was gone. Like the
+      Tables bug above it was a writer/reader asymmetry pointing the other
+      way, and it cost an imported deck's design on *every* save rather
+      than only on recovery.
+      A pptx master is three parts, not one: `p:sldMaster` carries the
+      decorations, a `p:sldLayout` sits between it and the slides, and it is
+      the layout a slide relates to. The reader already walked exactly that
+      chain, so all three parts and their four relationship files now get
+      written; decorations go on the master and the layout's shape tree is
+      left empty, because the reader concatenates both and writing the
+      shapes twice would double them on every save. ODF puts masters in
+      `styles.xml` under `office:master-styles`, which the odp writer did
+      not write at all; each `draw:page` now names its master with
+      `draw:master-page-name`, escaped into a style token the way
+      LibreOffice escapes it (`House_20_Style`) and unescaped on the way
+      back.
+      Two things about the tests, both of which were wrong first and are
+      worth keeping written down:
+      - Reading masters goes through the *same* walker as slides now
+        (`parse_pages`, with the page tag as a parameter), because a
+        master's decorations came back as nothing while that logic existed
+        only for slides. Any shape the slide reader learns, the master
+        reader now learns too.
+      - The mapping assertion needs a slide on a master that is *not* the
+        first. Losing the mapping falls back to master 0, so a deck whose
+        every slide is already on master 0 cannot tell that apart from
+        working — the first version of this test could not, and two
+        mutations (the odp page dropping its master name, the pptx slide
+        always relating to layout 1) passed under it.
+      `impress_keeps_the_master_we_write` is the check our own reader cannot
+      make: the pptx chain spans three parts and four relationship files,
+      and a package where any link is missing still round-trips through code
+      that looks where it wrote. Impress drops a master it cannot resolve,
+      so handing both formats to Impress and reading back what it rewrote is
+      what proves the parts are actually related.
+      What keeps this row `[~]` rather than `[x]`: the odp writer still
+      drops `SlideObject::Image`, which is supported content and a real
+      strip. It needs a packaged media part and a manifest entry, the same
+      shape of work the pptx path already does — the row cannot honestly
+      say "no format strips supported content" until it does. Two smaller
+      ones, recorded so they are not rediscovered as bugs: a master's
+      `default_font` is not carried by either format (pptx would need a
+      theme, ODF a page style this reader does not model), and a master
+      decoration's run styling is not either, in both cases because
+      *neither* reader fills them, so the writers emit nothing rather than
+      writing something nothing reads.
       A note on how the odp rotation gap was found, because the test design
       hid it: the fidelity tests looped `for kind in FORMATS` and asserted
       inside the loop, which aborts on the first format that fails. While

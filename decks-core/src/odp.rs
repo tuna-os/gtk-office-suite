@@ -182,6 +182,56 @@ fn text_style(st: &RunStyle) -> String {
     props
 }
 
+/// Emit a page's shapes. Shared by the slides in `content.xml` and the
+/// master pages in `styles.xml`, so a shape kind cannot be written on one
+/// and forgotten on the other.
+///
+/// `style_of` names the automatic text style for a run. Masters pass a
+/// closure that names none: neither format's master reader fills a
+/// decoration's `runs` (the pptx one parses `p:sp` text as plain), so
+/// emitting a `text:span` would be styling nothing reads back.
+fn shapes_xml(shapes: &[SlideObject], style_of: &dyn Fn(&RunStyle) -> usize) -> String {
+    let mut pages = String::new();
+        for obj in shapes {
+            match obj {
+                SlideObject::TextBox { text, x, y, w, h, rotation, runs } => {
+                    let inner: String = if runs.is_empty() {
+                        text.split('\n')
+                            .map(|l| format!("<text:p>{}</text:p>", esc(l)))
+                            .collect()
+                    } else {
+                        format!(
+                            "<text:p>{}</text:p>",
+                            runs.iter().map(|r| run_span(r, style_of(&r.style))).collect::<String>()
+                        )
+                    };
+                    pages.push_str(&format!(
+                        "<draw:frame {}>\
+                         <draw:text-box>{inner}</draw:text-box></draw:frame>",
+                        geometry(*x, *y, *w, *h, *rotation)
+                    ));
+                }
+                SlideObject::Rect { x, y, w, h, rotation } => {
+                    pages.push_str(&format!(
+                        "<draw:rect {}/>",
+                        geometry(*x, *y, *w, *h, *rotation)
+                    ));
+                }
+                SlideObject::Circle { x, y, r, rotation } => {
+                    let (cx, cy, d) = (x - r, y - r, r * 2.0);
+                    pages.push_str(&format!(
+                        "<draw:ellipse {}/>",
+                        geometry(cx, cy, d, d, *rotation)
+                    ));
+                }
+                // Images need packaged media; deferred (matches pptx v1 scope
+                // notes — the pptx path carries them).
+                SlideObject::Image { .. } => {}
+            }
+        }
+    pages
+}
+
 fn content_xml(deck: &Deck) -> String {
     // Distinct run styles across the deck, in first-use order.
     let mut styles: Vec<RunStyle> = Vec::new();
@@ -231,46 +281,18 @@ fn content_xml(deck: &Deck) -> String {
             String::new()
         };
         pages.push_str(&format!(
-            "<draw:page draw:name=\"{}\"{dp_attr}>",
-            esc(&slide.title)
+            "<draw:page draw:name=\"{}\"{dp_attr}{}>",
+            esc(&slide.title),
+            deck
+                .masters
+                .get(slide.master_idx.unwrap_or(0))
+                .map(|m| format!(
+                    " draw:master-page-name=\"{}\"",
+                    esc(&encode_style_name(&m.name))
+                ))
+                .unwrap_or_default(),
         ));
-        for obj in &slide.objects {
-            match obj {
-                SlideObject::TextBox { text, x, y, w, h, rotation, runs } => {
-                    let inner: String = if runs.is_empty() {
-                        text.split('\n')
-                            .map(|l| format!("<text:p>{}</text:p>", esc(l)))
-                            .collect()
-                    } else {
-                        format!(
-                            "<text:p>{}</text:p>",
-                            runs.iter().map(|r| run_span(r, style_of(&r.style))).collect::<String>()
-                        )
-                    };
-                    pages.push_str(&format!(
-                        "<draw:frame {}>\
-                         <draw:text-box>{inner}</draw:text-box></draw:frame>",
-                        geometry(*x, *y, *w, *h, *rotation)
-                    ));
-                }
-                SlideObject::Rect { x, y, w, h, rotation } => {
-                    pages.push_str(&format!(
-                        "<draw:rect {}/>",
-                        geometry(*x, *y, *w, *h, *rotation)
-                    ));
-                }
-                SlideObject::Circle { x, y, r, rotation } => {
-                    let (cx, cy, d) = (x - r, y - r, r * 2.0);
-                    pages.push_str(&format!(
-                        "<draw:ellipse {}/>",
-                        geometry(cx, cy, d, d, *rotation)
-                    ));
-                }
-                // Images need packaged media; deferred (matches pptx v1 scope
-                // notes — the pptx path carries them).
-                SlideObject::Image { .. } => {}
-            }
-        }
+        pages.push_str(&shapes_xml(&slide.objects, &style_of));
         if !slide.notes.is_empty() {
             let notes: String = slide
                 .notes
@@ -303,10 +325,114 @@ fn content_xml(deck: &Deck) -> String {
     )
 }
 
+// ── Master pages ─────────────────────────────────────────────────────
+//
+// Decks reads a master from an imported deck and renders it — the canvas
+// and the sidebar thumbnails both consult it — but neither writer emitted
+// one, so every save handed the reader a package with no master and the
+// reader synthesised a white default. An imported deck lost its design on
+// the first save, not only on recovery.
+//
+// ODF puts masters in `styles.xml`, under `office:master-styles`, and each
+// `draw:page` names the one it uses with `draw:master-page-name`. The
+// writer had no `styles.xml` at all.
+
+/// Escape a master's name into an ODF style token, the way LibreOffice
+/// does: anything but an ASCII letter, digit or `-` becomes `_hh_`, so a
+/// space is `_20_` and a literal underscore is `_5f_` (which is what keeps
+/// the escape unambiguous to decode).
+fn encode_style_name(name: &str) -> String {
+    let mut out = String::new();
+    for c in name.chars() {
+        if c.is_ascii_alphanumeric() || c == '-' {
+            out.push(c);
+        } else if (c as u32) < 0x100 {
+            out.push_str(&format!("_{:02x}_", c as u32));
+        } else {
+            out.push_str(&format!("_{:x}_", c as u32));
+        }
+    }
+    if out.is_empty() { "Default".into() } else { out }
+}
+
+/// The inverse, and tolerant: a token with no escapes, or a stray `_`, is
+/// returned as-is rather than dropped.
+fn decode_style_name(token: &str) -> String {
+    let bytes: Vec<char> = token.chars().collect();
+    let mut out = String::new();
+    let mut i = 0;
+    while i < bytes.len() {
+        if bytes[i] == '_' {
+            if let Some(end) = (i + 1..bytes.len()).find(|&j| bytes[j] == '_') {
+                let hex: String = bytes[i + 1..end].iter().collect();
+                if !hex.is_empty() && hex.len() <= 6 {
+                    if let Some(c) = u32::from_str_radix(&hex, 16).ok().and_then(char::from_u32) {
+                        out.push(c);
+                        i = end + 1;
+                        continue;
+                    }
+                }
+            }
+        }
+        out.push(bytes[i]);
+        i += 1;
+    }
+    out
+}
+
+/// `styles.xml` — the page layout, one drawing-page style per master's
+/// background, and the master pages themselves with their decorations.
+fn styles_xml(deck: &Deck) -> String {
+    let mut auto = String::from(
+        "<style:page-layout style:name=\"PM1\">\
+         <style:page-layout-properties fo:page-width=\"960pt\" fo:page-height=\"540pt\" \
+         style:print-orientation=\"landscape\"/></style:page-layout>",
+    );
+    let mut pages = String::new();
+    for (i, master) in deck.masters.iter().enumerate() {
+        let bg = master.background.trim_start_matches('#');
+        let dp = if bg.len() == 6 {
+            auto.push_str(&format!(
+                "<style:style style:name=\"mdp{}\" style:family=\"drawing-page\">\
+                 <style:drawing-page-properties draw:fill=\"solid\" draw:fill-color=\"#{}\"/>\
+                 </style:style>",
+                i + 1,
+                bg.to_lowercase(),
+            ));
+            format!(" draw:style-name=\"mdp{}\"", i + 1)
+        } else {
+            String::new()
+        };
+        pages.push_str(&format!(
+            "<style:master-page style:name=\"{}\" style:page-layout-name=\"PM1\"{dp}>{}\
+             </style:master-page>",
+            esc(&encode_style_name(&master.name)),
+            shapes_xml(&master.shapes, &|_| 0),
+        ));
+    }
+    format!(
+        "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\
+         <office:document-styles \
+         xmlns:office=\"urn:oasis:names:tc:opendocument:xmlns:office:1.0\" \
+         xmlns:draw=\"urn:oasis:names:tc:opendocument:xmlns:drawing:1.0\" \
+         xmlns:presentation=\"urn:oasis:names:tc:opendocument:xmlns:presentation:1.0\" \
+         xmlns:text=\"urn:oasis:names:tc:opendocument:xmlns:text:1.0\" \
+         xmlns:style=\"urn:oasis:names:tc:opendocument:xmlns:style:1.0\" \
+         xmlns:fo=\"urn:oasis:names:tc:opendocument:xmlns:xsl-fo-compatible:1.0\" \
+         xmlns:svg=\"urn:oasis:names:tc:opendocument:xmlns:svg-compatible:1.0\" \
+         office:version=\"1.2\">\
+         <office:styles/>\
+         <office:automatic-styles>{auto}</office:automatic-styles>\
+         <office:master-styles>{pages}</office:master-styles>\
+         </office:document-styles>"
+    )
+}
+
 const MANIFEST: &str = "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\
 <manifest:manifest xmlns:manifest=\"urn:oasis:names:tc:opendocument:xmlns:manifest:1.0\" manifest:version=\"1.2\">\
 <manifest:file-entry manifest:full-path=\"/\" manifest:media-type=\"application/vnd.oasis.opendocument.presentation\"/>\
 <manifest:file-entry manifest:full-path=\"content.xml\" manifest:media-type=\"text/xml\"/>\
+<manifest:file-entry manifest:full-path=\"styles.xml\" manifest:media-type=\"text/xml\"/>\
 </manifest:manifest>";
 
 /// Write the deck as .odp. Builds the whole archive in memory first, then
@@ -335,6 +461,8 @@ pub fn write_bytes(deck: &Deck) -> Result<Vec<u8>, String> {
     z.write_all(MANIFEST.as_bytes()).map_err(|e| e.to_string())?;
     z.start_file("content.xml", opt).map_err(|e| e.to_string())?;
     z.write_all(content_xml(deck).as_bytes()).map_err(|e| e.to_string())?;
+    z.start_file("styles.xml", opt).map_err(|e| e.to_string())?;
+    z.write_all(styles_xml(deck).as_bytes()).map_err(|e| e.to_string())?;
     z.finish().map_err(|e| e.to_string()).map(|c| c.into_inner())
 }
 
@@ -364,23 +492,17 @@ fn attr(e: &quick_xml::events::BytesStart, name: &str) -> Option<String> {
     })
 }
 
-/// Read an .odp into a Deck.
-pub fn read(path: &str) -> Result<Deck, String> {
-    let file = std::fs::File::open(path).map_err(|e| e.to_string())?;
-    let mut zip = zip::ZipArchive::new(file).map_err(|e| e.to_string())?;
-    // Bounded like every other package read: an ODP is an untrusted
-    // download, and content.xml is the part a bomb would hide in (#442).
-    let mut budget = ZipBudget::default();
-    budget.check_entry_count(zip.len())?;
-    let content = zip.part_to_string("content.xml", &mut budget).map_err(|e| {
-        if e.is_missing() { "no content.xml — not an ODP?".to_string() } else { e.to_string() }
-    })?;
-
-    // First pass: text styles and drawing-page backgrounds.
-    let mut text_styles: std::collections::HashMap<String, RunStyle> = Default::default();
-    let mut page_bg: std::collections::HashMap<String, String> = Default::default();
+/// Collect the named text styles and drawing-page backgrounds a part
+/// defines. Called for `content.xml` and again for `styles.xml`, because a
+/// master page's background lives in the latter's automatic styles while
+/// a slide's lives in the former's.
+fn parse_styles(
+    xml: &str,
+    text_styles: &mut std::collections::HashMap<String, RunStyle>,
+    page_bg: &mut std::collections::HashMap<String, String>,
+) {
     {
-        let mut reader = Reader::from_str(&content);
+        let mut reader = Reader::from_str(xml);
         let mut cur: Option<(String, String)> = None; // (name, family)
         loop {
             match reader.read_event() {
@@ -445,15 +567,31 @@ pub fn read(path: &str) -> Result<Deck, String> {
             }
         }
     }
+}
 
-    // Second pass: pages, frames, shapes, notes.
-    let mut deck = Deck { slides: Vec::new(), masters: vec![MasterSlide {
-        name: "Default".into(),
-        background: "#ffffff".into(),
-        default_font: "Sans".into(),
-        shapes: vec![],
-    }] };
-    let mut reader = Reader::from_str(&content);
+/// One `draw:page` or `style:master-page`, with the master it names.
+struct Page {
+    slide: Slide,
+    uses_master: Option<String>,
+}
+
+/// Walk a part's pages, collecting frames, shapes and notes.
+///
+/// `page_tag` is `draw:page` for `content.xml` and `style:master-page` for
+/// the master pages in `styles.xml` — the two have the same children, so
+/// one walker reads both. Reading masters through the same code as slides
+/// is the point: a master's decorations came back as nothing while this
+/// logic existed only for slides, and any shape the slide walker learns to
+/// read the master walker now learns too.
+fn parse_pages(
+    xml: &str,
+    page_tag: &str,
+    page_bg: &std::collections::HashMap<String, String>,
+    text_styles: &std::collections::HashMap<String, RunStyle>,
+) -> Result<Vec<Page>, String> {
+    let mut pages: Vec<Page> = Vec::new();
+    let mut uses_master: Option<String> = None;
+    let mut reader = Reader::from_str(xml);
     reader.config_mut().trim_text(false);
     let mut slide: Option<Slide> = None;
     let mut in_notes = false;
@@ -480,12 +618,18 @@ pub fn read(path: &str) -> Result<Deck, String> {
     loop {
         match reader.read_event() {
             Ok(Event::Start(ref e)) => match e.name().as_ref() {
-                "draw:page" => {
+                tag if tag == page_tag => {
                     let bg = attr(e, "draw:style-name")
                         .and_then(|n| page_bg.get(&n).cloned())
                         .unwrap_or_else(|| "#ffffff".into());
+                    // A slide is named by draw:name; a master page by its
+                    // style:name, which is an ODF style token and so is
+                    // escaped (LibreOffice writes "Title_20_Slide").
+                    uses_master = attr(e, "draw:master-page-name");
                     slide = Some(Slide {
-                        title: attr(e, "draw:name").unwrap_or_default(),
+                        title: attr(e, "draw:name")
+                            .or_else(|| attr(e, "style:name").map(|n| decode_style_name(&n)))
+                            .unwrap_or_default(),
                         background: bg,
                         objects: vec![],
                         notes: String::new(),
@@ -643,9 +787,9 @@ pub fn read(path: &str) -> Result<Deck, String> {
                     shape_type = None;
                 }
                 "presentation:notes" => in_notes = false,
-                "draw:page" => {
+                tag if tag == page_tag => {
                     if let Some(s) = slide.take() {
-                        deck.slides.push(s);
+                        pages.push(Page { slide: s, uses_master: uses_master.take() });
                     }
                 }
                 _ => {}
@@ -654,6 +798,65 @@ pub fn read(path: &str) -> Result<Deck, String> {
             Err(e) => return Err(format!("XML parse error: {e}")),
             _ => {}
         }
+    }
+    Ok(pages)
+}
+
+/// Read an .odp into a Deck.
+pub fn read(path: &str) -> Result<Deck, String> {
+    let file = std::fs::File::open(path).map_err(|e| e.to_string())?;
+    let mut zip = zip::ZipArchive::new(file).map_err(|e| e.to_string())?;
+    // Bounded like every other package read: an ODP is an untrusted
+    // download, and content.xml is the part a bomb would hide in (#442).
+    let mut budget = ZipBudget::default();
+    budget.check_entry_count(zip.len())?;
+    let content = zip.part_to_string("content.xml", &mut budget).map_err(|e| {
+        if e.is_missing() { "no content.xml — not an ODP?".to_string() } else { e.to_string() }
+    })?;
+
+    // First pass: text styles and drawing-page backgrounds, from both
+    // parts — styles.xml is optional, and a deck we wrote before masters
+    // existed has none.
+    let styles = zip.optional_part_to_string("styles.xml", &mut budget);
+    let mut text_styles: std::collections::HashMap<String, RunStyle> = Default::default();
+    let mut page_bg: std::collections::HashMap<String, String> = Default::default();
+    parse_styles(&content, &mut text_styles, &mut page_bg);
+    parse_styles(&styles, &mut text_styles, &mut page_bg);
+
+    // Second pass: the master pages, then the slides that name them.
+    let mut masters: Vec<MasterSlide> = Vec::new();
+    let mut master_idx_by_name: std::collections::HashMap<String, usize> = Default::default();
+    for page in parse_pages(&styles, "style:master-page", &page_bg, &text_styles)? {
+        master_idx_by_name.insert(page.slide.title.clone(), masters.len());
+        masters.push(MasterSlide {
+            name: page.slide.title,
+            background: page.slide.background,
+            // ODF carries the master's default font in its page styles,
+            // which this reader does not model; the renderer's own default
+            // stands in, as it did before masters were read at all.
+            default_font: "Sans".into(),
+            shapes: page.slide.objects,
+        });
+    }
+    if masters.is_empty() {
+        masters.push(MasterSlide {
+            name: "Default".into(),
+            background: "#ffffff".into(),
+            default_font: "Sans".into(),
+            shapes: vec![],
+        });
+    }
+
+    let mut deck = Deck { slides: Vec::new(), masters };
+    for page in parse_pages(&content, "draw:page", &page_bg, &text_styles)? {
+        let mut slide = page.slide;
+        slide.master_idx = page
+            .uses_master
+            .as_deref()
+            .map(decode_style_name)
+            .and_then(|n| master_idx_by_name.get(&n).copied())
+            .or(Some(0));
+        deck.slides.push(slide);
     }
 
     if deck.slides.is_empty() {
@@ -802,6 +1005,65 @@ mod tests {
             assert!((back - rotation).abs() < 1e-6, "{rotation} came back as {back}");
             assert!((x - 40.0).abs() < 1e-6 && (y - 50.0).abs() < 1e-6, "moved to ({x}, {y})");
         }
+    }
+
+    /// An ODF style token is not a free-text name: LibreOffice writes a
+    /// space as `_20_`, and a master called "House Style" comes back as
+    /// "House_20_Style" to a reader that does not unescape. The underscore
+    /// escaping its own self is what keeps the decode unambiguous.
+    #[test]
+    fn a_master_name_survives_the_style_token_escaping() {
+        for name in ["House Style", "Default", "a_b", "x-y", "déjà vu", "2026 Q1"] {
+            let token = encode_style_name(name);
+            assert!(
+                token.chars().all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_'),
+                "{name:?} encoded to {token:?}, which is not a style token",
+            );
+            assert_eq!(decode_style_name(&token), name, "via {token:?}");
+        }
+        assert_eq!(encode_style_name("House Style"), "House_20_Style");
+        assert_eq!(encode_style_name("a_b"), "a_5f_b");
+        assert_eq!(encode_style_name(""), "Default", "an unnamed master still needs a token");
+    }
+
+    /// A token from elsewhere that is not escaped at all, or is escaped in
+    /// a way we do not recognise, has to come back as itself rather than
+    /// losing characters.
+    #[test]
+    fn an_unescaped_style_token_decodes_to_itself() {
+        assert_eq!(decode_style_name("Standard"), "Standard");
+        assert_eq!(decode_style_name("a_b"), "a_b");
+        assert_eq!(decode_style_name("trailing_"), "trailing_");
+    }
+
+    /// The master page has to name the background style it defines, and
+    /// the slide has to name the master — three references that have to
+    /// agree or the deck comes back with a white default.
+    #[test]
+    fn styles_xml_ties_the_master_its_background_and_the_slide_together() {
+        let deck = Deck {
+            masters: vec![MasterSlide {
+                name: "House Style".into(),
+                background: "#204060".into(),
+                default_font: "Sans".into(),
+                shapes: vec![],
+            }],
+            slides: vec![Slide {
+                title: "one".into(),
+                background: String::new(),
+                objects: vec![],
+                notes: String::new(),
+                master_idx: Some(0),
+            }],
+        };
+        let styles = styles_xml(&deck);
+        assert!(styles.contains("draw:fill-color=\"#204060\""), "{styles}");
+        assert!(styles.contains("style:name=\"House_20_Style\""), "{styles}");
+        assert!(styles.contains("draw:style-name=\"mdp1\""), "{styles}");
+        assert!(
+            content_xml(&deck).contains("draw:master-page-name=\"House_20_Style\""),
+            "the slide must name its master, or every slide lands on the first",
+        );
     }
 
     #[test]
