@@ -290,6 +290,212 @@ fn write_image<W: std::io::Write>(
     Ok(())
 }
 
+// ── Slide masters ────────────────────────────────────────────────────
+//
+// Decks *reads* a master from an imported deck and renders it — the canvas
+// and the sidebar thumbnails both consult it — but neither writer emitted
+// one, so every save handed the reader a package with no master and the
+// reader synthesised a white default in its place. An imported deck lost
+// its design on the first save, not only on recovery.
+//
+// A pptx master is three parts, not one. `p:sldMaster` carries the
+// decorations and the colour map; a `p:sldLayout` sits between it and the
+// slides, and it is the layout a slide relates to. The reader walks exactly
+// that chain (slide rels -> slideLayout -> its rels -> slideMaster), so all
+// three have to be present and related for a master to come back.
+//
+// Decorations go on the master and the layout's shape tree is left empty:
+// the reader concatenates both, so writing the shapes twice would double
+// them on every save.
+
+/// The empty group-shape prelude every `p:spTree` opens with.
+fn write_group_prelude<W: std::io::Write>(
+    writer: &mut Writer<W>,
+) -> Result<(), quick_xml::Error> {
+    writer.write_event(Event::Start(BytesStart::new("p:nvGrpSpPr")))?;
+    let mut c_nv_pr = BytesStart::new("p:cNvPr");
+    c_nv_pr.push_attribute(("id", "1"));
+    c_nv_pr.push_attribute(("name", ""));
+    writer.write_event(Event::Empty(c_nv_pr))?;
+    writer.write_event(Event::Empty(BytesStart::new("p:cNvGrpSpPr")))?;
+    writer.write_event(Event::Empty(BytesStart::new("p:nvPr")))?;
+    writer.write_event(Event::End(BytesEnd::new("p:nvGrpSpPr")))?;
+
+    writer.write_event(Event::Start(BytesStart::new("p:grpSpPr")))?;
+    writer.write_event(Event::Start(BytesStart::new("a:xfrm")))?;
+    for (tag, a, b) in [
+        ("a:off", "x", "y"),
+        ("a:ext", "cx", "cy"),
+        ("a:chOff", "x", "y"),
+        ("a:chExt", "cx", "cy"),
+    ] {
+        let mut e = BytesStart::new(tag);
+        e.push_attribute((a, "0"));
+        e.push_attribute((b, "0"));
+        writer.write_event(Event::Empty(e))?;
+    }
+    writer.write_event(Event::End(BytesEnd::new("a:xfrm")))?;
+    writer.write_event(Event::End(BytesEnd::new("p:grpSpPr")))?;
+    Ok(())
+}
+
+/// Emit `p:bg` for an explicit colour. White and anything unparseable is
+/// left out, so a deck that never set a background is not rewritten with
+/// one.
+fn write_background<W: std::io::Write>(
+    writer: &mut Writer<W>,
+    background: &str,
+) -> Result<(), quick_xml::Error> {
+    let bg = background.trim_start_matches('#');
+    if bg.len() != 6 || bg.eq_ignore_ascii_case("ffffff") {
+        return Ok(());
+    }
+    writer.write_event(Event::Start(BytesStart::new("p:bg")))?;
+    writer.write_event(Event::Start(BytesStart::new("p:bgPr")))?;
+    writer.write_event(Event::Start(BytesStart::new("a:solidFill")))?;
+    let mut clr = BytesStart::new("a:srgbClr");
+    clr.push_attribute(("val", bg.to_uppercase().as_str()));
+    writer.write_event(Event::Empty(clr))?;
+    writer.write_event(Event::End(BytesEnd::new("a:solidFill")))?;
+    writer.write_event(Event::Empty(BytesStart::new("a:effectLst")))?;
+    writer.write_event(Event::End(BytesEnd::new("p:bgPr")))?;
+    writer.write_event(Event::End(BytesEnd::new("p:bg")))?;
+    Ok(())
+}
+
+/// Write a master's decoration shapes.
+///
+/// Images are skipped: they would need a media part and a relationship per
+/// master, and the master reader parses `p:sp` only, so writing one would
+/// be a part nothing reads. Text, rects and circles are what it reads, and
+/// they are what this writes.
+fn write_master_shapes<W: std::io::Write>(
+    writer: &mut Writer<W>,
+    shapes: &[SlideObject],
+) -> Result<(), quick_xml::Error> {
+    for (j, obj) in shapes.iter().enumerate() {
+        let id = 2 + j;
+        match obj {
+            SlideObject::TextBox { text, x, y, w, h, runs, rotation } => write_text_box(
+                writer,
+                id,
+                j + 1,
+                Placement { x: *x, y: *y, w: *w, h: *h, rotation: *rotation },
+                text,
+                runs,
+            )?,
+            SlideObject::Rect { x, y, w, h, rotation } => write_rect(
+                writer,
+                id,
+                j + 1,
+                Placement { x: *x, y: *y, w: *w, h: *h, rotation: *rotation },
+            )?,
+            SlideObject::Circle { x, y, r, rotation } => {
+                write_circle(writer, id, j + 1, Placement::of_circle(*x, *y, *r, *rotation))?
+            }
+            SlideObject::Image { .. } => {}
+        }
+    }
+    Ok(())
+}
+
+/// The `p:clrMap` a `p:sldMaster` is required to carry. Identity mapping —
+/// the suite has no theme, so there is nothing to remap.
+const CLR_MAP: &str = "<p:clrMap bg1=\"lt1\" tx1=\"dk1\" bg2=\"lt2\" tx2=\"dk2\" \
+     accent1=\"accent1\" accent2=\"accent2\" accent3=\"accent3\" accent4=\"accent4\" \
+     accent5=\"accent5\" accent6=\"accent6\" hlink=\"hlink\" folHlink=\"folHlink\"/>";
+
+const PART_NS: [(&str, &str); 3] = [
+    ("xmlns:a", "http://schemas.openxmlformats.org/drawingml/2006/main"),
+    ("xmlns:r", "http://schemas.openxmlformats.org/officeDocument/2006/relationships"),
+    ("xmlns:p", "http://schemas.openxmlformats.org/presentationml/2006/main"),
+];
+
+/// `ppt/slideMasters/slideMasterN.xml` — the decorations and the colour map.
+fn master_part_xml(master: &MasterSlide) -> Result<Vec<u8>, String> {
+    let mut out = Vec::new();
+    {
+        let mut writer = Writer::new(std::io::Cursor::new(&mut out));
+        writer
+            .write_event(Event::Decl(BytesDecl::new("1.0", Some("UTF-8"), Some("yes"))))
+            .map_err(|e| e.to_string())?;
+        let mut root = BytesStart::new("p:sldMaster");
+        for (k, v) in PART_NS {
+            root.push_attribute((k, v));
+        }
+        writer.write_event(Event::Start(root)).map_err(|e| e.to_string())?;
+        let mut c_sld = BytesStart::new("p:cSld");
+        c_sld.push_attribute(("name", master.name.as_str()));
+        writer.write_event(Event::Start(c_sld)).map_err(|e| e.to_string())?;
+        write_background(&mut writer, &master.background).map_err(|e| e.to_string())?;
+        writer.write_event(Event::Start(BytesStart::new("p:spTree"))).map_err(|e| e.to_string())?;
+        write_group_prelude(&mut writer).map_err(|e| e.to_string())?;
+        write_master_shapes(&mut writer, &master.shapes).map_err(|e| e.to_string())?;
+        writer.write_event(Event::End(BytesEnd::new("p:spTree"))).map_err(|e| e.to_string())?;
+        writer.write_event(Event::End(BytesEnd::new("p:cSld"))).map_err(|e| e.to_string())?;
+        writer.write_event(Event::End(BytesEnd::new("p:sldMaster"))).map_err(|e| e.to_string())?;
+    }
+    let mut xml = out;
+    // The colour map and the layout list are fixed text; splicing them in
+    // after the tree keeps the event writer to the parts that vary.
+    let close = b"</p:sldMaster>";
+    let at = xml.len() - close.len();
+    let tail = format!(
+        "{CLR_MAP}<p:sldLayoutIdLst><p:sldLayoutId id=\"2147483649\" r:id=\"rId1\"/>\
+         </p:sldLayoutIdLst>"
+    );
+    xml.splice(at..at, tail.into_bytes());
+    Ok(xml)
+}
+
+/// `ppt/slideLayouts/slideLayoutN.xml` — the part a slide actually relates
+/// to. Its shape tree is empty on purpose (see the module note above); it
+/// carries the name and the background so a reader that consults the layout
+/// first still sees them.
+fn layout_part_xml(master: &MasterSlide) -> Result<Vec<u8>, String> {
+    let mut out = Vec::new();
+    {
+        let mut writer = Writer::new(std::io::Cursor::new(&mut out));
+        writer
+            .write_event(Event::Decl(BytesDecl::new("1.0", Some("UTF-8"), Some("yes"))))
+            .map_err(|e| e.to_string())?;
+        let mut root = BytesStart::new("p:sldLayout");
+        for (k, v) in PART_NS {
+            root.push_attribute((k, v));
+        }
+        root.push_attribute(("type", "blank"));
+        root.push_attribute(("preserve", "1"));
+        writer.write_event(Event::Start(root)).map_err(|e| e.to_string())?;
+        let mut c_sld = BytesStart::new("p:cSld");
+        c_sld.push_attribute(("name", master.name.as_str()));
+        writer.write_event(Event::Start(c_sld)).map_err(|e| e.to_string())?;
+        write_background(&mut writer, &master.background).map_err(|e| e.to_string())?;
+        writer.write_event(Event::Start(BytesStart::new("p:spTree"))).map_err(|e| e.to_string())?;
+        write_group_prelude(&mut writer).map_err(|e| e.to_string())?;
+        writer.write_event(Event::End(BytesEnd::new("p:spTree"))).map_err(|e| e.to_string())?;
+        writer.write_event(Event::End(BytesEnd::new("p:cSld"))).map_err(|e| e.to_string())?;
+        writer.write_event(Event::End(BytesEnd::new("p:sldLayout"))).map_err(|e| e.to_string())?;
+    }
+    let mut xml = out;
+    let close = b"</p:sldLayout>";
+    let at = xml.len() - close.len();
+    xml.splice(at..at, b"<p:clrMapOvr><a:masterClrMapping/></p:clrMapOvr>".to_vec());
+    Ok(xml)
+}
+
+/// A relationships part with one relationship, which is all a master and a
+/// layout need to point at each other.
+fn one_rel(kind: &str, target: &str) -> String {
+    format!(
+        "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>\n\
+         <Relationships xmlns=\"http://schemas.openxmlformats.org/package/2006/relationships\">\n\
+         \x20 <Relationship Id=\"rId1\" \
+         Type=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships/{kind}\" \
+         Target=\"{target}\"/>\n\
+         </Relationships>"
+    )
+}
+
 pub fn write_pptx(path: &str, deck: &Deck) -> Result<(), String> {
     let bytes = write_pptx_bytes(deck)?;
     suite_common_core::atomic_save::atomic_write_bytes(std::path::Path::new(path), &bytes)
@@ -333,6 +539,13 @@ pub fn write_pptx_bytes(deck: &Deck) -> Result<Vec<u8>, String> {
             ));
         }
     }
+    for k in 0..deck.masters.len() {
+        content_types.push_str(&format!(
+            "  <Override PartName=\"/ppt/slideMasters/slideMaster{n}.xml\" ContentType=\"application/vnd.openxmlformats-officedocument.presentationml.slideMaster+xml\"/>\n\
+             \x20 <Override PartName=\"/ppt/slideLayouts/slideLayout{n}.xml\" ContentType=\"application/vnd.openxmlformats-officedocument.presentationml.slideLayout+xml\"/>\n",
+            n = k + 1
+        ));
+    }
     content_types.push_str("</Types>");
     zip.start_file("[Content_Types].xml", options).map_err(|e| e.to_string())?;
     zip.write_all(content_types.as_bytes()).map_err(|e| e.to_string())?;
@@ -352,8 +565,19 @@ pub fn write_pptx_bytes(deck: &Deck) -> Result<Vec<u8>, String> {
          <p:presentation xmlns:a=\"http://schemas.openxmlformats.org/drawingml/2006/main\"\n\
                          xmlns:r=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships\"\n\
                          xmlns:p=\"http://schemas.openxmlformats.org/presentationml/2006/main\">\n\
-           <p:sldIdLst>\n"
+           <p:sldMasterIdLst>\n"
     );
+    // The schema orders p:sldMasterIdLst before p:sldIdLst, and the master
+    // relationship ids follow the slides' so the slide loop above keeps
+    // rId1..rIdN.
+    for k in 0..deck.masters.len() {
+        presentation.push_str(&format!(
+            "    <p:sldMasterId id=\"{}\" r:id=\"rId{}\"/>\n",
+            2_147_483_648u64 + k as u64,
+            deck.slides.len() + 1 + k,
+        ));
+    }
+    presentation.push_str("  </p:sldMasterIdLst>\n  <p:sldIdLst>\n");
     for i in 0..deck.slides.len() {
         presentation.push_str(&format!(
             "    <p:sldId id=\"{}\" r:id=\"rId{}\"/>\n",
@@ -380,6 +604,13 @@ pub fn write_pptx_bytes(deck: &Deck) -> Result<Vec<u8>, String> {
             "  <Relationship Id=\"{}\" Type=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships/slide\" Target=\"slides/slide{}.xml\"/>\n",
             format_args!("rId{}", i + 1),
             i + 1
+        ));
+    }
+    for k in 0..deck.masters.len() {
+        pres_rels.push_str(&format!(
+            "  <Relationship Id=\"rId{}\" Type=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships/slideMaster\" Target=\"slideMasters/slideMaster{}.xml\"/>\n",
+            deck.slides.len() + 1 + k,
+            k + 1,
         ));
     }
     pres_rels.push_str("</Relationships>");
@@ -492,9 +723,17 @@ pub fn write_pptx_bytes(deck: &Deck) -> Result<Vec<u8>, String> {
         zip.start_file(&slide_path, options).map_err(|e| e.to_string())?;
         zip.write_all(&slide_data).map_err(|e| e.to_string())?;
 
-        // Write slide relationships (images and/or speaker notes)
+        // Write slide relationships (images, speaker notes, and the
+        // slideLayout that leads to this slide's master). The layout
+        // relationship is what makes the master reachable at all, so this
+        // part is now written for every slide rather than only for slides
+        // that carry an image or notes.
         let has_notes = !slide.notes.is_empty();
-        if !slide_rels.is_empty() || has_notes {
+        let layout = slide
+            .master_idx
+            .filter(|k| *k < deck.masters.len())
+            .or(if deck.masters.is_empty() { None } else { Some(0) });
+        if !slide_rels.is_empty() || has_notes || layout.is_some() {
             let mut rels_str = String::from(
                 "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>\n\
                  <Relationships xmlns=\"http://schemas.openxmlformats.org/package/2006/relationships\">\n"
@@ -510,9 +749,17 @@ pub fn write_pptx_bytes(deck: &Deck) -> Result<Vec<u8>, String> {
                 ));
             }
             if has_notes {
+                max_rel += 1;
                 rels_str.push_str(&format!(
                     "  <Relationship Id=\"rId{}\" Type=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships/notesSlide\" Target=\"../notesSlides/notesSlide{}.xml\"/>\n",
-                    max_rel + 1, i + 1
+                    max_rel, i + 1
+                ));
+            }
+            if let Some(k) = layout {
+                max_rel += 1;
+                rels_str.push_str(&format!(
+                    "  <Relationship Id=\"rId{}\" Type=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships/slideLayout\" Target=\"../slideLayouts/slideLayout{}.xml\"/>\n",
+                    max_rel, k + 1
                 ));
             }
             rels_str.push_str("</Relationships>");
@@ -529,7 +776,31 @@ pub fn write_pptx_bytes(deck: &Deck) -> Result<Vec<u8>, String> {
         }
     }
 
-    // 6. Write image media files in ppt/media/
+    // 6. Write the masters and their layouts
+    for (k, master) in deck.masters.iter().enumerate() {
+        let n = k + 1;
+        zip.start_file(format!("ppt/slideMasters/slideMaster{n}.xml"), options)
+            .map_err(|e| e.to_string())?;
+        zip.write_all(&master_part_xml(master)?).map_err(|e| e.to_string())?;
+        zip.start_file(format!("ppt/slideMasters/_rels/slideMaster{n}.xml.rels"), options)
+            .map_err(|e| e.to_string())?;
+        zip.write_all(
+            one_rel("slideLayout", &format!("../slideLayouts/slideLayout{n}.xml")).as_bytes(),
+        )
+        .map_err(|e| e.to_string())?;
+
+        zip.start_file(format!("ppt/slideLayouts/slideLayout{n}.xml"), options)
+            .map_err(|e| e.to_string())?;
+        zip.write_all(&layout_part_xml(master)?).map_err(|e| e.to_string())?;
+        zip.start_file(format!("ppt/slideLayouts/_rels/slideLayout{n}.xml.rels"), options)
+            .map_err(|e| e.to_string())?;
+        zip.write_all(
+            one_rel("slideMaster", &format!("../slideMasters/slideMaster{n}.xml")).as_bytes(),
+        )
+        .map_err(|e| e.to_string())?;
+    }
+
+    // 7. Write image media files in ppt/media/
     for (idx, img_path) in images_to_add.iter().enumerate() {
         let zip_img_path = format!("ppt/media/image{}.png", idx + 1);
         let mut img_file = File::open(img_path)
