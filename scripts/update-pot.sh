@@ -24,6 +24,9 @@ if command -v xtr >/dev/null 2>&1; then
     # xtr wants crate roots; run per app/lib main and merge.
     # Use a temp file to accumulate since xtr writes per-root.
     TMP=$(mktemp)
+    # set -e above means any later failure exits here, so the cleanup has
+    # to be a trap rather than a line at the end (#704).
+    trap 'rm -f "$TMP"' EXIT
     for src in "${SRCS[@]}"; do
         if [[ -f "$src" ]]; then
             xtr --keywords i18n --keywords ni18n -o "$TMP" "$src" 2>/dev/null || true

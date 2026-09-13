@@ -102,7 +102,7 @@ jobs:
       - name: Install llvm-tools
         run: rustup component add llvm-tools-preview
       - name: Run coverage
-        run: xvfb-run -a cargo llvm-cov --workspace --summary-only
+        run: scripts/with-display.sh cargo llvm-cov --workspace --summary-only
 
   fuzz-smoke:
     name: Fuzz importer smoke tests
