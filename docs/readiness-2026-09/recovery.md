@@ -96,27 +96,26 @@ AutosaveSlot used to store bytes and metadata in separate atomic writes. Each wr
       `crash-stress.md` records a previous test that chmod-ed to 0555 and
       therefore asserted nothing), then assert the notice is on screen. Both
       fail against the unwired code.
-      Two defects found while checking that figure, neither fixed here.
-      **Letters ships with its autosave timer switched off.** Its
-      `auto-save-interval` default is `0` where Tables and Decks ship `60`,
-      its range allows `0`, and `register_autosave` installs a timer only
-      `if interval > 0` — so a shipped Letters never snapshots on its own,
-      and every crash-recovery guarantee this file describes for it holds
-      only if something invokes the `autosave-now` action. Every Letters
-      autosave journey does exactly that, which is why they pass: they prove
-      the snapshot machinery works and say nothing about whether it ever
-      fires by itself. Fixing it is a one-line default, but turning a
-      feature on for every existing user is its own decision, and it wants a
-      check that compares the three apps' shipped defaults so the next one
-      to drift is caught.
-      **Recovery leaves a window with no protection at all.** All three apps
-      clear the orphan slot as soon as the content is in memory and rely on
-      the next timer tick to write a fresh snapshot — up to a minute later
-      on Tables and Decks, never on Letters. A crash in that window loses
-      work that had already survived one crash. The order should be
-      inverted: write the recovered content to this window's own slot
-      *first*, clear the orphan only once that succeeds, and keep the orphan
-      when it fails. That is the row two above this one.
+      Two defects were found while checking that figure, both since fixed.
+      **Letters shipped with its autosave timer switched off** (#659). Its
+      `auto-save-interval` default was `0` where Tables and Decks ship `60`,
+      and `register_autosave` installs a timer only `if interval > 0`, so a
+      shipped Letters never snapshotted on its own: every crash-recovery
+      guarantee this file makes for it held only when something invoked the
+      `autosave-now` action, which every Letters autosave journey did
+      explicitly. They proved the snapshot machinery worked and asserted
+      nothing about whether it ever ran. The default is `60` across all
+      three apps now, `tests/test_autosave_defaults.py` compares them so the
+      next divergence fails a check, and
+      `{Letters,Tables,Decks}UnattendedAutosaveSmoke` wait for a snapshot
+      without triggering anything. The range still permits `0`, so a user
+      who chose to switch autosave off keeps that: a changed default reaches
+      only installs that never set the key.
+      **Recovery left a window with no protection at all** — the row two
+      above this one, fixed there: all three apps cleared the orphan slot as
+      soon as the content was in memory and relied on the next timer tick
+      for a replacement, so a crash in that window lost work that had
+      already survived one crash.
       Still open: **cleanup errors.** `clear_tab_autosave` still drops its
       error, so a saved or discarded document whose slot could not be cleared
       is silently offered back as "recovered" on the next launch. Different
