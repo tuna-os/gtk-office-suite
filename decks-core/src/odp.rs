@@ -18,6 +18,130 @@ use suite_common_core::zip_guard::{BoundedArchive, ZipBudget};
 
 const MIMETYPE: &str = "application/vnd.oasis.opendocument.presentation";
 
+// ── Rotation, and the ODF transform convention ───────────────────────
+//
+// ODF has no rotation attribute. It spells the same thing OOXML spells as
+// one `a:xfrm/@rot` as a `draw:transform` list, which entangles rotation
+// with position — so writing it needs the exact convention, and the
+// convention is not obvious from the spec text.
+//
+// It was settled by probing Impress rather than by reading the spec. A
+// 300x100 rect at (100, 200) that our pptx writer gives `rot="1800000"`
+// (30 degrees clockwise) comes back from an Impress pptx-to-odp conversion
+// as, in Impress's own units,
+//
+//     svg:width="7.937cm" svg:height="2.645cm"
+//     draw:transform="rotate (-0.523598775598299) translate (3.839cm 3.485cm)"
+//
+// with `svg:x`/`svg:y` *absent*. Three things follow, and all three were
+// checked against a second shape with different geometry in the same file:
+//
+//   * ODF's angle is radians counter-clockwise where OOXML's `rot` is
+//     hundred-thousandths of a degree clockwise, so the ODF angle is the
+//     plain negation of our model's degrees — and Impress leaves it
+//     negative rather than normalising it into [0, 2pi).
+//   * The matrix for `rotate (a)` is
+//         x' =  x * cos a + y * sin a
+//         y' = -x * sin a + y * cos a
+//     which is a counter-clockwise turn in a y-down space, not SVG's
+//     `rotate`.
+//   * The terms apply left to right, so `rotate (a) translate (t)` maps a
+//     local point p to R(a) * p + t. (Right-to-left, SVG's order, puts both
+//     probe shapes in the wrong place, so this is not a coin toss.)
+//
+// The shape's local box is (0, 0)-(w, h), and OOXML rotates about the
+// shape's centre, so the translate is `centre - R(a) * (w/2, h/2)`.
+
+/// Apply the ODF `rotate (a)` matrix to a point.
+fn rotate_point(a: f64, x: f64, y: f64) -> (f64, f64) {
+    let (s, c) = a.sin_cos();
+    (x * c + y * s, -x * s + y * c)
+}
+
+/// Round to a millionth of a point, so a value that came back through the
+/// trigonometry above is bit-identical on the next save. Without it
+/// `odp_geometry_does_not_drift_across_repeated_saves` would fail on the
+/// last digit or two of every rotated shape.
+fn snap(v: f64) -> f64 {
+    (v * 1e6).round() / 1e6
+}
+
+/// The geometry attributes for a shape whose unrotated box is
+/// `(x, y, w, h)` and which the model turns `rotation` degrees clockwise.
+///
+/// An unrotated shape keeps plain `svg:x`/`svg:y`, both because that is
+/// what every reader handles and because it keeps the bytes of the decks
+/// this suite has already written unchanged.
+fn geometry(x: f64, y: f64, w: f64, h: f64, rotation: f64) -> String {
+    if rotation == 0.0 {
+        return format!(
+            "svg:x=\"{x}pt\" svg:y=\"{y}pt\" svg:width=\"{w}pt\" svg:height=\"{h}pt\""
+        );
+    }
+    let a = -rotation.to_radians();
+    let (rx, ry) = rotate_point(a, w / 2.0, h / 2.0);
+    let (tx, ty) = (x + w / 2.0 - rx, y + h / 2.0 - ry);
+    format!(
+        "svg:width=\"{w}pt\" svg:height=\"{h}pt\" \
+         draw:transform=\"rotate ({a}) translate ({tx}pt {ty}pt)\""
+    )
+}
+
+/// Split a `draw:transform` value into its `(name, args)` terms.
+fn transform_terms(v: &str) -> Option<Vec<(String, Vec<String>)>> {
+    let mut terms = Vec::new();
+    let mut rest = v.trim();
+    while !rest.is_empty() {
+        let open = rest.find('(')?;
+        let close = rest.find(')')?;
+        if close < open {
+            return None;
+        }
+        let name = rest[..open].trim().to_string();
+        let args = rest[open + 1..close]
+            .split(|c: char| c.is_whitespace() || c == ',')
+            .filter(|s| !s.is_empty())
+            .map(str::to_string)
+            .collect();
+        terms.push((name, args));
+        rest = rest[close + 1..].trim_start();
+    }
+    Some(terms)
+}
+
+/// Recover `(x, y, rotation-degrees)` from a `draw:transform`, given the
+/// box size the same element carries in `svg:width`/`svg:height`.
+///
+/// Returns `None` for a transform this does not fully understand — a
+/// `scale` or a `skewX`, which Impress writes for shapes we do not produce
+/// — so the caller falls back to `svg:x`/`svg:y` rather than placing the
+/// shape somewhere confidently wrong.
+fn parse_transform(v: &str, w: f64, h: f64) -> Option<(f64, f64, f64)> {
+    let mut angle = 0.0f64;
+    // The local centre, carried through the list so its image is the
+    // shape's centre on the page.
+    let (mut px, mut py) = (w / 2.0, h / 2.0);
+    for (name, args) in transform_terms(v)? {
+        match (name.as_str(), args.len()) {
+            ("rotate", 1) => {
+                let a: f64 = args[0].parse().ok()?;
+                (px, py) = rotate_point(a, px, py);
+                angle += a;
+            }
+            ("translate", 1 | 2) => {
+                px += parse_length_pt(&args[0])?;
+                py += args.get(1).map_or(Some(0.0), |a| parse_length_pt(a))?;
+            }
+            _ => return None,
+        }
+    }
+    Some((
+        snap(px - w / 2.0),
+        snap(py - h / 2.0),
+        snap((-angle.to_degrees()).rem_euclid(360.0)),
+    ))
+}
+
 fn esc(s: &str) -> String {
     s.replace('&', "&amp;")
         .replace('<', "&lt;")
@@ -112,7 +236,7 @@ fn content_xml(deck: &Deck) -> String {
         ));
         for obj in &slide.objects {
             match obj {
-                SlideObject::TextBox { text, x, y, w, h, runs, .. } => {
+                SlideObject::TextBox { text, x, y, w, h, rotation, runs } => {
                     let inner: String = if runs.is_empty() {
                         text.split('\n')
                             .map(|l| format!("<text:p>{}</text:p>", esc(l)))
@@ -124,22 +248,22 @@ fn content_xml(deck: &Deck) -> String {
                         )
                     };
                     pages.push_str(&format!(
-                        "<draw:frame svg:x=\"{x}pt\" svg:y=\"{y}pt\" \
-                         svg:width=\"{w}pt\" svg:height=\"{h}pt\">\
-                         <draw:text-box>{inner}</draw:text-box></draw:frame>"
+                        "<draw:frame {}>\
+                         <draw:text-box>{inner}</draw:text-box></draw:frame>",
+                        geometry(*x, *y, *w, *h, *rotation)
                     ));
                 }
-                SlideObject::Rect { x, y, w, h, .. } => {
+                SlideObject::Rect { x, y, w, h, rotation } => {
                     pages.push_str(&format!(
-                        "<draw:rect svg:x=\"{x}pt\" svg:y=\"{y}pt\" \
-                         svg:width=\"{w}pt\" svg:height=\"{h}pt\"/>"
+                        "<draw:rect {}/>",
+                        geometry(*x, *y, *w, *h, *rotation)
                     ));
                 }
-                SlideObject::Circle { x, y, r, .. } => {
+                SlideObject::Circle { x, y, r, rotation } => {
                     let (cx, cy, d) = (x - r, y - r, r * 2.0);
                     pages.push_str(&format!(
-                        "<draw:ellipse svg:x=\"{cx}pt\" svg:y=\"{cy}pt\" \
-                         svg:width=\"{d}pt\" svg:height=\"{d}pt\"/>"
+                        "<draw:ellipse {}/>",
+                        geometry(cx, cy, d, d, *rotation)
                     ));
                 }
                 // Images need packaged media; deferred (matches pptx v1 scope
@@ -333,16 +457,24 @@ pub fn read(path: &str) -> Result<Deck, String> {
     reader.config_mut().trim_text(false);
     let mut slide: Option<Slide> = None;
     let mut in_notes = false;
-    // Current draw:frame geometry; taken by the text-box inside it.
-    let mut frame: Option<(f64, f64, f64, f64)> = None;
+    // Current draw:frame geometry and rotation; taken by the text-box
+    // inside it.
+    let mut frame: Option<(f64, f64, f64, f64, f64)> = None;
     let mut textbox: Option<(Vec<String>, Vec<Run>)> = None; // (lines, runs)
     let mut span_style: Option<RunStyle> = None;
     let mut in_text = false;
     let mut shape_type: Option<String> = None;
 
-    let geo = |e: &quick_xml::events::BytesStart| -> (f64, f64, f64, f64) {
+    // `svg:x`/`svg:y` place an unrotated shape; a rotated one carries
+    // `draw:transform` instead and Impress omits them entirely, so the
+    // transform is what has to be believed when both are present.
+    let geo = |e: &quick_xml::events::BytesStart| -> (f64, f64, f64, f64, f64) {
         let g = |n: &str| attr(e, n).and_then(|v| parse_length_pt(&v)).unwrap_or(0.0);
-        (g("svg:x"), g("svg:y"), g("svg:width"), g("svg:height"))
+        let (w, h) = (g("svg:width"), g("svg:height"));
+        match attr(e, "draw:transform").and_then(|v| parse_transform(&v, w, h)) {
+            Some((x, y, rotation)) => (x, y, w, h, rotation),
+            None => (g("svg:x"), g("svg:y"), w, h, 0.0),
+        }
     };
 
     loop {
@@ -388,17 +520,17 @@ pub fn read(path: &str) -> Result<Deck, String> {
                 "draw:rect" => {
                     if let Some(s) = slide.as_mut() {
                         if !in_notes {
-                            let (x, y, w, h) = geo(e);
-                            s.objects.push(SlideObject::Rect { x, y, w, h, rotation: 0.0 });
+                            let (x, y, w, h, rotation) = geo(e);
+                            s.objects.push(SlideObject::Rect { x, y, w, h, rotation });
                         }
                     }
                 }
                 "draw:ellipse" | "draw:circle" => {
                     if let Some(s) = slide.as_mut() {
                         if !in_notes {
-                            let (x, y, w, h) = geo(e);
+                            let (x, y, w, h, rotation) = geo(e);
                             let r = (w.max(h)) / 2.0;
-                            s.objects.push(SlideObject::Circle { x: x + w / 2.0, y: y + h / 2.0, r, rotation: 0.0 });
+                            s.objects.push(SlideObject::Circle { x: x + w / 2.0, y: y + h / 2.0, r, rotation });
                         }
                     }
                 }
@@ -412,15 +544,15 @@ pub fn read(path: &str) -> Result<Deck, String> {
                 }
                 "draw:rect" => {
                     if let (Some(s), false) = (slide.as_mut(), in_notes) {
-                        let (x, y, w, h) = geo(e);
-                        s.objects.push(SlideObject::Rect { x, y, w, h, rotation: 0.0 });
+                        let (x, y, w, h, rotation) = geo(e);
+                        s.objects.push(SlideObject::Rect { x, y, w, h, rotation });
                     }
                 }
                 "draw:ellipse" | "draw:circle" => {
                     if let (Some(s), false) = (slide.as_mut(), in_notes) {
-                        let (x, y, w, h) = geo(e);
+                        let (x, y, w, h, rotation) = geo(e);
                         let r = (w.max(h)) / 2.0;
-                        s.objects.push(SlideObject::Circle { x: x + w / 2.0, y: y + h / 2.0, r, rotation: 0.0 });
+                        s.objects.push(SlideObject::Circle { x: x + w / 2.0, y: y + h / 2.0, r, rotation });
                     }
                 }
                 _ => {}
@@ -461,7 +593,7 @@ pub fn read(path: &str) -> Result<Deck, String> {
                 "text:p" => in_text = false,
                 "text:span" => span_style = None,
                 "draw:text-box" => {
-                    if let (Some((lines, runs)), Some((x, y, w, h))) =
+                    if let (Some((lines, runs)), Some((x, y, w, h, rotation))) =
                         (textbox.take(), frame)
                     {
                         let text = lines.join("\n");
@@ -479,7 +611,7 @@ pub fn read(path: &str) -> Result<Deck, String> {
                                     y,
                                     w,
                                     h,
-                                    rotation: 0.0,
+                                    rotation,
                                     runs: keep_runs,
                                 });
                             }
@@ -488,7 +620,9 @@ pub fn read(path: &str) -> Result<Deck, String> {
                 }
                 "draw:frame" => frame = None,
                 "draw:custom-shape" => {
-                    if let (Some((lines, runs)), Some((x, y, w, h))) = (textbox.take(), frame.take()) {
+                    if let (Some((lines, runs)), Some((x, y, w, h, rotation))) =
+                        (textbox.take(), frame.take())
+                    {
                         let text = lines.join("\n");
                         if let Some(s) = slide.as_mut() {
                             if in_notes {
@@ -497,12 +631,12 @@ pub fn read(path: &str) -> Result<Deck, String> {
                                 }
                             } else if !text.is_empty() {
                                 let keep_runs = if lines.len() == 1 { runs } else { vec![] };
-                                s.objects.push(SlideObject::TextBox { text, x, y, w, h, rotation: 0.0, runs: keep_runs });
+                                s.objects.push(SlideObject::TextBox { text, x, y, w, h, rotation, runs: keep_runs });
                             } else if shape_type.as_deref().is_some_and(|t| t.contains("ellipse")) {
                                 let r = (w.max(h)) / 2.0;
-                                s.objects.push(SlideObject::Circle { x: x + w / 2.0, y: y + h / 2.0, r, rotation: 0.0 });
+                                s.objects.push(SlideObject::Circle { x: x + w / 2.0, y: y + h / 2.0, r, rotation });
                             } else {
-                                s.objects.push(SlideObject::Rect { x, y, w, h, rotation: 0.0 });
+                                s.objects.push(SlideObject::Rect { x, y, w, h, rotation });
                             }
                         }
                     }
@@ -573,6 +707,101 @@ mod tests {
             SlideObject::TextBox { text, .. } if text == "first"));
         assert!(matches!(&rt.slides[1].objects[0],
             SlideObject::TextBox { text, .. } if text == "second"));
+    }
+
+    /// What Impress wrote, verbatim, for the probe described on the test
+    /// below: a 225x75pt rect at (75, 150)pt turned 30 degrees clockwise.
+    const IMPRESS_ROTATED_RECT: &str =
+        "rotate (-0.523598775598299) translate (3.839cm 3.485cm)";
+
+    /// The probe that settled the ODF convention, kept as a test.
+    ///
+    /// Impress was given our pptx for a 300x100 rect at (100, 200) with
+    /// `rot="1800000"` (30 degrees clockwise) and converted it to odp. In
+    /// its own units — our pptx writer emits 9525 EMU per model unit, so
+    /// Impress reads the shape as 225x75pt at (75, 150)pt — it wrote
+    /// exactly the transform asserted below.
+    ///
+    /// Reproducing Impress's own output is what pins both the sign and the
+    /// matrix. A round trip through our own reader cannot: a mirrored
+    /// convention cancels itself out and passes. The tolerance is Impress's
+    /// three decimal places of centimetres, a little under 0.03pt.
+    #[test]
+    fn the_transform_we_write_is_the_one_impress_wrote() {
+        let got = geometry(75.0, 150.0, 225.0, 75.0, 30.0);
+        let terms = transform_terms(
+            got.split("draw:transform=\"").nth(1).expect("no transform emitted").trim_end_matches('"'),
+        )
+        .expect("our own transform must parse");
+        let want = transform_terms(IMPRESS_ROTATED_RECT).expect("the recorded probe must parse");
+        assert_eq!(terms[0].0, "rotate");
+        let angle: f64 = terms[0].1[0].parse().unwrap();
+        let wanted_angle: f64 = want[0].1[0].parse().unwrap();
+        assert!(
+            (angle - wanted_angle).abs() < 1e-9,
+            "ODF wants radians counter-clockwise where our model is degrees \
+             clockwise; Impress wrote {wanted_angle} and we wrote {angle}",
+        );
+        assert_eq!(terms[1].0, "translate");
+        let cm = |v: &str| parse_length_pt(v).unwrap() * 2.54 / 72.0;
+        assert!(
+            (cm(&terms[1].1[0]) - cm(&want[1].1[0])).abs() < 0.001
+                && (cm(&terms[1].1[1]) - cm(&want[1].1[1])).abs() < 0.001,
+            "the translate must put the shape where Impress puts it; \
+             we wrote ({}cm {}cm)",
+            cm(&terms[1].1[0]),
+            cm(&terms[1].1[1]),
+        );
+        assert!(
+            !got.contains("svg:x"),
+            "Impress omits svg:x/svg:y on a transformed shape, and a reader \
+             that prefers them would place ours unrotated: {got}",
+        );
+    }
+
+    /// The reading half of the same probe: Impress's own bytes must come
+    /// back as the box and the clockwise angle we started from.
+    #[test]
+    fn a_transform_impress_wrote_reads_back_as_its_box_and_angle() {
+        let (x, y, rotation) = parse_transform(IMPRESS_ROTATED_RECT, 225.0, 75.0)
+            .expect("Impress's own transform must parse");
+        assert!((x - 75.0).abs() < 0.05 && (y - 150.0).abs() < 0.05, "read as ({x}, {y})");
+        assert!((rotation - 30.0).abs() < 0.01, "read as {rotation} degrees");
+    }
+
+    /// A shape that is not rotated keeps plain coordinates — every reader
+    /// handles those, and the decks already written stay byte-identical.
+    #[test]
+    fn an_unrotated_shape_keeps_plain_svg_coordinates() {
+        let got = geometry(10.0, 20.0, 30.0, 40.0, 0.0);
+        assert_eq!(got, "svg:x=\"10pt\" svg:y=\"20pt\" svg:width=\"30pt\" svg:height=\"40pt\"");
+    }
+
+    /// Impress writes `scale` and `skewX` for shapes we do not produce.
+    /// Declining them puts the shape at its `svg:x`/`svg:y` rather than
+    /// somewhere confidently wrong.
+    #[test]
+    fn a_transform_term_we_do_not_understand_is_declined() {
+        assert!(parse_transform("scale (2 2) translate (1cm 1cm)", 10.0, 10.0).is_none());
+        assert!(parse_transform("skewX (0.3)", 10.0, 10.0).is_none());
+        assert!(parse_transform("rotate (", 10.0, 10.0).is_none());
+        // And a translate in a unit we cannot convert, rather than treating
+        // it as zero and stacking the shape in the corner.
+        assert!(parse_transform("translate (3parsec 1cm)", 10.0, 10.0).is_none());
+    }
+
+    /// Rotation past a half turn, because normalising with the wrong modulo
+    /// turns 315 into -45 or 45.
+    #[test]
+    fn a_rotation_past_a_half_turn_round_trips() {
+        for rotation in [30.0, 120.0, 315.0] {
+            let got = geometry(40.0, 50.0, 60.0, 70.0, rotation);
+            let transform =
+                got.split("draw:transform=\"").nth(1).unwrap().trim_end_matches('"').to_string();
+            let (x, y, back) = parse_transform(&transform, 60.0, 70.0).unwrap();
+            assert!((back - rotation).abs() < 1e-6, "{rotation} came back as {back}");
+            assert!((x - 40.0).abs() < 1e-6 && (y - 50.0).abs() < 1e-6, "moved to ({x}, {y})");
+        }
     }
 
     #[test]

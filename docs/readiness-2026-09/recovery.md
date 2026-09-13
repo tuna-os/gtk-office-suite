@@ -74,17 +74,34 @@ AutosaveSlot used to store bytes and metadata in separate atomic writes. Each wr
       so the recovery path closes the loop. Round-trip tests already cover
       header, footer and page geometry.
       **Decks is now covered by `decks-core/tests/snapshot_fidelity.rs`, and
-      two gaps remain**, which is why this row is partial rather than done.
-      Notes, backgrounds, object geometry, run styles and slide order all
-      survive both formats, and shape *rotation* now survives pptx — it
-      previously survived neither, because both writers emitted no rotation
-      at all and both readers hardcoded zero, so the rotate gesture's result
-      was discarded by any save. The two that still strip content:
-      - **Rotation in odp.** pptx spells it `a:xfrm/@rot`, one attribute,
-        fixed. ODF spells the same thing as
-        `draw:transform="rotate(θ) translate(x y)"`, entangling rotation with
-        position in one attribute that LibreOffice emits in several shapes.
-        Larger than a fix, so not pretended to be one.
+      one gap remains**, which is why this row is partial rather than done.
+      Notes, backgrounds, object geometry, run styles, slide order and shape
+      rotation all survive both formats. Rotation survived neither until
+      recently: both writers emitted none at all and both readers hardcoded
+      zero, so the rotate gesture's result was discarded by any save. pptx
+      spells it `a:xfrm/@rot`, one attribute, and was fixed first. ODF has
+      no rotation attribute — it spells the same thing as a
+      `draw:transform` list, carrying rotation and position together — and
+      that is now written and read too, with the convention established by
+      probing Impress rather than by reading the spec:
+      - ODF's angle is radians *counter-clockwise* where OOXML's `rot` is
+        sixtieth-thousandths of a degree *clockwise*, so the ODF angle is
+        the plain negation of the model's degrees, left negative rather than
+        normalised into `[0, 2π)` — which is what Impress itself writes.
+      - The matrix for `rotate (a)` turns counter-clockwise in a y-down
+        space, not SVG's direction, and the terms apply left to right, so
+        `rotate (a) translate (t)` maps a local point `p` to `R(a)·p + t`.
+        The shape's local box starts at the origin and OOXML rotates about
+        the centre, so the translate is `centre − R(a)·(w/2, h/2)`.
+      Both facts are asserted offline by `the_transform_we_write_is_the_one
+      _impress_wrote`, which reproduces Impress's own output byte-for-byte
+      to its three decimal places of centimetres, and end-to-end by two
+      oracle tests that cross formats in both directions. Crossing formats
+      is the point: read our own odp back and a mirrored convention cancels
+      itself out and passes, which is exactly what happens to the
+      round-trip tests when the matrix is mutated to SVG's — they stay
+      green and only the two Impress-grounded tests go red.
+      The one that still strips content:
       - **Masters, in both formats.** Decks reads a master from an imported
         deck and renders it — the canvas and the sidebar thumbnails both
         consult it — but neither writer emits one, so the reader synthesises
@@ -96,11 +113,14 @@ AutosaveSlot used to store bytes and metadata in separate atomic writes. Each wr
         report instead of being a comment nobody reads; unignore it when a
         writer starts emitting masters.
       A note on how the odp rotation gap was found, because the test design
-      hid it: the fidelity tests loop `for kind in FORMATS` and assert inside
-      the loop, which aborts on the first format that fails. While pptx was
-      broken the odp failure was invisible, and it only surfaced when fixing
-      pptx made the same assertion fail again with a different prefix. A loop
-      over cases reports one case.
+      hid it: the fidelity tests looped `for kind in FORMATS` and asserted
+      inside the loop, which aborts on the first format that fails. While
+      pptx was broken the odp failure was invisible, and it only surfaced
+      when fixing pptx made the same assertion fail again with a different
+      prefix. A loop over cases reports one case — so
+      `shape_rotation_survives_a_snapshot` now collects its complaints and
+      asserts once at the end, naming every format that regressed instead of
+      only the first.
 - [x] Restart after recovery and before the next autosave does not lose the recovered checkpoint.
       All three apps used to clear the orphan slot as soon as the recovered
       content was in memory and leave the next autosave tick to write a

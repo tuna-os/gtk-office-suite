@@ -701,3 +701,80 @@ fn masters_read_from_impress_pptx_without_placeholder_leakage() {
         }
     }
 }
+
+// ── The ODF rotation sign (#322, recovery.md rotation row) ───────────
+
+/// ODF has no rotation attribute: it spells rotation as a
+/// `draw:transform` list, whose angle is radians *counter-clockwise* where
+/// OOXML's `a:xfrm/@rot` is sixtieth-thousandths of a degree *clockwise*.
+/// Our odp writer negates, and that negation is the one thing a round trip
+/// through our own reader cannot check — read our own file back and a
+/// mirrored convention cancels itself out, twice, and passes.
+///
+/// So this crosses formats. Our odp goes through Impress to pptx, and the
+/// pptx reader — which is checked against OOXML's own units — says what
+/// angle Impress thought the file asked for. Get the sign wrong and a 30
+/// degree clockwise rect comes back as 330.
+#[test]
+fn impress_reads_our_odp_rotation_with_the_sign_we_wrote() {
+    if !require_or_skip() { return; }
+    let mut deck = Deck::new();
+    deck.slides[0].objects.push(SlideObject::Rect {
+        x: 100.0, y: 200.0, w: 300.0, h: 100.0, rotation: 30.0,
+    });
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("rotated.odp");
+    odp::write(&deck, path.to_str().unwrap()).expect("write odp");
+
+    let as_pptx = convert(&path, "pptx").expect("Impress could not convert our odp to pptx");
+    let rt = read_pptx(as_pptx.to_str().unwrap()).expect("our pptx reader failed");
+    let rotations: Vec<f64> = rt.slides[0]
+        .objects
+        .iter()
+        .map(|o| match o {
+            SlideObject::Rect { rotation, .. }
+            | SlideObject::TextBox { rotation, .. }
+            | SlideObject::Circle { rotation, .. }
+            | SlideObject::Image { rotation, .. } => *rotation,
+        })
+        .collect();
+    assert!(
+        rotations.iter().any(|r| (r - 30.0).abs() < 0.5),
+        "Impress read our 30 degree clockwise rect as {rotations:?} — \
+         330 means the ODF angle is being written with the wrong sign"
+    );
+}
+
+/// And the reverse direction: a rotation Impress itself wrote into an odp
+/// must come back out of our odp reader as the same clockwise angle. This
+/// is the half that catches a `draw:transform` shape our term parser
+/// declines and silently reads as square.
+#[test]
+fn we_read_the_rotation_impress_writes_into_an_odp() {
+    if !require_or_skip() { return; }
+    let mut deck = Deck::new();
+    deck.slides[0].objects.push(SlideObject::Rect {
+        x: 100.0, y: 200.0, w: 300.0, h: 100.0, rotation: 30.0,
+    });
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("src.pptx");
+    write_pptx(path.to_str().unwrap(), &deck).expect("write pptx");
+
+    let as_odp = convert(&path, "odp").expect("Impress could not convert to odp");
+    let rt = odp::read(as_odp.to_str().unwrap()).expect("our odp reader failed");
+    let rotations: Vec<f64> = rt.slides[0]
+        .objects
+        .iter()
+        .map(|o| match o {
+            SlideObject::Rect { rotation, .. }
+            | SlideObject::TextBox { rotation, .. }
+            | SlideObject::Circle { rotation, .. }
+            | SlideObject::Image { rotation, .. } => *rotation,
+        })
+        .collect();
+    assert!(
+        rotations.iter().any(|r| (r - 30.0).abs() < 0.5),
+        "Impress wrote a 30 degree clockwise rect and we read {rotations:?}; \
+         0 means the transform was declined and the shape came back square"
+    );
+}
