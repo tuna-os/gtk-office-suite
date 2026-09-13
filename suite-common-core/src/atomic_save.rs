@@ -118,6 +118,69 @@ macro_rules! fail_point {
     };
 }
 
+/// The prefix every save temporary carries. Named because two places need
+/// to agree on it: the writer that creates them and the sweep that clears
+/// the ones a crash stranded.
+const TEMP_PREFIX: &str = ".office-save-";
+
+/// How old a stranded temporary has to be before the sweep will remove it.
+///
+/// The sweep cannot ask whether a temporary is still in use — there is no
+/// portable "is another process writing this" — so it asks how old it is
+/// instead. A live save's temporary exists for as long as one `write_all`
+/// plus one `fsync` takes, which is milliseconds to seconds; a day is four
+/// orders of magnitude beyond that, so a sweep can never plausibly delete
+/// a temporary another window is still filling. The cost of the wide margin
+/// is only that a crash's leftovers outlive the crash by a day.
+const STALE_TEMP_AGE: std::time::Duration = std::time::Duration::from_secs(24 * 60 * 60);
+
+/// Remove save temporaries a crash stranded in `dir`.
+///
+/// `atomic_write_bytes` writes to a temporary and renames it over the
+/// destination, and `tempfile` removes that temporary on drop if the write
+/// fails — which covers every *error*. It does not cover being killed:
+/// SIGKILL, an OOM kill, or the power going out runs no destructor, so the
+/// temporary survives with up to a whole document's worth of bytes in it,
+/// in the user's own document directory, named with a leading dot so they
+/// are unlikely ever to see it. Nothing removed them, so they accumulated
+/// one per crashed save, forever.
+///
+/// The fault-injection sweep in this module could not have found that: it
+/// makes the write fail, and a failing write unwinds and drops the
+/// temporary. Only a real kill leaves one behind, which is what
+/// `docs/readiness-2026-09/crash-stress.md` now records.
+///
+/// Deliberately narrow, because this deletes files in a directory the user
+/// owns: only entries that are files, only ones whose name starts with the
+/// prefix *this* module writes, and only ones older than
+/// `STALE_TEMP_AGE`. Errors are ignored throughout — a read-only or
+/// unreadable directory must not fail the save that just succeeded.
+fn sweep_stranded_temps(dir: &Path, now: std::time::SystemTime) {
+    let Ok(entries) = fs::read_dir(dir) else { return };
+    for entry in entries.flatten() {
+        let name = entry.file_name();
+        let Some(name) = name.to_str() else { continue };
+        if !name.starts_with(TEMP_PREFIX) {
+            continue;
+        }
+        // `metadata` rather than `entry.metadata()`'s symlink-following
+        // cousin is not the question here: a symlink is not a file we
+        // wrote, so `is_file` on the unfollowed entry is what to ask.
+        let Ok(meta) = entry.metadata() else { continue };
+        if !meta.is_file() {
+            continue;
+        }
+        let old_enough = meta
+            .modified()
+            .ok()
+            .and_then(|m| now.duration_since(m).ok())
+            .is_some_and(|age| age >= STALE_TEMP_AGE);
+        if old_enough {
+            let _ = fs::remove_file(entry.path());
+        }
+    }
+}
+
 /// Write `bytes` to `path` atomically: write to a temporary file in the same
 /// directory, flush and sync it to disk, then rename it over the
 /// destination. `rename` within one filesystem is atomic, so a reader can
@@ -134,7 +197,7 @@ pub fn atomic_write_bytes(path: &Path, bytes: &[u8]) -> Result<(), String> {
     // sharing/truncating a temporary file. Drop cleans up only our own file.
     let mut tmp = fail_point!(
         fault::Boundary::CreateTemp,
-        tempfile::Builder::new().prefix(".office-save-").tempfile_in(dir)
+        tempfile::Builder::new().prefix(TEMP_PREFIX).tempfile_in(dir)
     )
     .map_err(|e| format!("Failed to create save file: {e}"))?;
     match fs::metadata(path) {
@@ -162,6 +225,10 @@ pub fn atomic_write_bytes(path: &Path, bytes: &[u8]) -> Result<(), String> {
         fs::File::open(dir).and_then(|dir| dir.sync_all())
     )
     .map_err(|e| format!("File replaced, but failed to sync its directory: {e}"))?;
+    // Only once the save has succeeded: a sweep is housekeeping, and doing
+    // it first would spend time and risk on the path that still has the
+    // user's document to save.
+    sweep_stranded_temps(dir, std::time::SystemTime::now());
     Ok(())
 }
 
@@ -171,6 +238,140 @@ mod tests {
 
     /// Serializes the one test that changes the process working directory.
     static CWD_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
+    /// Backdate a file so the sweep sees it as stale without waiting a day.
+    fn backdate(path: &Path, by: std::time::Duration) {
+        let when = std::time::SystemTime::now() - by;
+        let handle = fs::OpenOptions::new().write(true).open(path).unwrap();
+        handle
+            .set_times(fs::FileTimes::new().set_modified(when))
+            .unwrap();
+    }
+
+    /// A crash during a save strands its temporary, and nothing used to
+    /// remove it.
+    ///
+    /// This is the case the fault-injection sweep below cannot reach. It
+    /// makes the write *fail*, and a failing write unwinds and drops the
+    /// temporary — so "no temporary left behind" was true of every error
+    /// and false of every kill. Measured before this existed: SIGKILL
+    /// during a 600 MiB save left a 78 MiB `.office-save-J6zNaJ` next to
+    /// the document, and the destination intact. The atomicity promise
+    /// held; the cleanup promise did not.
+    #[test]
+    fn a_stranded_temporary_is_swept_by_the_next_save() {
+        let dir = tempfile::tempdir().unwrap();
+        let stranded = dir.path().join(format!("{TEMP_PREFIX}aBcDeF"));
+        fs::write(&stranded, b"78 MiB of a document, in spirit").unwrap();
+        backdate(&stranded, STALE_TEMP_AGE * 2);
+
+        let path = dir.path().join("doc.txt");
+        atomic_write_bytes(&path, b"new document").unwrap();
+
+        assert!(!stranded.exists(), "a crash's leftover temporary was kept forever");
+        assert_eq!(fs::read(&path).unwrap(), b"new document", "the save itself must still land");
+    }
+
+    /// And the sweep must not touch a temporary another window is still
+    /// filling. It cannot ask whether one is in use, so it asks how old it
+    /// is — and a live save's temporary is seconds old at most.
+    #[test]
+    fn a_live_saves_temporary_is_not_swept() {
+        let dir = tempfile::tempdir().unwrap();
+        let live = dir.path().join(format!("{TEMP_PREFIX}zYxWvU"));
+        fs::write(&live, b"another window is writing this").unwrap();
+
+        atomic_write_bytes(&dir.path().join("doc.txt"), b"new document").unwrap();
+
+        assert!(
+            live.exists(),
+            "the sweep deleted a temporary a concurrent save was still writing",
+        );
+    }
+
+    /// The age alone is not the test either: something else's old dotfile
+    /// in the same directory is not ours to delete.
+    #[test]
+    fn the_sweep_only_touches_our_own_prefix() {
+        let dir = tempfile::tempdir().unwrap();
+        let others = [".other-editor-swap", "notes.txt", ".hidden-but-not-ours"];
+        for name in others {
+            let p = dir.path().join(name);
+            fs::write(&p, b"not ours").unwrap();
+            backdate(&p, STALE_TEMP_AGE * 2);
+        }
+
+        atomic_write_bytes(&dir.path().join("doc.txt"), b"new document").unwrap();
+
+        for name in others {
+            assert!(dir.path().join(name).exists(), "the sweep deleted {name}");
+        }
+    }
+
+    /// Something that carries the prefix but is not a file we wrote — and
+    /// the save must succeed regardless, since a sweep that cannot remove
+    /// something must never fail a save that already landed.
+    ///
+    /// The symlink is the case that makes `is_file` load-bearing, and it
+    /// took a mutation to notice: dropping the check does *not* change what
+    /// happens to a directory, because `remove_file` refuses a directory
+    /// anyway. It changes what happens to a symlink, which `remove_file`
+    /// would happily unlink. `DirEntry::metadata` does not traverse, so the
+    /// check sees the link itself rather than its target.
+    ///
+    /// The clock is injected rather than the entries backdated, because a
+    /// symlink's own mtime cannot be set through `std` — and with a
+    /// real-time sweep the age gate would skip the link for being fresh,
+    /// which is how this test would have passed without testing anything.
+    #[cfg(unix)]
+    #[test]
+    fn prefixed_things_we_did_not_write_are_left_alone() {
+        let dir = tempfile::tempdir().unwrap();
+        let target = dir.path().join("someones-file.txt");
+        fs::write(&target, b"must survive").unwrap();
+        let link = dir.path().join(format!("{TEMP_PREFIX}link"));
+        std::os::unix::fs::symlink(&target, &link).unwrap();
+        let decoy = dir.path().join(format!("{TEMP_PREFIX}directory"));
+        fs::create_dir(&decoy).unwrap();
+        fs::write(decoy.join("inside"), b"someone's data").unwrap();
+
+        // Far enough ahead that every entry is past the age gate, so what
+        // is being tested is the kind check and nothing else.
+        sweep_stranded_temps(dir.path(), std::time::SystemTime::now() + STALE_TEMP_AGE * 2);
+
+        assert!(link.is_symlink(), "the sweep unlinked a symlink it did not write");
+        assert_eq!(fs::read(&target).unwrap(), b"must survive");
+        assert!(decoy.is_dir(), "the sweep removed a directory it did not write");
+        assert_eq!(fs::read(decoy.join("inside")).unwrap(), b"someone's data");
+
+        // And a save into that same directory still succeeds.
+        let path = dir.path().join("doc.txt");
+        atomic_write_bytes(&path, b"new document").unwrap();
+        assert_eq!(fs::read(&path).unwrap(), b"new document");
+    }
+
+    /// The age gate itself, with the clock injected rather than waited on.
+    #[test]
+    fn the_sweep_gate_is_the_age_and_the_prefix_together() {
+        let dir = tempfile::tempdir().unwrap();
+        let ours = dir.path().join(format!("{TEMP_PREFIX}one"));
+        let theirs = dir.path().join(".not-ours");
+        fs::write(&ours, b"x").unwrap();
+        fs::write(&theirs, b"x").unwrap();
+
+        // A moment ago: nothing is stale yet, ours included.
+        sweep_stranded_temps(dir.path(), std::time::SystemTime::now());
+        assert!(ours.exists() && theirs.exists(), "nothing here is stale yet");
+
+        // Far enough in the future that both are older than the gate —
+        // only ours goes.
+        sweep_stranded_temps(
+            dir.path(),
+            std::time::SystemTime::now() + STALE_TEMP_AGE * 2,
+        );
+        assert!(!ours.exists(), "a stale temporary of ours should be gone");
+        assert!(theirs.exists(), "another program's stale dotfile is not ours to delete");
+    }
 
     #[cfg(unix)]
     #[test]
