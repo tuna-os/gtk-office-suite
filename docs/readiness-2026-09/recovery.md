@@ -37,7 +37,35 @@ AutosaveSlot used to store bytes and metadata in separate atomic writes. Each wr
       several at once needs the multiple-window/multiple-document work in the
       last row below; Letters already does it per tab.
 - [ ] Preserve imported non-buffer metadata and model state; no recovery format silently strips supported content.
-- [ ] Restart after recovery and before the next autosave does not lose the recovered checkpoint.
+- [x] Restart after recovery and before the next autosave does not lose the recovered checkpoint.
+      All three apps used to clear the orphan slot as soon as the recovered
+      content was in memory and leave the next autosave tick to write a
+      replacement — up to a minute later at the shipped 60-second interval,
+      and never at all in a Letters that shipped with its timer switched
+      off. A crash inside that window lost work that had just survived a
+      crash, which is the one thing recovery must not do.
+      The order is inverted now: `AutosaveSlot::adopt_recovered` writes the
+      recovered content to the new window's own slot and reports whether the
+      orphan may be dropped, so the work is covered continuously. A failed
+      write keeps the orphan, so content whose replacement could not be
+      written is still offered next launch; the cost is that a clean save
+      this session will not clear that orphan — the close path clears the
+      window's own slot, not the one it recovered from — so the same content
+      can be offered once more. Work offered twice is recoverable; work
+      silently dropped is not.
+      `{Tables,Decks,Letters}RecoveryIsItselfProtectedSmoke` crash, recover,
+      then crash again with no autosave in between and require the content
+      to still be there; each fails against the old order. The two branches
+      of `adopt_recovered` are unit-tested in `suite-common-core`, the
+      failure branch included, since "keep the orphan when the write fails"
+      was otherwise only an argument in a comment.
+      Worth recording what this cost in test terms: three existing journeys
+      asserted `snapshot_files() == []` after recovery — nothing on disk —
+      as a proxy for "the orphan is not offered twice". Zero files also
+      describes *unprotected work*, so that spelling was quietly asserting
+      the defect. They now assert the intent directly and more strictly: the
+      recovered orphan is gone, and the recovered document is itself covered.
+      The rewritten assertions still fail against the old code.
 - [~] Surface snapshot/write/cleanup errors; keep dirty state on failed commit.
       **Snapshot write failures now reach the user.** Every autosave write
       site in the three apps read `let _ = slot.write(&bytes, &meta);` — five
@@ -68,27 +96,26 @@ AutosaveSlot used to store bytes and metadata in separate atomic writes. Each wr
       `crash-stress.md` records a previous test that chmod-ed to 0555 and
       therefore asserted nothing), then assert the notice is on screen. Both
       fail against the unwired code.
-      Two defects found while checking that figure, neither fixed here.
-      **Letters ships with its autosave timer switched off.** Its
-      `auto-save-interval` default is `0` where Tables and Decks ship `60`,
-      its range allows `0`, and `register_autosave` installs a timer only
-      `if interval > 0` — so a shipped Letters never snapshots on its own,
-      and every crash-recovery guarantee this file describes for it holds
-      only if something invokes the `autosave-now` action. Every Letters
-      autosave journey does exactly that, which is why they pass: they prove
-      the snapshot machinery works and say nothing about whether it ever
-      fires by itself. Fixing it is a one-line default, but turning a
-      feature on for every existing user is its own decision, and it wants a
-      check that compares the three apps' shipped defaults so the next one
-      to drift is caught.
-      **Recovery leaves a window with no protection at all.** All three apps
-      clear the orphan slot as soon as the content is in memory and rely on
-      the next timer tick to write a fresh snapshot — up to a minute later
-      on Tables and Decks, never on Letters. A crash in that window loses
-      work that had already survived one crash. The order should be
-      inverted: write the recovered content to this window's own slot
-      *first*, clear the orphan only once that succeeds, and keep the orphan
-      when it fails. That is the row two above this one.
+      Two defects were found while checking that figure, both since fixed.
+      **Letters shipped with its autosave timer switched off** (#659). Its
+      `auto-save-interval` default was `0` where Tables and Decks ship `60`,
+      and `register_autosave` installs a timer only `if interval > 0`, so a
+      shipped Letters never snapshotted on its own: every crash-recovery
+      guarantee this file makes for it held only when something invoked the
+      `autosave-now` action, which every Letters autosave journey did
+      explicitly. They proved the snapshot machinery worked and asserted
+      nothing about whether it ever ran. The default is `60` across all
+      three apps now, `tests/test_autosave_defaults.py` compares them so the
+      next divergence fails a check, and
+      `{Letters,Tables,Decks}UnattendedAutosaveSmoke` wait for a snapshot
+      without triggering anything. The range still permits `0`, so a user
+      who chose to switch autosave off keeps that: a changed default reaches
+      only installs that never set the key.
+      **Recovery left a window with no protection at all** — the row two
+      above this one, fixed there: all three apps cleared the orphan slot as
+      soon as the content was in memory and relied on the next timer tick
+      for a replacement, so a crash in that window lost work that had
+      already survived one crash.
       Still open: **cleanup errors.** `clear_tab_autosave` still drops its
       error, so a saved or discarded document whose slot could not be cleared
       is silently offered back as "recovered" on the next launch. Different
