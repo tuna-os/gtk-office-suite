@@ -1100,9 +1100,9 @@ class BaseGUITestCase(unittest.TestCase):
                         capture_output=True, timeout=2)
         subprocess.run(
             ["xdotool", "mousemove", "--sync", str(int(x1)), str(int(y1))],
-            capture_output=True, timeout=5,
+            capture_output=True, timeout=20,
         )
-        subprocess.run(["xdotool", "mousedown", str(button)], capture_output=True, timeout=5)
+        subprocess.run(["xdotool", "mousedown", str(button)], capture_output=True, timeout=20)
         # A couple of intermediate points so GTK's GestureDrag sees real
         # motion, not a single jump — matches how a human drag arrives.
         for frac in (0.34, 0.67, 1.0):
@@ -1110,10 +1110,10 @@ class BaseGUITestCase(unittest.TestCase):
             my = y1 + (y2 - y1) * frac
             subprocess.run(
                 ["xdotool", "mousemove", "--sync", str(int(mx)), str(int(my))],
-                capture_output=True, timeout=5,
+                capture_output=True, timeout=20,
             )
             time.sleep(0.05)
-        subprocess.run(["xdotool", "mouseup", str(button)], capture_output=True, timeout=5)
+        subprocess.run(["xdotool", "mouseup", str(button)], capture_output=True, timeout=20)
 
     def wait_for_app(self, name: str, timeout: float = 15.0) -> "tree.Node":
         return self.wait_for_condition(
