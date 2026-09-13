@@ -2448,6 +2448,92 @@ class DecksSelectionSmoke(BaseGUITestCase):
         self.assertIsNone(self.process.poll(), "decks crashed during selection")
 
 
+class DecksCanvasDragSmoke(BaseGUITestCase):
+    """Dragging an object on the canvas moves it in the model.
+
+    The move, resize and rotate gestures had no journey at all.
+    `DecksSelectionSmoke` clicks to select and stops there, and the
+    harness's own `drag()` helper was unused by any Decks test. That gap
+    only became visible when `canvas_input.rs` was split out of
+    `window.rs`: "all ten Decks journeys pass" turned out to say nothing
+    about most of the 203 lines that moved, since only the click-to-select
+    path was ever exercised.
+
+    So this asserts the model, not the canvas description: a drag that
+    selects but fails to move would still satisfy a description check.
+    """
+
+    app_name = "decks"
+
+    def setUp(self):
+        self._snapshot_path = self.isolate_snapshot(prefix="decks-drag-")
+        super().setUp()
+
+    def _slide_to_window(self):
+        """Map slide (960x540) coordinates to window-local ones.
+
+        Same arithmetic as DecksSelectionSmoke: the canvas fits the slide
+        into its real allocation (slide_geometry() in canvas.rs), and the
+        app embeds its own position as `canvas_at=x,y` in the accessible
+        description because AT-SPI Component.position is wrong for nested
+        widgets (#132).
+        """
+        import re
+
+        canvas = self.app.child(name="Slide canvas")
+        cw, ch = canvas.size
+        match = re.search(r"canvas_at=(-?\d+),(-?\d+)", canvas.description)
+        if not match:
+            self.fail(f"canvas_at not found in description: {canvas.description!r}")
+        cx, cy = int(match.group(1)), int(match.group(2))
+        scale = min(cw / 960.0, ch / 540.0) * 0.92
+        ox = (cw - 960.0 * scale) / 2.0
+        oy = (ch - 540.0 * scale) / 2.0
+        return lambda sx, sy: (cx + ox + sx * scale, cy + oy + sy * scale)
+
+    def test_dragging_an_object_moves_it_in_the_model(self):
+        aid = "org.tunaos.decks"
+        self.gapplication_action(aid, "new-document")
+        time.sleep(1.5)
+        self.gapplication_action(aid, "add-shape")
+        time.sleep(1.0)
+
+        before = self.trigger_snapshot(aid)["slides"][0]["objects"][0]
+        self.assertEqual(before["kind"], "Rect", f"unexpected object: {before}")
+
+        # The default Rect sits at slide (200,200) sized 200x150, so its
+        # centre is (300,275). Drag it down and to the right in a 5:3 ratio.
+        to_window = self._slide_to_window()
+        start_x, start_y = to_window(300.0, 275.0)
+        end_x, end_y = to_window(400.0, 335.0)
+        self.drag(start_x, start_y, end_x, end_y)
+        time.sleep(1.0)
+
+        after = self.trigger_snapshot(aid)["slides"][0]["objects"][0]
+        dx = after["x"] - before["x"]
+        dy = after["y"] - before["y"]
+
+        # Direction and proportion, not absolute distance. Converting a
+        # requested slide-space delta into pointer pixels needs the canvas
+        # scale, and the only handle on that from here is the AT-SPI size —
+        # which is the very thing #132 says is unreliable for nested
+        # widgets. Asking for (100,60) in slide units and measuring exactly
+        # (200,120) says the reconstructed scale is out by 2x; identical
+        # numbers came back from an unmodified build, so it is the test's
+        # arithmetic (or the AT-SPI geometry behind it) rather than the
+        # gesture code. Pinning the magnitude here would bake that factor
+        # in as if it were intended, so this asserts what the journey is
+        # actually for: the drag reaches the model, along the axis dragged.
+        # The 2x itself is written up on the pull request.
+        self.assertGreater(dx, 0, f"drag did not move the object right: {before} -> {after}")
+        self.assertGreater(dy, 0, f"drag did not move the object down: {before} -> {after}")
+        self.assertAlmostEqual(
+            dx / dy, 100.0 / 60.0, delta=0.4,
+            msg=f"movement is not proportional to the drag: {before} -> {after}",
+        )
+        self.assertIsNone(self.process.poll(), "decks crashed during the drag")
+
+
 class DecksCloseGuardSmoke(BaseGUITestCase):
     """Real GTK journey: closing a dirty deck offers Save/Discard/Cancel
     (issue #99) instead of silently discarding unsaved work."""
