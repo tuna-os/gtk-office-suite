@@ -1281,7 +1281,7 @@ class DecksRenamedOriginalSmoke(RenamedOriginalMixin, BaseGUITestCase):
         )
 
 
-class TablesTwoDocumentsSmoke(BaseGUITestCase):
+class TwoDocumentsMixin:
     """Two crashed documents, and a defined answer about which comes back.
 
     `find_orphaned_snapshots` returns the newest snapshot first, breaking
@@ -1293,32 +1293,36 @@ class TablesTwoDocumentsSmoke(BaseGUITestCase):
 
     Both snapshots are planted rather than produced by two crashed runs: the
     app is single-instance, so getting two genuine orphans means two
-    sequential runs whose snapshots would differ by the order they were
-    written anyway. Planting them makes the newer one explicit.
+    sequential runs, and the first relaunch would consume one of them before
+    the second existed. Planting makes the newer one explicit.
+
+    Tables and Decks need this; Letters does not, and that is not an
+    omission. A Letters window holds a document per tab, so two dirty tabs
+    are two documents with two slots, and `LettersAutosaveSmoke` has
+    asserted since #99 that a crash recovers both. The single-document apps
+    are the ones that have to *choose*.
     """
 
-    app_name = "tables"
-
     def setUp(self):
-        self._state_dir = self.isolate_autosave_state(prefix="tables-two-docs-")
-        snap_dir = os.path.join(self._state_dir, "tables")
+        self._state_dir = self.isolate_autosave_state(prefix=f"{self.app_name}-two-docs-")
+        snap_dir = os.path.join(self._state_dir, self.app_name)
         os.makedirs(snap_dir, exist_ok=True)
         self._older = os.path.join(snap_dir, "doc-older.snapshot")
         self._newer = os.path.join(snap_dir, "doc-newer.snapshot")
         # Kept, not regenerated, for the untouched-bytes assertion below:
-        # `minimal_xlsx_bytes` builds a zip, and zip entries carry a
-        # modification time, so the same call a second later returns
-        # different bytes. Comparing against a fresh copy failed on one
-        # timestamp byte and read as "the snapshot was rewritten".
-        self._older_bytes = minimal_xlsx_bytes("1111")
+        # both builders produce a zip, and zip entries carry a modification
+        # time, so the same call a second later returns different bytes.
+        # Comparing against a fresh copy failed on one timestamp byte and
+        # read as "the snapshot was rewritten".
+        self._older_bytes = self.planted_bytes("older")
         for path, payload, name in (
-            (self._older, self._older_bytes, "older.xlsx"),
-            (self._newer, minimal_xlsx_bytes("9999"), "newer.xlsx"),
+            (self._older, self._older_bytes, f"older{self.doc_suffix}"),
+            (self._newer, self.planted_bytes("newer"), f"newer{self.doc_suffix}"),
         ):
             with open(path, "wb") as data:
                 data.write(payload)
             with open(f"{path}.meta", "w") as meta:
-                meta.write(f"/nonexistent/{name}\nxlsx")
+                meta.write(f"/nonexistent/{name}\n{self.snapshot_kind}")
         # Two clear generations rather than two writes a millisecond apart,
         # so the assertion is about the order and not about the tiebreak.
         old_time = time.time() - 600
@@ -1334,7 +1338,7 @@ class TablesTwoDocumentsSmoke(BaseGUITestCase):
             description="a recovered window title",
         )
         self.assertIn(
-            "newer.xlsx", frame,
+            f"newer{self.doc_suffix}", frame,
             f"the newest snapshot should be the one recovered: {frame!r}",
         )
 
@@ -1350,6 +1354,24 @@ class TablesTwoDocumentsSmoke(BaseGUITestCase):
                 kept.read(), self._older_bytes,
                 "the older document's snapshot was rewritten",
             )
+
+
+class TablesTwoDocumentsSmoke(TwoDocumentsMixin, BaseGUITestCase):
+    app_name = "tables"
+    doc_suffix = ".xlsx"
+    snapshot_kind = "xlsx"
+
+    def planted_bytes(self, which):
+        return minimal_xlsx_bytes("1111" if which == "older" else "9999")
+
+
+class DecksTwoDocumentsSmoke(TwoDocumentsMixin, BaseGUITestCase):
+    app_name = "decks"
+    doc_suffix = ".pptx"
+    snapshot_kind = "pptx"
+
+    def planted_bytes(self, which):
+        return minimal_pptx_bytes(f"{which} deck text")
 
 
 class TablesStaleSnapshotSmoke(TablesSavedDocumentMixin, BaseGUITestCase):
@@ -1547,80 +1569,70 @@ class TablesAutosaveFailureSmoke(BaseGUITestCase):
                 return node
         return None
 
-class TablesLegacySnapshotUpgradeSmoke(BaseGUITestCase):
+class LegacySnapshotUpgradeMixin:
     """A crash on the old build, then an upgrade, must not lose the work.
 
     The snapshot format changed to a single versioned envelope, and `read`
     still understands the two-file layout that preceded it — raw document
     bytes plus a `.snapshot.meta` sidecar — precisely so that somebody who
     crashed on the old build and then upgraded gets their unsaved work back.
-    Unit tests cover that read. Nothing had ever put a legacy pair on disk
-    and started the real app on it, which is the only way to know the whole
-    upgrade path is wired: recovery has to find the orphan, load bytes in a
-    format it did not write, and adopt them into its own envelope slot.
+    Unit tests cover that read. These put a legacy pair on disk and start the
+    real app on it, which is the only way to know the whole upgrade path is
+    wired: recovery has to find the orphan, load bytes in a format this build
+    does not write, and adopt them into its own envelope slot.
 
-    The workbook is hand-built rather than saved by Tables, because a
-    snapshot Tables itself wrote would be an envelope and would prove
+    The document is hand-built in every case rather than saved by the app,
+    because a snapshot the app wrote would be an envelope and would prove
     nothing about the legacy path.
 
-    It is also the negative control for the guard added alongside it: an
-    envelope that fails to decode is no longer re-read as legacy content,
-    and getting that wrong in the other direction — refusing everything the
-    envelope reader declines — would silently discard exactly this user's
-    work. This journey fails if it does.
+    It is also the negative control for #718's guard, which stops an
+    envelope that fails to decode being re-read as legacy content. Getting
+    that wrong in the other direction — refusing everything the envelope
+    reader declines — silently discards exactly this user's work, and these
+    journeys fail when it does.
+
+    Run for all three apps because each loads a different format through the
+    same shared read, and #322's completion note asks for all three.
     """
 
-    app_name = "tables"
-
     def setUp(self):
-        self._state_dir = self.isolate_autosave_state(prefix="tables-legacy-")
+        self._state_dir = self.isolate_autosave_state(prefix=f"{self.app_name}-legacy-")
+        # Decks and Letters read their recovered content back through the
+        # state-snapshot interface, which needs its own path configured;
+        # without it `trigger_snapshot` fails with
+        # "GTK_OFFICE_SNAPSHOT_PATH is not configured" rather than anything
+        # about recovery.
+        self._snapshot_path = self.isolate_snapshot(prefix=f"{self.app_name}-legacy-snap-")
         # The recorded original: a path that never existed, so the recovered
         # document is unsaved work rather than a file the app could reopen
         # on its own.
-        self._original = os.path.join(self.temp_dir(prefix="tables-legacy-doc-"), "quarterly.xlsx")
-        snap_dir = os.path.join(self._state_dir, "tables")
+        self._original = os.path.join(
+            self.temp_dir(prefix=f"{self.app_name}-legacy-doc-"),
+            f"quarterly{self.doc_suffix}",
+        )
+        snap_dir = os.path.join(self._state_dir, self.app_name)
         os.makedirs(snap_dir, exist_ok=True)
         with open(os.path.join(snap_dir, "legacy-1.snapshot"), "wb") as data:
-            data.write(minimal_xlsx_bytes("4242"))
+            data.write(self.planted_bytes())
         with open(os.path.join(snap_dir, "legacy-1.snapshot.meta"), "w") as meta:
-            meta.write(f"{self._original}\nxlsx")
+            meta.write(f"{self._original}\n{self.snapshot_kind}")
         super().setUp()
 
     def _snapshot_files(self):
-        d = os.path.join(self._state_dir, "tables")
+        d = os.path.join(self._state_dir, self.app_name)
         return sorted(f for f in os.listdir(d)) if os.path.isdir(d) else []
 
     def test_a_snapshot_from_the_previous_build_still_recovers(self):
-        from dogtail import rawinput
-
-        frame = self.wait_until(
+        self.wait_until(
             lambda: self.app.child(roleName="frame").name,
             lambda name: "Recovered" in name,
             timeout=20.0,
             description="a recovered window title",
         )
-        self.assertIn(
-            "quarterly.xlsx", frame,
-            f"the recovered window should name the original document: {frame!r}",
-        )
 
-        # The title alone would pass if recovery had adopted an empty
-        # workbook, so read the value back out of the grid.
-        rawinput.keyCombo("<Control>g")
-        time.sleep(0.5)
-        rawinput.typeText("A1")
-        rawinput.keyCombo("Return")
-        time.sleep(0.5)
-        rawinput.keyCombo("Escape")
-        rawinput.keyCombo("Right")
-        rawinput.keyCombo("Left")
-        grid = self.wait_until(
-            lambda: self.app.child(name="Spreadsheet grid").description,
-            lambda d: "4242" in d,
-            timeout=20.0,
-            description="the legacy snapshot's cell value in the grid",
-        )
-        self.assertIn("4242", grid)
+        # The title alone would pass if recovery had adopted an *empty*
+        # document, so each app reads its own content back.
+        self._assert_the_planted_content_came_back()
 
         # The legacy sidecar must not survive as something a later launch
         # could read again: adopting the content rewrites this window's own
@@ -1637,6 +1649,170 @@ class TablesLegacySnapshotUpgradeSmoke(BaseGUITestCase):
             any(f.endswith(".snapshot") for f in files),
             f"the recovered work must still be protected by a snapshot: {files}",
         )
+
+
+class TablesLegacySnapshotUpgradeSmoke(LegacySnapshotUpgradeMixin, BaseGUITestCase):
+    app_name = "tables"
+    doc_suffix = ".xlsx"
+    snapshot_kind = "xlsx"
+
+    def planted_bytes(self):
+        return minimal_xlsx_bytes("4242")
+
+    def _assert_the_planted_content_came_back(self):
+        from dogtail import rawinput
+
+        self.assertIn(
+            f"quarterly{self.doc_suffix}", self.app.child(roleName="frame").name,
+            "the recovered window should name the original document",
+        )
+        rawinput.keyCombo("<Control>g")
+        time.sleep(0.5)
+        rawinput.typeText("A1")
+        rawinput.keyCombo("Return")
+        time.sleep(0.5)
+        rawinput.keyCombo("Escape")
+        rawinput.keyCombo("Right")
+        rawinput.keyCombo("Left")
+        grid = self.wait_until(
+            lambda: self.app.child(name="Spreadsheet grid").description,
+            lambda d: "4242" in d,
+            timeout=20.0,
+            description="the legacy snapshot's cell value in the grid",
+        )
+        self.assertIn("4242", grid)
+
+
+class DecksLegacySnapshotUpgradeSmoke(LegacySnapshotUpgradeMixin, BaseGUITestCase):
+    app_name = "decks"
+    doc_suffix = ".pptx"
+    snapshot_kind = "pptx"
+
+    def planted_bytes(self):
+        return minimal_pptx_bytes("planted deck text")
+
+    def _assert_the_planted_content_came_back(self):
+        self.assertIn(
+            f"quarterly{self.doc_suffix}", self.app.child(roleName="frame").name,
+            "the recovered window should name the original document",
+        )
+        # The state snapshot rather than the canvas description: it names the
+        # object kinds, so an empty recovered deck cannot satisfy it.
+        snap = self.trigger_snapshot("org.tunaos.decks")
+        self.assertEqual(snap["slide_count"], 1, f"recovered deck: {snap}")
+        kinds = [o["kind"] for s in snap["slides"] for o in s["objects"]]
+        self.assertIn("TextBox", kinds, f"the planted text box did not come back: {snap}")
+
+
+class LettersLegacySnapshotUpgradeSmoke(LegacySnapshotUpgradeMixin, BaseGUITestCase):
+    app_name = "letters"
+    doc_suffix = ".md"
+    # Letters' snapshot is the Document as JSON, so its "legacy" bytes are
+    # the same JSON with the old sidecar beside them. Every field is spelled
+    # out because `ParaStyle` has no serde defaults — a trimmed literal is
+    # rejected outright with `missing field \`alignment\``, and the journey
+    # would then fail as a timeout rather than as a parse error.
+    snapshot_kind = "letters-json"
+
+    def planted_bytes(self):
+        import json
+
+        run_style = {
+            "bold": False, "italic": False, "underline": False,
+            "strikethrough": False, "highlight": False, "code": False,
+            "link": None, "image": None, "font_family": None,
+            "font_size_hp": None, "color": None, "vert_align": None,
+            "footnote": None, "html": False,
+        }
+        para_style = {
+            "heading": None, "alignment": "Left", "list": "None",
+            "list_level": 0, "list_start": None, "line_spacing": 1.0,
+            "space_before_pt": 0.0, "space_after_pt": 0.0,
+            "left_indent_pt": 0.0, "right_indent_pt": 0.0,
+            "first_line_indent_pt": 0.0, "tab_stops_pt": [],
+            "code_block": None, "block_quote": False, "html_block": False,
+            "page_break_before": False, "named_style": None,
+            "table_cell": None,
+        }
+        document = {
+            "paragraphs": [{
+                "style": para_style,
+                "runs": [{"text": "planted letter text", "style": run_style}],
+            }],
+            "footnotes": [],
+            "header": None,
+            "footer": None,
+            "page": None,
+        }
+        return json.dumps(document).encode()
+
+    def _assert_the_planted_content_came_back(self):
+        # Letters titles the *tab* with the document and keeps a fixed window
+        # title for a recovery, so the name is not on the frame to assert.
+        snap = self.trigger_snapshot("org.tunaos.letters")
+        text = "".join(r["text"] for p in snap["paragraphs"] for r in p["runs"])
+        self.assertIn(
+            "planted letter text", text,
+            f"the recovered document came back as {text!r}",
+        )
+
+
+def minimal_pptx_bytes(text):
+    """The smallest pptx package Decks will open, holding one text box.
+
+    Mirrors the parts `decks_core::engine::write_pptx_bytes` emits, because
+    the point is a deck that exists *before* the app starts: the
+    schema-upgrade journey plants it as a snapshot from the previous build,
+    and anything Decks wrote would be an envelope and would beg the
+    question. `txBox="1"` is what makes the reader treat the shape as a text
+    box rather than a rectangle.
+    """
+    import io
+    import zipfile
+
+    slide = f"""<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<p:sld xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main">
+ <p:cSld><p:spTree>
+  <p:nvGrpSpPr><p:cNvPr id="1" name=""/><p:cNvGrpSpPr/><p:nvPr/></p:nvGrpSpPr>
+  <p:grpSpPr/>
+  <p:sp>
+   <p:nvSpPr><p:cNvPr id="2" name="TextBox 1"/><p:cNvSpPr txBox="1"/><p:nvPr/></p:nvSpPr>
+   <p:spPr><a:xfrm><a:off x="952500" y="952500"/><a:ext cx="2857500" cy="762000"/></a:xfrm>
+    <a:prstGeom prst="rect"><a:avLst/></a:prstGeom></p:spPr>
+   <p:txBody><a:bodyPr/><a:lstStyle/><a:p><a:r><a:t>{text}</a:t></a:r></a:p></p:txBody>
+  </p:sp>
+ </p:spTree></p:cSld>
+</p:sld>"""
+
+    parts = {
+        "[Content_Types].xml": """<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
+ <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
+ <Default Extension="xml" ContentType="application/xml"/>
+ <Override PartName="/ppt/presentation.xml" ContentType="application/vnd.openxmlformats-officedocument.presentationml.presentation.main+xml"/>
+ <Override PartName="/ppt/slides/slide1.xml" ContentType="application/vnd.openxmlformats-officedocument.presentationml.slide+xml"/>
+</Types>""",
+        "_rels/.rels": """<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+ <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="ppt/presentation.xml"/>
+</Relationships>""",
+        "ppt/presentation.xml": """<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<p:presentation xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main">
+ <p:sldIdLst><p:sldId id="256" r:id="rId1"/></p:sldIdLst>
+ <p:sldSz cx="9144000" cy="5143500"/>
+ <p:notesSz cx="6858000" cy="9144000"/>
+</p:presentation>""",
+        "ppt/_rels/presentation.xml.rels": """<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+ <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/slide" Target="slides/slide1.xml"/>
+</Relationships>""",
+        "ppt/slides/slide1.xml": slide,
+    }
+    buffer = io.BytesIO()
+    with zipfile.ZipFile(buffer, "w", zipfile.ZIP_DEFLATED) as deck:
+        for name, content in parts.items():
+            deck.writestr(name, content)
+    return buffer.getvalue()
 
 
 def minimal_xlsx_bytes(a1_value):
