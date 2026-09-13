@@ -5,6 +5,7 @@ mod persistence;
 mod export;
 mod canvas;
 mod canvas_area;
+mod canvas_input;
 mod sidebar;
 mod toolbar;
 mod transition;

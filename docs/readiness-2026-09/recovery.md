@@ -8,7 +8,23 @@ AutosaveSlot used to store bytes and metadata in separate atomic writes. Each wr
 
 - [x] Versioned single-generation envelope (or atomic manifest pointing to immutable generation files) binds bytes, format, identity, revision and checksum — `suite-common-core/src/autosave.rs::envelope`, one atomic write, CRC-32 over the payload, magic whose last byte is the version. Snapshots written by the previous two-file build are still read so an upgrade mid-crash does not discard unsaved work. A revision counter is **not** in the envelope: nothing in the suite has one yet, and a field always written zero would look like coverage.
 - [x] Correctly round-trip newline/non-UTF8 paths or explicitly reject unsupported identities without corrupting metadata — the path is stored as its native OS bytes on Unix, so a newline or invalid UTF-8 round-trips exactly; off Unix a non-Unicode path is rejected at write time rather than mangled. The previous newline-delimited text metadata truncated the first at the newline and `to_string_lossy`-mangled the second into a path that does not exist.
-- [ ] Distinguish active sessions from abandoned snapshots using safe ownership/locking; never recover another live window's state.
+- [x] Distinguish active sessions from abandoned snapshots using safe ownership/locking; never recover another live window's state. Each `AutosaveSlot` claims `<doc-id>.lock` with `flock(2)` for as long as its window lives, and `find_orphaned_snapshots` skips any slot whose lock it cannot take. "Orphaned" used to mean only "not the document being opened", so a second window opened while the first was still editing was offered the first window's **in-progress** autosave — accept it and two windows own one document, with the recovering window's content overwriting a session that never crashed.
+      `flock` rather than a pid or a flag file because the failure mode
+      recovery exists for is SIGKILL: a process that dies running no cleanup
+      at all. Anything the writer has to remember to clear is
+      indistinguishable from a stale copy of itself after one. The kernel
+      releases an `flock` on process death and never attaches it to a file
+      sitting on disk, and because the lock is per open file description
+      rather than per process, a second descriptor conflicts with the first
+      even inside one process — which is how the unit tests exercise it
+      without forking.
+      An unusable lock path (unreadable directory, a regular file where the
+      lock should go) is biased toward **offering** the snapshot: failing to
+      prove a window is alive is not evidence that one is, and the costs are
+      not symmetric — a spurious recovery prompt is a dialog, a suppressed
+      one is lost work. Wired into all three apps: Tables and Decks hold the
+      claim as a window field, Letters on `DocumentSession` so a per-tab
+      document gets a per-tab lock.
 - [~] Enumerate all recoverable documents deterministically; corrupt/incomplete candidates do not hide valid later ones. `find_orphaned_snapshots` now lists a snapshot only if it reads back whole — a truncated or checksum-failing envelope, and a legacy data file whose metadata never landed, are skipped rather than offered — so one damaged candidate no longer hides a valid one. It costs one read per candidate at launch.
       **Deterministic ordering is done.** The function used to return
       `read_dir` order — whatever the filesystem handed back — and its own
