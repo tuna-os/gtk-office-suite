@@ -231,6 +231,35 @@ pub fn load_xlsx_workbook(path: &str) -> Result<(TablesEngine, Vec<SheetModel>),
             if let Some(setup) = &props.page_setup {
                 sheet.page_setup = setup.clone();
             }
+            // Layout the writer has always emitted and the reader used to
+            // throw away: column widths, row heights, frozen panes and
+            // merges. Every one of them survived a save and vanished on
+            // reopen — and, because a crash snapshot is the same xlsx bytes,
+            // vanished from recovered work too.
+            //
+            // Indices are clamped to this grid rather than trusted: the
+            // sheet is sized from its cell content, so a file can legally
+            // name a width for a column past the last one holding data.
+            for (&c, &px) in &props.col_widths {
+                if c < sheet.col_widths.len() {
+                    sheet.col_widths[c] = px;
+                }
+            }
+            for (&r, &px) in &props.row_heights {
+                if r < sheet.row_heights.len() {
+                    sheet.row_heights[r] = px;
+                }
+            }
+            if let Some((rows, cols)) = props.frozen {
+                sheet.frozen_rows = rows.min(sheet.rows);
+                sheet.frozen_cols = cols.min(sheet.cols);
+            }
+            sheet.merges = props
+                .merges
+                .iter()
+                .copied()
+                .filter(|(r, c, _, _)| *r < sheet.rows && *c < sheet.cols)
+                .collect();
         }
         sheets.push(sheet);
     }

@@ -24,6 +24,37 @@ pub struct SheetXlsxProps {
     pub hidden_rows: std::collections::HashSet<usize>,
     pub hidden_cols: std::collections::HashSet<usize>,
     pub page_setup: Option<suite_common_core::print::PageSetup>,
+    /// Explicitly-sized columns and rows, in pixels, 0-based — only the
+    /// ones the file marks as custom, so a sheet of default-width columns
+    /// produces an empty map rather than a row of defaults.
+    pub col_widths: std::collections::HashMap<usize, f64>,
+    pub row_heights: std::collections::HashMap<usize, f64>,
+    /// `(frozen_rows, frozen_cols)` from a frozen `<pane>`, absent when
+    /// the sheet has no split or a merely *split* (draggable) one, which
+    /// this app has no model for and must not silently read as frozen.
+    pub frozen: Option<(usize, usize)>,
+    /// Merged ranges as `(row, col, rowspan, colspan)` — the shape
+    /// `SheetModel::merges` uses, so the caller assigns it directly.
+    pub merges: Vec<(usize, usize, usize, usize)>,
+}
+
+/// xlsx stores a column width in "character units" plus the padding Excel
+/// adds for cell margins (5/MDW, with the 7-pixel MDW this writer assumes),
+/// so inverting `save.rs`'s `set_column_width(w / 7.0)` means subtracting
+/// that padding before scaling back to pixels. Getting this wrong is a
+/// quiet few-pixel drift on every save, which is why the round-trip test
+/// pins real numbers rather than trusting this comment.
+const XLSX_WIDTH_PADDING: f64 = 5.0 / 7.0;
+const PIXELS_PER_CHAR: f64 = 7.0;
+/// Row heights are stored in points; 96dpi pixels are 0.75pt each.
+const POINTS_PER_PIXEL: f64 = 0.75;
+
+fn width_chars_to_pixels(chars: f64) -> f64 {
+    ((chars - XLSX_WIDTH_PADDING).max(0.0) * PIXELS_PER_CHAR * 100.0).round() / 100.0
+}
+
+fn height_points_to_pixels(points: f64) -> f64 {
+    (points / POINTS_PER_PIXEL * 100.0).round() / 100.0
 }
 
 fn xml_attr<'a>(tag: &'a str, attr: &str) -> Option<&'a str> {
@@ -122,7 +153,14 @@ pub fn read_sheet_props_from_xlsx(
             let cols_block = cols_block.split("</cols>").next().unwrap_or("");
             for tag in cols_block.split("<col ").skip(1) {
                 let tag = tag.split('>').next().unwrap_or("").trim_end_matches('/');
-                if !xml_bool_attr(tag, "hidden") {
+                let hidden = xml_bool_attr(tag, "hidden");
+                // A `<col>` run carries a width, a hidden flag, or both, so
+                // neither one may short-circuit the other. This loop used to
+                // `continue` on anything not hidden, which is how every
+                // custom column width in a saved workbook was read back as
+                // the default.
+                let custom_width = xml_bool_attr(tag, "customWidth");
+                if !hidden && !custom_width {
                     continue;
                 }
                 let min: Option<usize> = xml_attr(tag, "min").and_then(|v| v.parse().ok());
@@ -137,8 +175,21 @@ pub fn read_sheet_props_from_xlsx(
                     // rather than refusing (#442).
                     let first = min.max(1);
                     let last = max.min(crate::sheet::SHEET_MAX_COLS);
+                    let width = if custom_width {
+                        xml_attr(tag, "width")
+                            .and_then(|v| v.parse::<f64>().ok())
+                            .filter(|w| w.is_finite() && *w >= 0.0)
+                            .map(width_chars_to_pixels)
+                    } else {
+                        None
+                    };
                     for c in first..=last {
-                        props.hidden_cols.insert(c - 1); // 1-based → 0-based
+                        if hidden {
+                            props.hidden_cols.insert(c - 1); // 1-based → 0-based
+                        }
+                        if let Some(px) = width {
+                            props.col_widths.insert(c - 1, px);
+                        }
                     }
                 }
             }
@@ -148,16 +199,85 @@ pub fn read_sheet_props_from_xlsx(
             let data_block = data_block.split("</sheetData>").next().unwrap_or("");
             for tag in data_block.split("<row ").skip(1) {
                 let tag = tag.split('>').next().unwrap_or("").trim_end_matches('/');
-                if !xml_bool_attr(tag, "hidden") {
+                let hidden = xml_bool_attr(tag, "hidden");
+                let custom_height = xml_bool_attr(tag, "customHeight");
+                if !hidden && !custom_height {
                     continue;
                 }
                 if let Some(r) = xml_attr(tag, "r").and_then(|v| v.parse::<usize>().ok()) {
                     // Rows are 1-based for the same reason, with the same
                     // underflow if a file says row 0.
                     if (1..=crate::sheet::SHEET_MAX_ROWS).contains(&r) {
-                        props.hidden_rows.insert(r - 1); // 1-based → 0-based
+                        if hidden {
+                            props.hidden_rows.insert(r - 1); // 1-based → 0-based
+                        }
+                        if custom_height {
+                            if let Some(px) = xml_attr(tag, "ht")
+                                .and_then(|v| v.parse::<f64>().ok())
+                                .filter(|h| h.is_finite() && *h >= 0.0)
+                                .map(height_points_to_pixels)
+                            {
+                                props.row_heights.insert(r - 1, px);
+                            }
+                        }
                     }
                 }
+            }
+        }
+
+        // `<pane state="frozen">` — split panes are a different feature
+        // (draggable, not locked) and this app models only frozen ones, so a
+        // plain `<pane>` without that state is left alone rather than read
+        // as a freeze the user never asked for.
+        if let Some(tag) = xml.split("<pane ").nth(1) {
+            let tag = tag.split('>').next().unwrap_or("").trim_end_matches('/');
+            if matches!(xml_attr(tag, "state"), Some("frozen") | Some("frozenSplit")) {
+                let axis = |attr: &str| {
+                    xml_attr(tag, attr)
+                        .and_then(|v| v.parse::<f64>().ok())
+                        .filter(|n| n.is_finite() && *n >= 0.0)
+                        .map(|n| n as usize)
+                        .unwrap_or(0)
+                };
+                // ySplit counts frozen *rows*, xSplit frozen *columns* —
+                // the opposite pairing to the (rows, cols) order below, and
+                // an easy thing to transpose silently.
+                let (rows, cols) = (axis("ySplit"), axis("xSplit"));
+                if rows > 0 || cols > 0 {
+                    props.frozen = Some((
+                        rows.min(crate::sheet::SHEET_MAX_ROWS),
+                        cols.min(crate::sheet::SHEET_MAX_COLS),
+                    ));
+                }
+            }
+        }
+
+        if let Some(block) = xml.split("<mergeCells").nth(1) {
+            let block = block.split("</mergeCells>").next().unwrap_or("");
+            for tag in block.split("<mergeCell ").skip(1) {
+                let tag = tag.split('>').next().unwrap_or("").trim_end_matches('/');
+                let Some(reference) = xml_attr(tag, "ref") else { continue };
+                let reference = reference.replace('$', "");
+                let (a, b) = match reference.split_once(':') {
+                    Some(pair) => pair,
+                    // A one-cell "merge" spans nothing; keeping it would put
+                    // a 1x1 entry in the model for no reason.
+                    None => continue,
+                };
+                let (Some((r0, c0)), Some((r1, c1))) = (
+                    crate::sheet::parse_cell_ref(a),
+                    crate::sheet::parse_cell_ref(b),
+                ) else {
+                    continue;
+                };
+                // Written either way round in principle, so normalise rather
+                // than trusting top-left-first.
+                let (top, left) = (r0.min(r1), c0.min(c1));
+                let (bottom, right) = (r0.max(r1), c0.max(c1));
+                if bottom >= crate::sheet::SHEET_MAX_ROWS || right >= crate::sheet::SHEET_MAX_COLS {
+                    continue;
+                }
+                props.merges.push((top, left, bottom - top + 1, right - left + 1));
             }
         }
 
