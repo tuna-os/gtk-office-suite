@@ -149,41 +149,43 @@ fn object_geometry_survives_a_snapshot() {
     }
 }
 
-/// Rotation, pptx only — deliberately, and the reason is recorded in
-/// docs/readiness-2026-09/recovery.md rather than left as a silent hole.
+/// Rotation, in both formats, and the position it is entangled with.
 ///
-/// pptx is the format an unsaved deck defaults to, so it is the one a crash
-/// snapshot uses and the one this row is really about. Both writers used to
-/// emit no rotation at all and both readers hardcoded zero, so a rotated
-/// shape came back square either way. pptx's `a:xfrm/@rot` is one attribute
-/// and is fixed here; ODF spells the same thing as
-/// `draw:transform="rotate(θ) translate(x y)"`, where the rotation and the
-/// position are entangled in one attribute and LibreOffice emits several
-/// shapes of it. That is a larger change than this one and is not pretended
-/// to be done.
+/// Both writers used to emit no rotation at all and both readers hardcoded
+/// zero, so a rotated shape came back square either way and the rotate
+/// gesture's result was discarded by every save. pptx's `a:xfrm/@rot` is
+/// one attribute and was fixed first; ODF has no rotation attribute and
+/// spells the same thing as a `draw:transform` list, which carries the
+/// rotation *and* the position together — so this test asserts the
+/// position of every rotated shape as well. A translate computed with the
+/// wrong matrix leaves the angle perfect and moves the shape, which an
+/// angle-only test would pass.
 ///
-/// Testing one format in a file whose other tests loop over both is worth a
-/// word: the loop is what hid this. Asserting inside `for kind in FORMATS`
-/// aborts on the first format that fails, so while pptx was broken the odp
-/// failure was invisible — I only found it by fixing pptx and watching the
-/// same assertion fail again with a different prefix.
+/// The loop is written to report every format rather than abort on the
+/// first, because the earlier version of this test asserted inside
+/// `for kind in FORMATS` and that is exactly what hid the odp gap: pptx
+/// failed first, and the odp failure only became visible once pptx was
+/// fixed. Collecting the complaints and asserting once at the end means a
+/// regression in either format names itself.
 #[test]
-fn shape_rotation_survives_a_pptx_snapshot() {
+fn shape_rotation_survives_a_snapshot() {
     let deck = deck_of(vec![slide_of(
         vec![
             SlideObject::Rect { x: 40.0, y: 50.0, w: 60.0, h: 70.0, rotation: 30.0 },
             SlideObject::TextBox {
                 text: "tilted".into(),
                 x: 10.0, y: 10.0, w: 200.0, h: 50.0,
+                // A rotation past a half turn, because normalising with the
+                // wrong modulo (or dropping the sign) turns 315 into -45 or
+                // 45 and a test using only 30 degrees would never notice.
                 rotation: 315.0,
                 runs: vec![],
             },
+            SlideObject::Circle { x: 300.0, y: 200.0, r: 45.0, rotation: 120.0 },
         ],
         "",
         "",
     )]);
-    let back = through_a_snapshot(&deck, "pptx", "rotation");
-    let objects = &back.slides[0].objects;
 
     let rotation_of = |o: &SlideObject| match o {
         SlideObject::Rect { rotation, .. }
@@ -191,21 +193,43 @@ fn shape_rotation_survives_a_pptx_snapshot() {
         | SlideObject::Circle { rotation, .. }
         | SlideObject::Image { rotation, .. } => *rotation,
     };
-    // OOXML stores sixtieth-thousandths of a degree, so a whole number of
-    // degrees round-trips exactly; the tolerance is for the f64 division.
-    assert!(
-        (rotation_of(&objects[0]) - 30.0).abs() < 0.01,
-        "the rect's 30 degree rotation came back as {}",
-        rotation_of(&objects[0]),
-    );
-    // A rotation past a half turn, because normalising with the wrong
-    // modulo (or dropping the sign) turns 315 into -45 or 45 and a test
-    // using only 30 degrees would never notice.
-    assert!(
-        (rotation_of(&objects[1]) - 315.0).abs() < 0.01,
-        "the text box's 315 degree rotation came back as {}",
-        rotation_of(&objects[1]),
-    );
+    let anchor_of = |o: &SlideObject| match o {
+        SlideObject::Rect { x, y, .. }
+        | SlideObject::TextBox { x, y, .. }
+        | SlideObject::Image { x, y, .. }
+        | SlideObject::Circle { x, y, .. } => (*x, *y),
+    };
+
+    let mut complaints: Vec<String> = Vec::new();
+    for kind in FORMATS {
+        let back = through_a_snapshot(&deck, kind, "rotation");
+        let objects = &back.slides[0].objects;
+        if objects.len() != deck.slides[0].objects.len() {
+            complaints.push(format!("{kind}: {} shapes came back, not 3", objects.len()));
+            continue;
+        }
+        for (i, want) in deck.slides[0].objects.iter().enumerate() {
+            // OOXML stores sixtieth-thousandths of a degree and ODF stores
+            // radians, so a whole number of degrees round-trips through
+            // both; the tolerance is for the f64 conversion at each end.
+            let got = rotation_of(&objects[i]);
+            let expected = rotation_of(want);
+            if (got - expected).abs() >= 0.01 {
+                complaints.push(format!(
+                    "{kind}: shape {i}'s {expected} degree rotation came back as {got}"
+                ));
+            }
+            let (gx, gy) = anchor_of(&objects[i]);
+            let (wx, wy) = anchor_of(want);
+            if (gx - wx).abs() >= 0.5 || (gy - wy).abs() >= 0.5 {
+                complaints.push(format!(
+                    "{kind}: shape {i} rotated correctly but moved from \
+                     ({wx}, {wy}) to ({gx}, {gy})"
+                ));
+            }
+        }
+    }
+    assert!(complaints.is_empty(), "{}", complaints.join("\n"));
 }
 
 #[test]
