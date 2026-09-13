@@ -61,7 +61,7 @@ impl DecksWindow {
             vec![MasterSlide {
                 name: "Default".into(),
                 background: "#ffffff".into(),
-                default_font: "Sans".into(),
+                default_font: MasterSlide::DEFAULT_FONT.into(),
                 shapes: vec![],
             }],
         ));

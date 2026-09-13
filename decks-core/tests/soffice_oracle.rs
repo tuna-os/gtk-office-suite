@@ -924,3 +924,72 @@ fn we_read_the_picture_impress_writes_into_an_odp() {
     let bytes = std::fs::read(recovered[0]).expect("the unpacked picture is unreadable");
     assert!(!bytes.is_empty(), "the picture unpacked to an empty file");
 }
+
+/// The font we put in a pptx theme has to reach a real consumer, and the
+/// only thing that can say so is a real consumer.
+///
+/// This crosses formats deliberately: our pptx (theme `a:fontScheme`) →
+/// Impress → its odp (`style:default-style`) → our odp reader. It is the
+/// measurement the odp writer's design came from — before it, where ODF
+/// keeps a default font was a guess.
+#[test]
+fn impress_carries_the_theme_font_from_our_pptx_into_an_odp() {
+    if !require_or_skip() { return; }
+    let dir = tempfile::tempdir().unwrap();
+    let mut deck = Deck::new();
+    deck.masters[0].default_font = "Liberation Serif".into();
+    deck.slides[0].objects.push(SlideObject::TextBox {
+        text: "body text".into(),
+        x: 100.0, y: 100.0, w: 300.0, h: 80.0,
+        rotation: 0.0,
+        runs: vec![],
+    });
+    let as_pptx = dir.path().join("themed.pptx");
+    write_pptx(as_pptx.to_str().unwrap(), &deck).expect("write pptx");
+
+    let as_odp = convert(&as_pptx, "odp").expect("Impress could not convert our pptx to odp");
+    let rt = odp::read(as_odp.to_str().unwrap()).expect("our odp reader failed");
+    let fonts: Vec<&str> = rt.masters.iter().map(|m| m.default_font.as_str()).collect();
+    assert!(
+        fonts.contains(&"Liberation Serif"),
+        "Impress did not carry our theme font into its odp; masters came back as {fonts:?}",
+    );
+}
+
+/// And the reverse direction: the font we write into an odp's
+/// `style:default-style` has to be honoured by a real consumer.
+///
+/// This asserts odp → Impress → odp, not odp → Impress → pptx, and the
+/// difference was measured rather than assumed. The pptx version of this
+/// test failed with `["Arial"]`, which looked like our writer being wrong.
+/// It is not: converting the same file odp → odp shows Impress reading our
+/// `style:default-style[@style:family="graphic"]` and writing it straight
+/// back out.
+///
+/// What actually loses it is **Impress's pptx exporter**, which does not
+/// derive a theme `a:fontScheme` from the document's default graphic font.
+/// That is a gap in its export path, not in this package, and asserting
+/// over it would have pinned someone else's bug as our contract.
+#[test]
+fn impress_keeps_the_font_we_write_into_an_odp() {
+    if !require_or_skip() { return; }
+    let dir = tempfile::tempdir().unwrap();
+    let mut deck = Deck::new();
+    deck.masters[0].default_font = "Liberation Serif".into();
+    deck.slides[0].objects.push(SlideObject::TextBox {
+        text: "body text".into(),
+        x: 100.0, y: 100.0, w: 300.0, h: 80.0,
+        rotation: 0.0,
+        runs: vec![],
+    });
+    let as_odp = dir.path().join("fonted.odp");
+    odp::write(&deck, as_odp.to_str().unwrap()).expect("write odp");
+
+    let rewritten = convert(&as_odp, "odp").expect("Impress could not rewrite our odp");
+    let rt = odp::read(rewritten.to_str().unwrap()).expect("our odp reader failed");
+    let fonts: Vec<&str> = rt.masters.iter().map(|m| m.default_font.as_str()).collect();
+    assert!(
+        fonts.contains(&"Liberation Serif"),
+        "Impress dropped the font we wrote into our odp; masters came back as {fonts:?}",
+    );
+}

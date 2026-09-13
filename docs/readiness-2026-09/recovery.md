@@ -200,16 +200,66 @@ AutosaveSlot used to store bytes and metadata in separate atomic writes. Each wr
       as every other entry in this row, arrived at from the opposite
       direction: not a writer dropping supported content, but content that
       was never supported being treated as though it were.
-      So the renderer honours it first. `canvas::master_font_family` is the
-      field's only consumer, and slide text and the master's own text
+      So the renderer honours it first. Slide text and the master's own text
       shapes both draw through it; application chrome (the `<image>`
       placeholder, the "Slide N" indicator) keeps its own face on purpose,
       since a deck asking for a display face should not restyle the
       furniture. A blank-but-present font falls back rather than asking
       pango for a family with no name, which is what an `unwrap_or` alone
-      would have done. Only now is carrying the field through the two
-      writers worth doing, and that is the remaining step — pptx would need
-      a theme, ODF a page style neither reader models yet.
+      would have done. That policy lives on `MasterSlide::font_family` and
+      nowhere else, because the renderer and both writers have to agree:
+      a font carried into a package the canvas would not have drawn is a
+      round-trip of something nothing honours.
+      Both formats now carry it, and **they do not carry it equally.** The
+      asymmetry is a property of the formats, was measured rather than
+      assumed, and is pinned by
+      `masters_keep_their_own_font_in_pptx_but_share_one_in_odp`:
+        * **pptx** gets a theme part per master
+          (`a:fontScheme/a:minorFont/a:latin`), so two masters keep two
+          fonts. Both the major (heading) and minor (body) fonts are
+          written from the one the model has; writing only the minor would
+          leave a reader that consults headings falling back elsewhere.
+          The theme is also **required** rather than optional — ECMA-376
+          gives every `p:sldMaster` exactly one theme relationship, and
+          until now this writer emitted masters with none. Impress opened
+          those packages regardless, which is why nothing caught it.
+        * **odp** gets one `style:default-style[@style:family="graphic"]`
+          for the whole document. That is where a real consumer puts it:
+          converting a pptx carrying a per-master theme font through
+          Impress and reading its `.odp` back shows exactly that element,
+          and nothing per-master. So a deck whose masters name *different*
+          fonts keeps the first master's and the rest read back as that
+          one. Writing per-master presentation styles was the alternative
+          and was not taken: nothing was found that reads them back, so it
+          would have round-tripped through this reader alone.
+      One measurement worth keeping, because it first looked like a bug
+      here. An oracle test asserting odp → Impress → **pptx** failed with
+      `["Arial"]`. Impress is not dropping what this writer emits: the same
+      file converted odp → **odp** comes back with the font intact, so
+      Impress reads our `style:default-style` and writes it straight out.
+      What loses it is Impress's *pptx exporter*, which does not derive a
+      theme `a:fontScheme` from the document's default graphic font. That
+      is a gap in its export path, and the test now asserts the direction
+      that is a claim about this package rather than about someone else's
+      bug.
+      A second limitation of the same kind, found the same way: deleting
+      the theme part's `[Content_Types].xml` override leaves every
+      round-trip test in `snapshot_fidelity.rs` green **and all 35 oracle
+      tests green**, because LibreOffice opens the package anyway. ECMA-376
+      still requires the override and a stricter consumer may reject the
+      part, so `the_pptx_declares_the_theme_part_it_ships` asserts the
+      package bytes directly. That is the weakest kind of check in that
+      file and is used only where no behavioural one can exist — the same
+      situation as #727's manifest entry, except there the oracle could
+      see it.
+      Its first version was itself too weak, which is worth recording: it
+      checked that the rels part contained `rId1` and that it contained
+      `slideLayout1.xml`, as two independent substrings. Both hold
+      whichever order the relationships are written in, so it passed
+      against a mutation that swapped them — and that swap matters,
+      because `master_part_xml` names rId1 as the layout in fixed text, so
+      a master would point at its own theme as though it were the layout.
+      It now reads out rId1's actual target.
       One limitation, stated because a mutation found it rather than
       because it is comfortable: `document_font_description` and
       `master_for` are covered — five mutations of the resolver, the

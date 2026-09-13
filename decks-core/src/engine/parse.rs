@@ -642,14 +642,40 @@ pub fn read_pptx(path: &str) -> Result<Deck, String> {
                     &mut budget,
                     &format!("{}/_rels/{}.rels", dir.to_string_lossy(), file),
                 );
-                let master_xml = rels
+                let master_path = rels
                     .split("Target=\"")
                     .skip(1)
                     .filter_map(|s| s.split('"').next())
                     .find(|t| t.contains("slideMaster"))
-                    .map(|t| format!("ppt/{}", t.trim_start_matches("../")))
-                    .map(|p| read_part(&mut archive, &mut budget, &p))
+                    .map(|t| format!("ppt/{}", t.trim_start_matches("../")));
+                let master_xml = master_path
+                    .as_deref()
+                    .map(|p| read_part(&mut archive, &mut budget, p))
                     .unwrap_or_default();
+
+                // Master rels → theme part → body font. A master with no
+                // theme relationship is what this writer used to emit, so
+                // the absence has to fall back rather than fail.
+                let theme_font = master_path
+                    .as_deref()
+                    .and_then(|mp| {
+                        let mdir = Path::new(mp).parent().unwrap_or(Path::new("ppt"));
+                        let mfile =
+                            Path::new(mp).file_name().unwrap_or_default().to_string_lossy().to_string();
+                        let mrels = read_part(
+                            &mut archive,
+                            &mut budget,
+                            &format!("{}/_rels/{}.rels", mdir.to_string_lossy(), mfile),
+                        );
+                        mrels
+                            .split("Target=\"")
+                            .skip(1)
+                            .filter_map(|s| s.split('"').next())
+                            .find(|t| t.contains("theme"))
+                            .map(|t| format!("ppt/{}", t.trim_start_matches("../")))
+                    })
+                    .map(|tp| read_part(&mut archive, &mut budget, &tp))
+                    .and_then(|tx| parse_theme_font(&tx));
 
                 let (master_bg, mut shapes) = parse_master_shapes(&master_xml);
                 let (layout_bg, layout_shapes) = parse_master_shapes(&layout_xml);
@@ -670,7 +696,8 @@ pub fn read_pptx(path: &str) -> Result<Deck, String> {
                     background: layout_bg
                         .or(master_bg)
                         .unwrap_or_else(|| "#ffffff".into()),
-                    default_font: "Sans".into(),
+                    default_font: theme_font
+                        .unwrap_or_else(|| MasterSlide::DEFAULT_FONT.into()),
                     shapes,
                 });
                 let idx = masters.len() - 1;
@@ -686,7 +713,7 @@ pub fn read_pptx(path: &str) -> Result<Deck, String> {
         masters.push(MasterSlide {
             name: "Default".into(),
             background: "#ffffff".into(),
-            default_font: "Sans".into(),
+            default_font: MasterSlide::DEFAULT_FONT.into(),
             shapes: vec![],
         });
     }
@@ -710,6 +737,43 @@ pub fn read_pptx(path: &str) -> Result<Deck, String> {
 /// Without it the name fell out of the part's file path — "slideLayout1"
 /// for a deck we wrote, so a master called "House Style" came back under a
 /// name nobody chose, and the sidebar showed it.
+/// The body font a theme part names, from `a:fontScheme/a:minorFont/a:latin`.
+///
+/// `a:latin` appears under both `a:majorFont` (headings) and `a:minorFont`
+/// (body), so a search for the first `a:latin` in the part returns the
+/// heading font instead — right-looking and wrong whenever the two differ.
+/// This tracks which scheme it is inside and only answers for the body one,
+/// which is the font a reader applies to ordinary text.
+pub fn parse_theme_font(xml: &str) -> Option<String> {
+    if xml.is_empty() {
+        return None;
+    }
+    let mut reader = Reader::from_str(xml);
+    reader.config_mut().trim_text(true);
+    let mut buf = Vec::new();
+    let mut in_minor = false;
+    loop {
+        match reader.read_event_into(&mut buf) {
+            Ok(Event::Start(ref e)) if e.name().as_ref() == "a:minorFont" => in_minor = true,
+            Ok(Event::End(ref e)) if e.name().as_ref() == "a:minorFont" => in_minor = false,
+            Ok(Event::Start(ref e)) | Ok(Event::Empty(ref e))
+                if in_minor && e.name().as_ref() == "a:latin" =>
+            {
+                return e
+                    .attributes()
+                    .filter_map(|a| a.ok())
+                    .find(|a| a.key.as_ref() == "typeface")
+                    .map(|a| a.value.to_string())
+                    .filter(|f| !f.trim().is_empty());
+            }
+            Ok(Event::Eof) | Err(_) => break,
+            _ => {}
+        }
+        buf.clear();
+    }
+    None
+}
+
 pub fn parse_c_sld_name(xml: &str) -> Option<String> {
     if xml.is_empty() {
         return None;
@@ -1133,5 +1197,49 @@ mod master_tests {
             }
             other => panic!("expected text box, got {other:?}"),
         }
+    }
+}
+
+#[cfg(test)]
+mod theme_font_tests {
+    use super::parse_theme_font;
+
+    /// The heading and body fonts differ, which is the only arrangement
+    /// that can tell a correct reader from one that returns the first
+    /// `a:latin` it sees. With both set to the same face this test would
+    /// pass against either.
+    #[test]
+    fn the_body_font_is_read_not_the_heading_font() {
+        let xml = "<a:theme><a:themeElements><a:fontScheme>\
+            <a:majorFont><a:latin typeface=\"Heading Face\"/></a:majorFont>\
+            <a:minorFont><a:latin typeface=\"Body Face\"/></a:minorFont>\
+            </a:fontScheme></a:themeElements></a:theme>";
+        assert_eq!(parse_theme_font(xml).as_deref(), Some("Body Face"));
+    }
+
+    /// `a:cs` and `a:ea` sit beside `a:latin` inside the same scheme, and
+    /// the writer emits them empty.
+    #[test]
+    fn the_latin_typeface_is_read_not_its_siblings() {
+        let xml = "<a:fontScheme><a:minorFont>\
+            <a:latin typeface=\"Body Face\"/><a:ea typeface=\"\"/>\
+            <a:cs typeface=\"\"/></a:minorFont></a:fontScheme>";
+        assert_eq!(parse_theme_font(xml).as_deref(), Some("Body Face"));
+    }
+
+    #[test]
+    fn an_empty_typeface_is_no_answer_rather_than_an_empty_one() {
+        let xml = "<a:fontScheme><a:minorFont><a:latin typeface=\"\"/>\
+            </a:minorFont></a:fontScheme>";
+        assert_eq!(parse_theme_font(xml), None);
+    }
+
+    /// A package written before the theme part existed — which is every
+    /// pptx this writer produced until now — has to fall back, not fail.
+    #[test]
+    fn a_part_with_no_font_scheme_answers_nothing() {
+        assert_eq!(parse_theme_font("<a:theme><a:themeElements/></a:theme>"), None);
+        assert_eq!(parse_theme_font(""), None);
+        assert_eq!(parse_theme_font("not xml at all <<<"), None);
     }
 }
