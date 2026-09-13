@@ -1341,42 +1341,149 @@ class TablesAutosaveFailureSmoke(BaseGUITestCase):
                 return node
         return None
 
-class TablesUndoSaveReopenSmoke(BaseGUITestCase):
-    """Real GTK journey: edit, undo, redo, save, restart, and reopen."""
+class TablesLegacySnapshotUpgradeSmoke(BaseGUITestCase):
+    """A crash on the old build, then an upgrade, must not lose the work.
+
+    The snapshot format changed to a single versioned envelope, and `read`
+    still understands the two-file layout that preceded it — raw document
+    bytes plus a `.snapshot.meta` sidecar — precisely so that somebody who
+    crashed on the old build and then upgraded gets their unsaved work back.
+    Unit tests cover that read. Nothing had ever put a legacy pair on disk
+    and started the real app on it, which is the only way to know the whole
+    upgrade path is wired: recovery has to find the orphan, load bytes in a
+    format it did not write, and adopt them into its own envelope slot.
+
+    The workbook is hand-built rather than saved by Tables, because a
+    snapshot Tables itself wrote would be an envelope and would prove
+    nothing about the legacy path.
+
+    It is also the negative control for the guard added alongside it: an
+    envelope that fails to decode is no longer re-read as legacy content,
+    and getting that wrong in the other direction — refusing everything the
+    envelope reader declines — would silently discard exactly this user's
+    work. This journey fails if it does.
+    """
 
     app_name = "tables"
 
     def setUp(self):
-        import zipfile
+        self._state_dir = self.isolate_autosave_state(prefix="tables-legacy-")
+        # The recorded original: a path that never existed, so the recovered
+        # document is unsaved work rather than a file the app could reopen
+        # on its own.
+        self._original = os.path.join(self.temp_dir(prefix="tables-legacy-doc-"), "quarterly.xlsx")
+        snap_dir = os.path.join(self._state_dir, "tables")
+        os.makedirs(snap_dir, exist_ok=True)
+        with open(os.path.join(snap_dir, "legacy-1.snapshot"), "wb") as data:
+            data.write(minimal_xlsx_bytes("4242"))
+        with open(os.path.join(snap_dir, "legacy-1.snapshot.meta"), "w") as meta:
+            meta.write(f"{self._original}\nxlsx")
+        super().setUp()
 
-        self._dir = self.temp_dir(prefix="tables-rt-")
-        self._doc = os.path.join(self._dir, "journey.xlsx")
-        parts = {
-            "[Content_Types].xml": """<?xml version="1.0" encoding="UTF-8"?>
+    def _snapshot_files(self):
+        d = os.path.join(self._state_dir, "tables")
+        return sorted(f for f in os.listdir(d)) if os.path.isdir(d) else []
+
+    def test_a_snapshot_from_the_previous_build_still_recovers(self):
+        from dogtail import rawinput
+
+        frame = self.wait_until(
+            lambda: self.app.child(roleName="frame").name,
+            lambda name: "Recovered" in name,
+            timeout=20.0,
+            description="a recovered window title",
+        )
+        self.assertIn(
+            "quarterly.xlsx", frame,
+            f"the recovered window should name the original document: {frame!r}",
+        )
+
+        # The title alone would pass if recovery had adopted an empty
+        # workbook, so read the value back out of the grid.
+        rawinput.keyCombo("<Control>g")
+        time.sleep(0.5)
+        rawinput.typeText("A1")
+        rawinput.keyCombo("Return")
+        time.sleep(0.5)
+        rawinput.keyCombo("Escape")
+        rawinput.keyCombo("Right")
+        rawinput.keyCombo("Left")
+        grid = self.wait_until(
+            lambda: self.app.child(name="Spreadsheet grid").description,
+            lambda d: "4242" in d,
+            timeout=20.0,
+            description="the legacy snapshot's cell value in the grid",
+        )
+        self.assertIn("4242", grid)
+
+        # The legacy sidecar must not survive as something a later launch
+        # could read again: adopting the content rewrites this window's own
+        # slot as an envelope and clears the orphan it came from.
+        files = self.wait_until(
+            self._snapshot_files,
+            lambda fs: "legacy-1.snapshot" not in fs,
+            timeout=20.0,
+            description="the legacy orphan to be cleared",
+        )
+        self.assertNotIn("legacy-1.snapshot.meta", files,
+                         f"the legacy sidecar outlived its snapshot: {files}")
+        self.assertTrue(
+            any(f.endswith(".snapshot") for f in files),
+            f"the recovered work must still be protected by a snapshot: {files}",
+        )
+
+
+def minimal_xlsx_bytes(a1_value):
+    """The smallest xlsx package Tables will open, with `a1_value` in A1.
+
+    Hand-built rather than produced by Tables itself, because two journeys
+    need a workbook that exists *before* the app starts: one opens it from
+    the command line, and one plants it as a crash snapshot from an older
+    build. Anything Tables wrote would beg the question in the second case.
+    """
+    import io
+    import zipfile
+
+    parts = {
+        "[Content_Types].xml": """<?xml version="1.0" encoding="UTF-8"?>
 <Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
  <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
  <Default Extension="xml" ContentType="application/xml"/>
  <Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>
  <Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>
 </Types>""",
-            "_rels/.rels": """<?xml version="1.0" encoding="UTF-8"?>
+        "_rels/.rels": """<?xml version="1.0" encoding="UTF-8"?>
 <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
  <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/>
 </Relationships>""",
-            "xl/workbook.xml": """<?xml version="1.0" encoding="UTF-8"?>
+        "xl/workbook.xml": """<?xml version="1.0" encoding="UTF-8"?>
 <workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
  <sheets><sheet name="Sheet1" sheetId="1" r:id="rId1"/></sheets>
 </workbook>""",
-            "xl/_rels/workbook.xml.rels": """<?xml version="1.0" encoding="UTF-8"?>
+        "xl/_rels/workbook.xml.rels": """<?xml version="1.0" encoding="UTF-8"?>
 <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
  <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/>
 </Relationships>""",
-            "xl/worksheets/sheet1.xml": """<?xml version="1.0" encoding="UTF-8"?>
-<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetData><row r="1"><c r="A1"><v>1</v></c></row></sheetData></worksheet>""",
-        }
-        with zipfile.ZipFile(self._doc, "w", zipfile.ZIP_DEFLATED) as book:
-            for name, content in parts.items():
-                book.writestr(name, content)
+        "xl/worksheets/sheet1.xml": f"""<?xml version="1.0" encoding="UTF-8"?>
+<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetData><row r="1"><c r="A1"><v>{a1_value}</v></c></row></sheetData></worksheet>""",
+    }
+    buffer = io.BytesIO()
+    with zipfile.ZipFile(buffer, "w", zipfile.ZIP_DEFLATED) as book:
+        for name, content in parts.items():
+            book.writestr(name, content)
+    return buffer.getvalue()
+
+
+class TablesUndoSaveReopenSmoke(BaseGUITestCase):
+    """Real GTK journey: edit, undo, redo, save, restart, and reopen."""
+
+    app_name = "tables"
+
+    def setUp(self):
+        self._dir = self.temp_dir(prefix="tables-rt-")
+        self._doc = os.path.join(self._dir, "journey.xlsx")
+        with open(self._doc, "wb") as book:
+            book.write(minimal_xlsx_bytes("1"))
         self.launch_args = [self._doc]
         super().setUp()
 
