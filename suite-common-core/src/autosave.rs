@@ -50,7 +50,22 @@ mod envelope {
     use std::path::PathBuf;
 
     const MAGIC: &[u8; 11] = b"OFFICESNAP";
+    /// The magic without its trailing version byte: what identifies a file
+    /// as *an* envelope, whatever version wrote it.
+    const MAGIC_PREFIX: &[u8] = b"OFFICESNAP";
     const HEADER: usize = 31;
+
+    /// Whether this is an envelope at all — as opposed to the raw document
+    /// bytes the two-file layout stored.
+    ///
+    /// `decode` answering `None` means "this build cannot read it", which is
+    /// not the same as "this is not one". The difference matters because the
+    /// caller's fallback is to treat the bytes as a legacy document, and
+    /// doing that to an envelope hands its 31-byte header to a format reader
+    /// as though it were the user's file.
+    pub fn looks_like_an_envelope(raw: &[u8]) -> bool {
+        raw.starts_with(MAGIC_PREFIX)
+    }
     /// Distinct from a zero-length path, which is not a valid identity.
     const NO_PATH: u32 = u32::MAX;
 
@@ -316,6 +331,29 @@ impl AutosaveSlot {
     }
 
     fn read_legacy_pair(&self, bytes: Vec<u8>) -> Option<(Vec<u8>, SnapshotMeta)> {
+        // An envelope this build could not decode is not legacy content, and
+        // must not be read as though it were. Without this the CRC check
+        // above is defeated by a leftover sidecar: a damaged envelope fails
+        // `decode`, falls through to here, and — if a `.snapshot.meta` from
+        // an older build happens to sit beside it — is handed back *whole*,
+        // header and all, wearing that sidecar's path and kind. Recovery
+        // then writes those bytes to a temp file and asks a format reader to
+        // open them as the user's document.
+        //
+        // The sidecar survives because `write` removes it best-effort
+        // (`let _ = fs::remove_file`), so a read-only or full state
+        // directory — the failure modes autosave already expects — leaves it
+        // in place next to a perfectly good envelope. It only needs the
+        // envelope to be damaged later for the fallback to start lying.
+        //
+        // The same guard covers the forward direction: a snapshot from a
+        // newer build carries a version byte this one does not know, so
+        // `decode` declines it, and declining is right — but it must decline
+        // as "an envelope I cannot read" rather than be reinterpreted as a
+        // document.
+        if envelope::looks_like_an_envelope(&bytes) {
+            return None;
+        }
         let meta_raw = fs::read_to_string(self.meta_path()).ok()?;
         let mut lines = meta_raw.splitn(2, '\n');
         let path_line = lines.next().unwrap_or_default();
@@ -888,6 +926,110 @@ mod tests {
         assert_eq!(meta, SnapshotMeta { original_path: None, kind: "odt".into() });
     }
 
+    /// The CRC check must hold whatever else is lying around in the state
+    /// directory. `a_damaged_snapshot_is_declined_rather_than_half_restored`
+    /// proves it does with a clean directory; this proves the leftover
+    /// sidecar from an older build cannot talk the reader out of it.
+    #[test]
+    fn a_damaged_envelope_is_declined_even_beside_a_stale_legacy_sidecar() {
+        let dir = tempfile::tempdir().unwrap();
+        let slot = AutosaveSlot::new(dir.path(), "doc-1");
+        slot.write(
+            b"the real workbook",
+            &SnapshotMeta { original_path: Some(PathBuf::from("/home/x/books.xlsx")), kind: "xlsx".into() },
+        )
+        .unwrap();
+
+        // Damage the payload, leaving the magic and version intact, so the
+        // envelope is recognisably one and fails only its checksum.
+        let path = dir.path().join("doc-1.snapshot");
+        let mut raw = fs::read(&path).unwrap();
+        let last = raw.len() - 1;
+        raw[last] ^= 0xFF;
+        fs::write(&path, &raw).unwrap();
+
+        // A sidecar from a previous build, of the kind `write` removes only
+        // best-effort — a read-only or full state directory leaves it.
+        fs::write(dir.path().join("doc-1.snapshot.meta"), "/tmp/old-notes.md\nmd").unwrap();
+
+        assert!(
+            slot.read().is_none(),
+            "a damaged envelope was handed back as a document because a stale \
+             sidecar was sitting next to it",
+        );
+        assert_eq!(
+            find_orphaned_snapshots(dir.path()),
+            Vec::<String>::new(),
+            "and it must not be offered for recovery either",
+        );
+    }
+
+    /// A snapshot from a *newer* build: same magic, a version byte this one
+    /// does not know. Declining is the only safe answer — the layout may
+    /// have changed — but it has to decline as an envelope rather than be
+    /// re-read as legacy content.
+    #[test]
+    fn a_snapshot_from_a_newer_build_is_declined_not_reinterpreted() {
+        let dir = tempfile::tempdir().unwrap();
+        let slot = AutosaveSlot::new(dir.path(), "doc-1");
+        slot.write(b"content", &SnapshotMeta { original_path: None, kind: "xlsx".into() }).unwrap();
+
+        let path = dir.path().join("doc-1.snapshot");
+        let mut raw = fs::read(&path).unwrap();
+        raw[10] = raw[10].wrapping_add(1); // the version byte
+        fs::write(&path, &raw).unwrap();
+        fs::write(dir.path().join("doc-1.snapshot.meta"), "/tmp/old.md\nmd").unwrap();
+
+        assert!(
+            slot.read().is_none(),
+            "a newer build's snapshot was reinterpreted as a legacy document",
+        );
+        assert_eq!(find_orphaned_snapshots(dir.path()), Vec::<String>::new());
+    }
+
+    /// Genuine legacy content still works, which is what stops the guard
+    /// above from being a blanket refusal. The bytes here are a document,
+    /// not an envelope, so the sidecar is the only description of them
+    /// there is.
+    #[test]
+    fn the_guard_does_not_block_real_legacy_content() {
+        let dir = tempfile::tempdir().unwrap();
+        fs::write(dir.path().join("doc-1.snapshot"), b"# notes\n\nplain markdown").unwrap();
+        fs::write(dir.path().join("doc-1.snapshot.meta"), "/tmp/report.md\nmd").unwrap();
+
+        let slot = AutosaveSlot::new(dir.path(), "doc-1");
+        let (bytes, meta) = slot.read().expect("legacy content is still readable");
+        assert_eq!(bytes, b"# notes\n\nplain markdown");
+        assert_eq!(meta.kind, "md");
+        assert_eq!(find_orphaned_snapshots(dir.path()), vec!["doc-1".to_string()]);
+    }
+
+    /// Recovering the same work twice must not offer it twice. The sequence
+    /// is the one `recover_from_snapshot` performs: adopt the orphan's
+    /// content into this window's own claimed slot, then clear the orphan.
+    /// A second pass has to come back empty — the adopted copy belongs to a
+    /// live window, and the orphan is gone.
+    #[test]
+    fn a_recovered_snapshot_is_not_offered_again() {
+        let dir = tempfile::tempdir().unwrap();
+        let orphan = AutosaveSlot::new(dir.path(), "crashed-1");
+        let meta = SnapshotMeta { original_path: Some(PathBuf::from("/home/x/report.odt")), kind: "odt".into() };
+        orphan.write(b"unsaved work", &meta).unwrap();
+        assert_eq!(find_orphaned_snapshots(dir.path()), vec!["crashed-1".to_string()]);
+
+        let mine = AutosaveSlot::new(dir.path(), "recovering-1");
+        let _claim = mine.claim().expect("the recovering window claims its own slot");
+        assert!(mine.adopt_recovered(b"unsaved work", &meta));
+        orphan.clear().unwrap();
+
+        assert_eq!(
+            find_orphaned_snapshots(dir.path()),
+            Vec::<String>::new(),
+            "the recovered work was offered a second time, which is how one \
+             crash becomes two copies of the same document",
+        );
+    }
+
     #[test]
     fn write_then_read_round_trips_bytes_and_meta() {
         let dir = tempfile::tempdir().unwrap();
@@ -1085,3 +1227,4 @@ mod tests {
         assert!(find_orphaned_snapshots(dir.path()).is_empty());
     }
 }
+
