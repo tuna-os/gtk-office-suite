@@ -1098,33 +1098,19 @@ class LettersLiveOwnerSmoke(LiveOwnerMixin, BaseGUITestCase):
     app_name = "letters"
 
 
-class TablesStaleSnapshotSmoke(BaseGUITestCase):
-    """Already-saved work must not come back as a recovery offer.
+class SavedWorkbookMixin:
+    """Gets a journey to a genuinely saved workbook, then a snapshot of
+    unsaved changes on top of it.
 
-    A snapshot is cleared when the document is saved, but that clear was
-    written `let _ = slot.clear()` — a read-only state directory or a full
-    disk left the snapshot behind with the failure discarded. The next launch
-    then offered the user their *already-saved* workbook back as
-    "recovered": a scary dialog about losing nothing. Whatever they chose,
-    the clear failed again, so it returned on every launch.
-
-    Reporting the failed clear would not help much — it happens at the moment
-    of a successful save, about a temporary file nobody can act on — so what
-    is suppressed is the false offer itself: a snapshot the saved file has
-    overtaken has nothing left to recover.
-
-    The journey builds that state the way a failed clear leaves it. Save a
-    real workbook, reopen it, edit, snapshot, then make the saved file newer
-    than the snapshot and crash. The relaunch must come up as an ordinary
-    window, not a recovery.
+    Two journeys need that exact state and disagree about what should happen
+    next, which is the point of sharing the setup: with the file touched
+    afterwards the snapshot must be suppressed, and with the file renamed
+    away it must still be offered. Identical preconditions, opposite
+    expectations — so a change that confused "a path is recorded" with "the
+    file at that path overtook the snapshot" cannot satisfy both.
     """
 
     app_name = "tables"
-
-    def setUp(self):
-        self._state_dir = self.isolate_autosave_state(prefix="tables-stale-state-")
-        self._dir = self.temp_dir("tables-stale-docs-")
-        super().setUp()
 
     def _snapshot_files(self):
         snap_dir = os.path.join(self._state_dir, "tables")
@@ -1158,15 +1144,13 @@ class TablesStaleSnapshotSmoke(BaseGUITestCase):
         self.assertTrue(os.path.exists(out_path), "no workbook was written")
         return out_path
 
-    def test_a_snapshot_the_save_overtook_is_not_offered_as_recovery(self):
+    def _dirty_the_saved_workbook(self, out_path):
+        """Reopen the saved file so the snapshot records its path, dirty it,
+        and take a snapshot."""
         import subprocess
 
         from dogtail import rawinput
 
-        out_path = self._save_a_real_workbook()
-
-        # Reopen the saved file so the snapshot records it as the document's
-        # path, then dirty it and snapshot.
         self.relaunch_app(launch_args=[out_path])
         time.sleep(2.0)
         rawinput.typeText("=1+1")
@@ -1175,6 +1159,155 @@ class TablesStaleSnapshotSmoke(BaseGUITestCase):
         subprocess.run(["gapplication", "action", "org.tunaos.tables", "autosave-now"])
         time.sleep(0.8)
         self.assertEqual(len(self._snapshot_files()), 1, "precondition: a snapshot exists")
+
+
+class TablesRenamedOriginalSmoke(SavedWorkbookMixin, BaseGUITestCase):
+    """Unsaved work must survive its original being renamed out from under it.
+
+    The stale-snapshot check asks whether the document on disk is newer than
+    the snapshot, so that already-saved work is not offered back
+    (`TablesStaleSnapshotSmoke`). A file renamed away has no mtime to
+    compare, and the honest answer there is to offer the work: the user's
+    edits were never saved anywhere, and the only copy is the snapshot.
+
+    Reading it the other way — "I cannot find the original, so I cannot show
+    this is unsaved" — would discard the one case where recovery matters
+    most. That is the same asymmetry the ownership lock is biased on: failing
+    to prove work is safe is not proof that it is.
+    """
+
+    def setUp(self):
+        self._state_dir = self.isolate_autosave_state(prefix="tables-renamed-state-")
+        self._dir = self.temp_dir("tables-renamed-docs-")
+        super().setUp()
+
+    def test_work_whose_original_was_renamed_away_is_still_offered(self):
+        out_path = self._save_a_real_workbook()
+        self._dirty_the_saved_workbook(out_path)
+
+        # The rename happens outside the app, as it would in a file manager
+        # or a shell, while the app holds unsaved changes to the old name.
+        renamed = os.path.join(self._dir, "quarterly-2026.xlsx")
+        os.rename(out_path, renamed)
+        self.assertFalse(os.path.exists(out_path))
+
+        self.relaunch_app(crash=True)
+        frame = self.wait_until(
+            lambda: self.app.child(roleName="frame").name,
+            lambda name: "Recovered" in name,
+            timeout=20.0,
+            description="a recovered window title",
+        )
+        # Titled from the path the snapshot recorded, which is the name the
+        # work was last known by — the app has no way to learn the new one.
+        self.assertIn(
+            "quarterly.xlsx", frame,
+            f"the recovered window should name the original document: {frame!r}",
+        )
+
+
+class TablesTwoDocumentsSmoke(BaseGUITestCase):
+    """Two crashed documents, and a defined answer about which comes back.
+
+    `find_orphaned_snapshots` returns the newest snapshot first, breaking
+    mtime ties on the document id, so that a launch recovering one document
+    per window is making a choice somebody made rather than taking whatever
+    the directory listed first. That ordering is unit-tested; nothing had
+    checked that a real launch honours it, or that the document it does not
+    take is left intact for the next one.
+
+    Both snapshots are planted rather than produced by two crashed runs: the
+    app is single-instance, so getting two genuine orphans means two
+    sequential runs whose snapshots would differ by the order they were
+    written anyway. Planting them makes the newer one explicit.
+    """
+
+    app_name = "tables"
+
+    def setUp(self):
+        self._state_dir = self.isolate_autosave_state(prefix="tables-two-docs-")
+        snap_dir = os.path.join(self._state_dir, "tables")
+        os.makedirs(snap_dir, exist_ok=True)
+        self._older = os.path.join(snap_dir, "doc-older.snapshot")
+        self._newer = os.path.join(snap_dir, "doc-newer.snapshot")
+        # Kept, not regenerated, for the untouched-bytes assertion below:
+        # `minimal_xlsx_bytes` builds a zip, and zip entries carry a
+        # modification time, so the same call a second later returns
+        # different bytes. Comparing against a fresh copy failed on one
+        # timestamp byte and read as "the snapshot was rewritten".
+        self._older_bytes = minimal_xlsx_bytes("1111")
+        for path, payload, name in (
+            (self._older, self._older_bytes, "older.xlsx"),
+            (self._newer, minimal_xlsx_bytes("9999"), "newer.xlsx"),
+        ):
+            with open(path, "wb") as data:
+                data.write(payload)
+            with open(f"{path}.meta", "w") as meta:
+                meta.write(f"/nonexistent/{name}\nxlsx")
+        # Two clear generations rather than two writes a millisecond apart,
+        # so the assertion is about the order and not about the tiebreak.
+        old_time = time.time() - 600
+        os.utime(self._older, (old_time, old_time))
+        os.utime(f"{self._older}.meta", (old_time, old_time))
+        super().setUp()
+
+    def test_the_newest_crashed_document_is_recovered_and_the_other_kept(self):
+        frame = self.wait_until(
+            lambda: self.app.child(roleName="frame").name,
+            lambda name: "Recovered" in name,
+            timeout=20.0,
+            description="a recovered window title",
+        )
+        self.assertIn(
+            "newer.xlsx", frame,
+            f"the newest snapshot should be the one recovered: {frame!r}",
+        )
+
+        # The one it did not take must still be there, whole, for the next
+        # launch — clearing or damaging it would lose a second document's
+        # unsaved work to the recovery of the first.
+        self.assertTrue(os.path.exists(self._older),
+                        "the older document's snapshot was cleared by the recovery of the newer")
+        self.assertTrue(os.path.exists(f"{self._older}.meta"),
+                        "the older document's metadata was cleared")
+        with open(self._older, "rb") as kept:
+            self.assertEqual(
+                kept.read(), self._older_bytes,
+                "the older document's snapshot was rewritten",
+            )
+
+
+class TablesStaleSnapshotSmoke(SavedWorkbookMixin, BaseGUITestCase):
+    """Already-saved work must not come back as a recovery offer.
+
+    A snapshot is cleared when the document is saved, but that clear was
+    written `let _ = slot.clear()` — a read-only state directory or a full
+    disk left the snapshot behind with the failure discarded. The next launch
+    then offered the user their *already-saved* workbook back as
+    "recovered": a scary dialog about losing nothing. Whatever they chose,
+    the clear failed again, so it returned on every launch.
+
+    Reporting the failed clear would not help much — it happens at the moment
+    of a successful save, about a temporary file nobody can act on — so what
+    is suppressed is the false offer itself: a snapshot the saved file has
+    overtaken has nothing left to recover.
+
+    The journey builds that state the way a failed clear leaves it. Save a
+    real workbook, reopen it, edit, snapshot, then make the saved file newer
+    than the snapshot and crash. The relaunch must come up as an ordinary
+    window, not a recovery.
+    """
+
+    app_name = "tables"
+
+    def setUp(self):
+        self._state_dir = self.isolate_autosave_state(prefix="tables-stale-state-")
+        self._dir = self.temp_dir("tables-stale-docs-")
+        super().setUp()
+
+    def test_a_snapshot_the_save_overtook_is_not_offered_as_recovery(self):
+        out_path = self._save_a_real_workbook()
+        self._dirty_the_saved_workbook(out_path)
 
         # What a failed clear leaves behind: the document saved after the
         # snapshot was taken, and the snapshot still on disk.
