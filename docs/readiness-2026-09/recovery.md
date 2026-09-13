@@ -52,7 +52,28 @@ AutosaveSlot used to store bytes and metadata in separate atomic writes. Each wr
       disk for the next launch rather than discarding them. Presenting
       several at once needs the multiple-window/multiple-document work in the
       last row below; Letters already does it per tab.
-- [ ] Preserve imported non-buffer metadata and model state; no recovery format silently strips supported content.
+- [~] Preserve imported non-buffer metadata and model state; no recovery format silently strips supported content. **Tables is done and was badly wrong.** Its snapshot is an xlsx package from `save_sheets_to_xlsx_bytes`, read back by the same `load_workbook` a plain Open uses — and that reader parsed no column widths, no row heights, no frozen panes and no merged ranges. All four were written correctly and silently dropped on the way back in, so the loss was never specific to recovery: any save-then-reopen lost them too, and recovered work inherited that.
+      The gap survived because the tests that covered it were about the
+      wrong program. `soffice_oracle.rs` has
+      `column_widths_survive_calc_rewrite`, `frozen_panes_survive_calc_rewrite`
+      and `merged_cells_survive_calc_rewrite`, each asserting that the *XML*
+      still carries the feature after LibreOffice rewrites the file. They
+      prove LibreOffice preserves what Tables writes. None of them asks
+      whether Tables can read its own output back, so they passed for as long
+      as the reader ignored all four. A round-trip claim needs both halves to
+      be *ours*; an oracle comparison is a different claim wearing the same
+      words. `tables-core/tests/snapshot_fidelity.rs` closes it through the
+      byte path a snapshot actually uses, with the negative controls that a
+      careless fix would trip (a default sheet must not come back carrying
+      "explicit" defaults, and sheet two must not inherit sheet one's layout).
+      **Letters and Decks are not yet verified**, which is why this row is
+      partial rather than done. Letters snapshots `capture_from_buffer` as
+      JSON, so the question there is precisely the row's wording — whether a
+      document imported from `.docx` keeps the state that does not live in
+      the `GtkTextBuffer`. Decks snapshots pptx/odp, a far wider surface
+      (masters, notes, images, backgrounds) than the four fields above.
+      Neither has the equivalent round-trip test yet, and neither should be
+      called clean on the strength of Tables'.
 - [x] Restart after recovery and before the next autosave does not lose the recovered checkpoint.
       All three apps used to clear the orphan slot as soon as the recovered
       content was in memory and leave the next autosave tick to write a
