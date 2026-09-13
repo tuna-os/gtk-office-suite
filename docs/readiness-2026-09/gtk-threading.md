@@ -132,16 +132,27 @@ What the reasons have since said, and what has been ruled out:
 
 The occurrences print `DISPLAY=:0` with a socket present — "refused by a
 live display rather than handed a missing one", the case
-`describe_display_and_server` was added to name. Three of them, three
-*different* `letters::bridge` tests, at positions 118 of 141, 138 of 141
-and 138 of 141 in nextest's run order, while every other widget test in the
-same run initialised fine.
+`describe_display_and_server` was added to name. Four of them, four
+*different* `letters::bridge` tests, while every other widget test in the
+same run initialised fine. The fourth, counted against the whole workspace
+rather than against the widget tests alone:
 
-Connection accumulation is the obvious guess and is contradicted by
-measurement. nextest runs a process per test, so each widget test opens its
-own X connection, and a server out of client slots would explain one failure
-near the end of a long run. Eight iterations of the widget tests against one
-persistent display — roughly 750 GTK inits — produced zero refusals.
+```
+FAIL [0.093s] (145/906) letters::bin/letters
+    bridge::tests::page_breaks_survive_the_buffer_round_trip
+Summary [8.573s] 148/906 tests run: 147 passed, 1 failed, 7 skipped
+```
+
+The earlier three sat at 118, 138 and 138 of a comparable total, so every
+occurrence lands around test 118 to 145 of some 900 — nowhere near the end
+of a run.
+
+Connection accumulation is the obvious guess and is contradicted twice
+over. nextest runs a process per test, so each widget test opens its own X
+connection, and a server out of client slots would explain one failure near
+the end of a long run — but no occurrence *is* near the end of a run, and
+eight iterations of the widget tests against one persistent display
+(roughly 750 GTK inits) produced zero refusals.
 `Xvfb -maxclients n` is the lever if this ever turns out to be the cause,
 and nextest test groups or `max-threads` the lever for reducing concurrency,
 but neither should be reached for on a hypothesis this measurement

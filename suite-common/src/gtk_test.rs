@@ -33,12 +33,20 @@
 // One failure mode is still open, and this records what has been ruled out
 // so the next occurrence does not start from nothing. Symptom: a single
 // `letters::bridge` widget test fails with GTK refusing to initialise while
-// every other widget test in the same run initialises fine. Three
-// occurrences, three *different* tests, at positions 118 of 141, 138 of 141
-// and 138 of 141 in nextest's run order, always with `DISPLAY=:0` and a
-// socket present — which is the case `describe_display_and_server` was added
-// to name, and it names it: refused by a live display, not handed a missing
-// one.
+// every other widget test in the same run initialises fine. Four
+// occurrences, four *different* tests, always with `DISPLAY=:0` and a socket
+// present — which is the case `describe_display_and_server` was added to
+// name, and it names it: refused by a live display, not handed a missing
+// one. The fourth verbatim, because it is the one counted against the whole
+// workspace rather than against the widget tests alone:
+//
+//     FAIL [0.093s] (145/906) letters::bin/letters
+//         bridge::tests::page_breaks_survive_the_buffer_round_trip
+//     Summary [8.573s] 148/906 tests run: 147 passed, 1 failed, 7 skipped
+//
+// The earlier three sat at 118, 138 and 138 of a comparable total. So every
+// occurrence lands around test 118 to 145 of some 900: nowhere near the end
+// of a run.
 //
 // Ruled out, with the evidence, because both are the obvious guesses:
 //
@@ -46,7 +54,9 @@
 //     widget test opens its own X connection, and a server that ran out of
 //     client slots would explain one failure near the end of a long run.
 //     Measured: eight iterations of the widget tests against one persistent
-//     display, roughly 750 GTK inits, zero refusals. `Xvfb -maxclients n`
+//     display, roughly 750 GTK inits, zero refusals — and no occurrence is
+//     near the end of a run anyway, as the positions above say.
+//     `Xvfb -maxclients n`
 //     is the lever if this ever is the cause, and nextest test groups or
 //     `max-threads` is the lever for reducing concurrency — but neither
 //     should be reached for on a hypothesis this measurement contradicts.
