@@ -193,6 +193,10 @@ pub struct AutosaveSlot {
 
 const DATA_SUFFIX: &str = ".snapshot";
 const META_SUFFIX: &str = ".snapshot.meta";
+/// Ownership marker. A zero-byte file whose only job is to carry an
+/// advisory lock; `find_orphaned_snapshots` keys off DATA_SUFFIX, so these
+/// are never mistaken for recoverable content.
+const LOCK_SUFFIX: &str = ".lock";
 
 impl AutosaveSlot {
     pub fn new(state_dir: impl Into<PathBuf>, doc_id: impl Into<String>) -> Self {
@@ -251,9 +255,44 @@ impl AutosaveSlot {
         self.write(bytes, meta).is_ok()
     }
 
+    /// Mark this process as the live owner of the slot, so another launch
+    /// does not offer this window's open document as a crash recovery.
+    ///
+    /// Keep the returned guard for the window's lifetime. `None` means
+    /// another live process already owns the slot, which for a freshly
+    /// allocated doc_id should not happen and is worth not overwriting.
+    /// A slot that cannot be locked at all — no directory, a read-only
+    /// state dir — yields a guard anyway: autosave still has to work
+    /// where locking does not, and the cost is only that a second launch
+    /// may offer a document that is already open.
+    pub fn claim(&self) -> Option<SnapshotOwner> {
+        if fs::create_dir_all(&self.state_dir).is_err() {
+            return None;
+        }
+        let path = lock_path(&self.state_dir, &self.doc_id);
+        let file = fs::OpenOptions::new()
+            .read(true)
+            .write(true)
+            .create(true)
+            .truncate(false)
+            .open(&path)
+            .ok()?;
+        match try_lock_exclusive(&file) {
+            Ok(true) => Some(SnapshotOwner { _file: file }),
+            Ok(false) => None,
+            // Could not ask. Autosave must still run, so claim it.
+            Err(_) => Some(SnapshotOwner { _file: file }),
+        }
+    }
+
     /// Remove the snapshot — call this on a successful real save and on an
     /// explicit discard. Missing files are not an error: nothing to do.
     pub fn clear(&self) -> Result<(), String> {
+        // The ownership marker belongs to the snapshot, so it goes when the
+        // snapshot does. Best-effort: a leftover zero-byte .lock is inert
+        // (nothing holds it, so it asserts no liveness), while failing the
+        // clear over it would turn a tidy-up into a reported error.
+        let _ = fs::remove_file(lock_path(&self.state_dir, &self.doc_id));
         for p in [self.data_path(), self.meta_path()] {
             if p.exists() {
                 fs::remove_file(&p).map_err(|e| format!("Cannot remove {}: {e}", p.display()))?;
@@ -369,6 +408,52 @@ impl AutosaveNotices {
 /// made. Ties on mtime — two snapshots written inside one filesystem
 /// timestamp tick, which a crash makes likely — break on `doc_id`, so the
 /// order is total rather than merely usually-stable.
+/// Proof that this process is the live owner of a snapshot slot.
+///
+/// Hold one of these for as long as the window is open. Dropping it — or
+/// the process dying, however abruptly — releases the claim, because the
+/// kernel owns the release rather than our shutdown path. That is the
+/// whole reason for an advisory lock here instead of writing a pid into a
+/// file: a pid has to be interpreted, and it is wrong exactly when it
+/// matters, after a SIGKILL, when the number may already belong to
+/// something else.
+pub struct SnapshotOwner {
+    /// Held open because closing it would release the lock. Never read.
+    _file: fs::File,
+}
+
+/// Try to take an advisory exclusive lock without blocking.
+///
+/// `Ok(true)` means we hold it, `Ok(false)` that someone else does, and
+/// `Err` that the question could not be asked. Callers must treat that
+/// last case as "no live owner" — see `has_a_live_owner`.
+#[cfg(unix)]
+fn try_lock_exclusive(file: &fs::File) -> std::io::Result<bool> {
+    use std::os::unix::io::AsRawFd;
+    // flock locks the open file description, so two descriptors on the
+    // same file conflict even inside one process. That is what makes this
+    // usable from a second window in the same app.
+    let rc = unsafe { libc::flock(file.as_raw_fd(), libc::LOCK_EX | libc::LOCK_NB) };
+    if rc == 0 {
+        return Ok(true);
+    }
+    let err = std::io::Error::last_os_error();
+    match err.raw_os_error() {
+        // EAGAIN and EWOULDBLOCK are the same value on Linux; both mean
+        // "held by someone else", which is an answer rather than a fault.
+        Some(code) if code == libc::EWOULDBLOCK || code == libc::EAGAIN => Ok(false),
+        _ => Err(err),
+    }
+}
+
+#[cfg(not(unix))]
+fn try_lock_exclusive(_file: &fs::File) -> std::io::Result<bool> {
+    // No advisory locking wired up off Unix. Claiming always "succeeds"
+    // and liveness is never asserted, which degrades to the behaviour
+    // before ownership existed: snapshots are offered.
+    Ok(true)
+}
+
 /// Has a real save already captured everything this snapshot holds?
 ///
 /// A snapshot is cleared when the document is saved, but that clear can
@@ -400,6 +485,33 @@ fn superseded_by_a_real_save(meta: &SnapshotMeta, written: Option<std::time::Sys
     saved > written
 }
 
+/// Is some other live window holding this snapshot open?
+///
+/// The bias is deliberate and one-directional: this returns `true` only
+/// when the lock is demonstrably held by someone, and `false` for every
+/// other outcome — no lock file (nothing ever claimed it, which is every
+/// snapshot written before ownership existed), an unreadable lock path, a
+/// platform without locking. A wrong `true` hides recoverable work
+/// forever, because a snapshot that is never offered is never cleared
+/// either; a wrong `false` costs the user one recovery dialog for a
+/// document that is already open. Those are not the same mistake.
+fn has_a_live_owner(state_dir: &Path, doc_id: &str) -> bool {
+    let path = lock_path(state_dir, doc_id);
+    if !path.exists() {
+        return false;
+    }
+    let Ok(file) = fs::OpenOptions::new().read(true).write(true).open(&path) else {
+        return false;
+    };
+    // Taking the lock proves nobody held it; dropping `file` at the end of
+    // this scope releases what we just took.
+    !matches!(try_lock_exclusive(&file), Ok(true) | Err(_))
+}
+
+fn lock_path(state_dir: &Path, doc_id: &str) -> PathBuf {
+    state_dir.join(format!("{doc_id}{LOCK_SUFFIX}"))
+}
+
 pub fn find_orphaned_snapshots(state_dir: &Path) -> Vec<String> {
     let Ok(entries) = fs::read_dir(state_dir) else { return Vec::new() };
     let mut found: Vec<(std::time::SystemTime, String)> = entries
@@ -422,6 +534,15 @@ pub fn find_orphaned_snapshots(state_dir: &Path) -> Vec<String> {
             // comparison against a missing timestamp is not evidence.
             let written = fs::metadata(slot.data_path()).and_then(|m| m.modified()).ok();
             if superseded_by_a_real_save(&meta, written) {
+                return None;
+            }
+            // A window that is still open is not a crash to recover from.
+            // Since a live window always keeps a snapshot on disk now, a
+            // second launch would otherwise offer the first window's
+            // unsaved document back — reopening work that is already open,
+            // in a second window, from a snapshot that is still being
+            // rewritten underneath it.
+            if has_a_live_owner(state_dir, &doc_id) {
                 return None;
             }
             Some((written.unwrap_or(std::time::UNIX_EPOCH), doc_id))
@@ -468,6 +589,103 @@ mod tests {
     use super::*;
 
     use crate::atomic_save::fault;
+
+    /// The assumption the whole ownership design rests on: flock is per
+    /// open file description, so a second descriptor conflicts even inside
+    /// one process. If that were false, `has_a_live_owner` would always say
+    /// "free" and every check below would pass while protecting nothing.
+    #[test]
+    fn a_claimed_slot_reads_as_live_from_a_second_descriptor() {
+        let dir = tempfile::tempdir().unwrap();
+        let slot = AutosaveSlot::new(dir.path().to_path_buf(), "doc-1");
+        let owner = slot.claim().expect("a fresh slot should be claimable");
+        assert!(
+            has_a_live_owner(dir.path(), "doc-1"),
+            "a held claim must read as live, or nothing here protects anything"
+        );
+        drop(owner);
+        assert!(
+            !has_a_live_owner(dir.path(), "doc-1"),
+            "releasing the claim must make the slot recoverable again"
+        );
+    }
+
+    /// The bug this exists for: recovery adopts content into the live
+    /// window's own slot, so an open window always has a snapshot on disk,
+    /// and a second launch used to offer it back.
+    #[test]
+    fn a_live_windows_snapshot_is_not_offered_for_recovery() {
+        let dir = tempfile::tempdir().unwrap();
+        let meta = SnapshotMeta { original_path: None, kind: "md".into() };
+        let slot = AutosaveSlot::new(dir.path().to_path_buf(), "doc-1");
+        slot.write(b"work in an open window", &meta).unwrap();
+        let _owner = slot.claim().unwrap();
+        assert!(
+            find_orphaned_snapshots(dir.path()).is_empty(),
+            "a document open in another window is not a crash to recover"
+        );
+    }
+
+    /// The crash case, which is the whole point: the process dies without
+    /// running any cleanup, the kernel drops the lock, and the work is
+    /// offered. Dropping the guard while leaving the snapshot behind is
+    /// what an abrupt exit leaves.
+    #[test]
+    fn work_from_a_dead_window_is_still_offered() {
+        let dir = tempfile::tempdir().unwrap();
+        let meta = SnapshotMeta { original_path: None, kind: "md".into() };
+        let slot = AutosaveSlot::new(dir.path().to_path_buf(), "doc-1");
+        slot.write(b"unsaved work", &meta).unwrap();
+        drop(slot.claim().unwrap());
+        assert_eq!(
+            find_orphaned_snapshots(dir.path()),
+            vec!["doc-1".to_string()],
+            "a released claim means the owner is gone and the work is recoverable"
+        );
+    }
+
+    /// Every snapshot written before ownership existed has no lock file,
+    /// and must still be offered.
+    #[test]
+    fn a_snapshot_with_no_lock_file_is_offered() {
+        let dir = tempfile::tempdir().unwrap();
+        let meta = SnapshotMeta { original_path: None, kind: "md".into() };
+        AutosaveSlot::new(dir.path().to_path_buf(), "doc-1")
+            .write(b"from an older build", &meta)
+            .unwrap();
+        assert!(!lock_path(dir.path(), "doc-1").exists());
+        assert_eq!(find_orphaned_snapshots(dir.path()), vec!["doc-1".to_string()]);
+    }
+
+    /// Liveness that cannot be determined must not hide work: an
+    /// unopenable lock path reads as "no live owner", never as "held".
+    #[test]
+    fn an_unusable_lock_path_does_not_hide_the_snapshot() {
+        let dir = tempfile::tempdir().unwrap();
+        let meta = SnapshotMeta { original_path: None, kind: "md".into() };
+        AutosaveSlot::new(dir.path().to_path_buf(), "doc-1")
+            .write(b"unsaved work", &meta)
+            .unwrap();
+        // A directory where the lock file should be: open() fails with
+        // EISDIR, for root as well as anyone else.
+        fs::create_dir(lock_path(dir.path(), "doc-1")).unwrap();
+        assert!(!has_a_live_owner(dir.path(), "doc-1"));
+        assert_eq!(find_orphaned_snapshots(dir.path()), vec!["doc-1".to_string()]);
+    }
+
+    /// Clearing a slot takes its ownership marker with it, so a state
+    /// directory does not silt up with zero-byte files.
+    #[test]
+    fn clearing_a_slot_removes_its_lock_file() {
+        let dir = tempfile::tempdir().unwrap();
+        let meta = SnapshotMeta { original_path: None, kind: "md".into() };
+        let slot = AutosaveSlot::new(dir.path().to_path_buf(), "doc-1");
+        slot.write(b"work", &meta).unwrap();
+        drop(slot.claim().unwrap());
+        assert!(lock_path(dir.path(), "doc-1").exists());
+        slot.clear().unwrap();
+        assert!(!lock_path(dir.path(), "doc-1").exists());
+    }
 
     /// Write a snapshot, then make the file it describes look saved *after*
     /// it. Helper for the supersession cases below.

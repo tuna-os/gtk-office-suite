@@ -24,6 +24,14 @@ RELEASE_GATE = os.path.join(REPO_ROOT, "scripts", "release_gate.py")
 ROW = re.compile(r"^\s*\|\s*`([^`]+\.rs)`\s*\|\s*(\d+)\s*\|\s*(\d+)\s*\|\s*$", re.M)
 # "letters/src/window.rs": 1800,
 CEILING = re.compile(r'^\s*"([^"]+\.rs)":\s*(\d+),', re.M)
+# `<<<<<<< HEAD`, `=======`, `>>>>>>> origin/main`: git's conflict markers,
+# anchored to the start of a line, and the `=======` form pinned to exactly
+# seven characters with nothing after it — which is what git writes. A Setext
+# heading underline in Markdown is also a run of `=`, so a heading underlined
+# with exactly seven would read as a conflict here. This file underlines with
+# `---` and `#`, and a false positive costs one character to fix, which is a
+# better trade than letting the real thing through again.
+CONFLICT_MARKER = re.compile(r"^(<<<<<<<|>>>>>>>)[ \t]|^=======\s*$")
 # "(#354, 9/10)" or "(#313, 7/8)" — an issue's progress through its readiness
 # checklist, quoted in prose rather than in a table.
 PROGRESS = re.compile(r"#(\d+),\s*(\d+)/(\d+)\)")
@@ -227,6 +235,42 @@ class ReadinessExecutionList(unittest.TestCase):
 
 
 class RoadmapFigures(unittest.TestCase):
+    def test_the_roadmap_has_no_unresolved_merge_in_it(self):
+        """Conflict markers sat in this file's God-file table for three merges.
+
+        Both sides of the conflict said the same thing, so resolving it by
+        keeping one was all it needed — and because every assertion here reads
+        *rows*, a table wrapped in `<<<<<<< HEAD` parsed fine and the figures
+        all matched. The test that exists to keep this section honest read
+        straight past `>>>>>>> origin/main` three times.
+        """
+        with open(ROADMAP, encoding="utf-8") as handle:
+            for number, line in enumerate(handle, start=1):
+                self.assertFalse(
+                    CONFLICT_MARKER.match(line),
+                    f"{ROADMAP}:{number} is a merge conflict marker: "
+                    f"{line.strip()!r}",
+                )
+
+    def test_no_file_is_claimed_twice(self):
+        """A duplicated row is an unresolved merge even with the markers gone.
+
+        Two rows that agree are not a resolution — nothing keeps them agreeing,
+        and the next measurement updates whichever one the editor happened to
+        find. One row per file is the invariant; `assertEqual` on the counts
+        names the offender rather than just failing.
+        """
+        seen = {}
+        for path, _claimed, _ceiling in claimed_rows():
+            seen[path] = seen.get(path, 0) + 1
+        repeated = {path: count for path, count in seen.items() if count > 1}
+        self.assertEqual(
+            repeated,
+            {},
+            "the God-file table states these files more than once; keep one "
+            "row each so there is a single figure to re-measure",
+        )
+
     def test_every_stated_line_count_matches_the_file(self):
         for path, claimed, _ceiling in claimed_rows():
             with self.subTest(path=path):

@@ -43,6 +43,9 @@ pub struct DecksWindow {
     /// This window's own snapshot slot; recovery writes to it before
     /// clearing the orphan (see `AutosaveSlot::adopt_recovered`).
     autosave_slot: Rc<suite_common::autosave::AutosaveSlot>,
+    /// Ownership of that slot, held for the window's lifetime so another
+    /// launch does not offer this open deck as a crash recovery.
+    _autosave_owner: Option<suite_common::autosave::SnapshotOwner>,
 }
 
 impl DecksWindow {
@@ -1512,6 +1515,7 @@ impl DecksWindow {
         }
 
         Self {
+            _autosave_owner: autosave_slot.claim(),
             autosave_slot: autosave_slot.clone(),
             window: suite_win.window,
             slide_list,
