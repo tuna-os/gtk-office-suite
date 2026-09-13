@@ -1503,6 +1503,58 @@ class TablesAutosaveSmoke(BaseGUITestCase):
 
 
 
+class TablesUnclearableSnapshotSmoke(TablesSavedDocumentMixin, BaseGUITestCase):
+    """A snapshot that cannot be cleared must leave a trace.
+
+    Clearing the snapshot is the last step of a save, and every call site
+    used to be `let _ = slot.clear();`. #666 decided, rightly, not to put a
+    dialog in front of somebody whose save just worked about a temporary
+    file they cannot act on, and removed the consequence instead — a
+    snapshot the saved file has overtaken is no longer offered back. But it
+    removed the trace along with the consequence: a state directory that is
+    full or read-only produced no output at all, so the one person who
+    needs to know — whoever is asking why it keeps filling up — had nothing
+    to read.
+
+    The journey arranges a clear that genuinely cannot succeed, saves, and
+    reads the app's own stderr. Asserting on stderr rather than on a toast
+    is the point: the choice under test is *log, do not interrupt*, and a
+    journey that looked for a notice would be asserting the opposite.
+    """
+
+    def setUp(self):
+        self._state_dir = self.isolate_autosave_state(prefix="tables-unclearable-state-")
+        self._dir = self.temp_dir("tables-unclearable-docs-")
+        super().setUp()
+
+    def test_a_snapshot_that_cannot_be_cleared_says_so(self):
+        from dogtail import rawinput
+
+        out_path = self._save_a_real_document()
+        self._dirty_the_saved_document(out_path)
+
+        # A directory where the snapshot file was: `remove_file` then fails
+        # for root as well, which a permission bit would not. Replacing the
+        # file rather than blocking the whole directory matters — block the
+        # directory and the snapshot never exists, so `clear` succeeds with
+        # nothing to do and the journey passes while proving nothing.
+        [snapshot] = self._snapshot_files()
+        blocked = os.path.join(self._state_dir, self.app_name, snapshot)
+        os.remove(blocked)
+        os.mkdir(blocked)
+
+        # The workbook already has a path, so Ctrl+S writes it and clears.
+        rawinput.keyCombo("<Control>s")
+        time.sleep(2.0)
+
+        self.assertTrue(os.path.isdir(blocked), "the clear should not have removed it")
+        _out, err = self.app_output()
+        self.assertIn(
+            "could not clear the crash snapshot", err or "",
+            f"the failed clear left no trace; the app's stderr was: {(err or '')[-800:]!r}",
+        )
+
+
 class TablesAutosaveFailureSmoke(BaseGUITestCase):
     """What the user is told when autosave cannot write at all."""
 

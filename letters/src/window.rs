@@ -968,7 +968,7 @@ impl LettersWindow {
             update_style_readout(&buf, &sl);
 
             if protected {
-                let _ = orphan.clear();
+                orphan.clear_or_report();
             }
             recovered += 1;
         }
@@ -1278,7 +1278,7 @@ fn connect_style_readout(buf: &gtk::TextBuffer, label: &gtk4::Label) {
 /// since a discarded tab shouldn't be offered back as "recovered" either.
 fn clear_tab_autosave(child: &gtk::Widget) {
     if let Some(td) = tab_data_get(child) {
-        let _ = td.0.borrow().autosave_slot.clear();
+        td.0.borrow().autosave_slot.clear_or_report();
     }
 }
 
