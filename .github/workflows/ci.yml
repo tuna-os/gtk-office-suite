@@ -67,6 +67,7 @@ jobs:
             tests/test_readiness_citations.py \
             tests/test_roadmap_figures.py \
             tests/test_skip_reasons.py \
+            tests/test_autosave_defaults.py \
             tests/test_ci_test_list.py \
             tests/adaptive_editor_contract.py
 
@@ -113,6 +114,7 @@ jobs:
             tests/test_readiness_citations.py \
             tests/test_roadmap_figures.py \
             tests/test_skip_reasons.py \
+            tests/test_autosave_defaults.py \
             tests/test_ci_test_list.py \
             tests/adaptive_editor_contract.py > python-collected.txt
           python3 conformance/collect_test_inventory.py \
