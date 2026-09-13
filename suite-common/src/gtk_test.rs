@@ -33,8 +33,9 @@
 // One failure mode is still open, and this records what has been ruled out
 // so the next occurrence does not start from nothing. Symptom: a single
 // Letters widget test fails with GTK refusing to initialise while every
-// other widget test in the same run initialises fine. Six occurrences, six
-// *different* tests, always with `DISPLAY=:0` and a socket present — which
+// other widget test in the same run initialises fine. Seven occurrences,
+// seven *different* tests, always with `DISPLAY=:0` and a socket present —
+// which
 // is the case `describe_display_and_server` was added to name, and it names
 // it: refused by a live display, not handed a missing one.
 //
@@ -94,10 +95,13 @@
 // one widget test's X connection is refused, which would need many runs to
 // measure rather than one to reproduce.
 //
-// The rate is worth knowing before picking that up: of roughly nine
-// `test`-lane runs across one afternoon's pull requests, three failed this
-// way. At one in three this is a gate rather than a curiosity, so the cost
-// of leaving it is paid on every pull request.
+// The rate is worth knowing before picking that up: of roughly ten
+// `test`-lane runs across one afternoon's pull requests, four failed this
+// way, and one pull request took three of them consecutively and could not
+// land. At better than one in three this is a gate rather than a
+// curiosity, so the cost of leaving it is paid on every pull request.
+// Whether the failures follow a runner rather than a commit is the
+// question that clustering raises; see gtk-threading.md.
 
 use std::panic;
 use std::sync::mpsc;

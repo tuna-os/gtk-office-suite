@@ -132,7 +132,7 @@ What the reasons have since said, and what has been ruled out:
 
 The occurrences print `DISPLAY=:0` with a socket present — "refused by a
 live display rather than handed a missing one", the case
-`describe_display_and_server` was added to name. Six so far, each a
+`describe_display_and_server` was added to name. Seven so far, each a
 *different* Letters widget test, while every other widget test in the same
 run initialised fine.
 
@@ -173,8 +173,24 @@ That is evidence about a long-lived display, and it is the only evidence
 here that is.
 
 The rate is worth recording too, because "intermittent" undersells it: of
-roughly nine `test`-lane runs across one afternoon's pull requests, three
-failed this way. At one in three it is a gate, not a curiosity.
+roughly ten `test`-lane runs across one afternoon's pull requests, four
+failed this way. At better than one in three it is a gate, not a
+curiosity.
+
+One pull request took three of those four, consecutively — the two runs
+above plus a third on its base merge, at 157 of 921
+(`bridge::tests::prose_containing_pipes_is_not_captured_as_a_table`). It
+could not land, and nothing about its diff was involved in any of the
+three failures.
+
+That clustering is worth a note rather than a conclusion. If each widget
+test carried an independent chance of refusal, the ~150 of them per run
+and a one-in-three run-failure rate put that chance near 0.2%, and three
+consecutive run failures would be a 1-in-27 coincidence — unlikely, not
+impossible. So it is either bad luck or something about a particular
+runner, and two samples cannot tell those apart. Recorded so the next
+person can check whether the failures follow a runner rather than a
+commit, which is the question the numbers now raise and cannot answer.
 
 `Xvfb -maxclients n` remains the lever if a client-slot limit is ever
 shown to be the cause, and a nextest test group with `max-threads = 1`
