@@ -41,6 +41,9 @@ pub struct DecksWindow {
     editor_split: adw::OverlaySplitView,
     file_path: Rc<RefCell<Option<String>>>,
     refresh_hud: Rc<dyn Fn()>,
+    /// This window's own snapshot slot; recovery writes to it before
+    /// clearing the orphan (see `AutosaveSlot::adopt_recovered`).
+    autosave_slot: Rc<suite_common::autosave::AutosaveSlot>,
 }
 
 impl DecksWindow {
@@ -1704,6 +1707,7 @@ impl DecksWindow {
         }
 
         Self {
+            autosave_slot: autosave_slot.clone(),
             window: suite_win.window,
             slide_list,
             canvas,
@@ -1757,7 +1761,10 @@ impl DecksWindow {
                 .map(|n| n.to_string_lossy().to_string())
                 .unwrap_or_else(|| "Untitled".to_string());
             self.window.set_title(Some(&format!("{name} (Recovered) — Decks")));
-            let _ = orphan.clear();
+            // Order and failure handling: AutosaveSlot::adopt_recovered.
+            if self.autosave_slot.adopt_recovered(&bytes, &meta) {
+                let _ = orphan.clear();
+            }
             return true;
         }
         false

@@ -36,7 +36,7 @@ list follows.
 - [~] #313 — CI validator and test gates — [ci-gates.md](ci-gates.md) 7/8
 - [~] #442 — crash and flake campaign — [crash-stress.md](crash-stress.md) 2/8
 - [~] #441 — capability evidence ledger — [capability-evidence.md](capability-evidence.md) 3/7
-- [~] #322 — recovery lifecycle — [recovery.md](recovery.md) 2/9
+- [~] #322 — recovery lifecycle — [recovery.md](recovery.md) 3/9
 - [~] #374 — live interoperability loss budgets — [interoperability.md](interoperability.md) 0/9
 - [~] #438 — Letters fidelity — [letters-fidelity.md](letters-fidelity.md) 0/6
 - [~] #439 — Tables format safety and authoring — [tables-readiness.md](tables-readiness.md) 1/7
