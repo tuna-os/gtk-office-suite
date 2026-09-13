@@ -1098,8 +1098,8 @@ class LettersLiveOwnerSmoke(LiveOwnerMixin, BaseGUITestCase):
     app_name = "letters"
 
 
-class SavedWorkbookMixin:
-    """Gets a journey to a genuinely saved workbook, then a snapshot of
+class SavedDocumentMixin:
+    """Gets a journey to a genuinely saved document, then a snapshot of
     unsaved changes on top of it.
 
     Two journeys need that exact state and disagree about what should happen
@@ -1108,43 +1108,60 @@ class SavedWorkbookMixin:
     away it must still be offered. Identical preconditions, opposite
     expectations — so a change that confused "a path is recorded" with "the
     file at that path overtook the snapshot" cannot satisfy both.
+
+    The save goes through the close guard because that is the route a
+    journey has to a genuinely written file. All three apps share that
+    dialog; they differ only in the extension they write and in what counts
+    as an edit, which is what the two hooks below are for.
     """
 
-    app_name = "tables"
+    doc_suffix = ".xlsx"
+    doc_stem = "quarterly"
+    # Letters' close guard is multi-tab, so its buttons are "Save All" and
+    # "Discard All" where the single-document apps say "Save".
+    save_button_label = "Save"
 
     def _snapshot_files(self):
-        snap_dir = os.path.join(self._state_dir, "tables")
+        snap_dir = os.path.join(self._state_dir, self.app_name)
         if not os.path.isdir(snap_dir):
             return []
         return [f for f in os.listdir(snap_dir) if f.endswith(".snapshot")]
 
-    def _save_a_real_workbook(self):
-        """Save through the close guard, which is the route a journey has to
-        a genuinely written file, and leaves the app closed."""
+    def _edit_the_document(self, rawinput, nth):
+        """Make the `nth` edit, leaving the document dirty.
+
+        It has to be a *different* edit each time. Retyping the same value
+        into the same cell leaves Tables clean, `autosave-now` returns early
+        on a clean document, and the journey then fails on its own
+        precondition with no snapshot — which is exactly how this hook was
+        wrong on its first outing.
+        """
+        rawinput.typeText(f"draft {nth} content")
+        time.sleep(0.5)
+
+    def _save_a_real_document(self):
         import subprocess
 
         from dogtail import rawinput, tree
 
-        out_path = os.path.join(self._dir, "quarterly.xlsx")
-        subprocess.run(["gapplication", "action", "org.tunaos.tables", "new-document"])
+        out_path = os.path.join(self._dir, f"{self.doc_stem}{self.doc_suffix}")
+        subprocess.run(["gapplication", "action", f"org.tunaos.{self.app_name}", "new-document"])
         time.sleep(1.5)
-        rawinput.typeText("=6*7")
-        rawinput.keyCombo("Return")
-        time.sleep(0.5)
+        self._edit_the_document(rawinput, 1)
 
         self.app.child(name="Close", roleName="push button").do_action(0)
         time.sleep(0.8)
-        self.app.child(name="Save", roleName="push button").do_action(0)
+        self.app.child(name=self.save_button_label, roleName="push button").do_action(0)
         time.sleep(1.0)
         name_entry = tree.root.findChild(lambda n: n.name == "Name:" and n.roleName == "text")
         name_entry.text = out_path
         time.sleep(0.3)
         tree.root.findChild(lambda n: n.name == "Save" and n.roleName == "push button").do_action(0)
         self.assertIsNotNone(self.wait_for_process_exit(), "the save did not complete")
-        self.assertTrue(os.path.exists(out_path), "no workbook was written")
+        self.assertTrue(os.path.exists(out_path), "no document was written")
         return out_path
 
-    def _dirty_the_saved_workbook(self, out_path):
+    def _dirty_the_saved_document(self, out_path):
         """Reopen the saved file so the snapshot records its path, dirty it,
         and take a snapshot."""
         import subprocess
@@ -1153,15 +1170,13 @@ class SavedWorkbookMixin:
 
         self.relaunch_app(launch_args=[out_path])
         time.sleep(2.0)
-        rawinput.typeText("=1+1")
-        rawinput.keyCombo("Return")
-        time.sleep(0.5)
-        subprocess.run(["gapplication", "action", "org.tunaos.tables", "autosave-now"])
+        self._edit_the_document(rawinput, 2)
+        subprocess.run(["gapplication", "action", f"org.tunaos.{self.app_name}", "autosave-now"])
         time.sleep(0.8)
         self.assertEqual(len(self._snapshot_files()), 1, "precondition: a snapshot exists")
 
 
-class TablesRenamedOriginalSmoke(SavedWorkbookMixin, BaseGUITestCase):
+class RenamedOriginalMixin(SavedDocumentMixin):
     """Unsaved work must survive its original being renamed out from under it.
 
     The stale-snapshot check asks whether the document on disk is newer than
@@ -1174,20 +1189,29 @@ class TablesRenamedOriginalSmoke(SavedWorkbookMixin, BaseGUITestCase):
     this is unsaved" — would discard the one case where recovery matters
     most. That is the same asymmetry the ownership lock is biased on: failing
     to prove work is safe is not proof that it is.
+
+    Run for all three apps because the check lives in shared code but each
+    app decides what to do with its answer, and #322's completion note asks
+    for journeys in all three.
     """
 
     def setUp(self):
-        self._state_dir = self.isolate_autosave_state(prefix="tables-renamed-state-")
-        self._dir = self.temp_dir("tables-renamed-docs-")
+        self._state_dir = self.isolate_autosave_state(prefix=f"{self.app_name}-renamed-state-")
+        self._dir = self.temp_dir(f"{self.app_name}-renamed-docs-")
         super().setUp()
 
+    def _assert_the_offer_names_the_work(self, frame_name):
+        """Tables and Decks title the window with the document; Letters puts
+        the name on the recovered tab and keeps a fixed window title, so it
+        has nothing to add here."""
+
     def test_work_whose_original_was_renamed_away_is_still_offered(self):
-        out_path = self._save_a_real_workbook()
-        self._dirty_the_saved_workbook(out_path)
+        out_path = self._save_a_real_document()
+        self._dirty_the_saved_document(out_path)
 
         # The rename happens outside the app, as it would in a file manager
         # or a shell, while the app holds unsaved changes to the old name.
-        renamed = os.path.join(self._dir, "quarterly-2026.xlsx")
+        renamed = os.path.join(self._dir, f"{self.doc_stem}-2026{self.doc_suffix}")
         os.rename(out_path, renamed)
         self.assertFalse(os.path.exists(out_path))
 
@@ -1198,11 +1222,62 @@ class TablesRenamedOriginalSmoke(SavedWorkbookMixin, BaseGUITestCase):
             timeout=20.0,
             description="a recovered window title",
         )
-        # Titled from the path the snapshot recorded, which is the name the
-        # work was last known by — the app has no way to learn the new one.
+        self._assert_the_offer_names_the_work(frame)
+
+
+class TablesSavedDocumentMixin(SavedDocumentMixin):
+    """How Tables specifically gets a dirty saved workbook.
+
+    Split from the app-agnostic mixin because both Tables journeys that need
+    one — the renamed original and the stale snapshot — have to edit cells
+    the same way, and putting the override on only one of them left the
+    other typing into a cell it never committed. The workbook was clean,
+    `autosave-now` returned early, and the journey failed on its own
+    precondition rather than on anything it meant to test.
+    """
+
+    app_name = "tables"
+    doc_suffix = ".xlsx"
+
+    def _edit_the_document(self, rawinput, nth):
+        # A cell edit only counts once committed, and the second one has to
+        # differ from the first or the workbook is not dirty.
+        rawinput.typeText("=6*7" if nth == 1 else "=1+1")
+        rawinput.keyCombo("Return")
+        time.sleep(0.5)
+
+
+class TablesRenamedOriginalSmoke(TablesSavedDocumentMixin, RenamedOriginalMixin, BaseGUITestCase):
+    def _assert_the_offer_names_the_work(self, frame_name):
         self.assertIn(
-            "quarterly.xlsx", frame,
-            f"the recovered window should name the original document: {frame!r}",
+            f"{self.doc_stem}{self.doc_suffix}", frame_name,
+            f"the recovered window should name the original document: {frame_name!r}",
+        )
+
+
+class LettersRenamedOriginalSmoke(RenamedOriginalMixin, BaseGUITestCase):
+    app_name = "letters"
+    doc_suffix = ".md"
+    save_button_label = "Save All"
+
+
+class DecksRenamedOriginalSmoke(RenamedOriginalMixin, BaseGUITestCase):
+    app_name = "decks"
+    doc_suffix = ".pptx"
+
+    def _edit_the_document(self, rawinput, nth):
+        # A fresh deck has no focused text frame, so it is dirtied the way
+        # every other Decks journey dirties one. Each call adds another
+        # shape, so the second edit is a real change.
+        import subprocess
+
+        subprocess.run(["gapplication", "action", "org.tunaos.decks", "add-shape"])
+        time.sleep(1.0)
+
+    def _assert_the_offer_names_the_work(self, frame_name):
+        self.assertIn(
+            f"{self.doc_stem}{self.doc_suffix}", frame_name,
+            f"the recovered window should name the original document: {frame_name!r}",
         )
 
 
@@ -1277,7 +1352,7 @@ class TablesTwoDocumentsSmoke(BaseGUITestCase):
             )
 
 
-class TablesStaleSnapshotSmoke(SavedWorkbookMixin, BaseGUITestCase):
+class TablesStaleSnapshotSmoke(TablesSavedDocumentMixin, BaseGUITestCase):
     """Already-saved work must not come back as a recovery offer.
 
     A snapshot is cleared when the document is saved, but that clear was
@@ -1298,16 +1373,14 @@ class TablesStaleSnapshotSmoke(SavedWorkbookMixin, BaseGUITestCase):
     window, not a recovery.
     """
 
-    app_name = "tables"
-
     def setUp(self):
         self._state_dir = self.isolate_autosave_state(prefix="tables-stale-state-")
         self._dir = self.temp_dir("tables-stale-docs-")
         super().setUp()
 
     def test_a_snapshot_the_save_overtook_is_not_offered_as_recovery(self):
-        out_path = self._save_a_real_workbook()
-        self._dirty_the_saved_workbook(out_path)
+        out_path = self._save_a_real_document()
+        self._dirty_the_saved_document(out_path)
 
         # What a failed clear leaves behind: the document saved after the
         # snapshot was taken, and the snapshot still on disk.
