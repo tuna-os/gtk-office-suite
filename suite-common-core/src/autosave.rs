@@ -495,10 +495,16 @@ pub struct SnapshotOwner {
 /// Try to take an advisory exclusive lock without blocking.
 ///
 /// `Ok(true)` means we hold it, `Ok(false)` that someone else does, and
-/// `Err` that the question could not be asked. Callers must treat that
-/// last case as "no live owner" — see `has_a_live_owner`.
+/// `Err` that the question could not be asked.
+///
+/// What to do with that last case is the caller's, and the two callers
+/// answer it oppositely on purpose. `has_a_live_owner` treats it as "no
+/// live owner", because autosave must still run. `atomic_save`'s sweep
+/// treats it as "leave it alone", because the action it gates is a
+/// deletion. Both are the same rule — failing to prove something is safe
+/// is not proof that it is — pointed at different consequences.
 #[cfg(unix)]
-fn try_lock_exclusive(file: &fs::File) -> std::io::Result<bool> {
+pub(crate) fn try_lock_exclusive(file: &fs::File) -> std::io::Result<bool> {
     use std::os::unix::io::AsRawFd;
     // flock locks the open file description, so two descriptors on the
     // same file conflict even inside one process. That is what makes this
@@ -517,7 +523,7 @@ fn try_lock_exclusive(file: &fs::File) -> std::io::Result<bool> {
 }
 
 #[cfg(not(unix))]
-fn try_lock_exclusive(_file: &fs::File) -> std::io::Result<bool> {
+pub(crate) fn try_lock_exclusive(_file: &fs::File) -> std::io::Result<bool> {
     // No advisory locking wired up off Unix. Claiming always "succeeds"
     // and liveness is never asserted, which degrades to the behaviour
     // before ownership existed: snapshots are offered.
