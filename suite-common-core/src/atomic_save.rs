@@ -416,26 +416,47 @@ mod tests {
         assert_eq!(fs::read(&path).unwrap(), b"new document");
     }
 
-    /// A save holds a lock on its own temporary while it writes — the
-    /// property the sweep reads. Asserted from outside, because the whole
-    /// mechanism rests on another process being unable to take it.
+    /// A save holds a lock on its temporary *while it is writing data* —
+    /// the property the sweep reads. Asserted from outside, because the
+    /// whole mechanism rests on another process being unable to take it.
+    ///
+    /// "While it is writing data" is the careful part, and the first
+    /// version of this test got it wrong. It locked any temporary the
+    /// moment one appeared, which asserts that a temporary is never
+    /// lockable at all — and that is not what the code promises. The order
+    /// is: create the temporary, *then* lock it. Between those two
+    /// statements the file is on disk holding no lock, and a watcher that
+    /// pounces on sight can win that window. It did, on a CI runner, at
+    /// test 497 of 912 in a full parallel workspace run, while passing a
+    /// dozen times in a row locally — load decides who wins.
+    ///
+    /// That window is not a bug to close; it is the window
+    /// `SWEEP_RACE_FLOOR` exists for. So the test waits for evidence that
+    /// the save has got past it: a non-zero length. `write_all` runs after
+    /// the lock is taken, so any non-empty temporary is already locked, and
+    /// a lock acquired on one is a real failure rather than a race.
     #[cfg(unix)]
     #[test]
     fn a_save_in_progress_holds_its_temporary() {
         let dir = tempfile::tempdir().unwrap();
         let seen = std::sync::Arc::new(std::sync::Mutex::new(Vec::<bool>::new()));
-        // Watch the directory while a large save runs and try to lock any
-        // temporary that appears. Every attempt must be refused.
         let watcher = {
             let (dir, seen) = (dir.path().to_path_buf(), seen.clone());
             std::thread::spawn(move || {
-                let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
+                let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
                 while std::time::Instant::now() < deadline {
                     for entry in fs::read_dir(&dir).into_iter().flatten().flatten() {
-                        let name = entry.file_name();
-                        if !name.to_string_lossy().starts_with(TEMP_PREFIX) {
+                        if !entry.file_name().to_string_lossy().starts_with(TEMP_PREFIX) {
                             continue;
                         }
+                        // Empty means the save may not have reached its
+                        // lock yet; that is the documented window, so it
+                        // is not evidence either way. Keep looking.
+                        if entry.metadata().map(|m| m.len()).unwrap_or(0) == 0 {
+                            continue;
+                        }
+                        // The save may have persisted between the listing
+                        // and this open, which is also not evidence.
                         if let Ok(f) =
                             fs::OpenOptions::new().read(true).write(true).open(entry.path())
                         {
@@ -447,24 +468,24 @@ mod tests {
                 }
             })
         };
-        // Big enough that the temporary exists for a measurable while.
+        // Big enough that the write dominates, so the watcher has time to
+        // catch the temporary with bytes in it.
         let big = vec![b'x'; 64 * 1024 * 1024];
         atomic_write_bytes(&dir.path().join("doc.bin"), &big).unwrap();
         watcher.join().unwrap();
 
         let attempts = seen.lock().unwrap().clone();
-        // An empty result means the watcher never caught the temporary,
-        // which makes this inconclusive rather than passing — say so
-        // instead of reporting a pass nobody earned.
+        // Nothing observed makes this inconclusive, not passing — say so
+        // rather than reporting a pass nobody earned.
         assert!(
             !attempts.is_empty(),
-            "the watcher never saw a temporary, so this proved nothing; \
-             raise the buffer size if this becomes flaky",
+            "the watcher never saw a temporary with bytes in it, so this \
+             proved nothing; raise the buffer size if this recurs",
         );
         assert!(
             attempts.iter().all(|locked| !locked),
-            "a temporary was lockable while its save was writing, so the \
-             sweep cannot tell a live save from a crashed one",
+            "a temporary was lockable while its save was writing data, so \
+             the sweep cannot tell a live save from a crashed one",
         );
     }
 
