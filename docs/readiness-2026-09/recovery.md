@@ -250,12 +250,34 @@ AutosaveSlot used to store bytes and metadata in separate atomic writes. Each wr
       over-refusing — declining everything the envelope reader declines —
       silently discards exactly this user's work, and the journey fails when
       it does (`last observed: 'Tables'`, no recovery at all).
-      **Still open: journeys for multiple documents and a renamed
-      original.** Multiple windows, unsaved documents, duplicate recovery
-      and now schema upgrades have real kill/relaunch journeys
-      (`LiveOwnerMixin`, the autosave journeys,
-      `*RecoveryIsItselfProtectedSmoke`,
-      `TablesLegacySnapshotUpgradeSmoke`). The other two are asserted only
-      headlessly, and this row asks for both.
+      All six scenarios now have a journey as well. The two that were
+      missing:
+      `TablesRenamedOriginalSmoke` saves a real workbook, reopens it,
+      dirties it, snapshots, renames the file away outside the app, and
+      asserts the work still comes back. It is deliberately the mirror image
+      of `TablesStaleSnapshotSmoke` — identical setup, opposite expectation —
+      and the two share it through `SavedWorkbookMixin` so the pairing is
+      visible. A file made *newer* than the snapshot must suppress the offer;
+      a file that is *gone* must not. Flipping that one bias
+      (`superseded_by_a_real_save` returning `true` when the original cannot
+      be stat'd) fails the renamed journey and leaves the stale one passing,
+      which is what shows the two are pinning opposite sides of one
+      decision rather than restating each other. The bias itself is the same
+      asymmetry the ownership lock carries: failing to prove work is safe is
+      not proof that it is.
+      `TablesTwoDocumentsSmoke` plants two snapshots a clear ten minutes
+      apart and asserts the launch recovers the newer, names it, and leaves
+      the older one byte-for-byte intact for the next launch. Reversing the
+      comparator in `find_orphaned_snapshots` brings up
+      `'older.xlsx (Recovered) — Tables'`, so the newest-first guarantee is
+      now checked through an app and not only in a unit test.
+      **Still short of done, for one reason: those three journeys are
+      Tables-only**, and this row's completion note asks for all three apps.
+      Multiple windows, unsaved documents and duplicate recovery do have
+      journeys in Letters and Decks as well; multiple documents, a renamed
+      original and a schema upgrade are asserted in Tables plus headlessly.
+      Porting them is mostly a matter of the planted bytes — Letters
+      snapshots JSON and Decks pptx, so neither can reuse the workbook
+      builder.
 
 Completion requires headless lifecycle tests plus real kill/relaunch journeys for all three apps. Avoid promising perfect power-loss survival on filesystems whose durability guarantees have not been verified.
