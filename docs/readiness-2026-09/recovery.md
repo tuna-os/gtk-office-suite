@@ -198,6 +198,49 @@ AutosaveSlot used to store bytes and metadata in separate atomic writes. Each wr
       Also still open in this row: "keep dirty state on failed commit" is the
       save transaction rather than the snapshot — #436 and #437 own it.
 - [~] Inject failures before/after each checkpoint/rename and kill the real app; verify old-or-new complete state, never a mismatched generation. The headless half is done: `atomic_save::fault` arms any of the six boundaries of a durable write (temp create, permission preservation, data write, data sync, rename, directory sync) and any arrival at one, so "fail the second commit of this transaction" is expressible. A sweep asserts that every pre-commit boundary leaves the destination byte-identical with no temporary left behind, that the one post-rename boundary reports the replacement rather than claiming a rollback, and that no boundary or arrival in a snapshot write can pair two generations. The hook is `cfg(test)` only — a release build contains no branch to take. Killing the real app under the GUI harness is still open.
-- [ ] Cover multiple windows, multiple documents, renamed/missing originals, unsaved documents, duplicate recovery attempts and schema upgrades.
+- [~] Cover multiple windows, multiple documents, renamed/missing originals, unsaved documents, duplicate recovery attempts and schema upgrades. The headless half of all six is now in `suite-common-core/src/autosave.rs`; three of the six still have no kill/relaunch journey, which is what this row's own completion note asks for, so it is partial rather than done.
+      Writing the schema-upgrade case found a real defect, and not in the
+      upgrade path. `read` tries the envelope, and when `decode` says no it
+      falls back to the two-file layout an older build wrote — raw document
+      bytes plus a `.snapshot.meta` sidecar. The fallback asked only whether
+      the sidecar existed, so a *damaged* envelope failed its CRC, fell
+      through, found a sidecar beside it and was handed back **whole**,
+      31-byte header included, wearing that sidecar's path and kind.
+      Recovery would write those bytes to a temp file and ask a format
+      reader to open them as the user's document. So the guarantee
+      `a_damaged_snapshot_is_declined_rather_than_half_restored` has asserted
+      all along held only in a state directory with nothing else in it — the
+      CRC check was defeated by a leftover file.
+      A stale sidecar is reachable because `write` removes it best-effort
+      (`let _ = fs::remove_file`), so a read-only or full state directory —
+      the failure modes autosave exists to survive — leaves one next to a
+      perfectly good envelope, and from there one torn write is enough. The
+      fix asks the question the fallback meant to ask: `decode` returning
+      `None` means "this build cannot read it", not "this is not one", and
+      only the second justifies reinterpreting the bytes.
+      That covers the forward direction too, which was the scenario being
+      tested: a snapshot from a newer build carries a version byte this one
+      does not know, so it is declined — correctly, the layout may have
+      changed — and now stays declined instead of being re-read as a legacy
+      document. Note what a downgrade therefore *is*: the work stays on disk
+      and is never offered, silently. Declining beats misparsing, but a
+      snapshot a build cannot read is currently indistinguishable to the user
+      from no snapshot at all.
+      Covered headlessly, per scenario: multiple windows and multiple
+      documents by the ownership and ordering tests; renamed and missing
+      originals by `a_snapshot_whose_file_no_longer_exists_is_still_offered`
+      (a rename leaves the recorded path pointing at nothing, which is the
+      same condition); unsaved documents by
+      `a_never_saved_snapshot_is_always_offered`; duplicate recovery by
+      `a_recovered_snapshot_is_not_offered_again`, which performs the
+      sequence `recover_from_snapshot` performs and asserts a second pass
+      finds nothing, or one crash becomes two copies of one document; schema
+      upgrades by the legacy-pair test in both directions.
+      **Still open: journeys for multiple documents, a renamed original and
+      a schema upgrade.** Multiple windows, unsaved documents and duplicate
+      recovery have real kill/relaunch journeys for all three apps
+      (`LiveOwnerMixin`, the autosave journeys, and
+      `*RecoveryIsItselfProtectedSmoke`). The other three are asserted only
+      headlessly, and this row asks for both.
 
 Completion requires headless lifecycle tests plus real kill/relaunch journeys for all three apps. Avoid promising perfect power-loss survival on filesystems whose durability guarantees have not been verified.
