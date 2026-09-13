@@ -116,12 +116,23 @@ AutosaveSlot used to store bytes and metadata in separate atomic writes. Each wr
       soon as the content was in memory and relied on the next timer tick
       for a replacement, so a crash in that window lost work that had
       already survived one crash.
-      Still open: **cleanup errors.** `clear_tab_autosave` still drops its
-      error, so a saved or discarded document whose slot could not be cleared
-      is silently offered back as "recovered" on the next launch. Different
-      consequence, different message, not done here. And "keep dirty state on
-      failed commit" is the save transaction rather than the snapshot — #436
-      and #437 own it.
+      **Cleanup errors are neutralised rather than surfaced** (#666), which
+      is why this row is still `[~]`. `clear_tab_autosave` and the
+      `slot.clear()` calls in Tables and Decks do still drop their errors, so
+      a snapshot whose clear fails is still left on disk. What changed is the
+      consequence: `find_orphaned_snapshots` no longer offers a snapshot the
+      saved file has overtaken, so already-saved work is not handed back as a
+      "recovered" document on every subsequent launch.
+      That was a deliberate choice over the obvious one. A failed clear
+      happens at the moment of a *successful* save, about a temporary file
+      the user cannot act on, so reporting it would put a warning in front of
+      someone whose save just worked. The false recovery offer is what they
+      actually experience, so that is what was removed. The trade-off is that
+      a failing clear now leaves no trace at all for anyone diagnosing a full
+      or read-only state directory — arguably a log line's job rather than a
+      toast's, and not done either way.
+      Also still open in this row: "keep dirty state on failed commit" is the
+      save transaction rather than the snapshot — #436 and #437 own it.
 - [~] Inject failures before/after each checkpoint/rename and kill the real app; verify old-or-new complete state, never a mismatched generation. The headless half is done: `atomic_save::fault` arms any of the six boundaries of a durable write (temp create, permission preservation, data write, data sync, rename, directory sync) and any arrival at one, so "fail the second commit of this transaction" is expressible. A sweep asserts that every pre-commit boundary leaves the destination byte-identical with no temporary left behind, that the one post-rename boundary reports the replacement rather than claiming a rollback, and that no boundary or arrival in a snapshot write can pair two generations. The hook is `cfg(test)` only — a release build contains no branch to take. Killing the real app under the GUI harness is still open.
 - [ ] Cover multiple windows, multiple documents, renamed/missing originals, unsaved documents, duplicate recovery attempts and schema upgrades.
 
