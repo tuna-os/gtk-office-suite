@@ -271,13 +271,34 @@ AutosaveSlot used to store bytes and metadata in separate atomic writes. Each wr
       comparator in `find_orphaned_snapshots` brings up
       `'older.xlsx (Recovered) — Tables'`, so the newest-first guarantee is
       now checked through an app and not only in a unit test.
-      **Still short of done, for one reason: those three journeys are
-      Tables-only**, and this row's completion note asks for all three apps.
-      Multiple windows, unsaved documents and duplicate recovery do have
-      journeys in Letters and Decks as well; multiple documents, a renamed
-      original and a schema upgrade are asserted in Tables plus headlessly.
-      Porting them is mostly a matter of the planted bytes — Letters
-      snapshots JSON and Decks pptx, so neither can reuse the workbook
-      builder.
+      The renamed-original journey now runs in all three apps, through
+      `RenamedOriginalMixin`: each drives its own close guard to a real
+      saved file, dirties it, snapshots, renames the file away, and relaunches.
+      Flipping the one bias fails all three and leaves the stale-snapshot
+      journey passing.
+      **Per app, what is actually covered by a journey** — this replaces an
+      earlier claim here that was wrong in one cell:
+      | scenario | Tables | Letters | Decks |
+      |---|---|---|---|
+      | multiple windows | yes | yes | yes |
+      | multiple documents | yes | yes | **no** |
+      | renamed/missing original | yes | yes | yes |
+      | unsaved documents | yes | yes | yes |
+      | duplicate recovery | yes | yes | yes |
+      | schema upgrade | yes | **no** | **no** |
+      Multiple documents was recorded as Tables-only when
+      `LettersAutosaveSmoke` had covered it all along — two dirty tabs are
+      two documents, each with its own slot, and it asserts both recover.
+      Letters reaches that case through ordinary use, where Tables and Decks
+      need two crashed runs.
+      **Three cells are left**: multiple documents in Decks, and the schema
+      upgrade in Letters and Decks. Those two need planted bytes in a format
+      this build does not write, and only they do — the earlier note here
+      claimed planting was the obstacle for all of the ports, which was
+      wrong: the renamed-original journeys drive the real app and plant
+      nothing. Letters requires JSON that deserialises as a whole
+      `letters_core::model::Document` (its `ParaStyle` has no serde
+      defaults, so a trimmed literal is rejected outright) and Decks a
+      minimal pptx package.
 
 Completion requires headless lifecycle tests plus real kill/relaunch journeys for all three apps. Avoid promising perfect power-loss survival on filesystems whose durability guarantees have not been verified.
