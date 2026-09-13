@@ -198,107 +198,39 @@ AutosaveSlot used to store bytes and metadata in separate atomic writes. Each wr
       Also still open in this row: "keep dirty state on failed commit" is the
       save transaction rather than the snapshot — #436 and #437 own it.
 - [~] Inject failures before/after each checkpoint/rename and kill the real app; verify old-or-new complete state, never a mismatched generation. The headless half is done: `atomic_save::fault` arms any of the six boundaries of a durable write (temp create, permission preservation, data write, data sync, rename, directory sync) and any arrival at one, so "fail the second commit of this transaction" is expressible. A sweep asserts that every pre-commit boundary leaves the destination byte-identical with no temporary left behind, that the one post-rename boundary reports the replacement rather than claiming a rollback, and that no boundary or arrival in a snapshot write can pair two generations. The hook is `cfg(test)` only — a release build contains no branch to take. Killing the real app under the GUI harness is still open.
-- [~] Cover multiple windows, multiple documents, renamed/missing originals, unsaved documents, duplicate recovery attempts and schema upgrades. The headless half of all six is now in `suite-common-core/src/autosave.rs`; three of the six still have no kill/relaunch journey, which is what this row's own completion note asks for, so it is partial rather than done.
-      Writing the schema-upgrade case found a real defect, and not in the
-      upgrade path. `read` tries the envelope, and when `decode` says no it
-      falls back to the two-file layout an older build wrote — raw document
-      bytes plus a `.snapshot.meta` sidecar. The fallback asked only whether
-      the sidecar existed, so a *damaged* envelope failed its CRC, fell
-      through, found a sidecar beside it and was handed back **whole**,
-      31-byte header included, wearing that sidecar's path and kind.
-      Recovery would write those bytes to a temp file and ask a format
-      reader to open them as the user's document. So the guarantee
-      `a_damaged_snapshot_is_declined_rather_than_half_restored` has asserted
-      all along held only in a state directory with nothing else in it — the
-      CRC check was defeated by a leftover file.
-      A stale sidecar is reachable because `write` removes it best-effort
-      (`let _ = fs::remove_file`), so a read-only or full state directory —
-      the failure modes autosave exists to survive — leaves one next to a
-      perfectly good envelope, and from there one torn write is enough. The
-      fix asks the question the fallback meant to ask: `decode` returning
-      `None` means "this build cannot read it", not "this is not one", and
-      only the second justifies reinterpreting the bytes.
-      That covers the forward direction too, which was the scenario being
-      tested: a snapshot from a newer build carries a version byte this one
-      does not know, so it is declined — correctly, the layout may have
-      changed — and now stays declined instead of being re-read as a legacy
-      document. Note what a downgrade therefore *is*: the work stays on disk
-      and is never offered, silently. Declining beats misparsing, but a
-      snapshot a build cannot read is currently indistinguishable to the user
-      from no snapshot at all.
-      Covered headlessly, per scenario: multiple windows and multiple
-      documents by the ownership and ordering tests; renamed and missing
-      originals by `a_snapshot_whose_file_no_longer_exists_is_still_offered`
-      (a rename leaves the recorded path pointing at nothing, which is the
-      same condition); unsaved documents by
-      `a_never_saved_snapshot_is_always_offered`; duplicate recovery by
-      `a_recovered_snapshot_is_not_offered_again`, which performs the
-      sequence `recover_from_snapshot` performs and asserts a second pass
-      finds nothing, or one crash becomes two copies of one document; schema
-      upgrades by the legacy-pair test in both directions.
-      The schema-upgrade journey exists now:
-      `TablesLegacySnapshotUpgradeSmoke` plants a two-file snapshot from the
-      previous build — a hand-built workbook, because anything Tables wrote
-      would be an envelope and would beg the question — starts the real app
-      on it, and asserts the window comes up recovered, naming the original,
-      with the planted cell value actually in the grid and the legacy pair
-      cleared behind it. Unit tests covered that read; nothing had run the
-      whole upgrade path through an app, where recovery has to find the
-      orphan, load a format it did not write, and adopt it into its own
-      envelope slot.
-      It doubles as the end-to-end negative control for the guard above:
-      over-refusing — declining everything the envelope reader declines —
-      silently discards exactly this user's work, and the journey fails when
-      it does (`last observed: 'Tables'`, no recovery at all).
-      All six scenarios now have a journey as well. The two that were
-      missing:
-      `TablesRenamedOriginalSmoke` saves a real workbook, reopens it,
-      dirties it, snapshots, renames the file away outside the app, and
-      asserts the work still comes back. It is deliberately the mirror image
-      of `TablesStaleSnapshotSmoke` — identical setup, opposite expectation —
-      and the two share it through `SavedWorkbookMixin` so the pairing is
-      visible. A file made *newer* than the snapshot must suppress the offer;
-      a file that is *gone* must not. Flipping that one bias
-      (`superseded_by_a_real_save` returning `true` when the original cannot
-      be stat'd) fails the renamed journey and leaves the stale one passing,
-      which is what shows the two are pinning opposite sides of one
-      decision rather than restating each other. The bias itself is the same
-      asymmetry the ownership lock carries: failing to prove work is safe is
-      not proof that it is.
-      `TablesTwoDocumentsSmoke` plants two snapshots a clear ten minutes
-      apart and asserts the launch recovers the newer, names it, and leaves
-      the older one byte-for-byte intact for the next launch. Reversing the
-      comparator in `find_orphaned_snapshots` brings up
-      `'older.xlsx (Recovered) — Tables'`, so the newest-first guarantee is
-      now checked through an app and not only in a unit test.
-      The renamed-original journey now runs in all three apps, through
-      `RenamedOriginalMixin`: each drives its own close guard to a real
-      saved file, dirties it, snapshots, renames the file away, and relaunches.
-      Flipping the one bias fails all three and leaves the stale-snapshot
-      journey passing.
-      **Per app, what is actually covered by a journey** — this replaces an
-      earlier claim here that was wrong in one cell:
-      | scenario | Tables | Letters | Decks |
-      |---|---|---|---|
-      | multiple windows | yes | yes | yes |
-      | multiple documents | yes | yes | **no** |
-      | renamed/missing original | yes | yes | yes |
-      | unsaved documents | yes | yes | yes |
-      | duplicate recovery | yes | yes | yes |
-      | schema upgrade | yes | **no** | **no** |
-      Multiple documents was recorded as Tables-only when
-      `LettersAutosaveSmoke` had covered it all along — two dirty tabs are
-      two documents, each with its own slot, and it asserts both recover.
-      Letters reaches that case through ordinary use, where Tables and Decks
-      need two crashed runs.
-      **Three cells are left**: multiple documents in Decks, and the schema
-      upgrade in Letters and Decks. Those two need planted bytes in a format
-      this build does not write, and only they do — the earlier note here
-      claimed planting was the obstacle for all of the ports, which was
-      wrong: the renamed-original journeys drive the real app and plant
-      nothing. Letters requires JSON that deserialises as a whole
-      `letters_core::model::Document` (its `ParaStyle` has no serde
-      defaults, so a trimmed literal is rejected outright) and Decks a
-      minimal pptx package.
+- [x] Cover multiple windows, multiple documents, renamed/missing originals, unsaved documents, duplicate recovery attempts and schema upgrades. All six have headless lifecycle tests in `suite-common-core/src/autosave.rs` and a real kill/relaunch journey in every app, which is what this row's completion note asks for.
+      | scenario | Tables | Letters | Decks | journey |
+      |---|---|---|---|---|
+      | multiple windows | yes | yes | yes | `LiveOwnerMixin` |
+      | multiple documents | yes | yes | yes | `TwoDocumentsMixin`; Letters via `LettersAutosaveSmoke` |
+      | renamed/missing original | yes | yes | yes | `RenamedOriginalMixin` |
+      | unsaved documents | yes | yes | yes | the autosave journeys |
+      | duplicate recovery | yes | yes | yes | `*RecoveryIsItselfProtectedSmoke` |
+      | schema upgrade | yes | yes | yes | `LegacySnapshotUpgradeMixin` |
+      Letters reaches "multiple documents" through ordinary use rather than a
+      planted pair: a window holds a document per tab, so two dirty tabs are
+      two documents with two slots, and `LettersAutosaveSmoke` has asserted
+      since #99 that a crash recovers both. The single-document apps are the
+      ones that have to *choose* which orphan to take, so those get the
+      planted pair and the ordering assertion.
+      Each mixin is pinned by a mutation rather than by its own passing.
+      Reversing `find_orphaned_snapshots`' comparator brings up
+      `'older.xlsx (Recovered) — Tables'` and `'older.pptx (Recovered) — Decks'`.
+      Making #718's legacy guard unconditional — the over-refusing direction,
+      which silently discards the unsaved work of somebody who crashed on the
+      old build and upgraded — fails the schema-upgrade journey in all three
+      apps. Flipping `superseded_by_a_real_save`'s missing-original bias
+      fails the renamed-original journey in all three while the
+      stale-snapshot journey keeps passing, which is what shows that pair is
+      pinning opposite sides of one decision rather than restating it.
+      The planted documents are hand-built in every case — `minimal_xlsx_bytes`,
+      `minimal_pptx_bytes`, and a spelled-out `Document` JSON literal for
+      Letters. A snapshot the app wrote would be an envelope and would prove
+      nothing about the legacy path. Letters' literal spells out every field
+      because `ParaStyle` has no serde defaults: a trimmed one is rejected
+      with `missing field 'alignment'`, and the journey would then fail as a
+      timeout rather than as a parse error.
+      Writing the schema-upgrade case is also what found #718's defect, which
+      was not in the upgrade path at all — see that row above.
 
 Completion requires headless lifecycle tests plus real kill/relaunch journeys for all three apps. Avoid promising perfect power-loss survival on filesystems whose durability guarantees have not been verified.
