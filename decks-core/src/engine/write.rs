@@ -13,12 +13,78 @@ use quick_xml::events::{Event, BytesStart, BytesEnd, BytesDecl, BytesText};
 use quick_xml::Writer;
 use letters_core::model::{Run, RunStyle};
 
-#[allow(clippy::too_many_arguments)]
+/// Where a shape sits and how far it is turned — the bounding box in points
+/// plus a rotation in degrees.
+///
+/// Grouped rather than passed as five loose `f64`s because threading
+/// rotation through made three of these writers exceed clippy's argument
+/// limit, and the honest fix for "too many arguments" is fewer arguments,
+/// not an `allow` (two of them carried one already). A named box also stops
+/// the circle call site being read as a centre: `Placement::of_circle`
+/// converts once, where the geometry is known.
+#[derive(Clone, Copy)]
+struct Placement {
+    x: f64,
+    y: f64,
+    w: f64,
+    h: f64,
+    rotation: f64,
+}
+
+impl Placement {
+    /// A circle's model form is a centre and a radius; its `a:xfrm` is the
+    /// bounding box, like every other shape's.
+    fn of_circle(cx: f64, cy: f64, r: f64, rotation: f64) -> Self {
+        Placement { x: cx - r, y: cy - r, w: 2.0 * r, h: 2.0 * r, rotation }
+    }
+}
+
+/// Emit a shape's `a:xfrm`: position, size, and rotation when there is any.
+///
+/// Four call sites wrote these six lines identically, which is how rotation
+/// came to be missing from all of them at once — the model has carried a
+/// `rotation` for every object since the rotate gesture landed, and the pptx
+/// writer emitted none of it while the odp writer did. Rotating a shape and
+/// saving as pptx (the format an unsaved deck defaults to, so also the format
+/// its crash snapshot uses) silently discarded the rotation.
+///
+/// OOXML measures `rot` in sixtieth-thousandths of a degree, positive
+/// clockwise, and omits the attribute entirely for an unrotated shape —
+/// writing `rot="0"` everywhere would be valid but would rewrite every
+/// existing file's shapes on the next save for no reason.
+fn write_xfrm<W: std::io::Write>(
+    writer: &mut Writer<W>,
+    at: Placement,
+) -> Result<(), quick_xml::Error> {
+    let Placement { x, y, w, h, rotation } = at;
+    let mut xfrm = BytesStart::new("a:xfrm");
+    if rotation.is_finite() && rotation.abs() > f64::EPSILON {
+        let rot = (rotation.rem_euclid(360.0) * 60_000.0).round() as i64;
+        if rot != 0 {
+            xfrm.push_attribute(("rot", rot.to_string().as_str()));
+        }
+    }
+    writer.write_event(Event::Start(xfrm))?;
+
+    let mut off = BytesStart::new("a:off");
+    off.push_attribute(("x", ((x * 9525.0).round() as i64).to_string().as_str()));
+    off.push_attribute(("y", ((y * 9525.0).round() as i64).to_string().as_str()));
+    writer.write_event(Event::Empty(off))?;
+
+    let mut ext = BytesStart::new("a:ext");
+    ext.push_attribute(("cx", ((w * 9525.0).round() as i64).to_string().as_str()));
+    ext.push_attribute(("cy", ((h * 9525.0).round() as i64).to_string().as_str()));
+    writer.write_event(Event::Empty(ext))?;
+
+    writer.write_event(Event::End(BytesEnd::new("a:xfrm")))?;
+    Ok(())
+}
+
 fn write_text_box<W: std::io::Write>(
     writer: &mut Writer<W>,
     id: usize,
     name_idx: usize,
-    x: f64, y: f64, w: f64, h: f64,
+    at: Placement,
     text: &str,
     runs: &[Run],
 ) -> Result<(), quick_xml::Error> {
@@ -40,19 +106,7 @@ fn write_text_box<W: std::io::Write>(
     
     // spPr
     writer.write_event(Event::Start(BytesStart::new("p:spPr")))?;
-    writer.write_event(Event::Start(BytesStart::new("a:xfrm")))?;
-    
-    let mut off = BytesStart::new("a:off");
-    off.push_attribute(("x", ((x * 9525.0).round() as i64).to_string().as_str()));
-    off.push_attribute(("y", ((y * 9525.0).round() as i64).to_string().as_str()));
-    writer.write_event(Event::Empty(off))?;
-    
-    let mut ext = BytesStart::new("a:ext");
-    ext.push_attribute(("cx", ((w * 9525.0).round() as i64).to_string().as_str()));
-    ext.push_attribute(("cy", ((h * 9525.0).round() as i64).to_string().as_str()));
-    writer.write_event(Event::Empty(ext))?;
-    
-    writer.write_event(Event::End(BytesEnd::new("a:xfrm")))?;
+    write_xfrm(writer, at)?;
     
     let mut prst_geom = BytesStart::new("a:prstGeom");
     prst_geom.push_attribute(("prst", "rect"));
@@ -115,7 +169,7 @@ fn write_rect<W: std::io::Write>(
     writer: &mut Writer<W>,
     id: usize,
     name_idx: usize,
-    x: f64, y: f64, w: f64, h: f64,
+    at: Placement,
 ) -> Result<(), quick_xml::Error> {
     writer.write_event(Event::Start(BytesStart::new("p:sp")))?;
     
@@ -131,19 +185,7 @@ fn write_rect<W: std::io::Write>(
     
     // spPr
     writer.write_event(Event::Start(BytesStart::new("p:spPr")))?;
-    writer.write_event(Event::Start(BytesStart::new("a:xfrm")))?;
-    
-    let mut off = BytesStart::new("a:off");
-    off.push_attribute(("x", ((x * 9525.0).round() as i64).to_string().as_str()));
-    off.push_attribute(("y", ((y * 9525.0).round() as i64).to_string().as_str()));
-    writer.write_event(Event::Empty(off))?;
-    
-    let mut ext = BytesStart::new("a:ext");
-    ext.push_attribute(("cx", ((w * 9525.0).round() as i64).to_string().as_str()));
-    ext.push_attribute(("cy", ((h * 9525.0).round() as i64).to_string().as_str()));
-    writer.write_event(Event::Empty(ext))?;
-    
-    writer.write_event(Event::End(BytesEnd::new("a:xfrm")))?;
+    write_xfrm(writer, at)?;
     
     let mut prst_geom = BytesStart::new("a:prstGeom");
     prst_geom.push_attribute(("prst", "rect"));
@@ -167,7 +209,7 @@ fn write_circle<W: std::io::Write>(
     writer: &mut Writer<W>,
     id: usize,
     name_idx: usize,
-    x: f64, y: f64, r: f64,
+    at: Placement,
 ) -> Result<(), quick_xml::Error> {
     writer.write_event(Event::Start(BytesStart::new("p:sp")))?;
     
@@ -183,19 +225,7 @@ fn write_circle<W: std::io::Write>(
     
     // spPr
     writer.write_event(Event::Start(BytesStart::new("p:spPr")))?;
-    writer.write_event(Event::Start(BytesStart::new("a:xfrm")))?;
-    
-    let mut off = BytesStart::new("a:off");
-    off.push_attribute(("x", (((x - r) * 9525.0).round() as i64).to_string().as_str()));
-    off.push_attribute(("y", (((y - r) * 9525.0).round() as i64).to_string().as_str()));
-    writer.write_event(Event::Empty(off))?;
-    
-    let mut ext = BytesStart::new("a:ext");
-    ext.push_attribute(("cx", ((2.0 * r * 9525.0).round() as i64).to_string().as_str()));
-    ext.push_attribute(("cy", ((2.0 * r * 9525.0).round() as i64).to_string().as_str()));
-    writer.write_event(Event::Empty(ext))?;
-    
-    writer.write_event(Event::End(BytesEnd::new("a:xfrm")))?;
+    write_xfrm(writer, at)?;
     
     let mut prst_geom = BytesStart::new("a:prstGeom");
     prst_geom.push_attribute(("prst", "ellipse"));
@@ -215,13 +245,12 @@ fn write_circle<W: std::io::Write>(
     Ok(())
 }
 
-#[allow(clippy::too_many_arguments)]
 fn write_image<W: std::io::Write>(
     writer: &mut Writer<W>,
     id: usize,
     name_idx: usize,
     rel_id: &str,
-    x: f64, y: f64, w: f64, h: f64,
+    at: Placement,
 ) -> Result<(), quick_xml::Error> {
     writer.write_event(Event::Start(BytesStart::new("p:pic")))?;
     
@@ -247,19 +276,7 @@ fn write_image<W: std::io::Write>(
     
     // spPr
     writer.write_event(Event::Start(BytesStart::new("p:spPr")))?;
-    writer.write_event(Event::Start(BytesStart::new("a:xfrm")))?;
-    
-    let mut off = BytesStart::new("a:off");
-    off.push_attribute(("x", ((x * 9525.0).round() as i64).to_string().as_str()));
-    off.push_attribute(("y", ((y * 9525.0).round() as i64).to_string().as_str()));
-    writer.write_event(Event::Empty(off))?;
-    
-    let mut ext = BytesStart::new("a:ext");
-    ext.push_attribute(("cx", ((w * 9525.0).round() as i64).to_string().as_str()));
-    ext.push_attribute(("cy", ((h * 9525.0).round() as i64).to_string().as_str()));
-    writer.write_event(Event::Empty(ext))?;
-    
-    writer.write_event(Event::End(BytesEnd::new("a:xfrm")))?;
+    write_xfrm(writer, at)?;
     
     let mut prst_geom = BytesStart::new("a:prstGeom");
     prst_geom.push_attribute(("prst", "rect"));
@@ -445,23 +462,23 @@ pub fn write_pptx_bytes(deck: &Deck) -> Result<Vec<u8>, String> {
             for (j, obj) in slide.objects.iter().enumerate() {
                 let id = 2 + j;
                 match obj {
-                    SlideObject::TextBox { text, x, y, w, h, runs, .. } => {
-                        write_text_box(&mut writer, id, j + 1, *x, *y, *w, *h, text, runs).map_err(|e| e.to_string())?;
+                    SlideObject::TextBox { text, x, y, w, h, runs, rotation } => {
+                        write_text_box(&mut writer, id, j + 1, Placement { x: *x, y: *y, w: *w, h: *h, rotation: *rotation }, text, runs).map_err(|e| e.to_string())?;
                     }
-                    SlideObject::Rect { x, y, w, h, .. } => {
-                        write_rect(&mut writer, id, j + 1, *x, *y, *w, *h).map_err(|e| e.to_string())?;
+                    SlideObject::Rect { x, y, w, h, rotation } => {
+                        write_rect(&mut writer, id, j + 1, Placement { x: *x, y: *y, w: *w, h: *h, rotation: *rotation }).map_err(|e| e.to_string())?;
                     }
-                    SlideObject::Circle { x, y, r, .. } => {
-                        write_circle(&mut writer, id, j + 1, *x, *y, *r).map_err(|e| e.to_string())?;
+                    SlideObject::Circle { x, y, r, rotation } => {
+                        write_circle(&mut writer, id, j + 1, Placement::of_circle(*x, *y, *r, *rotation)).map_err(|e| e.to_string())?;
                     }
-                    SlideObject::Image { path, x, y, w, h, .. } => {
+                    SlideObject::Image { path, x, y, w, h, rotation } => {
                         let img_idx = images_to_add.len() + 1;
                         images_to_add.push(path.clone());
 
                         let rel_id = format!("rId{}", slide_rels.len() + 1);
                         slide_rels.push((rel_id.clone(), format!("../media/image{}.png", img_idx)));
 
-                        write_image(&mut writer, id, j + 1, &rel_id, *x, *y, *w, *h).map_err(|e| e.to_string())?;
+                        write_image(&mut writer, id, j + 1, &rel_id, Placement { x: *x, y: *y, w: *w, h: *h, rotation: *rotation }).map_err(|e| e.to_string())?;
                     }
                 }
             }
