@@ -403,6 +403,86 @@ fn masters_survive_a_snapshot() {
     assert!(complaints.is_empty(), "{}", complaints.join("\n"));
 }
 
+/// An embedded picture, in both formats — and its *bytes*, not merely the
+/// existence of an image object.
+///
+/// The odp writer used to drop `SlideObject::Image` outright while the pptx
+/// writer carried it, so saving a deck as odp lost every picture in it —
+/// the same writer/reader asymmetry as #716's Tables bug, and like that one
+/// it cost the content on any save-and-reopen, not only on recovery.
+///
+/// Both readers unpack the picture to a temporary file and put that path in
+/// the model, so the path deliberately is *not* asserted: it cannot be the
+/// one that went in, and a test demanding it would be asserting the wrong
+/// thing. Comparing the bytes is what says the picture survived. An
+/// assertion that some `Image` came back would pass on a writer that
+/// packaged an empty file.
+#[test]
+fn images_survive_a_snapshot() {
+    // A 2x2 red PNG, inline so no fixture file is needed.
+    let png: &[u8] = &[
+        0x89, b'P', b'N', b'G', 0x0d, 0x0a, 0x1a, 0x0a,
+        0, 0, 0, 13, b'I', b'H', b'D', b'R', 0, 0, 0, 2, 0, 0, 0, 2, 8, 2, 0, 0, 0,
+        0xfd, 0xd4, 0x9a, 0x73,
+        0, 0, 0, 21, b'I', b'D', b'A', b'T', 0x78, 0x9c, 0x62, 0xfa, 0xcf, 0xc0, 0xc0,
+        0xf0, 0x1f, 0x88, 0xff, 0x33, 0x30, 0x30, 0x00, 0x00, 0x00, 0xff, 0xff,
+        0x03, 0x00, 0x2b, 0x11, 0x04, 0xf9,
+        0, 0, 0, 0, b'I', b'E', b'N', b'D', 0xae, 0x42, 0x60, 0x82,
+    ];
+    let dir = tempfile::tempdir().unwrap();
+    let source = dir.path().join("dot.png");
+    std::fs::write(&source, png).unwrap();
+
+    let deck = deck_of(vec![slide_of(
+        vec![SlideObject::Image {
+            path: source.to_string_lossy().to_string(),
+            x: 60.0,
+            y: 70.0,
+            w: 200.0,
+            h: 150.0,
+            rotation: 0.0,
+        }],
+        "",
+        "",
+    )]);
+
+    let mut complaints: Vec<String> = Vec::new();
+    for kind in FORMATS {
+        let back = through_a_snapshot(&deck, kind, "image");
+        let images: Vec<(&String, f64, f64)> = back.slides[0]
+            .objects
+            .iter()
+            .filter_map(|o| match o {
+                SlideObject::Image { path, x, y, .. } => Some((path, *x, *y)),
+                _ => None,
+            })
+            .collect();
+        let [(path, x, y)] = images.as_slice() else {
+            complaints.push(format!(
+                "{kind}: expected one picture back, got {:?}",
+                back.slides[0].objects,
+            ));
+            continue;
+        };
+        match std::fs::read(path) {
+            Ok(bytes) if bytes == png => {}
+            Ok(bytes) => complaints.push(format!(
+                "{kind}: the picture came back as {} bytes, not the {} that went in",
+                bytes.len(),
+                png.len(),
+            )),
+            Err(e) => complaints.push(format!(
+                "{kind}: the picture's path {path:?} cannot be read back: {e}"
+            )),
+        }
+        // Geometry travels with it or the picture lands somewhere else.
+        if (x - 60.0).abs() >= 0.5 || (y - 70.0).abs() >= 0.5 {
+            complaints.push(format!("{kind}: the picture moved to ({x}, {y})"));
+        }
+    }
+    assert!(complaints.is_empty(), "{}", complaints.join("\n"));
+}
+
 #[test]
 fn an_empty_deck_gains_nothing_it_never_had() {
     // The other direction, and the one a careless reader breaks: parsing a
