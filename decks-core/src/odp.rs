@@ -182,14 +182,6 @@ fn text_style(st: &RunStyle) -> String {
     props
 }
 
-/// Emit a page's shapes. Shared by the slides in `content.xml` and the
-/// master pages in `styles.xml`, so a shape kind cannot be written on one
-/// and forgotten on the other.
-///
-/// `style_of` names the automatic text style for a run. Masters pass a
-/// closure that names none: neither format's master reader fills a
-/// decoration's `runs` (the pptx one parses `p:sp` text as plain), so
-/// emitting a `text:span` would be styling nothing reads back.
 /// One picture the package has to carry: where it goes inside the archive,
 /// what it is, and its bytes.
 ///
@@ -228,6 +220,14 @@ fn media_type_for(path: &str) -> (&'static str, &'static str) {
     }
 }
 
+/// Emit a page's shapes. Shared by the slides in `content.xml` and the
+/// master pages in `styles.xml`, so a shape kind cannot be written on one
+/// and forgotten on the other.
+///
+/// `style_of` names the automatic text style for a run. Masters pass a
+/// closure that names none: neither format's master reader fills a
+/// decoration's `runs` (the pptx one parses `p:sp` text as plain), so
+/// emitting a `text:span` would be styling nothing reads back.
 fn shapes_xml(
     shapes: &[SlideObject],
     style_of: &dyn Fn(&RunStyle) -> usize,
