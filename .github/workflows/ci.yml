@@ -188,15 +188,21 @@ jobs:
       - name: cargo clippy (deny warnings, all crates)
         run: cargo clippy --workspace --all-targets -- -D warnings
 
+      # scripts/with-display.sh rather than `xvfb-run -a`: that starts the
+      # server and execs immediately, so gtk::init could run before the
+      # display served and fail — twice in one evening, reported as a
+      # widget-test panic rather than as the display problem it was. The
+      # wrapper waits for Xvfb's -displayfd handshake first.
+      #
       # nextest doesn't run doctests (a known limitation) — cargo test
       # --doc covers those separately. #108: JUnit output published as
       # an artifact even on failure, so a failing run's per-test detail
       # survives past the job's own log retention.
       - name: cargo nextest run
-        run: xvfb-run -a cargo nextest run --workspace --profile ci
+        run: scripts/with-display.sh cargo nextest run --workspace --profile ci
 
       - name: cargo test --doc
-        run: xvfb-run -a cargo test --doc --workspace
+        run: scripts/with-display.sh cargo test --doc --workspace
 
       # C3/C4 for the Rust layers: the ledger's claims must name tests
       # this run actually collected, and none of them may have been

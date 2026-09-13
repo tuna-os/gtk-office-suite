@@ -161,7 +161,7 @@ jobs:
           if-no-files-found: ignore
 
       - name: Run buffer-bridge round-trip tests (Xvfb)
-        run: xvfb-run -a cargo test -p letters bridge
+        run: scripts/with-display.sh cargo test -p letters bridge
 
   # VLM-judged visual audit. Non-gating (continue-on-error): screenshot
   # judgments flake on model output and need API keys, so they inform
