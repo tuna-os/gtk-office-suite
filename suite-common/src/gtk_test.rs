@@ -28,6 +28,44 @@
 // which is what #241 means by "do not mask GTK initialization failure with
 // test skips".
 
+// ── What is known about the remaining intermittent failure ───────────
+//
+// One failure mode is still open, and this records what has been ruled out
+// so the next occurrence does not start from nothing. Symptom: a single
+// `letters::bridge` widget test fails with GTK refusing to initialise while
+// every other widget test in the same run initialises fine. Three
+// occurrences, three *different* tests, at positions 118 of 141, 138 of 141
+// and 138 of 141 in nextest's run order, always with `DISPLAY=:0` and a
+// socket present — which is the case `describe_display_and_server` was added
+// to name, and it names it: refused by a live display, not handed a missing
+// one.
+//
+// Ruled out, with the evidence, because both are the obvious guesses:
+//
+//   * **Connection accumulation.** nextest runs a process per test, so each
+//     widget test opens its own X connection, and a server that ran out of
+//     client slots would explain one failure near the end of a long run.
+//     Measured: eight iterations of the widget tests against one persistent
+//     display, roughly 750 GTK inits, zero refusals. `Xvfb -maxclients n`
+//     is the lever if this ever is the cause, and nextest test groups or
+//     `max-threads` is the lever for reducing concurrency — but neither
+//     should be reached for on a hypothesis this measurement contradicts.
+//
+//   * **Retrying `gtk4::init()`.** This is the tempting fix and it is
+//     actively unsafe. `gtk4::init()` is *not* idempotent after a failure:
+//     called a second time it returns `Ok` without a usable display. A
+//     retry was implemented, passed the unit tests, and passed two
+//     mutations — and then a canary widget test run with `DISPLAY=:77`
+//     (nothing serving it) went from `FAILED` to `ok. 1 passed`. That is
+//     exactly the masking #241 exists to prevent, applied to every
+//     display-less run rather than to one flake. Do not reintroduce
+//     `init_with_retries`.
+//
+// Not yet reproduced faithfully: the failure has only ever been seen in a
+// full-workspace `cargo nextest run`, and the position in the run order is
+// the only clue that the rest of the workspace matters. Reproducing it needs
+// that whole run, which is the next step — not another mitigation.
+
 use std::panic;
 use std::sync::mpsc;
 use std::sync::OnceLock;
