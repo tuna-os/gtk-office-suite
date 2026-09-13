@@ -85,6 +85,27 @@ fn is_tx_box_attr(e: &BytesStart) -> bool {
     false
 }
 
+/// `a:xfrm`'s `rot`, in degrees. OOXML stores it in sixtieth-thousandths of
+/// a degree and omits the attribute for an unrotated shape, so absent and
+/// zero mean the same thing here.
+///
+/// The writer emitted no `rot` at all until the model's rotation was
+/// threaded through it, and this reader hardcoded `rotation: 0.0` at every
+/// construction site — so a rotated shape saved as pptx came back square,
+/// in the format an unsaved deck (and therefore its crash snapshot) uses by
+/// default.
+fn parse_rotation(e: &BytesStart) -> Option<f64> {
+    for attr in e.attributes().flatten() {
+        if attr.key.as_ref() != "rot" {
+            continue;
+        }
+        let val = attr.normalized_value(quick_xml::XmlVersion::Implicit1_0).ok()?;
+        let deg = val.trim().parse::<f64>().ok()? / 60_000.0;
+        return if deg.is_finite() { Some(deg) } else { None };
+    }
+    None
+}
+
 struct PendingShape {
     is_tx_box: bool,
     /// A p:txBody element was seen. Impress adds an (empty) txBody to
@@ -97,6 +118,7 @@ struct PendingShape {
     y: Option<f64>,
     w: Option<f64>,
     h: Option<f64>,
+    rotation: Option<f64>,
     prst: Option<String>,
 }
 
@@ -106,6 +128,7 @@ struct PendingPicture {
     y: Option<f64>,
     w: Option<f64>,
     h: Option<f64>,
+    rotation: Option<f64>,
 }
 
 pub fn read_pptx(path: &str) -> Result<Deck, String> {
@@ -311,6 +334,7 @@ pub fn read_pptx(path: &str) -> Result<Deck, String> {
                                     y: None,
                                     w: None,
                                     h: None,
+                                    rotation: None,
                                     prst: None,
                                 });
                             }
@@ -321,7 +345,16 @@ pub fn read_pptx(path: &str) -> Result<Deck, String> {
                                     y: None,
                                     w: None,
                                     h: None,
+                                    rotation: None,
                                 });
+                            }
+                            "a:xfrm" => {
+                                let rot = parse_rotation(e);
+                                if let Some(shape) = current_shape.as_mut() {
+                                    if rot.is_some() { shape.rotation = rot; }
+                                } else if let Some(pic) = current_picture.as_mut() {
+                                    if rot.is_some() { pic.rotation = rot; }
+                                }
                             }
                             "a:off" => {
                                 let (x, y) = parse_coords(e, "x", "y");
@@ -477,11 +510,13 @@ pub fn read_pptx(path: &str) -> Result<Deck, String> {
                                 let w = shape.w.unwrap_or(0.0) / 9525.0;
                                 let h = shape.h.unwrap_or(0.0) / 9525.0;
                                 
+                                let rotation = shape.rotation.unwrap_or(0.0);
+
                                 let has_text =
                                     shape.text.iter().any(|t| !t.trim().is_empty());
                                 if shape.is_tx_box || (shape.has_tx_body && has_text) {
                                     let text = shape.text.join("\n");
-                                    objects.push(SlideObject::TextBox { text, x, y, w, h, rotation: 0.0, runs: shape.runs.clone() });
+                                    objects.push(SlideObject::TextBox { text, x, y, w, h, rotation, runs: shape.runs.clone() });
                                 } else {
                                     let prst = shape.prst.unwrap_or_else(|| "rect".to_string());
                                     if prst == "ellipse" {
@@ -489,10 +524,10 @@ pub fn read_pptx(path: &str) -> Result<Deck, String> {
                                             x: x + w / 2.0,
                                             y: y + h / 2.0,
                                             r: w / 2.0,
-                                            rotation: 0.0,
+                                            rotation,
                                         });
                                     } else {
-                                        objects.push(SlideObject::Rect { x, y, w, h, rotation: 0.0 });
+                                        objects.push(SlideObject::Rect { x, y, w, h, rotation });
                                     }
                                 }
                             }
@@ -506,7 +541,7 @@ pub fn read_pptx(path: &str) -> Result<Deck, String> {
                                     
                                     if let Some(obj) = resolve_and_extract_picture(
                                         &embed_id,
-                                        PictureRect { x, y, w, h },
+                                        PictureRect { x, y, w, h, rotation: pic.rotation.unwrap_or(0.0) },
                                         &slide_image_rels,
                                         &mut archive,
                                         &mut budget,
@@ -816,6 +851,7 @@ struct PictureRect {
     y: f64,
     w: f64,
     h: f64,
+    rotation: f64,
 }
 
 fn resolve_and_extract_picture(
@@ -825,7 +861,7 @@ fn resolve_and_extract_picture(
     archive: &mut zip::ZipArchive<File>,
     budget: &mut ZipBudget,
 ) -> Option<SlideObject> {
-    let PictureRect { x, y, w, h } = rect;
+    let PictureRect { x, y, w, h, rotation } = rect;
     let target = rels.get(embed_id)?;
     let relative_path = target.trim_start_matches("../");
     let full_zip_path = format!("ppt/{}", relative_path);
@@ -851,7 +887,7 @@ fn resolve_and_extract_picture(
         y,
         w,
         h,
-        rotation: 0.0,
+        rotation,
     })
 }
 

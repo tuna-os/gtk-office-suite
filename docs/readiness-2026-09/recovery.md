@@ -66,14 +66,41 @@ AutosaveSlot used to store bytes and metadata in separate atomic writes. Each wr
       byte path a snapshot actually uses, with the negative controls that a
       careless fix would trip (a default sheet must not come back carrying
       "explicit" defaults, and sheet two must not inherit sheet one's layout).
-      **Letters and Decks are not yet verified**, which is why this row is
-      partial rather than done. Letters snapshots `capture_from_buffer` as
-      JSON, so the question there is precisely the row's wording — whether a
-      document imported from `.docx` keeps the state that does not live in
-      the `GtkTextBuffer`. Decks snapshots pptx/odp, a far wider surface
-      (masters, notes, images, backgrounds) than the four fields above.
-      Neither has the equivalent round-trip test yet, and neither should be
-      called clean on the strength of Tables'.
+      **Letters checks out.** Its snapshot is the whole `Document` as JSON
+      with nothing `serde(skip)`, and the four fields that do not live in the
+      `GtkTextBuffer` — header, footer, page geometry, footnotes — ride on
+      sidecar data attached to the buffer: `capture_from_buffer` reads them
+      and `render_to_buffer` reinstalls them through `set_buffer_sidecars`,
+      so the recovery path closes the loop. Round-trip tests already cover
+      header, footer and page geometry.
+      **Decks is now covered by `decks-core/tests/snapshot_fidelity.rs`, and
+      two gaps remain**, which is why this row is partial rather than done.
+      Notes, backgrounds, object geometry, run styles and slide order all
+      survive both formats, and shape *rotation* now survives pptx — it
+      previously survived neither, because both writers emitted no rotation
+      at all and both readers hardcoded zero, so the rotate gesture's result
+      was discarded by any save. The two that still strip content:
+      - **Rotation in odp.** pptx spells it `a:xfrm/@rot`, one attribute,
+        fixed. ODF spells the same thing as
+        `draw:transform="rotate(θ) translate(x y)"`, entangling rotation with
+        position in one attribute that LibreOffice emits in several shapes.
+        Larger than a fix, so not pretended to be one.
+      - **Masters, in both formats.** Decks reads a master from an imported
+        deck and renders it — the canvas and the sidebar thumbnails both
+        consult it — but neither writer emits one, so the reader synthesises
+        a white default and the deck's design is gone. Like the Tables bug
+        above this is a writer/reader asymmetry, pointing the other way, and
+        it costs an imported deck's design on *every* save rather than only
+        on recovery. `masters_survive_a_snapshot` specifies the fix and is
+        `#[ignore]`d with that reason, so it appears in every run's skip
+        report instead of being a comment nobody reads; unignore it when a
+        writer starts emitting masters.
+      A note on how the odp rotation gap was found, because the test design
+      hid it: the fidelity tests loop `for kind in FORMATS` and assert inside
+      the loop, which aborts on the first format that fails. While pptx was
+      broken the odp failure was invisible, and it only surfaced when fixing
+      pptx made the same assertion fail again with a different prefix. A loop
+      over cases reports one case.
 - [x] Restart after recovery and before the next autosave does not lose the recovered checkpoint.
       All three apps used to clear the orphan slot as soon as the recovered
       content was in memory and leave the next autosave tick to write a
