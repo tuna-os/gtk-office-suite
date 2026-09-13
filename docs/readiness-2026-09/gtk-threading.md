@@ -119,7 +119,48 @@ canary reports it too, and `describe_display` is split out from the
 environment read for the same reason `value_opts_out` is: a test that wrote
 `DISPLAY` would be visible to every widget test running beside it.
 
-Deliberately **not** added: a retry. A transient failure might well deserve
-one, but nothing yet says what the transient cause is, and guessing at a
-retry before seeing a cause would paper over whatever this actually is. The
-next occurrence will print its reason; that is the evidence to decide on.
+Deliberately **not** added: a retry. That was written as a "not yet" and
+has since become a "not ever", with a reason. `gtk4::init()` is **not
+idempotent after a failure**: called a second time it returns `Ok` without
+a usable display. A retry was implemented, passed the unit tests, and
+passed two mutations — and then a canary widget test run with `DISPLAY=:77`
+(nothing serving it) went from `FAILED` to `ok. 1 passed`. It masked every
+display-less run, which is precisely what the row above exists to prevent,
+so it was discarded. `init_with_retries` should not come back.
+
+What the reasons have since said, and what has been ruled out:
+
+The occurrences print `DISPLAY=:0` with a socket present — "refused by a
+live display rather than handed a missing one", the case
+`describe_display_and_server` was added to name. Four of them, four
+*different* `letters::bridge` tests, while every other widget test in the
+same run initialised fine. The fourth, counted against the whole workspace
+rather than against the widget tests alone:
+
+```
+FAIL [0.093s] (145/906) letters::bin/letters
+    bridge::tests::page_breaks_survive_the_buffer_round_trip
+Summary [8.573s] 148/906 tests run: 147 passed, 1 failed, 7 skipped
+```
+
+The earlier three sat at 118, 138 and 138 of a comparable total, so every
+occurrence lands around test 118 to 145 of some 900 — nowhere near the end
+of a run.
+
+Connection accumulation is the obvious guess and is contradicted twice
+over. nextest runs a process per test, so each widget test opens its own X
+connection, and a server out of client slots would explain one failure near
+the end of a long run — but no occurrence *is* near the end of a run, and
+eight iterations of the widget tests against one persistent display
+(roughly 750 GTK inits) produced zero refusals.
+`Xvfb -maxclients n` is the lever if this ever turns out to be the cause,
+and nextest test groups or `max-threads` the lever for reducing concurrency,
+but neither should be reached for on a hypothesis this measurement
+contradicts.
+
+Still open, and the next step is a reproduction rather than another
+mitigation: the failure has only ever appeared in a full-workspace
+`cargo nextest run`, and the position in the run order is the only clue
+that the rest of the workspace matters. The same note is in
+`suite-common/src/gtk_test.rs`, where somebody debugging it will be
+reading.
