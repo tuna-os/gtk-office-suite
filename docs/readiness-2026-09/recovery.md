@@ -182,13 +182,50 @@ AutosaveSlot used to store bytes and metadata in separate atomic writes. Each wr
       work; both formats behave the same way, so it is recorded here rather
       than fixed in one of them.
       What keeps this row `[~]` rather than `[x]`, now that the strips are
-      gone: a master's `default_font` is carried by neither format (pptx
-      would need a theme, ODF a page style this reader does not model), and
-      a master decoration's run styling is not either — in both cases
-      because *neither* reader fills them, so the writers emit nothing
-      rather than writing something nothing reads. Both are symmetric
-      omissions rather than silent strips, but the row's claim is about
-      supported content and these are still gaps.
+      gone: a master's `default_font` and a master decoration's run styling
+      are carried by neither format — in both cases because *neither*
+      reader fills them, so the writers emit nothing rather than writing
+      something nothing reads. Both are symmetric omissions rather than
+      silent strips, but the row's claim is about supported content and
+      these are still gaps.
+      On `default_font` the note above was true and incomplete, in a way
+      worth recording because it nearly produced the mistake this row keeps
+      catching. The field was not merely unfilled by the readers: it was
+      **read nowhere in the workspace** — written at all eight construction
+      sites, consumed at none, while the renderer hardcoded `"Sans"` for
+      every text box. So "carry `default_font` through the pptx and odp
+      writers" would have been a round-trip that preserved a value with no
+      effect, and a round-trip test over it would have passed while the
+      font it named was never applied once. That is the same defect shape
+      as every other entry in this row, arrived at from the opposite
+      direction: not a writer dropping supported content, but content that
+      was never supported being treated as though it were.
+      So the renderer honours it first. `canvas::master_font_family` is the
+      field's only consumer, and slide text and the master's own text
+      shapes both draw through it; application chrome (the `<image>`
+      placeholder, the "Slide N" indicator) keeps its own face on purpose,
+      since a deck asking for a display face should not restyle the
+      furniture. A blank-but-present font falls back rather than asking
+      pango for a family with no name, which is what an `unwrap_or` alone
+      would have done. Only now is carrying the field through the two
+      writers worth doing, and that is the remaining step — pptx would need
+      a theme, ODF a page style neither reader models yet.
+      One limitation, stated because a mutation found it rather than
+      because it is comfortable: `document_font_description` and
+      `master_for` are covered — five mutations of the resolver, the
+      builder, and the index handling all redden — but the *call* inside
+      `draw_slide_multi` is not. Replacing its argument with `None` leaves
+      the whole decks suite green. Closing that needs an assertion over
+      rendered output, and the only headless one available compares pixels
+      between two font families, which passes or fails on which fonts the
+      runner happens to have installed. Given the afternoon this repository
+      just had with an environment-dependent test, that trade is not worth
+      making; the call site is one expression, verified by reading.
+      Unifying the three hand-rolled master lookups in that function into
+      `master_for` shrinks what the untested expression can get wrong: two
+      of them used `masters.get(mi)` and the third a hand-written
+      `mi < masters.len()`, so one slide's background and its text could
+      have disagreed about which master it had.
       A note on how the odp rotation gap was found, because the test design
       hid it: the fidelity tests looped `for kind in FORMATS` and asserted
       inside the loop, which aborts on the first format that fails. While

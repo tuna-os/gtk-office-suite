@@ -230,6 +230,65 @@ pub fn accent_rgb(widget: &impl gtk4::prelude::WidgetExt) -> (f64, f64, f64) {
         .unwrap_or((0.0, 0.5, 1.0))
 }
 
+/// The master a slide is drawn against, if it has one that exists.
+///
+/// `master_idx` is an index into a list that a reader, an undo step or a
+/// snapshot may have changed, so it can point past the end; every caller
+/// has to handle that. Before this existed `draw_slide_multi` resolved the
+/// master three separate times — twice as `masters.get(mi)` and once as a
+/// hand-written `mi < masters.len()` bounds check — which is three chances
+/// for the styles applied to one slide to disagree about which master it
+/// even has.
+pub fn master_for<'a>(
+    slides: &[Slide],
+    current_slide: usize,
+    masters: &'a [MasterSlide],
+) -> Option<&'a MasterSlide> {
+    slides
+        .get(current_slide)?
+        .master_idx
+        .and_then(|mi| masters.get(mi))
+}
+
+/// The font family a slide's **document** text is drawn in: the master's
+/// `default_font`, or the renderer's own default when there is no master or
+/// it names nothing.
+///
+/// This is the only consumer of `MasterSlide::default_font`. Until it
+/// existed the field was written at every construction site and read at
+/// none, so both readers could have parsed a master's font correctly and
+/// nothing would have looked any different — and a round-trip test over it
+/// would have passed while the font it named was never applied. Carrying
+/// the field through the pptx and odp writers is only worth doing once
+/// something honours it.
+///
+/// Chrome keeps its own hardcoded face on purpose: the `<image>` placeholder
+/// label and the "Slide N" empty-slide indicator are this application's
+/// furniture, not the author's content, and a deck whose master asks for a
+/// display face should not restyle them.
+pub fn master_font_family(master: Option<&MasterSlide>) -> &str {
+    master
+        .map(|m| m.default_font.as_str())
+        .filter(|f| !f.trim().is_empty())
+        .unwrap_or("Sans")
+}
+
+/// The pango description slide text is drawn with, at `base_pt` points.
+///
+/// Built here rather than inline at the draw site so a test can assert the
+/// family actually reaches pango. `master_font_family` alone would only
+/// prove which string was chosen, not that the renderer put it anywhere —
+/// and a resolver whose answer is dropped on the floor is the shape of
+/// defect this whole row keeps turning up.
+pub fn document_font_description(
+    master: Option<&MasterSlide>,
+    base_pt: f64,
+) -> pango::FontDescription {
+    let mut desc = pango::FontDescription::from_string(master_font_family(master));
+    desc.set_absolute_size(base_pt * 96.0 / 72.0 * pango::SCALE as f64);
+    desc
+}
+
 #[allow(clippy::too_many_arguments)]
 pub fn draw_slide(
     cr: &cairo::Context, width: f64, height: f64,
@@ -264,9 +323,7 @@ pub fn draw_slide_multi(
     let mut slide_bg_rgb: (f64, f64, f64) = (1.0, 1.0, 1.0);
     if current_slide < slides.len() {
         let slide_bg = &slides[current_slide].background;
-        let master_bg = slides[current_slide]
-            .master_idx
-            .and_then(|mi| masters.get(mi))
+        let master_bg = master_for(slides, current_slide, masters)
             .map(|m| m.background.as_str())
             .filter(|b| !b.is_empty() && *b != "#ffffff");
         let bg: &str = if slide_bg == "#ffffff" || slide_bg.is_empty() {
@@ -295,37 +352,36 @@ pub fn draw_slide_multi(
     cr.stroke().unwrap();
 
     // Draw master slide shapes (background pattern, logos, headers)
-    if current_slide < slides.len() {
-        if let Some(mi) = slides[current_slide].master_idx {
-            if mi < masters.len() {
-                let master = &masters[mi];
-                for obj in &master.shapes {
-                    cr.save().unwrap();
-                    // Render master shapes with reduced opacity
-                    match obj {
-                        SlideObject::Rect { x, y, w, h, .. } => {
-                            let sx = ox + (x / 960.0) * slide_w;
-                            let sy = oy + (y / 540.0) * slide_h;
-                            let sw = (w / 960.0) * slide_w;
-                            let sh = (h / 540.0) * slide_h;
-                            cr.set_source_rgba(0.8, 0.8, 0.8, 0.3);
-                            cr.rectangle(sx, sy, sw, sh);
-                            cr.fill().unwrap();
-                        }
-                        SlideObject::TextBox { text, x, y, .. } => {
-                            let sx = ox + (x / 960.0) * slide_w;
-                            let sy = oy + (y / 540.0) * slide_h;
-                            cr.set_source_rgba(0.3, 0.3, 0.3, 0.4);
-                            cr.select_font_face("Sans", cairo::FontSlant::Normal, cairo::FontWeight::Bold);
-                            cr.set_font_size(11.0);
-                            cr.move_to(sx + 4.0, sy + 14.0);
-                            cr.show_text(text).unwrap();
-                        }
-                        _ => {}
-                    }
-                    cr.restore().unwrap();
+    if let Some(master) = master_for(slides, current_slide, masters) {
+        for obj in &master.shapes {
+            cr.save().unwrap();
+            // Render master shapes with reduced opacity
+            match obj {
+                SlideObject::Rect { x, y, w, h, .. } => {
+                    let sx = ox + (x / 960.0) * slide_w;
+                    let sy = oy + (y / 540.0) * slide_h;
+                    let sw = (w / 960.0) * slide_w;
+                    let sh = (h / 540.0) * slide_h;
+                    cr.set_source_rgba(0.8, 0.8, 0.8, 0.3);
+                    cr.rectangle(sx, sy, sw, sh);
+                    cr.fill().unwrap();
                 }
+                SlideObject::TextBox { text, x, y, .. } => {
+                    let sx = ox + (x / 960.0) * slide_w;
+                    let sy = oy + (y / 540.0) * slide_h;
+                    cr.set_source_rgba(0.3, 0.3, 0.3, 0.4);
+                    cr.select_font_face(
+                        master_font_family(Some(master)),
+                        cairo::FontSlant::Normal,
+                        cairo::FontWeight::Bold,
+                    );
+                    cr.set_font_size(11.0);
+                    cr.move_to(sx + 4.0, sy + 14.0);
+                    cr.show_text(text).unwrap();
+                }
+                _ => {}
             }
+            cr.restore().unwrap();
         }
     }
 
@@ -363,8 +419,10 @@ pub fn draw_slide_multi(
                     layout.set_wrap(pango::WrapMode::WordChar);
                     let scale = slide_w / 960.0;
                     let base_pt = 18.0 * scale;
-                    let mut desc = pango::FontDescription::from_string("Sans");
-                    desc.set_absolute_size(base_pt * 96.0 / 72.0 * pango::SCALE as f64);
+                    let desc = document_font_description(
+                        master_for(slides, current_slide, masters),
+                        base_pt,
+                    );
                     layout.set_font_description(Some(&desc));
                     if runs.is_empty() {
                         layout.set_text(text);
@@ -502,5 +560,114 @@ pub fn draw_slide_multi(
         cr.set_font_size(11.0);
         cr.move_to(ox + slide_w - 30.0, oy + 20.0);
         cr.show_text(&badge).unwrap();
+    }
+}
+
+#[cfg(test)]
+mod font_tests {
+    use super::*;
+
+    fn master(font: &str) -> MasterSlide {
+        MasterSlide {
+            name: "M".into(),
+            background: "#ffffff".into(),
+            default_font: font.into(),
+            shapes: vec![],
+        }
+    }
+
+    fn slide(master_idx: Option<usize>) -> Slide {
+        Slide {
+            title: "S".into(),
+            background: "#ffffff".into(),
+            objects: vec![],
+            notes: String::new(),
+            master_idx,
+        }
+    }
+
+    #[test]
+    fn a_slide_resolves_the_master_it_points_at() {
+        let masters = vec![master("A"), master("B")];
+        let slides = vec![slide(Some(1))];
+        assert_eq!(
+            master_for(&slides, 0, &masters).map(|m| m.default_font.as_str()),
+            Some("B")
+        );
+    }
+
+    // A master_idx can outlive the list it indexes — a reader, an undo step
+    // or a recovered snapshot can all leave one pointing past the end. The
+    // three hand-rolled resolutions this replaced each had to get that
+    // right separately; now there is one place to be wrong.
+    #[test]
+    fn a_master_idx_past_the_end_resolves_to_no_master() {
+        let masters = vec![master("A")];
+        let slides = vec![slide(Some(7))];
+        assert!(master_for(&slides, 0, &masters).is_none());
+        // ...and the font falls back rather than panicking on the index.
+        assert_eq!(master_font_family(master_for(&slides, 0, &masters)), "Sans");
+    }
+
+    #[test]
+    fn a_slide_index_past_the_end_resolves_to_no_master() {
+        let masters = vec![master("A")];
+        let slides = vec![slide(Some(0))];
+        assert!(master_for(&slides, 4, &masters).is_none());
+        assert!(master_for(&[], 0, &masters).is_none());
+    }
+
+    #[test]
+    fn a_slide_with_no_master_idx_resolves_to_no_master() {
+        let masters = vec![master("A")];
+        let slides = vec![slide(None)];
+        assert!(master_for(&slides, 0, &masters).is_none());
+    }
+
+    #[test]
+    fn a_master_that_names_a_font_gets_it() {
+        let m = master("Liberation Serif");
+        assert_eq!(master_font_family(Some(&m)), "Liberation Serif");
+    }
+
+    #[test]
+    fn a_slide_with_no_master_falls_back_to_the_renderer_default() {
+        assert_eq!(master_font_family(None), "Sans");
+    }
+
+    // A master read from a package that records no font leaves the field
+    // empty, and `FontDescription::from_string("")` asks pango for a family
+    // with no name — which resolves to whatever it likes rather than to the
+    // default we intend. Blank-but-present is the case a naive
+    // `unwrap_or` misses, so it gets its own test.
+    #[test]
+    fn a_master_whose_font_is_blank_falls_back_rather_than_asking_for_nothing() {
+        for blank in ["", "   ", "\t"] {
+            let m = master(blank);
+            assert_eq!(
+                master_font_family(Some(&m)),
+                "Sans",
+                "a master whose font is {blank:?} should fall back"
+            );
+        }
+    }
+
+    // The point of the row: the family has to reach pango, not merely be
+    // chosen. This asserts against the description the renderer itself
+    // builds, and needs no display and no font installed — pango reports
+    // back the family it was asked for whether or not it can resolve it.
+    #[test]
+    fn the_masters_font_reaches_the_description_the_renderer_draws_with() {
+        let m = master("Liberation Serif");
+        let desc = document_font_description(Some(&m), 18.0);
+        assert_eq!(desc.family().map(|f| f.to_string()).as_deref(), Some("Liberation Serif"));
+    }
+
+    #[test]
+    fn the_description_carries_the_size_it_was_asked_for() {
+        let desc = document_font_description(None, 18.0);
+        assert_eq!(desc.family().map(|f| f.to_string()).as_deref(), Some("Sans"));
+        assert_eq!(desc.size(), (18.0 * 96.0 / 72.0 * pango::SCALE as f64) as i32);
+        assert!(desc.is_size_absolute());
     }
 }
