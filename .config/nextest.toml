@@ -1,3 +1,45 @@
+# One X connection at a time from the Letters binary's tests.
+#
+# Every GTK widget test in this workspace lives in the `letters` binary,
+# and a single one of them intermittently fails with an X server that *is*
+# running refusing its connection — eight occurrences, eight different
+# tests, five of them in one afternoon at better than one in three runs,
+# blocking pull requests whose diffs were documentation only.
+# `docs/readiness-2026-09/gtk-threading.md` carries the investigation.
+#
+# This is an experiment with a stated expected outcome, not a fix, because
+# the cause is still unknown. nextest runs a process per test, so the
+# widget tests open several X connections at once; confining this binary
+# to one thread means at most one at a time. If the refusals stop,
+# concurrency was involved and this can stay while the cause is found.
+# **If they continue, concurrency is ruled out and this should be
+# reverted** — keeping it would pay run time for nothing and muddy the
+# next investigation.
+#
+# What this is not: a way to make a failure pass. `suite_common::gtk_test`
+# fails a widget test that cannot initialise GTK, and it still does; a
+# display-less run stays red. That is the distinction from the retry
+# `gtk_test.rs` records as disproved, which turned every display-less run
+# green.
+#
+# The cost is the Letters binary's tests running one at a time. There are
+# 95 of them and they are fast — tens of milliseconds each, a few seconds
+# for the slowest.
+[test-groups]
+letters-widgets = { max-threads = 1 }
+
 [profile.ci]
+
 [profile.ci.junit]
 path = "junit.xml"
+
+# `=` is an exact match on the binary id. Without it the filter is a
+# substring-ish match that silently matched nothing here, which would have
+# shipped a config that looked right and grouped no tests at all.
+[[profile.default.overrides]]
+filter = 'binary_id(=letters::bin/letters)'
+test-group = 'letters-widgets'
+
+[[profile.ci.overrides]]
+filter = 'binary_id(=letters::bin/letters)'
+test-group = 'letters-widgets'
