@@ -123,38 +123,50 @@ macro_rules! fail_point {
 /// the ones a crash stranded.
 const TEMP_PREFIX: &str = ".office-save-";
 
-/// How old a stranded temporary has to be before the sweep will remove it.
+/// A floor on how new a temporary can be and still be swept.
 ///
-/// The sweep cannot ask whether a temporary is still in use — there is no
-/// portable "is another process writing this" — so it asks how old it is
-/// instead. A live save's temporary exists for as long as one `write_all`
-/// plus one `fsync` takes, which is milliseconds to seconds; a day is four
-/// orders of magnitude beyond that, so a sweep can never plausibly delete
-/// a temporary another window is still filling. The cost of the wide margin
-/// is only that a crash's leftovers outlive the crash by a day.
-const STALE_TEMP_AGE: std::time::Duration = std::time::Duration::from_secs(24 * 60 * 60);
+/// This is not the liveness test — `flock` below is — it closes the gap
+/// *before* the lock exists. A save creates its temporary and then locks
+/// it, and in between the file is on disk with nothing holding it, which
+/// is exactly what a stranded one looks like. A second window sweeping at
+/// that instant would delete a temporary the first window is about to
+/// fill. A minute is enormous next to the microseconds between those two
+/// syscalls, and it only delays cleaning up after a crash by however long
+/// it takes the next save to come along.
+const SWEEP_RACE_FLOOR: std::time::Duration = std::time::Duration::from_secs(60);
 
 /// Remove save temporaries a crash stranded in `dir`.
 ///
 /// `atomic_write_bytes` writes to a temporary and renames it over the
-/// destination, and `tempfile` removes that temporary on drop if the write
-/// fails — which covers every *error*. It does not cover being killed:
-/// SIGKILL, an OOM kill, or the power going out runs no destructor, so the
-/// temporary survives with up to a whole document's worth of bytes in it,
-/// in the user's own document directory, named with a leading dot so they
-/// are unlikely ever to see it. Nothing removed them, so they accumulated
-/// one per crashed save, forever.
+/// destination, and `tempfile` removes that temporary on drop — which
+/// covers every *error*. It covers no *kill*: SIGKILL, an OOM kill and the
+/// power going out run no destructor, so the temporary survives with up to
+/// a whole document's worth of bytes in it, in the user's own document
+/// directory, named with a leading dot so they are unlikely ever to see
+/// it. Nothing removed them, so they accumulated one per crashed save,
+/// forever.
 ///
 /// The fault-injection sweep in this module could not have found that: it
-/// makes the write fail, and a failing write unwinds and drops the
-/// temporary. Only a real kill leaves one behind, which is what
-/// `docs/readiness-2026-09/crash-stress.md` now records.
+/// makes the write *fail*, and a failing write unwinds and drops the
+/// temporary. Only a real kill leaves one behind. Measured — SIGKILL
+/// during a 600 MiB save left a 78 MiB `.office-save-…` beside an intact
+/// destination — and recorded in
+/// `docs/readiness-2026-09/recovery.md`.
+///
+/// Whether a temporary is stranded is asked, not guessed: every live save
+/// holds an advisory lock on its temporary for as long as it is writing,
+/// and the kernel releases that lock when the process dies however it
+/// dies. So a temporary nobody can lock is one nobody owns. That is the
+/// same mechanism `AutosaveSlot::claim` uses to tell a crashed window's
+/// snapshot from a live one's.
 ///
 /// Deliberately narrow, because this deletes files in a directory the user
-/// owns: only entries that are files, only ones whose name starts with the
-/// prefix *this* module writes, and only ones older than
-/// `STALE_TEMP_AGE`. Errors are ignored throughout — a read-only or
-/// unreadable directory must not fail the save that just succeeded.
+/// owns: only regular files, not symlinks and not directories; only names
+/// carrying the prefix *this* module writes; only ones nothing holds a
+/// lock on; and only ones past `SWEEP_RACE_FLOOR`. Anything it cannot
+/// establish, it leaves — including a lock it could not ask about. Errors
+/// are ignored throughout, so an unreadable or read-only directory cannot
+/// fail the save that just succeeded.
 fn sweep_stranded_temps(dir: &Path, now: std::time::SystemTime) {
     let Ok(entries) = fs::read_dir(dir) else { return };
     for entry in entries.flatten() {
@@ -163,20 +175,29 @@ fn sweep_stranded_temps(dir: &Path, now: std::time::SystemTime) {
         if !name.starts_with(TEMP_PREFIX) {
             continue;
         }
-        // `metadata` rather than `entry.metadata()`'s symlink-following
-        // cousin is not the question here: a symlink is not a file we
-        // wrote, so `is_file` on the unfollowed entry is what to ask.
+        // `DirEntry::metadata` does not traverse, so this is the entry
+        // itself: a symlink carrying the prefix is not a temporary we
+        // wrote, and `remove_file` would unlink it happily.
         let Ok(meta) = entry.metadata() else { continue };
         if !meta.is_file() {
             continue;
         }
-        let old_enough = meta
+        let past_the_floor = meta
             .modified()
             .ok()
             .and_then(|m| now.duration_since(m).ok())
-            .is_some_and(|age| age >= STALE_TEMP_AGE);
-        if old_enough {
-            let _ = fs::remove_file(entry.path());
+            .is_some_and(|age| age >= SWEEP_RACE_FLOOR);
+        if !past_the_floor {
+            continue;
+        }
+        let path = entry.path();
+        let Ok(handle) = fs::OpenOptions::new().read(true).write(true).open(&path) else {
+            continue;
+        };
+        // Ok(true): nothing held it, so nothing owns it. Ok(false): a live
+        // save does. Err: could not ask, so this is not ours to delete.
+        if matches!(crate::autosave::try_lock_exclusive(&handle), Ok(true)) {
+            let _ = fs::remove_file(&path);
         }
     }
 }
@@ -200,6 +221,14 @@ pub fn atomic_write_bytes(path: &Path, bytes: &[u8]) -> Result<(), String> {
         tempfile::Builder::new().prefix(TEMP_PREFIX).tempfile_in(dir)
     )
     .map_err(|e| format!("Failed to create save file: {e}"))?;
+    // Claim the temporary for as long as this write lasts, so another
+    // window's sweep can tell it apart from one a crash stranded. The
+    // kernel drops this when the process does, however it does, which is
+    // the whole point — a lock that outlived its owner would strand
+    // temporaries just as permanently as no lock at all. Best-effort: a
+    // filesystem that cannot lock must not fail the save, it only means a
+    // sweep will wait out the race floor instead of asking.
+    let _claim = crate::autosave::try_lock_exclusive(tmp.as_file());
     match fs::metadata(path) {
         Ok(metadata) => fail_point!(
             fault::Boundary::Permissions,
@@ -239,13 +268,21 @@ mod tests {
     /// Serializes the one test that changes the process working directory.
     static CWD_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
 
-    /// Backdate a file so the sweep sees it as stale without waiting a day.
+    /// Backdate a file past the race floor without waiting a minute.
     fn backdate(path: &Path, by: std::time::Duration) {
         let when = std::time::SystemTime::now() - by;
         let handle = fs::OpenOptions::new().write(true).open(path).unwrap();
-        handle
-            .set_times(fs::FileTimes::new().set_modified(when))
-            .unwrap();
+        handle.set_times(fs::FileTimes::new().set_modified(when)).unwrap();
+    }
+
+    /// Plant something that looks exactly like what a crash leaves: a
+    /// prefixed file, old enough to be past the race floor, held by
+    /// nobody.
+    fn plant_stranded(dir: &Path, suffix: &str) -> std::path::PathBuf {
+        let p = dir.join(format!("{TEMP_PREFIX}{suffix}"));
+        fs::write(&p, b"a document's worth of bytes, in spirit").unwrap();
+        backdate(&p, SWEEP_RACE_FLOOR * 2);
+        p
     }
 
     /// A crash during a save strands its temporary, and nothing used to
@@ -256,14 +293,12 @@ mod tests {
     /// temporary — so "no temporary left behind" was true of every error
     /// and false of every kill. Measured before this existed: SIGKILL
     /// during a 600 MiB save left a 78 MiB `.office-save-J6zNaJ` next to
-    /// the document, and the destination intact. The atomicity promise
+    /// the document, with the destination intact. The atomicity promise
     /// held; the cleanup promise did not.
     #[test]
     fn a_stranded_temporary_is_swept_by_the_next_save() {
         let dir = tempfile::tempdir().unwrap();
-        let stranded = dir.path().join(format!("{TEMP_PREFIX}aBcDeF"));
-        fs::write(&stranded, b"78 MiB of a document, in spirit").unwrap();
-        backdate(&stranded, STALE_TEMP_AGE * 2);
+        let stranded = plant_stranded(dir.path(), "aBcDeF");
 
         let path = dir.path().join("doc.txt");
         atomic_write_bytes(&path, b"new document").unwrap();
@@ -272,14 +307,27 @@ mod tests {
         assert_eq!(fs::read(&path).unwrap(), b"new document", "the save itself must still land");
     }
 
-    /// And the sweep must not touch a temporary another window is still
-    /// filling. It cannot ask whether one is in use, so it asks how old it
-    /// is — and a live save's temporary is seconds old at most.
+    /// And a temporary a live save is still filling must survive — which
+    /// is the assertion the lock exists for, so the test holds a real
+    /// lock rather than relying on the file being new.
+    ///
+    /// Getting this wrong in the other direction is the worse bug: a
+    /// second window's sweep deleting the temporary the first window is
+    /// mid-write on would turn a tidy-up into data loss. Backdating the
+    /// file past the race floor is what makes the lock the only thing
+    /// standing between the sweep and that file — without it the floor
+    /// alone would pass this test, while protecting nothing a minute
+    /// later.
+    #[cfg(unix)]
     #[test]
-    fn a_live_saves_temporary_is_not_swept() {
+    fn a_temporary_a_live_save_holds_is_not_swept() {
         let dir = tempfile::tempdir().unwrap();
-        let live = dir.path().join(format!("{TEMP_PREFIX}zYxWvU"));
-        fs::write(&live, b"another window is writing this").unwrap();
+        let live = plant_stranded(dir.path(), "zYxWvU");
+        let held = fs::OpenOptions::new().read(true).write(true).open(&live).unwrap();
+        assert!(
+            matches!(crate::autosave::try_lock_exclusive(&held), Ok(true)),
+            "precondition: this test has to actually hold the lock",
+        );
 
         atomic_write_bytes(&dir.path().join("doc.txt"), b"new document").unwrap();
 
@@ -287,10 +335,29 @@ mod tests {
             live.exists(),
             "the sweep deleted a temporary a concurrent save was still writing",
         );
+        drop(held);
     }
 
-    /// The age alone is not the test either: something else's old dotfile
-    /// in the same directory is not ours to delete.
+    /// The window between creating a temporary and locking it is real: for
+    /// those microseconds the file is on disk holding no lock, which is
+    /// indistinguishable from stranded. The race floor is what covers it,
+    /// so a temporary nobody holds but which is *new* is still left alone.
+    #[test]
+    fn a_brand_new_unlocked_temporary_is_not_swept() {
+        let dir = tempfile::tempdir().unwrap();
+        let fresh = dir.path().join(format!("{TEMP_PREFIX}justBorn"));
+        fs::write(&fresh, b"created, not yet locked").unwrap();
+
+        atomic_write_bytes(&dir.path().join("doc.txt"), b"new document").unwrap();
+
+        assert!(
+            fresh.exists(),
+            "the sweep took a temporary created in the instant before its lock",
+        );
+    }
+
+    /// Something else's old dotfile in the same directory is not ours to
+    /// delete, however unlocked and however old.
     #[test]
     fn the_sweep_only_touches_our_own_prefix() {
         let dir = tempfile::tempdir().unwrap();
@@ -298,7 +365,7 @@ mod tests {
         for name in others {
             let p = dir.path().join(name);
             fs::write(&p, b"not ours").unwrap();
-            backdate(&p, STALE_TEMP_AGE * 2);
+            backdate(&p, SWEEP_RACE_FLOOR * 2);
         }
 
         atomic_write_bytes(&dir.path().join("doc.txt"), b"new document").unwrap();
@@ -313,15 +380,15 @@ mod tests {
     /// something must never fail a save that already landed.
     ///
     /// The symlink is the case that makes `is_file` load-bearing, and it
-    /// took a mutation to notice: dropping the check does *not* change what
-    /// happens to a directory, because `remove_file` refuses a directory
+    /// took a mutation to notice: dropping the check does *not* change
+    /// what happens to a directory, because `remove_file` refuses one
     /// anyway. It changes what happens to a symlink, which `remove_file`
-    /// would happily unlink. `DirEntry::metadata` does not traverse, so the
+    /// will happily unlink. `DirEntry::metadata` does not traverse, so the
     /// check sees the link itself rather than its target.
     ///
     /// The clock is injected rather than the entries backdated, because a
     /// symlink's own mtime cannot be set through `std` — and with a
-    /// real-time sweep the age gate would skip the link for being fresh,
+    /// real-time sweep the race floor would skip the link for being fresh,
     /// which is how this test would have passed without testing anything.
     #[cfg(unix)]
     #[test]
@@ -335,42 +402,70 @@ mod tests {
         fs::create_dir(&decoy).unwrap();
         fs::write(decoy.join("inside"), b"someone's data").unwrap();
 
-        // Far enough ahead that every entry is past the age gate, so what
-        // is being tested is the kind check and nothing else.
-        sweep_stranded_temps(dir.path(), std::time::SystemTime::now() + STALE_TEMP_AGE * 2);
+        // Far enough ahead that every entry is past the race floor, so
+        // what is being tested is the kind check and nothing else.
+        sweep_stranded_temps(dir.path(), std::time::SystemTime::now() + SWEEP_RACE_FLOOR * 2);
 
         assert!(link.is_symlink(), "the sweep unlinked a symlink it did not write");
         assert_eq!(fs::read(&target).unwrap(), b"must survive");
         assert!(decoy.is_dir(), "the sweep removed a directory it did not write");
         assert_eq!(fs::read(decoy.join("inside")).unwrap(), b"someone's data");
 
-        // And a save into that same directory still succeeds.
         let path = dir.path().join("doc.txt");
         atomic_write_bytes(&path, b"new document").unwrap();
         assert_eq!(fs::read(&path).unwrap(), b"new document");
     }
 
-    /// The age gate itself, with the clock injected rather than waited on.
+    /// A save holds a lock on its own temporary while it writes — the
+    /// property the sweep reads. Asserted from outside, because the whole
+    /// mechanism rests on another process being unable to take it.
+    #[cfg(unix)]
     #[test]
-    fn the_sweep_gate_is_the_age_and_the_prefix_together() {
+    fn a_save_in_progress_holds_its_temporary() {
         let dir = tempfile::tempdir().unwrap();
-        let ours = dir.path().join(format!("{TEMP_PREFIX}one"));
-        let theirs = dir.path().join(".not-ours");
-        fs::write(&ours, b"x").unwrap();
-        fs::write(&theirs, b"x").unwrap();
+        let seen = std::sync::Arc::new(std::sync::Mutex::new(Vec::<bool>::new()));
+        // Watch the directory while a large save runs and try to lock any
+        // temporary that appears. Every attempt must be refused.
+        let watcher = {
+            let (dir, seen) = (dir.path().to_path_buf(), seen.clone());
+            std::thread::spawn(move || {
+                let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
+                while std::time::Instant::now() < deadline {
+                    for entry in fs::read_dir(&dir).into_iter().flatten().flatten() {
+                        let name = entry.file_name();
+                        if !name.to_string_lossy().starts_with(TEMP_PREFIX) {
+                            continue;
+                        }
+                        if let Ok(f) =
+                            fs::OpenOptions::new().read(true).write(true).open(entry.path())
+                        {
+                            let got = crate::autosave::try_lock_exclusive(&f);
+                            seen.lock().unwrap().push(matches!(got, Ok(true)));
+                            return;
+                        }
+                    }
+                }
+            })
+        };
+        // Big enough that the temporary exists for a measurable while.
+        let big = vec![b'x'; 64 * 1024 * 1024];
+        atomic_write_bytes(&dir.path().join("doc.bin"), &big).unwrap();
+        watcher.join().unwrap();
 
-        // A moment ago: nothing is stale yet, ours included.
-        sweep_stranded_temps(dir.path(), std::time::SystemTime::now());
-        assert!(ours.exists() && theirs.exists(), "nothing here is stale yet");
-
-        // Far enough in the future that both are older than the gate —
-        // only ours goes.
-        sweep_stranded_temps(
-            dir.path(),
-            std::time::SystemTime::now() + STALE_TEMP_AGE * 2,
+        let attempts = seen.lock().unwrap().clone();
+        // An empty result means the watcher never caught the temporary,
+        // which makes this inconclusive rather than passing — say so
+        // instead of reporting a pass nobody earned.
+        assert!(
+            !attempts.is_empty(),
+            "the watcher never saw a temporary, so this proved nothing; \
+             raise the buffer size if this becomes flaky",
         );
-        assert!(!ours.exists(), "a stale temporary of ours should be gone");
-        assert!(theirs.exists(), "another program's stale dotfile is not ours to delete");
+        assert!(
+            attempts.iter().all(|locked| !locked),
+            "a temporary was lockable while its save was writing, so the \
+             sweep cannot tell a live save from a crashed one",
+        );
     }
 
     #[cfg(unix)]
