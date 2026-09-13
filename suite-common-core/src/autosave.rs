@@ -316,6 +316,38 @@ impl AutosaveSlot {
         Ok(())
     }
 
+    /// Clear the slot, and say so on stderr if it could not be cleared.
+    ///
+    /// Returns whether it reported a failure, which is what makes the
+    /// behaviour testable — the message itself is a side effect.
+    ///
+    /// Every call site in the three apps used to be `let _ = slot.clear();`.
+    /// A failed clear happens at the moment of a *successful* save, about a
+    /// temporary file the user cannot act on, so #666 deliberately did not
+    /// put a toast in front of someone whose save just worked, and removed
+    /// the consequence instead: `find_orphaned_snapshots` no longer offers a
+    /// snapshot the saved file has overtaken. That left the failure with no
+    /// trace at all, which is the wrong end of the trade — a full or
+    /// read-only state directory is exactly what somebody diagnosing "why is
+    /// this directory filling up" needs to see. A log line is that trace,
+    /// and it is the house convention for a diagnostic nobody can act on
+    /// mid-session (see the `GSettings write failed` reports).
+    pub fn clear_or_report(&self) -> bool {
+        match self.clear() {
+            Ok(()) => false,
+            Err(reason) => {
+                eprintln!(
+                    "autosave: could not clear the crash snapshot for {}: {reason}. \
+                     The snapshot is left behind; it will not be offered as a \
+                     recovery once the saved file is newer, but the state \
+                     directory keeps the file.",
+                    self.doc_id,
+                );
+                true
+            }
+        }
+    }
+
     /// Read back the snapshot bytes and metadata, if both files are present
     /// and well-formed.
     pub fn read(&self) -> Option<(Vec<u8>, SnapshotMeta)> {
@@ -1058,6 +1090,38 @@ mod tests {
         slot.write(b"x", &SnapshotMeta { original_path: None, kind: "md".into() }).unwrap();
         let (_, meta) = slot.read().unwrap();
         assert_eq!(meta.original_path, None);
+    }
+
+    /// A clear that cannot happen must leave a trace rather than nothing.
+    ///
+    /// `remove_file` on a directory fails even as root, which is how this
+    /// arranges a failing clear without needing a read-only mount: the
+    /// snapshot path is a directory, so it exists and cannot be removed.
+    #[test]
+    fn a_clear_that_fails_is_reported_rather_than_discarded() {
+        let dir = tempfile::tempdir().unwrap();
+        let slot = AutosaveSlot::new(dir.path(), "doc-1");
+        fs::create_dir_all(dir.path().join("doc-1.snapshot")).unwrap();
+
+        assert!(slot.clear().is_err(), "precondition: this clear cannot succeed");
+        assert!(
+            slot.clear_or_report(),
+            "a failed clear must report, or a full state directory leaves no trace",
+        );
+    }
+
+    /// And a clear that works says nothing, so the report means something
+    /// when it does appear.
+    #[test]
+    fn a_clear_that_works_is_silent() {
+        let dir = tempfile::tempdir().unwrap();
+        let slot = AutosaveSlot::new(dir.path(), "doc-1");
+        slot.write(b"work", &SnapshotMeta { original_path: None, kind: "md".into() }).unwrap();
+
+        assert!(!slot.clear_or_report(), "a successful clear must not report");
+        // And with nothing left to remove it is still silent, because
+        // clearing an already-clear slot is not a failure.
+        assert!(!slot.clear_or_report(), "clearing twice must not report");
     }
 
     #[test]

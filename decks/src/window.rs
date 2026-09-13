@@ -529,7 +529,7 @@ impl DecksWindow {
                 dialog.choose(Some(win), None::<&gio::Cancellable>, move |response: glib::GString| {
                     let Some(win) = win_weak.upgrade() else { return };
                     if response == "discard" {
-                        let _ = slot.clear();
+                        slot.clear_or_report();
                         force_close.set(true);
                         win.close();
                         return;
@@ -543,7 +543,7 @@ impl DecksWindow {
                         match write_deck(&path, &deck) {
                             Ok(()) => {
                                 dirty.set(false);
-                                let _ = slot.clear();
+                                slot.clear_or_report();
                                 force_close.set(true);
                                 win.close();
                             }
@@ -583,7 +583,7 @@ impl DecksWindow {
                                     Ok(()) => {
                                         *path_state.borrow_mut() = Some(path_str);
                                         dirty.set(false);
-                                        let _ = slot.clear();
+                                        slot.clear_or_report();
                                         force_close.set(true);
                                         win2.close();
                                     }
@@ -1383,7 +1383,7 @@ impl DecksWindow {
                             let settings = gio::Settings::new("org.tunaos.decks");
                             suite_common::push_recent_file(&settings, &path_str);
                             dirty_save.set(false);
-                            let _ = slot_save.clear();
+                            slot_save.clear_or_report();
                         }
                         Err(e) => {
                             let err = adw::AlertDialog::builder()
@@ -1437,7 +1437,7 @@ impl DecksWindow {
                                         suite_common::push_recent_file(&settings, &path_str);
                                         *path_ref.borrow_mut() = Some(path_str);
                                         dirty_as.set(false);
-                                        let _ = slot_as.clear();
+                                        slot_as.clear_or_report();
                                     }
                                     Err(e) => {
                                         let err = adw::AlertDialog::builder()
@@ -1572,7 +1572,7 @@ impl DecksWindow {
             self.window.set_title(Some(&format!("{name} (Recovered) — Decks")));
             // Order and failure handling: AutosaveSlot::adopt_recovered.
             if self.autosave_slot.adopt_recovered(&bytes, &meta) {
-                let _ = orphan.clear();
+                orphan.clear_or_report();
             }
             return true;
         }

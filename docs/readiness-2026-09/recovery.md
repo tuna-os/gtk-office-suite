@@ -239,23 +239,27 @@ AutosaveSlot used to store bytes and metadata in separate atomic writes. Each wr
       soon as the content was in memory and relied on the next timer tick
       for a replacement, so a crash in that window lost work that had
       already survived one crash.
-      **Cleanup errors are neutralised rather than surfaced** (#666), which
-      is why this row is still `[~]`. `clear_tab_autosave` and the
-      `slot.clear()` calls in Tables and Decks do still drop their errors, so
-      a snapshot whose clear fails is still left on disk. What changed is the
-      consequence: `find_orphaned_snapshots` no longer offers a snapshot the
-      saved file has overtaken, so already-saved work is not handed back as a
-      "recovered" document on every subsequent launch.
-      That was a deliberate choice over the obvious one. A failed clear
-      happens at the moment of a *successful* save, about a temporary file
-      the user cannot act on, so reporting it would put a warning in front of
-      someone whose save just worked. The false recovery offer is what they
-      actually experience, so that is what was removed. The trade-off is that
-      a failing clear now leaves no trace at all for anyone diagnosing a full
-      or read-only state directory — arguably a log line's job rather than a
-      toast's, and not done either way.
-      Also still open in this row: "keep dirty state on failed commit" is the
-      save transaction rather than the snapshot — #436 and #437 own it.
+      **Cleanup errors now leave a trace.** #666 neutralised the
+      *consequence* of a failed clear — `find_orphaned_snapshots` no longer
+      offers a snapshot the saved file has overtaken, so already-saved work
+      is not handed back as a "recovered" document on every subsequent
+      launch — and deliberately did not put a warning in front of somebody
+      whose save just worked, about a temporary file they cannot act on.
+      That was the right call on the dialog and the wrong one on the record:
+      it left a failing clear with no output at all, so whoever is asking
+      why a state directory keeps filling up had nothing to read. Every
+      `let _ = slot.clear()` in the three apps is now `clear_or_report()`,
+      which logs the doc id and the reason on stderr and says nothing when
+      the clear works — the house convention for a diagnostic nobody can act
+      on mid-session. `TablesUnclearableSnapshotSmoke` is the journey: it
+      replaces the app's own snapshot *file* with a directory, so
+      `remove_file` fails for root as well, saves with Ctrl+S, and reads the
+      app's stderr. Blocking the whole state directory instead would have
+      passed while proving nothing — the snapshot would never exist, so the
+      clear would succeed with nothing to do.
+      Still open in this row, and why it is `[~]` rather than `[x]`: "keep
+      dirty state on failed commit" is the save transaction rather than the
+      snapshot — #436 and #437 own it.
 - [~] Inject failures before/after each checkpoint/rename and kill the real app; verify old-or-new complete state, never a mismatched generation. The headless half is done: `atomic_save::fault` arms any of the six boundaries of a durable write (temp create, permission preservation, data write, data sync, rename, directory sync) and any arrival at one, so "fail the second commit of this transaction" is expressible. A sweep asserts that every pre-commit boundary leaves the destination byte-identical with no temporary left behind, that the one post-rename boundary reports the replacement rather than claiming a rollback, and that no boundary or arrival in a snapshot write can pair two generations. The hook is `cfg(test)` only — a release build contains no branch to take. Killing the real app under the GUI harness is still open.
 - [x] Cover multiple windows, multiple documents, renamed/missing originals, unsaved documents, duplicate recovery attempts and schema upgrades. All six have headless lifecycle tests in `suite-common-core/src/autosave.rs` and a real kill/relaunch journey in every app, which is what this row's completion note asks for.
       | scenario | Tables | Letters | Decks | journey |
