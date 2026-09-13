@@ -65,7 +65,7 @@ fn skipping_is_allowed() -> bool {
 /// message. An unset `DISPLAY` and a set one that nothing is serving fail
 /// identically inside GTK but need different fixes.
 fn display_for_diagnosis() -> String {
-    describe_display(std::env::var("DISPLAY").ok().as_deref())
+    describe_display_and_server(std::env::var("DISPLAY").ok().as_deref(), server_socket_exists)
 }
 
 /// Split out from the environment read for the same reason as
@@ -76,6 +76,59 @@ fn describe_display(value: Option<&str>) -> String {
         Some("") => "DISPLAY set but empty".to_string(),
         Some(value) => format!("DISPLAY={value}"),
         None => "DISPLAY unset".to_string(),
+    }
+}
+
+/// Whether a local X server has a socket for this display number.
+///
+/// Not a connection attempt: opening one from inside a failing test would
+/// add its own failure mode to the diagnosis. The socket's presence is
+/// enough to answer the question the message could not previously answer.
+fn server_socket_exists(number: &str) -> bool {
+    std::path::Path::new(&format!("/tmp/.X11-unix/X{number}")).exists()
+}
+
+/// The display *and* whether anything is serving it.
+///
+/// `describe_display` alone could not tell those apart, and the difference
+/// decides where to look. A widget test failing with `DISPLAY=:0` reads like
+/// a job that forgot Xvfb — but it is also what a job whose Xvfb is running
+/// and refused one connection looks like, and that happened: a lane where
+/// 140 of 141 widget tests initialised GTK on `:0` and one did not. The
+/// first is a missing display, the second is not, and the message used to
+/// describe both the same way.
+///
+/// The probe is injected so this stays a pure function: a test that created
+/// or removed a socket under `/tmp/.X11-unix` would be doing it to every
+/// other test in the process.
+fn describe_display_and_server(
+    value: Option<&str>,
+    socket_exists: impl Fn(&str) -> bool,
+) -> String {
+    let described = describe_display(value);
+    let Some(display) = value.filter(|v| !v.is_empty()) else {
+        return described;
+    };
+    // "host:0.0" — the part before the colon is a host (empty for a local
+    // display), and the screen suffix after the dot is not part of the
+    // server's socket name.
+    let Some((host, rest)) = display.split_once(':') else {
+        return described;
+    };
+    if !host.is_empty() && host != "localhost" {
+        return format!("{described}, a remote display this check does not probe");
+    }
+    let number = rest.split('.').next().unwrap_or(rest);
+    if number.is_empty() || !number.chars().all(|c| c.is_ascii_digit()) {
+        return described;
+    }
+    if socket_exists(number) {
+        format!(
+            "{described}, which an X server *is* serving — so GTK was refused by a \
+             live display rather than handed a missing one"
+        )
+    } else {
+        format!("{described}, which nothing is serving")
     }
 }
 
@@ -136,9 +189,11 @@ where
             assert!(
                 skipping_is_allowed(),
                 "GTK could not be initialised, so this widget test could not run: \
-                 {reason} ({display}). Give the run a display (`xvfb-run -a cargo \
-                 test ...`), or set {SKIP_VARIABLE}=skip to declare this run \
-                 display-less and skip the GTK widget tests deliberately.",
+                 {reason} ({display}). Give the run a display \
+                 (`scripts/with-display.sh cargo test ...`, which waits for the \
+                 server to accept connections), or set {SKIP_VARIABLE}=skip to \
+                 declare this run display-less and skip the GTK widget tests \
+                 deliberately.",
                 display = display_for_diagnosis(),
             );
             eprintln!(
@@ -187,7 +242,8 @@ mod tests {
             super::is_available() || super::skipping_is_allowed(),
             "GTK could not be initialised and {}=skip is not set, so every GTK \
              widget test in this run would have been unable to run: {} ({}). \
-             Give the run a display (`xvfb-run -a ...`) or opt out explicitly.",
+             Give the run a display (`scripts/with-display.sh ...`) or opt out \
+             explicitly.",
             super::SKIP_VARIABLE,
             super::unavailable_reason().unwrap_or("no reason recorded"),
             super::display_for_diagnosis(),
@@ -215,6 +271,59 @@ mod tests {
         assert_eq!(super::describe_display(None), "DISPLAY unset");
         assert_eq!(super::describe_display(Some("")), "DISPLAY set but empty");
         assert_eq!(super::describe_display(Some(":99")), "DISPLAY=:99");
+    }
+
+    /// The message has to separate "no display" from "a display that
+    /// refused us", because a lane where 140 of 141 widget tests
+    /// initialised GTK on `:0` and one did not reads exactly like a job
+    /// that forgot Xvfb, and is not one.
+    #[test]
+    fn the_message_says_whether_anything_is_serving_the_display() {
+        let serving = |_: &str| true;
+        let empty = |_: &str| false;
+
+        let live = super::describe_display_and_server(Some(":0"), serving);
+        assert!(live.starts_with("DISPLAY=:0,"), "{live}");
+        assert!(live.contains("refused"), "{live}");
+
+        let dead = super::describe_display_and_server(Some(":0"), empty);
+        assert_eq!(dead, "DISPLAY=:0, which nothing is serving");
+    }
+
+    /// The screen suffix is not part of the socket name, and the host part
+    /// means there is no local socket to look for at all. Getting either
+    /// wrong would report "nothing is serving" for a display that is.
+    #[test]
+    fn the_probe_reads_the_display_the_way_x_does() {
+        // RefCell because the probe is taken as `Fn`: a closure that pushed
+        // straight into a local Vec would only be `FnMut`.
+        let asked = std::cell::RefCell::new(Vec::new());
+        super::describe_display_and_server(Some(":12.0"), |number: &str| {
+            asked.borrow_mut().push(number.to_string());
+            true
+        });
+        assert_eq!(
+            asked.into_inner(),
+            vec!["12".to_string()],
+            "the screen suffix is not part of the display number",
+        );
+
+        let remote = super::describe_display_and_server(Some("otherhost:0"), |_| false);
+        assert!(remote.contains("remote"), "{remote}");
+        assert!(!remote.contains("nothing is serving"), "{remote}");
+    }
+
+    /// The states with nothing to probe keep their old wording rather than
+    /// gaining a claim about a server.
+    #[test]
+    fn a_display_with_no_number_is_described_but_not_probed() {
+        for value in [None, Some(""), Some("bogus"), Some(":")] {
+            let described = super::describe_display_and_server(value, |_| true);
+            assert!(
+                !described.contains("serving") && !described.contains("refused"),
+                "{value:?} -> {described}",
+            );
+        }
     }
 
     /// When GTK is usable there is no reason to report, and when it is not
