@@ -52,8 +52,11 @@ gtk-office-suite is the org's flagship **end-user product bet** and a cornerston
 | P1 | Letters: structured editing (tables/lists/paragraphs/sections), review workflows, pagination | #109, #110, #111 | 🟡 In progress |
 | P1 | Tables: sparse virtual grid + performance budgets | #112 | 🟡 In progress |
 | P1 | Headless CLI document conversion binary (`suite-convert`) | #579 | ⬜ Planned |
+| P1 | Offline-first real-time CRDT collaboration & state sync | RFC 0001 | 🟡 In progress |
+| P1 | Enterprise fleet deployment & dconf security profile locking | docs/enterprise-fleet-deployment.md | ⬜ Planned |
 | P1 | Decks: direct manipulation, themes/layouts, presenter view | #115, #116, #117 | ⬜ Not started |
 | P1 | GNOME platform integration: recent files, portals, drag/drop | #119 | ⬜ Not started |
+| P2 | Privacy-first local AI document intelligence contract | suite-common-core | ⬜ Planned |
 | P2 | Interop: unsupported-feature inspector + versioned fixture corpus with loss budgets | #105, #121 | ⬜ Not started |
 | P2 | Release gate: Flatpak, upgrade, recovery, localization, reproducible builds | #122, #578 | 🟡 In progress |
 | P2 | A11y: keyboard + screen-reader journeys | #120 | ⬜ Not started |
@@ -76,14 +79,14 @@ gtk-office-suite is the org's flagship **end-user product bet** and a cornerston
 
 ### Q4 2026 (October–December) — "Ship it properly"
 
-**Theme**: production release gating, Flatpak distribution, and headless batch
-document processing. Sketch until Q4 starts; the live execution plan remains
-[docs/readiness-2026-09/](docs/readiness-2026-09/README.md).
+**Theme**: production release gating, Flatpak distribution, enterprise policy, and headless batch document processing. Sketch until Q4 starts; the live execution plan remains [docs/readiness-2026-09/](docs/readiness-2026-09/README.md).
 
 | Goal | Owner | Tracking | Status |
 |------|-------|----------|--------|
 | Release gate: Flatpak reproducible builds + GSettings migration verification | quality / ops | #122, #578 | 🟡 Planned |
 | Headless CLI conversion binary (`suite-convert`) | architect / strategist | #579 | ⬜ Planned |
+| Enterprise fleet deployment & dconf security policy profile | ops / strategist | docs/enterprise-fleet-deployment.md | ⬜ Planned |
+| Offline-first CRDT real-time collaboration engine roadmap | architect / strategist | RFC 0001 | ⬜ Planned |
 | Decks presenter view & export rendering parity | architect | #117 | ⬜ Planned |
 | Interop loss budgets & unsupported-feature inspector | quality | #105, #121 | ⬜ Planned |
 | A11y: keyboard + screen-reader journeys | quality | #120 | ⬜ Planned |
