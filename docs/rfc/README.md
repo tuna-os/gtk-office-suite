@@ -13,3 +13,4 @@ status line as the record of the reasoning.
 | RFC | Title | Status |
 |---|---|---|
 | [0001](0001-crdt-collaboration.md) | CRDT collaboration for Letters, Tables and Decks | draft |
+| [0002](0002-wasm-plugin-architecture.md) | WebAssembly plugin runtime and IPC extension architecture | draft |
