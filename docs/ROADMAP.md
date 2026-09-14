@@ -108,6 +108,12 @@ without a test that fails first.
   validates pedantic-clean; flathub/ manifests build from tag v1.1.0.
   The submission PR itself is a human action (see flathub/README.md).
 
+## Enterprise Security & Cloud Interop (Q4 2026)
+
+- **Client-Side Document Encryption**: AES-256 and OpenPGP package encryption support for ODT/ODS/ODP and OOXML documents integrated into `suite-common-core`.
+- **Digital Signatures**: X.509 signature creation and verification for document integrity and compliance validation.
+- **WebDAV & Cloud Storage Interop**: Standardized WebDAV remote backend support in `suite-common` with lock management to prevent concurrent write collisions across enterprise fleets.
+
 ## Standing infrastructure notes
 
 - Builds: the `gtkbuild` distrobox on the build host (18 cores, ~10s warm) is the
