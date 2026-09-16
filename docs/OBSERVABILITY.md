@@ -15,7 +15,7 @@ This document defines the observability architecture, client-side diagnostic fac
 
 Per organization operational policy:
 - **No Remote Exporters Configured:** No external telemetry collector, Prometheus remote-write exporter, or cloud monitoring pipeline is configured or permitted without explicit operator approval.
-- **Client-Side Diagnostics Only:** Observability is strictly local to the desktop execution environment. No user document content, keystroke logs, or telemetry payloads are transmitted off-device.
+- **Client-Side Diagnostics Only:** Observability is strictly local to the desktop execution environment. No user document content, keystroke logs, or telemetry payloads are transmitted off-box.
 - **Strict Cardinality Bounds:** Any future in-process telemetry or metric collection must strictly avoid unbounded dimensions (e.g. document text, file paths, user identifiers, or arbitrary error strings).
 
 ## Client-Side Diagnostic Facilities
