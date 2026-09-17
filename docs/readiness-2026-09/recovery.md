@@ -385,6 +385,32 @@ AutosaveSlot used to store bytes and metadata in separate atomic writes. Each wr
           space; normalising per axis stretches it but keeps a full-bleed
           shape full-bleed and everything on-slide, where the old
           behaviour pushed content off the bottom.
+      The same audit, continued across the remaining fields, found a
+      second one: **speaker notes were dropped from every deck that had
+      been through Impress.** Impress's pptx exporter writes the notes into
+      a shape with *no placeholder at all* — one `p:sp` whose `p:nvPr` is
+      empty — and `extract_notes_text` only read text inside a
+      `p:ph type="body"`, which is what our own writer emits and therefore
+      the only shape any test ever presented it with.
+      How it was diagnosed is worth keeping, because the obvious reading
+      was wrong and #733 had trained the wrong reflex. A notes loss on
+      odp -> Impress -> pptx looks exactly like the font case, where
+      Impress's exporter genuinely does not write the part. It was not:
+      an odp -> odp rewrite kept the notes, proving Impress reads what we
+      write, and its pptx *did* contain `notesSlide1.xml` carrying the
+      text. Checking which side actually dropped it is what separated our
+      bug from theirs — the same two-step that cleared us in #733 and
+      convicted us here.
+      The fallback widens only to shapes that declare **no** placeholder.
+      A shape declaring some other one — a slide number, a date, a footer —
+      is still never notes, because reading a page number as a speaker note
+      would be worse than losing the note.
+      Four other fields were audited the same way and came back clean in
+      all four directions (self and cross-format, both ways): rotation,
+      slide background, the slide's master mapping, and that master's own
+      background. Run styling's six carried fields were checked in #783's
+      wake and are clean too. What is left unaudited: image sizing and
+      aspect.
       The row stays `[~]`, and the reason is the session that closed its
       two named gaps rather than anything still on a list. Carrying the run
       styling turned up three strips — a reader splitting one line in two,
