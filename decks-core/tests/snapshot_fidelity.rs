@@ -979,3 +979,92 @@ fn a_custom_shapes_styled_lines_survive_being_read() {
         "a custom shape's styling was dropped: {runs:?}"
     );
 }
+
+/// A deck whose slide is the size current PowerPoint actually uses.
+///
+/// `960x540` are *model units* (ADR 0004), so a coordinate means something
+/// only relative to its slide. Both readers divided by a fixed constant
+/// instead — which is the same thing only for a slide of exactly the size
+/// our own writer emits. PowerPoint and Impress both default 16:9 decks to
+/// 13.333in x 7.5in (`sldSz cx="12192000" cy="6858000"`), and on one of
+/// those a full-bleed shape came back as 1280x720 in a 960x540 space: a
+/// third too large, running off the canvas on every import.
+///
+/// No test could see it, because every test round-trips through our own
+/// writer and our own writer always emits the one size the constant
+/// assumed. So this crafts the package.
+#[test]
+fn a_deck_on_the_modern_powerpoint_slide_size_imports_at_model_scale() {
+    use std::io::{Cursor, Write};
+    // Full-bleed on a 12192000 x 6858000 EMU slide.
+    let parts: [(&str, String); 4] = [
+        (
+            "[Content_Types].xml",
+            "<Types xmlns=\"http://schemas.openxmlformats.org/package/2006/content-types\">\
+             <Default Extension=\"rels\" ContentType=\"application/vnd.openxmlformats-package.relationships+xml\"/>\
+             <Override PartName=\"/ppt/presentation.xml\" ContentType=\"application/vnd.openxmlformats-officedocument.presentationml.presentation.main+xml\"/>\
+             <Override PartName=\"/ppt/slides/slide1.xml\" ContentType=\"application/vnd.openxmlformats-officedocument.presentationml.slide+xml\"/>\
+             </Types>".to_string(),
+        ),
+        (
+            "_rels/.rels",
+            "<Relationships xmlns=\"http://schemas.openxmlformats.org/package/2006/relationships\">\
+             <Relationship Id=\"rId1\" Type=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument\" Target=\"ppt/presentation.xml\"/>\
+             </Relationships>".to_string(),
+        ),
+        (
+            "ppt/presentation.xml",
+            "<p:presentation xmlns:p=\"http://schemas.openxmlformats.org/presentationml/2006/main\" \
+             xmlns:r=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships\">\
+             <p:sldIdLst><p:sldId id=\"256\" r:id=\"rId1\"/></p:sldIdLst>\
+             <p:sldSz cx=\"12192000\" cy=\"6858000\"/></p:presentation>".to_string(),
+        ),
+        (
+            "ppt/slides/slide1.xml",
+            "<p:sld xmlns:p=\"http://schemas.openxmlformats.org/presentationml/2006/main\" \
+             xmlns:a=\"http://schemas.openxmlformats.org/drawingml/2006/main\">\
+             <p:cSld><p:spTree>\
+             <p:sp><p:spPr><a:xfrm><a:off x=\"0\" y=\"0\"/>\
+             <a:ext cx=\"12192000\" cy=\"6858000\"/></a:xfrm>\
+             <a:prstGeom prst=\"rect\"><a:avLst/></a:prstGeom></p:spPr></p:sp>\
+             </p:spTree></p:cSld></p:sld>".to_string(),
+        ),
+    ];
+    let mut buffer = Vec::new();
+    {
+        let mut w = zip::ZipWriter::new(Cursor::new(&mut buffer));
+        for (name, body) in &parts {
+            w.start_file(*name, zip::write::SimpleFileOptions::default()).unwrap();
+            w.write_all(body.as_bytes()).unwrap();
+        }
+        // The slide's rels, named for the slide part.
+        w.start_file("ppt/_rels/presentation.xml.rels", zip::write::SimpleFileOptions::default())
+            .unwrap();
+        w.write_all(
+            b"<Relationships xmlns=\"http://schemas.openxmlformats.org/package/2006/relationships\">\
+              <Relationship Id=\"rId1\" Type=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships/slide\" Target=\"slides/slide1.xml\"/>\
+              </Relationships>",
+        )
+        .unwrap();
+        w.finish().unwrap();
+    }
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("modern.pptx");
+    std::fs::write(&path, &buffer).unwrap();
+
+    let deck = decks_core::read_deck(path.to_str().unwrap()).expect("read crafted pptx");
+    let obj = deck.slides[0]
+        .objects
+        .first()
+        .expect("the full-bleed shape did not survive the read");
+    let (x, y, w, h) = match obj {
+        SlideObject::Rect { x, y, w, h, .. } => (*x, *y, *w, *h),
+        SlideObject::TextBox { x, y, w, h, .. } => (*x, *y, *w, *h),
+        other => panic!("unexpected object kind: {other:?}"),
+    };
+    assert!(x.abs() < 0.01 && y.abs() < 0.01, "origin moved: ({x}, {y})");
+    assert!(
+        (w - 960.0).abs() < 0.05 && (h - 540.0).abs() < 0.05,
+        "a full-bleed shape came back as {w}x{h}, not the model's 960x540"
+    );
+}

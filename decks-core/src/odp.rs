@@ -842,11 +842,71 @@ struct Page {
 /// is the point: a master's decorations came back as nothing while this
 /// logic existed only for slides, and any shape the slide walker learns to
 /// read the master walker now learns too.
+/// The page extent `styles.xml` declares for the *slides*, in points.
+///
+/// The odp counterpart of `p:sldSz`: coordinates only mean something
+/// relative to it, and reading them as points outright is right only for a
+/// page of exactly the size our own writer emits (960pt x 540pt). See
+/// `SlideScale` in the pptx reader for what that cost.
+///
+/// A document has several page layouts and taking the first is not good
+/// enough: Impress writes the notes layout too, and that one is A4
+/// *portrait*, which read a landscape slide as 1.21x wider and 0.48x
+/// shorter — non-uniformly wrong, where the bug being fixed was at least
+/// uniformly wrong. So the layout is looked up by the name the first
+/// `style:master-page` points at, which is the one the slides use.
+fn parse_page_size_pt(xml: &str) -> Option<(f64, f64)> {
+    if xml.is_empty() {
+        return None;
+    }
+    let mut layouts: std::collections::HashMap<String, (f64, f64)> = Default::default();
+    let mut wanted: Option<String> = None;
+    let mut cur: Option<String> = None;
+    let mut reader = Reader::from_str(xml);
+    reader.config_mut().trim_text(true);
+    loop {
+        match reader.read_event() {
+            Ok(Event::Start(ref e)) | Ok(Event::Empty(ref e)) => {
+                match e.name().as_ref() {
+                    "style:page-layout" => cur = attr(e, "style:name"),
+                    "style:page-layout-properties" => {
+                        if let Some(name) = cur.clone() {
+                            let w = attr(e, "fo:page-width").and_then(|v| parse_length_pt(&v));
+                            let h = attr(e, "fo:page-height").and_then(|v| parse_length_pt(&v));
+                            if let (Some(w), Some(h)) = (w, h) {
+                                if w > 0.0 && h > 0.0 {
+                                    layouts.insert(name, (w, h));
+                                }
+                            }
+                        }
+                    }
+                    // Guarded rather than a nested `if`: the first
+                    // master-page wins, and later ones must fall through to
+                    // `_` untouched.
+                    "style:master-page" if wanted.is_none() => {
+                        wanted = attr(e, "style:page-layout-name");
+                    }
+                    _ => {}
+                }
+            }
+            Ok(Event::End(ref e)) if e.name().as_ref() == "style:page-layout" => cur = None,
+            Ok(Event::Eof) | Err(_) => break,
+            _ => {}
+        }
+    }
+    wanted.and_then(|n| layouts.get(&n).copied())
+}
+
+/// The page size our own writer emits, and what reading a length as model
+/// units outright assumed.
+const DEFAULT_PAGE_PT: (f64, f64) = (960.0, 540.0);
+
 fn parse_pages(
     xml: &str,
     page_tag: &str,
     page_bg: &std::collections::HashMap<String, String>,
     text_styles: &std::collections::HashMap<String, RunStyle>,
+    scale: (f64, f64),
     resolve_image: &mut dyn FnMut(&str) -> Option<String>,
 ) -> Result<Vec<Page>, String> {
     let mut pages: Vec<Page> = Vec::new();
@@ -866,13 +926,18 @@ fn parse_pages(
     // `svg:x`/`svg:y` place an unrotated shape; a rotated one carries
     // `draw:transform` instead and Impress omits them entirely, so the
     // transform is what has to be believed when both are present.
+    // Lengths arrive in points and leave in model units; `scale` is what
+    // the page this document declares makes one point worth. The transform
+    // is parsed in points and scaled after, so its rotation is untouched.
     let geo = |e: &quick_xml::events::BytesStart| -> (f64, f64, f64, f64, f64) {
         let g = |n: &str| attr(e, n).and_then(|v| parse_length_pt(&v)).unwrap_or(0.0);
-        let (w, h) = (g("svg:width"), g("svg:height"));
-        match attr(e, "draw:transform").and_then(|v| parse_transform(&v, w, h)) {
-            Some((x, y, rotation)) => (x, y, w, h, rotation),
-            None => (g("svg:x"), g("svg:y"), w, h, 0.0),
-        }
+        let (w_pt, h_pt) = (g("svg:width"), g("svg:height"));
+        let (x_pt, y_pt, rotation) =
+            match attr(e, "draw:transform").and_then(|v| parse_transform(&v, w_pt, h_pt)) {
+                Some((x, y, rotation)) => (x, y, rotation),
+                None => (g("svg:x"), g("svg:y"), 0.0),
+            };
+        (x_pt * scale.0, y_pt * scale.1, w_pt * scale.0, h_pt * scale.1, rotation)
     };
 
     loop {
@@ -1163,6 +1228,12 @@ pub fn read(path: &str) -> Result<Deck, String> {
     // no per-master one to read. Every master gets it, so a deck saved and
     // reopened as odp renders in the font it was saved with even though
     // masters can no longer differ.
+    // Read before any coordinate, since every one of them is relative to it.
+    let scale = {
+        let (w, h) = parse_page_size_pt(&styles).unwrap_or(DEFAULT_PAGE_PT);
+        (960.0 / w, 540.0 / h)
+    };
+
     let doc_font = parse_default_graphic_font(&styles)
         .unwrap_or_else(|| MasterSlide::DEFAULT_FONT.into());
 
@@ -1171,7 +1242,7 @@ pub fn read(path: &str) -> Result<Deck, String> {
     let mut master_idx_by_name: std::collections::HashMap<String, usize> = Default::default();
     let master_pages = {
         let mut resolve = |href: &str| extract_picture(href, &mut zip, &mut budget);
-        parse_pages(&styles, "style:master-page", &page_bg, &text_styles, &mut resolve)?
+        parse_pages(&styles, "style:master-page", &page_bg, &text_styles, scale, &mut resolve)?
     };
     for page in master_pages {
         master_idx_by_name.insert(page.slide.title.clone(), masters.len());
@@ -1194,7 +1265,7 @@ pub fn read(path: &str) -> Result<Deck, String> {
     let mut deck = Deck { slides: Vec::new(), masters };
     let slide_pages = {
         let mut resolve = |href: &str| extract_picture(href, &mut zip, &mut budget);
-        parse_pages(&content, "draw:page", &page_bg, &text_styles, &mut resolve)?
+        parse_pages(&content, "draw:page", &page_bg, &text_styles, scale, &mut resolve)?
     };
     for page in slide_pages {
         let mut slide = page.slide;
@@ -1387,6 +1458,50 @@ mod tests {
     /// The master page has to name the background style it defines, and
     /// the slide has to name the master — three references that have to
     /// agree or the deck comes back with a white default.
+    /// Impress writes a notes layout beside the slide one, and the notes
+    /// layout is A4 *portrait*. Taking the first `style:page-layout` read a
+    /// landscape slide as 1.21x wider and 0.48x shorter — non-uniformly
+    /// wrong, where the bug it was meant to fix was at least uniform. The
+    /// layout the first `style:master-page` names is the slides'.
+    #[test]
+    fn the_page_size_comes_from_the_layout_the_master_names() {
+        let xml = "<office:document-styles xmlns:office=\"o\" xmlns:style=\"s\" \
+             xmlns:fo=\"f\">\
+             <office:automatic-styles>\
+             <style:page-layout style:name=\"PM2\">\
+             <style:page-layout-properties fo:page-width=\"595pt\" \
+             fo:page-height=\"842pt\"/></style:page-layout>\
+             <style:page-layout style:name=\"PM1\">\
+             <style:page-layout-properties fo:page-width=\"720pt\" \
+             fo:page-height=\"405pt\"/></style:page-layout>\
+             </office:automatic-styles>\
+             <office:master-styles>\
+             <style:master-page style:name=\"Default\" \
+             style:page-layout-name=\"PM1\"/>\
+             </office:master-styles></office:document-styles>";
+        assert_eq!(
+            parse_page_size_pt(xml),
+            Some((720.0, 405.0)),
+            "the A4 notes layout was read instead of the slide's"
+        );
+    }
+
+    /// No master, no size: the caller falls back rather than guessing one.
+    #[test]
+    fn a_document_naming_no_layout_reads_as_none() {
+        assert_eq!(parse_page_size_pt("<office:document-styles xmlns:office=\"o\"/>"), None);
+        assert_eq!(parse_page_size_pt(""), None);
+    }
+
+    /// Our own page size must map one point to one model unit, or every
+    /// document we wrote before this shifts.
+    #[test]
+    fn our_own_page_size_is_the_identity() {
+        let (w, h) = DEFAULT_PAGE_PT;
+        assert!((960.0 / w - 1.0).abs() < 1e-12);
+        assert!((540.0 / h - 1.0).abs() < 1e-12);
+    }
+
     #[test]
     fn styles_xml_ties_the_master_its_background_and_the_slide_together() {
         let deck = Deck {

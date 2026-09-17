@@ -106,6 +106,79 @@ fn parse_rotation(e: &BytesStart) -> Option<f64> {
     None
 }
 
+/// How a document's own slide size maps onto the model's 960x540 space.
+///
+/// The model's units are abstract (ADR 0004: "960x540 model units"), so a
+/// coordinate only means something relative to the slide it sits on. Both
+/// readers used to divide by a fixed constant instead — 9525 EMU per unit
+/// here, one point per unit in odp — which is the *same* thing only for a
+/// slide of exactly the size our own writer emits. A deck from current
+/// PowerPoint or Impress declares 13.333in x 7.5in
+/// (`sldSz cx="12192000" cy="6858000"`), and a full-bleed shape on one read
+/// back as 1280x720 in a 960x540 space: a third too large, running off the
+/// canvas. Every test missed it because every test round-trips through our
+/// own writer, which always emits the one size the constant assumed.
+#[derive(Clone, Copy, Debug)]
+pub struct SlideScale {
+    pub x: f64,
+    pub y: f64,
+}
+
+impl SlideScale {
+    /// The slide size our own writer emits: 9144000 x 5143500 EMU
+    /// (10in x 5.625in), which is what dividing by 9525 assumed.
+    pub const DEFAULT_EMU: (f64, f64) = (9144000.0, 5143500.0);
+
+    /// Each axis is normalised against that axis's own extent, so a
+    /// full-bleed shape stays full-bleed whatever the source's aspect
+    /// ratio. For any 16:9 source — both common PowerPoint sizes — the two
+    /// factors are equal and this is a uniform scale; only a 4:3 import is
+    /// stretched, which is the best a fixed 16:9 model space can do with
+    /// one, and is still an improvement on today's silent overflow.
+    pub fn from_emu(cx: f64, cy: f64) -> Self {
+        let (dx, dy) = Self::DEFAULT_EMU;
+        let cx = if cx > 0.0 { cx } else { dx };
+        let cy = if cy > 0.0 { cy } else { dy };
+        SlideScale { x: 960.0 / cx, y: 540.0 / cy }
+    }
+}
+
+impl Default for SlideScale {
+    fn default() -> Self {
+        let (cx, cy) = Self::DEFAULT_EMU;
+        Self::from_emu(cx, cy)
+    }
+}
+
+/// The slide extent a package declares, from `p:sldSz` in presentation.xml.
+pub fn parse_slide_size(xml: &str) -> Option<(f64, f64)> {
+    if xml.is_empty() {
+        return None;
+    }
+    let mut reader = Reader::from_str(xml);
+    reader.config_mut().trim_text(true);
+    let mut buf = Vec::new();
+    loop {
+        match reader.read_event_into(&mut buf) {
+            Ok(Event::Start(ref e)) | Ok(Event::Empty(ref e))
+                if e.name().as_ref() == "p:sldSz" =>
+            {
+                let (cx, cy) = parse_coords(e, "cx", "cy");
+                if let (Some(cx), Some(cy)) = (cx, cy) {
+                    if cx > 0.0 && cy > 0.0 {
+                        return Some((cx, cy));
+                    }
+                }
+                return None;
+            }
+            Ok(Event::Eof) | Err(_) => break,
+            _ => {}
+        }
+        buf.clear();
+    }
+    None
+}
+
 /// Close the paragraph a shape has been accumulating, so the next one starts
 /// on a new line.
 ///
@@ -203,6 +276,14 @@ pub fn read_pptx(path: &str) -> Result<Deck, String> {
                 e.to_string()
             }
         })?;
+
+    // Every coordinate in the package is relative to this, so it has to be
+    // read before any of them. A package that declares no size gets the one
+    // our own writer emits, which is what the old fixed divisor assumed.
+    let scale = match parse_slide_size(&presentation_xml) {
+        Some((cx, cy)) => SlideScale::from_emu(cx, cy),
+        None => SlideScale::default(),
+    };
 
     // 2. Read presentation.xml.rels to resolve slide relationship IDs to paths
     let rels_xml = archive
@@ -565,10 +646,10 @@ pub fn read_pptx(path: &str) -> Result<Deck, String> {
                         }
                         if name.as_ref() == "p:sp" {
                             if let Some(shape) = current_shape.take() {
-                                let x = shape.x.unwrap_or(0.0) / 9525.0;
-                                let y = shape.y.unwrap_or(0.0) / 9525.0;
-                                let w = shape.w.unwrap_or(0.0) / 9525.0;
-                                let h = shape.h.unwrap_or(0.0) / 9525.0;
+                                let x = shape.x.unwrap_or(0.0) * scale.x;
+                                let y = shape.y.unwrap_or(0.0) * scale.y;
+                                let w = shape.w.unwrap_or(0.0) * scale.x;
+                                let h = shape.h.unwrap_or(0.0) * scale.y;
                                 
                                 let rotation = shape.rotation.unwrap_or(0.0);
 
@@ -593,10 +674,10 @@ pub fn read_pptx(path: &str) -> Result<Deck, String> {
                         } else if name.as_ref() == "p:pic" {
                             if let Some(pic) = current_picture.take() {
                                 if let Some(embed_id) = pic.embed_id {
-                                    let x = pic.x.unwrap_or(0.0) / 9525.0;
-                                    let y = pic.y.unwrap_or(0.0) / 9525.0;
-                                    let w = pic.w.unwrap_or(0.0) / 9525.0;
-                                    let h = pic.h.unwrap_or(0.0) / 9525.0;
+                                    let x = pic.x.unwrap_or(0.0) * scale.x;
+                                    let y = pic.y.unwrap_or(0.0) * scale.y;
+                                    let w = pic.w.unwrap_or(0.0) * scale.x;
+                                    let h = pic.h.unwrap_or(0.0) * scale.y;
                                     
                                     if let Some(obj) = resolve_and_extract_picture(
                                         &embed_id,
@@ -738,8 +819,8 @@ pub fn read_pptx(path: &str) -> Result<Deck, String> {
                     .map(|tp| read_part(&mut archive, &mut budget, &tp))
                     .and_then(|tx| parse_theme_font(&tx));
 
-                let (master_bg, mut shapes) = parse_master_shapes(&master_xml);
-                let (layout_bg, layout_shapes) = parse_master_shapes(&layout_xml);
+                let (master_bg, mut shapes) = parse_master_shapes_scaled(&master_xml, scale);
+                let (layout_bg, layout_shapes) = parse_master_shapes_scaled(&layout_xml, scale);
                 shapes.extend(layout_shapes);
                 // The master's own name if either part records one;
                 // the layout's file stem only as a last resort, which is
@@ -864,6 +945,14 @@ pub fn parse_c_sld_name(xml: &str) -> Option<String> {
 /// "Click to edit Master title style" and friends) are styling slots,
 /// not content, and are skipped.
 pub fn parse_master_shapes(xml: &str) -> (Option<String>, Vec<SlideObject>) {
+    parse_master_shapes_scaled(xml, SlideScale::default())
+}
+
+/// As `parse_master_shapes`, against the slide size the package declares.
+pub fn parse_master_shapes_scaled(
+    xml: &str,
+    scale: SlideScale,
+) -> (Option<String>, Vec<SlideObject>) {
     if xml.is_empty() {
         return (None, Vec::new());
     }
@@ -930,10 +1019,10 @@ pub fn parse_master_shapes(xml: &str) -> (Option<String>, Vec<SlideObject>) {
                     if let Some(p) = cur.as_mut() {
                         let (x, y) = parse_coords(e, "x", "y");
                         if let Some(x) = x {
-                            p.x = x / 9525.0;
+                            p.x = x * scale.x;
                         }
                         if let Some(y) = y {
-                            p.y = y / 9525.0;
+                            p.y = y * scale.y;
                         }
                     }
                 }
@@ -941,10 +1030,10 @@ pub fn parse_master_shapes(xml: &str) -> (Option<String>, Vec<SlideObject>) {
                     if let Some(p) = cur.as_mut() {
                         let (w, h) = parse_coords(e, "cx", "cy");
                         if let Some(w) = w {
-                            p.w = w / 9525.0;
+                            p.w = w * scale.x;
                         }
                         if let Some(h) = h {
-                            p.h = h / 9525.0;
+                            p.h = h * scale.y;
                         }
                     }
                 }
@@ -1168,6 +1257,76 @@ mod tests {
         }
 
         let _ = std::fs::remove_file(&path);
+    }
+}
+
+#[cfg(test)]
+mod slide_size_tests {
+    use super::*;
+
+    const MODERN: &str = "<p:presentation xmlns:p=\"p\">\
+        <p:sldSz cx=\"12192000\" cy=\"6858000\"/></p:presentation>";
+
+    #[test]
+    fn the_declared_slide_size_is_read() {
+        assert_eq!(parse_slide_size(MODERN), Some((12192000.0, 6858000.0)));
+    }
+
+    #[test]
+    fn a_package_declaring_no_size_reads_as_none() {
+        assert_eq!(parse_slide_size("<p:presentation xmlns:p=\"p\"/>"), None);
+        assert_eq!(parse_slide_size(""), None);
+    }
+
+    /// A full-bleed shape is full-bleed whatever size the slide declares.
+    /// On the current PowerPoint default this used to come back as
+    /// 1280x720 in a 960x540 space.
+    #[test]
+    fn a_full_bleed_shape_fills_the_model_space_on_any_slide_size() {
+        let scale = SlideScale::from_emu(12192000.0, 6858000.0);
+        assert!((12192000.0 * scale.x - 960.0).abs() < 1e-6);
+        assert!((6858000.0 * scale.y - 540.0).abs() < 1e-6);
+    }
+
+    /// The default has to be exactly what dividing by 9525 did, or every
+    /// package that declares no size shifts the day this landed.
+    #[test]
+    fn the_default_is_the_old_fixed_divisor() {
+        let d = SlideScale::default();
+        for emu in [0.0, 9525.0, 190500.0, 9144000.0] {
+            assert!((emu * d.x - emu / 9525.0).abs() < 1e-9, "x at {emu}");
+            assert!((emu * d.y - emu / 9525.0).abs() < 1e-9, "y at {emu}");
+        }
+    }
+
+    /// Both axes are normalised independently, and only a non-16:9 slide
+    /// can show it: on any 16:9 source — including both common PowerPoint
+    /// sizes — `960/cx` and `540/cy` are equal, so a mutation using the
+    /// width factor for both passes against every other fixture here.
+    ///
+    /// A 4:3 deck cannot be represented faithfully in a fixed 16:9 model
+    /// space at all. Normalising per axis keeps a full-bleed shape
+    /// full-bleed and everything on-slide, at the cost of stretching it;
+    /// the alternative keeps shapes square and pushes content off the
+    /// bottom, which is the behaviour this replaced.
+    #[test]
+    fn a_four_three_slide_is_normalised_on_both_axes() {
+        // 10in x 7.5in, the classic 4:3 slide.
+        let scale = SlideScale::from_emu(9144000.0, 6858000.0);
+        assert!((9144000.0 * scale.x - 960.0).abs() < 1e-6, "width");
+        assert!((6858000.0 * scale.y - 540.0).abs() < 1e-6, "height");
+        assert!(
+            (scale.x - scale.y).abs() > 1e-12,
+            "a 4:3 slide must not use one factor for both axes"
+        );
+    }
+
+    /// A nonsense or zero extent falls back rather than dividing by it.
+    #[test]
+    fn a_zero_extent_falls_back_to_the_default() {
+        let z = SlideScale::from_emu(0.0, 0.0);
+        let d = SlideScale::default();
+        assert!((z.x - d.x).abs() < 1e-12 && (z.y - d.y).abs() < 1e-12);
     }
 }
 

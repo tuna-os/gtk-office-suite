@@ -341,6 +341,50 @@ AutosaveSlot used to store bytes and metadata in separate atomic writes. Each wr
       which is a real asymmetry and is left alone deliberately: the pptx
       side treats it as noise, and no reading of either format makes one
       obviously right.
+      **The audit that paragraph asks for found one straight away, and it
+      is worse than anything above.** Both readers converted coordinates
+      with a fixed constant — 9525 EMU per model unit in pptx, one point
+      per unit in odp — when `960x540` are *model units* (ADR 0004) and a
+      coordinate only means something relative to the slide it sits on.
+      Those two are the same thing only for a slide of exactly the size our
+      own writer emits. PowerPoint and Impress both default a 16:9 deck to
+      13.333in x 7.5in (`sldSz cx="12192000" cy="6858000"`), and on one of
+      those a full-bleed shape read back as **1280x720 in a 960x540
+      space** — a third too large, running off the canvas, on every import
+      of a current PowerPoint file. The two writers disagreed with each
+      other too: pptx declares a 10in slide and odp a 13.333in page, so a
+      deck taken pptx -> Impress -> odp came back at 0.75x and the reverse
+      at 1.33x.
+      Nothing could see it, and the reason is worth stating exactly,
+      because it is a *sharper* version of the round-trip trap:
+      `positions_approx_survive_impress_rewrite` and
+      `odp_geometry_survives_impress_rewrite` both send a file through real
+      LibreOffice, so they look like exactly the foreign-reader check this
+      row keeps asking for. They are not. **A same-format rewrite cannot
+      detect a wrong unit**: Impress reads whatever we wrote and writes the
+      same value back, so our constant cancels out on the way in and out.
+      Only crossing formats forces a real conversion — Impress turning EMU
+      into centimetres by the true ratio — and no test crossed them. An
+      Impress-grounded test is not automatically a test of the thing it
+      appears to ground.
+      Both readers now normalise against the size the document declares,
+      falling back to exactly the old constant when it declares none, so no
+      document written before this shifts. Two things the fix had to get
+      right that the first attempt did not:
+        * A document has several page layouts, and Impress writes the notes
+          one as **A4 portrait**. Taking the first `style:page-layout` read
+          a landscape slide as 1.21x wider and 0.48x shorter — non-uniformly
+          wrong, where the bug being fixed was at least uniformly wrong. The
+          layout named by the first `style:master-page` is the slides'.
+        * Each axis is normalised against its own extent. Every fixture
+          here is 16:9, where `960/cx` and `540/cy` are equal, so a
+          mutation using the width factor for both axes passed everything
+          until a 4:3 slide was added — the same fixture trap as the
+          single-run styling test and the master-mapping test before it. A
+          4:3 deck cannot be represented faithfully in a fixed 16:9 model
+          space; normalising per axis stretches it but keeps a full-bleed
+          shape full-bleed and everything on-slide, where the old
+          behaviour pushed content off the bottom.
       The same audit, continued across the remaining fields, found a
       second one: **speaker notes were dropped from every deck that had
       been through Impress.** Impress's pptx exporter writes the notes into
