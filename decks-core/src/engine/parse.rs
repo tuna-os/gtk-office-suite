@@ -106,13 +106,51 @@ fn parse_rotation(e: &BytesStart) -> Option<f64> {
     None
 }
 
+/// Close the paragraph a shape has been accumulating, so the next one starts
+/// on a new line.
+///
+/// A text box's paragraphs are `a:p` elements and its runs are the `a:r`
+/// inside them, and the two are *not* interchangeable: the runs of one
+/// paragraph are consecutive pieces of a single line, while two paragraphs
+/// are two lines. Both readers used to record one entry per `a:t` and join
+/// the lot with `\n`, which is right only when every paragraph holds exactly
+/// one run — so a decoration reading "Plain **Bold**" came back as two
+/// lines, and the break was then written into the saved package.
+///
+/// The break is carried *inside* the runs rather than only in the derived
+/// text, because `SlideObject::TextBox` requires concatenated run text to
+/// equal `text`. A paragraph that contributed no run of its own cannot
+/// carry it, so nothing is recorded for it and a wholly empty paragraph
+/// (a blank line) is still dropped — as it was before this.
+fn close_paragraphs(runs: &mut [Run], count: usize) {
+    if let Some(last) = runs.last_mut() {
+        for _ in 0..count {
+            last.text.push('\n');
+        }
+    }
+}
+
+/// The `(text, runs)` pair a `TextBox` is built from.
+///
+/// `text` is *derived* from the runs rather than accumulated beside them,
+/// which is what makes the model's invariant structural instead of a thing
+/// each walker has to remember.
+fn text_of(runs: &[Run]) -> String {
+    runs.iter().map(|r| r.text.as_str()).collect()
+}
+
 struct PendingShape {
     is_tx_box: bool,
     /// A p:txBody element was seen. Impress adds an (empty) txBody to
     /// every shape, so this alone does not make it a text box.
     has_tx_body: bool,
-    text: Vec<String>,
     runs: Vec<Run>,
+    /// Paragraphs that have closed since the last run, counted rather than
+    /// flagged: an empty `<a:p/>` between two others is a blank line, and a
+    /// flag would collapse the two breaks into one and lose it. Applied
+    /// only when more text actually arrives, so trailing empty paragraphs
+    /// cannot leave dangling breaks.
+    pending_breaks: usize,
     cur_style: RunStyle,
     x: Option<f64>,
     y: Option<f64>,
@@ -120,6 +158,16 @@ struct PendingShape {
     h: Option<f64>,
     rotation: Option<f64>,
     prst: Option<String>,
+}
+
+impl PendingShape {
+    /// Record one `a:t`'s text as a run, breaking the line first if a
+    /// paragraph closed since the last one.
+    fn push_run(&mut self, text: String) {
+        close_paragraphs(&mut self.runs, self.pending_breaks);
+        self.pending_breaks = 0;
+        self.runs.push(Run { text, style: self.cur_style.clone() });
+    }
 }
 
 struct PendingPicture {
@@ -307,8 +355,14 @@ pub fn read_pptx(path: &str) -> Result<Deck, String> {
         // Parse slide XML using quick-xml event reader
         let mut background = String::from("#ffffff");
         {
+            // Text inside `a:t` is significant: a run ending in a space
+            // ("Plain " + "Bold") is one word boundary, and trimming it
+            // silently welds the words together. The odp walker already
+            // reads its text untrimmed for the same reason. Whitespace
+            // *between* elements is still ignored, because a text event is
+            // only consumed while inside an `a:t`.
             let mut reader = Reader::from_str(&slide_xml);
-            reader.config_mut().trim_text(true);
+            reader.config_mut().trim_text(false);
             let mut buf = Vec::new();
 
             let mut current_shape: Option<PendingShape> = None;
@@ -327,8 +381,8 @@ pub fn read_pptx(path: &str) -> Result<Deck, String> {
                                 current_shape = Some(PendingShape {
                                     is_tx_box: false,
                                     has_tx_body: false,
-                                    text: Vec::new(),
                                     runs: Vec::new(),
+                                    pending_breaks: 0,
                                     cur_style: RunStyle::default(),
                                     x: None,
                                     y: None,
@@ -417,6 +471,12 @@ pub fn read_pptx(path: &str) -> Result<Deck, String> {
                     Ok(Event::Empty(ref e)) => {
                         let name = e.name();
                         match name.as_ref() {
+                            // See the master walker: `<a:p/>` is a blank line.
+                            "a:p" => {
+                                if let Some(shape) = current_shape.as_mut() {
+                                    shape.pending_breaks += 1;
+                                }
+                            }
                             "a:rPr" => {
                                 if let Some(shape) = current_shape.as_mut() {
                                     shape.cur_style = parse_run_style(e);
@@ -512,10 +572,9 @@ pub fn read_pptx(path: &str) -> Result<Deck, String> {
                                 
                                 let rotation = shape.rotation.unwrap_or(0.0);
 
-                                let has_text =
-                                    shape.text.iter().any(|t| !t.trim().is_empty());
+                                let text = text_of(&shape.runs);
+                                let has_text = !text.trim().is_empty();
                                 if shape.is_tx_box || (shape.has_tx_body && has_text) {
-                                    let text = shape.text.join("\n");
                                     objects.push(SlideObject::TextBox { text, x, y, w, h, rotation, runs: shape.runs.clone() });
                                 } else {
                                     let prst = shape.prst.unwrap_or_else(|| "rect".to_string());
@@ -552,6 +611,10 @@ pub fn read_pptx(path: &str) -> Result<Deck, String> {
                             }
                         } else if name.as_ref() == "a:t" {
                             in_text_element = false;
+                        } else if name.as_ref() == "a:p" {
+                            if let Some(shape) = current_shape.as_mut() {
+                                shape.pending_breaks += 1;
+                            }
                         }
                     }
                     Ok(Event::Text(ref e)) => {
@@ -559,8 +622,7 @@ pub fn read_pptx(path: &str) -> Result<Deck, String> {
                             {
                                 let t = unescape_text(e);
                                 if let Some(shape) = current_shape.as_mut() {
-                                    shape.runs.push(Run { text: t.clone(), style: shape.cur_style.clone() });
-                                    shape.text.push(t);
+                                    shape.push_run(t);
                                 }
                             }
                         }
@@ -569,8 +631,7 @@ pub fn read_pptx(path: &str) -> Result<Deck, String> {
                         if in_text_element {
                             let t = resolve_general_ref(r);
                             if let Some(shape) = current_shape.as_mut() {
-                                shape.runs.push(Run { text: t.clone(), style: shape.cur_style.clone() });
-                                shape.text.push(t);
+                                shape.push_run(t);
                             }
                         }
                     }
@@ -807,12 +868,14 @@ pub fn parse_master_shapes(xml: &str) -> (Option<String>, Vec<SlideObject>) {
         return (None, Vec::new());
     }
     let mut reader = Reader::from_str(xml);
-    reader.config_mut().trim_text(true);
+    // Untrimmed for the same reason as the slide walker above.
+    reader.config_mut().trim_text(false);
     let mut buf = Vec::new();
     let mut background: Option<String> = None;
     let mut shapes = Vec::new();
     let mut in_bg = false;
     let mut in_text = false;
+    let mut in_rpr = false;
     // (x, y, w, h, prst, has_ph, text)
     struct Pending {
         x: f64,
@@ -821,11 +884,28 @@ pub fn parse_master_shapes(xml: &str) -> (Option<String>, Vec<SlideObject>) {
         h: f64,
         prst: Option<String>,
         has_ph: bool,
-        text: Vec<String>,
+        runs: Vec<Run>,
+        pending_breaks: usize,
+        cur_style: RunStyle,
+    }
+    impl Pending {
+        fn push_run(&mut self, text: String) {
+            close_paragraphs(&mut self.runs, self.pending_breaks);
+            self.pending_breaks = 0;
+            self.runs.push(Run { text, style: self.cur_style.clone() });
+        }
     }
     let mut cur: Option<Pending> = None;
     while let Ok(ev) = reader.read_event_into(&mut buf) {
         match ev {
+            // `<a:p/>` arrives as one Empty event rather than Start+End, so
+            // the End arm below never sees it — and an empty paragraph is
+            // exactly the blank line that must not be swallowed.
+            Event::Empty(ref e) if e.name().as_ref() == "a:p" => {
+                if let Some(p) = cur.as_mut() {
+                    p.pending_breaks += 1;
+                }
+            }
             Event::Start(ref e) | Event::Empty(ref e) => match e.name().as_ref() {
                 "p:bg" => in_bg = true,
                 "p:sp" => {
@@ -836,7 +916,9 @@ pub fn parse_master_shapes(xml: &str) -> (Option<String>, Vec<SlideObject>) {
                         h: 0.0,
                         prst: None,
                         has_ph: false,
-                        text: Vec::new(),
+                        runs: Vec::new(),
+                        pending_breaks: 0,
+                        cur_style: RunStyle::default(),
                     });
                 }
                 "p:ph" => {
@@ -872,6 +954,25 @@ pub fn parse_master_shapes(xml: &str) -> (Option<String>, Vec<SlideObject>) {
                     }
                 }
                 "a:t" => in_text = true,
+                "a:rPr" => {
+                    if let Some(p) = cur.as_mut() {
+                        p.cur_style = parse_run_style(e);
+                    }
+                    in_rpr = true;
+                }
+                "a:srgbClr" if in_rpr => {
+                    if let Some(p) = cur.as_mut() {
+                        if let Some(val) = e
+                            .attributes()
+                            .filter_map(|a| a.ok())
+                            .find(|a| a.key.as_ref() == "val")
+                        {
+                            // Lowercase and without the '#', matching the
+                            // slide walker and `RunStyle`'s documented form.
+                            p.cur_style.color = Some(val.value.to_lowercase());
+                        }
+                    }
+                }
                 "a:srgbClr" if in_bg => {
                     if let Some(val) = e
                         .attributes()
@@ -887,19 +988,26 @@ pub fn parse_master_shapes(xml: &str) -> (Option<String>, Vec<SlideObject>) {
             Event::End(ref e) => match e.name().as_ref() {
                 "p:bg" => in_bg = false,
                 "a:t" => in_text = false,
+                "a:rPr" => in_rpr = false,
+                "a:p" => {
+                    if let Some(p) = cur.as_mut() {
+                        p.pending_breaks += 1;
+                    }
+                }
                 "p:sp" => {
                     if let Some(p) = cur.take() {
                         if !p.has_ph && p.w > 0.0 && p.h > 0.0 {
-                            let has_text = p.text.iter().any(|t| !t.trim().is_empty());
+                            let text = text_of(&p.runs);
+                            let has_text = !text.trim().is_empty();
                             if has_text {
                                 shapes.push(SlideObject::TextBox {
-                                    text: p.text.join("\n"),
+                                    text,
                                     x: p.x,
                                     y: p.y,
                                     w: p.w,
                                     h: p.h,
                                     rotation: 0.0,
-                                    runs: vec![],
+                                    runs: p.runs,
                                 });
                             } else if p.prst.as_deref() == Some("ellipse") {
                                 shapes.push(SlideObject::Circle {
@@ -925,14 +1033,14 @@ pub fn parse_master_shapes(xml: &str) -> (Option<String>, Vec<SlideObject>) {
             Event::Text(ref t) => {
                 if in_text {
                     if let Some(p) = cur.as_mut() {
-                        p.text.push(unescape_text(t));
+                        p.push_run(unescape_text(t));
                     }
                 }
             }
             Event::GeneralRef(ref r) => {
                 if in_text {
                     if let Some(p) = cur.as_mut() {
-                        p.text.push(resolve_general_ref(r));
+                        p.push_run(resolve_general_ref(r));
                     }
                 }
             }
@@ -1191,13 +1299,110 @@ mod master_tests {
         match &shapes[0] {
             SlideObject::TextBox { text, x, y, w, h, runs, .. } => {
                 assert_eq!(text, "Deck title");
-                assert!(runs.is_empty());
+                // The decoration's styling is read, not discarded: this
+                // asserted `runs.is_empty()` while the master walker parsed
+                // text as plain, which is what let a styled master
+                // decoration lose its emphasis on every open.
+                assert_eq!(runs.len(), 1);
+                assert_eq!(runs[0].text, "Deck title");
                 assert!((x - 2.0).abs() < 0.01 && (y - 3.0).abs() < 0.01);
                 assert!((w - 20.0).abs() < 0.01 && (h - 10.0).abs() < 0.01);
             }
             other => panic!("expected text box, got {other:?}"),
         }
     }
+
+    /// A shape with one geometry, so each case differs only in its text.
+    fn master_with(txbody: &str) -> Vec<SlideObject> {
+        let xml = format!(
+            r##"<p:sldMaster xmlns:p="x" xmlns:a="y"><p:cSld><p:spTree>
+<p:sp><p:spPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="190500" cy="95250"/></a:xfrm></p:spPr>
+<p:txBody>{txbody}</p:txBody></p:sp>
+</p:spTree></p:cSld></p:sldMaster>"##
+        );
+        parse_master_shapes(&xml).1
+    }
+
+    fn text_and_runs(shapes: &[SlideObject]) -> (String, Vec<Run>) {
+        match shapes.first() {
+            Some(SlideObject::TextBox { text, runs, .. }) => (text.clone(), runs.clone()),
+            other => panic!("expected a text box, got {other:?}"),
+        }
+    }
+
+    /// Two runs inside ONE paragraph are one line.
+    ///
+    /// This is the case that was wrong: the walker recorded one entry per
+    /// `a:t` and joined them with `\n`, so a decoration reading
+    /// "Plain **Bold**" came back as two lines — and, because masters are
+    /// written back from this text, the break was then saved into the file.
+    #[test]
+    fn master_runs_in_one_paragraph_do_not_become_separate_lines() {
+        let (text, runs) = text_and_runs(&master_with(
+            "<a:p><a:r><a:t>Plain </a:t></a:r>\
+             <a:r><a:rPr b=\"1\"/><a:t>Bold</a:t></a:r></a:p>",
+        ));
+        assert_eq!(text, "Plain Bold", "runs of one paragraph are one line");
+        assert_eq!(runs.len(), 2);
+        assert!(!runs[0].style.bold);
+        assert!(runs[1].style.bold, "the master's own emphasis is read");
+    }
+
+    /// Separate paragraphs ARE separate lines — the half that was already
+    /// right, and which a fix for the case above could easily break.
+    #[test]
+    fn master_separate_paragraphs_stay_separate_lines() {
+        let (text, runs) = text_and_runs(&master_with(
+            "<a:p><a:r><a:t>Line one</a:t></a:r></a:p>\
+             <a:p><a:r><a:t>Line two</a:t></a:r></a:p>",
+        ));
+        assert_eq!(text, "Line one\nLine two");
+        assert_eq!(
+            runs.iter().map(|r| r.text.as_str()).collect::<String>(),
+            text,
+            "concatenated runs must equal `text` (SlideObject::TextBox's invariant)"
+        );
+    }
+
+    /// `a:t` content is significant, so a run's trailing space survives.
+    /// Trimming it welds the words together, which the newline above was
+    /// masking: "Plain " + "Bold" read back as "PlainBold".
+    #[test]
+    fn master_keeps_the_space_a_run_ends_on() {
+        let (text, _) = text_and_runs(&master_with(
+            "<a:p><a:r><a:t>Plain </a:t></a:r><a:r><a:t>Bold</a:t></a:r></a:p>",
+        ));
+        assert_eq!(text, "Plain Bold");
+    }
+
+    /// An empty paragraph *between* two others is a blank line and has to
+    /// survive. Only a foreign file produces one — our own writer puts a
+    /// whole multi-line box in a single `a:t` — so this is import-only, and
+    /// counting the closes rather than flagging them is what keeps it.
+    #[test]
+    fn master_keeps_a_blank_line_between_two_paragraphs() {
+        let (text, runs) = text_and_runs(&master_with(
+            "<a:p><a:r><a:t>a</a:t></a:r></a:p><a:p/>\
+             <a:p><a:r><a:t>b</a:t></a:r></a:p>",
+        ));
+        assert_eq!(text, "a\n\nb", "the blank line was swallowed");
+        assert_eq!(
+            runs.iter().map(|r| r.text.as_str()).collect::<String>(),
+            text
+        );
+    }
+
+    /// A trailing empty paragraph must not leave a dangling break, which is
+    /// why the newline is applied when the next run arrives rather than
+    /// when the paragraph closes.
+    #[test]
+    fn master_trailing_empty_paragraph_adds_no_line() {
+        let (text, _) = text_and_runs(&master_with(
+            "<a:p><a:r><a:t>Only line</a:t></a:r></a:p><a:p/>",
+        ));
+        assert_eq!(text, "Only line");
+    }
+
 }
 
 #[cfg(test)]
@@ -1243,3 +1448,4 @@ mod theme_font_tests {
         assert_eq!(parse_theme_font("not xml at all <<<"), None);
     }
 }
+

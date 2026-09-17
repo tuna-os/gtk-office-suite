@@ -181,13 +181,14 @@ AutosaveSlot used to store bytes and metadata in separate atomic writes. Each wr
       snapshot, where it means one deleted image file costs all the unsaved
       work; both formats behave the same way, so it is recorded here rather
       than fixed in one of them.
-      What keeps this row `[~]` rather than `[x]`, now that the strips are
-      gone: a master's `default_font` and a master decoration's run styling
-      are carried by neither format — in both cases because *neither*
-      reader fills them, so the writers emit nothing rather than writing
-      something nothing reads. Both are symmetric omissions rather than
-      silent strips, but the row's claim is about supported content and
-      these are still gaps.
+      Two things kept this row `[~]` once the strips above were gone: a
+      master's `default_font` and a master decoration's run styling, carried
+      by neither format — in both cases because *neither* reader filled
+      them, so the writers emitted nothing rather than writing something
+      nothing reads. Symmetric omissions rather than silent strips, but the
+      row's claim is about supported content either way. **Both are now
+      carried**; what each cost to close is below, and the run-styling half
+      turned up three genuine strips that nothing in the suite could see.
       On `default_font` the note above was true and incomplete, in a way
       worth recording because it nearly produced the mistake this row keeps
       catching. The field was not merely unfilled by the readers: it was
@@ -260,6 +261,99 @@ AutosaveSlot used to store bytes and metadata in separate atomic writes. Each wr
       because `master_part_xml` names rId1 as the layout in fixed text, so
       a master would point at its own theme as though it were the layout.
       It now reads out rId1's actual target.
+      **Run styling in a master decoration** was the other half, and it
+      could not be carried honestly until something drew it. The canvas
+      drew a decoration with cairo's toy text API: one weight for the whole
+      box, hardcoded to bold — so every unemphasised decoration was drawn
+      as though the design asked for bold — and `show_text` has no concept
+      of a line break, so a multi-line decoration was silently drawn as one
+      line. Filling `runs` without fixing that would have round-tripped
+      styling nothing drew, which is the trap the `default_font` note above
+      describes. So the decoration now goes through pango and through the
+      same `set_styled_text` the slides use, and the call site that passes
+      the runs is itself reachable from a test — closing the gap the
+      `default_font` work recorded and could not close, by asserting over
+      the layout the master path builds rather than the pixels it produces.
+      Three real strips turned up on the way, none of which any test in the
+      suite could see, and all three were invisible for the same reason:
+      **our writer and our reader shared a convention, so a round trip
+      cancelled it out.**
+        * The pptx reader recorded one entry per `a:t` and joined them with
+          `\n`. Runs are the pieces of *one* line and `a:p` is what ends a
+          line, so a decoration reading "Plain **Bold**" came back as two
+          lines — and, since a master is written back from that text, the
+          break was then saved into the file. `text` is now derived from
+          the runs rather than accumulated beside them, which turns the
+          model's "concatenated run text equals `text`" from a thing each
+          walker has to remember into a thing neither can get wrong.
+        * Trimming hid a second one underneath it. `a:t` content is
+          significant, and the reader trimmed it, so "Plain " + "Bold"
+          became "PlainBold" the moment the spurious newline stopped
+          separating them. The odp walker had already been reading its text
+          untrimmed for this exact reason.
+        * The odp writer's *styled* path emitted one `text:p` with a
+          literal newline inside, and ODF collapses that to a space.
+          Impress read our two-line box back as one line reading "Bold one
+          plain two". Our own reader could not see it, because it split
+          that single paragraph back on the newline it had itself written.
+          The runs-empty path had always split correctly; only the styled
+          one did not. The pptx writer had the same defect — a newline
+          inside `a:t` rather than a second `a:p` — and there LibreOffice
+          happens to read the newline as a break, so it round-tripped
+          either way and only the emitted markup was wrong. Both write one
+          element per paragraph now.
+      Fixing the writers exposed the reader's other half: odp kept a box's
+      runs only when it had a single paragraph, "matching the pptx reader's
+      behavior" — which is to say both readers lost a styled multi-line
+      box's styling, one by discarding it and the other by never reading
+      it. Writing the break correctly without that would have traded a lost
+      line break for lost styling. Both readers now carry the paragraph
+      break *inside* the runs, which is the one convention that keeps the
+      invariant and the styling at the same time.
+      Three notes on the tests, because each marks a fixture that could not
+      have failed:
+        * `run_styles_survive_a_snapshot` has covered run styling since the
+          beginning and saw none of this, because it uses a **single** run —
+          and one run cannot reveal how two are joined. The same shape as
+          #725's master-mapping test needing a slide on a master that is
+          not the first.
+        * The odp style-collision test uses bold on the slide and italic on
+          the master deliberately. `content.xml` and `styles.xml` each
+          number their automatic styles from 1 and the reader merges both
+          into one map by name, so a master's `T1` would quietly redefine a
+          slide's; with one style shared between them the collision would
+          overwrite a value with itself and pass. Master styles are now
+          named per master (`MT1_`, `MT2_`).
+        * The odp reader builds a text box at two places, and only one of
+          them is reachable from our own writer: `draw:custom-shape` is
+          what Impress and PowerPoint's exporters emit for a shape carrying
+          text. It kept its own copy of the drop-the-runs rule, and the
+          Impress-grounded test did not catch it because Impress writes the
+          other shape. That one needs a crafted package, since our writer
+          cannot produce one.
+      One case is import-only and worth naming: an empty `<a:p/>` between
+      two paragraphs is a blank line, and it arrives as a single Empty
+      event rather than Start+End. Paragraph closes are counted rather than
+      flagged so two consecutive ones cannot collapse into one. Our own
+      writer never produces that shape, so this is reachable by imported
+      documents alone.
+      A trailing empty paragraph is still dropped in pptx and kept in odp,
+      which is a real asymmetry and is left alone deliberately: the pptx
+      side treats it as noise, and no reading of either format makes one
+      obviously right.
+      The row stays `[~]`, and the reason is the session that closed its
+      two named gaps rather than anything still on a list. Carrying the run
+      styling turned up three strips — a reader splitting one line in two,
+      a reader eating the space between two runs, a writer emitting a break
+      ODF collapses — and every one of them was live while the whole suite,
+      including thirty-five Impress-grounded oracle tests, was green. What
+      they had in common is that our writer and our reader agreed with each
+      other, so a round trip proved nothing. The row claims no format
+      silently strips supported content; three strips found in one sitting,
+      by probing rather than by a test failing, is not the evidence for
+      that claim. Flipping it wants a pass that goes looking for the same
+      shape elsewhere — every field a round trip could confirm while both
+      halves share a convention — rather than another feature landing.
       One limitation, stated because a mutation found it rather than
       because it is comfortable: `document_font_description` and
       `master_for` are covered — five mutations of the resolver, the

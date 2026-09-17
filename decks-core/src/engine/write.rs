@@ -130,8 +130,27 @@ fn write_text_box<W: std::io::Write>(
     } else {
         runs
     };
+    // One `a:p` per paragraph. A line break is a paragraph break in
+    // DrawingML, not a character: writing the whole box as one `a:p` with a
+    // newline inside its `a:t` is what the odp writer used to do, and ODF
+    // collapsed it to a space. LibreOffice happens to read a newline here
+    // as a break, so this survived a round trip either way — which is
+    // precisely why it needed fixing rather than measuring once and
+    // trusting.
     writer.write_event(Event::Start(BytesStart::new("a:p")))?;
-    for run in effective {
+    for (run, piece, starts_paragraph) in effective.iter().flat_map(|run| {
+        let mut parts = run.text.split('\n').enumerate().peekable();
+        std::iter::from_fn(move || {
+            parts.next().map(|(i, piece)| (run, piece.to_string(), i > 0))
+        })
+    }) {
+        if starts_paragraph {
+            writer.write_event(Event::End(BytesEnd::new("a:p")))?;
+            writer.write_event(Event::Start(BytesStart::new("a:p")))?;
+        }
+        if piece.is_empty() {
+            continue;
+        }
         writer.write_event(Event::Start(BytesStart::new("a:r")))?;
         let mut r_pr = BytesStart::new("a:rPr");
         r_pr.push_attribute(("lang", "en-US"));
@@ -153,7 +172,7 @@ fn write_text_box<W: std::io::Write>(
             writer.write_event(Event::Empty(r_pr))?;
         }
         writer.write_event(Event::Start(BytesStart::new("a:t")))?;
-        let escaped = quick_xml::escape::escape(run.text.as_str());
+        let escaped = quick_xml::escape::escape(piece.as_str());
         writer.write_event(Event::Text(BytesText::new(&escaped)))?;
         writer.write_event(Event::End(BytesEnd::new("a:t")))?;
         writer.write_event(Event::End(BytesEnd::new("a:r")))?;

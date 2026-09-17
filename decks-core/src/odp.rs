@@ -151,12 +151,107 @@ fn esc(s: &str) -> String {
 
 // ── Writing ──────────────────────────────────────────────────────────
 
-fn run_span(run: &Run, style_idx: usize) -> String {
+/// One run as a `text:span`, naming the automatic style it was assigned.
+///
+/// `prefix` namespaces that style name. `content.xml` and `styles.xml` each
+/// carry their own `office:automatic-styles`, but the reader merges both
+/// into one map keyed by name — so a master's `T1` in `styles.xml` would
+/// quietly redefine a slide's `T1` from `content.xml` and restyle text on
+/// an unrelated slide. Masters therefore use their own prefix.
+/// Automatic text styles declared in `content.xml`, for slide runs.
+const SLIDE_STYLE_PREFIX: &str = "T";
+
+/// Automatic text styles declared in `styles.xml`, for one master's runs.
+///
+/// Per master rather than one shared set, so two masters using the same
+/// index cannot collide either.
+fn master_style_prefix(master_idx: usize) -> String {
+    format!("MT{}_", master_idx + 1)
+}
+
+fn run_span(run: &Run, style_idx: usize, prefix: &str) -> String {
     if run.style == RunStyle::default() {
         esc(&run.text)
     } else {
-        format!("<text:span text:style-name=\"T{style_idx}\">{}</text:span>", esc(&run.text))
+        format!(
+            "<text:span text:style-name=\"{prefix}{style_idx}\">{}</text:span>",
+            esc(&run.text)
+        )
     }
+}
+
+/// A styled text box's runs as `text:p` elements, one per paragraph.
+///
+/// The line break inside a run's text is a *paragraph* break and has to be
+/// written as one. ODF collapses a literal newline in text content to a
+/// space, so emitting one `text:p` containing "Bold one\nplain two" makes
+/// Impress read back a single line reading "Bold one plain two" — the break
+/// silently gone, which our own reader could not see because it put the
+/// newline back when parsing its own single paragraph. The runs-empty path
+/// above always split correctly; only the styled one did not.
+fn styled_paragraphs(
+    runs: &[Run],
+    style_of: &dyn Fn(&RunStyle) -> usize,
+    prefix: &str,
+) -> String {
+    let mut out = String::new();
+    let mut para = String::new();
+    for run in runs {
+        let mut pieces = run.text.split('\n');
+        if let Some(first) = pieces.next() {
+            if !first.is_empty() {
+                para.push_str(&run_span(
+                    &Run { text: first.to_string(), style: run.style.clone() },
+                    style_of(&run.style),
+                    prefix,
+                ));
+            }
+        }
+        for piece in pieces {
+            out.push_str(&format!("<text:p>{para}</text:p>"));
+            para.clear();
+            if !piece.is_empty() {
+                para.push_str(&run_span(
+                    &Run { text: piece.to_string(), style: run.style.clone() },
+                    style_of(&run.style),
+                    prefix,
+                ));
+            }
+        }
+    }
+    out.push_str(&format!("<text:p>{para}</text:p>"));
+    out
+}
+
+/// The distinct non-default run styles used by `shapes`, in first-use order.
+/// Their position here is the index that names them.
+fn distinct_run_styles(shapes: &[SlideObject]) -> Vec<RunStyle> {
+    let mut styles: Vec<RunStyle> = Vec::new();
+    for obj in shapes {
+        if let SlideObject::TextBox { runs, .. } = obj {
+            for r in runs {
+                if r.style != RunStyle::default() && !styles.contains(&r.style) {
+                    styles.push(r.style.clone());
+                }
+            }
+        }
+    }
+    styles
+}
+
+/// Declare `styles` as `style:family="text"` automatic styles under
+/// `prefix`, matching what `run_span` writes for the same prefix.
+fn declare_run_styles(styles: &[RunStyle], prefix: &str) -> String {
+    let mut out = String::new();
+    for (i, st) in styles.iter().enumerate() {
+        out.push_str(&format!(
+            "<style:style style:name=\"{prefix}{}\" style:family=\"text\">\
+             <style:text-properties{}/></style:style>",
+            i + 1,
+            text_style(st)
+        ));
+    }
+    out
 }
 
 fn text_style(st: &RunStyle) -> String {
@@ -224,13 +319,15 @@ fn media_type_for(path: &str) -> (&'static str, &'static str) {
 /// master pages in `styles.xml`, so a shape kind cannot be written on one
 /// and forgotten on the other.
 ///
-/// `style_of` names the automatic text style for a run. Masters pass a
-/// closure that names none: neither format's master reader fills a
-/// decoration's `runs` (the pptx one parses `p:sp` text as plain), so
-/// emitting a `text:span` would be styling nothing reads back.
+/// `style_of` names the automatic text style for a run and `prefix`
+/// namespaces it (see `run_span`). Both slides and master decorations pass
+/// real ones: a master's runs are read back by both formats, so styling
+/// them is carrying something that is honoured rather than decoration for
+/// our own reader.
 fn shapes_xml(
     shapes: &[SlideObject],
     style_of: &dyn Fn(&RunStyle) -> usize,
+    prefix: &str,
     media: &mut Vec<Media>,
 ) -> Result<String, String> {
     let mut pages = String::new();
@@ -242,10 +339,7 @@ fn shapes_xml(
                             .map(|l| format!("<text:p>{}</text:p>", esc(l)))
                             .collect()
                     } else {
-                        format!(
-                            "<text:p>{}</text:p>",
-                            runs.iter().map(|r| run_span(r, style_of(&r.style))).collect::<String>()
-                        )
+                        styled_paragraphs(runs, style_of, prefix)
                     };
                     pages.push_str(&format!(
                         "<draw:frame {}>\
@@ -292,26 +386,14 @@ fn content_xml(deck: &Deck, media: &mut Vec<Media>) -> Result<String, String> {
     // Distinct run styles across the deck, in first-use order.
     let mut styles: Vec<RunStyle> = Vec::new();
     for slide in &deck.slides {
-        for obj in &slide.objects {
-            if let SlideObject::TextBox { runs, .. } = obj {
-                for r in runs {
-                    if r.style != RunStyle::default() && !styles.contains(&r.style) {
-                        styles.push(r.style.clone());
-                    }
-                }
+        for st in distinct_run_styles(&slide.objects) {
+            if !styles.contains(&st) {
+                styles.push(st);
             }
         }
     }
 
-    let mut auto = String::new();
-    for (i, st) in styles.iter().enumerate() {
-        auto.push_str(&format!(
-            "<style:style style:name=\"T{}\" style:family=\"text\">\
-             <style:text-properties{}/></style:style>",
-            i + 1,
-            text_style(st)
-        ));
-    }
+    let mut auto = declare_run_styles(&styles, SLIDE_STYLE_PREFIX);
     // Per-slide drawing-page styles carry the background fill.
     for (i, slide) in deck.slides.iter().enumerate() {
         let bg = slide.background.trim_start_matches('#');
@@ -348,7 +430,7 @@ fn content_xml(deck: &Deck, media: &mut Vec<Media>) -> Result<String, String> {
                 ))
                 .unwrap_or_default(),
         ));
-        pages.push_str(&shapes_xml(&slide.objects, &style_of, media)?);
+        pages.push_str(&shapes_xml(&slide.objects, &style_of, SLIDE_STYLE_PREFIX, media)?);
         if !slide.notes.is_empty() {
             let notes: String = slide
                 .notes
@@ -481,11 +563,16 @@ fn styles_xml(deck: &Deck, media: &mut Vec<Media>) -> Result<String, String> {
         } else {
             String::new()
         };
+        let mstyles = distinct_run_styles(&master.shapes);
+        auto.push_str(&declare_run_styles(&mstyles, &master_style_prefix(i)));
+        let style_of = |st: &RunStyle| {
+            mstyles.iter().position(|s| s == st).map(|p| p + 1).unwrap_or(0)
+        };
         pages.push_str(&format!(
             "<style:master-page style:name=\"{}\" style:page-layout-name=\"PM1\"{dp}>{}\
              </style:master-page>",
             esc(&encode_style_name(&master.name)),
-            shapes_xml(&master.shapes, &|_| 0, media)?,
+            shapes_xml(&master.shapes, &style_of, &master_style_prefix(i), media)?,
         ));
     }
     // ODF wants a font it uses declared as well as referenced; Impress
@@ -849,7 +936,15 @@ fn parse_pages(
                     }
                 }
                 "text:p" => {
-                    if let Some((lines, _)) = textbox.as_mut() {
+                    if let Some((lines, runs)) = textbox.as_mut() {
+                        // The break between two paragraphs goes inside the
+                        // runs as well as between the lines, so concatenated
+                        // run text still equals the box's `text` — the
+                        // invariant `SlideObject::TextBox` documents, and the
+                        // one the pptx walker keeps the same way.
+                        if let Some(last) = runs.last_mut() {
+                            last.text.push('\n');
+                        }
                         lines.push(String::new());
                     }
                     in_text = true;
@@ -955,10 +1050,12 @@ fn parse_pages(
                             if in_notes {
                                 s.notes = text;
                             } else {
-                                // Single-paragraph boxes keep their runs;
-                                // multi-line falls back to plain (matches
-                                // the pptx reader's behavior).
-                                let keep_runs = if lines.len() == 1 { runs } else { vec![] };
+                                // Every box keeps its runs. This used to
+                                // drop them for anything multi-paragraph,
+                                // "matching the pptx reader" — which is to
+                                // say both readers lost a styled multi-line
+                                // box's styling, one by discarding it and
+                                // the other by never reading it.
                                 s.objects.push(SlideObject::TextBox {
                                     text,
                                     x,
@@ -966,7 +1063,7 @@ fn parse_pages(
                                     w,
                                     h,
                                     rotation,
-                                    runs: keep_runs,
+                                    runs,
                                 });
                             }
                         }
@@ -984,8 +1081,7 @@ fn parse_pages(
                                     s.notes = text;
                                 }
                             } else if !text.is_empty() {
-                                let keep_runs = if lines.len() == 1 { runs } else { vec![] };
-                                s.objects.push(SlideObject::TextBox { text, x, y, w, h, rotation, runs: keep_runs });
+                                s.objects.push(SlideObject::TextBox { text, x, y, w, h, rotation, runs });
                             } else if shape_type.as_deref().is_some_and(|t| t.contains("ellipse")) {
                                 let r = (w.max(h)) / 2.0;
                                 s.objects.push(SlideObject::Circle { x: x + w / 2.0, y: y + h / 2.0, r, rotation });

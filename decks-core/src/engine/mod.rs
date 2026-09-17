@@ -15,6 +15,10 @@ mod parse;
 mod write;
 
 pub use model::{Deck, MasterSlide, Slide, SlideObject};
+// `SlideObject::TextBox` carries `Vec<Run>`, so `Run`/`RunStyle` are already
+// part of this crate's public surface; re-exported so a consumer can name
+// the type it is handed without depending on letters-core directly.
+pub use letters_core::model::{Run, RunStyle};
 pub use parse::{parse_master_shapes, read_pptx};
 pub use write::{write_pptx, write_pptx_bytes};
 

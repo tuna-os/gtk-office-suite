@@ -686,3 +686,296 @@ fn the_pptx_declares_the_theme_part_it_ships() {
         "rId1 must be the layout, not {rid1_target:?}: {rels}"
     );
 }
+
+/// Two runs in one paragraph are one line, and stay one line.
+///
+/// `run_styles_survive_a_snapshot` above has covered run styling since the
+/// beginning and never saw this, because it uses a *single* run — and one
+/// run cannot reveal how two are joined. The pptx reader recorded one entry
+/// per `a:t` and joined the lot with `\n`, so "Plain Bold" came back as two
+/// lines; the same reading then dropped the space the first run ends on, so
+/// removing only the newline yields "PlainBold". Both are asserted here.
+///
+/// This is the same shape as #725's master-mapping test needing a slide on a
+/// master that is not the first: a fixture too simple to distinguish the
+/// right answer from the wrong one passes either way.
+#[test]
+fn styled_runs_do_not_gain_line_breaks_between_them() {
+    for kind in FORMATS {
+        let runs = vec![
+            Run { text: "Plain ".into(), style: RunStyle::default() },
+            Run {
+                text: "Bold".into(),
+                style: RunStyle { bold: true, ..RunStyle::default() },
+            },
+        ];
+        let deck = deck_of(vec![slide_of(
+            vec![SlideObject::TextBox {
+                text: "Plain Bold".into(),
+                x: 10.0, y: 10.0, w: 200.0, h: 50.0,
+                rotation: 0.0,
+                runs,
+            }],
+            "",
+            "",
+        )]);
+        let back = through_a_snapshot(&deck, kind, "multirun");
+        let SlideObject::TextBox { runs, text, .. } = &back.slides[0].objects[0] else {
+            panic!("{kind}: the text box came back as a different object kind");
+        };
+        assert_eq!(
+            text, "Plain Bold",
+            "{kind}: runs of one paragraph came back split or welded"
+        );
+        assert_eq!(
+            runs.iter().map(|r| r.text.as_str()).collect::<String>(),
+            *text,
+            "{kind}: SlideObject::TextBox requires concatenated run text to equal `text`"
+        );
+        assert!(
+            runs.iter().any(|r| r.style.bold),
+            "{kind}: the emphasised run lost its styling"
+        );
+        assert!(
+            runs.iter().any(|r| !r.style.bold),
+            "{kind}: the unemphasised run gained styling"
+        );
+    }
+}
+
+/// A master decoration's own emphasis survives, in both formats.
+///
+/// This is what kept #322's imported-metadata row open after the master's
+/// `default_font` landed. Neither writer emitted it, because neither reader
+/// filled it — a symmetric omission rather than a silent strip, but the
+/// row's claim is about supported content either way. The canvas draws a
+/// decoration's runs now, so this carries something that is honoured.
+#[test]
+fn a_master_decorations_run_styling_survives_a_snapshot() {
+    for kind in FORMATS {
+        let deck = Deck {
+            slides: vec![slide_of(vec![text_box("Slide body", 10.0, 10.0)], "", "")],
+            masters: vec![MasterSlide {
+                name: "House Style".into(),
+                background: "#ffffff".into(),
+                default_font: "Cantarell".into(),
+                shapes: vec![SlideObject::TextBox {
+                    text: "ACME Confidential".into(),
+                    x: 20.0, y: 30.0, w: 300.0, h: 40.0,
+                    rotation: 0.0,
+                    runs: vec![
+                        Run { text: "ACME ".into(), style: RunStyle::default() },
+                        Run {
+                            text: "Confidential".into(),
+                            style: RunStyle {
+                                bold: true,
+                                italic: true,
+                                ..RunStyle::default()
+                            },
+                        },
+                    ],
+                }],
+            }],
+        };
+        let back = through_a_snapshot(&deck, kind, "masterruns");
+        let master = back
+            .masters
+            .first()
+            .unwrap_or_else(|| panic!("{kind}: the master did not survive at all"));
+        let SlideObject::TextBox { text, runs, .. } = &master.shapes[0] else {
+            panic!("{kind}: the decoration came back as a different object kind");
+        };
+        assert_eq!(text, "ACME Confidential", "{kind}: decoration text changed");
+        assert_eq!(
+            runs.iter().map(|r| r.text.as_str()).collect::<String>(),
+            *text,
+            "{kind}: concatenated run text must equal `text`"
+        );
+        let emphasised = runs
+            .iter()
+            .find(|r| r.text.contains("Confidential"))
+            .unwrap_or_else(|| panic!("{kind}: the emphasised run is missing"));
+        assert!(emphasised.style.bold, "{kind}: the decoration lost bold");
+        assert!(emphasised.style.italic, "{kind}: the decoration lost italic");
+        let plain = runs
+            .iter()
+            .find(|r| r.text.starts_with("ACME"))
+            .unwrap_or_else(|| panic!("{kind}: the plain run is missing"));
+        assert!(
+            !plain.style.bold,
+            "{kind}: styling leaked onto the unemphasised run"
+        );
+    }
+}
+
+/// A master's run styles must not redefine a slide's.
+///
+/// ODF-specific, because it is a hazard of how ODF splits a document:
+/// `content.xml` and `styles.xml` each carry their own
+/// `office:automatic-styles`, and our reader merges both into one map keyed
+/// by style name. Numbering each file's styles from 1 independently means
+/// the master's first style and the first slide's are both `T1`, and
+/// whichever file is parsed second wins — so adding a styled master
+/// decoration would silently restyle text on an unrelated slide.
+///
+/// The two styles here are deliberately *different* (bold on the slide,
+/// italic on the master). With one style shared between them a collision
+/// would overwrite one with an identical value and the test would pass
+/// while the bug was live, which is the same fixture trap as
+/// `styled_runs_do_not_gain_line_breaks_between_them`.
+#[test]
+fn a_masters_run_styles_do_not_collide_with_a_slides_in_odp() {
+    let deck = Deck {
+        slides: vec![slide_of(
+            vec![SlideObject::TextBox {
+                text: "slide word".into(),
+                x: 10.0, y: 10.0, w: 200.0, h: 50.0,
+                rotation: 0.0,
+                runs: vec![Run {
+                    text: "slide word".into(),
+                    style: RunStyle { bold: true, ..RunStyle::default() },
+                }],
+            }],
+            "",
+            "",
+        )],
+        masters: vec![MasterSlide {
+            name: "House".into(),
+            background: "#ffffff".into(),
+            default_font: "Cantarell".into(),
+            shapes: vec![SlideObject::TextBox {
+                text: "master word".into(),
+                x: 20.0, y: 20.0, w: 200.0, h: 50.0,
+                rotation: 0.0,
+                runs: vec![Run {
+                    text: "master word".into(),
+                    style: RunStyle { italic: true, ..RunStyle::default() },
+                }],
+            }],
+        }],
+    };
+    let back = through_a_snapshot(&deck, "odp", "stylecollide");
+
+    let SlideObject::TextBox { runs, .. } = &back.slides[0].objects[0] else {
+        panic!("the slide's text box came back as a different object kind");
+    };
+    let s = &runs[0].style;
+    assert!(s.bold, "the slide's run lost its own bold");
+    assert!(
+        !s.italic,
+        "the master's style leaked onto the slide: both were named T1"
+    );
+
+    let SlideObject::TextBox { runs, .. } = &back.masters[0].shapes[0] else {
+        panic!("the decoration came back as a different object kind");
+    };
+    let m = &runs[0].style;
+    assert!(m.italic, "the master's run lost its own italic");
+    assert!(!m.bold, "the slide's style leaked onto the master");
+}
+
+/// A styled box spanning two lines keeps both the break and the styling.
+///
+/// Two separate defects met here, and either one alone hides the other. The
+/// odp writer's styled path emitted a single `text:p` with a literal
+/// newline in it, which ODF collapses to a space; the odp reader then kept
+/// runs only for single-paragraph boxes, so writing the break properly
+/// would have swapped a lost line break for lost styling. The pptx reader
+/// reached the same place from the other side, joining every run with `\n`
+/// whether or not a paragraph had ended.
+#[test]
+fn a_styled_box_spanning_two_lines_keeps_both() {
+    for kind in FORMATS {
+        let deck = deck_of(vec![slide_of(
+            vec![SlideObject::TextBox {
+                text: "Bold one\nplain two".into(),
+                x: 10.0, y: 10.0, w: 300.0, h: 80.0,
+                rotation: 0.0,
+                runs: vec![
+                    Run {
+                        text: "Bold one".into(),
+                        style: RunStyle { bold: true, ..RunStyle::default() },
+                    },
+                    Run { text: "\nplain two".into(), style: RunStyle::default() },
+                ],
+            }],
+            "",
+            "",
+        )]);
+        let back = through_a_snapshot(&deck, kind, "styledlines");
+        let SlideObject::TextBox { text, runs, .. } = &back.slides[0].objects[0] else {
+            panic!("{kind}: the text box came back as a different object kind");
+        };
+        assert_eq!(text, "Bold one\nplain two", "{kind}: the line break moved");
+        assert_eq!(
+            runs.iter().map(|r| r.text.as_str()).collect::<String>(),
+            *text,
+            "{kind}: concatenated run text must equal `text`"
+        );
+        assert!(
+            runs.iter().any(|r| r.style.bold),
+            "{kind}: a multi-line box lost its styling"
+        );
+        assert!(
+            runs.iter().any(|r| !r.style.bold && r.text.contains("plain two")),
+            "{kind}: styling leaked onto the second line"
+        );
+    }
+}
+
+/// The same guarantee for a `draw:custom-shape`, which only a foreign file
+/// produces.
+///
+/// The odp reader builds a text box at two places — the `draw:text-box`
+/// inside a `draw:frame` that our own writer emits, and the
+/// `draw:custom-shape` that Impress and PowerPoint's exporters use for a
+/// shape carrying text. Our round trips only ever exercise the first, so
+/// the second is reachable by imported documents alone; it kept its own
+/// copy of the drop-the-runs rule and nothing noticed. This crafts the
+/// package directly, since our writer cannot produce one.
+#[test]
+fn a_custom_shapes_styled_lines_survive_being_read() {
+    use std::io::{Cursor, Write};
+    let content = "<office:document-content \
+         xmlns:office=\"urn:oasis:names:tc:opendocument:xmlns:office:1.0\" \
+         xmlns:text=\"urn:oasis:names:tc:opendocument:xmlns:text:1.0\" \
+         xmlns:draw=\"urn:oasis:names:tc:opendocument:xmlns:drawing:1.0\" \
+         xmlns:style=\"urn:oasis:names:tc:opendocument:xmlns:style:1.0\" \
+         xmlns:svg=\"urn:oasis:names:tc:opendocument:xmlns:svg-compatible:1.0\" \
+         xmlns:fo=\"urn:oasis:names:tc:opendocument:xmlns:xsl-fo-compatible:1.0\">\
+         <office:automatic-styles>\
+         <style:style style:name=\"T1\" style:family=\"text\">\
+         <style:text-properties fo:font-weight=\"bold\"/></style:style>\
+         </office:automatic-styles>\
+         <office:body><office:presentation><draw:page draw:name=\"p1\">\
+         <draw:custom-shape svg:x=\"1cm\" svg:y=\"1cm\" svg:width=\"8cm\" svg:height=\"2cm\">\
+         <text:p><text:span text:style-name=\"T1\">Bold one</text:span></text:p>\
+         <text:p>plain two</text:p>\
+         </draw:custom-shape>\
+         </draw:page></office:presentation></office:body></office:document-content>";
+    let mut buffer = Vec::new();
+    {
+        let mut w = zip::ZipWriter::new(Cursor::new(&mut buffer));
+        w.start_file("content.xml", zip::write::SimpleFileOptions::default()).unwrap();
+        w.write_all(content.as_bytes()).unwrap();
+        w.finish().unwrap();
+    }
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("foreign.odp");
+    std::fs::write(&path, &buffer).unwrap();
+
+    let deck = decks_core::read_deck(path.to_str().unwrap()).expect("read crafted odp");
+    let SlideObject::TextBox { text, runs, .. } = &deck.slides[0].objects[0] else {
+        panic!("the custom shape's text did not come back as a text box");
+    };
+    assert_eq!(text, "Bold one\nplain two");
+    assert_eq!(
+        runs.iter().map(|r| r.text.as_str()).collect::<String>(),
+        *text,
+        "concatenated run text must equal `text`"
+    );
+    assert!(
+        runs.iter().any(|r| r.style.bold),
+        "a custom shape's styling was dropped: {runs:?}"
+    );
+}
