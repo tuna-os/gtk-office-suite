@@ -35,6 +35,19 @@ xmlns:p=\"http://schemas.openxmlformats.org/presentationml/2006/main\">\
 }
 
 /// Extract the body-placeholder text from a notesSlide part.
+/// The `type` a `p:ph` declares, if any. A placeholder with no type is
+/// still a placeholder, which is why the caller tracks that separately.
+fn ph_type(e: &quick_xml::events::BytesStart) -> Option<String> {
+    for attr in e.attributes().flatten() {
+        if attr.key.as_ref() == "type" {
+            if let Ok(v) = attr.normalized_value(quick_xml::XmlVersion::Implicit1_0) {
+                return Some(v.to_string());
+            }
+        }
+    }
+    None
+}
+
 pub(super) fn extract_notes_text(xml: &str) -> String {
     let mut reader = Reader::from_str(xml);
     // No trim: a:t content is significant, including boundary spaces
@@ -42,28 +55,46 @@ pub(super) fn extract_notes_text(xml: &str) -> String {
     reader.config_mut().trim_text(false);
     let mut buf = Vec::new();
     let mut in_sp = false;
-    let mut sp_is_body = false;
+    // The placeholder this shape declares, if it declares one at all. Both
+    // matter and they are not the same question: a shape with no `p:ph` is
+    // a candidate, a shape holding the slide number is not.
+    let mut sp_ph: Option<String> = None;
+    let mut sp_has_ph = false;
     let mut in_t = false;
     let mut current = String::new();
-    let mut parts: Vec<String> = Vec::new();
+    let mut sp_parts: Vec<String> = Vec::new();
+    // Notes written into a `type="body"` placeholder, which is what our own
+    // writer emits and what PowerPoint uses.
+    let mut body_parts: Vec<String> = Vec::new();
+    // Notes written into a shape with no placeholder at all. Impress's pptx
+    // exporter writes exactly that — one `p:sp` whose `p:nvPr` is empty —
+    // so requiring the body placeholder dropped the speaker notes of every
+    // deck that had been through it. Used only when no body placeholder
+    // produced anything, and never for a shape that declares some *other*
+    // placeholder, so a slide number or footer can never be read as notes.
+    let mut unplaceheld_parts: Vec<String> = Vec::new();
     loop {
         match reader.read_event_into(&mut buf) {
             Ok(Event::Start(ref e)) => match e.name().as_ref() {
-                "p:sp" => { in_sp = true; sp_is_body = false; }
-                "a:t" if sp_is_body => in_t = true,
+                "p:sp" => {
+                    in_sp = true;
+                    sp_ph = None;
+                    sp_has_ph = false;
+                    sp_parts.clear();
+                }
+                "a:t" if in_sp => in_t = true,
+                "p:ph" if in_sp => {
+                    sp_has_ph = true;
+                    sp_ph = ph_type(e);
+                }
                 _ => {}
             },
-            Ok(Event::Empty(ref e)) if e.name().as_ref() == "a:br" && sp_is_body => {
+            Ok(Event::Empty(ref e)) if e.name().as_ref() == "a:br" && in_sp => {
                 current.push('\n');
             }
             Ok(Event::Empty(ref e)) if e.name().as_ref() == "p:ph" && in_sp => {
-                for attr in e.attributes().flatten() {
-                    if attr.key.as_ref() == "type" {
-                        if let Ok(v) = attr.normalized_value(quick_xml::XmlVersion::Implicit1_0) {
-                            if v == "body" { sp_is_body = true; }
-                        }
-                    }
-                }
+                sp_has_ph = true;
+                sp_ph = ph_type(e);
             }
             Ok(Event::Text(ref t)) if in_t => {
                 current.push_str(&unescape_text(t));
@@ -73,10 +104,26 @@ pub(super) fn extract_notes_text(xml: &str) -> String {
             }
             Ok(Event::End(ref e)) => match e.name().as_ref() {
                 "a:t" => in_t = false,
-                "a:p" if sp_is_body => {
-                    if !current.is_empty() { parts.push(std::mem::take(&mut current)); }
+                "a:p" if in_sp => {
+                    if !current.is_empty() {
+                        sp_parts.push(std::mem::take(&mut current));
+                    }
                 }
-                "p:sp" => { in_sp = false; sp_is_body = false; }
+                "p:sp" => {
+                    if !sp_parts.is_empty() {
+                        match (sp_has_ph, sp_ph.as_deref()) {
+                            (true, Some("body")) => body_parts.append(&mut sp_parts),
+                            // A placeholder that is not the body one: a slide
+                            // number, date or footer. Never notes.
+                            (true, _) => sp_parts.clear(),
+                            (false, _) => unplaceheld_parts.append(&mut sp_parts),
+                        }
+                    }
+                    in_sp = false;
+                    sp_ph = None;
+                    sp_has_ph = false;
+                    current.clear();
+                }
                 _ => {}
             },
             Ok(Event::Eof) => break,
@@ -85,8 +132,13 @@ pub(super) fn extract_notes_text(xml: &str) -> String {
         }
         buf.clear();
     }
-    parts.join("\n")
+    if !body_parts.is_empty() {
+        body_parts.join("\n")
+    } else {
+        unplaceheld_parts.join("\n")
+    }
 }
+
 
 /// Parse b/i/u/strike attributes from an a:rPr element into the shared
 /// RunStyle (same WYSIWYG primitive Letters uses).

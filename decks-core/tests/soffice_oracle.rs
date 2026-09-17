@@ -1129,3 +1129,47 @@ fn a_styled_multiline_box_keeps_its_break_and_its_styling_through_impress() {
         "pptx: the styling was dropped: {runs:?}"
     );
 }
+
+/// Speaker notes across a format boundary.
+///
+/// `notes_survive_impress_rewrite` above rewrites a pptx as a pptx, which
+/// our own writer's markup survives trivially. Coming the other way,
+/// Impress's pptx exporter writes the notes into a shape with **no
+/// placeholder at all**, and our reader required `p:ph type="body"` — so
+/// the speaker notes of every deck that had been through Impress were
+/// dropped on import, silently, while the same-format test stayed green.
+///
+/// Worth recording how this was diagnosed, because the obvious reading was
+/// wrong: an odp -> odp rewrite kept the notes, which proves Impress reads
+/// what we write, and its pptx *did* contain `notesSlide1.xml` carrying
+/// the text. So this was never Impress's export gap — unlike the font in
+/// #733, where the part genuinely was not written. It was our reader.
+#[test]
+fn speaker_notes_survive_a_conversion_between_the_two_formats() {
+    if !require_or_skip() {
+        return;
+    }
+    let mut deck = Deck::new();
+    deck.slides = vec![text_slide("T", "body", "remember the demo")];
+    let dir = tempfile::tempdir().unwrap();
+
+    let as_odp = dir.path().join("notes.odp");
+    odp::write(&deck, as_odp.to_str().unwrap()).expect("write odp");
+    let to_pptx = convert(&as_odp, "pptx").expect("Impress could not convert our odp to pptx");
+    let rt = read_pptx(to_pptx.to_str().unwrap()).expect("read pptx");
+    assert!(
+        rt.slides[0].notes.contains("remember the demo"),
+        "odp -> Impress -> pptx lost the speaker notes: {:?}",
+        rt.slides[0].notes
+    );
+
+    let as_pptx = dir.path().join("notes.pptx");
+    write_pptx(as_pptx.to_str().unwrap(), &deck).expect("write pptx");
+    let to_odp = convert(&as_pptx, "odp").expect("Impress could not convert our pptx to odp");
+    let rt = odp::read(to_odp.to_str().unwrap()).expect("read odp");
+    assert!(
+        rt.slides[0].notes.contains("remember the demo"),
+        "pptx -> Impress -> odp lost the speaker notes: {:?}",
+        rt.slides[0].notes
+    );
+}

@@ -1201,6 +1201,49 @@ mod master_tests {
 
     // ── notes_slide_xml ↔ extract_notes_text ─────────────────────────────
 
+    /// Impress's pptx exporter writes the notes into a shape with no
+    /// placeholder at all — one `p:sp` whose `p:nvPr` is empty. Requiring
+    /// `p:ph type="body"` dropped the speaker notes of every deck that had
+    /// been through it, and no test saw it because our own writer always
+    /// emits the body placeholder we were looking for.
+    #[test]
+    fn notes_in_a_shape_with_no_placeholder_are_read() {
+        let xml = r##"<p:notes xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main">
+<p:cSld><p:spTree>
+<p:sp><p:nvSpPr><p:cNvPr id="8" name=""/><p:cNvSpPr/><p:nvPr/></p:nvSpPr><p:spPr/>
+<p:txBody><a:p><a:r><a:t>remember the demo</a:t></a:r></a:p></p:txBody></p:sp>
+</p:spTree></p:cSld></p:notes>"##;
+        assert_eq!(extract_notes_text(xml), "remember the demo");
+    }
+
+    /// But a placeholder that is *not* the body one is never notes. A slide
+    /// number read as speaker notes would be worse than losing them, so the
+    /// fallback widens only to shapes that declare no placeholder.
+    #[test]
+    fn a_slide_number_placeholder_is_never_read_as_notes() {
+        let xml = r##"<p:notes xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main">
+<p:cSld><p:spTree>
+<p:sp><p:nvSpPr><p:nvPr><p:ph type="sldNum" idx="10"/></p:nvPr></p:nvSpPr>
+<p:txBody><a:p><a:r><a:t>7</a:t></a:r></a:p></p:txBody></p:sp>
+</p:spTree></p:cSld></p:notes>"##;
+        assert_eq!(extract_notes_text(xml), "");
+    }
+
+    /// And when a body placeholder is present it still wins, so a notes
+    /// part carrying both does not concatenate them.
+    #[test]
+    fn the_body_placeholder_wins_over_an_unplaceheld_shape() {
+        let xml = r##"<p:notes xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main">
+<p:cSld><p:spTree>
+<p:sp><p:nvSpPr><p:nvPr/></p:nvSpPr>
+<p:txBody><a:p><a:r><a:t>slide furniture</a:t></a:r></a:p></p:txBody></p:sp>
+<p:sp><p:nvSpPr><p:nvPr><p:ph type="body" idx="1"/></p:nvPr></p:nvSpPr>
+<p:txBody><a:p><a:r><a:t>the real notes</a:t></a:r></a:p></p:txBody></p:sp>
+</p:spTree></p:cSld></p:notes>"##;
+        assert_eq!(extract_notes_text(xml), "the real notes");
+    }
+
+
     /// Build a minimal notesSlide part around raw txBody XML so entity and
     /// break handling can be tested without going through `notes_slide_xml`.
     fn notes_with_txbody(txbody: &str) -> String {
