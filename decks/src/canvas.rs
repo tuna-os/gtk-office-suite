@@ -5,6 +5,7 @@ use gtk4::cairo;
 use std::cell::RefCell;
 use std::collections::HashMap;
 use decks_core::engine::{Slide, SlideObject, MasterSlide};
+use decks_core::engine::Run;
 
 // ── Image loading with cache ─────────────────────────────────────────
 
@@ -284,6 +285,92 @@ pub fn document_font_description(
     desc
 }
 
+/// Put a text box's content into `layout`, styled run by run.
+///
+/// Slides and master decorations share this so that a run style honoured on
+/// one is honoured on the other: the master path drew `text` with cairo's
+/// toy API and ignored `runs` entirely, which is how a master could carry
+/// styling that nothing drew. The empty-`runs` case is not a special style
+/// but the absence of one — the box is plain text and `text` is the whole
+/// of it.
+///
+/// `scale` converts a run's point size to the canvas's current zoom; it is
+/// the same factor the caller used for the layout's base font.
+pub fn set_styled_text(
+    layout: &pango::Layout,
+    text: &str,
+    runs: &[Run],
+    scale: f64,
+) {
+    if runs.is_empty() {
+        layout.set_text(text);
+        layout.set_attributes(None);
+        return;
+    }
+    let attrs = pango::AttrList::new();
+    let mut buf = String::new();
+    for run in runs {
+        let start = buf.len() as u32;
+        buf.push_str(&run.text);
+        let end = buf.len() as u32;
+        let add = |mut a: pango::Attribute| {
+            a.set_start_index(start);
+            a.set_end_index(end);
+            attrs.insert(a);
+        };
+        if run.style.bold {
+            add(pango::AttrInt::new_weight(pango::Weight::Bold).into());
+        }
+        if run.style.italic {
+            add(pango::AttrInt::new_style(pango::Style::Italic).into());
+        }
+        if run.style.underline {
+            add(pango::AttrInt::new_underline(pango::Underline::Single).into());
+        }
+        if run.style.strikethrough {
+            add(pango::AttrInt::new_strikethrough(true).into());
+        }
+        if let Some(hp) = run.style.font_size_hp {
+            let pt = hp as f64 / 2.0 * scale;
+            add(pango::AttrSize::new_size_absolute(
+                (pt * 96.0 / 72.0 * pango::SCALE as f64) as i32,
+            )
+            .into());
+        }
+    }
+    layout.set_text(&buf);
+    layout.set_attributes(Some(&attrs));
+}
+
+/// The layout one master decoration is drawn from.
+///
+/// Extracted so the master path's *use* of the runs is reachable from a
+/// test: #732 left the equivalent call inside `draw_slide_multi` uncovered,
+/// and a call site that silently stops passing its runs is exactly how a
+/// carried style stops being drawn without anything failing.
+///
+/// Drawn through pango, and through the same run styling the slides use, so
+/// a master's own emphasis shows. The cairo toy API this replaces could do
+/// neither: it took one weight for the whole box — hardcoded bold, which
+/// drew every unemphasised decoration as though the design asked for bold —
+/// and it has no concept of a line break, so a multi-line decoration was
+/// silently drawn as one line.
+pub fn master_decoration_layout(
+    cr: &cairo::Context,
+    master: &MasterSlide,
+    text: &str,
+    runs: &[Run],
+    scale: f64,
+) -> pango::Layout {
+    let layout = pangocairo::functions::create_layout(cr);
+    layout.set_font_description(Some(&document_font_description(
+        Some(master),
+        11.0 * scale,
+    )));
+    set_styled_text(&layout, text, runs, scale);
+    layout
+}
+
 #[allow(clippy::too_many_arguments)]
 pub fn draw_slide(
     cr: &cairo::Context, width: f64, height: f64,
@@ -361,18 +448,14 @@ pub fn draw_slide_multi(
                     cr.rectangle(sx, sy, sw, sh);
                     cr.fill().unwrap();
                 }
-                SlideObject::TextBox { text, x, y, .. } => {
+                SlideObject::TextBox { text, x, y, runs, .. } => {
                     let sx = ox + (x / 960.0) * slide_w;
                     let sy = oy + (y / 540.0) * slide_h;
                     cr.set_source_rgba(0.3, 0.3, 0.3, 0.4);
-                    cr.select_font_face(
-                        master_font_family(Some(master)),
-                        cairo::FontSlant::Normal,
-                        cairo::FontWeight::Bold,
-                    );
-                    cr.set_font_size(11.0);
-                    cr.move_to(sx + 4.0, sy + 14.0);
-                    cr.show_text(text).unwrap();
+                    let layout =
+                        master_decoration_layout(cr, master, text, runs, slide_w / 960.0);
+                    cr.move_to(sx + 4.0, sy + 4.0);
+                    pangocairo::functions::show_layout(cr, &layout);
                 }
                 _ => {}
             }
@@ -419,43 +502,7 @@ pub fn draw_slide_multi(
                         base_pt,
                     );
                     layout.set_font_description(Some(&desc));
-                    if runs.is_empty() {
-                        layout.set_text(text);
-                    } else {
-                        let attrs = pango::AttrList::new();
-                        let mut buf = String::new();
-                        for run in runs {
-                            let start = buf.len() as u32;
-                            buf.push_str(&run.text);
-                            let end = buf.len() as u32;
-                            let add = |mut a: pango::Attribute| {
-                                a.set_start_index(start);
-                                a.set_end_index(end);
-                                attrs.insert(a);
-                            };
-                            if run.style.bold {
-                                add(pango::AttrInt::new_weight(pango::Weight::Bold).into());
-                            }
-                            if run.style.italic {
-                                add(pango::AttrInt::new_style(pango::Style::Italic).into());
-                            }
-                            if run.style.underline {
-                                add(pango::AttrInt::new_underline(pango::Underline::Single).into());
-                            }
-                            if run.style.strikethrough {
-                                add(pango::AttrInt::new_strikethrough(true).into());
-                            }
-                            if let Some(hp) = run.style.font_size_hp {
-                                let pt = hp as f64 / 2.0 * scale;
-                                add(pango::AttrSize::new_size_absolute(
-                                    (pt * 96.0 / 72.0 * pango::SCALE as f64) as i32,
-                                )
-                                .into());
-                            }
-                        }
-                        layout.set_text(&buf);
-                        layout.set_attributes(Some(&attrs));
-                    }
+                    set_styled_text(&layout, text, runs, scale);
                     cr.move_to(sx + 4.0, sy + 4.0);
                     pangocairo::functions::show_layout(cr, &layout);
                 }
@@ -561,6 +608,7 @@ pub fn draw_slide_multi(
 #[cfg(test)]
 mod font_tests {
     use super::*;
+    use decks_core::engine::RunStyle;
 
     fn master(font: &str) -> MasterSlide {
         MasterSlide {
@@ -664,5 +712,130 @@ mod font_tests {
         assert_eq!(desc.family().map(|f| f.to_string()).as_deref(), Some("Sans"));
         assert_eq!(desc.size(), (18.0 * 96.0 / 72.0 * pango::SCALE as f64) as i32);
         assert!(desc.is_size_absolute());
+    }
+
+    fn layout() -> pango::Layout {
+        use pangocairo::prelude::FontMapExt;
+        pango::Layout::new(&pangocairo::FontMap::default().create_context())
+    }
+
+    fn run(text: &str, style: RunStyle) -> Run {
+        Run { text: text.to_string(), style }
+    }
+
+    /// A box with no runs is plain text, not a styled box that happens to
+    /// have no styles: whatever a previous layout left behind must not
+    /// survive into it.
+    #[test]
+    fn a_box_without_runs_is_drawn_as_plain_text() {
+        let l = layout();
+        l.set_attributes(Some(&pango::AttrList::new()));
+        set_styled_text(&l, "just text", &[], 1.0);
+        assert_eq!(l.text(), "just text");
+        assert!(l.attributes().is_none(), "a stale attribute list survived");
+    }
+
+    /// The drawn string is the runs concatenated — the same string the model
+    /// keeps in `text` — with no separator invented between them.
+    #[test]
+    fn runs_are_drawn_as_one_string_with_no_separator() {
+        let l = layout();
+        set_styled_text(
+            &l,
+            "ignored when runs are present",
+            &[
+                run("Plain ", RunStyle::default()),
+                run("Bold", RunStyle { bold: true, ..RunStyle::default() }),
+            ],
+            1.0,
+        );
+        assert_eq!(l.text(), "Plain Bold");
+    }
+
+    /// Emphasis lands on the run that asked for it and nothing else. The
+    /// offsets are byte offsets into the concatenated string, so an
+    /// off-by-one here bolds the wrong characters rather than failing
+    /// loudly.
+    #[test]
+    fn a_runs_emphasis_covers_exactly_that_run() {
+        let l = layout();
+        set_styled_text(
+            &l,
+            "",
+            &[
+                run("Plain ", RunStyle::default()),
+                run("Bold", RunStyle { bold: true, ..RunStyle::default() }),
+            ],
+            1.0,
+        );
+        let attrs = l.attributes().expect("styled runs produce an attribute list");
+        let bold: Vec<_> = attrs
+            .attributes()
+            .into_iter()
+            .filter(|a| a.type_() == pango::AttrType::Weight)
+            .map(|a| (a.start_index(), a.end_index()))
+            .collect();
+        assert_eq!(
+            bold,
+            vec![("Plain ".len() as u32, "Plain Bold".len() as u32)],
+            "bold did not cover exactly the emphasised run"
+        );
+    }
+
+    fn ctx() -> cairo::Context {
+        let surface = cairo::ImageSurface::create(cairo::Format::ARgb32, 64, 64)
+            .expect("an image surface needs no display");
+        cairo::Context::new(&surface).expect("context")
+    }
+
+    /// The master path actually passes its decoration's runs through.
+    ///
+    /// The gap #732 recorded and could not close: a call site that stops
+    /// passing its runs draws unstyled text and nothing fails, because
+    /// nothing asserts over what was drawn. Going through the layout the
+    /// master path builds — rather than the pixels it produces — makes that
+    /// reachable without depending on which fonts are installed.
+    #[test]
+    fn a_master_decorations_emphasis_reaches_the_layout_it_is_drawn_from() {
+        let m = master("Cantarell");
+        let l = master_decoration_layout(
+            &ctx(),
+            &m,
+            "ACME Confidential",
+            &[
+                run("ACME ", RunStyle::default()),
+                run(
+                    "Confidential",
+                    RunStyle { bold: true, ..RunStyle::default() },
+                ),
+            ],
+            1.0,
+        );
+        assert_eq!(l.text(), "ACME Confidential");
+        let attrs = l
+            .attributes()
+            .expect("the decoration's runs never reached the layout");
+        assert!(
+            attrs
+                .attributes()
+                .into_iter()
+                .any(|a| a.type_() == pango::AttrType::Weight),
+            "the decoration was drawn without its emphasis"
+        );
+    }
+
+    /// And the master's font still reaches it, which the same call site is
+    /// also responsible for.
+    #[test]
+    fn a_master_decoration_is_drawn_in_the_masters_font() {
+        let m = master("Liberation Serif");
+        let l = master_decoration_layout(&ctx(), &m, "plain", &[], 1.0);
+        assert_eq!(
+            l.font_description()
+                .and_then(|d| d.family())
+                .map(|f| f.to_string())
+                .as_deref(),
+            Some("Liberation Serif")
+        );
     }
 }

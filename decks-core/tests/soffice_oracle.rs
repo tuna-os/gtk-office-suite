@@ -993,3 +993,139 @@ fn impress_keeps_the_font_we_write_into_an_odp() {
         "Impress dropped the font we wrote into our odp; masters came back as {fonts:?}",
     );
 }
+
+/// Two runs in one paragraph, rewritten by Impress and read back by us.
+///
+/// The round-trip tests in `snapshot_fidelity.rs` pair our writer with our
+/// reader, so a convention both sides share cancels itself out and passes.
+/// Here Impress writes the `p:txBody`, so the fixture is a real producer's
+/// idea of "one paragraph, two runs" rather than ours — which is the only
+/// way to be sure our reader joins runs the way the format means and not
+/// merely the way we happen to emit them.
+///
+/// The bug this pins: the reader recorded one entry per `a:t` and joined
+/// them with `\n`, so an emphasised word split the line in two, and the
+/// break was then written back into the saved package.
+#[test]
+fn impress_runs_in_one_paragraph_come_back_as_one_line() {
+    let mut deck = Deck::new();
+    deck.slides = vec![Slide {
+        title: "T".into(),
+        background: String::new(),
+        notes: String::new(),
+        master_idx: None,
+        objects: vec![SlideObject::TextBox {
+            text: "Plain Bold".into(),
+            x: 20.0,
+            y: 20.0,
+            w: 400.0,
+            h: 60.0,
+            rotation: 0.0,
+            runs: vec![
+                Run { text: "Plain ".into(), style: RunStyle::default() },
+                Run {
+                    text: "Bold".into(),
+                    style: RunStyle { bold: true, ..RunStyle::default() },
+                },
+            ],
+        }],
+    }];
+    let Some(rt) = through_impress(&deck, "tworuns") else { return };
+    let text = all_text(&rt.slides[0]);
+    assert!(
+        text.contains("Plain Bold"),
+        "runs of one paragraph came back split or welded: {text:?}"
+    );
+    assert!(
+        !text.contains("Plain\nBold") && !text.contains("PlainBold"),
+        "the line was broken or the space between runs was eaten: {text:?}"
+    );
+}
+
+/// A styled multi-line text box keeps BOTH its line break and its styling
+/// through Impress, in odp.
+///
+/// ODF collapses a literal newline in text content to a space, and the odp
+/// writer's styled path emitted exactly that: one `text:p` containing
+/// "Bold one\nplain two". Our own reader could not see the loss, because it
+/// split that single paragraph back on the newline it had written — a
+/// mirrored convention cancelling itself out, the same trap the transform
+/// matrix hit. Impress is what reports it: before the fix it read the box
+/// back as one line, `<text:span>Bold one</text:span> plain two`.
+///
+/// The styling half matters too, and for a second reason: the reader used
+/// to keep runs only for single-paragraph boxes, so writing the break
+/// correctly would have traded a lost line break for lost styling.
+#[test]
+fn a_styled_multiline_box_keeps_its_break_and_its_styling_through_impress() {
+    if !require_or_skip() {
+        return;
+    }
+    let mut deck = Deck::new();
+    deck.slides = vec![Slide {
+        title: "T".into(),
+        background: String::new(),
+        notes: String::new(),
+        master_idx: None,
+        objects: vec![SlideObject::TextBox {
+            text: "Bold one\nplain two".into(),
+            x: 20.0,
+            y: 20.0,
+            w: 400.0,
+            h: 80.0,
+            rotation: 0.0,
+            runs: vec![
+                Run {
+                    text: "Bold one".into(),
+                    style: RunStyle { bold: true, ..RunStyle::default() },
+                },
+                Run { text: "\nplain two".into(), style: RunStyle::default() },
+            ],
+        }],
+    }];
+    let dir = tempfile::tempdir().unwrap();
+    let src = dir.path().join("styledlines.odp");
+    odp::write(&deck, src.to_str().unwrap()).expect("write odp");
+    let rewritten = convert(&src, "odp").expect("Impress could not rewrite our odp");
+    let rt = odp::read(rewritten.to_str().unwrap()).expect("read back");
+
+    let SlideObject::TextBox { text, runs, .. } = &rt.slides[0].objects[0] else {
+        panic!("the text box came back as a different object kind");
+    };
+    assert!(
+        text.contains('\n'),
+        "Impress read our line break as a space: {text:?}"
+    );
+    assert_eq!(
+        runs.iter().map(|r| r.text.as_str()).collect::<String>(),
+        *text,
+        "concatenated run text must equal `text`"
+    );
+    assert!(
+        runs.iter().any(|r| r.style.bold),
+        "the styling was dropped on the way: {runs:?}"
+    );
+
+    // The pptx writer had the same defect for the same reason — a newline
+    // inside `a:t` instead of a second `a:p`. LibreOffice reads that as a
+    // break, so unlike the odp case it round-tripped either way and only
+    // the emitted markup was wrong; this asserts the behaviour a stricter
+    // consumer depends on.
+    let as_pptx = dir.path().join("styledlines.pptx");
+    write_pptx(as_pptx.to_str().unwrap(), &deck).expect("write pptx");
+    let rewritten = convert(&as_pptx, "pptx").expect("Impress could not rewrite our pptx");
+    let rt = read_pptx(rewritten.to_str().unwrap()).expect("read back");
+    let SlideObject::TextBox { text, runs, .. } = &rt.slides[0].objects[0] else {
+        panic!("the pptx text box came back as a different object kind");
+    };
+    assert!(text.contains('\n'), "pptx: the line break is gone: {text:?}");
+    assert_eq!(
+        runs.iter().map(|r| r.text.as_str()).collect::<String>(),
+        *text,
+        "pptx: concatenated run text must equal `text`"
+    );
+    assert!(
+        runs.iter().any(|r| r.style.bold),
+        "pptx: the styling was dropped: {runs:?}"
+    );
+}
