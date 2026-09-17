@@ -19,7 +19,7 @@ pub use model::{Deck, MasterSlide, Slide, SlideObject};
 // part of this crate's public surface; re-exported so a consumer can name
 // the type it is handed without depending on letters-core directly.
 pub use letters_core::model::{Run, RunStyle};
-pub use parse::{parse_master_shapes, read_pptx};
+pub use parse::{parse_master_shapes, parse_master_shapes_scaled, parse_slide_size, read_pptx, SlideScale};
 pub use write::{write_pptx, write_pptx_bytes};
 
 // odp.rs and the shape parsers share these quick_xml helpers.

@@ -1129,3 +1129,75 @@ fn a_styled_multiline_box_keeps_its_break_and_its_styling_through_impress() {
         "pptx: the styling was dropped: {runs:?}"
     );
 }
+
+/// Geometry across a format boundary, which is the only place a wrong
+/// scale can show.
+///
+/// `positions_approx_survive_impress_rewrite` and
+/// `odp_geometry_survives_impress_rewrite` both rewrite a file in its own
+/// format, and a same-format rewrite cannot detect a wrong unit: Impress
+/// reads whatever we wrote and writes the same value back, so our own
+/// constant cancels itself out on the way in and out. Crossing formats is
+/// what forces a real conversion — Impress turns EMU into centimetres
+/// using the true ratio — and it is where the two readers' disagreement
+/// showed: a box round-tripped pptx -> odp came back at 0.75x, and
+/// odp -> pptx at 1.33x, while both same-format tests stayed green.
+#[test]
+fn geometry_survives_a_conversion_between_the_two_formats() {
+    if !require_or_skip() {
+        return;
+    }
+    let mut deck = Deck::new();
+    deck.slides = vec![Slide {
+        title: "T".into(),
+        background: String::new(),
+        notes: String::new(),
+        master_idx: None,
+        objects: vec![SlideObject::Rect {
+            x: 96.0,
+            y: 54.0,
+            w: 192.0,
+            h: 108.0,
+            rotation: 0.0,
+        }],
+    }];
+    let want = (96.0, 54.0, 192.0, 108.0);
+    let dir = tempfile::tempdir().unwrap();
+
+    let geom = |d: &Deck, label: &str| -> (f64, f64, f64, f64) {
+        match d.slides.first().and_then(|s| s.objects.first()) {
+            Some(SlideObject::Rect { x, y, w, h, .. })
+            | Some(SlideObject::TextBox { x, y, w, h, .. }) => (*x, *y, *w, *h),
+            other => panic!("{label}: the shape came back as {other:?}"),
+        }
+    };
+    // A conversion re-lays-out slightly; this is about scale, not pixels.
+    let close = |got: (f64, f64, f64, f64), label: &str| {
+        let d = [
+            (got.0 - want.0).abs(),
+            (got.1 - want.1).abs(),
+            (got.2 - want.2).abs(),
+            (got.3 - want.3).abs(),
+        ];
+        assert!(
+            d.iter().all(|v| *v < 2.0),
+            "{label}: {got:?} is not {want:?} — a scale factor, not a rounding"
+        );
+    };
+
+    let as_pptx = dir.path().join("cross.pptx");
+    write_pptx(as_pptx.to_str().unwrap(), &deck).expect("write pptx");
+    let to_odp = convert(&as_pptx, "odp").expect("Impress could not convert our pptx to odp");
+    close(
+        geom(&odp::read(to_odp.to_str().unwrap()).expect("read odp"), "pptx->odp"),
+        "pptx -> Impress -> odp",
+    );
+
+    let as_odp = dir.path().join("cross.odp");
+    odp::write(&deck, as_odp.to_str().unwrap()).expect("write odp");
+    let to_pptx = convert(&as_odp, "pptx").expect("Impress could not convert our odp to pptx");
+    close(
+        geom(&read_pptx(to_pptx.to_str().unwrap()).expect("read pptx"), "odp->pptx"),
+        "odp -> Impress -> pptx",
+    );
+}
