@@ -13,7 +13,7 @@ REPO_ROOT="$(cd ../.. && pwd)"
 BIN="$REPO_ROOT/target/debug/$APP"
 [ -x "$BIN" ] || { echo "Binary not built: $BIN (run cargo build --bin $APP)"; exit 1; }
 
-SCHEMA_DIR="${GSETTINGS_SCHEMA_DIR:-/tmp/gtk-office-schemas}"
+SCHEMA_DIR="${GSETTINGS_SCHEMA_DIR:-/tmp/gtk-office-schemas-${UID:-$(id -u)}}"
 mkdir -p "$SCHEMA_DIR"
 cp "$REPO_ROOT"/flatpak/*.gschema.xml "$SCHEMA_DIR/"
 glib-compile-schemas "$SCHEMA_DIR"

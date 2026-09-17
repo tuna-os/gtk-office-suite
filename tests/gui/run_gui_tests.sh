@@ -8,7 +8,7 @@ cd "$(dirname "$0")"
 REPO_ROOT="$(cd ../.. && pwd)"
 
 # GSettings schemas: the apps abort at startup without them.
-SCHEMA_DIR="${GSETTINGS_SCHEMA_DIR:-/tmp/gtk-office-schemas}"
+SCHEMA_DIR="${GSETTINGS_SCHEMA_DIR:-/tmp/gtk-office-schemas-${UID:-$(id -u)}}"
 mkdir -p "$SCHEMA_DIR"
 cp "$REPO_ROOT"/flatpak/*.gschema.xml "$SCHEMA_DIR/"
 glib-compile-schemas "$SCHEMA_DIR"
