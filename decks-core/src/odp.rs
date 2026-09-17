@@ -880,10 +880,11 @@ fn parse_page_size_pt(xml: &str) -> Option<(f64, f64)> {
                             }
                         }
                     }
-                    "style:master-page" => {
-                        if wanted.is_none() {
-                            wanted = attr(e, "style:page-layout-name");
-                        }
+                    // Guarded rather than a nested `if`: the first
+                    // master-page wins, and later ones must fall through to
+                    // `_` untouched.
+                    "style:master-page" if wanted.is_none() => {
+                        wanted = attr(e, "style:page-layout-name");
                     }
                     _ => {}
                 }
