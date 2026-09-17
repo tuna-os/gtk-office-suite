@@ -1245,3 +1245,41 @@ fn geometry_survives_a_conversion_between_the_two_formats() {
         "odp -> Impress -> pptx",
     );
 }
+
+/// A slide's name reaches Impress, in the direction that is a claim about
+/// our package.
+///
+/// `Slide::title` is the slide's name: `p:cSld/@name` in OOXML,
+/// `draw:page/@draw:name` in ODF. The pptx writer wrote the slide's
+/// `p:cSld` bare while naming the master's and the layout's, so the name
+/// never left the package at all — and no test asked, because every
+/// fixture's title was the empty string.
+///
+/// Only the pptx -> odp direction is asserted, and the reason is measured
+/// rather than assumed. Coming back the other way, Impress's pptx exporter
+/// writes `<p:cSld>` with no name and the string appears nowhere in
+/// `slide1.xml`, while an odp -> odp rewrite keeps it — so Impress reads
+/// our `draw:name` correctly and simply does not carry a page name into
+/// pptx. That is its export gap, the same situation as the master font in
+/// #733, and asserting over it would pin someone else's bug as our
+/// contract. `a_slides_name_survives_a_snapshot` covers our own odp write.
+#[test]
+fn a_slide_name_reaches_impress_from_our_pptx() {
+    if !require_or_skip() {
+        return;
+    }
+    let mut deck = Deck::new();
+    let mut slide = text_slide("T", "body", "");
+    slide.title = "Quarterly Review".into();
+    deck.slides = vec![slide];
+
+    let dir = tempfile::tempdir().unwrap();
+    let as_pptx = dir.path().join("named.pptx");
+    write_pptx(as_pptx.to_str().unwrap(), &deck).expect("write pptx");
+    let to_odp = convert(&as_pptx, "odp").expect("Impress could not convert our pptx to odp");
+    let rt = odp::read(to_odp.to_str().unwrap()).expect("read odp");
+    assert_eq!(
+        rt.slides[0].title, "Quarterly Review",
+        "the slide's name did not survive our pptx through Impress"
+    );
+}

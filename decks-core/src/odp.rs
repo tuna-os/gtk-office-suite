@@ -418,9 +418,16 @@ fn content_xml(deck: &Deck, media: &mut Vec<Media>) -> Result<String, String> {
         } else {
             String::new()
         };
+        // Omitted rather than written empty when unnamed, matching the
+        // pptx writer: the attribute is optional, and `draw:name=""` is a
+        // claim that the page is called nothing rather than unnamed.
+        let name_attr = if slide.title.trim().is_empty() {
+            String::new()
+        } else {
+            format!(" draw:name=\"{}\"", esc(&slide.title))
+        };
         pages.push_str(&format!(
-            "<draw:page draw:name=\"{}\"{dp_attr}{}>",
-            esc(&slide.title),
+            "<draw:page{name_attr}{dp_attr}{}>",
             deck
                 .masters
                 .get(slide.master_idx.unwrap_or(0))
@@ -703,10 +710,18 @@ fn parse_length_pt(v: &str) -> Option<f64> {
     })
 }
 
+/// One attribute's value, with entities resolved.
+///
+/// Normalised rather than raw. Most attributes here are style names,
+/// numbers and colours where an entity never appears, so reading the bytes
+/// verbatim was latent — but a page named `R&D` is escaped in the
+/// attribute, and the raw bytes give back `R&amp;D` as the name itself.
 fn attr(e: &quick_xml::events::BytesStart, name: &str) -> Option<String> {
     e.attributes().filter_map(|a| a.ok()).find_map(|a| {
         if a.key.into_inner() == name {
-            Some(a.value.to_string())
+            a.normalized_value(quick_xml::XmlVersion::Implicit1_0)
+                .ok()
+                .map(|v| v.to_string())
         } else {
             None
         }
@@ -1267,8 +1282,16 @@ pub fn read(path: &str) -> Result<Deck, String> {
         let mut resolve = |href: &str| extract_picture(href, &mut zip, &mut budget);
         parse_pages(&content, "draw:page", &page_bg, &text_styles, scale, &mut resolve)?
     };
-    for page in slide_pages {
+    for (i, page) in slide_pages.into_iter().enumerate() {
         let mut slide = page.slide;
+        // A page that names nothing gets a positional label, the same one
+        // the pptx reader falls back to, so an unnamed slide does not come
+        // back nameless in one format and labelled in the other. Applied
+        // here rather than in `parse_pages`, which also walks master pages
+        // — a master's title is its name, and "Slide 3" is not a master.
+        if slide.title.trim().is_empty() {
+            slide.title = format!("Slide {}", i + 1);
+        }
         slide.master_idx = page
             .uses_master
             .as_deref()

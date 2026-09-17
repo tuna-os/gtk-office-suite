@@ -737,7 +737,21 @@ pub fn write_pptx_bytes(deck: &Deck) -> Result<Vec<u8>, String> {
             sld.push_attribute(("xmlns:p", "http://schemas.openxmlformats.org/presentationml/2006/main"));
             writer.write_event(Event::Start(sld)).map_err(|e| e.to_string())?;
 
-            writer.write_event(Event::Start(BytesStart::new("p:cSld"))).map_err(|e| e.to_string())?;
+            // The slide's name, which is what `Slide::title` is. The master
+            // and layout parts above have always written theirs here; the
+            // slide's was left off, so a deck's slide names survived a .odp
+            // save (`draw:page/@draw:name`) and were destroyed by a .pptx
+            // one — and pptx is the format an unsaved deck is snapshotted
+            // in, so crash recovery lost every one of them.
+            //
+            // Omitted rather than written empty when there is no name: the
+            // attribute is optional, and `name=""` would be a claim that
+            // the slide is called nothing rather than that it is unnamed.
+            let mut c_sld = BytesStart::new("p:cSld");
+            if !slide.title.trim().is_empty() {
+                c_sld.push_attribute(("name", slide.title.as_str()));
+            }
+            writer.write_event(Event::Start(c_sld)).map_err(|e| e.to_string())?;
 
             // Slide background (only when it differs from the default
             // white — Impress preserves an explicit p:bg).

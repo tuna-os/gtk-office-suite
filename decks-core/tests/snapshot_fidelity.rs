@@ -1068,3 +1068,78 @@ fn a_deck_on_the_modern_powerpoint_slide_size_imports_at_model_scale() {
         "a full-bleed shape came back as {w}x{h}, not the model's 960x540"
     );
 }
+
+/// A slide's name survives a snapshot, in both formats.
+///
+/// `Slide::title` is the slide's name — `draw:page/@draw:name` in ODF,
+/// `p:cSld/@name` in OOXML. The odp writer had always written it; the pptx
+/// writer wrote the slide's `p:cSld` bare while setting `name` on the
+/// master's and the layout's a few lines above, and the pptx reader
+/// synthesised `format!("Slide {n}")` without ever looking for the real
+/// one. So a deck's slide names survived a .odp save and were destroyed by
+/// a .pptx one — and pptx is the format an unsaved deck is snapshotted in,
+/// so crash recovery lost every one of them.
+///
+/// Nothing caught it, and the reason is the fixture: `slide_of` sets
+/// `title: String::new()`, so every test in this file asked whether an
+/// *empty* name survived — a question with the same answer whether the
+/// writer carries names or not. Fourth time this session (after the
+/// single-run styling test, #725's master mapping, and the 16:9-only
+/// geometry fixtures) that a fixture too simple to tell right from wrong
+/// passed against a live bug.
+#[test]
+fn a_slides_name_survives_a_snapshot() {
+    for kind in FORMATS {
+        let mut slide = slide_of(vec![text_box("body", 10.0, 10.0)], "", "");
+        slide.title = "Quarterly Review".into();
+        let deck = deck_of(vec![slide]);
+        let back = through_a_snapshot(&deck, kind, "slidename");
+        assert_eq!(
+            back.slides[0].title, "Quarterly Review",
+            "{kind}: the slide's name was replaced or dropped"
+        );
+    }
+}
+
+/// A name needing XML escaping survives as itself.
+///
+/// It goes into an attribute in both formats, so a writer that interpolates
+/// it raw produces a package that either fails to parse or silently
+/// truncates the name at the quote.
+#[test]
+fn a_slide_name_needing_escaping_survives() {
+    for kind in FORMATS {
+        let mut slide = slide_of(vec![text_box("body", 10.0, 10.0)], "", "");
+        slide.title = r#"R&D <draft> "v2""#.into();
+        let deck = deck_of(vec![slide]);
+        let back = through_a_snapshot(&deck, kind, "slidenameesc");
+        assert_eq!(
+            back.slides[0].title, r#"R&D <draft> "v2""#,
+            "{kind}: an escaped name came back changed"
+        );
+    }
+}
+
+/// A deck whose slides carry no name still gets a usable label.
+///
+/// The positional fallback is what made the loss invisible, so it has to
+/// stay for foreign decks that genuinely name nothing — but only when
+/// there is no name to read.
+#[test]
+fn an_unnamed_slide_falls_back_to_its_position() {
+    for kind in FORMATS {
+        // slide_of leaves the title empty, which is the unnamed case.
+        let deck = deck_of(vec![
+            slide_of(vec![text_box("one", 10.0, 10.0)], "", ""),
+            slide_of(vec![text_box("two", 10.0, 10.0)], "", ""),
+        ]);
+        let back = through_a_snapshot(&deck, kind, "unnamed");
+        assert_eq!(back.slides.len(), 2, "{kind}: lost a slide");
+        for (i, s) in back.slides.iter().enumerate() {
+            assert!(
+                !s.title.trim().is_empty(),
+                "{kind}: slide {i} came back with no usable label"
+            );
+        }
+    }
+}

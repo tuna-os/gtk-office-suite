@@ -52,7 +52,7 @@ AutosaveSlot used to store bytes and metadata in separate atomic writes. Each wr
       disk for the next launch rather than discarding them. Presenting
       several at once needs the multiple-window/multiple-document work in the
       last row below; Letters already does it per tab.
-- [~] Preserve imported non-buffer metadata and model state; no recovery format silently strips supported content. **Tables is done and was badly wrong.** Its snapshot is an xlsx package from `save_sheets_to_xlsx_bytes`, read back by the same `load_workbook` a plain Open uses — and that reader parsed no column widths, no row heights, no frozen panes and no merged ranges. All four were written correctly and silently dropped on the way back in, so the loss was never specific to recovery: any save-then-reopen lost them too, and recovered work inherited that.
+- [x] Preserve imported non-buffer metadata and model state; no recovery format silently strips supported content. **Tables is done and was badly wrong.** Its snapshot is an xlsx package from `save_sheets_to_xlsx_bytes`, read back by the same `load_workbook` a plain Open uses — and that reader parsed no column widths, no row heights, no frozen panes and no merged ranges. All four were written correctly and silently dropped on the way back in, so the loss was never specific to recovery: any save-then-reopen lost them too, and recovered work inherited that.
       The gap survived because the tests that covered it were about the
       wrong program. `soffice_oracle.rs` has
       `column_widths_survive_calc_rewrite`, `frozen_panes_survive_calc_rewrite`
@@ -409,21 +409,87 @@ AutosaveSlot used to store bytes and metadata in separate atomic writes. Each wr
       all four directions (self and cross-format, both ways): rotation,
       slide background, the slide's master mapping, and that master's own
       background. Run styling's six carried fields were checked in #783's
-      wake and are clean too. What is left unaudited: image sizing and
-      aspect.
-      The row stays `[~]`, and the reason is the session that closed its
-      two named gaps rather than anything still on a list. Carrying the run
-      styling turned up three strips — a reader splitting one line in two,
-      a reader eating the space between two runs, a writer emitting a break
-      ODF collapses — and every one of them was live while the whole suite,
-      including thirty-five Impress-grounded oracle tests, was green. What
-      they had in common is that our writer and our reader agreed with each
-      other, so a round trip proved nothing. The row claims no format
-      silently strips supported content; three strips found in one sitting,
-      by probing rather than by a test failing, is not the evidence for
-      that claim. Flipping it wants a pass that goes looking for the same
-      shape elsewhere — every field a round trip could confirm while both
-      halves share a convention — rather than another feature landing.
+      wake and are clean too.
+      Finishing the sweep found a third: **a slide's name was destroyed by
+      every .pptx save.** `Slide::title` is the slide's name —
+      `draw:page/@draw:name` in ODF, `p:cSld/@name` in OOXML. The odp
+      writer had always written it. The pptx writer wrote the slide's
+      `p:cSld` *bare* while setting `name` on the master's and the layout's
+      a few lines above, and the pptx reader synthesised
+      `format!("Slide {n}")` without ever looking for the real one. So
+      slide names survived a .odp save and were destroyed by a .pptx one —
+      and pptx is the format an unsaved deck is snapshotted in, which makes
+      it this row's business exactly: crash recovery lost every slide name.
+      The fixture is why nothing saw it, and it is the fourth time:
+      `slide_of` sets `title: String::new()`, so every test in
+      `snapshot_fidelity.rs` was asking whether an *empty* name survived —
+      a question with the same answer whether the writer carries names or
+      not. (The others: the single-run styling test, #725's master mapping,
+      and the 16:9-only geometry fixtures.) The positional fallback is what
+      made it invisible rather than obvious — the reader returned a
+      plausible "Slide 1", so a round trip produced a title that merely
+      looked right.
+      Two further defects fell out of writing the tests for it, both found
+      by the tests rather than by reading:
+        * **Names were never unescaped.** `parse_c_sld_name` and the odp
+          `attr` helper both returned the raw attribute bytes, so a page
+          called `R&D <draft>` came back as `R&amp;D &lt;draft&gt;`. Latent
+          for every other attribute either reader touches — style names,
+          numbers, colours, where an entity never appears — and live for
+          names. Both now normalise, which is what the rest of the
+          codebase already did for `type` and rotation attributes.
+        * **An unnamed page came back nameless in odp and labelled in
+          pptx.** Both writers now omit the attribute rather than writing
+          it empty, and both readers fall back to the same positional
+          label. The odp fallback is applied where slides are assembled,
+          not in `parse_pages`, because that walker also reads master pages
+          and a master's title is its name — "Slide 3" is not a master.
+      Only the pptx -> odp direction is asserted against Impress, and that
+      choice was measured. Coming back the other way its pptx exporter
+      writes `<p:cSld>` with no name and the string appears nowhere in
+      `slide1.xml`, while an odp -> odp rewrite keeps it: Impress reads our
+      `draw:name` correctly and simply does not carry a page name into
+      pptx. Its export gap, the same as the master font in #733 — and the
+      opposite verdict to the speaker notes above, where the part was
+      present and we were the ones not reading it. Which side dropped it is
+      worth checking every time; the symptom looks identical.
+      That completes the sweep this row asked for. Every field of the model
+      has now been checked in all four directions: `Deck.slides` and
+      `.masters`, `Slide.title`, `.background`, `.notes`, `.master_idx`,
+      every `SlideObject` variant's geometry and rotation, a `Circle`'s
+      radius, an `Image`'s bytes and frame (including a frame stretched
+      against the image's own aspect, which must not be "corrected"), a
+      `TextBox`'s text and runs, `MasterSlide.name`, `.background`,
+      `.default_font` and `.shapes`, and `RunStyle`'s six carried fields.
+      Three strips were found and fixed; everything else was verified
+      rather than assumed.
+      **Why this row is now `[x]`, and what that claim does and does not
+      cover.** It was held at `[~]` after its two named gaps closed, on the
+      grounds that carrying the run styling had turned up three strips —
+      a reader splitting one line in two, a reader eating the space between
+      two runs, a writer emitting a break ODF collapses — every one of them
+      live while the whole suite, including thirty-five Impress-grounded
+      oracle tests, was green. What they had in common is that our writer
+      and our reader agreed with each other, so a round trip proved
+      nothing. Three strips found by probing rather than by a test failing
+      is not evidence for "no format silently strips supported content",
+      and the condition set for flipping was a pass over *every* field a
+      round trip could confirm while both halves share a convention.
+      That pass is the one recorded above. It covered every field of the
+      model in all four directions, found three more strips — the
+      coordinate scale, the speaker notes, the slide name — fixed each, and
+      verified the rest rather than assuming it. So the claim now rests on
+      measurement instead of on the absence of a failing test, which is
+      what the row was waiting for.
+      What it does not cover, stated so the `[x]` is not read wider than it
+      is: content the model does not represent at all — transitions,
+      animations, charts — is an opaque-preservation concern (ADR 0004),
+      not "supported content", and nothing here measured it. Two
+      asymmetries are known and deliberate: a trailing empty paragraph is
+      dropped in pptx and kept in odp, and a 4:3 deck is stretched into the
+      16:9 model space. And two losses belong to Impress's exporters rather
+      than to us — the master font (#733) and the page name — which no
+      change here can fix.
       One limitation, stated because a mutation found it rather than
       because it is comfortable: `document_font_description` and
       `master_for` are covered — five mutations of the resolver, the

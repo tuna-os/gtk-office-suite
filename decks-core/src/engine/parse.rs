@@ -746,7 +746,16 @@ pub fn read_pptx(path: &str) -> Result<Deck, String> {
         );
 
         slides.push(Slide {
-            title: format!("Slide {}", slide_index + 1),
+            // The name the slide carries, falling back to a positional
+            // label. The fallback is why the loss was invisible: the reader
+            // synthesised a plausible "Slide 1" and never looked for the
+            // real name, so a round trip produced a title that merely
+            // looked right. `parse_c_sld_name` already existed and was
+            // already used for masters.
+            title: parse_c_sld_name(&slide_xml)
+                .map(|n| n.trim().to_string())
+                .filter(|n| !n.is_empty())
+                .unwrap_or_else(|| format!("Slide {}", slide_index + 1)),
             background,
             objects,
             notes,
@@ -930,7 +939,14 @@ pub fn parse_c_sld_name(xml: &str) -> Option<String> {
                     .attributes()
                     .filter_map(|a| a.ok())
                     .find(|a| a.key.as_ref() == "name")
-                    .map(|a| a.value.to_string())
+                    // Normalised, not raw: a name containing `&` or `<` is
+                    // escaped in the attribute, and reading the bytes back
+                    // verbatim returns "R&amp;D" as the name itself.
+                    .and_then(|a| {
+                        a.normalized_value(quick_xml::XmlVersion::Implicit1_0)
+                            .ok()
+                            .map(|v| v.to_string())
+                    })
                     .filter(|n| !n.is_empty());
             }
             Event::Eof => break,
