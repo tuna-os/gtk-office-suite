@@ -6,16 +6,16 @@ with dependency-ordered issues and acceptance tests in
 
 > The post-v1 feature ledger below is retained as historical context. The
 > current product, interoperability, and confidence plan is
-> [Product and Quality Roadmap (2026-07-21)](PRODUCT-QUALITY-ROADMAP-2026-07.md).
+> [Product and Quality Roadmap (2026-07-21)](PRODUCT-QUALITY-ROADMAP-2026-07.md)
+> alongside the [September 2026 Daily-Driver Readiness Plan](readiness-2026-09/README.md).
 > That roadmap supersedes check-mark-only completeness and requires model,
-> GUI-journey, data-safety, and interoperability evidence.
+> GUI-journey, data-safety, crash-resilience, and interoperability evidence.
 
-State as of 2026-07-18: the surfacing wave, format-parity stragglers, and
-the oracle expansion are done (see PARITY.md for the row-by-row truth;
-TESTING.md for the coverage bar: 65 oracle tests, CommonMark 630/652,
-13 smoke, all gates green). What follows is what's left, ordered by
-leverage. Every item names its proving instrument — nothing lands
-without a test that fails first.
+State as of September 2026: the core feature set is complete across Letters,
+Tables, and Decks. Focus is now on daily-driver reliability, transactional atomic
+saves, crash/flake reduction, headless document conversion (`suite-convert`),
+and AT-SPI accessibility compliance. Every item names its proving instrument —
+nothing lands without a test that fails first.
 
 ## Now — next few sessions
 
