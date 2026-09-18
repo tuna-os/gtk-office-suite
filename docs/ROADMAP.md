@@ -87,6 +87,7 @@ without a test that fails first.
    the command palette ranks recently used actions first
    (`filter_entries_with_recency` in suite-common-core, unit-tested;
    MRU persisted per app in the `palette-recent` GSettings key).
+10. **Enterprise Accessibility & AT-SPI Roadmap** ([#768](https://github.com/tuna-os/gtk-office-suite/issues/768)): See [ACCESSIBILITY-ROADMAP.md](ACCESSIBILITY-ROADMAP.md) for Section 508 / EN 301 549 compliance, virtual child screen extent translation, and structural role annotations.
 
 ## Later — scoped by ADR 0003, executed 2026-07-18
 
