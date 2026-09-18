@@ -1728,7 +1728,14 @@ impl DecksWindow {
         let orphan = suite_common::autosave::AutosaveSlot::new(state_dir, orphan_id);
         let Some((bytes, meta)) = orphan.read() else { return false };
         let ext = if meta.kind == "odp" { "odp" } else { "pptx" };
-        let tmp = std::env::temp_dir().join(format!("decks-recovery-{}.{ext}", std::process::id()));
+        let Ok(tmp_file) = tempfile::Builder::new()
+            .prefix(&format!("decks-recovery-{}-", std::process::id()))
+            .suffix(&format!(".{ext}"))
+            .tempfile()
+        else {
+            return false;
+        };
+        let tmp = tmp_file.path().to_path_buf();
         if std::fs::write(&tmp, &bytes).is_err() {
             return false;
         }
