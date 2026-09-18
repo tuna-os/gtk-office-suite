@@ -64,6 +64,40 @@ fn norm(s: &str) -> String {
     s.trim_start_matches('\u{feff}').replace("\r\n", "\n").trim_end_matches('\n').to_string()
 }
 
+/// The paragraph carrying `want`, with every paragraph in the panic.
+///
+/// A converter is free to pad a document with empty paragraphs, and
+/// LibreOffice's do differ between builds, so `paragraphs[0]` is not
+/// reliably the paragraph a fixture wrote — an empty pad would answer
+/// every style question with its defaults and read as a lost property.
+/// Looking the paragraph up by its text asks about the one we authored,
+/// and printing the lot makes a real loss diagnosable from a CI log.
+fn para_with_text<'a>(doc: &'a Document, want: &str) -> &'a Paragraph {
+    doc.paragraphs
+        .iter()
+        .find(|p| p.runs.iter().map(|r| r.text.as_str()).collect::<String>().contains(want))
+        .unwrap_or_else(|| {
+            let seen: Vec<String> = doc
+                .paragraphs
+                .iter()
+                .map(|p| p.runs.iter().map(|r| r.text.as_str()).collect())
+                .collect();
+            panic!("no paragraph contains {want:?}; paragraphs: {seen:?}")
+        })
+}
+
+/// The lookup has to skip a pad, which is the whole reason it exists.
+#[test]
+fn para_with_text_skips_an_empty_pad() {
+    let mut d = Document::from_plain_text("");
+    d.paragraphs.push(Paragraph {
+        style: ParaStyle { left_indent_pt: 36.0, ..Default::default() },
+        runs: vec![Run::plain("wanted")],
+    });
+    assert!(d.paragraphs[0].runs.iter().all(|r| r.text.is_empty()), "fixture needs a leading pad");
+    assert!((para_with_text(&d, "wanted").style.left_indent_pt - 36.0).abs() < 0.01);
+}
+
 fn oracle_text_round_trip(doc: &Document) {
     let Some(bin) = require_or_skip() else { return };
     let dir = tempfile::tempdir().unwrap();
@@ -729,7 +763,7 @@ fn indents_and_spacing_survive_a_conversion_between_the_two_formats() {
     let dp = dir.path().join("x.docx");
     assert!(dp.exists(), "soffice did not convert the odt");
     let rt = docx::read(dp.to_str().unwrap()).expect("read converted docx");
-    let s = &rt.paragraphs[0].style;
+    let s = &para_with_text(&rt, "indented and spaced").style;
     assert!((s.left_indent_pt - 36.0).abs() < 1.0, "odt->docx left indent: {}", s.left_indent_pt);
     assert!((s.space_before_pt - 12.0).abs() < 1.0, "odt->docx space before: {}", s.space_before_pt);
     assert!((s.space_after_pt - 18.0).abs() < 1.0, "odt->docx space after: {}", s.space_after_pt);
@@ -741,7 +775,7 @@ fn indents_and_spacing_survive_a_conversion_between_the_two_formats() {
     let op2 = dir.path().join("y.odt");
     assert!(op2.exists(), "soffice did not convert the docx");
     let rt = letters_core::odt::read(op2.to_str().unwrap()).expect("read converted odt");
-    let s = &rt.paragraphs[0].style;
+    let s = &para_with_text(&rt, "indented and spaced").style;
     assert!((s.left_indent_pt - 36.0).abs() < 1.0, "docx->odt left indent: {}", s.left_indent_pt);
     assert!((s.space_before_pt - 12.0).abs() < 1.0, "docx->odt space before: {}", s.space_before_pt);
     assert!((s.space_after_pt - 18.0).abs() < 1.0, "docx->odt space after: {}", s.space_after_pt);
