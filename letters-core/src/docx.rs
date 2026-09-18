@@ -8,18 +8,111 @@
 
 use crate::model::{Alignment, Document, ListKind, PageGeometry, Paragraph, ParaStyle, Run, RunStyle};
 
+/// A body paragraph's strict-OOXML horizontal indents, in twips.
+#[derive(Clone, Copy, Default)]
+struct StrictInd {
+    start_twips: Option<f64>,
+    end_twips: Option<f64>,
+}
+
+/// Left/right indents spelled the strict-OOXML way, per body paragraph.
+///
+/// ISO/IEC 29500 strict names the horizontal indents `w:start`/`w:end`
+/// rather than the transitional `w:left`/`w:right`, and LibreOffice's
+/// "Office Open XML Text" export filter writes the strict spelling — as
+/// does anything else targeting that conformance class. rdocx reads only
+/// the transitional attributes, so those indents arrive as "absent" and
+/// the paragraph reads as unindented. Everything else in `w:ind` is
+/// already shared between the two spellings (`w:firstLine`, `w:hanging`),
+/// as is `w:jc`'s `start`/`end`, which rdocx does map.
+///
+/// The vector is positional: one entry per body-level `w:p`, in document
+/// order, so the caller can pair it with `doc.paragraphs()`. Paragraphs
+/// inside `w:tbl` are skipped because rdocx exposes those separately;
+/// a strict indent inside a table cell stays unread.
+///
+/// Returns the pairs in twips. Any failure to open or scan the part
+/// yields an empty vector, which the caller treats as "nothing to add".
+fn strict_indents(path: &str) -> Vec<StrictInd> {
+    fn scan(path: &str) -> Result<Vec<StrictInd>, Box<dyn std::error::Error>> {
+        let mut zip = zip::ZipArchive::new(std::fs::File::open(path)?)?;
+        let mut xml = String::new();
+        std::io::Read::read_to_string(&mut zip.by_name("word/document.xml")?, &mut xml)?;
+
+        let mut reader = quick_xml::Reader::from_str(&xml);
+        reader.config_mut().trim_text(true);
+        let mut out: Vec<StrictInd> = Vec::new();
+        let mut table_depth = 0usize;
+        loop {
+            match reader.read_event()? {
+                quick_xml::events::Event::Eof => break,
+                quick_xml::events::Event::Start(e) => match e.name().as_ref() {
+                    "w:tbl" => table_depth += 1,
+                    "w:p" if table_depth == 0 => out.push(StrictInd::default()),
+                    _ => {}
+                },
+                quick_xml::events::Event::End(e) => {
+                    if e.name().as_ref() == "w:tbl" {
+                        table_depth = table_depth.saturating_sub(1);
+                    }
+                }
+                quick_xml::events::Event::Empty(e) => match e.name().as_ref() {
+                    // A `w:p` with nothing in it is still a paragraph.
+                    "w:p" if table_depth == 0 => out.push(StrictInd::default()),
+                    "w:ind" if table_depth == 0 => {
+                        let Some(last) = out.last_mut() else { continue };
+                        for a in e.attributes().with_checks(false).flatten() {
+                            let v = || {
+                                a.value.trim().parse::<f64>().ok()
+                            };
+                            match a.key.as_ref() {
+                                "w:start" => last.start_twips = v(),
+                                "w:end" => last.end_twips = v(),
+                                _ => {}
+                            }
+                        }
+                    }
+                    _ => {}
+                },
+                _ => {}
+            }
+        }
+        Ok(out)
+    }
+    scan(path).unwrap_or_default()
+}
+
 /// Read a .docx file into a Document.
 pub fn read(path: &str) -> Result<Document, String> {
     let doc = rdocx::Document::open(path)
         .map_err(|e| format!("Cannot open .docx {}: {}", path, e))?;
 
+    // Indents rdocx cannot see because they use the strict spelling. The
+    // scan is positional, so it is only trusted when it found exactly as
+    // many body paragraphs as rdocx did; otherwise the two disagree about
+    // what a paragraph is and pairing them would misattribute an indent.
+    let body = doc.paragraphs();
+    let strict = strict_indents(path);
+    let strict = (strict.len() == body.len()).then_some(strict);
+
     let mut paragraphs = Vec::new();
-    for p in doc.paragraphs() {
+    for (i, p) in body.iter().enumerate() {
         // Decorative rules (LibreOffice's HorizontalLine style) carry no text.
         if p.style_id() == Some("HorizontalLine") && p.text().is_empty() {
             continue;
         }
-        paragraphs.push(map_paragraph(&doc, &p));
+        let mut para = map_paragraph(&doc, p);
+        if let Some(&StrictInd { start_twips, end_twips }) = strict.as_ref().and_then(|s| s.get(i)) {
+            // Transitional wins where both are present: it is what rdocx
+            // read, and a file carrying both is already self-contradictory.
+            if para.style.left_indent_pt == 0.0 {
+                if let Some(tw) = start_twips { para.style.left_indent_pt = tw / 20.0; }
+            }
+            if para.style.right_indent_pt == 0.0 {
+                if let Some(tw) = end_twips { para.style.right_indent_pt = tw / 20.0; }
+            }
+        }
+        paragraphs.push(para);
     }
 
     // Table cells become paragraphs tagged with (table, row, col) — the
@@ -195,6 +288,31 @@ pub fn write(doc: &Document, path: impl AsRef<std::path::Path>) -> Result<(), St
         }
         if (para.style.line_spacing - 1.0).abs() > 0.01 {
             p = p.line_spacing_multiple(para.style.line_spacing as f64);
+        }
+        // Paragraph indents and spacing. The odt writer has carried these
+        // since it was written; this one never emitted them at all, so a
+        // document with an indented or spaced paragraph lost that on every
+        // .docx save while keeping it on .odt. rdocx has had the builders
+        // the whole time — they were simply never called.
+        //
+        // Only non-zero values are written: OOXML treats an absent `w:ind`
+        // or `w:spacing` as "inherit from the style", and writing an
+        // explicit zero is a different claim, one that overrides a style's
+        // own indent with nothing.
+        if para.style.left_indent_pt != 0.0 {
+            p = p.indent_left(rdocx::Length::pt(para.style.left_indent_pt));
+        }
+        if para.style.right_indent_pt != 0.0 {
+            p = p.indent_right(rdocx::Length::pt(para.style.right_indent_pt));
+        }
+        if para.style.first_line_indent_pt != 0.0 {
+            p = p.first_line_indent(rdocx::Length::pt(para.style.first_line_indent_pt));
+        }
+        if para.style.space_before_pt != 0.0 {
+            p = p.space_before(rdocx::Length::pt(para.style.space_before_pt));
+        }
+        if para.style.space_after_pt != 0.0 {
+            p = p.space_after(rdocx::Length::pt(para.style.space_after_pt));
         }
         p = match para.style.alignment {
             Alignment::Left => p,
@@ -408,6 +526,15 @@ fn map_paragraph(doc: &rdocx::Document, p: &rdocx::ParagraphRef<'_>) -> Paragrap
             list_level,
             named_style, page_break_before,
             line_spacing: p.line_spacing_multiple().map(|m| m as f32).unwrap_or(1.0),
+            // Absent means "inherit", which for this model is the zero the
+            // default already carries — so an unset indent stays unset
+            // rather than becoming an explicit zero that would override a
+            // style.
+            left_indent_pt: p.indent_left().map(|l| l.to_pt()).unwrap_or(0.0),
+            right_indent_pt: p.indent_right().map(|l| l.to_pt()).unwrap_or(0.0),
+            first_line_indent_pt: p.first_line_indent().map(|l| l.to_pt()).unwrap_or(0.0),
+            space_before_pt: p.space_before().map(|l| l.to_pt()).unwrap_or(0.0),
+            space_after_pt: p.space_after().map(|l| l.to_pt()).unwrap_or(0.0),
             ..Default::default()
         },
         runs,

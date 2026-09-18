@@ -373,3 +373,114 @@ fn footnote_round_trips_through_docx() {
         .any(|r| r.style.footnote == Some(0));
     assert!(has_ref, "footnote reference lost: {:?}", rt.paragraphs[0].runs);
 }
+
+/// Paragraph indents and spacing survive a docx save.
+///
+/// The docx writer emitted neither, while the odt writer had carried both
+/// since it was written — so the same document kept its layout as .odt and
+/// lost it as .docx, silently. rdocx had the builders the whole time; they
+/// were simply never called.
+#[test]
+fn indents_and_spacing_survive_a_docx_round_trip() {
+    let mut doc = Document::new();
+    doc.paragraphs[0] = Paragraph {
+        style: ParaStyle {
+            left_indent_pt: 36.0,
+            right_indent_pt: 18.0,
+            first_line_indent_pt: 24.0,
+            space_before_pt: 12.0,
+            space_after_pt: 18.0,
+            ..Default::default()
+        },
+        runs: vec![Run::plain("indented and spaced")],
+    };
+
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("layout.docx");
+    letters_core::docx::write(&doc, path.to_str().unwrap()).unwrap();
+    let rt = letters_core::docx::read(path.to_str().unwrap()).unwrap();
+    let s = &rt.paragraphs[0].style;
+
+    assert_eq!(s.left_indent_pt, 36.0, "left indent");
+    assert_eq!(s.right_indent_pt, 18.0, "right indent");
+    assert_eq!(s.first_line_indent_pt, 24.0, "first-line indent");
+    assert_eq!(s.space_before_pt, 12.0, "space before");
+    assert_eq!(s.space_after_pt, 18.0, "space after");
+}
+
+/// A paragraph that asks for no indent writes no `w:ind` at all.
+///
+/// OOXML reads an absent `w:ind` as "inherit from the style" and an
+/// explicit zero as "override the style with nothing", so writing zeros
+/// unconditionally would flatten the indent of every styled paragraph.
+#[test]
+fn an_unindented_paragraph_writes_no_indent_at_all() {
+    let doc = Document::from_plain_text("plain");
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("plain.docx");
+    letters_core::docx::write(&doc, path.to_str().unwrap()).unwrap();
+
+    let f = std::fs::File::open(&path).unwrap();
+    let mut zip = zip::ZipArchive::new(f).unwrap();
+    let mut xml = String::new();
+    {
+        use std::io::Read;
+        zip.by_name("word/document.xml").unwrap().read_to_string(&mut xml).unwrap();
+    }
+    assert!(!xml.contains("<w:ind"), "an explicit w:ind was written for an unindented paragraph");
+    assert!(
+        !xml.contains("<w:spacing w:before=\"0\""),
+        "an explicit zero spacing was written"
+    );
+}
+
+/// Strict-OOXML indents, which name the axis rather than the side.
+///
+/// ISO/IEC 29500 strict spells the horizontal indents `w:start`/`w:end`;
+/// the transitional schema spells them `w:left`/`w:right`. Both are real
+/// .docx — LibreOffice's "Office Open XML Text" filter writes the strict
+/// pair — and the reader used to see only the transitional one, so every
+/// indent in a strict file read as zero. This rewrites our own output
+/// into the strict spelling so the guard does not need LibreOffice; the
+/// oracle covers the same ground against the real exporter.
+#[test]
+fn strict_ooxml_indents_are_read() {
+    let mut d = Document::from_plain_text("");
+    d.paragraphs[0] = Paragraph {
+        style: ParaStyle {
+            left_indent_pt: 36.0,
+            right_indent_pt: 24.0,
+            ..Default::default()
+        },
+        runs: vec![Run::plain("indented")],
+    };
+    let dir = tempfile::tempdir().unwrap();
+    let src = dir.path().join("transitional.docx");
+    docx::write(&d, &src).expect("write docx");
+
+    // Re-spell the indents and repack.
+    let strict = dir.path().join("strict.docx");
+    {
+        let mut zin = zip::ZipArchive::new(std::fs::File::open(&src).unwrap()).unwrap();
+        let mut zout = zip::ZipWriter::new(std::fs::File::create(&strict).unwrap());
+        for i in 0..zin.len() {
+            let mut f = zin.by_index(i).unwrap();
+            let name = f.name().to_string();
+            let mut buf = Vec::new();
+            std::io::Read::read_to_end(&mut f, &mut buf).unwrap();
+            if name == "word/document.xml" {
+                let xml = String::from_utf8(buf).unwrap();
+                assert!(xml.contains("w:left="), "fixture needs a transitional indent: {xml}");
+                buf = xml.replace("w:left=", "w:start=").replace("w:right=", "w:end=").into_bytes();
+            }
+            zout.start_file(name, zip::write::SimpleFileOptions::default()).unwrap();
+            std::io::Write::write_all(&mut zout, &buf).unwrap();
+        }
+        zout.finish().unwrap();
+    }
+
+    let rt = docx::read(strict.to_str().unwrap()).expect("read strict docx");
+    let s = &rt.paragraphs[0].style;
+    assert!((s.left_indent_pt - 36.0).abs() < 0.01, "strict left indent: {}", s.left_indent_pt);
+    assert!((s.right_indent_pt - 24.0).abs() < 0.01, "strict right indent: {}", s.right_indent_pt);
+}

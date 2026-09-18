@@ -64,6 +64,40 @@ fn norm(s: &str) -> String {
     s.trim_start_matches('\u{feff}').replace("\r\n", "\n").trim_end_matches('\n').to_string()
 }
 
+/// The paragraph carrying `want`, with every paragraph in the panic.
+///
+/// A converter is free to pad a document with empty paragraphs, and
+/// LibreOffice's do differ between builds, so `paragraphs[0]` is not
+/// reliably the paragraph a fixture wrote — an empty pad would answer
+/// every style question with its defaults and read as a lost property.
+/// Looking the paragraph up by its text asks about the one we authored,
+/// and printing the lot makes a real loss diagnosable from a CI log.
+fn para_with_text<'a>(doc: &'a Document, want: &str) -> &'a Paragraph {
+    doc.paragraphs
+        .iter()
+        .find(|p| p.runs.iter().map(|r| r.text.as_str()).collect::<String>().contains(want))
+        .unwrap_or_else(|| {
+            let seen: Vec<String> = doc
+                .paragraphs
+                .iter()
+                .map(|p| p.runs.iter().map(|r| r.text.as_str()).collect())
+                .collect();
+            panic!("no paragraph contains {want:?}; paragraphs: {seen:?}")
+        })
+}
+
+/// The lookup has to skip a pad, which is the whole reason it exists.
+#[test]
+fn para_with_text_skips_an_empty_pad() {
+    let mut d = Document::from_plain_text("");
+    d.paragraphs.push(Paragraph {
+        style: ParaStyle { left_indent_pt: 36.0, ..Default::default() },
+        runs: vec![Run::plain("wanted")],
+    });
+    assert!(d.paragraphs[0].runs.iter().all(|r| r.text.is_empty()), "fixture needs a leading pad");
+    assert!((para_with_text(&d, "wanted").style.left_indent_pt - 36.0).abs() < 0.01);
+}
+
 fn oracle_text_round_trip(doc: &Document) {
     let Some(bin) = require_or_skip() else { return };
     let dir = tempfile::tempdir().unwrap();
@@ -661,4 +695,98 @@ fn footnote_survives_writer_rewrite() {
         rt.paragraphs.iter().any(|p| p.runs.iter().any(|r| r.style.footnote.is_some())),
         "footnote reference lost after Writer rewrite"
     );
+}
+
+/// Paragraph spacing has to be written where ODF says it lives.
+///
+/// The writer emitted `fo:space-before`/`fo:space-after`, which the reader
+/// here understood and LibreOffice does not — ODF spells paragraph
+/// spacing `fo:margin-top`/`fo:margin-bottom`, the same XSL-FO properties
+/// the page geometry already used. So the self round trip passed on an
+/// attribute nothing else reads, and the spacing was gone the moment the
+/// file reached Writer.
+///
+/// This asserts the bytes because it is a claim about the package rather
+/// than about our own reader; the conversion below is what makes it a
+/// claim about a real consumer.
+#[test]
+fn odt_paragraph_spacing_uses_the_attribute_odf_defines() {
+    let mut d = Document::from_plain_text("");
+    d.paragraphs[0] = Paragraph {
+        style: ParaStyle { space_before_pt: 12.0, space_after_pt: 18.0, ..Default::default() },
+        runs: vec![Run::plain("spaced")],
+    };
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("spacing.odt");
+    letters_core::odt::write(&d, path.to_str().unwrap()).expect("write odt");
+
+    let f = std::fs::File::open(&path).unwrap();
+    let mut zip = zip::ZipArchive::new(f).unwrap();
+    let mut xml = String::new();
+    {
+        use std::io::Read;
+        zip.by_name("content.xml").unwrap().read_to_string(&mut xml).unwrap();
+    }
+    assert!(xml.contains("fo:margin-top=\"12.00pt\""), "spacing before: {xml}");
+    assert!(xml.contains("fo:margin-bottom=\"18.00pt\""), "spacing after");
+    assert!(
+        !xml.contains("fo:space-before"),
+        "still writing the attribute only this reader understands"
+    );
+}
+
+/// Indents and spacing across a format boundary, in both directions.
+///
+/// The existing oracle tests here cover styling, lists, headings, page
+/// geometry and more — but not paragraph indents or spacing, so neither
+/// the docx writer's silence nor the odt writer's wrong attribute had
+/// anything asking about them.
+#[test]
+fn indents_and_spacing_survive_a_conversion_between_the_two_formats() {
+    let Some(bin) = require_or_skip() else { return };
+    let mut d = Document::from_plain_text("");
+    d.paragraphs[0] = Paragraph {
+        style: ParaStyle {
+            left_indent_pt: 36.0,
+            space_before_pt: 12.0,
+            space_after_pt: 18.0,
+            ..Default::default()
+        },
+        runs: vec![Run::plain("indented and spaced")],
+    };
+    let dir = tempfile::tempdir().unwrap();
+
+    // odt -> Writer -> docx, through each docx filter by name.
+    //
+    // A bare `--convert-to docx` lets LibreOffice choose between its two
+    // docx exporters, and the choice differs between installations: the
+    // transitional filter writes `w:ind w:left`, the strict one
+    // `w:ind w:start`. Naming both makes this test ask the same question
+    // everywhere instead of whichever spelling the local build prefers.
+    for (i, filter) in ["docx:MS Word 2007 XML", "docx:Office Open XML Text"].iter().enumerate() {
+        let sub = dir.path().join(format!("f{i}"));
+        std::fs::create_dir_all(&sub).unwrap();
+        let op = sub.join("x.odt");
+        letters_core::odt::write(&d, op.to_str().unwrap()).expect("write odt");
+        let _ = soffice_convert(bin, &op, filter).ok();
+        let dp = sub.join("x.docx");
+        assert!(dp.exists(), "soffice did not convert the odt with {filter}");
+        let rt = docx::read(dp.to_str().unwrap()).expect("read converted docx");
+        let s = &para_with_text(&rt, "indented and spaced").style;
+        assert!((s.left_indent_pt - 36.0).abs() < 1.0, "{filter} left indent: {}", s.left_indent_pt);
+        assert!((s.space_before_pt - 12.0).abs() < 1.0, "{filter} space before: {}", s.space_before_pt);
+        assert!((s.space_after_pt - 18.0).abs() < 1.0, "{filter} space after: {}", s.space_after_pt);
+    }
+
+    // docx -> Writer -> odt
+    let dp2 = dir.path().join("y.docx");
+    docx::write(&d, &dp2).expect("write docx");
+    let _ = soffice_convert(bin, &dp2, "odt").ok();
+    let op2 = dir.path().join("y.odt");
+    assert!(op2.exists(), "soffice did not convert the docx");
+    let rt = letters_core::odt::read(op2.to_str().unwrap()).expect("read converted odt");
+    let s = &para_with_text(&rt, "indented and spaced").style;
+    assert!((s.left_indent_pt - 36.0).abs() < 1.0, "docx->odt left indent: {}", s.left_indent_pt);
+    assert!((s.space_before_pt - 12.0).abs() < 1.0, "docx->odt space before: {}", s.space_before_pt);
+    assert!((s.space_after_pt - 18.0).abs() < 1.0, "docx->odt space after: {}", s.space_after_pt);
 }
