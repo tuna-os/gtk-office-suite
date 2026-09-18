@@ -139,6 +139,27 @@ fn para_style_props(st: &ParaStyle) -> String {
     props
 }
 
+/// Child elements of `style:paragraph-properties`, as opposed to its
+/// attributes.
+///
+/// ODF puts tab stops in a `style:tab-stops` child rather than an
+/// attribute, so a paragraph style carrying them cannot be written as a
+/// self-closing element. Returns the empty string when there are none,
+/// which keeps every other style exactly as it was.
+fn para_style_children(st: &ParaStyle) -> String {
+    if st.tab_stops_pt.is_empty() {
+        return String::new();
+    }
+    let mut out = String::from("<style:tab-stops>");
+    for pos in &st.tab_stops_pt {
+        // `style:type` defaults to left, which is the only kind the model
+        // has; a position is all a stop needs.
+        out.push_str(&format!("<style:tab-stop style:position=\"{pos:.2}pt\"/>"));
+    }
+    out.push_str("</style:tab-stops>");
+    out
+}
+
 fn content_xml(doc: &Document) -> String {
     let run_styles = collect_run_styles(doc);
 
@@ -152,26 +173,34 @@ fn content_xml(doc: &Document) -> String {
         ));
     }
     // Paragraph automatic styles: one per used (alignment, break) combo.
-    let mut para_autos: Vec<String> = Vec::new();
+    let mut para_autos: Vec<(String, String)> = Vec::new();
     let mut para_style_idx: Vec<Option<usize>> = Vec::new();
     for p in &doc.paragraphs {
         let props = para_style_props(&p.style);
-        if props.is_empty() {
+        let kids = para_style_children(&p.style);
+        if props.is_empty() && kids.is_empty() {
             para_style_idx.push(None);
             continue;
         }
-        let pos = para_autos.iter().position(|x| *x == props).unwrap_or_else(|| {
-            para_autos.push(props.clone());
+        // Keyed on the whole element: two paragraphs share a style only
+        // when their attributes *and* their tab stops match.
+        let elem = (props, kids);
+        let pos = para_autos.iter().position(|x| *x == elem).unwrap_or_else(|| {
+            para_autos.push(elem.clone());
             para_autos.len() - 1
         });
         para_style_idx.push(Some(pos));
     }
-    for (i, props) in para_autos.iter().enumerate() {
+    for (i, (props, kids)) in para_autos.iter().enumerate() {
+        let body = if kids.is_empty() {
+            format!("<style:paragraph-properties{props}/>")
+        } else {
+            format!("<style:paragraph-properties{props}>{kids}</style:paragraph-properties>")
+        };
         auto.push_str(&format!(
-            "<style:style style:name=\"P{}\" style:family=\"paragraph\">\
-             <style:paragraph-properties{}/></style:style>",
+            "<style:style style:name=\"P{}\" style:family=\"paragraph\">{}</style:style>",
             i + 1,
-            props
+            body
         ));
     }
     auto.push_str(
@@ -395,7 +424,7 @@ struct AutoStyles {
 }
 
 /// Paragraph-level values read off one automatic style. Lengths are points.
-#[derive(Clone, Copy, Debug, Default)]
+#[derive(Clone, Debug, Default)]
 struct AutoParaStyle {
     alignment: Alignment,
     page_break_before: bool,
@@ -405,6 +434,8 @@ struct AutoParaStyle {
     left_indent_pt: f64,
     right_indent_pt: f64,
     first_line_indent_pt: f64,
+    /// Positions of `style:tab-stops` children, in document order.
+    tab_stops_pt: Vec<f64>,
 }
 
 fn parse_auto_styles(xml: &str) -> AutoStyles {
@@ -526,7 +557,23 @@ fn parse_auto_styles(xml: &str) -> AutoStyles {
                                 left_indent_pt: length("fo:margin-left"),
                                 right_indent_pt: length("fo:margin-right"),
                                 first_line_indent_pt: length("fo:text-indent"),
+                                // Filled from the `style:tab-stop`
+                                // children that follow this element.
+                                tab_stops_pt: Vec::new(),
                             });
+                        }
+                    }
+                    // A tab stop is a child of the paragraph properties
+                    // just inserted above, so the entry is already there.
+                    "style:tab-stop" => {
+                        if let (Some(name), "paragraph") = (cur_name.clone(), cur_family.as_str()) {
+                            if let Some(pos) =
+                                attr_val(&e, "style:position").and_then(|v| parse_length_pt(&v))
+                            {
+                                if let Some(st) = out.para.get_mut(&name) {
+                                    st.tab_stops_pt.push(pos);
+                                }
+                            }
                         }
                     }
                     _ => {}
@@ -669,6 +716,7 @@ pub fn read(path: &str) -> Result<Document, String> {
                             style.left_indent_pt = auto_para.left_indent_pt;
                             style.right_indent_pt = auto_para.right_indent_pt;
                             style.first_line_indent_pt = auto_para.first_line_indent_pt;
+                            style.tab_stops_pt = auto_para.tab_stops_pt.clone();
                         }
                         // Direct built-in name, or an automatic style
                         // inheriting from one (LO's rewrite pattern).
@@ -1001,6 +1049,47 @@ mod tests {
         assert_eq!(
             rt.paragraphs[0].runs.iter().filter_map(|r| r.style.footnote).collect::<Vec<_>>(),
             vec![0, 1]
+        );
+    }
+
+    /// Tab stops, which ODF puts in a child element of the paragraph
+    /// properties rather than an attribute.
+    ///
+    /// Neither writer persisted these, so a paragraph's stops were lost
+    /// on every save in both formats. Because `style:tab-stops` is a
+    /// child, a paragraph carrying stops cannot be written as a
+    /// self-closing `style:paragraph-properties` — which is what this
+    /// writer emitted for every style it had.
+    #[test]
+    fn tab_stops_survive() {
+        let mut d = Document::from_plain_text("tabbed");
+        d.paragraphs[0].style.tab_stops_pt = vec![36.0, 108.0];
+        let rt = round_trip(&d);
+        assert_eq!(rt.paragraphs[0].style.tab_stops_pt.len(), 2, "stops lost");
+        for (got, want) in rt.paragraphs[0].style.tab_stops_pt.iter().zip([36.0, 108.0]) {
+            assert!((got - want).abs() < 0.01, "stop {got} != {want}");
+        }
+    }
+
+    /// Stops belong to the paragraph that declared them.
+    ///
+    /// Paragraph automatic styles are deduplicated, and the key used to
+    /// be the attribute string alone — which every paragraph here shares.
+    /// Two paragraphs with different stops would then have collapsed onto
+    /// one style and both read back with the first one's stops.
+    #[test]
+    fn different_tab_stops_do_not_share_one_style() {
+        let mut d = Document::from_plain_text("first\nsecond");
+        d.paragraphs[0].style.tab_stops_pt = vec![36.0];
+        d.paragraphs[1].style.tab_stops_pt = vec![144.0];
+        let rt = round_trip(&d);
+        assert_eq!(rt.paragraphs[0].style.tab_stops_pt.len(), 1);
+        assert_eq!(rt.paragraphs[1].style.tab_stops_pt.len(), 1);
+        assert!((rt.paragraphs[0].style.tab_stops_pt[0] - 36.0).abs() < 0.01);
+        assert!(
+            (rt.paragraphs[1].style.tab_stops_pt[0] - 144.0).abs() < 0.01,
+            "second paragraph got the first one's stops: {:?}",
+            rt.paragraphs[1].style.tab_stops_pt
         );
     }
 

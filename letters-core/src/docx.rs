@@ -8,14 +8,19 @@
 
 use crate::model::{Alignment, Document, ListKind, PageGeometry, Paragraph, ParaStyle, Run, RunStyle};
 
-/// A body paragraph's strict-OOXML horizontal indents, in twips.
-#[derive(Clone, Copy, Default)]
-struct StrictInd {
+/// The body-paragraph properties rdocx does not hand back, in twips.
+///
+/// Two unrelated gaps share one scan of `word/document.xml`: the
+/// strict-OOXML indents rdocx never parses, and the tab stops it parses
+/// but exposes only as a count (`tab_stop_count`), with no positions.
+#[derive(Clone, Default)]
+struct RawPara {
     start_twips: Option<f64>,
     end_twips: Option<f64>,
+    tab_twips: Vec<f64>,
 }
 
-/// Left/right indents spelled the strict-OOXML way, per body paragraph.
+/// Per body paragraph: strict-spelled indents and tab-stop positions.
 ///
 /// ISO/IEC 29500 strict names the horizontal indents `w:start`/`w:end`
 /// rather than the transitional `w:left`/`w:right`, and LibreOffice's
@@ -33,32 +38,63 @@ struct StrictInd {
 ///
 /// Returns the pairs in twips. Any failure to open or scan the part
 /// yields an empty vector, which the caller treats as "nothing to add".
-fn strict_indents(path: &str) -> Vec<StrictInd> {
-    fn scan(path: &str) -> Result<Vec<StrictInd>, Box<dyn std::error::Error>> {
+fn raw_paragraph_props(path: &str) -> Vec<RawPara> {
+    fn scan(path: &str) -> Result<Vec<RawPara>, Box<dyn std::error::Error>> {
         let mut zip = zip::ZipArchive::new(std::fs::File::open(path)?)?;
         let mut xml = String::new();
         std::io::Read::read_to_string(&mut zip.by_name("word/document.xml")?, &mut xml)?;
 
         let mut reader = quick_xml::Reader::from_str(&xml);
         reader.config_mut().trim_text(true);
-        let mut out: Vec<StrictInd> = Vec::new();
+        let mut out: Vec<RawPara> = Vec::new();
         let mut table_depth = 0usize;
+        // `w:tab` means two different things: a stop inside `w:tabs`, and
+        // a tab character inside a run. Only the former has a position,
+        // so the flag is what keeps a tabbed line from inventing stops.
+        let mut in_tabs = false;
         loop {
             match reader.read_event()? {
                 quick_xml::events::Event::Eof => break,
                 quick_xml::events::Event::Start(e) => match e.name().as_ref() {
                     "w:tbl" => table_depth += 1,
-                    "w:p" if table_depth == 0 => out.push(StrictInd::default()),
+                    "w:tabs" => in_tabs = true,
+                    "w:p" if table_depth == 0 => out.push(RawPara::default()),
                     _ => {}
                 },
-                quick_xml::events::Event::End(e) => {
-                    if e.name().as_ref() == "w:tbl" {
-                        table_depth = table_depth.saturating_sub(1);
-                    }
-                }
+                quick_xml::events::Event::End(e) => match e.name().as_ref() {
+                    "w:tbl" => table_depth = table_depth.saturating_sub(1),
+                    "w:tabs" => in_tabs = false,
+                    _ => {}
+                },
                 quick_xml::events::Event::Empty(e) => match e.name().as_ref() {
                     // A `w:p` with nothing in it is still a paragraph.
-                    "w:p" if table_depth == 0 => out.push(StrictInd::default()),
+                    "w:p" if table_depth == 0 => out.push(RawPara::default()),
+                    "w:tab" if in_tabs && table_depth == 0 => {
+                        let Some(last) = out.last_mut() else { continue };
+                        let mut pos = None;
+                        let mut val = None;
+                        for a in e.attributes().with_checks(false).flatten() {
+                            match a.key.as_ref() {
+                                "w:pos" => pos = a.value.trim().parse::<f64>().ok(),
+                                "w:val" => val = Some(a.value.trim().to_ascii_lowercase()),
+                                _ => {}
+                            }
+                        }
+                        // `w:val` decides whether this is a stop at all.
+                        // `clear` *removes* an inherited stop at that
+                        // position — LibreOffice writes one to drop the
+                        // 2cm default — and `bar`/`num` are a rule and a
+                        // list's numbering gap, not user tab stops. An
+                        // allowlist keeps each of those from arriving as
+                        // a phantom stop the document never had.
+                        let keep = matches!(
+                            val.as_deref().unwrap_or("left"),
+                            "left" | "start" | "center" | "centre" | "right" | "end" | "decimal"
+                        );
+                        if let (Some(v), true) = (pos, keep) {
+                            last.tab_twips.push(v);
+                        }
+                    }
                     "w:ind" if table_depth == 0 => {
                         let Some(last) = out.last_mut() else { continue };
                         for a in e.attributes().with_checks(false).flatten() {
@@ -87,13 +123,14 @@ pub fn read(path: &str) -> Result<Document, String> {
     let doc = rdocx::Document::open(path)
         .map_err(|e| format!("Cannot open .docx {}: {}", path, e))?;
 
-    // Indents rdocx cannot see because they use the strict spelling. The
-    // scan is positional, so it is only trusted when it found exactly as
-    // many body paragraphs as rdocx did; otherwise the two disagree about
-    // what a paragraph is and pairing them would misattribute an indent.
+    // Paragraph properties rdocx cannot hand back: strict-spelled indents
+    // and tab-stop positions. The scan is positional, so it is only
+    // trusted when it found exactly as many body paragraphs as rdocx did;
+    // otherwise the two disagree about what a paragraph is and pairing
+    // them would misattribute a property to its neighbour.
     let body = doc.paragraphs();
-    let strict = strict_indents(path);
-    let strict = (strict.len() == body.len()).then_some(strict);
+    let raw = raw_paragraph_props(path);
+    let raw = (raw.len() == body.len()).then_some(raw);
 
     let mut paragraphs = Vec::new();
     for (i, p) in body.iter().enumerate() {
@@ -102,7 +139,9 @@ pub fn read(path: &str) -> Result<Document, String> {
             continue;
         }
         let mut para = map_paragraph(&doc, p);
-        if let Some(&StrictInd { start_twips, end_twips }) = strict.as_ref().and_then(|s| s.get(i)) {
+        if let Some(RawPara { start_twips, end_twips, tab_twips }) =
+            raw.as_ref().and_then(|s| s.get(i))
+        {
             // Transitional wins where both are present: it is what rdocx
             // read, and a file carrying both is already self-contradictory.
             if para.style.left_indent_pt == 0.0 {
@@ -111,6 +150,7 @@ pub fn read(path: &str) -> Result<Document, String> {
             if para.style.right_indent_pt == 0.0 {
                 if let Some(tw) = end_twips { para.style.right_indent_pt = tw / 20.0; }
             }
+            para.style.tab_stops_pt = tab_twips.iter().map(|tw| tw / 20.0).collect();
         }
         paragraphs.push(para);
     }
@@ -326,6 +366,13 @@ pub fn write(doc: &Document, path: impl AsRef<std::path::Path>) -> Result<(), St
         }
         if para.style.space_after_pt != 0.0 {
             p = p.space_after(rdocx::Length::pt(para.style.space_after_pt));
+        }
+        // Tab stops, which neither writer persisted: a paragraph's stops
+        // were lost on every save in both formats, self round trip
+        // included. The model has positions only, so every stop is a
+        // left-aligned one.
+        for pos in &para.style.tab_stops_pt {
+            p = p.add_tab_stop(rdocx::TabAlignment::Left, rdocx::Length::pt(*pos));
         }
         p = match para.style.alignment {
             Alignment::Left => p,

@@ -518,3 +518,90 @@ fn single_column_writes_no_cols_element() {
     assert!(!xml.contains("<w:cols"), "wrote a redundant single-column w:cols");
     assert_eq!(docx::read(path.to_str().unwrap()).unwrap().page.unwrap().columns, 1);
 }
+
+/// Tab stops, which neither format persisted.
+///
+/// `ParaStyle::tab_stops_pt` is settable from the paragraph layout UI and
+/// was dropped by both writers on every save, self round trip included.
+/// rdocx writes stops through `add_tab_stop` but exposes only
+/// `tab_stop_count()` when reading, so the positions come from the same
+/// scan of `word/document.xml` that reads the strict indents.
+#[test]
+fn tab_stops_survive() {
+    let mut d = Document::from_plain_text("tabbed");
+    d.paragraphs[0].style.tab_stops_pt = vec![36.0, 108.0, 180.0];
+    let rt = round_trip(&d);
+    assert_eq!(rt.paragraphs[0].style.tab_stops_pt.len(), 3, "stops lost");
+    for (got, want) in rt.paragraphs[0].style.tab_stops_pt.iter().zip([36.0, 108.0, 180.0]) {
+        assert!((got - want).abs() < 0.1, "stop {got} != {want}");
+    }
+}
+
+/// A tab *character* is not a tab stop.
+///
+/// OOXML spells both `w:tab`: a stop inside `w:tabs` in the paragraph
+/// properties, and a literal tab inside a run. Only the first has a
+/// position, so a paragraph containing a tab in its text must come back
+/// with no stops rather than an invented one.
+#[test]
+fn a_tab_character_does_not_become_a_tab_stop() {
+    let d = Document::from_plain_text("before\tafter");
+    let rt = round_trip(&d);
+    assert!(
+        rt.paragraphs[0].style.tab_stops_pt.is_empty(),
+        "a tab in the text invented stops: {:?}",
+        rt.paragraphs[0].style.tab_stops_pt
+    );
+    assert!(
+        rt.paragraphs[0].runs.iter().map(|r| r.text.as_str()).collect::<String>().contains('\t'),
+        "the tab character itself was lost"
+    );
+}
+
+/// A `w:val="clear"` entry removes an inherited stop; it is not one.
+///
+/// LibreOffice writes `<w:tab w:val="clear" w:pos="1134"/>` to drop the
+/// 2cm default before listing the real stops, and `bar` and `num` are a
+/// vertical rule and a list's numbering gap. Collecting every
+/// `w:tab@w:pos` turns each of those into a stop the document never had.
+/// This rewrites our own output so the guard needs no LibreOffice.
+#[test]
+fn a_cleared_or_non_stop_tab_entry_is_not_read_as_a_stop() {
+    let mut d = Document::from_plain_text("tabbed");
+    d.paragraphs[0].style.tab_stops_pt = vec![36.0];
+    let dir = tempfile::tempdir().unwrap();
+    let src = dir.path().join("plain.docx");
+    docx::write(&d, &src).expect("write docx");
+
+    let doctored = dir.path().join("doctored.docx");
+    {
+        let mut zin = zip::ZipArchive::new(std::fs::File::open(&src).unwrap()).unwrap();
+        let mut zout = zip::ZipWriter::new(std::fs::File::create(&doctored).unwrap());
+        for i in 0..zin.len() {
+            let mut f = zin.by_index(i).unwrap();
+            let name = f.name().to_string();
+            let mut buf = Vec::new();
+            std::io::Read::read_to_end(&mut f, &mut buf).unwrap();
+            if name == "word/document.xml" {
+                let xml = String::from_utf8(buf).unwrap();
+                assert!(xml.contains("<w:tabs>"), "fixture needs a w:tabs: {xml}");
+                buf = xml
+                    .replace(
+                        "<w:tabs>",
+                        "<w:tabs><w:tab w:val=\"clear\" w:pos=\"1134\"/>\
+                         <w:tab w:val=\"bar\" w:pos=\"2000\"/>\
+                         <w:tab w:val=\"num\" w:pos=\"3000\"/>",
+                    )
+                    .into_bytes();
+            }
+            zout.start_file(name, zip::write::SimpleFileOptions::default()).unwrap();
+            std::io::Write::write_all(&mut zout, &buf).unwrap();
+        }
+        zout.finish().unwrap();
+    }
+
+    let rt = docx::read(doctored.to_str().unwrap()).expect("read doctored docx");
+    let stops = &rt.paragraphs[0].style.tab_stops_pt;
+    assert_eq!(stops.len(), 1, "non-stop entries were read as stops: {stops:?}");
+    assert!((stops[0] - 36.0).abs() < 0.1, "the real stop was lost: {stops:?}");
+}

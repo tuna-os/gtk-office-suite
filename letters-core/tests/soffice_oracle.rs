@@ -896,3 +896,54 @@ fn columns_survive_a_conversion_between_the_two_formats() {
         .expect("geometry");
     assert_eq!(pg.columns, 2, "docx->odt column count");
 }
+
+/// Tab stops across the format boundary, both ways.
+///
+/// Neither writer persisted these, so a self round trip in either format
+/// agreed with itself about nothing being there. These ask whether the
+/// stops we now emit reach a real Writer, and whether we read the ones
+/// Writer emits.
+#[test]
+fn tab_stops_survive_a_conversion_between_the_two_formats() {
+    let Some(bin) = require_or_skip() else { return };
+    let mut d = Document::from_plain_text("tabbed across formats");
+    d.paragraphs[0].style.tab_stops_pt = vec![36.0, 108.0];
+    let dir = tempfile::tempdir().unwrap();
+
+    let near = |got: &[f64], want: &[f64], what: &str| {
+        assert_eq!(got.len(), want.len(), "{what}: {got:?}");
+        for (g, w) in got.iter().zip(want) {
+            assert!((g - w).abs() < 1.0, "{what}: {got:?}");
+        }
+    };
+
+    // odt -> Writer -> docx
+    let a = dir.path().join("a");
+    std::fs::create_dir_all(&a).unwrap();
+    let op = a.join("x.odt");
+    letters_core::odt::write(&d, op.to_str().unwrap()).expect("write odt");
+    let _ = soffice_convert(bin, &op, "docx:MS Word 2007 XML").ok();
+    let dp = a.join("x.docx");
+    assert!(dp.exists(), "soffice did not convert the odt");
+    let rt = docx::read(dp.to_str().unwrap()).expect("read converted docx");
+    near(
+        &para_with_text(&rt, "tabbed across formats").style.tab_stops_pt,
+        &[36.0, 108.0],
+        "odt->docx tab stops",
+    );
+
+    // docx -> Writer -> odt
+    let b = dir.path().join("b");
+    std::fs::create_dir_all(&b).unwrap();
+    let dp2 = b.join("y.docx");
+    docx::write(&d, &dp2).expect("write docx");
+    let _ = soffice_convert(bin, &dp2, "odt").ok();
+    let op2 = b.join("y.odt");
+    assert!(op2.exists(), "soffice did not convert the docx");
+    let rt = letters_core::odt::read(op2.to_str().unwrap()).expect("read converted odt");
+    near(
+        &para_with_text(&rt, "tabbed across formats").style.tab_stops_pt,
+        &[36.0, 108.0],
+        "docx->odt tab stops",
+    );
+}
