@@ -90,7 +90,7 @@ measured in all four directions (self and cross-format, both ways):
 |---|---|
 | `tab_stops_pt` | lost by **both** formats, including each self round trip — neither writer persists it at all |
 | `Document.footnotes` | docx carries them; the **odt** writer and reader drop them entirely |
-| `PageGeometry.columns` | odt carries them; the **docx** module has no `w:cols`, so a two-column document saves as one |
+| `PageGeometry.columns` | **fixed** — see below |
 | `page_break_before` | survives everywhere except `odt -> Writer -> docx`, which needs the same which-side-dropped-it check the spacing got |
 
 Tab stops and columns are missing features rather than silent strips in
@@ -128,3 +128,44 @@ both filters instead of accepting whichever one the local build prefers.
 Not covered: a strict indent inside a table cell. rdocx exposes table
 paragraphs separately from the body stream, and this scan walks the body
 only, skipping `w:tbl` subtrees.
+
+### Columns: one missing writer call, and one reader looking in the wrong part
+
+`PageGeometry.columns` was carried by the odt writer and dropped by the
+docx one — `w:cols` appeared nowhere in the module, so a two-column
+document saved as `.docx` came back as one column. rdocx has exposed
+`set_columns` and `section_properties().columns` all along, exactly as it
+had exposed the indent builders. One column still writes no `w:cols`:
+that is the default section layout, so an explicit `w:num="1"` is noise.
+
+The cross-format test then failed in **one** direction only, and the
+two-step attribution mattered again:
+
+| step | finding |
+|---|---|
+| what did we write? | `<w:cols w:num="2" w:space="480"/>` — correct, 480 twips is 24pt |
+| did Writer read it? | yes: docx → docx keeps `w:num="2"`, elaborated with `w:equalWidth` and `w:sep` |
+| where did it go in the odt? | `styles.xml` had no `style:columns` at all |
+| so who lost it? | **nobody** |
+
+ODF allows column layout either page-wide or per section, and the two
+live in different parts. This writer emits the page-wide form —
+`style:columns` inside `style:page-layout-properties` in `styles.xml` —
+and Writer, reading a docx `w:cols`, models it as a **section** instead
+and writes `style:section-properties` into `content.xml`:
+
+```xml
+<style:style style:name="Sect1" style:family="section">
+  <style:section-properties style:editable="false">
+    <style:columns fo:column-count="2" fo:column-gap="0.3335in"/>
+```
+
+Our reader only ever looked at the page layout, so a converted
+two-column document read as one column. Nothing was lost in the
+conversion; it was recorded somewhere we never read. Had the first check
+stopped at "the odt has no `style:columns`", the obvious next move would
+have been to change the writer — which was not wrong.
+
+A page-wide count still wins where both are stated. That precedence is
+**not separately observable**: this writer never emits a section, so no
+fixture can hold both, and it is a stated rule rather than a tested one.

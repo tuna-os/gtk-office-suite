@@ -212,8 +212,21 @@ fn read_page_geometry(doc: &rdocx::Document) -> Option<PageGeometry> {
         margin_bottom_pt: sect.margin_bottom.map(|v| v.0 as f64 / 20.0).unwrap_or(default.margin_bottom_pt),
         margin_left_pt: sect.margin_left.map(|v| v.0 as f64 / 20.0).unwrap_or(default.margin_left_pt),
         margin_right_pt: sect.margin_right.map(|v| v.0 as f64 / 20.0).unwrap_or(default.margin_right_pt),
-        columns: default.columns,
-        column_gap_pt: default.column_gap_pt,
+        // `w:cols` is absent for a single-column section, which is the
+        // default this falls back to.
+        columns: sect
+            .columns
+            .as_ref()
+            .and_then(|c| c.num)
+            .and_then(|n| u8::try_from(n).ok())
+            .filter(|n| *n > 0)
+            .unwrap_or(default.columns),
+        column_gap_pt: sect
+            .columns
+            .as_ref()
+            .and_then(|c| c.space)
+            .map(|v| v.0 as f64 / 20.0)
+            .unwrap_or(default.column_gap_pt),
     })
 }
 
@@ -392,6 +405,12 @@ pub fn write(doc: &Document, path: impl AsRef<std::path::Path>) -> Result<(), St
             rdocx::Length::pt(pg.margin_bottom_pt),
             rdocx::Length::pt(pg.margin_left_pt),
         );
+        // A single column is the default section layout, and `w:cols`
+        // with `w:num="1"` is noise; more than one has to be written or a
+        // two-column document saves as one.
+        if pg.columns > 1 {
+            out.set_columns(pg.columns as u32, rdocx::Length::pt(pg.column_gap_pt));
+        }
     }
     let bytes = out
         .to_bytes()
