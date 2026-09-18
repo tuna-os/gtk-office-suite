@@ -219,6 +219,24 @@ fn content_xml(doc: &Document) -> String {
 
         let mut inner = String::new();
         for r in &p.runs {
+            // A footnote reference is an element, not text: ODF puts the
+            // note's whole body inline at the reference point, and the
+            // consumer renders the citation and the note area itself. The
+            // run's own text carries nothing (the docx writer likewise
+            // writes a reference and drops it), so it is not escaped in.
+            if let Some(idx) = r.style.footnote {
+                if let Some(text) = doc.footnotes.get(idx) {
+                    let n = idx + 1;
+                    inner.push_str(&format!(
+                        "<text:note text:id=\"ftn{n}\" text:note-class=\"footnote\">\
+                         <text:note-citation>{n}</text:note-citation>\
+                         <text:note-body><text:p>{}</text:p></text:note-body>\
+                         </text:note>",
+                        esc(text)
+                    ));
+                }
+                continue;
+            }
             let mut run_xml = esc(&r.text);
             if r.style != RunStyle::default() {
                 let ti = run_styles.iter().position(|s| *s == r.style).unwrap() + 1;
@@ -561,11 +579,40 @@ pub fn read(path: &str) -> Result<Document, String> {
     let mut link_stack: Vec<String> = Vec::new();
     let mut list_kind = ListKind::None;
     let mut list_level: u8 = 0;
+    // A `text:note` nests its body *inside* the referencing paragraph, so
+    // its `text:p` children have to be kept out of the body stream: while
+    // a note is open, text accumulates into the note instead. The citation
+    // (the rendered marker) is a consumer's business and is skipped, or it
+    // would arrive as a stray "1" in the footnote text.
+    let mut note: Option<String> = None;
+    let mut note_paras = 0usize;
+    let mut in_citation = false;
 
     loop {
         match reader.read_event() {
             Ok(Event::Start(e)) => match e.name().as_ref() {
                 "office:text" => in_body = true,
+                "text:note" if para.is_some() => {
+                    // The reference run is empty on purpose: it marks the
+                    // position, and the text lives in `Document::footnotes`.
+                    // Notes are read in document order, so the next free
+                    // index is this note's.
+                    if let Some(p) = para.as_mut() {
+                        p.runs.push(Run {
+                            text: String::new(),
+                            style: RunStyle { footnote: Some(doc.footnotes.len()), ..Default::default() },
+                        });
+                    }
+                    note = Some(String::new());
+                    note_paras = 0;
+                }
+                "text:note-citation" => in_citation = true,
+                "text:p" if note.is_some() => {
+                    if note_paras > 0 {
+                        if let Some(n) = note.as_mut() { n.push('\n'); }
+                    }
+                    note_paras += 1;
+                }
                 "text:p" | "text:h" if in_body => {
                     let mut style = ParaStyle::default();
                     if e.name().as_ref() == "text:h" {
@@ -634,6 +681,7 @@ pub fn read(path: &str) -> Result<Document, String> {
                 "text:tab" if para.is_some() => {
                     push_text(&mut para, &span_stack, &link_stack, "\t");
                 }
+                "text:p" if note.is_some() => {}
                 "text:p" | "text:h" if in_body => {
                     let style = ParaStyle { list: list_kind, list_level: list_level.saturating_sub(1), ..Default::default() };
                     doc.paragraphs.push(Paragraph { style, runs: Vec::new() });
@@ -641,7 +689,11 @@ pub fn read(path: &str) -> Result<Document, String> {
                 _ => {}
             },
             Ok(Event::Text(t)) => {
-                if para.is_some() {
+                if let Some(n) = note.as_mut() {
+                    if !in_citation {
+                        n.push_str(&unescape_text(&t));
+                    }
+                } else if para.is_some() {
                     let txt = unescape_text(&t);
                     push_text(&mut para, &span_stack, &link_stack, &txt);
                 }
@@ -653,6 +705,16 @@ pub fn read(path: &str) -> Result<Document, String> {
                 }
             }
             Ok(Event::End(e)) => match e.name().as_ref() {
+                "text:note-citation" => in_citation = false,
+                "text:note" => {
+                    if let Some(text) = note.take() {
+                        doc.footnotes.push(text);
+                    }
+                    note_paras = 0;
+                }
+                // A note's own paragraphs must not close the paragraph that
+                // carries the reference.
+                "text:p" if note.is_some() => {}
                 "text:p" | "text:h" => {
                     if let Some(p) = para.take() {
                         doc.paragraphs.push(p);
@@ -798,6 +860,60 @@ mod tests {
         let path = dir.path().join("t.odt");
         write(doc, path.to_str().unwrap()).expect("write odt");
         read(path.to_str().unwrap()).expect("read odt")
+    }
+
+    /// Footnotes, which ODF nests inside the referencing paragraph.
+    ///
+    /// The writer and reader both ignored `text:note` entirely, so a
+    /// footnote's text — authored content, not layout — was dropped on
+    /// every odt save. The body paragraph must come back unchanged too:
+    /// the note's own `text:p` children are nested *inside* it, so a
+    /// reader that treats them as body text either splits the paragraph
+    /// or pulls the footnote into it.
+    #[test]
+    fn footnotes_survive() {
+        let mut d = Document::from_plain_text("");
+        d.footnotes = vec!["the note text".to_string()];
+        d.paragraphs[0] = Paragraph {
+            style: ParaStyle::default(),
+            runs: vec![
+                Run::plain("body before"),
+                Run { text: String::new(), style: RunStyle { footnote: Some(0), ..Default::default() } },
+                Run::plain(" and after"),
+            ],
+        };
+        let rt = round_trip(&d);
+        assert_eq!(rt.footnotes, vec!["the note text".to_string()]);
+        assert_eq!(rt.paragraphs.len(), 1, "note body leaked into the body stream: {:?}", rt.paragraphs);
+        let text: String = rt.paragraphs[0].runs.iter().map(|r| r.text.as_str()).collect();
+        assert_eq!(text, "body before and after");
+        assert_eq!(
+            rt.paragraphs[0].runs.iter().filter_map(|r| r.style.footnote).collect::<Vec<_>>(),
+            vec![0],
+            "the reference run did not come back"
+        );
+    }
+
+    /// Two notes keep their own text and their own order.
+    #[test]
+    fn two_footnotes_keep_their_indexes() {
+        let mut d = Document::from_plain_text("");
+        d.footnotes = vec!["first".to_string(), "second".to_string()];
+        d.paragraphs[0] = Paragraph {
+            style: ParaStyle::default(),
+            runs: vec![
+                Run::plain("a"),
+                Run { text: String::new(), style: RunStyle { footnote: Some(0), ..Default::default() } },
+                Run::plain("b"),
+                Run { text: String::new(), style: RunStyle { footnote: Some(1), ..Default::default() } },
+            ],
+        };
+        let rt = round_trip(&d);
+        assert_eq!(rt.footnotes, vec!["first".to_string(), "second".to_string()]);
+        assert_eq!(
+            rt.paragraphs[0].runs.iter().filter_map(|r| r.style.footnote).collect::<Vec<_>>(),
+            vec![0, 1]
+        );
     }
 
     #[test]
