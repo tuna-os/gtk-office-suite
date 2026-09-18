@@ -33,7 +33,7 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
-      - uses: docker/setup-buildx-action@v3
+      - uses: docker/setup-buildx-action@v4
 
       # A pull request only proves the image still builds and works. It is
       # published from main (and the scheduled rebuild), so no PR can
