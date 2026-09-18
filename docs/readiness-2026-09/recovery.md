@@ -453,6 +453,48 @@ AutosaveSlot used to store bytes and metadata in separate atomic writes. Each wr
       opposite verdict to the speaker notes above, where the part was
       present and we were the ones not reading it. Which side dropped it is
       worth checking every time; the symptom looks identical.
+      **The same sweep, pointed at Tables, found the identical defect in
+      the reader nobody went back to.** #716 taught the *xlsx* reader
+      column widths, row heights, frozen panes and merges. The ods reader
+      never learned any of it: `load_ods_workbook` asked calamine for cell
+      values and stopped, so a spreadsheet opened as `.ods` came back with
+      its whole layout replaced by defaults. The data was in the file —
+      Calc writes `style:column-width`, `style:row-height` and the span
+      attributes — so this was ours, not Calc's.
+      Why the existing tests could not see it is the same shape as
+      everything above: `column_widths_survive_calc_rewrite` and the merge
+      and frozen-pane tests beside it all rewrite **xlsx as xlsx**, so they
+      only ever asked our xlsx reader to read our xlsx writer. Crossing to
+      ods asks a different reader entirely, and nothing crossed.
+      Two things this turned up that are worth keeping:
+        * **A pretty-printed ods read as empty.** Splitting on
+          `"<style:style "` matches nothing in a file whose tags are
+          newline-formatted, so every width, height and merge came back
+          absent — silently, because Calc writes compact XML and every
+          fixture came from Calc. Element scanning is whitespace-tolerant
+          now, which is a capability the reader did not previously have
+          rather than a refinement of one it did.
+        * **Two guards are defensive and not separately observable**, and
+          are marked as such rather than propped up by a contrived
+          fixture: the `style:family` check (the property attribute
+          already discriminates, since only a column style carries
+          `style:column-width`) and the element-name boundary (a spurious
+          match carries no `table:name` and is skipped anyway). A first
+          version of the family test claimed to cover it and could not;
+          mutation said so.
+      One measurement is recorded without a fix, because a fix would be
+      tuning to one consumer. Our xlsx writer converts a column width at
+      7px per character unit; Calc reads the same file and lays the column
+      out at about 9.5px per unit, so a 240px column arrives in Calc's ods
+      as 326.67px. The xlsx width unit is relative to the workbook font's
+      digit width, so neither side is obviously wrong, and there is no
+      Excel here to break the tie. Row heights, which are absolute points,
+      round-trip to within a hundredth of a pixel.
+      Frozen panes are the one property still not read from an ods. They
+      live in `settings.xml` rather than `content.xml`, and Calc's own
+      headless xlsx -> ods conversion does not write them at all, so there
+      is no fixture to check a reader against. Left absent rather than
+      guessed at.
       That completes the sweep this row asked for. Every field of the model
       has now been checked in all four directions: `Deck.slides` and
       `.masters`, `Slide.title`, `.background`, `.notes`, `.master_idx`,

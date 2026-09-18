@@ -403,3 +403,375 @@ mod sheet_props_tests {
         );
     }
 }
+
+// ── ODF sheet layout ────────────────────────────────────────────────────
+//
+// The xlsx reader learned column widths, row heights, frozen panes and
+// merges in #716, after every one of them survived a save and vanished on
+// reopen. The ods reader never did: `load_ods_workbook` asks calamine for
+// cell values and stops, so opening a spreadsheet someone sent as .ods
+// still loses its whole layout. The data is right there — a Calc-written
+// ods carries `style:column-width`, `style:row-height` and the span
+// attributes — which is why this reads the same struct the xlsx path
+// fills, rather than inventing a second shape for the loader to merge.
+
+/// The text after each `<name` start tag, for elements whose tag may be
+/// followed by any whitespace rather than exactly one space.
+///
+/// `split("<table:table ")` is the obvious thing and is wrong for a
+/// pretty-printed file: a producer that writes `<style:style\n  style:...`
+/// matches no delimiter at all, so the scan silently finds nothing and
+/// every width, height and merge reads as absent. Calc writes compact XML,
+/// which is why that failed quietly rather than loudly.
+fn split_elements<'a>(xml: &'a str, name: &str) -> Vec<&'a str> {
+    let needle = format!("<{name}");
+    let mut out = Vec::new();
+    let mut rest = xml;
+    while let Some(i) = rest.find(&needle) {
+        let after = &rest[i + needle.len()..];
+        // `<table:table` must not match `<table:table-row`: the next byte
+        // has to end the name. Defensive rather than load-bearing — a
+        // spurious match carries no `table:name` and is skipped anyway —
+        // and said so here rather than propped up by a contrived fixture.
+        match after.chars().next() {
+            Some(c) if c.is_whitespace() || c == '>' || c == '/' => out.push(after),
+            _ => {}
+        }
+        rest = after;
+    }
+    out
+}
+
+/// An ODF length in px at 96dpi. ODF writes an absolute unit on every
+/// length, and Calc picks whichever suits the locale, so all four have to
+/// be understood rather than the one that happened to appear in a fixture.
+fn odf_length_to_pixels(v: &str) -> Option<f64> {
+    let v = v.trim();
+    let (num, per_inch) = if let Some(n) = v.strip_suffix("in") {
+        (n, 1.0)
+    } else if let Some(n) = v.strip_suffix("cm") {
+        (n, 2.54)
+    } else if let Some(n) = v.strip_suffix("mm") {
+        (n, 25.4)
+    } else if let Some(n) = v.strip_suffix("pt") {
+        (n, 72.0)
+    } else {
+        // The last arm carries the `?`: a length with no unit at all is
+        // not an ODF length, and ODF always writes one.
+        (v.strip_suffix("px")?, 96.0)
+    };
+    let n: f64 = num.trim().parse().ok()?;
+    let px = n / per_inch * 96.0;
+    // A negative or non-finite length is a malformed file, not a shape to
+    // pass on to the grid.
+    (px.is_finite() && px >= 0.0).then(|| (px * 100.0).round() / 100.0)
+}
+
+/// style name → length in px, for one `style:family`.
+///
+/// Column and row styles live in the same `office:automatic-styles` block.
+/// The family check is a guard rather than the thing doing the work: the
+/// property attribute already discriminates, because only a column style
+/// carries `style:column-width` and only a row style carries
+/// `style:row-height`. Removing it fails no test here, and that is stated
+/// rather than papered over with a fixture contrived to make it look
+/// load-bearing.
+fn odf_styles_by_family(xml: &str, family: &str, prop_attr: &str) -> std::collections::HashMap<String, f64> {
+    let mut out = std::collections::HashMap::new();
+    for block in split_elements(xml, "style:style") {
+        let head = block.split('>').next().unwrap_or("");
+        if xml_attr(head, "style:family") != Some(family) {
+            continue;
+        }
+        let Some(name) = xml_attr(head, "style:name") else { continue };
+        // Only this style's own body. The outer split already ends a
+        // block at the next `<style:style ` — but only when that tag is
+        // written with a trailing space. A pretty-printed file puts a
+        // newline there instead, the split misses it, and without this
+        // trim a style with no length of its own would take the next
+        // one's.
+        let body = block.split("</style:style>").next().unwrap_or("");
+        if let Some(v) = xml_attr(body, prop_attr).and_then(odf_length_to_pixels) {
+            out.insert(name.to_string(), v);
+        }
+    }
+    out
+}
+
+/// A `table:number-*-repeated` count, defaulting to 1.
+///
+/// Capped because ODF's way of saying "the rest of the sheet is empty" is
+/// a repeat count in the millions on a trailing row or column; taking it
+/// literally would allocate for a sheet nobody has.
+fn odf_repeat(tag: &str, attr: &str) -> usize {
+    xml_attr(tag, attr)
+        .and_then(|v| v.parse::<usize>().ok())
+        .unwrap_or(1)
+        .min(ODF_MAX_REPEAT)
+}
+
+const ODF_MAX_REPEAT: usize = 4096;
+
+/// Column widths, row heights and merges for every sheet in an ods,
+/// keyed by sheet name.
+///
+/// Frozen panes are deliberately not read here: they live in
+/// `settings.xml`, not `content.xml`, and Calc's own headless
+/// xlsx -> ods conversion does not write them at all, so there is no
+/// fixture this could be checked against. Left absent rather than guessed.
+pub fn read_sheet_props_from_ods(
+    path: &str,
+) -> std::collections::HashMap<String, SheetXlsxProps> {
+    let mut out = std::collections::HashMap::new();
+    let Ok(f) = std::fs::File::open(path) else {
+        return out;
+    };
+    let Ok(mut zip) = zip::ZipArchive::new(f) else {
+        return out;
+    };
+    let mut budget = ZipBudget::default();
+    if budget.check_entry_count(zip.len()).is_err() {
+        return out;
+    }
+    let Ok(xml) = zip.part_to_string("content.xml", &mut budget) else {
+        return out;
+    };
+
+    let col_styles = odf_styles_by_family(&xml, "table-column", "style:column-width");
+    let row_styles = odf_styles_by_family(&xml, "table-row", "style:row-height");
+
+    for table in split_elements(&xml, "table:table") {
+        let head = table.split('>').next().unwrap_or("");
+        let Some(name) = xml_attr(head, "table:name") else { continue };
+        let body = table.split("</table:table>").next().unwrap_or("");
+        let mut props = SheetXlsxProps::default();
+
+        // Columns: each element covers `number-columns-repeated` of them.
+        let mut col = 0usize;
+        for tag in split_elements(body, "table:table-column") {
+            let tag = tag.split('>').next().unwrap_or("");
+            let repeat = odf_repeat(tag, "table:number-columns-repeated");
+            if let Some(px) = xml_attr(tag, "table:style-name").and_then(|s| col_styles.get(s)) {
+                for i in 0..repeat {
+                    props.col_widths.insert(col + i, *px);
+                }
+            }
+            col += repeat;
+        }
+
+        // Rows, and the merges the cells inside them declare. A merge is
+        // written on its anchor cell as a span, and the cells it covers
+        // follow as `table:covered-table-cell` — which still advance the
+        // column, so they are counted rather than skipped.
+        let mut row = 0usize;
+        for row_block in split_elements(body, "table:table-row") {
+            let head = row_block.split('>').next().unwrap_or("");
+            let repeat = odf_repeat(head, "table:number-rows-repeated");
+            if let Some(px) = xml_attr(head, "table:style-name").and_then(|s| row_styles.get(s)) {
+                for i in 0..repeat {
+                    props.row_heights.insert(row + i, *px);
+                }
+            }
+            let cells = row_block.split("</table:table-row>").next().unwrap_or("");
+            let mut c = 0usize;
+            for cell in cells.split("<table:").skip(1) {
+                let is_covered = cell.starts_with("covered-table-cell");
+                if !cell.starts_with("table-cell") && !is_covered {
+                    continue;
+                }
+                let tag = cell.split('>').next().unwrap_or("");
+                let cspan = odf_repeat(tag, "table:number-columns-spanned");
+                let rspan = odf_repeat(tag, "table:number-rows-spanned");
+                if !is_covered && (cspan > 1 || rspan > 1) {
+                    props.merges.push((row, c, rspan, cspan));
+                }
+                c += odf_repeat(tag, "table:number-columns-repeated");
+            }
+            row += repeat;
+        }
+
+        out.insert(name.to_string(), props);
+    }
+    out
+}
+
+#[cfg(test)]
+mod odf_tests {
+    use super::*;
+
+    #[test]
+    fn lengths_convert_from_every_unit_odf_uses() {
+        // 96dpi: an inch is 96px, and the others are that inch restated.
+        assert_eq!(odf_length_to_pixels("1in"), Some(96.0));
+        assert_eq!(odf_length_to_pixels("2.54cm"), Some(96.0));
+        assert_eq!(odf_length_to_pixels("25.4mm"), Some(96.0));
+        assert_eq!(odf_length_to_pixels("72pt"), Some(96.0));
+        assert_eq!(odf_length_to_pixels("96px"), Some(96.0));
+        // Calc writes this for a 40px row; the reader must land back on it.
+        assert_eq!(odf_length_to_pixels("0.4165in"), Some(39.98));
+        assert_eq!(odf_length_to_pixels("garbage"), None);
+        assert_eq!(odf_length_to_pixels("12"), None, "a bare number has no unit");
+    }
+
+    /// Lookups are family-scoped, which is what the loader relies on.
+    ///
+    /// This does not prove the family *check* is load-bearing — it is not,
+    /// and a mutation removing it stays green, because only a column style
+    /// carries `style:column-width` in the first place. Asserted as the
+    /// behaviour the caller depends on, not as coverage of that guard.
+    #[test]
+    fn column_and_row_lengths_do_not_mix() {
+        let xml = "<office:automatic-styles>\
+            <style:style style:name=\"co1\" style:family=\"table-column\">\
+            <style:table-column-properties style:column-width=\"2in\"/></style:style>\
+            <style:style style:name=\"ro1\" style:family=\"table-row\">\
+            <style:table-row-properties style:row-height=\"1in\"/></style:style>\
+            </office:automatic-styles>";
+        let cols = odf_styles_by_family(xml, "table-column", "style:column-width");
+        let rows = odf_styles_by_family(xml, "table-row", "style:row-height");
+        assert_eq!(cols.get("co1"), Some(&192.0));
+        assert_eq!(rows.get("ro1"), Some(&96.0));
+        assert_eq!(cols.get("ro1"), None);
+        assert_eq!(rows.get("co1"), None);
+    }
+
+    /// A style with no length of its own must not take the next one's.
+    ///
+    /// The opening tags here are newline-separated, which is how a
+    /// pretty-printing producer writes them — and the case the body trim
+    /// exists for. With the tags space-separated the outer split bounds
+    /// each block on its own and the trim cannot be seen to matter, which
+    /// is how a first version of this test passed against its removal.
+    #[test]
+    fn a_style_does_not_borrow_the_next_styles_length() {
+        let xml = "<office:automatic-styles>\n\
+            <style:style\n style:name=\"co1\" style:family=\"table-column\">\n\
+            <style:table-column-properties fo:break-before=\"auto\"/></style:style>\n\
+            <style:style\n style:name=\"co2\" style:family=\"table-column\">\n\
+            <style:table-column-properties style:column-width=\"3in\"/></style:style>\n\
+            </office:automatic-styles>";
+        let cols = odf_styles_by_family(xml, "table-column", "style:column-width");
+        assert_eq!(
+            cols.get("co1"),
+            None,
+            "co1 has no width of its own and must not inherit co2's"
+        );
+    }
+
+    /// A pretty-printed file yields its layout at all.
+    ///
+    /// Not a refinement: `split("<style:style ")` matched no delimiter in
+    /// a file whose tags are newline-formatted, so every width, height and
+    /// merge read as absent and the sheet opened with defaults. Silent,
+    /// because Calc writes compact XML and every fixture came from Calc.
+    #[test]
+    fn a_pretty_printed_ods_is_read_rather_than_silently_skipped() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("pretty.ods");
+        write_ods_fixture(
+            &path,
+            "<office:automatic-styles>\n\
+             <style:style\n  style:name=\"co1\"\n  style:family=\"table-column\">\n\
+             <style:table-column-properties\n  style:column-width=\"1.5in\"/>\n\
+             </style:style>\n</office:automatic-styles>\n\
+             <office:body>\n<office:spreadsheet>\n\
+             <table:table\n  table:name=\"S\">\n\
+             <table:table-column\n  table:style-name=\"co1\"/>\n\
+             <table:table-row>\n<table:table-cell><text:p>x</text:p></table:table-cell>\n\
+             </table:table-row>\n</table:table>\n\
+             </office:spreadsheet>\n</office:body>",
+        );
+        let props = read_sheet_props_from_ods(path.to_str().unwrap());
+        let s = props.get("S").expect("the sheet was not found at all");
+        assert_eq!(s.col_widths.get(&0), Some(&144.0), "1.5in is 144px");
+    }
+
+    /// ODF says "these forty columns are all like this" with a repeat
+    /// count, so a reader that treats each element as one column puts
+    /// every later width on the wrong index.
+    #[test]
+    fn repeated_columns_and_rows_land_on_every_index_they_cover() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("r.ods");
+        write_ods_fixture(
+            &path,
+            "<office:automatic-styles>\
+             <style:style style:name=\"co1\" style:family=\"table-column\">\
+             <style:table-column-properties style:column-width=\"1in\"/></style:style>\
+             <style:style style:name=\"co2\" style:family=\"table-column\">\
+             <style:table-column-properties style:column-width=\"2in\"/></style:style>\
+             <style:style style:name=\"ro1\" style:family=\"table-row\">\
+             <style:table-row-properties style:row-height=\"0.5in\"/></style:style>\
+             </office:automatic-styles>\
+             <office:body><office:spreadsheet>\
+             <table:table table:name=\"S\">\
+             <table:table-column table:style-name=\"co1\" table:number-columns-repeated=\"3\"/>\
+             <table:table-column table:style-name=\"co2\"/>\
+             <table:table-row table:style-name=\"ro1\" table:number-rows-repeated=\"2\">\
+             <table:table-cell office:value-type=\"string\"><text:p>x</text:p></table:table-cell>\
+             </table:table-row>\
+             </table:table></office:spreadsheet></office:body>",
+        );
+        let props = read_sheet_props_from_ods(path.to_str().unwrap());
+        let s = props.get("S").expect("sheet S");
+        for c in 0..3 {
+            assert_eq!(s.col_widths.get(&c), Some(&96.0), "column {c}");
+        }
+        assert_eq!(s.col_widths.get(&3), Some(&192.0), "the fourth column");
+        assert_eq!(s.row_heights.get(&0), Some(&48.0));
+        assert_eq!(s.row_heights.get(&1), Some(&48.0), "the repeated row");
+    }
+
+    /// A merge is written as a span on its anchor and `covered-table-cell`
+    /// for the rest. The covered ones still advance the column, so a
+    /// reader that skips them puts later merges at the wrong column.
+    #[test]
+    fn a_merge_is_anchored_where_the_span_is_declared() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("m.ods");
+        write_ods_fixture(
+            &path,
+            "<office:body><office:spreadsheet><table:table table:name=\"S\">\
+             <table:table-row>\
+             <table:table-cell/>\
+             <table:table-cell table:number-columns-spanned=\"2\" \
+             table:number-rows-spanned=\"3\"><text:p>a</text:p></table:table-cell>\
+             <table:covered-table-cell/>\
+             <table:table-cell table:number-columns-spanned=\"2\"><text:p>b</text:p></table:table-cell>\
+             </table:table-row>\
+             </table:table></office:spreadsheet></office:body>",
+        );
+        let props = read_sheet_props_from_ods(path.to_str().unwrap());
+        let s = props.get("S").expect("sheet S");
+        assert_eq!(
+            s.merges,
+            vec![(0, 1, 3, 2), (0, 3, 1, 2)],
+            "the second merge is at column 3 only if the covered cell was counted"
+        );
+    }
+
+    /// ODF ends a sheet with a repeat count in the millions; taking it
+    /// literally would allocate for a grid nobody has.
+    #[test]
+    fn an_enormous_repeat_count_is_capped() {
+        assert_eq!(
+            odf_repeat("table:number-columns-repeated=\"16384000\"", "table:number-columns-repeated"),
+            ODF_MAX_REPEAT
+        );
+        assert_eq!(odf_repeat("<x/>", "table:number-columns-repeated"), 1);
+    }
+
+    fn write_ods_fixture(path: &std::path::Path, body: &str) {
+        use std::io::Write;
+        let xml = format!(
+            "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\
+             <office:document-content xmlns:office=\"o\" xmlns:table=\"t\" \
+             xmlns:style=\"s\" xmlns:text=\"x\" xmlns:fo=\"f\">{body}</office:document-content>"
+        );
+        let f = std::fs::File::create(path).unwrap();
+        let mut w = zip::ZipWriter::new(f);
+        w.start_file("content.xml", zip::write::SimpleFileOptions::default()).unwrap();
+        w.write_all(xml.as_bytes()).unwrap();
+        w.finish().unwrap();
+    }
+}
