@@ -133,12 +133,36 @@ pub fn read(path: &str) -> Result<Document, String> {
     let raw = (raw.len() == body.len()).then_some(raw);
 
     let mut paragraphs = Vec::new();
+    // Set when a paragraph ends with a run-level page break, and consumed
+    // by the next paragraph this loop keeps.
+    let mut carried_break = false;
     for (i, p) in body.iter().enumerate() {
+        let mut pending_break = false;
         // Decorative rules (LibreOffice's HorizontalLine style) carry no text.
         if p.style_id() == Some("HorizontalLine") && p.text().is_empty() {
             continue;
         }
         let mut para = map_paragraph(&doc, p);
+        // A run-level break after this paragraph's text belongs to the
+        // paragraph that follows, which is where LibreOffice puts the
+        // break it converts from an ODF `fo:break-before`. The trailing
+        // newline it leaves behind is the break itself, not content: this
+        // model's paragraphs never contain one.
+        let breaks = run_page_break(p);
+        if breaks.trailing {
+            if let Some(last) = para.runs.last_mut() {
+                if last.text.ends_with('\n') {
+                    last.text.pop();
+                }
+            }
+            para.runs.retain(|r| {
+                !r.text.is_empty() || r.style.image.is_some() || r.style.footnote.is_some()
+            });
+            pending_break = true;
+        }
+        if std::mem::take(&mut carried_break) {
+            para.style.page_break_before = true;
+        }
         if let Some(RawPara { start_twips, end_twips, tab_twips }) =
             raw.as_ref().and_then(|s| s.get(i))
         {
@@ -153,6 +177,7 @@ pub fn read(path: &str) -> Result<Document, String> {
             para.style.tab_stops_pt = tab_twips.iter().map(|tw| tw / 20.0).collect();
         }
         paragraphs.push(para);
+        carried_break = pending_break;
     }
 
     // Table cells become paragraphs tagged with (table, row, col) — the
@@ -477,6 +502,55 @@ pub fn write_with_opaque(
 }
 
 /// Map one rdocx paragraph (body or table cell) into a model paragraph.
+/// Where a run-level page break sits in a paragraph, if there is one.
+///
+/// OOXML expresses a page break two ways: `w:pageBreakBefore` in the
+/// paragraph properties, and a `<w:br w:type="page"/>` inside a run.
+/// LibreOffice writes the second when it converts an ODF
+/// `fo:break-before="page"` — as the *last* run of the paragraph
+/// *before* the break, which is the same thing as this model's
+/// `page_break_before` on the paragraph that follows.
+///
+/// A break before any text in its own paragraph means the same flag on
+/// that paragraph, which is how Word writes a break the user inserted at
+/// the start of a line. A break with text on both sides of it splits one
+/// paragraph across pages, which this model cannot express and which
+/// this therefore ignores rather than misreport as a paragraph break.
+#[derive(Clone, Copy, Default, PartialEq, Debug)]
+struct RunPageBreak {
+    /// Before any text in this paragraph.
+    leading: bool,
+    /// After all of this paragraph's text, so the break belongs to the
+    /// next paragraph.
+    trailing: bool,
+}
+
+fn run_page_break(p: &rdocx::ParagraphRef<'_>) -> RunPageBreak {
+    let mut seen_text = false;
+    let mut break_after_text = false;
+    let mut leading = false;
+    for r in p.runs() {
+        for item in r.items() {
+            match item {
+                rdocx::RunItemRef::Break(rdocx::BreakKind::Page) => {
+                    if seen_text {
+                        break_after_text = true;
+                    } else {
+                        leading = true;
+                    }
+                }
+                rdocx::RunItemRef::Text(t) if !t.is_empty() => {
+                    seen_text = true;
+                    // Text after a break means it was not trailing after all.
+                    break_after_text = false;
+                }
+                _ => {}
+            }
+        }
+    }
+    RunPageBreak { leading, trailing: break_after_text }
+}
+
 fn map_paragraph(doc: &rdocx::Document, p: &rdocx::ParagraphRef<'_>) -> Paragraph {
     let heading = p.style_id().and_then(style_id_to_heading);
     // LO uses "Quotations"; Word uses "Quote"/"IntenseQuote".
@@ -494,7 +568,9 @@ fn map_paragraph(doc: &rdocx::Document, p: &rdocx::ParagraphRef<'_>) -> Paragrap
         Some(id @ ("Title" | "Subtitle")) => Some(id.to_string()),
         _ => None,
     };
-    let page_break_before = p.is_page_break_before();
+    // Either spelling counts: the paragraph property, or a run-level
+    // break before this paragraph's own text.
+    let page_break_before = p.is_page_break_before() || run_page_break(p).leading;
     let (list, list_level) = match p.numbering() {
         Some((num_id, level)) => (match doc.numbering_is_bullet(num_id) {
             Some(false) => ListKind::Numbered,

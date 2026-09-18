@@ -81,21 +81,29 @@ run-joining convention in #783: **our writer and our reader agreed with
 each other, and nothing else agreed with either.** A self round trip
 cannot see it; only a real consumer can.
 
-### Still open, measured but not fixed
+### The four fields, all now closed
 
-Four fields the audit found and this change does not address. Each was
-measured in all four directions (self and cross-format, both ways):
+The four fields #839's audit measured and left open, each in all four
+directions (self and cross-format, both ways). Every one is now fixed,
+in the order of severity the audit gave them; the sections below record
+what each turned out to be, because the four had four different causes:
 
 | field | state |
 |---|---|
 | `tab_stops_pt` | **fixed** — see below |
 | `Document.footnotes` | **fixed** — see below |
 | `PageGeometry.columns` | **fixed** — see below |
-| `page_break_before` | survives everywhere except `odt -> Writer -> docx`, which needs the same which-side-dropped-it check the spacing got |
+| `page_break_before` | **fixed** — see below |
 
-Tab stops and columns are missing features rather than silent strips in
-one direction, but a document loses them on save either way, so they
-belong on this list rather than in a backlog nobody reads.
+Tab stops and columns were missing features rather than silent strips in
+one direction; footnotes and the page break were losses in a single
+direction. A document lost all four on save either way, which is why
+they were listed here rather than in a backlog nobody reads.
+
+One thing measured and still unread: a strict-OOXML indent inside a
+table cell. rdocx exposes table paragraphs separately from the body
+stream, and the positional scan that reads the strict indents and tab
+stops walks the body only, skipping `w:tbl` subtrees.
 
 ### Strict-OOXML indents (`w:ind w:start`), found by a CI-only failure
 
@@ -236,3 +244,44 @@ rdocx writes stops through `add_tab_stop` but exposes only
 `tab_stop_count()` when reading — no positions — so the positions come
 from the same positional scan of `word/document.xml` that reads the
 strict-spelled indents. One scan now serves both.
+
+### The page break: a third verdict shape
+
+The last of the four, and the two-step attribution came back differently
+again. The spacing (#839) was our writer using an attribute nothing else
+reads. The columns (#845) were our reader looking in the wrong part of
+the package. This one:
+
+| step | finding |
+|---|---|
+| what did we write? | `fo:break-before="page"` — ODF-correct |
+| did Writer read it? | yes |
+| is the break in its output? | **yes**, as `<w:br w:type="page"/>` |
+| so who lost it? | nobody — OOXML has two spellings and we knew one |
+
+OOXML expresses a page break either as `w:pageBreakBefore` in the
+paragraph properties, or as a run-level `<w:br w:type="page"/>`.
+LibreOffice writes the second, and puts it as the **last run of the
+paragraph before the break** — which is this model's
+`page_break_before` on the paragraph that *follows*. Reading it as the
+containing paragraph's own break puts the break a page early.
+
+Where the break sits is the whole meaning, so all three placements are
+handled and separately tested:
+
+| placement | meaning |
+|---|---|
+| after all of a paragraph's text | the next paragraph's `page_break_before` |
+| before any of its text | that paragraph's own (how Word writes a break inserted at the start of a line) |
+| text on both sides | one paragraph split across pages — **not** expressible in this model, so not reported on either paragraph |
+
+The middle case is guessable in a way that would be wrong: assuming the
+containing paragraph is the break's owner is exactly the off-by-one
+above. The last case is guessable in a way that moves text to the wrong
+page, so it is deliberately dropped rather than approximated.
+
+A second, smaller defect came out with it. rdocx renders the break run's
+content as a newline, which arrived merged into the preceding run — so
+`"first page"` read back as `"first page\n"`, in a model whose
+paragraphs never contain a newline. The break is not content, and is
+stripped with the flag it produced.
