@@ -16,10 +16,13 @@ pub(crate) fn next_doc_id() -> String {
 pub(crate) fn autosave_state_dir() -> std::path::PathBuf {
     // glib::user_state_dir() needs the "v2_72" feature this workspace's
     // glib binding doesn't enable — do the XDG fallback ourselves.
+    let user = std::env::var("USER")
+        .or_else(|_| std::env::var("LOGNAME"))
+        .unwrap_or_else(|_| glib::user_name().to_string());
     let base = std::env::var_os("XDG_STATE_HOME")
         .map(std::path::PathBuf::from)
         .or_else(|| std::env::var_os("HOME").map(|h| std::path::PathBuf::from(h).join(".local/state")))
-        .unwrap_or_else(|| std::path::PathBuf::from("/tmp"));
+        .unwrap_or_else(|| std::path::PathBuf::from(format!("/tmp/gtk-office-{user}")));
     base.join("decks")
 }
 
