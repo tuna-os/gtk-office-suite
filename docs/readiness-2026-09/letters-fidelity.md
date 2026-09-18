@@ -89,7 +89,7 @@ measured in all four directions (self and cross-format, both ways):
 | field | state |
 |---|---|
 | `tab_stops_pt` | lost by **both** formats, including each self round trip — neither writer persists it at all |
-| `Document.footnotes` | docx carries them; the **odt** writer and reader drop them entirely |
+| `Document.footnotes` | **fixed** — see below |
 | `PageGeometry.columns` | **fixed** — see below |
 | `page_break_before` | survives everywhere except `odt -> Writer -> docx`, which needs the same which-side-dropped-it check the spacing got |
 
@@ -128,6 +128,35 @@ both filters instead of accepting whichever one the local build prefers.
 Not covered: a strict indent inside a table cell. rdocx exposes table
 paragraphs separately from the body stream, and this scan walks the body
 only, skipping `w:tbl` subtrees.
+
+### Footnotes now cross the boundary both ways
+
+`text:note` appeared nowhere in the odt module — neither writer nor
+reader — so a footnote's text was dropped on every odt save. That is
+authored content, not layout, which makes it the most severe of the four.
+
+ODF nests a note *inside* the referencing paragraph:
+
+```xml
+<text:p>Body<text:note text:id="ftn1" text:note-class="footnote"
+  ><text:note-citation>1</text:note-citation
+  ><text:note-body><text:p>the note</text:p></text:note-body
+></text:note> and after</text:p>
+```
+
+Three things follow from that nesting, each its own guard:
+
+- the note's `text:p` children must stay out of the body stream, or the
+  referencing paragraph splits and the note's text lands in the body;
+- `text:note-citation` holds the rendered marker, which a reader that
+  takes all the text turns into a leading `1` on the footnote;
+- the reference run carries no text of its own — it marks a position,
+  and the text lives in `Document::footnotes`.
+
+The docx → Writer → odt direction was broken for the same reason, so
+fixing the reader also made us able to read Writer's own notes. Both
+directions are now asserted against a real Writer, and all four guards
+above fail independently under mutation.
 
 ### Columns: one missing writer call, and one reader looking in the wrong part
 
