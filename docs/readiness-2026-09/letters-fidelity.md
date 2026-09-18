@@ -88,7 +88,7 @@ measured in all four directions (self and cross-format, both ways):
 
 | field | state |
 |---|---|
-| `tab_stops_pt` | lost by **both** formats, including each self round trip — neither writer persists it at all |
+| `tab_stops_pt` | **fixed** — see below |
 | `Document.footnotes` | **fixed** — see below |
 | `PageGeometry.columns` | **fixed** — see below |
 | `page_break_before` | survives everywhere except `odt -> Writer -> docx`, which needs the same which-side-dropped-it check the spacing got |
@@ -198,3 +198,41 @@ have been to change the writer — which was not wrong.
 A page-wide count still wins where both are stated. That precedence is
 **not separately observable**: this writer never emits a section, so no
 fixture can hold both, and it is a stated rule rather than a tested one.
+
+### Tab stops, and a `w:tab` that means three different things
+
+`tab_stops_pt` is settable from the paragraph layout UI and was
+persisted by **neither** writer, so a paragraph's stops were lost on
+every save in both formats — self round trips included, because writer
+and reader agreed the stops did not exist.
+
+Each format resisted in its own way.
+
+**ODF** puts stops in a `style:tab-stops` *child* of the paragraph
+properties, not an attribute. Every paragraph style this writer emitted
+was a self-closing `<style:paragraph-properties .../>`, so carrying
+stops meant giving that element a body. The automatic-style dedup was
+keyed on the attribute string alone, which two paragraphs with different
+stops share exactly — they would have collapsed onto one style and both
+read back with the first one's stops. The key is now the whole element.
+
+**OOXML** spells `w:tab` for three unrelated things:
+
+| where | meaning |
+|---|---|
+| `w:tabs` child, `w:val="left"` and friends | a real tab stop |
+| `w:tabs` child, `w:val="clear"` | **removes** an inherited stop at that position |
+| inside a `w:r` | a literal tab character in the text |
+
+A reader that collects every `w:tab@w:pos` invents stops from all three.
+The cross-format test caught the `clear` case immediately: Writer emits
+`<w:tab w:val="clear" w:pos="1134"/>` to drop its own 2cm default before
+listing the real stops, so `[36, 108]` came back as `[56.7, 36, 108]`.
+`w:val="bar"` (a vertical rule) and `w:val="num"` (a list's numbering
+gap) are not stops either, so the reader keeps an allowlist of the
+alignment kinds that are.
+
+rdocx writes stops through `add_tab_stop` but exposes only
+`tab_stop_count()` when reading — no positions — so the positions come
+from the same positional scan of `word/document.xml` that reads the
+strict-spelled indents. One scan now serves both.
