@@ -1,11 +1,11 @@
 # gtk-office-suite Roadmap
 
 The current execution plan is [Roadmap to dependable daily use](docs/readiness-2026-09/README.md),
-tracked in [#443](https://github.com/tuna-os/gtk-office-suite/issues/443).
+tracked in [#443](https://github.com/tuna-os/gtk-office-suite/issues/443) and strategic alignment [#760](https://github.com/tuna-os/gtk-office-suite/issues/760).
 It prioritizes crash reproduction, save/recovery safety and verified user journeys.
 The dated ledger below is historical and does not certify present behavior.
 
-**Last updated**: 2026-09-12 | **Maintainer**: tuna-os (hanthor) / architect agent
+**Last updated**: 2026-09-16 | **Maintainer**: tuna-os (hanthor) / architect agent
 
 ---
 
