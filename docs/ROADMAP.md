@@ -10,12 +10,7 @@ with dependency-ordered issues and acceptance tests in
 > That roadmap supersedes check-mark-only completeness and requires model,
 > GUI-journey, data-safety, and interoperability evidence.
 
-State as of 2026-07-18: the surfacing wave, format-parity stragglers, and
-the oracle expansion are done (see PARITY.md for the row-by-row truth;
-TESTING.md for the coverage bar: 65 oracle tests, CommonMark 630/652,
-13 smoke, all gates green). What follows is what's left, ordered by
-leverage. Every item names its proving instrument — nothing lands
-without a test that fails first.
+State as of 2026-09-18: Post-v1.0 execution is gated by the capability evidence ledger (`conformance/capabilities.json`) validated via `conformance/validate_capabilities.py`. The surfacing wave, format-parity stragglers, and LibreOffice oracle expansion are verified with 100% layer coverage (14/14 capability suites passing across model, format, bridge, and AT-SPI GUI journey layers). What follows is the strategic roadmap for Q4 2026 and 2027, ordered by leverage. Every item names its proving instrument — nothing lands without a test that fails first.
 
 ## Now — next few sessions
 
