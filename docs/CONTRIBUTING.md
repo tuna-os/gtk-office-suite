@@ -45,6 +45,13 @@ already archived.
 | `to-issues` | Converting a plan into GitHub issues |
 | `pi-subagents` | Parallel work on independent features |
 
+### Extension & Plugin Contributions
+
+GTK Office Suite targets a sandboxed WebAssembly (WASM) and IPC-based extension host architecture. When proposing new plugin capabilities or extensions:
+- Extensibility MUST be isolated behind pure Rust runtime interfaces or WASM capabilities.
+- Unsandboxed native C/C++ extensions are disallowed to maintain application security and crash resilience.
+- Plugins and format filters must expose unit-testable APIs in `suite-common-core` or dedicated host crates.
+
 ---
 
 ## Workflow
