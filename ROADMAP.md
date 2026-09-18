@@ -54,6 +54,7 @@ gtk-office-suite is the org's flagship **end-user product bet** and a cornerston
 | P1 | Headless CLI document conversion binary (`suite-convert`) | #579 | ⬜ Planned |
 | P1 | Decks: direct manipulation, themes/layouts, presenter view | #115, #116, #117 | ⬜ Not started |
 | P1 | GNOME platform integration: recent files, portals, drag/drop | #119 | ⬜ Not started |
+| P2 | Sandboxed extension host (WASM runtime & IPC plugin manifest standard) | #861 | ⬜ Planned |
 | P2 | Interop: unsupported-feature inspector + versioned fixture corpus with loss budgets | #105, #121 | ⬜ Not started |
 | P2 | Release gate: Flatpak, upgrade, recovery, localization, reproducible builds | #122, #578 | 🟡 In progress |
 | P2 | A11y: keyboard + screen-reader journeys | #120 | ⬜ Not started |
