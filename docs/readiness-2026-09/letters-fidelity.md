@@ -96,3 +96,35 @@ measured in all four directions (self and cross-format, both ways):
 Tab stops and columns are missing features rather than silent strips in
 one direction, but a document loses them on save either way, so they
 belong on this list rather than in a backlog nobody reads.
+
+### Strict-OOXML indents (`w:ind w:start`), found by a CI-only failure
+
+The oracle test added for the two fixes above passed locally and failed
+on CI, at the same assertion twice, with the indent reading zero after
+`odt -> Writer -> docx`. LibreOffice was the same version on both sides
+(4:24.2.7-0ubuntu0.24.04.6), which ruled out a version divergence and
+pointed at the one thing left: `--convert-to docx` does not name a
+filter, and LibreOffice has **two** docx exporters.
+
+| filter | `w:pPr` |
+|---|---|
+| `MS Word 2007 XML` (transitional) | `<w:ind w:left="720"/>`, `<w:jc w:val="left"/>` |
+| `Office Open XML Text` (strict) | `<w:ind w:start="720"/>`, `<w:jc w:val="start"/>` |
+
+ISO/IEC 29500 strict names the horizontal indents by axis rather than by
+side. rdocx parses only the transitional pair, so every indent in a
+strict .docx read as zero — the CI runner's LibreOffice simply picked the
+other filter than this container's, and the environment difference was
+exposing a real reader gap rather than causing one. `w:firstLine`,
+`w:hanging` and `w:jc`'s `start`/`end` are already handled, so the gap is
+exactly `w:start`/`w:end`.
+
+The reader now supplements the strict spelling from `word/document.xml`
+where rdocx reports no indent, positionally and only when its paragraph
+count agrees with rdocx's. Two guards: a unit test that re-spells our own
+output and needs no LibreOffice, and the oracle test, which now names
+both filters instead of accepting whichever one the local build prefers.
+
+Not covered: a strict indent inside a table cell. rdocx exposes table
+paragraphs separately from the body stream, and this scan walks the body
+only, skipping `w:tbl` subtrees.

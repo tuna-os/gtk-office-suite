@@ -433,3 +433,54 @@ fn an_unindented_paragraph_writes_no_indent_at_all() {
         "an explicit zero spacing was written"
     );
 }
+
+/// Strict-OOXML indents, which name the axis rather than the side.
+///
+/// ISO/IEC 29500 strict spells the horizontal indents `w:start`/`w:end`;
+/// the transitional schema spells them `w:left`/`w:right`. Both are real
+/// .docx — LibreOffice's "Office Open XML Text" filter writes the strict
+/// pair — and the reader used to see only the transitional one, so every
+/// indent in a strict file read as zero. This rewrites our own output
+/// into the strict spelling so the guard does not need LibreOffice; the
+/// oracle covers the same ground against the real exporter.
+#[test]
+fn strict_ooxml_indents_are_read() {
+    let mut d = Document::from_plain_text("");
+    d.paragraphs[0] = Paragraph {
+        style: ParaStyle {
+            left_indent_pt: 36.0,
+            right_indent_pt: 24.0,
+            ..Default::default()
+        },
+        runs: vec![Run::plain("indented")],
+    };
+    let dir = tempfile::tempdir().unwrap();
+    let src = dir.path().join("transitional.docx");
+    docx::write(&d, &src).expect("write docx");
+
+    // Re-spell the indents and repack.
+    let strict = dir.path().join("strict.docx");
+    {
+        let mut zin = zip::ZipArchive::new(std::fs::File::open(&src).unwrap()).unwrap();
+        let mut zout = zip::ZipWriter::new(std::fs::File::create(&strict).unwrap());
+        for i in 0..zin.len() {
+            let mut f = zin.by_index(i).unwrap();
+            let name = f.name().to_string();
+            let mut buf = Vec::new();
+            std::io::Read::read_to_end(&mut f, &mut buf).unwrap();
+            if name == "word/document.xml" {
+                let xml = String::from_utf8(buf).unwrap();
+                assert!(xml.contains("w:left="), "fixture needs a transitional indent: {xml}");
+                buf = xml.replace("w:left=", "w:start=").replace("w:right=", "w:end=").into_bytes();
+            }
+            zout.start_file(name, zip::write::SimpleFileOptions::default()).unwrap();
+            std::io::Write::write_all(&mut zout, &buf).unwrap();
+        }
+        zout.finish().unwrap();
+    }
+
+    let rt = docx::read(strict.to_str().unwrap()).expect("read strict docx");
+    let s = &rt.paragraphs[0].style;
+    assert!((s.left_indent_pt - 36.0).abs() < 0.01, "strict left indent: {}", s.left_indent_pt);
+    assert!((s.right_indent_pt - 24.0).abs() < 0.01, "strict right indent: {}", s.right_indent_pt);
+}
