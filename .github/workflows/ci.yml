@@ -19,7 +19,7 @@ permissions:
 
 jobs:
   interop-corpus:
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     steps:
       - uses: actions/checkout@v7
       - name: Validate versioned office corpus
@@ -31,7 +31,7 @@ jobs:
   # own docstring says is meant to run in PR CI.
   python-checks:
     name: Python validators and their tests
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     steps:
       - uses: actions/checkout@v7
         with:
@@ -152,7 +152,7 @@ jobs:
   # entry to `deny.toml` with a reason — rather than removing this job.
   advisories:
     name: RustSec advisory gate
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     steps:
       - uses: actions/checkout@v7
       - uses: EmbarkStudios/cargo-deny-action@v2
@@ -161,7 +161,7 @@ jobs:
 
   # Unit tests + clippy on Ubuntu 24.04 (has GTK 4.14 + libadwaita 1.5)
   test:
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     steps:
       - uses: actions/checkout@v7
 
@@ -269,7 +269,7 @@ jobs:
 
   # Flatpak builds — uses Flatpak SDK container (no Rust needed)
   flatpak:
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     needs: [test]
     strategy:
       matrix:
