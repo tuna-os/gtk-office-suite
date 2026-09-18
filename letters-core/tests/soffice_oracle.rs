@@ -662,3 +662,87 @@ fn footnote_survives_writer_rewrite() {
         "footnote reference lost after Writer rewrite"
     );
 }
+
+/// Paragraph spacing has to be written where ODF says it lives.
+///
+/// The writer emitted `fo:space-before`/`fo:space-after`, which the reader
+/// here understood and LibreOffice does not — ODF spells paragraph
+/// spacing `fo:margin-top`/`fo:margin-bottom`, the same XSL-FO properties
+/// the page geometry already used. So the self round trip passed on an
+/// attribute nothing else reads, and the spacing was gone the moment the
+/// file reached Writer.
+///
+/// This asserts the bytes because it is a claim about the package rather
+/// than about our own reader; the conversion below is what makes it a
+/// claim about a real consumer.
+#[test]
+fn odt_paragraph_spacing_uses_the_attribute_odf_defines() {
+    let mut d = Document::from_plain_text("");
+    d.paragraphs[0] = Paragraph {
+        style: ParaStyle { space_before_pt: 12.0, space_after_pt: 18.0, ..Default::default() },
+        runs: vec![Run::plain("spaced")],
+    };
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("spacing.odt");
+    letters_core::odt::write(&d, path.to_str().unwrap()).expect("write odt");
+
+    let f = std::fs::File::open(&path).unwrap();
+    let mut zip = zip::ZipArchive::new(f).unwrap();
+    let mut xml = String::new();
+    {
+        use std::io::Read;
+        zip.by_name("content.xml").unwrap().read_to_string(&mut xml).unwrap();
+    }
+    assert!(xml.contains("fo:margin-top=\"12.00pt\""), "spacing before: {xml}");
+    assert!(xml.contains("fo:margin-bottom=\"18.00pt\""), "spacing after");
+    assert!(
+        !xml.contains("fo:space-before"),
+        "still writing the attribute only this reader understands"
+    );
+}
+
+/// Indents and spacing across a format boundary, in both directions.
+///
+/// The existing oracle tests here cover styling, lists, headings, page
+/// geometry and more — but not paragraph indents or spacing, so neither
+/// the docx writer's silence nor the odt writer's wrong attribute had
+/// anything asking about them.
+#[test]
+fn indents_and_spacing_survive_a_conversion_between_the_two_formats() {
+    let Some(bin) = require_or_skip() else { return };
+    let mut d = Document::from_plain_text("");
+    d.paragraphs[0] = Paragraph {
+        style: ParaStyle {
+            left_indent_pt: 36.0,
+            space_before_pt: 12.0,
+            space_after_pt: 18.0,
+            ..Default::default()
+        },
+        runs: vec![Run::plain("indented and spaced")],
+    };
+    let dir = tempfile::tempdir().unwrap();
+
+    // odt -> Writer -> docx
+    let op = dir.path().join("x.odt");
+    letters_core::odt::write(&d, op.to_str().unwrap()).expect("write odt");
+    let _ = soffice_convert(bin, &op, "docx").ok();
+    let dp = dir.path().join("x.docx");
+    assert!(dp.exists(), "soffice did not convert the odt");
+    let rt = docx::read(dp.to_str().unwrap()).expect("read converted docx");
+    let s = &rt.paragraphs[0].style;
+    assert!((s.left_indent_pt - 36.0).abs() < 1.0, "odt->docx left indent: {}", s.left_indent_pt);
+    assert!((s.space_before_pt - 12.0).abs() < 1.0, "odt->docx space before: {}", s.space_before_pt);
+    assert!((s.space_after_pt - 18.0).abs() < 1.0, "odt->docx space after: {}", s.space_after_pt);
+
+    // docx -> Writer -> odt
+    let dp2 = dir.path().join("y.docx");
+    docx::write(&d, &dp2).expect("write docx");
+    let _ = soffice_convert(bin, &dp2, "odt").ok();
+    let op2 = dir.path().join("y.odt");
+    assert!(op2.exists(), "soffice did not convert the docx");
+    let rt = letters_core::odt::read(op2.to_str().unwrap()).expect("read converted odt");
+    let s = &rt.paragraphs[0].style;
+    assert!((s.left_indent_pt - 36.0).abs() < 1.0, "docx->odt left indent: {}", s.left_indent_pt);
+    assert!((s.space_before_pt - 12.0).abs() < 1.0, "docx->odt space before: {}", s.space_before_pt);
+    assert!((s.space_after_pt - 18.0).abs() < 1.0, "docx->odt space after: {}", s.space_after_pt);
+}

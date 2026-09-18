@@ -125,8 +125,14 @@ fn para_style_props(st: &ParaStyle) -> String {
     if (st.line_spacing - 1.0).abs() > 0.01 {
         props.push_str(&format!(" fo:line-height=\"{:.0}%\"", st.line_spacing * 100.0));
     }
-    if st.space_before_pt.abs() > 0.01 { props.push_str(&format!(" fo:space-before=\"{:.2}pt\"", st.space_before_pt)); }
-    if st.space_after_pt.abs() > 0.01 { props.push_str(&format!(" fo:space-after=\"{:.2}pt\"", st.space_after_pt)); }
+    // ODF spells paragraph spacing `fo:margin-top`/`fo:margin-bottom`,
+    // the same XSL-FO properties the page geometry below already uses.
+    // This wrote `fo:space-before`/`fo:space-after`, which our own reader
+    // understood and LibreOffice does not: the self round trip passed
+    // because both halves shared an attribute nothing else reads, and the
+    // spacing was silently gone the moment the file reached Writer.
+    if st.space_before_pt.abs() > 0.01 { props.push_str(&format!(" fo:margin-top=\"{:.2}pt\"", st.space_before_pt)); }
+    if st.space_after_pt.abs() > 0.01 { props.push_str(&format!(" fo:margin-bottom=\"{:.2}pt\"", st.space_after_pt)); }
     if st.left_indent_pt.abs() > 0.01 { props.push_str(&format!(" fo:margin-left=\"{:.2}pt\"", st.left_indent_pt)); }
     if st.right_indent_pt.abs() > 0.01 { props.push_str(&format!(" fo:margin-right=\"{:.2}pt\"", st.right_indent_pt)); }
     if st.first_line_indent_pt.abs() > 0.01 { props.push_str(&format!(" fo:text-indent=\"{:.2}pt\"", st.first_line_indent_pt)); }
@@ -487,8 +493,18 @@ fn parse_auto_styles(xml: &str) -> AutoStyles {
                                 alignment: align,
                                 page_break_before: brk,
                                 line_spacing: spacing,
-                                space_before_pt: length("fo:space-before"),
-                                space_after_pt: length("fo:space-after"),
+                                // `fo:space-before` is what this writer
+                                // used to emit; still accepted so a
+                                // document saved by an older build keeps
+                                // its spacing.
+                                space_before_pt: {
+                                    let m = length("fo:margin-top");
+                                    if m != 0.0 { m } else { length("fo:space-before") }
+                                },
+                                space_after_pt: {
+                                    let m = length("fo:margin-bottom");
+                                    if m != 0.0 { m } else { length("fo:space-after") }
+                                },
                                 left_indent_pt: length("fo:margin-left"),
                                 right_indent_pt: length("fo:margin-right"),
                                 first_line_indent_pt: length("fo:text-indent"),

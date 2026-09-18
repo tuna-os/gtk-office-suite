@@ -196,6 +196,31 @@ pub fn write(doc: &Document, path: impl AsRef<std::path::Path>) -> Result<(), St
         if (para.style.line_spacing - 1.0).abs() > 0.01 {
             p = p.line_spacing_multiple(para.style.line_spacing as f64);
         }
+        // Paragraph indents and spacing. The odt writer has carried these
+        // since it was written; this one never emitted them at all, so a
+        // document with an indented or spaced paragraph lost that on every
+        // .docx save while keeping it on .odt. rdocx has had the builders
+        // the whole time — they were simply never called.
+        //
+        // Only non-zero values are written: OOXML treats an absent `w:ind`
+        // or `w:spacing` as "inherit from the style", and writing an
+        // explicit zero is a different claim, one that overrides a style's
+        // own indent with nothing.
+        if para.style.left_indent_pt != 0.0 {
+            p = p.indent_left(rdocx::Length::pt(para.style.left_indent_pt));
+        }
+        if para.style.right_indent_pt != 0.0 {
+            p = p.indent_right(rdocx::Length::pt(para.style.right_indent_pt));
+        }
+        if para.style.first_line_indent_pt != 0.0 {
+            p = p.first_line_indent(rdocx::Length::pt(para.style.first_line_indent_pt));
+        }
+        if para.style.space_before_pt != 0.0 {
+            p = p.space_before(rdocx::Length::pt(para.style.space_before_pt));
+        }
+        if para.style.space_after_pt != 0.0 {
+            p = p.space_after(rdocx::Length::pt(para.style.space_after_pt));
+        }
         p = match para.style.alignment {
             Alignment::Left => p,
             Alignment::Center => p.alignment(rdocx::Alignment::Center),
@@ -408,6 +433,15 @@ fn map_paragraph(doc: &rdocx::Document, p: &rdocx::ParagraphRef<'_>) -> Paragrap
             list_level,
             named_style, page_break_before,
             line_spacing: p.line_spacing_multiple().map(|m| m as f32).unwrap_or(1.0),
+            // Absent means "inherit", which for this model is the zero the
+            // default already carries — so an unset indent stays unset
+            // rather than becoming an explicit zero that would override a
+            // style.
+            left_indent_pt: p.indent_left().map(|l| l.to_pt()).unwrap_or(0.0),
+            right_indent_pt: p.indent_right().map(|l| l.to_pt()).unwrap_or(0.0),
+            first_line_indent_pt: p.first_line_indent().map(|l| l.to_pt()).unwrap_or(0.0),
+            space_before_pt: p.space_before().map(|l| l.to_pt()).unwrap_or(0.0),
+            space_after_pt: p.space_after().map(|l| l.to_pt()).unwrap_or(0.0),
             ..Default::default()
         },
         runs,
