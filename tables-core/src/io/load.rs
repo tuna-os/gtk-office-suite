@@ -3,7 +3,7 @@
 //
 // Split out of io.rs (issue #247).
 
-use super::props::{parse_sheet_qualified_range, read_sheet_props_from_xlsx};
+use super::props::{parse_sheet_qualified_range, read_sheet_props_from_ods, read_sheet_props_from_xlsx};
 
 // io.rs — Spreadsheet file I/O: xlsx/ods/csv/tsv import, xlsx export.
 // SPDX-License-Identifier: GPL-3.0-or-later
@@ -369,7 +369,37 @@ pub fn load_ods_workbook(path: &str) -> Result<(TablesEngine, Vec<SheetModel>), 
             .map_err(|e| format!("Cannot read sheet: {e}"))?;
         source.push((name, range));
     }
-    build_named_workbook(source)
+    let (engine, mut sheets) = build_named_workbook(source)?;
+
+    // The same layout the xlsx reader learned in #716. calamine reports
+    // cell values only, so without this an .ods opened here lost every
+    // column width, row height and merge it declared — the identical
+    // defect, in the reader nobody went back to.
+    //
+    // Indices are clamped to this grid for the same reason as there: the
+    // sheet is sized from its cell content, and a file can legally name a
+    // width for a column past the last one holding data.
+    let props = read_sheet_props_from_ods(path);
+    for sheet in &mut sheets {
+        let Some(p) = props.get(&sheet.name) else { continue };
+        for (&c, &px) in &p.col_widths {
+            if c < sheet.col_widths.len() {
+                sheet.col_widths[c] = px;
+            }
+        }
+        for (&r, &px) in &p.row_heights {
+            if r < sheet.row_heights.len() {
+                sheet.row_heights[r] = px;
+            }
+        }
+        sheet.merges = p
+            .merges
+            .iter()
+            .copied()
+            .filter(|(r, c, _, _)| *r < sheet.rows && *c < sheet.cols)
+            .collect();
+    }
+    Ok((engine, sheets))
 }
 
 /// Load every legacy XLS sheet while retaining names and cell values.

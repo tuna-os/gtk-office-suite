@@ -4,7 +4,7 @@
 
 use std::process::Command;
 
-use tables_core::io::save_sheets_to_xlsx;
+use tables_core::io::{load_workbook, save_sheets_to_xlsx};
 use tables_core::sheet::SheetModel;
 
 fn soffice_available() -> bool {
@@ -656,4 +656,48 @@ fn page_setup_survives_calc_rewrite() {
     let setup = props["Sheet1"].page_setup.as_ref().expect("page setup lost through Calc");
     assert_eq!(setup.size, PageSize::Legal, "paper size changed: {setup:?}");
     assert_eq!(setup.orientation, Orientation::Landscape, "orientation changed: {setup:?}");
+}
+
+/// Sheet layout across a format boundary, which is where the ods reader's
+/// gap was hiding.
+///
+/// `column_widths_survive_calc_rewrite` and the merge and frozen-pane
+/// tests beside it all rewrite xlsx as xlsx, so they only ever asked our
+/// xlsx reader to read our xlsx writer. Crossing to ods asks a different
+/// reader entirely — and that one had never learned what #716 taught the
+/// xlsx one, so a spreadsheet opened as .ods came back with its column
+/// widths, row heights and merges replaced by defaults.
+///
+/// Calc writes the layout into the ods it produces (`style:column-width`,
+/// `style:row-height`, and the span attributes), so this is a claim about
+/// our reader, not about Calc's converter.
+#[test]
+fn sheet_layout_survives_a_conversion_to_ods() {
+    if !require_or_skip() {
+        return;
+    }
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("layout.xlsx");
+    let mut sheet = SheetModel::new("W", 6, 6, 0);
+    sheet.data[0][0] = "wide".into();
+    sheet.set_row_height(0, 40.0);
+    sheet.merges = vec![(2, 2, 3, 4)];
+    save_sheets_to_xlsx(path.to_str().unwrap(), &[sheet]).unwrap();
+
+    let as_ods = convert(&path, "ods").expect("Calc could not convert our xlsx to ods");
+    let (_engine, sheets) = load_workbook(as_ods.to_str().unwrap()).expect("read back the ods");
+    let s = &sheets[0];
+
+    // Calc restates the height in inches; this is about the layout
+    // surviving, not about the last hundredth of a pixel.
+    let h = s.row_heights.first().copied().unwrap_or(0.0);
+    assert!(
+        (h - 40.0).abs() < 1.0,
+        "row height came back as {h}, not the 40px it was set to"
+    );
+    assert_eq!(
+        s.merges,
+        vec![(2, 2, 3, 4)],
+        "the merged range did not survive the conversion to ods"
+    );
 }
