@@ -44,7 +44,7 @@ permissions:
 
 jobs:
   scheduled-evidence-is-current:
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     steps:
       - uses: actions/checkout@v7
       - name: Refuse to certify a release with stale scheduled evidence

@@ -52,7 +52,7 @@ jobs:
   # Core crates only — no GTK needed. REQUIRE_SOFFICE turns a missing
   # oracle into a failure so this check can never silently skip.
   oracle:
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     steps:
       - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@stable
@@ -88,7 +88,7 @@ jobs:
     # Nightly cost, not pull-request cost: the oracle is what the path
     # filter above is for.
     if: github.event_name != 'pull_request'
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     steps:
       - uses: actions/checkout@v7
       # Coverage runs the same workspace as the PR job, GTK widget tests
@@ -109,7 +109,7 @@ jobs:
     # Nightly cost, not pull-request cost: the oracle is what the path
     # filter above is for.
     if: github.event_name != 'pull_request'
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     timeout-minutes: 40
     steps:
       - uses: actions/checkout@v7
