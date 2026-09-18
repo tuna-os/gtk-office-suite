@@ -853,3 +853,46 @@ fn footnotes_survive_a_conversion_between_the_two_formats() {
         "the note's text leaked into the body paragraph"
     );
 }
+
+/// Column layout across the format boundary, both ways.
+///
+/// `page_geometry_survives_lo_conversion` above asks about the page size
+/// and margins but not the column count, which is how the docx writer's
+/// missing `w:cols` went unnoticed: the odt side carried it, so a self
+/// round trip in either format looked fine.
+#[test]
+fn columns_survive_a_conversion_between_the_two_formats() {
+    let Some(bin) = require_or_skip() else { return };
+    let mut d = Document::from_plain_text("two columns crossing formats");
+    d.page = Some(letters_core::model::PageGeometry {
+        columns: 2,
+        column_gap_pt: 24.0,
+        ..Default::default()
+    });
+    let dir = tempfile::tempdir().unwrap();
+
+    // odt -> Writer -> docx
+    let a = dir.path().join("a");
+    std::fs::create_dir_all(&a).unwrap();
+    let op = a.join("x.odt");
+    letters_core::odt::write(&d, op.to_str().unwrap()).expect("write odt");
+    let _ = soffice_convert(bin, &op, "docx:MS Word 2007 XML").ok();
+    let dp = a.join("x.docx");
+    assert!(dp.exists(), "soffice did not convert the odt");
+    let pg = docx::read(dp.to_str().unwrap()).expect("read converted docx").page.expect("geometry");
+    assert_eq!(pg.columns, 2, "odt->docx column count");
+
+    // docx -> Writer -> odt
+    let b = dir.path().join("b");
+    std::fs::create_dir_all(&b).unwrap();
+    let dp2 = b.join("y.docx");
+    docx::write(&d, &dp2).expect("write docx");
+    let _ = soffice_convert(bin, &dp2, "odt").ok();
+    let op2 = b.join("y.odt");
+    assert!(op2.exists(), "soffice did not convert the docx");
+    let pg = letters_core::odt::read(op2.to_str().unwrap())
+        .expect("read converted odt")
+        .page
+        .expect("geometry");
+    assert_eq!(pg.columns, 2, "docx->odt column count");
+}

@@ -484,3 +484,37 @@ fn strict_ooxml_indents_are_read() {
     assert!((s.left_indent_pt - 36.0).abs() < 0.01, "strict left indent: {}", s.left_indent_pt);
     assert!((s.right_indent_pt - 24.0).abs() < 0.01, "strict right indent: {}", s.right_indent_pt);
 }
+
+/// Multi-column sections, which the writer never emitted.
+///
+/// `PageGeometry::columns` was carried by the odt writer and dropped by
+/// this one: `w:cols` appeared nowhere, so a two-column document saved
+/// as `.docx` came back as one column with no warning. rdocx has exposed
+/// `set_columns` and `section_properties().columns` the whole time.
+#[test]
+fn column_count_and_gap_survive() {
+    let mut d = Document::from_plain_text("two columns");
+    d.page = Some(PageGeometry { columns: 2, column_gap_pt: 24.0, ..Default::default() });
+    let rt = round_trip(&d);
+    let pg = rt.page.expect("page geometry");
+    assert_eq!(pg.columns, 2, "column count lost");
+    assert!((pg.column_gap_pt - 24.0).abs() < 0.1, "column gap: {}", pg.column_gap_pt);
+}
+
+/// A single-column section writes no `w:cols` at all.
+///
+/// One column is the default section layout, so an explicit `w:num="1"`
+/// is noise in every ordinary document. The count still reads back as 1.
+#[test]
+fn single_column_writes_no_cols_element() {
+    let mut d = Document::from_plain_text("one column");
+    d.page = Some(PageGeometry::default());
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("one.docx");
+    docx::write(&d, &path).expect("write docx");
+    let mut zip = zip::ZipArchive::new(std::fs::File::open(&path).unwrap()).unwrap();
+    let mut xml = String::new();
+    std::io::Read::read_to_string(&mut zip.by_name("word/document.xml").unwrap(), &mut xml).unwrap();
+    assert!(!xml.contains("<w:cols"), "wrote a redundant single-column w:cols");
+    assert_eq!(docx::read(path.to_str().unwrap()).unwrap().page.unwrap().columns, 1);
+}

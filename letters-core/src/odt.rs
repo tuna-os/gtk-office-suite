@@ -554,6 +554,44 @@ fn parse_length_pt(v: &str) -> Option<f64> {
     })
 }
 
+/// Column layout declared on a `text:section` rather than on the page.
+///
+/// ODF allows either, and the two live in different parts: a page-wide
+/// layout carries `style:columns` inside `style:page-layout-properties`
+/// in styles.xml, which is what this writer emits. LibreOffice, reading
+/// a docx `w:cols`, models it as a section instead and writes
+/// `style:section-properties` into content.xml — so a reader that only
+/// looks at the page layout sees a two-column document as one column.
+/// Nothing is lost in that conversion; it is simply recorded elsewhere.
+///
+/// Returns the first section's count and gap, the gap only when stated.
+fn parse_section_columns(xml: &str) -> Option<(u8, Option<f64>)> {
+    let mut reader = Reader::from_str(xml);
+    let mut in_section_props = false;
+    loop {
+        match reader.read_event() {
+            Ok(Event::Start(e)) if e.name().as_ref() == "style:section-properties" => {
+                in_section_props = true;
+            }
+            Ok(Event::End(e)) if e.name().as_ref() == "style:section-properties" => {
+                in_section_props = false;
+            }
+            Ok(Event::Start(e)) | Ok(Event::Empty(e))
+                if in_section_props && e.name().as_ref() == "style:columns" =>
+            {
+                let count = attr_val(&e, "fo:column-count").and_then(|v| v.parse::<u8>().ok())?;
+                if count <= 1 {
+                    return None;
+                }
+                let gap = attr_val(&e, "fo:column-gap").and_then(|v| parse_length_pt(&v));
+                return Some((count, gap));
+            }
+            Ok(Event::Eof) | Err(_) => return None,
+            _ => {}
+        }
+    }
+}
+
 /// Read an .odt into the model.
 pub fn read(path: &str) -> Result<Document, String> {
     let file = std::fs::File::open(path).map_err(|e| e.to_string())?;
@@ -820,6 +858,19 @@ pub fn read(path: &str) -> Result<Document, String> {
     }
 
     doc.ensure_non_empty();
+    // A column count LibreOffice recorded on a section instead of on the
+    // page layout. Only consulted when the page layout said nothing, so
+    // an explicit page-wide count still wins.
+    if let Some((count, gap)) = parse_section_columns(&content) {
+        let page = doc.page.get_or_insert_with(PageGeometry::default);
+        if page.columns <= 1 {
+            page.columns = count;
+            if let Some(gap) = gap {
+                page.column_gap_pt = gap;
+            }
+        }
+    }
+
     Ok(doc)
 }
 
@@ -860,6 +911,43 @@ mod tests {
         let path = dir.path().join("t.odt");
         write(doc, path.to_str().unwrap()).expect("write odt");
         read(path.to_str().unwrap()).expect("read odt")
+    }
+
+    /// A section's column count, which lives in content.xml.
+    ///
+    /// LibreOffice models a docx `w:cols` as an ODF section rather than a
+    /// page-wide layout, so this is the shape a converted file arrives
+    /// in. The gap is optional: a section may state a count alone.
+    #[test]
+    fn section_columns_are_read_from_content() {
+        let xml = "<office:document-content><office:automatic-styles>\
+                   <style:style style:name=\"Sect1\" style:family=\"section\">\
+                   <style:section-properties style:editable=\"false\">\
+                   <style:columns fo:column-count=\"2\" fo:column-gap=\"0.3335in\"/>\
+                   </style:section-properties></style:style>\
+                   </office:automatic-styles></office:document-content>";
+        let (count, gap) = parse_section_columns(xml).expect("section columns");
+        assert_eq!(count, 2);
+        assert!((gap.expect("gap") - 24.0).abs() < 0.1, "gap: {gap:?}");
+    }
+
+    /// One column is not a column layout, and must not displace the page's.
+    #[test]
+    fn a_single_column_section_is_not_a_column_layout() {
+        let xml = "<office:document-content>\
+                   <style:section-properties>\
+                   <style:columns fo:column-count=\"1\"/>\
+                   </style:section-properties></office:document-content>";
+        assert!(parse_section_columns(xml).is_none());
+    }
+
+    /// `style:columns` outside a section is the page's, read elsewhere.
+    #[test]
+    fn page_layout_columns_are_not_mistaken_for_a_section() {
+        let xml = "<office:document-styles><style:page-layout-properties>\
+                   <style:columns fo:column-count=\"3\"/>\
+                   </style:page-layout-properties></office:document-styles>";
+        assert!(parse_section_columns(xml).is_none());
     }
 
     /// Footnotes, which ODF nests inside the referencing paragraph.
