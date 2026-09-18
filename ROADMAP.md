@@ -88,6 +88,25 @@ document processing. Sketch until Q4 starts; the live execution plan remains
 | Interop loss budgets & unsupported-feature inspector | quality | #105, #121 | ⬜ Planned |
 | A11y: keyboard + screen-reader journeys | quality | #120 | ⬜ Planned |
 
+### Proposed, not scheduled
+
+Planning documents that exist but have **not** been accepted and are not
+committed to any quarter. They are listed here only so they are discoverable
+instead of being rediscovered and rewritten.
+
+| Proposal | Document |
+|---|---|
+| Extension architecture (sandboxed WASM + out-of-process IPC) | [docs/rfc/0002-extension-architecture.md](docs/rfc/0002-extension-architecture.md) |
+| Headless conversion CLI (`suite-convert`) | [docs/HEADLESS-CONVERSION-SPEC.md](docs/HEADLESS-CONVERSION-SPEC.md) |
+| Headless layout and rendering | [docs/adr/0009-headless-rendering.md](docs/adr/0009-headless-rendering.md) |
+| Enterprise fleet deployment and dconf policy | [docs/ENTERPRISE-DEPLOYMENT.md](docs/ENTERPRISE-DEPLOYMENT.md) |
+| Document encryption and digital signatures | [docs/DOCUMENT-SECURITY.md](docs/DOCUMENT-SECURITY.md) |
+| Telemetry and crash reporting | [docs/TELEMETRY-STRATEGY.md](docs/TELEMETRY-STRATEGY.md) |
+| Template catalog and distribution | [docs/TEMPLATE-CATALOG.md](docs/TEMPLATE-CATALOG.md) |
+
+Each carries its open questions. None precedes the
+[September readiness plan](docs/readiness-2026-09/README.md) (#443).
+
 ---
 
 ## Technical Debt Backlog
