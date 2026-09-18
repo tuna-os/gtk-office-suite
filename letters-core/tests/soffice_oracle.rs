@@ -790,3 +790,66 @@ fn indents_and_spacing_survive_a_conversion_between_the_two_formats() {
     assert!((s.space_before_pt - 12.0).abs() < 1.0, "docx->odt space before: {}", s.space_before_pt);
     assert!((s.space_after_pt - 18.0).abs() < 1.0, "docx->odt space after: {}", s.space_after_pt);
 }
+
+/// Footnotes across the format boundary, both ways.
+///
+/// `footnote_survives_writer_rewrite` above only rewrites a docx as a
+/// docx, so it could not see that the odt writer and reader had no
+/// `text:note` support at all: a footnote was silently dropped on every
+/// odt save. These cross the boundary, which is the only way to learn
+/// whether Writer accepts the note we emit and whether we read the one
+/// it emits.
+#[test]
+fn footnotes_survive_a_conversion_between_the_two_formats() {
+    let Some(bin) = require_or_skip() else { return };
+    let mut d = Document::from_plain_text("Body text");
+    d.paragraphs[0].runs.push(Run {
+        text: String::new(),
+        style: RunStyle { footnote: Some(0), ..Default::default() },
+    });
+    d.footnotes = vec!["A note that has to cross formats.".into()];
+    let dir = tempfile::tempdir().unwrap();
+
+    // odt -> Writer -> docx
+    let a = dir.path().join("a");
+    std::fs::create_dir_all(&a).unwrap();
+    let op = a.join("x.odt");
+    letters_core::odt::write(&d, op.to_str().unwrap()).expect("write odt");
+    let _ = soffice_convert(bin, &op, "docx:MS Word 2007 XML").ok();
+    let dp = a.join("x.docx");
+    assert!(dp.exists(), "soffice did not convert the odt");
+    let rt = docx::read(dp.to_str().unwrap()).expect("read converted docx");
+    assert!(
+        rt.footnotes.iter().any(|f| f.contains("has to cross formats")),
+        "odt->docx lost the footnote: {:?}",
+        rt.footnotes
+    );
+    assert!(
+        rt.paragraphs.iter().any(|p| p.runs.iter().any(|r| r.style.footnote.is_some())),
+        "odt->docx lost the reference"
+    );
+
+    // docx -> Writer -> odt
+    let b = dir.path().join("b");
+    std::fs::create_dir_all(&b).unwrap();
+    let dp2 = b.join("y.docx");
+    docx::write(&d, &dp2).expect("write docx");
+    let _ = soffice_convert(bin, &dp2, "odt").ok();
+    let op2 = b.join("y.odt");
+    assert!(op2.exists(), "soffice did not convert the docx");
+    let rt = letters_core::odt::read(op2.to_str().unwrap()).expect("read converted odt");
+    assert!(
+        rt.footnotes.iter().any(|f| f.contains("has to cross formats")),
+        "docx->odt lost the footnote: {:?}",
+        rt.footnotes
+    );
+    assert!(
+        rt.paragraphs.iter().any(|p| p.runs.iter().any(|r| r.style.footnote.is_some())),
+        "docx->odt lost the reference"
+    );
+    assert_eq!(
+        para_with_text(&rt, "Body text").runs.iter().map(|r| r.text.as_str()).collect::<String>(),
+        "Body text",
+        "the note's text leaked into the body paragraph"
+    );
+}
