@@ -88,6 +88,17 @@ document processing. Sketch until Q4 starts; the live execution plan remains
 | Interop loss budgets & unsupported-feature inspector | quality | #105, #121 | ⬜ Planned |
 | A11y: keyboard + screen-reader journeys | quality | #120 | ⬜ Planned |
 
+### Q1 2027 (January–March) — "Extensibility & Ecosystem Expansion"
+
+**Theme**: WASM plugin ecosystem, enterprise dconf policies, offline-first sync, and Tracker3 integration.
+
+| Goal | Owner | Tracking | Status |
+|------|-------|----------|--------|
+| Sandbox-safe WASM plugin marketplace & IPC architecture | architect / strategist | #825 | ⬜ Planned |
+| Enterprise fleet dconf deployment & lock-down policy | ops / strategist | #827 | ⬜ Planned |
+| Offline-first document sync & CRDT collaboration architecture | architect | #823 | ⬜ Planned |
+| GNOME Tracker3 desktop search & document indexing | architect | #119 | ⬜ Planned |
+
 ---
 
 ## Technical Debt Backlog
