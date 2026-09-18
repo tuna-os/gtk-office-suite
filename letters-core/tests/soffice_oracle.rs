@@ -947,3 +947,57 @@ fn tab_stops_survive_a_conversion_between_the_two_formats() {
         "docx->odt tab stops",
     );
 }
+
+/// A page break across the format boundary, both ways.
+///
+/// This was the last field the Letters audit left open: the break
+/// survived every direction except `odt -> Writer -> docx`. Nothing was
+/// losing it. OOXML spells a page break two ways, and LibreOffice
+/// converts ODF's `fo:break-before="page"` into the run-level one —
+/// `<w:br w:type="page"/>` as the last run of the paragraph *before* the
+/// break — where this reader only understood `w:pageBreakBefore`.
+#[test]
+fn a_page_break_survives_a_conversion_between_the_two_formats() {
+    let Some(bin) = require_or_skip() else { return };
+    let mut d = Document::from_plain_text("first page\nsecond page");
+    d.paragraphs[1].style.page_break_before = true;
+    let dir = tempfile::tempdir().unwrap();
+
+    // odt -> Writer -> docx
+    let a = dir.path().join("a");
+    std::fs::create_dir_all(&a).unwrap();
+    let op = a.join("x.odt");
+    letters_core::odt::write(&d, op.to_str().unwrap()).expect("write odt");
+    let _ = soffice_convert(bin, &op, "docx:MS Word 2007 XML").ok();
+    let dp = a.join("x.docx");
+    assert!(dp.exists(), "soffice did not convert the odt");
+    let rt = docx::read(dp.to_str().unwrap()).expect("read converted docx");
+    assert!(
+        para_with_text(&rt, "second page").style.page_break_before,
+        "odt->docx lost the page break"
+    );
+    assert!(
+        !para_with_text(&rt, "first page").style.page_break_before,
+        "odt->docx put the break on the wrong paragraph"
+    );
+    // The break is not content: a paragraph never holds a newline.
+    assert_eq!(
+        para_with_text(&rt, "first page").runs.iter().map(|r| r.text.as_str()).collect::<String>(),
+        "first page",
+        "the break leaked into the paragraph's text"
+    );
+
+    // docx -> Writer -> odt
+    let b = dir.path().join("b");
+    std::fs::create_dir_all(&b).unwrap();
+    let dp2 = b.join("y.docx");
+    docx::write(&d, &dp2).expect("write docx");
+    let _ = soffice_convert(bin, &dp2, "odt").ok();
+    let op2 = b.join("y.odt");
+    assert!(op2.exists(), "soffice did not convert the docx");
+    let rt = letters_core::odt::read(op2.to_str().unwrap()).expect("read converted odt");
+    assert!(
+        para_with_text(&rt, "second page").style.page_break_before,
+        "docx->odt lost the page break"
+    );
+}

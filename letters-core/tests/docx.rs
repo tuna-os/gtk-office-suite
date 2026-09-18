@@ -605,3 +605,121 @@ fn a_cleared_or_non_stop_tab_entry_is_not_read_as_a_stop() {
     assert_eq!(stops.len(), 1, "non-stop entries were read as stops: {stops:?}");
     assert!((stops[0] - 36.0).abs() < 0.1, "the real stop was lost: {stops:?}");
 }
+
+/// Collapse whitespace between XML elements (`>   <` becomes `><`).
+fn regex_lite_collapse(xml: &str) -> String {
+    let mut out = String::with_capacity(xml.len());
+    let mut chars = xml.chars().peekable();
+    while let Some(c) = chars.next() {
+        out.push(c);
+        if c == '>' {
+            let mut ws = String::new();
+            while let Some(&n) = chars.peek() {
+                if n.is_whitespace() {
+                    ws.push(n);
+                    chars.next();
+                } else {
+                    break;
+                }
+            }
+            // Keep the whitespace unless the next thing is another tag.
+            if chars.peek() != Some(&'<') {
+                out.push_str(&ws);
+            }
+        }
+    }
+    out
+}
+
+/// Insert raw XML into our own docx's body, for the break placements
+/// LibreOffice and Word produce that our writer never emits.
+fn doctor_document_xml(d: &Document, edit: impl Fn(String) -> String) -> Document {
+    let dir = tempfile::tempdir().unwrap();
+    let src = dir.path().join("src.docx");
+    docx::write(d, &src).expect("write docx");
+    let out = dir.path().join("out.docx");
+    {
+        let mut zin = zip::ZipArchive::new(std::fs::File::open(&src).unwrap()).unwrap();
+        let mut zout = zip::ZipWriter::new(std::fs::File::create(&out).unwrap());
+        for i in 0..zin.len() {
+            let mut f = zin.by_index(i).unwrap();
+            let name = f.name().to_string();
+            let mut buf = Vec::new();
+            std::io::Read::read_to_end(&mut f, &mut buf).unwrap();
+            if name == "word/document.xml" {
+                // Our writer pretty-prints, so collapse the whitespace
+                // between elements first: it is insignificant here, and
+                // it keeps these fixtures from depending on the writer's
+                // indentation.
+                let xml = String::from_utf8(buf).unwrap();
+                let collapsed = regex_lite_collapse(&xml);
+                buf = edit(collapsed).into_bytes();
+            }
+            zout.start_file(name, zip::write::SimpleFileOptions::default()).unwrap();
+            std::io::Write::write_all(&mut zout, &buf).unwrap();
+        }
+        zout.finish().unwrap();
+    }
+    docx::read(out.to_str().unwrap()).expect("read doctored docx")
+}
+
+/// A run-level break after a paragraph's text belongs to the next one.
+///
+/// This is what LibreOffice writes when it converts an ODF
+/// `fo:break-before="page"`: the break is the last run of the paragraph
+/// *before* it. Reading it as this paragraph's own break puts it a page
+/// too early.
+#[test]
+fn a_trailing_run_page_break_marks_the_next_paragraph() {
+    let d = Document::from_plain_text("first page\nsecond page");
+    let rt = doctor_document_xml(&d, |xml| {
+        let marker = "<w:t>first page</w:t></w:r>";
+        assert!(xml.contains(marker), "fixture shape changed: {xml}");
+        xml.replace(marker, "<w:t>first page</w:t></w:r><w:r><w:br w:type=\"page\"/></w:r>")
+    });
+    assert!(!rt.paragraphs[0].style.page_break_before, "break landed a page early");
+    assert!(rt.paragraphs[1].style.page_break_before, "break was dropped");
+    assert_eq!(
+        rt.paragraphs[0].runs.iter().map(|r| r.text.as_str()).collect::<String>(),
+        "first page",
+        "the break leaked into the text"
+    );
+}
+
+/// A break before a paragraph's own text is that paragraph's break.
+///
+/// Word writes this when the break is inserted at the start of a line.
+#[test]
+fn a_leading_run_page_break_marks_its_own_paragraph() {
+    let d = Document::from_plain_text("first page\nsecond page");
+    let rt = doctor_document_xml(&d, |xml| {
+        let marker = "<w:r><w:t>second page</w:t>";
+        assert!(xml.contains(marker), "fixture shape changed: {xml}");
+        xml.replace(marker, &format!("<w:r><w:br w:type=\"page\"/></w:r>{marker}"))
+    });
+    assert!(rt.paragraphs[1].style.page_break_before, "break was dropped");
+    assert!(!rt.paragraphs[0].style.page_break_before, "break landed on the wrong paragraph");
+}
+
+/// A break with text on both sides splits one paragraph across pages.
+///
+/// The model has no way to say that, so it must not be reported as a
+/// paragraph-level break on either paragraph — a guess in either
+/// direction moves text to the wrong page.
+#[test]
+fn a_mid_paragraph_run_page_break_is_not_a_paragraph_break() {
+    let d = Document::from_plain_text("first page\nsecond page");
+    let rt = doctor_document_xml(&d, |xml| {
+        let marker = "<w:t>first page</w:t></w:r>";
+        xml.replace(
+            marker,
+            "<w:t>first page</w:t></w:r><w:r><w:br w:type=\"page\"/></w:r>\
+             <w:r><w:t>still the same paragraph</w:t></w:r>",
+        )
+    });
+    assert!(!rt.paragraphs[0].style.page_break_before, "invented a break on the paragraph");
+    assert!(
+        !rt.paragraphs[1].style.page_break_before,
+        "a mid-paragraph break became the next paragraph's"
+    );
+}
