@@ -10,6 +10,13 @@ with dependency-ordered issues and acceptance tests in
 > That roadmap supersedes check-mark-only completeness and requires model,
 > GUI-journey, data-safety, and interoperability evidence.
 
+### Q4 2026 Strategic Alignment & Post-v1 Quality Gates
+
+The post-v1 release architecture enforces strict capability verification via `conformance/capabilities.json` and automated soak metrics prior to publishing. Key priorities include:
+- **Durable Persistence & Transactional Recovery**: Full coverage across Letters, Tables, and Decks.
+- **Continuous GUI Journey Verification**: Automated AT-SPI journey campaigns without headless test flakiness.
+- **Capability Evidence Validation**: Mandatory proof across `model`, `bridge`, `format`, and `gui` layers for all advertised features.
+
 State as of 2026-07-18: the surfacing wave, format-parity stragglers, and
 the oracle expansion are done (see PARITY.md for the row-by-row truth;
 TESTING.md for the coverage bar: 65 oracle tests, CommonMark 630/652,
