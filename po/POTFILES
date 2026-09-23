@@ -2,7 +2,14 @@
 # Regenerate the template: scripts/update-pot.sh
 suite-common/src/lib.rs
 letters/src/dialogs.rs
+letters/src/doc_tab.rs
 letters/src/window.rs
+letters/src/window/saving.rs
+decks/src/main.rs
 decks/src/window.rs
+tables/src/chart_dialog.rs
+tables/src/main.rs
+tables/src/persistence.rs
 tables/src/window.rs
 tables/src/window_dialogs.rs
+
