@@ -321,6 +321,25 @@ guides, Magic Move and more. It is specified in
 Each of those items lands with its render-lab fixture, never ahead of
 what the canvas draws.
 
+### Collaboration track (RFC-0001)
+
+The project owner wants CRDT collaboration (2026-09-24).
+[RFC-0001](rfc/0001-crdt-collaboration.md) is the design: offline-first,
+the file stays the document of record, per-user undo, the library chosen
+by measurement. It runs alongside Phase 1 and is gated by it, because a
+CRDT replicates a *model*. It can't replicate state that only lives in
+widgets.
+
+- **Tables** has a GTK-free model, and with the cell-style model it holds
+  everything a sheet shows. That unblocks RFC Phase 1, the library
+  measurement spike (Automerge vs Loro vs yrs on a recorded Tables
+  session), and then RFC Phase 2: Tables, session-scoped, LAN or relay,
+  off by default.
+- **Decks** needs the shape-style model first: objects must carry their
+  own style before two people can edit it.
+- **Letters** needs the page-layout engine's GTK-free document model
+  (RFC Phase 0). The single `GtkTextView` is the blocker the RFC names.
+
 ### Phase 2: Close the gap to LibreOffice, feature by feature
 
 Work in order of the most-used feature among red and amber fixtures. Each

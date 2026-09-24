@@ -160,6 +160,77 @@ only with its render-lab fixture green or improving.
   that highlight their range on the grid. The formula-reference colouring
   already exists and is extended into the editor.
 
+## Ideas taken from Google Docs, Sheets and Slides (direction set 2026-09-24)
+
+The project owner also wants the best of Google's editors, and
+collaboration if possible. Google's strength is **working together**
+rather than layout. So most of the ideas below arrive through RFC-0001
+(CRDT collaboration). The rest stand alone and don't wait for it.
+
+### Collaboration (RFC-0001; offline-first, the file stays the document)
+
+- **Live presence**
+  - Pattern: collaborators' cursors and selections, each in their own
+    colour with a name flag; avatars in the header.
+  - Here:
+    - an `AdwAvatar` row in the header bar;
+    - cursors and selections drawn as render nodes on the canvas;
+    - presence state in the core, transport in the shell (RFC-0001
+      "Where replication state lives").
+- **Share without a cloud account**
+  - Here: RFC-0001's LAN or explicit-relay transport. An
+    `AdwAlertDialog` "Share" flow shows a join code, off by default. Access
+    control waits for RFC-0001's identity work.
+- **Comments and threads, @mentions**
+  - Letters already has review workflows (`LETTERS-REVIEW-WORKFLOWS.md`);
+    Tables and Decks gain the same anchored-comment model.
+  - The side panel is the Format inspector's sibling: one
+    `AdwOverlaySplitView`, with a tab each.
+- **Suggestion mode (Docs)**
+  - Edits become tracked suggestions others accept or reject. This builds
+    on Letters' tracked changes, and in collaboration each suggestion is
+    an operation attributed to its author.
+- **Version history with named versions**
+  - Here: a timeline sidebar of snapshots, with author colours on changed
+    text or cells, "Name this version", and restore as an undoable
+    command.
+  - It sits on RFC-0001 Phase 4's sidecar history. Before collaboration
+    exists, the same UI can show autosave snapshots.
+- **Filter views (Sheets)**
+  - A filter that is yours alone and doesn't reorder the sheet for
+    everyone else. It's local view state that is never replicated, which
+    the model has to distinguish from shared state.
+
+### Standalone (no collaboration needed)
+
+- **Docs:**
+  - a document outline sidebar built from headings (Letters' structured
+    editing already has the tree);
+  - "pageless" as a view mode alongside real pages;
+  - smart chips (dates, people, links) as inline objects.
+- **Sheets:**
+  - formula autocomplete with argument hints;
+  - dropdown chips for data validation (the model already has
+    validations);
+  - Explore-style suggested charts and pivots from a selection;
+  - smart fill;
+  - named and protected ranges surfaced in the inspector.
+- **Slides:**
+  - "Explore" layout suggestions;
+  - a theme builder that edits the master;
+  - charts linked to a Tables range, which update when the sheet
+    changes (the cross-app clipboard section below is the start).
+- **Everywhere:**
+  - the command palette (done), in the spirit of Docs' "Search the menus";
+  - keyboard-first everything.
+
+### Order
+
+Collaboration features follow RFC-0001's phases: Tables first, then Decks,
+then Letters once it has a live GTK-free model. The standalone items follow
+the same rule as the iWork ones: they land on the Phase 1 models, each with
+its render-lab fixture or GUI journey.
+
 ### Rusty and fast (non-negotiable for every item above)
 
 - Canvas drawing goes to GSK render nodes, with Cairo only inside
