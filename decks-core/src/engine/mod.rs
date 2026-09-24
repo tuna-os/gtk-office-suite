@@ -8,10 +8,12 @@
 //! - `parse.rs` — [`read_pptx`], [`parse_master_shapes`], xml helpers
 //! - `write.rs` — [`write_pptx`], [`write_pptx_bytes`], shape writers
 //! - `notes.rs` — speaker-notes XML + text extraction
+//! - `placeholders.rs` — layout/master geometry a slide placeholder inherits
 
 mod model;
 mod notes;
 mod parse;
+mod placeholders;
 mod write;
 
 pub use model::{Deck, MasterSlide, Slide, SlideObject};
