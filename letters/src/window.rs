@@ -141,6 +141,7 @@ impl LettersWindow {
             ("app.print-preview", &suite_common::i18n("Print Preview")),
             ("app.print-layout", &suite_common::i18n("Print Layout")),
             ("app.export-pdf", &suite_common::i18n("Export as PDF…")),
+            ("app.export-pdf-typst", &suite_common::i18n("Export as PDF with Typst…")),
             ("app.edit-headers", &suite_common::i18n("Edit Headers and Footers…")),
             ("app.style-p", &suite_common::i18n("Paragraph Style: Normal")),
             ("app.style-h1", &suite_common::i18n("Paragraph Style: Heading 1")),
@@ -518,109 +519,47 @@ impl LettersWindow {
             });
         }
 
-        // ── Print action ──────────────────────────────────────────
-        {
+        // ── Print, Export as PDF, Print Preview ─────────────────────
+        // All three draw the tab's laid-out pages (printing.rs, ADR 0010).
+        type PagesAction = fn(&adw::ApplicationWindow, &crate::page_container::PageContainer, &gtk::TextBuffer);
+        let page_actions: [(&str, PagesAction, &str); 3] = [
+            ("print", crate::printing::print, "<Primary>p"),
+            ("export-pdf", crate::printing::export_pdf, "<Primary><Shift>e"),
+            ("print-preview", crate::printing::preview, "<Primary><Shift>p"),
+        ];
+        for (name, run, accel) in page_actions {
             let tv = tab_view.clone();
             let w = win.clone();
-            let s = settings.clone();
-            let a = gtk::gio::SimpleAction::new("print", None);
+            let a = gtk::gio::SimpleAction::new(name, None);
             a.connect_activate(move |_, _| {
-                if let Some(buf) = active_buffer(&tv) {
-                    let config = crate::layout::LayoutConfig::from_settings(&s);
-                    let ctx = crate::layout::measuring_context();
-                    let pages = crate::layout::paginate(&buf, &config, &ctx);
-                    let text = buf.text(&buf.start_iter(), &buf.end_iter(), false).to_string();
-                    // Read header/footer from PageContainer
-                    let (hdr, ftr) = tv.selected_page()
-                        .and_then(|p| p.child().first_child())
-                        .and_then(|c| c.downcast::<crate::page_container::PageContainer>().ok())
-                        .map(|pc| (pc.header_text(), pc.footer_text()))
-                        .unwrap_or_default();
-
-                    let op = gtk::PrintOperation::new();
-                    op.set_n_pages(pages.len() as i32);
-                    op.connect_draw_page(move |_op, ctx, nth| {
-                        let page_idx = nth as usize;
-                        if page_idx >= pages.len() { return; }
-                        let cr = ctx.cairo_context();
-                        let page = &pages[page_idx];
-                        // Draw page frame using shared PageContainer rendering (scale=1.0 for print points)
-                        crate::page_container::draw_page_to_cairo(
-                            &cr, page_idx, 0.0, 0.0,
-                            config.page_width_pt, config.page_height_pt, 1.0,
-                            config.margin_left, config.margin_right,
-                            config.margin_top, config.margin_bottom,
-                            &hdr, &ftr,
-                        );
-                        // Render page text
-                        let page_text = if page.end_offset as usize <= text.len() {
-                            &text[page.start_offset as usize..page.end_offset as usize]
-                        } else { &text };
-                        let layout = pangocairo::functions::create_layout(&cr);
-                        layout.set_text(page_text);
-                        let content_w = (config.page_width_pt - config.margin_left - config.margin_right).max(10.0);
-                        layout.set_width((content_w * (pango::SCALE as f64)) as i32);
-                        cr.move_to(config.margin_left, config.margin_top);
-                        pangocairo::functions::show_layout(&cr, &layout);
-                    });
-                    op.set_export_filename("output.pdf");
-                    let _ = op.run(gtk::PrintOperationAction::PrintDialog, Some(&w));
+                let Some(page) = tv.selected_page() else { return };
+                if let (Some(pc), Some(buf)) = (find_page_container(&page.child()), active_buffer(&tv)) {
+                    run(&w, &pc, &buf);
                 }
             });
             app.add_action(&a);
-            app.set_accels_for_action("app.print", &["<Primary>p"]);
+            app.set_accels_for_action(&format!("app.{name}"), &[accel]);
         }
-
-        // ── Export PDF action (Typst-backed, distinct from print-to-file) ──
+        // Typst stays as an alternative typeset export (ADR 0010); it no
+        // longer defines what a PDF of the document looks like.
         {
             let tv = tab_view.clone();
             let w = win.clone();
-            let a = gtk::gio::SimpleAction::new("export-pdf", None);
+            let a = gtk::gio::SimpleAction::new("export-pdf-typst", None);
             a.connect_activate(move |_, _| {
                 let Some(buf) = active_buffer(&tv) else { return };
                 let text = buf.text(&buf.start_iter(), &buf.end_iter(), false).to_string();
                 let dlg = gtk::FileDialog::new();
-                let f = gtk::FileFilter::new();
-                f.add_pattern("*.pdf");
-                f.set_name(Some("PDF"));
-                let fl = gio::ListStore::new::<gtk::FileFilter>();
-                fl.append(&f);
-                dlg.set_filters(Some(&fl));
                 dlg.set_initial_name(Some("Untitled.pdf"));
-                dlg.save(Some(&w), None::<&gio::Cancellable>,
-                    move |result: Result<gio::File, glib::Error>| {
-                        if let Ok(file) = result {
-                            if let Some(path) = file.path() {
-                                if let Err(e) = crate::engine::export_pdf(&text, &path.to_string_lossy()) {
-                                    eprintln!("export pdf failed: {e}");
-                                }
-                            }
-                        }
-                    });
+                let w2 = w.clone();
+                dlg.save(Some(&w), None::<&gio::Cancellable>, move |result: Result<gio::File, glib::Error>| {
+                    let Some(path) = result.ok().and_then(|f| f.path()) else { return };
+                    if let Err(e) = crate::engine::export_pdf(&text, &path.to_string_lossy()) {
+                        suite_common::show_error_dialog(Some(&w2), &suite_common::i18n("Could not export PDF"), &e);
+                    }
+                });
             });
             app.add_action(&a);
-            app.set_accels_for_action("app.export-pdf", &["<Primary><Shift>e"]);
-        }
-
-        // ── Print Preview action ──────────────────────────────────
-        {
-            let tv = tab_view.clone();
-            let w = win.clone();
-            let s = settings.clone();
-            let a = gtk::gio::SimpleAction::new("print-preview", None);
-            a.connect_activate(move |_, _| {
-                let buf = active_buffer(&tv);
-                if let Some(buf) = buf {
-                    let (hdr, ftr) = tv.selected_page()
-                        .and_then(|p| p.child().first_child())
-                        .and_then(|c| c.downcast::<crate::page_container::PageContainer>().ok())
-                        .map(|pc| (pc.header_text(), pc.footer_text()))
-                        .unwrap_or_default();
-                    crate::print_preview::show_print_preview(&w, &buf, &s, &hdr, &ftr);
-                }
-            });
-            app.add_action(&a);
-            app.set_accels_for_action("app.print-preview", &["<Primary><Shift>p"]);
         }
 
         // ── Line spacing action ──────────────────────────────────
@@ -713,6 +652,11 @@ impl LettersWindow {
                 let rects: Vec<_> = match pc.page_view().filter(|_| pc.is_print_layout()) {
                     Some(pv) => {
                         view = pv.clone().upcast();
+                        // The PDF export of the same pages: the lab checks
+                        // that paper and screen agree (print_agreement).
+                        if let Err(e) = pv.write_pdf(&dir.join("print.pdf")) {
+                            eprintln!("render-dump: print.pdf: {e}");
+                        }
                         (0..pv.page_count()).map(|i| pv.page_rect(i)).collect()
                     }
                     None => {

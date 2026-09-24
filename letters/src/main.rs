@@ -13,8 +13,7 @@ mod page_view;
 mod ruler;
 mod spell;
 mod styles;
-mod layout;
-mod print_preview;
+mod printing;
 
 fn main() {
     let suite = suite_common::SuiteApp::new("org.tunaos.letters");

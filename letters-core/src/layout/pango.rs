@@ -319,6 +319,31 @@ impl Typeset {
         Some(cache.entry(key).or_insert_with(|| self.shaper.layout(&paragraph_request(p, box_w, &self.opts))).clone())
     }
 
+    /// Write every page to a PDF at `path`, one PDF page per laid-out page
+    /// at its own size, drawn by `draw_page` — the same routine the page
+    /// view and printing use, so the PDF is the Print Layout.
+    pub fn write_pdf(&self, path: impl AsRef<std::path::Path>) -> Result<(), String> {
+        let first = self.tree.pages.first().ok_or("no pages to write")?;
+        let surface = cairo::PdfSurface::new(first.width_pt, first.height_pt, path.as_ref())
+            .map_err(|e| format!("cannot create {}: {e}", path.as_ref().display()))?;
+        // PDF 1.4: readable everywhere, and no compressed object streams, so
+        // the page tree is plain text a test can count.
+        surface.restrict(cairo::PdfVersion::_1_4).map_err(|e| e.to_string())?;
+        let cr = cairo::Context::new(&surface).map_err(|e| e.to_string())?;
+        for (index, page) in self.tree.pages.iter().enumerate() {
+            // A section of another size (landscape) gets its own page size.
+            surface.set_size(page.width_pt, page.height_pt).map_err(|e| e.to_string())?;
+            self.draw_page(&cr, index);
+            cr.show_page().map_err(|e| e.to_string())?;
+        }
+        drop(cr);
+        surface.finish();
+        match surface.status() {
+            Ok(()) => Ok(()),
+            Err(e) => Err(format!("cannot write {}: {e}", path.as_ref().display())),
+        }
+    }
+
     /// Draw page `index`'s content (not the paper itself). An index out of
     /// range draws nothing.
     pub fn draw_page(&self, cr: &cairo::Context, index: usize) {
@@ -433,5 +458,27 @@ mod tests {
         // Ink inside the first line's box, none above the top margin.
         assert!(dark(72, 72, 160, 86), "no text drawn in the first line box");
         assert!(!dark(0, 0, w as usize, 70), "ink above the top margin");
+    }
+
+    /// The PDF is the laid-out pages: as many PDF pages as the tree has,
+    /// each at the page's size in points. (The render lab rasterises this
+    /// same PDF and compares it with the on-screen page view pixel by
+    /// pixel: `print_agreement`.)
+    #[test]
+    fn the_pdf_has_the_trees_pages_at_their_size() {
+        let geometry = crate::model::PageGeometry { width_pt: 612.0, height_pt: 792.0, ..Default::default() };
+        let mut d = doc(120, "One line of body text.");
+        d.page = Some(geometry);
+        let typeset = Typeset::new(d, LayoutOptions::default());
+        let pages = typeset.tree().pages.len();
+        assert!(pages >= 3, "120 lines take several pages: {pages}");
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("out.pdf");
+        typeset.write_pdf(&path).expect("write pdf");
+        let bytes = std::fs::read(&path).unwrap();
+        let text = String::from_utf8_lossy(&bytes);
+        let page_objects = text.matches("/Type /Page").count() - text.matches("/Type /Pages").count();
+        assert_eq!(page_objects, pages, "one PDF page per laid-out page");
+        assert!(text.contains("/MediaBox [ 0 0 612 792 ]"), "pages keep their size in points");
     }
 }

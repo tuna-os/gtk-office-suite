@@ -143,10 +143,16 @@ pub(crate) fn refresh_print_layout(container: &PageContainer, buf: &gtk::TextBuf
         return;
     }
     let Some(view) = container.page_view() else { return };
+    view.set_typeset(typeset_for(container, buf));
+}
+
+/// The tab's document laid out into pages (ADR 0010): what Print Layout
+/// shows, and what Print and Export as PDF draw — one layout for all three.
+pub(crate) fn typeset_for(container: &PageContainer, buf: &gtk::TextBuffer) -> letters_core::layout::pango::Typeset {
     let doc = crate::bridge::capture_from_buffer(buf);
     let mut typeset = letters_core::layout::pango::Typeset::new(doc, layout_options(container));
     typeset.set_image_loader(crate::page_view::load_image);
-    view.set_typeset(typeset);
+    typeset
 }
 
 /// Switch a tab between Print Layout and Draft.
@@ -375,34 +381,27 @@ pub(crate) fn make_doc_widget(settings: Option<&gio::Settings>) -> (PageContaine
         });
         editor.add_controller(scroll_ctrl);
     }
-    // Pagination: recalculate page count on buffer changes (debounced)
-    if let Some(s) = settings {
-        let s = s.clone();
+    // Pagination (debounced): the page layout engine decides the page
+    // count for both views. The Draft view used to count pages with a
+    // separate pass over unstyled plain text, so headings, spacing and
+    // breaks never moved a page boundary.
+    {
         let pc = container.clone();
-        let ed = editor.clone();
         let timer = std::rc::Rc::new(std::cell::RefCell::new(None::<glib::SourceId>));
-        let pages_store = std::rc::Rc::new(std::cell::RefCell::new(Vec::<crate::layout::Page>::new()));
-        let ps = pages_store.clone();
-        let t = timer.clone();
         let b2 = buffer.clone();
         buffer.connect_changed(move |_| {
-            if let Some(id) = t.borrow_mut().take() { id.remove(); }
-            let buf = b2.clone();
-            let pc = pc.clone();
-            let ed = ed.clone();
-            let s = s.clone();
-            let t2 = t.clone();
-            let ps2 = ps.clone();
+            if let Some(id) = timer.borrow_mut().take() { id.remove(); }
+            let (buf, pc, t2) = (b2.clone(), pc.clone(), timer.clone());
             let id = glib::timeout_add_local(std::time::Duration::from_millis(500), move || {
-                let config = crate::layout::LayoutConfig::from_settings(&s);
-                let pages = crate::layout::paginate(&buf, &config, &ed.pango_context());
-                pc.set_page_count(pages.len());
-                refresh_print_layout(&pc, &buf);
-                ps2.borrow_mut().clone_from(&pages);
+                let typeset = typeset_for(&pc, &buf);
+                pc.set_page_count(typeset.tree().pages.len());
+                if let (true, Some(view)) = (pc.is_print_layout(), pc.page_view()) {
+                    view.set_typeset(typeset);
+                }
                 t2.borrow_mut().take();
                 glib::ControlFlow::Break
             });
-            *t.borrow_mut() = Some(id);
+            *timer.borrow_mut() = Some(id);
         });
     }
     (container, buffer)

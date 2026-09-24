@@ -120,6 +120,15 @@ impl PageView {
         self.queue_draw();
     }
 
+    /// Write the pages this view shows as a PDF (the render lab compares its
+    /// pages with the view's, pixel by pixel).
+    pub fn write_pdf(&self, path: &std::path::Path) -> Result<(), String> {
+        match self.imp().typeset.borrow().as_ref() {
+            Some(t) => t.write_pdf(path),
+            None => Err("nothing laid out yet".into()),
+        }
+    }
+
     /// Number of laid-out pages (0 before the first layout).
     pub fn page_count(&self) -> usize {
         self.imp().typeset.borrow().as_ref().map_or(0, |t| t.tree().pages.len())
