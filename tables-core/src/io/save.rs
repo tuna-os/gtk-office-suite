@@ -148,9 +148,10 @@ pub fn save_sheets_to_xlsx_bytes(
         for c in 0..sh.cols {
             let w = sh.col_width(c);
             if (w - tables_core_default_col_width()).abs() > 0.5 {
-                // Pixels → Excel character width (~7px per character unit).
+                // In pixels: the writer applies Excel's own character-width
+                // conversion, which props.rs inverts on read.
                 sheet
-                    .set_column_width(c as u16, w / 7.0)
+                    .set_column_width_pixels(c as u16, w.round().max(1.0) as u32)
                     .map_err(|e| format!("Width error: {}", e))?;
             }
         }
