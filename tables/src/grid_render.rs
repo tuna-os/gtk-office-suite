@@ -25,8 +25,11 @@ pub fn auto_fit_column(cr: &Context, sheet: &mut SheetModel, col: usize, _scroll
     sheet.set_col_width(col, max_w.clamp(30.0, 500.0));
 }
 
-const ROW_HEADER_WIDTH: f64 = 50.0;
-const COL_HEADER_HEIGHT: f64 = 26.0;
+// Header geometry is tables-core's: hit-testing, the accessibility grid and
+// the render lab's crop all measure from the same constants. A private copy
+// here drifted once (50/26 vs the core's values) and put every cell 10 px
+// right of where everything else thought it was.
+use tables_core::sheet::{COL_HEADER_HEIGHT, ROW_HEADER_WIDTH};
 const HEADER_BG: (f64, f64, f64) = (0.95, 0.95, 0.95);
 const HEADER_BG_DARK: (f64, f64, f64) = (0.25, 0.25, 0.25);
 const GRID_LINE: (f64, f64, f64) = (0.85, 0.85, 0.85);
@@ -50,17 +53,29 @@ pub fn draw_border_edges(cr: &Context, x: f64, y: f64, w: f64, h: f64, border: &
     draw_border_line(cr, &border.right, x + w, y, x + w, y + h, is_dark);
 }
 
-fn draw_pango_text(cr: &Context, text: &str, x: f64, y: f64) {
+/// A header label (column letter or row number) in the UI font at 9 pt,
+/// small enough for a 20 px header.
+fn header_layout(cr: &Context, text: &str) -> pango::Layout {
     let layout = pangocairo::functions::create_layout(cr);
+    let mut font = layout.context().font_description().unwrap_or_default();
+    // Chrome, not document: the GNOME UI face, whatever the cairo
+    // context's default happens to be (serif in a bare container).
+    font.set_family("Adwaita Sans, Cantarell, Sans");
+    font.set_size(9 * pango::SCALE);
+    layout.set_font_description(Some(&font));
     layout.set_text(text);
-    cr.move_to(x, y);
+    layout
+}
+
+/// Draw a header label with its left edge at `x`, centred vertically on `mid_y`.
+fn draw_pango_text(cr: &Context, text: &str, x: f64, mid_y: f64) {
+    let layout = header_layout(cr, text);
+    cr.move_to(x, mid_y - layout.pixel_size().1 as f64 / 2.0);
     pangocairo::functions::show_layout(cr, &layout);
 }
 
 fn pango_text_width(cr: &Context, text: &str) -> f64 {
-    let layout = pangocairo::functions::create_layout(cr);
-    layout.set_text(text);
-    layout.pixel_size().0 as f64
+    header_layout(cr, text).pixel_size().0 as f64
 }
 
 fn draw_border_line(cr: &Context, style: &BorderStyle, x1: f64, y1: f64, x2: f64, y2: f64, is_dark: bool) {
@@ -122,6 +137,9 @@ const FORMULA_REF_COLORS: [(f64, f64, f64); 5] = [
 /// inside their cell; the text sits at the top, as the grid always drew it.
 /// Pixels per indent level: three characters, as in Excel.
 const INDENT_PX: f64 = 21.0;
+/// Space between a cell's edge and its text, each side, as Excel and Calc
+/// leave it.
+const CELL_PAD: f64 = 2.0;
 
 /// The Pango layout for a cell's text in its style: font, weight, slant,
 /// underline and strikethrough, alignment, and wrapping within `width`.
@@ -130,12 +148,9 @@ fn cell_layout(cr: &Context, sheet: &SheetModel, r: usize, c: usize, text: &str,
     let style = &sheet.styles[r][c];
     let layout = pangocairo::functions::create_layout(cr);
     let mut font = layout.context().font_description().unwrap_or_default();
-    if let Some(family) = &style.font_family {
-        font.set_family(family);
-    }
-    if let Some(size) = style.font_size {
-        font.set_size((size * pango::SCALE as f64) as i32);
-    }
+    font.set_family(style.font_family.as_deref().unwrap_or(tables_core::sheet::DEFAULT_FONT_FAMILY));
+    let size = style.font_size.unwrap_or(tables_core::sheet::DEFAULT_FONT_SIZE);
+    font.set_size((size * pango::SCALE as f64) as i32);
     if style.bold {
         font.set_weight(pango::Weight::Bold);
     }
@@ -154,7 +169,7 @@ fn cell_layout(cr: &Context, sheet: &SheetModel, r: usize, c: usize, text: &str,
         layout.set_attributes(Some(&attrs));
     }
     layout.set_text(text);
-    layout.set_width(((width - 8.0 - style.indent as f64 * INDENT_PX).max(1.0) * pango::SCALE as f64) as i32);
+    layout.set_width(((width - 2.0 * CELL_PAD - style.indent as f64 * INDENT_PX).max(1.0) * pango::SCALE as f64) as i32);
     if style.wrap {
         layout.set_wrap(pango::WrapMode::WordChar);
     } else {
@@ -183,7 +198,13 @@ fn draw_cell_text(cr: &Context, sheet: &SheetModel, r: usize, c: usize, rect: (f
     let (red, green, blue) = style.color.map_or(color, |c| c.to_f64());
     cr.set_source_rgb(red, green, blue);
     let formatted = sheet.formats[r][c].format(val);
-    let layout = cell_layout(cr, sheet, r, c, &formatted, cw);
+    let mut layout = cell_layout(cr, sheet, r, c, &formatted, cw);
+    // A number that doesn't fit is never truncated: a clipped "1,234,56…"
+    // reads as a different number. Calc shows ### instead (Excel fills the
+    // cell with #; Calc's form is the reference here).
+    if sheet.aligns_right(r, c) && !style.wrap && layout.is_ellipsized() {
+        layout = cell_layout(cr, sheet, r, c, "###", cw);
+    }
     let text_h = layout.pixel_size().1 as f64;
     let y = match style.v_align {
         VAlign::Top => cy + 2.0,
@@ -191,9 +212,9 @@ fn draw_cell_text(cr: &Context, sheet: &SheetModel, r: usize, c: usize, rect: (f
         VAlign::Bottom => cy + rh - text_h - 2.0,
     };
     let indent = style.indent as f64 * INDENT_PX;
-    let x = if sheet.resolved_h_align(r, c) == HAlign::Right { cx + 4.0 } else { cx + 4.0 + indent };
+    let x = if sheet.resolved_h_align(r, c) == HAlign::Right { cx + CELL_PAD } else { cx + CELL_PAD + indent };
     cr.save().unwrap();
-    cr.rectangle(cx + 3.0, cy + 1.0, (cw - 6.0).max(1.0), (rh - 2.0).max(1.0));
+    cr.rectangle(cx + 1.0, cy + 1.0, (cw - 2.0).max(1.0), (rh - 2.0).max(1.0));
     cr.clip();
     cr.move_to(x, y.max(cy + 1.0));
     pangocairo::functions::show_layout(cr, &layout);
@@ -274,7 +295,7 @@ pub fn draw_grid(
         let label = col_label(c);
         cr.set_source_rgb(hdr_text.0, hdr_text.1, hdr_text.2);
         let text_width = pango_text_width(cr, &label);
-        draw_pango_text(cr, &label, cx + (cw - text_width) / 2.0, 4.0);
+        draw_pango_text(cr, &label, cx + (cw - text_width) / 2.0, COL_HEADER_HEIGHT / 2.0);
         // Sort indicator (#113: "visible criteria" — a small triangle
         // pointing the sort direction, standard spreadsheet convention).
         if let Some((sc, dir)) = sheet.sorted_col {
@@ -310,7 +331,7 @@ pub fn draw_grid(
         cr.set_source_rgb(hdr_text.0, hdr_text.1, hdr_text.2);
         let label = (r + 1).to_string();
         let text_width = pango_text_width(cr, &label);
-        draw_pango_text(cr, &label, ROW_HEADER_WIDTH - 6.0 - text_width, ry + 4.0);
+        draw_pango_text(cr, &label, ROW_HEADER_WIDTH - 6.0 - text_width, ry + sheet.row_height(r) / 2.0);
     }
     cr.restore().unwrap();
 

@@ -311,10 +311,10 @@ class Tables113FeatureVisuals(BaseGUITestCase):
 
     CANVAS_X = 0
     CANVAS_Y = 128
-    ROW_HEADER_WIDTH = 50
-    COL_HEADER_HEIGHT = 26
-    ROW_HEIGHT = 28
-    COL_WIDTH = 90
+    ROW_HEADER_WIDTH = 40
+    COL_HEADER_HEIGHT = 20
+    ROW_HEIGHT = 20
+    COL_WIDTH = 64
 
     def setUp(self):
         # Autosave isolation matters here specifically: without it, a

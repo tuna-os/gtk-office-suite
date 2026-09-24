@@ -202,7 +202,7 @@ mod imp_grid {
         pub fn col_span(&self, col: usize) -> (f64, f64) {
             let widths = self.col_widths.borrow();
             let x: f64 = ROW_HEADER_WIDTH + widths.iter().take(col).sum::<f64>();
-            let w = widths.get(col).copied().unwrap_or(90.0);
+            let w = widths.get(col).copied().unwrap_or(tables_core::sheet::COL_WIDTH);
             (x, w)
         }
     }

@@ -194,12 +194,16 @@ def ocr_words(img, sparse=False):
     values, where page-layout analysis (psm 3) drops most of them."""
     if not shutil.which("tesseract"):
         return None
-    # Upscale 2x: 96 DPI body text is below tesseract's comfortable size.
+    # Upscale: 96 DPI body text is below tesseract's comfortable size, and a
+    # spreadsheet's 10-11 pt cell text more so; at 2x it dropped row numbers
+    # and short values like "1/2" from both images, which is noise in a
+    # fixture with only a handful of words.
     import tempfile
 
+    k = 4 if sparse else 2
     with tempfile.NamedTemporaryFile(suffix=".png") as tmp:
         g = img.convert("L")
-        g.resize((g.width * 2, g.height * 2), Image.LANCZOS).save(tmp.name)
+        g.resize((g.width * k, g.height * k), Image.LANCZOS).save(tmp.name)
         psm = "11" if sparse else "3"
         r = subprocess.run(["tesseract", tmp.name, "-", "--psm", psm, "tsv"], capture_output=True, text=True)
     words = []
@@ -214,7 +218,7 @@ def ocr_words(img, sparse=False):
         text = re.sub(r"[^0-9a-z]", "", f[11].lower())
         if conf < 30 or not text:
             continue
-        left, top, w, h = (int(v) / 2 for v in f[6:10])
+        left, top, w, h = (int(v) / k for v in f[6:10])
         words.append((text, left + w / 2, top + h / 2))
     return words
 
