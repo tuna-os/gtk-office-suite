@@ -904,6 +904,7 @@ impl DecksWindow {
                     text: "Text".into(), x: 200.0, y: 150.0, w: 200.0, h: 40.0,
                     rotation: 0.0,
                     runs: vec![],
+                    body: Default::default(),
                 };
                 controller.add_object(idx, obj);
                 cs.queue_draw();

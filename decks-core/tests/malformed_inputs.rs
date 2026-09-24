@@ -77,6 +77,7 @@ fn valid_odp() -> Vec<u8> {
             text: "A slide with an object on it".into(),
             runs: Vec::new(),
             rotation: 0.0,
+            body: Default::default(),
         });
     }
     decks_core::odp::write_bytes(&deck).expect("write an odp")

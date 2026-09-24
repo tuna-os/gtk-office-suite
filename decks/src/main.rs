@@ -4,6 +4,7 @@ mod window;
 mod persistence;
 mod export;
 mod canvas;
+mod text_render;
 mod canvas_area;
 mod canvas_input;
 mod sidebar;

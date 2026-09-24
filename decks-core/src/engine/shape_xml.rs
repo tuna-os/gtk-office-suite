@@ -20,27 +20,27 @@ use std::collections::HashMap;
 // ── A minimal element tree ────────────────────────────────────────────────
 
 #[derive(Debug, Default)]
-struct Node {
-    name: String,
-    attrs: Vec<(String, String)>,
-    children: Vec<Node>,
+pub(super) struct Node {
+    pub(super) name: String,
+    pub(super) attrs: Vec<(String, String)>,
+    pub(super) children: Vec<Node>,
     /// Text content (kept for `a:t`; whitespace-significant).
-    text: String,
+    pub(super) text: String,
 }
 
 impl Node {
-    fn attr(&self, key: &str) -> Option<&str> {
+    pub(super) fn attr(&self, key: &str) -> Option<&str> {
         self.attrs.iter().find(|(k, _)| k == key).map(|(_, v)| v.as_str())
     }
-    fn child(&self, name: &str) -> Option<&Node> {
+    pub(super) fn child(&self, name: &str) -> Option<&Node> {
         self.children.iter().find(|c| c.name == name)
     }
-    fn children_named<'a>(&'a self, name: &'a str) -> impl Iterator<Item = &'a Node> + 'a {
+    pub(super) fn children_named<'a>(&'a self, name: &'a str) -> impl Iterator<Item = &'a Node> + 'a {
         self.children.iter().filter(move |c| c.name == name)
     }
     /// Every descendant named `name`, in document order, not descending
     /// into matches.
-    fn find_all<'a>(&'a self, name: &str, out: &mut Vec<&'a Node>) {
+    pub(super) fn find_all<'a>(&'a self, name: &str, out: &mut Vec<&'a Node>) {
         for c in &self.children {
             if c.name == name {
                 out.push(c);
@@ -49,7 +49,7 @@ impl Node {
             }
         }
     }
-    fn find(&self, name: &str) -> Option<&Node> {
+    pub(super) fn find(&self, name: &str) -> Option<&Node> {
         let mut v = Vec::new();
         self.find_all(name, &mut v);
         v.into_iter().next()
@@ -74,7 +74,7 @@ fn element(e: &BytesStart) -> Node {
 
 /// The element tree of `xml`. Text is kept only inside `a:t`, untrimmed:
 /// a run ending in a space is a word boundary.
-fn parse_tree(xml: &str) -> Node {
+pub(super) fn parse_tree(xml: &str) -> Node {
     let mut reader = Reader::from_str(xml);
     reader.config_mut().trim_text(false);
     let mut buf = Vec::new();
@@ -170,7 +170,7 @@ impl Default for Theme {
 impl Theme {
     /// A `schemeClr` value, with the presentation's standard mapping of
     /// text/background names onto the dark/light slots.
-    fn slot(&self, name: &str) -> Option<Color> {
+    pub(super) fn slot(&self, name: &str) -> Option<Color> {
         let slot = match name {
             "tx1" => "dk1",
             "bg1" => "lt1",
@@ -269,7 +269,7 @@ fn color_of(node: &Node, theme: &Theme, placeholder: Option<Color>) -> Option<Co
 }
 
 /// The first colour element among `node`'s children.
-fn first_color(node: &Node, theme: &Theme, placeholder: Option<Color>) -> Option<Color> {
+pub(super) fn first_color(node: &Node, theme: &Theme, placeholder: Option<Color>) -> Option<Color> {
     node.children
         .iter()
         .find(|c| COLOR_ELEMENTS.contains(&c.name.as_str()))

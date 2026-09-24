@@ -526,12 +526,24 @@ pub fn draw_slide_multi(
             }
 
             match obj {
-                SlideObject::TextBox { text, runs, .. } => {
+                SlideObject::TextBox { text, runs, body, .. } => {
+                    // The colour for runs that name none; runs read from a
+                    // file carry the colour their styles resolve to.
                     let luminance = 0.299 * slide_bg_rgb.0 + 0.587 * slide_bg_rgb.1 + 0.114 * slide_bg_rgb.2;
                     if luminance < 0.5 {
                         cr.set_source_rgb(0.95, 0.95, 0.95);
                     } else {
                         cr.set_source_rgb(0.1, 0.1, 0.1);
+                    }
+                    if !body.is_plain() {
+                        let scale = slide_w / 960.0;
+                        let desc = document_font_description(master_for(slides, current_slide, masters), 18.0 * scale);
+                        crate::text_render::draw_text_body(cr, text, runs, body, (sx, sy, sw, sh), scale, &desc);
+                        cr.restore().unwrap();
+                        if is_selected {
+                            draw_selection(cr, selected_indices.len(), (sx, sy, sw, sh), (ar, ag, ab));
+                        }
+                        continue;
                     }
                     let layout = pangocairo::functions::create_layout(cr);
                     layout.set_width(((sw - 8.0).max(8.0) as i32) * pango::SCALE);
@@ -601,14 +613,7 @@ pub fn draw_slide_multi(
 
             // Draw selection handles / outline
             if is_selected {
-                if selected_indices.len() == 1 {
-                    draw_handles(cr, sx, sy, sw, sh, (ar, ag, ab));
-                } else {
-                    cr.set_source_rgb(ar, ag, ab);
-                    cr.set_line_width(1.5);
-                    cr.rectangle(sx - 1.0, sy - 1.0, sw + 2.0, sh + 2.0);
-                    cr.stroke().unwrap();
-                }
+                draw_selection(cr, selected_indices.len(), (sx, sy, sw, sh), (ar, ag, ab));
             }
         }
     }
@@ -650,6 +655,19 @@ pub fn draw_slide_multi(
         cr.set_font_size(11.0);
         cr.move_to(ox + slide_w - 30.0, oy + 20.0);
         cr.show_text(&badge).unwrap();
+    }
+}
+
+/// Handles for a single selection, an outline for one of several.
+fn draw_selection(cr: &cairo::Context, count: usize, rect: (f64, f64, f64, f64), accent: (f64, f64, f64)) {
+    let (sx, sy, sw, sh) = rect;
+    if count == 1 {
+        draw_handles(cr, sx, sy, sw, sh, accent);
+    } else {
+        cr.set_source_rgb(accent.0, accent.1, accent.2);
+        cr.set_line_width(1.5);
+        cr.rectangle(sx - 1.0, sy - 1.0, sw + 2.0, sh + 2.0);
+        cr.stroke().unwrap();
     }
 }
 

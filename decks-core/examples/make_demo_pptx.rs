@@ -14,7 +14,7 @@ fn slide(title: &str, objects: Vec<SlideObject>, notes: &str) -> Slide {
 }
 
 fn text(text: &str, x: f64, y: f64, w: f64, h: f64) -> SlideObject {
-    SlideObject::TextBox { text: text.to_string(), x, y, w, h, rotation: 0.0, runs: vec![] }
+    SlideObject::TextBox { text: text.to_string(), x, y, w, h, rotation: 0.0, runs: vec![], body: Default::default() }
 }
 
 fn main() -> Result<(), String> {

@@ -65,6 +65,7 @@ fn text_box(text: &str, x: f64, y: f64) -> SlideObject {
         x, y, w: 300.0, h: 80.0,
         rotation: 0.0,
         runs: vec![],
+        body: Default::default(),
     }
 }
 
@@ -112,6 +113,7 @@ fn object_geometry_survives_a_snapshot() {
                     x: 137.0, y: 211.0, w: 320.0, h: 96.0,
                     rotation: 0.0,
                     runs: vec![],
+                    body: Default::default(),
                 },
                 SlideObject::Rect { x: 40.0, y: 50.0, w: 60.0, h: 70.0, rotation: 0.0 },
                 SlideObject::Circle { x: 200.0, y: 240.0, r: 55.0, rotation: 0.0 },
@@ -180,6 +182,7 @@ fn shape_rotation_survives_a_snapshot() {
                 // 45 and a test using only 30 degrees would never notice.
                 rotation: 315.0,
                 runs: vec![],
+                body: Default::default(),
             },
             SlideObject::Circle { x: 300.0, y: 200.0, r: 45.0, rotation: 120.0 },
         ],
@@ -243,6 +246,7 @@ fn run_styles_survive_a_snapshot() {
                 x: 10.0, y: 10.0, w: 200.0, h: 50.0,
                 rotation: 0.0,
                 runs: vec![styled_run("loud")],
+                body: Default::default(),
             }],
             "",
             "",
@@ -717,6 +721,7 @@ fn styled_runs_do_not_gain_line_breaks_between_them() {
                 x: 10.0, y: 10.0, w: 200.0, h: 50.0,
                 rotation: 0.0,
                 runs,
+                body: Default::default(),
             }],
             "",
             "",
@@ -776,6 +781,7 @@ fn a_master_decorations_run_styling_survives_a_snapshot() {
                             },
                         },
                     ],
+                    body: Default::default(),
                 }],
             }],
         };
@@ -837,6 +843,7 @@ fn a_masters_run_styles_do_not_collide_with_a_slides_in_odp() {
                     text: "slide word".into(),
                     style: RunStyle { bold: true, ..RunStyle::default() },
                 }],
+                body: Default::default(),
             }],
             "",
             "",
@@ -853,6 +860,7 @@ fn a_masters_run_styles_do_not_collide_with_a_slides_in_odp() {
                     text: "master word".into(),
                     style: RunStyle { italic: true, ..RunStyle::default() },
                 }],
+                body: Default::default(),
             }],
         }],
     };
@@ -900,6 +908,7 @@ fn a_styled_box_spanning_two_lines_keeps_both() {
                     },
                     Run { text: "\nplain two".into(), style: RunStyle::default() },
                 ],
+                body: Default::default(),
             }],
             "",
             "",
@@ -1266,4 +1275,173 @@ fn slide_placeholders_inherit_geometry_from_layout_and_master() {
         "subtitle should fall through to the master's body, got {:?}",
         (x, y, w, h)
     );
+}
+
+/// A one-slide pptx built from raw parts: the slide's, layout's and
+/// master's `p:spTree` contents, and anything the master carries after its
+/// `p:cSld` (its `p:txStyles`).
+fn crafted_pptx(dir: &std::path::Path, slide: &str, layout: &str, master: &str, master_tail: &str) -> std::path::PathBuf {
+    use std::io::{Cursor, Write};
+    const P: &str = "xmlns:p=\"http://schemas.openxmlformats.org/presentationml/2006/main\" \
+                     xmlns:a=\"http://schemas.openxmlformats.org/drawingml/2006/main\" \
+                     xmlns:r=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships\"";
+    let rels = |kind: &str, target: &str| {
+        format!(
+            "<Relationships xmlns=\"http://schemas.openxmlformats.org/package/2006/relationships\">\
+             <Relationship Id=\"rId1\" Type=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships/{kind}\" Target=\"{target}\"/></Relationships>"
+        )
+    };
+    let tree = |root: &str, shapes: &str, tail: &str| {
+        format!("<p:{root} {P}><p:cSld><p:spTree>{shapes}</p:spTree></p:cSld>{tail}</p:{root}>")
+    };
+    let parts: Vec<(&str, String)> = vec![
+        ("_rels/.rels", rels("officeDocument", "ppt/presentation.xml")),
+        (
+            "ppt/presentation.xml",
+            format!("<p:presentation {P}><p:sldIdLst><p:sldId id=\"256\" r:id=\"rId1\"/></p:sldIdLst>\
+                     <p:sldSz cx=\"9144000\" cy=\"5143500\"/></p:presentation>"),
+        ),
+        ("ppt/_rels/presentation.xml.rels", rels("slide", "slides/slide1.xml")),
+        ("ppt/slides/slide1.xml", tree("sld", slide, "")),
+        ("ppt/slides/_rels/slide1.xml.rels", rels("slideLayout", "../slideLayouts/slideLayout1.xml")),
+        ("ppt/slideLayouts/slideLayout1.xml", tree("sldLayout", layout, "")),
+        ("ppt/slideLayouts/_rels/slideLayout1.xml.rels", rels("slideMaster", "../slideMasters/slideMaster1.xml")),
+        ("ppt/slideMasters/slideMaster1.xml", tree("sldMaster", master, master_tail)),
+    ];
+    let mut buffer = Vec::new();
+    {
+        let mut w = zip::ZipWriter::new(Cursor::new(&mut buffer));
+        for (name, body) in &parts {
+            w.start_file(*name, zip::write::SimpleFileOptions::default()).unwrap();
+            w.write_all(body.as_bytes()).unwrap();
+        }
+        w.finish().unwrap();
+    }
+    let path = dir.join("crafted.pptx");
+    std::fs::write(&path, &buffer).unwrap();
+    path
+}
+
+/// A placeholder's paragraphs take what its layout and master say about
+/// them: python-pptx's default template centres the subtitle in grey and
+/// gives the body bullets on hanging indents, 32 and 28 pt by level. None of
+/// it is on the slide, and all of it used to be read as 18 pt left-aligned
+/// plain text (render lab `decks/title-layout`, `decks/bullets`).
+#[test]
+fn placeholder_paragraphs_inherit_their_layout_and_master_styles() {
+    use decks_core::engine::{Anchor, Bullet, ParaAlign};
+    let sp = |ph: &str, xfrm: &str, lst: &str, paras: &str| {
+        format!(
+            "<p:sp><p:nvSpPr><p:cNvPr id=\"2\" name=\"s\"/><p:cNvSpPr/><p:nvPr>{ph}</p:nvPr></p:nvSpPr>\
+             <p:spPr>{xfrm}</p:spPr><p:txBody><a:bodyPr/><a:lstStyle>{lst}</a:lstStyle>{paras}</p:txBody></p:sp>"
+        )
+    };
+    let xfrm = "<a:xfrm><a:off x=\"457200\" y=\"457200\"/><a:ext cx=\"8229600\" cy=\"2286000\"/></a:xfrm>";
+    let slide = sp("<p:ph type=\"subTitle\" idx=\"1\"/>", "", "", "<a:p><a:r><a:t>Sub</a:t></a:r></a:p>")
+        + &sp(
+            "<p:ph idx=\"2\"/>",
+            xfrm,
+            "",
+            // A leading empty paragraph (dropped), two levels, and a run
+            // that overrides its size.
+            "<a:p/><a:p><a:r><a:t>One</a:t></a:r></a:p>\
+             <a:p><a:pPr lvl=\"1\"/><a:r><a:rPr sz=\"1000\"/><a:t>Two</a:t></a:r></a:p>",
+        );
+    let layout = sp(
+        "<p:ph type=\"subTitle\" idx=\"1\"/>",
+        xfrm,
+        "<a:lvl1pPr marL=\"0\" indent=\"0\" algn=\"ctr\"><a:buNone/><a:defRPr>\
+         <a:solidFill><a:schemeClr val=\"tx1\"><a:tint val=\"75000\"/></a:schemeClr></a:solidFill></a:defRPr></a:lvl1pPr>",
+        "<a:p/>",
+    ) + &sp("<p:ph idx=\"2\"/>", xfrm, "", "<a:p/>");
+    let master = format!(
+        "<p:sp><p:nvSpPr><p:cNvPr id=\"3\" name=\"b\"/><p:cNvSpPr/><p:nvPr><p:ph type=\"body\" idx=\"1\"/></p:nvPr></p:nvSpPr>\
+         <p:spPr>{xfrm}</p:spPr><p:txBody><a:bodyPr anchor=\"b\"/><a:lstStyle/><a:p/></p:txBody></p:sp>"
+    );
+    let tx_styles = "<p:txStyles><p:bodyStyle>\
+        <a:lvl1pPr marL=\"342900\" indent=\"-342900\" algn=\"l\"><a:buChar char=\"•\"/><a:defRPr sz=\"3200\"/></a:lvl1pPr>\
+        <a:lvl2pPr marL=\"742950\" indent=\"-285750\" algn=\"l\"><a:buChar char=\"–\"/><a:defRPr sz=\"2800\"/></a:lvl2pPr>\
+        </p:bodyStyle></p:txStyles>";
+    let dir = tempfile::tempdir().unwrap();
+    let path = crafted_pptx(dir.path(), &slide, &layout, &master, tx_styles);
+    let deck = decks_core::read_deck(path.to_str().unwrap()).expect("read crafted pptx");
+    let boxes: Vec<_> = deck.slides[0]
+        .objects
+        .iter()
+        .filter_map(|o| match o {
+            SlideObject::TextBox { text, runs, body, .. } => Some((text.clone(), runs.clone(), body.clone())),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(boxes.len(), 2, "{boxes:?}");
+
+    let (text, runs, body) = &boxes[0];
+    assert_eq!(text, "Sub");
+    assert_eq!(body.paras[0].align, ParaAlign::Center);
+    assert_eq!(body.paras[0].bullet, Bullet::None);
+    assert_eq!(runs[0].style.font_size_hp, Some(64), "32 pt from the master's body style");
+    assert!(
+        runs[0].style.color.as_deref().is_some_and(|c| c != "000000"),
+        "tx1 at a 75% tint is grey: {:?}",
+        runs[0].style.color
+    );
+    assert_eq!(body.anchor, Anchor::Bottom, "the master placeholder's anchor");
+
+    let (text, runs, body) = &boxes[1];
+    assert_eq!(text, "One\nTwo");
+    assert_eq!(body.paras.len(), 2, "one style per line, the dropped empty paragraph excluded");
+    assert_eq!((body.paras[0].level, &body.paras[0].bullet), (0, &Bullet::Char("•".into())));
+    assert_eq!((body.paras[1].level, &body.paras[1].bullet), (1, &Bullet::Char("–".into())));
+    assert!((body.paras[0].margin_left - 36.0).abs() < 1e-9 && (body.paras[0].indent + 36.0).abs() < 1e-9);
+    assert_eq!(runs.iter().map(|r| r.style.font_size_hp).collect::<Vec<_>>(), [Some(64), Some(20)]);
+}
+
+/// Paragraph styles, anchor and insets survive our own pptx round trip.
+/// (The odp writer does not write them yet.)
+#[test]
+fn paragraph_styles_survive_a_pptx_snapshot() {
+    use decks_core::engine::{Anchor, Bullet, Insets, ParaAlign, ParaStyle, Spacing, TextBody};
+    let body = TextBody {
+        paras: vec![
+            ParaStyle { align: ParaAlign::Center, ..Default::default() },
+            ParaStyle {
+                level: 1,
+                bullet: Bullet::Char("•".into()),
+                margin_left: 36.0,
+                indent: -36.0,
+                space_before: Spacing::Lines(0.2),
+                space_after: Spacing::Units(8.0),
+                ..Default::default()
+            },
+            ParaStyle { bullet: Bullet::AutoNum { scheme: "alphaLcParenR".into(), start: 3 }, ..Default::default() },
+        ],
+        anchor: Anchor::Middle,
+        insets: Some(Insets { left: 9.6, top: 4.8, right: 9.6, bottom: 4.8 }),
+    };
+    let deck = deck_of(vec![slide_of(
+        vec![SlideObject::TextBox {
+            text: "a\nb\nc".into(),
+            x: 10.0, y: 10.0, w: 300.0, h: 200.0,
+            rotation: 0.0,
+            runs: vec![],
+            body: body.clone(),
+        }],
+        "",
+        "#ffffff",
+    )]);
+    let back = through_a_snapshot(&deck, "pptx", "para-styles");
+    let SlideObject::TextBox { body: got, .. } = &back.slides[0].objects[0] else { panic!("not a text box") };
+    assert_eq!(got.paras.len(), 3);
+    assert_eq!(got.anchor, body.anchor);
+    for (a, b) in got.paras.iter().zip(&body.paras) {
+        assert_eq!((a.align, a.level, &a.bullet), (b.align, b.level, &b.bullet));
+        assert!((a.margin_left - b.margin_left).abs() < 1e-6 && (a.indent - b.indent).abs() < 1e-6);
+        assert_eq!(a.space_before, b.space_before);
+        match (a.space_after, b.space_after) {
+            (Spacing::Units(x), Spacing::Units(y)) => assert!((x - y).abs() < 0.02, "{x} vs {y}"),
+            other => assert_eq!(other.0, other.1),
+        }
+    }
+    let (gi, bi) = (got.insets.unwrap(), body.insets.unwrap());
+    assert!((gi.left - bi.left).abs() < 1e-6 && (gi.top - bi.top).abs() < 1e-6);
 }

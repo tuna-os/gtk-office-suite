@@ -11,7 +11,7 @@ use letters_core::model::{Run, RunStyle};
 use std::path::{Path, PathBuf};
 
 fn text_box(x: f64, y: f64, text: &str, runs: Vec<Run>) -> SlideObject {
-    SlideObject::TextBox { x, y, w: 300.0, h: 80.0, text: text.to_string(), runs, rotation: 0.0 }
+    SlideObject::TextBox { x, y, w: 300.0, h: 80.0, text: text.to_string(), runs, rotation: 0.0, body: Default::default() }
 }
 
 /// Decks chosen for the reader branches they reach, not for looking real.

@@ -12,6 +12,7 @@ use zip::write::SimpleFileOptions;
 use quick_xml::events::{Event, BytesStart, BytesEnd, BytesDecl, BytesText};
 use quick_xml::Writer;
 use letters_core::model::{Run, RunStyle};
+use super::text_body::{Anchor, Bullet, ParaAlign, ParaStyle, Spacing, TextBody};
 
 /// Where a shape sits and how far it is turned — the bounding box in points
 /// plus a rotation in degrees.
@@ -82,10 +83,87 @@ fn write_xfrm<W: std::io::Write>(
 
 /// The `a:p` paragraphs of a text body: styled runs when present (shared
 /// Run/RunStyle with Letters), else one default-styled run of `text`.
+/// EMU for a length in model units.
+fn emu(v: f64) -> String {
+    ((v * 9525.0).round() as i64).to_string()
+}
+
+/// `a:bodyPr` with the box's insets and anchor, where they aren't the
+/// defaults.
+fn write_body_pr<W: std::io::Write>(writer: &mut Writer<W>, body: &TextBody) -> Result<(), quick_xml::Error> {
+    let mut b = BytesStart::new("a:bodyPr");
+    if let Some(i) = body.insets {
+        b.push_attribute(("lIns", emu(i.left).as_str()));
+        b.push_attribute(("tIns", emu(i.top).as_str()));
+        b.push_attribute(("rIns", emu(i.right).as_str()));
+        b.push_attribute(("bIns", emu(i.bottom).as_str()));
+    }
+    if body.anchor != Anchor::Top {
+        b.push_attribute(("anchor", body.anchor.to_drawingml()));
+    }
+    writer.write_event(Event::Empty(b))?;
+    Ok(())
+}
+
+/// `a:pPr` for a paragraph whose style isn't the default. Everything is
+/// written out, bullets included: the box is written as a plain text box,
+/// which inherits none of the placeholder styles it may have been read
+/// from.
+fn write_para_pr<W: std::io::Write>(writer: &mut Writer<W>, st: &ParaStyle) -> Result<(), quick_xml::Error> {
+    if *st == ParaStyle::default() {
+        return Ok(());
+    }
+    let mut p = BytesStart::new("a:pPr");
+    if st.margin_left != 0.0 {
+        p.push_attribute(("marL", emu(st.margin_left).as_str()));
+    }
+    if st.level != 0 {
+        p.push_attribute(("lvl", st.level.to_string().as_str()));
+    }
+    if st.indent != 0.0 {
+        p.push_attribute(("indent", emu(st.indent).as_str()));
+    }
+    if st.align != ParaAlign::Left {
+        p.push_attribute(("algn", st.align.to_drawingml()));
+    }
+    writer.write_event(Event::Start(p))?;
+    for (name, sp) in [("a:spcBef", st.space_before), ("a:spcAft", st.space_after)] {
+        let (el, val) = match sp {
+            Spacing::Units(u) if u != 0.0 => ("a:spcPts", (u * 72.0 / 96.0 * 100.0).round() as i64),
+            Spacing::Lines(f) if f != 0.0 => ("a:spcPct", (f * 100_000.0).round() as i64),
+            _ => continue,
+        };
+        writer.write_event(Event::Start(BytesStart::new(name)))?;
+        let mut e = BytesStart::new(el);
+        e.push_attribute(("val", val.to_string().as_str()));
+        writer.write_event(Event::Empty(e))?;
+        writer.write_event(Event::End(BytesEnd::new(name)))?;
+    }
+    match &st.bullet {
+        Bullet::None => writer.write_event(Event::Empty(BytesStart::new("a:buNone")))?,
+        Bullet::Char(c) => {
+            let mut e = BytesStart::new("a:buChar");
+            e.push_attribute(("char", c.as_str()));
+            writer.write_event(Event::Empty(e))?;
+        }
+        Bullet::AutoNum { scheme, start } => {
+            let mut e = BytesStart::new("a:buAutoNum");
+            e.push_attribute(("type", scheme.as_str()));
+            if *start != 1 {
+                e.push_attribute(("startAt", start.to_string().as_str()));
+            }
+            writer.write_event(Event::Empty(e))?;
+        }
+    }
+    writer.write_event(Event::End(BytesEnd::new("a:pPr")))?;
+    Ok(())
+}
+
 fn write_paragraphs<W: std::io::Write>(
     writer: &mut Writer<W>,
     text: &str,
     runs: &[Run],
+    body: &TextBody,
 ) -> Result<(), quick_xml::Error> {
     // Emit styled runs when present (shared Run/RunStyle with Letters);
     // otherwise a single default-styled run with the plain text.
@@ -103,7 +181,9 @@ fn write_paragraphs<W: std::io::Write>(
     // as a break, so this survived a round trip either way — which is
     // precisely why it needed fixing rather than measuring once and
     // trusting.
+    let mut para = 0usize;
     writer.write_event(Event::Start(BytesStart::new("a:p")))?;
+    write_para_pr(writer, &body.para(0))?;
     for (run, piece, starts_paragraph) in effective.iter().flat_map(|run| {
         let mut parts = run.text.split('\n').enumerate().peekable();
         std::iter::from_fn(move || {
@@ -113,6 +193,8 @@ fn write_paragraphs<W: std::io::Write>(
         if starts_paragraph {
             writer.write_event(Event::End(BytesEnd::new("a:p")))?;
             writer.write_event(Event::Start(BytesStart::new("a:p")))?;
+            para += 1;
+            write_para_pr(writer, &body.para(para))?;
         }
         if piece.is_empty() {
             continue;
@@ -154,6 +236,7 @@ fn write_text_box<W: std::io::Write>(
     at: Placement,
     text: &str,
     runs: &[Run],
+    body: &TextBody,
 ) -> Result<(), quick_xml::Error> {
     writer.write_event(Event::Start(BytesStart::new("p:sp")))?;
     
@@ -185,10 +268,10 @@ fn write_text_box<W: std::io::Write>(
     
     // txBody
     writer.write_event(Event::Start(BytesStart::new("p:txBody")))?;
-    writer.write_event(Event::Empty(BytesStart::new("a:bodyPr")))?;
+    write_body_pr(writer, body)?;
     writer.write_event(Event::Empty(BytesStart::new("a:lstStyle")))?;
     
-    write_paragraphs(writer, text, runs)?;
+    write_paragraphs(writer, text, runs, body)?;
     writer.write_event(Event::End(BytesEnd::new("p:txBody")))?;
     
     writer.write_event(Event::End(BytesEnd::new("p:sp")))?;
@@ -434,7 +517,7 @@ fn write_table<W: std::io::Write>(
             writer.write_event(Event::Start(BytesStart::new("a:txBody")))?;
             writer.write_event(Event::Empty(BytesStart::new("a:bodyPr")))?;
             writer.write_event(Event::Empty(BytesStart::new("a:lstStyle")))?;
-            write_paragraphs(writer, &cell.text(), &cell.runs)?;
+            write_paragraphs(writer, &cell.text(), &cell.runs, &TextBody::default())?;
             writer.write_event(Event::End(BytesEnd::new("a:txBody")))?;
             match cell.fill {
                 Some(fill) => {
@@ -590,13 +673,14 @@ fn write_master_shapes<W: std::io::Write>(
     for (j, obj) in shapes.iter().enumerate() {
         let id = 2 + j;
         match obj {
-            SlideObject::TextBox { text, x, y, w, h, runs, rotation } => write_text_box(
+            SlideObject::TextBox { text, x, y, w, h, runs, rotation, body } => write_text_box(
                 writer,
                 id,
                 j + 1,
                 Placement { x: *x, y: *y, w: *w, h: *h, rotation: *rotation },
                 text,
                 runs,
+                body,
             )?,
             SlideObject::Rect { x, y, w, h, rotation } => write_rect(
                 writer,
@@ -1020,8 +1104,8 @@ pub fn write_pptx_bytes(deck: &Deck) -> Result<Vec<u8>, String> {
             for (j, obj) in slide.objects.iter().enumerate() {
                 let id = 2 + j;
                 match obj {
-                    SlideObject::TextBox { text, x, y, w, h, runs, rotation } => {
-                        write_text_box(&mut writer, id, j + 1, Placement { x: *x, y: *y, w: *w, h: *h, rotation: *rotation }, text, runs).map_err(|e| e.to_string())?;
+                    SlideObject::TextBox { text, x, y, w, h, runs, rotation, body } => {
+                        write_text_box(&mut writer, id, j + 1, Placement { x: *x, y: *y, w: *w, h: *h, rotation: *rotation }, text, runs, body).map_err(|e| e.to_string())?;
                     }
                     SlideObject::Rect { x, y, w, h, rotation } => {
                         write_rect(&mut writer, id, j + 1, Placement { x: *x, y: *y, w: *w, h: *h, rotation: *rotation }).map_err(|e| e.to_string())?;
@@ -1174,6 +1258,7 @@ mod emu_rounding_tests {
                     x: at, y: at, w, h,
                     rotation: 0.0,
                     runs: vec![],
+                    body: Default::default(),
                 }],
             }],
             ..Default::default()

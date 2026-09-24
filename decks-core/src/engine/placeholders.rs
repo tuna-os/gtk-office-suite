@@ -133,18 +133,46 @@ pub(crate) fn parse_placeholders(xml: &str) -> Vec<Placeholder> {
     out
 }
 
-/// The placeholder in `list` that `key` inherits from. Most specific first:
-/// same type and index, same index within the same family, same type, same
-/// family. A title with no `idx` has index 0 by the schema default.
-fn find<'a>(list: &'a [Placeholder], key: &PhKey, use_idx: bool) -> Option<&'a Placeholder> {
+/// The index of the placeholder among `keys` that `key` inherits from. Most
+/// specific first: same type and index, same index within the same family,
+/// same type, same family. A title with no `idx` has index 0 by the schema
+/// default.
+fn find_index(keys: &[&PhKey], key: &PhKey, use_idx: bool) -> Option<usize> {
     let idx = |k: &PhKey| k.idx.unwrap_or(0);
-    let tiers: [&dyn Fn(&Placeholder) -> bool; 4] = [
-        &|p| use_idx && p.key.ty == key.ty && idx(&p.key) == idx(key),
-        &|p| use_idx && idx(&p.key) == idx(key) && p.key.family() == key.family(),
-        &|p| p.key.ty == key.ty,
-        &|p| p.key.family() == key.family(),
+    let tiers: [&dyn Fn(&PhKey) -> bool; 4] = [
+        &|p| use_idx && p.ty == key.ty && idx(p) == idx(key),
+        &|p| use_idx && idx(p) == idx(key) && p.family() == key.family(),
+        &|p| p.ty == key.ty,
+        &|p| p.family() == key.family(),
     ];
-    tiers.iter().find_map(|t| list.iter().find(|p| t(p)))
+    tiers.iter().find_map(|t| keys.iter().position(|p| t(p)))
+}
+
+fn find<'a>(list: &'a [Placeholder], key: &PhKey, use_idx: bool) -> Option<&'a Placeholder> {
+    let keys: Vec<&PhKey> = list.iter().map(|p| &p.key).collect();
+    find_index(&keys, key, use_idx).map(|i| &list[i])
+}
+
+/// Which layout placeholder and which master placeholder a slide
+/// placeholder `key` inherits from, as indices into `layout` and `master`.
+/// The layout is matched by index, then type; the master by type only,
+/// through the layout's own key when the layout has one.
+pub(crate) fn inherited_indices(key: &PhKey, layout: &[&PhKey], master: &[&PhKey]) -> (Option<usize>, Option<usize>) {
+    let l = find_index(layout, key, true);
+    let up = l.map(|i| layout[i]).unwrap_or(key);
+    (l, find_index(master, up, false))
+}
+
+impl PhKey {
+    /// Which of the master's `p:txStyles` this placeholder's text starts
+    /// from: `titleStyle`, `bodyStyle` or `otherStyle`.
+    pub(crate) fn text_style_family(&self) -> &str {
+        match self.family() {
+            "title" => "title",
+            "body" => "body",
+            _ => "other",
+        }
+    }
 }
 
 /// Where a slide placeholder with no geometry of its own belongs: the

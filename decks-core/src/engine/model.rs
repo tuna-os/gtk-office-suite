@@ -59,6 +59,9 @@ pub enum SlideObject {
         /// Styled runs (shared WYSIWYG primitive with Letters). When
         /// non-empty, concatenated run text equals `text`.
         runs: Vec<Run>,
+        /// Paragraph styles (alignment, level, bullet, indents, spacing),
+        /// vertical anchor and insets. `TextBody::default()` is a plain box.
+        body: super::text_body::TextBody,
     },
     Rect { x: f64, y: f64, w: f64, h: f64, rotation: f64 },
     /// A preset shape with its own fill and outline (engine::shape). What

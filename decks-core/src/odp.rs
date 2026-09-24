@@ -397,7 +397,7 @@ fn shapes_xml(
     let mut pages = String::new();
         for obj in shapes {
             match obj {
-                SlideObject::TextBox { text, x, y, w, h, rotation, runs } => {
+                SlideObject::TextBox { text, x, y, w, h, rotation, runs, .. } => {
                     let inner: String = if runs.is_empty() {
                         text.split('\n')
                             .map(|l| format!("<text:p>{}</text:p>", esc(l)))
@@ -1261,6 +1261,7 @@ fn parse_pages(
                                     h,
                                     rotation,
                                     runs,
+                                    body: Default::default(),
                                 });
                             }
                         }
@@ -1278,7 +1279,7 @@ fn parse_pages(
                                     s.notes = text;
                                 }
                             } else if !text.is_empty() {
-                                s.objects.push(SlideObject::TextBox { text, x, y, w, h, rotation, runs });
+                                s.objects.push(SlideObject::TextBox { text, x, y, w, h, rotation, runs, body: Default::default() });
                             } else if shape_type.as_deref().is_some_and(|t| t.contains("ellipse")) {
                                 let r = (w.max(h)) / 2.0;
                                 s.objects.push(SlideObject::Circle { x: x + w / 2.0, y: y + h / 2.0, r, rotation });
@@ -1453,6 +1454,7 @@ mod tests {
                 h: 60.0,
                 runs: vec![],
                 rotation: 0.0,
+                body: Default::default(),
             }],
             notes: notes.into(),
             master_idx: Some(0),
@@ -1913,6 +1915,7 @@ mod tests {
                     },
                 ],
                 rotation: 0.0,
+                body: Default::default(),
             }],
             notes: String::new(),
             master_idx: Some(0),
@@ -2071,6 +2074,7 @@ mod tests {
                     x: at, y: at, w: 200.0, h: 50.0,
                     rotation: 0.0,
                     runs: vec![],
+                    body: Default::default(),
                 }],
             }],
             ..Default::default()
