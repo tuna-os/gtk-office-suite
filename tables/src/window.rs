@@ -287,45 +287,24 @@ impl TablesWindow {
             "Selection statistics",
         )]);
 
+        // The Format inspector's sync, set once it is built (further down).
+        let inspector_sync: crate::format_inspector::SyncSlot = Rc::default();
         let refresh_sel: Rc<dyn Fn()> = {
             let s = state.clone();
             let nb = name_box.clone();
             let stats = stats_label.clone();
             let ga = grid_area.clone();
+            let isync = inspector_sync.clone();
             Rc::new(move || {
-                let st = s.borrow();
-                let sh = st.sheet();
-                ga.sync_cells(&sh.data, &sh.formats, &sh.col_widths, sh.selection_rect());
-                nb.set_text(&format!(
-                    "{}{}",
-                    tables_core::sheet::col_label(sh.selected_col),
-                    sh.selected_row + 1
-                ));
-                if sh.has_range_selection() {
-                    let fmt = |v: f64| {
-                        if v.fract() == 0.0 && v.abs() < 1e15 {
-                            format!("{}", v as i64)
-                        } else {
-                            format!("{v:.2}")
-                        }
-                    };
-                    let stats_v = sh.selection_stats();
-                    let (r0, c0, r1, c1) = sh.selection_rect();
-                    let range = format!(
-                        "{}{}:{}{}",
-                        tables_core::sheet::col_label(c0), r0 + 1,
-                        tables_core::sheet::col_label(c1), r1 + 1
-                    );
-                    if stats_v.count > 0 {
-                        stats.set_text(&format!(
-                            "{}  ·  Sum {}  ·  Avg {}  ·  Count {}",
-                            range, fmt(stats_v.sum), fmt(stats_v.avg), stats_v.count
-                        ));
-                    } else {
-                        stats.set_text(&range);
-                    }
-                } else {
-                    stats.set_text("");
+                {
+                    let st = s.borrow();
+                    let sh = st.sheet();
+                    ga.sync_cells(&sh.data, &sh.formats, &sh.col_widths, sh.selection_rect());
+                    nb.set_text(&format!("{}{}", tables_core::sheet::col_label(sh.selected_col), sh.selected_row + 1));
+                    stats.set_text(&sh.selection_status());
+                }
+                if let Some(sync) = isync.borrow().as_ref() {
+                    sync();
                 }
             })
         };
@@ -1549,7 +1528,10 @@ impl TablesWindow {
         }
 
         suite_win.add_top_bar(&fx_bar);
-        toast_overlay.set_child(Some(&stack));
+        let sw = &suite_win;
+        let inspector = crate::format_inspector::build(&controller, &drawing_area, &sw.header_bar, &[&sw.medium_breakpoint, &sw.narrow_breakpoint], &stack);
+        *inspector_sync.borrow_mut() = Some(inspector.sync.clone());
+        toast_overlay.set_child(Some(&inspector.split));
         suite_win.set_content(&toast_overlay);
         let autosave_notices = suite_common::autosave_notice::AutosaveNotifier::new(&toast_overlay);
         suite_win.add_bottom_bar(&sheet_bar);

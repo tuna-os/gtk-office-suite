@@ -863,6 +863,25 @@ impl SheetModel {
         SelectionStats { count, sum, avg }
     }
 
+    /// The status-bar text for a range selection: the range, then sum,
+    /// average and count when it holds numbers ("A1:B2  ·  Sum 3  ·  Avg
+    /// 1.50  ·  Count 2"). Empty for a single cell.
+    pub fn selection_status(&self) -> String {
+        if !self.has_range_selection() {
+            return String::new();
+        }
+        let fmt = |v: f64| {
+            if v.fract() == 0.0 && v.abs() < 1e15 { format!("{}", v as i64) } else { format!("{v:.2}") }
+        };
+        let (r0, c0, r1, c1) = self.selection_rect();
+        let range = format!("{}{}:{}{}", col_label(c0), r0 + 1, col_label(c1), r1 + 1);
+        let stats = self.selection_stats();
+        if stats.count == 0 {
+            return range;
+        }
+        format!("{}  ·  Sum {}  ·  Avg {}  ·  Count {}", range, fmt(stats.sum), fmt(stats.avg), stats.count)
+    }
+
     pub fn cell(&self, r: usize, c: usize) -> &str {
         if r < self.rows && c < self.cols { &self.data[r][c] } else { "" }
     }
@@ -1391,6 +1410,18 @@ mod selection_tests {
         assert_eq!(st.count, 3);
         assert_eq!(st.sum, 60.0);
         assert_eq!(st.avg, 20.0);
+    }
+
+    #[test]
+    fn the_status_bar_reads_range_then_stats() {
+        let mut s = sheet();
+        s.select_cell(1, 1);
+        assert_eq!(s.selection_status(), "", "a single cell has no range status");
+        s.extend_selection(2, 2);
+        assert_eq!(s.selection_status(), "B2:C3  ·  Sum 60  ·  Avg 20  ·  Count 3");
+        s.select_cell(5, 5);
+        s.extend_selection(6, 6);
+        assert_eq!(s.selection_status(), "F6:G7", "no numbers, just the range");
     }
 
     #[test]
