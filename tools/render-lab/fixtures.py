@@ -339,6 +339,9 @@ def tables():
     ch = BarChart()
     ch.add_data(Reference(ws, min_col=2, min_row=1, max_row=4))
     ch.set_categories(Reference(ws, min_col=1, min_row=1, max_row=4))
+    # Small enough that LibreOffice's printed range (to column I) holds the
+    # whole chart; at openpyxl's default 15 cm it clipped the fourth bar.
+    ch.width, ch.height = 9, 6
     ws.add_chart(ch, "D2")
     save(wb, "chart", "A bar chart with four bars (3,7,5,9) anchored at D2")
 

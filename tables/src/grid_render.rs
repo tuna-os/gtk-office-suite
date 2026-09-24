@@ -337,6 +337,30 @@ pub fn draw_grid(
         }
         draw_cell_text(cr, sheet, mr, mc, (x, y, w, h), cell_text);
     }
+    // Charts float above the cells at their anchor. They were read from
+    // xlsx and saved back, but only ever drawn in the chart dialog's preview
+    // (render lab `tables/chart`).
+    for chart in &sheet.charts {
+        let x = tables_core::sheet::col_x(chart.anchor.1, scroll_x, sheet);
+        let y = tables_core::sheet::row_y(chart.anchor.0, scroll_y, sheet);
+        let (w, h) = (chart.width_px.round() as i32, chart.height_px.round() as i32);
+        if w < 1 || h < 1 || x > width || y > height || x + chart.width_px < ROW_HEADER_WIDTH || y + chart.height_px < COL_HEADER_HEIGHT {
+            continue;
+        }
+        let kind = match chart.kind {
+            tables_core::sheet::ChartKind::Line => crate::charts::ChartType::Line,
+            tables_core::sheet::ChartKind::Pie => crate::charts::ChartType::Pie,
+            _ => crate::charts::ChartType::Bar,
+        };
+        let name = chart.series_name();
+        let surface = crate::charts::render_chart_named(&chart.points(sheet), kind, w, h, Some(&name));
+        cr.set_source_surface(&surface, x.round(), y.round()).unwrap();
+        cr.paint().unwrap();
+        cr.set_source_rgb(grid_line.0, grid_line.1, grid_line.2);
+        cr.set_line_width(1.0);
+        cr.rectangle(x.round() + 0.5, y.round() + 0.5, w as f64 - 1.0, h as f64 - 1.0);
+        cr.stroke().unwrap();
+    }
     cr.restore().unwrap();
 
     // Selection range outline (2px accent around the whole rectangle).

@@ -91,9 +91,44 @@ def strip_rules(img):
     arr = np.asarray(img).copy()
     m = ink_mask(arr)
     bg = background(arr)
-    arr[m.mean(axis=1) > 0.5, :] = bg
-    arr[:, m.mean(axis=0) > 0.5] = bg
+    # A rule is continuous: its longest unbroken run of ink spans over half
+    # the image. Right-aligned digits stacked down a column also put a lot
+    # of ink in one pixel column, but with a gap between every row.
+    arr[thin_runs(longest_run(m, axis=1) > 0.5 * m.shape[1]), :] = bg
+    arr[:, thin_runs(longest_run(m, axis=0) > 0.5 * m.shape[0])] = bg
     return Image.fromarray(arr)
+
+
+def longest_run(mask, axis):
+    """Length of the longest run of consecutive True along `axis`, for each
+    row (axis=1) or column (axis=0)."""
+    m = mask if axis == 1 else mask.T
+    best = np.zeros(m.shape[0], dtype=int)
+    cur = np.zeros(m.shape[0], dtype=int)
+    for j in range(m.shape[1]):
+        cur = np.where(m[:, j], cur + 1, 0)
+        best = np.maximum(best, cur)
+    return best
+
+
+def thin_runs(flags, max_width=3):
+    """`flags` with only runs of at most `max_width` consecutive Trues kept.
+    A rule is a line 1-2 px wide; a chart bar or a filled block is mostly
+    ink across many consecutive columns, and must not be painted out as if
+    it were a gridline."""
+    out = np.zeros_like(flags)
+    i = 0
+    while i < len(flags):
+        if flags[i]:
+            j = i
+            while j < len(flags) and flags[j]:
+                j += 1
+            if j - i <= max_width:
+                out[i:j] = True
+            i = j
+        else:
+            i += 1
+    return out
 
 
 def ssim(a, b):
