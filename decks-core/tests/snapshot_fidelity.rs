@@ -1396,10 +1396,11 @@ fn placeholder_paragraphs_inherit_their_layout_and_master_styles() {
     assert_eq!(runs.iter().map(|r| r.style.font_size_hp).collect::<Vec<_>>(), [Some(64), Some(20)]);
 }
 
-/// Paragraph styles, anchor and insets survive our own pptx round trip.
-/// (The odp writer does not write them yet.)
+/// Paragraph styles, anchor and insets survive our own round trip, in both
+/// formats. ODF has no paragraph margin relative to the line height, so
+/// `Spacing::Lines` survives pptx only.
 #[test]
-fn paragraph_styles_survive_a_pptx_snapshot() {
+fn paragraph_styles_survive_a_snapshot() {
     use decks_core::engine::{Anchor, Bullet, Insets, ParaAlign, ParaStyle, Spacing, TextBody};
     let body = TextBody {
         paras: vec![
@@ -1429,19 +1430,28 @@ fn paragraph_styles_survive_a_pptx_snapshot() {
         "",
         "#ffffff",
     )]);
-    let back = through_a_snapshot(&deck, "pptx", "para-styles");
-    let SlideObject::TextBox { body: got, .. } = &back.slides[0].objects[0] else { panic!("not a text box") };
-    assert_eq!(got.paras.len(), 3);
-    assert_eq!(got.anchor, body.anchor);
-    for (a, b) in got.paras.iter().zip(&body.paras) {
-        assert_eq!((a.align, a.level, &a.bullet), (b.align, b.level, &b.bullet));
-        assert!((a.margin_left - b.margin_left).abs() < 1e-6 && (a.indent - b.indent).abs() < 1e-6);
-        assert_eq!(a.space_before, b.space_before);
-        match (a.space_after, b.space_after) {
-            (Spacing::Units(x), Spacing::Units(y)) => assert!((x - y).abs() < 0.02, "{x} vs {y}"),
-            other => assert_eq!(other.0, other.1),
+    for kind in FORMATS {
+        let back = through_a_snapshot(&deck, kind, "para-styles");
+        let SlideObject::TextBox { body: got, text, .. } = &back.slides[0].objects[0] else {
+            panic!("{kind}: not a text box")
+        };
+        assert_eq!(text, "a\nb\nc", "{kind}");
+        assert_eq!(got.paras.len(), 3, "{kind}: {got:?}");
+        assert_eq!(got.anchor, body.anchor, "{kind}");
+        for (a, b) in got.paras.iter().zip(&body.paras) {
+            assert_eq!((a.align, a.level, &a.bullet), (b.align, b.level, &b.bullet), "{kind}");
+            assert!((a.margin_left - b.margin_left).abs() < 1e-3 && (a.indent - b.indent).abs() < 1e-3, "{kind}: {a:?}");
+            let units = |s: Spacing| match s {
+                Spacing::Units(u) => Some(u),
+                Spacing::Lines(_) => None,
+            };
+            match (kind, b.space_before) {
+                ("odp", Spacing::Lines(_)) => assert_eq!(a.space_before, Spacing::Units(0.0), "odp: lines are dropped"),
+                _ => assert_eq!(a.space_before, b.space_before, "{kind}"),
+            }
+            assert!((units(a.space_after).unwrap() - units(b.space_after).unwrap()).abs() < 0.02, "{kind}");
         }
+        let (gi, bi) = (got.insets.unwrap(), body.insets.unwrap());
+        assert!((gi.left - bi.left).abs() < 1e-3 && (gi.top - bi.top).abs() < 1e-3, "{kind}");
     }
-    let (gi, bi) = (got.insets.unwrap(), body.insets.unwrap());
-    assert!((gi.left - bi.left).abs() < 1e-6 && (gi.top - bi.top).abs() < 1e-6);
 }

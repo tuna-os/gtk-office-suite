@@ -142,7 +142,7 @@ fn parse_transform(v: &str, w: f64, h: f64) -> Option<(f64, f64, f64)> {
     ))
 }
 
-fn esc(s: &str) -> String {
+pub(crate) fn esc(s: &str) -> String {
     s.replace('&', "&amp;")
         .replace('<', "&lt;")
         .replace('>', "&gt;")
@@ -338,11 +338,13 @@ fn media_type_for(path: &str) -> (&'static str, &'static str) {
 pub(crate) struct GraphicStyles {
     prefix: String,
     styles: Vec<crate::engine::shape::ShapeStyle>,
+    /// Text boxes' paragraph, list and frame styles, under the same prefix.
+    text: crate::odp_text::TextStyles,
 }
 
 impl GraphicStyles {
     fn new(prefix: &str) -> Self {
-        GraphicStyles { prefix: prefix.to_string(), styles: Vec::new() }
+        GraphicStyles { prefix: prefix.to_string(), styles: Vec::new(), text: crate::odp_text::TextStyles::new(prefix) }
     }
 
     fn name_of(&mut self, style: &crate::engine::shape::ShapeStyle) -> String {
@@ -360,6 +362,7 @@ impl GraphicStyles {
     /// A gradient is written as its mean colour: ODF gradients need named
     /// `draw:gradient` styles in office:styles, not yet written.
     fn declare(&self) -> String {
+        let text = self.text.declare();
         self.styles
             .iter()
             .enumerate()
@@ -383,7 +386,8 @@ impl GraphicStyles {
                     i + 1
                 )
             })
-            .collect()
+            .collect::<String>()
+            + &text
     }
 }
 
@@ -397,6 +401,28 @@ fn shapes_xml(
     let mut pages = String::new();
         for obj in shapes {
             match obj {
+                SlideObject::TextBox { text, x, y, w, h, rotation, runs, body } if !body.is_plain() => {
+                    // Paragraph styles, lists and the frame's anchor and
+                    // padding (odp_text.rs).
+                    let inner: Vec<String> = if runs.is_empty() {
+                        text.split('\n').map(esc).collect()
+                    } else {
+                        crate::engine::text_body::paragraphs(runs)
+                            .iter()
+                            .map(|p| p.iter().map(|r| run_span(r, style_of(&r.style), prefix)).collect())
+                            .collect()
+                    };
+                    let paras = graphics.text.paragraphs(body, &inner);
+                    let style = graphics
+                        .text
+                        .frame_name(body)
+                        .map(|n| format!("draw:style-name=\"{n}\" "))
+                        .unwrap_or_default();
+                    pages.push_str(&format!(
+                        "<draw:frame {style}{}><draw:text-box>{paras}</draw:text-box></draw:frame>",
+                        geometry(*x, *y, *w, *h, *rotation)
+                    ));
+                }
                 SlideObject::TextBox { text, x, y, w, h, rotation, runs, .. } => {
                     let inner: String = if runs.is_empty() {
                         text.split('\n')
@@ -813,7 +839,7 @@ pub fn write_bytes(deck: &Deck) -> Result<Vec<u8>, String> {
 
 // ── Reading ──────────────────────────────────────────────────────────
 
-fn parse_length_pt(v: &str) -> Option<f64> {
+pub(crate) fn parse_length_pt(v: &str) -> Option<f64> {
     let v = v.trim();
     let split = v.find(|c: char| c.is_ascii_alphabetic())?;
     let (num, unit) = v.split_at(split);
@@ -1038,6 +1064,7 @@ fn parse_pages(
     page_tag: &str,
     page_bg: &std::collections::HashMap<String, String>,
     text_styles: &std::collections::HashMap<String, RunStyle>,
+    text_defs: &crate::odp_text::TextDefs,
     scale: (f64, f64),
     resolve_image: &mut dyn FnMut(&str) -> Option<String>,
 ) -> Result<Vec<Page>, String> {
@@ -1054,6 +1081,15 @@ fn parse_pages(
     let mut span_style: Option<RunStyle> = None;
     let mut in_text = false;
     let mut shape_type: Option<String> = None;
+    // Paragraph layout of the box being read: the frame's graphic style,
+    // the open `text:list`s' style names, and one style per `text:p`.
+    let mut frame_style: Option<String> = None;
+    let mut lists: Vec<Option<String>> = Vec::new();
+    let mut paras: Vec<crate::engine::ParaStyle> = Vec::new();
+    let body_of = |frame_style: &Option<String>, paras: &mut Vec<crate::engine::ParaStyle>| {
+        let (anchor, insets) = text_defs.frame(frame_style.as_deref(), scale);
+        crate::engine::TextBody { paras: std::mem::take(paras), anchor, insets }
+    };
 
     // `svg:x`/`svg:y` place an unrotated shape; a rotated one carries
     // `draw:transform` instead and Impress omits them entirely, so the
@@ -1094,7 +1130,11 @@ fn parse_pages(
                     });
                 }
                 "presentation:notes" => in_notes = true,
-                "draw:frame" => frame = Some(geo(e)),
+                "draw:frame" => {
+                    frame = Some(geo(e));
+                    frame_style = attr(e, "draw:style-name");
+                }
+                "text:list" => lists.push(attr(e, "text:style-name")),
                 // A picture takes its geometry from the frame around it,
                 // the way a text box does. `xlink:href` names a part inside
                 // this package; the resolver turns it into something the
@@ -1119,12 +1159,17 @@ fn parse_pages(
                         }
                     }
                 }
-                "draw:text-box" => textbox = Some((Vec::new(), Vec::new())),
+                "draw:text-box" => {
+                    textbox = Some((Vec::new(), Vec::new()));
+                    paras.clear();
+                }
                 // Impress converts pptx text boxes to custom-shapes with
                 // text:p directly inside (no draw:text-box wrapper).
                 "draw:custom-shape" => {
                     frame = Some(geo(e));
+                    frame_style = attr(e, "draw:style-name");
                     textbox = Some((Vec::new(), Vec::new()));
+                    paras.clear();
                     shape_type = None;
                 }
                 "draw:enhanced-geometry" => {
@@ -1143,6 +1188,8 @@ fn parse_pages(
                             last.text.push('\n');
                         }
                         lines.push(String::new());
+                        let list = lists.iter().flatten().next().map(String::as_str);
+                        paras.push(text_defs.para(attr(e, "text:style-name").as_deref(), list, lists.len(), scale.0));
                     }
                     in_text = true;
                 }
@@ -1237,6 +1284,9 @@ fn parse_pages(
             }
             Ok(Event::End(ref e)) => match e.name().as_ref() {
                 "text:p" => in_text = false,
+                "text:list" => {
+                    lists.pop();
+                }
                 "text:span" => span_style = None,
                 "draw:text-box" => {
                     if let (Some((lines, runs)), Some((x, y, w, h, rotation))) =
@@ -1261,7 +1311,7 @@ fn parse_pages(
                                     h,
                                     rotation,
                                     runs,
-                                    body: Default::default(),
+                                    body: body_of(&frame_style, &mut paras),
                                 });
                             }
                         }
@@ -1279,7 +1329,7 @@ fn parse_pages(
                                     s.notes = text;
                                 }
                             } else if !text.is_empty() {
-                                s.objects.push(SlideObject::TextBox { text, x, y, w, h, rotation, runs, body: Default::default() });
+                                s.objects.push(SlideObject::TextBox { text, x, y, w, h, rotation, runs, body: body_of(&frame_style, &mut paras) });
                             } else if shape_type.as_deref().is_some_and(|t| t.contains("ellipse")) {
                                 let r = (w.max(h)) / 2.0;
                                 s.objects.push(SlideObject::Circle { x: x + w / 2.0, y: y + h / 2.0, r, rotation });
@@ -1356,6 +1406,9 @@ pub fn read(path: &str) -> Result<Deck, String> {
     let mut page_bg: std::collections::HashMap<String, String> = Default::default();
     parse_styles(&content, &mut text_styles, &mut page_bg);
     parse_styles(&styles, &mut text_styles, &mut page_bg);
+    let mut text_defs = crate::odp_text::TextDefs::default();
+    text_defs.read(&content);
+    text_defs.read(&styles);
 
     // One font for the whole document — see `styles_xml` for why ODF has
     // no per-master one to read. Every master gets it, so a deck saved and
@@ -1375,7 +1428,7 @@ pub fn read(path: &str) -> Result<Deck, String> {
     let mut master_idx_by_name: std::collections::HashMap<String, usize> = Default::default();
     let master_pages = {
         let mut resolve = |href: &str| extract_picture(href, &mut zip, &mut budget);
-        parse_pages(&styles, "style:master-page", &page_bg, &text_styles, scale, &mut resolve)?
+        parse_pages(&styles, "style:master-page", &page_bg, &text_styles, &text_defs, scale, &mut resolve)?
     };
     for page in master_pages {
         master_idx_by_name.insert(page.slide.title.clone(), masters.len());
@@ -1398,7 +1451,7 @@ pub fn read(path: &str) -> Result<Deck, String> {
     let mut deck = Deck { slides: Vec::new(), masters };
     let slide_pages = {
         let mut resolve = |href: &str| extract_picture(href, &mut zip, &mut budget);
-        parse_pages(&content, "draw:page", &page_bg, &text_styles, scale, &mut resolve)?
+        parse_pages(&content, "draw:page", &page_bg, &text_styles, &text_defs, scale, &mut resolve)?
     };
     for (i, page) in slide_pages.into_iter().enumerate() {
         let mut slide = page.slide;
