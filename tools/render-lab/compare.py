@@ -114,17 +114,23 @@ def lo_cell_box(ref):
 
 def our_cell_origin(ours):
     """Where our cells start: the width of the row-header band and the
-    height of the column-header band, both drawn in one flat shade. Read
-    along the bottom pixel row and the rightmost pixel column, which run
-    through the bands but clear of their labels."""
+    height of the column-header band, both drawn in one flat shade. A band
+    ends at the first column (row) where that shade covers under half the
+    pixels; labels cover far less than half their band. The shade is read
+    a few px in from the corner, clear of the 1 px frame a Broadway
+    capture can carry on its edge."""
     a = np.asarray(ours).astype(int)
-    shade = a[0, 0]  # the corner cell
+    shade = a[4, 4]
+    is_shade = np.abs(a - shade).sum(axis=2) <= 6
 
-    def band(line):
-        same = np.abs(line - shade).sum(axis=1) <= 6
-        return int(np.argmin(same)) if not same.all() else 0
+    def band(fraction):
+        inside = np.nonzero(fraction >= 0.5)[0]
+        if not len(inside):
+            return 0
+        past = np.nonzero(fraction[inside[0] :] < 0.5)[0]
+        return int(inside[0] + past[0]) if len(past) else 0
 
-    return band(a[-2, :]), band(a[:, -2])
+    return band(is_shade.mean(axis=0)), band(is_shade.mean(axis=1))
 
 
 def bridge(mask, gap=3):
