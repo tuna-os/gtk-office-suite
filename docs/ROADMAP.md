@@ -6,6 +6,14 @@
 > plans below. A visual feature is done only when a screenshot of the
 > running app matches LibreOffice's rendering of the same file within
 > budget.
+>
+> **Collaboration & Google Workspace track (accepted 2026-09-24):**
+> Following the project owner direction, [RFC-0001](rfc/0001-crdt-collaboration.md)
+> is accepted in principle and governed by the [Render Parity Roadmap Collaboration Track](RENDER-PARITY-ROADMAP.md#collaboration-track-rfc-0001).
+> The newly landed Tables cell-style model unblocks Phase 1 (library measurement
+> spike: Automerge vs Loro vs yrs on recorded Tables sessions). Standalone Google
+> Docs/Sheets/Slides capabilities ([DESIGN-UI.md](DESIGN-UI.md#ideas-taken-from-google-docs-sheets-and-slides-direction-set-2026-09-24))
+> proceed on Phase 1 models without waiting for networking or CRDT synchronization.
 
 Current execution: [September readiness plan](readiness-2026-09/README.md),
 with dependency-ordered issues and acceptance tests in
@@ -114,6 +122,21 @@ without a test that fails first.
 - ✅ **Flathub prep**: metainfo (screenshots/releases/launchable)
   validates pedantic-clean; flathub/ manifests build from tag v1.1.0.
   The submission PR itself is a human action (see flathub/README.md).
+
+## Collaboration and Google Workspace editors (direction set 2026-09-24)
+
+- **RFC-0001 Phase 1 measurement spike**: Tables has a GTK-free model with the
+  new cell-style model (`tables-core/src/style.rs`). Replay a recorded Tables
+  editing session through Automerge, Loro, and yrs to benchmark memory overhead,
+  serialized document size, and merge latency without taking production
+  dependencies.
+- **Standalone Google Workspace features** ([`docs/DESIGN-UI.md`](DESIGN-UI.md)):
+  - **Letters**: Document outline sidebar from headings; pageless view mode;
+    smart chips.
+  - **Tables**: Formula autocomplete with argument hints; dropdown chips for data
+    validation; Explore-style suggested charts/pivots.
+  - **Decks**: Explore layout suggestions; theme builder editing master; linked
+    charts updating from Tables ranges.
 
 ## Standing infrastructure notes
 
