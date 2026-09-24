@@ -218,6 +218,11 @@ pub fn capture_from_buffer(buf: &gtk::TextBuffer) -> Document {
                 }
             }
             line_list_level = iter.tags().iter().find_map(|t| t.name().and_then(|n| list_level_from_tag_name(&n)));
+            for tag in iter.tags() {
+                if let Some(name) = tag.name() {
+                    apply_para_tag_name(&name, &mut current.style);
+                }
+            }
             at_line_start = false;
         }
         // Embedded images appear as the object-replacement char; the source
@@ -313,7 +318,7 @@ pub fn capture_from_buffer(buf: &gtk::TextBuffer) -> Document {
     let footer = footer_sidecar(buf);
     let page = page_sidecar(buf);
     capture_tables(&mut paragraphs);
-    Document { paragraphs, footnotes, header, footer, page }
+    Document { paragraphs, footnotes, header, footer, page, base_font: base_font_sidecar(buf) }
 }
 
 /// Fold rendered pipe grids back into table-cell paragraphs.
@@ -387,6 +392,8 @@ pub const HEADER_KEY: &str = "letters-header";
 pub const FOOTER_KEY: &str = "letters-footer";
 /// Buffer data key holding the document's page geometry, if it has one.
 pub const PAGE_KEY: &str = "letters-page";
+/// Buffer data key holding the document's base (body) font.
+pub const BASE_FONT_KEY: &str = "letters-base-font";
 
 // GObject data is an untyped pointer: reading a key back at a type other than
 // the one it was written with is undefined behaviour, not a panic, and no test
@@ -405,6 +412,10 @@ fn header_sidecar(buf: &gtk::TextBuffer) -> Option<String> {
 
 fn footer_sidecar(buf: &gtk::TextBuffer) -> Option<String> {
     unsafe { buf.data::<Option<String>>(FOOTER_KEY).and_then(|p| p.as_ref().clone()) }
+}
+
+fn base_font_sidecar(buf: &gtk::TextBuffer) -> letters_core::model::BaseFont {
+    unsafe { buf.data::<letters_core::model::BaseFont>(BASE_FONT_KEY).map(|p| p.as_ref().clone()).unwrap_or_default() }
 }
 
 fn page_sidecar(buf: &gtk::TextBuffer) -> Option<PageGeometry> {
@@ -446,7 +457,108 @@ pub fn set_buffer_sidecars(doc: &Document, buf: &gtk::TextBuffer) {
         buf.set_data(HEADER_KEY, doc.header.clone());
         buf.set_data(FOOTER_KEY, doc.footer.clone());
         buf.set_data(PAGE_KEY, doc.page);
+        buf.set_data(BASE_FONT_KEY, doc.base_font.clone());
     }
+}
+
+const PARA_TAG_PREFIX: &str = "para:";
+
+/// The paragraph properties the fixed tags do not carry, as one tag name:
+/// spacing, indents, tab stops, a line spacing no `line-spacing-*` tag
+/// names, block quote, named style and a list restart. `None` when the
+/// paragraph has none of them.
+///
+/// Without it all of these were dropped on the way into the editor, so a
+/// save wrote the document back without its paragraph spacing and indents,
+/// and Print Layout (which reads the document back from the editor) drew
+/// every paragraph tight.
+fn para_tag_name(style: &letters_core::ParaStyle) -> Option<String> {
+    let mut parts: Vec<String> = Vec::new();
+    let mut num = |key: &str, v: f64| {
+        if v != 0.0 {
+            parts.push(format!("{key}={v}"));
+        }
+    };
+    num("b", style.space_before_pt);
+    num("a", style.space_after_pt);
+    num("l", style.left_indent_pt);
+    num("r", style.right_indent_pt);
+    num("f", style.first_line_indent_pt);
+    if !style.tab_stops_pt.is_empty() {
+        let tabs: Vec<String> = style.tab_stops_pt.iter().map(f64::to_string).collect();
+        parts.push(format!("t={}", tabs.join(",")));
+    }
+    if line_spacing_tag_name(style.line_spacing).is_none() && (style.line_spacing - 1.0).abs() > 0.001 {
+        parts.push(format!("ls={}", style.line_spacing));
+    }
+    if style.block_quote {
+        parts.push("q".into());
+    }
+    if let Some(start) = style.list_start {
+        parts.push(format!("n={start}"));
+    }
+    if let Some(name) = &style.named_style {
+        // Last, and the only free text: everything after "s=" is the name.
+        parts.push(format!("s={name}"));
+    }
+    (!parts.is_empty()).then(|| format!("{PARA_TAG_PREFIX}{}", parts.join(";")))
+}
+
+/// Read a `para:` tag back into `style`. Inverse of `para_tag_name`.
+fn apply_para_tag_name(name: &str, style: &mut letters_core::ParaStyle) {
+    let Some(mut rest) = name.strip_prefix(PARA_TAG_PREFIX) else { return };
+    while !rest.is_empty() {
+        if let Some(named) = rest.strip_prefix("s=") {
+            style.named_style = Some(named.to_string());
+            return;
+        }
+        let (part, tail) = rest.split_once(';').unwrap_or((rest, ""));
+        rest = tail;
+        let (key, value) = part.split_once('=').unwrap_or((part, ""));
+        let f = || value.parse::<f64>().ok();
+        match key {
+            "b" => style.space_before_pt = f().unwrap_or(0.0),
+            "a" => style.space_after_pt = f().unwrap_or(0.0),
+            "l" => style.left_indent_pt = f().unwrap_or(0.0),
+            "r" => style.right_indent_pt = f().unwrap_or(0.0),
+            "f" => style.first_line_indent_pt = f().unwrap_or(0.0),
+            "t" => style.tab_stops_pt = value.split(',').filter_map(|t| t.parse().ok()).collect(),
+            "ls" => style.line_spacing = value.parse().unwrap_or(1.0),
+            "q" => style.block_quote = true,
+            "n" => style.list_start = value.parse().ok(),
+            _ => {}
+        }
+    }
+}
+
+/// Create (on first use) the `para:` tag for `style` and return its name.
+/// It also draws what it can in the Draft editor: spacing above and below,
+/// and — outside lists, whose own tag owns the margin — the indents.
+fn para_tag(buf: &gtk::TextBuffer, style: &letters_core::ParaStyle) -> Option<String> {
+    let name = para_tag_name(style)?;
+    if buf.tag_table().lookup(&name).is_none() {
+        let px = |pt: f64| (pt * 96.0 / 72.0).round() as i32;
+        let tag = gtk::TextTag::builder().name(&name).build();
+        if style.space_before_pt > 0.0 {
+            tag.set_pixels_above_lines(px(style.space_before_pt));
+        }
+        if style.space_after_pt > 0.0 {
+            tag.set_pixels_below_lines(px(style.space_after_pt));
+        }
+        if style.list == letters_core::ListKind::None {
+            if style.left_indent_pt != 0.0 {
+                tag.set_left_margin(EDITOR_LEFT_MARGIN_PX + px(style.left_indent_pt));
+            }
+            if style.first_line_indent_pt != 0.0 {
+                tag.set_indent(px(style.first_line_indent_pt));
+            }
+        }
+        if style.right_indent_pt > 0.0 {
+            tag.set_right_margin(EDITOR_LEFT_MARGIN_PX + px(style.right_indent_pt));
+        }
+        buf.tag_table().add(&tag);
+    }
+    Some(name)
 }
 
 /// GtkTextTag name for the list geometry of nesting level `level`.
@@ -645,6 +757,9 @@ pub fn render_to_buffer(doc: &Document, buf: &gtk::TextBuffer) {
         }
         if para.style.list != letters_core::ListKind::None {
             para_tags.push(list_level_tag(buf, para.style.list_level));
+        }
+        if let Some(name) = para_tag(buf, &para.style) {
+            para_tags.push(name);
         }
         for name in para_tags {
             let start = buf.iter_at_offset(para_start);
@@ -876,6 +991,51 @@ mod tests {
             assert_eq!(tag.size_points(), 18.0);
             assert!(buf.tag_table().lookup("color:C80000").is_some());
             assert!(buf.tag_table().lookup("font:Liberation Mono").is_some());
+        });
+    }
+
+    #[test]
+    fn paragraph_properties_round_trip_through_their_tag_name() {
+        let style = letters_core::ParaStyle {
+            space_before_pt: 12.0,
+            space_after_pt: 10.0,
+            left_indent_pt: 36.0,
+            right_indent_pt: 4.5,
+            first_line_indent_pt: -18.0,
+            tab_stops_pt: vec![36.0, 72.5],
+            line_spacing: 1.08,
+            block_quote: true,
+            list_start: Some(5),
+            named_style: Some("My; odd=style".into()),
+            ..Default::default()
+        };
+        let name = para_tag_name(&style).expect("a tag for a styled paragraph");
+        let mut back = letters_core::ParaStyle::default();
+        apply_para_tag_name(&name, &mut back);
+        assert_eq!(back, style);
+        assert_eq!(para_tag_name(&letters_core::ParaStyle::default()), None, "a plain paragraph needs no tag");
+        // Line spacings the line-spacing-* tags carry stay with them.
+        let tagged = letters_core::ParaStyle { line_spacing: 1.5, ..Default::default() };
+        assert_eq!(para_tag_name(&tagged), None);
+    }
+
+    /// Spacing and indents used to be dropped by the buffer: lost on save,
+    /// and missing from Print Layout.
+    #[test]
+    fn paragraph_spacing_and_indents_survive_the_buffer() {
+        gtk_test(|| {
+            let buf = gtk::TextBuffer::new(None);
+            crate::actions::register_formatting_tags(&buf);
+            let mut d = Document::from_plain_text("spaced\nindented\nplain");
+            d.paragraphs[0].style.space_after_pt = 10.0;
+            d.paragraphs[0].style.line_spacing = 1.15;
+            d.paragraphs[1].style.left_indent_pt = 72.0;
+            d.paragraphs[1].style.first_line_indent_pt = 36.0;
+            let rt = round_trip(&buf, &d);
+            let styles: Vec<&letters_core::ParaStyle> = rt.paragraphs.iter().map(|p| &p.style).collect();
+            assert_eq!(styles[0], &d.paragraphs[0].style);
+            assert_eq!(styles[1], &d.paragraphs[1].style);
+            assert_eq!(styles[2], &letters_core::ParaStyle::default());
         });
     }
 

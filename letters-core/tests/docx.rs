@@ -835,3 +835,88 @@ fn list_numbering_inherited_from_a_paragraph_style_is_read() {
         ]
     );
 }
+
+/// What a paragraph inherits from its styles is how it looks.
+///
+/// python-docx's template (and Word's) puts 10pt after every paragraph and
+/// 1.15 line spacing in docDefaults, the body font in the Normal style, and
+/// contextual spacing on the list styles. Reading only direct properties
+/// drew those documents tight, in the wrong font, and paginated them onto
+/// too few pages (render-lab `letters/pagination`: 3 pages vs 4).
+#[test]
+fn style_inherited_spacing_font_and_contextual_spacing_are_read() {
+    let mut d = Document::from_plain_text("intro\none\ntwo\nthree\noutro");
+    for p in &mut d.paragraphs[1..4] {
+        p.style.list = ListKind::Bullet;
+    }
+    let rt = doctor_parts(&d, |parts| {
+        let body = parts.get_mut("word/document.xml").unwrap();
+        let num_id = body.split("<w:numId w:val=\"").nth(1).unwrap().split('"').next().unwrap().to_string();
+        while let Some(start) = body.find("<w:numPr>") {
+            let end = body[start..].find("</w:numPr>").unwrap() + start + "</w:numPr>".len();
+            body.replace_range(start..end, "<w:pStyle w:val=\"ListBullet\"/>");
+        }
+        let st = parts.get_mut("word/styles.xml").unwrap();
+        let a = st.find("<w:docDefaults").unwrap();
+        let b = st.find("</w:docDefaults>").unwrap() + "</w:docDefaults>".len();
+        st.replace_range(
+            a..b,
+            "<w:docDefaults><w:rPrDefault><w:rPr><w:rFonts w:asciiTheme=\"minorHAnsi\"/><w:sz w:val=\"22\"/>\
+             </w:rPr></w:rPrDefault><w:pPrDefault><w:pPr><w:spacing w:after=\"200\" w:line=\"276\" \
+             w:lineRule=\"auto\"/></w:pPr></w:pPrDefault></w:docDefaults>",
+        );
+        // The body font lives on Normal, as python-docx's fixtures set it.
+        let normal = st.find("w:styleId=\"Normal\"").expect("a Normal style");
+        let close = st[normal..].find('>').unwrap() + normal + 1;
+        st.insert_str(close, "<w:rPr><w:rFonts w:ascii=\"Liberation Serif\" w:hAnsi=\"Liberation Serif\"/><w:sz w:val=\"24\"/></w:rPr>");
+        *st = st.replace(
+            "</w:styles>",
+            &format!(
+                "<w:style w:type=\"paragraph\" w:styleId=\"ListBullet\"><w:name w:val=\"List Bullet\"/>\
+                 <w:basedOn w:val=\"Normal\"/><w:pPr><w:numPr><w:numId w:val=\"{num_id}\"/></w:numPr>\
+                 <w:contextualSpacing/></w:pPr></w:style></w:styles>"
+            ),
+        );
+    });
+    assert_eq!(rt.base_font.family.as_deref(), Some("Liberation Serif"));
+    assert_eq!(rt.base_font.size_hp, Some(24));
+    let s: Vec<(f64, f64, f32)> =
+        rt.paragraphs.iter().map(|p| (p.style.space_before_pt, p.style.space_after_pt, p.style.line_spacing)).collect();
+    assert_eq!(s[0], (0.0, 10.0, 1.15), "docDefaults spacing on a Normal paragraph");
+    assert_eq!(s[1].1, 0.0, "no space between items of one contextual list style");
+    assert_eq!(s[2].1, 0.0);
+    assert_eq!(s[3].1, 10.0, "the last item keeps its space before a Normal paragraph");
+    assert_eq!(s[4], (0.0, 10.0, 1.15));
+    assert!(rt.paragraphs[0].runs.iter().all(|r| r.style.font_family.is_none() && r.style.font_size_hp.is_none()),
+        "body runs in the body font carry no font of their own: {:?}", rt.paragraphs[0].runs);
+}
+
+/// A document Letters writes looks in Word and LibreOffice as it does in
+/// Letters, and the same again when Letters reopens it: no inherited
+/// paragraph spacing, the base font, and all six heading styles.
+#[test]
+fn a_written_docx_carries_letters_own_styles() {
+    let mut d = Document::from_plain_text("Title\nbody");
+    d.paragraphs[0].style.heading = Some(2);
+    d.base_font = BaseFont { family: Some("Carlito".into()), size_hp: Some(22) };
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("styles.docx");
+    docx::write(&d, &path).unwrap();
+    let mut zip = zip::ZipArchive::new(std::fs::File::open(&path).unwrap()).unwrap();
+    let mut styles = String::new();
+    std::io::Read::read_to_string(&mut zip.by_name("word/styles.xml").unwrap(), &mut styles).unwrap();
+    for n in 1..=6 {
+        assert_eq!(styles.matches(&format!("w:styleId=\"Heading{n}\"")).count(), 1, "Heading{n} defined once");
+    }
+    assert!(styles.contains("w:after=\"0\""), "no inherited space after: {styles}");
+    assert!(!styles.contains("Calibri\""), "rdocx's Calibri default is gone");
+
+    let rt = docx::read(path.to_str().unwrap()).unwrap();
+    assert_eq!(rt.base_font, d.base_font);
+    for p in &rt.paragraphs {
+        assert_eq!((p.style.space_before_pt, p.style.space_after_pt, p.style.line_spacing), (0.0, 0.0, 1.0));
+    }
+    assert_eq!(rt.paragraphs[0].style.heading, Some(2));
+    assert!(rt.paragraphs[0].runs.iter().all(|r| r.style.font_size_hp.is_none() && !r.style.bold),
+        "a heading's look stays its level, not copied onto its runs");
+}

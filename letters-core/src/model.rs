@@ -258,6 +258,20 @@ pub struct Document {
     pub footer: Option<String>,
     /// Page size and margins; None = application default (A4).
     pub page: Option<PageGeometry>,
+    /// The body font the document's own styles name; runs without a font
+    /// of their own are drawn in it.
+    #[serde(default)]
+    pub base_font: BaseFont,
+}
+
+/// A document's body font: a docx's docDefaults and Normal style, an ODT's
+/// default paragraph style. `None` fields fall back to the application's
+/// default (Liberation Serif 12pt, LibreOffice Writer's).
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct BaseFont {
+    pub family: Option<String>,
+    /// Size in half-points (24 = 12pt).
+    pub size_hp: Option<u16>,
 }
 
 /// Page size and margins, in points.
@@ -316,7 +330,14 @@ impl Default for Document {
 
 impl Document {
     pub fn new() -> Self {
-        Self { paragraphs: vec![Paragraph::default()], footnotes: vec![], header: None, footer: None, page: None }
+        Self {
+            paragraphs: vec![Paragraph::default()],
+            footnotes: vec![],
+            header: None,
+            footer: None,
+            page: None,
+            base_font: BaseFont::default(),
+        }
     }
 
     pub fn from_plain_text(text: &str) -> Self {
@@ -327,7 +348,7 @@ impl Document {
                 runs: if line.is_empty() { vec![] } else { vec![Run::plain(line)] },
             })
             .collect::<Vec<_>>();
-        let mut d = Self { paragraphs, footnotes: vec![], header: None, footer: None, page: None };
+        let mut d = Self { paragraphs, ..Self::new() };
         d.ensure_non_empty();
         d
     }
