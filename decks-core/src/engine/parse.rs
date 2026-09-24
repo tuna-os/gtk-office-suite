@@ -24,7 +24,8 @@ use super::model::*;
 use super::notes::{extract_notes_text, parse_run_style};
 use super::placeholders::{inherited_rect, parse_placeholders, PhKey, Placeholder};
 use super::shape::ShapeKind;
-use super::shape_xml::{frame_tables, sp_styles, theme as read_theme};
+use super::shape_xml::{frame_tables, sp_styles, theme as read_theme, Theme};
+use super::text_xml::{sp_texts, Inherited};
 
 use std::fs::File;
 use std::io::Write;
@@ -266,15 +267,51 @@ struct PendingShape {
     /// Set when the shape is a placeholder (`p:ph`): its geometry may
     /// come from the layout or master instead of its own `a:xfrm`.
     ph: Option<PhKey>,
+    /// `a:p` elements seen so far (the current one is `paras_seen - 1`).
+    paras_seen: usize,
+    /// `a:r`/`a:fld` elements seen so far.
+    runs_seen: usize,
+    /// For each line of text, the `a:p` it came from. Empty paragraphs at
+    /// the start and end make no line, so this is not simply 0..n.
+    line_paras: Vec<usize>,
+    /// For each run, the `a:r`/`a:fld` it came from.
+    run_refs: Vec<Option<usize>>,
 }
 
 impl PendingShape {
     /// Record one `a:t`'s text as a run, breaking the line first if a
     /// paragraph closed since the last one.
     fn push_run(&mut self, text: String) {
+        let cur = self.paras_seen.saturating_sub(1);
+        if self.runs.is_empty() {
+            self.line_paras.push(cur);
+        } else {
+            // n closed paragraphs since the last run: the n-1 empty ones
+            // between, then this one.
+            for k in 0..self.pending_breaks {
+                self.line_paras.push((cur + 1 + k).saturating_sub(self.pending_breaks));
+            }
+        }
         close_paragraphs(&mut self.runs, self.pending_breaks);
         self.pending_breaks = 0;
         self.runs.push(Run { text, style: self.cur_style.clone() });
+        self.run_refs.push(self.runs_seen.checked_sub(1));
+    }
+
+    /// The runs styled as the file resolves them (inherited defaults under
+    /// their own properties), and the text body for the lines kept.
+    fn resolve(&self, st: Option<&super::text_xml::SpText>) -> (Vec<Run>, super::text_body::TextBody) {
+        let Some(st) = st else { return (self.runs.clone(), Default::default()) };
+        let runs = self
+            .runs
+            .iter()
+            .zip(&self.run_refs)
+            .map(|(r, i)| match i.and_then(|i| st.runs.get(i)) {
+                Some(p) => Run { text: r.text.clone(), style: p.style() },
+                None => r.clone(),
+            })
+            .collect();
+        (runs, st.body_for(&self.line_paras))
     }
 }
 
@@ -293,7 +330,8 @@ fn read_layout_placeholders(
     archive: &mut zip::ZipArchive<File>,
     budget: &mut ZipBudget,
     layout_path: &str,
-) -> (Vec<Placeholder>, Vec<Placeholder>) {
+    theme: &Theme,
+) -> (Vec<Placeholder>, Vec<Placeholder>, Inherited) {
     let layout_xml = archive.optional_part_to_string(layout_path, budget);
     let dir = Path::new(layout_path).parent().unwrap_or(Path::new("ppt"));
     let file = Path::new(layout_path).file_name().unwrap_or_default().to_string_lossy();
@@ -305,7 +343,8 @@ fn read_layout_placeholders(
         .find(|t| t.contains("slideMaster"))
         .map(|t| archive.optional_part_to_string(&format!("ppt/{}", t.trim_start_matches("../")), budget))
         .unwrap_or_default();
-    (parse_placeholders(&layout_xml), parse_placeholders(&master_xml))
+    let inherited = Inherited::read(&layout_xml, &master_xml, theme);
+    (parse_placeholders(&layout_xml), parse_placeholders(&master_xml), inherited)
 }
 
 pub fn read_pptx(path: &str) -> Result<Deck, String> {
@@ -435,7 +474,8 @@ pub fn read_pptx(path: &str) -> Result<Deck, String> {
     // Layout part path per slide (slide → layout → master mapping is
     // resolved after the slide loop, when `archive` is free again).
     let mut slide_layout_paths: Vec<Option<String>> = Vec::new();
-    let mut placeholder_cache: std::collections::HashMap<String, (Vec<Placeholder>, Vec<Placeholder>)> =
+    #[allow(clippy::type_complexity)]
+    let mut placeholder_cache: std::collections::HashMap<String, (Vec<Placeholder>, Vec<Placeholder>, Inherited)> =
         std::collections::HashMap::new();
 
     // 3. Parse each slide XML file
@@ -513,15 +553,19 @@ pub fn read_pptx(path: &str) -> Result<Deck, String> {
             .map(|t| format!("ppt/{}", t.trim_start_matches("../")));
         if let Some(lp) = &layout_path {
             if !placeholder_cache.contains_key(lp) {
-                let found = read_layout_placeholders(&mut archive, &mut budget, lp);
+                let found = read_layout_placeholders(&mut archive, &mut budget, lp, &theme);
                 placeholder_cache.insert(lp.clone(), found);
             }
         }
-        let (layout_phs, master_phs): (&[Placeholder], &[Placeholder]) = layout_path
+        let no_inheritance = Inherited::default();
+        let (layout_phs, master_phs, inherited): (&[Placeholder], &[Placeholder], &Inherited) = layout_path
             .as_ref()
             .and_then(|lp| placeholder_cache.get(lp))
-            .map(|(l, m)| (l.as_slice(), m.as_slice()))
-            .unwrap_or((&[], &[]));
+            .map(|(l, m, i)| (l.as_slice(), m.as_slice(), i))
+            .unwrap_or((&[], &[], &no_inheritance));
+        // Paragraph and run styles of every p:sp, with what the layout and
+        // master give them (Nth p:sp, like the paint).
+        let sp_text = sp_texts(&slide_xml, &theme, inherited, scale);
 
         // Parse slide XML using quick-xml event reader
         let mut background = String::from("#ffffff");
@@ -562,6 +606,10 @@ pub fn read_pptx(path: &str) -> Result<Deck, String> {
                                     rotation: None,
                                     prst: None,
                                     ph: None,
+                                    paras_seen: 0,
+                                    runs_seen: 0,
+                                    line_paras: Vec::new(),
+                                    run_refs: Vec::new(),
                                 });
                             }
                             "p:pic" => {
@@ -636,6 +684,16 @@ pub fn read_pptx(path: &str) -> Result<Deck, String> {
                             "a:t" => {
                                 in_text_element = true;
                             }
+                            "a:p" => {
+                                if let Some(shape) = current_shape.as_mut() {
+                                    shape.paras_seen += 1;
+                                }
+                            }
+                            "a:r" | "a:fld" => {
+                                if let Some(shape) = current_shape.as_mut() {
+                                    shape.runs_seen += 1;
+                                }
+                            }
                             "a:rPr" => {
                                 if let Some(shape) = current_shape.as_mut() {
                                     shape.cur_style = parse_run_style(e);
@@ -652,6 +710,12 @@ pub fn read_pptx(path: &str) -> Result<Deck, String> {
                             "a:p" => {
                                 if let Some(shape) = current_shape.as_mut() {
                                     shape.pending_breaks += 1;
+                                    shape.paras_seen += 1;
+                                }
+                            }
+                            "a:r" | "a:fld" => {
+                                if let Some(shape) = current_shape.as_mut() {
+                                    shape.runs_seen += 1;
                                 }
                             }
                             "a:rPr" => {
@@ -749,6 +813,7 @@ pub fn read_pptx(path: &str) -> Result<Deck, String> {
                             // This shape's fill and outline, resolved by the
                             // shape_xml pass over the same part (Nth p:sp).
                             let paint = sp_paint.get(sp_index).cloned().unwrap_or_default();
+                            let text_style = sp_text.get(sp_index);
                             sp_index += 1;
                             if let Some(mut shape) = current_shape.take() {
                                 let text = text_of(&shape.runs);
@@ -778,7 +843,8 @@ pub fn read_pptx(path: &str) -> Result<Deck, String> {
                                 let rotation = shape.rotation.unwrap_or(0.0);
 
                                 if shape.is_tx_box || (shape.has_tx_body && has_text) {
-                                    objects.push(SlideObject::TextBox { text, x, y, w, h, rotation, runs: scale.text_runs(&shape.runs) });
+                                    let (runs, body) = shape.resolve(text_style);
+                                    objects.push(SlideObject::TextBox { text, x, y, w, h, rotation, runs: scale.text_runs(&runs), body });
                                 } else {
                                     // The shape as the file draws it: its own
                                     // preset and paint. It used to become a
@@ -1241,6 +1307,7 @@ pub fn parse_master_shapes_scaled(
                                     h: p.h,
                                     rotation: 0.0,
                                     runs: p.runs,
+                                    body: Default::default(),
                                 });
                             } else if p.prst.as_deref() == Some("ellipse") {
                                 shapes.push(SlideObject::Circle {
@@ -1346,6 +1413,7 @@ mod tests {
             x: 100.0, y: 100.0, w: 300.0, h: 50.0,
             runs: vec![],
             rotation: 0.0,
+            body: Default::default(),
         });
         deck.slides[0].objects.push(SlideObject::Rect {
             x: 150.0, y: 200.0, w: 200.0, h: 100.0,

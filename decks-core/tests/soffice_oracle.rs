@@ -65,6 +65,7 @@ fn sample_deck() -> Deck {
         x: 100.0, y: 100.0, w: 400.0, h: 60.0,
         rotation: 0.0,
         runs: vec![],
+        body: Default::default(),
     });
     deck.slides[0].objects.push(SlideObject::Rect { x: 50.0, y: 250.0, w: 200.0, h: 90.0, rotation: 0.0 });
     deck.slides[0].notes = "speaker notes body".into();
@@ -96,6 +97,7 @@ fn impress_survives_multi_slide_deck() {
                 x: 80.0, y: 120.0, w: 300.0, h: 50.0,
                 rotation: 0.0,
                 runs: vec![],
+                body: Default::default(),
             }],
             notes: String::new(),
             master_idx: Some(0),
@@ -143,6 +145,7 @@ fn text_slide(title: &str, text: &str, notes: &str) -> Slide {
             x: 100.0, y: 100.0, w: 500.0, h: 60.0,
             runs: vec![],
             rotation: 0.0,
+            body: Default::default(),
         }],
         notes: notes.into(),
         master_idx: Some(0),
@@ -327,6 +330,7 @@ fn bold_run_survives_impress_rewrite() {
                 },
             ],
             rotation: 0.0,
+            body: Default::default(),
         }],
         notes: String::new(),
         master_idx: Some(0),
@@ -402,6 +406,7 @@ fn styled_run_slide(runs: Vec<Run>) -> Slide {
             x: 100.0, y: 100.0, w: 600.0, h: 80.0,
             runs,
             rotation: 0.0,
+            body: Default::default(),
         }],
         notes: String::new(),
         master_idx: Some(0),
@@ -646,6 +651,7 @@ fn odp_bold_run_survives_impress_rewrite() {
                 },
             ],
             rotation: 0.0,
+            body: Default::default(),
         }],
         notes: String::new(),
         master_idx: Some(0),
@@ -818,6 +824,7 @@ fn impress_keeps_the_master_we_write() {
         x: 100.0, y: 100.0, w: 400.0, h: 60.0,
         rotation: 0.0,
         runs: vec![],
+        body: Default::default(),
     });
 
     let dir = tempfile::tempdir().unwrap();
@@ -959,6 +966,7 @@ fn impress_carries_the_theme_font_from_our_pptx_into_an_odp() {
         x: 100.0, y: 100.0, w: 300.0, h: 80.0,
         rotation: 0.0,
         runs: vec![],
+        body: Default::default(),
     });
     let as_pptx = dir.path().join("themed.pptx");
     write_pptx(as_pptx.to_str().unwrap(), &deck).expect("write pptx");
@@ -997,6 +1005,7 @@ fn impress_keeps_the_font_we_write_into_an_odp() {
         x: 100.0, y: 100.0, w: 300.0, h: 80.0,
         rotation: 0.0,
         runs: vec![],
+        body: Default::default(),
     });
     let as_odp = dir.path().join("fonted.odp");
     odp::write(&deck, as_odp.to_str().unwrap()).expect("write odp");
@@ -1044,6 +1053,7 @@ fn impress_runs_in_one_paragraph_come_back_as_one_line() {
                     style: RunStyle { bold: true, ..RunStyle::default() },
                 },
             ],
+            body: Default::default(),
         }],
     }];
     let Some(rt) = through_impress(&deck, "tworuns") else { return };
@@ -1097,6 +1107,7 @@ fn a_styled_multiline_box_keeps_its_break_and_its_styling_through_impress() {
                 },
                 Run { text: "\nplain two".into(), style: RunStyle::default() },
             ],
+            body: Default::default(),
         }],
     }];
     let dir = tempfile::tempdir().unwrap();

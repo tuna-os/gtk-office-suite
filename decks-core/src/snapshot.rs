@@ -153,6 +153,7 @@ mod tests {
         c.add_object(1, SlideObject::TextBox {
             text: "hi".into(), x: 0.0, y: 0.0, w: 5.0, h: 5.0, runs: vec![],
             rotation: 0.0,
+            body: Default::default(),
         });
         let snap = snapshot(&c);
         assert_eq!(snap.slide_count, 2);
@@ -198,7 +199,7 @@ mod tests {
     #[test]
     fn object_snapshot_maps_every_kind() {
         let objs = [
-            SlideObject::TextBox { text: "t".into(), x: 1.0, y: 2.0, w: 3.0, h: 4.0, rotation: 0.0, runs: vec![] },
+            SlideObject::TextBox { text: "t".into(), x: 1.0, y: 2.0, w: 3.0, h: 4.0, rotation: 0.0, runs: vec![], body: Default::default() },
             SlideObject::Rect { x: 1.0, y: 2.0, w: 3.0, h: 4.0, rotation: 0.0 },
             SlideObject::Circle { x: 1.0, y: 2.0, r: 3.0, rotation: 0.0 },
             SlideObject::Image { path: "p.png".into(), x: 1.0, y: 2.0, w: 3.0, h: 4.0, rotation: 0.0 },

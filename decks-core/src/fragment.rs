@@ -31,7 +31,7 @@ pub fn paste_as_text_box(frag: &Fragment, x: f64, y: f64) -> SlideObject {
         }
         Fragment::Grid(_) => (frag.to_plain(), vec![]),
     };
-    SlideObject::TextBox { text, x, y, w: 400.0, h: 100.0, rotation: 0.0, runs }
+    SlideObject::TextBox { text, x, y, w: 400.0, h: 100.0, rotation: 0.0, runs, body: Default::default() }
 }
 
 #[cfg(test)]
@@ -49,6 +49,7 @@ mod tests {
                 Run { text: "plain ".into(), style: RunStyle::default() },
                 Run { text: "bold".into(), style: RunStyle { bold: true, ..Default::default() } },
             ],
+            body: Default::default(),
         };
         let frag = copy_object(&obj).expect("fragment");
         let back = paste_as_text_box(&frag, 10.0, 10.0);
@@ -78,7 +79,7 @@ mod tests {
     // ── copy_object edge cases ───────────────────────────────────────────────
 
     fn textbox(text: &str, runs: Vec<Run>) -> SlideObject {
-        SlideObject::TextBox { text: text.into(), x: 0.0, y: 0.0, w: 100.0, h: 50.0, runs, rotation: 0.0 }
+        SlideObject::TextBox { text: text.into(), x: 0.0, y: 0.0, w: 100.0, h: 50.0, runs, rotation: 0.0, body: Default::default() }
     }
 
     #[test]

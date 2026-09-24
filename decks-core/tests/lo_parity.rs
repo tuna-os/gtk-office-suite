@@ -30,7 +30,7 @@ fn slide(title: &str, objects: Vec<SlideObject>) -> Slide {
 }
 
 fn text_box(text: &str) -> SlideObject {
-    SlideObject::TextBox { text: text.to_string(), x: 100.0, y: 100.0, w: 400.0, h: 80.0, rotation: 0.0, runs: vec![] }
+    SlideObject::TextBox { text: text.to_string(), x: 100.0, y: 100.0, w: 400.0, h: 80.0, rotation: 0.0, runs: vec![], body: Default::default() }
 }
 
 fn all_text(deck: &Deck) -> Vec<String> {
@@ -165,11 +165,13 @@ fn scenarios() -> Vec<Scenario> {
                 text: "top-left".into(), x: 10.0, y: 10.0, w: 200.0, h: 40.0,
                 runs: vec![],
                 rotation: 0.0,
+                body: Default::default(),
             });
             d.slides[0].objects.push(SlideObject::TextBox {
                 text: "lower".into(), x: 300.0, y: 400.0, w: 200.0, h: 40.0,
                 runs: vec![],
                 rotation: 0.0,
+                body: Default::default(),
             });
             d
         },
@@ -201,6 +203,7 @@ fn scenarios() -> Vec<Scenario> {
                     Run { text: "italic".into(), style: RunStyle { italic: true, ..Default::default() } },
                 ],
                 rotation: 0.0,
+                body: Default::default(),
             });
             d
         },

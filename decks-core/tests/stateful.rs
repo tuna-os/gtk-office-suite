@@ -193,6 +193,7 @@ fn text_box(text: &str, x: f64, y: f64) -> SlideObject {
         h: 60.0,
         rotation: 0.0,
         runs: Vec::new(),
+        body: Default::default(),
     }
 }
 

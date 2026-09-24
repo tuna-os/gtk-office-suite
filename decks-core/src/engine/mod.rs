@@ -11,6 +11,8 @@
 //! - `placeholders.rs` — layout/master geometry a slide placeholder inherits
 //! - `shape.rs` — preset shapes: geometry kind, fill and outline
 //! - `table.rs` — tables: grid, cells and the default table style
+//! - `text_body.rs` — paragraph styles, anchor and insets of a text box
+//! - `text_xml.rs` — the pptx text styles a paragraph inherits
 
 mod model;
 mod notes;
@@ -19,9 +21,12 @@ mod placeholders;
 pub mod shape;
 pub mod table;
 mod shape_xml;
+pub mod text_body;
+mod text_xml;
 mod write;
 
 pub use model::{Deck, MasterSlide, Slide, SlideObject};
+pub use text_body::{Anchor, Bullet, Insets, ParaAlign, ParaGeometry, ParaStyle, Spacing, TextBody};
 // `SlideObject::TextBox` carries `Vec<Run>`, so `Run`/`RunStyle` are already
 // part of this crate's public surface; re-exported so a consumer can name
 // the type it is handed without depending on letters-core directly.
