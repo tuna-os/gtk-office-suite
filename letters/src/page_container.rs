@@ -103,11 +103,20 @@ mod imp {
             for page_idx in 0..n_pages {
                 let page_y = start_y + page_idx as f64 * (sh + PAGE_GAP * scale);
 
-                // Cairo region for this page + gap
-                let cr = snapshot.append_cairo(&gtk4::graphene::Rect::new(
-                    px as f32 - 4.0, page_y as f32 - 4.0,
-                    (sw + 8.0) as f32, (sh + 8.0) as f32,
+                // Cairo region for this page + gap, built at its own origin
+                // and moved into place by an explicit transform node. GTK's
+                // Broadway renderer (4.14 through main) rasterizes a cairo
+                // node's recording surface from (0, 0) without subtracting
+                // the node's origin, so a node whose bounds start at (x, y)
+                // shows its content shifted by (x, y) and clipped; with
+                // snapshot.append_cairo the offset is always folded into the
+                // bounds. Other renderers draw both forms identically.
+                let (ox, oy) = (px - 4.0, page_y - 4.0);
+                let node = gtk4::gsk::CairoNode::new(&gtk4::graphene::Rect::new(
+                    0.0, 0.0, (sw + 8.0) as f32, (sh + 8.0) as f32,
                 ));
+                let cr = node.draw_context();
+                cr.translate(-ox, -oy);
 
                 // Drop shadow
                 cr.set_source_rgba(0.0, 0.0, 0.0, 0.10);
@@ -207,6 +216,9 @@ mod imp {
                 }
 
                 drop(cr);
+                let to_page = gtk4::gsk::Transform::new()
+                    .translate(&gtk4::graphene::Point::new(ox as f32, oy as f32));
+                snapshot.append_node(gtk4::gsk::TransformNode::new(&node, Some(&to_page)));
             }
 
             self.parent_snapshot(snapshot);
