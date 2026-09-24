@@ -48,7 +48,13 @@ echo "== LibreOffice reference"
 python3 "$LAB/lo_render.py" "$OUT/fixtures" "$OUT" "${APP_ARGS[@]}" || echo "(some references failed; see above)"
 if [ -z "${RENDER_LAB_SKIP_BUILD:-}" ]; then
     echo "== build"
-    cargo build --bin letters --bin tables --bin decks
+    # Only the app being tested when --app is given: CI runs one job per
+    # app, and building the other two would triple each job's build.
+    if [ ${#APP_ARGS[@]} -gt 0 ]; then
+        cargo build --bin "${APP_ARGS[1]}"
+    else
+        cargo build --bin letters --bin tables --bin decks
+    fi
 fi
 echo "== capture"
 python3 "$LAB/capture.py" "$OUT/fixtures" "$OUT" "${APP_ARGS[@]}" "${TIER_ARGS[@]}"

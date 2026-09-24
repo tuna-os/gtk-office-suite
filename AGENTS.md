@@ -56,6 +56,13 @@ units) ← `suite-common` (GTK helpers: dialogs, toasts, SuiteApp/SuiteWindow)
   screen. Run `tools/render-lab/run.sh --app <app>` and look at
   `render-lab-out/report.html` before claiming a visual feature works. See
   `docs/RENDER-PARITY-ROADMAP.md`.
+- **Let CI do the heavy runs.** A local machine is often slower than CI. Push
+  a draft PR early: `render-parity.yml` renders each app in its own parallel
+  job, and `ci.yml` runs clippy (`-D warnings`) and the tests. Then
+  `gh run download <run> -n render-parity-report` gives you every image,
+  `report.html` and `baseline.proposed.json` (the baseline that run would
+  lock in). Look at the images, then commit that baseline. Locally, run
+  only what you're iterating on.
 - New user-visible behavior ⇒ extend `tests/gui/test_smoke.py` only if it can
   be asserted deterministically via AT-SPI (no VLM assertions in gating tests).
 - CI: `ci.yml` (check/clippy/test/flatpak) and `gui-tests.yml` (smoke job
