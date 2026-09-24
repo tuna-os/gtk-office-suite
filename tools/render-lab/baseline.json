@@ -36,12 +36,12 @@
     "B": "amber"
   },
   "letters/bullet-list": {
-    "A": "amber",
-    "B": "amber"
+    "A": "green",
+    "B": "green"
   },
   "letters/char-emphasis": {
-    "A": "amber",
-    "B": "amber"
+    "A": "green",
+    "B": "green"
   },
   "letters/font-families": {
     "A": "amber",
@@ -52,28 +52,28 @@
     "B": "amber"
   },
   "letters/header-footer": {
-    "A": "amber",
-    "B": "amber"
+    "A": "green",
+    "B": "green"
   },
   "letters/headings": {
     "A": "amber",
     "B": "amber"
   },
   "letters/highlight": {
-    "A": "amber",
-    "B": "amber"
+    "A": "green",
+    "B": "green"
   },
   "letters/image": {
-    "A": "amber",
-    "B": "amber"
+    "A": "green",
+    "B": "green"
   },
   "letters/indents": {
     "A": "amber",
     "B": "amber"
   },
   "letters/landscape": {
-    "A": "amber",
-    "B": "amber"
+    "A": "green",
+    "B": "green"
   },
   "letters/line-spacing": {
     "A": "amber",
@@ -84,40 +84,40 @@
     "B": "amber"
   },
   "letters/numbered-list": {
-    "A": "amber",
-    "B": "amber"
+    "A": "green",
+    "B": "green"
   },
   "letters/page-break": {
-    "A": "amber",
-    "B": "amber"
+    "A": "green",
+    "B": "green"
   },
   "letters/page-margins": {
     "A": "amber",
     "B": "amber"
   },
   "letters/pagination": {
-    "A": "red",
+    "A": "amber",
     "B": "amber"
   },
   "letters/paragraph-spacing": {
-    "A": "amber",
-    "B": "amber"
+    "A": "green",
+    "B": "green"
   },
   "letters/plain-paragraph": {
-    "A": "amber",
-    "B": "amber"
+    "A": "green",
+    "B": "green"
   },
   "letters/super-subscript": {
-    "A": "amber",
-    "B": "amber"
+    "A": "green",
+    "B": "green"
   },
   "letters/table": {
     "A": "amber",
     "B": "amber"
   },
   "letters/text-color": {
-    "A": "amber",
-    "B": "amber"
+    "A": "green",
+    "B": "green"
   },
   "tables/alignment": {
     "A": "green",
