@@ -1,0 +1,220 @@
+name: Render parity
+
+# Compares what the editors draw on screen against LibreOffice's rendering
+# of the same single-feature fixtures (docs/RENDER-PARITY-ROADMAP.md).
+#
+#   Tier A  in-app render dump through GTK's own GSK pipeline (every run)
+#   Tier B  the app under GTK Broadway, screenshotted by headless Chromium
+#           (every run)
+#   Tier C  the shipped Flatpak in a GNOME Wayland VM (nightly + manual)
+#
+# Everything an agent or reviewer needs comes out of this workflow, with
+# no human looking at screenshots:
+#   - the job summary and a sticky PR comment list regressed/improved
+#     fixtures;
+#   - the ratchet fails a PR that makes any fixture worse, or that makes
+#     one better without committing tools/render-lab/baseline.json;
+#   - on main, every non-green fixture has exactly one `render-parity`
+#     issue with a CI-checkable acceptance criterion (sync_issues.py), and
+#     issues close themselves when their fixture goes green;
+#   - the full side-by-side report is an artifact on every run.
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  schedule:
+    - cron: '30 3 * * *'
+  workflow_dispatch:
+    inputs:
+      vm:
+        description: Also run Tier C (Flatpak in a GNOME VM)
+        type: boolean
+        default: false
+
+concurrency:
+  group: render-parity-${{ github.ref }}-${{ github.event_name }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  lab:
+    name: Tiers A+B vs LibreOffice
+    runs-on: ubuntu-24.04
+    timeout-minutes: 75
+    permissions:
+      contents: read
+      issues: write
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: docker/setup-buildx-action@v4
+
+      - name: Build GUI test image
+        uses: docker/build-push-action@v7
+        with:
+          context: tests/gui/container
+          load: true
+          tags: gui-test
+          cache-from: type=gha,scope=gui-test
+          cache-to: type=gha,mode=max,scope=gui-test
+
+      - name: Build render-lab image
+        uses: docker/build-push-action@v7
+        with:
+          context: tools/render-lab
+          load: true
+          tags: render-lab
+          build-args: BASE=gui-test
+          cache-from: type=gha,scope=render-lab
+          cache-to: type=gha,mode=max,scope=render-lab
+
+      - name: Cache cargo
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/render-lab-cargo
+            target
+          key: render-lab-cargo-${{ hashFiles('Cargo.lock') }}
+          restore-keys: render-lab-cargo-
+
+      - name: Run render lab
+        id: lab
+        env:
+          CONTAINER_ENGINE: docker
+        run: tools/render-lab/run.sh
+
+      - name: Job summary
+        if: always()
+        run: cat render-lab-out/summary.md >> "$GITHUB_STEP_SUMMARY" || true
+
+      - name: Upload report
+        if: always()
+        id: upload
+        uses: actions/upload-artifact@v4
+        with:
+          name: render-parity-report
+          path: |
+            render-lab-out/report.html
+            render-lab-out/summary.json
+            render-lab-out/summary.md
+            render-lab-out/scorecard.json
+            render-lab-out/*/*/*.png
+            render-lab-out/*/*/*.log
+          retention-days: 14
+
+      - name: Sticky PR comment
+        if: always() && github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR: ${{ github.event.pull_request.number }}
+          REPORT: ${{ steps.upload.outputs.artifact-url }}
+        run: |
+          [ -f render-lab-out/summary.md ] || exit 0
+          { echo '<!-- render-parity-comment -->'; cat render-lab-out/summary.md
+            echo; echo "Side-by-side report (LibreOffice | ours | diff): ${REPORT}"; } > comment.md
+          id=$(gh api "repos/${GITHUB_REPOSITORY}/issues/${PR}/comments" --paginate \
+               --jq '.[] | select(.body | startswith("<!-- render-parity-comment -->")) | .id' | head -1)
+          if [ -n "$id" ]; then
+            gh api -X PATCH "repos/${GITHUB_REPOSITORY}/issues/comments/${id}" -F body=@comment.md >/dev/null
+          else
+            gh pr comment "$PR" --body-file comment.md
+          fi
+
+      - name: Sync render-parity issues
+        if: always() && github.ref == 'refs/heads/main' && github.event_name != 'pull_request' && hashFiles('render-lab-out/summary.json') != ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: >
+          python3 tools/render-lab/sync_issues.py render-lab-out/summary.json
+          --repo "${GITHUB_REPOSITORY}"
+          --run-url "${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+
+  flatpak:
+    name: Flatpak bundle (${{ matrix.app }})
+    if: github.event_name == 'schedule' || inputs.vm
+    runs-on: ubuntu-24.04
+    container:
+      image: ghcr.io/flathub-infra/flatpak-github-actions:gnome-50
+      options: --privileged
+    strategy:
+      matrix:
+        app: [letters, tables, decks]
+    steps:
+      - uses: actions/checkout@v7
+      - uses: flatpak/flatpak-github-actions/flatpak-builder@v6
+        with:
+          bundle: ${{ matrix.app }}.flatpak
+          manifest-path: flatpak/org.tunaos.${{ matrix.app }}.json
+          cache-key: render-lab-flatpak-${{ matrix.app }}-${{ github.sha }}
+          upload-artifact: false
+      - uses: actions/upload-artifact@v4
+        with:
+          name: bundle-${{ matrix.app }}
+          path: ${{ matrix.app }}.flatpak
+          retention-days: 3
+
+  vm:
+    name: Tier C (Flatpak in a GNOME VM)
+    needs: flatpak
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    # Not gating yet: Tier C has not had a green run. Remove this line once
+    # it has run green on main for a week. Its failures stay visible in the
+    # run list and the report either way.
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Enable KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm.rules
+          sudo udevadm control --reload-rules && sudo udevadm trigger --name-match=kvm
+          sudo apt-get update && sudo apt-get install -y --no-install-recommends qemu-system-x86 qemu-utils cloud-image-utils python3-pil
+
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: bundle-*
+          path: bundles
+          merge-multiple: true
+
+      - name: Cache prepared guest image
+        uses: actions/cache@v4
+        with:
+          path: vm-work
+          key: render-lab-vm-${{ hashFiles('tools/render-lab/vm/prepare.sh', 'tools/render-lab/vm/user-data') }}
+
+      - name: Prepare guest (first run only)
+        run: '[ -f vm-work/guest.qcow2 ] || tools/render-lab/vm/prepare.sh vm-work'
+
+      - name: Fixtures and LibreOffice reference
+        run: |
+          docker build -t gui-test tests/gui/container
+          docker build -t render-lab tools/render-lab
+          docker run --rm -v "$PWD:/workspace" -w /workspace render-lab bash -c \
+            'python3 tools/render-lab/fixtures.py render-lab-out/fixtures && python3 tools/render-lab/lo_render.py render-lab-out/fixtures render-lab-out'
+
+      - name: Capture in the VM
+        run: tools/render-lab/vm/run.sh vm-work bundles render-lab-out/fixtures render-lab-out
+
+      - name: Compare
+        run: |
+          docker run --rm -v "$PWD:/workspace" -w /workspace render-lab \
+            python3 tools/render-lab/compare.py render-lab-out/fixtures render-lab-out --baseline tools/render-lab/baseline.json
+          cat render-lab-out/summary.md >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload VM report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: render-parity-vm-report
+          path: |
+            render-lab-out/report.html
+            render-lab-out/summary.*
+            render-lab-out/*/*/*.png
+            render-lab-out/*/*/*.log
+            vm-work/*.log
+          retention-days: 14
