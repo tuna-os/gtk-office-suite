@@ -551,6 +551,47 @@ fn run_page_break(p: &rdocx::ParagraphRef<'_>) -> RunPageBreak {
     RunPageBreak { leading, trailing: break_after_text }
 }
 
+/// A paragraph's list numbering as `(num_id, level)`, wherever it is set.
+///
+/// Word's built-in list styles ("List Bullet", "List Number 2", …) carry
+/// their `w:numPr` on the *style*, not the paragraph: python-docx, Word's
+/// own style gallery and many templates write list items that way. Reading
+/// only the paragraph's direct `w:numPr` turned every such list into plain
+/// paragraphs with no marker at all.
+///
+/// The level is the paragraph's own `w:ilvl` when it has one. Otherwise a
+/// numbered built-in style names its level ("List Bullet 3" is the third
+/// level: Word gives each its own `numId` at `ilvl` 0, indented one step
+/// further), and failing that the style's inherited `w:ilvl`. `numId` 0
+/// means "no numbering" and switches an inherited list off.
+fn paragraph_numbering(doc: &rdocx::Document, p: &rdocx::ParagraphRef<'_>) -> Option<(u32, u32)> {
+    if let Some((num_id, level)) = p.numbering() {
+        return (num_id != 0).then_some((num_id, level));
+    }
+    let style_id = p.style_id()?;
+    let resolved = doc.resolve_paragraph_properties(Some(style_id));
+    let num_id = resolved.num_id.filter(|&id| id != 0)?;
+    let level = doc
+        .style(style_id)
+        .and_then(|s| s.name().and_then(builtin_list_style_level))
+        .or(resolved.num_ilvl)
+        .unwrap_or(0);
+    Some((num_id, level))
+}
+
+/// The level a Word built-in list style name implies: "List Bullet" and
+/// "List Number" are level 0, "List Bullet 2" … "List Bullet 5" levels 1–4.
+fn builtin_list_style_level(name: &str) -> Option<u32> {
+    let rest = name
+        .strip_prefix("List Bullet")
+        .or_else(|| name.strip_prefix("List Number"))?
+        .trim();
+    if rest.is_empty() {
+        return Some(0);
+    }
+    rest.parse::<u32>().ok().filter(|n| (2..=9).contains(n)).map(|n| n - 1)
+}
+
 fn map_paragraph(doc: &rdocx::Document, p: &rdocx::ParagraphRef<'_>) -> Paragraph {
     let heading = p.style_id().and_then(style_id_to_heading);
     // LO uses "Quotations"; Word uses "Quote"/"IntenseQuote".
@@ -571,12 +612,12 @@ fn map_paragraph(doc: &rdocx::Document, p: &rdocx::ParagraphRef<'_>) -> Paragrap
     // Either spelling counts: the paragraph property, or a run-level
     // break before this paragraph's own text.
     let page_break_before = p.is_page_break_before() || run_page_break(p).leading;
-    let (list, list_level) = match p.numbering() {
+    let (list, list_level) = match paragraph_numbering(doc, p) {
         Some((num_id, level)) => (match doc.numbering_is_bullet(num_id) {
             Some(false) => ListKind::Numbered,
             // Unknown num_id defaults to bullet — the safer visual guess.
             _ => ListKind::Bullet,
-        }, level as u8),
+        }, level.min(8) as u8),
         None => (ListKind::None, 0),
     };
 

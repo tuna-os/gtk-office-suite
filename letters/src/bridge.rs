@@ -7,7 +7,7 @@
 // (see register_formatting_tags in window.rs).
 //
 // Links use dynamic "link:<url>" tags; alignment uses the align-* tags;
-// list kinds translate to/from the editor's literal "- " / "N. " markers.
+// list kinds translate to/from the editor's "•" / "N." markers (letters_core::lists).
 
 use gtk4::{self as gtk, prelude::*};
 use letters_core::model::{Document, PageGeometry, Paragraph, Run, RunStyle};
@@ -130,6 +130,7 @@ pub fn capture_from_buffer(buf: &gtk::TextBuffer) -> Document {
     let mut current = Paragraph::default();
     let mut current_run: Option<Run> = None;
     let mut at_line_start = true;
+    let mut line_list_level: Option<u8> = None;
 
     let mut iter = buf.start_iter();
     while !iter.is_end() {
@@ -163,6 +164,7 @@ pub fn capture_from_buffer(buf: &gtk::TextBuffer) -> Document {
                     current.style.page_break_before = true;
                 }
             }
+            line_list_level = iter.tags().iter().find_map(|t| t.name().and_then(|n| list_level_from_tag_name(&n)));
             at_line_start = false;
         }
         // Embedded images appear as the object-replacement char; the source
@@ -216,7 +218,7 @@ pub fn capture_from_buffer(buf: &gtk::TextBuffer) -> Document {
             if let Some(r) = current_run.take() {
                 current.runs.push(r);
             }
-            capture_list_marker(&mut current);
+            capture_list_marker(&mut current, line_list_level);
             paragraphs.push(std::mem::take(&mut current));
             at_line_start = true;
         } else {
@@ -236,7 +238,7 @@ pub fn capture_from_buffer(buf: &gtk::TextBuffer) -> Document {
     if let Some(r) = current_run.take() {
         current.runs.push(r);
     }
-    capture_list_marker(&mut current);
+    capture_list_marker(&mut current, line_list_level);
     paragraphs.push(current);
 
     // Footnotes, header, footer and page geometry are document state that has
@@ -391,31 +393,79 @@ pub fn set_buffer_sidecars(doc: &Document, buf: &gtk::TextBuffer) {
     }
 }
 
-/// The editor shows lists as literal "- " / "N. " markers; the model wants
-/// ListKind. Strip the marker and set the kind when capturing.
-fn capture_list_marker(para: &mut Paragraph) {
+/// GtkTextTag name for the list geometry of nesting level `level`.
+fn list_level_tag_name(level: u8) -> String {
+    format!("list-level-{}", level.min(letters_core::lists::MAX_LEVEL))
+}
+
+/// Inverse of [`list_level_tag_name`].
+fn list_level_from_tag_name(name: &str) -> Option<u8> {
+    name.strip_prefix("list-level-")?.parse().ok()
+}
+
+/// The editor's left margin in pixels (`TextView::set_left_margin`). A tag
+/// with its own left margin *replaces* the view's, so list indents are
+/// measured from this.
+pub const EDITOR_LEFT_MARGIN_PX: i32 = 24;
+
+/// Tag giving a list item at `level` its hanging indent: the marker sits at
+/// the level's indent, a tab carries the text to the text indent, and
+/// wrapped lines line up with the text rather than under the marker.
+/// Created on first use, like the `link:` tags. Returns its name.
+pub(crate) fn list_level_tag(buf: &gtk::TextBuffer, level: u8) -> String {
+    use letters_core::lists;
+    let name = list_level_tag_name(level);
+    if buf.tag_table().lookup(&name).is_none() {
+        // Points to the editor's pixels (GTK's 96 dpi), as fonts are drawn.
+        let px = |pt: f64| (pt * 96.0 / 72.0).round() as i32;
+        let hang = px(lists::HANGING_PT);
+        let marker_x = px(lists::text_indent_pt(level) - lists::HANGING_PT);
+        let mut tabs = gtk4::pango::TabArray::new(1, true);
+        tabs.set_tab(0, gtk4::pango::TabAlign::Left, hang);
+        let tag = gtk::TextTag::builder()
+            .name(&name)
+            .left_margin(EDITOR_LEFT_MARGIN_PX + marker_x)
+            .indent(-hang)
+            .tabs(&tabs)
+            .build();
+        buf.tag_table().add(&tag);
+    }
+    name
+}
+
+/// The editor shows a list item as its marker ("•", "3.") and a tab,
+/// followed by the item's text; the model wants `ListKind` and the text
+/// alone. Strip the marker and set the kind when capturing.
+///
+/// `tag_level` is the level carried by the paragraph's `list-level-N` tag.
+/// A line without one (typed by hand, or pasted) still counts as a list
+/// item when it starts with a marker; then four leading spaces make one
+/// nesting level. Markdown's "- " and "N. " are accepted as typed markers.
+fn capture_list_marker(para: &mut Paragraph, tag_level: Option<u8>) {
     let text = para.text();
-    // Four spaces represent one nesting level in the editable buffer, so the
-    // marker is matched after the indent. The model keeps the level
-    // separately, so DOCX/ODT round-trips do not depend on literal
-    // whitespace in the paragraph text.
     let indent = text.len() - text.trim_start_matches(' ').len();
     let body = &text[indent..];
-    let (kind, marker) = if body.starts_with("- ") {
-        (letters_core::ListKind::Bullet, 2)
-    } else if let Some(dot) = body.find(". ") {
-        if dot > 0 && body[..dot].chars().all(|c| c.is_ascii_digit()) {
-            (letters_core::ListKind::Numbered, dot + 2)
-        } else {
+    // A marker is followed by a tab (as rendered) or a space (as typed).
+    let separated = |rest: &str| rest.starts_with(['\t', ' ']);
+    let (kind, marker_chars) = if let Some(rest) = body.strip_prefix(letters_core::lists::BULLET) {
+        if !separated(rest) {
             return;
         }
+        (letters_core::ListKind::Bullet, 2)
+    } else if body.starts_with("- ") {
+        (letters_core::ListKind::Bullet, 2)
     } else {
-        return;
+        let digits = body.chars().take_while(|c| c.is_ascii_digit()).count();
+        match body[digits..].strip_prefix('.') {
+            Some(rest) if digits > 0 && separated(rest) => (letters_core::ListKind::Numbered, digits + 2),
+            _ => return,
+        }
     };
     para.style.list = kind;
-    para.style.list_level = (indent / 4) as u8;
-    // Remove the indent and marker chars from the front of the run list.
-    let mut remaining = indent + marker;
+    para.style.list_level = tag_level.unwrap_or((indent / 4) as u8);
+    // Remove the indent and marker from the front of the run list. Counts
+    // are in chars (the bullet is one char, three bytes), as runs slice.
+    let mut remaining = indent + marker_chars;
     while remaining > 0 {
         let Some(first) = para.runs.first_mut() else { break };
         let n = first.text.chars().count();
@@ -482,22 +532,14 @@ pub fn render_to_buffer(doc: &Document, buf: &gtk::TextBuffer) {
     buf.set_text("");
     let mut insert = buf.start_iter();
     let lines = render_lines(doc);
+    let ordinals = letters_core::lists::ordinals(lines.iter().map(|p| &p.style));
     for (i, para) in lines.iter().map(|p| p.as_ref()).enumerate() {
         if i > 0 {
             buf.insert(&mut insert, "\n");
         }
         let para_start = insert.offset();
-        match para.style.list {
-            letters_core::ListKind::Bullet => buf.insert(&mut insert, &format!("{}- ", "    ".repeat(para.style.list_level as usize))),
-            letters_core::ListKind::Numbered => {
-                // Number within the current consecutive numbered group at
-                // this nesting level; list_start explicitly restarts it.
-                let n = doc.paragraphs[..i].iter().rev()
-                    .take_while(|p| p.style.list == letters_core::ListKind::Numbered && p.style.list_level == para.style.list_level)
-                    .count() as u32 + para.style.list_start.unwrap_or(1);
-                buf.insert(&mut insert, &format!("{}{}. ", "    ".repeat(para.style.list_level as usize), n));
-            }
-            letters_core::ListKind::None => {}
+        if let Some(marker) = letters_core::lists::marker(para.style.list, ordinals[i]) {
+            buf.insert(&mut insert, &format!("{marker}\t"));
         }
         for run in &para.runs {
             if let Some(src) = &run.style.image {
@@ -555,6 +597,9 @@ pub fn render_to_buffer(doc: &Document, buf: &gtk::TextBuffer) {
         }
         if para.style.page_break_before {
             para_tags.push(PAGE_BREAK_TAG.to_string());
+        }
+        if para.style.list != letters_core::ListKind::None {
+            para_tags.push(list_level_tag(buf, para.style.list_level));
         }
         for name in para_tags {
             let start = buf.iter_at_offset(para_start);
@@ -705,7 +750,7 @@ mod tests {
 
     fn captured(text: &str) -> Paragraph {
         let mut para = Paragraph { style: Default::default(), runs: vec![Run::plain(text)] };
-        capture_list_marker(&mut para);
+        capture_list_marker(&mut para, None);
         para
     }
 
@@ -734,6 +779,89 @@ mod tests {
         let prose = captured("Hello. World");
         assert_eq!(prose.style.list, ListKind::None);
         assert_eq!(prose.text(), "Hello. World");
+    }
+
+    #[test]
+    fn capture_list_marker_reads_rendered_and_typed_glyph_markers() {
+        use letters_core::ListKind;
+
+        // As render_to_buffer draws them: glyph, then a tab.
+        let bullet = captured("\u{2022}\tApples");
+        assert_eq!((bullet.style.list, bullet.text().as_str()), (ListKind::Bullet, "Apples"));
+        let numbered = captured("12.\tTwelfth");
+        assert_eq!((numbered.style.list, numbered.text().as_str()), (ListKind::Numbered, "Twelfth"));
+
+        // As list continuation types them: glyph, then a space.
+        let typed = captured("\u{2022} Oranges");
+        assert_eq!((typed.style.list, typed.text().as_str()), (ListKind::Bullet, "Oranges"));
+
+        // A bullet glued to a word is text, not a marker.
+        let glued = captured("\u{2022}Pears");
+        assert_eq!((glued.style.list, glued.text().as_str()), (ListKind::None, "\u{2022}Pears"));
+        let decimal = captured("3.5 apples");
+        assert_eq!(decimal.style.list, ListKind::None);
+
+        // The level tag wins over leading spaces.
+        let mut para = Paragraph { style: Default::default(), runs: vec![Run::plain("\u{2022}\tdeep")] };
+        capture_list_marker(&mut para, Some(2));
+        assert_eq!((para.style.list_level, para.text().as_str()), (2, "deep"));
+    }
+
+    #[test]
+    fn list_level_tag_names_round_trip() {
+        for level in 0..=letters_core::lists::MAX_LEVEL {
+            assert_eq!(list_level_from_tag_name(&list_level_tag_name(level)), Some(level));
+        }
+        assert_eq!(list_level_tag_name(40), list_level_tag_name(letters_core::lists::MAX_LEVEL));
+        assert_eq!(list_level_from_tag_name("line-spacing-1.5"), None);
+    }
+
+    /// Lists are drawn as lists: a bullet glyph or number, a tab, and a
+    /// hanging indent that grows with the level; never Markdown's "- ".
+    #[test]
+    fn lists_render_as_glyphs_with_a_hanging_indent_per_level() {
+        use letters_core::ListKind;
+        gtk_test(|| {
+            let buf = gtk::TextBuffer::new(None);
+            crate::actions::register_formatting_tags(&buf);
+            let mut d = Document::from_plain_text("one\ntwo\nthree\nfirst\nsecond\nnested\nthird");
+            let levels = [0u8, 1, 2, 0, 0, 1, 0];
+            let kinds = [ListKind::Bullet, ListKind::Bullet, ListKind::Bullet,
+                ListKind::Numbered, ListKind::Numbered, ListKind::Bullet, ListKind::Numbered];
+            for (p, (level, kind)) in d.paragraphs.iter_mut().zip(levels.iter().zip(kinds)) {
+                p.style.list = kind;
+                p.style.list_level = *level;
+            }
+            render_to_buffer(&d, &buf);
+            let shown = buf.text(&buf.start_iter(), &buf.end_iter(), false).to_string();
+            assert_eq!(
+                shown,
+                "\u{2022}\tone\n\u{2022}\ttwo\n\u{2022}\tthree\n1.\tfirst\n2.\tsecond\n\u{2022}\tnested\n3.\tthird",
+                "a nested item does not restart the outer numbering"
+            );
+
+            let margin = |line: i32| -> (i32, i32) {
+                let it = buf.iter_at_line(line).unwrap();
+                let tag = it.tags().into_iter()
+                    .find(|t| t.name().is_some_and(|n| n.starts_with("list-level-")))
+                    .expect("list item carries its level tag");
+                (tag.left_margin(), tag.indent())
+            };
+            let (m0, i0) = margin(0);
+            let (m1, i1) = margin(1);
+            let (m2, _) = margin(2);
+            assert_eq!(m0, EDITOR_LEFT_MARGIN_PX, "level 0 marker sits at the text margin");
+            assert!(i0 < 0 && i0 == i1, "hanging indent: wrapped lines align with the text");
+            assert_eq!(m1 - m0, m2 - m1, "each level indents one equal step");
+            assert!(m1 > m0);
+
+            let rt = capture_from_buffer(&buf);
+            let back: Vec<(ListKind, u8, String)> =
+                rt.paragraphs.iter().map(|p| (p.style.list, p.style.list_level, p.text())).collect();
+            let want: Vec<(ListKind, u8, String)> =
+                d.paragraphs.iter().map(|p| (p.style.list, p.style.list_level, p.text())).collect();
+            assert_eq!(back, want, "kinds, levels and text survive the buffer");
+        });
     }
 
     fn round_trip(buf: &gtk::TextBuffer, doc: &Document) -> Document {
@@ -904,7 +1032,7 @@ mod tests {
             });
 
             let shown = buf.text(&buf.start_iter(), &buf.end_iter(), false).to_string();
-            assert_eq!(shown, "first\n- second", "one rendered marker, on the caret's line");
+            assert_eq!(shown, "first\n\u{2022}\tsecond", "one rendered marker, on the caret's line");
             let doc = capture_from_buffer(&buf);
             assert_eq!(doc.paragraphs[0].style.list, letters_core::ListKind::None);
             assert_eq!(doc.paragraphs[1].style.list, letters_core::ListKind::Bullet);
@@ -1040,7 +1168,7 @@ single");
         d.paragraphs[1].style.list = letters_core::ListKind::Numbered;
         render_to_buffer(&d, &buf);
         let shown = buf.text(&buf.start_iter(), &buf.end_iter(), false).to_string();
-        assert_eq!(shown, "- first\n1. second\nplain", "markers not rendered: {shown:?}");
+        assert_eq!(shown, "\u{2022}\tfirst\n1.\tsecond\nplain", "markers not rendered: {shown:?}");
         let rt = capture_from_buffer(&buf);
         assert_eq!(rt.paragraphs[0].style.list, letters_core::ListKind::Bullet);
         assert_eq!(rt.paragraphs[0].text(), "first");
