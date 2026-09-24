@@ -63,6 +63,116 @@ Three surfacing mechanisms, shared across all three apps:
   notes drawer under the canvas (engine round-trips notes; UI must edit
   them).
 
+## Ideas taken from iWork (direction set 2026-09-24)
+
+The project owner's direction: **take the best design ideas from Apple's
+iWork (Pages, Keynote, Numbers), build them in Rust so they are fast, and
+express them through GNOME HIG and libadwaita.** Take the idea, not the
+look. Each item below names the iWork pattern, the libadwaita form it
+takes here, and what it needs from the engines.
+
+Order matters. These build on the Render Parity Roadmap's Phase 1 (one
+renderer per app). A beautiful inspector that edits a property the canvas
+doesn't draw is the failure this project already had. So each item lands
+only with its render-lab fixture green or improving.
+
+### Shared across the suite
+
+- **The Format inspector (iWork's right-hand "Format" sidebar)**
+  - Pattern: one context-sensitive sidebar replaces format dialogs. Its
+    tabs follow the selection: Text / Arrange / Style for a shape; Cell /
+    Table / Text for cells.
+  - Here:
+    - `AdwOverlaySplitView` on the right, with an `AdwViewSwitcher` for
+      the tabs and `AdwPreferencesGroup` rows (`AdwSpinRow`,
+      `AdwComboRow`, `AdwSwitchRow`) for the fields.
+    - A header toggle opens it. It collapses to a bottom sheet under the
+      narrow `AdwBreakpoint`.
+    - Decks' existing inspector becomes this; Letters and Tables gain one.
+  - Needs: the Phase 1 style models (Tables `CellStyle`, Decks shape
+    style, Letters paragraph and character styles). The inspector edits
+    exactly those fields, each through an undoable command.
+- **Insert buttons, not menus (iWork's Table · Chart · Text · Shape ·
+  Media toolbar)**
+  - Here: a short row of labelled icon buttons in the header bar, and a
+    `GtkPopover` shape and media library with a search entry.
+  - Needs: nothing new for text, table and image. Shapes need the Decks
+    shape model.
+- **Styles first (paragraph, cell, table and chart styles, previewed)**
+  - Pattern: iWork formats through named styles shown as live previews,
+    not raw attributes.
+  - Here: style pickers render each entry in its own style (a
+    `GtkListView` with a custom factory), with "Update style to match
+    selection".
+  - Needs: named styles in each model; Letters already has them.
+- **Templates that look finished (iWork's template chooser)**
+  - Here: an `AdwNavigationView` start page with a `GtkGridView` of real
+    rendered thumbnails. The thumbnails come from the same renderer as the
+    canvas (Phase 1), cached on disk, never hand-drawn.
+- **Smart guides and snapping**
+  - Pattern: iWork's yellow alignment guides for centre and edges, equal
+    spacing, and size matching.
+  - Here: guides in the accent colour, computed in the GTK-free core from
+    object rectangles (unit-tested), drawn as render nodes.
+
+### Letters (from Pages)
+
+- **Page thumbnails sidebar and a real page view.** Pages' left sidebar of
+  page thumbnails depends on the per-page layout engine (Phase 1: render
+  tree → pages). Thumbnails are that tree drawn small, not a second
+  layout.
+- **Word processing vs. page layout.** Pages has two document kinds: flowing
+  text, and free placement of text boxes on pages. Start with flowing
+  text on real pages; free placement reuses the Decks object model later.
+- **Distraction-free typing.** The chrome fades while typing and comes back
+  on pointer motion (`AdwToolbarView` reveal properties).
+
+### Decks (from Keynote)
+
+- **Magic Move.**
+  - Pattern: a transition that morphs matching objects between
+    consecutive slides.
+  - Here: objects are matched by id or content in the core. Position,
+    size, rotation and opacity are tweened through GSK transform and
+    opacity nodes on the GPU renderer: no per-frame re-layout, 60 fps.
+    This is where Rust and GSK pay off.
+- **Presenter display.** Current slide, next slide, notes and a timer on
+  the second monitor, with the audience window fullscreen. The layout uses
+  `AdwBreakpoint` so a single-monitor rehearsal mode works too.
+- **Object builds (animate in/out, one item at a time)**, driven by the
+  same tween engine as Magic Move.
+- **Master slides with real placeholders.** A new slide inherits its
+  layout's title and body placement and text styles. Geometry inheritance
+  landed in #932; text-style inheritance is the Decks shape-style item.
+
+### Tables (from Numbers)
+
+- **Tables as objects on a free canvas.** Numbers' biggest idea is a sheet
+  that is a canvas holding several independent tables, charts and text,
+  not one infinite grid. It is a large model change, so it gets an ADR
+  before any code. The Excel-compatible grid remains the default and the
+  interchange format.
+- **Header rows and columns that are structural.** They are frozen,
+  styled, and used as chart labels and formula names (`=Price × Qty`).
+- **Table styles** (banded rows, header emphasis) as named presets, built
+  on the cell-style model.
+- **Formula editor with range tokens.** References show as coloured chips
+  that highlight their range on the grid. The formula-reference colouring
+  already exists and is extended into the editor.
+
+### Rusty and fast (non-negotiable for every item above)
+
+- Canvas drawing goes to GSK render nodes, with Cairo only inside
+  well-bounded leaves. Per-page and per-slide render trees are cached and
+  invalidated by edit ranges, never rebuilt per frame.
+- Layout, hit-testing, snapping, tweening and style resolution live in the
+  GTK-free core crates, with unit tests and the existing
+  `performance_budgets` tests extended to them (typing latency, slide
+  switch, open time for large files).
+- No per-frame allocation in draw paths. Scrolling and animation are
+  profiled (`GSK_DEBUG`, Sysprof), and regressions fail CI through
+  performance budgets.
+
 ## Feature-surfacing audit (the checklist)
 
 Every ✅ row in PARITY.md gets a "reachable in ≤2 interactions" audit

@@ -314,6 +314,13 @@ and does the part that matters.
 Exit: every feature fixture is at least **amber** (rendered, even if not
 yet close). Zero reds.
 
+The design layer that sits on these models is iWork-inspired, Rust-fast
+and HIG-native: format inspector, insert bar, previewed styles, smart
+guides, Magic Move and more. It is specified in
+[DESIGN-UI.md, "Ideas taken from iWork"](DESIGN-UI.md#ideas-taken-from-iwork-direction-set-2026-09-24).
+Each of those items lands with its render-lab fixture, never ahead of
+what the canvas draws.
+
 ### Phase 2: Close the gap to LibreOffice, feature by feature
 
 Work in order of the most-used feature among red and amber fixtures. Each
