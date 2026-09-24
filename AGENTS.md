@@ -49,6 +49,13 @@ units) ← `suite-common` (GTK helpers: dialogs, toasts, SuiteApp/SuiteWindow)
 ## Testing expectations
 
 - New logic ⇒ unit test in the same (GTK-free) crate. TDD preferred.
+- **Anything that changes what a document looks like ⇒ a render-lab fixture**
+  (`tools/render-lab/fixtures.py`) whose screenshot is compared against
+  LibreOffice's rendering of the same file. Passing round-trip tests
+  do not prove a feature is drawn; several ✅ PARITY rows were invisible on
+  screen. Run `tools/render-lab/run.sh --app <app>` and look at
+  `render-lab-out/report.html` before claiming a visual feature works. See
+  `docs/RENDER-PARITY-ROADMAP.md`.
 - New user-visible behavior ⇒ extend `tests/gui/test_smoke.py` only if it can
   be asserted deterministically via AT-SPI (no VLM assertions in gating tests).
 - CI: `ci.yml` (check/clippy/test/flatpak) and `gui-tests.yml` (smoke job
