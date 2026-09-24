@@ -34,6 +34,62 @@ pub(crate) fn run_tag_names(style: &RunStyle) -> Vec<&'static str> {
     names
 }
 
+/// Every tag a run with `style` is drawn with: the fixed formatting tags,
+/// plus the per-value ones for a link, a font family, a size and a colour,
+/// created on first use. Render and paste both use it.
+///
+/// Family, size and colour used to have no tags at all, so every one of
+/// them was dropped on the way into the editor and was gone on the next
+/// save: a docx with red 18pt headings came back black and default-sized.
+pub(crate) fn run_tags(buf: &gtk::TextBuffer, style: &RunStyle) -> Vec<String> {
+    let mut names: Vec<String> = run_tag_names(style).into_iter().map(str::to_string).collect();
+    let table = buf.tag_table();
+    let mut dynamic = |name: String, build: &dyn Fn(gtk::TextTag)| {
+        if table.lookup(&name).is_none() {
+            let tag = gtk::TextTag::builder().name(&name).build();
+            build(tag.clone());
+            table.add(&tag);
+        }
+        names.push(name);
+    };
+    if let Some(url) = &style.link {
+        dynamic(format!("{LINK_TAG_PREFIX}{url}"), &|t| {
+            t.set_foreground(Some("#1a5fb4"));
+            t.set_underline(gtk4::pango::Underline::Single);
+        });
+    }
+    if let Some(family) = &style.font_family {
+        let family = family.clone();
+        dynamic(format!("{FONT_TAG_PREFIX}{family}"), &move |t| t.set_family(Some(&family)));
+    }
+    if let Some(hp) = style.font_size_hp {
+        dynamic(format!("{SIZE_TAG_PREFIX}{hp}"), &move |t| t.set_size_points(f64::from(hp) / 2.0));
+    }
+    if let Some(color) = &style.color {
+        let hex = format!("#{}", color.trim_start_matches('#'));
+        dynamic(format!("{COLOR_TAG_PREFIX}{}", color.trim_start_matches('#')), &move |t| t.set_foreground(Some(&hex)));
+    }
+    names
+}
+
+const LINK_TAG_PREFIX: &str = "link:";
+const FONT_TAG_PREFIX: &str = "font:";
+const SIZE_TAG_PREFIX: &str = "size-hp:";
+const COLOR_TAG_PREFIX: &str = "color:";
+
+/// Read a per-value tag back into `style`. Inverse of `run_tags`.
+fn apply_dynamic_tag(name: &str, style: &mut RunStyle) {
+    if let Some(url) = name.strip_prefix(LINK_TAG_PREFIX) {
+        style.link = Some(url.to_string());
+    } else if let Some(family) = name.strip_prefix(FONT_TAG_PREFIX) {
+        style.font_family = Some(family.to_string());
+    } else if let Some(hp) = name.strip_prefix(SIZE_TAG_PREFIX).and_then(|v| v.parse().ok()) {
+        style.font_size_hp = Some(hp);
+    } else if let Some(color) = name.strip_prefix(COLOR_TAG_PREFIX) {
+        style.color = Some(color.to_string());
+    }
+}
+
 /// GtkTextTag name for a discrete line-spacing multiplier — reuses the
 /// same "line-spacing-1.0"/"1.15"/"1.5"/"2.0" tags window.rs's
 /// register_formatting_tags already registers and its cycle-line-spacing
@@ -97,13 +153,10 @@ pub fn capture_from_buffer(buf: &gtk::TextBuffer) -> Document {
                 }
             }
         }
-        // Links use one dynamically-created tag per URL, named "link:<url>".
+        // Links, fonts, sizes and colours use one tag per value.
         for tag in iter.tags() {
             if let Some(name) = tag.name() {
-                if let Some(url) = name.strip_prefix("link:") {
-                    s.link = Some(url.to_string());
-                    break;
-                }
+                apply_dynamic_tag(&name, &mut s);
             }
         }
         s
@@ -177,13 +230,16 @@ pub fn capture_from_buffer(buf: &gtk::TextBuffer) -> Document {
                 paintable.data::<String>("letters-image-alt")
                     .map(|p| p.as_ref().clone()).unwrap_or_default()
             };
+            let extent: Option<(u64, u64)> = unsafe {
+                paintable.data::<Option<(u64, u64)>>("letters-image-extent").and_then(|p| *p.as_ref())
+            };
             if let Some(src) = src {
                 if let Some(r) = current_run.take() {
                     current.runs.push(r);
                 }
                 current.runs.push(Run {
                     text: alt,
-                    style: RunStyle { image: Some(src), ..Default::default() },
+                    style: RunStyle { image: Some(src), image_extent_emu: extent, ..Default::default() },
                 });
                 iter.forward_char();
                 continue;
@@ -548,6 +604,7 @@ pub fn render_to_buffer(doc: &Document, buf: &gtk::TextBuffer) {
                         unsafe {
                             texture.set_data("letters-image-src", src.clone());
                             texture.set_data("letters-image-alt", run.text.clone());
+                            texture.set_data("letters-image-extent", run.style.image_extent_emu);
                         }
                         buf.insert_paintable(&mut insert, &texture);
                     }
@@ -560,20 +617,8 @@ pub fn render_to_buffer(doc: &Document, buf: &gtk::TextBuffer) {
                 insert_footnote_marker(buf, &mut insert, idx);
                 continue;
             }
-            let mut names: Vec<&str> = run_tag_names(&run.style);
-            let link_tag_name = run.style.link.as_ref().map(|url| {
-                let name = format!("link:{url}");
-                if buf.tag_table().lookup(&name).is_none() {
-                    let tag = gtk::TextTag::builder()
-                        .name(&name)
-                        .foreground("#1a5fb4")
-                        .underline(gtk4::pango::Underline::Single)
-                        .build();
-                    buf.tag_table().add(&tag);
-                }
-                name
-            });
-            if let Some(n) = &link_tag_name { names.push(n.as_str()); }
+            let tags = run_tags(buf, &run.style);
+            let names: Vec<&str> = tags.iter().map(String::as_str).collect();
             if names.is_empty() {
                 buf.insert(&mut insert, &run.text);
             } else {
@@ -805,6 +850,33 @@ mod tests {
         let mut para = Paragraph { style: Default::default(), runs: vec![Run::plain("\u{2022}\tdeep")] };
         capture_list_marker(&mut para, Some(2));
         assert_eq!((para.style.list_level, para.text().as_str()), (2, "deep"));
+    }
+
+    /// Font family, size and colour had no buffer tags, so opening a
+    /// document dropped them from the editor and the next save dropped them
+    /// from the file.
+    #[test]
+    fn font_family_size_and_colour_survive_the_buffer() {
+        gtk_test(|| {
+            let buf = gtk::TextBuffer::new(None);
+            crate::actions::register_formatting_tags(&buf);
+            let mut d = Document::from_plain_text("plain big red");
+            let styled = RunStyle {
+                font_family: Some("Liberation Mono".into()),
+                font_size_hp: Some(36),
+                color: Some("C80000".into()),
+                bold: true,
+                ..Default::default()
+            };
+            d.paragraphs[0].runs = vec![Run::plain("plain "), Run { text: "big red".into(), style: styled.clone() }];
+            let rt = round_trip(&buf, &d);
+            assert_eq!(rt.paragraphs[0].runs, d.paragraphs[0].runs);
+            // And they are drawn: the tag carries the size and colour.
+            let tag = buf.tag_table().lookup("size-hp:36").expect("size tag");
+            assert_eq!(tag.size_points(), 18.0);
+            assert!(buf.tag_table().lookup("color:C80000").is_some());
+            assert!(buf.tag_table().lookup("font:Liberation Mono").is_some());
+        });
     }
 
     #[test]

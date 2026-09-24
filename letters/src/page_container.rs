@@ -33,6 +33,13 @@ mod imp {
         /// Pointer is over the widget — margin guides show only then
         /// (DESIGN-UI: margins visible on hover only).
         pub pointer_over: Cell<bool>,
+        /// Print Layout (ADR 0010): show the laid-out pages instead of the
+        /// editable Draft view.
+        pub print_layout: Cell<bool>,
+        /// The Print Layout view and the scrolled window holding it; a
+        /// second child, after the Draft editor's scrolled window.
+        pub print_scroll: std::cell::RefCell<Option<gtk::ScrolledWindow>>,
+        pub page_view: std::cell::RefCell<Option<crate::page_view::PageView>>,
     }
 
     #[glib::object_subclass]
@@ -72,6 +79,18 @@ mod imp {
             let w = self.obj().width() as f64;
             let h = self.obj().height() as f64;
             if w <= 0.0 || h <= 0.0 { return; }
+
+            if self.print_layout.get() {
+                // The page view draws its own pages on this backdrop.
+                let is_dark = adw::StyleManager::default().is_dark();
+                let bg = if is_dark { 0.13 } else { 0.753 };
+                snapshot.append_color(
+                    &gtk4::gdk::RGBA::new(bg, bg, bg, 1.0),
+                    &gtk4::graphene::Rect::new(0.0, 0.0, w as f32, h as f32),
+                );
+                self.parent_snapshot(snapshot);
+                return;
+            }
 
             let pw = self.page_width.get();
             let ph = self.page_height.get();
@@ -237,6 +256,15 @@ mod imp {
                 Some(c) => c,
                 None => return,
             };
+            let print = self.print_layout.get();
+            child.set_child_visible(!print);
+            if let Some(ps) = self.print_scroll.borrow().as_ref() {
+                ps.set_child_visible(print);
+                if print {
+                    ps.size_allocate(&gtk4::Allocation::new(0, 0, width.max(1), height.max(1)), -1);
+                    return;
+                }
+            }
             let w = width as f64;
             let h = height as f64;
             if w <= 0.0 || h <= 0.0 { return; }
@@ -330,6 +358,35 @@ impl PageContainer {
         ((w - sw) / 2.0, start_y + index as f64 * (sh + PAGE_GAP * scale), sw, sh)
     }
 
+    /// Add the Print Layout view as this container's second child. Called
+    /// once, after the Draft editor has been parented.
+    pub fn attach_page_view(&self) -> crate::page_view::PageView {
+        let view = crate::page_view::PageView::new();
+        let scroll = gtk::ScrolledWindow::new();
+        scroll.set_child(Some(&view));
+        scroll.set_parent(self);
+        scroll.set_child_visible(false);
+        self.imp().print_scroll.replace(Some(scroll));
+        self.imp().page_view.replace(Some(view.clone()));
+        view
+    }
+
+    /// The Print Layout view, once attached.
+    pub fn page_view(&self) -> Option<crate::page_view::PageView> {
+        self.imp().page_view.borrow().clone()
+    }
+
+    /// Switch between Print Layout and the Draft editor.
+    pub fn set_print_layout(&self, on: bool) {
+        self.imp().print_layout.set(on);
+        self.queue_resize();
+        self.queue_draw();
+    }
+
+    pub fn is_print_layout(&self) -> bool {
+        self.imp().print_layout.get()
+    }
+
     /// Number of page rectangles currently drawn.
     pub fn page_count(&self) -> usize {
         self.imp().page_count.get().max(1)
@@ -401,6 +458,9 @@ impl PageContainer {
     /// Set zoom level (50-200).
     pub fn set_zoom(&self, level: f64) {
         self.imp().zoom_level.set(level.clamp(50.0, 200.0));
+        if let Some(view) = self.page_view() {
+            view.set_zoom(self.zoom_level());
+        }
         self.queue_resize();
     }
 

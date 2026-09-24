@@ -59,6 +59,10 @@
       <default>false</default>
       <summary>Use metric units (cm) on ruler instead of imperial (inches)</summary>
     </key>
+    <key name="print-layout" type="b">
+      <default>false</default>
+      <summary>Show documents in Print Layout (laid-out pages, read-only) instead of the editable Draft view</summary>
+    </key>
     <key name="zoom-level" type="d">
       <default>100.0</default>
       <range min="50" max="200"/>
