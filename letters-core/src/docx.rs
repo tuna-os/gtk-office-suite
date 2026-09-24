@@ -168,7 +168,11 @@ pub fn read(path: &str) -> Result<Document, String> {
         // empty line) is the break, not a line of its own: LibreOffice
         // starts the next paragraph at the top of the new page. Kept, it
         // put an empty line there instead.
-        if para.runs.is_empty() && breaks.leading && !pending_break && i + 1 < body.len() {
+        // (rdocx gives the break's run the text "\n".)
+        let only_break = para.runs.iter().all(|r| {
+            r.style.image.is_none() && r.style.footnote.is_none() && r.text.chars().all(|c| c == '\n')
+        });
+        if only_break && breaks.leading && !pending_break && i + 1 < body.len() {
             carried_break = true;
             continue;
         }
