@@ -20,6 +20,16 @@ pub fn to_typst(slides: &[decks_core::engine::Slide]) -> String {
                     out.push_str("#ellipse(width: 100%, height: 100%)\n")
                 }
                 Shape { .. } => out.push_str("#rect(width: 100%, height: 100%)\n"),
+                Table { table, .. } => {
+                    let cols = table.rows.first().map_or(1, |r| r.len().max(1));
+                    let cells: Vec<String> = table
+                        .rows
+                        .iter()
+                        .flatten()
+                        .map(|c| format!("[{}]", c.text().replace(['[', ']', '#', '\\'], " ")))
+                        .collect();
+                    out.push_str(&format!("#table(columns: {cols}, {})\n", cells.join(", ")));
+                }
                 Image { path, .. } => out.push_str(&format!("#image(\"{}\")\n", path)),
             }
         }

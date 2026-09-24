@@ -125,6 +125,14 @@ impl ObjectAccessible {
                 (label, (*x, *y, *w, *h))
             }
             SlideObject::Rect { x, y, w, h, .. } => ("Rectangle".to_string(), (*x, *y, *w, *h)),
+            SlideObject::Table { x, y, w, h, table, .. } => (
+                format!(
+                    "Table, {} rows by {} columns",
+                    table.rows.len(),
+                    table.rows.first().map_or(0, |r| r.len())
+                ),
+                (*x, *y, *w, *h),
+            ),
             SlideObject::Shape { kind, x, y, w, h, .. } => {
                 use decks_core::engine::shape::ShapeKind;
                 let name = match kind {

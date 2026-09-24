@@ -80,47 +80,13 @@ fn write_xfrm<W: std::io::Write>(
     Ok(())
 }
 
-fn write_text_box<W: std::io::Write>(
+/// The `a:p` paragraphs of a text body: styled runs when present (shared
+/// Run/RunStyle with Letters), else one default-styled run of `text`.
+fn write_paragraphs<W: std::io::Write>(
     writer: &mut Writer<W>,
-    id: usize,
-    name_idx: usize,
-    at: Placement,
     text: &str,
     runs: &[Run],
 ) -> Result<(), quick_xml::Error> {
-    writer.write_event(Event::Start(BytesStart::new("p:sp")))?;
-    
-    // nvSpPr
-    writer.write_event(Event::Start(BytesStart::new("p:nvSpPr")))?;
-    let mut c_nv_pr = BytesStart::new("p:cNvPr");
-    c_nv_pr.push_attribute(("id", id.to_string().as_str()));
-    c_nv_pr.push_attribute(("name", format!("TextBox {}", name_idx).as_str()));
-    writer.write_event(Event::Empty(c_nv_pr))?;
-    
-    let mut c_nv_sp_pr = BytesStart::new("p:cNvSpPr");
-    c_nv_sp_pr.push_attribute(("txBox", "1"));
-    writer.write_event(Event::Empty(c_nv_sp_pr))?;
-    
-    writer.write_event(Event::Empty(BytesStart::new("p:nvPr")))?;
-    writer.write_event(Event::End(BytesEnd::new("p:nvSpPr")))?;
-    
-    // spPr
-    writer.write_event(Event::Start(BytesStart::new("p:spPr")))?;
-    write_xfrm(writer, at)?;
-    
-    let mut prst_geom = BytesStart::new("a:prstGeom");
-    prst_geom.push_attribute(("prst", "rect"));
-    writer.write_event(Event::Start(prst_geom))?;
-    writer.write_event(Event::Empty(BytesStart::new("a:avLst")))?;
-    writer.write_event(Event::End(BytesEnd::new("a:prstGeom")))?;
-    
-    writer.write_event(Event::End(BytesEnd::new("p:spPr")))?;
-    
-    // txBody
-    writer.write_event(Event::Start(BytesStart::new("p:txBody")))?;
-    writer.write_event(Event::Empty(BytesStart::new("a:bodyPr")))?;
-    writer.write_event(Event::Empty(BytesStart::new("a:lstStyle")))?;
-    
     // Emit styled runs when present (shared Run/RunStyle with Letters);
     // otherwise a single default-styled run with the plain text.
     let plain: Vec<Run>;
@@ -178,6 +144,51 @@ fn write_text_box<W: std::io::Write>(
         writer.write_event(Event::End(BytesEnd::new("a:r")))?;
     }
     writer.write_event(Event::End(BytesEnd::new("a:p")))?;
+    Ok(())
+}
+
+fn write_text_box<W: std::io::Write>(
+    writer: &mut Writer<W>,
+    id: usize,
+    name_idx: usize,
+    at: Placement,
+    text: &str,
+    runs: &[Run],
+) -> Result<(), quick_xml::Error> {
+    writer.write_event(Event::Start(BytesStart::new("p:sp")))?;
+    
+    // nvSpPr
+    writer.write_event(Event::Start(BytesStart::new("p:nvSpPr")))?;
+    let mut c_nv_pr = BytesStart::new("p:cNvPr");
+    c_nv_pr.push_attribute(("id", id.to_string().as_str()));
+    c_nv_pr.push_attribute(("name", format!("TextBox {}", name_idx).as_str()));
+    writer.write_event(Event::Empty(c_nv_pr))?;
+    
+    let mut c_nv_sp_pr = BytesStart::new("p:cNvSpPr");
+    c_nv_sp_pr.push_attribute(("txBox", "1"));
+    writer.write_event(Event::Empty(c_nv_sp_pr))?;
+    
+    writer.write_event(Event::Empty(BytesStart::new("p:nvPr")))?;
+    writer.write_event(Event::End(BytesEnd::new("p:nvSpPr")))?;
+    
+    // spPr
+    writer.write_event(Event::Start(BytesStart::new("p:spPr")))?;
+    write_xfrm(writer, at)?;
+    
+    let mut prst_geom = BytesStart::new("a:prstGeom");
+    prst_geom.push_attribute(("prst", "rect"));
+    writer.write_event(Event::Start(prst_geom))?;
+    writer.write_event(Event::Empty(BytesStart::new("a:avLst")))?;
+    writer.write_event(Event::End(BytesEnd::new("a:prstGeom")))?;
+    
+    writer.write_event(Event::End(BytesEnd::new("p:spPr")))?;
+    
+    // txBody
+    writer.write_event(Event::Start(BytesStart::new("p:txBody")))?;
+    writer.write_event(Event::Empty(BytesStart::new("a:bodyPr")))?;
+    writer.write_event(Event::Empty(BytesStart::new("a:lstStyle")))?;
+    
+    write_paragraphs(writer, text, runs)?;
     writer.write_event(Event::End(BytesEnd::new("p:txBody")))?;
     
     writer.write_event(Event::End(BytesEnd::new("p:sp")))?;
@@ -350,6 +361,104 @@ fn write_shape<W: std::io::Write>(
     Ok(())
 }
 
+/// A table as a `p:graphicFrame` holding an `a:tbl`, in PowerPoint's
+/// default table style ("Medium Style 2 - Accent 1"), which is the style
+/// the model's `cell_paint` draws. Column widths and row heights are the
+/// fitted ones, so the grid fills the frame exactly.
+fn write_table<W: std::io::Write>(
+    writer: &mut Writer<W>,
+    id: usize,
+    name_idx: usize,
+    at: Placement,
+    table: &super::table::TableData,
+) -> Result<(), quick_xml::Error> {
+    let emu = |v: f64| ((v * 9525.0).round() as i64).to_string();
+    writer.write_event(Event::Start(BytesStart::new("p:graphicFrame")))?;
+    writer.write_event(Event::Start(BytesStart::new("p:nvGraphicFramePr")))?;
+    let mut c_nv_pr = BytesStart::new("p:cNvPr");
+    c_nv_pr.push_attribute(("id", id.to_string().as_str()));
+    c_nv_pr.push_attribute(("name", format!("Table {}", name_idx).as_str()));
+    writer.write_event(Event::Empty(c_nv_pr))?;
+    writer.write_event(Event::Start(BytesStart::new("p:cNvGraphicFramePr")))?;
+    let mut locks = BytesStart::new("a:graphicFrameLocks");
+    locks.push_attribute(("noGrp", "1"));
+    writer.write_event(Event::Empty(locks))?;
+    writer.write_event(Event::End(BytesEnd::new("p:cNvGraphicFramePr")))?;
+    writer.write_event(Event::Empty(BytesStart::new("p:nvPr")))?;
+    writer.write_event(Event::End(BytesEnd::new("p:nvGraphicFramePr")))?;
+
+    writer.write_event(Event::Start(BytesStart::new("p:xfrm")))?;
+    let mut off = BytesStart::new("a:off");
+    off.push_attribute(("x", emu(at.x).as_str()));
+    off.push_attribute(("y", emu(at.y).as_str()));
+    writer.write_event(Event::Empty(off))?;
+    let mut ext = BytesStart::new("a:ext");
+    ext.push_attribute(("cx", emu(at.w).as_str()));
+    ext.push_attribute(("cy", emu(at.h).as_str()));
+    writer.write_event(Event::Empty(ext))?;
+    writer.write_event(Event::End(BytesEnd::new("p:xfrm")))?;
+
+    writer.write_event(Event::Start(BytesStart::new("a:graphic")))?;
+    let mut data = BytesStart::new("a:graphicData");
+    data.push_attribute(("uri", "http://schemas.openxmlformats.org/drawingml/2006/table"));
+    writer.write_event(Event::Start(data))?;
+    writer.write_event(Event::Start(BytesStart::new("a:tbl")))?;
+    let mut tbl_pr = BytesStart::new("a:tblPr");
+    if table.first_row {
+        tbl_pr.push_attribute(("firstRow", "1"));
+    }
+    if table.band_row {
+        tbl_pr.push_attribute(("bandRow", "1"));
+    }
+    writer.write_event(Event::Start(tbl_pr))?;
+    writer.write_event(Event::Start(BytesStart::new("a:tableStyleId")))?;
+    writer.write_event(Event::Text(BytesText::new("{5C22544A-7EE6-4342-B048-85BDC9FD1C3A}")))?;
+    writer.write_event(Event::End(BytesEnd::new("a:tableStyleId")))?;
+    writer.write_event(Event::End(BytesEnd::new("a:tblPr")))?;
+
+    let (cols, rows) = table.fitted(at.w, at.h);
+    writer.write_event(Event::Start(BytesStart::new("a:tblGrid")))?;
+    for w in &cols {
+        let mut col = BytesStart::new("a:gridCol");
+        col.push_attribute(("w", emu(*w).as_str()));
+        writer.write_event(Event::Empty(col))?;
+    }
+    writer.write_event(Event::End(BytesEnd::new("a:tblGrid")))?;
+    for (r, h) in rows.iter().enumerate() {
+        let mut tr = BytesStart::new("a:tr");
+        tr.push_attribute(("h", emu(*h).as_str()));
+        writer.write_event(Event::Start(tr))?;
+        for c in 0..cols.len() {
+            let cell = table.rows.get(r).and_then(|row| row.get(c)).cloned().unwrap_or_default();
+            writer.write_event(Event::Start(BytesStart::new("a:tc")))?;
+            writer.write_event(Event::Start(BytesStart::new("a:txBody")))?;
+            writer.write_event(Event::Empty(BytesStart::new("a:bodyPr")))?;
+            writer.write_event(Event::Empty(BytesStart::new("a:lstStyle")))?;
+            write_paragraphs(writer, &cell.text(), &cell.runs)?;
+            writer.write_event(Event::End(BytesEnd::new("a:txBody")))?;
+            match cell.fill {
+                Some(fill) => {
+                    writer.write_event(Event::Start(BytesStart::new("a:tcPr")))?;
+                    writer.write_event(Event::Start(BytesStart::new("a:solidFill")))?;
+                    let mut srgb = BytesStart::new("a:srgbClr");
+                    srgb.push_attribute(("val", fill.to_hex().as_str()));
+                    writer.write_event(Event::Empty(srgb))?;
+                    writer.write_event(Event::End(BytesEnd::new("a:solidFill")))?;
+                    writer.write_event(Event::End(BytesEnd::new("a:tcPr")))?;
+                }
+                None => writer.write_event(Event::Empty(BytesStart::new("a:tcPr")))?,
+            }
+            writer.write_event(Event::End(BytesEnd::new("a:tc")))?;
+        }
+        writer.write_event(Event::End(BytesEnd::new("a:tr")))?;
+    }
+    writer.write_event(Event::End(BytesEnd::new("a:tbl")))?;
+    writer.write_event(Event::End(BytesEnd::new("a:graphicData")))?;
+    writer.write_event(Event::End(BytesEnd::new("a:graphic")))?;
+    writer.write_event(Event::End(BytesEnd::new("p:graphicFrame")))?;
+    Ok(())
+}
+
 fn write_image<W: std::io::Write>(
     writer: &mut Writer<W>,
     id: usize,
@@ -505,6 +614,13 @@ fn write_master_shapes<W: std::io::Write>(
                 Placement { x: *x, y: *y, w: *w, h: *h, rotation: *rotation },
                 kind,
                 style,
+            )?,
+            SlideObject::Table { x, y, w, h, rotation, table } => write_table(
+                writer,
+                id,
+                j + 1,
+                Placement { x: *x, y: *y, w: *w, h: *h, rotation: *rotation },
+                table,
             )?,
             SlideObject::Image { .. } => {}
         }
@@ -915,6 +1031,9 @@ pub fn write_pptx_bytes(deck: &Deck) -> Result<Vec<u8>, String> {
                     }
                     SlideObject::Shape { kind, x, y, w, h, rotation, style } => {
                         write_shape(&mut writer, id, j + 1, Placement { x: *x, y: *y, w: *w, h: *h, rotation: *rotation }, kind, style).map_err(|e| e.to_string())?;
+                    }
+                    SlideObject::Table { x, y, w, h, rotation, table } => {
+                        write_table(&mut writer, id, j + 1, Placement { x: *x, y: *y, w: *w, h: *h, rotation: *rotation }, table).map_err(|e| e.to_string())?;
                     }
                     SlideObject::Image { path, x, y, w, h, rotation } => {
                         let img_idx = images_to_add.len() + 1;

@@ -192,6 +192,7 @@ fn shape_rotation_survives_a_snapshot() {
         | SlideObject::TextBox { rotation, .. }
         | SlideObject::Circle { rotation, .. }
         | SlideObject::Shape { rotation, .. }
+        | SlideObject::Table { rotation, .. }
         | SlideObject::Image { rotation, .. } => *rotation,
     };
     // Where the shape's box sits. A Circle stores its centre and a Shape
@@ -1061,6 +1062,7 @@ fn a_deck_on_the_modern_powerpoint_slide_size_imports_at_model_scale() {
     let (x, y, w, h) = match obj {
         SlideObject::Rect { x, y, w, h, .. }
         | SlideObject::Shape { x, y, w, h, .. }
+        | SlideObject::Table { x, y, w, h, .. }
         | SlideObject::TextBox { x, y, w, h, .. } => (*x, *y, *w, *h),
         other => panic!("unexpected object kind: {other:?}"),
     };
