@@ -1218,13 +1218,7 @@ pub(crate) fn insert_fragment(buf: &gtk::TextBuffer, frag: &letters_core::fragme
                     buf.insert_at_cursor("\n");
                 }
                 for run in &p.runs {
-                    let mut tags: Vec<&str> = Vec::new();
-                    if run.style.bold { tags.push("bold"); }
-                    if run.style.italic { tags.push("italic"); }
-                    if run.style.underline { tags.push("underline"); }
-                    if run.style.strikethrough { tags.push("strikethrough"); }
-                    if run.style.highlight { tags.push("highlight"); }
-                    if run.style.code { tags.push("code"); }
+                    let tags = crate::bridge::run_tag_names(&run.style);
                     let mut iter = buf.iter_at_mark(&buf.get_insert());
                     if tags.is_empty() {
                         buf.insert(&mut iter, &run.text);
