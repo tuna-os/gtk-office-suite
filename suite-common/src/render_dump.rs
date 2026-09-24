@@ -55,10 +55,37 @@ pub fn schedule(app: &impl IsA<gio::Application>) {
         gtk4::style_context_add_provider_for_display(&display, &css, gtk4::STYLE_PROVIDER_PRIORITY_USER);
     }
     let app = app.as_ref().clone();
-    // 1.5 s covers debounced relayout (Letters paginates on a 500 ms
-    // debounce) and image decoding; the lab would rather be slow than
-    // capture a half-laid-out page.
-    glib::timeout_add_local_once(std::time::Duration::from_millis(1500), move || {
+    // Wait for the window to settle before capturing: at least 1.5 s (Letters
+    // relayouts on a 500 ms debounce; images decode), then until its size has
+    // been stable for three polls. Under Broadway (HOLD), also until it is
+    // maximized: GDK Broadway grows the window to the browser's size only
+    // when the screen size arrives, and on a loaded machine that came after
+    // a fixed 1.5 s, so the dump described a 1024x768 window the browser was
+    // no longer showing (decks/shapes Tier B went missing).
+    let hold = std::env::var_os("GTK_OFFICE_RENDER_HOLD").is_some();
+    let start = std::time::Instant::now();
+    let last = std::cell::Cell::new((0, 0));
+    let stable = std::cell::Cell::new(0u32);
+    glib::timeout_add_local(std::time::Duration::from_millis(250), move || {
+        let window = app.downcast_ref::<gtk4::Application>().and_then(|a| a.active_window());
+        let size = window.as_ref().map_or((0, 0), |w| (w.width(), w.height()));
+        if size == last.get() && size != (0, 0) {
+            stable.set(stable.get() + 1);
+        } else {
+            stable.set(0);
+            last.set(size);
+        }
+        let maximized = !hold || window.as_ref().is_some_and(|w| w.is_maximized());
+        let elapsed = start.elapsed();
+        let ready = elapsed >= std::time::Duration::from_millis(1500) && stable.get() >= 3 && maximized;
+        // Give up waiting after 15 s and capture what there is; the lab's
+        // own checks (template match, A-vs-B agreement) will say so.
+        if !ready && elapsed < std::time::Duration::from_secs(15) {
+            return glib::ControlFlow::Continue;
+        }
+        if !ready {
+            eprintln!("render-dump: window never settled (size {size:?}, maximized {maximized}); capturing anyway");
+        }
         if let Some(dir) = dump_dir() {
             let _ = std::fs::create_dir_all(&dir);
         }
@@ -69,9 +96,10 @@ pub fn schedule(app: &impl IsA<gio::Application>) {
         }
         // Tier B keeps the app on screen so a browser can capture it; the
         // lab kills the process when it is done.
-        if std::env::var_os("GTK_OFFICE_RENDER_HOLD").is_none() {
+        if !hold {
             app.quit();
         }
+        glib::ControlFlow::Break
     });
 }
 
