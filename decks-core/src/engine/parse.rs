@@ -23,6 +23,8 @@ pub(crate) fn resolve_general_ref(r: &BytesRef) -> String {
 use super::model::*;
 use super::notes::{extract_notes_text, parse_run_style};
 use super::placeholders::{inherited_rect, parse_placeholders, PhKey, Placeholder};
+use super::shape::ShapeKind;
+use super::shape_xml::{sp_styles, theme as read_theme};
 
 use std::fs::File;
 use std::io::Write;
@@ -396,6 +398,10 @@ pub fn read_pptx(path: &str) -> Result<Deck, String> {
         }
     }
 
+    // The deck's theme colours, which shapes reference through p:style and
+    // schemeClr. A package without a theme part gets the default theme's.
+    let theme = read_theme(&archive.optional_part_to_string("ppt/theme/theme1.xml", &mut budget));
+
     let mut slides = Vec::new();
     // Layout part path per slide (slide → layout → master mapping is
     // resolved after the slide loop, when `archive` is free again).
@@ -459,6 +465,8 @@ pub fn read_pptx(path: &str) -> Result<Deck, String> {
         }
 
         let mut objects = Vec::new();
+        let sp_paint = sp_styles(&slide_xml, &theme, scale.x);
+        let mut sp_index = 0usize;
 
         // The layout (and through it, the master) this slide's placeholders
         // inherit their geometry from. Read once per layout.
@@ -701,6 +709,10 @@ pub fn read_pptx(path: &str) -> Result<Deck, String> {
                             in_rpr = false;
                         }
                         if name.as_ref() == "p:sp" {
+                            // This shape's fill and outline, resolved by the
+                            // shape_xml pass over the same part (Nth p:sp).
+                            let paint = sp_paint.get(sp_index).cloned().unwrap_or_default();
+                            sp_index += 1;
                             if let Some(mut shape) = current_shape.take() {
                                 let text = text_of(&shape.runs);
                                 let has_text = !text.trim().is_empty();
@@ -731,17 +743,16 @@ pub fn read_pptx(path: &str) -> Result<Deck, String> {
                                 if shape.is_tx_box || (shape.has_tx_body && has_text) {
                                     objects.push(SlideObject::TextBox { text, x, y, w, h, rotation, runs: shape.runs.clone() });
                                 } else {
+                                    // The shape as the file draws it: its own
+                                    // preset and paint. It used to become a
+                                    // plain Rect or a Circle of the width's
+                                    // diameter, painted in the app's colours.
                                     let prst = shape.prst.unwrap_or_else(|| "rect".to_string());
-                                    if prst == "ellipse" {
-                                        objects.push(SlideObject::Circle {
-                                            x: x + w / 2.0,
-                                            y: y + h / 2.0,
-                                            r: w / 2.0,
-                                            rotation,
-                                        });
-                                    } else {
-                                        objects.push(SlideObject::Rect { x, y, w, h, rotation });
+                                    let mut kind = ShapeKind::from_prst(&prst);
+                                    if let (ShapeKind::RoundRect { radius }, Some(adj)) = (&mut kind, paint.round_adj) {
+                                        *radius = adj.clamp(0.0, 0.5);
                                     }
+                                    objects.push(SlideObject::Shape { kind, x, y, w, h, rotation, style: paint.style });
                                 }
                             }
                         } else if name.as_ref() == "p:pic" {
@@ -1319,25 +1330,28 @@ mod tests {
             _ => panic!("Expected TextBox"),
         }
 
-        // Verify Rect
+        // A rect and a circle come back as what the file holds: preset
+        // shapes, in the colours they were written in.
+        use crate::engine::shape::{Color, ShapeKind};
         match &slide.objects[1] {
-            SlideObject::Rect { x, y, w, h, .. } => {
+            SlideObject::Shape { kind: ShapeKind::Rect, x, y, w, h, style, .. } => {
                 assert!((x - 150.0).abs() < 0.1);
                 assert!((y - 200.0).abs() < 0.1);
                 assert!((w - 200.0).abs() < 0.1);
                 assert!((h - 100.0).abs() < 0.1);
+                assert_eq!(style.fill, Some(Color(0x4A, 0x90, 0xE2)));
             }
-            _ => panic!("Expected Rect"),
+            other => panic!("Expected a rect shape, got {other:?}"),
         }
 
-        // Verify Circle
         match &slide.objects[2] {
-            SlideObject::Circle { x, y, r, .. } => {
-                assert!((x - 400.0).abs() < 0.1);
-                assert!((y - 300.0).abs() < 0.1);
-                assert!((r - 50.0).abs() < 0.1);
+            SlideObject::Shape { kind: ShapeKind::Ellipse, x, y, w, h, style, .. } => {
+                // Circle (400, 300) r 50 is the box (350, 250, 100, 100).
+                assert!((x - 350.0).abs() < 0.1 && (y - 250.0).abs() < 0.1);
+                assert!((w - 100.0).abs() < 0.1 && (h - 100.0).abs() < 0.1);
+                assert_eq!(style.fill, Some(Color(0xE0, 0x4F, 0x32)));
             }
-            _ => panic!("Expected Circle"),
+            other => panic!("Expected an ellipse shape, got {other:?}"),
         }
 
         let _ = std::fs::remove_file(&path);

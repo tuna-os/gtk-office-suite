@@ -9,11 +9,14 @@
 //! - `write.rs` — [`write_pptx`], [`write_pptx_bytes`], shape writers
 //! - `notes.rs` — speaker-notes XML + text extraction
 //! - `placeholders.rs` — layout/master geometry a slide placeholder inherits
+//! - `shape.rs` — preset shapes: geometry kind, fill and outline
 
 mod model;
 mod notes;
 mod parse;
 mod placeholders;
+pub mod shape;
+mod shape_xml;
 mod write;
 
 pub use model::{Deck, MasterSlide, Slide, SlideObject};

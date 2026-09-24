@@ -317,6 +317,7 @@ impl DecksWindow {
                         let (x, y, w, h) = match o {
                             SlideObject::TextBox { x, y, w, h, .. }
                             | SlideObject::Rect { x, y, w, h, .. }
+                            | SlideObject::Shape { x, y, w, h, .. }
                             | SlideObject::Image { x, y, w, h, .. } => (*x, *y, *w, *h),
                             SlideObject::Circle { x, y, r, .. } => (*x, *y, r * 2.0, r * 2.0),
                         };
@@ -369,6 +370,7 @@ impl DecksWindow {
                     match obj {
                         SlideObject::TextBox { x, y, w, h, .. }
                         | SlideObject::Rect { x, y, w, h, .. }
+                        | SlideObject::Shape { x, y, w, h, .. }
                         | SlideObject::Image { x, y, w, h, .. } => match field {
                             Field::X => *x = v,
                             Field::Y => *y = v,
@@ -926,10 +928,14 @@ impl DecksWindow {
                 if idx >= ss_snap.len() { return; }
                 let count = shape_count.get();
                 shape_count.set(count + 1);
+                // A styled shape in the theme's default look (accent fill,
+                // darker outline), which the file then carries: not the old
+                // unstyled Rect/Circle that the canvas painted blue/red.
+                use decks_core::engine::shape::{ShapeKind, ShapeStyle};
                 let obj = if count.is_multiple_of(2) {
-                    SlideObject::Rect { x: 200.0, y: 200.0, w: 200.0, h: 150.0, rotation: 0.0 }
+                    SlideObject::Shape { kind: ShapeKind::Rect, x: 200.0, y: 200.0, w: 200.0, h: 150.0, rotation: 0.0, style: ShapeStyle::default() }
                 } else {
-                    SlideObject::Circle { x: 300.0, y: 250.0, r: 80.0, rotation: 0.0 }
+                    SlideObject::Shape { kind: ShapeKind::Ellipse, x: 220.0, y: 170.0, w: 160.0, h: 160.0, rotation: 0.0, style: ShapeStyle::default() }
                 };
                 drop(ss_snap);
                 controller.add_object(idx, obj);

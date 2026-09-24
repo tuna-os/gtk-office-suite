@@ -23,6 +23,7 @@ fn size(object: &SlideObject) -> (f64, f64) {
     match object {
         SlideObject::TextBox { w, h, .. }
         | SlideObject::Rect { w, h, .. }
+        | SlideObject::Shape { w, h, .. }
         | SlideObject::Image { w, h, .. } => (*w, *h),
         SlideObject::Circle { r, .. } => (*r * 2.0, *r * 2.0),
     }
@@ -326,6 +327,7 @@ fn kind(object: &SlideObject) -> &'static str {
         SlideObject::TextBox { .. } => "T",
         SlideObject::Rect { .. } => "R",
         SlideObject::Circle { .. } => "C",
+        SlideObject::Shape { .. } => "S",
         SlideObject::Image { .. } => "I",
     }
 }

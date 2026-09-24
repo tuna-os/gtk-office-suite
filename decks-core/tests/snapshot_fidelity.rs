@@ -191,13 +191,14 @@ fn shape_rotation_survives_a_snapshot() {
         SlideObject::Rect { rotation, .. }
         | SlideObject::TextBox { rotation, .. }
         | SlideObject::Circle { rotation, .. }
+        | SlideObject::Shape { rotation, .. }
         | SlideObject::Image { rotation, .. } => *rotation,
     };
-    let anchor_of = |o: &SlideObject| match o {
-        SlideObject::Rect { x, y, .. }
-        | SlideObject::TextBox { x, y, .. }
-        | SlideObject::Image { x, y, .. }
-        | SlideObject::Circle { x, y, .. } => (*x, *y),
+    // Where the shape's box sits. A Circle stores its centre and a Shape
+    // (what a file reads back as) its corner; the box is what must not move.
+    let anchor_of = |o: &SlideObject| {
+        let (x, y, _, _) = decks_core::undo::obj_bounds(o);
+        (x, y)
     };
 
     let mut complaints: Vec<String> = Vec::new();
@@ -1058,8 +1059,9 @@ fn a_deck_on_the_modern_powerpoint_slide_size_imports_at_model_scale() {
         .first()
         .expect("the full-bleed shape did not survive the read");
     let (x, y, w, h) = match obj {
-        SlideObject::Rect { x, y, w, h, .. } => (*x, *y, *w, *h),
-        SlideObject::TextBox { x, y, w, h, .. } => (*x, *y, *w, *h),
+        SlideObject::Rect { x, y, w, h, .. }
+        | SlideObject::Shape { x, y, w, h, .. }
+        | SlideObject::TextBox { x, y, w, h, .. } => (*x, *y, *w, *h),
         other => panic!("unexpected object kind: {other:?}"),
     };
     assert!(x.abs() < 0.01 && y.abs() < 0.01, "origin moved: ({x}, {y})");

@@ -125,6 +125,18 @@ impl ObjectAccessible {
                 (label, (*x, *y, *w, *h))
             }
             SlideObject::Rect { x, y, w, h, .. } => ("Rectangle".to_string(), (*x, *y, *w, *h)),
+            SlideObject::Shape { kind, x, y, w, h, .. } => {
+                use decks_core::engine::shape::ShapeKind;
+                let name = match kind {
+                    ShapeKind::Rect => "Rectangle".to_string(),
+                    ShapeKind::RoundRect { .. } => "Rounded rectangle".to_string(),
+                    ShapeKind::Ellipse => "Ellipse".to_string(),
+                    ShapeKind::Triangle => "Triangle".to_string(),
+                    ShapeKind::Diamond => "Diamond".to_string(),
+                    ShapeKind::Other(prst) => format!("Shape ({prst})"),
+                };
+                (name, (*x, *y, *w, *h))
+            }
             SlideObject::Circle { x, y, r, .. } => {
                 ("Circle".to_string(), (x - r, y - r, r * 2.0, r * 2.0))
             }

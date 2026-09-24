@@ -61,6 +61,15 @@ pub enum SlideObject {
         runs: Vec<Run>,
     },
     Rect { x: f64, y: f64, w: f64, h: f64, rotation: f64 },
+    /// A preset shape with its own fill and outline (engine::shape). What
+    /// the pptx and odp readers produce; `Rect` and `Circle` are the
+    /// editor's older unstyled shapes.
+    Shape {
+        kind: super::shape::ShapeKind,
+        x: f64, y: f64, w: f64, h: f64,
+        rotation: f64,
+        style: super::shape::ShapeStyle,
+    },
     Circle { x: f64, y: f64, r: f64, rotation: f64 },
     Image { path: String, x: f64, y: f64, w: f64, h: f64, rotation: f64 },
 }
@@ -70,6 +79,7 @@ impl SlideObject {
         match self {
             SlideObject::TextBox { x, .. }
             | SlideObject::Rect { x, .. }
+            | SlideObject::Shape { x, .. }
             | SlideObject::Image { x, .. } => *x,
             SlideObject::Circle { x, r, .. } => *x - *r,
         }
@@ -78,6 +88,7 @@ impl SlideObject {
         match self {
             SlideObject::TextBox { y, .. }
             | SlideObject::Rect { y, .. }
+            | SlideObject::Shape { y, .. }
             | SlideObject::Image { y, .. } => *y,
             SlideObject::Circle { y, r, .. } => *y - *r,
         }
@@ -87,6 +98,7 @@ impl SlideObject {
             SlideObject::TextBox { rotation, .. }
             | SlideObject::Rect { rotation, .. }
             | SlideObject::Circle { rotation, .. }
+            | SlideObject::Shape { rotation, .. }
             | SlideObject::Image { rotation, .. } => *rotation,
         }
     }
