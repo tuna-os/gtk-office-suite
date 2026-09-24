@@ -4,8 +4,8 @@
     "B": "amber"
   },
   "decks/bullets": {
-    "A": "amber",
-    "B": "amber"
+    "A": "green",
+    "B": "green"
   },
   "decks/image": {
     "A": "green",
@@ -28,8 +28,8 @@
     "B": "amber"
   },
   "decks/title-layout": {
-    "A": "amber",
-    "B": "amber"
+    "A": "green",
+    "B": "green"
   },
   "letters/alignment": {
     "A": "green",
