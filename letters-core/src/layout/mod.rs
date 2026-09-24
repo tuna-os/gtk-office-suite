@@ -252,6 +252,10 @@ fn run_at(runs: &[Run], index: usize) -> Option<&Run> {
 /// default for a table: 0.08in).
 pub const CELL_PADDING_PT: f64 = 5.4;
 
+/// Width of the cell rules the painter draws, in points. A row is its
+/// content plus one rule, as Word and LibreOffice measure it.
+pub const CELL_RULE_PT: f64 = 0.5;
+
 /// Lay out `doc` into pages.
 pub fn layout(doc: &Document, opts: &LayoutOptions, shaper: &mut dyn Shaper) -> RenderTree {
     let opts = &opts.for_document(doc);
@@ -491,7 +495,7 @@ fn layout_table(flow: &mut Flow, doc: &Document, range: std::ops::Range<usize>, 
                 paras.push((i, s, ph));
                 h += ph;
             }
-            row_h = row_h.max(h);
+            row_h = row_h.max(h + CELL_RULE_PT);
             row_cells.push((col, paras));
         }
         if flow.y + row_h > flow.bottom() && !flow.column_is_empty() {
@@ -500,7 +504,10 @@ fn layout_table(flow: &mut Flow, doc: &Document, range: std::ops::Range<usize>, 
         let top = flow.y;
         let x0 = flow.column_x();
         for (col, paras) in row_cells {
-            let cx = x0 + f64::from(col) * col_w;
+            // The table hangs one cell padding into the left margin, so
+            // cell text lines up with the body text (Word's and
+            // LibreOffice's default table indent).
+            let cx = x0 - CELL_PADDING_PT + f64::from(col) * col_w;
             flow.push(Item::Cell { table: first.table, row, col, x_pt: cx, y_pt: top, width_pt: col_w, height_pt: row_h });
             let mut y = top;
             for (i, s, _) in paras {
