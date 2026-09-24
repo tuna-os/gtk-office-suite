@@ -304,6 +304,10 @@ impl WorkbookController {
             .iter()
             .map(|&row| before_sheet.borders[row].clone())
             .collect();
+        after_sheet.styles = order
+            .iter()
+            .map(|&row| before_sheet.styles[row].clone())
+            .collect();
         after_sheet.validations = order
             .iter()
             .map(|&row| before_sheet.validations[row].clone())

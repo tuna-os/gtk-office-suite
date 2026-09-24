@@ -12,10 +12,10 @@
 // `NumberFormatKind`, falling back to General rather than guessing when a
 // code means something the model can't express.
 
-use suite_common_core::format::{NumberFormat, NumberFormatKind};
+use suite_common_core::format::NumberFormatKind;
 
 /// Excel's built-in format ids, as their format codes.
-fn builtin_code(id: u32) -> Option<&'static str> {
+pub(super) fn builtin_code(id: u32) -> Option<&'static str> {
     Some(match id {
         0 => "General",
         1 => "0",
@@ -203,39 +203,6 @@ fn xml_attr<'a>(tag: &'a str, attr: &str) -> Option<&'a str> {
     tag[start..].split('"').next()
 }
 
-fn unescape(s: &str) -> String {
-    s.replace("&quot;", "\"").replace("&apos;", "'").replace("&lt;", "<").replace("&gt;", ">").replace("&amp;", "&")
-}
-
-/// The number format of each cell style (`cellXfs` order) in styles.xml.
-pub fn cell_style_formats(styles_xml: &str) -> Vec<NumberFormat> {
-    let mut custom = std::collections::HashMap::new();
-    if let Some(block) = styles_xml.split("<numFmts").nth(1) {
-        let block = block.split("</numFmts>").next().unwrap_or("");
-        for tag in block.split("<numFmt ").skip(1) {
-            let tag = format!(" {}", tag.split("/>").next().unwrap_or(""));
-            if let (Some(id), Some(code)) = (
-                xml_attr(&tag, "numFmtId").and_then(|v| v.parse::<u32>().ok()),
-                xml_attr(&tag, "formatCode"),
-            ) {
-                custom.insert(id, unescape(code));
-            }
-        }
-    }
-    let Some(block) = styles_xml.split("<cellXfs").nth(1) else { return Vec::new() };
-    let block = block.split("</cellXfs>").next().unwrap_or("");
-    block
-        .split("<xf ")
-        .skip(1)
-        .map(|tag| {
-            let tag = format!(" {}", tag.split('>').next().unwrap_or(""));
-            let id = xml_attr(&tag, "numFmtId").and_then(|v| v.parse::<u32>().ok()).unwrap_or(0);
-            let code = custom.get(&id).map(String::as_str).or_else(|| builtin_code(id)).unwrap_or("General");
-            NumberFormat::new(kind_for_code(code))
-        })
-        .collect()
-}
-
 /// `(row, col, style index)` for every cell in a worksheet part that names a
 /// non-default style, 0-based.
 pub fn cell_style_indices(sheet_xml: &str) -> Vec<(usize, usize, usize)> {
@@ -291,7 +258,8 @@ mod tests {
             <cellStyleXfs count="1"><xf numFmtId="3"/></cellStyleXfs>
             <cellXfs count="4"><xf numFmtId="0" fontId="0"/><xf numFmtId="164" applyNumberFormat="1"/>
             <xf numFmtId="165"/><xf numFmtId="14"/></cellXfs></styleSheet>"#;
-        let kinds: Vec<_> = cell_style_formats(styles).into_iter().map(|f| f.kind).collect();
+        let kinds: Vec<_> =
+            super::super::xlsx_styles::parse_cell_styles(styles).into_iter().map(|x| x.format.kind).collect();
         assert_eq!(kinds, vec![General, Percent(1), Currency("$".into(), 2), Date("%m-%d-%y".into())]);
     }
 

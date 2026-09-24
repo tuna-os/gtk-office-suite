@@ -164,7 +164,7 @@
     "B": "amber"
   },
   "tables/wrap-text": {
-    "A": "red",
-    "B": "red"
+    "A": "amber",
+    "B": "amber"
   }
 }

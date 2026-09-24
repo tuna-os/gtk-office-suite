@@ -103,24 +103,19 @@ pub fn save_sheets_to_xlsx_bytes(
                 // number here round-trips as "INF" (calamine's own
                 // float formatting) on reopen, silently corrupting the
                 // cell — caught by tables-core/tests/property.rs.
+                let format = cell_format(&sh.formats[r][c], &sh.styles[r][c]);
                 if let Some(n) = val.parse::<f64>().ok().filter(|n| n.is_finite()) {
-                    match xlsx_num_format(&sh.formats[r][c]) {
-                        Some(fmt) => {
-                            let f = rust_xlsxwriter::Format::new().set_num_format(&fmt);
-                            sheet
-                                .write_number_with_format(r as u32, c as u16, n, &f)
-                                .map_err(|e| format!("Write error: {}", e))?;
-                        }
-                        None => {
-                            sheet
-                                .write_number(r as u32, c as u16, n)
-                                .map_err(|e| format!("Write error: {}", e))?;
-                        }
+                    match &format {
+                        Some(f) => sheet.write_number_with_format(r as u32, c as u16, n, f),
+                        None => sheet.write_number(r as u32, c as u16, n),
                     }
+                    .map_err(|e| format!("Write error: {}", e))?;
                 } else {
-                    sheet
-                        .write_string(r as u32, c as u16, val)
-                        .map_err(|e| format!("Write error: {}", e))?;
+                    match &format {
+                        Some(f) => sheet.write_string_with_format(r as u32, c as u16, val, f),
+                        None => sheet.write_string(r as u32, c as u16, val),
+                    }
+                    .map_err(|e| format!("Write error: {}", e))?;
                 }
             }
         }
@@ -128,6 +123,7 @@ pub fn save_sheets_to_xlsx_bytes(
         for (mr, mc, rows, cols) in &sh.merges {
             let (lr, lc) = (mr + (*rows).max(1) - 1, mc + (*cols).max(1) - 1);
             let val = sh.data[*mr][*mc].clone();
+            let format = cell_format(&sh.formats[*mr][*mc], &sh.styles[*mr][*mc]).unwrap_or_default();
             sheet
                 .merge_range(
                     *mr as u32,
@@ -135,7 +131,7 @@ pub fn save_sheets_to_xlsx_bytes(
                     lr as u32,
                     lc as u16,
                     &val,
-                    &rust_xlsxwriter::Format::default(),
+                    &format,
                 )
                 .map_err(|e| format!("Merge error: {}", e))?;
         }
@@ -328,6 +324,67 @@ pub fn save_sheets_to_xlsx_bytes(
         .map_err(|e| format!("Save error: {}", e))
 }
 
+/// The xlsx format a cell is written with: its number format and its
+/// CellStyle, or `None` when both are the defaults.
+fn cell_format(
+    nf: &suite_common_core::format::NumberFormat,
+    style: &crate::style::CellStyle,
+) -> Option<rust_xlsxwriter::Format> {
+    use crate::style::{HAlign, VAlign};
+    use rust_xlsxwriter::{Color, Format, FormatAlign, FormatUnderline};
+    let code = xlsx_num_format(nf);
+    if code.is_none() && style.is_default() {
+        return None;
+    }
+    let rgb = |c: crate::style::Rgb| Color::RGB(((c.0 as u32) << 16) | ((c.1 as u32) << 8) | c.2 as u32);
+    let mut f = Format::new();
+    if let Some(code) = code {
+        f = f.set_num_format(&code);
+    }
+    if let Some(family) = &style.font_family {
+        f = f.set_font_name(family);
+    }
+    if let Some(size) = style.font_size {
+        f = f.set_font_size(size);
+    }
+    if style.bold {
+        f = f.set_bold();
+    }
+    if style.italic {
+        f = f.set_italic();
+    }
+    if style.underline {
+        f = f.set_underline(FormatUnderline::Single);
+    }
+    if style.strikethrough {
+        f = f.set_font_strikethrough();
+    }
+    if let Some(c) = style.color {
+        f = f.set_font_color(rgb(c));
+    }
+    if let Some(c) = style.fill {
+        f = f.set_background_color(rgb(c));
+    }
+    match style.h_align {
+        HAlign::General => {}
+        HAlign::Left => f = f.set_align(FormatAlign::Left),
+        HAlign::Center => f = f.set_align(FormatAlign::Center),
+        HAlign::Right => f = f.set_align(FormatAlign::Right),
+    }
+    match style.v_align {
+        VAlign::Bottom => {}
+        VAlign::Top => f = f.set_align(FormatAlign::Top),
+        VAlign::Center => f = f.set_align(FormatAlign::VerticalCenter),
+    }
+    if style.wrap {
+        f = f.set_text_wrap();
+    }
+    if style.indent > 0 {
+        f = f.set_indent(style.indent);
+    }
+    Some(f)
+}
+
 /// Map our NumberFormat onto an xlsx number-format code, if non-default.
 fn xlsx_num_format(nf: &suite_common_core::format::NumberFormat) -> Option<String> {
     use suite_common_core::format::NumberFormatKind::*;
@@ -441,6 +498,42 @@ mod tests {
         sheet.set_row_height(1, 60.0);
         save_sheets_to_xlsx(path.to_str().unwrap(), &[sheet]).unwrap();
         assert!(path.exists());
+    }
+
+    /// Font, fill, alignment and wrap survive a save and reopen: written
+    /// through rust_xlsxwriter's Format, read back through styles.xml.
+    #[test]
+    fn cell_styles_round_trip_through_xlsx() {
+        use crate::style::{CellStyle, HAlign, Rgb, VAlign};
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("styles.xlsx").to_string_lossy().into_owned();
+        let styled = CellStyle {
+            font_family: Some("Liberation Serif".into()),
+            font_size: Some(16.0),
+            bold: true,
+            italic: true,
+            underline: true,
+            color: Some(Rgb(0xC0, 0, 0)),
+            fill: Some(Rgb(0xFF, 0xC7, 0xCE)),
+            h_align: HAlign::Center,
+            v_align: VAlign::Top,
+            wrap: true,
+            indent: 1,
+            ..CellStyle::default()
+        };
+        let mut sheet = SheetModel::new("S", 3, 3, 0);
+        sheet.data[0][0] = "styled".into();
+        sheet.styles[0][0] = styled.clone();
+        sheet.data[1][1] = "3.5".into();
+        sheet.styles[1][1] = CellStyle { h_align: HAlign::Right, ..CellStyle::default() };
+        sheet.data[2][2] = "plain".into();
+        save_sheets_to_xlsx(&path, &[sheet]).unwrap();
+
+        let (_, sheets) = crate::io::load_xlsx_workbook(&path).unwrap();
+        let back = sheets[0].clone();
+        assert_eq!(back.styles[0][0], styled);
+        assert_eq!(back.styles[1][1].h_align, HAlign::Right);
+        assert!(back.styles[2][2].is_default());
     }
 
     #[test]

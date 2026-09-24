@@ -120,28 +120,109 @@ const FORMULA_REF_COLORS: [(f64, f64, f64); 5] = [
 /// A cell's value through its number format, in a bounded Pango layout
 /// clipped to `rect` (x, y, w, h). Clipping and ellipsizing keep long values
 /// inside their cell; the text sits at the top, as the grid always drew it.
+/// Pixels per indent level: three characters, as in Excel.
+const INDENT_PX: f64 = 21.0;
+
+/// The Pango layout for a cell's text in its style: font, weight, slant,
+/// underline and strikethrough, alignment, and wrapping within `width`.
+fn cell_layout(cr: &Context, sheet: &SheetModel, r: usize, c: usize, text: &str, width: f64) -> pango::Layout {
+    use tables_core::style::HAlign;
+    let style = &sheet.styles[r][c];
+    let layout = pangocairo::functions::create_layout(cr);
+    let mut font = layout.context().font_description().unwrap_or_default();
+    if let Some(family) = &style.font_family {
+        font.set_family(family);
+    }
+    if let Some(size) = style.font_size {
+        font.set_size((size * pango::SCALE as f64) as i32);
+    }
+    if style.bold {
+        font.set_weight(pango::Weight::Bold);
+    }
+    if style.italic {
+        font.set_style(pango::Style::Italic);
+    }
+    layout.set_font_description(Some(&font));
+    if style.underline || style.strikethrough {
+        let attrs = pango::AttrList::new();
+        if style.underline {
+            attrs.insert(pango::AttrInt::new_underline(pango::Underline::Single));
+        }
+        if style.strikethrough {
+            attrs.insert(pango::AttrInt::new_strikethrough(true));
+        }
+        layout.set_attributes(Some(&attrs));
+    }
+    layout.set_text(text);
+    layout.set_width(((width - 8.0 - style.indent as f64 * INDENT_PX).max(1.0) * pango::SCALE as f64) as i32);
+    if style.wrap {
+        layout.set_wrap(pango::WrapMode::WordChar);
+    } else {
+        layout.set_ellipsize(EllipsizeMode::End);
+        layout.set_single_paragraph_mode(true);
+    }
+    layout.set_alignment(match sheet.resolved_h_align(r, c) {
+        HAlign::Center => pango::Alignment::Center,
+        HAlign::Right => pango::Alignment::Right,
+        _ => pango::Alignment::Left,
+    });
+    layout
+}
+
+/// A cell's value through its number format and style, clipped to `rect`
+/// (x, y, w, h). Clipping and ellipsizing keep long values inside their
+/// cell; wrapped cells break across lines instead.
 fn draw_cell_text(cr: &Context, sheet: &SheetModel, r: usize, c: usize, rect: (f64, f64, f64, f64), color: (f64, f64, f64)) {
+    use tables_core::style::{HAlign, VAlign};
     let val = sheet.cell(r, c);
     if val.is_empty() {
         return;
     }
     let (cx, cy, cw, rh) = rect;
-    cr.set_source_rgb(color.0, color.1, color.2);
+    let style = &sheet.styles[r][c];
+    let (red, green, blue) = style.color.map_or(color, |c| c.to_f64());
+    cr.set_source_rgb(red, green, blue);
     let formatted = sheet.formats[r][c].format(val);
-    let layout = pangocairo::functions::create_layout(cr);
-    layout.set_text(&formatted);
-    layout.set_width(((cw - 8.0).max(1.0) * pango::SCALE as f64) as i32);
-    layout.set_ellipsize(EllipsizeMode::End);
-    layout.set_single_paragraph_mode(true);
-    if sheet.aligns_right(r, c) {
-        layout.set_alignment(pango::Alignment::Right);
-    }
+    let layout = cell_layout(cr, sheet, r, c, &formatted, cw);
+    let text_h = layout.pixel_size().1 as f64;
+    let y = match style.v_align {
+        VAlign::Top => cy + 2.0,
+        VAlign::Center => cy + (rh - text_h) / 2.0,
+        VAlign::Bottom => cy + rh - text_h - 2.0,
+    };
+    let indent = style.indent as f64 * INDENT_PX;
+    let x = if sheet.resolved_h_align(r, c) == HAlign::Right { cx + 4.0 } else { cx + 4.0 + indent };
     cr.save().unwrap();
-    cr.rectangle(cx + 3.0, cy + 2.0, (cw - 6.0).max(1.0), (rh - 4.0).max(1.0));
+    cr.rectangle(cx + 3.0, cy + 1.0, (cw - 6.0).max(1.0), (rh - 2.0).max(1.0));
     cr.clip();
-    cr.move_to(cx + 4.0, cy + 5.0);
+    cr.move_to(x, y.max(cy + 1.0));
     pangocairo::functions::show_layout(cr, &layout);
     cr.restore().unwrap();
+}
+
+/// Grow each row to fit cells that need more than the default height (a
+/// wrapped cell, or a font size of its own), unless the row already has a
+/// height of its own (anything other than the default), as spreadsheets
+/// auto-fit rows on open. Measured with Pango off-screen.
+pub fn fit_rows_to_content(sheet: &mut SheetModel) {
+    let Ok(surface) = gtk4::cairo::ImageSurface::create(gtk4::cairo::Format::ARgb32, 1, 1) else { return };
+    let Ok(cr) = Context::new(&surface) else { return };
+    for r in 0..sheet.rows {
+        if (sheet.row_heights[r] - tables_core::sheet::ROW_HEIGHT).abs() > 0.5 {
+            continue;
+        }
+        let mut need = sheet.row_heights[r];
+        for c in 0..sheet.cols {
+            let style = &sheet.styles[r][c];
+            if !(style.wrap || style.font_size.is_some()) || sheet.cell(r, c).is_empty() {
+                continue;
+            }
+            let text = sheet.formats[r][c].format(sheet.cell(r, c));
+            let layout = cell_layout(&cr, sheet, r, c, &text, sheet.col_width(c));
+            need = need.max(layout.pixel_size().1 as f64 + 6.0);
+        }
+        sheet.row_heights[r] = need;
+    }
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -272,6 +353,9 @@ pub fn draw_grid(
                 } else {
                     cr.set_source_rgb(cell_bg.0, cell_bg.1, cell_bg.2);
                 }
+            } else if let Some(fill) = sheet.styles[r][c].fill {
+                let (fr, fg, fb) = fill.to_f64();
+                cr.set_source_rgb(fr, fg, fb);
             } else {
                 cr.set_source_rgb(cell_bg.0, cell_bg.1, cell_bg.2);
             }
