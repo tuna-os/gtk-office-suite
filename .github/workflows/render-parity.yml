@@ -123,12 +123,23 @@ jobs:
           build-args: BASE=ghcr.io/${{ github.repository }}/gui-test:main
           cache-from: type=gha,scope=render-lab
 
+      # upload-artifact strips the paths' common prefix, so each app's
+      # captures arrive as <fixture>/... and must be put back under <app>/.
+      # Merging them into one directory lost the app level, the compare
+      # found nothing, and the report came out empty but green.
       - name: Download captures
         uses: actions/download-artifact@v4
         with:
           pattern: render-lab-*
-          path: render-lab-out
-          merge-multiple: true
+          path: render-lab-captures
+
+      - name: Arrange captures by app
+        run: |
+          mkdir -p render-lab-out
+          for app in letters tables decks; do
+            [ -d "render-lab-captures/render-lab-$app" ] && mv "render-lab-captures/render-lab-$app" "render-lab-out/$app"
+          done
+          ls render-lab-out
 
       # The whole-suite report, and the baseline this run would lock in: an
       # agent or reviewer can take `baseline.proposed.json` from the
