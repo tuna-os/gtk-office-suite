@@ -3490,9 +3490,10 @@ class LettersStructuredEditingSmoke(BaseGUITestCase):
         self.assertTrue(second.get("page_break_before"), "the break lands on the caret's paragraph")
         self.assertFalse(first.get("page_break_before"))
 
-        # On screen: exactly one marker, indented one level (four spaces).
+        # On screen: exactly one marker, a bullet glyph and a tab. The level
+        # is the item's hanging indent (a paragraph tag), not literal spaces.
         shown = self.wait_for_node(roleName="text").text
-        self.assertEqual(shown.splitlines(), ["first", "    - second"],
+        self.assertEqual(shown.splitlines(), ["first", "•\tsecond"],
                          f"unexpected editor contents: {shown!r}")
 
         self.gapplication_action("org.tunaos.letters", "list-outdent")
