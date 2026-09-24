@@ -1,5 +1,13 @@
 # GTK Office Suite
 
+> [!WARNING]
+> **Pre-alpha. Not usable for real work yet.** Do not use Letters, Tables
+> or Decks as a replacement for LibreOffice, OnlyOffice, Google Docs or
+> Microsoft Office. Documents you open may look wrong on screen, and
+> formatting that *is* preserved in the saved file is often **not drawn**
+> in the editor. Keep using your existing office suite, and only open
+> copies of files you care about. See [Project status](#project-status).
+
 [![CI](https://github.com/tuna-os/gtk-office-suite/actions/workflows/ci.yml/badge.svg)](https://github.com/tuna-os/gtk-office-suite/actions/workflows/ci.yml)
 
 Three GNOME-native office applications written in Rust with GTK4 and
@@ -26,7 +34,9 @@ measured against real LibreOffice output rather than asserted — see
 
 Captured automatically from the real applications by the
 [Screenshots workflow](.github/workflows/screenshots.yml), which drives
-each app under Xvfb. Nothing here is a mockup.
+each app under Xvfb. Nothing here is a mockup, but the demo documents were
+written to show features that work. Real-world files look worse (see
+[Project status](#project-status)).
 
 | Letters | Tables |
 |---|---|
@@ -62,11 +72,39 @@ steps need a human and are written down in
 
 ## Project status
 
-Current release: **[v2.1.0](https://github.com/tuna-os/gtk-office-suite/releases/latest)**.
-All three apps are usable for real work. What that does and does not mean:
+Current release: **[v2.1.0](https://github.com/tuna-os/gtk-office-suite/releases/latest)**
+— a version number, not a maturity claim.
 
-**Measured compatibility.** Four corpora are ratcheted in CI — the pass
-count may climb, never fall:
+**Honest status: pre-alpha, not a daily driver.** The file-format engines
+(reading and writing DOCX/ODT/XLSX/ODS/PPTX/ODP) are the most mature part
+and are tested against LibreOffice. The *editors*, meaning what you see
+on screen while you work, are not. Known problems:
+
+- **What you see is not what you get.** Most tests check that a file
+  survives a save/reopen, not that the editor draws it correctly. Many
+  features that exist in the document model and round-trip through files
+  are drawn wrong or not drawn on screen. Examples: lists appear as
+  literal `- ` text, slide titles lose their placeholder styling, and
+  number formats and fonts fall back to defaults.
+- **Nobody has compared our on-screen rendering with LibreOffice's.** The
+  [render parity roadmap](docs/RENDER-PARITY-ROADMAP.md) is the plan to
+  fix that. Every visual feature will be proven by screenshots of the
+  running app (headless, in a browser via GTK Broadway, and in a real VM)
+  compared against LibreOffice's rendering of the same file.
+- The README screenshots come from demo documents chosen to show what
+  works. They do not represent arbitrary real-world files.
+
+| App | Usable for | Not usable for |
+|---|---|---|
+| **Letters** | Trying it out; plain text and Markdown notes | Opening real DOCX/ODT documents and expecting them to look right; page layout; printing |
+| **Tables** | Small, simple sheets of values and formulas | Formatted workbooks, charts, anything where the look matters |
+| **Decks** | Experiments only | Opening real PPTX/ODP decks; presenting |
+
+This table only moves to "usable" when the render parity scorecard backs
+it, not because a feature has been merged.
+
+**Measured file compatibility** (file content, *not* on-screen rendering).
+Four corpora are ratcheted in CI. The pass count may climb but never fall:
 
 | Corpus | Score | What it checks |
 |---|---|---|
