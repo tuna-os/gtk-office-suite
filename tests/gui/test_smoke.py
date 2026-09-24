@@ -3068,7 +3068,9 @@ class DecksSnapshotSmoke(BaseGUITestCase):
         self.assertEqual(snap["slide_count"], 1)
         kinds = [o["kind"] for o in snap["slides"][0]["objects"]]
         self.assertIn("TextBox", kinds)
-        self.assertIn("Rect", kinds)
+        # "Insert shape" makes a styled preset Shape (engine::shape), not
+        # the old unstyled Rect the canvas painted blue.
+        self.assertIn("Shape", kinds)
         self.assertIsNone(self.process.poll(), "decks crashed writing a snapshot")
 
 
@@ -3088,7 +3090,7 @@ class DecksSelectionSmoke(BaseGUITestCase):
         time.sleep(1.5)
         subprocess.run(["gapplication", "action", aid, "add-shape"])
         time.sleep(1.0)
-        # Default Rect is at slide (200,200,200x150) in the 960x540 slide
+        # The first inserted shape is a rectangle at slide (200,200,200x150) in the 960x540 slide
         # coordinate space. The canvas fits that into whatever it's
         # actually sized to (slide_geometry() in canvas.rs) — compute the
         # on-screen click point from the canvas's real geometry rather
@@ -3171,9 +3173,9 @@ class DecksCanvasDragSmoke(BaseGUITestCase):
         time.sleep(1.0)
 
         before = self.trigger_snapshot(aid)["slides"][0]["objects"][0]
-        self.assertEqual(before["kind"], "Rect", f"unexpected object: {before}")
+        self.assertEqual(before["kind"], "Shape", f"unexpected object: {before}")
 
-        # The default Rect sits at slide (200,200) sized 200x150, so its
+        # The first inserted shape is a rectangle at slide (200,200) sized 200x150, so its
         # centre is (300,275). Drag it down and to the right in a 5:3 ratio.
         to_window = self._slide_to_window()
         start_x, start_y = to_window(300.0, 275.0)
