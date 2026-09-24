@@ -1,6 +1,6 @@
 # Oracle, not port: building a Rust office suite that proves its parity on every commit
 
-*TunaOS project, July 2026 — draft for review before posting*
+*TunaOS project, September 2026 — draft for review before posting*
 
 We're building a GNOME-native office suite in Rust — **Letters** (writing),
 **Tables** (spreadsheets), **Decks** (presentations) — GTK4/libadwaita,
