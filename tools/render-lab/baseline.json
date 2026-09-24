@@ -1,0 +1,170 @@
+{
+  "decks/background": {
+    "A": "amber",
+    "B": "amber"
+  },
+  "decks/bullets": {
+    "A": "red",
+    "B": "red"
+  },
+  "decks/image": {
+    "A": "red",
+    "B": "red"
+  },
+  "decks/rotation": {
+    "A": "green",
+    "B": "green"
+  },
+  "decks/shapes": {
+    "A": "amber",
+    "B": "amber"
+  },
+  "decks/table": {
+    "A": "red",
+    "B": "red"
+  },
+  "decks/text-styles": {
+    "A": "amber",
+    "B": "amber"
+  },
+  "decks/title-layout": {
+    "A": "red",
+    "B": "red"
+  },
+  "letters/alignment": {
+    "A": "amber",
+    "B": "amber"
+  },
+  "letters/bullet-list": {
+    "A": "amber",
+    "B": "amber"
+  },
+  "letters/char-emphasis": {
+    "A": "amber",
+    "B": "amber"
+  },
+  "letters/font-families": {
+    "A": "amber",
+    "B": "amber"
+  },
+  "letters/font-sizes": {
+    "A": "amber",
+    "B": "amber"
+  },
+  "letters/header-footer": {
+    "A": "amber",
+    "B": "amber"
+  },
+  "letters/headings": {
+    "A": "amber",
+    "B": "amber"
+  },
+  "letters/highlight": {
+    "A": "amber",
+    "B": "amber"
+  },
+  "letters/image": {
+    "A": "amber",
+    "B": "amber"
+  },
+  "letters/indents": {
+    "A": "amber",
+    "B": "amber"
+  },
+  "letters/landscape": {
+    "A": "amber",
+    "B": "amber"
+  },
+  "letters/line-spacing": {
+    "A": "amber",
+    "B": "amber"
+  },
+  "letters/nested-list": {
+    "A": "amber",
+    "B": "amber"
+  },
+  "letters/numbered-list": {
+    "A": "amber",
+    "B": "amber"
+  },
+  "letters/page-break": {
+    "A": "amber",
+    "B": "amber"
+  },
+  "letters/page-margins": {
+    "A": "amber",
+    "B": "amber"
+  },
+  "letters/pagination": {
+    "A": "red",
+    "B": "amber"
+  },
+  "letters/paragraph-spacing": {
+    "A": "amber",
+    "B": "amber"
+  },
+  "letters/plain-paragraph": {
+    "A": "amber",
+    "B": "amber"
+  },
+  "letters/super-subscript": {
+    "A": "red",
+    "B": "red"
+  },
+  "letters/table": {
+    "A": "amber",
+    "B": "amber"
+  },
+  "letters/text-color": {
+    "A": "amber",
+    "B": "amber"
+  },
+  "tables/alignment": {
+    "A": "amber",
+    "B": "amber"
+  },
+  "tables/borders": {
+    "A": "amber",
+    "B": "amber"
+  },
+  "tables/cell-fonts": {
+    "A": "amber",
+    "B": "amber"
+  },
+  "tables/chart": {
+    "A": "red",
+    "B": "red"
+  },
+  "tables/col-row-size": {
+    "A": "amber",
+    "B": "amber"
+  },
+  "tables/conditional": {
+    "A": "amber",
+    "B": "amber"
+  },
+  "tables/fills": {
+    "A": "amber",
+    "B": "amber"
+  },
+  "tables/frozen": {
+    "A": "amber",
+    "B": "amber"
+  },
+  "tables/merged": {
+    "A": "red",
+    "B": "red"
+  },
+  "tables/number-formats": {
+    "A": "red",
+    "B": "red"
+  },
+  "tables/values": {
+    "A": "amber",
+    "B": "amber"
+  },
+  "tables/wrap-text": {
+    "A": "red",
+    "B": "red"
+  }
+}
