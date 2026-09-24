@@ -47,7 +47,7 @@ permissions:
 
 jobs:
   image:
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     permissions:
       contents: read
       packages: write
@@ -80,7 +80,7 @@ jobs:
 
   soak:
     needs: image
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     timeout-minutes: 420
     outputs:
       summary: ${{ steps.summarize.outputs.summary }}

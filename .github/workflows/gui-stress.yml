@@ -42,7 +42,7 @@ permissions:
 
 jobs:
   image:
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     permissions:
       contents: read
       packages: write
@@ -77,7 +77,7 @@ jobs:
 
   campaign:
     needs: image
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     timeout-minutes: 300
     container:
       image: ${{ needs.image.outputs.ref }}

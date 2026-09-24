@@ -46,7 +46,7 @@ jobs:
   # proposed baseline and issue sync.
   lab:
     name: Render lab (${{ matrix.app }})
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     timeout-minutes: 75
     strategy:
       fail-fast: false
@@ -102,7 +102,7 @@ jobs:
     name: Tiers A+B vs LibreOffice
     needs: lab
     if: always()
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     timeout-minutes: 30
     permissions:
       contents: read
@@ -194,7 +194,7 @@ jobs:
   flatpak:
     name: Flatpak bundle (${{ matrix.app }})
     if: github.event_name == 'schedule' || inputs.vm
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     container:
       image: ghcr.io/flathub-infra/flatpak-github-actions:gnome-50
       options: --privileged
@@ -218,7 +218,7 @@ jobs:
   vm:
     name: Tier C (Flatpak in a GNOME VM)
     needs: flatpak
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     timeout-minutes: 120
     # Not gating yet: Tier C has not had a green run. Remove this line once
     # it has run green on main for a week. Its failures stay visible in the

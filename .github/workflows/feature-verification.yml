@@ -39,7 +39,7 @@ jobs:
   # package, publish media, or comment. Skipping with a reason is honest;
   # a half-run that silently posts nothing is not.
   gate:
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     outputs:
       run: ${{ steps.decide.outputs.run }}
     steps:
@@ -66,7 +66,7 @@ jobs:
   image:
     needs: gate
     if: needs.gate.outputs.run == 'true'
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     permissions:
       contents: read
       packages: write
@@ -100,7 +100,7 @@ jobs:
 
   record:
     needs: image
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     container:
       image: ${{ needs.image.outputs.ref }}
       # GTK and Xvfb share memory through /dev/shm; the container default
@@ -154,7 +154,7 @@ jobs:
     # about the change — the newer run happened to overwrite it, but a
     # newer run that failed would have left the lie standing.
     if: always() && (needs.record.result == 'success' || needs.record.result == 'failure')
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     permissions:
       contents: write        # push clips to the ci-evidence branch
       pull-requests: write   # write the evidence block into the PR body
