@@ -42,19 +42,22 @@ pub struct SheetXlsxProps {
     pub cell_styles: Vec<(usize, usize, super::XfStyle)>,
 }
 
-/// xlsx stores a column width in "character units" plus the padding Excel
-/// adds for cell margins (5/MDW, with the 7-pixel MDW this writer assumes),
-/// so inverting `save.rs`'s `set_column_width(w / 7.0)` means subtracting
-/// that padding before scaling back to pixels. Getting this wrong is a
-/// quiet few-pixel drift on every save, which is why the round-trip test
-/// pins real numbers rather than trusting this comment.
-const XLSX_WIDTH_PADDING: f64 = 5.0 / 7.0;
+/// xlsx stores a column width in character units of the default font's
+/// maximum digit width (MDW), and the stored number already includes the
+/// cell margin padding: Excel draws `<col width="w">` as
+/// `trunc(((256·w + trunc(128/MDW)) / 256) · MDW)` pixels. With Calibri 11's
+/// 7 px MDW that is 7·w, so the default 9.140625 is 64 px and a width of 12
+/// is 84 px. (The user-facing "8.43 characters" is w minus the padding; the
+/// file holds w.) This used to subtract the padding again, drawing every
+/// column from a foreign file 5 px narrow. The round-trip and Excel-value
+/// tests pin real numbers rather than trusting this comment.
 const PIXELS_PER_CHAR: f64 = 7.0;
 /// Row heights are stored in points; 96dpi pixels are 0.75pt each.
 const POINTS_PER_PIXEL: f64 = 0.75;
 
 fn width_chars_to_pixels(chars: f64) -> f64 {
-    ((chars - XLSX_WIDTH_PADDING).max(0.0) * PIXELS_PER_CHAR * 100.0).round() / 100.0
+    let w = chars.max(0.0);
+    ((256.0 * w + (128.0 / PIXELS_PER_CHAR).trunc()) / 256.0 * PIXELS_PER_CHAR).trunc()
 }
 
 fn height_points_to_pixels(points: f64) -> f64 {
@@ -371,6 +374,18 @@ mod sheet_props_tests {
         assert!(props["Sheet1"].hidden_cols.contains(&2));
         assert!(props["Sheet2"].hidden_rows.is_empty(), "Sheet2 must not inherit Sheet1's hides");
         assert!(props["Sheet2"].hidden_cols.is_empty());
+    }
+
+    /// The pixel widths Excel shows for `<col width>` values any producer
+    /// writes (openpyxl stores what the user typed): the default 9.140625 is
+    /// 64 px, 12 is 84 px, 40 is 280 px. The reader used to subtract the
+    /// cell padding a second time and drew each of these 5 px narrow.
+    #[test]
+    fn column_widths_read_as_excel_draws_them() {
+        assert_eq!(width_chars_to_pixels(9.140625), 64.0);
+        assert_eq!(width_chars_to_pixels(12.0), 84.0);
+        assert_eq!(width_chars_to_pixels(40.0), 280.0);
+        assert_eq!(width_chars_to_pixels(0.0), 0.0);
     }
 
     #[test]
