@@ -20,8 +20,8 @@
     "B": "green"
   },
   "decks/table": {
-    "A": "red",
-    "B": "red"
+    "A": "amber",
+    "B": "amber"
   },
   "decks/text-styles": {
     "A": "amber",
