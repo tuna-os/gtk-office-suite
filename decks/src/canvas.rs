@@ -361,9 +361,26 @@ pub fn set_styled_text(
             )
             .into());
         }
+        // The run's own colour. The readers have always stored it (pptx
+        // a:rPr solidFill, odp fo:color) and the writers write it back,
+        // but nothing drew it: every run took the canvas text colour
+        // (render lab decks/text-styles: red and blue text drawn black).
+        if let Some((r, g, b)) = run.style.color.as_deref().and_then(hex_rgb16) {
+            add(pango::AttrColor::new_foreground(r, g, b).into());
+        }
     }
     layout.set_text(&buf);
     layout.set_attributes(Some(&attrs));
+}
+
+/// `RRGGBB` (optionally `#`-prefixed) as Pango's 16-bit colour channels.
+fn hex_rgb16(hex: &str) -> Option<(u16, u16, u16)> {
+    let hex = hex.trim().trim_start_matches('#');
+    if hex.len() != 6 {
+        return None;
+    }
+    let c = |i: usize| u8::from_str_radix(&hex[i..i + 2], 16).ok().map(|v| v as u16 * 257);
+    Some((c(0)?, c(2)?, c(4)?))
 }
 
 /// The layout one master decoration is drawn from.
@@ -845,6 +862,32 @@ mod font_tests {
         // BGRA, premultiplied: red 255 at alpha 128 is stored as 128.
         surf.with_data(|data| assert_eq!(&data[0..4], &[0, 0, 128, 128])).unwrap();
         let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// A run's colour reaches the layout as a foreground attribute; before,
+    /// every run drew in the canvas text colour.
+    #[test]
+    fn a_coloured_run_is_drawn_in_its_colour() {
+        let surface = cairo::ImageSurface::create(cairo::Format::ARgb32, 10, 10).unwrap();
+        let cr = cairo::Context::new(&surface).unwrap();
+        let layout = pangocairo::functions::create_layout(&cr);
+        let runs = vec![
+            Run { text: "plain ".into(), style: Default::default() },
+            Run { text: "red".into(), style: letters_core::model::RunStyle { color: Some("C80000".into()), ..Default::default() } },
+        ];
+        set_styled_text(&layout, "plain red", &runs, 1.0);
+        let attrs = layout.attributes().expect("attributes set");
+        let fg: Vec<_> = attrs
+            .attributes()
+            .into_iter()
+            .filter(|a| a.type_() == pango::AttrType::Foreground)
+            .collect();
+        assert_eq!(fg.len(), 1, "one coloured run, one foreground attribute");
+        let c = fg[0].downcast_ref::<pango::AttrColor>().unwrap().color();
+        assert_eq!((c.red(), c.green(), c.blue()), (0xC8 * 257, 0, 0));
+        assert_eq!((fg[0].start_index(), fg[0].end_index()), (6, 9), "only the red run");
+        assert_eq!(hex_rgb16("#0000c8"), Some((0, 0, 0xC8 * 257)));
+        assert_eq!(hex_rgb16("bad"), None);
     }
 
     #[test]
