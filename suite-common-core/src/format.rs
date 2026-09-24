@@ -28,11 +28,14 @@ pub enum NumberFormatKind {
     Scientific(u8),
     /// Display as-is, no numeric interpretation.
     Text,
+    /// Mixed fraction with denominators of up to this many digits:
+    /// Fraction(1) → "1 1/2", as Excel's `# ?/?`.
+    Fraction(u8),
 }
 
 // ── Number format ──────────────────────────────────────────────────────
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct NumberFormat {
     pub kind: NumberFormatKind,
 }
@@ -53,6 +56,7 @@ impl NumberFormat {
             NumberFormatKind::DateTime(fmt) => format_datetime(raw, fmt),
             NumberFormatKind::Scientific(dp) => format_scientific(raw, *dp),
             NumberFormatKind::Text => raw.to_string(),
+            NumberFormatKind::Fraction(digits) => format_fraction(raw, *digits),
         }
     }
 }
@@ -123,6 +127,31 @@ fn format_datetime(raw: &str, fmt: &str) -> String {
     raw.to_string()
 }
 
+/// `value` as a mixed fraction whose denominator has at most `digits`
+/// digits, choosing the closest such fraction (Excel's `# ?/?` family).
+fn format_fraction(raw: &str, digits: u8) -> String {
+    let Ok(num) = raw.parse::<f64>() else { return raw.to_string() };
+    let max_den = 10u64.saturating_pow(digits.clamp(1, 4) as u32) - 1;
+    let sign = if num < 0.0 { "-" } else { "" };
+    let a = num.abs();
+    let whole = a.trunc() as u64;
+    let frac = a - whole as f64;
+    let (mut best_n, mut best_d, mut best_err) = (0u64, 1u64, f64::INFINITY);
+    for d in 1..=max_den {
+        let n = (frac * d as f64).round() as u64;
+        let err = (frac - n as f64 / d as f64).abs();
+        if err < best_err - 1e-12 {
+            (best_n, best_d, best_err) = (n, d, err);
+        }
+    }
+    let (whole, best_n) = if best_n == best_d { (whole + 1, 0) } else { (whole, best_n) };
+    match (whole, best_n) {
+        (w, 0) => format!("{sign}{w}"),
+        (0, n) => format!("{sign}{n}/{best_d}"),
+        (w, n) => format!("{sign}{w} {n}/{best_d}"),
+    }
+}
+
 fn format_scientific(raw: &str, decimal_places: u8) -> String {
     let num = match raw.parse::<f64>() {
         Ok(n) => n,
@@ -138,14 +167,21 @@ fn format_scientific(raw: &str, decimal_places: u8) -> String {
 // Serial 1 = 1899-12-31, Serial 60 = 1900-02-29 (fictional), Serial 61 = 1900-03-01.
 
 /// Convert an Excel serial date number to a chrono NaiveDate.
-/// Handles the Lotus 1-2-3 leap year bug for serials < 61.
+///
+/// Serial 1 is 1900-01-01. Serial 60 is Excel's fictional 1900-02-29 (the
+/// Lotus 1-2-3 bug), which has no real date; it maps to 1900-02-28. From
+/// serial 61 (1900-03-01) on, day N is simply 1899-12-30 + N: that epoch
+/// already absorbs the fictional day. This used to subtract one more day,
+/// so every modern date showed a day early (2023-03-15 as 2023-03-14).
 pub fn excel_serial_to_date(serial: f64) -> Option<NaiveDate> {
-    if serial <= 0.0 { return None; }
-    let epoch = NaiveDate::from_ymd_opt(1899, 12, 30)?;
-    // For serials >= 61, subtract 1 to account for the fictional 1900-02-29.
-    let adjusted = if serial >= 61.0 { serial - 1.0 } else { serial };
-    epoch
-        .checked_add_days(chrono::Days::new(adjusted as u64))
+    if serial < 1.0 { return None; }
+    let days = serial.floor() as u64;
+    let (epoch, days) = match days {
+        1..=59 => (NaiveDate::from_ymd_opt(1899, 12, 31)?, days),
+        60 => return NaiveDate::from_ymd_opt(1900, 2, 28),
+        _ => (NaiveDate::from_ymd_opt(1899, 12, 30)?, days),
+    };
+    epoch.checked_add_days(chrono::Days::new(days))
 }
 
 /// Convert an Excel serial date+time number to chrono NaiveDateTime.
@@ -166,6 +202,18 @@ pub fn excel_serial_to_datetime(serial: f64) -> Option<NaiveDateTime> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn fractions_pick_the_closest_denominator_in_range() {
+        let f = |d, v: &str| NumberFormat::new(NumberFormatKind::Fraction(d)).format(v);
+        assert_eq!(f(1, "0.5"), "1/2");
+        assert_eq!(f(1, "1.25"), "1 1/4");
+        assert_eq!(f(1, "-0.75"), "-3/4");
+        assert_eq!(f(1, "3"), "3");
+        assert_eq!(f(1, "0.999"), "1");
+        assert_eq!(f(2, "0.3333"), "1/3");
+        assert_eq!(f(1, "abc"), "abc");
+    }
     use chrono::Datelike;
 
     #[test]
@@ -200,19 +248,20 @@ mod tests {
         let fmt = NumberFormat::new(NumberFormatKind::Date("%Y-%m-%d".into()));
         // ISO string passthrough
         assert_eq!(fmt.format("2025-06-15"), "2025-06-15");
-        // Excel serial: verify conversion produces a valid date
-        let d = excel_serial_to_date(1.0).unwrap();
-        assert_eq!(d.year(), 1899);
-        assert_eq!(d.month(), 12);
-        assert_eq!(d.day(), 31);
+        // Excel serial 45000 is 2023-03-15 (what Excel and LibreOffice show).
+        assert_eq!(fmt.format("45000"), "2023-03-15");
     }
 
     #[test]
     fn test_excel_serial_epoch() {
-        let d = excel_serial_to_date(1.0).unwrap();
-        assert_eq!(d.year(), 1899);
-        assert_eq!(d.month(), 12);
-        assert_eq!(d.day(), 31);
+        let ymd = |s: f64| excel_serial_to_date(s).map(|d| (d.year(), d.month(), d.day()));
+        assert_eq!(ymd(1.0), Some((1900, 1, 1)));
+        assert_eq!(ymd(59.0), Some((1900, 2, 28)));
+        assert_eq!(ymd(60.0), Some((1900, 2, 28)), "the fictional 1900-02-29");
+        assert_eq!(ymd(61.0), Some((1900, 3, 1)));
+        assert_eq!(ymd(45292.0), Some((2024, 1, 1)));
+        assert_eq!(ymd(45000.75), Some((2023, 3, 15)), "the time of day doesn't move the date");
+        assert_eq!(ymd(0.0), None);
     }
 
     #[test]

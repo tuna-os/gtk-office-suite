@@ -796,6 +796,18 @@ impl SheetModel {
         extent
     }
 
+    /// Whether the cell's value sits at the right of its cell under the
+    /// spreadsheet "General" alignment rule: numbers (and dates, which are
+    /// numbers) right, text left. There is no per-cell alignment in the
+    /// model yet, so this is every cell's alignment.
+    pub fn aligns_right(&self, r: usize, c: usize) -> bool {
+        let raw = self.cell(r, c).trim();
+        let text_format = r < self.rows
+            && c < self.cols
+            && self.formats[r][c].kind == suite_common_core::format::NumberFormatKind::Text;
+        !text_format && !raw.is_empty() && raw.parse::<f64>().is_ok_and(f64::is_finite)
+    }
+
     pub fn cell_mut(&mut self, r: usize, c: usize) -> &mut String {
         &mut self.data[r][c]
     }
@@ -861,6 +873,20 @@ impl SheetModel {
 #[cfg(test)]
 mod used_extent_tests {
     use super::*;
+
+    #[test]
+    fn numbers_align_right_and_text_left() {
+        let mut s = SheetModel::new("t", 4, 4, 0);
+        s.data[0][0] = "12.5".into();
+        s.data[0][1] = "-3".into();
+        s.data[0][2] = "abc".into();
+        s.data[0][3] = "12".into();
+        s.formats[0][3] = suite_common_core::format::NumberFormat::new(suite_common_core::format::NumberFormatKind::Text);
+        assert!(s.aligns_right(0, 0) && s.aligns_right(0, 1));
+        assert!(!s.aligns_right(0, 2), "text stays left");
+        assert!(!s.aligns_right(0, 3), "a number formatted as text is text");
+        assert!(!s.aligns_right(1, 0), "empty");
+    }
 
     #[test]
     fn empty_sheet_has_no_extent() {
