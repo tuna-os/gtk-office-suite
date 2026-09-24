@@ -1,11 +1,19 @@
 # gtk-office-suite Roadmap
 
+> [!IMPORTANT]
+> **Top priority as of 2026-09-24: [Render Parity Roadmap](docs/RENDER-PARITY-ROADMAP.md).**
+> The apps do not yet render documents correctly on screen, and nothing
+> previously measured that. Until its Phase 1 exits, it takes precedence over
+> ordinary feature work. A visual feature is done only when a screenshot of the
+> running app matches LibreOffice's rendering of the same file within recorded
+> budgets, ratcheted in CI (`tools/render-lab`).
+
 The current execution plan is [Roadmap to dependable daily use](docs/readiness-2026-09/README.md),
 tracked in [#443](https://github.com/tuna-os/gtk-office-suite/issues/443).
 It prioritizes crash reproduction, save/recovery safety and verified user journeys.
 The dated ledger below is historical and does not certify present behavior.
 
-**Last updated**: 2026-09-12 | **Maintainer**: tuna-os (hanthor) / architect agent
+**Last updated**: 2026-09-24 | **Maintainer**: tuna-os (hanthor) / architect agent
 
 ---
 
@@ -46,12 +54,13 @@ gtk-office-suite is the org's flagship **end-user product bet** and a cornerston
 
 | Priority | Item | Tracking | Status |
 |----------|------|----------|--------|
+| P0 | Render parity & visual fidelity: render lab, layout engines, visual ratchet | docs/RENDER-PARITY-ROADMAP.md | 🟡 In progress |
 | P0 | Product quality + daily-driver readiness roadmap (meta-tracker) | #95 | 🟡 In progress |
 | P0 | CI quality gates: fast / GUI / nightly with published capability matrix | #108, #107 | 🟡 In progress |
 | P0 | GUI-layer God-file decomposition (window.rs) | #168 | 🟡 In progress |
 | P1 | Letters: structured editing (tables/lists/paragraphs/sections), review workflows, pagination | #109, #110, #111 | 🟡 In progress |
 | P1 | Tables: sparse virtual grid + performance budgets | #112 | 🟡 In progress |
-| P1 | Headless CLI document conversion binary (`suite-convert`) | #579 | ⬜ Planned |
+| P1 | Headless CLI document conversion binary (`suite-convert`) | #579, docs/HEADLESS-CONVERSION-SPEC.md | ⬜ Planned |
 | P1 | Decks: direct manipulation, themes/layouts, presenter view | #115, #116, #117 | ⬜ Not started |
 | P1 | GNOME platform integration: recent files, portals, drag/drop | #119 | ⬜ Not started |
 | P2 | Interop: unsupported-feature inspector + versioned fixture corpus with loss budgets | #105, #121 | ⬜ Not started |
@@ -76,14 +85,17 @@ gtk-office-suite is the org's flagship **end-user product bet** and a cornerston
 
 ### Q4 2026 (October–December) — "Ship it properly"
 
-**Theme**: production release gating, Flatpak distribution, and headless batch
-document processing. Sketch until Q4 starts; the live execution plan remains
-[docs/readiness-2026-09/](docs/readiness-2026-09/README.md).
+**Theme**: visual render parity, core layout engines, production release gating, and Flatpak distribution.
+The live execution plan is guided by [docs/RENDER-PARITY-ROADMAP.md](docs/RENDER-PARITY-ROADMAP.md)
+and [docs/readiness-2026-09/](docs/readiness-2026-09/README.md).
 
 | Goal | Owner | Tracking | Status |
 |------|-------|----------|--------|
+| Render Parity Phase 1: Letters page layout engine & GTK-free render tree | architect | docs/RENDER-PARITY-ROADMAP.md, ADR 0009 | 🟡 In progress |
+| Render Parity Phase 1: Tables cell-style model & Decks shape-style model | architect | docs/RENDER-PARITY-ROADMAP.md | 🟡 In progress |
+| Render Parity Phase 2: Close visual gap across 45 single-feature fixtures | quality / contributors | docs/RENDER-PARITY-ROADMAP.md | 🟡 In progress |
 | Release gate: Flatpak reproducible builds + GSettings migration verification | quality / ops | #122, #578 | 🟡 Planned |
-| Headless CLI conversion binary (`suite-convert`) | architect / strategist | #579 | ⬜ Planned |
+| Headless CLI conversion binary (`suite-convert`) | architect / strategist | #579, docs/HEADLESS-CONVERSION-SPEC.md | ⬜ Planned |
 | Decks presenter view & export rendering parity | architect | #117 | ⬜ Planned |
 | Interop loss budgets & unsupported-feature inspector | quality | #105, #121 | ⬜ Planned |
 | A11y: keyboard + screen-reader journeys | quality | #120 | ⬜ Planned |
@@ -105,6 +117,7 @@ instead of being rediscovered and rewritten.
 | Template catalog and distribution | [docs/TEMPLATE-CATALOG.md](docs/TEMPLATE-CATALOG.md) |
 
 Each carries its open questions. None precedes the
+[Render Parity Roadmap](docs/RENDER-PARITY-ROADMAP.md) or the
 [September readiness plan](docs/readiness-2026-09/README.md) (#443).
 
 ---
