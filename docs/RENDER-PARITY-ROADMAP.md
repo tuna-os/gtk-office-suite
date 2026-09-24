@@ -128,7 +128,7 @@ How the reference lines up with each app:
 |---|---|---|---|
 | Letters | page N of the page view at 100% | PDF page N | Exact: same page box, same DPI |
 | Decks | slide canvas scaled to the slide size | PDF page = slide | Exact: same aspect, resampled |
-| Tables | column/row headers plus the used range, as drawn at 100% zoom | PDF of the sheet with headers and gridlines on, cropped to its ink (the same headers + used range) | Ours is resampled onto LibreOffice's range so cells line up. The size ratio is reported separately as `scale`. Grid rules are painted out before ink and OCR, because LibreOffice prints black gridlines and we draw faint ones. |
+| Tables | column/row headers plus the used range, as drawn at 100% zoom with "Show gridlines" off | PDF of the sheet with headings on and gridlines off, cropped to its ink (the same headers + used range) | The size ratio of the two is reported as `scale`. Then both are cut to their cells: Calc prints headings boxed in black and we shade them, so headings are left out. Ours is resampled onto LibreOffice's cells. Gridlines are off on both sides because they are view furniture (Calc prints them black, screens draw them faint) and a printed gridline hides a thin cell border. |
 
 ### Capture tiers: what each one proves
 
