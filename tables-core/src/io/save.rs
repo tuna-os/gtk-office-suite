@@ -92,15 +92,20 @@ pub fn save_sheets_to_xlsx_bytes(
                     }
                 }
                 let val = &sh.data[r][c];
-                let format = cell_format(&sh.formats[r][c], &sh.styles[r][c], &sh.borders[r][c]);
                 if val.is_empty() {
                     // An empty cell can still be styled: a boxed or filled
-                    // blank is part of what the sheet looks like.
-                    if let Some(f) = &format {
-                        sheet.write_blank(r as u32, c as u16, f).map_err(|e| format!("Write error: {}", e))?;
+                    // blank is part of what the sheet looks like. Most empty
+                    // cells are plain, and are skipped before building a
+                    // format (performance_budgets' dense save).
+                    if sh.styles[r][c].is_default() && sh.borders[r][c].is_none() {
+                        continue;
+                    }
+                    if let Some(f) = cell_format(&sh.formats[r][c], &sh.styles[r][c], &sh.borders[r][c]) {
+                        sheet.write_blank(r as u32, c as u16, &f).map_err(|e| format!("Write error: {}", e))?;
                     }
                     continue;
                 }
+                let format = cell_format(&sh.formats[r][c], &sh.styles[r][c], &sh.borders[r][c]);
                 // Rust's f64::from_str accepts "inf"/"infinity"/"nan"
                 // (any case, optionally signed) as valid floats — but a
                 // user typing that text almost certainly means literal
