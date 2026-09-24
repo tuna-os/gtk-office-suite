@@ -324,11 +324,66 @@ fn media_type_for(path: &str) -> (&'static str, &'static str) {
 /// real ones: a master's runs are read back by both formats, so styling
 /// them is carrying something that is honoured rather than decoration for
 /// our own reader.
+/// The automatic graphic styles (`style:family="graphic"`) the shapes in
+/// one part use, named `{prefix}{n}` in first-use order.
+pub(crate) struct GraphicStyles {
+    prefix: String,
+    styles: Vec<crate::engine::shape::ShapeStyle>,
+}
+
+impl GraphicStyles {
+    fn new(prefix: &str) -> Self {
+        GraphicStyles { prefix: prefix.to_string(), styles: Vec::new() }
+    }
+
+    fn name_of(&mut self, style: &crate::engine::shape::ShapeStyle) -> String {
+        let i = match self.styles.iter().position(|s| s == style) {
+            Some(i) => i,
+            None => {
+                self.styles.push(style.clone());
+                self.styles.len() - 1
+            }
+        };
+        format!("{}{}", self.prefix, i + 1)
+    }
+
+    /// The `<style:style>` declarations, for `office:automatic-styles`.
+    /// A gradient is written as its mean colour: ODF gradients need named
+    /// `draw:gradient` styles in office:styles, not yet written.
+    fn declare(&self) -> String {
+        self.styles
+            .iter()
+            .enumerate()
+            .map(|(i, s)| {
+                let fill = match s.fill {
+                    Some(c) => format!("draw:fill=\"solid\" draw:fill-color=\"#{}\"", c.to_hex().to_lowercase()),
+                    None => "draw:fill=\"none\"".to_string(),
+                };
+                let stroke = match s.stroke {
+                    Some(st) => format!(
+                        "draw:stroke=\"solid\" svg:stroke-color=\"#{}\" svg:stroke-width=\"{}pt\"",
+                        st.color.to_hex().to_lowercase(),
+                        snap(st.width)
+                    ),
+                    None => "draw:stroke=\"none\"".to_string(),
+                };
+                format!(
+                    "<style:style style:name=\"{}{}\" style:family=\"graphic\">\
+                     <style:graphic-properties {fill} {stroke}/></style:style>",
+                    self.prefix,
+                    i + 1
+                )
+            })
+            .collect()
+    }
+}
+
 fn shapes_xml(
     shapes: &[SlideObject],
     style_of: &dyn Fn(&RunStyle) -> usize,
     prefix: &str,
     media: &mut Vec<Media>,
+    graphics: &mut GraphicStyles,
 ) -> Result<String, String> {
     let mut pages = String::new();
         for obj in shapes {
@@ -359,6 +414,31 @@ fn shapes_xml(
                         "<draw:ellipse {}/>",
                         geometry(cx, cy, d, d, *rotation)
                     ));
+                }
+                SlideObject::Shape { kind, x, y, w, h, rotation, style } => {
+                    use crate::engine::shape::ShapeKind;
+                    let at = geometry(*x, *y, *w, *h, *rotation);
+                    let gs = graphics.name_of(style);
+                    pages.push_str(&match kind {
+                        ShapeKind::Rect => format!("<draw:rect draw:style-name=\"{gs}\" {at}/>"),
+                        ShapeKind::RoundRect { radius } => format!(
+                            "<draw:rect draw:style-name=\"{gs}\" draw:corner-radius=\"{}pt\" {at}/>",
+                            snap(radius.clamp(0.0, 0.5) * w.min(*h))
+                        ),
+                        ShapeKind::Ellipse => format!("<draw:ellipse draw:style-name=\"{gs}\" {at}/>"),
+                        // Impress's names for the other DrawingML presets.
+                        other => {
+                            let ty = match other {
+                                ShapeKind::Triangle => "isosceles-triangle".to_string(),
+                                ShapeKind::Diamond => "diamond".to_string(),
+                                _ => format!("ooxml-{}", other.prst()),
+                            };
+                            format!(
+                                "<draw:custom-shape draw:style-name=\"{gs}\" {at}>\
+                                 <draw:enhanced-geometry draw:type=\"{ty}\"/></draw:custom-shape>"
+                            )
+                        }
+                    });
                 }
                 SlideObject::Image { path, x, y, w, h, rotation } => {
                     // Named by position in the package rather than after
@@ -411,6 +491,7 @@ fn content_xml(deck: &Deck, media: &mut Vec<Media>) -> Result<String, String> {
     let style_of = |st: &RunStyle| styles.iter().position(|s| s == st).map(|i| i + 1).unwrap_or(0);
 
     let mut pages = String::new();
+    let mut graphics = GraphicStyles::new("gr");
     for (si, slide) in deck.slides.iter().enumerate() {
         let bg = slide.background.trim_start_matches('#');
         let dp_attr = if bg.len() == 6 && !bg.eq_ignore_ascii_case("ffffff") {
@@ -437,7 +518,7 @@ fn content_xml(deck: &Deck, media: &mut Vec<Media>) -> Result<String, String> {
                 ))
                 .unwrap_or_default(),
         ));
-        pages.push_str(&shapes_xml(&slide.objects, &style_of, SLIDE_STYLE_PREFIX, media)?);
+        pages.push_str(&shapes_xml(&slide.objects, &style_of, SLIDE_STYLE_PREFIX, media, &mut graphics)?);
         if !slide.notes.is_empty() {
             let notes: String = slide
                 .notes
@@ -452,6 +533,7 @@ fn content_xml(deck: &Deck, media: &mut Vec<Media>) -> Result<String, String> {
         }
         pages.push_str("</draw:page>");
     }
+    auto.push_str(&graphics.declare());
 
     Ok(format!(
         "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\
@@ -556,6 +638,7 @@ fn styles_xml(deck: &Deck, media: &mut Vec<Media>) -> Result<String, String> {
          style:print-orientation=\"landscape\"/></style:page-layout>",
     );
     let mut pages = String::new();
+    let mut master_graphics = GraphicStyles::new("mgr");
     for (i, master) in deck.masters.iter().enumerate() {
         let bg = master.background.trim_start_matches('#');
         let dp = if bg.len() == 6 {
@@ -579,9 +662,10 @@ fn styles_xml(deck: &Deck, media: &mut Vec<Media>) -> Result<String, String> {
             "<style:master-page style:name=\"{}\" style:page-layout-name=\"PM1\"{dp}>{}\
              </style:master-page>",
             esc(&encode_style_name(&master.name)),
-            shapes_xml(&master.shapes, &style_of, &master_style_prefix(i), media)?,
+            shapes_xml(&master.shapes, &style_of, &master_style_prefix(i), media, &mut master_graphics)?,
         ));
     }
+    auto.push_str(&master_graphics.declare());
     // ODF wants a font it uses declared as well as referenced; Impress
     // writes both, and a reference to an undeclared face is what a
     // conforming reader is entitled to ignore.

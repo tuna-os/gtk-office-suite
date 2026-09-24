@@ -109,6 +109,13 @@ pub fn hit_test_object(objects: &[SlideObject], sx: f64, sy: f64) -> Option<usiz
                     return Some(oi);
                 }
             }
+            // The true outline: a click in an ellipse's bounding-box
+            // corner is not a click on the ellipse.
+            SlideObject::Shape { kind, x, y, w, h, .. } => {
+                if decks_core::engine::shape::contains(kind, *w, *h, sx - *x, sy - *y) {
+                    return Some(oi);
+                }
+            }
             SlideObject::Circle { x: cx, y: cy, r, .. } => {
                 let dx = sx - *cx;
                 let dy = sy - *cy;
@@ -523,6 +530,9 @@ pub fn draw_slide_multi(
                     cr.rectangle(sx, sy, sw, sh);
                     cr.fill().unwrap();
                 }
+                SlideObject::Shape { kind, style, .. } => {
+                    draw_shape(cr, kind, style, (sx, sy, sw, sh), slide_w / 960.0);
+                }
                 SlideObject::Circle { x: cx_slide, y: cy_slide, r: r_slide, .. } => {
                     let cx = ox + (cx_slide / 960.0) * slide_w;
                     let cy = oy + (cy_slide / 540.0) * slide_h;
@@ -615,6 +625,79 @@ pub fn draw_slide_multi(
         cr.move_to(ox + slide_w - 30.0, oy + 20.0);
         cr.show_text(&badge).unwrap();
     }
+}
+
+/// Draw a preset shape's outline in the box `(x, y, w, h)` (canvas pixels),
+/// then fill and stroke it in its own style. `scale` is canvas pixels per
+/// model unit, for the stroke width.
+pub fn draw_shape(
+    cr: &cairo::Context,
+    kind: &decks_core::engine::shape::ShapeKind,
+    style: &decks_core::engine::shape::ShapeStyle,
+    (x, y, w, h): (f64, f64, f64, f64),
+    scale: f64,
+) {
+    use decks_core::engine::shape::{polygon, ShapeKind};
+    cr.new_path();
+    match kind {
+        ShapeKind::Ellipse => {
+            if w <= 0.0 || h <= 0.0 {
+                return;
+            }
+            cr.save().unwrap();
+            cr.translate(x + w / 2.0, y + h / 2.0);
+            cr.scale(w / 2.0, h / 2.0);
+            cr.arc(0.0, 0.0, 1.0, 0.0, 2.0 * std::f64::consts::PI);
+            cr.restore().unwrap();
+        }
+        ShapeKind::RoundRect { radius } => {
+            let r = radius.clamp(0.0, 0.5) * w.min(h);
+            let pi = std::f64::consts::PI;
+            cr.new_sub_path();
+            cr.arc(x + w - r, y + r, r, -pi / 2.0, 0.0);
+            cr.arc(x + w - r, y + h - r, r, 0.0, pi / 2.0);
+            cr.arc(x + r, y + h - r, r, pi / 2.0, pi);
+            cr.arc(x + r, y + r, r, pi, 1.5 * pi);
+            cr.close_path();
+        }
+        _ => {
+            for (i, (px, py)) in polygon(kind, w, h).unwrap_or_default().into_iter().enumerate() {
+                if i == 0 {
+                    cr.move_to(x + px, y + py);
+                } else {
+                    cr.line_to(x + px, y + py);
+                }
+            }
+            cr.close_path();
+        }
+    }
+    if let Some(grad) = &style.gradient {
+        // Colours run along `angle` (clockwise from left-to-right) across
+        // the box: the line through its centre, from the box's projection
+        // at one end to the other.
+        let a = grad.angle.to_radians();
+        let (dx, dy) = (a.cos(), a.sin());
+        let half = (w * dx.abs() + h * dy.abs()) / 2.0;
+        let (cx, cy) = (x + w / 2.0, y + h / 2.0);
+        let pattern = cairo::LinearGradient::new(cx - dx * half, cy - dy * half, cx + dx * half, cy + dy * half);
+        for stop in &grad.stops {
+            let (r, g, b) = stop.color.to_f64();
+            pattern.add_color_stop_rgb(stop.pos, r, g, b);
+        }
+        cr.set_source(&pattern).unwrap();
+        cr.fill_preserve().unwrap();
+    } else if let Some(fill) = style.fill {
+        let (r, g, b) = fill.to_f64();
+        cr.set_source_rgb(r, g, b);
+        cr.fill_preserve().unwrap();
+    }
+    if let Some(stroke) = style.stroke {
+        let (r, g, b) = stroke.color.to_f64();
+        cr.set_source_rgb(r, g, b);
+        cr.set_line_width((stroke.width * scale).max(0.5));
+        cr.stroke_preserve().unwrap();
+    }
+    cr.new_path();
 }
 
 /// Render slide `index` exactly as the editor canvas draws it, cropped to

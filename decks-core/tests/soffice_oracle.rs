@@ -222,6 +222,17 @@ fn slide_count_and_order_survive_impress_rewrite() {
     }
 }
 
+/// A rectangle as either model form: the editor's older `Rect`, or the
+/// `Shape` a file reads back as.
+fn is_rect(o: &SlideObject) -> bool {
+    matches!(o, SlideObject::Rect { .. } | SlideObject::Shape { kind: decks_core::engine::shape::ShapeKind::Rect, .. })
+}
+
+/// An ellipse as either model form (`Circle`, or an ellipse `Shape`).
+fn is_ellipse(o: &SlideObject) -> bool {
+    matches!(o, SlideObject::Circle { .. } | SlideObject::Shape { kind: decks_core::engine::shape::ShapeKind::Ellipse, .. })
+}
+
 #[test]
 fn shape_kinds_survive_impress_rewrite() {
     let mut deck = Deck::new();
@@ -236,9 +247,8 @@ fn shape_kinds_survive_impress_rewrite() {
         master_idx: Some(0),
     }];
     let Some(rt) = through_impress(&deck, "shapes") else { return };
-    let rects = rt.slides[0].objects.iter().filter(|o| matches!(o, SlideObject::Rect { .. })).count();
-    let circles =
-        rt.slides[0].objects.iter().filter(|o| matches!(o, SlideObject::Circle { .. })).count();
+    let rects = rt.slides[0].objects.iter().filter(|o| is_rect(o)).count();
+    let circles = rt.slides[0].objects.iter().filter(|o| is_ellipse(o)).count();
     assert!(rects >= 1, "rect lost: {:?}", rt.slides[0].objects);
     assert!(circles >= 1, "circle lost: {:?}", rt.slides[0].objects);
 }
@@ -254,13 +264,15 @@ fn positions_approx_survive_impress_rewrite() {
         master_idx: Some(0),
     }];
     let Some(rt) = through_impress(&deck, "pos") else { return };
-    let Some(SlideObject::Rect { x, y, w, h, .. }) = rt.slides[0]
+    let Some((x, y, w, h)) = rt.slides[0]
         .objects
         .iter()
-        .find(|o| matches!(o, SlideObject::Rect { .. }))
+        .find(|o| is_rect(o))
+        .map(decks_core::undo::obj_bounds)
     else {
         panic!("rect lost: {:?}", rt.slides[0].objects)
     };
+    let (x, y, w, h) = (&x, &y, &w, &h);
     // EMU rounding through two converters: half-a-percent tolerance.
     let close = |a: f64, b: f64| (a - b).abs() < 6.0;
     assert!(close(*x, 240.0) && close(*y, 180.0), "position drifted: {x},{y}");
@@ -735,6 +747,7 @@ fn impress_reads_our_odp_rotation_with_the_sign_we_wrote() {
             SlideObject::Rect { rotation, .. }
             | SlideObject::TextBox { rotation, .. }
             | SlideObject::Circle { rotation, .. }
+            | SlideObject::Shape { rotation, .. }
             | SlideObject::Image { rotation, .. } => *rotation,
         })
         .collect();
@@ -769,6 +782,7 @@ fn we_read_the_rotation_impress_writes_into_an_odp() {
             SlideObject::Rect { rotation, .. }
             | SlideObject::TextBox { rotation, .. }
             | SlideObject::Circle { rotation, .. }
+            | SlideObject::Shape { rotation, .. }
             | SlideObject::Image { rotation, .. } => *rotation,
         })
         .collect();
@@ -1211,6 +1225,7 @@ fn geometry_survives_a_conversion_between_the_two_formats() {
     let geom = |d: &Deck, label: &str| -> (f64, f64, f64, f64) {
         match d.slides.first().and_then(|s| s.objects.first()) {
             Some(SlideObject::Rect { x, y, w, h, .. })
+            | Some(SlideObject::Shape { x, y, w, h, .. })
             | Some(SlideObject::TextBox { x, y, w, h, .. }) => (*x, *y, *w, *h),
             other => panic!("{label}: the shape came back as {other:?}"),
         }

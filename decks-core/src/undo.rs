@@ -13,6 +13,7 @@ fn offset_object(obj: &mut SlideObject, dx: f64, dy: f64) {
     match obj {
         SlideObject::TextBox { x, y, .. }
         | SlideObject::Rect { x, y, .. }
+        | SlideObject::Shape { x, y, .. }
         | SlideObject::Image { x, y, .. }
         | SlideObject::Circle { x, y, .. } => {
             *x += dx;
@@ -26,6 +27,7 @@ pub fn set_obj_position(obj: &mut SlideObject, nx: f64, ny: f64) {
     match obj {
         SlideObject::TextBox { x, y, .. }
         | SlideObject::Rect { x, y, .. }
+        | SlideObject::Shape { x, y, .. }
         | SlideObject::Image { x, y, .. }
         | SlideObject::Circle { x, y, .. } => {
             *x = nx;
@@ -39,6 +41,7 @@ pub fn obj_position(obj: &SlideObject) -> (f64, f64) {
     match obj {
         SlideObject::TextBox { x, y, .. }
         | SlideObject::Rect { x, y, .. }
+        | SlideObject::Shape { x, y, .. }
         | SlideObject::Image { x, y, .. }
         | SlideObject::Circle { x, y, .. } => (*x, *y),
     }
@@ -49,6 +52,7 @@ pub fn obj_rotation(obj: &SlideObject) -> f64 {
     match obj {
         SlideObject::TextBox { rotation, .. }
         | SlideObject::Rect { rotation, .. }
+        | SlideObject::Shape { rotation, .. }
         | SlideObject::Circle { rotation, .. }
         | SlideObject::Image { rotation, .. } => *rotation,
     }
@@ -59,6 +63,7 @@ pub fn set_obj_rotation(obj: &mut SlideObject, angle: f64) {
     match obj {
         SlideObject::TextBox { rotation, .. }
         | SlideObject::Rect { rotation, .. }
+        | SlideObject::Shape { rotation, .. }
         | SlideObject::Circle { rotation, .. }
         | SlideObject::Image { rotation, .. } => *rotation = angle,
     }
@@ -69,6 +74,7 @@ pub fn obj_bounds(obj: &SlideObject) -> (f64, f64, f64, f64) {
     match obj {
         SlideObject::TextBox { x, y, w, h, .. }
         | SlideObject::Rect { x, y, w, h, .. }
+        | SlideObject::Shape { x, y, w, h, .. }
         | SlideObject::Image { x, y, w, h, .. } => (*x, *y, *w, *h),
         SlideObject::Circle { x, y, r, .. } => (*x - *r, *y - *r, *r * 2.0, *r * 2.0),
     }
@@ -100,6 +106,7 @@ pub fn set_obj_bounds(obj: &mut SlideObject, nx: f64, ny: f64, nw: f64, nh: f64)
     match obj {
         SlideObject::TextBox { x, y, w, h, .. }
         | SlideObject::Rect { x, y, w, h, .. }
+        | SlideObject::Shape { x, y, w, h, .. }
         | SlideObject::Image { x, y, w, h, .. } => {
             *x = nx;
             *y = ny;

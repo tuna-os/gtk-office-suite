@@ -16,6 +16,10 @@ pub fn to_typst(slides: &[decks_core::engine::Slide]) -> String {
                 TextBox { text, .. } => out.push_str(&format!("{}\n\n", text)),
                 Rect { .. } => out.push_str("#rect(width: 100%, height: 100%)\n"),
                 Circle { .. } => out.push_str("#circle(radius: 50%)\n"),
+                Shape { kind: decks_core::engine::shape::ShapeKind::Ellipse, .. } => {
+                    out.push_str("#ellipse(width: 100%, height: 100%)\n")
+                }
+                Shape { .. } => out.push_str("#rect(width: 100%, height: 100%)\n"),
                 Image { path, .. } => out.push_str(&format!("#image(\"{}\")\n", path)),
             }
         }

@@ -264,6 +264,92 @@ fn write_circle<W: std::io::Write>(
     Ok(())
 }
 
+/// A preset shape with its own fill and outline (`SlideObject::Shape`).
+fn write_shape<W: std::io::Write>(
+    writer: &mut Writer<W>,
+    id: usize,
+    name_idx: usize,
+    at: Placement,
+    kind: &super::shape::ShapeKind,
+    style: &super::shape::ShapeStyle,
+) -> Result<(), quick_xml::Error> {
+    use super::shape::ShapeKind;
+    writer.write_event(Event::Start(BytesStart::new("p:sp")))?;
+    writer.write_event(Event::Start(BytesStart::new("p:nvSpPr")))?;
+    let mut c_nv_pr = BytesStart::new("p:cNvPr");
+    c_nv_pr.push_attribute(("id", id.to_string().as_str()));
+    c_nv_pr.push_attribute(("name", format!("Shape {}", name_idx).as_str()));
+    writer.write_event(Event::Empty(c_nv_pr))?;
+    writer.write_event(Event::Empty(BytesStart::new("p:cNvSpPr")))?;
+    writer.write_event(Event::Empty(BytesStart::new("p:nvPr")))?;
+    writer.write_event(Event::End(BytesEnd::new("p:nvSpPr")))?;
+
+    writer.write_event(Event::Start(BytesStart::new("p:spPr")))?;
+    write_xfrm(writer, at)?;
+    let mut prst_geom = BytesStart::new("a:prstGeom");
+    prst_geom.push_attribute(("prst", kind.prst()));
+    writer.write_event(Event::Start(prst_geom))?;
+    writer.write_event(Event::Start(BytesStart::new("a:avLst")))?;
+    if let ShapeKind::RoundRect { radius } = kind {
+        let mut gd = BytesStart::new("a:gd");
+        gd.push_attribute(("name", "adj"));
+        gd.push_attribute(("fmla", format!("val {}", (radius * 100_000.0).round() as i64).as_str()));
+        writer.write_event(Event::Empty(gd))?;
+    }
+    writer.write_event(Event::End(BytesEnd::new("a:avLst")))?;
+    writer.write_event(Event::End(BytesEnd::new("a:prstGeom")))?;
+
+    let solid = |writer: &mut Writer<W>, color: super::shape::Color| -> Result<(), quick_xml::Error> {
+        writer.write_event(Event::Start(BytesStart::new("a:solidFill")))?;
+        let mut srgb = BytesStart::new("a:srgbClr");
+        srgb.push_attribute(("val", color.to_hex().as_str()));
+        writer.write_event(Event::Empty(srgb))?;
+        writer.write_event(Event::End(BytesEnd::new("a:solidFill")))?;
+        Ok(())
+    };
+    match (&style.gradient, style.fill) {
+        (Some(g), _) => {
+            writer.write_event(Event::Start(BytesStart::new("a:gradFill")))?;
+            writer.write_event(Event::Start(BytesStart::new("a:gsLst")))?;
+            for stop in &g.stops {
+                let mut gs = BytesStart::new("a:gs");
+                gs.push_attribute(("pos", ((stop.pos * 100_000.0).round() as i64).to_string().as_str()));
+                writer.write_event(Event::Start(gs))?;
+                let mut srgb = BytesStart::new("a:srgbClr");
+                srgb.push_attribute(("val", stop.color.to_hex().as_str()));
+                writer.write_event(Event::Empty(srgb))?;
+                writer.write_event(Event::End(BytesEnd::new("a:gs")))?;
+            }
+            writer.write_event(Event::End(BytesEnd::new("a:gsLst")))?;
+            let mut lin = BytesStart::new("a:lin");
+            lin.push_attribute(("ang", ((g.angle * 60_000.0).round() as i64).to_string().as_str()));
+            lin.push_attribute(("scaled", "0"));
+            writer.write_event(Event::Empty(lin))?;
+            writer.write_event(Event::End(BytesEnd::new("a:gradFill")))?;
+        }
+        (None, Some(c)) => solid(writer, c)?,
+        (None, None) => writer.write_event(Event::Empty(BytesStart::new("a:noFill")))?,
+    }
+    let mut ln = BytesStart::new("a:ln");
+    match style.stroke {
+        Some(stroke) => {
+            // Model units, as write_xfrm writes coordinates.
+            ln.push_attribute(("w", ((stroke.width * 9525.0).round() as i64).to_string().as_str()));
+            writer.write_event(Event::Start(ln))?;
+            solid(writer, stroke.color)?;
+            writer.write_event(Event::End(BytesEnd::new("a:ln")))?;
+        }
+        None => {
+            writer.write_event(Event::Start(ln))?;
+            writer.write_event(Event::Empty(BytesStart::new("a:noFill")))?;
+            writer.write_event(Event::End(BytesEnd::new("a:ln")))?;
+        }
+    }
+    writer.write_event(Event::End(BytesEnd::new("p:spPr")))?;
+    writer.write_event(Event::End(BytesEnd::new("p:sp")))?;
+    Ok(())
+}
+
 fn write_image<W: std::io::Write>(
     writer: &mut Writer<W>,
     id: usize,
@@ -412,6 +498,14 @@ fn write_master_shapes<W: std::io::Write>(
             SlideObject::Circle { x, y, r, rotation } => {
                 write_circle(writer, id, j + 1, Placement::of_circle(*x, *y, *r, *rotation))?
             }
+            SlideObject::Shape { kind, x, y, w, h, rotation, style } => write_shape(
+                writer,
+                id,
+                j + 1,
+                Placement { x: *x, y: *y, w: *w, h: *h, rotation: *rotation },
+                kind,
+                style,
+            )?,
             SlideObject::Image { .. } => {}
         }
     }
@@ -818,6 +912,9 @@ pub fn write_pptx_bytes(deck: &Deck) -> Result<Vec<u8>, String> {
                     }
                     SlideObject::Circle { x, y, r, rotation } => {
                         write_circle(&mut writer, id, j + 1, Placement::of_circle(*x, *y, *r, *rotation)).map_err(|e| e.to_string())?;
+                    }
+                    SlideObject::Shape { kind, x, y, w, h, rotation, style } => {
+                        write_shape(&mut writer, id, j + 1, Placement { x: *x, y: *y, w: *w, h: *h, rotation: *rotation }, kind, style).map_err(|e| e.to_string())?;
                     }
                     SlideObject::Image { path, x, y, w, h, rotation } => {
                         let img_idx = images_to_add.len() + 1;
