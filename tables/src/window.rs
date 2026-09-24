@@ -720,7 +720,7 @@ impl TablesWindow {
                 drag.connect_drag_begin(move |_g, x, y| {
                     let st = s.borrow();
                     let sh = st.sheet();
-                    let sel = sh.selection_rect();
+                    let sel = sh.selection_block();
                     if hit_fill_handle(x, y, sel.2, sel.3, h.value(), v.value(), &sh) {
                         filling.set(Some(sel));
                         return;

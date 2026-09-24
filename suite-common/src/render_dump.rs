@@ -14,6 +14,14 @@ use gtk4::{gio, glib, prelude::*};
 
 pub const ENV: &str = "GTK_OFFICE_RENDER_DUMP";
 
+/// Whether this process is a render-lab capture. Cached: widgets ask on
+/// every frame to leave out editing chrome (caret, selection) that is not
+/// document content and that LibreOffice's reference never shows.
+pub fn active() -> bool {
+    static ACTIVE: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
+    *ACTIVE.get_or_init(|| dump_dir().is_some())
+}
+
 /// The dump directory, if the render lab asked for one.
 pub fn dump_dir() -> Option<std::path::PathBuf> {
     std::env::var_os(ENV).map(std::path::PathBuf::from)

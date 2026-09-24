@@ -117,6 +117,33 @@ const FORMULA_REF_COLORS: [(f64, f64, f64); 5] = [
     (0.85, 0.5, 0.0),   // orange
 ];
 
+/// A cell's value through its number format, in a bounded Pango layout
+/// clipped to `rect` (x, y, w, h). Clipping and ellipsizing keep long values
+/// inside their cell; the text sits at the top, as the grid always drew it.
+fn draw_cell_text(cr: &Context, sheet: &SheetModel, r: usize, c: usize, rect: (f64, f64, f64, f64), color: (f64, f64, f64)) {
+    let val = sheet.cell(r, c);
+    if val.is_empty() {
+        return;
+    }
+    let (cx, cy, cw, rh) = rect;
+    cr.set_source_rgb(color.0, color.1, color.2);
+    let formatted = sheet.formats[r][c].format(val);
+    let layout = pangocairo::functions::create_layout(cr);
+    layout.set_text(&formatted);
+    layout.set_width(((cw - 8.0).max(1.0) * pango::SCALE as f64) as i32);
+    layout.set_ellipsize(EllipsizeMode::End);
+    layout.set_single_paragraph_mode(true);
+    if sheet.aligns_right(r, c) {
+        layout.set_alignment(pango::Alignment::Right);
+    }
+    cr.save().unwrap();
+    cr.rectangle(cx + 3.0, cy + 2.0, (cw - 6.0).max(1.0), (rh - 4.0).max(1.0));
+    cr.clip();
+    cr.move_to(cx + 4.0, cy + 5.0);
+    pangocairo::functions::show_layout(cr, &layout);
+    cr.restore().unwrap();
+}
+
 #[allow(clippy::too_many_arguments)]
 pub fn draw_grid(
     cr: &Context, state: &Rc<RefCell<crate::window::AppState>>,
@@ -131,6 +158,9 @@ pub fn draw_grid(
     let grid_line = if is_dark { GRID_LINE_DARK } else { GRID_LINE };
     let cell_bg = if is_dark { CELL_BG_DARK } else { CELL_BG };
     let cell_text = suite_common::canvas_foreground(is_dark);
+    // Editing chrome (selection wash, outline, fill handle) is not document
+    // content; the render lab's capture leaves it out, as it does the caret.
+    let show_selection = !suite_common::render_dump::active();
     let range_wash = if is_dark { RANGE_WASH_DARK } else { RANGE_WASH };
     let canvas_bg = if is_dark { CANVAS_BG_DARK } else { CANVAS_BG };
 
@@ -219,9 +249,9 @@ pub fn draw_grid(
             let cw = sheet.col_width(c);
             if cx + cw < ROW_HEADER_WIDTH { cx += cw; continue; }
             if cx > width { break; }
-            let is_sel = r == sheet.selected_row && c == sheet.selected_col;
-            let (sr0, sc0, sr1, sc1) = sheet.selection_rect();
-            let in_range = r >= sr0 && r <= sr1 && c >= sc0 && c <= sc1;
+            let is_sel = show_selection && r == sheet.selected_row && c == sheet.selected_col;
+            let (sr0, sc0, sr1, sc1) = sheet.selection_block();
+            let in_range = show_selection && r >= sr0 && r <= sr1 && c >= sc0 && c <= sc1;
             let border = &sheet.borders[r][c];
 
             // Cell bg — selection wash wins; else a matching
@@ -248,16 +278,28 @@ pub fn draw_grid(
             cr.rectangle(cx, cy, cw, rh);
             cr.fill().unwrap();
 
+            // A merged block draws as one cell: no gridlines inside it, and
+            // its anchor's value across the whole block (second pass below).
+            let merge = sheet.merge_covering(r, c);
+            let (right_edge, bottom_edge) = match merge {
+                Some((mr, mc, rs, cs)) => (c + 1 == mc + cs.max(1), r + 1 == mr + rs.max(1)),
+                None => (true, true),
+            };
+
             // Grid line
             if show_gridlines {
                 cr.set_source_rgb(grid_line.0, grid_line.1, grid_line.2);
                 cr.set_line_width(0.5);
-                cr.move_to(cx + cw, cy);
-                cr.line_to(cx + cw, cy + rh);
-                cr.stroke().unwrap();
-                cr.move_to(cx, cy + rh);
-                cr.line_to(cx + cw, cy + rh);
-                cr.stroke().unwrap();
+                if right_edge {
+                    cr.move_to(cx + cw, cy);
+                    cr.line_to(cx + cw, cy + rh);
+                    cr.stroke().unwrap();
+                }
+                if bottom_edge {
+                    cr.move_to(cx, cy + rh);
+                    cr.line_to(cx + cw, cy + rh);
+                    cr.stroke().unwrap();
+                }
             }
 
             // Cell border
@@ -266,8 +308,8 @@ pub fn draw_grid(
                 draw_border_edges(cr, cx, cy, cw, rh, border, is_dark);
             }
 
-            // Active cell border
-            if is_sel {
+            // Active cell border (a merged block's is the selection outline)
+            if is_sel && sheet.merge_covering(r, c).is_none() {
                 cr.set_source_rgb(accent.0, accent.1, accent.2);
                 cr.set_line_width(2.0);
                 cr.rectangle(cx, cy, cw, rh);
@@ -277,32 +319,28 @@ pub fn draw_grid(
             // Text — through the cell's number format and a bounded Pango
             // layout.  Clipping/ellipsizing keeps long values inside their
             // cell while still allowing readable text when a column grows.
-            let val = sheet.cell(r, c);
-            if !val.is_empty() {
-                cr.set_source_rgb(cell_text.0, cell_text.1, cell_text.2);
-                let formatted = sheet.formats[r][c].format(val);
-                let layout = pangocairo::functions::create_layout(cr);
-                layout.set_text(&formatted);
-                layout.set_width(((cw - 8.0).max(1.0) * pango::SCALE as f64) as i32);
-                layout.set_ellipsize(EllipsizeMode::End);
-                layout.set_single_paragraph_mode(true);
-                if sheet.aligns_right(r, c) {
-                    layout.set_alignment(pango::Alignment::Right);
-                }
-                cr.save().unwrap();
-                cr.rectangle(cx + 3.0, cy + 2.0, (cw - 6.0).max(1.0), (rh - 4.0).max(1.0));
-                cr.clip();
-                cr.move_to(cx + 4.0, cy + 5.0);
-                pangocairo::functions::show_layout(cr, &layout);
-                cr.restore().unwrap();
+            if merge.is_none() {
+                draw_cell_text(cr, sheet, r, c, (cx, cy, cw, rh), cell_text);
             }
             cx += cw;
         }
     }
+    // Merged blocks: the anchor's value across the whole block, drawn after
+    // every cell so the covered cells' backgrounds can't paint over it.
+    for &(mr, mc, rs, cs) in &sheet.merges {
+        let x = tables_core::sheet::col_x(mc, scroll_x, sheet);
+        let y = tables_core::sheet::row_y(mr, scroll_y, sheet);
+        let w = tables_core::sheet::col_x(mc + cs.max(1), scroll_x, sheet) - x;
+        let h = tables_core::sheet::row_y(mr + rs.max(1), scroll_y, sheet) - y;
+        if x > width || y > height || x + w < ROW_HEADER_WIDTH || y + h < COL_HEADER_HEIGHT {
+            continue;
+        }
+        draw_cell_text(cr, sheet, mr, mc, (x, y, w, h), cell_text);
+    }
     cr.restore().unwrap();
 
     // Selection range outline (2px accent around the whole rectangle).
-    let (sr0, sc0, sr1, sc1) = sheet.selection_rect();
+    let (sr0, sc0, sr1, sc1) = sheet.selection_block();
     let px_x = |col: usize| -> f64 { tables_core::sheet::col_x(col, scroll_x, sheet) };
     let x0 = px_x(sc0);
     let x1 = px_x(sc1 + 1);
@@ -311,22 +349,23 @@ pub fn draw_grid(
     cr.save().unwrap();
     cr.rectangle(ROW_HEADER_WIDTH, COL_HEADER_HEIGHT, width - ROW_HEADER_WIDTH, height - COL_HEADER_HEIGHT);
     cr.clip();
-    cr.set_source_rgb(accent.0, accent.1, accent.2);
-    cr.set_line_width(2.0);
-    cr.rectangle(x0, y0, x1 - x0, y1 - y0);
-    cr.stroke().unwrap();
+    if show_selection {
+        cr.set_source_rgb(accent.0, accent.1, accent.2);
+        cr.set_line_width(2.0);
+        cr.rectangle(x0, y0, x1 - x0, y1 - y0);
+        cr.stroke().unwrap();
 
-    // Fill handle (#113): a small solid square at the selection's
-    // bottom-right corner, same shared geometry hit_fill_handle() tests
-    // presses against — see tables_core::sheet::fill_handle_center.
-    cr.set_source_rgb(accent.0, accent.1, accent.2);
-    cr.rectangle(
-        x1 - tables_core::sheet::FILL_HANDLE_HALF,
-        y1 - tables_core::sheet::FILL_HANDLE_HALF,
-        tables_core::sheet::FILL_HANDLE_HALF * 2.0,
-        tables_core::sheet::FILL_HANDLE_HALF * 2.0,
-    );
-    cr.fill().unwrap();
+        // Fill handle (#113): a small solid square at the selection's
+        // bottom-right corner, same shared geometry hit_fill_handle() tests
+        // presses against — see tables_core::sheet::fill_handle_center.
+        cr.rectangle(
+            x1 - tables_core::sheet::FILL_HANDLE_HALF,
+            y1 - tables_core::sheet::FILL_HANDLE_HALF,
+            tables_core::sheet::FILL_HANDLE_HALF * 2.0,
+            tables_core::sheet::FILL_HANDLE_HALF * 2.0,
+        );
+        cr.fill().unwrap();
+    }
 
     // Print area (#113): a dashed border around the range PDF export
     // will use, same convention as Excel/Sheets — print_area only ever

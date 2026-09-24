@@ -152,8 +152,8 @@
     "B": "amber"
   },
   "tables/merged": {
-    "A": "red",
-    "B": "red"
+    "A": "amber",
+    "B": "amber"
   },
   "tables/number-formats": {
     "A": "amber",
