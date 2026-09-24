@@ -247,30 +247,34 @@ reports as at least amber.
 
 ## Phases
 
-### Phase 0: See the truth (this week)
+### Phase 0: See the truth (done 2026-09-24)
 
 Exit: the lab runs in the container and produces a baseline report for all
 three apps. We expect it to be mostly red.
+
+The first baseline was Tier A 1 green / 31 amber / 10 red.
 
 - [x] Honest README banner and status table.
 - [x] This roadmap.
 - [x] `tools/render-lab/`: Containerfile, fixture generator, LibreOffice
       reference renderer, comparison metrics, HTML report, driver script.
-- [ ] Tier A `render-dump` test action in Decks, Tables and Letters
-      (`GTK_OFFICE_TEST_MODE` only). Decks first, since `draw_slide`
-      already takes a Cairo context.
-- [ ] Tier B Broadway capture (`capture.py --tier B`): headless Chromium
-      screenshots the Broadway page and crops it with `geom.json`.
+- [x] Tier A `render-dump` test action in Decks, Tables and Letters
+      (`GTK_OFFICE_TEST_MODE` only) (#888).
+- [x] Tier B Broadway capture (`capture.py --tier B`): headless Chromium
+      screenshots the Broadway page, located by geom.json and verified
+      against the app's own render. Tiers A and B agree to within about
+      1 grey level; see "Broadway notes" (#888).
 - [ ] Tier C VM harness (`tools/render-lab/vm/`). Boots a GNOME image
       under QEMU/KVM, installs the CI Flatpak bundle, opens each fixture
       and takes a `screendump` over QMP. It needs `/dev/kvm`, which the
       2026-09-24 dev box lacks, so it is built and validated on a GitHub
       runner.
-- [ ] `render-parity.yml`: Tier A+B on every PR, ratchet, sticky PR
-      comment, report artifact, issue sync on main, nightly Tier C.
-      Written, not yet green in CI.
-- [ ] Commit the first `baseline.json` from a CI run, and let the issue
-      sync open the first backlog.
+- [x] `render-parity.yml`: Tier A+B on every PR, ratchet, sticky PR
+      comment, report artifact, issue sync on main, nightly Tier C (#888).
+      Each app runs as its own parallel job, and every run publishes
+      `baseline.proposed.json` (#946, #955). Tier C has not had a green run.
+- [x] Commit the first `baseline.json`, and let the issue sync open the
+      first backlog: 41 `render-parity` issues (#888).
 - [ ] Close or consolidate the 60+ duplicate strategist issues so the
       `render-parity` backlog is what agents find.
 - [ ] `visual_golden.py`: delete it, or make it the Tier A vs Tier B
@@ -278,11 +282,20 @@ three apps. We expect it to be mostly red.
 
 ### Phase 1: One renderer per app (architecture; ADR 0009 accepted)
 
+**Status (2026-09-24): exit criterion met.** No fixture is red in any app,
+in either tier. On main, Tier A is 21 green / 21 amber / 0 red; it began
+the day at 1 / 31 / 10. The items below are what's left.
+`tools/render-lab/baseline.json` is the live source of truth.
+
+
 WYSIWYG is only true when the screen, print and PDF come from **one**
 layout and one draw routine. ADR 0009 is proposed; this phase accepts it
 and does the part that matters.
 
 - **Letters page layout engine** (`letters-core::layout`, GTK-free).
+  *Landed (#960, ADR 0010): the render tree, a pluggable measurer, and a
+  shared page-drawing routine behind `render`. `letters/pagination` is
+  green. Still to do: moving print and PDF onto the shared routine.*
   - It takes the document model and produces a serializable render tree:
     pages → blocks → lines → glyph runs, plus boxes for list markers,
     table cells, images, headers/footers and footnotes. It uses Pango
@@ -296,17 +309,25 @@ and does the part that matters.
   hit-testing map through the render tree, text input goes through
   `GtkIMContext`, and accessibility through `GtkAccessibleText` (GTK ≥ 4.14).
   - Staged: first a **read-only page view** (a toggle, like "Print Layout"
-    vs "Draft"). It is immediately useful and lab-testable.
+    vs "Draft"). It is immediately useful and lab-testable. *(Done in
+    #960: `PageView`, real size at 100%.)*
   - Then editing on it. Then remove the TextView path.
   - This is the largest single item on the roadmap and it is unavoidable.
     There is no configuration of one `GtkTextView` that produces per-page
     layout.
-- **Tables cell-style model**: font (family, size, bold, italic,
+- **Tables cell-style model** *(landed: #940 xlsx read, write and draw;
+  #941 spreadsheet metrics; #937 merges; #938 charts; #954 and #961 in
+  review for borders and ODS; #962 the Format inspector)*: font (family,
+  size, bold, italic,
   underline, colour), fill, horizontal/vertical alignment, wrap, indent,
   border colour and rotation. Add them to `tables-core::sheet` with xlsx
   and ods read/write, then draw them. Merges, frozen panes and chart
   overlays go into `draw_grid`.
-- **Decks shape-style model**: fill (solid/gradient/none), stroke (colour,
+- **Decks shape-style model** *(landed: #948 presets, fills, gradients
+  from the theme's format scheme, and outlines; #956 tables; #932
+  inherited placeholder geometry; #963 text sizes; #964 run colours.
+  Inherited text styles, paragraphs and bullets are in progress in #966)*:
+  fill (solid/gradient/none), stroke (colour,
   width, dash), placeholders with inherited layout and master text styles,
   run colour and font family, vertical anchor and autofit. Delete the
   hardcoded blue and red.
