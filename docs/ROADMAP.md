@@ -1,5 +1,12 @@
 # Roadmap
 
+> **Top priority as of 2026-09-24: [Render Parity Roadmap](RENDER-PARITY-ROADMAP.md).**
+> The apps do not yet render documents correctly on screen, and nothing
+> measured that. Until its Phase 1 exits, it takes precedence over the
+> plans below. A visual feature is done only when a screenshot of the
+> running app matches LibreOffice's rendering of the same file within
+> budget.
+
 Current execution: [September readiness plan](readiness-2026-09/README.md),
 with dependency-ordered issues and acceptance tests in
 [#443](https://github.com/tuna-os/gtk-office-suite/issues/443).
