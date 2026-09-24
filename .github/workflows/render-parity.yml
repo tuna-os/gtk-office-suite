@@ -68,7 +68,7 @@ jobs:
           cache-to: type=gha,mode=max,scope=render-lab
 
       - name: Cache cargo
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: |
             ~/.cache/render-lab-cargo
@@ -177,7 +177,7 @@ jobs:
           merge-multiple: true
 
       - name: Cache prepared guest image
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: vm-work
           key: render-lab-vm-${{ hashFiles('tools/render-lab/vm/prepare.sh', 'tools/render-lab/vm/user-data') }}
