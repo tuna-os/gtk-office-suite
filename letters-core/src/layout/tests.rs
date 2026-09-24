@@ -187,9 +187,11 @@ fn a_table_is_a_grid_of_cells_with_rows_as_tall_as_their_tallest_cell() {
         .collect();
     assert_eq!(cells.len(), 6);
     let w = (595.3 - 144.0) / 3.0;
-    assert!((cells[1].2 - (72.0 + w)).abs() < 1e-9 && (cells[1].4 - w).abs() < 1e-9, "equal columns");
+    assert!((cells[1].2 - (72.0 - CELL_PADDING_PT + w)).abs() < 1e-9 && (cells[1].4 - w).abs() < 1e-9, "equal columns");
+    assert_eq!(cells[0].2, 72.0 - CELL_PADDING_PT, "cell text, not the rule, aligns with the margin");
     let tall = cells[1].5;
     assert!(tall > LINE * 2.0, "the long cell wraps: {tall}");
+    assert_eq!(cells[3].5, LINE + CELL_RULE_PT, "a one-line row is its line plus a rule");
     assert!(cells[..3].iter().all(|c| c.5 == tall), "the whole row takes the tallest cell's height");
     assert_eq!(cells[3].3, 72.0 + tall, "row two starts below row one");
     // The paragraph after the table starts below it.
@@ -197,7 +199,7 @@ fn a_table_is_a_grid_of_cells_with_rows_as_tall_as_their_tallest_cell() {
         Item::Line { text, top_pt, .. } if text == "after" => Some(*top_pt),
         _ => None,
     });
-    assert_eq!(after, Some(72.0 + tall + LINE), "below both rows");
+    assert_eq!(after, Some(72.0 + tall + LINE + CELL_RULE_PT), "below both rows");
 }
 
 #[test]
