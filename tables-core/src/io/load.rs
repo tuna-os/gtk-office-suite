@@ -261,6 +261,7 @@ pub fn load_xlsx_workbook(path: &str) -> Result<(TablesEngine, Vec<SheetModel>),
                 if *r < sheet.rows && *c < sheet.cols {
                     sheet.formats[*r][*c] = x.format.clone();
                     sheet.styles[*r][*c] = x.style.clone();
+                    sheet.borders[*r][*c] = x.border.clone();
                 }
             }
             sheet.merges = props

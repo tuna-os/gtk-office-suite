@@ -1317,7 +1317,7 @@ impl TablesWindow {
                         BorderStyle::Solid => BorderStyle::Dashed,
                         BorderStyle::Dashed => BorderStyle::Dotted,
                         BorderStyle::Dotted => BorderStyle::Double,
-                        BorderStyle::Double => BorderStyle::None,
+                        _ => BorderStyle::None,
                     };
                     sh.borders[r][c] = CellBorder::outline(next, (0.0, 0.0, 0.0));
                 });

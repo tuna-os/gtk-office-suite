@@ -31,8 +31,22 @@ pub const DEFAULT_FONT_SIZE: f64 = 11.0;
 #[derive(Clone, Copy, PartialEq)]
 pub enum SortDirection { Ascending, Descending }
 
+/// One edge of a cell border. `Solid` is a thin (1 px) line; `Medium` and
+/// `Thick` are Excel's 2 px and 3 px solid lines.
 #[derive(Clone, Debug, PartialEq)]
-pub enum BorderStyle { None, Solid, Dotted, Dashed, Double }
+pub enum BorderStyle { None, Solid, Dotted, Dashed, Double, Medium, Thick }
+
+impl BorderStyle {
+    /// Line width in pixels at 100% zoom, as Excel and Calc draw it.
+    pub fn width_px(&self) -> f64 {
+        match self {
+            BorderStyle::None => 0.0,
+            BorderStyle::Solid | BorderStyle::Dotted | BorderStyle::Dashed => 1.0,
+            BorderStyle::Medium => 2.0,
+            BorderStyle::Thick | BorderStyle::Double => 3.0,
+        }
+    }
+}
 
 #[derive(Clone, Debug)]
 pub enum ValidationRule {
@@ -68,7 +82,7 @@ impl ValidationRule {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct CellBorder {
     pub top: BorderStyle, pub bottom: BorderStyle,
     pub left: BorderStyle, pub right: BorderStyle,
@@ -90,6 +104,13 @@ impl CellBorder {
 
 impl Default for CellBorder {
     fn default() -> Self { Self::none() }
+}
+
+impl CellBorder {
+    /// No edge drawn.
+    pub fn is_none(&self) -> bool {
+        [&self.top, &self.bottom, &self.left, &self.right].iter().all(|s| **s == BorderStyle::None)
+    }
 }
 
 pub fn col_label(c: usize) -> String {

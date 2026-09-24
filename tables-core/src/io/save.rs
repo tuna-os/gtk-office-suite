@@ -92,7 +92,13 @@ pub fn save_sheets_to_xlsx_bytes(
                     }
                 }
                 let val = &sh.data[r][c];
+                let format = cell_format(&sh.formats[r][c], &sh.styles[r][c], &sh.borders[r][c]);
                 if val.is_empty() {
+                    // An empty cell can still be styled: a boxed or filled
+                    // blank is part of what the sheet looks like.
+                    if let Some(f) = &format {
+                        sheet.write_blank(r as u32, c as u16, f).map_err(|e| format!("Write error: {}", e))?;
+                    }
                     continue;
                 }
                 // Rust's f64::from_str accepts "inf"/"infinity"/"nan"
@@ -103,7 +109,6 @@ pub fn save_sheets_to_xlsx_bytes(
                 // number here round-trips as "INF" (calamine's own
                 // float formatting) on reopen, silently corrupting the
                 // cell — caught by tables-core/tests/property.rs.
-                let format = cell_format(&sh.formats[r][c], &sh.styles[r][c]);
                 if let Some(n) = val.parse::<f64>().ok().filter(|n| n.is_finite()) {
                     match &format {
                         Some(f) => sheet.write_number_with_format(r as u32, c as u16, n, f),
@@ -123,7 +128,7 @@ pub fn save_sheets_to_xlsx_bytes(
         for (mr, mc, rows, cols) in &sh.merges {
             let (lr, lc) = (mr + (*rows).max(1) - 1, mc + (*cols).max(1) - 1);
             let val = sh.data[*mr][*mc].clone();
-            let format = cell_format(&sh.formats[*mr][*mc], &sh.styles[*mr][*mc]).unwrap_or_default();
+            let format = cell_format(&sh.formats[*mr][*mc], &sh.styles[*mr][*mc], &sh.borders[*mr][*mc]).unwrap_or_default();
             sheet
                 .merge_range(
                     *mr as u32,
@@ -329,15 +334,37 @@ pub fn save_sheets_to_xlsx_bytes(
 fn cell_format(
     nf: &suite_common_core::format::NumberFormat,
     style: &crate::style::CellStyle,
+    border: &crate::sheet::CellBorder,
 ) -> Option<rust_xlsxwriter::Format> {
+    use crate::sheet::BorderStyle;
     use crate::style::{HAlign, VAlign};
-    use rust_xlsxwriter::{Color, Format, FormatAlign, FormatUnderline};
+    use rust_xlsxwriter::{Color, Format, FormatAlign, FormatBorder, FormatUnderline};
     let code = xlsx_num_format(nf);
-    if code.is_none() && style.is_default() {
+    if code.is_none() && style.is_default() && border.is_none() {
         return None;
     }
     let rgb = |c: crate::style::Rgb| Color::RGB(((c.0 as u32) << 16) | ((c.1 as u32) << 8) | c.2 as u32);
     let mut f = Format::new();
+    if !border.is_none() {
+        let edge = |s: &BorderStyle| match s {
+            BorderStyle::None => FormatBorder::None,
+            BorderStyle::Solid => FormatBorder::Thin,
+            BorderStyle::Medium => FormatBorder::Medium,
+            BorderStyle::Thick => FormatBorder::Thick,
+            BorderStyle::Dotted => FormatBorder::Dotted,
+            BorderStyle::Dashed => FormatBorder::Dashed,
+            BorderStyle::Double => FormatBorder::Double,
+        };
+        let to_u8 = |v: f64| (v.clamp(0.0, 1.0) * 255.0).round() as u8;
+        let (r, g, b) = border.color;
+        let color = rgb(crate::style::Rgb(to_u8(r), to_u8(g), to_u8(b)));
+        f = f
+            .set_border_top(edge(&border.top))
+            .set_border_bottom(edge(&border.bottom))
+            .set_border_left(edge(&border.left))
+            .set_border_right(edge(&border.right))
+            .set_border_color(color);
+    }
     if let Some(code) = code {
         f = f.set_num_format(&code);
     }
@@ -534,6 +561,33 @@ mod tests {
         assert_eq!(back.styles[0][0], styled);
         assert_eq!(back.styles[1][1].h_align, HAlign::Right);
         assert!(back.styles[2][2].is_default());
+    }
+
+    /// Borders were neither read nor written: a boxed table opened unboxed
+    /// and saved that way. Weight, colour and an empty bordered cell all
+    /// survive a save and reopen now.
+    #[test]
+    fn cell_borders_round_trip_through_xlsx() {
+        use crate::sheet::{BorderStyle, CellBorder};
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("borders.xlsx").to_string_lossy().into_owned();
+        let mut sheet = SheetModel::new("S", 3, 3, 0);
+        sheet.data[0][0] = "boxed".into();
+        sheet.borders[0][0] = CellBorder::outline(BorderStyle::Thick, (0.0, 0.0, 0.0));
+        let mixed = CellBorder {
+            top: BorderStyle::Solid,
+            bottom: BorderStyle::Medium,
+            left: BorderStyle::Dashed,
+            right: BorderStyle::None,
+            color: (1.0, 0.0, 0.0),
+        };
+        sheet.borders[1][1] = mixed.clone();
+        save_sheets_to_xlsx(&path, &[sheet]).unwrap();
+
+        let (_, sheets) = crate::io::load_xlsx_workbook(&path).unwrap();
+        assert_eq!(sheets[0].borders[0][0], CellBorder::outline(BorderStyle::Thick, (0.0, 0.0, 0.0)));
+        assert_eq!(sheets[0].borders[1][1], mixed, "an empty cell keeps its border");
+        assert!(sheets[0].borders[2][2].is_none());
     }
 
     #[test]
