@@ -16,6 +16,8 @@ pub fn register_formatting_tags(buffer: &gtk::TextBuffer) {
         ("strikethrough", &[]),
         ("highlight", &[]),
         ("code", &[]),
+        ("superscript", &[]),
+        ("subscript", &[]),
         ("h1", &[]),
         ("h2", &[]),
         ("h3", &[]),
@@ -45,6 +47,11 @@ pub fn register_formatting_tags(buffer: &gtk::TextBuffer) {
                 "strikethrough" => gtk::TextTag::builder().name(name).strikethrough(true).build(),
                 "highlight" => gtk::TextTag::builder().name(name).background("#fce94f").build(),
                 "code" => gtk::TextTag::builder().name(name).family("monospace").background("#f0f0f0").build(),
+                // 58% size, as LibreOffice and Word draw super/subscript;
+                // the rise is in Pango units (1/1024 pt), a third of an
+                // 11 pt line up and a sixth down.
+                "superscript" => gtk::TextTag::builder().name(name).scale(0.58).rise(4 * gtk4::pango::SCALE).build(),
+                "subscript" => gtk::TextTag::builder().name(name).scale(0.58).rise(-2 * gtk4::pango::SCALE).build(),
                 "h1" => gtk::TextTag::builder().name(name).weight(700).scale(1.6).build(),
                 "h2" => gtk::TextTag::builder().name(name).weight(700).scale(1.4).build(),
                 "h3" => gtk::TextTag::builder().name(name).weight(700).scale(1.2).build(),

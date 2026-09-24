@@ -12,7 +12,27 @@
 use gtk4::{self as gtk, prelude::*};
 use letters_core::model::{Document, PageGeometry, Paragraph, Run, RunStyle};
 
-const RUN_TAGS: [&str; 6] = ["bold", "italic", "underline", "strikethrough", "highlight", "code"];
+const RUN_TAGS: [&str; 8] = ["bold", "italic", "underline", "strikethrough", "highlight", "code", "superscript", "subscript"];
+
+/// The formatting tags a run with `style` is drawn with. The one mapping
+/// from model to buffer: render and paste both use it, so a style can't be
+/// drawn by one and dropped by the other (super/subscript were in the model
+/// and in every reader and writer, and drawn by neither).
+pub(crate) fn run_tag_names(style: &RunStyle) -> Vec<&'static str> {
+    let mut names = Vec::new();
+    if style.bold { names.push("bold"); }
+    if style.italic { names.push("italic"); }
+    if style.underline { names.push("underline"); }
+    if style.strikethrough { names.push("strikethrough"); }
+    if style.highlight { names.push("highlight"); }
+    if style.code { names.push("code"); }
+    match style.vert_align {
+        Some(letters_core::model::VertAlign::Superscript) => names.push("superscript"),
+        Some(letters_core::model::VertAlign::Subscript) => names.push("subscript"),
+        None => {}
+    }
+    names
+}
 
 /// GtkTextTag name for a discrete line-spacing multiplier — reuses the
 /// same "line-spacing-1.0"/"1.15"/"1.5"/"2.0" tags window.rs's
@@ -71,6 +91,8 @@ pub fn capture_from_buffer(buf: &gtk::TextBuffer) -> Document {
                     "strikethrough" => s.strikethrough = true,
                     "highlight" => s.highlight = true,
                     "code" => s.code = true,
+                    "superscript" => s.vert_align = Some(letters_core::model::VertAlign::Superscript),
+                    "subscript" => s.vert_align = Some(letters_core::model::VertAlign::Subscript),
                     _ => unreachable!(),
                 }
             }
@@ -496,13 +518,7 @@ pub fn render_to_buffer(doc: &Document, buf: &gtk::TextBuffer) {
                 insert_footnote_marker(buf, &mut insert, idx);
                 continue;
             }
-            let mut names: Vec<&str> = Vec::new();
-            if run.style.bold { names.push("bold"); }
-            if run.style.italic { names.push("italic"); }
-            if run.style.underline { names.push("underline"); }
-            if run.style.strikethrough { names.push("strikethrough"); }
-            if run.style.highlight { names.push("highlight"); }
-            if run.style.code { names.push("code"); }
+            let mut names: Vec<&str> = run_tag_names(&run.style);
             let link_tag_name = run.style.link.as_ref().map(|url| {
                 let name = format!("link:{url}");
                 if buf.tag_table().lookup(&name).is_none() {
@@ -934,6 +950,24 @@ second line");
         assert_eq!(rt.to_plain_text(), d.to_plain_text());
         assert!(rt.style_at(6).bold && !rt.style_at(5).bold, "bold boundaries");
         assert!(rt.style_at(11).italic, "italic");
+
+        // super/subscript: E = mc² and H₂O
+        let buf = fresh();
+        let mut d = Document::from_plain_text("E = mc2 and H2O");
+        let sup = RunStyle { vert_align: Some(letters_core::model::VertAlign::Superscript), ..Default::default() };
+        let sub = RunStyle { vert_align: Some(letters_core::model::VertAlign::Subscript), ..Default::default() };
+        d.paragraphs[0].runs = vec![
+            letters_core::Run { text: "E = mc".into(), style: RunStyle::default() },
+            letters_core::Run { text: "2".into(), style: sup },
+            letters_core::Run { text: " and H".into(), style: RunStyle::default() },
+            letters_core::Run { text: "2".into(), style: sub },
+            letters_core::Run { text: "O".into(), style: RunStyle::default() },
+        ];
+        let rt = round_trip(&buf, &d);
+        assert_eq!(rt.to_plain_text(), "E = mc2 and H2O");
+        assert_eq!(rt.style_at(6).vert_align, Some(letters_core::model::VertAlign::Superscript));
+        assert_eq!(rt.style_at(13).vert_align, Some(letters_core::model::VertAlign::Subscript));
+        assert_eq!(rt.style_at(5).vert_align, None, "only the digit is raised");
 
         // headings
         let buf = fresh();
