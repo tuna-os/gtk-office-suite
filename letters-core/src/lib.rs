@@ -5,6 +5,7 @@
 
 pub mod docx;
 pub mod fragment;
+pub mod lists;
 pub mod markdown;
 pub mod model;
 pub mod odt;

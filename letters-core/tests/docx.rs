@@ -723,3 +723,84 @@ fn a_mid_paragraph_run_page_break_is_not_a_paragraph_break() {
         "a mid-paragraph break became the next paragraph's"
     );
 }
+
+/// Rewrite the XML parts of our own docx, for producer shapes our writer
+/// never emits. `edit` sees every `.xml` part at once (name → XML, with the
+/// whitespace between elements collapsed) and may change any of them.
+fn doctor_parts(d: &Document, edit: impl FnOnce(&mut std::collections::BTreeMap<String, String>)) -> Document {
+    let dir = tempfile::tempdir().unwrap();
+    let src = dir.path().join("src.docx");
+    docx::write(d, &src).expect("write docx");
+    let mut zin = zip::ZipArchive::new(std::fs::File::open(&src).unwrap()).unwrap();
+    let mut parts: Vec<(String, Vec<u8>)> = Vec::new();
+    for i in 0..zin.len() {
+        let mut f = zin.by_index(i).unwrap();
+        let mut buf = Vec::new();
+        std::io::Read::read_to_end(&mut f, &mut buf).unwrap();
+        parts.push((f.name().to_string(), buf));
+    }
+    let mut xml: std::collections::BTreeMap<String, String> = parts
+        .iter()
+        .filter(|(n, _)| n.ends_with(".xml"))
+        .map(|(n, b)| (n.clone(), regex_lite_collapse(std::str::from_utf8(b).unwrap())))
+        .collect();
+    edit(&mut xml);
+    let out = dir.path().join("out.docx");
+    let mut zout = zip::ZipWriter::new(std::fs::File::create(&out).unwrap());
+    for (name, bytes) in parts {
+        let bytes = xml.get(&name).map(|s| s.clone().into_bytes()).unwrap_or(bytes);
+        zout.start_file(name, zip::write::SimpleFileOptions::default()).unwrap();
+        std::io::Write::write_all(&mut zout, &bytes).unwrap();
+    }
+    zout.finish().unwrap();
+    docx::read(out.to_str().unwrap()).expect("read doctored docx")
+}
+
+/// Word's built-in list styles carry the numbering on the style.
+///
+/// python-docx's `style="List Bullet"`, Word's style gallery and many
+/// templates write `<w:pStyle w:val="ListBullet"/>` and no `w:numPr` on the
+/// paragraph. Those items used to read as plain paragraphs: no bullet, no
+/// indent (render-lab `letters/bullet-list`, `nested-list`, `numbered-list`).
+#[test]
+fn list_numbering_inherited_from_a_paragraph_style_is_read() {
+    let mut d = Document::from_plain_text("one\ntwo\nthree\nfirst\nplain");
+    for p in &mut d.paragraphs[..3] {
+        p.style.list = ListKind::Bullet;
+    }
+    d.paragraphs[3].style.list = ListKind::Numbered;
+    let rt = doctor_parts(&d, |parts| {
+        // Move each paragraph's numbering onto a named list style, keeping
+        // the numId our writer allocated so bullet-vs-number still resolves.
+        let body = parts.get_mut("word/document.xml").unwrap();
+        let names = [("ListBullet", "List Bullet"), ("ListBullet2", "List Bullet 2"),
+            ("ListBullet3", "List Bullet 3"), ("ListNumber", "List Number")];
+        let mut styles = String::new();
+        for (id, name) in names {
+            let start = body.find("<w:numPr>").expect("fixture shape changed");
+            let end = body[start..].find("</w:numPr>").unwrap() + start + "</w:numPr>".len();
+            let num_pr = body[start..end].to_string();
+            let num_id = num_pr.split("<w:numId w:val=\"").nth(1).unwrap().split('"').next().unwrap();
+            styles.push_str(&format!(
+                "<w:style w:type=\"paragraph\" w:styleId=\"{id}\"><w:name w:val=\"{name}\"/>\
+                 <w:pPr><w:numPr><w:numId w:val=\"{num_id}\"/></w:numPr></w:pPr></w:style>"
+            ));
+            body.replace_range(start..end, &format!("<w:pStyle w:val=\"{id}\"/>"));
+        }
+        assert!(!body.contains("<w:numPr>"), "fixture shape changed: {body}");
+        let st = parts.get_mut("word/styles.xml").unwrap();
+        *st = st.replace("</w:styles>", &format!("{styles}</w:styles>"));
+    });
+    let lists: Vec<(ListKind, u8, String)> =
+        rt.paragraphs.iter().map(|p| (p.style.list, p.style.list_level, p.text())).collect();
+    assert_eq!(
+        lists,
+        vec![
+            (ListKind::Bullet, 0, "one".into()),
+            (ListKind::Bullet, 1, "two".into()),
+            (ListKind::Bullet, 2, "three".into()),
+            (ListKind::Numbered, 0, "first".into()),
+            (ListKind::None, 0, "plain".into()),
+        ]
+    );
+}
