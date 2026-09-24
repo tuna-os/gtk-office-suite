@@ -2315,6 +2315,7 @@ dependencies = [
  "pulldown-cmark",
  "quick-xml 0.42.0",
  "rdocx",
+ "rdocx-oxml",
  "serde",
  "serde_json",
  "suite-common-core",

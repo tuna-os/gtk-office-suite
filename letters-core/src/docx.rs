@@ -7,6 +7,7 @@
 // LO-authored corpus in tests/lo_parity.rs.
 
 use crate::model::{Alignment, Document, ListKind, PageGeometry, Paragraph, ParaStyle, Run, RunStyle};
+use rdocx_oxml::shared::ST_Jc;
 
 /// The body-paragraph properties rdocx does not hand back, in twips.
 ///
@@ -18,6 +19,8 @@ struct RawPara {
     start_twips: Option<f64>,
     end_twips: Option<f64>,
     tab_twips: Vec<f64>,
+    /// Direct `w:contextualSpacing` (rdocx does not model it).
+    contextual: bool,
 }
 
 /// Per body paragraph: strict-spelled indents and tab-stop positions.
@@ -95,6 +98,11 @@ fn raw_paragraph_props(path: &str) -> Vec<RawPara> {
                             last.tab_twips.push(v);
                         }
                     }
+                    "w:contextualSpacing" if table_depth == 0 => {
+                        if let Some(last) = out.last_mut() {
+                            last.contextual = on_off(&e);
+                        }
+                    }
                     "w:ind" if table_depth == 0 => {
                         let Some(last) = out.last_mut() else { continue };
                         for a in e.attributes().with_checks(false).flatten() {
@@ -118,6 +126,77 @@ fn raw_paragraph_props(path: &str) -> Vec<RawPara> {
     scan(path).unwrap_or_default()
 }
 
+/// An OOXML on/off element's value: present means on, unless `w:val`
+/// says "0", "false" or "off".
+fn on_off(e: &quick_xml::events::BytesStart<'_>) -> bool {
+    !e.attributes().with_checks(false).flatten().any(|a| {
+        a.key.as_ref() == "w:val" && matches!(a.value.trim(), "0" | "false" | "off")
+    })
+}
+
+/// Paragraph styles whose paragraphs have `w:contextualSpacing` ("don't add
+/// space between paragraphs of the same style"), through `w:basedOn`.
+/// Word's list styles set it: without it every list item of a python-docx
+/// or Word list would be 10pt apart.
+fn contextual_styles(path: &str) -> std::collections::HashSet<String> {
+    /// (style id, basedOn, contextualSpacing if the style itself says)
+    type StyleSpacing = (String, Option<String>, Option<bool>);
+    fn scan(path: &str) -> Result<Vec<StyleSpacing>, Box<dyn std::error::Error>> {
+        let mut zip = zip::ZipArchive::new(std::fs::File::open(path)?)?;
+        let mut xml = String::new();
+        std::io::Read::read_to_string(&mut zip.by_name("word/styles.xml")?, &mut xml)?;
+        let mut reader = quick_xml::Reader::from_str(&xml);
+        reader.config_mut().trim_text(true);
+        let mut out: Vec<StyleSpacing> = Vec::new();
+        let attr = |e: &quick_xml::events::BytesStart<'_>, key: &str| {
+            e.attributes().with_checks(false).flatten().find(|a| a.key.as_ref() == key).map(|a| a.value.to_string())
+        };
+        loop {
+            match reader.read_event()? {
+                quick_xml::events::Event::Eof => break,
+                quick_xml::events::Event::Start(e) if e.name().as_ref() == "w:style" => {
+                    out.push((attr(&e, "w:styleId").unwrap_or_default(), None, None));
+                }
+                quick_xml::events::Event::Empty(e) => match e.name().as_ref() {
+                    "w:basedOn" => {
+                        if let Some(last) = out.last_mut() {
+                            last.1 = attr(&e, "w:val");
+                        }
+                    }
+                    "w:contextualSpacing" => {
+                        if let Some(last) = out.last_mut() {
+                            last.2 = Some(on_off(&e));
+                        }
+                    }
+                    _ => {}
+                },
+                _ => {}
+            }
+        }
+        Ok(out)
+    }
+    let styles = scan(path).unwrap_or_default();
+    let by_id: std::collections::HashMap<&str, &StyleSpacing> =
+        styles.iter().map(|s| (s.0.as_str(), s)).collect();
+    styles
+        .iter()
+        .filter(|s| {
+            // Walk basedOn to the first style that decides; bounded, as a
+            // hostile file may make the chain a cycle.
+            let mut cur = Some(*s);
+            for _ in 0..32 {
+                let Some(style) = cur else { return false };
+                if let Some(on) = style.2 {
+                    return on;
+                }
+                cur = style.1.as_deref().and_then(|b| by_id.get(b).copied());
+            }
+            false
+        })
+        .map(|s| s.0.clone())
+        .collect()
+}
+
 /// Read a .docx file into a Document.
 pub fn read(path: &str) -> Result<Document, String> {
     let doc = rdocx::Document::open(path)
@@ -133,6 +212,10 @@ pub fn read(path: &str) -> Result<Document, String> {
     let raw = (raw.len() == body.len()).then_some(raw);
 
     let mut paragraphs = Vec::new();
+    // Per kept body paragraph: its style id and whether it has contextual
+    // spacing, for the pass after this loop.
+    let mut contextual: Vec<(Option<String>, bool)> = Vec::new();
+    let contextual_ids = contextual_styles(path);
     // Set when a paragraph ends with a run-level page break, and consumed
     // by the next paragraph this loop keeps.
     let mut carried_break = false;
@@ -176,7 +259,11 @@ pub fn read(path: &str) -> Result<Document, String> {
             carried_break = true;
             continue;
         }
-        if let Some(RawPara { start_twips, end_twips, tab_twips }) =
+        let style_id = p.style_id().map(str::to_string);
+        let direct_contextual = raw.as_ref().and_then(|s| s.get(i)).is_some_and(|r| r.contextual);
+        let is_contextual = direct_contextual || style_id.as_deref().is_some_and(|id| contextual_ids.contains(id));
+        contextual.push((style_id, is_contextual));
+        if let Some(RawPara { start_twips, end_twips, tab_twips, .. }) =
             raw.as_ref().and_then(|s| s.get(i))
         {
             // Transitional wins where both are present: it is what rdocx
@@ -191,6 +278,18 @@ pub fn read(path: &str) -> Result<Document, String> {
         }
         paragraphs.push(para);
         carried_break = pending_break;
+    }
+
+    // Contextual spacing: no space between two paragraphs of one style
+    // when the paragraph asks for it (Word's and LibreOffice's rule).
+    for k in 1..contextual.len().min(paragraphs.len()) {
+        let same = contextual[k - 1].0 == contextual[k].0;
+        if same && contextual[k - 1].1 {
+            paragraphs[k - 1].style.space_after_pt = 0.0;
+        }
+        if same && contextual[k].1 {
+            paragraphs[k].style.space_before_pt = 0.0;
+        }
     }
 
     // Table cells become paragraphs tagged with (table, row, col) — the
@@ -252,6 +351,7 @@ pub fn read(path: &str) -> Result<Document, String> {
         header: doc.header_text(),
         footer: doc.footer_text(),
         page: read_page_geometry(&doc),
+        base_font: read_base_font(&doc),
     })
 }
 
@@ -503,7 +603,87 @@ pub fn write(doc: &Document, path: impl AsRef<std::path::Path>) -> Result<(), St
     let bytes = out
         .to_bytes()
         .map_err(|e| format!("Cannot save {}: {}", path.as_ref().display(), e))?;
+    let bytes = with_letters_styles(&bytes, &doc.base_font)
+        .map_err(|e| format!("Cannot save {}: {}", path.as_ref().display(), e))?;
     suite_common_core::atomic_save::atomic_write_bytes(path.as_ref(), &bytes)
+}
+
+/// The styles a document written by Letters must carry so that Word and
+/// LibreOffice show it as Letters does.
+///
+/// rdocx's template says body text is Calibri 11pt with 8pt after each
+/// paragraph at 1.08 line spacing, and defines only Heading 1 (16pt blue)
+/// — Heading 2 to 6 fell back to body text. Letters draws none of that,
+/// so every saved document looked different elsewhere, and, now that the
+/// reader resolves styles, would look different in Letters after a reload.
+/// This writes the document's base font with no paragraph spacing, and
+/// Heading 1–6 as Letters draws them: bold, `layout::heading_scale` times
+/// the body size.
+fn with_letters_styles(package: &[u8], base: &crate::model::BaseFont) -> Result<Vec<u8>, String> {
+    let family = base.family.clone().unwrap_or_else(|| crate::layout::LayoutOptions::default().font_family);
+    let size_hp = base.size_hp.unwrap_or((crate::layout::LayoutOptions::default().font_size_pt * 2.0) as u16);
+    let family = xml_escape(&family);
+    let defaults = format!(
+        "<w:docDefaults><w:rPrDefault><w:rPr><w:rFonts w:ascii=\"{family}\" w:hAnsi=\"{family}\" \
+         w:eastAsia=\"{family}\" w:cs=\"{family}\"/><w:sz w:val=\"{size_hp}\"/><w:szCs w:val=\"{size_hp}\"/>\
+         </w:rPr></w:rPrDefault><w:pPrDefault><w:pPr><w:spacing w:before=\"0\" w:after=\"0\" w:line=\"240\" \
+         w:lineRule=\"auto\"/></w:pPr></w:pPrDefault></w:docDefaults>"
+    );
+    let headings: String = (1u8..=6)
+        .map(|n| {
+            let hp = (f64::from(size_hp) * crate::layout::heading_scale(n)).round() as u32;
+            format!(
+                "<w:style w:type=\"paragraph\" w:styleId=\"Heading{n}\"><w:name w:val=\"heading {n}\"/>\
+                 <w:basedOn w:val=\"Normal\"/><w:next w:val=\"Normal\"/><w:qFormat/><w:pPr><w:keepNext/>\
+                 <w:outlineLvl w:val=\"{lvl}\"/></w:pPr><w:rPr><w:b/><w:bCs/><w:sz w:val=\"{hp}\"/>\
+                 <w:szCs w:val=\"{hp}\"/></w:rPr></w:style>",
+                lvl = n - 1
+            )
+        })
+        .collect();
+
+    let mut zin = zip::ZipArchive::new(std::io::Cursor::new(package)).map_err(|e| e.to_string())?;
+    let mut out = zip::ZipWriter::new(std::io::Cursor::new(Vec::new()));
+    let options = zip::write::SimpleFileOptions::default().compression_method(zip::CompressionMethod::Deflated);
+    for i in 0..zin.len() {
+        let mut f = zin.by_index(i).map_err(|e| e.to_string())?;
+        let name = f.name().to_string();
+        let mut data = Vec::new();
+        std::io::Read::read_to_end(&mut f, &mut data).map_err(|e| e.to_string())?;
+        if name == "word/styles.xml" {
+            let xml = String::from_utf8(data).map_err(|e| e.to_string())?;
+            data = patch_styles_xml(&xml, &defaults, &headings).into_bytes();
+        }
+        out.start_file(name, options).map_err(|e| e.to_string())?;
+        std::io::Write::write_all(&mut out, &data).map_err(|e| e.to_string())?;
+    }
+    Ok(out.finish().map_err(|e| e.to_string())?.into_inner())
+}
+
+/// Replace `styles.xml`'s docDefaults and its Heading1–6 styles.
+fn patch_styles_xml(xml: &str, defaults: &str, headings: &str) -> String {
+    let mut xml = xml.to_string();
+    if let (Some(a), Some(b)) = (xml.find("<w:docDefaults"), xml.find("</w:docDefaults>")) {
+        xml.replace_range(a..b + "</w:docDefaults>".len(), defaults);
+    } else if let Some(at) = xml.find("<w:style ") {
+        xml.insert_str(at, defaults);
+    }
+    for n in 1..=6 {
+        let id = format!("w:styleId=\"Heading{n}\"");
+        while let Some(at) = xml.find(&id) {
+            let Some(start) = xml[..at].rfind("<w:style ") else { break };
+            let Some(len) = xml[start..].find("</w:style>") else { break };
+            xml.replace_range(start..start + len + "</w:style>".len(), "");
+        }
+    }
+    if let Some(end) = xml.rfind("</w:styles>") {
+        xml.insert_str(end, headings);
+    }
+    xml
+}
+
+fn xml_escape(s: &str) -> String {
+    s.replace('&', "&amp;").replace('"', "&quot;").replace('<', "&lt;").replace('>', "&gt;")
 }
 
 /// Write a DOCX and append previously captured, non-conflicting package parts.
@@ -615,11 +795,21 @@ fn map_paragraph(doc: &rdocx::Document, p: &rdocx::ParagraphRef<'_>) -> Paragrap
     // LibreOffice emits PreformattedText for <pre>/code blocks.
     let code_block = matches!(p.style_id(), Some("PreformattedText") | Some("HTMLPreformatted"))
         .then(String::new);
+    // What the paragraph's style chain (docDefaults, basedOn, its style)
+    // says, for everything the paragraph does not set itself. Numbering
+    // indents are left out: the model's list level carries them.
+    let styled = doc.resolve_paragraph_properties(p.style_id());
     let alignment = match p.alignment() {
         Some(rdocx::Alignment::Center) => Alignment::Center,
         Some(rdocx::Alignment::Right) => Alignment::Right,
         Some(rdocx::Alignment::Justify) => Alignment::Justify,
-        _ => Alignment::Left,
+        Some(_) => Alignment::Left,
+        None => match styled.jc {
+            Some(ST_Jc::Center) => Alignment::Center,
+            Some(ST_Jc::Right | ST_Jc::End) => Alignment::Right,
+            Some(ST_Jc::Both | ST_Jc::Distribute) => Alignment::Justify,
+            _ => Alignment::Left,
+        },
     };
     let named_style = match p.style_id() {
         Some(id @ ("Title" | "Subtitle")) => Some(id.to_string()),
@@ -645,6 +835,7 @@ fn map_paragraph(doc: &rdocx::Document, p: &rdocx::ParagraphRef<'_>) -> Paragrap
             .and_then(|(_, _, rel_id)| rel_id.as_deref().and_then(|id| doc.hyperlink_url(id)))
     };
 
+    let base = read_base_font(doc);
     let mut runs = Vec::new();
     for (idx, r) in p.runs().enumerate() {
         // Inline images: extract bytes to a cache file so the model's
@@ -698,11 +889,30 @@ fn map_paragraph(doc: &rdocx::Document, p: &rdocx::ParagraphRef<'_>) -> Paragrap
         }
         let text = r.text();
         if text.is_empty() { continue; }
+        // A style's font, size and colour (a heading style's 16pt blue)
+        // are the run's too; only what differs from the body font is
+        // recorded, so an ordinary run stays unstyled.
+        let eff = if heading.is_some() {
+            // A heading's look is its level (layout::heading_scale); the
+            // file's heading style is not copied onto every run.
+            rdocx_oxml::properties::CT_RPr::default()
+        } else {
+            doc.effective_run_properties(p, &r)
+        };
+        let family = r.font_name().map(|f| f.to_string()).or_else(|| rpr_family(&eff).filter(|f| Some(f) != base.family.as_ref()));
+        let size_hp = r
+            .size()
+            .map(|pt| (pt * 2.0).round() as u16)
+            .or_else(|| eff.sz.map(|s| s.0.min(u32::from(u16::MAX)) as u16).filter(|hp| Some(*hp) != base.size_hp));
+        let color = r
+            .color()
+            .map(|c| c.trim_start_matches('#').to_uppercase())
+            .or_else(|| eff.color.as_deref().filter(|c| !c.eq_ignore_ascii_case("auto")).map(|c| c.to_uppercase()));
         runs.push(Run {
             text,
             style: RunStyle {
-                bold: r.is_bold(),
-                italic: r.is_italic(),
+                bold: r.is_bold() || eff.bold == Some(true),
+                italic: r.is_italic() || eff.italic == Some(true),
                 underline: r.is_underline(),
                 strikethrough: r.is_strike(),
                 highlight: r.highlight().is_some(),
@@ -712,9 +922,9 @@ fn map_paragraph(doc: &rdocx::Document, p: &rdocx::ParagraphRef<'_>) -> Paragrap
                 image_extent_emu: None,
                 footnote: None,
                 html: false,
-                font_family: r.font_name().map(|f| f.to_string()),
-                font_size_hp: r.size().map(|pt| (pt * 2.0).round() as u16),
-                color: r.color().map(|c| c.trim_start_matches('#').to_uppercase()),
+                font_family: family,
+                font_size_hp: size_hp,
+                color,
                 vert_align: match r.vert_align() {
                     Some("superscript") => Some(crate::model::VertAlign::Superscript),
                     Some("subscript") => Some(crate::model::VertAlign::Subscript),
@@ -734,22 +944,76 @@ fn map_paragraph(doc: &rdocx::Document, p: &rdocx::ParagraphRef<'_>) -> Paragrap
             heading, alignment, list, code_block, block_quote,
             list_level,
             named_style, page_break_before,
-            line_spacing: p.line_spacing_multiple().map(|m| m as f32).unwrap_or(1.0),
-            // Absent means "inherit", which for this model is the zero the
-            // default already carries — so an unset indent stays unset
-            // rather than becoming an explicit zero that would override a
-            // style.
-            left_indent_pt: p.indent_left().map(|l| l.to_pt()).unwrap_or(0.0),
-            right_indent_pt: p.indent_right().map(|l| l.to_pt()).unwrap_or(0.0),
-            first_line_indent_pt: p.first_line_indent().map(|l| l.to_pt()).unwrap_or(0.0),
-            space_before_pt: p.space_before().map(|l| l.to_pt()).unwrap_or(0.0),
-            space_after_pt: p.space_after().map(|l| l.to_pt()).unwrap_or(0.0),
+            // Absent means "inherit": the paragraph looks the way its style
+            // chain says, which the model has no styles to express, so the
+            // inherited value is read into the paragraph. Reading only
+            // direct values drew every paragraph of a python-docx or Word
+            // document without its style's 10pt spacing and 1.15 lines.
+            line_spacing: p
+                .line_spacing_multiple()
+                .or_else(|| styled_line_multiple(&styled))
+                .map(|m| m as f32)
+                .unwrap_or(1.0),
+            left_indent_pt: p
+                .indent_left()
+                .map(|l| l.to_pt())
+                .or_else(|| styled.ind_left.or(styled.ind_start).map(twips_pt))
+                .unwrap_or(0.0),
+            right_indent_pt: p
+                .indent_right()
+                .map(|l| l.to_pt())
+                .or_else(|| styled.ind_right.or(styled.ind_end).map(twips_pt))
+                .unwrap_or(0.0),
+            first_line_indent_pt: p
+                .first_line_indent()
+                .map(|l| l.to_pt())
+                .or_else(|| {
+                    styled.ind_first_line.map(twips_pt).or_else(|| styled.ind_hanging.map(|h| -twips_pt(h)))
+                })
+                .unwrap_or(0.0),
+            space_before_pt: p.space_before().map(|l| l.to_pt()).or_else(|| styled.space_before.map(twips_pt)).unwrap_or(0.0),
+            space_after_pt: p.space_after().map(|l| l.to_pt()).or_else(|| styled.space_after.map(twips_pt)).unwrap_or(0.0),
             ..Default::default()
         },
         runs,
     };
     normalize(&mut para);
     para
+}
+
+fn twips_pt(t: rdocx_oxml::Twips) -> f64 {
+    f64::from(t.0) / 20.0
+}
+
+/// A style's "auto" line spacing as a multiple of single (240 = 1.0).
+/// Exact and at-least spacing have no multiple and read as unset.
+fn styled_line_multiple(ppr: &rdocx_oxml::properties::CT_PPr) -> Option<f64> {
+    let line = ppr.line_spacing?;
+    match ppr.line_rule.as_deref() {
+        None | Some("auto") if line.0 > 0 => Some(f64::from(line.0) / 240.0),
+        _ => None,
+    }
+}
+
+/// A run property set's font family: the explicit ASCII (or high-ANSI)
+/// face, else the theme font it names. Theme fonts are mapped to Office's
+/// defaults, which is what a theme without its own fonts means.
+fn rpr_family(rpr: &rdocx_oxml::properties::CT_RPr) -> Option<String> {
+    rpr.font_ascii.clone().or_else(|| rpr.font_hansi.clone()).or_else(|| {
+        match rpr.font_ascii_theme.as_deref().or(rpr.font_hansi_theme.as_deref())? {
+            t if t.starts_with("major") => Some("Calibri Light".to_string()),
+            t if t.starts_with("minor") => Some("Calibri".to_string()),
+            _ => None,
+        }
+    })
+}
+
+/// The body font: docDefaults run properties plus the default paragraph
+/// style's (python-docx and Word put "Liberation Serif 12pt" or "Calibri
+/// 11pt" there, never on the runs).
+fn read_base_font(doc: &rdocx::Document) -> crate::model::BaseFont {
+    let rpr = doc.resolve_run_properties(None, None);
+    crate::model::BaseFont { family: rpr_family(&rpr), size_hp: rpr.sz.map(|s| s.0.min(u32::from(u16::MAX)) as u16) }
 }
 
 fn style_id_to_heading(id: &str) -> Option<u8> {

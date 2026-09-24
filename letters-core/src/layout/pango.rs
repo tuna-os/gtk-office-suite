@@ -49,6 +49,9 @@ impl PangoShaper {
         let mut options = cairo::FontOptions::new().expect("cairo font options");
         options.set_hint_metrics(cairo::HintMetrics::Off);
         options.set_hint_style(cairo::HintStyle::None);
+        // Greyscale, like print and like LibreOffice: subpixel colour
+        // fringes belong to one screen, not to the page.
+        options.set_antialias(cairo::Antialias::Gray);
         pangocairo::functions::context_set_font_options(&context, Some(&options));
         // Positions in fractional points, not rounded to whole units.
         context.set_round_glyph_positions(false);
@@ -213,7 +216,19 @@ fn line_boxes(layout: &pango::Layout) -> Vec<LineBox> {
 
 impl Shaper for PangoShaper {
     fn shape(&mut self, req: &ShapeRequest<'_>) -> Vec<LineBox> {
-        line_boxes(&self.layout(req))
+        let layout = self.layout(req);
+        let mut lines = line_boxes(&layout);
+        // A line is as tall as the font's ascent, descent *and* line gap,
+        // as LibreOffice and Word space lines (Liberation Serif 12pt:
+        // 13.8pt); Pango's logical extents leave the gap out.
+        if let Some(desc) = layout.font_description() {
+            let m = self.context.metrics(Some(&desc), None);
+            let gap = to_pt(m.height() - m.ascent() - m.descent()).max(0.0);
+            for l in &mut lines {
+                l.descent_pt += gap;
+            }
+        }
+        lines
     }
 }
 
@@ -246,6 +261,7 @@ impl Typeset {
     /// Lay `doc` out into pages.
     pub fn new(doc: Document, opts: LayoutOptions) -> Self {
         let mut shaper = PangoShaper::new();
+        let opts = opts.for_document(&doc);
         let tree = super::layout(&doc, &opts, &mut shaper);
         Self {
             doc,

@@ -284,3 +284,25 @@ fn an_image_wider_than_the_text_box_is_scaled_to_fit() {
     };
     assert_eq!(image_size_pt(&run, 450.0), (450.0, 150.0));
 }
+
+#[test]
+fn the_document_base_font_sets_body_text_size() {
+    let mut d = doc_of(1, "x");
+    d.base_font = crate::model::BaseFont { family: Some("Carlito".into()), size_hp: Some(22) };
+    let t = lay(&d);
+    let Item::Line { height_pt, .. } = t.pages[0].lines().next().unwrap() else { unreachable!() };
+    assert_eq!(*height_pt, 11.0 * 1.25, "11pt body text from the document, not the 12pt default");
+    assert_eq!(LayoutOptions::default().for_document(&d).font_family, "Carlito");
+}
+
+#[test]
+fn the_larger_of_space_after_and_space_before_separates_paragraphs() {
+    let mut d = doc_of(3, "x");
+    for p in &mut d.paragraphs {
+        p.style.space_after_pt = 10.0;
+    }
+    d.paragraphs[1].style.space_before_pt = 24.0;
+    d.paragraphs[2].style.space_before_pt = 4.0;
+    let tops: Vec<f64> = line_items(&lay(&d).pages[0]).iter().map(|l| l.3).collect();
+    assert_eq!(tops, vec![72.0, 72.0 + LINE + 24.0, 72.0 + 2.0 * LINE + 24.0 + 10.0]);
+}

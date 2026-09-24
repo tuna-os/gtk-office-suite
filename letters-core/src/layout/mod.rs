@@ -40,6 +40,22 @@ pub struct LayoutOptions {
     pub footer_distance_pt: f64,
 }
 
+impl LayoutOptions {
+    /// These options with the document's own body font where it names one.
+    /// `layout` applies it; a renderer re-shaping paragraphs must use the
+    /// same result.
+    pub fn for_document(&self, doc: &Document) -> LayoutOptions {
+        let mut o = self.clone();
+        if let Some(family) = &doc.base_font.family {
+            o.font_family = family.clone();
+        }
+        if let Some(hp) = doc.base_font.size_hp.filter(|hp| *hp > 0) {
+            o.font_size_pt = f64::from(hp) / 2.0;
+        }
+        o
+    }
+}
+
 impl Default for LayoutOptions {
     fn default() -> Self {
         Self {
@@ -238,6 +254,7 @@ pub const CELL_PADDING_PT: f64 = 5.4;
 
 /// Lay out `doc` into pages.
 pub fn layout(doc: &Document, opts: &LayoutOptions, shaper: &mut dyn Shaper) -> RenderTree {
+    let opts = &opts.for_document(doc);
     let geometry = doc.page.unwrap_or(opts.page);
     let mut flow = Flow::new(geometry, opts);
     let ordinals = lists::ordinals(doc.paragraphs.iter().map(|p| &p.style));
@@ -346,7 +363,11 @@ fn place_paragraph(flow: &mut Flow, idx: usize, para: &Paragraph, shaped: &Shape
     let heights: Vec<f64> = shaped.lines.iter().map(|l| l.natural_height() * ls).collect();
     let total: f64 = heights.iter().sum();
 
-    flow.y += st.space_before_pt.max(0.0);
+    // Between two paragraphs the larger of the space after the first and
+    // the space before the second applies, not their sum: LibreOffice
+    // draws Word documents that way (render-lab letters/paragraph-spacing:
+    // 10pt after, then 24pt before, is a 24pt gap).
+    flow.y += st.space_before_pt.max(0.0).max(std::mem::take(&mut flow.pending_after));
     // Everything that must stay together with the first line: the whole
     // paragraph if short, the orphan lines otherwise, plus a heading's
     // follower.
@@ -406,7 +427,8 @@ fn place_paragraph(flow: &mut Flow, idx: usize, para: &Paragraph, shaped: &Shape
             flow.next_column();
         }
     }
-    flow.y += st.space_after_pt.max(0.0);
+    // Applied by whatever comes next, or dropped at the foot of a page.
+    flow.pending_after = st.space_after_pt.max(0.0);
 }
 
 /// Emit line `k` of paragraph `idx` with its text box's left edge at
@@ -451,6 +473,7 @@ fn layout_table(flow: &mut Flow, doc: &Document, range: std::ops::Range<usize>, 
     let col_w = table_w / f64::from(cols);
     let inner_w = (col_w - 2.0 * CELL_PADDING_PT).max(1.0);
     let opts = flow.opts.clone();
+    flow.y += std::mem::take(&mut flow.pending_after);
 
     for row in 0..rows {
         // Shape each cell of the row (a cell may hold several paragraphs).
@@ -506,11 +529,13 @@ struct Flow<'o> {
     y: f64,
     /// Items placed in the current column.
     column_items: usize,
+    /// Space after the last paragraph, not yet added (see place_paragraph).
+    pending_after: f64,
 }
 
 impl<'o> Flow<'o> {
     fn new(geometry: PageGeometry, opts: &'o LayoutOptions) -> Self {
-        let mut f = Flow { geometry, opts, pages: Vec::new(), column: 0, y: 0.0, column_items: 0 };
+        let mut f = Flow { geometry, opts, pages: Vec::new(), column: 0, y: 0.0, column_items: 0, pending_after: 0.0 };
         f.new_page();
         f
     }
@@ -560,6 +585,7 @@ impl<'o> Flow<'o> {
         self.column = 0;
         self.y = self.top();
         self.column_items = 0;
+        self.pending_after = 0.0;
     }
 
     fn next_column(&mut self) {
@@ -567,6 +593,7 @@ impl<'o> Flow<'o> {
             self.column += 1;
             self.y = self.top();
             self.column_items = 0;
+        self.pending_after = 0.0;
         } else {
             self.new_page();
         }
