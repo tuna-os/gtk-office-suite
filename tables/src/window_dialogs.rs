@@ -37,6 +37,8 @@ pub(crate) fn show_format_cells_dialog(
             NumberFormatKind::Percent(_) => 3,
             NumberFormatKind::Date(_) | NumberFormatKind::DateTime(_) => 4,
             NumberFormatKind::Scientific(_) => 5,
+            // No dropdown entry of its own yet; "Number" is the nearest.
+            NumberFormatKind::Fraction(_) => 1,
         };
         dropdown.set_selected(idx);
     }

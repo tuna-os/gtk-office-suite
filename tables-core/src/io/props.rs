@@ -36,6 +36,9 @@ pub struct SheetXlsxProps {
     /// Merged ranges as `(row, col, rowspan, colspan)` — the shape
     /// `SheetModel::merges` uses, so the caller assigns it directly.
     pub merges: Vec<(usize, usize, usize, usize)>,
+    /// Number formats cells name through their style (`<c s="n">`),
+    /// 0-based `(row, col, format)`; cells on the default style are absent.
+    pub cell_formats: Vec<(usize, usize, suite_common_core::format::NumberFormat)>,
 }
 
 /// xlsx stores a column width in "character units" plus the padding Excel
@@ -140,6 +143,8 @@ pub fn read_sheet_props_from_xlsx(
         return out;
     }
     let parts = resolve_sheet_parts(&mut zip, &mut budget);
+    let style_formats =
+        super::numfmt::cell_style_formats(&zip.optional_part_to_string("xl/styles.xml", &mut budget));
 
     for name in names {
         let Some(part) = parts.get(name) else { continue };
@@ -148,6 +153,13 @@ pub fn read_sheet_props_from_xlsx(
         };
 
         let mut props = SheetXlsxProps::default();
+
+        props.cell_formats = super::numfmt::cell_style_indices(&xml)
+            .into_iter()
+            .filter(|&(r, c, _)| r < crate::sheet::SHEET_MAX_ROWS && c < crate::sheet::SHEET_MAX_COLS)
+            .filter_map(|(r, c, s)| style_formats.get(s).map(|f| (r, c, f.clone())))
+            .filter(|(_, _, f)| f.kind != suite_common_core::format::NumberFormatKind::General)
+            .collect();
 
         if let Some(cols_block) = xml.split("<cols>").nth(1) {
             let cols_block = cols_block.split("</cols>").next().unwrap_or("");

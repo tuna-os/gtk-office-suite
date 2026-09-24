@@ -156,8 +156,8 @@
     "B": "red"
   },
   "tables/number-formats": {
-    "A": "red",
-    "B": "red"
+    "A": "amber",
+    "B": "amber"
   },
   "tables/values": {
     "A": "amber",

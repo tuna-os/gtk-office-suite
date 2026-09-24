@@ -254,6 +254,14 @@ pub fn load_xlsx_workbook(path: &str) -> Result<(TablesEngine, Vec<SheetModel>),
                 sheet.frozen_rows = rows.min(sheet.rows);
                 sheet.frozen_cols = cols.min(sheet.cols);
             }
+            // Number formats: every value used to show raw (0.153 for
+            // 15.3%, a serial number for a date) because the reader never
+            // looked at cell styles.
+            for (r, c, f) in &props.cell_formats {
+                if *r < sheet.rows && *c < sheet.cols {
+                    sheet.formats[*r][*c] = f.clone();
+                }
+            }
             sheet.merges = props
                 .merges
                 .iter()

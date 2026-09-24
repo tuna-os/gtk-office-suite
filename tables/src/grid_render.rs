@@ -286,6 +286,9 @@ pub fn draw_grid(
                 layout.set_width(((cw - 8.0).max(1.0) * pango::SCALE as f64) as i32);
                 layout.set_ellipsize(EllipsizeMode::End);
                 layout.set_single_paragraph_mode(true);
+                if sheet.aligns_right(r, c) {
+                    layout.set_alignment(pango::Alignment::Right);
+                }
                 cr.save().unwrap();
                 cr.rectangle(cx + 3.0, cy + 2.0, (cw - 6.0).max(1.0), (rh - 4.0).max(1.0));
                 cr.clip();

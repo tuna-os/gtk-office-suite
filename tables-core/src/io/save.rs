@@ -349,6 +349,7 @@ fn xlsx_num_format(nf: &suite_common_core::format::NumberFormat) -> Option<Strin
             format!("0.{}%", "0".repeat(*d as usize))
         }),
         Date(_) => Some("yyyy-mm-dd".to_string()),
+        Fraction(d) => Some(format!("# {}/{}", "?".repeat(*d as usize), "?".repeat(*d as usize))),
         _ => None,
     }
 }
@@ -457,7 +458,7 @@ mod tests {
         let (rows, cols) = load_file_into_engine(&path, &mut e).unwrap();
         assert_eq!(e.cell(0, 0), "hello");
         assert_eq!(e.cell(0, 1), "42");
-        assert_eq!(e.cell(2, 2), "3.50");
+        assert_eq!(e.cell(2, 2), "3.5", "the value itself, not a 2-dp rendering of it");
         assert!(rows >= 3 && cols >= 3);
     }
 

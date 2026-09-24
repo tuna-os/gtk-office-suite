@@ -161,13 +161,7 @@ impl TablesEngine {
         let c = col as i32 + 1;
         match self.model.get_cell_value_by_index(sheet as u32, r, c) {
             Ok(CellValue::String(s)) => s,
-            Ok(CellValue::Number(n)) => {
-                if n.fract() == 0.0 && (n.abs() < 1e15) {
-                    format!("{}", n as i64)
-                } else {
-                    format!("{:.2}", n)
-                }
-            }
+            Ok(CellValue::Number(n)) => general_number(n),
             Ok(CellValue::Boolean(b)) => format!("{}", b),
             Ok(CellValue::None) => String::new(),
             Err(_) => String::new(),
@@ -301,9 +295,43 @@ impl TablesEngine {
     }
 }
 
+/// A number as its cell text, the way a spreadsheet's "General" format
+/// shows it: up to 15 significant digits (Excel's precision), trailing zeros
+/// dropped. This string is also what the sheet model stores, so it must not
+/// round: it used to be `{:.2}`, which turned 0.153 into "0.15" before any
+/// number format saw it (render lab `tables/number-formats`: 15.3% came out
+/// as 15.0%).
+pub fn general_number(n: f64) -> String {
+    if !n.is_finite() {
+        return n.to_string();
+    }
+    if n.fract() == 0.0 && n.abs() < 1e15 {
+        return format!("{}", n as i64);
+    }
+    let magnitude = n.abs().log10().floor() as i32;
+    let decimals = 14 - magnitude;
+    if !(0..=20).contains(&decimals) {
+        return format!("{n}");
+    }
+    let s = format!("{:.*}", decimals as usize, n);
+    let s = s.trim_end_matches('0').trim_end_matches('.');
+    if s == "-0" { "0".to_string() } else { s.to_string() }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn numbers_show_at_full_precision_without_float_noise() {
+        assert_eq!(general_number(0.153), "0.153");
+        assert_eq!(general_number(1234567.891), "1234567.891");
+        assert_eq!(general_number(0.1 + 0.2), "0.3");
+        assert_eq!(general_number(1.0 / 3.0), "0.333333333333333");
+        assert_eq!(general_number(-2.5), "-2.5");
+        assert_eq!(general_number(42.0), "42");
+        assert_eq!(general_number(1e-20), "0.00000000000000000001");
+    }
 
     #[test]
     fn test_engine_creation() {
