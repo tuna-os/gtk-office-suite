@@ -556,6 +556,8 @@ pub struct SheetModel {
     pub row_heights: Vec<f64>,
     pub formulas: Vec<Vec<bool>>,
     pub formats: Vec<Vec<NumberFormat>>,
+    /// Font, fill, alignment and wrap per cell (crate::style).
+    pub styles: Vec<Vec<crate::style::CellStyle>>,
     pub sorted_col: Option<(usize, SortDirection)>,
     pub borders: Vec<Vec<CellBorder>>,
     pub frozen_rows: usize,
@@ -635,6 +637,7 @@ impl SheetModel {
             row_heights: vec![ROW_HEIGHT; rows],
             formulas: vec![vec![false; cols]; rows],
             formats: vec![vec![NumberFormat::default(); cols]; rows],
+            styles: vec![vec![crate::style::CellStyle::default(); cols]; rows],
             sorted_col: None,
             borders: vec![vec![CellBorder::none(); cols]; rows],
             frozen_rows: 0, frozen_cols: 0,
@@ -663,6 +666,7 @@ impl SheetModel {
         insert_matrix_rows(&mut self.data, at, count, self.cols);
         insert_matrix_rows(&mut self.formulas, at, count, self.cols);
         insert_matrix_rows(&mut self.formats, at, count, self.cols);
+        insert_matrix_rows(&mut self.styles, at, count, self.cols);
         insert_matrix_rows(&mut self.borders, at, count, self.cols);
         insert_matrix_rows(&mut self.cell_protections, at, count, self.cols);
         insert_matrix_rows(&mut self.validations, at, count, self.cols);
@@ -678,6 +682,7 @@ impl SheetModel {
         delete_matrix_rows(&mut self.data, at, end);
         delete_matrix_rows(&mut self.formulas, at, end);
         delete_matrix_rows(&mut self.formats, at, end);
+        delete_matrix_rows(&mut self.styles, at, end);
         delete_matrix_rows(&mut self.borders, at, end);
         delete_matrix_rows(&mut self.cell_protections, at, end);
         delete_matrix_rows(&mut self.validations, at, end);
@@ -694,6 +699,7 @@ impl SheetModel {
         insert_matrix_cols(&mut self.data, at, count);
         insert_matrix_cols(&mut self.formulas, at, count);
         insert_matrix_cols(&mut self.formats, at, count);
+        insert_matrix_cols(&mut self.styles, at, count);
         insert_matrix_cols(&mut self.borders, at, count);
         insert_matrix_cols(&mut self.cell_protections, at, count);
         insert_matrix_cols(&mut self.validations, at, count);
@@ -709,6 +715,7 @@ impl SheetModel {
         delete_matrix_cols(&mut self.data, at, end);
         delete_matrix_cols(&mut self.formulas, at, end);
         delete_matrix_cols(&mut self.formats, at, end);
+        delete_matrix_cols(&mut self.styles, at, end);
         delete_matrix_cols(&mut self.borders, at, end);
         delete_matrix_cols(&mut self.cell_protections, at, end);
         delete_matrix_cols(&mut self.validations, at, end);
@@ -906,10 +913,21 @@ impl SheetModel {
             .find(|&(mr, mc, rs, cs)| (mr..mr + rs.max(1)).contains(&r) && (mc..mc + cs.max(1)).contains(&c))
     }
 
-    /// Whether the cell's value sits at the right of its cell under the
-    /// spreadsheet "General" alignment rule: numbers (and dates, which are
-    /// numbers) right, text left. There is no per-cell alignment in the
-    /// model yet, so this is every cell's alignment.
+    /// Where the cell's value sits across its cell: its own alignment, or
+    /// for `General` the spreadsheet rule, numbers (and dates, which are
+    /// numbers) right and text left. Never `General`.
+    pub fn resolved_h_align(&self, r: usize, c: usize) -> crate::style::HAlign {
+        use crate::style::HAlign;
+        let own = if r < self.rows && c < self.cols { self.styles[r][c].h_align } else { HAlign::General };
+        match own {
+            HAlign::General if self.aligns_right(r, c) => HAlign::Right,
+            HAlign::General => HAlign::Left,
+            other => other,
+        }
+    }
+
+    /// Whether the value is a number under the "General" alignment rule
+    /// (numbers right, text left).
     pub fn aligns_right(&self, r: usize, c: usize) -> bool {
         let raw = self.cell(r, c).trim();
         let text_format = r < self.rows
@@ -996,6 +1014,13 @@ mod used_extent_tests {
         assert!(!s.aligns_right(0, 2), "text stays left");
         assert!(!s.aligns_right(0, 3), "a number formatted as text is text");
         assert!(!s.aligns_right(1, 0), "empty");
+        use crate::style::HAlign;
+        assert_eq!(s.resolved_h_align(0, 0), HAlign::Right);
+        assert_eq!(s.resolved_h_align(0, 2), HAlign::Left);
+        s.styles[0][0].h_align = HAlign::Center;
+        s.styles[0][2].h_align = HAlign::Right;
+        assert_eq!(s.resolved_h_align(0, 0), HAlign::Center, "an explicit alignment wins");
+        assert_eq!(s.resolved_h_align(0, 2), HAlign::Right);
     }
 
     #[test]
