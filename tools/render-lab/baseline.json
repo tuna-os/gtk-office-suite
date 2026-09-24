@@ -120,8 +120,8 @@
     "B": "amber"
   },
   "tables/alignment": {
-    "A": "amber",
-    "B": "amber"
+    "A": "green",
+    "B": "green"
   },
   "tables/borders": {
     "A": "amber",
@@ -136,8 +136,8 @@
     "B": "amber"
   },
   "tables/col-row-size": {
-    "A": "amber",
-    "B": "amber"
+    "A": "green",
+    "B": "green"
   },
   "tables/conditional": {
     "A": "amber",
@@ -148,12 +148,12 @@
     "B": "amber"
   },
   "tables/frozen": {
-    "A": "amber",
-    "B": "amber"
+    "A": "green",
+    "B": "green"
   },
   "tables/merged": {
-    "A": "amber",
-    "B": "amber"
+    "A": "green",
+    "B": "green"
   },
   "tables/number-formats": {
     "A": "amber",
