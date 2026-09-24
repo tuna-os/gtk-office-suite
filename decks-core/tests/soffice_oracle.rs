@@ -1312,3 +1312,49 @@ fn a_slide_name_reaches_impress_from_our_pptx() {
         "the slide's name did not survive our pptx through Impress"
     );
 }
+
+/// Paragraph alignment, bullets and list levels, written by us in either
+/// format, survive LibreOffice rewriting the file in that format, and we
+/// read LibreOffice's version back.
+#[test]
+fn paragraph_styles_survive_impress_rewrite() {
+    use decks_core::engine::{Bullet, ParaAlign, ParaStyle, TextBody};
+    if !require_or_skip() { return; }
+    let bullet = |level: u8, c: &str| ParaStyle {
+        level,
+        bullet: Bullet::Char(c.into()),
+        margin_left: 27.0 * (level as f64 + 1.0),
+        indent: -27.0,
+        ..Default::default()
+    };
+    let mut deck = Deck::new();
+    deck.slides[0].objects.push(SlideObject::TextBox {
+        text: "Centred\nFirst\nSub".into(),
+        x: 60.0, y: 60.0, w: 600.0, h: 300.0,
+        rotation: 0.0,
+        runs: vec![],
+        body: TextBody {
+            paras: vec![ParaStyle { align: ParaAlign::Center, ..Default::default() }, bullet(0, "•"), bullet(1, "–")],
+            ..Default::default()
+        },
+    });
+    for kind in ["pptx", "odp"] {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join(format!("paras.{kind}"));
+        decks_core::write_deck(path.to_str().unwrap(), &deck).expect("write");
+        let back = convert(&path, kind).unwrap_or_else(|e| panic!("{kind}: {e}"));
+        let read = decks_core::read_deck(back.to_str().unwrap()).expect("read Impress's file");
+        let body = read.slides[0]
+            .objects
+            .iter()
+            .find_map(|o| match o {
+                SlideObject::TextBox { text, body, .. } if text.contains("First") => Some(body.clone()),
+                _ => None,
+            })
+            .unwrap_or_else(|| panic!("{kind}: the box is gone: {:?}", read.slides[0].objects));
+        assert_eq!(body.para(0).align, ParaAlign::Center, "{kind}: {body:?}");
+        assert!(matches!(body.para(1).bullet, Bullet::Char(_)), "{kind}: {body:?}");
+        assert_eq!(body.para(2).level, 1, "{kind}: {body:?}");
+        assert!(matches!(body.para(2).bullet, Bullet::Char(_)), "{kind}: {body:?}");
+    }
+}
