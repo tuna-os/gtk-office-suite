@@ -29,6 +29,10 @@ APP_IDS = {"letters": "org.tunaos.letters", "tables": "org.tunaos.tables", "deck
 # 16:9 slide are fully on screen.
 WINDOW = (1100, 1700)
 TIMEOUT = 60
+# View preferences that must match how LibreOffice prints the reference.
+# Tables fixtures print without gridlines (fixtures.py says why), so the
+# grid is captured with the user's "Show gridlines" preference off.
+VIEW_SETTINGS = {"tables": "show-gridlines=false\n"}
 SOLID_CSD_BORDER = 5  # px per side, GTK 4.14 on X11 without compositing
 # Tier B's crop must match the app's own render (A-1.png from the same
 # process) this closely, in mean absolute grey levels, or it is rejected.
@@ -78,11 +82,11 @@ def seed_settings(home, maximized=False, extra=0):
     d = os.path.join(home, "config", "glib-2.0", "settings")
     os.makedirs(d, exist_ok=True)
     with open(os.path.join(d, "keyfile"), "w") as f:
-        for app in APP_IDS.values():
+        for name, app in APP_IDS.items():
             path = "/".join(app.split("."))
             f.write(
                 f"[{path}]\nwindow-width={WINDOW[0] + extra}\nwindow-height={WINDOW[1] + extra}\n"
-                f"window-maximized={'true' if maximized else 'false'}\n\n"
+                f"window-maximized={'true' if maximized else 'false'}\n{VIEW_SETTINGS.get(name, '')}\n"
             )
 
 

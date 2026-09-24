@@ -244,10 +244,14 @@ def tables():
         return wb, wb.active
 
     def save(wb, name, expect):
-        # Print headings and gridlines so LibreOffice's PDF shows the same
-        # furniture as our on-screen grid.
+        # Print headings so LibreOffice's PDF shows the same cells as our
+        # grid, but not gridlines: they are view furniture, which Calc
+        # prints black and screens draw faint, and a printed gridline hides
+        # a thin cell border drawn on top of it. capture.py turns Tables'
+        # "Show gridlines" off to match, so both sides show the cells'
+        # own borders, fills and text.
         for sheet in wb.worksheets:
-            sheet.print_options.gridLines = True
+            sheet.print_options.gridLines = False
             sheet.print_options.headings = True
         path = os.path.join(d, f"{name}.xlsx")
         wb.save(path)

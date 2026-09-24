@@ -83,20 +83,61 @@ def ink_mask(arr):
     return np.abs(arr.astype(int) - bg).sum(axis=2) > 60
 
 
-def strip_rules(img):
-    """Paint out ruled lines (rows/columns that are mostly ink). Used for
-    Tables: LibreOffice prints black gridlines and we draw faint ones, so
-    with the rules left in, ink and OCR would measure gridline weight
-    instead of cell content (tesseract also reads rules as `|`)."""
-    arr = np.asarray(img).copy()
-    m = ink_mask(arr)
-    bg = background(arr)
-    # A rule is continuous: its longest unbroken run of ink spans over half
-    # the image. Right-aligned digits stacked down a column also put a lot
-    # of ink in one pixel column, but with a gap between every row.
-    arr[thin_runs(longest_run(m, axis=1) > 0.5 * m.shape[1]), :] = bg
-    arr[:, thin_runs(longest_run(m, axis=0) > 0.5 * m.shape[0])] = bg
-    return Image.fromarray(arr)
+def long_lines(mask, axis):
+    """Indices of rows (axis=1) or columns (axis=0) of `mask` holding an
+    unbroken line over half the image long, grouped into (first, last) runs
+    of adjacent indices, in order."""
+    m = mask if axis == 1 else mask.T
+    hits = np.nonzero(longest_run(bridge(m), axis=1) > 0.5 * m.shape[1])[0]
+    groups = []
+    for i in hits:
+        if groups and i == groups[-1][1] + 1:
+            groups[-1][1] = i
+        else:
+            groups.append([i, i])
+    return [tuple(g) for g in groups]
+
+
+def lo_cell_box(ref):
+    """The cells inside LibreOffice's printed sheet: (left, top, right,
+    bottom), or None. With headings on and gridlines off (fixtures.py),
+    Calc frames the print range and boxes each heading in black, so the
+    long lines are, in order, the frame's top, the column headings' bottom
+    and the frame's bottom (and the same across: frame, row headings,
+    frame). The cells are what the second and last of each enclose."""
+    dark = np.asarray(ref.convert("L")) < 128
+    rows, cols = long_lines(dark, axis=1), long_lines(dark, axis=0)
+    if len(rows) < 3 or len(cols) < 3:
+        return None
+    return cols[1][1] + 1, rows[1][1] + 1, cols[-1][0], rows[-1][0]
+
+
+def our_cell_origin(ours):
+    """Where our cells start: the width of the row-header band and the
+    height of the column-header band, both drawn in one flat shade. Read
+    along the bottom pixel row and the rightmost pixel column, which run
+    through the bands but clear of their labels."""
+    a = np.asarray(ours).astype(int)
+    shade = a[0, 0]  # the corner cell
+
+    def band(line):
+        same = np.abs(line - shade).sum(axis=1) <= 6
+        return int(np.argmin(same)) if not same.all() else 0
+
+    return band(a[-2, :]), band(a[:, -2])
+
+
+def bridge(mask, gap=3):
+    """`mask` with gaps of up to `gap` px along each row filled in: where a
+    rule crosses another, the crossing pixels continue both ways and are
+    not a thin line in either direction, so they would break the run."""
+    w = mask.shape[1]
+    left = np.zeros_like(mask)
+    right = np.zeros_like(mask)
+    for k in range(1, gap + 1):
+        left[:, k:] |= mask[:, : w - k]
+        right[:, : w - k] |= mask[:, k:]
+    return mask | (left & right)
 
 
 def longest_run(mask, axis):
@@ -109,26 +150,6 @@ def longest_run(mask, axis):
         cur = np.where(m[:, j], cur + 1, 0)
         best = np.maximum(best, cur)
     return best
-
-
-def thin_runs(flags, max_width=3):
-    """`flags` with only runs of at most `max_width` consecutive Trues kept.
-    A rule is a line 1-2 px wide; a chart bar or a filled block is mostly
-    ink across many consecutive columns, and must not be painted out as if
-    it were a gridline."""
-    out = np.zeros_like(flags)
-    i = 0
-    while i < len(flags):
-        if flags[i]:
-            j = i
-            while j < len(flags) and flags[j]:
-                j += 1
-            if j - i <= max_width:
-                out[i:j] = True
-            i = j
-        else:
-            i += 1
-    return out
 
 
 def ssim(a, b):
@@ -253,9 +274,11 @@ def align(app, lo_path, ours_path):
     so ours is resampled onto the reference. A Tables capture is the header
     band plus the used range (the app crops to it); LibreOffice's printed
     page is cropped to its ink, which is the same headings + used range.
-    Ours is resampled onto that, so cells line up and the metrics compare
-    layout within the grid. How much bigger or smaller our grid is overall
-    is reported separately as `scale` rather than hidden in every metric.
+    How much bigger or smaller our grid is overall is reported as `scale`.
+    Then both are cut to their cells (headings are drawn differently on
+    paper and on screen, see below) and ours is resampled onto
+    LibreOffice's, so cells line up and every metric compares layout within
+    the grid.
     """
     ref = load(lo_path)
     if app != "tables":
@@ -265,21 +288,28 @@ def align(app, lo_path, ours_path):
         ref = ref.crop((xs.min(), ys.min(), xs.max() + 1, ys.max() + 1))
     ours = load(ours_path)
     scale = (ours.width / ref.width + ours.height / ref.height) / 2
+    # Headings are furniture and each side draws its own: Calc prints them
+    # boxed in black, we shade them as a screen does. So only the cells are
+    # compared: LibreOffice's inside its frame and heading boxes, ours from
+    # the end of our header bands, resampled onto LibreOffice's.
+    box = lo_cell_box(ref)
+    ox, oy = our_cell_origin(ours)
+    if box and 0 < ox < ours.width and 0 < oy < ours.height:
+        ref = ref.crop(box)
+        ours = ours.crop((ox, oy, ours.width, ours.height))
     ours = ours.resize(ref.size, Image.LANCZOS)
-    # A white margin: cropped to its ink, LibreOffice's border *is* the
-    # outer gridline, and background() reads the border.
-    # Wider than background()'s 4 px inset, or the ring lands on the rule.
+    # A white margin, wider than background()'s 4 px inset, so the
+    # background is read from the page and not from a cell's fill or
+    # border at the crop's edge.
     pad = lambda im: ImageOps.expand(im, border=8, fill=(255, 255, 255))
     return pad(ref), pad(ours), scale
 
 
 def compare_page(app, ref, ours, ref_words):
-    """`ref_words` is ocr_words(content(app, ref)), cached by the caller."""
-    rc, oc = content(app, ref), content(app, ours)
-    ra, oa = np.asarray(rc), np.asarray(oc)
-    ref_ink = ink_mask(ra).sum()
-    ink = float(ink_mask(oa).sum() / ref_ink) if ref_ink else None
-    words, disp = match_words(ref_words, ocr_words(oc, app == "tables") if ref_words is not None else None)
+    """`ref_words` is ocr_words(ref), cached by the caller."""
+    ref_ink = ink_mask(np.asarray(ref)).sum()
+    ink = float(ink_mask(np.asarray(ours)).sum() / ref_ink) if ref_ink else None
+    words, disp = match_words(ref_words, ocr_words(ours, app == "tables") if ref_words is not None else None)
     return {
         "ink": ink,
         "words": words,
@@ -288,12 +318,6 @@ def compare_page(app, ref, ours, ref_words):
         "ssim": ssim(ref, ours),
         "ref_words": len(ref_words) if ref_words is not None else None,
     }
-
-
-def content(app, img):
-    """What ink and OCR look at: the page itself, or for Tables the cell
-    contents without the grid rules."""
-    return strip_rules(img) if app == "tables" else img
 
 
 def verdict(m):
@@ -340,7 +364,7 @@ def score_fixture(app, d, tier, ref_words_cache):
         ref, ours, scale = align(app, lo, ours_pages[i])
         key = (lo, ref.size)
         if key not in ref_words_cache:
-            ref_words_cache[key] = ocr_words(content(app, ref), app == "tables")
+            ref_words_cache[key] = ocr_words(ref, app == "tables")
         per_page.append(dict(compare_page(app, ref, ours, ref_words_cache[key]), scale=scale))
     m = {k: mean([p.get(k) for p in per_page]) for k in METRICS}
     m["ref_words"] = sum(p["ref_words"] or 0 for p in per_page)
