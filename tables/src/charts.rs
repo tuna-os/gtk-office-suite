@@ -20,8 +20,11 @@ pub fn render_chart_named(
     let surface = ImageSurface::create(Format::ARgb32, width, height).unwrap();
     let cr = Context::new(&surface).unwrap();
     cr.set_source_rgb(1.0, 1.0, 1.0); cr.paint().unwrap();
-    cr.select_font_face("Sans", gtk4::cairo::FontSlant::Normal, gtk4::cairo::FontWeight::Normal);
-    cr.set_font_size(10.0);
+    // Chart text is Calibri 10 pt (Carlito where Calibri isn't
+    // installed), as Excel and Calc draw a chart that names no font. It was
+    // 10 px of the generic sans: 7.5 pt, and too small to read at 100%.
+    cr.select_font_face("Calibri", gtk4::cairo::FontSlant::Normal, gtk4::cairo::FontWeight::Normal);
+    cr.set_font_size(CHART_TEXT_PX);
     match chart_type {
         ChartType::Bar => draw_bars(&cr, data, width, height, series_name),
         ChartType::Line => draw_line(&cr, data, width, height),
@@ -30,6 +33,12 @@ pub fn render_chart_named(
     surface.flush();
     surface
 }
+
+/// 10 pt at 96 DPI.
+const CHART_TEXT_PX: f64 = 10.0 * 96.0 / 72.0;
+/// Axis and legend text: black, as Calc draws a chart that names no text
+/// colour.
+const CHART_TEXT: (f64, f64, f64) = (0.0, 0.0, 0.0);
 
 /// The first series colour of Office's default theme (accent 1), which
 /// Excel and LibreOffice give a series that names no colour.
@@ -50,7 +59,7 @@ fn draw_bars(cr: &Context, data: &[(String, f64)], w: i32, h: i32, series_name: 
     };
     let axis_w = (0..=ticks).map(|i| text_w(&label(i as f64 * step))).fold(0.0, f64::max);
     let legend_w = series_name.map_or(0.0, |n| text_w(n) + 30.0);
-    let (left, right, top_y, bottom) = (axis_w + 14.0, w - 10.0 - legend_w, 12.0, h - 24.0);
+    let (left, right, top_y, bottom) = (axis_w + 14.0, w - 10.0 - legend_w, 12.0, h - CHART_TEXT_PX - 14.0);
     if right <= left || bottom <= top_y || data.is_empty() {
         return;
     }
@@ -66,8 +75,8 @@ fn draw_bars(cr: &Context, data: &[(String, f64)], w: i32, h: i32, series_name: 
         cr.line_to(right, y);
         cr.stroke().unwrap();
         let t = label(v);
-        cr.set_source_rgb(0.2, 0.2, 0.2);
-        cr.move_to(left - 6.0 - text_w(&t), y + 3.5);
+        cr.set_source_rgb(CHART_TEXT.0, CHART_TEXT.1, CHART_TEXT.2);
+        cr.move_to(left - 6.0 - text_w(&t), y + CHART_TEXT_PX * 0.35);
         cr.show_text(&t).unwrap();
     }
 
@@ -79,8 +88,8 @@ fn draw_bars(cr: &Context, data: &[(String, f64)], w: i32, h: i32, series_name: 
         cr.set_source_rgb(SERIES_1.0, SERIES_1.1, SERIES_1.2);
         cr.rectangle(x, y_of(*val), bar_w, bottom - y_of(*val));
         cr.fill().unwrap();
-        cr.set_source_rgb(0.2, 0.2, 0.2);
-        cr.move_to(left + i as f64 * slot + (slot - text_w(cat)) / 2.0, bottom + 15.0);
+        cr.set_source_rgb(CHART_TEXT.0, CHART_TEXT.1, CHART_TEXT.2);
+        cr.move_to(left + i as f64 * slot + (slot - text_w(cat)) / 2.0, bottom + 4.0 + CHART_TEXT_PX);
         cr.show_text(cat).unwrap();
     }
 
@@ -91,8 +100,8 @@ fn draw_bars(cr: &Context, data: &[(String, f64)], w: i32, h: i32, series_name: 
         cr.set_source_rgb(SERIES_1.0, SERIES_1.1, SERIES_1.2);
         cr.rectangle(lx, ly - 7.0, 8.0, 8.0);
         cr.fill().unwrap();
-        cr.set_source_rgb(0.2, 0.2, 0.2);
-        cr.move_to(lx + 12.0, ly);
+        cr.set_source_rgb(CHART_TEXT.0, CHART_TEXT.1, CHART_TEXT.2);
+        cr.move_to(lx + 12.0, ly + 1.0);
         cr.show_text(name).unwrap();
     }
 }
