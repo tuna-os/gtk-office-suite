@@ -163,6 +163,15 @@ pub fn read(path: &str) -> Result<Document, String> {
         if std::mem::take(&mut carried_break) {
             para.style.page_break_before = true;
         }
+        // A paragraph holding nothing but a page break (python-docx's
+        // `add_run().add_break(WD_BREAK.PAGE)`, Word's Ctrl+Enter on an
+        // empty line) is the break, not a line of its own: LibreOffice
+        // starts the next paragraph at the top of the new page. Kept, it
+        // put an empty line there instead.
+        if para.runs.is_empty() && breaks.leading && !pending_break && i + 1 < body.len() {
+            carried_break = true;
+            continue;
+        }
         if let Some(RawPara { start_twips, end_twips, tab_twips }) =
             raw.as_ref().and_then(|s| s.get(i))
         {
@@ -417,10 +426,13 @@ pub fn write(doc: &Document, path: impl AsRef<std::path::Path>) -> Result<(), St
                         let name = std::path::Path::new(src)
                             .file_name().map(|n| n.to_string_lossy().to_string())
                             .unwrap_or_else(|| "image.png".into());
-                        let mut pic = out.add_picture(
-                            &bytes, &name,
-                            rdocx::Length::inches(4.0), rdocx::Length::inches(3.0),
-                        );
+                        // The size it was shown at; every picture used to
+                        // be saved 4in x 3in whatever its size.
+                        let (w, h) = match run.style.image_extent_emu {
+                            Some((w, h)) => (rdocx::Length::emu(w as i64), rdocx::Length::emu(h as i64)),
+                            None => (rdocx::Length::inches(4.0), rdocx::Length::inches(3.0)),
+                        };
+                        let mut pic = out.add_picture(&bytes, &name, w, h);
                         pic = pic.style("Figure");
                         let _ = pic;
                         out.add_paragraph("");
@@ -652,10 +664,19 @@ fn map_paragraph(doc: &rdocx::Document, p: &rdocx::ParagraphRef<'_>) -> Paragrap
                     Ok(p) => p,
                     Err(_) => continue,
                 };
+                // The displayed size is the drawing's extent, not the
+                // image's pixels: a 200px picture placed 2in wide is 2in.
+                let extent = r.items().into_iter().find_map(|item| match item {
+                    rdocx::RunItemRef::Drawing(d) => d.width().zip(d.height()),
+                    _ => None,
+                });
                 runs.push(Run {
                     text: alt.unwrap_or("").to_string(),
                     style: RunStyle {
                         image: Some(path.to_string_lossy().into_owned()),
+                        image_extent_emu: extent
+                            .map(|(w, h)| (w.to_emu().max(0) as u64, h.to_emu().max(0) as u64))
+                            .filter(|(w, h)| *w > 0 && *h > 0),
                         ..Default::default()
                     },
                 });
@@ -684,6 +705,7 @@ fn map_paragraph(doc: &rdocx::Document, p: &rdocx::ParagraphRef<'_>) -> Paragrap
                 code: r.style_id() == Some("SourceText"),
                 link: link_for(idx),
                 image: None,
+                image_extent_emu: None,
                 footnote: None,
                 html: false,
                 font_family: r.font_name().map(|f| f.to_string()),

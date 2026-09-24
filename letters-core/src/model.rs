@@ -24,6 +24,10 @@ pub struct RunStyle {
     pub link: Option<String>,
     /// Inline image: source path/URI. The run's text is the alt text.
     pub image: Option<String>,
+    /// Inline image's displayed size as (width, height) in EMU (914400 per
+    /// inch, OOXML's unit); None = the image's own size.
+    #[serde(default)]
+    pub image_extent_emu: Option<(u64, u64)>,
     /// Font family name (e.g. "Liberation Serif"); None = document default.
     #[serde(default)]
     pub font_family: Option<String>,

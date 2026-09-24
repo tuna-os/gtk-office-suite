@@ -22,6 +22,10 @@ suite-common-core = { path = "../suite-common-core", version = "0.1.0" }
 # NamedTempFile for extracted images (gh-268): production code writes
 # document-embedded images to /tmp, which must not use predictable paths.
 tempfile = "3"
+# Optional, feature `render`: Pango and Cairo are not GTK (ADR 0010).
+pango = { version = "0.22", optional = true, features = ["v1_44"] }
+pangocairo = { version = "0.22", optional = true }
+cairo-rs = { version = "0.22", optional = true, features = ["png"] }
 
 [lib]
 name = "letters_core"
@@ -31,3 +35,7 @@ path = "src/lib.rs"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 proptest = "1"
+
+[features]
+# The Pango shaper and Cairo renderer for layout::RenderTree (ADR 0010).
+render = ["dep:pango", "dep:pangocairo", "dep:cairo-rs"]

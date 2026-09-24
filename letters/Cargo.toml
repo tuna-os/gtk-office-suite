@@ -13,7 +13,7 @@ pango = "0.22"
 pangocairo = "0.22"
 zspell = { version = "0.5", features = ["unstable-suggestions"] }
 suite-common = { path = "../suite-common" }
-letters-core = { path = "../letters-core" }
+letters-core = { path = "../letters-core", features = ["render"] }
 suite-export = { path = "../suite-export" }
 serde_json = "1"
 

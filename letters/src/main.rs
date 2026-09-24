@@ -9,6 +9,7 @@ mod actions;
 mod engine;
 mod preferences;
 mod page_container;
+mod page_view;
 mod ruler;
 mod spell;
 mod styles;

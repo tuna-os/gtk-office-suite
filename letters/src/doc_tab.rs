@@ -112,6 +112,47 @@ pub(crate) fn apply_page_setup_from_buffer(container: &PageContainer, buf: &gtk:
         );
         container.set_column_count(page.columns.max(1) as u32);
     }
+    refresh_print_layout(container, buf);
+}
+
+/// Layout options for a tab: the container's page setup is the page for a
+/// document that carries none of its own.
+fn layout_options(container: &PageContainer) -> letters_core::layout::LayoutOptions {
+    let (width_pt, height_pt) = container.page_size();
+    let (margin_top_pt, margin_bottom_pt, margin_left_pt, margin_right_pt) = container.margins();
+    letters_core::layout::LayoutOptions {
+        page: letters_core::model::PageGeometry {
+            width_pt,
+            height_pt,
+            margin_top_pt,
+            margin_bottom_pt,
+            margin_left_pt,
+            margin_right_pt,
+            columns: container.column_count().clamp(1, 255) as u8,
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+/// Lay the tab's document out again for its Print Layout view. Does
+/// nothing while the tab shows the Draft editor: layout is only paid for
+/// when someone looks at the pages.
+pub(crate) fn refresh_print_layout(container: &PageContainer, buf: &gtk::TextBuffer) {
+    if !container.is_print_layout() {
+        return;
+    }
+    let Some(view) = container.page_view() else { return };
+    let doc = crate::bridge::capture_from_buffer(buf);
+    let mut typeset = letters_core::layout::pango::Typeset::new(doc, layout_options(container));
+    typeset.set_image_loader(crate::page_view::load_image);
+    view.set_typeset(typeset);
+}
+
+/// Switch a tab between Print Layout and Draft.
+pub(crate) fn set_print_layout(container: &PageContainer, buf: &gtk::TextBuffer, on: bool) {
+    container.set_print_layout(on);
+    refresh_print_layout(container, buf);
 }
 
 pub(crate) fn make_doc_widget(settings: Option<&gio::Settings>) -> (PageContainer, gtk::TextBuffer) {
@@ -308,7 +349,12 @@ pub(crate) fn make_doc_widget(settings: Option<&gio::Settings>) -> (PageContaine
         container.load_from_settings(s);
     }
     scroll.set_parent(&container);
+    container.attach_page_view();
+    container.set_zoom(container.zoom_level());
     container.set_vexpand(true); container.set_hexpand(true);
+    // A render-lab capture looks at the laid-out pages (ADR 0010).
+    let print = settings.is_some_and(|s| s.boolean("print-layout")) || suite_common::render_dump::active();
+    set_print_layout(&container, &buffer, print);
     // Zoom via Ctrl+Scroll
     {
         let pc = container.clone();
@@ -351,6 +397,7 @@ pub(crate) fn make_doc_widget(settings: Option<&gio::Settings>) -> (PageContaine
                 let config = crate::layout::LayoutConfig::from_settings(&s);
                 let pages = crate::layout::paginate(&buf, &config, &ed.pango_context());
                 pc.set_page_count(pages.len());
+                refresh_print_layout(&pc, &buf);
                 ps2.borrow_mut().clone_from(&pages);
                 t2.borrow_mut().take();
                 glib::ControlFlow::Break

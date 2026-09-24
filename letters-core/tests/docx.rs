@@ -156,7 +156,12 @@ fn inline_image_survives() {
         style: ParaStyle::default(),
         runs: vec![Run {
             text: "a red dot".into(),
-            style: RunStyle { image: Some(img_path.to_string_lossy().into_owned()), ..Default::default() },
+            style: RunStyle {
+                image: Some(img_path.to_string_lossy().into_owned()),
+                // 2in x 1.2in: the size it is shown at, not its 1x1 pixels.
+                image_extent_emu: Some((1_828_800, 1_097_280)),
+                ..Default::default()
+            },
         }],
     });
     let rt = round_trip(&d);
@@ -167,6 +172,7 @@ fn inline_image_survives() {
     let extracted = img_run.style.image.as_ref().unwrap();
     let bytes = std::fs::read(extracted).expect("extracted image unreadable");
     assert_eq!(bytes, png, "image bytes changed in round trip");
+    assert_eq!(img_run.style.image_extent_emu, Some((1_828_800, 1_097_280)), "displayed size lost");
     assert!(rt.to_plain_text().contains("before"));
 }
 
@@ -684,6 +690,31 @@ fn a_trailing_run_page_break_marks_the_next_paragraph() {
         "first page",
         "the break leaked into the text"
     );
+}
+
+/// A paragraph holding only a page break is the break, not an empty line.
+///
+/// python-docx's `add_paragraph().add_run().add_break(WD_BREAK.PAGE)`
+/// writes this; LibreOffice starts the next paragraph at the top of the
+/// new page (render-lab `letters/page-break`), where an empty paragraph
+/// kept in the model put a blank line first.
+#[test]
+fn a_paragraph_that_is_only_a_page_break_breaks_before_the_next() {
+    let d = Document::from_plain_text("first page\nsecond page");
+    let rt = doctor_document_xml(&d, |xml| {
+        let marker = "<w:p><w:r><w:t>second page</w:t>";
+        let marker = if xml.contains(marker) { marker.to_string() } else {
+            // Our writer may give the paragraph properties first.
+            let at = xml.find("<w:t>second page</w:t>").expect("fixture shape changed");
+            let p = xml[..at].rfind("<w:p>").or_else(|| xml[..at].rfind("<w:p ")).unwrap();
+            xml[p..at].to_string()
+        };
+        xml.replacen(&marker, &format!("<w:p><w:r><w:br w:type=\"page\"/></w:r></w:p>{marker}"), 1)
+    });
+    let texts: Vec<String> = rt.paragraphs.iter().map(|p| p.text()).collect();
+    assert_eq!(texts, vec!["first page", "second page"], "no empty paragraph for the break");
+    assert!(rt.paragraphs[1].style.page_break_before, "the break was lost");
+    assert!(!rt.paragraphs[0].style.page_break_before);
 }
 
 /// A break before a paragraph's own text is that paragraph's break.
