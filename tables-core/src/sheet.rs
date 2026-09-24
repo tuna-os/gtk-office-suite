@@ -12,10 +12,21 @@ pub const DEFAULT_COLS: usize = 26;
 /// reader that loops over it hangs instead of refusing (#442).
 pub const SHEET_MAX_ROWS: usize = 1_048_576;
 pub const SHEET_MAX_COLS: usize = 16_384;
-pub const ROW_HEIGHT: f64 = 28.0;
-pub const COL_WIDTH: f64 = 90.0;
-pub const ROW_HEADER_WIDTH: f64 = 50.0;
-pub const COL_HEADER_HEIGHT: f64 = 26.0;
+/// Grid metrics at 100% zoom, those of a default Excel/Calc sheet: 15 pt
+/// rows (20 px at 96 DPI) and 8.43-character columns (64 px: Calibri 11's
+/// 7 px maximum digit width, as io/props.rs assumes for xlsx widths). The
+/// grid used to be 90x28, which drew every workbook 1.4x the size
+/// LibreOffice prints it (render lab `scale`).
+pub const ROW_HEIGHT: f64 = 20.0;
+pub const COL_WIDTH: f64 = 64.0;
+pub const ROW_HEADER_WIDTH: f64 = 40.0;
+pub const COL_HEADER_HEIGHT: f64 = 20.0;
+/// The default cell font, the one xlsx workbooks declare as font 0.
+/// Fontconfig maps it to the metric-compatible Carlito where Calibri itself
+/// isn't installed.
+pub const DEFAULT_FONT_FAMILY: &str = "Calibri";
+/// Points.
+pub const DEFAULT_FONT_SIZE: f64 = 11.0;
 
 #[derive(Clone, Copy, PartialEq)]
 pub enum SortDirection { Ascending, Descending }
@@ -1215,7 +1226,7 @@ mod selection_tests {
         // sits at COL_HEADER_HEIGHT + ROW_HEIGHT.
         let y = COL_HEADER_HEIGHT + ROW_HEIGHT;
         assert_eq!(hit_row_divider(ROW_HEADER_WIDTH / 2.0, y, 0.0, &s), Some(0));
-        assert_eq!(hit_row_divider(ROW_HEADER_WIDTH / 2.0, y + 20.0, 0.0, &s), None);
+        assert_eq!(hit_row_divider(ROW_HEADER_WIDTH / 2.0, y + ROW_HEIGHT / 2.0, 0.0, &s), None, "mid-row is no boundary");
     }
 
     #[test]

@@ -585,7 +585,7 @@
         });
         assert_eq!(observed.borrow().sheet().col_width(0), 240.0);
         assert!(controller.undo());
-        assert_eq!(observed.borrow().sheet().col_width(0), 90.0);
+        assert_eq!(observed.borrow().sheet().col_width(0), crate::sheet::COL_WIDTH);
         assert!(controller.redo());
         assert_eq!(observed.borrow().sheet().col_width(0), 240.0);
     }

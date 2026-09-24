@@ -2634,7 +2634,7 @@ class TablesCanvasCoordsMixin:
     """Screen coordinates for mouse journeys on the Tables grid.
 
     The grid's own layout constants (tables-core::sheet's ROW_HEADER_WIDTH
-    50, COL_HEADER_HEIGHT 26, ROW_HEIGHT 28, COL_WIDTH 90) are fixed, but
+    40, COL_HEADER_HEIGHT 20, ROW_HEIGHT 20, COL_WIDTH 64) are fixed, but
     the canvas *origin* is not: it sits below the header/toolbar/name-box
     chrome, whose height moves with toolbar metrics (the 44sp touch targets
     in #118 shifted it). AT-SPI can't be asked either — it mis-reports the
@@ -2647,10 +2647,10 @@ class TablesCanvasCoordsMixin:
     canvas_at hint).
     """
 
-    ROW_HEADER_WIDTH = 50
-    COL_HEADER_HEIGHT = 26
-    ROW_HEIGHT = 28
-    COL_WIDTH = 90
+    ROW_HEADER_WIDTH = 40
+    COL_HEADER_HEIGHT = 20
+    ROW_HEIGHT = 20
+    COL_WIDTH = 64
 
     def canvas_origin(self) -> tuple[float, float]:
         origin = self.trigger_snapshot("org.tunaos.tables").get("grid_origin")
