@@ -510,6 +510,11 @@ def main():
         print(f"{key:32} {line}")
 
     totals = write_report(args.out, manifest, results, agreement)
+    # Nothing captured at all is a broken pipeline, not a clean result: the
+    # ratchet skips fixtures with no verdict, so an empty run would pass.
+    if manifest and not any(results[k].get(t) for k in results for t in TIERS):
+        print("compare: no captures found for any fixture; the lab produced nothing to judge", file=sys.stderr)
+        sys.exit(2)
     card = {
         k: {t: {"verdict": m["verdict"], **{x: m.get(x) for x in METRICS}} for t, m in v.items() if m}
         for k, v in results.items()
