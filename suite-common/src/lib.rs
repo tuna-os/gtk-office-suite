@@ -14,6 +14,7 @@ pub mod file_dialogs;
 pub mod autosave_notice;
 pub mod gtk_test;
 pub mod toast_manager;
+pub mod render_dump;
 pub use suite_common_core::{actions, palette, format, undo, events, string_pool, units, props, style, search, print, atomic_save, autosave, interop, recent, templates, session};
 
 pub use file_dialogs::FileDialogHelper;

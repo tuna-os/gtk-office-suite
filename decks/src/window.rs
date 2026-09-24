@@ -107,6 +107,33 @@ impl DecksWindow {
         canvas.set_hexpand(true);
         canvas.set_accessible_role(gtk::AccessibleRole::List);
         canvas.update_property(&[gtk::accessible::Property::Label("Slide canvas")]);
+        if std::env::var_os("GTK_OFFICE_TEST_MODE").is_some() {
+            // Render lab Tier A (docs/RENDER-PARITY-ROADMAP.md): every
+            // slide as the canvas draws it, 1280 px wide (13.33 in at 96
+            // DPI, the size LibreOffice's reference PNGs come out at).
+            let ctl = controller.clone();
+            let dump_canvas = canvas.clone();
+            let act = gio::SimpleAction::new("test-render-dump", None);
+            act.connect_activate(move |_, _| {
+                let Some(dir) = suite_common::render_dump::dump_dir() else { return };
+                // Tier B can only see the slide on the canvas (slide 1).
+                let slide = crate::canvas::slide_geometry(dump_canvas.width() as f64, dump_canvas.height() as f64);
+                suite_common::render_dump::write_geometry(&dump_canvas, &[slide]);
+                let screen = suite_common::render_dump::screen_path(&dir, 0);
+                if let Err(e) = suite_common::render_dump::widget_to_png(&dump_canvas, Some(slide), &screen) {
+                    eprintln!("render-dump: on-screen slide: {e}");
+                }
+                let slides = ctl.slides.borrow();
+                let masters = ctl.masters.borrow();
+                for i in 0..slides.len() {
+                    let path = suite_common::render_dump::page_path(&dir, i);
+                    if let Err(e) = crate::canvas::render_slide_png(&slides, &masters, i, 1280, &path) {
+                        eprintln!("render-dump: slide {}: {e}", i + 1);
+                    }
+                }
+            });
+            app.add_action(&act);
+        }
         // No fixed content size: the canvas fills the viewport and the
         // slide scales to fit (slide_geometry) — a fixed 960px minimum
         // made the scrolled window clip the slide at narrow widths.

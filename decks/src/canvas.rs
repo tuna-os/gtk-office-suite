@@ -605,6 +605,36 @@ pub fn draw_slide_multi(
     }
 }
 
+/// Render slide `index` exactly as the editor canvas draws it, cropped to
+/// the slide, at `width` pixels wide (height follows 16:9). Used by the
+/// render lab's Tier A capture (`test-render-dump`), so it deliberately goes
+/// through `draw_slide` rather than a separate export path: what we compare
+/// against LibreOffice must be what the user sees.
+pub fn render_slide_png(
+    slides: &[Slide], masters: &[MasterSlide], index: usize, width: i32, path: &std::path::Path,
+) -> Result<(), String> {
+    let height = width * 540 / 960;
+    // draw_slide insets the slide to 92% of the canvas; size the canvas so
+    // the slide lands at exactly width x height, then crop to it.
+    let canvas_w = (width as f64 / 0.92).ceil();
+    let canvas_h = (height as f64 / 0.92).ceil();
+    let full = cairo::ImageSurface::create(cairo::Format::ARgb32, canvas_w as i32, canvas_h as i32)
+        .map_err(|e| e.to_string())?;
+    {
+        let cr = cairo::Context::new(&full).map_err(|e| e.to_string())?;
+        draw_slide(&cr, canvas_w, canvas_h, slides, index, None, masters, (0.0, 0.5, 1.0));
+    }
+    let (ox, oy, _, _) = slide_geometry(canvas_w, canvas_h);
+    let out = cairo::ImageSurface::create(cairo::Format::ARgb32, width, height).map_err(|e| e.to_string())?;
+    {
+        let cr = cairo::Context::new(&out).map_err(|e| e.to_string())?;
+        cr.set_source_surface(&full, -ox.round(), -oy.round()).map_err(|e| e.to_string())?;
+        cr.paint().map_err(|e| e.to_string())?;
+    }
+    let mut file = std::fs::File::create(path).map_err(|e| e.to_string())?;
+    out.write_to_png(&mut file).map_err(|e| e.to_string())
+}
+
 #[cfg(test)]
 mod font_tests {
     use super::*;

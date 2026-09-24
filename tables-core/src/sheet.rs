@@ -782,6 +782,20 @@ impl SheetModel {
         if r < self.rows && c < self.cols { &self.data[r][c] } else { "" }
     }
 
+    /// Last row and column holding a value, or `None` for an empty sheet.
+    /// This is the extent LibreOffice prints (and the render lab crops
+    /// our grid to, so both show the same cells).
+    pub fn used_extent(&self) -> Option<(usize, usize)> {
+        let mut extent: Option<(usize, usize)> = None;
+        for (r, row) in self.data.iter().enumerate() {
+            if let Some(c) = row.iter().rposition(|v| !v.is_empty()) {
+                let (er, ec) = extent.unwrap_or((0, 0));
+                extent = Some((er.max(r), ec.max(c)));
+            }
+        }
+        extent
+    }
+
     pub fn cell_mut(&mut self, r: usize, c: usize) -> &mut String {
         &mut self.data[r][c]
     }
@@ -841,6 +855,24 @@ impl SheetModel {
                 self.formulas[r][c] = engine.has_formula(r, c);
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod used_extent_tests {
+    use super::*;
+
+    #[test]
+    fn empty_sheet_has_no_extent() {
+        assert_eq!(SheetModel::new("t", 5, 5, 0).used_extent(), None);
+    }
+
+    #[test]
+    fn extent_is_last_row_and_last_column_independently() {
+        let mut s = SheetModel::new("t", 10, 10, 0);
+        s.data[4][1] = "a".into();
+        s.data[2][6] = "b".into();
+        assert_eq!(s.used_extent(), Some((4, 6)));
     }
 }
 

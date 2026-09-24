@@ -101,6 +101,7 @@ fn main() {
             }
         }
         win.present();
+        suite_common::render_dump::schedule(app);
     });
     suite.run();
 }
