@@ -1,6 +1,14 @@
 # RFC-0001: CRDT collaboration for Letters, Tables and Decks
 
-Date: 2026-09-12 · Status: **draft, not accepted** · Tracks: [#544](https://github.com/tuna-os/gtk-office-suite/issues/544)
+Date: 2026-09-12 · Status: **direction accepted 2026-09-24; library choice and phases as below** · Tracks: [#544](https://github.com/tuna-os/gtk-office-suite/issues/544)
+
+> **2026-09-24:** the project owner wants collaboration ("we want the CRDT
+> stuff and collaborations if possible"). This RFC's design and its phase
+> order stand as the plan. The library is still chosen by the Phase 1
+> measurement, not picked here. Where it sits relative to the rendering
+> work: [Render Parity Roadmap, "Collaboration track"](../RENDER-PARITY-ROADMAP.md#collaboration-track-rfc-0001).
+> The "why this is a draft" section below describes the situation before
+> that decision.
 
 ## Summary
 
