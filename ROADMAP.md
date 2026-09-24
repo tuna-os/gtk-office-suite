@@ -84,6 +84,7 @@ document processing. Sketch until Q4 starts; the live execution plan remains
 |------|-------|----------|--------|
 | Release gate: Flatpak reproducible builds + GSettings migration verification | quality / ops | #122, #578 | 🟡 Planned |
 | Headless CLI conversion binary (`suite-convert`) | architect / strategist | #579 | ⬜ Planned |
+| Enterprise client-side encryption & digital signatures | strategist | #884 | ⬜ Planned |
 | Decks presenter view & export rendering parity | architect | #117 | ⬜ Planned |
 | Interop loss budgets & unsupported-feature inspector | quality | #105, #121 | ⬜ Planned |
 | A11y: keyboard + screen-reader journeys | quality | #120 | ⬜ Planned |
