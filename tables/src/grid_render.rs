@@ -46,11 +46,19 @@ const BORDER_LINE: (f64, f64, f64) = (0.0, 0.0, 0.0);
 const BORDER_LINE_DARK: (f64, f64, f64) = (0.85, 0.85, 0.85);
 
 pub fn draw_border_edges(cr: &Context, x: f64, y: f64, w: f64, h: f64, border: &CellBorder, is_dark: bool) {
-    let _lw = 1.5;
-    draw_border_line(cr, &border.top, x, y, x + w, y, is_dark);
-    draw_border_line(cr, &border.bottom, x, y + h, x + w, y + h, is_dark);
-    draw_border_line(cr, &border.left, x, y, x, y + h, is_dark);
-    draw_border_line(cr, &border.right, x + w, y, x + w, y + h, is_dark);
+    draw_border_line(cr, &border.top, border.color, x, y, x + w, y, is_dark);
+    draw_border_line(cr, &border.bottom, border.color, x, y + h, x + w, y + h, is_dark);
+    draw_border_line(cr, &border.left, border.color, x, y, x, y + h, is_dark);
+    draw_border_line(cr, &border.right, border.color, x + w, y, x + w, y + h, is_dark);
+}
+
+/// Where to stroke a line `width` px wide so it lands on whole pixels
+/// along the cell edge at `edge` (a whole-pixel coordinate): an odd width is
+/// centred half a pixel in, on the pixel row just inside the edge, where
+/// the gridline is; an even one straddles the edge. A line centred on the
+/// edge itself would smear across two half-covered pixel rows.
+fn crisp(edge: f64, width: f64) -> f64 {
+    if (width.round() as i64) % 2 == 1 { edge.round() - 0.5 } else { edge.round() }
 }
 
 /// A header label (column letter or row number) in the UI font at 9 pt,
@@ -78,20 +86,41 @@ fn pango_text_width(cr: &Context, text: &str) -> f64 {
     header_layout(cr, text).pixel_size().0 as f64
 }
 
-fn draw_border_line(cr: &Context, style: &BorderStyle, x1: f64, y1: f64, x2: f64, y2: f64, is_dark: bool) {
+#[allow(clippy::too_many_arguments)]
+fn draw_border_line(cr: &Context, style: &BorderStyle, color: (f64, f64, f64), x1: f64, y1: f64, x2: f64, y2: f64, is_dark: bool) {
     if *style == BorderStyle::None { return; }
-    let c = if is_dark { BORDER_LINE_DARK } else { BORDER_LINE };
+    // The border's own colour; the default black follows the theme so a
+    // black border stays visible on the dark canvas.
+    let c = if color == (0.0, 0.0, 0.0) { if is_dark { BORDER_LINE_DARK } else { BORDER_LINE } } else { color };
+    let width = style.width_px();
     cr.save().unwrap();
     cr.set_source_rgb(c.0, c.1, c.2);
-    cr.set_line_width(1.5);
+    cr.set_line_width(width);
     match style {
-        BorderStyle::Dotted => cr.set_dash(&[2.0, 2.0], 0.0),
-        BorderStyle::Dashed => cr.set_dash(&[4.0, 4.0], 0.0),
-        BorderStyle::Double => { cr.set_line_width(3.0); cr.set_dash(&[1.0, 3.0], 0.0); }
+        BorderStyle::Dotted => cr.set_dash(&[1.0, 2.0], 0.0),
+        BorderStyle::Dashed => cr.set_dash(&[4.0, 2.0], 0.0),
         _ => cr.set_dash(&[], 0.0),
     }
-    cr.move_to(x1, y1);
-    cr.line_to(x2, y2);
+    // Extend along the line to cover the corner squares a crossing edge of
+    // the same weight fills, so boxed cells have closed corners.
+    let (lead, trail) = ((width / 2.0).ceil(), (width / 2.0).floor());
+    let (x1, y1, x2, y2) = if y1 == y2 {
+        (x1.round() - lead, crisp(y1, width), x2.round() + trail, crisp(y2, width))
+    } else {
+        (crisp(x1, width), y1.round() - lead, crisp(x2, width), y2.round() + trail)
+    };
+    if *style == BorderStyle::Double {
+        // Two 1 px lines with a 1 px gap, as Excel draws a double border.
+        cr.set_line_width(1.0);
+        let (dx, dy) = if y1 == y2 { (0.0, 1.0) } else { (1.0, 0.0) };
+        for k in [-1.0, 1.0] {
+            cr.move_to(x1 + k * dx, y1 + k * dy);
+            cr.line_to(x2 + k * dx, y2 + k * dy);
+        }
+    } else {
+        cr.move_to(x1, y1);
+        cr.line_to(x2, y2);
+    }
     cr.stroke().unwrap();
     cr.restore().unwrap();
 }
@@ -339,6 +368,7 @@ pub fn draw_grid(
     cr.save().unwrap();
     cr.rectangle(ROW_HEADER_WIDTH, COL_HEADER_HEIGHT, width - ROW_HEADER_WIDTH, height - COL_HEADER_HEIGHT);
     cr.clip();
+    let mut bordered: Vec<(f64, f64, f64, f64, &CellBorder)> = Vec::new();
     for r in 0..sheet.rows {
         if sheet.is_row_hidden(r) { continue; }
         let cy = tables_core::sheet::row_y(r, scroll_y, sheet);
@@ -391,26 +421,30 @@ pub fn draw_grid(
                 None => (true, true),
             };
 
-            // Grid line
+            // Grid line: a crisp 1 px hairline on the cell's last pixel row
+            // and column. Stroked half a pixel wide on the edge itself, it
+            // smeared over two pixels and the next cell's fill covered one,
+            // leaving a line about 4% grey that barely showed.
             if show_gridlines {
                 cr.set_source_rgb(grid_line.0, grid_line.1, grid_line.2);
-                cr.set_line_width(0.5);
+                cr.set_line_width(1.0);
                 if right_edge {
-                    cr.move_to(cx + cw, cy);
-                    cr.line_to(cx + cw, cy + rh);
+                    cr.move_to(crisp(cx + cw, 1.0), cy.round());
+                    cr.line_to(crisp(cx + cw, 1.0), (cy + rh).round());
                     cr.stroke().unwrap();
                 }
                 if bottom_edge {
-                    cr.move_to(cx, cy + rh);
-                    cr.line_to(cx + cw, cy + rh);
+                    cr.move_to(cx.round(), crisp(cy + rh, 1.0));
+                    cr.line_to((cx + cw).round(), crisp(cy + rh, 1.0));
                     cr.stroke().unwrap();
                 }
             }
 
-            // Cell border
-            if border.top != BorderStyle::None || border.bottom != BorderStyle::None
-                || border.left != BorderStyle::None || border.right != BorderStyle::None {
-                draw_border_edges(cr, cx, cy, cw, rh, border, is_dark);
+            // Cell borders are drawn after every cell's background: a 2 or
+            // 3 px edge reaches into the neighbouring cell, whose fill
+            // would otherwise paint over it.
+            if !border.is_none() {
+                bordered.push((cx, cy, cw, rh, border));
             }
 
             // Active cell border (a merged block's is the selection outline)
@@ -429,6 +463,9 @@ pub fn draw_grid(
             }
             cx += cw;
         }
+    }
+    for &(x, y, w, h, border) in &bordered {
+        draw_border_edges(cr, x, y, w, h, border, is_dark);
     }
     // Merged blocks: the anchor's value across the whole block, drawn after
     // every cell so the covered cells' backgrounds can't paint over it.

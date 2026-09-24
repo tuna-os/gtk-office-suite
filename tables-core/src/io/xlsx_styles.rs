@@ -7,6 +7,7 @@
 // NumberFormat and CellStyle.
 
 use super::numfmt::{builtin_code, kind_for_code};
+use crate::sheet::{BorderStyle, CellBorder};
 use crate::style::{CellStyle, HAlign, Rgb, VAlign};
 use suite_common_core::format::NumberFormat;
 
@@ -15,6 +16,7 @@ use suite_common_core::format::NumberFormat;
 pub struct XfStyle {
     pub format: NumberFormat,
     pub style: CellStyle,
+    pub border: CellBorder,
 }
 
 #[derive(Clone, Debug, Default)]
@@ -127,6 +129,43 @@ fn parse_fill(body: &str) -> Option<Rgb> {
     elements(inner, "fgColor").first().and_then(|(a, _)| color(a))
 }
 
+/// An xlsx border edge style (`<left style="thin">`) in the model's terms.
+/// Hairlines draw as thin lines; the dash-dot family draws dashed.
+fn edge_style(style: Option<&str>) -> BorderStyle {
+    match style {
+        None | Some("none") => BorderStyle::None,
+        Some("medium") => BorderStyle::Medium,
+        Some("thick") => BorderStyle::Thick,
+        Some("double") => BorderStyle::Double,
+        Some("dotted") => BorderStyle::Dotted,
+        Some("dashed" | "mediumDashed" | "dashDot" | "mediumDashDot" | "dashDotDot" | "mediumDashDotDot" | "slantDashDot") => {
+            BorderStyle::Dashed
+        }
+        // thin, hair, and anything newer we don't know: a thin line.
+        Some(_) => BorderStyle::Solid,
+    }
+}
+
+/// One `<border>`: its four edges, and the colour of the first edge that
+/// names one (the model has one colour per cell border). `start`/`end` are
+/// the ISO 29500 names for left/right.
+fn parse_border(body: &str) -> CellBorder {
+    let mut edge_color = None;
+    let mut edge = |names: &[&str]| {
+        let Some((attrs, inner)) = names.iter().find_map(|n| elements(body, n).into_iter().next()) else {
+            return BorderStyle::None;
+        };
+        let style = edge_style(xml_attr(&format!(" {attrs}"), "style"));
+        if style != BorderStyle::None && edge_color.is_none() {
+            edge_color = elements(inner, "color").first().and_then(|(a, _)| color(a));
+        }
+        style
+    };
+    let (left, right, top, bottom) = (edge(&["left", "start"]), edge(&["right", "end"]), edge(&["top"]), edge(&["bottom"]));
+    let (r, g, b) = edge_color.unwrap_or(Rgb(0, 0, 0)).to_f64();
+    CellBorder { top, bottom, left, right, color: (r, g, b) }
+}
+
 /// Every cell style (`cellXfs` order) in styles.xml.
 pub fn parse_cell_styles(styles_xml: &str) -> Vec<XfStyle> {
     let custom: std::collections::HashMap<u32, String> = elements(block(styles_xml, "numFmts"), "numFmt")
@@ -138,6 +177,8 @@ pub fn parse_cell_styles(styles_xml: &str) -> Vec<XfStyle> {
         .collect();
     let fonts: Vec<Font> = elements(block(styles_xml, "fonts"), "font").into_iter().map(|(_, b)| parse_font(b)).collect();
     let fills: Vec<Option<Rgb>> = elements(block(styles_xml, "fills"), "fill").into_iter().map(|(_, b)| parse_fill(b)).collect();
+    let borders: Vec<CellBorder> =
+        elements(block(styles_xml, "borders"), "border").into_iter().map(|(_, b)| parse_border(b)).collect();
     // Font 0 is the workbook's default font: a cell on it has no font of its own.
     let default_font = fonts.first().cloned().unwrap_or_default();
 
@@ -180,7 +221,8 @@ pub fn parse_cell_styles(styles_xml: &str) -> Vec<XfStyle> {
                 style.wrap = matches!(xml_attr(&a, "wrapText"), Some("1") | Some("true"));
                 style.indent = xml_attr(&a, "indent").and_then(|v| v.parse().ok()).unwrap_or(0);
             }
-            XfStyle { format: NumberFormat::new(kind_for_code(code)), style }
+            let border = borders.get(id("borderId")).cloned().unwrap_or_default();
+            XfStyle { format: NumberFormat::new(kind_for_code(code)), style, border }
         })
         .collect()
 }
@@ -202,19 +244,27 @@ mod tests {
         <fill><patternFill patternType="gray125"/></fill>
         <fill><patternFill patternType="solid"><fgColor rgb="FFFFC7CE"/><bgColor indexed="64"/></patternFill></fill>
       </fills>
+      <borders count="3">
+        <border><left/><right/><top/><bottom/><diagonal/></border>
+        <border><left style="thin"><color indexed="64"/></left><right style="thin"/><top style="thin"/><bottom style="thin"/><diagonal/></border>
+        <border><start style="thick"><color rgb="FF0070C0"/></start><end style="medium"/><top style="dashed"/><bottom style="hair"/></border>
+      </borders>
       <cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0"/></cellStyleXfs>
-      <cellXfs count="4">
+      <cellXfs count="6">
         <xf numFmtId="0" fontId="0" fillId="0" borderId="0"/>
         <xf numFmtId="164" fontId="1" fillId="2" applyFont="1"/>
         <xf numFmtId="0" fontId="2" fillId="0" applyAlignment="1"><alignment horizontal="center" vertical="top" wrapText="1" indent="2"/></xf>
         <xf numFmtId="0" fontId="0" fillId="1"><alignment horizontal="right"/></xf>
+        <xf numFmtId="0" fontId="0" fillId="0" borderId="1" applyBorder="1"/>
+        <xf numFmtId="0" fontId="0" fillId="0" borderId="2" applyBorder="1"/>
       </cellXfs>
     </styleSheet>"#;
 
     #[test]
     fn the_default_xf_is_the_default_style() {
         let xfs = parse_cell_styles(STYLES);
-        assert_eq!(xfs.len(), 4);
+        assert_eq!(xfs.len(), 6);
+        assert!(xfs[0].border.is_none());
         assert!(xfs[0].style.is_default(), "{:?}", xfs[0].style);
         assert_eq!(xfs[0].format.kind, NumberFormatKind::General);
     }
@@ -240,5 +290,20 @@ mod tests {
         // gray125 is a pattern, not a solid fill.
         assert_eq!(xfs[3].style.fill, None);
         assert_eq!(xfs[3].style.h_align, HAlign::Right);
+    }
+
+    #[test]
+    fn borders_resolve_through_border_id() {
+        let xfs = parse_cell_styles(STYLES);
+        let thin = &xfs[4].border;
+        assert_eq!((&thin.left, &thin.right, &thin.top, &thin.bottom), (&BorderStyle::Solid, &BorderStyle::Solid, &BorderStyle::Solid, &BorderStyle::Solid));
+        assert_eq!(thin.color, (0.0, 0.0, 0.0));
+        let mixed = &xfs[5].border;
+        assert_eq!(mixed.left, BorderStyle::Thick, "<start> is the left edge");
+        assert_eq!(mixed.right, BorderStyle::Medium, "<end> is the right edge");
+        assert_eq!(mixed.top, BorderStyle::Dashed);
+        assert_eq!(mixed.bottom, BorderStyle::Solid, "a hairline draws thin");
+        let (r, g, b) = mixed.color;
+        assert_eq!(((r * 255.0).round(), (g * 255.0).round(), (b * 255.0).round()), (0.0, 112.0, 192.0));
     }
 }
