@@ -5,11 +5,25 @@ use gtk4::cairo::{Context, Format, ImageSurface};
 pub enum ChartType { Bar, Line, Pie }
 
 pub fn render_chart(data: &[(String, f64)], chart_type: ChartType, width: i32, height: i32) -> ImageSurface {
+    render_chart_named(data, chart_type, width, height, None)
+}
+
+/// As [`render_chart`], with a legend entry for the series when it has a
+/// name (charts on the grid do; the dialog's preview doesn't need one).
+pub fn render_chart_named(
+    data: &[(String, f64)],
+    chart_type: ChartType,
+    width: i32,
+    height: i32,
+    series_name: Option<&str>,
+) -> ImageSurface {
     let surface = ImageSurface::create(Format::ARgb32, width, height).unwrap();
     let cr = Context::new(&surface).unwrap();
     cr.set_source_rgb(1.0, 1.0, 1.0); cr.paint().unwrap();
+    cr.select_font_face("Sans", gtk4::cairo::FontSlant::Normal, gtk4::cairo::FontWeight::Normal);
+    cr.set_font_size(10.0);
     match chart_type {
-        ChartType::Bar => draw_bars(&cr, data, width, height),
+        ChartType::Bar => draw_bars(&cr, data, width, height, series_name),
         ChartType::Line => draw_line(&cr, data, width, height),
         ChartType::Pie => draw_pie(&cr, data, width, height),
     }
@@ -17,17 +31,69 @@ pub fn render_chart(data: &[(String, f64)], chart_type: ChartType, width: i32, h
     surface
 }
 
-fn draw_bars(cr: &Context, data: &[(String, f64)], w: i32, h: i32) { /* same as before */ 
-    let n = data.len() as f64;
-    let max_val = data.iter().map(|d| d.1).fold(0.0, f64::max).max(1.0);
-    let bar_w = (w as f64 * 0.7) / n;
-    let margin = w as f64 * 0.15 / n;
-    for (i, (label, val)) in data.iter().enumerate() {
-        let x = margin + i as f64 * (bar_w + margin * 2.0);
-        let bar_h = (val / max_val) * (h as f64 * 0.7);
-        let y = h as f64 * 0.85 - bar_h;
-        cr.set_source_rgb(0.2, 0.5, 0.9); cr.rectangle(x, y, bar_w, bar_h); cr.fill().unwrap();
-        cr.set_source_rgb(0.1, 0.1, 0.1); cr.move_to(x, h as f64 * 0.92); cr.show_text(label).unwrap();
+/// The first series colour of Office's default theme (accent 1), which
+/// Excel and LibreOffice give a series that names no colour.
+const SERIES_1: (f64, f64, f64) = (0x4f as f64 / 255.0, 0x81 as f64 / 255.0, 0xbd as f64 / 255.0);
+
+/// A clustered column chart: value axis from 0 with round ticks and
+/// horizontal gridlines, categories under the bars, and the legend at the
+/// right when the series has a name.
+fn draw_bars(cr: &Context, data: &[(String, f64)], w: i32, h: i32, series_name: Option<&str>) {
+    let (w, h) = (w as f64, h as f64);
+    let text_w = |t: &str| cr.text_extents(t).map(|e| e.x_advance()).unwrap_or(0.0);
+    let max_val = data.iter().map(|d| d.1).fold(0.0, f64::max);
+    let (top, step) = tables_core::sheet::nice_axis(max_val);
+    let ticks = (top / step).round() as usize;
+    let label = |v: f64| {
+        let s = format!("{:.*}", if step < 1.0 { 1 } else { 0 }, v);
+        s
+    };
+    let axis_w = (0..=ticks).map(|i| text_w(&label(i as f64 * step))).fold(0.0, f64::max);
+    let legend_w = series_name.map_or(0.0, |n| text_w(n) + 30.0);
+    let (left, right, top_y, bottom) = (axis_w + 14.0, w - 10.0 - legend_w, 12.0, h - 24.0);
+    if right <= left || bottom <= top_y || data.is_empty() {
+        return;
+    }
+    let y_of = |v: f64| bottom - (v / top) * (bottom - top_y);
+
+    // Gridlines and value labels.
+    cr.set_line_width(1.0);
+    for i in 0..=ticks {
+        let v = i as f64 * step;
+        let y = y_of(v).round() + 0.5;
+        cr.set_source_rgb(0.7, 0.7, 0.7);
+        cr.move_to(left, y);
+        cr.line_to(right, y);
+        cr.stroke().unwrap();
+        let t = label(v);
+        cr.set_source_rgb(0.2, 0.2, 0.2);
+        cr.move_to(left - 6.0 - text_w(&t), y + 3.5);
+        cr.show_text(&t).unwrap();
+    }
+
+    // Bars: each category's slot is split 150% gap to 100% bar, as Excel's default.
+    let slot = (right - left) / data.len() as f64;
+    let bar_w = slot / 2.5;
+    for (i, (cat, val)) in data.iter().enumerate() {
+        let x = left + i as f64 * slot + (slot - bar_w) / 2.0;
+        cr.set_source_rgb(SERIES_1.0, SERIES_1.1, SERIES_1.2);
+        cr.rectangle(x, y_of(*val), bar_w, bottom - y_of(*val));
+        cr.fill().unwrap();
+        cr.set_source_rgb(0.2, 0.2, 0.2);
+        cr.move_to(left + i as f64 * slot + (slot - text_w(cat)) / 2.0, bottom + 15.0);
+        cr.show_text(cat).unwrap();
+    }
+
+    // Legend.
+    if let Some(name) = series_name {
+        let lx = right + 12.0;
+        let ly = (top_y + bottom) / 2.0;
+        cr.set_source_rgb(SERIES_1.0, SERIES_1.1, SERIES_1.2);
+        cr.rectangle(lx, ly - 7.0, 8.0, 8.0);
+        cr.fill().unwrap();
+        cr.set_source_rgb(0.2, 0.2, 0.2);
+        cr.move_to(lx + 12.0, ly);
+        cr.show_text(name).unwrap();
     }
 }
 fn draw_line(cr: &Context, data: &[(String, f64)], w: i32, h: i32) { /* same */

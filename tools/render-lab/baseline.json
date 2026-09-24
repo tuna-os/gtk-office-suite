@@ -132,8 +132,8 @@
     "B": "amber"
   },
   "tables/chart": {
-    "A": "red",
-    "B": "red"
+    "A": "amber",
+    "B": "amber"
   },
   "tables/col-row-size": {
     "A": "amber",

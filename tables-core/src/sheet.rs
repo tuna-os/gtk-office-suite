@@ -412,6 +412,49 @@ pub struct ChartSpec {
     pub height_px: f64,
 }
 
+/// A value axis from 0 that holds `max`: `(top, step)` with the step
+/// 1, 2 or 5 times a power of ten and 4 to 10 intervals, as spreadsheet
+/// charts choose them (0..10 by 1 for a maximum of 9).
+pub fn nice_axis(max: f64) -> (f64, f64) {
+    if !max.is_finite() || max <= 0.0 {
+        return (1.0, 0.2);
+    }
+    // The top is the first tick above `max` (headroom over the tallest bar).
+    let top_for = |step: f64| ((max / step).floor() + 1.0) * step;
+    let mag = 10f64.powf((max / 10.0).log10().floor());
+    [1.0, 2.0, 5.0, 10.0, 20.0, 50.0]
+        .iter()
+        .map(|m| m * mag)
+        .map(|step| (top_for(step), step))
+        .find(|(top, step)| (top / step).round() <= 10.0)
+        .unwrap_or((top_for(100.0 * mag), 100.0 * mag))
+}
+
+impl ChartSpec {
+    /// The name a single series is shown under: its own, else the one
+    /// LibreOffice gives an untitled series, "Column B".
+    pub fn series_name(&self) -> String {
+        match self.series.first() {
+            Some(s) if !s.name.trim().is_empty() => s.name.clone(),
+            _ => format!("Column {}", col_label(self.val.1)),
+        }
+    }
+
+    /// The (category, value) points a single-series chart plots, read from
+    /// the sheet. A value that isn't a number plots as 0, as in Excel.
+    pub fn points(&self, sheet: &SheetModel) -> Vec<(String, f64)> {
+        let (cat, val) = self.series.first().map_or((self.cat, self.val), |s| (s.cat, s.val));
+        let (r0, vc, r1) = val;
+        (r0..=r1)
+            .map(|r| {
+                let label = sheet.cell(cat.0 + (r - r0), cat.1).to_string();
+                let v = sheet.cell(r, vc).trim().parse::<f64>().ok().filter(|v| v.is_finite()).unwrap_or(0.0);
+                (label, v)
+            })
+            .collect()
+    }
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum ChartKind {
     Bar,
@@ -804,7 +847,31 @@ impl SheetModel {
         for &(r, c, rs, cs) in &self.merges {
             grow(r + rs.max(1) - 1, c + cs.max(1) - 1);
         }
+        // So is a chart, over the cells it floats above.
+        for chart in &self.charts {
+            let (r, c) = self.chart_extent(chart);
+            grow(r, c);
+        }
         extent
+    }
+
+    /// The last row and column a chart covers, from its anchor and pixel
+    /// size over this sheet's row heights and column widths.
+    pub fn chart_extent(&self, chart: &ChartSpec) -> (usize, usize) {
+        let (ar, ac) = chart.anchor;
+        let mut c = ac;
+        let mut w = self.col_width(c);
+        while w < chart.width_px && c + 1 < self.cols {
+            c += 1;
+            w += self.col_width(c);
+        }
+        let mut r = ar;
+        let mut h = self.row_height(r);
+        while h < chart.height_px && r + 1 < self.rows {
+            r += 1;
+            h += self.row_height(r);
+        }
+        (r, c)
     }
 
     /// The selection as drawn: `selection_rect` grown to take in every merged
@@ -946,6 +1013,64 @@ mod used_extent_tests {
         assert_eq!(s.selection_block(), (0, 0, 1, 2));
         s.select_cell(5, 5);
         assert_eq!(s.selection_block(), (5, 5, 5, 5));
+    }
+
+    #[test]
+    fn a_chart_extends_the_used_range_over_the_cells_it_covers() {
+        let mut s = SheetModel::new("t", 40, 20, 0);
+        s.data[0][0] = "x".into();
+        let chart = ChartSpec {
+            kind: ChartKind::Bar,
+            title: String::new(),
+            x_axis_title: None,
+            y_axis_title: None,
+            legend_position: LegendPosition::Right,
+            series: Vec::new(),
+            cat: (0, 0, 3),
+            val: (0, 1, 3),
+            anchor: (1, 3),
+            width_px: COL_WIDTH * 2.5,
+            height_px: ROW_HEIGHT * 4.0,
+        };
+        // Three columns cover 2.5 widths; four rows exactly cover four heights.
+        assert_eq!(s.chart_extent(&chart), (4, 5));
+        s.charts.push(chart);
+        assert_eq!(s.used_extent(), Some((4, 5)));
+    }
+
+    #[test]
+    fn value_axes_use_round_steps_with_headroom() {
+        assert_eq!(nice_axis(9.0), (10.0, 1.0));
+        assert_eq!(nice_axis(10.0), (12.0, 2.0));
+        assert_eq!(nice_axis(47.0), (50.0, 5.0));
+        assert_eq!(nice_axis(0.8), (0.9, 0.1));
+        assert_eq!(nice_axis(0.0), (1.0, 0.2));
+    }
+
+    #[test]
+    fn chart_points_pair_categories_with_numeric_values() {
+        let mut s = SheetModel::new("t", 10, 5, 0);
+        for (i, (k, v)) in [("Q1", "3"), ("Q2", "7"), ("Q3", "n/a"), ("Q4", "9")].iter().enumerate() {
+            s.data[i][0] = (*k).into();
+            s.data[i][1] = (*v).into();
+        }
+        let chart = ChartSpec {
+            kind: ChartKind::Bar,
+            title: String::new(),
+            x_axis_title: None,
+            y_axis_title: None,
+            legend_position: LegendPosition::Right,
+            series: Vec::new(),
+            cat: (0, 0, 3),
+            val: (0, 1, 3),
+            anchor: (0, 3),
+            width_px: 100.0,
+            height_px: 100.0,
+        };
+        assert_eq!(
+            chart.points(&s),
+            vec![("Q1".into(), 3.0), ("Q2".into(), 7.0), ("Q3".into(), 0.0), ("Q4".into(), 9.0)]
+        );
     }
 
     #[test]
