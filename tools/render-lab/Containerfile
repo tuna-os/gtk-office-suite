@@ -1,0 +1,40 @@
+# Render lab: the GUI test image plus everything needed to compare what our
+# editors draw on screen against what LibreOffice draws for the same file.
+#
+#   podman build -t gui-test tests/gui/container
+#   podman build -t render-lab tools/render-lab
+#   tools/render-lab/run.sh            # full lab, report in render-lab-out/
+#
+# See docs/RENDER-PARITY-ROADMAP.md for what each tier proves.
+ARG BASE=gui-test
+FROM ${BASE}
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+      # The reference renderer. Writer/Calc/Impress export each fixture to
+      # PDF; poppler rasterizes it at the same DPI our capture uses.
+      libreoffice-writer libreoffice-calc libreoffice-impress \
+      poppler-utils \
+      # Tier B: gtk4-broadwayd serves the running app over HTTP; a headless
+      # browser screenshots it, proving pixels reached a real client.
+      libgtk-4-bin \
+      # Word-box extraction for geometry comparison (where text landed,
+      # not only whether pixels match).
+      tesseract-ocr tesseract-ocr-eng \
+      # Reference-matching fonts: Carlito/Caladea are metric-compatible
+      # with Calibri/Cambria, Liberation with Arial/Times/Courier. Both
+      # renderers must see the same fonts or the comparison measures
+      # font substitution instead of our layout.
+      fonts-crosextra-carlito fonts-crosextra-caladea fonts-liberation \
+      # The toolbar icons; without the theme every button is a broken-image
+      # glyph and Tier B no longer shows what users see. The symbolic icons
+      # are SVGs, so gdk-pixbuf also needs librsvg's loader.
+      adwaita-icon-theme librsvg2-common \
+      python3-numpy python3-docx python3-openpyxl \
+    && rm -rf /var/lib/apt/lists/*
+
+# python-pptx has no Ubuntu package; Playwright ships its own Chromium.
+RUN pip3 install --no-cache-dir --break-system-packages \
+      python-pptx==1.0.2 playwright==1.47.0 \
+    && playwright install --with-deps chromium
+
+ENV RENDER_LAB=1
