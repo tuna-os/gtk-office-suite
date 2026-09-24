@@ -22,6 +22,7 @@ pub(crate) fn resolve_general_ref(r: &BytesRef) -> String {
 
 use super::model::*;
 use super::notes::{extract_notes_text, parse_run_style};
+use super::placeholders::{inherited_rect, parse_placeholders, PhKey, Placeholder};
 
 use std::fs::File;
 use std::io::Write;
@@ -231,6 +232,9 @@ struct PendingShape {
     h: Option<f64>,
     rotation: Option<f64>,
     prst: Option<String>,
+    /// Set when the shape is a placeholder (`p:ph`): its geometry may
+    /// come from the layout or master instead of its own `a:xfrm`.
+    ph: Option<PhKey>,
 }
 
 impl PendingShape {
@@ -250,6 +254,27 @@ struct PendingPicture {
     w: Option<f64>,
     h: Option<f64>,
     rotation: Option<f64>,
+}
+
+/// The placeholders of a slide layout and of the master it belongs to, for
+/// resolving slide placeholders that carry no geometry of their own.
+fn read_layout_placeholders(
+    archive: &mut zip::ZipArchive<File>,
+    budget: &mut ZipBudget,
+    layout_path: &str,
+) -> (Vec<Placeholder>, Vec<Placeholder>) {
+    let layout_xml = archive.optional_part_to_string(layout_path, budget);
+    let dir = Path::new(layout_path).parent().unwrap_or(Path::new("ppt"));
+    let file = Path::new(layout_path).file_name().unwrap_or_default().to_string_lossy();
+    let rels = archive.optional_part_to_string(&format!("{}/_rels/{}.rels", dir.to_string_lossy(), file), budget);
+    let master_xml = rels
+        .split("Target=\"")
+        .skip(1)
+        .filter_map(|s| s.split('"').next())
+        .find(|t| t.contains("slideMaster"))
+        .map(|t| archive.optional_part_to_string(&format!("ppt/{}", t.trim_start_matches("../")), budget))
+        .unwrap_or_default();
+    (parse_placeholders(&layout_xml), parse_placeholders(&master_xml))
 }
 
 pub fn read_pptx(path: &str) -> Result<Deck, String> {
@@ -375,6 +400,8 @@ pub fn read_pptx(path: &str) -> Result<Deck, String> {
     // Layout part path per slide (slide → layout → master mapping is
     // resolved after the slide loop, when `archive` is free again).
     let mut slide_layout_paths: Vec<Option<String>> = Vec::new();
+    let mut placeholder_cache: std::collections::HashMap<String, (Vec<Placeholder>, Vec<Placeholder>)> =
+        std::collections::HashMap::new();
 
     // 3. Parse each slide XML file
     for (slide_index, r_id) in ordered_slide_rids.iter().enumerate() {
@@ -433,6 +460,24 @@ pub fn read_pptx(path: &str) -> Result<Deck, String> {
 
         let mut objects = Vec::new();
 
+        // The layout (and through it, the master) this slide's placeholders
+        // inherit their geometry from. Read once per layout.
+        let layout_path = slide_image_rels
+            .values()
+            .find(|t| t.contains("slideLayout"))
+            .map(|t| format!("ppt/{}", t.trim_start_matches("../")));
+        if let Some(lp) = &layout_path {
+            if !placeholder_cache.contains_key(lp) {
+                let found = read_layout_placeholders(&mut archive, &mut budget, lp);
+                placeholder_cache.insert(lp.clone(), found);
+            }
+        }
+        let (layout_phs, master_phs): (&[Placeholder], &[Placeholder]) = layout_path
+            .as_ref()
+            .and_then(|lp| placeholder_cache.get(lp))
+            .map(|(l, m)| (l.as_slice(), m.as_slice()))
+            .unwrap_or((&[], &[]));
+
         // Parse slide XML using quick-xml event reader
         let mut background = String::from("#ffffff");
         {
@@ -471,6 +516,7 @@ pub fn read_pptx(path: &str) -> Result<Deck, String> {
                                     h: None,
                                     rotation: None,
                                     prst: None,
+                                    ph: None,
                                 });
                             }
                             "p:pic" => {
@@ -516,6 +562,11 @@ pub fn read_pptx(path: &str) -> Result<Deck, String> {
                                     if let Some(prst) = parse_prst_geom(e) {
                                         shape.prst = Some(prst);
                                     }
+                                }
+                            }
+                            "p:ph" => {
+                                if let Some(shape) = current_shape.as_mut() {
+                                    shape.ph = Some(PhKey::from_ph(e));
                                 }
                             }
                             "p:cNvSpPr" => {
@@ -607,6 +658,11 @@ pub fn read_pptx(path: &str) -> Result<Deck, String> {
                                     }
                                 }
                             }
+                            "p:ph" => {
+                                if let Some(shape) = current_shape.as_mut() {
+                                    shape.ph = Some(PhKey::from_ph(e));
+                                }
+                            }
                             "p:cNvSpPr" => {
                                 if is_tx_box_attr(e) {
                                     if let Some(shape) = current_shape.as_mut() {
@@ -645,7 +701,26 @@ pub fn read_pptx(path: &str) -> Result<Deck, String> {
                             in_rpr = false;
                         }
                         if name.as_ref() == "p:sp" {
-                            if let Some(shape) = current_shape.take() {
+                            if let Some(mut shape) = current_shape.take() {
+                                let text = text_of(&shape.runs);
+                                let has_text = !text.trim().is_empty();
+                                if let Some(key) = &shape.ph {
+                                    // An empty placeholder is a prompt in the
+                                    // editor, not content: LibreOffice doesn't
+                                    // draw it, and neither do we.
+                                    if !has_text && !shape.is_tx_box {
+                                        buf.clear();
+                                        continue;
+                                    }
+                                    if [shape.x, shape.y, shape.w, shape.h].iter().any(Option::is_none) {
+                                        if let Some(r) = inherited_rect(key, layout_phs, master_phs) {
+                                            shape.x = shape.x.or(Some(r.x));
+                                            shape.y = shape.y.or(Some(r.y));
+                                            shape.w = shape.w.or(Some(r.w));
+                                            shape.h = shape.h.or(Some(r.h));
+                                        }
+                                    }
+                                }
                                 let x = shape.x.unwrap_or(0.0) * scale.x;
                                 let y = shape.y.unwrap_or(0.0) * scale.y;
                                 let w = shape.w.unwrap_or(0.0) * scale.x;
@@ -653,8 +728,6 @@ pub fn read_pptx(path: &str) -> Result<Deck, String> {
                                 
                                 let rotation = shape.rotation.unwrap_or(0.0);
 
-                                let text = text_of(&shape.runs);
-                                let has_text = !text.trim().is_empty();
                                 if shape.is_tx_box || (shape.has_tx_body && has_text) {
                                     objects.push(SlideObject::TextBox { text, x, y, w, h, rotation, runs: shape.runs.clone() });
                                 } else {
@@ -738,12 +811,7 @@ pub fn read_pptx(path: &str) -> Result<Deck, String> {
             }
         }
 
-        slide_layout_paths.push(
-            slide_image_rels
-                .values()
-                .find(|t| t.contains("slideLayout"))
-                .map(|t| format!("ppt/{}", t.trim_start_matches("../"))),
-        );
+        slide_layout_paths.push(layout_path);
 
         slides.push(Slide {
             // The name the slide carries, falling back to a positional

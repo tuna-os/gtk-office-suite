@@ -1143,3 +1143,123 @@ fn an_unnamed_slide_falls_back_to_its_position() {
         }
     }
 }
+
+/// Placeholders without an `a:xfrm` of their own (what PowerPoint and
+/// python-pptx write for a slide built on a layout) take their geometry
+/// from the layout, then the master. Reading the missing xfrm as zero put
+/// the title and subtitle at the slide's corner with no width, and the
+/// canvas drew them one character per line (render lab `decks/title-layout`).
+/// An empty placeholder is an editing prompt, not content, and isn't drawn.
+#[test]
+fn slide_placeholders_inherit_geometry_from_layout_and_master() {
+    use std::io::{Cursor, Write};
+    const P: &str = "xmlns:p=\"http://schemas.openxmlformats.org/presentationml/2006/main\" \
+                     xmlns:a=\"http://schemas.openxmlformats.org/drawingml/2006/main\" \
+                     xmlns:r=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships\"";
+    let rels = |rels: &[(&str, &str)]| {
+        let body: String = rels
+            .iter()
+            .enumerate()
+            .map(|(i, (kind, target))| {
+                format!(
+                    "<Relationship Id=\"rId{}\" Type=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships/{kind}\" Target=\"{target}\"/>",
+                    i + 1
+                )
+            })
+            .collect();
+        format!("<Relationships xmlns=\"http://schemas.openxmlformats.org/package/2006/relationships\">{body}</Relationships>")
+    };
+    let sp = |ph: &str, xfrm: &str, text: &str| {
+        let body = if text.is_empty() {
+            "<a:p/>".to_string()
+        } else {
+            format!("<a:p><a:r><a:t>{text}</a:t></a:r></a:p>")
+        };
+        format!(
+            "<p:sp><p:nvSpPr><p:cNvPr id=\"2\" name=\"s\"/><p:cNvSpPr/><p:nvPr>{ph}</p:nvPr></p:nvSpPr>\
+             <p:spPr>{xfrm}</p:spPr><p:txBody><a:bodyPr/>{body}</p:txBody></p:sp>"
+        )
+    };
+    let xfrm = |x: i64, y: i64, w: i64, h: i64| {
+        format!("<a:xfrm><a:off x=\"{x}\" y=\"{y}\"/><a:ext cx=\"{w}\" cy=\"{h}\"/></a:xfrm>")
+    };
+    let tree = |root: &str, shapes: String| format!("<p:{root} {P}><p:cSld><p:spTree>{shapes}</p:spTree></p:cSld></p:{root}>");
+
+    let parts: Vec<(&str, String)> = vec![
+        ("_rels/.rels", rels(&[("officeDocument", "ppt/presentation.xml")])),
+        (
+            "ppt/presentation.xml",
+            format!("<p:presentation {P}><p:sldIdLst><p:sldId id=\"256\" r:id=\"rId1\"/></p:sldIdLst>\
+                     <p:sldSz cx=\"12192000\" cy=\"6858000\"/></p:presentation>"),
+        ),
+        ("ppt/_rels/presentation.xml.rels", rels(&[("slide", "slides/slide1.xml")])),
+        (
+            "ppt/slides/slide1.xml",
+            tree(
+                "sld",
+                sp("<p:ph type=\"ctrTitle\"/>", "", "Title Slide")
+                    + &sp("<p:ph type=\"subTitle\" idx=\"1\"/>", "", "Subtitle text")
+                    + &sp("<p:ph type=\"dt\" idx=\"10\"/>", "", ""),
+            ),
+        ),
+        ("ppt/slides/_rels/slide1.xml.rels", rels(&[("slideLayout", "../slideLayouts/slideLayout1.xml")])),
+        (
+            "ppt/slideLayouts/slideLayout1.xml",
+            // The layout places the title; the subtitle it leaves to the master.
+            tree(
+                "sldLayout",
+                sp("<p:ph type=\"ctrTitle\"/>", &xfrm(914400, 2130425, 10363200, 1470025), "")
+                    + &sp("<p:ph type=\"subTitle\" idx=\"1\"/>", "", ""),
+            ),
+        ),
+        ("ppt/slideLayouts/_rels/slideLayout1.xml.rels", rels(&[("slideMaster", "../slideMasters/slideMaster1.xml")])),
+        (
+            "ppt/slideMasters/slideMaster1.xml",
+            tree(
+                "sldMaster",
+                sp("<p:ph type=\"title\"/>", &xfrm(0, 0, 100, 100), "")
+                    + &sp("<p:ph type=\"body\" idx=\"1\"/>", &xfrm(1828800, 3886200, 8534400, 1752600), ""),
+            ),
+        ),
+    ];
+    let mut buffer = Vec::new();
+    {
+        let mut w = zip::ZipWriter::new(Cursor::new(&mut buffer));
+        for (name, body) in &parts {
+            w.start_file(*name, zip::write::SimpleFileOptions::default()).unwrap();
+            w.write_all(body.as_bytes()).unwrap();
+        }
+        w.finish().unwrap();
+    }
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("layout.pptx");
+    std::fs::write(&path, &buffer).unwrap();
+
+    let deck = decks_core::read_deck(path.to_str().unwrap()).expect("read crafted pptx");
+    let boxes: Vec<(&str, f64, f64, f64, f64)> = deck.slides[0]
+        .objects
+        .iter()
+        .map(|o| match o {
+            SlideObject::TextBox { text, x, y, w, h, .. } => (text.as_str(), *x, *y, *w, *h),
+            other => panic!("unexpected object {other:?}"),
+        })
+        .collect();
+    assert_eq!(boxes.len(), 2, "the empty date placeholder must not be drawn: {boxes:?}");
+    // 12192000 EMU across maps to 960 model units.
+    let k = 960.0 / 12192000.0;
+    let close = |a: f64, b: f64| (a - b).abs() < 0.01;
+    let (t, x, y, w, h) = boxes[0];
+    assert_eq!(t, "Title Slide");
+    assert!(
+        close(x, 914400.0 * k) && close(y, 2130425.0 * k) && close(w, 10363200.0 * k) && close(h, 1470025.0 * k),
+        "title should sit where the layout puts it, got {:?}",
+        (x, y, w, h)
+    );
+    let (t, x, y, w, h) = boxes[1];
+    assert_eq!(t, "Subtitle text");
+    assert!(
+        close(x, 1828800.0 * k) && close(y, 3886200.0 * k) && close(w, 8534400.0 * k) && close(h, 1752600.0 * k),
+        "subtitle should fall through to the master's body, got {:?}",
+        (x, y, w, h)
+    );
+}
