@@ -171,7 +171,12 @@ def tier_a(app, doc, dest, env):
     # page, fitted to width, differs by 1% in scale between the tiers. The
     # A-vs-B agreement metric catches it if this ever stops being true.
     seed_settings(env["HOME"], extra=2 * SOLID_CSD_BORDER)
-    for old in glob.glob(os.path.join(dest, "A-*.png")) + glob.glob(os.path.join(dest, "S-*.png")):
+    for old in (
+        glob.glob(os.path.join(dest, "A-*.png"))
+        + glob.glob(os.path.join(dest, "S-*.png"))
+        + glob.glob(os.path.join(dest, "P-*.png"))
+        + glob.glob(os.path.join(dest, "print.pdf"))
+    ):
         os.remove(old)
     xvfb = start(["Xvfb", ":71", "-screen", "0", f"{WINDOW[0] + 100}x{WINDOW[1] + 100}x24", "-nolisten", "tcp"], env, subprocess.DEVNULL)
     time.sleep(1)
@@ -185,7 +190,23 @@ def tier_a(app, doc, dest, env):
         finally:
             stop(p)
             stop(xvfb)
+    rasterize_print(dest)
     return len(glob.glob(os.path.join(dest, "A-*.png")))
+
+
+def rasterize_print(dest):
+    """An app that also wrote its PDF export of the captured pages
+    (`print.pdf`, Letters) gets it rasterised like LibreOffice's reference,
+    as P-<n>.png, so compare.py can check that paper and screen agree."""
+    pdf = os.path.join(dest, "print.pdf")
+    if not os.path.exists(pdf):
+        return
+    subprocess.run(["pdftoppm", "-r", "96", "-png", pdf, os.path.join(dest, "P")], check=False, capture_output=True)
+    pages = sorted(glob.glob(os.path.join(dest, "P-*.png")), key=lambda p: int(p.rsplit("-", 1)[1][:-4]))
+    for i, p in enumerate(pages, start=1):
+        os.rename(p, os.path.join(dest, f"P-{i}.tmp"))
+    for i in range(1, len(pages) + 1):
+        os.rename(os.path.join(dest, f"P-{i}.tmp"), os.path.join(dest, f"P-{i}.png"))
 
 
 def tier_b(app, doc, dest, env, browser):

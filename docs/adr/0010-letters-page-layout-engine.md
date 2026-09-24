@@ -41,7 +41,7 @@ the Letters part concretely.
 3. **Pango and Cairo, not GTK, behind the `render` feature.**
    `layout::pango::PangoShaper` shapes with a pangocairo font map at 72 dpi
    (one Pango unit is one point) with metrics hinting off, so line breaks do
-   not depend on zoom. `layout::pango::Painter::draw_page(cr, page)` is the
+   not depend on zoom. `layout::pango::Typeset::draw_page(cr, page)` is the
    one drawing routine for a page: the page view, print and PDF call it with
    a Cairo context scaled to their device. Pango and Cairo are not GTK; the
    crate stays free of `gtk4`, and without the feature it has no C
@@ -51,7 +51,12 @@ the Letters part concretely.
       It is a view toggle beside the editable "Draft" view (the current
       TextView), and it is what the render lab captures. Its zoom is
       physical: 100% is 96/72 px per point; fit-to-width is a separate mode.
-   2. Print and PDF export move to `Painter`.
+   2. Print, Print Preview and PDF export draw with `Typeset::draw_page`
+      (done: `letters/src/printing.rs`; the old unstyled pagination in
+      `letters/src/layout.rs` is gone and the Draft view takes its page count
+      from the engine too). The render lab rasterises the PDF export and
+      compares it with the on-screen pages (`print_agreement`). Typst stays as
+      "Export as PDF with Typst".
    3. Editing moves onto the page view (caret, selection and hit-testing
       through the tree, `GtkIMContext`, `GtkAccessibleText`), then the
       TextView path is removed. That step also gives Letters the live
@@ -66,7 +71,7 @@ the Letters part concretely.
   makes that explicit instead of pretending one view is both.
 - A renderer that re-shapes a paragraph to draw it must use
   `layout::paragraph_request`, or it can break lines differently from the
-  engine. `Painter` does; nothing else should shape paragraphs.
+  engine. `Typeset` does; nothing else should shape paragraphs.
 - Not yet in the tree: images (they need their size in the model), footnote
   bodies, floating objects, table column widths and merged cells from the
   file. Each lands with its render-lab fixture.

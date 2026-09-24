@@ -24,6 +24,14 @@ writes an on-screen copy, else A-<n>.png) and what reached the browser
 should be near-identical; a disagreement means pixels were lost or moved
 between GTK and a real client, which is its own bug class.
 
+Print agreement (A vs PDF, Letters): the same measure between the on-screen
+pages and the app's own PDF export of them, rasterised at 96 dpi (P-<n>.png,
+made by capture.py from print.pdf), both box-averaged 4x so the two
+rasterisers' antialiasing doesn't count. Paper and screen come from one layout,
+so they should be near-identical; a different page count scores 255.
+Reported in summary.json (`print_agreement`, `print_disagreements`); it
+does not change verdicts.
+
 Usage:
     compare.py <fixtures-dir> <out-dir> [--baseline scorecard.json]
 
@@ -425,6 +433,31 @@ def tier_agreement(d):
     return worst
 
 
+def print_agreement(d):
+    """Worst per-page difference in grey levels between the app's on-screen
+    pages (A-<n>) and its own PDF export of them rasterised at the same
+    96 dpi (P-<n>), or None when the app wrote no PDF. A page-count mismatch
+    counts as total disagreement (255): paper and screen must be one layout.
+    Informational; it does not change any verdict."""
+    prints = glob.glob(os.path.join(d, "P-[0-9]*.png"))
+    if not prints:
+        return None
+    screens = glob.glob(os.path.join(d, "A-[0-9]*.png"))
+    if len(prints) != len(screens):
+        return 255.0
+    worst = 0.0
+    for p in prints:
+        a = os.path.join(d, f"A-{page_no(p)}.png")
+        pi, ai = Image.open(p).convert("L"), Image.open(a).convert("L")
+        # Two rasterisers (GTK's cairo, poppler) antialias glyph edges
+        # differently; a moved line or word survives a 4x box average, edge
+        # shading does not (the same 4x the SSIM metric uses).
+        size = (pi.size[0] // 4, pi.size[1] // 4)
+        pi, ai = pi.resize(size, Image.BOX), ai.resize(size, Image.BOX)
+        worst = max(worst, float(np.abs(np.asarray(ai, dtype=float) - np.asarray(pi, dtype=float)).mean()))
+    return worst
+
+
 def page_no(path):
     return int(re.search(r"-(\d+)\.png$", path).group(1))
 
@@ -556,15 +589,18 @@ def main():
     manifest = json.load(open(os.path.join(args.fixtures, "manifest.json")))
     if args.app:
         manifest = [fx for fx in manifest if fx["app"] == args.app]
-    results, cache, agreement = {}, {}, {}
+    results, cache, agreement, printed = {}, {}, {}, {}
     for fx in manifest:
         key = f"{fx['app']}/{fx['feature']}"
         d = os.path.join(args.out, fx["app"], fx["feature"])
         results[key] = {t: score_fixture(fx["app"], d, t, cache) for t in TIERS}
         agreement[key] = tier_agreement(d)
+        printed[key] = print_agreement(d)
         line = "  ".join(f"{t}:{(results[key][t] or {'verdict': '-'})['verdict']}" for t in TIERS)
         if agreement[key] is not None:
             line += f"  A~B:{agreement[key]:.2f}"
+        if printed[key] is not None:
+            line += f"  A~PDF:{printed[key]:.2f}"
         print(f"{key:32} {line}")
 
     totals = write_report(args.out, manifest, results, agreement)
@@ -583,10 +619,11 @@ def main():
         if any(totals[t][k] for k in ("green", "amber", "red")):
             print(f"Tier {t}: " + ", ".join(f"{totals[t][k]} {k}" for k in VERDICT_RANK))
 
-    ratchet(args, manifest, card, agreement)
+    ratchet(args, manifest, card, agreement, printed)
 
 
-def ratchet(args, manifest, card, agreement):
+def ratchet(args, manifest, card, agreement, printed=None):
+    printed = printed or {}
     """Compare verdicts with the committed baseline, write the machine-
     readable summary (summary.json, summary.md) that CI, PR comments and
     the hive consume, and exit non-zero on any change the PR didn't lock in.
@@ -635,6 +672,7 @@ def ratchet(args, manifest, card, agreement):
             "verdicts": now.get(f"{fx['app']}/{fx['feature']}", {}),
             "metrics": card.get(f"{fx['app']}/{fx['feature']}", {}),
             "tier_agreement": agreement.get(f"{fx['app']}/{fx['feature']}"),
+            "print_agreement": printed.get(f"{fx['app']}/{fx['feature']}"),
         }
         for fx in manifest
     ]
@@ -644,6 +682,7 @@ def ratchet(args, manifest, card, agreement):
         "regressed": regressed,
         "improved": improved,
         "tier_disagreements": disagree,
+        "print_disagreements": sorted(k for k, v in printed.items() if v is not None and v > TIER_AGREE),
         "fixtures": fixtures,
     }
     with open(os.path.join(args.out, "summary.json"), "w") as f:

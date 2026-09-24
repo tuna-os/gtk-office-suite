@@ -28,7 +28,7 @@ tempfile = "3"
 # Optional, feature `render`: Pango and Cairo are not GTK (ADR 0010).
 pango = { version = "0.22", optional = true, features = ["v1_44"] }
 pangocairo = { version = "0.22", optional = true }
-cairo-rs = { version = "0.22", optional = true, features = ["png"] }
+cairo-rs = { version = "0.22", optional = true, features = ["png", "pdf"] }
 
 [lib]
 name = "letters_core"
