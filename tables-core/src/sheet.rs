@@ -681,7 +681,10 @@ impl SheetModel {
         shift(&mut self.selected_row); shift(&mut self.sel_end_row);
         self.hidden_rows = shift_set(&self.hidden_rows, at, delta);
         self.hidden_rows_manual = shift_set(&self.hidden_rows_manual, at, delta);
-        for range in &mut self.merges { shift(&mut range.0); shift(&mut range.2); }
+        // (row, col, rowspan, colspan): only the anchor row moves. Shifting
+        // field 2 as if it were an end row stretched every merge below an
+        // inserted row.
+        for range in &mut self.merges { shift(&mut range.0); }
         for rule in &mut self.cond_rules { shift(&mut rule.range.0); shift(&mut rule.range.2); }
         for chart in &mut self.charts {
             shift(&mut chart.anchor.0); shift(&mut chart.cat.0); shift(&mut chart.cat.2);
@@ -704,7 +707,7 @@ impl SheetModel {
         };
         shift(&mut self.selected_col); shift(&mut self.sel_end_col);
         self.hidden_cols = shift_set(&self.hidden_cols, at, delta);
-        for range in &mut self.merges { shift(&mut range.1); shift(&mut range.3); }
+        for range in &mut self.merges { shift(&mut range.1); }
         for rule in &mut self.cond_rules { shift(&mut rule.range.1); shift(&mut rule.range.3); }
         for chart in &mut self.charts {
             shift(&mut chart.anchor.1); shift(&mut chart.cat.1); shift(&mut chart.val.1);
@@ -787,13 +790,53 @@ impl SheetModel {
     /// our grid to, so both show the same cells).
     pub fn used_extent(&self) -> Option<(usize, usize)> {
         let mut extent: Option<(usize, usize)> = None;
+        let mut grow = |r: usize, c: usize| {
+            let (er, ec) = extent.unwrap_or((0, 0));
+            extent = Some((er.max(r), ec.max(c)));
+        };
         for (r, row) in self.data.iter().enumerate() {
             if let Some(c) = row.iter().rposition(|v| !v.is_empty()) {
-                let (er, ec) = extent.unwrap_or((0, 0));
-                extent = Some((er.max(r), ec.max(c)));
+                grow(r, c);
             }
         }
+        // A merged block is printed whole even where only its anchor holds
+        // a value (render lab `tables/merged`: one value, A1:C2).
+        for &(r, c, rs, cs) in &self.merges {
+            grow(r + rs.max(1) - 1, c + cs.max(1) - 1);
+        }
         extent
+    }
+
+    /// The selection as drawn: `selection_rect` grown to take in every merged
+    /// block it touches, as spreadsheets select a merge whole. The renderer
+    /// and the fill-handle hit-test both use it, so the handle is pressed
+    /// where it is drawn.
+    pub fn selection_block(&self) -> (usize, usize, usize, usize) {
+        let (mut r0, mut c0, mut r1, mut c1) = self.selection_rect();
+        loop {
+            let mut grew = false;
+            for &(mr, mc, rs, cs) in &self.merges {
+                let (er, ec) = (mr + rs.max(1) - 1, mc + cs.max(1) - 1);
+                let touches = mr <= r1 && er >= r0 && mc <= c1 && ec >= c0;
+                if touches && (mr < r0 || mc < c0 || er > r1 || ec > c1) {
+                    (r0, c0, r1, c1) = (r0.min(mr), c0.min(mc), r1.max(er), c1.max(ec));
+                    grew = true;
+                }
+            }
+            if !grew {
+                return (r0, c0, r1, c1);
+            }
+        }
+    }
+
+    /// The merged block `(row, col, rowspan, colspan)` covering cell
+    /// (`r`, `c`), if any. The first cell is the block's anchor: it holds
+    /// the value and is drawn across the whole block.
+    pub fn merge_covering(&self, r: usize, c: usize) -> Option<(usize, usize, usize, usize)> {
+        self.merges
+            .iter()
+            .copied()
+            .find(|&(mr, mc, rs, cs)| (mr..mr + rs.max(1)).contains(&r) && (mc..mc + cs.max(1)).contains(&c))
     }
 
     /// Whether the cell's value sits at the right of its cell under the
@@ -889,6 +932,23 @@ mod used_extent_tests {
     }
 
     #[test]
+    fn a_merge_extends_the_used_range_and_covers_its_block() {
+        let mut s = SheetModel::new("t", 10, 10, 0);
+        s.data[0][0] = "Merged".into();
+        s.merges.push((0, 0, 2, 3)); // A1:C2
+        assert_eq!(s.used_extent(), Some((1, 2)));
+        assert_eq!(s.merge_covering(1, 2), Some((0, 0, 2, 3)));
+        assert_eq!(s.merge_covering(0, 0), Some((0, 0, 2, 3)));
+        assert_eq!(s.merge_covering(2, 0), None);
+        assert_eq!(s.merge_covering(0, 3), None);
+        // Selecting the anchor selects the whole block.
+        s.select_cell(0, 0);
+        assert_eq!(s.selection_block(), (0, 0, 1, 2));
+        s.select_cell(5, 5);
+        assert_eq!(s.selection_block(), (5, 5, 5, 5));
+    }
+
+    #[test]
     fn empty_sheet_has_no_extent() {
         assert_eq!(SheetModel::new("t", 5, 5, 0).used_extent(), None);
     }
@@ -930,7 +990,7 @@ mod selection_tests {
         assert_eq!(s.rows, 12);
         assert_eq!(s.data[3][1], "10");
         assert!(s.formulas[3][1]);
-        assert_eq!(s.merges[0], (3, 1, 4, 2));
+        assert_eq!(s.merges[0], (3, 1, 2, 2), "the anchor moves; the span doesn't");
         assert_eq!(s.cond_rules[0].range, (3, 1, 4, 2));
         assert_eq!((s.selected_row, s.selected_col), (3, 1));
         // Remove the two rows just inserted at index 1, not the row the
