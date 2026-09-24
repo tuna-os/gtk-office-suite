@@ -748,6 +748,7 @@ fn impress_reads_our_odp_rotation_with_the_sign_we_wrote() {
             | SlideObject::TextBox { rotation, .. }
             | SlideObject::Circle { rotation, .. }
             | SlideObject::Shape { rotation, .. }
+            | SlideObject::Table { rotation, .. }
             | SlideObject::Image { rotation, .. } => *rotation,
         })
         .collect();
@@ -783,6 +784,7 @@ fn we_read_the_rotation_impress_writes_into_an_odp() {
             | SlideObject::TextBox { rotation, .. }
             | SlideObject::Circle { rotation, .. }
             | SlideObject::Shape { rotation, .. }
+            | SlideObject::Table { rotation, .. }
             | SlideObject::Image { rotation, .. } => *rotation,
         })
         .collect();
@@ -1226,6 +1228,7 @@ fn geometry_survives_a_conversion_between_the_two_formats() {
         match d.slides.first().and_then(|s| s.objects.first()) {
             Some(SlideObject::Rect { x, y, w, h, .. })
             | Some(SlideObject::Shape { x, y, w, h, .. })
+            | Some(SlideObject::Table { x, y, w, h, .. })
             | Some(SlideObject::TextBox { x, y, w, h, .. }) => (*x, *y, *w, *h),
             other => panic!("{label}: the shape came back as {other:?}"),
         }

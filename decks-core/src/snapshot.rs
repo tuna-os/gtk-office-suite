@@ -47,6 +47,9 @@ fn object_snapshot(index: usize, obj: &SlideObject) -> ObjectSnapshot {
         SlideObject::Shape { x, y, .. } => {
             ObjectSnapshot { index, kind: "Shape", text: None, x: *x, y: *y }
         }
+        SlideObject::Table { x, y, .. } => {
+            ObjectSnapshot { index, kind: "Table", text: None, x: *x, y: *y }
+        }
         SlideObject::Image { x, y, .. } => {
             ObjectSnapshot { index, kind: "Image", text: None, x: *x, y: *y }
         }

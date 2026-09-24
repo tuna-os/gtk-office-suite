@@ -24,6 +24,8 @@ struct Node {
     name: String,
     attrs: Vec<(String, String)>,
     children: Vec<Node>,
+    /// Text content (kept for `a:t`; whitespace-significant).
+    text: String,
 }
 
 impl Node {
@@ -66,13 +68,15 @@ fn element(e: &BytesStart) -> Node {
             })
             .collect(),
         children: Vec::new(),
+        text: String::new(),
     }
 }
 
-/// The element tree of `xml` (text content is not kept: nothing here needs it).
+/// The element tree of `xml`. Text is kept only inside `a:t`, untrimmed:
+/// a run ending in a space is a word boundary.
 fn parse_tree(xml: &str) -> Node {
     let mut reader = Reader::from_str(xml);
-    reader.config_mut().trim_text(true);
+    reader.config_mut().trim_text(false);
     let mut buf = Vec::new();
     let mut stack = vec![Node::default()];
     loop {
@@ -82,6 +86,16 @@ fn parse_tree(xml: &str) -> Node {
                 let node = element(e);
                 if let Some(top) = stack.last_mut() {
                     top.children.push(node);
+                }
+            }
+            Ok(Event::Text(ref t)) => {
+                if let Some(top) = stack.last_mut().filter(|n| n.name == "a:t") {
+                    top.text.push_str(&super::parse::unescape_text(t));
+                }
+            }
+            Ok(Event::GeneralRef(ref r)) => {
+                if let Some(top) = stack.last_mut().filter(|n| n.name == "a:t") {
+                    top.text.push_str(&super::parse::resolve_general_ref(r));
                 }
             }
             Ok(Event::End(_)) => {
@@ -207,7 +221,12 @@ pub(crate) fn theme(theme_xml: &str) -> Theme {
 }
 
 fn clone_node(n: &Node) -> Node {
-    Node { name: n.name.clone(), attrs: n.attrs.clone(), children: n.children.iter().map(clone_node).collect() }
+    Node {
+        name: n.name.clone(),
+        attrs: n.attrs.clone(),
+        children: n.children.iter().map(clone_node).collect(),
+        text: n.text.clone(),
+    }
 }
 
 // ── Colours, fills, lines ─────────────────────────────────────────────────
@@ -373,6 +392,101 @@ fn resolve_sp(sp: &Node, theme: &Theme, scale: f64) -> SpStyle {
     SpStyle { style: ShapeStyle { fill, gradient, stroke }, round_adj }
 }
 
+// ── Tables ────────────────────────────────────────────────────────────────
+
+/// A table found in a `p:graphicFrame`: its box (EMU, before scaling) and
+/// content. `index` is the frame's position among all `p:graphicFrame`s in
+/// the part, so the slide walker can place it in document order.
+pub(crate) struct FrameTable {
+    pub index: usize,
+    pub x: f64,
+    pub y: f64,
+    pub w: f64,
+    pub h: f64,
+    pub table: super::table::TableData,
+}
+
+fn runs_of(tx_body: &Node) -> Vec<letters_core::model::Run> {
+    use letters_core::model::{Run, RunStyle};
+    let mut runs = Vec::new();
+    for (pi, p) in tx_body.children_named("a:p").enumerate() {
+        if pi > 0 {
+            runs.push(Run { text: "\n".into(), style: RunStyle::default() });
+        }
+        for r in p.children_named("a:r") {
+            let mut style = RunStyle::default();
+            if let Some(rpr) = r.child("a:rPr") {
+                let on = |k: &str| matches!(rpr.attr(k), Some("1") | Some("true"));
+                style.bold = on("b");
+                style.italic = on("i");
+                if let Some(sz) = rpr.attr("sz").and_then(|v| v.parse::<u32>().ok()) {
+                    style.font_size_hp = Some((sz / 50) as u16);
+                }
+            }
+            let text: String = r.children_named("a:t").map(|t| t.text.as_str()).collect();
+            if !text.is_empty() {
+                runs.push(Run { text, style });
+            }
+        }
+    }
+    runs
+}
+
+/// Every table in a part's graphic frames.
+pub(crate) fn frame_tables(xml: &str, theme: &Theme) -> Vec<FrameTable> {
+    use super::table::{TableCell, TableData};
+    let root = parse_tree(xml);
+    let mut frames = Vec::new();
+    root.find_all("p:graphicFrame", &mut frames);
+    frames
+        .into_iter()
+        .enumerate()
+        .filter_map(|(index, frame)| {
+            let xfrm = frame.child("p:xfrm")?;
+            let num = |n: Option<&Node>, k: &str| n.and_then(|n| n.attr(k)).and_then(|v| v.parse::<f64>().ok());
+            let (off, ext) = (xfrm.child("a:off"), xfrm.child("a:ext"));
+            let tbl = frame.find("a:tbl")?;
+            let tbl_pr = tbl.child("a:tblPr");
+            let flag = |k: &str| matches!(tbl_pr.and_then(|p| p.attr(k)), Some("1") | Some("true"));
+            let col_widths = tbl
+                .child("a:tblGrid")
+                .map(|g| g.children_named("a:gridCol").filter_map(|c| c.attr("w")?.parse().ok()).collect())
+                .unwrap_or_default();
+            let mut row_heights = Vec::new();
+            let rows = tbl
+                .children_named("a:tr")
+                .map(|tr| {
+                    row_heights.push(tr.attr("h").and_then(|v| v.parse::<f64>().ok()).unwrap_or(0.0));
+                    tr.children_named("a:tc")
+                        .map(|tc| TableCell {
+                            runs: tc.child("a:txBody").map(runs_of).unwrap_or_default(),
+                            fill: tc
+                                .child("a:tcPr")
+                                .and_then(|p| p.child("a:solidFill"))
+                                .and_then(|f| first_color(f, theme, None)),
+                        })
+                        .collect()
+                })
+                .collect();
+            Some(FrameTable {
+                index,
+                x: num(off, "x").unwrap_or(0.0),
+                y: num(off, "y").unwrap_or(0.0),
+                w: num(ext, "cx").unwrap_or(0.0),
+                h: num(ext, "cy").unwrap_or(0.0),
+                table: TableData {
+                    col_widths,
+                    row_heights,
+                    rows,
+                    first_row: flag("firstRow"),
+                    band_row: flag("bandRow"),
+                    accent: theme.slot("accent1"),
+                },
+            })
+        })
+        .collect()
+}
+
 /// The painting of every `p:sp` in a slide, layout or master part, in
 /// document order. `scale` converts EMU to model units (for line widths).
 pub(crate) fn sp_styles(xml: &str, theme: &Theme, scale: f64) -> Vec<SpStyle> {
@@ -408,6 +522,28 @@ mod tests {
     const REFS: &str = r#"<p:style><a:lnRef idx="1"><a:schemeClr val="accent1"/></a:lnRef>
         <a:fillRef idx="3"><a:schemeClr val="accent1"/></a:fillRef><a:effectRef idx="2"><a:schemeClr val="accent1"/></a:effectRef>
         <a:fontRef idx="minor"><a:schemeClr val="lt1"/></a:fontRef></p:style>"#;
+
+    #[test]
+    fn a_graphic_frame_table_is_read_with_its_grid_text_and_style_flags() {
+        let xml = r#"<p:spTree><p:graphicFrame><p:xfrm><a:off x="914400" y="914400"/><a:ext cx="7315200" cy="2743200"/></p:xfrm>
+          <a:graphic><a:graphicData><a:tbl><a:tblPr firstRow="1" bandRow="1"/>
+          <a:tblGrid><a:gridCol w="2438400"/><a:gridCol w="2438400"/></a:tblGrid>
+          <a:tr h="914400"><a:tc><a:txBody><a:p><a:r><a:rPr b="1"/><a:t>Head </a:t></a:r><a:r><a:t>one</a:t></a:r></a:p></a:txBody><a:tcPr/></a:tc>
+            <a:tc><a:txBody><a:p><a:r><a:t>R1C2</a:t></a:r></a:p></a:txBody><a:tcPr><a:solidFill><a:srgbClr val="FF0000"/></a:solidFill></a:tcPr></a:tc></a:tr>
+          </a:tbl></a:graphicData></a:graphic></p:graphicFrame></p:spTree>"#;
+        let t = frame_tables(xml, &theme(THEME_2007));
+        assert_eq!(t.len(), 1);
+        let f = &t[0];
+        assert_eq!((f.index, f.x, f.w), (0, 914400.0, 7315200.0));
+        let d = &f.table;
+        assert_eq!(d.col_widths, vec![2438400.0, 2438400.0]);
+        assert_eq!(d.row_heights, vec![914400.0]);
+        assert!(d.first_row && d.band_row);
+        assert_eq!(d.rows[0][0].text(), "Head one");
+        assert!(d.rows[0][0].runs[0].style.bold);
+        assert_eq!(d.rows[0][1].fill, Some(Color(0xFF, 0, 0)));
+        assert_eq!(d.accent, Some(Color(0x4F, 0x81, 0xBD)));
+    }
 
     #[test]
     fn the_theme_part_overrides_the_default_slots() {

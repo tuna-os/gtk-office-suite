@@ -227,13 +227,22 @@ fn styled_paragraphs(
 /// Their position here is the index that names them.
 fn distinct_run_styles(shapes: &[SlideObject]) -> Vec<RunStyle> {
     let mut styles: Vec<RunStyle> = Vec::new();
+    let mut add = |runs: &[Run]| {
+        for r in runs {
+            if r.style != RunStyle::default() && !styles.contains(&r.style) {
+                styles.push(r.style.clone());
+            }
+        }
+    };
     for obj in shapes {
-        if let SlideObject::TextBox { runs, .. } = obj {
-            for r in runs {
-                if r.style != RunStyle::default() && !styles.contains(&r.style) {
-                    styles.push(r.style.clone());
+        match obj {
+            SlideObject::TextBox { runs, .. } => add(runs),
+            SlideObject::Table { table, .. } => {
+                for cell in table.rows.iter().flatten() {
+                    add(&cell.runs);
                 }
             }
+            _ => {}
         }
     }
     styles
@@ -415,6 +424,28 @@ fn shapes_xml(
                         geometry(cx, cy, d, d, *rotation)
                     ));
                 }
+                SlideObject::Table { x, y, w, h, rotation, table } => {
+                    // A table in a frame, as Impress writes one. Its default
+                    // look (header row, banding) isn't carried: ODF expresses
+                    // it through a table template, not yet written.
+                    let cols = table.rows.first().map_or(0, |r| r.len());
+                    let mut t = format!("<draw:frame {}><table:table>", geometry(*x, *y, *w, *h, *rotation));
+                    t.push_str(&"<table:table-column/>".repeat(cols));
+                    for row in &table.rows {
+                        t.push_str("<table:table-row>");
+                        for cell in row {
+                            let inner: String = if cell.runs.is_empty() {
+                                "<text:p/>".to_string()
+                            } else {
+                                styled_paragraphs(&cell.runs, style_of, prefix)
+                            };
+                            t.push_str(&format!("<table:table-cell>{inner}</table:table-cell>"));
+                        }
+                        t.push_str("</table:table-row>");
+                    }
+                    t.push_str("</table:table></draw:frame>");
+                    pages.push_str(&t);
+                }
                 SlideObject::Shape { kind, x, y, w, h, rotation, style } => {
                     use crate::engine::shape::ShapeKind;
                     let at = geometry(*x, *y, *w, *h, *rotation);
@@ -542,6 +573,7 @@ fn content_xml(deck: &Deck, media: &mut Vec<Media>) -> Result<String, String> {
          xmlns:draw=\"urn:oasis:names:tc:opendocument:xmlns:drawing:1.0\" \
          xmlns:presentation=\"urn:oasis:names:tc:opendocument:xmlns:presentation:1.0\" \
          xmlns:text=\"urn:oasis:names:tc:opendocument:xmlns:text:1.0\" \
+         xmlns:table=\"urn:oasis:names:tc:opendocument:xmlns:table:1.0\" \
          xmlns:style=\"urn:oasis:names:tc:opendocument:xmlns:style:1.0\" \
          xmlns:fo=\"urn:oasis:names:tc:opendocument:xmlns:xsl-fo-compatible:1.0\" \
          xmlns:svg=\"urn:oasis:names:tc:opendocument:xmlns:svg-compatible:1.0\" \
@@ -691,6 +723,7 @@ fn styles_xml(deck: &Deck, media: &mut Vec<Media>) -> Result<String, String> {
          xmlns:draw=\"urn:oasis:names:tc:opendocument:xmlns:drawing:1.0\" \
          xmlns:presentation=\"urn:oasis:names:tc:opendocument:xmlns:presentation:1.0\" \
          xmlns:text=\"urn:oasis:names:tc:opendocument:xmlns:text:1.0\" \
+         xmlns:table=\"urn:oasis:names:tc:opendocument:xmlns:table:1.0\" \
          xmlns:style=\"urn:oasis:names:tc:opendocument:xmlns:style:1.0\" \
          xmlns:fo=\"urn:oasis:names:tc:opendocument:xmlns:xsl-fo-compatible:1.0\" \
          xmlns:svg=\"urn:oasis:names:tc:opendocument:xmlns:svg-compatible:1.0\" \

@@ -10,12 +10,14 @@
 //! - `notes.rs` — speaker-notes XML + text extraction
 //! - `placeholders.rs` — layout/master geometry a slide placeholder inherits
 //! - `shape.rs` — preset shapes: geometry kind, fill and outline
+//! - `table.rs` — tables: grid, cells and the default table style
 
 mod model;
 mod notes;
 mod parse;
 mod placeholders;
 pub mod shape;
+pub mod table;
 mod shape_xml;
 mod write;
 

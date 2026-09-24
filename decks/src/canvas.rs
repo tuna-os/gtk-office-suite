@@ -116,6 +116,11 @@ pub fn hit_test_object(objects: &[SlideObject], sx: f64, sy: f64) -> Option<usiz
                     return Some(oi);
                 }
             }
+            SlideObject::Table { x, y, w, h, .. } => {
+                if sx >= *x && sx <= *x + *w && sy >= *y && sy <= *y + *h {
+                    return Some(oi);
+                }
+            }
             SlideObject::Circle { x: cx, y: cy, r, .. } => {
                 let dx = sx - *cx;
                 let dy = sy - *cy;
@@ -533,6 +538,10 @@ pub fn draw_slide_multi(
                 SlideObject::Shape { kind, style, .. } => {
                     draw_shape(cr, kind, style, (sx, sy, sw, sh), slide_w / 960.0);
                 }
+                SlideObject::Table { table, .. } => {
+                    let desc = document_font_description(master_for(slides, current_slide, masters), 18.0 * slide_w / 960.0);
+                    draw_table(cr, table, (sx, sy, sw, sh), slide_w / 960.0, &desc);
+                }
                 SlideObject::Circle { x: cx_slide, y: cy_slide, r: r_slide, .. } => {
                     let cx = ox + (cx_slide / 960.0) * slide_w;
                     let cy = oy + (cy_slide / 540.0) * slide_h;
@@ -698,6 +707,72 @@ pub fn draw_shape(
         cr.stroke_preserve().unwrap();
     }
     cr.new_path();
+}
+
+/// Draw a table in the box `(x, y, w, h)` (canvas pixels): each cell's
+/// fill from the table style, its text at DrawingML's default cell margins
+/// (0.1 in across, 0.05 in down), then the style's white 1 pt rules.
+/// `scale` is canvas pixels per model unit.
+pub fn draw_table(
+    cr: &cairo::Context,
+    table: &decks_core::engine::table::TableData,
+    (x, y, w, h): (f64, f64, f64, f64),
+    scale: f64,
+    font: &pango::FontDescription,
+) {
+    let (cols, rows) = table.fitted(w, h);
+    let (pad_x, pad_y) = (9.6 * scale, 4.8 * scale);
+    let mut cy = y;
+    for (r, rh) in rows.iter().enumerate() {
+        let mut cx = x;
+        for (c, cw) in cols.iter().enumerate() {
+            let paint = table.cell_paint(r, c);
+            if let Some(fill) = paint.fill {
+                let (fr, fg, fb) = fill.to_f64();
+                cr.set_source_rgb(fr, fg, fb);
+                cr.rectangle(cx, cy, *cw, *rh);
+                cr.fill().unwrap();
+            }
+            if let Some(cell) = table.rows.get(r).and_then(|row| row.get(c)) {
+                let layout = pangocairo::functions::create_layout(cr);
+                layout.set_font_description(Some(font));
+                layout.set_width(((cw - 2.0 * pad_x).max(1.0) * pango::SCALE as f64) as i32);
+                layout.set_wrap(pango::WrapMode::WordChar);
+                set_styled_text(&layout, &cell.text(), &cell.runs, scale);
+                if paint.bold {
+                    let attrs = layout.attributes().unwrap_or_default();
+                    attrs.insert(pango::AttrInt::new_weight(pango::Weight::Bold));
+                    layout.set_attributes(Some(&attrs));
+                }
+                let (tr, tg, tb) = paint.text.to_f64();
+                cr.set_source_rgb(tr, tg, tb);
+                cr.save().unwrap();
+                cr.rectangle(cx, cy, *cw, *rh);
+                cr.clip();
+                cr.move_to(cx + pad_x, cy + pad_y);
+                pangocairo::functions::show_layout(cr, &layout);
+                cr.restore().unwrap();
+            }
+            cx += cw;
+        }
+        cy += rh;
+    }
+    // "Medium Style 2" separates cells with white 1 pt rules.
+    cr.set_source_rgb(1.0, 1.0, 1.0);
+    cr.set_line_width((1.0 * 960.0 / 720.0 * scale).max(1.0));
+    let mut cx = x;
+    for cw in &cols[..cols.len().saturating_sub(1)] {
+        cx += cw;
+        cr.move_to(cx, y);
+        cr.line_to(cx, y + h);
+    }
+    let mut cy = y;
+    for rh in &rows[..rows.len().saturating_sub(1)] {
+        cy += rh;
+        cr.move_to(x, cy);
+        cr.line_to(x + w, cy);
+    }
+    cr.stroke().unwrap();
 }
 
 /// Render slide `index` exactly as the editor canvas draws it, cropped to

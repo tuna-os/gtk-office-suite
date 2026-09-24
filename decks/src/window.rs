@@ -318,6 +318,7 @@ impl DecksWindow {
                             SlideObject::TextBox { x, y, w, h, .. }
                             | SlideObject::Rect { x, y, w, h, .. }
                             | SlideObject::Shape { x, y, w, h, .. }
+                            | SlideObject::Table { x, y, w, h, .. }
                             | SlideObject::Image { x, y, w, h, .. } => (*x, *y, *w, *h),
                             SlideObject::Circle { x, y, r, .. } => (*x, *y, r * 2.0, r * 2.0),
                         };
@@ -371,6 +372,7 @@ impl DecksWindow {
                         SlideObject::TextBox { x, y, w, h, .. }
                         | SlideObject::Rect { x, y, w, h, .. }
                         | SlideObject::Shape { x, y, w, h, .. }
+                        | SlideObject::Table { x, y, w, h, .. }
                         | SlideObject::Image { x, y, w, h, .. } => match field {
                             Field::X => *x = v,
                             Field::Y => *y = v,

@@ -24,7 +24,7 @@ use super::model::*;
 use super::notes::{extract_notes_text, parse_run_style};
 use super::placeholders::{inherited_rect, parse_placeholders, PhKey, Placeholder};
 use super::shape::ShapeKind;
-use super::shape_xml::{sp_styles, theme as read_theme};
+use super::shape_xml::{frame_tables, sp_styles, theme as read_theme};
 
 use std::fs::File;
 use std::io::Write;
@@ -467,6 +467,9 @@ pub fn read_pptx(path: &str) -> Result<Deck, String> {
         let mut objects = Vec::new();
         let sp_paint = sp_styles(&slide_xml, &theme, scale.x);
         let mut sp_index = 0usize;
+        // Tables live in p:graphicFrame, which the walker used to skip.
+        let tables = frame_tables(&slide_xml, &theme);
+        let mut frame_index = 0usize;
 
         // The layout (and through it, the master) this slide's placeholders
         // inherit their geometry from. Read once per layout.
@@ -755,6 +758,18 @@ pub fn read_pptx(path: &str) -> Result<Deck, String> {
                                     objects.push(SlideObject::Shape { kind, x, y, w, h, rotation, style: paint.style });
                                 }
                             }
+                        } else if name.as_ref() == "p:graphicFrame" {
+                            if let Some(t) = tables.iter().find(|t| t.index == frame_index) {
+                                objects.push(SlideObject::Table {
+                                    x: t.x * scale.x,
+                                    y: t.y * scale.y,
+                                    w: t.w * scale.x,
+                                    h: t.h * scale.y,
+                                    rotation: 0.0,
+                                    table: t.table.clone(),
+                                });
+                            }
+                            frame_index += 1;
                         } else if name.as_ref() == "p:pic" {
                             if let Some(pic) = current_picture.take() {
                                 if let Some(embed_id) = pic.embed_id {
