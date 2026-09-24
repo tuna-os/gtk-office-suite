@@ -873,7 +873,7 @@ mod font_tests {
         let layout = pangocairo::functions::create_layout(&cr);
         let runs = vec![
             Run { text: "plain ".into(), style: Default::default() },
-            Run { text: "red".into(), style: letters_core::model::RunStyle { color: Some("C80000".into()), ..Default::default() } },
+            Run { text: "red".into(), style: RunStyle { color: Some("C80000".into()), ..Default::default() } },
         ];
         set_styled_text(&layout, "plain red", &runs, 1.0);
         let attrs = layout.attributes().expect("attributes set");
