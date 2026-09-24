@@ -189,7 +189,9 @@ def salient_colors(img, n=8, min_share=0.003):
     covered by the word metric)."""
     q = img.quantize(colors=n, method=Image.MEDIANCUT)
     pal = q.getpalette()[: n * 3]
-    counts = np.bincount(np.asarray(q).ravel(), minlength=n)
+    idx = np.asarray(q).ravel()
+    px = np.asarray(img.convert("RGB"), dtype=int).reshape(-1, 3)
+    counts = np.bincount(idx, minlength=n)
     total = counts.sum()
     out = []
     for i in range(n):
@@ -198,19 +200,45 @@ def salient_colors(img, n=8, min_share=0.003):
         rgb = np.array(pal[i * 3 : i * 3 + 3])
         if rgb.max() - rgb.min() < 40:  # grey-ish
             continue
-        out.append(rgb)
+        # The colour the cluster's saturated pixels actually have, not the
+        # cluster's mean: small coloured text shares a cluster with the
+        # black text and grey anti-aliasing beside it, and their mean
+        # (C00000 red text averaged to 905050) is in neither image.
+        members = px[idx == i]
+        members = members[members.max(axis=1) - members.min(axis=1) >= 40]
+        out.append(np.median(members, axis=0).astype(int) if len(members) else rgb)
     return out
 
 
+def color_groups(colors, near=60):
+    """`colors` grouped so that shades within `near` of one another count
+    as one colour. The anti-aliased edge of a single rotated fill quantises
+    into several clusters a few levels apart; they are one colour to look
+    for, not five, and each alone covers too little to be found."""
+    groups = []
+    for rgb in colors:
+        for g in groups:
+            if any(np.abs(rgb - other).sum() < near for other in g):
+                g.append(rgb)
+                break
+        else:
+            groups.append([rgb])
+    return groups
+
+
 def color_presence(ref, ours):
-    wanted = salient_colors(ref)
+    wanted = color_groups(salient_colors(ref))
     if not wanted:
         return None
-    arr = np.asarray(ours.resize((ours.width // 2, ours.height // 2)), dtype=int).reshape(-1, 3)
+    # Full resolution: halving blends thin coloured strokes (red text)
+    # into the white round them until the colour is gone.
+    arr = np.asarray(ours.convert("RGB"), dtype=int).reshape(-1, 3)
     hit = 0
-    for rgb in wanted:
-        d = np.abs(arr - rgb).sum(axis=1)
-        if (d < 60).mean() > 0.0005:
+    for group in wanted:
+        near = np.zeros(len(arr), dtype=bool)
+        for rgb in group:
+            near |= np.abs(arr - rgb).sum(axis=1) < 60
+        if near.mean() > 0.0005:
             hit += 1
     return hit / len(wanted)
 
