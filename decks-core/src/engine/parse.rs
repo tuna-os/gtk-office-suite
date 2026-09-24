@@ -146,6 +146,35 @@ impl SlideScale {
     }
 }
 
+impl SlideScale {
+    /// The factor text sizes take onto the model's slide: the same one the
+    /// horizontal geometry takes. The model is always our writer's
+    /// 10-inch-wide slide, so a 13.33-inch deck's shapes shrink to fit it;
+    /// its point sizes, left alone, came out 1.33x too big beside them
+    /// (render lab decks/text-styles, decks/table).
+    pub fn text_factor(&self) -> f64 {
+        self.x * 9525.0
+    }
+
+    /// `runs` with every size mapped onto the model's slide. A run with no
+    /// size of its own has the 18 pt default, so on a slide of another size
+    /// it gets the scaled default explicitly.
+    pub fn text_runs(&self, runs: &[Run]) -> Vec<Run> {
+        let k = self.text_factor();
+        if (k - 1.0).abs() < 1e-6 {
+            return runs.to_vec();
+        }
+        runs.iter()
+            .map(|r| {
+                let mut r = r.clone();
+                let hp = r.style.font_size_hp.unwrap_or(36) as f64;
+                r.style.font_size_hp = Some((hp * k).round().clamp(1.0, u16::MAX as f64) as u16);
+                r
+            })
+            .collect()
+    }
+}
+
 impl Default for SlideScale {
     fn default() -> Self {
         let (cx, cy) = Self::DEFAULT_EMU;
@@ -468,7 +497,12 @@ pub fn read_pptx(path: &str) -> Result<Deck, String> {
         let sp_paint = sp_styles(&slide_xml, &theme, scale.x);
         let mut sp_index = 0usize;
         // Tables live in p:graphicFrame, which the walker used to skip.
-        let tables = frame_tables(&slide_xml, &theme);
+        let mut tables = frame_tables(&slide_xml, &theme);
+        for t in &mut tables {
+            for cell in t.table.rows.iter_mut().flatten() {
+                cell.runs = scale.text_runs(&cell.runs);
+            }
+        }
         let mut frame_index = 0usize;
 
         // The layout (and through it, the master) this slide's placeholders
@@ -744,7 +778,7 @@ pub fn read_pptx(path: &str) -> Result<Deck, String> {
                                 let rotation = shape.rotation.unwrap_or(0.0);
 
                                 if shape.is_tx_box || (shape.has_tx_body && has_text) {
-                                    objects.push(SlideObject::TextBox { text, x, y, w, h, rotation, runs: shape.runs.clone() });
+                                    objects.push(SlideObject::TextBox { text, x, y, w, h, rotation, runs: scale.text_runs(&shape.runs) });
                                 } else {
                                     // The shape as the file draws it: its own
                                     // preset and paint. It used to become a
@@ -1375,6 +1409,22 @@ mod tests {
 
 #[cfg(test)]
 mod slide_size_tests {
+
+    #[test]
+    fn text_sizes_scale_with_the_slide_like_its_geometry() {
+        use letters_core::model::{Run, RunStyle};
+        // Our own 10in slide: sizes are untouched, including "no size".
+        let ours = SlideScale::default();
+        let runs = vec![Run { text: "a".into(), style: RunStyle { font_size_hp: Some(48), ..Default::default() } }];
+        assert_eq!(ours.text_runs(&runs)[0].style.font_size_hp, Some(48));
+        // A 13.33in (12192000 EMU) deck maps onto the 10in model at 0.75.
+        let wide = SlideScale::from_emu(12_192_000.0, 6_858_000.0);
+        assert!((wide.text_factor() - 0.75).abs() < 1e-9);
+        let plain = vec![Run { text: "b".into(), style: RunStyle::default() }];
+        assert_eq!(wide.text_runs(&runs)[0].style.font_size_hp, Some(36), "24 pt -> 18 pt");
+        assert_eq!(wide.text_runs(&plain)[0].style.font_size_hp, Some(27), "the 18 pt default -> 13.5 pt");
+    }
+
     use super::*;
 
     const MODERN: &str = "<p:presentation xmlns:p=\"p\">\
