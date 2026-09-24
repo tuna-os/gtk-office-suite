@@ -89,7 +89,7 @@ jobs:
 
       - name: Upload captures
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: render-lab-${{ matrix.app }}
           path: |
@@ -124,7 +124,7 @@ jobs:
           cache-from: type=gha,scope=render-lab
 
       - name: Download captures
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           pattern: render-lab-*
           path: render-lab-out
@@ -151,7 +151,7 @@ jobs:
       - name: Upload report
         if: always()
         id: upload
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: render-parity-report
           path: |
@@ -209,7 +209,7 @@ jobs:
           manifest-path: flatpak/org.tunaos.${{ matrix.app }}.json
           cache-key: render-lab-flatpak-${{ matrix.app }}-${{ github.sha }}
           upload-artifact: false
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: bundle-${{ matrix.app }}
           path: ${{ matrix.app }}.flatpak
@@ -233,7 +233,7 @@ jobs:
           sudo udevadm control --reload-rules && sudo udevadm trigger --name-match=kvm
           sudo apt-get update && sudo apt-get install -y --no-install-recommends qemu-system-x86 qemu-utils cloud-image-utils python3-pil
 
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           pattern: bundle-*
           path: bundles
@@ -266,7 +266,7 @@ jobs:
 
       - name: Upload VM report
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: render-parity-vm-report
           path: |
