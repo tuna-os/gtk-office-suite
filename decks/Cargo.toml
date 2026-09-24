@@ -17,6 +17,7 @@ pulldown-cmark = "0.13"
 image = "0.25"
 zip = "8.0"
 quick-xml = "0.42"
+tempfile = "=3.27.0"
 
 [[bin]]
 name = "decks"

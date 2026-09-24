@@ -744,6 +744,7 @@ dependencies = [
  "quick-xml 0.42.0",
  "suite-common",
  "suite-export",
+ "tempfile",
  "zip",
 ]
 
