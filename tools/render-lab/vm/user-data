@@ -1,0 +1,34 @@
+#cloud-config
+# Tier C guest: a real GNOME Wayland session (GDM autologin, Mutter, GL via
+# virtio-gpu + Mesa) with Flatpak and the GNOME runtime the apps ship on.
+users:
+  - name: lab
+    groups: [wheel]
+    sudo: ALL=(ALL) NOPASSWD:ALL
+    lock_passwd: true
+    ssh_authorized_keys:
+      - __SSH_KEY__
+packages:
+  - gdm
+  - gnome-shell
+  - gnome-session-wayland-session
+  - flatpak
+  - mesa-dri-drivers
+  - liberation-fonts
+  - google-carlito-fonts
+write_files:
+  - path: /etc/gdm/custom.conf
+    content: |
+      [daemon]
+      AutomaticLoginEnable=True
+      AutomaticLogin=lab
+      WaylandEnable=True
+runcmd:
+  - systemctl set-default graphical.target
+  - flatpak remote-add --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo
+  - flatpak install -y --noninteractive flathub org.gnome.Platform//50
+  # No screen lock, no idle blank, no welcome tour in the captures.
+  - sudo -u lab dbus-run-session gsettings set org.gnome.desktop.session idle-delay 0 || true
+  - sudo -u lab dbus-run-session gsettings set org.gnome.desktop.screensaver lock-enabled false || true
+  - touch /var/lib/render-lab-ready
+  - poweroff
