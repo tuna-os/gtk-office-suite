@@ -408,6 +408,14 @@ pub fn load_ods_workbook(path: &str) -> Result<(TablesEngine, Vec<SheetModel>), 
             .copied()
             .filter(|(r, c, _, _)| *r < sheet.rows && *c < sheet.cols)
             .collect();
+        // Cell styles and borders, as the xlsx reader applies them. The
+        // number format stays calamine's: ODF data styles aren't read yet.
+        for (r, c, x) in &p.cell_styles {
+            if *r < sheet.rows && *c < sheet.cols {
+                sheet.styles[*r][*c] = x.style.clone();
+                sheet.borders[*r][*c] = x.border.clone();
+            }
+        }
     }
     Ok((engine, sheets))
 }

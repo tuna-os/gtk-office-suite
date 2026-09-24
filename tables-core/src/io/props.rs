@@ -568,12 +568,14 @@ pub fn read_sheet_props_from_ods(
 
     let col_styles = odf_styles_by_family(&xml, "table-column", "style:column-width");
     let row_styles = odf_styles_by_family(&xml, "table-row", "style:row-height");
+    let cell_styles = super::ods_styles::parse_ods_cell_styles(&xml);
 
     for table in split_elements(&xml, "table:table") {
         let head = table.split('>').next().unwrap_or("");
         let Some(name) = xml_attr(head, "table:name") else { continue };
         let body = table.split("</table:table>").next().unwrap_or("");
         let mut props = SheetXlsxProps::default();
+        let mut col_cell_style: std::collections::HashMap<usize, &str> = std::collections::HashMap::new();
 
         // Columns: each element covers `number-columns-repeated` of them.
         let mut col = 0usize;
@@ -583,6 +585,11 @@ pub fn read_sheet_props_from_ods(
             if let Some(px) = xml_attr(tag, "table:style-name").and_then(|s| col_styles.get(s)) {
                 for i in 0..repeat {
                     props.col_widths.insert(col + i, *px);
+                }
+            }
+            if let Some(s) = xml_attr(tag, "table:default-cell-style-name") {
+                for i in 0..repeat {
+                    col_cell_style.insert(col + i, s);
                 }
             }
             col += repeat;
@@ -614,7 +621,30 @@ pub fn read_sheet_props_from_ods(
                 if !is_covered && (cspan > 1 || rspan > 1) {
                     props.merges.push((row, c, rspan, cspan));
                 }
-                c += odf_repeat(tag, "table:number-columns-repeated");
+                let crepeat = odf_repeat(tag, "table:number-columns-repeated");
+                // The cell's own style, else its column's default. Only
+                // cells that hold a value or stand alone are styled: a
+                // repeated run of empty cells is how ODF says "the rest of
+                // the row/sheet", and styling each would allocate for
+                // cells nobody has.
+                let has_value = tag.contains("office:value-type=");
+                if has_value || (crepeat == 1 && repeat == 1) {
+                    for i in 0..crepeat {
+                        let style_name = xml_attr(tag, "table:style-name").or_else(|| col_cell_style.get(&(c + i)).copied());
+                        let Some((style, border)) = style_name.and_then(|n| cell_styles.get(n)) else { continue };
+                        if style.is_default() && border.is_none() {
+                            continue;
+                        }
+                        for r in row..row + repeat {
+                            props.cell_styles.push((
+                                r,
+                                c + i,
+                                super::XfStyle { style: style.clone(), border: border.clone(), ..super::XfStyle::default() },
+                            ));
+                        }
+                    }
+                }
+                c += crepeat;
             }
             row += repeat;
         }
@@ -749,6 +779,42 @@ mod odf_tests {
         assert_eq!(s.col_widths.get(&3), Some(&192.0), "the fourth column");
         assert_eq!(s.row_heights.get(&0), Some(&48.0));
         assert_eq!(s.row_heights.get(&1), Some(&48.0), "the repeated row");
+    }
+
+    /// A cell takes its own style, else its column's default cell style;
+    /// repeated runs of empty cells are left alone.
+    #[test]
+    fn cell_styles_land_on_their_cells() {
+        use crate::sheet::BorderStyle;
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("styles.ods");
+        write_ods_fixture(
+            &path,
+            "<office:automatic-styles>\
+             <style:style style:name=\"ce1\" style:family=\"table-cell\">\
+             <style:text-properties fo:font-weight=\"bold\"/></style:style>\
+             <style:style style:name=\"ce2\" style:family=\"table-cell\">\
+             <style:table-cell-properties fo:background-color=\"#c6efce\" fo:border=\"0.74pt solid #000000\"/></style:style>\
+             </office:automatic-styles>\
+             <office:body><office:spreadsheet><table:table table:name=\"S\">\
+             <table:table-column table:default-cell-style-name=\"ce2\" table:number-columns-repeated=\"2\"/>\
+             <table:table-column/>\
+             <table:table-row>\
+             <table:table-cell table:style-name=\"ce1\" office:value-type=\"string\"><text:p>b</text:p></table:table-cell>\
+             <table:table-cell office:value-type=\"float\" office:value=\"2\"><text:p>2</text:p></table:table-cell>\
+             <table:table-cell table:style-name=\"ce2\" table:number-columns-repeated=\"1000\"/>\
+             </table:table-row>\
+             </table:table></office:spreadsheet></office:body>",
+        );
+        let props = read_sheet_props_from_ods(path.to_str().unwrap());
+        let styles = &props["S"].cell_styles;
+        let at = |r: usize, c: usize| styles.iter().find(|(sr, sc, _)| (*sr, *sc) == (r, c)).map(|(_, _, x)| x);
+        assert!(at(0, 0).unwrap().style.bold, "the cell's own style");
+        assert!(at(0, 0).unwrap().border.is_none(), "its own style wins over the column's");
+        let b = at(0, 1).expect("the column default");
+        assert_eq!(b.style.fill, Some(crate::style::Rgb(0xC6, 0xEF, 0xCE)));
+        assert_eq!(b.border.top, BorderStyle::Solid);
+        assert_eq!(styles.len(), 2, "the repeated empty run is not expanded: {styles:?}");
     }
 
     /// A merge is written as a span on its anchor and `covered-table-cell`

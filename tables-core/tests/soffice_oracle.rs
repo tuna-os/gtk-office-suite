@@ -701,3 +701,44 @@ fn sheet_layout_survives_a_conversion_to_ods() {
         "the merged range did not survive the conversion to ods"
     );
 }
+
+/// Cell styles and borders across the same boundary. The ods reader read
+/// layout but no style at all, so a sheet opened as .ods lost every bold
+/// header, fill, border and alignment its xlsx had.
+#[test]
+fn cell_styles_survive_a_conversion_to_ods() {
+    if !require_or_skip() {
+        return;
+    }
+    use tables_core::sheet::{BorderStyle, CellBorder};
+    use tables_core::style::{CellStyle, HAlign, Rgb};
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("styled.xlsx");
+    let mut sheet = SheetModel::new("S", 4, 4, 0);
+    sheet.data[0][0] = "head".into();
+    sheet.styles[0][0] = CellStyle {
+        bold: true,
+        italic: true,
+        color: Some(Rgb(0xC0, 0, 0)),
+        fill: Some(Rgb(0xFF, 0xC7, 0xCE)),
+        h_align: HAlign::Center,
+        wrap: true,
+        ..CellStyle::default()
+    };
+    sheet.data[1][1] = "boxed".into();
+    sheet.borders[1][1] = CellBorder::outline(BorderStyle::Thick, (0.0, 0.0, 0.0));
+    save_sheets_to_xlsx(path.to_str().unwrap(), &[sheet]).unwrap();
+
+    let as_ods = convert(&path, "ods").expect("Calc could not convert our xlsx to ods");
+    let (_engine, sheets) = load_workbook(as_ods.to_str().unwrap()).expect("read back the ods");
+    let s = &sheets[0];
+    let head = &s.styles[0][0];
+    assert!(head.bold && head.italic, "{head:?}");
+    assert_eq!(head.color, Some(Rgb(0xC0, 0, 0)));
+    assert_eq!(head.fill, Some(Rgb(0xFF, 0xC7, 0xCE)));
+    assert_eq!(head.h_align, HAlign::Center);
+    assert!(head.wrap);
+    assert_eq!(s.borders[1][1].top, BorderStyle::Thick, "{:?}", s.borders[1][1]);
+    assert_eq!(s.borders[1][1].left, BorderStyle::Thick);
+    assert!(s.styles[2][2].is_default() && s.borders[2][2].is_none());
+}
