@@ -264,14 +264,18 @@ def tables():
     save(wb, "values", "A 5x4 block of integers, right-aligned in their cells")
 
     wb, ws = book()
+    # Name the face and size, as Excel and Calc always do. openpyxl's bare
+    # Font(bold=True) writes a <font> with no name, which Calc draws in its
+    # own serif fallback: that measured the fallback, not the style.
+    font = lambda **kw: Font(name="Calibri", size=kw.pop("size", 11), **kw)
     ws["A1"] = "Bold"
-    ws["A1"].font = Font(bold=True)
+    ws["A1"].font = font(bold=True)
     ws["A2"] = "Italic"
-    ws["A2"].font = Font(italic=True)
+    ws["A2"].font = font(italic=True)
     ws["A3"] = "Big"
-    ws["A3"].font = Font(size=20)
+    ws["A3"].font = font(size=20)
     ws["A4"] = "Red"
-    ws["A4"].font = Font(color="C00000")
+    ws["A4"].font = font(color="C00000")
     save(wb, "cell-fonts", "Bold, italic, 20pt and red text in A1:A4; row 3 is taller")
 
     wb, ws = book()
