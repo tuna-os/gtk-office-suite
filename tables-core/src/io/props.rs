@@ -152,14 +152,15 @@ pub fn read_sheet_props_from_xlsx(
             continue;
         };
 
-        let mut props = SheetXlsxProps::default();
-
-        props.cell_formats = super::numfmt::cell_style_indices(&xml)
-            .into_iter()
-            .filter(|&(r, c, _)| r < crate::sheet::SHEET_MAX_ROWS && c < crate::sheet::SHEET_MAX_COLS)
-            .filter_map(|(r, c, s)| style_formats.get(s).map(|f| (r, c, f.clone())))
-            .filter(|(_, _, f)| f.kind != suite_common_core::format::NumberFormatKind::General)
-            .collect();
+        let mut props = SheetXlsxProps {
+            cell_formats: super::numfmt::cell_style_indices(&xml)
+                .into_iter()
+                .filter(|&(r, c, _)| r < crate::sheet::SHEET_MAX_ROWS && c < crate::sheet::SHEET_MAX_COLS)
+                .filter_map(|(r, c, s)| style_formats.get(s).map(|f| (r, c, f.clone())))
+                .filter(|(_, _, f)| f.kind != suite_common_core::format::NumberFormatKind::General)
+                .collect(),
+            ..SheetXlsxProps::default()
+        };
 
         if let Some(cols_block) = xml.split("<cols>").nth(1) {
             let cols_block = cols_block.split("</cols>").next().unwrap_or("");
