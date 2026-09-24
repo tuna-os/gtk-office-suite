@@ -2081,6 +2081,57 @@ class TablesCellEntryMixin:
         )
 
 
+class TablesFormatInspectorSmoke(TablesCellEntryMixin, BaseGUITestCase):
+    """The Format inspector (DESIGN-UI.md) edits the selected cell's style
+    and follows the selection: Bold set on A1 shows as pressed on A1 and
+    not on B1. The inspector's toggles carry accessible names, and their
+    pressed state is what AT-SPI reports, so this is asserted on the tree,
+    not on pixels (the render lab covers how bold text looks)."""
+
+    app_name = "tables"
+
+    def _pressed(self, name):
+        import pyatspi
+        node = self.app.child(name=name, roleName="toggle button")
+        states = node.getState()
+        return states.contains(pyatspi.STATE_PRESSED) or states.contains(pyatspi.STATE_CHECKED)
+
+    def _go(self, ref):
+        from dogtail import rawinput
+        rawinput.keyCombo("<Control>g")
+        self.wait_until(lambda: self._focused("Cell reference"), bool,
+                        description="the name box to take focus")
+        rawinput.typeText(ref)
+        rawinput.keyCombo("Return")
+        self.wait_until(lambda: self._focused("Formula input"), bool,
+                        description=f"the jump to {ref} to hand focus back to fx")
+        rawinput.keyCombo("Escape")
+        self.wait_until(lambda: not self._focused("Formula input"), bool,
+                        description="Escape to leave the formula entry")
+
+    def test_bold_applies_to_the_selection_and_follows_it(self):
+        import subprocess
+
+        subprocess.run(["gapplication", "action", "org.tunaos.tables", "new-document"])
+        self._wait_for_a_new_document()
+        self._put("A1", "x")
+        self._put("B1", "y")
+        self.app.child(name="Format", roleName="toggle button").click()
+        self.wait_until(lambda: self.app.child(name="Bold", roleName="toggle button").showing, bool,
+                        description="the inspector to open")
+        self._go("A1")
+        self.assertFalse(self._pressed("Bold"), "A1 starts plain")
+        self.app.child(name="Bold", roleName="toggle button").click()
+        self.wait_until(lambda: self._pressed("Bold"), bool, description="Bold to press")
+        self._go("B1")
+        self.wait_until(lambda: not self._pressed("Bold"), bool,
+                        description="the inspector to show B1, which is not bold")
+        self._go("A1")
+        self.wait_until(lambda: self._pressed("Bold"), bool,
+                        description="the inspector to show A1 as bold again")
+        self.assertIsNone(self.process.poll(), "tables crashed in the format inspector")
+
+
 class TablesNamedRangeStatsSmoke(TablesCellEntryMixin, BaseGUITestCase):
     """Named ranges (#113) verified through the stats label's range readout.
 

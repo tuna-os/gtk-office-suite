@@ -3,6 +3,7 @@ use gtk4::gio;
 mod charts;
 mod chart_dialog;
 mod window;
+mod format_inspector;
 mod persistence;
 mod window_dialogs;
 mod preferences;
