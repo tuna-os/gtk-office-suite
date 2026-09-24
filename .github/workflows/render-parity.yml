@@ -53,22 +53,17 @@ jobs:
 
       - uses: docker/setup-buildx-action@v4
 
-      - name: Build GUI test image
-        uses: docker/build-push-action@v7
-        with:
-          context: tests/gui/container
-          load: true
-          tags: gui-test
-          cache-from: type=gha,scope=gui-test
-          cache-to: type=gha,mode=max,scope=gui-test
-
+      # On top of the published GUI test image (gui-container.yml builds,
+      # verifies and pushes it from main). A locally built base would be
+      # invisible to buildx's docker-container builder.
       - name: Build render-lab image
         uses: docker/build-push-action@v7
         with:
           context: tools/render-lab
+          file: tools/render-lab/Containerfile
           load: true
           tags: render-lab
-          build-args: BASE=gui-test
+          build-args: BASE=ghcr.io/${{ github.repository }}/gui-test:main
           cache-from: type=gha,scope=render-lab
           cache-to: type=gha,mode=max,scope=render-lab
 
@@ -192,8 +187,8 @@ jobs:
 
       - name: Fixtures and LibreOffice reference
         run: |
-          docker build -t gui-test tests/gui/container
-          docker build -t render-lab tools/render-lab
+          docker build -t render-lab -f tools/render-lab/Containerfile \
+            --build-arg BASE=ghcr.io/${GITHUB_REPOSITORY}/gui-test:main tools/render-lab
           docker run --rm -v "$PWD:/workspace" -w /workspace render-lab bash -c \
             'python3 tools/render-lab/fixtures.py render-lab-out/fixtures && python3 tools/render-lab/lo_render.py render-lab-out/fixtures render-lab-out'
 
