@@ -40,14 +40,18 @@ permissions:
   contents: read
 
 jobs:
+  # One job per app, in parallel: each builds only its own app, renders its
+  # fixtures, and gates on its own verdicts (the ratchet in run.sh). The
+  # combine job below turns their outputs into one report, PR comment,
+  # proposed baseline and issue sync.
   lab:
-    name: Tiers A+B vs LibreOffice
+    name: Render lab (${{ matrix.app }})
     runs-on: ubuntu-24.04
     timeout-minutes: 75
-    permissions:
-      contents: read
-      issues: write
-      pull-requests: write
+    strategy:
+      fail-fast: false
+      matrix:
+        app: [letters, tables, decks]
     steps:
       - uses: actions/checkout@v7
 
@@ -73,14 +77,72 @@ jobs:
           path: |
             ~/.cache/render-lab-cargo
             target
-          key: render-lab-cargo-${{ hashFiles('Cargo.lock') }}
-          restore-keys: render-lab-cargo-
+          key: render-lab-cargo-${{ matrix.app }}-${{ hashFiles('Cargo.lock') }}
+          restore-keys: |
+            render-lab-cargo-${{ matrix.app }}-
+            render-lab-cargo-
 
       - name: Run render lab
-        id: lab
         env:
           CONTAINER_ENGINE: docker
-        run: tools/render-lab/run.sh
+        run: tools/render-lab/run.sh --app ${{ matrix.app }}
+
+      - name: Upload captures
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: render-lab-${{ matrix.app }}
+          path: |
+            render-lab-out/${{ matrix.app }}/*/*.png
+            render-lab-out/${{ matrix.app }}/*/*.log
+            render-lab-out/${{ matrix.app }}/*/geom.json
+          retention-days: 14
+
+  report:
+    name: Tiers A+B vs LibreOffice
+    needs: lab
+    if: always()
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      issues: write
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: docker/setup-buildx-action@v4
+
+      - name: Build render-lab image
+        uses: docker/build-push-action@v7
+        with:
+          context: tools/render-lab
+          file: tools/render-lab/Containerfile
+          load: true
+          tags: render-lab
+          build-args: BASE=ghcr.io/${{ github.repository }}/gui-test:main
+          cache-from: type=gha,scope=render-lab
+
+      - name: Download captures
+        uses: actions/download-artifact@v4
+        with:
+          pattern: render-lab-*
+          path: render-lab-out
+          merge-multiple: true
+
+      # The whole-suite report, and the baseline this run would lock in: an
+      # agent or reviewer can take `baseline.proposed.json` from the
+      # artifact instead of re-running the lab locally.
+      - name: Compare all apps
+        id: compare
+        run: |
+          docker run --rm -v "$PWD:/workspace" -w /workspace render-lab bash -c '
+            python3 tools/render-lab/fixtures.py render-lab-out/fixtures >/dev/null &&
+            cp tools/render-lab/baseline.json render-lab-out/baseline.proposed.json &&
+            python3 tools/render-lab/compare.py render-lab-out/fixtures render-lab-out \
+              --baseline render-lab-out/baseline.proposed.json --update-baseline >/dev/null &&
+            python3 tools/render-lab/compare.py render-lab-out/fixtures render-lab-out \
+              --baseline tools/render-lab/baseline.json'
 
       - name: Job summary
         if: always()
@@ -97,6 +159,7 @@ jobs:
             render-lab-out/summary.json
             render-lab-out/summary.md
             render-lab-out/scorecard.json
+            render-lab-out/baseline.proposed.json
             render-lab-out/*/*/*.png
             render-lab-out/*/*/*.log
           retention-days: 14
@@ -110,7 +173,7 @@ jobs:
         run: |
           [ -f render-lab-out/summary.md ] || exit 0
           { echo '<!-- render-parity-comment -->'; cat render-lab-out/summary.md
-            echo; echo "Side-by-side report (LibreOffice | ours | diff): ${REPORT}"; } > comment.md
+            echo; echo "Side-by-side report (LibreOffice | ours | diff), with \`baseline.proposed.json\`: ${REPORT}"; } > comment.md
           id=$(gh api "repos/${GITHUB_REPOSITORY}/issues/${PR}/comments" --paginate \
                --jq '.[] | select(.body | startswith("<!-- render-parity-comment -->")) | .id' | head -1)
           if [ -n "$id" ]; then
@@ -120,7 +183,7 @@ jobs:
           fi
 
       - name: Sync render-parity issues
-        if: always() && github.ref == 'refs/heads/main' && github.event_name != 'pull_request' && hashFiles('render-lab-out/summary.json') != ''
+        if: always() && github.ref == 'refs/heads/main' && github.event_name != 'pull_request' && needs.lab.result == 'success' && hashFiles('render-lab-out/summary.json') != ''
         env:
           GH_TOKEN: ${{ github.token }}
         run: >
