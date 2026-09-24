@@ -124,8 +124,8 @@
     "B": "green"
   },
   "tables/borders": {
-    "A": "amber",
-    "B": "amber"
+    "A": "green",
+    "B": "green"
   },
   "tables/cell-fonts": {
     "A": "amber",
