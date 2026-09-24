@@ -25,18 +25,30 @@ pub fn load_image(path: &str) -> Option<cairo::ImageSurface> {
             }
         }
     }
-    let img = image::open(path).ok()?;
+    // Sniff the format from the bytes: images extracted from a pptx are
+    // written to extensionless temp files on purpose (gh-268: the
+    // extension came from the untrusted document), and `image::open`
+    // guesses by extension only, so every imported picture failed to load
+    // and was drawn as the `<image>` placeholder (render lab `decks/image`).
+    let img = image::ImageReader::open(path).ok()?.with_guessed_format().ok()?.decode().ok()?;
     let rgba = img.to_rgba8();
     let (w, h) = rgba.dimensions();
     let mut surface = cairo::ImageSurface::create(cairo::Format::ARgb32, w as i32, h as i32).ok()?;
     {
+        // Cairo's ARGB32 is premultiplied, native-endian (BGRA in memory
+        // on little-endian), with a row stride that can exceed w * 4.
+        let stride = surface.stride() as usize;
         let mut data = surface.data().ok()?;
-        for (i, pixel) in rgba.chunks(4).enumerate() {
-            let offset = i * 4;
-            data[offset] = pixel[2];
-            data[offset + 1] = pixel[1];
-            data[offset + 2] = pixel[0];
-            data[offset + 3] = pixel[3];
+        for (y, row) in rgba.rows().enumerate() {
+            for (x, p) in row.enumerate() {
+                let a = p[3] as u16;
+                let pm = |c: u8| ((c as u16 * a + 127) / 255) as u8;
+                let o = y * stride + x * 4;
+                data[o] = pm(p[2]);
+                data[o + 1] = pm(p[1]);
+                data[o + 2] = pm(p[0]);
+                data[o + 3] = p[3];
+            }
         }
     }
     surface.flush();
@@ -657,6 +669,24 @@ mod font_tests {
             notes: String::new(),
             master_idx,
         }
+    }
+
+    /// Pictures imported from a pptx live in extensionless temp files
+    /// (gh-268), so the loader must sniff the format from the bytes.
+    /// Half-transparent red must come out premultiplied, as Cairo expects.
+    #[test]
+    fn an_image_without_an_extension_still_loads() {
+        let dir = std::env::temp_dir().join(format!("decks-load-image-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("picture"); // no extension
+        let img = image::RgbaImage::from_pixel(3, 2, image::Rgba([255, 0, 0, 128]));
+        img.save_with_format(&path, image::ImageFormat::Png).unwrap();
+
+        let surf = load_image(path.to_str().unwrap()).expect("extensionless png should load");
+        assert_eq!((surf.width(), surf.height()), (3, 2));
+        // BGRA, premultiplied: red 255 at alpha 128 is stored as 128.
+        surf.with_data(|data| assert_eq!(&data[0..4], &[0, 0, 128, 128])).unwrap();
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]
