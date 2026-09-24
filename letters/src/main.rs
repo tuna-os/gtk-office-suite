@@ -123,6 +123,7 @@ fn main() {
             }
         }
         win.present();
+        suite_common::render_dump::schedule(gtk_app);
     });
     suite.run();
 }

@@ -672,6 +672,31 @@ impl LettersWindow {
                 }
             });
             app.add_action(&act);
+
+            // Render lab Tier A (docs/RENDER-PARITY-ROADMAP.md): each page
+            // rectangle exactly as GTK painted it — PageContainer's paper
+            // plus the TextView on top — through the real GSK pipeline.
+            // Pages outside the visible viewport are captured as whatever
+            // is drawn there, which today is the honest answer.
+            let tv = tab_view.clone();
+            let act = gtk::gio::SimpleAction::new("test-render-dump", None);
+            act.connect_activate(move |_, _| {
+                let Some(dir) = suite_common::render_dump::dump_dir() else { return };
+                let Some(page) = tv.selected_page() else { return };
+                let Some(pc) = find_page_container(&page.child()) else {
+                    eprintln!("render-dump: no PageContainer in the active tab");
+                    return;
+                };
+                let rects: Vec<_> = (0..pc.page_count()).map(|i| pc.page_rect(i)).collect();
+                suite_common::render_dump::write_geometry(&pc, &rects);
+                for i in 0..pc.page_count() {
+                    let path = suite_common::render_dump::page_path(&dir, i);
+                    if let Err(e) = suite_common::render_dump::widget_to_png(&pc, Some(pc.page_rect(i)), &path) {
+                        eprintln!("render-dump: page {}: {e}", i + 1);
+                    }
+                }
+            });
+            app.add_action(&act);
         }
 
         // Header/Footer edit dialog action
@@ -1298,4 +1323,19 @@ fn make_tab_menu() -> gio::Menu {
     s3.append(Some("_Close"), Some("win.close-current-page"));
     m.append_section(Some("Close"), &s3);
     m
+}
+
+/// The PageContainer inside a tab's widget tree (render lab only).
+fn find_page_container(widget: &gtk::Widget) -> Option<crate::page_container::PageContainer> {
+    if let Ok(pc) = widget.clone().downcast::<crate::page_container::PageContainer>() {
+        return Some(pc);
+    }
+    let mut child = widget.first_child();
+    while let Some(c) = child {
+        if let Some(pc) = find_page_container(&c) {
+            return Some(pc);
+        }
+        child = c.next_sibling();
+    }
+    None
 }

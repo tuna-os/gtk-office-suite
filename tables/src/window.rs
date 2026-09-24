@@ -135,6 +135,37 @@ impl TablesWindow {
                 let _ = std::fs::write(path, snap.to_json());
             });
             app.add_action(&act);
+
+            // Render lab Tier A (docs/RENDER-PARITY-ROADMAP.md): the grid
+            // as GTK painted it, headers plus the used range. LibreOffice's
+            // reference prints exactly that (headings and gridlines on), so
+            // both images show the same cells.
+            let area = drawing_area.clone();
+            let ctl = controller.clone();
+            let act = gtk4::gio::SimpleAction::new("test-render-dump", None);
+            act.connect_activate(move |_, _| {
+                let Some(dir) = suite_common::render_dump::dump_dir() else { return };
+                let path = suite_common::render_dump::page_path(&dir, 0);
+                let (aw, ah) = (area.width() as f64, area.height() as f64);
+                let used = {
+                    let state = ctl.borrow().state.clone();
+                    let state = state.borrow();
+                    let sheet = state.sheet();
+                    sheet.used_extent().map(|(r, c)| {
+                        (
+                            tables_core::sheet::col_x(c + 1, 0.0, &sheet),
+                            tables_core::sheet::row_y(r + 1, 0.0, &sheet),
+                        )
+                    })
+                };
+                let (w, h) = used.unwrap_or((aw, ah));
+                let rect = (0.0, 0.0, w.min(aw), h.min(ah));
+                suite_common::render_dump::write_geometry(&area, &[rect]);
+                if let Err(e) = suite_common::render_dump::widget_to_png(&area, Some(rect), &path) {
+                    eprintln!("render-dump: {e}");
+                }
+            });
+            app.add_action(&act);
         }
 
         // Column auto-fit (double-clicking a header divider) needs a

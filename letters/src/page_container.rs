@@ -302,6 +302,27 @@ impl PageContainer {
         ((w - sw) / 2.0, sw)
     }
 
+    /// On-screen rectangle (x, y, w, h) of page `index` in this widget's
+    /// coordinates. Mirrors the snapshot math; used by the render lab's
+    /// Tier A capture to crop exactly one page.
+    pub fn page_rect(&self, index: usize) -> (f64, f64, f64, f64) {
+        let imp = self.imp();
+        let (w, h) = (self.width() as f64, self.height() as f64);
+        let (pw, ph) = (imp.page_width.get(), imp.page_height.get());
+        let n_pages = imp.page_count.get().max(1);
+        let pad = 24.0;
+        let scale = ((w - pad * 2.0) / pw).min(1.5) * imp.zoom_level.get() / 100.0;
+        let (sw, sh) = (pw * scale, ph * scale);
+        let total_height = n_pages as f64 * sh + (n_pages as f64 - 1.0) * PAGE_GAP * scale;
+        let start_y = ((h - total_height) / 2.0).max(pad);
+        ((w - sw) / 2.0, start_y + index as f64 * (sh + PAGE_GAP * scale), sw, sh)
+    }
+
+    /// Number of page rectangles currently drawn.
+    pub fn page_count(&self) -> usize {
+        self.imp().page_count.get().max(1)
+    }
+
     pub fn set_page_size(&self, width_pt: f64, height_pt: f64) {
         let imp = self.imp();
         imp.page_width.set(width_pt);
