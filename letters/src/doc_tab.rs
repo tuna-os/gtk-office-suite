@@ -156,7 +156,10 @@ pub(crate) fn typeset_for(container: &PageContainer, buf: &gtk::TextBuffer) -> l
 /// `typeset_for`, plus where each laid-out paragraph starts in the buffer,
 /// which the page view needs to edit it.
 fn typeset_with_starts(container: &PageContainer, buf: &gtk::TextBuffer) -> (letters_core::layout::pango::Typeset, Vec<usize>) {
-    let (doc, starts) = crate::bridge::capture_with_starts(buf);
+    let (doc, starts) = match crate::live::of(buf) {
+        Some(m) => m.borrow_mut().snapshot(buf),
+        None => crate::bridge::capture_with_starts(buf),
+    };
     let mut typeset = letters_core::layout::pango::Typeset::new(doc, layout_options(container));
     typeset.set_image_loader(crate::page_view::load_image);
     (typeset, starts)
@@ -233,6 +236,9 @@ pub(crate) fn connect_suite_clipboard(widget: &gtk::Widget, buf: &gtk::TextBuffe
 pub(crate) fn make_doc_widget(settings: Option<&gio::Settings>) -> (PageContainer, gtk::TextBuffer) {
     let buffer = gtk::TextBuffer::new(None);
     register_formatting_tags(&buffer);
+    // The tab's document: the live model is the source of truth, the
+    // buffer its Draft view, and its history the tab's undo (live.rs).
+    let live = crate::live::LiveModel::attach(&buffer);
     let editor = gtk::TextView::with_buffer(&buffer);
     connect_list_continuation(&editor, &buffer);
     connect_markdown_macros(&buffer);
@@ -409,8 +415,6 @@ pub(crate) fn make_doc_widget(settings: Option<&gio::Settings>) -> (PageContaine
         let pc = container.clone();
         let timer = std::rc::Rc::new(std::cell::RefCell::new(None::<glib::SourceId>));
         let b2 = buffer.clone();
-        // The live model follows the buffer edit by edit (live.rs).
-        let live = crate::live::LiveModel::attach(&buffer);
         buffer.connect_changed(move |_| {
             if let Some(id) = timer.borrow_mut().take() { id.remove(); }
             let (buf, pc, t2, live) = (b2.clone(), pc.clone(), timer.clone(), live.clone());
