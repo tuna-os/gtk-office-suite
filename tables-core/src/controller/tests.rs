@@ -866,17 +866,41 @@
         controller.state.borrow_mut().delete_sheet(1).unwrap();
         assert_eq!(controller.state.borrow().sheets.len(), 2);
 
-        // Undoing the Sheet2 edit is inert: Sheet2 no longer exists, and the
-        // command must not silently retarget Sheet3, which is now at the old
-        // Sheet2 position.
+        // The sheet went behind the history's back (every real delete is an
+        // op, so undo would bring it back first). The Sheet2 edit's undo no
+        // longer applies: it must not retarget Sheet3, which now sits at the
+        // old Sheet2 position, and no half undo happens: the history is
+        // dropped (ADR 0011).
         controller.state.borrow_mut().switch_sheet(1).unwrap();
         let sheet3_before = controller.state.borrow().sheet().cell(0, 0).to_string();
-        assert!(controller.undo()); // pops the Sheet2 edit off the stack
+        assert!(!controller.undo());
         assert_eq!(controller.state.borrow().sheet().cell(0, 0), sheet3_before);
-
-        // The Sheet1 edit underneath it still undoes correctly.
+        assert!(!controller.can_undo() && controller.undo_description().is_none());
         controller.state.borrow_mut().switch_sheet(0).unwrap();
-        assert!(controller.undo());
+        assert_eq!(controller.state.borrow().sheet().cell(0, 0), "sheet1-a");
+    }
+
+    #[test]
+    fn undoing_past_a_sheet_delete_brings_the_sheet_back_first() {
+        let mut controller = WorkbookController::new(2, 2).unwrap();
+        controller.edit_cell(0, 0, "sheet1-a");
+        assert!(controller.add_sheet("Sheet2"));
+        controller.edit_cell(0, 0, "sheet2-a");
+        assert!(controller.add_sheet("Sheet3"));
+        controller.edit_cell(0, 0, "sheet3-a");
+        assert!(controller.delete_sheet(1));
+        assert!(controller.undo(), "the delete");
+        assert_eq!(controller.state.borrow().sheet().name, "Sheet2");
+        assert_eq!(controller.state.borrow().sheet().cell(0, 0), "sheet2-a");
+        assert!(controller.undo(), "Sheet3's edit");
+        assert_eq!(controller.state.borrow().sheet().name, "Sheet3");
+        assert_eq!(controller.state.borrow().sheet().cell(0, 0), "");
+        assert!(controller.undo(), "adding Sheet3");
+        assert!(controller.undo(), "Sheet2's edit");
+        assert_eq!(controller.state.borrow().sheet().name, "Sheet2");
+        assert_eq!(controller.state.borrow().sheet().cell(0, 0), "");
+        assert!(controller.undo(), "adding Sheet2");
+        assert!(controller.undo(), "Sheet1's edit");
         assert_eq!(controller.state.borrow().sheet().cell(0, 0), "");
     }
 

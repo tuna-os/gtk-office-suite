@@ -44,7 +44,6 @@ use std::cell::RefCell;
 use std::rc::Rc;
 
 use suite_common_core::format::NumberFormat;
-use suite_common_core::undo::Command;
 
 use super::state::WorkbookState;
 use std::collections::HashSet;
@@ -268,7 +267,7 @@ impl Op {
 
     /// Apply this op to `state` and return the op that undoes it exactly.
     /// On an error nothing has changed.
-    pub fn apply(&self, state: &mut WorkbookState) -> Result<Op, String> {
+    fn apply_one(&self, state: &mut WorkbookState) -> Result<Op, String> {
         // The sheet's current position, for the ops that address one.
         let si = match self.sheet() {
             Some(id) => state.sheet_index_for_id(id).ok_or_else(|| format!("no sheet with id {id}"))?,
@@ -591,28 +590,27 @@ pub fn diff_ops(before: &SheetModel, after: &SheetModel) -> Vec<Op> {
     ops
 }
 
-/// Apply `op` and return the ops that undo it (as `letters_core::edit::apply`).
+/// Tables' ops in the suite's one op shape (ADR 0011): the shared
+/// `History` undoes and redoes them.
+impl suite_common_core::ops::Op for Op {
+    type Doc = WorkbookState;
+    type Error = String;
+
+    fn apply(&self, state: &mut WorkbookState) -> Result<Vec<Op>, String> {
+        self.apply_one(state).map(|inverse| vec![inverse])
+    }
+}
+
+/// Apply `op` and return the ops that undo it.
 pub fn apply(state: &mut WorkbookState, op: &Op) -> Result<Vec<Op>, String> {
-    op.apply(state).map(|inverse| vec![inverse])
+    suite_common_core::ops::Op::apply(op, state)
 }
 
 /// Apply `ops` in order, all or nothing: if one fails, the ones before it
 /// are undone and the error returned. On success, the ops that undo the
 /// whole group, in the order to apply them.
 pub fn apply_all(state: &mut WorkbookState, ops: &[Op]) -> Result<Vec<Op>, String> {
-    let mut undo: Vec<Vec<Op>> = Vec::new();
-    for op in ops {
-        match apply(state, op) {
-            Ok(u) => undo.push(u),
-            Err(e) => {
-                for u in undo.into_iter().rev() {
-                    let _ = apply_all(state, &u);
-                }
-                return Err(e);
-            }
-        }
-    }
-    Ok(undo.into_iter().rev().flatten().collect())
+    suite_common_core::ops::apply_all(state, ops)
 }
 
 /// Blank lines to insert: `count` rows or columns of `sheet`'s default size.
@@ -625,43 +623,15 @@ pub fn blank_lines(state: &WorkbookState, sheet: usize, axis: Axis, count: usize
     vec![Line { size, cells: vec![CellContent::default(); across] }; count]
 }
 
-/// A group of ops as one step in the controller's undo stack, which still
-/// holds whole-sheet snapshot commands for the edits not yet expressed as
-/// ops. Applying records the group's inverse; undoing applies it. When
-/// every edit is an op this becomes a plain op history, as Letters has.
-pub(super) struct OpCommand {
-    pub(super) ops: Vec<Op>,
-    pub(super) inverses: RefCell<Vec<Op>>,
-    pub(super) description: String,
-}
-
-impl Command<WorkbookState> for OpCommand {
-    fn apply(&self, state: &mut WorkbookState) {
-        // A group that no longer applies (its sheet deleted since) changes
-        // nothing and leaves nothing to undo.
-        let inverses = apply_all(state, &self.ops).unwrap_or_default();
-        show_changed_sheet(state, &self.ops, &inverses);
-        *self.inverses.borrow_mut() = inverses;
-    }
-
-    fn undo(&self, state: &mut WorkbookState) {
-        let inverses = self.inverses.borrow();
-        if apply_all(state, &inverses).is_ok() {
-            show_changed_sheet(state, &inverses, &self.ops);
-        }
-    }
-
-    fn description(&self) -> &str {
-        &self.description
-    }
-}
-
-/// After an undo step's `ops` (whose inverses are `inverses`), show the
-/// sheet they changed, as Sheets and Excel do: undoing an edit on another
-/// sheet brings that sheet up, undoing a delete shows the sheet it brought
-/// back. A sheet that no longer exists (the step deleted it) is skipped.
-fn show_changed_sheet(state: &mut WorkbookState, ops: &[Op], inverses: &[Op]) {
-    let target = ops.iter().chain(inverses).filter_map(Op::sheet).find_map(|id| state.sheet_index_for_id(id));
+/// After `ops` (an edit, its undo or its redo), show the sheet they
+/// changed, as Sheets and Excel do: undoing an edit on another sheet brings
+/// that sheet up, and adding a sheet (or undoing its delete) shows it. A
+/// sheet that no longer exists (the ops deleted it) is skipped.
+pub(super) fn show_changed_sheet(state: &mut WorkbookState, ops: &[Op]) {
+    let target = ops.iter().find_map(|op| match op {
+        Op::AddSheet { index, .. } => Some(*index).filter(|i| *i < state.sheets.len()),
+        _ => op.sheet().and_then(|id| state.sheet_index_for_id(id)),
+    });
     if let Some(index) = target {
         if index != state.active_sheet {
             let _ = state.switch_sheet(index);
@@ -676,12 +646,16 @@ impl super::core::WorkbookController {
         if ops.is_empty() {
             return false;
         }
-        let ok = apply_all(&mut self.state.borrow_mut(), &ops);
-        let Ok(inverses) = ok else { return false };
-        // Undo what was just applied, so execute() applies it once through
-        // the command (the path redo takes too).
-        let _ = apply_all(&mut self.state.borrow_mut(), &inverses);
-        self.execute(Box::new(OpCommand { ops, inverses: RefCell::new(Vec::new()), description: description.into() }));
+        let applied = {
+            let mut state = self.state.borrow_mut();
+            let applied = apply_all(&mut state, &ops);
+            if applied.is_ok() {
+                show_changed_sheet(&mut state, &ops);
+            }
+            applied
+        };
+        let Ok(inverses) = applied else { return false };
+        self.record(description.into(), inverses);
         true
     }
 
