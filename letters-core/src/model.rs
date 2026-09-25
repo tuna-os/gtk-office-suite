@@ -45,6 +45,10 @@ pub struct RunStyle {
     /// export (never escaped) and rendered as plain text in the editor.
     #[serde(default)]
     pub html: bool,
+    /// Smart chip (a date, person or link) — an inline object whose text
+    /// is its label (`crate::chips`).
+    #[serde(default)]
+    pub chip: Option<crate::chips::Chip>,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -202,10 +206,11 @@ impl Paragraph {
     /// and never merged.
     fn normalize(&mut self) {
         self.runs
-            .retain(|r| !r.text.is_empty() || r.style.image.is_some() || r.style.footnote.is_some());
+            .retain(|r| !r.text.is_empty() || crate::layout::is_object(r));
         let mut i = 0;
         while i + 1 < self.runs.len() {
-            if self.runs[i].style.footnote.is_some() || self.runs[i + 1].style.footnote.is_some() {
+            // Objects are never merged: two chips side by side stay two.
+            if crate::layout::is_object(&self.runs[i]) || crate::layout::is_object(&self.runs[i + 1]) {
                 i += 1;
                 continue;
             }

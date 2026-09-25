@@ -374,11 +374,13 @@ pub(crate) fn make_doc_widget(settings: Option<&gio::Settings>) -> (PageContaine
 
     {
         let ed = editor.clone();
-        connect_selection_popover(editor.upcast_ref(), &buffer, move |start| {
+        let locate = move |start: usize| {
             let loc = ed.iter_location(&ed.buffer().iter_at_offset(start as i32));
             let (x, y) = ed.buffer_to_window_coords(gtk::TextWindowType::Widget, loc.x(), loc.y());
             Some(gtk4::gdk::Rectangle::new(x, y, 1, loc.height()))
-        });
+        };
+        connect_selection_popover(editor.upcast_ref(), &buffer, locate.clone());
+        crate::chips_ui::attach(editor.upcast_ref(), &buffer, locate, true);
     }
 
     let scroll = gtk::ScrolledWindow::new();
@@ -395,9 +397,11 @@ pub(crate) fn make_doc_widget(settings: Option<&gio::Settings>) -> (PageContaine
     crate::page_edit::make_editable(&page_view, &buffer);
     {
         let pv = page_view.clone();
-        connect_selection_popover(page_view.upcast_ref(), &buffer, move |start| {
+        let locate = move |start: usize| {
             pv.caret_rect(start).map(|(x, y, h)| gtk4::gdk::Rectangle::new(x as i32, y as i32, 1, h.ceil() as i32))
-        });
+        };
+        connect_selection_popover(page_view.upcast_ref(), &buffer, locate.clone());
+        crate::chips_ui::attach(page_view.upcast_ref(), &buffer, locate, false);
     }
     // Like the Draft editor: focus the page view whenever it is shown, or
     // keystrokes fall through to the window's search bar.

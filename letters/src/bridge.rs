@@ -285,6 +285,24 @@ pub(crate) fn capture_span(buf: &gtk::TextBuffer, from: i32, to: i32) -> (Vec<Pa
                 continue;
             }
         }
+        // A smart chip is its label under one "chip:KIND:VALUE" tag: one
+        // object run, however many chars the label takes in the buffer.
+        let chip = iter.tags().into_iter().find_map(|t| {
+            let chip = parse_chip_tag(t.name()?.as_str())?;
+            Some((t, chip))
+        });
+        if let Some((tag, chip)) = chip {
+            if let Some(r) = current_run.take() {
+                current.runs.push(r);
+            }
+            let mut label = String::new();
+            while !iter.is_end() && iter.char() != '\n' && iter.has_tag(&tag) {
+                label.push(iter.char());
+                iter.forward_char();
+            }
+            current.runs.push(letters_core::chips::chip_run(chip, label));
+            continue;
+        }
         // Footnote markers carry an "fnref:N" tag; the visible "[n]"
         // text is presentation only — capture emits a reference run.
         let fn_idx = iter.tags().iter().find_map(|t| {
@@ -351,6 +369,8 @@ pub(crate) fn capture_span(buf: &gtk::TextBuffer, from: i32, to: i32) -> (Vec<Pa
 fn run_lengths(run: &Run) -> (usize, usize) {
     if run.style.image.is_some() {
         (1, 1)
+    } else if run.style.chip.is_some() {
+        (1, run.text.chars().count())
     } else if let Some(idx) = run.style.footnote {
         (1, format!("[{}]", idx + 1).chars().count())
     } else {
@@ -938,6 +958,10 @@ pub(crate) fn render_paragraphs(buf: &gtk::TextBuffer, insert: &mut gtk::TextIte
                 insert_footnote_marker(buf, &mut insert, idx);
                 continue;
             }
+            if run.style.chip.is_some() {
+                insert_chip(buf, &mut insert, run);
+                continue;
+            }
             let tags = run_tags(buf, &run.style);
             let names: Vec<&str> = tags.iter().map(String::as_str).collect();
             if names.is_empty() {
@@ -1024,6 +1048,45 @@ pub fn save_buffer_to_file(
         }
         None => letters_core::save::write(&capture_from_buffer(buf), path),
     }
+}
+
+/// Prefix of a smart chip's tag: "chip:ID:date:2026-09-25". Every chip
+/// gets its own tag (ID), so two identical chips side by side read back as
+/// two; the value comes last because a URL may hold ':' or '#'.
+pub const CHIP_TAG_PREFIX: &str = "chip:";
+
+thread_local! {
+    static NEXT_CHIP_TAG: std::cell::Cell<u64> = const { std::cell::Cell::new(0) };
+}
+
+pub(crate) fn parse_chip_tag(name: &str) -> Option<letters_core::chips::Chip> {
+    use letters_core::chips::{Chip, ChipKind};
+    let (_id, rest) = name.strip_prefix(CHIP_TAG_PREFIX)?.split_once(':')?;
+    let (kind, value) = rest.split_once(':')?;
+    let kind = match kind {
+        "date" => ChipKind::Date,
+        "person" => ChipKind::Person,
+        "link" => ChipKind::Link,
+        _ => return None,
+    };
+    Some(Chip { kind, value: value.to_string() })
+}
+
+/// Insert smart chip `run` (its label) at `insert`, under its chip tag:
+/// the Draft view's pill, in the chip's colours.
+pub fn insert_chip(buf: &gtk::TextBuffer, insert: &mut gtk::TextIter, run: &Run) {
+    use letters_core::chips::ChipKind;
+    let Some(chip) = &run.style.chip else { return };
+    let (kind, fg, bg) = match chip.kind {
+        ChipKind::Date => ("date", "#1a57b5", "#e8effc"),
+        ChipKind::Person => ("person", "#222222", "#ededed"),
+        ChipKind::Link => ("link", "#176b38", "#e6f5eb"),
+    };
+    let id = NEXT_CHIP_TAG.with(|n| n.replace(n.get() + 1));
+    let name = format!("{CHIP_TAG_PREFIX}{id}:{kind}:{}", chip.value);
+    let tag = gtk::TextTag::builder().name(&name).foreground(fg).background(bg).build();
+    buf.tag_table().add(&tag);
+    buf.insert_with_tags_by_name(insert, &run.text, &[&name]);
 }
 
 /// Insert the visible "[n]" marker for footnote index `idx`, tagged

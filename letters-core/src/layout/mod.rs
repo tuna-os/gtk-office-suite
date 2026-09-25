@@ -245,6 +245,10 @@ pub enum Item {
     Marker { para: usize, text: String, x_pt: f64, baseline_pt: f64 },
     /// An inline image, `src` as the model names it, in its box.
     Image { para: usize, src: String, x_pt: f64, y_pt: f64, width_pt: f64, height_pt: f64 },
+    /// A smart chip: its run's object char `ch` in paragraph `para`, drawn
+    /// as a pill from `x_pt` on the line's baseline (the painter shapes its
+    /// label, as the shaper measured it).
+    Chip { para: usize, ch: usize, x_pt: f64, baseline_pt: f64 },
     /// A table cell's border box.
     Cell { table: u32, row: u32, col: u32, x_pt: f64, y_pt: f64, width_pt: f64, height_pt: f64 },
 }
@@ -285,11 +289,17 @@ impl RenderTree {
 /// layout text.
 pub const OBJECT: char = '\u{FFFC}';
 
-/// Whether a run is an inline object (an image or a footnote reference):
-/// one `OBJECT` char in the layout and edit sequence, whatever its text.
+/// Whether a run is an inline object (an image, a footnote reference or a
+/// smart chip): one `OBJECT` char in the layout and edit sequence, whatever
+/// its text.
 pub fn is_object(run: &Run) -> bool {
-    run.style.image.is_some() || run.style.footnote.is_some()
+    run.style.image.is_some() || run.style.footnote.is_some() || run.style.chip.is_some()
 }
+
+/// Space around a smart chip's label, in points: horizontal padding inside
+/// the pill, and the gap kept outside it on each side.
+pub const CHIP_PAD_PT: f64 = 4.0;
+pub const CHIP_GAP_PT: f64 = 1.5;
 
 /// A paragraph's text as the layout sees it: every inline object (image,
 /// footnote reference) is one `OBJECT` char (the model keeps an image's alt
@@ -596,6 +606,10 @@ fn emit_line(flow: &mut Flow, idx: usize, para: &Paragraph, text: &[char], k: us
     });
     for &(ch, x) in &lb.objects {
         let Some(run) = run_at(&para.runs, ch) else { continue };
+        if run.style.chip.is_some() {
+            flow.push(Item::Chip { para: idx, ch, x_pt: box_x + x, baseline_pt: baseline });
+            continue;
+        }
         let Some(src) = run.style.image.clone() else { continue };
         let (w, h) = image_size_pt(run, box_w);
         flow.push(Item::Image { para: idx, src, x_pt: box_x + x, y_pt: baseline - h, width_pt: w, height_pt: h });
@@ -837,6 +851,9 @@ impl Shaper for MonoShaper {
                     vec![(OBJECT, w, h)]
                 } else if r.style.footnote.is_some() {
                     vec![(OBJECT, 0.0, 0.0)]
+                } else if r.style.chip.is_some() {
+                    let w = r.text.chars().count() as f64 * s * 0.5 + 2.0 * (CHIP_PAD_PT + CHIP_GAP_PT);
+                    vec![(OBJECT, w, s)]
                 } else {
                     r.text.chars().map(|c| (c, s * 0.5, s)).collect()
                 }

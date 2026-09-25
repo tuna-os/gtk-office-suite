@@ -22,6 +22,8 @@ rdocx-oxml = "0.13.1"
 zip = { version = "8.0", default-features = false, features = ["deflate"] }
 quick-xml = "0.42"
 suite-common-core = { path = "../suite-common-core", version = "0.1.0" }
+# Smart date chips (chips.rs); already in the lockfile via suite-common-core.
+chrono = "0.4"
 # NamedTempFile for extracted images (gh-268): production code writes
 # document-embedded images to /tmp, which must not use predictable paths.
 tempfile = "3"

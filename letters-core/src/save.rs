@@ -203,6 +203,7 @@ struct Present {
     alignment: bool,
     page_layout: bool,
     header_footer: bool,
+    chip: bool,
 }
 
 fn styled(run: &Run) -> bool {
@@ -252,6 +253,7 @@ fn survey(doc: &Document) -> Present {
             present.link |= run.style.link.is_some();
             present.image |= run.style.image.is_some();
             present.footnote |= run.style.footnote.is_some();
+            present.chip |= run.style.chip.is_some();
         }
     }
     present
@@ -281,6 +283,9 @@ fn lost(
 pub fn compatibility_report(doc: &Document, format: SaveFormat) -> CompatibilityReport {
     let mut report = CompatibilityReport::new(format.extension());
     let present = survey(doc);
+    // No file format keeps a smart chip as a chip yet: every writer saves
+    // its label, and a link or person chip's hyperlink.
+    lost(&mut report, present.chip, "smart-chips", "Smart chips", "each chip is saved as its text, and as a link where it has one; it opens as text");
     match format {
         // The package formats are the reference targets: they carry the
         // whole model, and opaque parts on top of it.

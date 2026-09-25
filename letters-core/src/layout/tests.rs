@@ -345,6 +345,34 @@ fn relayout_reshapes_only_the_edited_paragraph() {
 }
 
 #[test]
+fn a_smart_chip_is_one_object_drawn_as_a_pill() {
+    let mut d = doc_of(1, "Due ");
+    let date = crate::chips::date_chip(crate::chips::NaiveDate::from_ymd_opt(2026, 10, 3).unwrap());
+    d.paragraphs[0].runs.push(date);
+    d.paragraphs[0].runs.push(Run::plain(" ok"));
+    assert_eq!(layout_text(&d.paragraphs[0].runs), "Due \u{FFFC} ok");
+    let t = lay(&d);
+    let chips: Vec<(usize, usize, f64)> = t.pages[0]
+        .items
+        .iter()
+        .filter_map(|i| match i { Item::Chip { para, ch, x_pt, .. } => Some((*para, *ch, *x_pt)), _ => None })
+        .collect();
+    // After "Due " (4 chars × 6 pt) from the left margin.
+    assert_eq!(chips, [(0, 4, 72.0 + 24.0)]);
+    // The pill holds the label open: " ok" starts after it.
+    let label_w = "3 Oct 2026".len() as f64 * 6.0 + 2.0 * (CHIP_PAD_PT + CHIP_GAP_PT);
+    let line = t.pages[0].lines().next().unwrap();
+    if let Item::Line { text, .. } = line {
+        assert_eq!(text, "Due \u{FFFC} ok");
+    }
+    let mut shaper = MonoShaper;
+    let o = opts();
+    let req = paragraph_request(&d.paragraphs[0], 400.0, &o);
+    let lb = &shaper.shape(&req)[0];
+    assert!((lb.width_pt - (7.0 * 6.0 + label_w)).abs() < 1e-9, "{}", lb.width_pt);
+}
+
+#[test]
 fn title_subtitle_and_quotes_have_their_own_looks() {
     let mut d = doc_of(5, "text");
     d.paragraphs[0].style.named_style = Some("Title".into());

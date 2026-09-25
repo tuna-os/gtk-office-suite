@@ -951,6 +951,7 @@ fn map_paragraph(doc: &rdocx::Document, p: &rdocx::ParagraphRef<'_>) -> Paragrap
                 image_extent_emu: None,
                 footnote: None,
                 html: false,
+                chip: None,
                 font_family: family,
                 font_size_hp: size_hp,
                 color,
