@@ -13,6 +13,7 @@
 use adw::prelude::*;
 use decks_core::engine::shape::{Color, ShapeKind};
 use decks_core::engine::{Anchor, ParaAlign, Transition};
+use decks_core::builds::BuildEffect;
 use decks_core::format::{FormatEdit, ListKind, ObjectFormat};
 use decks_core::undo::ZOrderOp;
 use decks_core::DecksController;
@@ -243,11 +244,30 @@ pub fn build(
     ));
     let arrange_page = page(&[&pos_group, &size_group, &turn_group, &order_group]);
 
+    // ── Animate (Keynote's builds) ─────────────────────────────────────────
+    let build_group = adw::PreferencesGroup::builder()
+        .title("Build")
+        .description("How the object arrives and leaves during a show, one click each")
+        .build();
+    let mut effect_names = vec!["None"];
+    effect_names.extend(BuildEffect::ALL.iter().map(|e| e.label()));
+    let build_in = combo("Build In", &effect_names);
+    let out_names: Vec<String> = effect_names.iter().map(|n| n.replace(" from ", " to ")).collect();
+    let out_refs: Vec<&str> = out_names.iter().map(String::as_str).collect();
+    let build_out = combo("Build Out", &out_refs);
+    let build_order = adw::ActionRow::builder().title("Order").build();
+    build_order.add_css_class("property");
+    build_group.add(&build_in);
+    build_group.add(&build_out);
+    build_group.add(&build_order);
+    let animate_page = page(&[&build_group]);
+
     // ── Tabs ─────────────────────────────────────────────────────────────
     let stack = adw::ViewStack::new();
     let style_tab = stack.add_titled_with_icon(&style_page, Some("style"), "Style", "applications-graphics-symbolic");
     let text_tab = stack.add_titled_with_icon(&text_page, Some("text"), "Text", "format-text-rich-symbolic");
     stack.add_titled_with_icon(&arrange_page, Some("arrange"), "Arrange", "object-select-symbolic");
+    stack.add_titled_with_icon(&animate_page, Some("animate"), "Animate", "media-playback-start-symbolic");
     let switcher = adw::ViewSwitcher::builder().stack(&stack).policy(adw::ViewSwitcherPolicy::Wide).build();
     switcher.set_margin_top(6);
     switcher.set_margin_bottom(6);
@@ -291,6 +311,7 @@ pub fn build(
         let aligns = [a_left.clone(), a_center.clone(), a_right.clone(), a_just.clone()];
         let (list, anchor, transition) = (list.clone(), anchor.clone(), transition.clone());
         let (x, y, w, h, rotation) = (x.clone(), y.clone(), w.clone(), h.clone(), rotation.clone());
+        let (build_in, build_out, build_order) = (build_in.clone(), build_out.clone(), build_order.clone());
         Rc::new(move || {
             let f: Option<ObjectFormat> = sel.get().and_then(|oi| ctl.object_format(cs.get(), oi));
             let Some(f) = f else {
@@ -351,6 +372,33 @@ pub fn build(
             w.set_value(bw);
             h.set_value(bh);
             rotation.set_value(f.rotation.rem_euclid(360.0).round());
+            if let (Some(oi), Some(slide)) = (sel.get(), ctl.slides.borrow().get(cs.get())) {
+                let pick = |out: bool| {
+                    slide
+                        .builds
+                        .iter()
+                        .find(|b| b.object == oi && b.out == out)
+                        .and_then(|b| BuildEffect::ALL.iter().position(|e| *e == b.effect))
+                        .map_or(0, |i| i as u32 + 1)
+                };
+                build_in.set_selected(pick(false));
+                build_out.set_selected(pick(true));
+                let mine: Vec<usize> = slide
+                    .builds
+                    .iter()
+                    .enumerate()
+                    .filter(|(_, b)| b.object == oi)
+                    .map(|(i, _)| i + 1)
+                    .collect();
+                let n = slide.builds.len();
+                build_order.set_subtitle(&match mine.as_slice() {
+                    [] => "Always on the slide".to_string(),
+                    steps => format!(
+                        "Click {} of {n}",
+                        steps.iter().map(|s| s.to_string()).collect::<Vec<_>>().join(" and ")
+                    ),
+                });
+            }
             syncing.set(false);
         })
     };
@@ -508,6 +556,22 @@ pub fn build(
                 if ctl.set_transition(cs.get(), *t) {
                     changed();
                 }
+            }
+        });
+    }
+
+    for (row, out) in [(&build_in, false), (&build_out, true)] {
+        let (ctl, cs, sel, syncing, changed, sync) =
+            (ctl.clone(), current_slide.clone(), selected.clone(), syncing.clone(), changed.clone(), sync.clone());
+        row.connect_selected_notify(move |r| {
+            if syncing.get() {
+                return;
+            }
+            let Some(oi) = sel.get() else { return };
+            let effect = (r.selected() as usize).checked_sub(1).and_then(|i| BuildEffect::ALL.get(i).copied());
+            if ctl.set_build(cs.get(), oi, out, effect) {
+                changed();
+                sync();
             }
         });
     }

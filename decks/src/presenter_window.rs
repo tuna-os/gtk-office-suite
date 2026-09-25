@@ -19,7 +19,12 @@ use std::cell::RefCell;
 use std::rc::Rc;
 use std::time::Instant;
 
-use crate::canvas::{draw_slide_in, draw_slide_show, Chrome};
+use crate::canvas::{draw_slide_objects, Chrome};
+use decks_core::engine::Slide;
+use decks_core::presenter::Advance;
+
+/// How long a build plays.
+const BUILD_TIME: std::time::Duration = std::time::Duration::from_millis(500);
 use crate::transition::{draw_transition, TransitionState, TransitionType};
 
 /// One running show.
@@ -27,6 +32,8 @@ struct Show {
     deck: Deck,
     state: RefCell<PresenterState>,
     transition: Rc<RefCell<TransitionState>>,
+    /// The build playing on the audience window: its step and start.
+    build: RefCell<Option<(usize, Instant)>>,
     /// Filled in once the windows exist (they refer back to the show).
     audience: RefCell<Option<(gtk::Window, gtk::DrawingArea)>>,
     presenter: RefCell<Option<Presenter>>,
@@ -72,29 +79,81 @@ impl Show {
         }
     }
 
-    /// Move to slide `to`, playing its transition where the audience sees
-    /// it (going back plays the slide being left's, as the editor does).
+    /// Slide `i` as it stands after `step` builds: what is on it.
+    fn slide_at(&self, i: usize, step: usize) -> Slide {
+        let s = &self.deck.slides[i];
+        let objects = decks_core::builds::frame(s, step, 0.0).into_iter().map(|f| f.object).collect();
+        Slide { objects, ..s.clone() }
+    }
+
+    /// Play the transition from slide `from` (as it was left, after
+    /// `from_step` builds) to slide `to` (before its builds) where the
+    /// audience sees it. Going back plays the slide being left's.
+    fn play_transition(&self, from: usize, from_step: usize, to: usize) {
+        self.build.borrow_mut().take();
+        if let Some((_, area)) = self.audience.borrow().as_ref() {
+            let a = self.slide_at(from, from_step);
+            let b = self.slide_at(to, self.state.borrow().build_step());
+            let kind = TransitionType::of(if to > from { b.transition } else { a.transition });
+            self.transition.borrow_mut().chrome = Chrome::Show;
+            TransitionState::start(&self.transition, kind, &a, &b, &self.deck.masters, area);
+        }
+    }
+
+    /// Jump to slide `to`.
     fn go(&self, to: usize) {
-        let from = self.index();
+        let (from, from_step) = (self.index(), self.state.borrow().build_step());
         if !self.state.borrow_mut().go_to(to, &self.deck) {
             return;
         }
-        if let Some((_, area)) = self.audience.borrow().as_ref() {
-            let (a, b) = (&self.deck.slides[from], &self.deck.slides[to]);
-            let kind = TransitionType::of(if to > from { b.transition } else { a.transition });
-            self.transition.borrow_mut().chrome = Chrome::Show;
-            TransitionState::start(&self.transition, kind, a, b, &self.deck.masters, area);
+        self.play_transition(from, from_step, to);
+        self.refresh();
+    }
+
+    /// One click forward (the next build, else the next slide) or back.
+    fn step(&self, forward: bool) {
+        let (from, from_step) = (self.index(), self.state.borrow().build_step());
+        if forward {
+            let advance = self.state.borrow_mut().advance(&self.deck);
+            match advance {
+                Some(Advance::Build(n)) => {
+                    *self.build.borrow_mut() = Some((n, Instant::now()));
+                    if let Some((_, area)) = self.audience.borrow().as_ref() {
+                        let area = area.clone();
+                        let started = Instant::now();
+                        glib::timeout_add_local(std::time::Duration::from_millis(16), move || {
+                            area.queue_draw();
+                            if started.elapsed() >= BUILD_TIME { glib::ControlFlow::Break } else { glib::ControlFlow::Continue }
+                        });
+                    }
+                }
+                Some(Advance::Slide(to)) => self.play_transition(from, from_step, to),
+                None => return,
+            }
+        } else {
+            if !self.state.borrow_mut().back(&self.deck) {
+                return;
+            }
+            self.build.borrow_mut().take();
+            if self.index() != from {
+                // Back to the previous slide as it was left: no transition.
+                self.transition.borrow_mut().active = false;
+            }
         }
         self.refresh();
     }
 
-    fn step(&self, forward: bool) {
-        let i = self.index();
-        if forward {
-            self.go(i + 1);
-        } else if i > 0 {
-            self.go(i - 1);
+    /// What the audience sees now: a build part-way, or the slide as it
+    /// stands.
+    fn audience_objects(&self) -> Vec<decks_core::magic_move::FrameObject> {
+        let slide = &self.deck.slides[self.index()];
+        if let Some((n, started)) = *self.build.borrow() {
+            let t = started.elapsed().as_secs_f64() / BUILD_TIME.as_secs_f64();
+            if t < 1.0 {
+                return decks_core::builds::frame(slide, n, t);
+            }
         }
+        decks_core::builds::frame(slide, self.state.borrow().build_step(), 0.0)
     }
 
     /// Close both windows. Taking them out of the show also breaks the
@@ -147,9 +206,20 @@ fn slide_area(show: &Rc<Show>, offset: usize, label: &str) -> gtk::DrawingArea {
     let weak = Rc::downgrade(show);
     area.set_draw_func(move |_, cr, w, h| {
         let Some(show) = weak.upgrade() else { return };
-        let i = show.index() + offset;
+        // The current slide as it stands; "next" is what the next click
+        // shows: the next build on this slide, else the next slide.
+        let (i, step) = (show.index(), show.state.borrow().build_step());
+        let slide = &show.deck.slides[i];
+        let (i, step) = if offset == 0 {
+            (i, step)
+        } else if step < decks_core::builds::steps(slide) {
+            (i, step + 1)
+        } else {
+            (i + 1, 0)
+        };
         if i < show.deck.slides.len() {
-            draw_slide_in(cr, w as f64, h as f64, &show.deck.slides, i, &show.deck.masters, Chrome::Preview);
+            let objects = decks_core::builds::frame(&show.deck.slides[i], step, 0.0);
+            draw_slide_objects(cr, w as f64, h as f64, &show.deck.slides, i, &show.deck.masters, Chrome::Preview, &objects);
         }
         // After the last slide there is no next one: the area stays empty.
     });
@@ -167,7 +237,8 @@ fn build_audience(app: &adw::Application, show: &Rc<Show>) -> (gtk::Window, gtk:
         if draw_transition(cr, &show.transition.borrow(), w as f64, h as f64) {
             return;
         }
-        draw_slide_show(cr, w as f64, h as f64, &show.deck.slides, show.index(), &show.deck.masters);
+        let objects = show.audience_objects();
+        draw_slide_objects(cr, w as f64, h as f64, &show.deck.slides, show.index(), &show.deck.masters, Chrome::Show, &objects);
     });
     let window = gtk::Window::builder().application(app).title("Slide Show").decorated(false).child(&area).build();
     // Clicking the slide advances, as in every presentation app.
@@ -291,6 +362,7 @@ pub fn start(app: &adw::Application, deck: Deck, start: usize, rehearse: bool) {
         deck,
         state: RefCell::new(state),
         transition: Rc::new(RefCell::new(TransitionState::new())),
+        build: RefCell::new(None),
         audience: RefCell::new(None),
         presenter: RefCell::new(None),
     });
