@@ -1342,6 +1342,7 @@ mod emu_rounding_tests {
                 }],
                 transition: Default::default(),
                 builds: Vec::new(),
+                ids: Default::default(),
             }],
             ..Default::default()
         }

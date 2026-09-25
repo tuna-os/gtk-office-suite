@@ -51,6 +51,7 @@ fn slide_of(objects: Vec<SlideObject>, notes: &str, background: &str) -> Slide {
         master_idx: None,
         transition: Default::default(),
         builds: Vec::new(),
+        ids: Default::default(),
     }
 }
 
@@ -342,6 +343,7 @@ fn masters_survive_a_snapshot() {
                     master_idx: Some(0),
                     transition: Default::default(),
                     builds: Vec::new(),
+                    ids: Default::default(),
                 },
                 // On the *second* master, which is what makes the mapping
                 // testable: a reader that loses it falls back to master 0,
@@ -355,6 +357,7 @@ fn masters_survive_a_snapshot() {
                     master_idx: Some(1),
                     transition: Default::default(),
                     builds: Vec::new(),
+                    ids: Default::default(),
                 },
             ],
         };
@@ -546,6 +549,7 @@ fn the_masters_font_survives_a_snapshot() {
                 master_idx: Some(0),
                 transition: Default::default(),
                 builds: Vec::new(),
+                ids: Default::default(),
             }],
         };
         let back = through_a_snapshot(&deck, kind, "master-font");
@@ -599,6 +603,7 @@ fn masters_keep_their_own_font_in_pptx_but_share_one_in_odp() {
                 master_idx: Some(0),
                 transition: Default::default(),
                 builds: Vec::new(),
+                ids: Default::default(),
             },
             Slide {
                 title: String::new(),
@@ -608,6 +613,7 @@ fn masters_keep_their_own_font_in_pptx_but_share_one_in_odp() {
                 master_idx: Some(1),
                 transition: Default::default(),
                 builds: Vec::new(),
+                ids: Default::default(),
             },
         ],
     };
@@ -659,6 +665,7 @@ fn the_pptx_declares_the_theme_part_it_ships() {
             master_idx: Some(0),
             transition: Default::default(),
             builds: Vec::new(),
+            ids: Default::default(),
         }],
     };
     let bytes = decks_core::write_deck_bytes("pptx", &deck).expect("write pptx");

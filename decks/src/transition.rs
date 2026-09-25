@@ -364,6 +364,7 @@ mod tests {
             master_idx: None,
             transition: Transition::MagicMove,
             builds: Vec::new(),
+            ids: Default::default(),
         };
         let from = slide(vec![sq(100.0, red)]);
         let mut arriving = sq(430.0, blue);

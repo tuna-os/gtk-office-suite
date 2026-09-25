@@ -13,6 +13,7 @@ pub mod guides;
 pub mod magic_move;
 pub mod odp;
 mod odp_builds;
+pub mod ops;
 mod odp_text;
 pub mod presenter;
 pub mod snapshot;

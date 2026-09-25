@@ -8,10 +8,8 @@
 // nothing records nothing. The inspector reads what to show from
 // `ObjectFormat::of`.
 
-use suite_common_core::undo::Command;
-
 use crate::engine::shape::{Color, ShapeKind, ShapeStyle, Stroke};
-use crate::engine::{Anchor, Bullet, ParaAlign, ParaStyle, Run, RunStyle, Slide, SlideObject};
+use crate::engine::{Anchor, Bullet, ParaAlign, ParaStyle, Run, RunStyle, SlideObject};
 use crate::undo::{obj_bounds, obj_rotation, set_obj_bounds, set_obj_rotation};
 
 /// A paragraph list type, as the inspector offers it.
@@ -338,57 +336,6 @@ pub fn apply_edit(obj: &mut SlideObject, edit: &FormatEdit) {
     }
 }
 
-/// Replaces some of a slide's objects with new versions, and back.
-pub struct FormatObjectsCmd {
-    pub slide_idx: usize,
-    pub before: Vec<(usize, SlideObject)>,
-    pub after: Vec<(usize, SlideObject)>,
-    pub description: &'static str,
-}
-
-impl Command<Vec<Slide>> for FormatObjectsCmd {
-    fn apply(&self, slides: &mut Vec<Slide>) {
-        put(slides, self.slide_idx, &self.after);
-    }
-    fn undo(&self, slides: &mut Vec<Slide>) {
-        put(slides, self.slide_idx, &self.before);
-    }
-    fn description(&self) -> &str {
-        self.description
-    }
-}
-
-fn put(slides: &mut [Slide], slide_idx: usize, objects: &[(usize, SlideObject)]) {
-    let Some(slide) = slides.get_mut(slide_idx) else { return };
-    for (i, o) in objects {
-        if let Some(slot) = slide.objects.get_mut(*i) {
-            *slot = o.clone();
-        }
-    }
-}
-
-/// The command that applies `edit` to `indices` on `slide`, or `None`
-/// when it changes nothing.
-pub fn format_command(slide: &Slide, slide_idx: usize, indices: &[usize], edit: &FormatEdit) -> Option<FormatObjectsCmd> {
-    let mut before = Vec::new();
-    let mut after = Vec::new();
-    let mut seen = Vec::new();
-    for &i in indices {
-        if seen.contains(&i) {
-            continue;
-        }
-        seen.push(i);
-        let Some(obj) = slide.objects.get(i) else { continue };
-        let mut new = obj.clone();
-        apply_edit(&mut new, edit);
-        if format!("{new:?}") != format!("{obj:?}") {
-            before.push((i, obj.clone()));
-            after.push((i, new));
-        }
-    }
-    (!after.is_empty()).then_some(FormatObjectsCmd { slide_idx, before, after, description: edit.description() })
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -408,9 +355,6 @@ mod tests {
         SlideObject::Shape { kind: ShapeKind::Rect, x: 0.0, y: 0.0, w: 100.0, h: 50.0, rotation: 0.0, style: ShapeStyle::default() }
     }
 
-    fn slide(objects: Vec<SlideObject>) -> Slide {
-        Slide { title: String::new(), background: "#ffffff".into(), objects, notes: String::new(), master_idx: None, transition: Default::default(), builds: Vec::new() }
-    }
 
     #[test]
     fn a_fill_edit_on_a_plain_rectangle_makes_it_a_styled_shape_that_looks_the_same_until_then() {
@@ -488,19 +432,4 @@ mod tests {
         assert!(obj_bounds(&t).3 > 0.0, "never collapses");
     }
 
-    #[test]
-    fn a_command_covers_the_selection_and_skips_what_it_would_not_change() {
-        let s = slide(vec![shape(), text_box("t"), shape()]);
-        let cmd = format_command(&s, 0, &[0, 1, 2, 2], &FormatEdit::Fill(Some(Color(1, 1, 1)))).expect("a change");
-        assert_eq!(cmd.after.iter().map(|(i, _)| *i).collect::<Vec<_>>(), [0, 2], "the text box has no fill; 2 once");
-        assert_eq!(cmd.description(), "Fill");
-        let mut slides = vec![s.clone()];
-        cmd.apply(&mut slides);
-        assert_eq!(ObjectFormat::of(&slides[0].objects[2]).fill, Some(Color(1, 1, 1)));
-        cmd.undo(&mut slides);
-        assert_eq!(format!("{:?}", slides[0]), format!("{s:?}"));
-        // Already that way: no step.
-        assert!(format_command(&s, 0, &[1], &FormatEdit::Bold(false)).is_none());
-        assert!(format_command(&s, 0, &[0], &FormatEdit::Bold(true)).is_none(), "a shape has no text");
-    }
 }

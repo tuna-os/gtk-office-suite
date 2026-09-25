@@ -966,6 +966,7 @@ pub fn read_pptx(path: &str) -> Result<Deck, String> {
             master_idx: Some(0),
             transition: parse_transition(&slide_xml),
             builds: super::timing::read_builds(&slide_xml, |spid| object_ids.iter().position(|id| *id == Some(spid))),
+            ids: Default::default(),
         });
     }
 
@@ -1084,6 +1085,7 @@ pub fn read_pptx(path: &str) -> Result<Deck, String> {
             master_idx: Some(0),
             transition: Default::default(),
             builds: Vec::new(),
+            ids: Default::default(),
         });
     }
 

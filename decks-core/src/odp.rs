@@ -1285,6 +1285,7 @@ fn parse_pages(
                         master_idx: Some(0),
                         transition: Default::default(),
                         builds: Vec::new(),
+                        ids: Default::default(),
                     });
                 }
                 "presentation:notes" => in_notes = true,
@@ -1647,6 +1648,7 @@ pub fn read(path: &str) -> Result<Deck, String> {
             master_idx: Some(0),
             transition: Default::default(),
             builds: Vec::new(),
+            ids: Default::default(),
         });
     }
     Ok(deck)
@@ -1681,6 +1683,7 @@ mod tests {
             master_idx: Some(0),
             transition: Default::default(),
             builds: Vec::new(),
+            ids: Default::default(),
         }
     }
 
@@ -1884,6 +1887,7 @@ mod tests {
                 master_idx: Some(0),
                 transition: Default::default(),
                 builds: Vec::new(),
+                ids: Default::default(),
             }],
         };
         let styles = styles_xml(&deck, &mut Vec::new()).unwrap();
@@ -1934,6 +1938,7 @@ mod tests {
                 master_idx: Some(0),
                 transition: Default::default(),
                 builds: Vec::new(),
+                ids: Default::default(),
             }],
         }
     }
@@ -2098,6 +2103,7 @@ mod tests {
             master_idx: Some(0),
             transition: Default::default(),
             builds: Vec::new(),
+            ids: Default::default(),
         }];
         let rt = round_trip(&deck);
         let close = |a: f64, b: f64| (a - b).abs() < 0.1;
@@ -2150,6 +2156,7 @@ mod tests {
             master_idx: Some(0),
             transition: Default::default(),
             builds: Vec::new(),
+            ids: Default::default(),
         }];
         let rt = round_trip(&deck);
         let SlideObject::TextBox { runs, .. } = &rt.slides[0].objects[0] else { panic!() };
@@ -2309,6 +2316,7 @@ mod tests {
                 }],
                 transition: Default::default(),
                 builds: Vec::new(),
+                ids: Default::default(),
             }],
             ..Default::default()
         }

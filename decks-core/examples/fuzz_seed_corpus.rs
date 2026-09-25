@@ -38,6 +38,7 @@ fn decks() -> Vec<(&'static str, Deck)> {
                 master_idx: None,
                 transition: Default::default(),
                 builds: Vec::new(),
+                ids: Default::default(),
             })
             .collect(),
         ..Deck::default()

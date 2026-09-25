@@ -183,6 +183,7 @@ fn blank_slide() -> Slide {
         master_idx: None,
         transition: Default::default(),
         builds: Vec::new(),
+        ids: Default::default(),
     }
 }
 

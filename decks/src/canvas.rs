@@ -1019,6 +1019,7 @@ mod font_tests {
                 Build { object: 0, effect: BuildEffect::Move(Edge::Left), out: false },
                 Build { object: 1, effect: BuildEffect::Dissolve, out: false },
             ],
+            ids: Default::default(),
         };
         let slides = [slide];
         let (w, h) = (960, 540);
@@ -1070,6 +1071,7 @@ mod font_tests {
             master_idx,
             transition: Default::default(),
             builds: Vec::new(),
+            ids: Default::default(),
         }
     }
 

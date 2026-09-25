@@ -23,6 +23,10 @@ pub struct Slide {
     /// Objects that build in or out, one per click, in order
     /// (decks_core::builds).
     pub builds: Vec<crate::builds::Build>,
+    /// Stable identities for editing by ops (decks_core::ops): the slide's
+    /// id, one id per object, and the ids of deleted objects (tombstones).
+    /// Readers leave it empty; ops fill it in (`ops::ensure_ids`).
+    pub ids: crate::ops::SlideIds,
 }
 
 /// A slide transition.
@@ -173,6 +177,7 @@ impl Deck {
                 master_idx: Some(0),
                 transition: Default::default(),
                 builds: Vec::new(),
+                ids: Default::default(),
             }],
             masters: vec![default_master],
         }
