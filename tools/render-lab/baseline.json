@@ -144,8 +144,8 @@
     "B": "amber"
   },
   "tables/fills": {
-    "A": "amber",
-    "B": "amber"
+    "A": "green",
+    "B": "green"
   },
   "tables/frozen": {
     "A": "green",
