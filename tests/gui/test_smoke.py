@@ -3351,8 +3351,9 @@ class DecksPresenterDisplaySmoke(BaseGUITestCase):
         self.wait_until(self._texts, lambda t: "Slide 2 of 2" not in t, interval=0.5,
                         description="End Show to close the presenter display")
         subprocess.run(["gapplication", "action", aid, "present"], check=True, timeout=5)
-        self.wait_until(lambda: [n.name for n in self.app.findChildren(lambda n: n.roleName == "drawing area" or n.name == "Slide show")],
-                        lambda names: "Slide show" in names, interval=0.5,
+        # The audience window: an undecorated fullscreen frame.
+        self.wait_until(lambda: [n.name for n in self.app.findChildren(lambda n: n.roleName == "frame")],
+                        lambda names: "Slide Show" in names, interval=0.5,
                         description="the audience window to open")
         self.assertIsNone(self.process.poll(), "decks crashed running a show")
 
