@@ -1,11 +1,23 @@
 # gtk-office-suite Roadmap
 
+> **Top priority since 2026-09-24: the [Render Parity Roadmap](docs/RENDER-PARITY-ROADMAP.md).**
+> A visual feature is done only when a screenshot of the running app matches
+> LibreOffice's rendering of the same file within a recorded budget,
+> ratcheted in CI by `tools/render-lab`. Phase 1 (one renderer per app) met its
+> exit criterion on 2026-09-24: no fixture is red. Phase 2 (every
+> single-feature fixture green) is in progress, and
+> [`tools/render-lab/baseline.json`](tools/render-lab/baseline.json) is the live
+> scorecard. Until Phase 2 exits, render parity comes before ordinary feature
+> work. Collaboration follows [RFC-0001](docs/rfc/0001-crdt-collaboration.md)
+> (accepted, Loro) alongside it. The UI direction is in
+> [docs/DESIGN-UI.md](docs/DESIGN-UI.md).
+
 The current execution plan is [Roadmap to dependable daily use](docs/readiness-2026-09/README.md),
 tracked in [#443](https://github.com/tuna-os/gtk-office-suite/issues/443).
 It prioritizes crash reproduction, save/recovery safety and verified user journeys.
 The dated ledger below is historical and does not certify present behavior.
 
-**Last updated**: 2026-09-12 | **Maintainer**: tuna-os (hanthor) / architect agent
+**Last updated**: 2026-09-25 | **Maintainer**: tuna-os (hanthor) / architect agent
 
 ---
 
@@ -46,6 +58,7 @@ gtk-office-suite is the org's flagship **end-user product bet** and a cornerston
 
 | Priority | Item | Tracking | Status |
 |----------|------|----------|--------|
+| P0 | Render parity: each app's screen matches LibreOffice, fixture by fixture | [docs/RENDER-PARITY-ROADMAP.md](docs/RENDER-PARITY-ROADMAP.md) | 🟡 Phase 2 in progress |
 | P0 | Product quality + daily-driver readiness roadmap (meta-tracker) | #95 | 🟡 In progress |
 | P0 | CI quality gates: fast / GUI / nightly with published capability matrix | #108, #107 | 🟡 In progress |
 | P0 | GUI-layer God-file decomposition (window.rs) | #168 | 🟡 In progress |
@@ -105,6 +118,7 @@ instead of being rediscovered and rewritten.
 | Template catalog and distribution | [docs/TEMPLATE-CATALOG.md](docs/TEMPLATE-CATALOG.md) |
 
 Each carries its open questions. None precedes the
+[Render Parity Roadmap](docs/RENDER-PARITY-ROADMAP.md) or the
 [September readiness plan](docs/readiness-2026-09/README.md) (#443).
 
 ---
@@ -114,7 +128,7 @@ Each carries its open questions. None precedes the
 | Item | Issue | Priority | Effort |
 |------|-------|----------|--------|
 | GUI-layer God-files (window.rs — line counts under Current Status) | #168 | P0 | L |
-| Dual maintenance burden: Python office suite (letters/tables/decks) + Rust suite | #82 | P1 | L |
+| ~~Dual maintenance burden: Python office suite (letters/tables/decks) + Rust suite~~ — ✅ the Python repos are archived and feature-frozen; the remaining retirement gates are tracked in [docs/PYTHON-DEPRECATION.md](docs/PYTHON-DEPRECATION.md) | #82 | P1 | L |
 | ~~spell.rs `generate_candidates("")` panic (0..n-1, n=0)~~ — ✅ fixed, `saturating_sub(1)` in the transposition loop | #172 | P1 | S |
 
 ---

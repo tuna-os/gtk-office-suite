@@ -309,9 +309,10 @@ The first baseline was Tier A 1 green / 31 amber / 10 red.
 ### Phase 1: One renderer per app (architecture; ADR 0009 accepted)
 
 **Status (2026-09-24): exit criterion met.** No fixture is red in any app,
-in either tier. On main, Tier A is 21 green / 21 amber / 0 red; it began
-the day at 1 / 31 / 10. The items below are what's left.
-`tools/render-lab/baseline.json` is the live source of truth.
+in either tier. On main, Tier A was 21 green / 21 amber / 0 red that day; it
+began the day at 1 / 31 / 10. The counts have moved since, so read them from
+`tools/render-lab/baseline.json`, the live source of truth, not from this
+page. The items below record what landed and what's left.
 
 
 WYSIWYG is only true when the screen, print and PDF come from **one**
@@ -321,7 +322,8 @@ and does the part that matters.
 - **Letters page layout engine** (`letters-core::layout`, GTK-free).
   *Landed (#960, ADR 0010): the render tree, a pluggable measurer, and a
   shared page-drawing routine behind `render`. `letters/pagination` is
-  green. Still to do: moving print and PDF onto the shared routine.*
+  green. Print, Print Preview and Export as PDF draw from the same laid-out
+  pages (#973, ADR 0010 stage 2).*
   - It takes the document model and produces a serializable render tree:
     pages → blocks → lines → glyph runs, plus boxes for list markers,
     table cells, images, headers/footers and footnotes. It uses Pango
@@ -337,7 +339,10 @@ and does the part that matters.
   - Staged: first a **read-only page view** (a toggle, like "Print Layout"
     vs "Draft"). It is immediately useful and lab-testable. *(Done in
     #960: `PageView`, real size at 100%.)*
-  - Then editing on it. Then remove the TextView path.
+  - Then editing on it. Then remove the TextView path. *(Editing landed:
+    #974 caret and input, #976 screen readers and lists, #986/#987/#1015 a
+    live model with incremental relayout, and #1022 made Print Layout the
+    default view. The TextView path is still there.)*
   - This is the largest single item on the roadmap and it is unavoidable.
     There is no configuration of one `GtkTextView` that produces per-page
     layout.
