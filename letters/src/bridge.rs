@@ -337,18 +337,34 @@ pub fn capture_with_starts(buf: &gtk::TextBuffer) -> (Document, Vec<usize>) {
     (Document { paragraphs, footnotes, header, footer, page, base_font: base_font_sidecar(buf) }, starts)
 }
 
-/// Chars a run takes in the layout text (an image is one object char, a
-/// footnote reference none) and in the buffer (a footnote reference is its
-/// visible "[n]" marker).
+/// Chars a run takes in the layout text (an image or footnote reference is
+/// one object char) and in the buffer (a footnote reference is its visible
+/// "[n]" marker).
 fn run_lengths(run: &Run) -> (usize, usize) {
     if run.style.image.is_some() {
         (1, 1)
     } else if let Some(idx) = run.style.footnote {
-        (0, format!("[{}]", idx + 1).chars().count())
+        (1, format!("[{}]", idx + 1).chars().count())
     } else {
         let n = run.text.chars().count();
         (n, n)
     }
+}
+
+/// The document between buffer offsets `start` and `end`, as a clipboard
+/// fragment.
+///
+/// Buffer offsets are not document offsets: a list item's marker, a
+/// table's pipes and a footnote's "[n]" are in the buffer only. Copying
+/// used to pass buffer offsets as document offsets, so a selection after a
+/// list or a table came out shifted by those characters.
+pub fn selection_fragment(buf: &gtk::TextBuffer, start: usize, end: usize) -> letters_core::fragment::Fragment {
+    let (doc, starts) = capture_with_starts(buf);
+    let seq = |off: usize| {
+        let (para, offset) = paragraph_offset(&doc, &starts, off);
+        letters_core::edit::paragraph_start(&doc, para) + offset
+    };
+    letters_core::fragment::from_sequence(&doc, seq(start), seq(end))
 }
 
 /// Buffer offset of char `offset` of paragraph `para`'s layout text, the
@@ -1171,7 +1187,9 @@ mod tests {
                 let layout: Vec<char> = letters_core::layout::layout_text(&p.runs).chars().collect();
                 for (k, ch) in layout.iter().enumerate() {
                     let off = buffer_offset(p, starts[i], k);
-                    assert_eq!(text.get(off), Some(ch), "paragraph {i} char {k} ({:?})", p.text());
+                    // A footnote reference's object char is its "[n]" in the buffer.
+                    let want = if *ch == letters_core::layout::OBJECT && text.get(off) == Some(&'[') { '[' } else { *ch };
+                    assert_eq!(text.get(off), Some(&want), "paragraph {i} char {k} ({:?})", p.text());
                     assert_eq!(paragraph_offset(&doc, &starts, off), (i, k), "back from buffer offset {off}");
                 }
                 // The end of a paragraph maps to where its text ends.
@@ -1180,6 +1198,33 @@ mod tests {
             }
             // A click in a list marker lands at the start of that item.
             assert_eq!(paragraph_offset(&doc, &starts, 0), (0, 0));
+        });
+    }
+
+    /// Copying after a list or a table copies what was selected, not text
+    /// shifted by the markers and pipes that exist only in the buffer.
+    #[test]
+    fn a_copied_selection_is_the_selected_text() {
+        gtk_test(|| {
+            let buf = gtk::TextBuffer::new(None);
+            crate::actions::register_formatting_tags(&buf);
+            let mut d = doc_with_table(&[&["Name", "Qty"], &["Bolts", "12"]]);
+            d.paragraphs.insert(0, Paragraph {
+                style: letters_core::ParaStyle { list: letters_core::ListKind::Bullet, ..Default::default() },
+                runs: vec![Run::plain("apples")],
+            });
+            render_to_buffer(&d, &buf);
+            let text = buf.text(&buf.start_iter(), &buf.end_iter(), false).to_string();
+            let find = |needle: &str| {
+                let b = text.find(needle).unwrap();
+                let s = text[..b].chars().count();
+                (s, s + needle.chars().count())
+            };
+            for want in ["apples", "Bolts", "after the table", "the tab"] {
+                let (s, e) = find(want);
+                let frag = selection_fragment(&buf, s, e);
+                assert_eq!(frag.to_plain().trim_end(), want, "copying {want:?}");
+            }
         });
     }
 

@@ -220,6 +220,17 @@ impl PageView {
         self.queue_draw();
     }
 
+    /// Lay out an edited version of the document, re-using the shaped
+    /// paragraphs the edit did not touch.
+    pub fn update_document(&self, doc: letters_core::Document, opts: letters_core::layout::LayoutOptions, starts: Vec<usize>) {
+        if let Some(t) = self.imp().typeset.borrow_mut().as_mut() {
+            t.update(doc, opts);
+        }
+        self.imp().starts.replace(starts);
+        self.queue_resize();
+        self.queue_draw();
+    }
+
     /// The buffer this view edits.
     pub fn buffer(&self) -> Option<gtk::TextBuffer> {
         self.imp().buffer.borrow().clone()

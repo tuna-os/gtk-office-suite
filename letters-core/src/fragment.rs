@@ -181,6 +181,14 @@ mod tests {
     }
 }
 
+/// Extract the document range [start, end) in `edit`'s sequence offsets
+/// (an inline object is one char, a paragraph break one char) as a text
+/// fragment. The app maps a buffer selection to these (bridge.rs).
+pub fn from_sequence(doc: &crate::model::Document, start: usize, end: usize) -> Fragment {
+    let end = end.min(crate::edit::doc_len(doc));
+    Fragment::Text(crate::edit::slice(doc, start.min(end), end).unwrap_or_default())
+}
+
 /// Extract the document range [start, end) (global char offsets, where
 /// each paragraph break counts as one char) as a text fragment —
 /// partial paragraphs keep their runs sliced at the boundaries.

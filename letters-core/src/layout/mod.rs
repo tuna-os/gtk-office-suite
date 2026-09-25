@@ -120,6 +120,73 @@ pub trait Shaper {
     fn shape(&mut self, req: &ShapeRequest<'_>) -> Vec<LineBox>;
 }
 
+/// A key identifying everything a shaper's result depends on: the runs and
+/// their styles, the paragraph's formatting and the width. Two requests
+/// with one key shape identically.
+pub fn request_key(req: &ShapeRequest<'_>) -> u64 {
+    use std::hash::{Hash, Hasher};
+    let mut h = std::collections::hash_map::DefaultHasher::new();
+    format!("{:?}", req.runs).hash(&mut h);
+    (req.heading, req.code, format!("{:?}", req.alignment)).hash(&mut h);
+    (req.width_pt.to_bits(), req.first_line_indent_pt.to_bits()).hash(&mut h);
+    req.tab_stops_pt.iter().map(|t| t.to_bits()).collect::<Vec<_>>().hash(&mut h);
+    (&req.defaults.font_family, req.defaults.font_size_pt.to_bits()).hash(&mut h);
+    h.finish()
+}
+
+/// Shaped paragraphs kept between layouts: an edit re-shapes only the
+/// paragraphs it changed, and the rest of the relayout is arithmetic.
+/// Entries not used by the latest layout are dropped (`prune`), so the cache
+/// holds one document's worth.
+#[derive(Default)]
+pub struct ShapeCache {
+    entries: std::collections::HashMap<u64, Vec<LineBox>>,
+    used: std::collections::HashSet<u64>,
+    /// Requests shaped (not found in the cache) since the last `prune`.
+    pub misses: usize,
+}
+
+impl ShapeCache {
+    /// Forget entries the last layout did not use; reset the miss count.
+    pub fn prune(&mut self) {
+        let used = std::mem::take(&mut self.used);
+        self.entries.retain(|k, _| used.contains(k));
+        self.misses = 0;
+    }
+
+    /// Keys of the entries kept.
+    pub fn keys(&self) -> impl Iterator<Item = &u64> {
+        self.entries.keys()
+    }
+}
+
+/// A shaper that answers from `cache` when it can.
+pub struct Cached<'a> {
+    pub shaper: &'a mut dyn Shaper,
+    pub cache: &'a mut ShapeCache,
+}
+
+impl Shaper for Cached<'_> {
+    fn shape(&mut self, req: &ShapeRequest<'_>) -> Vec<LineBox> {
+        let key = request_key(req);
+        self.cache.used.insert(key);
+        if let Some(lines) = self.cache.entries.get(&key) {
+            return lines.clone();
+        }
+        self.cache.misses += 1;
+        let lines = self.shaper.shape(req);
+        self.cache.entries.insert(key, lines.clone());
+        lines
+    }
+}
+
+/// `layout`, re-shaping only what `cache` does not already hold. After an
+/// edit to one paragraph, that is the one paragraph (and its neighbour when
+/// a heading looks ahead).
+pub fn relayout(doc: &Document, opts: &LayoutOptions, shaper: &mut dyn Shaper, cache: &mut ShapeCache) -> RenderTree {
+    layout(doc, opts, &mut Cached { shaper, cache })
+}
+
 /// Where a line's text comes from.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub enum Source {
@@ -194,13 +261,18 @@ impl RenderTree {
 /// layout text.
 pub const OBJECT: char = '\u{FFFC}';
 
-/// A paragraph's text as the layout sees it: every image is one
-/// `OBJECT` char (the model keeps its alt text as the run's text).
-/// Line char ranges index this text.
+/// Whether a run is an inline object (an image or a footnote reference):
+/// one `OBJECT` char in the layout and edit sequence, whatever its text.
+pub fn is_object(run: &Run) -> bool {
+    run.style.image.is_some() || run.style.footnote.is_some()
+}
+
+/// A paragraph's text as the layout sees it: every inline object (image,
+/// footnote reference) is one `OBJECT` char (the model keeps an image's alt
+/// text as the run's text, and a footnote reference has none). Line char
+/// ranges, `pango::TextPos` and `edit`'s sequence offsets index this text.
 pub fn layout_text(runs: &[Run]) -> String {
-    runs.iter()
-        .map(|r| if r.style.image.is_some() { OBJECT.to_string() } else { r.text.clone() })
-        .collect()
+    runs.iter().map(|r| if is_object(r) { OBJECT.to_string() } else { r.text.clone() }).collect()
 }
 
 /// EMU per point (914400 per inch).
@@ -239,7 +311,7 @@ fn png_size_px(path: &str) -> Option<(u32, u32)> {
 fn run_at(runs: &[Run], index: usize) -> Option<&Run> {
     let mut at = 0;
     for r in runs {
-        let n = if r.style.image.is_some() { 1 } else { r.text.chars().count() };
+        let n = if is_object(r) { 1 } else { r.text.chars().count() };
         if index < at + n {
             return Some(r);
         }
@@ -693,6 +765,8 @@ impl Shaper for MonoShaper {
                 if r.style.image.is_some() {
                     let (w, h) = image_size_pt(r, req.width_pt);
                     vec![(OBJECT, w, h)]
+                } else if r.style.footnote.is_some() {
+                    vec![(OBJECT, 0.0, 0.0)]
                 } else {
                     r.text.chars().map(|c| (c, s * 0.5, s)).collect()
                 }

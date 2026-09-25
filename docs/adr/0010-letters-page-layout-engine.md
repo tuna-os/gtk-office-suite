@@ -76,12 +76,60 @@ the Letters part concretely.
       - **3b (done):** `GtkAccessibleText` on the page view (a "line" is the
         laid-out line); list continuation shared by both views
         (`bridge::enter_in_list`); the suite clipboard format on both views.
-      - 3c: the live model. The page view edits a `letters_core::Document`
-        through `StructuredEditor`-style operations and relays out only the
-        paragraphs an edit touched; the buffer becomes Draft's view of the
-        model instead of the other way round. This is RFC-0001 Phase 0.
+      - 3c: the live model (RFC-0001 Phase 0), in two steps:
+        - **3c-1 (this PR):** `letters_core::edit` — the operations a live
+          `Document` changes by (`Insert`, `Delete`, `Mark`, `SetParaStyle`),
+          each returning its exact undo; and incremental relayout: a
+          `ShapeCache` keyed by `request_key` means an edit re-shapes only
+          the paragraphs it changed (`Typeset::update`, used by Print
+          Layout after every edit).
+        - 3c-2: the tab holds the live `Document`; buffer edits become ops
+          on it (buffer change signals → `edit` ops), so the page view no
+          longer re-captures the whole buffer per keystroke; then the page
+          view edits the model directly and the buffer becomes Draft's
+          view of it.
       - 3d: Print Layout becomes the default view; the TextView path is
         removed once nothing depends on it.
+
+## Design constraints from the CRDT spike
+
+RFC-0001's Phase 1 spike ([results](../rfc/0001-spike-results.md)) recommends
+Loro (not adopted: the owner decides). Whatever library is chosen, the live
+model must be replicable without a rewrite, so `letters_core::edit` holds to
+these rules:
+
+1. **One sequence.** The document is one sequence of chars: paragraph text,
+   one `OBJECT` char per inline object (image, footnote reference — an embed
+   is a placeholder char carrying a mark, as the spike found Loro and
+   Automerge need), one break char between paragraphs. Every op addresses it
+   by offset (`edit::locate`, `paragraph_start`).
+2. **Formatting is marks with per-key expand rules.** `MarkKey::expand`:
+   bold, italic, size, colour… expand `After` (typing at their end
+   continues them); link, inline code and raw HTML expand `None`. This is
+   Loro's `config_text_style` / Automerge's `ExpandMark`; yrs cannot express
+   it natively, which is one reason it was not recommended.
+3. **Ops carry their style explicitly.** `Insert` holds the runs it
+   inserts, styled; `typing_style` applies the expand rule once, where the
+   user types. Replaying an op never consults the rule, so two peers (or an
+   undo) agree even when their rules would differ.
+4. **Paragraph formatting is a paragraph attribute** (`SetParaStyle`), which
+   maps to an attribute of the paragraph's break char or a map keyed by a
+   stable paragraph id.
+5. **Every op has an exact inverse** (`apply` returns it), property-tested:
+   the sequence text changes exactly as a string edit, and undoing any
+   sequence of ops restores the document.
+6. **Table structure is not a sequence edit.** Ops that would join or split
+   table cells are refused (`EditError::TableStructure`); table rows and
+   columns change through their own structural commands, which will need a
+   tree or map in a CRDT, not the text sequence.
+7. **No CRDT dependency** until the owner chooses one.
+
+Text rendering: the page view, print and PDF draw with `Typeset`'s own Pango
+context — greyscale antialiasing, no hinting, no metric hinting — so a page
+is laid out once in points and only scaled. That is stricter than
+`suite_common::use_ui_font_rendering` (slight hinting, for UI text that is
+not a printed page) and already greyscale, so the page view does not call
+it.
 
 ## Consequences
 
