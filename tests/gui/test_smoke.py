@@ -2076,6 +2076,63 @@ def minimal_xlsx_bytes(a1_value):
     return buffer.getvalue()
 
 
+class TablesNotesSmoke(BaseGUITestCase):
+    """Cell notes: Edit Note opens a popover at the cell, what's typed
+    becomes the note when it closes, the cell describes it to screen
+    readers (sighted users see it on hover, beside a red corner), and it
+    saves as the workbook's comments, which Calc reads."""
+
+    app_name = "tables"
+
+    def setUp(self):
+        self._dir = self.temp_dir(prefix="tables-notes-")
+        self._doc = os.path.join(self._dir, "notes.xlsx")
+        with open(self._doc, "wb") as book:
+            book.write(minimal_xlsx_bytes("7"))
+        self.launch_args = [self._doc]
+        super().setUp()
+
+    def test_a_note_is_written_described_and_saved(self):
+        from dogtail import rawinput
+        import subprocess
+        import zipfile
+
+        time.sleep(1.0)
+        rawinput.keyCombo("<Control>g")
+        time.sleep(0.4)
+        rawinput.typeText("A1")
+        rawinput.keyCombo("Return")
+        time.sleep(0.4)
+
+        subprocess.run(["gapplication", "action", "org.tunaos.tables", "edit-note"])
+        self.wait_for_node(name="Note", roleName="text")
+        rawinput.typeText("Call Ann")
+        time.sleep(0.3)
+        rawinput.keyCombo("Escape")
+
+        self.wait_until(
+            lambda: [c.description for c in self.app.findChildren(
+                lambda c: (c.name or "").startswith("A1"))],
+            lambda found: any("Note: Call Ann" in (d or "") for d in found),
+            timeout=10.0,
+            description="cell A1 to describe its note",
+        )
+
+        rawinput.keyCombo("<Control>s")
+
+        def saved_note():
+            try:
+                with zipfile.ZipFile(self._doc) as book:
+                    parts = [n for n in book.namelist() if "comments" in n and n.endswith(".xml")]
+                    return "".join(book.read(p).decode() for p in parts)
+            except (zipfile.BadZipFile, OSError):
+                return ""
+        comments = self.wait_until(saved_note, lambda xml: "Call Ann" in xml, timeout=10.0,
+                                   description="the note in the saved workbook's comments")
+        self.assertIn('ref="A1"', comments)
+        self.assertIsNone(self.process.poll(), "tables crashed editing a note")
+
+
 class TablesUndoSaveReopenSmoke(BaseGUITestCase):
     """Real GTK journey: edit, undo, redo, save, restart, and reopen."""
 

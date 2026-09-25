@@ -281,7 +281,7 @@ impl TablesWindow {
                 {
                     let st = s.borrow();
                     let sh = st.sheet();
-                    ga.sync_cells(&sh.data, &sh.formats, sh.selection_rect());
+                    ga.sync_cells(&sh.data, &sh.formats, &sh.notes, sh.selection_rect());
                     crate::grid_render::follow_selection(&ga, &sh, &h, &v);
                     nb.set_text(&format!("{}{}", tables_core::sheet::col_label(sh.selected_col), sh.selected_row + 1));
                     stats.set_text(&sh.selection_status());
@@ -316,6 +316,7 @@ impl TablesWindow {
             drawing_area.add_controller(right);
         }
         crate::column_menu::attach(&controller, &drawing_area, &h_adj, &refresh_sel);
+        crate::notes::attach(app.upcast_ref(), &controller, &drawing_area, &h_adj, &v_adj, &refresh_sel);
 
         // Jumping to a reference: the name box's Enter and Ctrl+G both go
         // through here, so a jump means the same thing however it was

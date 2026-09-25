@@ -537,6 +537,9 @@ pub fn draw_grid(
             if merge.is_none() {
                 draw_cell_text(cr, sheet, r, c, (cx, cy, cw, rh), cell_text);
             }
+            if sheet.notes[r][c].is_some() {
+                crate::notes::draw_marker(cr, cx, cy, cw);
+            }
         }
     }
     for &(x, y, w, h, border) in &bordered {

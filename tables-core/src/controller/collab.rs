@@ -90,13 +90,14 @@ fn blank_cell() -> CellContent {
         border: s.borders[0][0].clone(),
         validation: None,
         lock: s.cell_protections[0][0].clone(),
+        note: None,
     }
 }
 
-const FIELDS: [&str; 6] = ["v", "nf", "st", "bd", "va", "lk"];
+const FIELDS: [&str; 7] = ["v", "nf", "st", "bd", "va", "lk", "no"];
 
 /// A cell's fields as stored: `None` where the field is at its default.
-fn encode_cell(c: &CellContent, blank: &CellContent) -> [Option<String>; 6] {
+fn encode_cell(c: &CellContent, blank: &CellContent) -> [Option<String>; 7] {
     [
         (!c.input.is_empty()).then(|| c.input.clone()),
         (c.format != blank.format).then(|| json(&c.format)),
@@ -104,6 +105,7 @@ fn encode_cell(c: &CellContent, blank: &CellContent) -> [Option<String>; 6] {
         (c.border != blank.border).then(|| json(&c.border)),
         c.validation.as_ref().map(json),
         (c.lock != blank.lock).then(|| json(&c.lock)),
+        c.note.clone(),
     ]
 }
 
@@ -115,6 +117,7 @@ fn decode_field(cell: &mut CellContent, field: &str, text: &str) {
         "bd" => cell.border = unjson(text).unwrap_or_else(|| cell.border.clone()),
         "va" => cell.validation = unjson(text),
         "lk" => cell.lock = unjson(text).unwrap_or_else(|| cell.lock.clone()),
+        "no" => cell.note = Some(text.to_string()),
         _ => {}
     }
 }
@@ -700,6 +703,7 @@ fn build(view: &DocView) -> Result<WorkbookState, String> {
             s.borders[*r][*c] = cell.border.clone();
             s.validations[*r][*c] = cell.validation.clone();
             s.cell_protections[*r][*c] = cell.lock.clone();
+            s.notes[*r][*c] = cell.note.clone();
         }
         for (r, id) in m.rows.iter().enumerate() {
             s.row_heights[r] = m.sizes.get(&format!("r|{id}")).copied().unwrap_or(size_defaults.row_heights[0]);

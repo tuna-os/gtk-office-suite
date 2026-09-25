@@ -773,3 +773,46 @@ fn number_formats_and_dates_survive_a_conversion_to_ods() {
     let shown: Vec<String> = (0..4).map(|r| s.formats[r][0].format(s.cell(r, 0))).collect();
     assert_eq!(shown, ["15.3%", "$1,234.50", "2023-03-15", "1,234,567.89"], "kinds {:?}", (0..4).map(|r| &s.formats[r][0].kind).collect::<Vec<_>>());
 }
+
+/// Convert `input` with Calc to `ext` in its folder and return the new path.
+fn calc_convert(input: &std::path::Path, ext: &str) -> std::path::PathBuf {
+    let dir = input.parent().unwrap();
+    let out = Command::new("soffice")
+        .arg("--headless")
+        .arg(format!("-env:UserInstallation=file://{}", dir.join("lo-profile").display()))
+        .args(["--convert-to", ext, "--outdir"])
+        .arg(dir)
+        .arg(input)
+        .output()
+        .expect("soffice");
+    assert!(out.status.success(), "soffice failed: {}", String::from_utf8_lossy(&out.stderr));
+    input.with_extension(ext)
+}
+
+/// Our notes are Calc's comments: Calc reads the ones we write to xlsx,
+/// and writes them to ods and back to xlsx in a form we read.
+#[test]
+fn notes_survive_calc_both_ways() {
+    if !require_or_skip() { return; }
+    let dir = tempfile::tempdir().unwrap();
+    let ours = dir.path().join("notes.xlsx");
+    let mut sheet = SheetModel::new("Sheet1", 4, 4, 0);
+    sheet.data[1][1] = "42".into();
+    sheet.notes[1][1] = Some("Check with Ann".into());
+    sheet.notes[3][0] = Some("Two\nlines".into());
+    save_sheets_to_xlsx(ours.to_str().unwrap(), &[sheet]).unwrap();
+
+    let ods = calc_convert(&ours, "ods");
+    let (_, from_ods) = load_workbook(ods.to_str().unwrap()).expect("we read Calc's ods");
+    assert_eq!(from_ods[0].notes[1][1].as_deref(), Some("Check with Ann"), "the note after Calc's ods");
+    assert_eq!(from_ods[0].notes[3][0].as_deref(), Some("Two\nlines"));
+
+    let calc_dir = dir.path().join("calc");
+    std::fs::create_dir_all(&calc_dir).unwrap();
+    let copy = calc_dir.join("notes.ods");
+    std::fs::copy(&ods, &copy).unwrap();
+    let back = calc_convert(&copy, "xlsx");
+    let (_, from_xlsx) = load_workbook(back.to_str().unwrap()).expect("we read Calc's xlsx");
+    assert_eq!(from_xlsx[0].notes[1][1].as_deref(), Some("Check with Ann"), "the note after Calc's xlsx");
+    assert_eq!(from_xlsx[0].notes[3][0].as_deref(), Some("Two\nlines"));
+}

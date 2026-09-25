@@ -118,7 +118,7 @@ impl CellAccessible {
         cell
     }
 
-    fn update(&self, value: &str, selected: bool) {
+    fn update(&self, value: &str, selected: bool, note: Option<&str>) {
         let (row, col) = (self.imp().row.get(), self.imp().col.get());
         let name = if value.is_empty() {
             format!("{}{}, empty", col_label(col), row + 1)
@@ -126,6 +126,12 @@ impl CellAccessible {
             format!("{}{}: {}", col_label(col), row + 1, value)
         };
         self.update_property(&[gtk::accessible::Property::Label(&name)]);
+        // The note, which sighted users see on hover, is the cell's
+        // description.
+        match note {
+            Some(note) => self.update_property(&[gtk::accessible::Property::Description(&format!("Note: {note}"))]),
+            None => self.reset_property(gtk::AccessibleProperty::Description),
+        }
         self.update_state(&[gtk::accessible::State::Selected(Some(selected))]);
     }
 }
@@ -251,6 +257,7 @@ impl GridArea {
         &self,
         data: &[Vec<String>],
         formats: &[Vec<NumberFormat>],
+        notes: &[Vec<Option<String>>],
         sel: (usize, usize, usize, usize),
     ) {
         // Used extent: rows/cols containing data, plus the selection.
@@ -258,7 +265,8 @@ impl GridArea {
         let mut max_c = sel.3;
         for (r, row) in data.iter().enumerate() {
             for (c, v) in row.iter().enumerate() {
-                if !v.is_empty() {
+                let noted = notes.get(r).and_then(|n| n.get(c)).is_some_and(Option::is_some);
+                if !v.is_empty() || noted {
                     if r > max_r {
                         max_r = r;
                     }
@@ -334,7 +342,8 @@ impl GridArea {
                     })
                     .unwrap_or_default();
                 let selected = r >= sel.0 && r <= sel.2 && c >= sel.1 && c <= sel.3;
-                cell.update(&display, selected);
+                let note = notes.get(r).and_then(|row| row.get(c)).and_then(Option::as_deref);
+                cell.update(&display, selected, note);
             } else {
                 cell.update_state(&[gtk::accessible::State::Hidden(true)]);
             }

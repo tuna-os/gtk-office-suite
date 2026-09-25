@@ -10,6 +10,24 @@ use crate::sheet::SheetModel;
 use super::core::WorkbookController;
 
 impl WorkbookController {
+    /// Set, change or (with `None` or empty text) remove the note on a
+    /// cell of the active sheet, as one undo step. False if nothing
+    /// changed.
+    pub fn set_note(&mut self, row: usize, col: usize, note: Option<String>) -> bool {
+        let (sheet, old) = {
+            let state = self.state.borrow();
+            let s = state.sheet();
+            let Some(old) = s.notes.get(row).and_then(|r| r.get(col)) else { return false };
+            (s.sheet_id, old.clone())
+        };
+        let note = note.filter(|n| !n.trim().is_empty());
+        if note == old {
+            return false;
+        }
+        let description = if note.is_none() { "Delete Note" } else { "Edit Note" };
+        self.apply_ops(description, vec![super::ops::Op::SetNote { sheet, row, col, note }])
+    }
+
     pub fn edit_cell(&mut self, row: usize, col: usize, input: impl Into<String>) {
         let new_input = input.into();
         let state = self.state.borrow();
