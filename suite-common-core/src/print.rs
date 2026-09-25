@@ -7,7 +7,7 @@
 // and Decks (slides as pages).
 
 /// Standard page sizes in millimeters (ISO 216).
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
 pub enum PageSize {
     A4,
     A3,
@@ -28,11 +28,11 @@ impl PageSize {
     }
 }
 
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
 pub enum Orientation { Portrait, Landscape }
 
 /// Page setup configuration.
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct PageSetup {
     pub size: PageSize,
     pub orientation: Orientation,

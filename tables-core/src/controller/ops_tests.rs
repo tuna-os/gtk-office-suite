@@ -14,13 +14,13 @@ use crate::sheet::{BorderStyle, CellBorder};
 use crate::style::{CellStyle, HAlign, Rgb};
 use suite_common_core::format::{NumberFormat, NumberFormatKind};
 
-const SEEDS: &[u64] = &[1, 2, 3, 7, 42, 99, 1337, 0x5EED, 20260925, 0xC0FFEE];
+pub(super) const SEEDS: &[u64] = &[1, 2, 3, 7, 42, 99, 1337, 0x5EED, 20260925, 0xC0FFEE];
 const STEPS: usize = 80;
 
-struct Rng(u64);
+pub(super) struct Rng(u64);
 
 impl Rng {
-    fn new(seed: u64) -> Self {
+    pub(super) fn new(seed: u64) -> Self {
         Rng(seed.wrapping_mul(0x9E37_79B9_7F4A_7C15).wrapping_add(0x1234_5678))
     }
     fn next(&mut self) -> u64 {
@@ -31,12 +31,12 @@ impl Rng {
         self.0 = x;
         x.wrapping_mul(0x2545_F491_4F6C_DD1D)
     }
-    fn below(&mut self, n: usize) -> usize {
+    pub(super) fn below(&mut self, n: usize) -> usize {
         (self.next() % n.max(1) as u64) as usize
     }
 }
 
-fn workbook() -> WorkbookState {
+pub(super) fn workbook() -> WorkbookState {
     let mut state = WorkbookState::new(8, 5).unwrap();
     state.add_sheet("Data".into(), 8, 5).unwrap();
     for (sheet, r, c, v) in [(0, 0, 0, "1"), (0, 1, 0, "2"), (0, 2, 0, "=A1+A2"), (0, 3, 1, "=SUM(A1:A3)"), (1, 0, 0, "=Sheet1!A3*10"), (1, 1, 1, "text")] {
@@ -46,7 +46,7 @@ fn workbook() -> WorkbookState {
 }
 
 /// A random op that fits `state` as it is now.
-fn random_op(rng: &mut Rng, state: &WorkbookState) -> Op {
+pub(super) fn random_op(rng: &mut Rng, state: &WorkbookState) -> Op {
     let pos = rng.below(state.sheets.len());
     let (rows, cols, sheet) = {
         let s = state.sheets[pos].borrow();

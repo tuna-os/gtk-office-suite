@@ -29,11 +29,13 @@ pub const DEFAULT_FONT_FAMILY: &str = "Calibri";
 pub const DEFAULT_FONT_SIZE: f64 = 11.0;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[cfg_attr(feature = "collab", derive(serde::Serialize, serde::Deserialize))]
 pub enum SortDirection { Ascending, Descending }
 
 /// One edge of a cell border. `Solid` is a thin (1 px) line; `Medium` and
 /// `Thick` are Excel's 2 px and 3 px solid lines.
 #[derive(Clone, Debug, PartialEq)]
+#[cfg_attr(feature = "collab", derive(serde::Serialize, serde::Deserialize))]
 pub enum BorderStyle { None, Solid, Dotted, Dashed, Double, Medium, Thick }
 
 impl BorderStyle {
@@ -49,6 +51,7 @@ impl BorderStyle {
 }
 
 #[derive(Clone, Debug, PartialEq)]
+#[cfg_attr(feature = "collab", derive(serde::Serialize, serde::Deserialize))]
 pub enum ValidationRule {
     List(Vec<String>),
     WholeNumber { min: Option<i64>, max: Option<i64> },
@@ -83,6 +86,7 @@ impl ValidationRule {
 }
 
 #[derive(Clone, Debug, PartialEq)]
+#[cfg_attr(feature = "collab", derive(serde::Serialize, serde::Deserialize))]
 pub struct CellBorder {
     pub top: BorderStyle, pub bottom: BorderStyle,
     pub left: BorderStyle, pub right: BorderStyle,
@@ -504,6 +508,7 @@ pub fn xy_to_cell(x: f64, y: f64, scroll_x: f64, scroll_y: f64, sheet: &SheetMod
 /// A cell-value conditional-formatting rule (ADR 0003 §4): when a
 /// numeric cell in `range` satisfies the comparison, paint `fill`.
 #[derive(Clone, Debug, PartialEq)]
+#[cfg_attr(feature = "collab", derive(serde::Serialize, serde::Deserialize))]
 pub struct CondRule {
     /// (first_row, first_col, last_row, last_col), zero-based inclusive.
     pub range: (usize, usize, usize, usize),
@@ -516,6 +521,7 @@ pub struct CondRule {
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[cfg_attr(feature = "collab", derive(serde::Serialize, serde::Deserialize))]
 pub enum CondOp {
     Greater,
     Less,
@@ -542,6 +548,7 @@ impl CondRule {
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[cfg_attr(feature = "collab", derive(serde::Serialize, serde::Deserialize))]
 pub enum LegendPosition {
     None,
     Top,
@@ -551,6 +558,7 @@ pub enum LegendPosition {
 }
 
 #[derive(Clone, Debug, PartialEq)]
+#[cfg_attr(feature = "collab", derive(serde::Serialize, serde::Deserialize))]
 pub struct ChartSeries {
     pub name: String,
     /// Category range: (first_row, col, last_row)
@@ -562,6 +570,7 @@ pub struct ChartSeries {
 
 /// One embedded chart: kind, title, series, axes, legend, and placement.
 #[derive(Clone, Debug, PartialEq)]
+#[cfg_attr(feature = "collab", derive(serde::Serialize, serde::Deserialize))]
 pub struct ChartSpec {
     pub kind: ChartKind,
     pub title: String,
@@ -623,6 +632,7 @@ impl ChartSpec {
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[cfg_attr(feature = "collab", derive(serde::Serialize, serde::Deserialize))]
 pub enum ChartKind {
     Bar,
     Line,
@@ -632,6 +642,7 @@ pub enum ChartKind {
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[cfg_attr(feature = "collab", derive(serde::Serialize, serde::Deserialize))]
 pub enum PivotAggFunc {
     Sum,
     Count,
@@ -641,12 +652,14 @@ pub enum PivotAggFunc {
 }
 
 #[derive(Clone, Debug, PartialEq)]
+#[cfg_attr(feature = "collab", derive(serde::Serialize, serde::Deserialize))]
 pub struct PivotField {
     pub col_index: usize,
     pub name: String,
 }
 
 #[derive(Clone, Debug, PartialEq)]
+#[cfg_attr(feature = "collab", derive(serde::Serialize, serde::Deserialize))]
 pub struct PivotDataField {
     pub col_index: usize,
     pub name: String,
@@ -655,6 +668,7 @@ pub struct PivotDataField {
 
 /// Pivot Table specification model.
 #[derive(Clone, Debug, PartialEq)]
+#[cfg_attr(feature = "collab", derive(serde::Serialize, serde::Deserialize))]
 pub struct PivotTableSpec {
     pub name: String,
     /// Source data range: (top, left, bottom, right), 0-based inclusive
@@ -668,6 +682,7 @@ pub struct PivotTableSpec {
 
 /// Cell protection settings.
 #[derive(Clone, Debug, PartialEq, Eq)]
+#[cfg_attr(feature = "collab", derive(serde::Serialize, serde::Deserialize))]
 pub struct CellProtection {
     pub locked: bool,
     pub hidden_formula: bool,
@@ -681,6 +696,7 @@ impl Default for CellProtection {
 
 /// Sheet protection specification model.
 #[derive(Clone, Debug, PartialEq, Eq)]
+#[cfg_attr(feature = "collab", derive(serde::Serialize, serde::Deserialize))]
 pub struct SheetProtection {
     pub protected: bool,
     pub password_hash: Option<String>,

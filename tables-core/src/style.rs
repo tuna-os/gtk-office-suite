@@ -9,6 +9,7 @@
 
 /// An sRGB colour.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "collab", derive(serde::Serialize, serde::Deserialize))]
 pub struct Rgb(pub u8, pub u8, pub u8);
 
 impl Rgb {
@@ -38,6 +39,7 @@ impl Rgb {
 /// Horizontal alignment. `General` is the spreadsheet default: numbers
 /// right, text left.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "collab", derive(serde::Serialize, serde::Deserialize))]
 pub enum HAlign {
     #[default]
     General,
@@ -48,6 +50,7 @@ pub enum HAlign {
 
 /// Vertical alignment. Spreadsheets default to the bottom of the cell.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "collab", derive(serde::Serialize, serde::Deserialize))]
 pub enum VAlign {
     Top,
     Center,
@@ -58,6 +61,7 @@ pub enum VAlign {
 /// Everything about a cell's appearance that isn't its number format or
 /// its borders. `None` means "the workbook default".
 #[derive(Clone, Debug, Default, PartialEq)]
+#[cfg_attr(feature = "collab", derive(serde::Serialize, serde::Deserialize))]
 pub struct CellStyle {
     pub font_family: Option<String>,
     /// Points.
