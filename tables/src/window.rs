@@ -126,12 +126,17 @@ impl TablesWindow {
             act.connect_activate(move |_, _| {
                 let Ok(path) = std::env::var("GTK_OFFICE_SNAPSHOT_PATH") else { return };
                 let mut snap = tables_core::snapshot::snapshot(&ctl.borrow(), 0..100, 0..26);
+                // In the window's *surface* coordinates, which is what
+                // input arrives in: the root widget starts inside the CSD
+                // resize border, which a window that isn't maximized has
+                // (the 400 and 800 px display-matrix runs, #520).
+                let (tx, ty) = snap_area.native().map_or((0.0, 0.0), |n| n.surface_transform());
                 snap.grid_origin = snap_area
                     .root()
                     .and_then(|root| {
                         snap_area.compute_point(&root, &gtk4::graphene::Point::new(0.0, 0.0))
                     })
-                    .map(|pt| (pt.x() as i32, pt.y() as i32));
+                    .map(|pt| ((f64::from(pt.x()) + tx).round() as i32, (f64::from(pt.y()) + ty).round() as i32));
                 let _ = std::fs::write(path, snap.to_json());
             });
             app.add_action(&act);
@@ -500,6 +505,14 @@ impl TablesWindow {
                         da.queue_draw();
                         return;
                     }
+                }
+                // A press on the fill handle is the fill drag's (#520): the
+                // handle straddles the corner, so its lower-right half lies
+                // in the next cells, and selecting one of them here moved
+                // the handle away before the drag could grab it.
+                let sel = sh.selection_block();
+                if hit_fill_handle(x, y, sel.2, sel.3, h.value(), v.value(), &sh) {
+                    return;
                 }
                 if let Some((col, row)) = xy_to_cell(x, y, h.value(), v.value(), &sh) {
                     drop(sh); drop(st);

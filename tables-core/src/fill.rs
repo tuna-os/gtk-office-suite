@@ -96,16 +96,19 @@ pub fn infer_fill(
     drag_col: usize,
 ) -> Option<(FillDirection, usize)> {
     let (top, left, bottom, right) = sel;
-    if drag_row > bottom && drag_col >= left && drag_col <= right {
-        Some((FillDirection::Down, drag_row - bottom))
-    } else if drag_row < top && drag_col >= left && drag_col <= right {
-        Some((FillDirection::Up, top - drag_row))
-    } else if drag_col > right && drag_row >= top && drag_row <= bottom {
-        Some((FillDirection::Right, drag_col - right))
-    } else if drag_col < left && drag_row >= top && drag_row <= bottom {
-        Some((FillDirection::Left, left - drag_col))
-    } else {
+    // How far outside the selection the drag ended, along each axis.
+    let rows_out = drag_row.saturating_sub(bottom).max(top.saturating_sub(drag_row));
+    let cols_out = drag_col.saturating_sub(right).max(left.saturating_sub(drag_col));
+    // The handle sits on the selection's corner, so a straight drag from
+    // it easily ends a cell over on the other axis too (#520). The fill
+    // goes along the axis the drag went further on; a tie goes down or
+    // up, as in Excel and Calc.
+    if rows_out == 0 && cols_out == 0 {
         None
+    } else if rows_out >= cols_out {
+        Some(if drag_row > bottom { (FillDirection::Down, rows_out) } else { (FillDirection::Up, rows_out) })
+    } else {
+        Some(if drag_col > right { (FillDirection::Right, cols_out) } else { (FillDirection::Left, cols_out) })
     }
 }
 
@@ -208,9 +211,12 @@ mod tests {
     }
 
     #[test]
-    fn infer_fill_diagonal_off_axis_is_none() {
-        // Landing outside both row range and col range isn't a valid
-        // single-axis fill drag.
-        assert_eq!(infer_fill((2, 2, 4, 4), 6, 6), None);
+    fn infer_fill_off_both_axes_follows_the_longer_one() {
+        // Straight down from the corner handle, ending a column over.
+        assert_eq!(infer_fill((0, 0, 0, 0), 3, 1), Some((FillDirection::Down, 3)));
+        assert_eq!(infer_fill((2, 2, 4, 4), 5, 9), Some((FillDirection::Right, 5)));
+        assert_eq!(infer_fill((2, 2, 4, 4), 0, 1), Some((FillDirection::Up, 2)));
+        // A tie fills down or up.
+        assert_eq!(infer_fill((2, 2, 4, 4), 6, 6), Some((FillDirection::Down, 2)));
     }
 }

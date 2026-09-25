@@ -143,6 +143,22 @@ jobs:
             --repeat "$REPEAT" --matrix "$MATRIX" \
             --output "$GITHUB_WORKSPACE/campaign" "$@"
 
+      # The display matrix, nightly (#520): every journey once at each
+      # window width (400, 800, 1280 px), in dark style and at scale 2.
+      # A journey that only passes at the default size is a layout bug
+      # the campaign above can't see. (A dispatch with matrix=display runs
+      # the matrix in the campaign step instead.)
+      - name: Run the display matrix
+        if: always() && github.event_name == 'schedule'
+        env:
+          SEED: ${{ github.event.inputs.seed }}
+        run: |
+          set --
+          [ -n "$SEED" ] && set -- "$@" --seed "$SEED"
+          python3 tests/gui/stress.py \
+            --repeat 1 --matrix display \
+            --output "$GITHUB_WORKSPACE/campaign-display" "$@"
+
       # Always: a campaign's failures are its output, so the evidence
       # must survive the run that produced them. Videos and failure
       # artifacts are already inside the campaign directory, filed under
@@ -152,7 +168,9 @@ jobs:
         uses: actions/upload-artifact@v7
         with:
           name: gui-stress-campaign
-          path: campaign
+          path: |
+            campaign
+            campaign-display
           retention-days: 30
           if-no-files-found: warn
 
