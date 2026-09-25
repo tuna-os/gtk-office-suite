@@ -40,6 +40,19 @@ pub struct TableData {
     /// The accent colour the table style is built from (the theme's
     /// accent 1 for the default style).
     pub accent: Option<Color>,
+    /// Cell text insets (left/right, top/bottom) in model units. `None`:
+    /// DrawingML's 0.1in and 0.05in on our own 10-inch slide. A reader
+    /// sets it for the slide it read, since on a wider slide those
+    /// inches are fewer model units (render lab `decks/table`: the text
+    /// sat 3 px right of and below LibreOffice's).
+    pub cell_margins: Option<(f64, f64)>,
+}
+
+impl TableData {
+    /// `cell_margins`, defaulted.
+    pub fn margins(&self) -> (f64, f64) {
+        self.cell_margins.unwrap_or((9.6, 4.8))
+    }
 }
 
 /// How one cell is painted under the table style.
@@ -98,7 +111,16 @@ mod tests {
             first_row,
             band_row,
             accent: Some(Color(0x4F, 0x81, 0xBD)),
+            cell_margins: None,
         }
+    }
+
+    #[test]
+    fn cell_margins_default_to_drawingmls_on_the_models_slide() {
+        let mut t = table(false, false);
+        assert_eq!(t.margins(), (9.6, 4.8));
+        t.cell_margins = Some((7.2, 3.6));
+        assert_eq!(t.margins(), (7.2, 3.6));
     }
 
     #[test]

@@ -539,6 +539,7 @@ pub fn read_pptx(path: &str) -> Result<Deck, String> {
         // Tables live in p:graphicFrame, which the walker used to skip.
         let mut tables = frame_tables(&slide_xml, &theme);
         for t in &mut tables {
+            t.table.cell_margins = Some((91440.0 * scale.x, 45720.0 * scale.y));
             for cell in t.table.rows.iter_mut().flatten() {
                 cell.runs = scale.text_runs(&cell.runs);
             }
