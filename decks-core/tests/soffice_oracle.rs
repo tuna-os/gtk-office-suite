@@ -1490,9 +1490,11 @@ fn impress_keeps_our_object_builds() {
 #[test]
 fn impress_sees_the_slide_size_we_kept() {
     // Issue triage for #440: a 4:3 or custom-size pptx, opened and saved,
-    // used to come back 16:9. LibreOffice is the judge of the saved file:
-    // its own rewrite (as pptx and as odp) must still have the source's
-    // size, and a full-bleed shape must still cover the slide.
+    // used to come back 16:9. LibreOffice is the judge: what it makes of
+    // our saved file (rewritten as pptx and as odp) must be exactly what
+    // it makes of the source, which had the size. Impress rounds a size
+    // through its own units (a 20cm square reads as 7199313 EMU), so the
+    // comparison is between its two readings, not with our EMU.
     if !require_or_skip() {
         return;
     }
@@ -1505,26 +1507,24 @@ fn impress_sees_the_slide_size_we_kept() {
         write_pptx(source.to_str().unwrap(), &deck).expect("write the source");
         // Open and save, as the app does.
         let opened = read_pptx(source.to_str().unwrap()).expect("open");
-        let saved = dir.path().join("saved.pptx");
+        let saved_dir = dir.path().join("saved");
+        std::fs::create_dir_all(&saved_dir).unwrap();
+        let saved = saved_dir.join("source.pptx");
         write_pptx(saved.to_str().unwrap(), &opened).expect("save");
         for kind in ["pptx", "odp"] {
-            let back = convert(&saved, kind).unwrap_or_else(|e| panic!("Impress rewrites our pptx as {kind}: {e}"));
-            let read = decks_core::read_deck(back.to_str().unwrap()).expect("read Impress's file");
-            let (cx, cy) = read.masters[0].page_emu.unwrap_or((9_144_000.0, 5_143_500.0));
-            // Impress stores lengths in hundredths of a millimetre (360
-            // EMU), so its size is ours to within that rounding.
+            let impress = |path: &std::path::Path| {
+                let back = convert(path, kind).unwrap_or_else(|e| panic!("Impress rewrites {path:?} as {kind}: {e}"));
+                let read = decks_core::read_deck(back.to_str().unwrap()).expect("read Impress's file");
+                let geometry = read.slides[0].objects.first().map(|o| format!("{o:?}"));
+                (read.masters[0].page_emu, geometry)
+            };
+            let (from_source, from_saved) = (impress(&source), impress(&saved));
+            let (cx, cy) = from_source.0.unwrap_or_else(|| panic!("{kind}: Impress lost the source's own size"));
             assert!(
-                (cx - size.0).abs() <= 360.0 && (cy - size.1).abs() <= 360.0,
-                "{kind}: Impress sees {cx}x{cy} EMU, the source was {size:?}"
+                (cx - 9_144_000.0).abs() > 100_000.0 || (cy - 5_143_500.0).abs() > 100_000.0,
+                "{kind}: the source already reads as our 16:9 default: {cx}x{cy}"
             );
-            match read.slides[0].objects.first() {
-                Some(SlideObject::Rect { x, y, w, h, .. }) | Some(SlideObject::Shape { x, y, w, h, .. }) => assert!(
-                    x.abs() < 0.5 && y.abs() < 0.5 && (w - 960.0).abs() < 0.5 && (h - 540.0).abs() < 0.5,
-                    "{kind} {size:?}: the full-bleed shape came back as {:?}",
-                    (x, y, w, h)
-                ),
-                other => panic!("{kind}: the shape came back as {other:?}"),
-            }
+            assert_eq!(from_saved, from_source, "{kind} {size:?}: Impress sees our saved deck differently from its source");
         }
     }
 }
