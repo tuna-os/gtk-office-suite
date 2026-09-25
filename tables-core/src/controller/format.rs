@@ -29,6 +29,14 @@ impl WorkbookController {
         (sheet.styles[r][c].clone(), sheet.borders[r][c].clone())
     }
 
+    /// The active sheet's default font, `(family, points)`: what a cell
+    /// with no font of its own is drawn in.
+    pub fn default_font(&self) -> (String, f64) {
+        let state = self.state.borrow();
+        let sheet = state.sheet();
+        (sheet.default_font_family.clone(), sheet.default_font_size)
+    }
+
     /// Apply `change` to the style of every selected cell, as one undo step
     /// named `description`.
     pub fn format_selection(&mut self, description: &'static str, change: impl Fn(&mut CellStyle)) {

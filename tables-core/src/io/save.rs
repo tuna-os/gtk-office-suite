@@ -100,12 +100,12 @@ pub fn save_sheets_to_xlsx_bytes(
                     if sh.styles[r][c].is_default() && sh.borders[r][c].is_none() {
                         continue;
                     }
-                    if let Some(f) = cell_format(&sh.formats[r][c], &sh.styles[r][c], &sh.borders[r][c]) {
+                    if let Some(f) = cell_format(&sh.formats[r][c], &with_sheet_font(&sh.styles[r][c], sh), &sh.borders[r][c]) {
                         sheet.write_blank(r as u32, c as u16, &f).map_err(|e| format!("Write error: {}", e))?;
                     }
                     continue;
                 }
-                let format = cell_format(&sh.formats[r][c], &sh.styles[r][c], &sh.borders[r][c]);
+                let format = cell_format(&sh.formats[r][c], &with_sheet_font(&sh.styles[r][c], sh), &sh.borders[r][c]);
                 // Rust's f64::from_str accepts "inf"/"infinity"/"nan"
                 // (any case, optionally signed) as valid floats — but a
                 // user typing that text almost certainly means literal
@@ -133,7 +133,7 @@ pub fn save_sheets_to_xlsx_bytes(
         for (mr, mc, rows, cols) in &sh.merges {
             let (lr, lc) = (mr + (*rows).max(1) - 1, mc + (*cols).max(1) - 1);
             let val = sh.data[*mr][*mc].clone();
-            let format = cell_format(&sh.formats[*mr][*mc], &sh.styles[*mr][*mc], &sh.borders[*mr][*mc]).unwrap_or_default();
+            let format = cell_format(&sh.formats[*mr][*mc], &with_sheet_font(&sh.styles[*mr][*mc], sh), &sh.borders[*mr][*mc]).unwrap_or_default();
             sheet
                 .merge_range(
                     *mr as u32,
@@ -337,6 +337,26 @@ pub fn save_sheets_to_xlsx_bytes(
 
 /// The xlsx format a cell is written with: its number format and its
 /// CellStyle, or `None` when both are the defaults.
+/// `style` with the sheet's default font spelled out when that isn't the
+/// Calibri 11 this writer's workbook declares as its default: a sheet read
+/// from Calc (Liberation Sans 10) keeps its font through an xlsx save.
+fn with_sheet_font<'a>(style: &'a crate::style::CellStyle, sh: &SheetModel) -> std::borrow::Cow<'a, crate::style::CellStyle> {
+    use crate::sheet::{DEFAULT_FONT_FAMILY, DEFAULT_FONT_SIZE};
+    let family_differs = sh.default_font_family != DEFAULT_FONT_FAMILY && style.font_family.is_none();
+    let size_differs = (sh.default_font_size - DEFAULT_FONT_SIZE).abs() > f64::EPSILON && style.font_size.is_none();
+    if !family_differs && !size_differs {
+        return std::borrow::Cow::Borrowed(style);
+    }
+    let mut s = style.clone();
+    if family_differs {
+        s.font_family = Some(sh.default_font_family.clone());
+    }
+    if size_differs {
+        s.font_size = Some(sh.default_font_size);
+    }
+    std::borrow::Cow::Owned(s)
+}
+
 fn cell_format(
     nf: &suite_common_core::format::NumberFormat,
     style: &crate::style::CellStyle,
@@ -572,6 +592,30 @@ mod tests {
     /// Borders were neither read nor written: a boxed table opened unboxed
     /// and saved that way. Weight, colour and an empty bordered cell all
     /// survive a save and reopen now.
+    /// A sheet whose default font isn't Calibri 11 (one read from Calc)
+    /// keeps its font through an xlsx save: the writer's workbook default is
+    /// Calibri, so the font is spelled out on the cells that relied on it.
+    #[test]
+    fn a_sheets_default_font_survives_an_xlsx_save() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("font.xlsx").to_string_lossy().into_owned();
+        let mut sheet = SheetModel::new("S", 2, 2, 0);
+        (sheet.default_font_family, sheet.default_font_size) = ("Liberation Sans".into(), 10.0);
+        sheet.data[0][0] = "plain".into();
+        sheet.data[1][1] = "big".into();
+        sheet.styles[1][1].font_size = Some(20.0);
+        save_sheets_to_xlsx(&path, &[sheet]).unwrap();
+
+        let (_, sheets) = crate::io::load_xlsx_workbook(&path).unwrap();
+        let s = &sheets[0];
+        let font = |r: usize, c: usize| {
+            let st = &s.styles[r][c];
+            (st.font_family.clone().unwrap_or(s.default_font_family.clone()), st.font_size.unwrap_or(s.default_font_size))
+        };
+        assert_eq!(font(0, 0), ("Liberation Sans".into(), 10.0));
+        assert_eq!(font(1, 1), ("Liberation Sans".into(), 20.0));
+    }
+
     #[test]
     fn cell_borders_round_trip_through_xlsx() {
         use crate::sheet::{BorderStyle, CellBorder};

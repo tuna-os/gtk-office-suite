@@ -33,6 +33,8 @@ pub struct SheetXlsxProps {
     /// the sheet has no split or a merely *split* (draggable) one, which
     /// this app has no model for and must not silently read as frozen.
     pub frozen: Option<(usize, usize)>,
+    /// The workbook's default cell font, `(family, points)`.
+    pub default_font: Option<(String, f64)>,
     /// Merged ranges as `(row, col, rowspan, colspan)` — the shape
     /// `SheetModel::merges` uses, so the caller assigns it directly.
     pub merges: Vec<(usize, usize, usize, usize)>,
@@ -147,8 +149,9 @@ pub fn read_sheet_props_from_xlsx(
         return out;
     }
     let parts = resolve_sheet_parts(&mut zip, &mut budget);
-    let xf_styles =
-        super::xlsx_styles::parse_cell_styles(&zip.optional_part_to_string("xl/styles.xml", &mut budget));
+    let styles_xml = zip.optional_part_to_string("xl/styles.xml", &mut budget);
+    let xf_styles = super::xlsx_styles::parse_cell_styles(&styles_xml);
+    let default_font = super::xlsx_styles::default_font(&styles_xml);
 
     for name in names {
         let Some(part) = parts.get(name) else { continue };
@@ -163,6 +166,7 @@ pub fn read_sheet_props_from_xlsx(
                 .filter_map(|(r, c, s)| xf_styles.get(s).map(|x| (r, c, x.clone())))
                 .filter(|(_, _, x)| *x != super::XfStyle::default())
                 .collect(),
+            default_font: default_font.clone(),
             ..SheetXlsxProps::default()
         };
 
@@ -570,7 +574,9 @@ pub fn read_sheet_props_from_ods(
     let row_styles = odf_styles_by_family(&xml, "table-row", "style:row-height");
     // Data styles live in content.xml's automatic styles, and a named one
     // can be in styles.xml.
-    let mut data_styles = super::ods_numfmt::parse_data_styles(&zip.optional_part_to_string("styles.xml", &mut budget));
+    let styles_xml = zip.optional_part_to_string("styles.xml", &mut budget);
+    let default_font = super::ods_styles::document_default_font(&styles_xml);
+    let mut data_styles = super::ods_numfmt::parse_data_styles(&styles_xml);
     data_styles.extend(super::ods_numfmt::parse_data_styles(&xml));
     let cell_styles = super::ods_styles::parse_ods_cell_styles(&xml, &data_styles);
 
@@ -578,7 +584,7 @@ pub fn read_sheet_props_from_ods(
         let head = table.split('>').next().unwrap_or("");
         let Some(name) = xml_attr(head, "table:name") else { continue };
         let body = table.split("</table:table>").next().unwrap_or("");
-        let mut props = SheetXlsxProps::default();
+        let mut props = SheetXlsxProps { default_font: default_font.clone(), ..SheetXlsxProps::default() };
         let mut col_cell_style: std::collections::HashMap<usize, &str> = std::collections::HashMap::new();
 
         // Columns: each element covers `number-columns-repeated` of them.

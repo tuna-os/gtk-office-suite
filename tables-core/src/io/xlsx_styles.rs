@@ -166,6 +166,12 @@ fn parse_border(body: &str) -> CellBorder {
     CellBorder { top, bottom, left, right, color: (r, g, b) }
 }
 
+/// The workbook's default font, font 0, as `(family, points)`.
+pub fn default_font(styles_xml: &str) -> Option<(String, f64)> {
+    let font = elements(block(styles_xml, "fonts"), "font").into_iter().next().map(|(_, b)| parse_font(b))?;
+    Some((font.family?, font.size?))
+}
+
 /// Every cell style (`cellXfs` order) in styles.xml.
 pub fn parse_cell_styles(styles_xml: &str) -> Vec<XfStyle> {
     let custom: std::collections::HashMap<u32, String> = elements(block(styles_xml, "numFmts"), "numFmt")
@@ -290,6 +296,12 @@ mod tests {
         // gray125 is a pattern, not a solid fill.
         assert_eq!(xfs[3].style.fill, None);
         assert_eq!(xfs[3].style.h_align, HAlign::Right);
+    }
+
+    #[test]
+    fn font_zero_is_the_workbook_default_font() {
+        assert_eq!(default_font(STYLES), Some(("Calibri".into(), 11.0)));
+        assert_eq!(default_font("<styleSheet/>"), None);
     }
 
     #[test]

@@ -7,9 +7,9 @@
 // alignment and font. This resolves each into the model's CellStyle and
 // CellBorder, the ODF twin of xlsx_styles.rs.
 //
-// The number format comes from the style's data style (ods_numfmt.rs).
-// Not read (yet): named parent styles in styles.xml other than the
-// document default (see `document_default_font`).
+// The number format comes from the style's data style (ods_numfmt.rs), and
+// the document's default font from styles.xml (`document_default_font`).
+// Not read (yet): other named parent styles in styles.xml.
 
 use super::XfStyle;
 use crate::sheet::{BorderStyle, CellBorder};
@@ -96,12 +96,31 @@ fn edge(v: &str) -> (BorderStyle, Option<Rgb>) {
 
 /// Style name → (style, border) for every `table-cell` automatic style.
 /// `font-face-decls` resolves a `style:font-name` to its family.
-/// Style name → resolved style for every `table-cell` automatic style;
-/// `data_styles` (from ods_numfmt::parse_data_styles) supply the number
-/// formats they name.
-pub fn parse_ods_cell_styles(content_xml: &str, data_styles: &HashMap<String, NumberFormat>) -> HashMap<String, XfStyle> {
-    let faces: HashMap<String, String> = content_xml
-        .split("<style:font-face")
+/// The document's default cell font, `(family, points)`: the text
+/// properties of styles.xml's `Default` table-cell style, else of the
+/// table-cell default style.
+pub fn document_default_font(styles_xml: &str) -> Option<(String, f64)> {
+    let faces = font_faces(styles_xml);
+    let text_of = |block: &str| first_tag(block.split("</style:").next().unwrap_or(""), "style:text-properties").map(str::to_string);
+    let named = styles_xml.split("<style:style").skip(1).find(|b| {
+        let head = format!(" {}", b.split('>').next().unwrap_or(""));
+        attr(&head, "style:name") == Some("Default") && attr(&head, "style:family") == Some("table-cell")
+    });
+    let fallback = styles_xml.split("<style:default-style").skip(1).find(|b| {
+        let head = format!(" {}", b.split('>').next().unwrap_or(""));
+        attr(&head, "style:family") == Some("table-cell")
+    });
+    let family_of = |t: &str| attr(t, "style:font-name").map(|n| faces.get(n).cloned().unwrap_or_else(|| n.to_string()));
+    let size_of = |t: &str| attr(t, "fo:font-size").and_then(points);
+    let texts: Vec<String> = [named, fallback].into_iter().flatten().filter_map(text_of).collect();
+    let family = texts.iter().find_map(|t| family_of(t))?;
+    let size = texts.iter().find_map(|t| size_of(t))?;
+    Some((family, size))
+}
+
+/// Font face name → family, from `office:font-face-decls`.
+fn font_faces(xml: &str) -> HashMap<String, String> {
+    xml.split("<style:font-face")
         .skip(1)
         .filter_map(|f| {
             let tag = format!(" {}", f.split('>').next()?);
@@ -110,7 +129,14 @@ pub fn parse_ods_cell_styles(content_xml: &str, data_styles: &HashMap<String, Nu
             let family = attr(&tag, "svg:font-family").unwrap_or(name).replace("&apos;", "").replace('\'', "");
             Some((name.to_string(), family.trim().to_string()))
         })
-        .collect();
+        .collect()
+}
+
+/// Style name → resolved style for every `table-cell` automatic style;
+/// `data_styles` (from ods_numfmt::parse_data_styles) supply the number
+/// formats they name.
+pub fn parse_ods_cell_styles(content_xml: &str, data_styles: &HashMap<String, NumberFormat>) -> HashMap<String, XfStyle> {
+    let faces = font_faces(content_xml);
 
     let mut out = HashMap::new();
     for block in content_xml.split("<style:style").skip(1) {
@@ -241,6 +267,20 @@ mod tests {
         assert_eq!(b.right, BorderStyle::None);
         let (r, g, bl) = b.color;
         assert_eq!(((r * 255.0).round(), (g * 255.0).round(), (bl * 255.0).round()), (0.0, 112.0, 192.0));
+    }
+
+    /// Calc's own documents default to Liberation Sans 10, set on the
+    /// Default cell style in styles.xml (trimmed from a Calc-saved file).
+    #[test]
+    fn the_document_default_font_comes_from_the_default_cell_style() {
+        let styles = r#"<office:document-styles>
+          <office:font-face-decls><style:font-face style:name="Liberation Sans" svg:font-family="&apos;Liberation Sans&apos;" style:font-family-generic="swiss"/></office:font-face-decls>
+          <office:styles>
+            <style:default-style style:family="table-cell"><style:text-properties style:font-name="Liberation Sans" fo:font-size="12pt"/></style:default-style>
+            <style:style style:name="Default" style:family="table-cell"><style:text-properties fo:font-size="10pt"/></style:style>
+          </office:styles></office:document-styles>"#;
+        assert_eq!(document_default_font(styles), Some(("Liberation Sans".into(), 10.0)), "Default's size, the default style's family");
+        assert_eq!(document_default_font("<office:document-styles/>"), None);
     }
 
     #[test]
