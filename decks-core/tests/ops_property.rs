@@ -11,7 +11,8 @@
 
 use decks_core::builds::{Build, BuildEffect};
 use decks_core::engine::{Slide, SlideObject, Transition};
-use decks_core::ops::{apply_all, ensure_ids, next_id, History, Op, SlideProps};
+use decks_core::ops::{apply_all, ensure_ids, next_id, Op, SlideProps};
+use suite_common_core::ops::History;
 use proptest::prelude::*;
 
 #[derive(Clone, Debug)]
@@ -219,18 +220,18 @@ proptest! {
         for e in &edits {
             let ops = ops_for(&via_ops, e);
             let inverse = apply_all(&mut via_ops, &ops).expect("a valid edit applies");
-            history.record("edit", inverse);
+            history.record(inverse);
             direct(&mut plain, e);
             prop_assert_eq!(content(&via_ops), content(&plain), "after {:?}", e);
         }
         let edited = content(&via_ops);
         while history.can_undo() {
-            prop_assert!(history.undo(&mut via_ops), "an undo step applies");
+            prop_assert!(history.undo(&mut via_ops).is_some(), "an undo step applies");
         }
         prop_assert_eq!(live(&via_ops), initial);
         // And redo-all brings the edits back.
         while history.can_redo() {
-            prop_assert!(history.redo(&mut via_ops), "a redo step applies");
+            prop_assert!(history.redo(&mut via_ops).is_some(), "a redo step applies");
         }
         prop_assert_eq!(content(&via_ops), edited);
     }
