@@ -166,6 +166,21 @@ impl PangoShaper {
                 None => {}
             }
         }
+        // Spaces ending a paragraph take no width. Pango lets spaces hang
+        // past the margin where it breaks a line, but not at the end of the
+        // text, so a last line that fits to the margin without its trailing
+        // space was wrapped a word early (render-lab letters/indents: the
+        // fixture's paragraphs end in a space, as typed text often does).
+        // Word and LibreOffice let them hang. A zero-size shape keeps the
+        // chars, so offsets are unchanged.
+        let body = text.trim_end_matches([' ', '\t']);
+        if !body.trim().is_empty() && body.len() < text.len() {
+            let zero = pango::Rectangle::new(0, 0, 0, 0);
+            let mut a: pango::Attribute = pango::AttrShape::new(&zero, &zero).into();
+            a.set_start_index(body.len() as u32);
+            a.set_end_index(text.len() as u32);
+            attrs.insert(a);
+        }
         layout.set_text(&text);
         layout.set_attributes(Some(&attrs));
         layout.set_width(to_units(req.width_pt.max(1.0)));
@@ -733,10 +748,37 @@ mod tests {
         assert_eq!(rects, t.selection_rects(TextPos { para: 1, offset: 9 }, TextPos { para: 0, offset: 4 }));
     }
 
-    /// The PDF is the laid-out pages: as many PDF pages as the tree has,
-    /// each at the page's size in points. (The render lab rasterises this
-    /// same PDF and compares it with the on-screen page view pixel by
-    /// pixel: `print_agreement`.)
+    /// A paragraph's trailing space hangs past the margin: a last line
+    /// that fits without it is not wrapped a word early (render-lab
+    /// letters/indents).
+    #[test]
+    fn a_trailing_space_does_not_wrap_the_last_line() {
+        let opts = LayoutOptions::default();
+        let line = "lazy dog. Pack my box with five dozen liquor jugs. How vexingly quick daft zebras jump.";
+        let mut shaper = PangoShaper::new();
+        let runs = [crate::model::Run::plain(line)];
+        fn req<'a>(runs: &'a [crate::model::Run], w: f64, opts: &'a LayoutOptions) -> ShapeRequest<'a> {
+            ShapeRequest {
+                runs,
+                heading: None,
+                code: false,
+                alignment: Alignment::Left,
+                width_pt: w,
+                first_line_indent_pt: 0.0,
+                tab_stops_pt: Vec::new(),
+                defaults: opts,
+            }
+        }
+        let width = shaper.shape(&req(&runs, 1000.0, &opts))[0].width_pt;
+        let spaced = [crate::model::Run::plain(format!("{line} "))];
+        let lines = shaper.shape(&req(&spaced, width + 0.05, &opts));
+        assert_eq!(lines.len(), 1, "the trailing space wrapped the line");
+        assert!(lines[0].natural_height() > 10.0);
+        // A paragraph of spaces only keeps its line height.
+        let blank = [crate::model::Run::plain("   ")];
+        assert!(shaper.shape(&req(&blank, 100.0, &opts))[0].natural_height() > 10.0);
+    }
+
     /// Updating after an edit re-shapes the edited paragraph only, and
     /// draws and hit-tests the same as a fresh layout.
     #[test]
@@ -753,6 +795,10 @@ mod tests {
         assert_eq!(t.caret(pos), fresh.caret(pos));
     }
 
+    /// The PDF is the laid-out pages: as many PDF pages as the tree has,
+    /// each at the page's size in points. (The render lab rasterises this
+    /// same PDF and compares it with the on-screen page view pixel by
+    /// pixel: `print_agreement`.)
     #[test]
     fn the_pdf_has_the_trees_pages_at_their_size() {
         let geometry = crate::model::PageGeometry { width_pt: 612.0, height_pt: 792.0, ..Default::default() };
