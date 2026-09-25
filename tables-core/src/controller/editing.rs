@@ -2,7 +2,11 @@
 //! Cell-level editing commands: direct edits, sheet mutations, paste, and fill.
 //! Split out of the former controller.rs (issue #227).
 
-use crate::fill::{extend_fill, infer_fill, FillDirection};
+use crate::fill::{extend_fill_kind, infer_fill, FillDirection};
+use suite_common_core::format::NumberFormatKind;
+
+/// A cell position, `(row, col)`.
+type Pos = (usize, usize);
 use crate::fragment::Fragment;
 use crate::sheet::SheetModel;
 
@@ -105,145 +109,91 @@ impl WorkbookController {
             self.apply_ops("Paste Cells", vec![super::ops::Op::SetCells { sheet: sheet_id, cells }]);
         }
     }
+    /// Drag the fill handle of `sel` to `(drag_row, drag_col)`: continue
+    /// what the selection holds into the cells dragged over, as one undo
+    /// step, the way Excel and Calc's autofill does (`crate::fill`):
+    /// number series, dates, weekdays and months, numbered text, and
+    /// anything else repeated. Filling up or left continues the series
+    /// backwards. The cells filled take the formats, styles and borders of
+    /// the cells they continue.
     pub fn fill(&mut self, sel: (usize, usize, usize, usize), drag_row: usize, drag_col: usize) {
+        use super::ops::Op;
         let Some((direction, distance)) = infer_fill(sel, drag_row, drag_col) else {
             return;
         };
         let (top, left, bottom, right) = sel;
         let state = self.state.borrow();
-        let sheet_id = state.sheet().sheet_id;
+        let sheet = state.sheet();
+        let sheet_id = sheet.sheet_id;
 
-        // `formula_source` is the originating cell of a copied formula —
-        // extend_fill/tile_fill only ever carry formula text verbatim,
-        // so the reference shift happens in a second pass below, once we
-        // have mutable access to the engine.
-        struct Change {
-            row: usize,
-            col: usize,
-            new_input: String,
-            formula_source: Option<(usize, usize)>,
-        }
-        let mut changes: Vec<Change> = Vec::new();
-        match direction {
-            FillDirection::Down => {
-                for c in left..=right {
-                    let source: Vec<_> = (top..=bottom)
-                        .map(|r| {
-                            let input = state.cell_input(r, c);
-                            let is_formula = input.starts_with('=');
-                            (input, is_formula)
-                        })
-                        .collect();
-                    let filled = extend_fill(&source, distance);
-                    for (i, (input, is_formula)) in filled.into_iter().enumerate() {
-                        let row = bottom + 1 + i;
-                        let old_input = state.cell_input(row, c);
-                        if old_input != input {
-                            let formula_source = is_formula.then(|| (top + i % source.len(), c));
-                            changes.push(Change {
-                                row,
-                                col: c,
-                                new_input: input,
-                                formula_source,
-                            });
-                        }
-                    }
+        // Each line runs along the drag: its source cells in drag order,
+        // and where its filled cells go.
+        let vertical = matches!(direction, FillDirection::Down | FillDirection::Up);
+        let lines: Vec<(Vec<Pos>, Vec<Pos>)> = if vertical {
+            (left..=right)
+                .map(|c| match direction {
+                    FillDirection::Down => ((top..=bottom).map(|r| (r, c)).collect(), (1..=distance).map(|i| (bottom + i, c)).collect()),
+                    _ => ((top..=bottom).rev().map(|r| (r, c)).collect(), (1..=distance).map(|i| (top - i, c)).collect()),
+                })
+                .collect()
+        } else {
+            (top..=bottom)
+                .map(|r| match direction {
+                    FillDirection::Right => ((left..=right).map(|c| (r, c)).collect(), (1..=distance).map(|i| (r, right + i)).collect()),
+                    _ => ((left..=right).rev().map(|c| (r, c)).collect(), (1..=distance).map(|i| (r, left - i)).collect()),
+                })
+                .collect()
+        };
+
+        // `formula_source` is the cell a copied formula came from: its
+        // references shift in a second pass, with the engine.
+        let mut cells: Vec<(usize, usize, String, Option<Pos>)> = Vec::new();
+        let mut ops: Vec<Op> = Vec::new();
+        for (sources, targets) in &lines {
+            let source: Vec<(String, bool)> = sources
+                .iter()
+                .map(|&(r, c)| {
+                    let input = state.cell_input(r, c);
+                    let is_formula = input.starts_with('=');
+                    (input, is_formula)
+                })
+                .collect();
+            let dates = sources.iter().all(|&(r, c)| {
+                matches!(sheet.formats[r][c].kind, NumberFormatKind::Date(_) | NumberFormatKind::DateTime(_))
+            });
+            let filled = extend_fill_kind(&source, targets.len(), dates);
+            for (i, ((input, is_formula), &(row, col))) in filled.into_iter().zip(targets).enumerate() {
+                let from = sources[i % sources.len()];
+                if state.cell_input(row, col) != input {
+                    cells.push((row, col, input, is_formula.then_some(from)));
                 }
-            }
-            FillDirection::Right => {
-                for r in top..=bottom {
-                    let source: Vec<_> = (left..=right)
-                        .map(|c| {
-                            let input = state.cell_input(r, c);
-                            let is_formula = input.starts_with('=');
-                            (input, is_formula)
-                        })
-                        .collect();
-                    let filled = extend_fill(&source, distance);
-                    for (i, (input, is_formula)) in filled.into_iter().enumerate() {
-                        let col = right + 1 + i;
-                        let old_input = state.cell_input(r, col);
-                        if old_input != input {
-                            let formula_source = is_formula.then(|| (r, left + i % source.len()));
-                            changes.push(Change {
-                                row: r,
-                                col,
-                                new_input: input,
-                                formula_source,
-                            });
-                        }
-                    }
+                if sheet.formats[row][col] != sheet.formats[from.0][from.1] {
+                    ops.push(Op::SetFormat { sheet: sheet_id, row, col, format: sheet.formats[from.0][from.1].clone() });
                 }
-            }
-            FillDirection::Up => {
-                for c in left..=right {
-                    let source: Vec<_> = (top..=bottom)
-                        .map(|r| {
-                            let input = state.cell_input(r, c);
-                            let is_formula = input.starts_with('=');
-                            (input, is_formula)
-                        })
-                        .collect();
-                    let filled = extend_fill(&source, distance);
-                    // Adjacent-to-selection cell (top - 1) gets the first
-                    // tile element, same convention as Down's bottom + 1.
-                    for (i, (input, is_formula)) in filled.into_iter().enumerate() {
-                        let row = top - 1 - i;
-                        let old_input = state.cell_input(row, c);
-                        if old_input != input {
-                            let formula_source = is_formula.then(|| (top + i % source.len(), c));
-                            changes.push(Change {
-                                row,
-                                col: c,
-                                new_input: input,
-                                formula_source,
-                            });
-                        }
-                    }
+                if sheet.styles[row][col] != sheet.styles[from.0][from.1] {
+                    ops.push(Op::SetStyle { sheet: sheet_id, row, col, style: sheet.styles[from.0][from.1].clone() });
                 }
-            }
-            FillDirection::Left => {
-                for r in top..=bottom {
-                    let source: Vec<_> = (left..=right)
-                        .map(|c| {
-                            let input = state.cell_input(r, c);
-                            let is_formula = input.starts_with('=');
-                            (input, is_formula)
-                        })
-                        .collect();
-                    let filled = extend_fill(&source, distance);
-                    for (i, (input, is_formula)) in filled.into_iter().enumerate() {
-                        let col = left - 1 - i;
-                        let old_input = state.cell_input(r, col);
-                        if old_input != input {
-                            let formula_source = is_formula.then(|| (r, left + i % source.len()));
-                            changes.push(Change {
-                                row: r,
-                                col,
-                                new_input: input,
-                                formula_source,
-                            });
-                        }
-                    }
+                if sheet.borders[row][col] != sheet.borders[from.0][from.1] {
+                    ops.push(Op::SetBorder { sheet: sheet_id, row, col, border: sheet.borders[from.0][from.1].clone() });
                 }
             }
         }
+        drop(sheet);
         drop(state);
-        if changes.iter().any(|c| c.formula_source.is_some()) {
+        if cells.iter().any(|c| c.3.is_some()) {
             let mut state = self.state.borrow_mut();
-            for change in changes.iter_mut() {
-                if let Some(source) = change.formula_source {
-                    change.new_input = state.engine.extend_input(
-                        &change.new_input,
-                        source,
-                        (change.row, change.col),
-                    );
+            for (row, col, input, from) in cells.iter_mut() {
+                if let Some(from) = *from {
+                    *input = state.engine.extend_input(input, from, (*row, *col));
                 }
             }
         }
-        let cells: Vec<(usize, usize, String)> = changes.into_iter().map(|c| (c.row, c.col, c.new_input)).collect();
+        let cells: Vec<(usize, usize, String)> = cells.into_iter().map(|(r, c, input, _)| (r, c, input)).collect();
         if !cells.is_empty() {
-            self.apply_ops("Fill", vec![super::ops::Op::SetCells { sheet: sheet_id, cells }]);
+            ops.insert(0, Op::SetCells { sheet: sheet_id, cells });
+        }
+        if !ops.is_empty() {
+            self.apply_ops("Fill", ops);
         }
     }
 }

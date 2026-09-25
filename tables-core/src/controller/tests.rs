@@ -110,14 +110,56 @@
         controller.edit_cell(3, 0, "a");
         controller.edit_cell(4, 0, "b");
 
-        // Selection rows 3..=4; drag up to row 0 -> fills rows 0..=2,
-        // adjacent-first: row2=a, row1=b, row0=a (tiled, cycling source).
+        // Selection rows 3..=4; drag up to row 0 -> fills rows 0..=2 so
+        // the column reads as one repeating pattern, as in Excel and Calc:
+        // b a b | a b.
         controller.fill((3, 0, 4, 0), 0, 0);
         let sheet = controller.state.borrow();
         let sh = sheet.sheet();
-        assert_eq!(sh.cell(2, 0), "a");
-        assert_eq!(sh.cell(1, 0), "b");
-        assert_eq!(sh.cell(0, 0), "a");
+        assert_eq!(sh.cell(2, 0), "b");
+        assert_eq!(sh.cell(1, 0), "a");
+        assert_eq!(sh.cell(0, 0), "b");
+    }
+
+    #[test]
+    fn a_series_filled_up_counts_down_and_formats_come_along() {
+        use suite_common_core::format::{NumberFormat, NumberFormatKind};
+        let mut controller = WorkbookController::new(8, 4).unwrap();
+        controller.edit_cell(4, 0, "10");
+        controller.edit_cell(5, 0, "20");
+        controller.edit_cell(4, 1, "Mon");
+        controller.mutate_sheet("Bold", |s| {
+            s.styles[5][0].bold = true;
+            s.formats[4][2] = NumberFormat::new(NumberFormatKind::Date("%Y-%m-%d".into()));
+        });
+        controller.edit_cell(4, 2, "45306"); // 2024-01-15
+
+        // Up from rows 4..=5 to row 2: column A counts down, and row 3
+        // takes the format of the cell it continues (row 5's bold).
+        controller.fill((4, 0, 5, 0), 2, 0);
+        {
+            let state = controller.state.borrow();
+            let sh = state.sheet();
+            assert_eq!((sh.cell(3, 0), sh.cell(2, 0)), ("0", "-10"));
+            assert!(sh.styles[3][0].bold && !sh.styles[2][0].bold);
+        }
+        // Weekdays count on down.
+        controller.fill((4, 1, 4, 1), 6, 1);
+        {
+            let state = controller.state.borrow();
+            let sh = state.sheet();
+            assert_eq!((sh.cell(5, 1), sh.cell(6, 1)), ("Tue", "Wed"));
+        }
+        // A date goes up a day, and stays a date.
+        controller.fill((4, 2, 4, 2), 5, 2);
+        let state = controller.state.borrow();
+        let sh = state.sheet();
+        assert_eq!(state.cell_input(5, 2), "45307");
+        assert_eq!(sh.formats[5][2].kind, NumberFormatKind::Date("%Y-%m-%d".into()));
+        drop(sh);
+        drop(state);
+        assert!(controller.undo());
+        assert_eq!(controller.state.borrow().cell_input(5, 2), "");
     }
 
     #[test]
