@@ -23,6 +23,8 @@ pub struct FormatInspector {
     pub split: adw::OverlaySplitView,
     /// Show the active cell's style. Call when the selection changes.
     pub sync: Rc<dyn Fn()>,
+    /// Open the inspector with the number format code ready to type.
+    pub edit_number_format: Rc<dyn Fn()>,
 }
 
 type Ctl = Rc<RefCell<WorkbookController>>;
@@ -184,7 +186,7 @@ pub fn build(
     }
     borders.add(&row("Apply", &b_box));
 
-    let (number, sync_number) = crate::number_format_editor::group(ctl, grid);
+    let (number, sync_number, code_row) = crate::number_format_editor::group(ctl, grid);
     let page = adw::PreferencesPage::new();
     page.add(&number);
     page.add(&text);
@@ -386,5 +388,12 @@ pub fn build(
         });
     }
 
-    FormatInspector { split, sync }
+    let edit_number_format: Rc<dyn Fn()> = {
+        let split = split.clone();
+        Rc::new(move || {
+            split.set_show_sidebar(true);
+            code_row.grab_focus();
+        })
+    };
+    FormatInspector { split, sync, edit_number_format }
 }
