@@ -59,6 +59,10 @@
     "A": "amber",
     "B": "amber"
   },
+  "letters/footnote-continued": {
+    "A": "green",
+    "B": "green"
+  },
   "letters/footnotes": {
     "A": "green",
     "B": "green"
