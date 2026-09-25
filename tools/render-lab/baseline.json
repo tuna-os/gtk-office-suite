@@ -1,7 +1,11 @@
 {
-  "decks/background": {
+  "decks/autofit": {
     "A": "amber",
     "B": "amber"
+  },
+  "decks/background": {
+    "A": "green",
+    "B": "green"
   },
   "decks/bullets": {
     "A": "green",
@@ -24,8 +28,8 @@
     "B": "amber"
   },
   "decks/text-styles": {
-    "A": "amber",
-    "B": "amber"
+    "A": "green",
+    "B": "green"
   },
   "decks/title-layout": {
     "A": "green",
