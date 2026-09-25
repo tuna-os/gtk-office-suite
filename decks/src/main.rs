@@ -8,6 +8,7 @@ mod text_render;
 mod format_inspector;
 mod insert_bar;
 mod template_chooser;
+mod notes_pane;
 mod presenter_window;
 mod canvas_area;
 mod canvas_input;
@@ -36,6 +37,9 @@ fn main() {
             ("Save", "<Control>s"),
             ("Open", "<Control>o"),
             ("New presentation", "<Control>n"),
+        ]),
+        ("Speaker Notes", &[
+            ("Go to speaker notes", "<Control><Alt><Shift>s"),
         ]),
     ];
     let act_shortcuts = gtk4::gio::SimpleAction::new("show-shortcuts", None);

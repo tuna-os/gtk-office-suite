@@ -3748,6 +3748,62 @@ class DecksTemplateChooserSmoke(BaseGUITestCase):
         self.assertIsNone(self.process.poll(), "decks crashed creating from a template")
 
 
+class DecksSpeakerNotesSmoke(BaseGUITestCase):
+    """The speaker notes pane under the slide (Keynote's presenter notes,
+    Google Slides' "Click to add speaker notes"): typed notes land on the
+    slide, Undo takes back the last word, and Save writes them into the
+    pptx's notes slide. Asserted on the state snapshot, on the pane's own
+    text and on the saved package."""
+
+    app_name = "decks"
+
+    def setUp(self):
+        self.isolate_snapshot("decks-notes-snapshot-")
+        self._dir = self.temp_dir(prefix="decks-notes-")
+        self._doc = os.path.join(self._dir, "talk.pptx")
+        with open(self._doc, "wb") as f:
+            f.write(minimal_pptx_bytes("the slide"))
+        self.launch_args = [self._doc]
+        super().setUp()
+
+    def _notes(self, aid):
+        return self.trigger_snapshot(aid)["slides"][0]["notes"]
+
+    def test_notes_are_typed_undone_and_saved(self):
+        import zipfile
+        from dogtail import rawinput
+        aid = "org.tunaos.decks"
+        pane = self.wait_until(lambda: self.app.findChild(lambda n: n.name == "Speaker notes", retry=False, requireResult=False),
+                               lambda n: n is not None and n.showing, description="the notes pane under the slide")
+        self.gapplication_action(aid, "focus-notes")
+        time.sleep(0.5)
+        rawinput.typeText("remember the demo")
+        self.wait_until(lambda: self._notes(aid), lambda n: n == "remember the demo", interval=0.5,
+                        description="the typed notes on the slide")
+        # Undo takes back the last word as one step, in the model and in
+        # the pane.
+        self.gapplication_action(aid, "undo")
+        self.wait_until(lambda: self._notes(aid), lambda n: n == "remember the ", interval=0.5,
+                        description="undo to take back the last word")
+        self.wait_until(lambda: pane.queryText().getText(0, -1), lambda t: t == "remember the ", interval=0.25,
+                        description="the pane to show the undone notes")
+        self.gapplication_action(aid, "redo")
+        self.wait_until(lambda: self._notes(aid), lambda n: n == "remember the demo", interval=0.5,
+                        description="redo to bring the word back")
+        self.gapplication_action(aid, "save")
+
+        def saved_notes():
+            try:
+                with zipfile.ZipFile(self._doc) as z:
+                    names = [n for n in z.namelist() if n.startswith("ppt/notesSlides/") and n.endswith(".xml")]
+                    return "".join(z.read(n).decode() for n in names)
+            except (OSError, zipfile.BadZipFile):
+                return ""
+        self.wait_until(saved_notes, lambda x: "remember the demo" in x, interval=0.5,
+                        description="the notes in the saved pptx")
+        self.assertIsNone(self.process.poll(), "decks crashed editing notes")
+
+
 class DecksInsertBarSmoke(BaseGUITestCase):
     """The Insert buttons in the header bar (DESIGN-UI.md, "Insert
     buttons, not menus"): the Shape button's library is searchable, and

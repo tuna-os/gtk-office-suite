@@ -1807,11 +1807,12 @@ mod master_tests {
     }
 
     #[test]
-    fn notes_blank_lines_do_not_survive_round_trip() {
-        // Current behavior: empty paragraphs are dropped when captured, so
-        // blank lines in speaker notes collapse on a write→read round trip.
-        assert_eq!(extract_notes_text(&notes_slide_xml("a\n\nb")), "a\nb");
-        assert_eq!(extract_notes_text(&notes_slide_xml("a\n")), "a");
+    fn notes_blank_lines_survive_round_trip() {
+        // Blank lines are the presenter's; they used to collapse.
+        assert_eq!(extract_notes_text(&notes_slide_xml("a\n\nb")), "a\n\nb");
+        assert_eq!(extract_notes_text(&notes_slide_xml("a\n")), "a\n");
+        // A shape of nothing but blank paragraphs holds no notes.
+        assert_eq!(extract_notes_text(&notes_slide_xml("\n")), "");
     }
 
     #[test]

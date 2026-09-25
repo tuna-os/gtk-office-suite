@@ -125,9 +125,10 @@ class DecksTest(VisionGUITestCase):
             "A file open dialog or file picker window is visible for selecting an image",
         ], screenshot_path=self.last_screenshot)
 
-    def test_speaker_notes_panel_expands(self):
+    def test_speaker_notes_panel_is_under_the_slide(self):
+        # The notes pane is always there under the slide (notes_pane.rs);
+        # there is no expander to open any more.
         self._new()
-        self._click("Speaker Notes", "push button")
         time.sleep(0.5)
         self.take_screenshot("notes")
         self.assertVision([

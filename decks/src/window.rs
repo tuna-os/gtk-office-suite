@@ -238,9 +238,23 @@ impl DecksWindow {
         status_label.set_margin_bottom(12);
         canvas_overlay.add_overlay(&status_label);
 
+        // Speaker notes under the slide (notes_pane.rs), the divider
+        // between them dragged to size the pane; extra height goes to the
+        // slide.
+        let notes = crate::notes_pane::build();
+        let notes_buffer = notes.buffer.clone();
+        let slide_and_notes = gtk::Paned::builder()
+            .orientation(gtk::Orientation::Vertical)
+            .start_child(&canvas_overlay)
+            .end_child(&notes.widget)
+            .resize_end_child(false)
+            .shrink_start_child(false)
+            .shrink_end_child(false)
+            .build();
+
         let editor_split = adw::OverlaySplitView::new();
         editor_split.set_sidebar_position(gtk::PackType::End);
-        editor_split.set_content(Some(&canvas_overlay));
+        editor_split.set_content(Some(&slide_and_notes));
         editor_split.set_min_sidebar_width(280.0);
         editor_split.set_max_sidebar_width(340.0);
 
@@ -574,19 +588,11 @@ impl DecksWindow {
         nbp.add_setter(&editor_split, "show-sidebar", Some(&f));
         nbp.add_setter(&canvas_scroll, "min-content-width", Some(&glib::Value::from(&180i32)));
         nbp.add_setter(&status_label, "visible", Some(&f));
-
-        // Speaker notes pane (collapsible, below the canvas)
-        let notes_expander = gtk::Expander::new(Some("Speaker Notes"));
-        let notes_buffer = gtk::TextBuffer::new(None);
-        let notes_view = gtk::TextView::with_buffer(&notes_buffer);
-        notes_view.set_wrap_mode(gtk::WrapMode::Word);
-        notes_view.set_size_request(-1, 80);
-        notes_view.set_vexpand(false);
-        notes_expander.set_child(Some(&notes_view));
+        // A phone-width window keeps the slide; notes are the desktop's.
+        nbp.add_setter(&notes.widget, "visible", Some(&f));
 
         let main_box = gtk::Box::new(gtk::Orientation::Vertical, 0);
         main_box.append(&split_view);
-        main_box.append(&notes_expander);
         let toast_overlay = adw::ToastOverlay::new();
         toast_overlay.set_child(Some(&main_box));
         suite_win.set_content(&toast_overlay);
@@ -671,9 +677,22 @@ impl DecksWindow {
             });
         }
 
-        // Save speaker notes on text change
+        // Go to Speaker Notes (Google Slides' Ctrl+Alt+Shift+S): the
+        // keyboard's way into the pane.
         {
-            let ss = slides.clone();
+            let view = notes.view.clone();
+            let act = gio::SimpleAction::new("focus-notes", None);
+            act.connect_activate(move |_, _| {
+                view.grab_focus();
+            });
+            app.add_action(&act);
+            app.set_accels_for_action("app.focus-notes", &["<Primary><Alt><Shift>s"]);
+        }
+
+        // Save speaker notes on text change, through the controller: an
+        // undoable edit (a word per step) that marks the deck changed.
+        {
+            let controller = controller.clone();
             let cs_ref = current_slide.clone();
             let skip = notes_skip.clone();
             notes_buffer.connect_changed(move |buf| {
@@ -684,11 +703,8 @@ impl DecksWindow {
                 // reach ss.borrow_mut() while that handler's ss.borrow()
                 // was still alive (the exact Tables reentrancy bug class).
                 if skip.get() { return; }
-                let idx = cs_ref.get();
-                let mut slides = ss.borrow_mut();
-                if let Some(slide) = slides.get_mut(idx) {
-                    slide.notes = buf.text(&buf.start_iter(), &buf.end_iter(), false).to_string();
-                }
+                let text = buf.text(&buf.start_iter(), &buf.end_iter(), false);
+                controller.set_notes(cs_ref.get(), &text);
             });
         }
 

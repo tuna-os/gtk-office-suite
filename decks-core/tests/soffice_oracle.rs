@@ -1528,3 +1528,19 @@ fn impress_sees_the_slide_size_we_kept() {
         }
     }
 }
+
+#[test]
+fn notes_paragraphs_survive_impress_in_both_formats() {
+    // What the notes pane writes: several paragraphs, a blank line
+    // between two of them, Unicode. Impress's own rewrite of each format
+    // must keep every paragraph, in order, blank line included.
+    let notes = "Open with the question.\nThen the three numbers — 12, 40, 7.\n\nPause for questions; café at 15:00.";
+    let mut deck = Deck::new();
+    deck.slides = vec![text_slide("T", "body", notes), text_slide("U", "second", "")];
+    let rewrites = [("pptx", through_impress(&deck, "notesparas")), ("odp", odp_through_impress(&deck, "notesparas"))];
+    for (kind, rt) in rewrites {
+        let Some(rt) = rt else { return };
+        assert_eq!(rt.slides[0].notes, notes, "{kind}: Impress changed the notes");
+        assert_eq!(rt.slides[1].notes, "", "{kind}: a slide without notes gained some");
+    }
+}
