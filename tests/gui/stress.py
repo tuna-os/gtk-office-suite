@@ -30,6 +30,7 @@ import hashlib
 import json
 import os
 import random
+import re
 import shutil
 import subprocess
 import sys
@@ -143,12 +144,29 @@ INFRASTRUCTURE_MARKERS = (
 )
 
 
+# A journey's own name is not evidence about the app. `pytest -v` prints
+# every node id it runs, and recovery journeys are named for the scenario
+# they drive — `test_the_newest_crashed_document_is_recovered_and_the_other_kept`
+# — so matching markers against the raw log scored every attempt that ran
+# one as a product crash, including attempts where all 85 journeys passed.
+# That kept the nightly red from 2026-09-14 (when #719 added those
+# journeys) with `failing_journeys: []`. Node ids and test function names
+# are removed before the markers are looked for; what the app and the
+# assertions actually said is kept.
+_JOURNEY_NAMES = re.compile(r"\S+\.py::\S+|\btest_\w+")
+
+
+def _without_journey_names(text: str) -> str:
+    return _JOURNEY_NAMES.sub("", text)
+
+
 def classify(text: str, junit_failures: list, exit_code: int, timed_out: bool) -> str:
     """Classify one attempt from what it printed and what JUnit recorded."""
     if timed_out:
         return CLASS_TIMEOUT
-    haystack = "\n".join([text] + [f.get("message", "") + f.get("text", "")
-                                   for f in junit_failures])
+    haystack = _without_journey_names(
+        "\n".join([text] + [f.get("message", "") + f.get("text", "")
+                            for f in junit_failures]))
     lowered = haystack.lower()
     if any(marker.lower() in lowered for marker in CRASH_MARKERS):
         return CLASS_CRASH

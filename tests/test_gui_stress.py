@@ -43,6 +43,38 @@ class ClassificationTests(unittest.TestCase):
         failures = [{"message": "AssertionError: no stats label found", "text": ""}]
         self.assertEqual(stress.classify(text, failures, 1, False), stress.CLASS_CRASH)
 
+    def test_a_passing_journey_named_for_a_crash_is_not_a_crash(self):
+        # The nightly's own log, 2026-09-25 (run 36114269557): 85 passed,
+        # exit 0, scored product-crash on every attempt because a recovery
+        # journey has "crashed" in its name.
+        text = textwrap.dedent("""\
+            test_smoke.py::TablesTwoDocumentsSmoke::test_the_newest_crashed_document_is_recovered_and_the_other_kept PASSED [ 34%]
+            test_smoke.py::LettersRecoveryIsItselfProtectedSmoke::test_a_second_crash_right_after_recovery_keeps_the_work PASSED [ 35%]
+            ======================== 85 passed in 641.29s (0:10:41) ========================
+            """)
+        self.assertEqual(stress.classify(text, [], 0, False), stress.CLASS_PASS)
+
+    def test_a_failing_journey_named_for_a_crash_is_an_assertion_mismatch(self):
+        # The name must not promote an ordinary assertion to a crash
+        # either — the traceback repeats the function name.
+        failures = [{"message": "AssertionError: 'Recovered' not in 'Letters'",
+                     "text": "tests/gui/test_smoke.py:900: in "
+                             "test_the_newest_crashed_document_is_recovered_and_the_other_kept"}]
+        text = ("test_smoke.py::DecksTwoDocumentsSmoke::"
+                "test_the_newest_crashed_document_is_recovered_and_the_other_kept FAILED")
+        self.assertEqual(stress.classify(text, failures, 1, False), stress.CLASS_ASSERTION)
+
+    def test_a_real_crash_inside_a_crash_named_journey_is_still_a_crash(self):
+        text = ("test_smoke.py::TablesTwoDocumentsSmoke::"
+                "test_the_newest_crashed_document_is_recovered_and_the_other_kept FAILED\n"
+                "malloc(): unaligned fastbin chunk detected")
+        self.assertEqual(stress.classify(text, [], 1, False), stress.CLASS_CRASH)
+
+    def test_an_assertion_that_says_the_app_died_is_still_a_crash(self):
+        failures = [{"message": "AssertionError: 1 is not None : tables died after "
+                                "a far jump and back — #137/#507 regression", "text": ""}]
+        self.assertEqual(stress.classify("", failures, 1, False), stress.CLASS_CRASH)
+
     def test_dead_application_is_a_product_crash(self):
         failures = [{"message": "atspi_error: The application no longer exists",
                      "text": ""}]
