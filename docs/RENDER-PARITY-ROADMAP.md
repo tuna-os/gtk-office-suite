@@ -193,6 +193,32 @@ committed as `tools/render-lab/baseline.json` and **ratcheted**: a fixture
 may move toward green, never away.
 The same rule applies to the existing oracle corpora.
 
+#### Known metric artifacts (left amber on purpose)
+
+A fixture stays amber, rather than having a threshold tuned, when its
+images show our rendering matches LibreOffice's and the metric is what
+disagrees. Recorded here with the measurement, so nobody "fixes" them by
+loosening a budget:
+
+- **`letters/font-sizes`** (2026-09-25). Every line's ink box is within a
+  pixel of LibreOffice's (measured row and column extents). Tesseract reads
+  the 8 pt line as "spt text" on LibreOffice's page and as one token
+  ("bpetext") on ours, so 8 of 10 words match (below the 0.9 green bar).
+  The matcher then pairs LibreOffice's unmatched "text" with the nearest
+  remaining "text" on the next line, and every later pairing shifts by a
+  line: the median displacement (14.8 pt) is that cascade, not a layout
+  error. A globally optimal matcher would fix the displacement but not the
+  word count, so it would not change this verdict, and it was not
+  worth a shared-metric change on its own.
+- **`letters/table`** (2026-09-25). Cell text sits within 0.2 pt of
+  LibreOffice's; Tesseract reads one cell label in ours ("R1C1" as "rici",
+  unhinted glyphs at 12 px) and so 6 of 9 cell words match.
+
+Both are OCR of very small or very similar glyphs, not rendering. They go
+green when the metric can read them (a larger OCR scale for small text is
+the next candidate, and it would have to be checked against every app's
+verdicts first, since `compare.py` is shared).
+
 ### Report
 
 `report.html` lays each fixture out as LibreOffice | ours (Tier A) | ours
