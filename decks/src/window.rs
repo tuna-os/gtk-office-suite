@@ -811,6 +811,34 @@ impl DecksWindow {
             app.add_action(&act);
         }
 
+        // Insert buttons in the header bar (insert_bar.rs): a shape from the
+        // library by its index, or a 3x3 table; each selected once in.
+        {
+            let (cs, cs_ref, controller, refresh, so) =
+                (canvas.clone(), current_slide.clone(), controller.clone(), refresh_hud.clone(), selected_object.clone());
+            let insert = move |obj: SlideObject| {
+                let idx = cs_ref.get();
+                controller.add_object(idx, obj);
+                so.set(controller.slides.borrow().get(idx).map(|s| s.objects.len().saturating_sub(1)));
+                cs.queue_draw();
+                refresh();
+            };
+            let insert = Rc::new(insert);
+            let act = gio::SimpleAction::new("insert-shape", Some(glib::VariantTy::UINT32));
+            let ins = insert.clone();
+            act.connect_activate(move |_, p| {
+                let lib = decks_core::insert::shape_library();
+                if let Some(s) = p.and_then(|p| p.get::<u32>()).and_then(|i| lib.get(i as usize)) {
+                    ins(decks_core::insert::shape(s.kind.clone()));
+                }
+            });
+            app.add_action(&act);
+            let act = gio::SimpleAction::new("insert-table", None);
+            act.connect_activate(move |_, _| insert(decks_core::insert::table(3, 3)));
+            app.add_action(&act);
+            crate::insert_bar::build(&suite_win.header_bar);
+        }
+
         // "Add Text Box"
         {
             let cs = canvas.clone();
