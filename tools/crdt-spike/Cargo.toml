@@ -26,7 +26,7 @@ loro = { version = "1.16", optional = true }
 # yrs 0.28.0 (latest) and 0.27.x do not compile on the project's toolchain
 # (rustc 1.94.1): they use `if let` guards, stable only from 1.95, and
 # declare no rust-version. 0.26 is the newest release line that builds here.
-yrs = { version = "0.26", optional = true }
+yrs = { version = "0.28", optional = true }
 
 [profile.release]
 debug = false
