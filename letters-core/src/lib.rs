@@ -4,6 +4,8 @@
 // See DESIGN.md for the model, invariants, and addressing scheme.
 
 pub mod chips;
+#[cfg(feature = "collab")]
+pub mod collab;
 pub mod docx;
 mod docx_chips;
 mod docx_fields;

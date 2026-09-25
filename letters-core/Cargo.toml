@@ -27,6 +27,9 @@ chrono = "0.4"
 # NamedTempFile for extracted images (gh-268): production code writes
 # document-embedded images to /tmp, which must not use predictable paths.
 tempfile = "3"
+# RFC-0001 Phase 5 (feature `collab`, off by default): the document as a
+# Loro rich text (collab.rs). Not built without the feature.
+loro = { version = "1.16", optional = true }
 # Optional, feature `render`: Pango and Cairo are not GTK (ADR 0010).
 pango = { version = "0.22", optional = true, features = ["v1_44"] }
 pangocairo = { version = "0.22", optional = true }
@@ -44,3 +47,6 @@ proptest = "1"
 [features]
 # The Pango shaper and Cairo renderer for layout::RenderTree (ADR 0010).
 render = ["dep:pango", "dep:pangocairo", "dep:cairo-rs"]
+# The document as a Loro rich text (RFC-0001 Phase 5): not in any product
+# build yet, and linted and tested on its own in CI.
+collab = ["dep:loro"]
