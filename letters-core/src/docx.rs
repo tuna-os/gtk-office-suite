@@ -872,17 +872,12 @@ fn map_paragraph(doc: &rdocx::Document, p: &rdocx::ParagraphRef<'_>) -> Paragrap
                 // gh-268: the previous code wrote to a predictable
                 // /tmp/letters-images/<content-hash>.png via fs::write, which
                 // follows a pre-created symlink — a local user could point the
-                // write anywhere. NamedTempFile gives O_EXCL + O_NOFOLLOW + an
-                // unpredictable name; keep the file alive and hand the model
-                // its path (deleted on drop once the model is done).
-                let mut tmp = match tempfile::NamedTempFile::new() {
-                    Ok(t) => t,
-                    Err(_) => continue,
-                };
-                if std::io::Write::write_all(&mut tmp, &bytes).is_err() {
-                    continue;
-                }
-                let (_, path) = match tmp.keep() {
+                // write anywhere. The media cache writes into a private 0700
+                // per-process directory under an unpredictable name. The file
+                // is NOT deleted when the model is done: it lives as long as
+                // this process, identical bytes share one file, and the next
+                // process sweeps the directory once this one is gone (#455).
+                let path = match suite_common_core::media_cache::persist(&bytes) {
                     Ok(p) => p,
                     Err(_) => continue,
                 };
