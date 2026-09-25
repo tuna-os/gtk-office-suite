@@ -74,14 +74,27 @@ pub fn opener(
             ("Pie", ChartKind::Pie),
             ("XY (Scatter)", ChartKind::Scatter),
         ];
-        let names: Vec<String> = KINDS.iter().map(|(n, _)| suite_common::i18n(n)).collect();
-        let type_combo = gtk::DropDown::from_strings(&names.iter().map(String::as_str).collect::<Vec<_>>());
-        let ct2 = chart_type.clone();
-        let pv = preview.clone();
-        type_combo.connect_selected_notify(move |dd| {
-            ct2.set(KINDS.get(dd.selected() as usize).map_or(ChartKind::Bar, |k| k.1));
-            pv.queue_draw();
-        });
+        // All five in view as linked toggles, like the inspector's
+        // alignment buttons: nothing to open to see what there is.
+        let type_combo = gtk::Box::new(gtk::Orientation::Horizontal, 0);
+        type_combo.add_css_class("linked");
+        let mut first: Option<gtk::ToggleButton> = None;
+        for (name, kind) in KINDS {
+            let button = gtk::ToggleButton::with_label(&suite_common::i18n(name));
+            button.set_group(first.as_ref());
+            if first.is_none() {
+                button.set_active(true);
+                first = Some(button.clone());
+            }
+            let (ct2, pv) = (chart_type.clone(), preview.clone());
+            button.connect_toggled(move |b| {
+                if b.is_active() {
+                    ct2.set(kind);
+                    pv.queue_draw();
+                }
+            });
+            type_combo.append(&button);
+        }
 
         let header = gtk::Box::new(gtk::Orientation::Horizontal, 6);
         header.set_margin_start(12); header.set_margin_end(12); header.set_margin_top(6);
