@@ -25,10 +25,15 @@ zip = "8.0"
 loro = { version = "1.16", optional = true }
 serde = { version = "1", features = ["derive"], optional = true }
 serde_json = { version = "1", features = ["float_roundtrip"], optional = true }
+# The session transport (RFC-0001 Phase 2): QUIC between two peers,
+# addressed by public key, relayed where a direct path fails.
+iroh = { version = "1.2", optional = true }
+tokio = { version = "1", features = ["rt-multi-thread", "sync", "io-util", "time", "macros"], optional = true }
+data-encoding = { version = "2", optional = true }
 
 [features]
 default = []
-collab = ["dep:loro", "dep:serde", "dep:serde_json"]
+collab = ["dep:loro", "dep:serde", "dep:serde_json", "dep:iroh", "dep:tokio", "dep:data-encoding"]
 
 [dev-dependencies]
 tempfile = "3"
