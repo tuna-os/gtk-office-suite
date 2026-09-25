@@ -655,7 +655,7 @@ pub fn read(path: &str) -> Result<Document, String> {
 
     let auto = parse_auto_styles(&content);
 
-    let mut doc = Document { paragraphs: Vec::new(), footnotes: Vec::new(), header: None, footer: None, page: None, base_font: Default::default() };
+    let mut doc = Document { paragraphs: Vec::new(), footnotes: Vec::new(), header: None, footer: None, page: None, base_font: Default::default(), heading_styles: Vec::new() };
     let mut reader = Reader::from_str(&content);
     let mut in_body = false;
     let mut para: Option<Paragraph> = None;

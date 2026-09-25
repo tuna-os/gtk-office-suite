@@ -38,9 +38,26 @@ pub struct LayoutOptions {
     /// footer's bottom from the bottom edge (Word's default: 0.5in).
     pub header_distance_pt: f64,
     pub footer_distance_pt: f64,
+    /// The document's heading looks (levels 1–6), if it has its own.
+    #[serde(default)]
+    pub heading_styles: Vec<crate::model::RunStyle>,
 }
 
 impl LayoutOptions {
+    /// The document's own look for heading `level`, if it has one.
+    pub fn heading_style(&self, level: u8) -> Option<&crate::model::RunStyle> {
+        self.heading_styles.get(usize::from(level.clamp(1, 6)) - 1)
+    }
+
+    /// Size in points of heading `level`'s text.
+    pub fn heading_size_pt(&self, level: u8) -> f64 {
+        match self.heading_style(level).and_then(|h| h.font_size_hp) {
+            Some(hp) => f64::from(hp) / 2.0,
+            None if self.heading_style(level).is_some() => self.font_size_pt,
+            None => self.font_size_pt * heading_scale(level),
+        }
+    }
+
     /// These options with the document's own body font where it names one.
     /// `layout` applies it; a renderer re-shaping paragraphs must use the
     /// same result.
@@ -52,6 +69,7 @@ impl LayoutOptions {
         if let Some(hp) = doc.base_font.size_hp.filter(|hp| *hp > 0) {
             o.font_size_pt = f64::from(hp) / 2.0;
         }
+        o.heading_styles.clone_from(&doc.heading_styles);
         o
     }
 }
@@ -66,6 +84,7 @@ impl Default for LayoutOptions {
             widows: 2,
             header_distance_pt: 36.0,
             footer_distance_pt: 36.0,
+            heading_styles: Vec::new(),
         }
     }
 }
@@ -131,6 +150,9 @@ pub fn request_key(req: &ShapeRequest<'_>) -> u64 {
     (req.width_pt.to_bits(), req.first_line_indent_pt.to_bits()).hash(&mut h);
     req.tab_stops_pt.iter().map(|t| t.to_bits()).collect::<Vec<_>>().hash(&mut h);
     (&req.defaults.font_family, req.defaults.font_size_pt.to_bits()).hash(&mut h);
+    if let Some(level) = req.heading {
+        format!("{:?}", req.defaults.heading_style(level)).hash(&mut h);
+    }
     h.finish()
 }
 
@@ -747,7 +769,7 @@ pub struct MonoShaper;
 impl MonoShaper {
     fn size(req: &ShapeRequest<'_>, run: Option<&Run>) -> f64 {
         let base = match req.heading {
-            Some(l) => req.defaults.font_size_pt * heading_scale(l),
+            Some(l) => req.defaults.heading_size_pt(l),
             None => req.defaults.font_size_pt,
         };
         run.and_then(|r| r.style.font_size_hp).map_or(base, |hp| f64::from(hp) / 2.0)

@@ -334,7 +334,8 @@ pub fn capture_with_starts(buf: &gtk::TextBuffer) -> (Document, Vec<usize>) {
     let footer = footer_sidecar(buf);
     let page = page_sidecar(buf);
     capture_tables(&mut paragraphs, &mut starts);
-    (Document { paragraphs, footnotes, header, footer, page, base_font: base_font_sidecar(buf) }, starts)
+    let heading_styles = heading_styles_sidecar(buf);
+    (Document { paragraphs, footnotes, header, footer, page, base_font: base_font_sidecar(buf), heading_styles }, starts)
 }
 
 /// Chars a run takes in the layout text (an image or footnote reference is
@@ -484,6 +485,8 @@ pub const HEADER_KEY: &str = "letters-header";
 pub const FOOTER_KEY: &str = "letters-footer";
 /// Buffer data key holding the document's page geometry, if it has one.
 pub const PAGE_KEY: &str = "letters-page";
+/// Buffer data key holding the document's heading styles.
+pub const HEADING_STYLES_KEY: &str = "letters-heading-styles";
 /// Buffer data key holding the document's base (body) font.
 pub const BASE_FONT_KEY: &str = "letters-base-font";
 
@@ -527,6 +530,7 @@ pub(crate) fn read_sidecars(buf: &gtk::TextBuffer, doc: &mut Document) {
     doc.footer = footer_sidecar(buf);
     doc.page = page_sidecar(buf);
     doc.base_font = base_font_sidecar(buf);
+    doc.heading_styles = heading_styles_sidecar(buf);
 }
 
 fn header_sidecar(buf: &gtk::TextBuffer) -> Option<String> {
@@ -535,6 +539,10 @@ fn header_sidecar(buf: &gtk::TextBuffer) -> Option<String> {
 
 fn footer_sidecar(buf: &gtk::TextBuffer) -> Option<String> {
     unsafe { buf.data::<Option<String>>(FOOTER_KEY).and_then(|p| p.as_ref().clone()) }
+}
+
+fn heading_styles_sidecar(buf: &gtk::TextBuffer) -> Vec<RunStyle> {
+    unsafe { buf.data::<Vec<RunStyle>>(HEADING_STYLES_KEY).map(|p| p.as_ref().clone()).unwrap_or_default() }
 }
 
 fn base_font_sidecar(buf: &gtk::TextBuffer) -> letters_core::model::BaseFont {
@@ -581,6 +589,7 @@ pub fn set_buffer_sidecars(doc: &Document, buf: &gtk::TextBuffer) {
         buf.set_data(FOOTER_KEY, doc.footer.clone());
         buf.set_data(PAGE_KEY, doc.page);
         buf.set_data(BASE_FONT_KEY, doc.base_font.clone());
+        buf.set_data(HEADING_STYLES_KEY, doc.heading_styles.clone());
     }
 }
 

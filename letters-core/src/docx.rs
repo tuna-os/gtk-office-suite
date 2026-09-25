@@ -201,6 +201,8 @@ fn contextual_styles(path: &str) -> std::collections::HashSet<String> {
 pub fn read(path: &str) -> Result<Document, String> {
     let doc = rdocx::Document::open(path)
         .map_err(|e| format!("Cannot open .docx {}: {}", path, e))?;
+    THEME.with(|t| *t.borrow_mut() = theme_fonts(path));
+    STYLE_FONTS.with(|s| *s.borrow_mut() = style_fonts(path));
 
     // Paragraph properties rdocx cannot hand back: strict-spelled indents
     // and tab-stop positions. The scan is positional, so it is only
@@ -352,6 +354,7 @@ pub fn read(path: &str) -> Result<Document, String> {
         footer: doc.footer_text(),
         page: read_page_geometry(&doc),
         base_font: read_base_font(&doc),
+        heading_styles: read_heading_styles(&doc),
     })
 }
 
@@ -603,7 +606,7 @@ pub fn write(doc: &Document, path: impl AsRef<std::path::Path>) -> Result<(), St
     let bytes = out
         .to_bytes()
         .map_err(|e| format!("Cannot save {}: {}", path.as_ref().display(), e))?;
-    let bytes = with_letters_styles(&bytes, &doc.base_font)
+    let bytes = with_letters_styles(&bytes, &doc.base_font, &doc.heading_styles)
         .map_err(|e| format!("Cannot save {}: {}", path.as_ref().display(), e))?;
     suite_common_core::atomic_save::atomic_write_bytes(path.as_ref(), &bytes)
 }
@@ -619,7 +622,7 @@ pub fn write(doc: &Document, path: impl AsRef<std::path::Path>) -> Result<(), St
 /// This writes the document's base font with no paragraph spacing, and
 /// Heading 1–6 as Letters draws them: bold, `layout::heading_scale` times
 /// the body size.
-fn with_letters_styles(package: &[u8], base: &crate::model::BaseFont) -> Result<Vec<u8>, String> {
+fn with_letters_styles(package: &[u8], base: &crate::model::BaseFont, heading_styles: &[RunStyle]) -> Result<Vec<u8>, String> {
     let family = base.family.clone().unwrap_or_else(|| crate::layout::LayoutOptions::default().font_family);
     let size_hp = base.size_hp.unwrap_or((crate::layout::LayoutOptions::default().font_size_pt * 2.0) as u16);
     let family = xml_escape(&family);
@@ -631,12 +634,36 @@ fn with_letters_styles(package: &[u8], base: &crate::model::BaseFont) -> Result<
     );
     let headings: String = (1u8..=6)
         .map(|n| {
-            let hp = (f64::from(size_hp) * crate::layout::heading_scale(n)).round() as u32;
+            // The document's own heading look if it has one, else Letters'.
+            let rpr = match heading_styles.get(usize::from(n) - 1) {
+                Some(h) => {
+                    let mut r = String::new();
+                    if let Some(f) = &h.font_family {
+                        let f = xml_escape(f);
+                        r.push_str(&format!("<w:rFonts w:ascii=\"{f}\" w:hAnsi=\"{f}\" w:cs=\"{f}\"/>"));
+                    }
+                    if h.bold {
+                        r.push_str("<w:b/><w:bCs/>");
+                    }
+                    if h.italic {
+                        r.push_str("<w:i/><w:iCs/>");
+                    }
+                    if let Some(c) = &h.color {
+                        r.push_str(&format!("<w:color w:val=\"{}\"/>", xml_escape(c)));
+                    }
+                    let hp = h.font_size_hp.map_or(u32::from(size_hp), u32::from);
+                    r.push_str(&format!("<w:sz w:val=\"{hp}\"/><w:szCs w:val=\"{hp}\"/>"));
+                    r
+                }
+                None => {
+                    let hp = (f64::from(size_hp) * crate::layout::heading_scale(n)).round() as u32;
+                    format!("<w:b/><w:bCs/><w:sz w:val=\"{hp}\"/><w:szCs w:val=\"{hp}\"/>")
+                }
+            };
             format!(
                 "<w:style w:type=\"paragraph\" w:styleId=\"Heading{n}\"><w:name w:val=\"heading {n}\"/>\
                  <w:basedOn w:val=\"Normal\"/><w:next w:val=\"Normal\"/><w:qFormat/><w:pPr><w:keepNext/>\
-                 <w:outlineLvl w:val=\"{lvl}\"/></w:pPr><w:rPr><w:b/><w:bCs/><w:sz w:val=\"{hp}\"/>\
-                 <w:szCs w:val=\"{hp}\"/></w:rPr></w:style>",
+                 <w:outlineLvl w:val=\"{lvl}\"/></w:pPr><w:rPr>{rpr}</w:rPr></w:style>",
                 lvl = n - 1
             )
         })
@@ -899,7 +926,9 @@ fn map_paragraph(doc: &rdocx::Document, p: &rdocx::ParagraphRef<'_>) -> Paragrap
         } else {
             doc.effective_run_properties(p, &r)
         };
-        let family = r.font_name().map(|f| f.to_string()).or_else(|| rpr_family(&eff).filter(|f| Some(f) != base.family.as_ref()));
+        let family = r.font_name().map(|f| f.to_string()).or_else(|| {
+            heading.is_none().then(|| style_family(p.style_id())).flatten().filter(|f| Some(f) != base.family.as_ref())
+        });
         let size_hp = r
             .size()
             .map(|pt| (pt * 2.0).round() as u16)
@@ -995,17 +1024,186 @@ fn styled_line_multiple(ppr: &rdocx_oxml::properties::CT_PPr) -> Option<f64> {
     }
 }
 
-/// A run property set's font family: the explicit ASCII (or high-ANSI)
-/// face, else the theme font it names. Theme fonts are mapped to Office's
-/// defaults, which is what a theme without its own fonts means.
-fn rpr_family(rpr: &rdocx_oxml::properties::CT_RPr) -> Option<String> {
-    rpr.font_ascii.clone().or_else(|| rpr.font_hansi.clone()).or_else(|| {
-        match rpr.font_ascii_theme.as_deref().or(rpr.font_hansi_theme.as_deref())? {
-            t if t.starts_with("major") => Some("Calibri Light".to_string()),
-            t if t.starts_with("minor") => Some("Calibri".to_string()),
-            _ => None,
+/// The theme's major (headings) and minor (body) Latin fonts, from
+/// `word/theme/theme1.xml`; Office's current defaults when the file has no
+/// theme or names none.
+#[derive(Clone, Debug)]
+struct ThemeFonts {
+    major: String,
+    minor: String,
+}
+
+fn theme_fonts(path: &str) -> ThemeFonts {
+    let read = || -> Option<String> {
+        let mut zip = zip::ZipArchive::new(std::fs::File::open(path).ok()?).ok()?;
+        let mut xml = String::new();
+        std::io::Read::read_to_string(&mut zip.by_name("word/theme/theme1.xml").ok()?, &mut xml).ok()?;
+        Some(xml)
+    };
+    let xml = read().unwrap_or_default();
+    let face = |which: &str| {
+        let at = xml.find(&format!("<a:{which}>"))?;
+        let latin = xml[at..].find("<a:latin ")? + at;
+        let tf = xml[latin..].find("typeface=\"")? + latin + "typeface=\"".len();
+        let end = xml[tf..].find('"')? + tf;
+        Some(xml[tf..end].to_string()).filter(|f| !f.is_empty())
+    };
+    ThemeFonts {
+        major: face("majorFont").unwrap_or_else(|| "Calibri Light".into()),
+        minor: face("minorFont").unwrap_or_else(|| "Calibri".into()),
+    }
+}
+
+thread_local! {
+    /// The theme of the document being read (set by `read`).
+    static THEME: std::cell::RefCell<ThemeFonts> =
+        std::cell::RefCell::new(ThemeFonts { major: "Calibri Light".into(), minor: "Calibri".into() });
+}
+
+/// One `w:rFonts`: a theme font (which wins over an explicit face on the
+/// same element, ISO/IEC 29500 §17.3.2.26) or a named face.
+#[derive(Clone, Debug, PartialEq)]
+enum FontRef {
+    Major,
+    Minor,
+    Named(String),
+}
+
+/// The fonts styles.xml names, for resolving a style's font family through
+/// its `w:basedOn` chain the way Word does: the most derived style that
+/// names a font decides, whether by name or by theme. rdocx's merged
+/// properties keep both a base style's explicit face and a derived style's
+/// theme font, and cannot say which came from where (Heading 1's theme
+/// "major" font lost to Normal's "Liberation Serif").
+#[derive(Default)]
+struct StyleFonts {
+    /// style id -> (basedOn, its own run font)
+    styles: std::collections::HashMap<String, (Option<String>, Option<FontRef>)>,
+    default_para: Option<String>,
+    doc_default: Option<FontRef>,
+}
+
+fn style_fonts(path: &str) -> StyleFonts {
+    fn scan(path: &str) -> Result<StyleFonts, Box<dyn std::error::Error>> {
+        let mut zip = zip::ZipArchive::new(std::fs::File::open(path)?)?;
+        let mut xml = String::new();
+        std::io::Read::read_to_string(&mut zip.by_name("word/styles.xml")?, &mut xml)?;
+        let mut reader = quick_xml::Reader::from_str(&xml);
+        reader.config_mut().trim_text(true);
+        let mut out = StyleFonts::default();
+        let attr = |e: &quick_xml::events::BytesStart<'_>, key: &str| {
+            e.attributes().with_checks(false).flatten().find(|a| a.key.as_ref() == key).map(|a| a.value.to_string())
+        };
+        // Where we are: inside a style (its id), inside docDefaults'
+        // rPrDefault, and inside a pPr (whose rPr is the paragraph mark's).
+        let (mut style, mut in_defaults, mut in_ppr) = (None::<String>, false, false);
+        loop {
+            let ev = reader.read_event()?;
+            let (e, empty) = match &ev {
+                quick_xml::events::Event::Eof => break,
+                quick_xml::events::Event::Start(e) => (e.clone(), false),
+                quick_xml::events::Event::Empty(e) => (e.clone(), true),
+                quick_xml::events::Event::End(e) => {
+                    match e.name().as_ref() {
+                        "w:style" => style = None,
+                        "w:rPrDefault" => in_defaults = false,
+                        "w:pPr" => in_ppr = false,
+                        _ => {}
+                    }
+                    continue;
+                }
+                _ => continue,
+            };
+            match e.name().as_ref() {
+                "w:style" if !empty => {
+                    let id = attr(&e, "w:styleId").unwrap_or_default();
+                    let is_para = attr(&e, "w:type").as_deref() == Some("paragraph");
+                    if is_para && matches!(attr(&e, "w:default").as_deref(), Some("1" | "true")) {
+                        out.default_para = Some(id.clone());
+                    }
+                    out.styles.entry(id.clone()).or_default();
+                    style = Some(id);
+                }
+                "w:rPrDefault" if !empty => in_defaults = true,
+                "w:pPr" if !empty => in_ppr = true,
+                "w:basedOn" => {
+                    if let Some(id) = &style {
+                        out.styles.entry(id.clone()).or_default().0 = attr(&e, "w:val");
+                    }
+                }
+                "w:rFonts" if !in_ppr => {
+                    let font = match attr(&e, "w:asciiTheme").or_else(|| attr(&e, "w:hAnsiTheme")) {
+                        Some(t) if t.starts_with("major") => Some(FontRef::Major),
+                        Some(t) if t.starts_with("minor") => Some(FontRef::Minor),
+                        _ => attr(&e, "w:ascii").or_else(|| attr(&e, "w:hAnsi")).map(FontRef::Named),
+                    };
+                    if let Some(id) = &style {
+                        out.styles.entry(id.clone()).or_default().1 = font;
+                    } else if in_defaults {
+                        out.doc_default = font;
+                    }
+                }
+                _ => {}
+            }
         }
+        Ok(out)
+    }
+    scan(path).unwrap_or_default()
+}
+
+thread_local! {
+    /// The styles' fonts of the document being read (set by `read`).
+    static STYLE_FONTS: std::cell::RefCell<StyleFonts> = std::cell::RefCell::new(StyleFonts::default());
+}
+
+/// The font family paragraph style `id` (or the default paragraph style)
+/// gives its text, resolved through `w:basedOn` and docDefaults.
+fn style_family(id: Option<&str>) -> Option<String> {
+    STYLE_FONTS.with(|sf| {
+        let sf = sf.borrow();
+        let mut cur = id.map(str::to_string).or_else(|| sf.default_para.clone());
+        let mut found = None;
+        for _ in 0..32 {
+            let Some(c) = cur else { break };
+            let Some((based_on, font)) = sf.styles.get(&c) else { break };
+            if font.is_some() {
+                found = font.clone();
+                break;
+            }
+            cur = based_on.clone();
+        }
+        let font = found.or_else(|| sf.doc_default.clone())?;
+        THEME.with(|t| {
+            let t = t.borrow();
+            Some(match font {
+                FontRef::Major => t.major.clone(),
+                FontRef::Minor => t.minor.clone(),
+                FontRef::Named(n) => n,
+            })
+        })
     })
+}
+
+/// How the document's Heading 1–6 styles look, as `RunStyle`s; empty when
+/// it defines none (then Letters' own heading look applies).
+fn read_heading_styles(doc: &rdocx::Document) -> Vec<RunStyle> {
+    if !(1..=6).any(|n| doc.style(&format!("Heading{n}")).is_some()) {
+        return Vec::new();
+    }
+    (1..=6)
+        .map(|n| {
+            let id = format!("Heading{n}");
+            let rpr = doc.resolve_run_properties(Some(&id), None);
+            RunStyle {
+                bold: rpr.bold == Some(true),
+                italic: rpr.italic == Some(true),
+                font_family: style_family(Some(&id)),
+                font_size_hp: rpr.sz.map(|s| s.0.min(u32::from(u16::MAX)) as u16),
+                color: rpr.color.as_deref().filter(|c| !c.eq_ignore_ascii_case("auto")).map(|c| c.to_uppercase()),
+                ..Default::default()
+            }
+        })
+        .collect()
 }
 
 /// The body font: docDefaults run properties plus the default paragraph
@@ -1013,7 +1211,7 @@ fn rpr_family(rpr: &rdocx_oxml::properties::CT_RPr) -> Option<String> {
 /// 11pt" there, never on the runs).
 fn read_base_font(doc: &rdocx::Document) -> crate::model::BaseFont {
     let rpr = doc.resolve_run_properties(None, None);
-    crate::model::BaseFont { family: rpr_family(&rpr), size_hp: rpr.sz.map(|s| s.0.min(u32::from(u16::MAX)) as u16) }
+    crate::model::BaseFont { family: style_family(None), size_hp: rpr.sz.map(|s| s.0.min(u32::from(u16::MAX)) as u16) }
 }
 
 fn style_id_to_heading(id: &str) -> Option<u8> {

@@ -16,7 +16,7 @@ use std::collections::HashMap;
 
 use pango::prelude::*;
 
-use super::{heading_scale, paragraph_request, request_key, Item, LayoutOptions, LineBox, RenderTree, ShapeCache, ShapeRequest, Shaper, Source};
+use super::{paragraph_request, request_key, Item, LayoutOptions, LineBox, RenderTree, ShapeCache, ShapeRequest, Shaper, Source};
 use crate::model::{Alignment, Document, VertAlign};
 
 /// Pango's fixed-point scale.
@@ -67,15 +67,35 @@ impl PangoShaper {
         let mut base = pango::FontDescription::new();
         base.set_family(if req.code { "Liberation Mono" } else { &req.defaults.font_family });
         let mut size = req.defaults.font_size_pt;
+        // A heading's look: the document's own heading style if it has
+        // one (family, size, weight, slant, colour), else bold and scaled.
+        let mut heading_color = None;
         if let Some(level) = req.heading {
-            size *= heading_scale(level);
-            base.set_weight(pango::Weight::Bold);
+            size = req.defaults.heading_size_pt(level);
+            match req.defaults.heading_style(level) {
+                Some(h) => {
+                    if let Some(f) = &h.font_family {
+                        base.set_family(f);
+                    }
+                    if h.bold {
+                        base.set_weight(pango::Weight::Bold);
+                    }
+                    if h.italic {
+                        base.set_style(pango::Style::Italic);
+                    }
+                    heading_color = h.color.as_deref().and_then(parse_hex);
+                }
+                None => base.set_weight(pango::Weight::Bold),
+            }
         }
         base.set_size(to_units(size));
         layout.set_font_description(Some(&base));
 
         let mut text = String::new();
         let attrs = pango::AttrList::new();
+        if let Some((r, g, b)) = heading_color {
+            attrs.insert(pango::AttrColor::new_foreground(r, g, b));
+        }
         for run in req.runs {
             let start = text.len() as u32;
             if super::is_object(run) {
@@ -561,6 +581,25 @@ impl Typeset {
                         run.style.font_size_hp = f.style.font_size_hp;
                         run.style.color = f.style.color.clone();
                     }
+                    let size = run.style.font_size_hp.map_or_else(
+                        || p.style.heading.map_or(self.opts.font_size_pt, |l| self.opts.heading_size_pt(l)),
+                        |hp| f64::from(hp) / 2.0,
+                    );
+                    if text.as_str() == crate::lists::BULLET.to_string() {
+                        // Word's and LibreOffice's default bullet (Symbol /
+                        // OpenSymbol) is a disc about 0.31 em across, its
+                        // centre 0.28 em above the baseline; the "•" of a
+                        // text face is smaller and varies by font. Drawn,
+                        // it looks the same whatever fonts are installed.
+                        let r = size * 0.155;
+                        let (r_, g, b) = run.style.color.as_deref().and_then(parse_hex).unwrap_or((0, 0, 0));
+                        let _ = cr.save();
+                        cr.set_source_rgb(f64::from(r_) / 65535.0, f64::from(g) / 65535.0, f64::from(b) / 65535.0);
+                        cr.arc(*x_pt + r, *baseline_pt - size * 0.28, r, 0.0, std::f64::consts::TAU);
+                        let _ = cr.fill();
+                        let _ = cr.restore();
+                        continue;
+                    }
                     let runs = [run];
                     let mut req = paragraph_request(p, 1000.0, &self.opts);
                     req.runs = &runs;
@@ -574,9 +613,27 @@ impl Typeset {
                     self.draw_image(cr, src, *x_pt, *y_pt, *width_pt, *height_pt);
                 }
                 Item::Cell { x_pt, y_pt, width_pt, height_pt, .. } => {
-                    cr.set_line_width(0.5);
-                    cr.rectangle(*x_pt, *y_pt, *width_pt, *height_pt);
+                    // A 0.5 pt rule, at least one device pixel, on whole
+                    // pixels: on screen a hairline between two pixel rows
+                    // was drawn as two grey rows, which blurred into the
+                    // cell text. (On paper and PDF a device unit is tiny,
+                    // so this changes nothing there.)
+                    let (px, _) = cr.device_to_user_distance(1.0, 0.0).unwrap_or((0.5, 0.0));
+                    let lw = 0.5f64.max(px.abs());
+                    let snap = |x: f64, y: f64| {
+                        let (dx, dy) = cr.user_to_device(x, y);
+                        let (dw, _) = cr.user_to_device_distance(lw, 0.0).unwrap_or((lw, 0.0));
+                        let half = (dw.round().max(1.0) % 2.0) / 2.0;
+                        cr.device_to_user(dx.round() + half, dy.round() + half).unwrap_or((x, y))
+                    };
+                    let (x0, y0) = snap(*x_pt, *y_pt);
+                    let (x1, y1) = snap(*x_pt + *width_pt, *y_pt + *height_pt);
+                    let _ = cr.save();
+                    cr.set_source_rgb(0.0, 0.0, 0.0);
+                    cr.set_line_width(lw);
+                    cr.rectangle(x0, y0, x1 - x0, y1 - y0);
                     let _ = cr.stroke();
+                    let _ = cr.restore();
                 }
             }
         }
