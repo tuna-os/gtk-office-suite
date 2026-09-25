@@ -136,16 +136,16 @@
     "B": "green"
   },
   "tables/chart": {
-    "A": "amber",
-    "B": "amber"
+    "A": "green",
+    "B": "green"
   },
   "tables/col-row-size": {
     "A": "green",
     "B": "green"
   },
   "tables/conditional": {
-    "A": "amber",
-    "B": "amber"
+    "A": "green",
+    "B": "green"
   },
   "tables/fills": {
     "A": "green",
@@ -164,8 +164,8 @@
     "B": "amber"
   },
   "tables/values": {
-    "A": "amber",
-    "B": "amber"
+    "A": "green",
+    "B": "green"
   },
   "tables/wrap-text": {
     "A": "amber",

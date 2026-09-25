@@ -253,8 +253,13 @@ def color_presence(ref, ours):
 
 # ── OCR ───────────────────────────────────────────────────────────────────
 def ocr_words(img, sparse=False):
-    """OCR word boxes. `sparse` (tesseract --psm 11) suits grids of short
-    values, where page-layout analysis (psm 3) drops most of them."""
+    """OCR word boxes. `sparse` is for Tables' grids of short values, where
+    page-layout analysis (psm 3) drops most of them. They are read as one
+    uniform block of text (psm 6): sparse-text mode (psm 11) dropped whole
+    cells of short numbers from LibreOffice's own reference (5 of the 10
+    values in tables/conditional, 14 of 25 words in tables/chart) and, just
+    as arbitrarily, different ones from ours, so it measured which blobs
+    tesseract happened to find rather than what was drawn."""
     if not shutil.which("tesseract"):
         return None
     # Upscale: 96 DPI body text is below tesseract's comfortable size, and a
@@ -267,7 +272,7 @@ def ocr_words(img, sparse=False):
     with tempfile.NamedTemporaryFile(suffix=".png") as tmp:
         g = img.convert("L")
         g.resize((g.width * k, g.height * k), Image.LANCZOS).save(tmp.name)
-        psm = "11" if sparse else "3"
+        psm = "6" if sparse else "3"
         r = subprocess.run(["tesseract", tmp.name, "-", "--psm", psm, "tsv"], capture_output=True, text=True)
     words = []
     for line in r.stdout.splitlines()[1:]:
