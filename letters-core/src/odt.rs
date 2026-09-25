@@ -64,8 +64,9 @@ fn collect_run_styles(doc: &Document) -> Vec<RunStyle> {
     let mut styles: Vec<RunStyle> = Vec::new();
     for p in &doc.paragraphs {
         for r in &p.runs {
-            if r.style != RunStyle::default() && r.style.chip.is_none() && !styles.contains(&r.style) {
-                styles.push(r.style.clone());
+            let style = RunStyle { revision: None, ..r.style.clone() };
+            if style != RunStyle::default() && style.chip.is_none() && !styles.contains(&style) {
+                styles.push(style);
             }
         }
     }
@@ -215,6 +216,8 @@ fn content_xml(doc: &Document) -> String {
     );
 
     let mut body = String::new();
+    // Tracked changes: one changed region per change (text:tracked-changes).
+    let mut regions: Vec<String> = Vec::new();
     let mut open_list: Option<ListKind> = None;
     for (pi, p) in doc.paragraphs.iter().enumerate() {
         // List grouping: consecutive list paragraphs share one text:list.
@@ -277,8 +280,9 @@ fn content_xml(doc: &Document) -> String {
                 continue;
             }
             let mut run_xml = esc(&r.text);
-            if r.style != RunStyle::default() {
-                let ti = run_styles.iter().position(|s| *s == r.style).unwrap() + 1;
+            let plain = RunStyle { revision: None, ..r.style.clone() };
+            if plain != RunStyle::default() {
+                let ti = run_styles.iter().position(|s| *s == plain).unwrap() + 1;
                 run_xml = format!("<text:span text:style-name=\"T{ti}\">{run_xml}</text:span>");
             }
             if let Some(href) = &r.style.link {
@@ -288,7 +292,10 @@ fn content_xml(doc: &Document) -> String {
                     run_xml
                 );
             }
-            inner.push_str(&run_xml);
+            match &r.style.revision {
+                None => inner.push_str(&run_xml),
+                Some(rev) => inner.push_str(&tracked_xml(&mut regions, rev, &run_xml)),
+            }
         }
 
         if let Some(level) = p.style.heading {
@@ -302,6 +309,11 @@ fn content_xml(doc: &Document) -> String {
     if open_list.map(|l| l != ListKind::None).unwrap_or(false) {
         body.push_str("</text:list-item></text:list>");
     }
+    let changes = if regions.is_empty() {
+        String::new()
+    } else {
+        format!("<text:tracked-changes text:track-changes=\"false\">{}</text:tracked-changes>", regions.concat())
+    };
 
     format!(
         "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\
@@ -313,6 +325,7 @@ fn content_xml(doc: &Document) -> String {
          xmlns:xlink=\"http://www.w3.org/1999/xlink\" \
          xmlns:svg=\"urn:oasis:names:tc:opendocument:xmlns:svg-compatible:1.0\" \
          xmlns:loext=\"urn:org:documentfoundation:names:experimental:office:xmlns:loext:1.0\" \
+         xmlns:dc=\"http://purl.org/dc/elements/1.1/\" \
          office:version=\"1.2\">\
          <office:font-face-decls>\
          <style:font-face style:name=\"Monospace\" \
@@ -320,7 +333,7 @@ fn content_xml(doc: &Document) -> String {
          style:font-family-generic=\"modern\" style:font-pitch=\"fixed\"/>\
          </office:font-face-decls>\
          <office:automatic-styles>{auto}</office:automatic-styles>\
-         <office:body><office:text>{body}</office:text></office:body>\
+         <office:body><office:text>{changes}{body}</office:text></office:body>\
          </office:document-content>"
     )
 }
@@ -330,6 +343,36 @@ fn content_xml(doc: &Document) -> String {
 fn page_fields(text: &str) -> String {
     text.replace("{page}", "<text:page-number text:select-page=\"current\">1</text:page-number>")
         .replace("{total}", "<text:page-count>1</text:page-count>")
+}
+
+/// A tracked change's body markup: the run between change marks for an
+/// insertion, a change mark alone for a deletion (whose text goes into its
+/// region, as ODF keeps deleted text out of the body). The region is added
+/// to `regions`. A deletion of someone else's insertion is one region with
+/// the deletion and then the insertion it deleted, as LibreOffice writes it.
+fn tracked_xml(regions: &mut Vec<String>, rev: &crate::model::Revision, run_xml: &str) -> String {
+    let id = format!("ct{}", regions.len() + 1);
+    let info_of = |r: &crate::model::Revision| {
+        format!(
+            "<office:change-info><dc:creator>{}</dc:creator><dc:date>{}</dc:date></office:change-info>",
+            esc(&r.author),
+            esc(&r.date)
+        )
+    };
+    let info = info_of(rev);
+    let under = rev.under.as_deref().map(|u| format!("<text:insertion>{}</text:insertion>", info_of(u))).unwrap_or_default();
+    let (region, body) = match rev.kind {
+        crate::model::RevisionKind::Insert => (
+            format!("<text:insertion>{info}</text:insertion>"),
+            format!("<text:change-start text:change-id=\"{id}\"/>{run_xml}<text:change-end text:change-id=\"{id}\"/>"),
+        ),
+        crate::model::RevisionKind::Delete => (
+            format!("<text:deletion>{info}<text:p>{run_xml}</text:p></text:deletion>{under}"),
+            format!("<text:change text:change-id=\"{id}\"/>"),
+        ),
+    };
+    regions.push(format!("<text:changed-region xml:id=\"{id}\" text:id=\"{id}\">{region}</text:changed-region>"));
+    body
 }
 
 /// A smart chip's ODF: LibreOffice's own content control
@@ -745,9 +788,112 @@ pub fn read(path: &str) -> Result<Document, String> {
     // element that closes it (a content control, or a standard date field
     // from another application).
     let mut chip: Option<(crate::chips::Chip, String, &'static str)> = None;
+    // Tracked changes. `text:tracked-changes` comes first in `office:text`:
+    // each region's change (who, when, and a deletion's text) is read into
+    // `regions`; the body then marks insertions (change-start/end, whose
+    // revision applies to the text between) and deletions (a change mark
+    // where the deleted text goes back in).
+    let mut regions: std::collections::HashMap<String, (crate::model::Revision, Vec<Run>)> = std::collections::HashMap::new();
+    // The region being read: its id, its changes in order (kind, author,
+    // date) and a deletion's text.
+    type Entry = (crate::model::RevisionKind, String, String);
+    let mut region: Option<(String, Vec<Entry>, Vec<Run>)> = None;
+    let mut in_changes = false;
+    let mut change_field: Option<&'static str> = None;
+    let mut rev_stack: Vec<crate::model::Revision> = Vec::new();
 
     loop {
         match reader.read_event() {
+            Ok(Event::Start(e)) if in_changes || e.name().as_ref() == "text:tracked-changes" => match e.name().as_ref() {
+                "text:tracked-changes" => in_changes = true,
+                "text:changed-region" => {
+                    let id = attr_val(&e, "text:id").or_else(|| attr_val(&e, "xml:id")).unwrap_or_default();
+                    region = Some((id, Vec::new(), Vec::new()));
+                }
+                "text:insertion" | "text:deletion" => {
+                    if let Some(r) = region.as_mut() {
+                        let kind = if e.name().as_ref() == "text:insertion" { crate::model::RevisionKind::Insert } else { crate::model::RevisionKind::Delete };
+                        r.1.push((kind, String::new(), String::new()));
+                    }
+                }
+                "dc:creator" => change_field = Some("author"),
+                "dc:date" => change_field = Some("date"),
+                "text:p" | "text:h" => para = Some(Paragraph::default()),
+                "text:span" => {
+                    let st = attr_val(&e, "text:style-name").and_then(|n| auto.text.get(&n).cloned()).unwrap_or_default();
+                    span_stack.push(st);
+                }
+                _ => {}
+            },
+            Ok(Event::End(e)) if in_changes => match e.name().as_ref() {
+                "text:tracked-changes" => in_changes = false,
+                "text:changed-region" => {
+                    // A region with a deletion is that deletion; an insertion
+                    // in the same region is the one it deleted (LibreOffice
+                    // writes a deletion of an insertion so).
+                    if let Some((id, entries, runs)) = region.take() {
+                        let rev = |e: &Entry| crate::model::Revision { kind: e.0, author: e.1.clone(), date: e.2.clone(), under: None };
+                        let deletion = entries.iter().find(|e| e.0 == crate::model::RevisionKind::Delete);
+                        let insertion = entries.iter().find(|e| e.0 == crate::model::RevisionKind::Insert);
+                        let revision = match (deletion, insertion) {
+                            (Some(d), under) => crate::model::Revision { under: under.map(|i| Box::new(rev(i))), ..rev(d) },
+                            (None, Some(i)) => rev(i),
+                            (None, None) => continue,
+                        };
+                        regions.insert(id, (revision, runs));
+                    }
+                }
+                "dc:creator" | "dc:date" => change_field = None,
+                "text:p" | "text:h" => {
+                    if let (Some(p), Some(r)) = (para.take(), region.as_mut()) {
+                        if !r.2.is_empty() && !p.runs.is_empty() {
+                            r.2.push(Run::plain(" "));
+                        }
+                        r.2.extend(p.runs);
+                    }
+                }
+                "text:span" => {
+                    span_stack.pop();
+                }
+                _ => {}
+            },
+            Ok(Event::Text(t)) if in_changes => {
+                let txt = unescape_text(&t);
+                match (change_field, region.as_mut()) {
+                    (Some("author"), Some(r)) => {
+                        if let Some(e) = r.1.last_mut() {
+                            e.1.push_str(&txt);
+                        }
+                    }
+                    (Some("date"), Some(r)) => {
+                        if let Some(e) = r.1.last_mut() {
+                            e.2.push_str(&txt);
+                        }
+                    }
+                    _ => push_text(&mut para, &span_stack, &link_stack, &[], &txt),
+                }
+            }
+            Ok(Event::Empty(e)) if matches!(e.name().as_ref(), "text:change-start" | "text:change-end" | "text:change") && !in_changes => {
+                let id = attr_val(&e, "text:change-id").unwrap_or_default();
+                let Some((rev, runs)) = regions.get(&id).cloned() else { continue };
+                match e.name().as_ref() {
+                    "text:change-start" => rev_stack.push(rev),
+                    "text:change-end" => {
+                        rev_stack.pop();
+                    }
+                    _ => {
+                        if let Some(p) = para.as_mut() {
+                            for mut r in runs {
+                                r.style.revision = Some(rev.clone());
+                                match p.runs.last_mut() {
+                                    Some(last) if last.style == r.style => last.text.push_str(&r.text),
+                                    _ => p.runs.push(r),
+                                }
+                            }
+                        }
+                    }
+                }
+            }
             Ok(Event::Start(e)) => match e.name().as_ref() {
                 "office:text" => in_body = true,
                 "text:note" if para.is_some() => {
@@ -861,10 +1007,10 @@ pub fn read(path: &str) -> Result<Document, String> {
                     let n = attr_val(&e, "text:c")
                         .and_then(|v| v.parse::<usize>().ok())
                         .unwrap_or(1);
-                    push_text(&mut para, &span_stack, &link_stack, &" ".repeat(n));
+                    push_text(&mut para, &span_stack, &link_stack, &rev_stack, &" ".repeat(n));
                 }
                 "text:tab" if para.is_some() => {
-                    push_text(&mut para, &span_stack, &link_stack, "\t");
+                    push_text(&mut para, &span_stack, &link_stack, &rev_stack, "\t");
                 }
                 "text:p" if note.is_some() => {}
                 "text:p" | "text:h" if in_body => {
@@ -882,7 +1028,7 @@ pub fn read(path: &str) -> Result<Document, String> {
                     c.1.push_str(&unescape_text(&t));
                 } else if para.is_some() {
                     let txt = unescape_text(&t);
-                    push_text(&mut para, &span_stack, &link_stack, &txt);
+                    push_text(&mut para, &span_stack, &link_stack, &rev_stack, &txt);
                 }
             }
             Ok(Event::GeneralRef(r)) => {
@@ -890,7 +1036,7 @@ pub fn read(path: &str) -> Result<Document, String> {
                     c.1.push_str(&resolve_general_ref(&r));
                 } else if para.is_some() {
                     let txt = resolve_general_ref(&r);
-                    push_text(&mut para, &span_stack, &link_stack, &txt);
+                    push_text(&mut para, &span_stack, &link_stack, &rev_stack, &txt);
                 }
             }
             Ok(Event::End(e)) if chip.as_ref().is_some_and(|c| c.2 == e.name().as_ref()) => {
@@ -1044,6 +1190,7 @@ fn push_text(
     para: &mut Option<Paragraph>,
     span_stack: &[RunStyle],
     link_stack: &[String],
+    rev_stack: &[crate::model::Revision],
     text: &str,
 ) {
     if text.is_empty() {
@@ -1051,6 +1198,7 @@ fn push_text(
     }
     if let Some(p) = para.as_mut() {
         let mut style = span_stack.last().cloned().unwrap_or_default();
+        style.revision = rev_stack.last().cloned();
         if let Some(href) = link_stack.last() {
             if !href.is_empty() {
                 style.link = Some(href.clone());
@@ -1084,6 +1232,16 @@ mod tests {
     #[test]
     fn smart_chips_survive() {
         let d = crate::chips::sample_document();
+        let rt = round_trip(&d);
+        assert_eq!(rt.paragraphs[0].runs, d.paragraphs[0].runs);
+    }
+
+    /// Tracked changes reopen as they were, deleted text included (ODF keeps
+    /// it in the change region, not the body), and a deletion of someone
+    /// else's insertion too.
+    #[test]
+    fn tracked_changes_survive() {
+        let d = crate::track::sample_document();
         let rt = round_trip(&d);
         assert_eq!(rt.paragraphs[0].runs, d.paragraphs[0].runs);
     }

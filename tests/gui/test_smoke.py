@@ -4497,6 +4497,67 @@ class LettersSmartChipsSmoke(BaseGUITestCase):
         self.assertIsNone(self.process.poll(), "letters crashed inserting a chip")
 
 
+class LettersTrackChangesSmoke(BaseGUITestCase):
+    """Track changes (docs/LETTERS-REVIEW-WORKFLOWS.md): with tracking on,
+    typing is a tracked insertion and deleting marks text deleted instead
+    of removing it; the Changes sidebar lists both with Accept and Reject,
+    and accepting or rejecting does what it says."""
+
+    app_name = "letters"
+
+    def setUp(self):
+        self._snapshot_path = self.isolate_snapshot(prefix="letters-track-")
+        super().setUp()
+
+    def _runs(self):
+        s = self.trigger_snapshot("org.tunaos.letters")
+        return [(r["text"], (r["style"].get("revision") or {}).get("kind")) for p in s["paragraphs"] for r in p["runs"]]
+
+    def _wait_runs(self, want, what):
+        seen = []
+
+        def check():
+            seen[:] = [self._runs()]
+            return seen[0] == want or None
+
+        try:
+            return self.wait_for_condition(check, description=what)
+        except AssertionError as e:
+            raise AssertionError(f"{e}; the document's runs were {seen[0] if seen else '?'}") from None
+
+    def test_tracked_edits_are_reviewed(self):
+        from dogtail import rawinput
+
+        self.wait_for_node(name="New Document", roleName="push button").do_action(0)
+        self.wait_for_node(name="Print Layout", roleName="text")
+        rawinput.typeText("Keep this")
+        self._wait_runs([("Keep this", None)], "the untracked text")
+
+        self.gapplication_action("org.tunaos.letters", "track-changes")
+        self.wait_for_node(name="Tracking changes", roleName="label")
+        rawinput.typeText(" now")
+        rawinput.keyCombo("Home")
+        rawinput.keyCombo("Delete")
+        rawinput.keyCombo("Delete")
+        # The insertion is marked; the two deleted letters are still there,
+        # marked deleted.
+        self._wait_runs([("Ke", "Delete"), ("ep this", None), (" now", "Insert")], "the tracked insertion and deletion")
+
+        self.gapplication_action("org.tunaos.letters", "toggle-changes")
+        self.wait_for_node(name="Tracked changes", roleName="list")
+        accept = self.wait_for_condition(
+            lambda: next((n for n in self.app.findChildren(lambda n: n.roleName == "push button" and n.name.startswith("Accept:") and "deleted" in n.name)), None),
+            description="the deletion's Accept button")
+        accept.do_action(0)
+        self._wait_runs([("ep this", None), (" now", "Insert")], "the deletion accepted: its text gone")
+
+        self.gapplication_action("org.tunaos.letters", "reject-all-changes")
+        self._wait_runs([("ep this", None)], "the insertion rejected")
+        rawinput.keyCombo("<Control>z")
+        self._wait_runs([("ep this", None), (" now", "Insert")], "undo brings the insertion back, still tracked")
+        self.assertIsNone(self.process.poll(), "letters crashed reviewing changes")
+
+
 class LettersPrintLayoutEditingSmoke(BaseGUITestCase):
     """Print Layout is the default view, and editing there is editing the
     document (ADR 0010, stage 3d).

@@ -50,26 +50,13 @@ pub struct Comment {
     pub resolved: bool,
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
-pub enum ChangeKind { Insert, Delete }
-
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
-pub struct TrackedChange {
-    pub id: ReviewId,
-    /// Insertions cover their visible text. Deletions are zero-width at the
-    /// location where the removed text should be restored.
-    pub range: TextRange,
-    pub author: String,
-    pub text: String,
-    pub kind: ChangeKind,
-}
-
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ReviewState {
     #[serde(default = "first_review_id")]
     next_id: ReviewId,
     pub comments: Vec<Comment>,
-    pub changes: Vec<TrackedChange>,
+    // Tracked changes are marks on the text they cover (`crate::track`),
+    // not entries here: see docs/LETTERS-REVIEW-WORKFLOWS.md.
 }
 
 fn first_review_id() -> ReviewId { 1 }
@@ -89,12 +76,6 @@ impl ReviewState {
         id
     }
 
-    pub fn add_change(&mut self, range: TextRange, kind: ChangeKind, author: impl Into<String>, text: impl Into<String>) -> ReviewId {
-        let id = self.id();
-        self.changes.push(TrackedChange { id, range, kind, author: author.into(), text: text.into() });
-        id
-    }
-
     pub fn resolve_comment(&mut self, id: ReviewId, resolved: bool) -> bool {
         self.comments.iter_mut().find(|c| c.id == id).map(|c| { c.resolved = resolved; true }).unwrap_or(false)
     }
@@ -110,24 +91,8 @@ impl ReviewState {
         }
     }
 
-    /// Accept or reject a revision and remove it from the pending queue.
-    /// Rejecting an insertion removes visible text; rejecting a deletion
-    /// restores its saved text. Accepting leaves the document as-is.
-    pub fn decide_change(&mut self, doc: &mut Document, id: ReviewId, accept: bool) -> bool {
-        let Some(index) = self.changes.iter().position(|c| c.id == id) else { return false };
-        let change = self.changes.remove(index);
-        if !accept {
-            match change.kind {
-                ChangeKind::Insert => doc.delete_range(change.range.start, change.range.end),
-                ChangeKind::Delete => doc.insert_text(change.range.start, &change.text),
-            }
-        }
-        true
-    }
-
     pub fn rebase_after_edit(&mut self, at: usize, removed: usize, inserted: usize) {
         for c in &mut self.comments { c.range.rebase(at, removed, inserted); }
-        for c in &mut self.changes { c.range.rebase(at, removed, inserted); }
     }
 }
 
@@ -204,18 +169,6 @@ mod tests {
         assert_eq!(state.next_comment(0).unwrap().id, early);
         assert_eq!(state.next_comment(5).unwrap().id, late);
         assert_eq!(state.next_comment(30).unwrap().id, early);
-    }
-
-    #[test]
-    fn rejecting_changes_has_expected_document_effect() {
-        let mut doc = Document::from_plain_text("one two");
-        let mut state = ReviewState::new();
-        let insertion = state.add_change(TextRange::new(4, 8), ChangeKind::Insert, "a", "two");
-        assert!(state.decide_change(&mut doc, insertion, false));
-        assert_eq!(doc.to_plain_text(), "one ");
-        let deletion = state.add_change(TextRange::new(4, 4), ChangeKind::Delete, "a", "two");
-        assert!(state.decide_change(&mut doc, deletion, false));
-        assert_eq!(doc.to_plain_text(), "one two");
     }
 
     #[test]

@@ -42,6 +42,9 @@ pub enum MarkKey {
     Color,
     VertAlign,
     Html,
+    /// A tracked change (`RunStyle::revision`). Unlike the others it also
+    /// marks inline objects: a deleted image is tracked like deleted text.
+    Revision,
 }
 
 /// What happens to a mark when text is inserted at its edge.
@@ -55,7 +58,7 @@ pub enum Expand {
 }
 
 impl MarkKey {
-    pub const ALL: [MarkKey; 12] = [
+    pub const ALL: [MarkKey; 13] = [
         MarkKey::Bold,
         MarkKey::Italic,
         MarkKey::Underline,
@@ -68,6 +71,7 @@ impl MarkKey {
         MarkKey::Color,
         MarkKey::VertAlign,
         MarkKey::Html,
+        MarkKey::Revision,
     ];
 
     /// The expand rule, as Word and LibreOffice behave: typing after bold
@@ -75,7 +79,9 @@ impl MarkKey {
     /// starts plain text.
     pub fn expand(self) -> Expand {
         match self {
-            MarkKey::Link | MarkKey::Code | MarkKey::Html => Expand::None,
+            // Typing next to someone's tracked change is not part of it:
+            // a tracked edit marks its own text (`crate::track`).
+            MarkKey::Link | MarkKey::Code | MarkKey::Html | MarkKey::Revision => Expand::None,
             _ => Expand::After,
         }
     }
@@ -95,6 +101,7 @@ impl MarkKey {
             MarkKey::Color => to.color.clone_from(&from.color),
             MarkKey::VertAlign => to.vert_align = from.vert_align,
             MarkKey::Html => to.html = from.html,
+            MarkKey::Revision => to.revision.clone_from(&from.revision),
         }
     }
 
@@ -361,7 +368,7 @@ fn mark(doc: &mut Document, start: usize, end: usize, key: MarkKey, value: &RunS
         let to = if i == ep { eo } else { seq_len(&p.runs) };
         let (head, rest) = split_runs(&p.runs, from);
         let (mut mid, tail) = split_runs(&rest, to - from);
-        for r in mid.iter_mut().filter(|r| !is_object(r)) {
+        for r in mid.iter_mut().filter(|r| !is_object(r) || key == MarkKey::Revision) {
             key.copy(value, &mut r.style);
         }
         let mut runs = head;
@@ -379,7 +386,7 @@ fn mark(doc: &mut Document, start: usize, end: usize, key: MarkKey, value: &RunS
         }
         for r in &p.runs {
             let n = run_len(r);
-            if !is_object(r) && !key.same(&r.style, value) {
+            if (!is_object(r) || key == MarkKey::Revision) && !key.same(&r.style, value) {
                 undo.push(Op::Mark { start: pos, end: pos + n, key, value: marks_only(&r.style) });
             }
             pos += n;

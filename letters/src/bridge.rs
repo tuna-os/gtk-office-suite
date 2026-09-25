@@ -69,13 +69,48 @@ pub(crate) fn run_tags(buf: &gtk::TextBuffer, style: &RunStyle) -> Vec<String> {
         let hex = format!("#{}", color.trim_start_matches('#'));
         dynamic(format!("{COLOR_TAG_PREFIX}{}", color.trim_start_matches('#')), &move |t| t.set_foreground(Some(&hex)));
     }
+    if let Some(rev) = &style.revision {
+        names.push(revision_tag(buf, rev));
+    }
     names
+}
+
+/// A tracked change's tag: "rev:" and the revision as JSON (author and
+/// date are free text), drawn as the page draws it (track::author_color).
+fn revision_tag(buf: &gtk::TextBuffer, rev: &letters_core::Revision) -> String {
+    let name = format!("{REVISION_TAG_PREFIX}{}", serde_json::to_string(rev).expect("a revision serializes"));
+    if buf.tag_table().lookup(&name).is_none() {
+        let tag = gtk::TextTag::builder().name(&name).foreground(letters_core::track::author_hex(&rev.author)).build();
+        match rev.kind {
+            letters_core::RevisionKind::Insert => tag.set_underline(gtk4::pango::Underline::Single),
+            letters_core::RevisionKind::Delete => tag.set_strikethrough(true),
+        }
+        buf.tag_table().add(&tag);
+    }
+    name
+}
+
+/// The tracked change on the char at `iter`, if any.
+fn revision_at(iter: &gtk::TextIter) -> Option<letters_core::Revision> {
+    iter.tags().into_iter().find_map(|t| {
+        let name = t.name()?;
+        serde_json::from_str(name.strip_prefix(REVISION_TAG_PREFIX)?).ok()
+    })
+}
+
+/// Tag `start..end` with `rev`'s tag (an object's char or label).
+fn tag_revision(buf: &gtk::TextBuffer, start: i32, end: &gtk::TextIter, rev: Option<&letters_core::Revision>) {
+    if let Some(rev) = rev {
+        let name = revision_tag(buf, rev);
+        buf.apply_tag_by_name(&name, &buf.iter_at_offset(start), end);
+    }
 }
 
 const LINK_TAG_PREFIX: &str = "link:";
 const FONT_TAG_PREFIX: &str = "font:";
 const SIZE_TAG_PREFIX: &str = "size-hp:";
 const COLOR_TAG_PREFIX: &str = "color:";
+const REVISION_TAG_PREFIX: &str = "rev:";
 
 /// Read a per-value tag back into `style`. Inverse of `run_tags`.
 fn apply_dynamic_tag(name: &str, style: &mut RunStyle) {
@@ -87,6 +122,8 @@ fn apply_dynamic_tag(name: &str, style: &mut RunStyle) {
         style.font_size_hp = Some(hp);
     } else if let Some(color) = name.strip_prefix(COLOR_TAG_PREFIX) {
         style.color = Some(color.to_string());
+    } else if let Some(json) = name.strip_prefix(REVISION_TAG_PREFIX) {
+        style.revision = serde_json::from_str(json).ok();
     }
 }
 
@@ -279,7 +316,7 @@ pub(crate) fn capture_span(buf: &gtk::TextBuffer, from: i32, to: i32) -> (Vec<Pa
                 }
                 current.runs.push(Run {
                     text: alt,
-                    style: RunStyle { image: Some(src), image_extent_emu: extent, ..Default::default() },
+                    style: RunStyle { image: Some(src), image_extent_emu: extent, revision: revision_at(&iter), ..Default::default() },
                 });
                 iter.forward_char();
                 continue;
@@ -296,11 +333,14 @@ pub(crate) fn capture_span(buf: &gtk::TextBuffer, from: i32, to: i32) -> (Vec<Pa
                 current.runs.push(r);
             }
             let mut label = String::new();
+            let revision = revision_at(&iter);
             while !iter.is_end() && iter.char() != '\n' && iter.has_tag(&tag) {
                 label.push(iter.char());
                 iter.forward_char();
             }
-            current.runs.push(letters_core::chips::chip_run(chip, label));
+            let mut run = letters_core::chips::chip_run(chip, label);
+            run.style.revision = revision;
+            current.runs.push(run);
             continue;
         }
         // Footnote markers carry an "fnref:N" tag; the visible "[n]"
@@ -316,7 +356,7 @@ pub(crate) fn capture_span(buf: &gtk::TextBuffer, from: i32, to: i32) -> (Vec<Pa
             }
             current.runs.push(Run {
                 text: String::new(),
-                style: RunStyle { footnote: Some(idx), ..Default::default() },
+                style: RunStyle { footnote: Some(idx), revision: revision_at(&iter), ..Default::default() },
             });
             while !iter.is_end()
                 && iter.tags().iter().any(|t| {
@@ -951,7 +991,9 @@ pub(crate) fn render_paragraphs(buf: &gtk::TextBuffer, insert: &mut gtk::TextIte
                             texture.set_data("letters-image-alt", run.text.clone());
                             texture.set_data("letters-image-extent", run.style.image_extent_emu);
                         }
+                        let start = insert.offset();
                         buf.insert_paintable(&mut insert, &texture);
+                        tag_revision(buf, start, &insert, run.style.revision.as_ref());
                     }
                     // Unloadable image degrades to visible alt text.
                     Err(_) => buf.insert(&mut insert, &run.text),
@@ -959,11 +1001,15 @@ pub(crate) fn render_paragraphs(buf: &gtk::TextBuffer, insert: &mut gtk::TextIte
                 continue;
             }
             if let Some(idx) = run.style.footnote {
+                let start = insert.offset();
                 insert_footnote_marker(buf, &mut insert, idx);
+                tag_revision(buf, start, &insert, run.style.revision.as_ref());
                 continue;
             }
             if run.style.chip.is_some() {
+                let start = insert.offset();
                 insert_chip(buf, &mut insert, run);
+                tag_revision(buf, start, &insert, run.style.revision.as_ref());
                 continue;
             }
             let tags = run_tags(buf, &run.style);

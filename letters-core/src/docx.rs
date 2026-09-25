@@ -201,8 +201,10 @@ fn contextual_styles(path: &str) -> std::collections::HashSet<String> {
 pub fn read(path: &str) -> Result<Document, String> {
     // Smart chips are content controls rdocx does not read runs from:
     // they become sentinel runs first (docx_chips).
-    let (doc, chips) = open_with_chips(path).map_err(|e| format!("Cannot open .docx {}: {}", path, e))?;
+    let (doc, (chips, revisions)) = open_with_chips(path).map_err(|e| format!("Cannot open .docx {}: {}", path, e))?;
     let mut read = read_opened(path, doc)?;
+    // Tracked changes first: a bracket may hold a chip's sentinel.
+    crate::docx_revisions::restore(&mut read, &revisions);
     crate::docx_chips::restore(&mut read, &chips);
     // Page-number fields in the header and footer, as "{page}"/"{total}".
     let (header, footer) = header_footer_templates(path);
@@ -235,22 +237,38 @@ fn header_footer_templates(path: &str) -> (Option<String>, Option<String>) {
 }
 
 /// The package at `path`, with its chip controls as sentinel runs.
-fn open_with_chips(path: &str) -> Result<(rdocx::Document, Vec<(crate::chips::Chip, String)>), String> {
+/// What `open_with_chips` took out of the markup for rdocx: the smart
+/// chips and the tracked changes, restored after reading.
+type Unwrapped = (Vec<(crate::chips::Chip, String)>, Vec<crate::model::Revision>);
+
+fn open_with_chips(path: &str) -> Result<(rdocx::Document, Unwrapped), String> {
     let bytes = std::fs::read(path).map_err(|e| e.to_string())?;
     let mut xml = String::new();
-    let has_controls = zip::ZipArchive::new(std::io::Cursor::new(&bytes))
+    let found = zip::ZipArchive::new(std::io::Cursor::new(&bytes))
         .ok()
         .and_then(|mut z| std::io::Read::read_to_string(&mut z.by_name("word/document.xml").ok()?, &mut xml).ok())
-        .is_some_and(|_| xml.contains("<w:sdt"));
-    if !has_controls {
-        return Ok((rdocx::Document::open(path).map_err(|e| e.to_string())?, Vec::new()));
+        .is_some();
+    if !found || !(xml.contains("<w:sdt") || xml.contains("<w:ins ") || xml.contains("<w:del ")) {
+        return Ok((rdocx::Document::open(path).map_err(|e| e.to_string())?, (Vec::new(), Vec::new())));
     }
     let (patched, chips) = crate::docx_chips::unwrap(&xml);
-    if chips.is_empty() {
-        return Ok((rdocx::Document::open(path).map_err(|e| e.to_string())?, Vec::new()));
+    let (patched, revisions) = crate::docx_revisions::unwrap(&patched);
+    if chips.is_empty() && revisions.is_empty() {
+        return Ok((rdocx::Document::open(path).map_err(|e| e.to_string())?, (Vec::new(), Vec::new())));
     }
     let bytes = with_part(&bytes, "word/document.xml", |_| patched.clone())?;
-    Ok((rdocx::Document::from_bytes(&bytes).map_err(|e| e.to_string())?, chips))
+    Ok((rdocx::Document::from_bytes(&bytes).map_err(|e| e.to_string())?, (chips, revisions)))
+}
+
+/// A run's text as written: bracketed as a tracked change if it is one.
+fn bracketed(revisions: &mut Vec<crate::model::Revision>, run: &Run) -> String {
+    match &run.style.revision {
+        Some(rev) => {
+            revisions.push(rev.clone());
+            crate::docx_revisions::bracket(revisions.len() - 1, &run.text)
+        }
+        None => run.text.clone(),
+    }
 }
 
 /// `package` with part `name` rewritten by `f`.
@@ -489,6 +507,8 @@ pub fn write(doc: &Document, path: impl AsRef<std::path::Path>) -> Result<(), St
     let mut out = rdocx::Document::new();
     // Smart chips, written as sentinels and made content controls below.
     let mut chips: Vec<(crate::chips::Chip, String)> = Vec::new();
+    // Tracked changes, written as bracketed text and made w:ins/w:del below.
+    let mut revisions: Vec<crate::model::Revision> = Vec::new();
     // Footnote texts first: model index → docx id.
     let footnote_ids: Vec<i32> = doc.footnotes.iter().map(|t| out.add_footnote(t)).collect();
     let paras = &doc.paragraphs;
@@ -650,11 +670,13 @@ pub fn write(doc: &Document, path: impl AsRef<std::path::Path>) -> Result<(), St
             if let Some(url) = &run.style.link {
                 // Hyperlinks need a document-level relationship; styles on
                 // link text are not yet carried through append_hyperlink.
-                out.append_hyperlink(&run.text, url);
+                let text = bracketed(&mut revisions, run);
+                out.append_hyperlink(&text, url);
                 continue;
             }
             let mut p = out.last_paragraph_mut().expect("paragraph just added");
-            let mut r = p.add_run(&run.text);
+            let text = bracketed(&mut revisions, run);
+            let mut r = p.add_run(&text);
             if run.style.bold { r = r.bold(true); }
             if run.style.italic { r = r.italic(true); }
             if run.style.underline { r = r.underline(true); }
@@ -697,11 +719,13 @@ pub fn write(doc: &Document, path: impl AsRef<std::path::Path>) -> Result<(), St
         .map_err(|e| format!("Cannot save {}: {}", path.as_ref().display(), e))?;
     let bytes = with_letters_styles(&bytes, &doc.base_font, &doc.heading_styles)
         .map_err(|e| format!("Cannot save {}: {}", path.as_ref().display(), e))?;
-    let bytes = if chips.is_empty() {
+    let bytes = if chips.is_empty() && revisions.is_empty() {
         bytes
     } else {
-        with_part(&bytes, "word/document.xml", |xml| crate::docx_chips::wrap(xml, &chips))
-            .map_err(|e| format!("Cannot save {}: {}", path.as_ref().display(), e))?
+        with_part(&bytes, "word/document.xml", |xml| {
+            crate::docx_revisions::wrap(&crate::docx_chips::wrap(xml, &chips), &revisions)
+        })
+        .map_err(|e| format!("Cannot save {}: {}", path.as_ref().display(), e))?
     };
     // "{page}" and "{total}" in the header and footer become Word's PAGE
     // and NUMPAGES fields, so every page shows its own number.
@@ -1080,6 +1104,7 @@ fn map_paragraph(doc: &rdocx::Document, p: &rdocx::ParagraphRef<'_>) -> Paragrap
                 footnote: None,
                 html: false,
                 chip: None,
+                revision: None,
                 font_family: family,
                 font_size_hp: size_hp,
                 color,

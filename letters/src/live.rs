@@ -56,6 +56,9 @@ pub struct LiveModel {
     /// Changes followed with a local read, and whole-buffer reads.
     pub local_reads: usize,
     pub full_reads: usize,
+    /// Track changes: the author edits are recorded as, or None when
+    /// edits apply directly (`letters_core::track`).
+    pub tracking: Option<String>,
 }
 
 /// The live model of `buf`, if it has one.
@@ -390,6 +393,43 @@ impl LiveModel {
     /// step, then show them in the buffer. `false` if they don't apply.
     pub fn apply_user_ops(&mut self, buf: &gtk::TextBuffer, ops: &[Op], typing: bool) -> bool {
         self.resolve(buf);
+        // While tracking, a text edit is recorded as a tracked change (an
+        // insertion marked, a deletion marked rather than removed); an edit
+        // that is not a text edit (a table's structure) applies as it is.
+        let tracked = self.tracking.as_deref().and_then(|author| letters_core::track::tracked(&self.doc, ops, author, &letters_core::track::now()));
+        self.apply_ops(buf, tracked.as_deref().unwrap_or(ops), typing)
+    }
+
+    /// Accept (`accept`) or reject the tracked changes touching buffer
+    /// offsets `from..to` (whole changes), as one undo step.
+    pub fn resolve_changes(&mut self, buf: &gtk::TextBuffer, from: usize, to: usize, accept: bool) -> bool {
+        self.resolve(buf);
+        let (a, b) = (self.sequence_offset(buf, from), self.sequence_offset(buf, to));
+        let ops = letters_core::track::resolve(&self.doc, a, b, accept);
+        !ops.is_empty() && self.apply_ops(buf, &ops, false)
+    }
+
+    /// Accept or reject every tracked change, as one undo step.
+    pub fn resolve_all_changes(&mut self, buf: &gtk::TextBuffer, accept: bool) -> bool {
+        self.resolve(buf);
+        let ops = letters_core::track::resolve_all(&self.doc, accept);
+        !ops.is_empty() && self.apply_ops(buf, &ops, false)
+    }
+
+    /// The tracked changes, each with the buffer offset where it starts.
+    pub fn changes(&mut self, buf: &gtk::TextBuffer) -> Vec<(letters_core::track::Change, usize)> {
+        self.resolve(buf);
+        letters_core::track::changes(&self.doc)
+            .into_iter()
+            .filter_map(|c| {
+                let (p, off) = edit::locate(&self.doc, c.start)?;
+                let at = crate::bridge::buffer_offset(&self.doc.paragraphs[p], *self.starts.get(p)?, off);
+                Some((c, at))
+            })
+            .collect()
+    }
+
+    fn apply_ops(&mut self, buf: &gtk::TextBuffer, ops: &[Op], typing: bool) -> bool {
         let old = self.doc.clone();
         match edit::apply_all(&mut self.doc, ops) {
             Ok(inverse) => {

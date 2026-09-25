@@ -207,6 +207,17 @@ impl PangoShaper {
                 }
                 None => {}
             }
+            // A tracked change, as Word and LibreOffice show one: in its
+            // author's colour, an insertion underlined, a deletion struck
+            // through. Last, so it wins over the run's own colour.
+            if let Some(rev) = &st.revision {
+                let (r, g, b) = crate::track::author_color(&rev.author);
+                add(pango::AttrColor::new_foreground(r, g, b).into());
+                match rev.kind {
+                    crate::model::RevisionKind::Insert => add(pango::AttrInt::new_underline(pango::Underline::Single).into()),
+                    crate::model::RevisionKind::Delete => add(pango::AttrInt::new_strikethrough(true).into()),
+                }
+            }
         }
         // Spaces ending a paragraph take no width. Pango lets spaces hang
         // past the margin where it breaks a line, but not at the end of the

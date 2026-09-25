@@ -66,6 +66,7 @@ pub fn build(
     let views = adw::ViewStack::new();
     views.add_titled_with_icon(&stack, Some("outline"), "Outline", "view-list-symbolic");
     views.add_titled_with_icon(&crate::thumbnails::build(tv), Some("pages"), "Pages", "view-paged-symbolic");
+    views.add_titled_with_icon(&crate::review_ui::changes_view(tv), Some("changes"), "Changes", "document-edit-symbolic");
     let switcher = adw::ViewSwitcher::builder().stack(&views).policy(adw::ViewSwitcherPolicy::Wide).build();
     let sidebar = adw::ToolbarView::new();
     let title = adw::HeaderBar::builder()
@@ -100,6 +101,7 @@ pub fn build(
     for (action, view, accel, label) in [
         ("toggle-outline", "outline", "<Primary><Alt>o", "Show Outline"),
         ("toggle-pages", "pages", "<Primary><Alt>p", "Show Page Thumbnails"),
+        ("toggle-changes", "changes", "<Primary><Alt>r", "Show Tracked Changes"),
     ] {
         let a = gtk::gio::SimpleAction::new(action, None);
         let (show, views) = (show.clone(), views.clone());
