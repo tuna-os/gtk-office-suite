@@ -15,7 +15,8 @@ use std::rc::Rc;
 
 
 use crate::engine::{MasterSlide, Slide, SlideObject};
-use crate::ops::{History, Op};
+use crate::ops::Op;
+use suite_common_core::ops::History;
 
 pub struct DecksController {
     pub slides: Rc<RefCell<Vec<Slide>>>,
@@ -116,7 +117,10 @@ impl DecksController {
             // Every op addressed something deleted: nothing happened.
             return false;
         }
-        self.history.borrow_mut().record(description, inverses);
+        // One user action, one step (`description` is for the caller's
+        // messages; the shared history keeps only the inverse).
+        let _ = description;
+        self.history.borrow_mut().record(inverses);
         self.dirty.set(true);
         true
     }
@@ -374,7 +378,7 @@ impl DecksController {
     }
 
     pub fn undo(&self) -> bool {
-        let done = self.history.borrow_mut().undo(&mut self.slides.borrow_mut());
+        let done = self.history.borrow_mut().undo(&mut self.slides.borrow_mut()).is_some();
         if done {
             self.dirty.set(true);
         }
@@ -382,7 +386,7 @@ impl DecksController {
     }
 
     pub fn redo(&self) -> bool {
-        let done = self.history.borrow_mut().redo(&mut self.slides.borrow_mut());
+        let done = self.history.borrow_mut().redo(&mut self.slides.borrow_mut()).is_some();
         if done {
             self.dirty.set(true);
         }
