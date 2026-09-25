@@ -64,7 +64,7 @@ fn collect_run_styles(doc: &Document) -> Vec<RunStyle> {
     let mut styles: Vec<RunStyle> = Vec::new();
     for p in &doc.paragraphs {
         for r in &p.runs {
-            if r.style != RunStyle::default() && !styles.contains(&r.style) {
+            if r.style != RunStyle::default() && r.style.chip.is_none() && !styles.contains(&r.style) {
                 styles.push(r.style.clone());
             }
         }
@@ -266,6 +266,13 @@ fn content_xml(doc: &Document) -> String {
                 }
                 continue;
             }
+            // A smart chip: a date is a fixed date field, which LibreOffice
+            // and Word keep as a date; a link or person chip is its link,
+            // named so it reopens as a chip.
+            if let Some(chip) = &r.style.chip {
+                inner.push_str(&chip_xml(chip, &r.text, r.style.link.as_deref()));
+                continue;
+            }
             let mut run_xml = esc(&r.text);
             if r.style != RunStyle::default() {
                 let ti = run_styles.iter().position(|s| *s == r.style).unwrap() + 1;
@@ -302,6 +309,7 @@ fn content_xml(doc: &Document) -> String {
          xmlns:fo=\"urn:oasis:names:tc:opendocument:xmlns:xsl-fo-compatible:1.0\" \
          xmlns:xlink=\"http://www.w3.org/1999/xlink\" \
          xmlns:svg=\"urn:oasis:names:tc:opendocument:xmlns:svg-compatible:1.0\" \
+         xmlns:loext=\"urn:org:documentfoundation:names:experimental:office:xmlns:loext:1.0\" \
          office:version=\"1.2\">\
          <office:font-face-decls>\
          <style:font-face style:name=\"Monospace\" \
@@ -312,6 +320,52 @@ fn content_xml(doc: &Document) -> String {
          <office:body><office:text>{body}</office:text></office:body>\
          </office:document-content>"
     )
+}
+
+/// A smart chip's ODF: LibreOffice's own content control
+/// (`loext:content-control`, what Writer makes of a Word content control),
+/// tagged with what the chip is, holding its label (inside its link for a
+/// link or person). A date chip is also a date control, so Writer shows a
+/// date picker and saves it to .docx as a Word date control. A reader that
+/// does not know the element still shows its text.
+fn chip_xml(chip: &crate::chips::Chip, label: &str, link: Option<&str>) -> String {
+    use crate::chips::ChipKind;
+    let kind = match chip.kind {
+        ChipKind::Date => "date",
+        ChipKind::Person => "person",
+        ChipKind::Link => "link",
+    };
+    let date = match chip.kind {
+        ChipKind::Date => format!(
+            " loext:date=\"true\" loext:date-format=\"d MMM yyyy\" loext:date-rfc-language-tag=\"en-GB\" loext:current-date=\"{}T00:00:00Z\"",
+            esc(&chip.value)
+        ),
+        _ => String::new(),
+    };
+    let inner = match link {
+        Some(href) => format!("<text:a xlink:type=\"simple\" xlink:href=\"{}\">{}</text:a>", esc(href), esc(label)),
+        None => esc(label),
+    };
+    format!(
+        "<loext:content-control loext:tag=\"{}\"{date}>{inner}</loext:content-control>",
+        esc(&format!("{CHIP_NAME_PREFIX}{kind}:{}", chip.value))
+    )
+}
+
+/// Prefix of a chip content control's tag.
+const CHIP_NAME_PREFIX: &str = "letters-chip:";
+
+/// The chip a content control's tag stands for.
+fn chip_from_name(name: &str) -> Option<crate::chips::Chip> {
+    use crate::chips::{Chip, ChipKind};
+    let (kind, value) = name.strip_prefix(CHIP_NAME_PREFIX)?.split_once(':')?;
+    let kind = match kind {
+        "date" => ChipKind::Date,
+        "link" => ChipKind::Link,
+        "person" => ChipKind::Person,
+        _ => return None,
+    };
+    Some(Chip { kind, value: value.to_string() })
 }
 
 fn styles_xml(doc: &Document) -> String {
@@ -406,7 +460,10 @@ pub fn write_with_opaque(doc: &Document, path: impl AsRef<std::path::Path>, opaq
 fn attr_val(e: &quick_xml::events::BytesStart, name: &str) -> Option<String> {
     e.attributes().filter_map(|a| a.ok()).find_map(|a| {
         if a.key.into_inner() == name {
-            Some(a.value.to_string())
+            // Attribute values are escaped XML too: a link to "?a=1&b=2"
+            // is written "&amp;" and read back as "&amp;" without this.
+            let raw = a.value.to_string();
+            Some(quick_xml::escape::unescape(&raw).map(|s| s.into_owned()).unwrap_or(raw))
         } else {
             None
         }
@@ -672,6 +729,10 @@ pub fn read(path: &str) -> Result<Document, String> {
     let mut note: Option<String> = None;
     let mut note_paras = 0usize;
     let mut in_citation = false;
+    // A smart chip being read: what it is and its label so far, and the
+    // element that closes it (a content control, or a standard date field
+    // from another application).
+    let mut chip: Option<(crate::chips::Chip, String, &'static str)> = None;
 
     loop {
         match reader.read_event() {
@@ -746,6 +807,27 @@ pub fn read(path: &str) -> Result<Document, String> {
                 "text:a" => {
                     link_stack.push(attr_val(&e, "xlink:href").unwrap_or_default());
                 }
+                // A Word content control as LibreOffice writes it in ODF
+                // (a .docx chip saved as .odt): ours by its tag, or any
+                // date control by its date.
+                "loext:content-control" if para.is_some() => {
+                    let tagged = attr_val(&e, "loext:tag").as_deref().and_then(chip_from_name);
+                    let dated = || {
+                        let v = attr_val(&e, "loext:current-date")?.get(..10)?.to_string();
+                        crate::chips::NaiveDate::parse_from_str(&v, "%Y-%m-%d").ok()?;
+                        (attr_val(&e, "loext:date").as_deref() == Some("true"))
+                            .then_some(crate::chips::Chip { kind: crate::chips::ChipKind::Date, value: v })
+                    };
+                    if let Some(c) = tagged.or_else(dated) {
+                        chip = Some((c, String::new(), "loext:content-control"));
+                    }
+                }
+                "text:date" if para.is_some() => {
+                    let value = attr_val(&e, "text:date-value").and_then(|v| v.get(..10).map(str::to_string));
+                    if let Some(v) = value.filter(|v| crate::chips::NaiveDate::parse_from_str(v, "%Y-%m-%d").is_ok()) {
+                        chip = Some((crate::chips::Chip { kind: crate::chips::ChipKind::Date, value: v }, String::new(), "text:date"));
+                    }
+                }
                 "text:list" if in_body => {
                     // Bullet vs numbered comes from the list style name we
                     // write; LO-authored lists fall back to bullet.
@@ -758,6 +840,10 @@ pub fn read(path: &str) -> Result<Document, String> {
                 _ => {}
             },
             Ok(Event::Empty(e)) => match e.name().as_ref() {
+                "text:s" if chip.is_some() => {
+                    let n = attr_val(&e, "text:c").and_then(|v| v.parse::<usize>().ok()).unwrap_or(1);
+                    if let Some(c) = chip.as_mut() { c.1.push_str(&" ".repeat(n)); }
+                }
                 "text:s" if para.is_some() => {
                     let n = attr_val(&e, "text:c")
                         .and_then(|v| v.parse::<usize>().ok())
@@ -779,15 +865,24 @@ pub fn read(path: &str) -> Result<Document, String> {
                     if !in_citation {
                         n.push_str(&unescape_text(&t));
                     }
+                } else if let Some(c) = chip.as_mut() {
+                    c.1.push_str(&unescape_text(&t));
                 } else if para.is_some() {
                     let txt = unescape_text(&t);
                     push_text(&mut para, &span_stack, &link_stack, &txt);
                 }
             }
             Ok(Event::GeneralRef(r)) => {
-                if para.is_some() {
+                if let Some(c) = chip.as_mut() {
+                    c.1.push_str(&resolve_general_ref(&r));
+                } else if para.is_some() {
                     let txt = resolve_general_ref(&r);
                     push_text(&mut para, &span_stack, &link_stack, &txt);
+                }
+            }
+            Ok(Event::End(e)) if chip.as_ref().is_some_and(|c| c.2 == e.name().as_ref()) => {
+                if let (Some((c, label, _)), Some(p)) = (chip.take(), para.as_mut()) {
+                    p.runs.push(crate::chips::chip_run(c, label));
                 }
             }
             Ok(Event::End(e)) => match e.name().as_ref() {
@@ -959,6 +1054,47 @@ mod tests {
         let path = dir.path().join("t.odt");
         write(doc, path.to_str().unwrap()).expect("write odt");
         read(path.to_str().unwrap()).expect("read odt")
+    }
+
+    /// Smart chips reopen as chips: a date is a fixed `text:date`, a link
+    /// or person chip a named `text:a` (a name-only person a bookmark).
+    #[test]
+    fn smart_chips_survive() {
+        let d = crate::chips::sample_document();
+        let rt = round_trip(&d);
+        assert_eq!(rt.paragraphs[0].runs, d.paragraphs[0].runs);
+    }
+
+    /// A standard ODF date field from another application opens as a date
+    /// chip, keeping the text it shows.
+    #[test]
+    fn a_date_field_opens_as_a_date_chip() {
+        let dir = tempfile::tempdir().unwrap();
+        let ours = dir.path().join("ours.odt");
+        write(&Document::from_plain_text("Due MARK."), ours.to_str().unwrap()).unwrap();
+        // The same package, with a date field where MARK was.
+        let theirs = dir.path().join("theirs.odt");
+        let mut zin = zip::ZipArchive::new(std::fs::File::open(&ours).unwrap()).unwrap();
+        let mut out = zip::ZipWriter::new(std::fs::File::create(&theirs).unwrap());
+        for i in 0..zin.len() {
+            let mut f = zin.by_index(i).unwrap();
+            let name = f.name().to_string();
+            let mut data = String::new();
+            std::io::Read::read_to_string(&mut f, &mut data).unwrap();
+            if name == "content.xml" {
+                data = data.replace(
+                    "MARK",
+                    "<text:date style:data-style-name=\"N37\" text:date-value=\"2025-01-31T00:00:00\">31/01/2025</text:date>",
+                );
+            }
+            out.start_file(name, zip::write::SimpleFileOptions::default()).unwrap();
+            out.write_all(data.as_bytes()).unwrap();
+        }
+        out.finish().unwrap();
+        let rt = read(theirs.to_str().unwrap()).unwrap();
+        let chip = rt.paragraphs[0].runs.iter().find(|r| r.style.chip.is_some()).expect("a chip");
+        assert_eq!(chip.text, "31/01/2025");
+        assert_eq!(chip.style.chip.as_ref().unwrap().value, "2025-01-31");
     }
 
     /// A section's column count, which lives in content.xml.

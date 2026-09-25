@@ -111,16 +111,39 @@ fn parse_person(s: &str) -> Option<Run> {
     plausible.then(|| chip_run(Chip { kind: ChipKind::Person, value: name.to_string() }, name))
 }
 
-/// The chips an "@" query offers, best first: relative dates whose name
-/// starts with the query (all three when it is empty), a date it spells, a
-/// link it is, or the person it names.
-pub fn suggestions(query: &str, today: NaiveDate) -> Vec<Run> {
-    let q = query.trim();
-    let mut out: Vec<Run> = RELATIVE
+/// The people already mentioned in `doc` (its person chips), in order of
+/// first mention, each once.
+pub fn people(doc: &crate::model::Document) -> Vec<Run> {
+    let mut seen = std::collections::HashSet::new();
+    doc.paragraphs
         .iter()
-        .filter(|(name, _)| name.to_lowercase().starts_with(&q.to_lowercase()))
-        .map(|(_, days)| date_chip(today + Duration::days(*days)))
+        .flat_map(|p| &p.runs)
+        .filter(|r| r.style.chip.as_ref().is_some_and(|c| c.kind == ChipKind::Person))
+        .filter(|r| seen.insert(r.style.chip.as_ref().map(|c| c.value.clone())))
+        .cloned()
+        .collect()
+}
+
+/// The chips an "@" query offers, best first: people already in the
+/// document (`known`, from `people`) whose name or address holds the query,
+/// relative dates whose name starts with it (all three when it is empty),
+/// then a date it spells, a link it is, or a new person it names.
+pub fn suggestions(query: &str, today: NaiveDate, known: &[Run]) -> Vec<Run> {
+    let q = query.trim();
+    let lower = q.to_lowercase();
+    let mut out: Vec<Run> = known
+        .iter()
+        .filter(|r| {
+            let value = r.style.chip.as_ref().map_or("", |c| c.value.as_str());
+            r.text.to_lowercase().contains(&lower) || value.to_lowercase().contains(&lower)
+        })
+        .take(5)
+        .cloned()
         .collect();
+    out.extend(RELATIVE
+        .iter()
+        .filter(|(name, _)| name.to_lowercase().starts_with(&lower))
+        .map(|(_, days)| date_chip(today + Duration::days(*days))));
     if q.is_empty() {
         return out;
     }
@@ -130,9 +153,29 @@ pub fn suggestions(query: &str, today: NaiveDate) -> Vec<Run> {
         let url = if q.starts_with("www.") { format!("https://{q}") } else { q.to_string() };
         out.push(chip_run(Chip { kind: ChipKind::Link, value: url.clone() }, link_label(&url)));
     } else if out.is_empty() {
+        // A new person, only when nobody known (and no date) matched.
         out.extend(parse_person(q));
     }
     out
+}
+
+/// A paragraph holding one chip of each kind with text between, for the
+/// format round-trip and LibreOffice oracle tests.
+#[doc(hidden)]
+pub fn sample_document() -> crate::model::Document {
+    let mut d = crate::model::Document::from_plain_text("");
+    d.paragraphs[0].runs = vec![
+        Run::plain("Due "),
+        date_chip(NaiveDate::from_ymd_opt(2026, 10, 3).expect("a date")),
+        Run::plain(", see "),
+        chip_run(Chip { kind: ChipKind::Link, value: "https://gnome.org/?a=1&b=2".into() }, "gnome.org"),
+        Run::plain(" with "),
+        chip_run(Chip { kind: ChipKind::Person, value: "ada@example.org".into() }, "Ada Lovelace"),
+        Run::plain(" and "),
+        chip_run(Chip { kind: ChipKind::Person, value: "Grace Hopper".into() }, "Grace Hopper"),
+        Run::plain("."),
+    ];
+    d
 }
 
 #[cfg(test)]
@@ -153,8 +196,25 @@ mod tests {
     }
 
     #[test]
+    fn people_in_the_document_are_suggested_first() {
+        let today = day(2026, 9, 25);
+        let known = people(&sample_document());
+        assert_eq!(known.iter().map(|r| r.text.as_str()).collect::<Vec<_>>(), ["Ada Lovelace", "Grace Hopper"]);
+        // An empty query: the people, then the dates.
+        let all = describe(&suggestions("", today, &known));
+        assert_eq!(all.iter().map(|s| s.0).collect::<Vec<_>>(), [ChipKind::Person, ChipKind::Person, ChipKind::Date, ChipKind::Date, ChipKind::Date]);
+        // A query matches their name or address, and is not offered again as
+        // a new person.
+        assert_eq!(describe(&suggestions("ada", today, &known)), [(ChipKind::Person, "ada@example.org".into(), "Ada Lovelace".into())]);
+        assert_eq!(describe(&suggestions("example.org", today, &known))[0].2, "Ada Lovelace");
+        assert_eq!(describe(&suggestions("Grace Hopper", today, &known)).len(), 1);
+        // Someone new still can be.
+        assert_eq!(describe(&suggestions("Alan Turing", today, &known)), [(ChipKind::Person, "Alan Turing".into(), "Alan Turing".into())]);
+    }
+
+    #[test]
     fn an_empty_query_offers_the_relative_dates() {
-        let got = describe(&suggestions("", day(2026, 9, 25)));
+        let got = describe(&suggestions("", day(2026, 9, 25), &[]));
         assert_eq!(
             got,
             [
@@ -163,30 +223,30 @@ mod tests {
                 (ChipKind::Date, "2026-09-24".into(), "24 Sep 2026".into()),
             ]
         );
-        assert_eq!(describe(&suggestions("tom", day(2026, 12, 31)))[0].1, "2027-01-01");
+        assert_eq!(describe(&suggestions("tom", day(2026, 12, 31), &[]))[0].1, "2027-01-01");
     }
 
     #[test]
     fn dates_are_read_as_people_type_them() {
         let today = day(2026, 9, 25);
         for q in ["2026-10-03", "3 Oct 2026", "3 October 2026", "Oct 3, 2026", "03/10/2026", "3 Oct"] {
-            assert_eq!(describe(&suggestions(q, today)), [(ChipKind::Date, "2026-10-03".into(), "3 Oct 2026".into())], "{q}");
+            assert_eq!(describe(&suggestions(q, today, &[])), [(ChipKind::Date, "2026-10-03".into(), "3 Oct 2026".into())], "{q}");
         }
     }
 
     #[test]
     fn links_and_people_carry_their_hyperlink() {
         let today = day(2026, 9, 25);
-        let link = &suggestions("https://gnome.org/", today)[0];
+        let link = &suggestions("https://gnome.org/", today, &[])[0];
         assert_eq!((link.text.as_str(), link.style.link.as_deref()), ("gnome.org", Some("https://gnome.org/")));
-        let www = &suggestions("www.example.org", today)[0];
+        let www = &suggestions("www.example.org", today, &[])[0];
         assert_eq!(www.style.chip.as_ref().unwrap().value, "https://www.example.org");
-        let ada = &suggestions("Ada Lovelace <ada@example.org>", today)[0];
+        let ada = &suggestions("Ada Lovelace <ada@example.org>", today, &[])[0];
         assert_eq!((ada.text.as_str(), ada.style.link.as_deref()), ("Ada Lovelace", Some("mailto:ada@example.org")));
-        let bare = &suggestions("grace@example.org", today)[0];
+        let bare = &suggestions("grace@example.org", today, &[])[0];
         assert_eq!(bare.text, "grace");
-        let name = &suggestions("Grace Hopper", today)[0];
+        let name = &suggestions("Grace Hopper", today, &[])[0];
         assert_eq!((name.style.chip.as_ref().unwrap().kind, name.style.link.as_ref()), (ChipKind::Person, None));
-        assert!(suggestions("3 + 4 = 7", today).is_empty(), "not everything is a chip");
+        assert!(suggestions("3 + 4 = 7", today, &[]).is_empty(), "not everything is a chip");
     }
 }

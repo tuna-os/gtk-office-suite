@@ -1001,3 +1001,46 @@ fn a_page_break_survives_a_conversion_between_the_two_formats() {
         "docx->odt lost the page break"
     );
 }
+
+/// The chips in `doc`, as (kind, value, label).
+fn chips_of(doc: &Document) -> Vec<(letters_core::chips::ChipKind, String, String)> {
+    doc.paragraphs
+        .iter()
+        .flat_map(|p| &p.runs)
+        .filter_map(|r| r.style.chip.as_ref().map(|c| (c.kind, c.value.clone(), r.text.clone())))
+        .collect()
+}
+
+/// Smart chips survive LibreOffice: our .docx and .odt, opened and saved by
+/// Writer in either format, reopen with every chip (a date control / field,
+/// the named links and bookmark) intact.
+#[test]
+fn smart_chips_survive_lo_passes() {
+    let Some(bin) = require_or_skip() else { return };
+    let d = letters_core::chips::sample_document();
+    let want = chips_of(&d);
+    let dir = tempfile::tempdir().unwrap();
+    for (from, to) in [("docx", "docx"), ("odt", "odt"), ("docx", "odt"), ("odt", "docx")] {
+        let work = dir.path().join(format!("{from}-{to}"));
+        let out = work.join("out");
+        std::fs::create_dir_all(&out).unwrap();
+        let input = work.join(format!("chips.{from}"));
+        match from {
+            "docx" => docx::write(&d, &input).expect("write docx"),
+            _ => letters_core::odt::write(&d, &input).expect("write odt"),
+        }
+        // Convert into its own directory: a same-format pass would otherwise
+        // overwrite the input.
+        let staged = out.join(format!("chips.{from}"));
+        std::fs::copy(&input, &staged).unwrap();
+        let filter = if to == "docx" { "docx:MS Word 2007 XML" } else { "odt" };
+        let _ = soffice_convert(bin, &staged, filter);
+        let converted = out.join(format!("chips.{to}"));
+        assert!(converted.exists(), "soffice did not convert {from} to {to}");
+        let rt = match to {
+            "docx" => docx::read(converted.to_str().unwrap()).expect("read converted docx"),
+            _ => letters_core::odt::read(converted.to_str().unwrap()).expect("read converted odt"),
+        };
+        assert_eq!(chips_of(&rt), want, "{from} -> LibreOffice -> {to} lost a chip: {:?}", rt.paragraphs[0].runs);
+    }
+}

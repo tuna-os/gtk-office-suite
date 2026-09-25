@@ -199,8 +199,54 @@ fn contextual_styles(path: &str) -> std::collections::HashSet<String> {
 
 /// Read a .docx file into a Document.
 pub fn read(path: &str) -> Result<Document, String> {
-    let doc = rdocx::Document::open(path)
-        .map_err(|e| format!("Cannot open .docx {}: {}", path, e))?;
+    // Smart chips are content controls rdocx does not read runs from:
+    // they become sentinel runs first (docx_chips).
+    let (doc, chips) = open_with_chips(path).map_err(|e| format!("Cannot open .docx {}: {}", path, e))?;
+    let mut read = read_opened(path, doc)?;
+    crate::docx_chips::restore(&mut read, &chips);
+    Ok(read)
+}
+
+/// The package at `path`, with its chip controls as sentinel runs.
+fn open_with_chips(path: &str) -> Result<(rdocx::Document, Vec<(crate::chips::Chip, String)>), String> {
+    let bytes = std::fs::read(path).map_err(|e| e.to_string())?;
+    let mut xml = String::new();
+    let has_controls = zip::ZipArchive::new(std::io::Cursor::new(&bytes))
+        .ok()
+        .and_then(|mut z| std::io::Read::read_to_string(&mut z.by_name("word/document.xml").ok()?, &mut xml).ok())
+        .is_some_and(|_| xml.contains("<w:sdt"));
+    if !has_controls {
+        return Ok((rdocx::Document::open(path).map_err(|e| e.to_string())?, Vec::new()));
+    }
+    let (patched, chips) = crate::docx_chips::unwrap(&xml);
+    if chips.is_empty() {
+        return Ok((rdocx::Document::open(path).map_err(|e| e.to_string())?, Vec::new()));
+    }
+    let bytes = with_part(&bytes, "word/document.xml", |_| patched.clone())?;
+    Ok((rdocx::Document::from_bytes(&bytes).map_err(|e| e.to_string())?, chips))
+}
+
+/// `package` with part `name` rewritten by `f`.
+fn with_part(package: &[u8], name: &str, f: impl Fn(&str) -> String) -> Result<Vec<u8>, String> {
+    let mut zin = zip::ZipArchive::new(std::io::Cursor::new(package)).map_err(|e| e.to_string())?;
+    let mut out = zip::ZipWriter::new(std::io::Cursor::new(Vec::new()));
+    let options = zip::write::SimpleFileOptions::default().compression_method(zip::CompressionMethod::Deflated);
+    for i in 0..zin.len() {
+        let mut part = zin.by_index(i).map_err(|e| e.to_string())?;
+        let part_name = part.name().to_string();
+        let mut data = Vec::new();
+        std::io::Read::read_to_end(&mut part, &mut data).map_err(|e| e.to_string())?;
+        if part_name == name {
+            let xml = String::from_utf8(data).map_err(|e| e.to_string())?;
+            data = f(&xml).into_bytes();
+        }
+        out.start_file(part_name, options).map_err(|e| e.to_string())?;
+        std::io::Write::write_all(&mut out, &data).map_err(|e| e.to_string())?;
+    }
+    Ok(out.finish().map_err(|e| e.to_string())?.into_inner())
+}
+
+fn read_opened(path: &str, doc: rdocx::Document) -> Result<Document, String> {
     THEME.with(|t| *t.borrow_mut() = theme_fonts(path));
     STYLE_FONTS.with(|s| *s.borrow_mut() = style_fonts(path));
 
@@ -414,6 +460,8 @@ fn read_page_geometry(doc: &rdocx::Document) -> Option<PageGeometry> {
 /// Write a Document to a .docx file.
 pub fn write(doc: &Document, path: impl AsRef<std::path::Path>) -> Result<(), String> {
     let mut out = rdocx::Document::new();
+    // Smart chips, written as sentinels and made content controls below.
+    let mut chips: Vec<(crate::chips::Chip, String)> = Vec::new();
     // Footnote texts first: model index → docx id.
     let footnote_ids: Vec<i32> = doc.footnotes.iter().map(|t| out.add_footnote(t)).collect();
     let paras = &doc.paragraphs;
@@ -558,6 +606,17 @@ pub fn write(doc: &Document, path: impl AsRef<std::path::Path>) -> Result<(), St
                 }
                 continue;
             }
+            if let Some(chip) = &run.style.chip {
+                let mark = crate::docx_chips::sentinel(chips.len());
+                chips.push((chip.clone(), run.text.clone()));
+                match &run.style.link {
+                    Some(url) => out.append_hyperlink(&mark, url),
+                    None => {
+                        let _ = out.last_paragraph_mut().expect("paragraph").add_run(&mark);
+                    }
+                }
+                continue;
+            }
             if let Some(url) = &run.style.link {
                 // Hyperlinks need a document-level relationship; styles on
                 // link text are not yet carried through append_hyperlink.
@@ -608,6 +667,12 @@ pub fn write(doc: &Document, path: impl AsRef<std::path::Path>) -> Result<(), St
         .map_err(|e| format!("Cannot save {}: {}", path.as_ref().display(), e))?;
     let bytes = with_letters_styles(&bytes, &doc.base_font, &doc.heading_styles)
         .map_err(|e| format!("Cannot save {}: {}", path.as_ref().display(), e))?;
+    let bytes = if chips.is_empty() {
+        bytes
+    } else {
+        with_part(&bytes, "word/document.xml", |xml| crate::docx_chips::wrap(xml, &chips))
+            .map_err(|e| format!("Cannot save {}: {}", path.as_ref().display(), e))?
+    };
     suite_common_core::atomic_save::atomic_write_bytes(path.as_ref(), &bytes)
 }
 
