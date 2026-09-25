@@ -106,6 +106,9 @@ fn legend_width(cr: &Context, name: Option<&str>, key: Key) -> f64 {
 /// A scatter point's marker: a filled circle with a darker rim, the size
 /// Calc draws a 7 pt marker.
 fn marker(cr: &Context, x: f64, y: f64) {
+    // A path of its own: after text, the current point would otherwise
+    // join the circle with a line from wherever the text ended.
+    cr.new_path();
     cr.arc(x, y, 5.0, 0.0, std::f64::consts::TAU);
     set(cr, SERIES_1);
     cr.fill_preserve().unwrap();
@@ -276,7 +279,7 @@ fn draw_pie(cr: &Context, data: &[(String, f64)], w: f64, h: f64) {
     }
     let legend_w = data.iter().map(|(c, _)| text_w(cr, c)).fold(0.0, f64::max) + 30.0;
     let plot_w = (w - legend_w - 10.0).max(1.0);
-    let r = ((plot_w.min(h) - 30.0) / 2.0).max(1.0);
+    let r = ((plot_w.min(h) - 27.0) / 2.0).max(1.0);
     let (cx, cy) = (plot_w / 2.0 + 5.0, h / 2.0);
     let mut angle = -std::f64::consts::FRAC_PI_2;
     for (i, (_, val)) in data.iter().enumerate() {
@@ -291,7 +294,7 @@ fn draw_pie(cr: &Context, data: &[(String, f64)], w: f64, h: f64) {
     // The legend: one row per category, centred on the pie.
     let row = 19.0;
     let lx = w - legend_w + 8.0;
-    let y0 = cy - row * data.len() as f64 / 2.0 + row * 0.5 + 4.0;
+    let y0 = cy - row * data.len() as f64 / 2.0 + row * 0.5 + 2.0;
     for (i, (cat, _)) in data.iter().enumerate() {
         let y = y0 + i as f64 * row;
         set(cr, accent(i));

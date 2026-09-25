@@ -4838,22 +4838,9 @@ class TablesChartTypesSmoke(BaseGUITestCase):
             timeout=10.0,
             description="the chart dialog's Insert button",
         )[0]
-        chooser = self.app.findChildren(lambda c: c.roleName == "combo box")[-1]
-
-        # The dropdown's list isn't in the AT-SPI tree; its accessible name
-        # mirrors the selected kind, so open it, go down, and retry until
-        # the last kind is selected (Down at the bottom stays put).
-        def choose_scatter():
-            chooser.child(roleName="toggle button").do_action(0)
-            time.sleep(0.5)  # the popover opens asynchronously
-            rawinput.keyCombo("End")
-            time.sleep(0.2)
-            rawinput.keyCombo("Return")
-            time.sleep(0.3)
-            return chooser.name
-
-        self.wait_until(choose_scatter, lambda name: name == "XY (Scatter)", interval=0.6,
-                        description="the chart type to be XY (Scatter)")
+        # The kinds are toggle buttons, each in the tree by name.
+        self.app.child(name="XY (Scatter)", roleName="toggle button").do_action(0)
+        time.sleep(0.3)
         insert.do_action(0)
         time.sleep(1.0)
         rawinput.keyCombo("<Control>s")
@@ -4935,7 +4922,7 @@ class TablesChartDialogSmoke(BaseGUITestCase):
         # The type chooser is the dialog's other half; if only the button
         # showed up, the dialog was built but not populated.
         types = [c for c in self.app.findChildren(
-            lambda c: c.roleName == "combo box")]
+            lambda c: c.roleName == "toggle button" and c.name in ("Column", "Line", "Pie"))]
         self.assertTrue(types, "chart dialog has no type chooser")
 
         insert.do_action(0)
