@@ -147,6 +147,68 @@ impl TablesEngine {
         Ok(())
     }
 
+    /// What was typed into a cell on sheet `sheet`: its formula with the
+    /// leading `=`, else its value as text ("" when empty). Setting this
+    /// back with `set_cell_text` recreates the cell.
+    pub fn input_at(&self, sheet: usize, row: usize, col: usize) -> String {
+        self.model
+            .get_localized_cell_content(sheet as u32, row as i32 + 1, col as i32 + 1)
+            .unwrap_or_default()
+    }
+
+    /// Every formula cell in the workbook, `(sheet, row, col, input)`.
+    pub fn formula_cells(&self) -> Vec<(usize, usize, usize, String)> {
+        let mut out = Vec::new();
+        for (s, ws) in self.model.workbook.worksheets.iter().enumerate() {
+            for (&r, row) in &ws.sheet_data {
+                for (&c, cell) in row {
+                    if cell.has_formula() && r >= 1 && c >= 1 {
+                        let (r, c) = (r as usize - 1, c as usize - 1);
+                        out.push((s, r, c, self.input_at(s, r, c)));
+                    }
+                }
+            }
+        }
+        out
+    }
+
+    /// Insert `count` blank rows before `at` on sheet `sheet`; formulas
+    /// everywhere follow the cells they point at.
+    pub fn insert_rows(&mut self, sheet: usize, at: usize, count: usize) -> Result<(), String> {
+        self.model.insert_rows(sheet as u32, at as i32 + 1, count as i32)?;
+        self.model.evaluate();
+        Ok(())
+    }
+
+    pub fn delete_rows(&mut self, sheet: usize, at: usize, count: usize) -> Result<(), String> {
+        self.model.delete_rows(sheet as u32, at as i32 + 1, count as i32)?;
+        self.model.evaluate();
+        Ok(())
+    }
+
+    pub fn insert_cols(&mut self, sheet: usize, at: usize, count: usize) -> Result<(), String> {
+        self.model.insert_columns(sheet as u32, at as i32 + 1, count as i32)?;
+        self.model.evaluate();
+        Ok(())
+    }
+
+    pub fn delete_cols(&mut self, sheet: usize, at: usize, count: usize) -> Result<(), String> {
+        self.model.delete_columns(sheet as u32, at as i32 + 1, count as i32)?;
+        self.model.evaluate();
+        Ok(())
+    }
+
+    /// Insert a worksheet at `index`, reusing `sheet_id` when given (so a
+    /// sheet deleted and put back keeps its identity).
+    pub fn insert_sheet(&mut self, index: usize, name: &str, sheet_id: Option<u32>) -> Result<(), String> {
+        self.model.insert_sheet(name, index as u32, sheet_id)?;
+        if self.active_sheet >= index && self.sheet_count() > 1 {
+            self.active_sheet += 1;
+        }
+        self.model.evaluate();
+        Ok(())
+    }
+
     pub fn sheet_name_at(&self, index: usize) -> Option<String> {
         self.model.workbook.worksheets.get(index).map(|w| w.name.clone())
     }

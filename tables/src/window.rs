@@ -567,7 +567,7 @@ impl TablesWindow {
                 }
             });
             drag.connect_drag_end(move |_g, _dx, _dy| {
-                if let (Some((col, old_width)), Some(before)) =
+                if let (Some((col, old_width)), Some(_)) =
                     (dc3.get(), before_end.borrow_mut().take())
                 {
                     let new_width = resize_controller
@@ -579,7 +579,7 @@ impl TablesWindow {
                     if (new_width - old_width).abs() > f64::EPSILON {
                         resize_controller
                             .borrow_mut()
-                            .record_sheet_mutation("Resize Column", before);
+                            .record_resize(tables_core::controller::Axis::Cols, col, old_width);
                     }
                 }
                 dc3.set(None);
@@ -621,7 +621,7 @@ impl TablesWindow {
                 }
             });
             drag.connect_drag_end(move |_g, _dx, _dy| {
-                if let (Some((row, old_height)), Some(before)) =
+                if let (Some((row, old_height)), Some(_)) =
                     (dr3.get(), before_end.borrow_mut().take())
                 {
                     let new_height = resize_controller
@@ -633,7 +633,7 @@ impl TablesWindow {
                     if (new_height - old_height).abs() > f64::EPSILON {
                         resize_controller
                             .borrow_mut()
-                            .record_sheet_mutation("Resize Row", before);
+                            .record_resize(tables_core::controller::Axis::Rows, row, old_height);
                     }
                 }
                 dr3.set(None);
@@ -1270,8 +1270,7 @@ impl TablesWindow {
             let ctl = controller.clone();
             let da = drawing_area.clone();
             Box::new(move || {
-                ctl.borrow_mut()
-                    .mutate_sheet("Merge Cells", SheetModel::toggle_merge);
+                ctl.borrow_mut().toggle_merge();
                 da.queue_draw();
             })
         };

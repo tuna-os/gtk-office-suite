@@ -8,6 +8,7 @@ use crate::sheet::{BorderStyle, CellBorder, SheetModel};
 use crate::style::CellStyle;
 
 use super::core::WorkbookController;
+use super::ops::Op;
 
 /// Which edges of the selection a border command draws.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -40,22 +41,19 @@ impl WorkbookController {
     /// Apply `change` to the style of every selected cell, as one undo step
     /// named `description`.
     pub fn format_selection(&mut self, description: &'static str, change: impl Fn(&mut CellStyle)) {
-        let differs = {
+        // One SetStyle op per cell that actually changes.
+        let ops: Vec<Op> = {
             let state = self.state.borrow();
             let sheet = state.sheet();
-            cells(&sheet).any(|(r, c)| {
-                let mut s = sheet.styles[r][c].clone();
-                change(&mut s);
-                s != sheet.styles[r][c]
-            })
+            cells(&sheet)
+                .filter_map(|(r, c)| {
+                    let mut s = sheet.styles[r][c].clone();
+                    change(&mut s);
+                    (s != sheet.styles[r][c]).then_some(Op::SetStyle { sheet: sheet.sheet_id, row: r, col: c, style: s })
+                })
+                .collect()
         };
-        if differs {
-            self.mutate_sheet(description, |sheet| {
-                for (r, c) in cells(sheet).collect::<Vec<_>>() {
-                    change(&mut sheet.styles[r][c]);
-                }
-            });
-        }
+        self.apply_ops(description, ops);
     }
 
     /// Draw (or clear) borders on the selection in `style` and `color`.
@@ -95,14 +93,20 @@ impl WorkbookController {
                 }
             }
         }
-        let unchanged = self.state.borrow().sheet().borders == after;
-        if !unchanged {
-            let description = match preset {
-                BorderPreset::None => "Clear Borders",
-                _ => "Set Borders",
-            };
-            self.mutate_sheet(description, move |sheet| sheet.borders = after);
-        }
+        let ops: Vec<Op> = {
+            let state = self.state.borrow();
+            let sheet = state.sheet();
+            (r0..=r1)
+                .flat_map(|r| (c0..=c1).map(move |c| (r, c)))
+                .filter(|&(r, c)| after[r][c] != sheet.borders[r][c])
+                .map(|(r, c)| Op::SetBorder { sheet: sheet.sheet_id, row: r, col: c, border: after[r][c].clone() })
+                .collect()
+        };
+        let description = match preset {
+            BorderPreset::None => "Clear Borders",
+            _ => "Set Borders",
+        };
+        self.apply_ops(description, ops);
     }
 }
 

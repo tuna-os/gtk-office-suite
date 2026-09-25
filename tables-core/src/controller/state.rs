@@ -56,12 +56,12 @@ impl WorkbookState {
             .unwrap_or_else(|| self.engine.cell(row, col))
     }
 
-    fn set_cell_input(&mut self, row: usize, col: usize, input: &str) {
+    pub(super) fn set_cell_input(&mut self, row: usize, col: usize, input: &str) {
         self.engine.set_cell_text(row, col, input);
         self.sync_active_sheet();
     }
 
-    fn set_cell_inputs<'a>(&mut self, inputs: impl IntoIterator<Item = (usize, usize, &'a str)>) {
+    pub(super) fn set_cell_inputs<'a>(&mut self, inputs: impl IntoIterator<Item = (usize, usize, &'a str)>) {
         for (row, col, input) in inputs {
             self.engine.set_cell_text(row, col, input);
         }
@@ -69,7 +69,7 @@ impl WorkbookState {
         self.sync_active_sheet();
     }
 
-    fn set_cell_input_on_sheet(&mut self, sheet: usize, row: usize, col: usize, input: &str) {
+    pub(super) fn set_cell_input_on_sheet(&mut self, sheet: usize, row: usize, col: usize, input: &str) {
         let previous = self.active_sheet;
         self.engine
             .set_active_sheet(sheet)
@@ -82,7 +82,7 @@ impl WorkbookState {
         self.active_sheet = previous;
     }
 
-    fn set_cell_inputs_on_sheet<'a>(
+    pub(super) fn set_cell_inputs_on_sheet<'a>(
         &mut self,
         sheet: usize,
         inputs: impl IntoIterator<Item = (usize, usize, &'a str)>,
@@ -151,20 +151,23 @@ impl WorkbookState {
         Ok(())
     }
 
-    fn sync_active_sheet(&mut self) {
+    /// The engine reads every sheet through one grid size: keep it at
+    /// least as big as the biggest sheet, or a grown sheet reads blanks past
+    /// the old edge.
+    pub fn grow_engine(&mut self) {
+        for s in &self.sheets {
+            let s = s.borrow();
+            self.engine.rows = self.engine.rows.max(s.rows);
+            self.engine.cols = self.engine.cols.max(s.cols);
+        }
+    }
+
+    pub(super) fn sync_active_sheet(&mut self) {
         let active = self.active_sheet;
         self.sheets[active]
             .borrow_mut()
             .sync_from_engine(&self.engine);
     }
-}
-
-pub(super) struct CellInputCommand {
-    pub(super) sheet_id: u32,
-    pub(super) row: usize,
-    pub(super) col: usize,
-    pub(super) old_input: String,
-    pub(super) new_input: String,
 }
 
 /// Put a recorded sheet back, without putting its *name* back.
@@ -208,24 +211,6 @@ impl Command<WorkbookState> for SheetSnapshotCommand {
 
     fn description(&self) -> &str {
         self.description
-    }
-}
-
-impl Command<WorkbookState> for CellInputCommand {
-    fn apply(&self, state: &mut WorkbookState) {
-        if let Some(index) = state.sheet_index_for_id(self.sheet_id) {
-            state.set_cell_input_on_sheet(index, self.row, self.col, &self.new_input);
-        }
-    }
-
-    fn undo(&self, state: &mut WorkbookState) {
-        if let Some(index) = state.sheet_index_for_id(self.sheet_id) {
-            state.set_cell_input_on_sheet(index, self.row, self.col, &self.old_input);
-        }
-    }
-
-    fn description(&self) -> &str {
-        "Edit Cell"
     }
 }
 

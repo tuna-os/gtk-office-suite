@@ -18,20 +18,14 @@ impl WorkbookController {
         if sheet.protection.protected && sheet.cell_protections[row][col].locked {
             return;
         }
-        let sheet_id = sheet.sheet_id;
         let old_input = state.cell_input(row, col);
+        let active = sheet.sheet_id;
         drop(sheet);
         drop(state);
         if old_input == new_input {
             return;
         }
-        self.execute(Box::new(CellInputCommand {
-            sheet_id,
-            row,
-            col,
-            old_input,
-            new_input,
-        }));
+        self.apply_ops("Edit Cell", vec![super::ops::Op::SetCell { sheet: active, row, col, input: new_input }]);
     }
 
     pub fn mutate_sheet(
