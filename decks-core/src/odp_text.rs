@@ -218,15 +218,15 @@ impl TextStyles {
                 props.push_str(&format!(" fo:text-align=\"{}\"", st.align.to_odf()));
             }
             if st.margin_left != 0.0 {
-                props.push_str(&format!(" fo:margin-left=\"{}\"", pt(st.margin_left)));
+                props.push_str(&format!(" fo:margin-left=\"{}\"", pt(crate::odp::page_x(st.margin_left))));
             }
             if st.indent != 0.0 {
-                props.push_str(&format!(" fo:text-indent=\"{}\"", pt(st.indent)));
+                props.push_str(&format!(" fo:text-indent=\"{}\"", pt(crate::odp::page_x(st.indent))));
             }
             for (attr, sp) in [("fo:margin-top", st.space_before), ("fo:margin-bottom", st.space_after)] {
                 if let Spacing::Units(u) = sp {
                     if u != 0.0 {
-                        props.push_str(&format!(" {attr}=\"{}\"", pt(u)));
+                        props.push_str(&format!(" {attr}=\"{}\"", pt(crate::odp::page_x(u))));
                     }
                 }
             }
@@ -243,8 +243,8 @@ impl TextStyles {
                     "<style:list-level-properties text:list-level-position-and-space-mode=\"label-alignment\">\
                      <style:list-level-label-alignment text:label-followed-by=\"listtab\" \
                      fo:margin-left=\"{}\" fo:text-indent=\"{}\"/></style:list-level-properties>",
-                    pt(l.margin_left),
-                    pt(l.indent)
+                    pt(crate::odp::page_x(l.margin_left)),
+                    pt(crate::odp::page_x(l.indent))
                 );
                 let n = l.level + 1;
                 // The bullet's own font and colour, and its size relative
@@ -290,10 +290,10 @@ impl TextStyles {
             if let Some(ins) = insets {
                 props.push_str(&format!(
                     " fo:padding-left=\"{}\" fo:padding-top=\"{}\" fo:padding-right=\"{}\" fo:padding-bottom=\"{}\"",
-                    pt(ins.left),
-                    pt(ins.top),
-                    pt(ins.right),
-                    pt(ins.bottom)
+                    pt(crate::odp::page_x(ins.left)),
+                    pt(crate::odp::page_y(ins.top)),
+                    pt(crate::odp::page_x(ins.right)),
+                    pt(crate::odp::page_y(ins.bottom))
                 ));
             }
             out.push_str(&format!(

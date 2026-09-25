@@ -58,6 +58,50 @@ fn rotate_point(a: f64, x: f64, y: f64) -> (f64, f64) {
     (x * c + y * s, -x * s + y * c)
 }
 
+thread_local! {
+    // Points per model unit across and down, for the deck being written:
+    // its page (`MasterSlide::page_emu`) over the model's 960x540. A deck
+    // with no size of its own is written on this writer's 960x540pt page,
+    // one point to the unit. `write_bytes` sets it for the length of a write.
+    static PAGE: std::cell::Cell<(f64, f64)> = const { std::cell::Cell::new((1.0, 1.0)) };
+}
+
+/// The page this writer puts `deck` on, in points.
+fn page_pt(deck: &Deck) -> (f64, f64) {
+    match deck.masters.first().and_then(|m| m.page_emu) {
+        Some((cx, cy)) if cx > 0.0 && cy > 0.0 => (cx / 12700.0, cy / 12700.0),
+        _ => DEFAULT_PAGE_PT,
+    }
+}
+
+/// Sets `PAGE` for one write, and puts the default back after it.
+struct PageScale;
+
+impl PageScale {
+    fn set(deck: &Deck) -> PageScale {
+        let (w, h) = page_pt(deck);
+        PAGE.with(|p| p.set((w / DEFAULT_PAGE_PT.0, h / DEFAULT_PAGE_PT.1)));
+        PageScale
+    }
+}
+
+impl Drop for PageScale {
+    fn drop(&mut self) {
+        PAGE.with(|p| p.set((1.0, 1.0)));
+    }
+}
+
+/// A length across the page (or with no direction), from model units to
+/// the points written. The reader scales such lengths by the page's width.
+pub(crate) fn page_x(v: f64) -> f64 {
+    v * PAGE.with(|p| p.get().0)
+}
+
+/// A length down the page, from model units to the points written.
+pub(crate) fn page_y(v: f64) -> f64 {
+    v * PAGE.with(|p| p.get().1)
+}
+
 /// Round to a millionth of a point, so a value that came back through the
 /// trigonometry above is bit-identical on the next save. Without it
 /// `odp_geometry_does_not_drift_across_repeated_saves` would fail on the
@@ -73,6 +117,8 @@ fn snap(v: f64) -> f64 {
 /// what every reader handles and because it keeps the bytes of the decks
 /// this suite has already written unchanged.
 fn geometry(x: f64, y: f64, w: f64, h: f64, rotation: f64) -> String {
+    let (x, w) = (page_x(x), page_x(w));
+    let (y, h) = (page_y(y), page_y(h));
     if rotation == 0.0 {
         return format!(
             "svg:x=\"{x}pt\" svg:y=\"{y}pt\" svg:width=\"{w}pt\" svg:height=\"{h}pt\""
@@ -389,13 +435,21 @@ fn with_ids(shapes: &str, count: usize, si: usize) -> String {
 pub(crate) struct GraphicStyles {
     prefix: String,
     styles: Vec<crate::engine::shape::ShapeStyle>,
+    /// The deck's gradients (`odp_graphics::deck_gradients`), which
+    /// styles.xml declares and these styles name.
+    gradients: Vec<crate::engine::shape::LinearGradient>,
     /// Text boxes' paragraph, list and frame styles, under the same prefix.
     text: crate::odp_text::TextStyles,
 }
 
 impl GraphicStyles {
-    fn new(prefix: &str) -> Self {
-        GraphicStyles { prefix: prefix.to_string(), styles: Vec::new(), text: crate::odp_text::TextStyles::new(prefix) }
+    fn new(prefix: &str, deck: &Deck) -> Self {
+        GraphicStyles {
+            prefix: prefix.to_string(),
+            styles: Vec::new(),
+            gradients: crate::odp_graphics::deck_gradients(deck),
+            text: crate::odp_text::TextStyles::new(prefix),
+        }
     }
 
     fn name_of(&mut self, style: &crate::engine::shape::ShapeStyle) -> String {
@@ -409,24 +463,20 @@ impl GraphicStyles {
         format!("{}{}", self.prefix, i + 1)
     }
 
-    /// The `<style:style>` declarations, for `office:automatic-styles`.
-    /// A gradient is written as its mean colour: ODF gradients need named
-    /// `draw:gradient` styles in office:styles, not yet written.
+    /// The `<style:style>` declarations, for `office:automatic-styles`. A
+    /// gradient is named: styles.xml declares it (`odp_graphics`).
     fn declare(&self) -> String {
         let text = self.text.declare();
         self.styles
             .iter()
             .enumerate()
             .map(|(i, s)| {
-                let fill = match s.fill {
-                    Some(c) => format!("draw:fill=\"solid\" draw:fill-color=\"#{}\"", c.to_hex().to_lowercase()),
-                    None => "draw:fill=\"none\"".to_string(),
-                };
+                let fill = crate::odp_graphics::fill_attrs(s, &self.gradients);
                 let stroke = match s.stroke {
                     Some(st) => format!(
                         "draw:stroke=\"solid\" svg:stroke-color=\"#{}\" svg:stroke-width=\"{}pt\"",
                         st.color.to_hex().to_lowercase(),
-                        snap(st.width)
+                        snap(page_x(st.width))
                     ),
                     None => "draw:stroke=\"none\"".to_string(),
                 };
@@ -531,7 +581,7 @@ fn shapes_xml(
                         ShapeKind::Rect => format!("<draw:rect draw:style-name=\"{gs}\" {at}/>"),
                         ShapeKind::RoundRect { radius } => format!(
                             "<draw:rect draw:style-name=\"{gs}\" draw:corner-radius=\"{}pt\" {at}/>",
-                            snap(radius.clamp(0.0, 0.5) * w.min(*h))
+                            snap(page_x(radius.clamp(0.0, 0.5) * w.min(*h)))
                         ),
                         ShapeKind::Ellipse => format!("<draw:ellipse draw:style-name=\"{gs}\" {at}/>"),
                         // Impress's names for the other DrawingML presets.
@@ -597,7 +647,7 @@ fn content_xml(deck: &Deck, media: &mut Vec<Media>) -> Result<String, String> {
     let style_of = |st: &RunStyle| styles.iter().position(|s| s == st).map(|i| i + 1).unwrap_or(0);
 
     let mut pages = String::new();
-    let mut graphics = GraphicStyles::new("gr");
+    let mut graphics = GraphicStyles::new("gr", deck);
     for (si, slide) in deck.slides.iter().enumerate() {
         let dp_attr = if drawing_page_props(slide).is_some() {
             format!(" draw:style-name=\"dp{}\"", si + 1)
@@ -750,13 +800,17 @@ fn decode_style_name(token: &str) -> String {
 /// back, so it would have round-tripped through this reader alone — the
 /// exact shape of check this row keeps catching.
 fn styles_xml(deck: &Deck, media: &mut Vec<Media>) -> Result<String, String> {
-    let mut auto = String::from(
+    let (page_w, page_h) = page_pt(deck);
+    let mut auto = format!(
         "<style:page-layout style:name=\"PM1\">\
-         <style:page-layout-properties fo:page-width=\"960pt\" fo:page-height=\"540pt\" \
-         style:print-orientation=\"landscape\"/></style:page-layout>",
+         <style:page-layout-properties fo:page-width=\"{}pt\" fo:page-height=\"{}pt\" \
+         style:print-orientation=\"{}\"/></style:page-layout>",
+        snap(page_w),
+        snap(page_h),
+        if page_w >= page_h { "landscape" } else { "portrait" }
     );
     let mut pages = String::new();
-    let mut master_graphics = GraphicStyles::new("mgr");
+    let mut master_graphics = GraphicStyles::new("mgr", deck);
     for (i, master) in deck.masters.iter().enumerate() {
         let bg = master.background.trim_start_matches('#');
         let dp = if bg.len() == 6 {
@@ -797,6 +851,7 @@ fn styles_xml(deck: &Deck, media: &mut Vec<Media>) -> Result<String, String> {
          svg:font-family=\"&apos;{f}&apos;\"/></office:font-face-decls>",
         f = esc(font)
     );
+    let gradients = crate::odp_graphics::gradient_defs(&crate::odp_graphics::deck_gradients(deck));
     let default_style = format!(
         "<style:default-style style:family=\"graphic\">\
          <style:text-properties style:font-name=\"{}\"/></style:default-style>",
@@ -816,7 +871,7 @@ fn styles_xml(deck: &Deck, media: &mut Vec<Media>) -> Result<String, String> {
          xmlns:xlink=\"http://www.w3.org/1999/xlink\" \
          office:version=\"1.2\">\
          {font_decls}\
-         <office:styles>{default_style}</office:styles>\
+         <office:styles>{default_style}{gradients}</office:styles>\
          <office:automatic-styles>{auto}</office:automatic-styles>\
          <office:master-styles>{pages}</office:master-styles>\
          </office:document-styles>"
@@ -862,6 +917,8 @@ pub fn write(deck: &Deck, path: &str) -> Result<(), String> {
 /// Render the deck to an in-memory .odp buffer without touching disk —
 /// shared by the real save path (above) and autosave snapshots.
 pub fn write_bytes(deck: &Deck) -> Result<Vec<u8>, String> {
+    // Every length goes onto the deck's own page size.
+    let _page = PageScale::set(deck);
     let buf = std::io::Cursor::new(Vec::new());
     let mut z = zip::ZipWriter::new(buf);
     z.start_file(
@@ -1202,12 +1259,16 @@ fn parse_page_size_pt(xml: &str) -> Option<(f64, f64)> {
 /// units outright assumed.
 const DEFAULT_PAGE_PT: (f64, f64) = (960.0, 540.0);
 
+// One argument per kind of style a page's shapes can name, plus the page
+// scale and the picture resolver: bundling them would only rename them.
+#[allow(clippy::too_many_arguments)]
 fn parse_pages(
     xml: &str,
     page_tag: &str,
     page_bg: &std::collections::HashMap<String, String>,
     text_styles: &std::collections::HashMap<String, RunStyle>,
     text_defs: &crate::odp_text::TextDefs,
+    graphics: &crate::odp_graphics::GraphicDefs,
     scale: (f64, f64),
     resolve_image: &mut dyn FnMut(&str) -> Option<String>,
 ) -> Result<Vec<Page>, String> {
@@ -1250,6 +1311,18 @@ fn parse_pages(
                 None => (g("svg:x"), g("svg:y"), 0.0),
             };
         (x_pt * scale.0, y_pt * scale.1, w_pt * scale.0, h_pt * scale.1, rotation)
+    };
+
+    // A rect or ellipse with a graphic style is a painted Shape, as on a
+    // slide read from pptx; one with none stays the editor's plain kind.
+    let styled = |e: &quick_xml::events::BytesStart, element: &str| -> Option<SlideObject> {
+        let style = graphics.style(&attr(e, "draw:style-name")?, scale.0)?;
+        let (x, y, w, h, rotation) = geo(e);
+        let radius = attr(e, "draw:corner-radius")
+            .and_then(|v| parse_length_pt(&v))
+            .map(|r| r * scale.0 / w.min(h).max(f64::EPSILON));
+        let kind = crate::odp_graphics::kind_of(element, None, radius);
+        Some(SlideObject::Shape { kind, x, y, w, h, rotation, style })
     };
 
     // Builds: each object's xml:id (the shape element it came from), and
@@ -1365,7 +1438,7 @@ fn parse_pages(
                     if let Some(s) = slide.as_mut() {
                         if !in_notes {
                             let (x, y, w, h, rotation) = geo(e);
-                            s.objects.push(SlideObject::Rect { x, y, w, h, rotation });
+                            s.objects.push(styled(e, "draw:rect").unwrap_or(SlideObject::Rect { x, y, w, h, rotation }));
                         }
                     }
                 }
@@ -1374,7 +1447,10 @@ fn parse_pages(
                         if !in_notes {
                             let (x, y, w, h, rotation) = geo(e);
                             let r = (w.max(h)) / 2.0;
-                            s.objects.push(SlideObject::Circle { x: x + w / 2.0, y: y + h / 2.0, r, rotation });
+                            s.objects.push(
+                                styled(e, "draw:ellipse")
+                                    .unwrap_or(SlideObject::Circle { x: x + w / 2.0, y: y + h / 2.0, r, rotation }),
+                            );
                         }
                     }
                 }
@@ -1396,14 +1472,17 @@ fn parse_pages(
                 "draw:rect" => {
                     if let (Some(s), false) = (slide.as_mut(), in_notes) {
                         let (x, y, w, h, rotation) = geo(e);
-                        s.objects.push(SlideObject::Rect { x, y, w, h, rotation });
+                        s.objects.push(styled(e, "draw:rect").unwrap_or(SlideObject::Rect { x, y, w, h, rotation }));
                     }
                 }
                 "draw:ellipse" | "draw:circle" => {
                     if let (Some(s), false) = (slide.as_mut(), in_notes) {
                         let (x, y, w, h, rotation) = geo(e);
                         let r = (w.max(h)) / 2.0;
-                        s.objects.push(SlideObject::Circle { x: x + w / 2.0, y: y + h / 2.0, r, rotation });
+                        s.objects.push(
+                            styled(e, "draw:ellipse")
+                                .unwrap_or(SlideObject::Circle { x: x + w / 2.0, y: y + h / 2.0, r, rotation }),
+                        );
                     }
                 }
                 // The empty form, which is what this writer emits — see the
@@ -1501,6 +1580,9 @@ fn parse_pages(
                                 }
                             } else if !text.is_empty() {
                                 s.objects.push(SlideObject::TextBox { text, x, y, w, h, rotation, runs, body: body_of(&frame_style, &mut paras) });
+                            } else if let Some(style) = frame_style.as_deref().and_then(|n| graphics.style(n, scale.0)) {
+                                let kind = crate::odp_graphics::kind_of("draw:custom-shape", shape_type.as_deref(), None);
+                                s.objects.push(SlideObject::Shape { kind, x, y, w, h, rotation, style });
                             } else if shape_type.as_deref().is_some_and(|t| t.contains("ellipse")) {
                                 let r = (w.max(h)) / 2.0;
                                 s.objects.push(SlideObject::Circle { x: x + w / 2.0, y: y + h / 2.0, r, rotation });
@@ -1586,6 +1668,9 @@ pub fn read(path: &str) -> Result<Deck, String> {
     let mut text_defs = crate::odp_text::TextDefs::default();
     text_defs.read(&content);
     text_defs.read(&styles);
+    let mut graphic_defs = crate::odp_graphics::GraphicDefs::default();
+    graphic_defs.read(&styles);
+    graphic_defs.read(&content);
 
     // One font for the whole document — see `styles_xml` for why ODF has
     // no per-master one to read. Every master gets it, so a deck saved and
@@ -1606,7 +1691,7 @@ pub fn read(path: &str) -> Result<Deck, String> {
     let mut master_idx_by_name: std::collections::HashMap<String, usize> = Default::default();
     let master_pages = {
         let mut resolve = |href: &str| extract_picture(href, &mut zip, &mut budget);
-        parse_pages(&styles, "style:master-page", &page_bg, &text_styles, &text_defs, scale, &mut resolve)?
+        parse_pages(&styles, "style:master-page", &page_bg, &text_styles, &text_defs, &graphic_defs, scale, &mut resolve)?
     };
     for page in master_pages {
         master_idx_by_name.insert(page.slide.title.clone(), masters.len());
@@ -1634,7 +1719,7 @@ pub fn read(path: &str) -> Result<Deck, String> {
     let mut deck = Deck { slides: Vec::new(), masters };
     let slide_pages = {
         let mut resolve = |href: &str| extract_picture(href, &mut zip, &mut budget);
-        parse_pages(&content, "draw:page", &page_bg, &text_styles, &text_defs, scale, &mut resolve)?
+        parse_pages(&content, "draw:page", &page_bg, &text_styles, &text_defs, &graphic_defs, scale, &mut resolve)?
     };
     for (i, page) in slide_pages.into_iter().enumerate() {
         let mut slide = page.slide;
