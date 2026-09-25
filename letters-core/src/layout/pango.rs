@@ -16,7 +16,7 @@ use std::collections::HashMap;
 
 use pango::prelude::*;
 
-use super::{heading_scale, paragraph_request, Item, LayoutOptions, LineBox, RenderTree, ShapeRequest, Shaper, Source};
+use super::{heading_scale, paragraph_request, request_key, Item, LayoutOptions, LineBox, RenderTree, ShapeCache, ShapeRequest, Shaper, Source};
 use crate::model::{Alignment, Document, VertAlign};
 
 /// Pango's fixed-point scale.
@@ -30,9 +30,12 @@ fn to_units(pt: f64) -> i32 {
     (pt * SCALE).round() as i32
 }
 
-/// A shaper backed by Pango through a Cairo font map, at 72 dpi.
+/// A shaper backed by Pango through a Cairo font map, at 72 dpi. It keeps
+/// the Pango layout of each paragraph it shapes (by `request_key`), so
+/// drawing a page reuses the layout its lines came from.
 pub struct PangoShaper {
     context: pango::Context,
+    layouts: HashMap<u64, pango::Layout>,
 }
 
 impl Default for PangoShaper {
@@ -55,7 +58,7 @@ impl PangoShaper {
         pangocairo::functions::context_set_font_options(&context, Some(&options));
         // Positions in fractional points, not rounded to whole units.
         context.set_round_glyph_positions(false);
-        Self { context }
+        Self { context, layouts: HashMap::new() }
     }
 
     /// The Pango layout of one paragraph, exactly as the engine shapes it.
@@ -75,11 +78,12 @@ impl PangoShaper {
         let attrs = pango::AttrList::new();
         for run in req.runs {
             let start = text.len() as u32;
-            if run.style.image.is_some() {
+            if super::is_object(run) {
                 // An image is one object char holding its box open; the
-                // painter draws the picture into it (layout_text).
+                // painter draws the picture into it (layout_text). A
+                // footnote reference is one too, with no size yet.
                 text.push(super::OBJECT);
-                let (w, h) = super::image_size_pt(run, req.width_pt);
+                let (w, h) = if run.style.image.is_some() { super::image_size_pt(run, req.width_pt) } else { (0.0, 0.0) };
                 let rect = pango::Rectangle::new(0, -to_units(h), to_units(w), to_units(h));
                 let mut a: pango::Attribute = pango::AttrShape::new(&rect, &rect).into();
                 a.set_start_index(start);
@@ -217,6 +221,7 @@ fn line_boxes(layout: &pango::Layout) -> Vec<LineBox> {
 impl Shaper for PangoShaper {
     fn shape(&mut self, req: &ShapeRequest<'_>) -> Vec<LineBox> {
         let layout = self.layout(req);
+        self.layouts.insert(request_key(req), layout.clone());
         let mut lines = line_boxes(&layout);
         // A line is as tall as the font's ascent, descent *and* line gap,
         // as LibreOffice and Word space lines (Liberation Serif 12pt:
@@ -242,8 +247,11 @@ pub struct Typeset {
     opts: LayoutOptions,
     tree: RenderTree,
     shaper: PangoShaper,
-    /// Paragraph layouts by (paragraph, box width bits).
-    cache: RefCell<HashMap<(usize, u64), pango::Layout>>,
+    /// Shaped paragraphs kept for the next `update`.
+    shapes: ShapeCache,
+    /// Layouts made for drawing that the shaper did not keep (a paragraph's
+    /// lines came from the shape cache), by request key.
+    cache: RefCell<HashMap<u64, pango::Layout>>,
     images: RefCell<HashMap<String, Option<cairo::ImageSurface>>>,
     loader: Box<ImageLoader>,
 }
@@ -294,13 +302,16 @@ impl Typeset {
     /// Lay `doc` out into pages.
     pub fn new(doc: Document, opts: LayoutOptions) -> Self {
         let mut shaper = PangoShaper::new();
+        let mut shapes = ShapeCache::default();
         let opts = opts.for_document(&doc);
-        let tree = super::layout(&doc, &opts, &mut shaper);
+        let tree = super::relayout(&doc, &opts, &mut shaper, &mut shapes);
+        shapes.prune();
         Self {
             doc,
             opts,
             tree,
             shaper,
+            shapes,
             cache: RefCell::new(HashMap::new()),
             images: RefCell::new(HashMap::new()),
             loader: Box::new(load_png),
@@ -309,6 +320,21 @@ impl Typeset {
 
     pub fn tree(&self) -> &RenderTree {
         &self.tree
+    }
+
+    /// Lay out `doc` in place of the current document, re-shaping only the
+    /// paragraphs that changed (ADR 0010 stage 3c). Returns how many were
+    /// shaped.
+    pub fn update(&mut self, doc: Document, opts: LayoutOptions) -> usize {
+        self.opts = opts.for_document(&doc);
+        self.tree = super::relayout(&doc, &self.opts, &mut self.shaper, &mut self.shapes);
+        self.doc = doc;
+        let shaped = self.shapes.misses;
+        self.shapes.prune();
+        let keep: std::collections::HashSet<u64> = self.shapes.keys().copied().collect();
+        self.shaper.layouts.retain(|k, _| keep.contains(k));
+        self.cache.borrow_mut().clear();
+        shaped
     }
 
     pub fn document(&self) -> &Document {
@@ -347,9 +373,13 @@ impl Typeset {
 
     fn paragraph_layout(&self, para: usize, box_w: f64) -> Option<pango::Layout> {
         let p = self.doc.paragraphs.get(para)?;
-        let key = (para, box_w.to_bits());
+        let req = paragraph_request(p, box_w, &self.opts);
+        let key = request_key(&req);
+        if let Some(l) = self.shaper.layouts.get(&key) {
+            return Some(l.clone());
+        }
         let mut cache = self.cache.borrow_mut();
-        Some(cache.entry(key).or_insert_with(|| self.shaper.layout(&paragraph_request(p, box_w, &self.opts))).clone())
+        Some(cache.entry(key).or_insert_with(|| self.shaper.layout(&req)).clone())
     }
 
     /// Write every page to a PDF at `path`, one PDF page per laid-out page
@@ -650,6 +680,22 @@ mod tests {
     /// each at the page's size in points. (The render lab rasterises this
     /// same PDF and compares it with the on-screen page view pixel by
     /// pixel: `print_agreement`.)
+    /// Updating after an edit re-shapes the edited paragraph only, and
+    /// draws and hit-tests the same as a fresh layout.
+    #[test]
+    fn update_reshapes_only_what_changed() {
+        let text = "The quick brown fox jumps over the lazy dog. ".repeat(4);
+        let mut d = doc(50, text.trim_end());
+        let mut t = Typeset::new(d.clone(), LayoutOptions::default());
+        let op = crate::edit::typing(&d, crate::edit::paragraph_start(&d, 20) + 3, "abc").unwrap();
+        crate::edit::apply(&mut d, &op).unwrap();
+        assert_eq!(t.update(d.clone(), LayoutOptions::default()), 1);
+        let fresh = Typeset::new(d, LayoutOptions::default());
+        assert_eq!(t.tree(), fresh.tree());
+        let pos = TextPos { para: 20, offset: 5 };
+        assert_eq!(t.caret(pos), fresh.caret(pos));
+    }
+
     #[test]
     fn the_pdf_has_the_trees_pages_at_their_size() {
         let geometry = crate::model::PageGeometry { width_pt: 612.0, height_pt: 792.0, ..Default::default() };

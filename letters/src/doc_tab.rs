@@ -192,12 +192,7 @@ pub(crate) fn connect_suite_clipboard(widget: &gtk::Widget, buf: &gtk::TextBuffe
             let ctrl = mods.contains(gtk4::gdk::ModifierType::CONTROL_MASK);
             if ctrl && keyval == gtk4::gdk::Key::c {
                 if let Some((start, end)) = buf.selection_bounds() {
-                    let doc = crate::bridge::capture_from_buffer(&buf);
-                    let frag = letters_core::fragment::from_selection(
-                        &doc,
-                        start.offset() as usize,
-                        end.offset() as usize,
-                    );
+                    let frag = crate::bridge::selection_fragment(&buf, start.offset() as usize, end.offset() as usize);
                     let provider = suite_common::clipboard::provider(
                         letters_core::fragment::MIME,
                         &frag.to_json(),
@@ -419,10 +414,21 @@ pub(crate) fn make_doc_widget(settings: Option<&gio::Settings>) -> (PageContaine
             let (buf, pc, t2) = (b2.clone(), pc.clone(), timer.clone());
             let delay = if pc.is_print_layout() { 0 } else { 500 };
             let id = glib::timeout_add_local(std::time::Duration::from_millis(delay), move || {
-                let (typeset, starts) = typeset_with_starts(&pc, &buf);
-                pc.set_page_count(typeset.tree().pages.len());
-                if let (true, Some(view)) = (pc.is_print_layout(), pc.page_view()) {
-                    view.set_typeset(typeset, starts);
+                match pc.page_view().filter(|v| pc.is_print_layout() && v.page_count() > 0) {
+                    // Print Layout keeps its typeset and re-shapes only the
+                    // paragraphs the edit changed (ADR 0010 stage 3c).
+                    Some(view) => {
+                        let (doc, starts) = crate::bridge::capture_with_starts(&buf);
+                        view.update_document(doc, layout_options(&pc), starts);
+                        pc.set_page_count(view.page_count());
+                    }
+                    None => {
+                        let (typeset, starts) = typeset_with_starts(&pc, &buf);
+                        pc.set_page_count(typeset.tree().pages.len());
+                        if let (true, Some(view)) = (pc.is_print_layout(), pc.page_view()) {
+                            view.set_typeset(typeset, starts);
+                        }
+                    }
                 }
                 t2.borrow_mut().take();
                 glib::ControlFlow::Break

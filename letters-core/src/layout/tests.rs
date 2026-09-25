@@ -308,3 +308,38 @@ fn the_larger_of_space_after_and_space_before_separates_paragraphs() {
     let tops: Vec<f64> = line_items(&lay(&d).pages[0]).iter().map(|l| l.3).collect();
     assert_eq!(tops, vec![72.0, 72.0 + LINE + 24.0, 72.0 + 2.0 * LINE + 24.0 + 10.0]);
 }
+
+/// A shaper that counts the paragraphs it shapes.
+struct Counting(usize);
+
+impl Shaper for Counting {
+    fn shape(&mut self, req: &ShapeRequest<'_>) -> Vec<LineBox> {
+        self.0 += 1;
+        MonoShaper.shape(req)
+    }
+}
+
+/// Incremental relayout: after typing in one paragraph of a long document,
+/// only that paragraph is shaped again, and the result is the full layout.
+#[test]
+fn relayout_reshapes_only_the_edited_paragraph() {
+    let mut d = doc_of(200, "x");
+    for (i, p) in d.paragraphs.iter_mut().enumerate() {
+        p.runs = vec![Run::plain(format!("paragraph {i} of body text that wraps once or twice at this width"))];
+    }
+    let opts = opts();
+    let mut cache = ShapeCache::default();
+    let mut counting = Counting(0);
+    relayout(&d, &opts, &mut counting, &mut cache);
+    cache.prune();
+    let first = counting.0;
+    assert!(first >= 200, "everything is shaped once: {first}");
+
+    let op = crate::edit::typing(&d, 5, "x").unwrap();
+    crate::edit::apply(&mut d, &op).unwrap();
+    let tree = relayout(&d, &opts, &mut counting, &mut cache);
+    assert_eq!(cache.misses, 1, "only the edited paragraph is shaped again");
+    assert_eq!(counting.0, first + 1);
+    cache.prune();
+    assert_eq!(tree, lay(&d), "the incremental layout is the full layout");
+}
