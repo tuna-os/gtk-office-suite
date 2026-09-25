@@ -17,10 +17,7 @@ use suite_common_core::events::{Broadcaster, Hint, Listener};
 use suite_common_core::undo::UndoManager;
 
 use crate::engine::{MasterSlide, Slide, SlideObject};
-use crate::undo::{
-    AddObjectCmd, AddSlideCmd, ChangeTextCmd, DeleteObjectCmd, DeleteSlideCmd, MoveObjectCmd,
-    ReorderSlidesCmd,
-};
+use crate::ops::{Op, OpCommand};
 
 /// Marks the deck dirty on any undo-stack mutation (execute, undo, or
 /// redo) — driven by the undo manager's own broadcaster rather than set
@@ -75,7 +72,10 @@ impl DecksController {
     /// Insert a new slide at `index` (typically the current slide count)
     /// and return the index it landed at.
     pub fn add_slide(&self, index: usize, slide: Slide) -> usize {
-        self.undo.borrow_mut().execute(Box::new(AddSlideCmd { index, slide }));
+        let index = index.min(self.slides.borrow().len());
+        let mut slide = slide;
+        slide.ids = Default::default();
+        self.apply_ops("Add Slide", vec![Op::InsertSlide { at: index, slide: Box::new(slide) }]);
         index
     }
 
@@ -83,35 +83,82 @@ impl DecksController {
     /// selected, or `None` if `index` was the only slide (deletion is a
     /// no-op — Decks always keeps at least one slide).
     pub fn delete_slide(&self, index: usize) -> Option<usize> {
-        let (removed, new_selected) = {
-            let slides = self.slides.borrow();
+        let (id, new_selected) = {
+            let slides = self.ids_ready();
             if slides.len() <= 1 || index >= slides.len() {
                 return None;
             }
-            (slides[index].clone(), index.min(slides.len().saturating_sub(2)))
+            (slides[index].ids.slide, index.min(slides.len().saturating_sub(2)))
         };
-        self.undo.borrow_mut().execute(Box::new(DeleteSlideCmd { index, slide: removed }));
+        self.apply_ops("Delete Slide", vec![Op::DeleteSlide { slide: id }]);
         Some(new_selected)
     }
 
-    /// Swap the slide at `index` with its predecessor. Returns the new
-    /// index of the moved slide, or `None` if it was already first.
+    /// Move the slide at `index` one place up (earlier). Returns its new
+    /// index, or `None` if it was already first.
     pub fn move_slide_up(&self, index: usize) -> Option<usize> {
         if index == 0 {
             return None;
         }
-        self.undo.borrow_mut().execute(Box::new(ReorderSlidesCmd { from: index, to: index - 1 }));
+        let id = self.ids_ready().get(index)?.ids.slide;
+        self.apply_ops("Move Slide", vec![Op::MoveSlide { slide: id, to: index - 1 }]);
         Some(index - 1)
     }
 
-    /// Swap the slide at `index` with its successor. Returns the new
-    /// index of the moved slide, or `None` if it was already last.
+    /// Move the slide at `index` one place down (later). Returns its new
+    /// index, or `None` if it was already last.
     pub fn move_slide_down(&self, index: usize) -> Option<usize> {
-        if index + 1 >= self.slides.borrow().len() {
-            return None;
-        }
-        self.undo.borrow_mut().execute(Box::new(ReorderSlidesCmd { from: index, to: index + 1 }));
+        let id = {
+            let slides = self.ids_ready();
+            if index + 1 >= slides.len() {
+                return None;
+            }
+            slides[index].ids.slide
+        };
+        self.apply_ops("Move Slide", vec![Op::MoveSlide { slide: id, to: index + 1 }]);
         Some(index + 1)
+    }
+
+    /// The slides, every slide and object given its id first.
+    fn ids_ready(&self) -> std::cell::Ref<'_, Vec<Slide>> {
+        crate::ops::ensure_ids(&mut self.slides.borrow_mut());
+        self.slides.borrow()
+    }
+
+    /// Apply `ops` as one undo step named `description`, all or nothing.
+    /// Returns false (and records nothing) when there is nothing to do or
+    /// the group doesn't apply. The step's undo is the group's inverse ops.
+    pub fn apply_ops(&self, description: &str, ops: Vec<Op>) -> bool {
+        if ops.is_empty() {
+            return false;
+        }
+        let inverses = crate::ops::apply_all(&mut self.slides.borrow_mut(), &ops);
+        let Ok(inverses) = inverses else { return false };
+        if inverses.is_empty() {
+            // Every op addressed something deleted: nothing happened.
+            return false;
+        }
+        // Undo what was just applied, so the command applies it once, the
+        // path redo takes too.
+        let _ = crate::ops::apply_all(&mut self.slides.borrow_mut(), &inverses);
+        self.execute(Box::new(OpCommand { ops, inverses: Default::default(), description: description.to_string() }));
+        true
+    }
+
+    /// Edit the objects of slide `slide_idx` in place (same count) as one
+    /// undo step: one `SetObject` per object `edit` changes.
+    pub fn edit_objects(&self, slide_idx: usize, description: &str, edit: impl FnOnce(&mut Vec<SlideObject>)) -> bool {
+        let ops = {
+            let slides = self.ids_ready();
+            let Some(slide) = slides.get(slide_idx) else { return false };
+            let mut objects = slide.objects.clone();
+            edit(&mut objects);
+            if objects.len() != slide.objects.len() {
+                return false;
+            }
+            crate::ops::set_objects(&slides, slide_idx, &objects)
+        };
+        self.apply_ops(description, ops)
     }
 
     /// Escape hatch for object-level commands that don't yet have their
@@ -123,31 +170,67 @@ impl DecksController {
     }
 
     pub fn add_object(&self, slide_idx: usize, object: SlideObject) {
-        self.execute(Box::new(AddObjectCmd::new(slide_idx, object)));
+        let op = {
+            let slides = self.ids_ready();
+            let Some(slide) = slides.get(slide_idx) else { return };
+            Op::InsertObject {
+                slide: slide.ids.slide,
+                at: slide.objects.len(),
+                id: crate::ops::next_id(&slides),
+                object: Box::new(object),
+            }
+        };
+        self.apply_ops("Add Object", vec![op]);
     }
 
-    pub fn delete_object(&self, slide_idx: usize, index: usize, object: SlideObject) {
-        self.execute(Box::new(DeleteObjectCmd::new(slide_idx, index, object)));
+    /// Delete object `index` of slide `slide_idx` (a tombstone: see ops.rs).
+    /// `_object` is what the caller believes is there; the op takes the
+    /// object from the slide itself.
+    pub fn delete_object(&self, slide_idx: usize, index: usize, _object: SlideObject) {
+        let op = {
+            let slides = self.ids_ready();
+            let Some(slide) = slides.get(slide_idx) else { return };
+            let Some(id) = slide.ids.objects.get(index) else { return };
+            Op::DeleteObject { slide: slide.ids.slide, id: *id }
+        };
+        self.apply_ops("Delete Object", vec![op]);
     }
 
     pub fn move_object(&self, slide_idx: usize, index: usize, dx: f64, dy: f64) {
-        self.execute(Box::new(MoveObjectCmd { slide_idx, index, dx, dy }));
+        self.edit_objects(slide_idx, "Move Object", |o| {
+            if let Some(obj) = o.get_mut(index) {
+                crate::undo::offset_object(obj, dx, dy);
+            }
+        });
     }
 
-    pub fn change_text(&self, slide_idx: usize, index: usize, old_text: String, new_text: String) {
-        self.execute(Box::new(ChangeTextCmd { slide_idx, index, old_text, new_text }));
+    pub fn change_text(&self, slide_idx: usize, index: usize, _old_text: String, new_text: String) {
+        self.edit_objects(slide_idx, "Edit text", |o| {
+            if let Some(SlideObject::TextBox { text, .. }) = o.get_mut(index) {
+                *text = new_text;
+            }
+        });
     }
 
-    pub fn resize_object(&self, slide_idx: usize, index: usize, old_bounds: (f64, f64, f64, f64), new_bounds: (f64, f64, f64, f64)) {
-        self.execute(Box::new(crate::undo::ResizeObjectCmd { slide_idx, index, old_bounds, new_bounds }));
+    pub fn resize_object(&self, slide_idx: usize, index: usize, _old_bounds: (f64, f64, f64, f64), new_bounds: (f64, f64, f64, f64)) {
+        self.edit_objects(slide_idx, "Resize Object", |o| {
+            if let Some(obj) = o.get_mut(index) {
+                let (x, y, w, h) = new_bounds;
+                crate::undo::set_obj_bounds(obj, x, y, w, h);
+            }
+        });
     }
 
-    pub fn rotate_object(&self, slide_idx: usize, index: usize, old_angle: f64, new_angle: f64) {
-        self.execute(Box::new(crate::undo::RotateObjectCmd { slide_idx, index, old_angle, new_angle }));
+    pub fn rotate_object(&self, slide_idx: usize, index: usize, _old_angle: f64, new_angle: f64) {
+        self.edit_objects(slide_idx, "Rotate Object", |o| {
+            if let Some(obj) = o.get_mut(index) {
+                crate::undo::set_obj_rotation(obj, new_angle);
+            }
+        });
     }
 
     pub fn align_objects(&self, slide_idx: usize, indices: &[usize], mode: crate::undo::AlignMode) {
-        use crate::undo::{obj_bounds, AlignMode, AlignObjectsCmd};
+        use crate::undo::{obj_bounds, AlignMode};
         let slides = self.slides.borrow();
         if slide_idx >= slides.len() || indices.len() < 2 { return; }
         let objects = &slides[slide_idx].objects;
@@ -179,17 +262,24 @@ impl DecksController {
             }
         }).collect();
         drop(slides);
+        let _ = old_positions;
+        self.place_objects(slide_idx, "Align Objects", indices, &new_positions);
+    }
 
-        self.execute(Box::new(AlignObjectsCmd {
-            slide_idx,
-            indices: indices.to_vec(),
-            old_positions,
-            new_positions,
-        }));
+    /// Move objects `indices` to `positions` (bounding-box origins) as one
+    /// undo step.
+    fn place_objects(&self, slide_idx: usize, description: &str, indices: &[usize], positions: &[(f64, f64)]) {
+        self.edit_objects(slide_idx, description, |o| {
+            for (&i, &(x, y)) in indices.iter().zip(positions) {
+                if let Some(obj) = o.get_mut(i) {
+                    crate::undo::set_obj_origin(obj, x, y);
+                }
+            }
+        });
     }
 
     pub fn distribute_objects(&self, slide_idx: usize, indices: &[usize], mode: crate::undo::DistributeMode) {
-        use crate::undo::{obj_bounds, DistributeMode, AlignObjectsCmd};
+        use crate::undo::{obj_bounds, DistributeMode};
         let slides = self.slides.borrow();
         if slide_idx >= slides.len() || indices.len() < 3 { return; }
         let objects = &slides[slide_idx].objects;
@@ -209,12 +299,8 @@ impl DecksController {
             }).collect();
             let sorted_indices: Vec<usize> = items.iter().map(|i| i.0).collect();
             drop(slides);
-            self.execute(Box::new(AlignObjectsCmd {
-                slide_idx,
-                indices: sorted_indices,
-                old_positions: old_pos,
-                new_positions: new_pos,
-            }));
+            let _ = old_pos;
+            self.place_objects(slide_idx, "Distribute Objects", &sorted_indices, &new_pos);
         } else {
             items.sort_by(|a, b| a.1.1.partial_cmp(&b.1.1).unwrap());
             let min_y = items.first().unwrap().1.1;
@@ -227,72 +313,40 @@ impl DecksController {
             }).collect();
             let sorted_indices: Vec<usize> = items.iter().map(|i| i.0).collect();
             drop(slides);
-            self.execute(Box::new(AlignObjectsCmd {
-                slide_idx,
-                indices: sorted_indices,
-                old_positions: old_pos,
-                new_positions: new_pos,
-            }));
+            let _ = old_pos;
+            self.place_objects(slide_idx, "Distribute Objects", &sorted_indices, &new_pos);
         }
     }
 
     pub fn z_order_object(&self, slide_idx: usize, index: usize, op: crate::undo::ZOrderOp) {
-        use crate::undo::{ZOrderCmd, ZOrderOp};
-        let slides = self.slides.borrow();
-        if slide_idx >= slides.len() || index >= slides[slide_idx].objects.len() { return; }
-        let old_objects = slides[slide_idx].objects.clone();
-        let old_builds = slides[slide_idx].builds.clone();
-        let mut new_objects = old_objects.clone();
-        // The same moves on the objects' old indices, for the builds.
-        let mut order: Vec<usize> = (0..old_objects.len()).collect();
-        let len = new_objects.len();
-
-        match op {
-            ZOrderOp::BringToFront => {
-                let obj = new_objects.remove(index);
-                new_objects.push(obj);
-                let o = order.remove(index);
-                order.push(o);
+        let op = {
+            let slides = self.ids_ready();
+            let Some(slide) = slides.get(slide_idx) else { return };
+            let Some(&id) = slide.ids.objects.get(index) else { return };
+            let to = crate::undo::z_order_index(index, slide.objects.len(), op);
+            if to == index {
+                return;
             }
-            ZOrderOp::SendToBack => {
-                let obj = new_objects.remove(index);
-                new_objects.insert(0, obj);
-                let o = order.remove(index);
-                order.insert(0, o);
-            }
-            ZOrderOp::BringForward => {
-                if index + 1 < len {
-                    new_objects.swap(index, index + 1);
-                    order.swap(index, index + 1);
-                }
-            }
-            ZOrderOp::SendBackward => {
-                if index > 0 {
-                    new_objects.swap(index, index - 1);
-                    order.swap(index, index - 1);
-                }
-            }
-        }
-        drop(slides);
-        let new_builds = crate::builds::after_reorder(&old_builds, &order);
-        self.execute(Box::new(ZOrderCmd { slide_idx, old_objects, new_objects, old_builds, new_builds }));
+            Op::MoveObject { slide: slide.ids.slide, id, to }
+        };
+        self.apply_ops("Reorder Object", vec![op]);
     }
 
     /// Apply one Format inspector edit to the objects `indices` on slide
     /// `slide_idx`, as one undo step. Returns whether anything changed.
     pub fn format_objects(&self, slide_idx: usize, indices: &[usize], edit: &crate::format::FormatEdit) -> bool {
-        let cmd = {
-            let slides = self.slides.borrow();
-            let Some(slide) = slides.get(slide_idx) else { return false };
-            crate::format::format_command(slide, slide_idx, indices, edit)
-        };
-        match cmd {
-            Some(cmd) => {
-                self.execute(Box::new(cmd));
-                true
+        self.edit_objects(slide_idx, edit.description(), |o| {
+            let mut seen = Vec::new();
+            for &i in indices {
+                if seen.contains(&i) {
+                    continue;
+                }
+                seen.push(i);
+                if let Some(obj) = o.get_mut(i) {
+                    crate::format::apply_edit(obj, edit);
+                }
             }
-            None => false,
-        }
+        })
     }
 
     /// Set object `index`'s build in (`out` false) or out on slide
@@ -320,19 +374,29 @@ impl DecksController {
         if old == new {
             return false;
         }
-        self.execute(Box::new(SetBuildsCmd { slide_idx, old, new }));
-        true
+        self.set_slide_props(slide_idx, "Build", |p| p.builds = new)
+    }
+
+    /// Change slide `slide_idx`'s properties as one undo step.
+    fn set_slide_props(&self, slide_idx: usize, description: &str, change: impl FnOnce(&mut crate::ops::SlideProps)) -> bool {
+        let op = {
+            let slides = self.ids_ready();
+            let Some(slide) = slides.get(slide_idx) else { return false };
+            let old = crate::ops::SlideProps::of(slide);
+            let mut new = old.clone();
+            change(&mut new);
+            if new == old {
+                return false;
+            }
+            Op::SetSlide { slide: slide.ids.slide, props: Box::new(new) }
+        };
+        self.apply_ops(description, vec![op])
     }
 
     /// Set how slide `slide_idx` arrives when presented, as one undo step.
     /// Returns whether anything changed.
     pub fn set_transition(&self, slide_idx: usize, transition: crate::engine::Transition) -> bool {
-        let old = match self.slides.borrow().get(slide_idx) {
-            Some(s) if s.transition != transition => s.transition,
-            _ => return false,
-        };
-        self.execute(Box::new(SetTransitionCmd { slide_idx, old, new: transition }));
-        true
+        self.set_slide_props(slide_idx, "Transition", |p| p.transition = transition)
     }
 
     /// What the inspector shows for object `index` on slide `slide_idx`.
@@ -358,51 +422,7 @@ impl DecksController {
     }
 }
 
-/// Replaces one slide's builds, and back.
-struct SetBuildsCmd {
-    slide_idx: usize,
-    old: Vec<crate::builds::Build>,
-    new: Vec<crate::builds::Build>,
-}
 
-impl suite_common_core::undo::Command<Vec<Slide>> for SetBuildsCmd {
-    fn apply(&self, slides: &mut Vec<Slide>) {
-        if let Some(s) = slides.get_mut(self.slide_idx) {
-            s.builds = self.new.clone();
-        }
-    }
-    fn undo(&self, slides: &mut Vec<Slide>) {
-        if let Some(s) = slides.get_mut(self.slide_idx) {
-            s.builds = self.old.clone();
-        }
-    }
-    fn description(&self) -> &str {
-        "Build"
-    }
-}
-
-/// Changes one slide's transition, and back.
-struct SetTransitionCmd {
-    slide_idx: usize,
-    old: crate::engine::Transition,
-    new: crate::engine::Transition,
-}
-
-impl suite_common_core::undo::Command<Vec<Slide>> for SetTransitionCmd {
-    fn apply(&self, slides: &mut Vec<Slide>) {
-        if let Some(s) = slides.get_mut(self.slide_idx) {
-            s.transition = self.new;
-        }
-    }
-    fn undo(&self, slides: &mut Vec<Slide>) {
-        if let Some(s) = slides.get_mut(self.slide_idx) {
-            s.transition = self.old;
-        }
-    }
-    fn description(&self) -> &str {
-        "Transition"
-    }
-}
 
 #[cfg(test)]
 mod tests {
@@ -410,7 +430,7 @@ mod tests {
     use crate::engine::Slide;
 
     fn slide(title: &str) -> Slide {
-        Slide { title: title.into(), background: "#fff".into(), objects: vec![], notes: String::new(), master_idx: Some(0), transition: Default::default(), builds: Vec::new() }
+        Slide { title: title.into(), background: "#fff".into(), objects: vec![], notes: String::new(), master_idx: Some(0), transition: Default::default(), builds: Vec::new(), ids: Default::default() }
     }
 
     fn rect(x: f64, y: f64) -> SlideObject {

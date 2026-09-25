@@ -171,6 +171,7 @@ mod tests {
             master_idx: None,
             transition: Default::default(),
             builds,
+            ids: Default::default(),
         }
     }
 
