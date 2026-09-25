@@ -498,6 +498,37 @@ pub const BASE_FONT_KEY: &str = "letters-base-font";
 // both flatten to `None`, but only the former is worth keeping separate for
 // anyone extending this.
 
+/// The run style of the char at `iter`, exactly as `capture_from_buffer`
+/// reads it.
+pub(crate) fn run_style_at(iter: &gtk::TextIter) -> RunStyle {
+    let mut s = RunStyle::default();
+    for tag in iter.tags() {
+        let Some(name) = tag.name() else { continue };
+        match name.as_str() {
+            "bold" => s.bold = true,
+            "italic" => s.italic = true,
+            "underline" => s.underline = true,
+            "strikethrough" => s.strikethrough = true,
+            "highlight" => s.highlight = true,
+            "code" => s.code = true,
+            "superscript" => s.vert_align = Some(letters_core::model::VertAlign::Superscript),
+            "subscript" => s.vert_align = Some(letters_core::model::VertAlign::Subscript),
+            other => apply_dynamic_tag(other, &mut s),
+        }
+    }
+    s
+}
+
+/// Copy the document state that lives beside the buffer's text (footnotes,
+/// header, footer, page geometry, base font) from `buf` into `doc`.
+pub(crate) fn read_sidecars(buf: &gtk::TextBuffer, doc: &mut Document) {
+    doc.footnotes = unsafe { buf.data::<Vec<String>>(FOOTNOTES_KEY).map(|p| p.as_ref().clone()).unwrap_or_default() };
+    doc.header = header_sidecar(buf);
+    doc.footer = footer_sidecar(buf);
+    doc.page = page_sidecar(buf);
+    doc.base_font = base_font_sidecar(buf);
+}
+
 fn header_sidecar(buf: &gtk::TextBuffer) -> Option<String> {
     unsafe { buf.data::<Option<String>>(HEADER_KEY).and_then(|p| p.as_ref().clone()) }
 }

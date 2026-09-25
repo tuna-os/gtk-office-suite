@@ -11,6 +11,7 @@ mod preferences;
 mod page_container;
 mod page_view;
 mod page_edit;
+mod live;
 mod ruler;
 mod spell;
 mod styles;

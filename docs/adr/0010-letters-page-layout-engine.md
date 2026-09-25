@@ -77,17 +77,23 @@ the Letters part concretely.
         laid-out line); list continuation shared by both views
         (`bridge::enter_in_list`); the suite clipboard format on both views.
       - 3c: the live model (RFC-0001 Phase 0), in two steps:
-        - **3c-1 (this PR):** `letters_core::edit` — the operations a live
+        - **3c-1 (done):** `letters_core::edit` — the operations a live
           `Document` changes by (`Insert`, `Delete`, `Mark`, `SetParaStyle`),
           each returning its exact undo; and incremental relayout: a
           `ShapeCache` keyed by `request_key` means an edit re-shapes only
           the paragraphs it changed (`Typeset::update`, used by Print
           Layout after every edit).
-        - 3c-2: the tab holds the live `Document`; buffer edits become ops
-          on it (buffer change signals → `edit` ops), so the page view no
-          longer re-captures the whole buffer per keystroke; then the page
-          view edits the model directly and the buffer becomes Draft's
-          view of it.
+        - **3c-2 (done):** each tab holds a `LiveModel` (letters/src/live.rs):
+          a `Document` that follows the buffer edit by edit. Typing and
+          deleting inside a paragraph become `edit` ops; paragraph breaks,
+          list markers, table pipes, objects and formatting-tag changes mark
+          it stale, and the next read re-captures. It is always exactly the
+          captured document (tested after every edit, including 1,500
+          seeded random edits). Print Layout reads it instead of capturing
+          the buffer on every keystroke.
+        - 3c-3: invert the flow — edits become ops on the model first, the
+          buffer is Draft's view of the model, and the re-capture path goes
+          away. Undo moves to the model's inverse ops.
       - 3d: Print Layout becomes the default view; the TextView path is
         removed once nothing depends on it.
 
