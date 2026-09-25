@@ -3,7 +3,7 @@
 // FileDialogHelper — shared open/save/export file dialog helpers
 // with standard office format filters. Used by Letters, Tables, Decks.
 
-use gtk4::{self as gtk, gio, prelude::*};
+use gtk4::{self as gtk, gio};
 use libadwaita as adw;
 use std::path::PathBuf;
 
@@ -88,7 +88,7 @@ impl FileDialogHelper {
         }
         let w = self.parent.clone();
         dlg.open(Some(&w), None::<&gio::Cancellable>, move |result| {
-            callback(result.ok().and_then(|f| f.path()))
+            callback(result.ok().and_then(|f| crate::locations::open_location(&f).map_err(|e| eprintln!("{e}")).ok()))
         });
     }
 
@@ -107,8 +107,10 @@ impl FileDialogHelper {
             dlg.set_filters(Some(&fl));
         }
         let w = self.parent.clone();
+        // A remote destination gets a staging path: the caller writes it,
+        // then calls `locations::commit_save` to upload it.
         dlg.save(Some(&w), None::<&gio::Cancellable>, move |result| {
-            callback(result.ok().and_then(|f| f.path()))
+            callback(result.ok().and_then(|f| crate::locations::save_location(&f).map_err(|e| eprintln!("{e}")).ok()))
         });
     }
 
