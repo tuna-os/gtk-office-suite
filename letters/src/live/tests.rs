@@ -27,6 +27,21 @@ fn at(buf: &gtk::TextBuffer, needle: &str) -> i32 {
     t[..t.find(needle).unwrap()].chars().count() as i32
 }
 
+/// A 1x1 image as the editor inserts one (its source rides on the paintable).
+fn image() -> gtk::gdk::Texture {
+    let tex = gtk::gdk::MemoryTexture::new(1, 1, gtk::gdk::MemoryFormat::R8g8b8a8, &glib::Bytes::from_static(&[255, 0, 0, 255]), 4);
+    let dir = std::env::temp_dir().join("letters-live-test");
+    let _ = std::fs::create_dir_all(&dir);
+    let path = dir.join("dot.png");
+    let _ = tex.save_to_png(&path);
+    let tex = gtk::gdk::Texture::from_filename(&path).unwrap();
+    unsafe {
+        tex.set_data("letters-image-src", path.to_string_lossy().into_owned());
+        tex.set_data("letters-image-alt", String::from("a dot"));
+    }
+    tex
+}
+
 fn sample() -> Document {
     let mut d = Document::from_plain_text("Title\nfirst item\nsecond item\nbody text here");
     d.paragraphs[0].style.heading = Some(1);
@@ -87,6 +102,7 @@ fn random_edits_never_leave_the_live_model_behind() {
             d.paragraphs[2].style.list = letters_core::ListKind::Bullet;
             d.insert_table_at(3, 1, 2);
             let (buf, live) = tab(&d);
+            let reads = live.borrow().full_reads;
             let mut state = seed;
             let mut next = |n: u64| {
                 state ^= state << 13;
@@ -96,7 +112,13 @@ fn random_edits_never_leave_the_live_model_behind() {
             };
             for step in 0..300 {
                 let len = buf.char_count().max(0) as u64;
-                match next(12) {
+                match next(13) {
+                    12 => {
+                        // An inline image, as Insert Image puts one.
+                        let tex = image();
+                        let mut it = buf.iter_at_offset(next(len + 1) as i32);
+                        buf.insert_paintable(&mut it, &tex);
+                    }
                     0..=4 => {
                         let t = ["a", "bc", " ", "xyz", "\n", "|"][next(6) as usize];
                         let mut it = buf.iter_at_offset(next(len + 1) as i32);
@@ -125,6 +147,7 @@ fn random_edits_never_leave_the_live_model_behind() {
                 }
             }
             check(&buf, &live, &format!("seed {seed} end"));
+            assert_eq!(live.borrow().full_reads, reads, "seed {seed}: no edit read the whole buffer, tables and images included");
         }
     });
 }
@@ -174,6 +197,7 @@ fn undo_and_redo_run_on_the_model_and_the_buffer_follows() {
             steps += 1;
         }
         assert_eq!(steps, 4, "table, italic, Enter, and 'Hello' as one typed word");
+        assert!(!live.borrow().can_undo() && live.borrow().can_redo());
         let now = crate::bridge::capture_from_buffer(&buf);
         for (x, y) in now.paragraphs.iter().zip(&loaded.paragraphs) {
             assert_eq!(x, y, "paragraph differs after undo");
@@ -260,5 +284,61 @@ fn a_keystroke_on_200_paragraphs_relays_out_within_budget() {
         const BUDGET: Duration = Duration::from_millis(100);
         assert!(p95 <= BUDGET, "keystroke p95 {p95:?} over {BUDGET:?}");
         assert!(median < full, "a keystroke must cost less than laying out from scratch ({median:?} vs {full:?})");
+    });
+}
+
+/// Table commands (insert a table, rows and columns, delete them), list
+/// commands and page breaks run on the model as ops: no whole-buffer read,
+/// the buffer matches, and each is one undo step.
+#[test]
+fn structured_commands_are_model_ops() {
+    use letters_core::ListKind;
+    gtk_test(|| {
+        let (buf, live) = tab(&sample());
+        let reads = live.borrow().full_reads;
+        buf.place_cursor(&buf.iter_at_offset(at(&buf, "body")));
+        crate::bridge::apply_structured_edit(&buf, |ed| {
+            ed.insert_table(2, 2);
+        });
+        check(&buf, &live, "insert table");
+        // The caret is in the new table's first cell: type there.
+        buf.insert_at_cursor("A1");
+        check(&buf, &live, "typing in the new cell");
+        for (what, cmd) in [
+            ("row below", 0),
+            ("column after", 1),
+            ("delete row", 2),
+            ("delete column", 3),
+        ] {
+            crate::bridge::apply_structured_edit(&buf, |ed| {
+                let _ = match cmd {
+                    0 => ed.insert_row_at_cursor(true),
+                    1 => ed.insert_col_at_cursor(true),
+                    2 => ed.delete_row_at_cursor(),
+                    _ => ed.delete_col_at_cursor(),
+                };
+            });
+            check(&buf, &live, what);
+        }
+        buf.place_cursor(&buf.iter_at_offset(at(&buf, "Title")));
+        crate::bridge::apply_structured_edit(&buf, |ed| {
+            ed.toggle_list_at_cursor(ListKind::Bullet);
+        });
+        check(&buf, &live, "a list toggled");
+        crate::bridge::apply_structured_edit(&buf, |ed| {
+            ed.toggle_page_break_at_cursor();
+        });
+        check(&buf, &live, "a page break");
+        assert_eq!(live.borrow().full_reads, reads, "no command read the whole buffer");
+        // Undo all of it, one command at a time.
+        let mut steps = 0;
+        while live.borrow().can_undo() {
+            undo(&buf, false);
+            check(&buf, &live, &format!("undo {steps}"));
+            steps += 1;
+        }
+        assert_eq!(steps, 8, "each command and the typed word is one step");
+        let (fresh, _) = tab(&sample());
+        assert_eq!(crate::bridge::capture_from_buffer(&buf), crate::bridge::capture_from_buffer(&fresh));
     });
 }

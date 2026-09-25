@@ -142,7 +142,7 @@ pub fn capture_with_starts(buf: &gtk::TextBuffer) -> (Document, Vec<usize>) {
     // them on every save, because `save_buffer_to_path` writes exactly the
     // Document this returns and both the ODT and DOCX writers emit all three
     // (#438).
-    capture_tables(&mut paragraphs, &mut starts);
+    capture_tables(&mut paragraphs, &mut starts, 1);
     let mut doc = Document { paragraphs, ..Document::new() };
     read_sidecars(buf, &mut doc);
     (doc, starts)
@@ -430,12 +430,14 @@ pub fn paragraph_offset(doc: &Document, starts: &[usize], off: usize) -> (usize,
 /// Without this, `render_to_buffer` → `capture_from_buffer` turned every
 /// table into literal "| a | b |" prose — which is how a table inserted
 /// into the editor used to reach DOCX as text and vanish as a table.
-fn capture_tables(paragraphs: &mut Vec<Paragraph>, starts: &mut Vec<usize>) {
+/// `first_id` is the id the first table found gets (tables are numbered in
+/// document order; the live model folds a span that starts after others).
+pub(crate) fn capture_tables(paragraphs: &mut Vec<Paragraph>, starts: &mut Vec<usize>, first_id: u32) {
     use letters_core::table_text;
 
     let mut out: Vec<Paragraph> = Vec::with_capacity(paragraphs.len());
     let mut out_starts: Vec<usize> = Vec::with_capacity(starts.len());
-    let mut table_id = 0u32;
+    let mut table_id = first_id.saturating_sub(1);
     let mut i = 0;
     while i < paragraphs.len() {
         let header_cells = table_text::parse_row(&paragraphs[i].text());
@@ -845,24 +847,24 @@ fn capture_list_marker(para: &mut Paragraph, tag_level: Option<u8>) -> usize {
 /// paragraphs in the model but a *grid* on screen, so each row's cells
 /// collapse into one pipe line and a delimiter line follows the header.
 /// `capture_tables` reverses exactly this.
-fn render_lines(doc: &Document) -> Vec<std::borrow::Cow<'_, Paragraph>> {
+pub(crate) fn render_lines(paragraphs: &[Paragraph]) -> Vec<std::borrow::Cow<'_, Paragraph>> {
     use letters_core::table_text;
     use std::borrow::Cow;
 
-    let mut lines: Vec<Cow<Paragraph>> = Vec::with_capacity(doc.paragraphs.len());
+    let mut lines: Vec<Cow<Paragraph>> = Vec::with_capacity(paragraphs.len());
     let mut i = 0;
-    while i < doc.paragraphs.len() {
-        let Some(cell) = doc.paragraphs[i].style.table_cell else {
-            lines.push(Cow::Borrowed(&doc.paragraphs[i]));
+    while i < paragraphs.len() {
+        let Some(cell) = paragraphs[i].style.table_cell else {
+            lines.push(Cow::Borrowed(&paragraphs[i]));
             i += 1;
             continue;
         };
         let table = cell.table;
-        let end = doc.paragraphs[i..]
+        let end = paragraphs[i..]
             .iter()
             .position(|p| p.style.table_cell.is_none_or(|c| c.table != table))
-            .map_or(doc.paragraphs.len(), |n| i + n);
-        let cells = &doc.paragraphs[i..end];
+            .map_or(paragraphs.len(), |n| i + n);
+        let cells = &paragraphs[i..end];
         let cols = cells.iter().filter_map(|p| p.style.table_cell).map(|c| c.col).max().unwrap_or(0) + 1;
 
         // Cells arrive in row-major order (the model keeps them that way);
@@ -890,7 +892,7 @@ pub fn render_to_buffer(doc: &Document, buf: &gtk::TextBuffer) {
     set_buffer_sidecars(doc, buf);
     buf.set_text("");
     let mut insert = buf.start_iter();
-    let lines = render_lines(doc);
+    let lines = render_lines(&doc.paragraphs);
     let ordinals = letters_core::lists::ordinals(lines.iter().map(|p| &p.style));
     let lines: Vec<&Paragraph> = lines.iter().map(|p| p.as_ref()).collect();
     render_paragraphs(buf, &mut insert, &lines, &ordinals);
@@ -1027,12 +1029,59 @@ pub fn insert_footnote_marker(buf: &gtk::TextBuffer, insert: &mut gtk::TextIter,
     buf.insert_with_tags_by_name(insert, &format!("[{}]", idx + 1), &[&name]);
 }
 
+/// Model offset (`Document`'s global char offsets) of buffer offset `off`.
+fn model_offset(doc: &Document, starts: &[usize], off: usize) -> usize {
+    let (para, offset) = paragraph_offset(doc, starts, off);
+    doc.paragraph_offset(para) + offset
+}
+
+/// Buffer offset of model offset `off`.
+fn buffer_offset_of_model(doc: &Document, starts: &[usize], off: usize) -> usize {
+    let para = doc.paragraph_at(off).min(doc.paragraphs.len().saturating_sub(1));
+    let within = off.saturating_sub(doc.paragraph_offset(para));
+    starts.get(para).map_or(0, |s| buffer_offset(&doc.paragraphs[para], *s, within))
+}
+
+fn structured_edit_on_model<F>(buf: &gtk::TextBuffer, m: &std::rc::Rc<std::cell::RefCell<crate::live::LiveModel>>, edit: F)
+where
+    F: FnOnce(&mut letters_core::structured::StructuredEditor),
+{
+    let (doc, starts) = m.borrow_mut().snapshot(buf);
+    let mut editor = letters_core::structured::StructuredEditor::new(doc.clone());
+    editor.set_cursor(model_offset(&doc, &starts, buf.iter_at_mark(&buf.get_insert()).offset().max(0) as usize));
+    if let Some((start, end)) = buf.selection_bounds() {
+        editor.select(
+            model_offset(&doc, &starts, start.offset().max(0) as usize),
+            model_offset(&doc, &starts, end.offset().max(0) as usize),
+        );
+    }
+    edit(&mut editor);
+    let ops = letters_core::edit::diff(&doc, editor.document());
+    if ops.is_empty() {
+        return;
+    }
+    let mut m = m.borrow_mut();
+    if m.apply_user_ops(buf, &ops, false) {
+        // The caret where the command left it (the new table's first cell).
+        let (doc, starts) = m.snapshot(buf);
+        let off = buffer_offset_of_model(&doc, &starts, editor.cursor());
+        buf.place_cursor(&buf.iter_at_offset(off as i32));
+    }
+}
+
 /// Apply a structured editing operation directly to the GtkTextBuffer through
 /// letters_core::StructuredEditor, preserving document structure and cursor position.
 pub fn apply_structured_edit<F>(buf: &gtk::TextBuffer, edit: F)
 where
     F: FnOnce(&mut letters_core::structured::StructuredEditor),
 {
+    // With a live model the command runs on the model: its change becomes
+    // ops (`edit::diff`) and only the changed paragraphs are re-rendered —
+    // inserting a table row no longer rewrites and re-reads the document.
+    if let Some(m) = crate::live::of(buf) {
+        structured_edit_on_model(buf, &m, edit);
+        return;
+    }
     let doc = capture_from_buffer(buf);
     let mut editor = letters_core::structured::StructuredEditor::new(doc);
     // The caret, not the selection start: `unwrap_or(0)` for an unselected
