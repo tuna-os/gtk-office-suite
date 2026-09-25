@@ -851,4 +851,62 @@ fn list_validation_survives_calc_both_ways() {
         assert_eq!(from_xlsx[0].validations[r][1].as_ref(), Some(&colours), "B{} after Calc's xlsx", r + 1);
     }
     assert_eq!(from_xlsx[0].validations[0][2], Some(ValidationRule::WholeNumber { min: Some(1), max: Some(10) }));
+||||||| parent of a1c6af5 (feat(tables): a number-format editor with any Excel/Calc format code and a live preview)
+
+/// Custom format codes draw as Calc draws them. Each row is a value with a
+/// code; Calc's CSV export writes what it shows, which must be what the
+/// cell shows here. Also proves the codes are written so Calc reads them.
+#[test]
+fn custom_format_codes_draw_as_calc_draws_them() {
+    use suite_common_core::format::{NumberFormat, NumberFormatKind};
+    if !require_or_skip() { return; }
+    let cases: &[(&str, &str)] = &[
+        ("0.00", "1234.567"),
+        ("#,##0", "1234567.8"),
+        ("000", "7"),
+        ("0.0 \"kg\"", "3"),
+        ("#,##0.00;(#,##0.00)", "-1500"),
+        ("#,##0.00;(#,##0.00);\"zero\"", "0"),
+        ("0%", "0.256"),
+        ("0.00E+00", "12345"),
+        ("#,##0,\"K\"", "25000"),
+        ("# ?/?", "1.5"),
+        ("yyyy-mm-dd", "45306"),
+        ("d mmmm yyyy", "45306"),
+        ("ddd", "45306"),
+        ("h:mm AM/PM", "45306.75"),
+        ("[h]:mm", "1.5"),
+        ("\"Total: \"0", "12"),
+    ];
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("codes.xlsx");
+    let mut e = TablesEngine::new(cases.len(), 1).unwrap();
+    let mut sheet = SheetModel::new("S", cases.len(), 1, 0);
+    for (r, (code, value)) in cases.iter().enumerate() {
+        e.set_cell_text(r, 0, value);
+        sheet.data[r][0] = value.to_string();
+        sheet.formats[r][0] = NumberFormat::new(NumberFormatKind::Custom(code.to_string()));
+    }
+    e.evaluate();
+    tables_core::io::save_sheets_to_xlsx_with_engine(path.to_str().unwrap(), &[sheet.clone()], Some(&e)).unwrap();
+    // CSV "as shown": token 9 of the filter options.
+    let out = Command::new("soffice")
+        .arg("--headless")
+        .arg(format!("-env:UserInstallation=file://{}", dir.path().join("lo-profile").display()))
+        .args(["--convert-to", "csv:Text - txt - csv (StarCalc):44,34,76,1,,1033,false,true,true", "--outdir"])
+        .arg(dir.path())
+        .arg(&path)
+        .output()
+        .expect("soffice");
+    assert!(out.status.success(), "soffice failed: {}", String::from_utf8_lossy(&out.stderr));
+    let csv = std::fs::read_to_string(path.with_extension("csv")).unwrap();
+    let calc: Vec<String> = csv.lines().map(|l| l.trim_matches('"').replace("\"\"", "\"")).collect();
+    let mut wrong = Vec::new();
+    for (r, (code, value)) in cases.iter().enumerate() {
+        let ours = sheet.formats[r][0].format(value);
+        if calc.get(r).map(String::as_str) != Some(ours.as_str()) {
+            wrong.push(format!("{code} on {value}: Calc {:?}, us {ours:?}", calc.get(r)));
+        }
+    }
+    assert!(wrong.is_empty(), "drawn differently from Calc:\n{}", wrong.join("\n"));
 }

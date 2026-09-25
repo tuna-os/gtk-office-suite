@@ -184,7 +184,9 @@ pub fn build(
     }
     borders.add(&row("Apply", &b_box));
 
+    let (number, sync_number) = crate::number_format_editor::group(ctl, grid);
     let page = adw::PreferencesPage::new();
+    page.add(&number);
     page.add(&text);
     page.add(&cell);
     page.add(&borders);
@@ -249,6 +251,7 @@ pub fn build(
             });
             wrap.set_active(s.wrap);
             syncing.set(false);
+            sync_number();
         })
     };
 

@@ -150,8 +150,95 @@ fn chrono_format(code: &str) -> String {
     out
 }
 
-/// What a format code means, as the model can express it.
+/// Values a kind and a code must draw alike to be the same format.
+const SAMPLES: [&str; 7] = ["1234.567", "-1234.567", "0", "0.5", "12", "45306.75", "text"];
+
+/// The format a code means: the kind the model names it by when that kind
+/// draws every sample exactly as the code does, else the code itself
+/// ([`NumberFormatKind::Custom`]), so nothing a file says is lost or
+/// drawn differently.
 pub fn kind_for_code(code: &str) -> NumberFormatKind {
+    let kind = nearest_kind(code);
+    if kind == NumberFormatKind::General {
+        return kind;
+    }
+    // Sections, colours and conditions are the code's own, even where a
+    // kind draws the same text: kept, they save back as they came.
+    let brackets = code.split('[').skip(1).any(|b| !b.starts_with('$'));
+    if code.contains(';') || brackets {
+        return NumberFormatKind::Custom(code.trim().to_string());
+    }
+    let nf = suite_common_core::format::NumberFormat::new(kind.clone());
+    // Dates are compared where a date exists: from 1900-03-01 on.
+    let samples: &[&str] = match kind {
+        NumberFormatKind::Date(_) | NumberFormatKind::DateTime(_) => &["45306.75", "61", "text"],
+        _ => &SAMPLES,
+    };
+    let same = samples
+        .iter()
+        .all(|s| nf.format(s) == suite_common_core::format_code::format_with_code(code, s));
+    if same {
+        kind
+    } else {
+        NumberFormatKind::Custom(code.trim().to_string())
+    }
+}
+
+/// The code to write for a kind; `None` for General.
+pub fn code_for_kind(kind: &NumberFormatKind) -> Option<String> {
+    use NumberFormatKind::*;
+    let places = |d: u8| if d == 0 { String::new() } else { format!(".{}", "0".repeat(d as usize)) };
+    match kind {
+        General => None,
+        Number(d) => Some(format!("#,##0{}", places(*d))),
+        Currency(sym, d) => Some(format!("\"{sym}\"#,##0{}", places(*d))),
+        Percent(d) => Some(format!("0{}%", places(*d))),
+        Scientific(d) => Some(format!("0{}E+00", places(*d))),
+        Text => Some("@".into()),
+        Date(fmt) | DateTime(fmt) => Some(code_for_chrono(fmt)),
+        Fraction(d) => Some(format!("# {}/{}", "?".repeat(*d as usize), "?".repeat(*d as usize))),
+        Custom(code) => Some(code.clone()),
+    }
+}
+
+/// A chrono date format as a spreadsheet code (`%Y-%m-%d` → `yyyy-mm-dd`).
+fn code_for_chrono(fmt: &str) -> String {
+    let mut out = String::new();
+    let mut chars = fmt.chars().peekable();
+    while let Some(c) = chars.next() {
+        if c != '%' {
+            out.push(c);
+            continue;
+        }
+        let padless = chars.peek() == Some(&'-');
+        if padless {
+            chars.next();
+        }
+        let spec = chars.next().unwrap_or('%');
+        out.push_str(match (spec, padless) {
+            ('Y', _) => "yyyy",
+            ('y', _) => "yy",
+            ('m', false) => "mm",
+            ('m', true) => "m",
+            ('d', false) | ('e', _) => "dd",
+            ('d', true) => "d",
+            ('b', _) => "mmm",
+            ('B', _) => "mmmm",
+            ('a', _) => "ddd",
+            ('A', _) => "dddd",
+            ('H', false) | ('I', false) => "hh",
+            ('H', true) | ('I', true) => "h",
+            ('M', _) => "mm",
+            ('S', _) => "ss",
+            ('p', _) => "AM/PM",
+            _ => "",
+        });
+    }
+    out
+}
+
+/// What a format code means, as the model's named kinds can express it.
+pub fn nearest_kind(code: &str) -> NumberFormatKind {
     let code = code.trim();
     if code.is_empty() || code.eq_ignore_ascii_case("general") {
         return NumberFormatKind::General;
@@ -225,7 +312,29 @@ mod tests {
     use NumberFormatKind::*;
 
     #[test]
+    fn a_code_a_kind_draws_differently_stays_a_code() {
+        // Drawn the same: the kind.
+        assert_eq!(kind_for_code("#,##0.00"), Number(2));
+        assert_eq!(kind_for_code("yyyy-mm-dd"), Date("%Y-%m-%d".into()));
+        assert_eq!(kind_for_code("@"), Text);
+        // No thousands separator, two sections, a condition, literals,
+        // a colour: the code, as written.
+        for code in ["0.00", "#,##0;[Red]-#,##0", "[>=1000]#,##0,\"K\";0", "0.0 \"kg\"", "#,##0.00_);(#,##0.00)"] {
+            assert_eq!(kind_for_code(code), Custom(code.into()), "{code}");
+        }
+    }
+
+    #[test]
+    fn every_kind_writes_a_code_that_reads_back_as_itself() {
+        for kind in [Number(0), Number(2), Currency("$".into(), 2), Scientific(3), Text, Date("%Y-%m-%d".into()), Custom("0.0;-0.0;\"–\"".into())] {
+            let code = code_for_kind(&kind).unwrap();
+            assert_eq!(kind_for_code(&code), kind, "{code}");
+        }
+    }
+
+    #[test]
     fn codes_map_to_the_nearest_kind() {
+        let kind_for_code = nearest_kind;
         assert_eq!(kind_for_code("General"), General);
         assert_eq!(kind_for_code("0.0%"), Percent(1));
         assert_eq!(kind_for_code("0%"), Percent(0));
@@ -242,6 +351,7 @@ mod tests {
 
     #[test]
     fn dates_and_times_translate_to_chrono() {
+        let kind_for_code = nearest_kind;
         assert_eq!(kind_for_code("yyyy-mm-dd"), Date("%Y-%m-%d".into()));
         assert_eq!(kind_for_code("mm-dd-yy"), Date("%m-%d-%y".into()));
         assert_eq!(kind_for_code("d-mmm-yy"), Date("%-d-%b-%y".into()));

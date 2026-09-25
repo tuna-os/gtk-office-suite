@@ -4,6 +4,7 @@ mod charts;
 mod chart_dialog;
 mod window;
 mod format_inspector;
+mod number_format_editor;
 mod formula_bar;
 mod column_menu;
 mod notes;

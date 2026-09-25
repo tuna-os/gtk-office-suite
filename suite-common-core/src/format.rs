@@ -31,6 +31,9 @@ pub enum NumberFormatKind {
     /// Mixed fraction with denominators of up to this many digits:
     /// Fraction(1) → "1 1/2", as Excel's `# ?/?`.
     Fraction(u8),
+    /// Any other format code, as Excel and Calc write it
+    /// (`#,##0.00;[Red](#,##0.00)`), applied by [`crate::format_code`].
+    Custom(String),
 }
 
 // ── Number format ──────────────────────────────────────────────────────
@@ -57,6 +60,7 @@ impl NumberFormat {
             NumberFormatKind::Scientific(dp) => format_scientific(raw, *dp),
             NumberFormatKind::Text => raw.to_string(),
             NumberFormatKind::Fraction(digits) => format_fraction(raw, *digits),
+            NumberFormatKind::Custom(code) => crate::format_code::format_with_code(code, raw),
         }
     }
 }
@@ -74,19 +78,22 @@ fn format_number(raw: &str, decimal_places: u8, currency: Option<&str>) -> Strin
         Ok(n) => n,
         Err(_) => return raw.to_string(),
     };
-    let int_part = num.trunc().abs() as i64;
-    let frac_part = (num.abs().fract() * 10_f64.powi(decimal_places as i32)).round() as u64;
+    // Round the whole value once, as Excel does: 45306.75 to no places is
+    // 45,307, and 0.999 to two is 1.00. Truncating the integer and rounding
+    // the fraction apart lost the carry.
+    let scale = 10_f64.powi(decimal_places as i32);
+    let scaled = (num.abs() * scale).round();
+    let int_part = (scaled / scale).trunc() as i64;
+    let frac_part = (scaled - int_part as f64 * scale).round() as u64;
     let int_str = int_part.to_formatted_string(&Locale::en);
-    let sign = if num < 0.0 { "-" } else { "" };
-    let formatted = if decimal_places > 0 {
-        format!("{}{}.{:0width$}", sign, int_str, frac_part, width = decimal_places as usize)
+    let sign = if num < 0.0 && scaled > 0.0 { "-" } else { "" };
+    let digits = if decimal_places > 0 {
+        format!("{}.{:0width$}", int_str, frac_part, width = decimal_places as usize)
     } else {
-        format!("{}{}", sign, int_str)
+        int_str
     };
-    match currency {
-        Some(sym) => format!("{}{}", sym, formatted),
-        None => formatted,
-    }
+    // The sign goes before the currency symbol: -$1,234.50.
+    format!("{sign}{}{digits}", currency.unwrap_or(""))
 }
 
 fn format_percent(raw: &str, decimal_places: u8) -> String {
@@ -94,14 +101,10 @@ fn format_percent(raw: &str, decimal_places: u8) -> String {
         Ok(n) => n,
         Err(_) => return raw.to_string(),
     };
-    // If value is already in percentage form (e.g., 12.3), display as-is.
-    // If it's a decimal (e.g., 0.123), multiply by 100.
-    let display = if num.abs() <= 1.0 && num != 0.0 {
-        num * 100.0
-    } else {
-        num
-    };
-    format!("{:.*}%", decimal_places as usize, display)
+    // A percentage shows the value times a hundred, as Excel and Calc do:
+    // 0.123 is 12.3% and 12 is 1200%. Treating values over 1 as already
+    // being percentages drew 12 as 12%, which no spreadsheet does.
+    format!("{:.*}%", decimal_places as usize, num * 100.0)
 }
 
 fn format_date(raw: &str, fmt: &str) -> String {
@@ -157,7 +160,11 @@ fn format_scientific(raw: &str, decimal_places: u8) -> String {
         Ok(n) => n,
         Err(_) => return raw.to_string(),
     };
-    format!("{:.*e}", decimal_places as usize, num)
+    // As Excel and Calc write it: 1.23E+04, 1.20E-04.
+    let s = format!("{:.*e}", decimal_places as usize, num);
+    let (mantissa, exp) = s.split_once('e').unwrap_or((&s, "0"));
+    let exp: i32 = exp.parse().unwrap_or(0);
+    format!("{mantissa}E{}{:02}", if exp < 0 { '-' } else { '+' }, exp.abs())
 }
 
 // ── Excel serial date conversion ───────────────────────────────────────
@@ -239,8 +246,8 @@ mod tests {
     fn test_percent() {
         let fmt = NumberFormat::new(NumberFormatKind::Percent(1));
         assert_eq!(fmt.format("0.123"), "12.3%");
-        // Already-percentage values pass through
-        assert_eq!(fmt.format("25"), "25.0%");
+        // A value over 1 is multiplied too, as in Excel and Calc.
+        assert_eq!(fmt.format("25"), "2500.0%");
     }
 
     #[test]
@@ -267,7 +274,7 @@ mod tests {
     #[test]
     fn test_scientific() {
         let fmt = NumberFormat::new(NumberFormatKind::Scientific(2));
-        assert_eq!(fmt.format("1234"), "1.23e3");
+        assert_eq!(fmt.format("1234"), "1.23E+03");
     }
 
     #[test]
@@ -305,7 +312,7 @@ mod tests {
     #[test]
     fn test_percent_whole() {
         let fmt = NumberFormat::new(NumberFormatKind::Percent(0));
-        assert_eq!(fmt.format("50"), "50%");
+        assert_eq!(fmt.format("0.5"), "50%");
     }
 
     #[test]

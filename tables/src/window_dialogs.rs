@@ -39,6 +39,8 @@ pub(crate) fn show_format_cells_dialog(
             NumberFormatKind::Scientific(_) => 5,
             // No dropdown entry of its own yet; "Number" is the nearest.
             NumberFormatKind::Fraction(_) => 1,
+            // A code of its own: the inspector's Number group edits it.
+            NumberFormatKind::Custom(_) => 0,
         };
         dropdown.set_selected(idx);
     }

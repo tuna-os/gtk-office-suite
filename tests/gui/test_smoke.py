@@ -2546,6 +2546,42 @@ class TablesFormatInspectorSmoke(TablesCellEntryMixin, BaseGUITestCase):
         self.assertIsNone(self.process.poll(), "tables crashed in the format inspector")
 
 
+class TablesFormatCodeSmoke(TablesFormatInspectorSmoke):
+    """The number-format editor: in the Format inspector's Number group, a
+    custom code typed into Format Code and applied formats the selection,
+    and the cell shows (and says) the value as the code draws it."""
+
+    def test_bold_applies_to_the_selection_and_follows_it(self):
+        self.skipTest("the parent's journey; this class runs its own")
+
+    def test_a_custom_code_formats_the_cell(self):
+        import subprocess
+        from dogtail import rawinput
+
+        subprocess.run(["gapplication", "action", "org.tunaos.tables", "new-document"])
+        self._wait_for_a_new_document()
+        self._put("A1", "3")
+        self.app.child(name="Format", roleName="toggle button").do_action(0)
+        code = self.wait_until(
+            lambda: [n for n in self.app.findChildren(lambda c: c.name == "Format Code" and c.showing)],
+            bool, description="the inspector's Format Code row")[0]
+        self._go("A1")
+        # The row's own entry takes the typing.
+        entry = ([c for c in code.findChildren(lambda c: c.roleName in ("text", "entry"))] or [code])[0]
+        entry.grabFocus()
+        time.sleep(0.3)
+        rawinput.keyCombo("<Control>a")
+        rawinput.typeText('0.0 "kg"')
+        rawinput.keyCombo("Return")
+        self.wait_until(
+            lambda: [c.name for c in self.app.findChildren(lambda c: (c.name or "").startswith("A1"))],
+            lambda names: "A1: 3.0 kg" in names,
+            timeout=10.0,
+            description="A1 to show 3.0 kg",
+        )
+        self.assertIsNone(self.process.poll(), "tables crashed applying a format code")
+
+
 class TablesNamedRangeStatsSmoke(TablesCellEntryMixin, BaseGUITestCase):
     """Named ranges (#113) verified through the stats label's range readout.
 
