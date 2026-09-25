@@ -19,6 +19,7 @@ pub fn render_chart_named(
 ) -> ImageSurface {
     let surface = ImageSurface::create(Format::ARgb32, width, height).unwrap();
     let cr = Context::new(&surface).unwrap();
+    suite_common::use_ui_font_rendering(&cr);
     cr.set_source_rgb(1.0, 1.0, 1.0); cr.paint().unwrap();
     // Chart text is Calibri 10 pt (Carlito where Calibri isn't
     // installed), as Excel and Calc draw a chart that names no font. It was

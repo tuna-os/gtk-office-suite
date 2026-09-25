@@ -9,6 +9,7 @@ use tables_core::sheet::{SheetModel, CellBorder, BorderStyle, SortDirection, col
 /// Auto-fit column width to content using PangoLayout text measurement.
 /// Lives here (not tables-core) because it needs Cairo/Pango to measure.
 pub fn auto_fit_column(cr: &Context, sheet: &mut SheetModel, col: usize, _scroll_x: f64) {
+    suite_common::use_ui_font_rendering(cr);
     let layout = pangocairo::functions::create_layout(cr);
     let mut max_w: f64 = 30.0;
     let label = col_label(col);
@@ -257,6 +258,9 @@ fn draw_cell_text(cr: &Context, sheet: &SheetModel, r: usize, c: usize, rect: (f
 pub fn fit_rows_to_content(sheet: &mut SheetModel) {
     let Ok(surface) = gtk4::cairo::ImageSurface::create(gtk4::cairo::Format::ARgb32, 1, 1) else { return };
     let Ok(cr) = Context::new(&surface) else { return };
+    // Measure with the options the grid draws with, or rows fit a
+    // different text than the one shown.
+    suite_common::use_ui_font_rendering(&cr);
     for r in 0..sheet.rows {
         if (sheet.row_heights[r] - tables_core::sheet::ROW_HEIGHT).abs() > 0.5 {
             continue;
@@ -281,6 +285,7 @@ pub fn draw_grid(
     width: f64, height: f64, scroll_x: f64, scroll_y: f64, show_gridlines: bool,
     formula_refs: &[(usize, usize, usize, usize)], accent: (f64, f64, f64),
 ) {
+    suite_common::use_ui_font_rendering(cr);
     let st = state.borrow();
     let sheet = &st.sheets[st.active_sheet].borrow();
     let is_dark = adw::StyleManager::default().is_dark();

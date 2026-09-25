@@ -428,6 +428,7 @@ pub fn draw_slide_multi(
     marquee: Option<(f64, f64, f64, f64)>,
     masters: &[MasterSlide], accent: (f64, f64, f64),
 ) {
+    suite_common::use_ui_font_rendering(cr);
     cr.set_source_rgb(0.86, 0.86, 0.86);
     cr.paint().unwrap();
 
