@@ -289,23 +289,115 @@ pub fn set_objects(slides: &[Slide], si: usize, objects: &[SlideObject]) -> Vec<
         .collect()
 }
 
-/// A group of ops as one undo step. Applying records the group's inverse;
-/// undoing applies it. (Tables' `OpCommand`, on Decks' slides.)
-pub struct OpCommand {
-    pub ops: Vec<Op>,
-    pub inverses: std::cell::RefCell<Vec<Op>>,
-    pub description: String,
+/// An edit that applies to its document and returns the ops that undo it
+/// exactly: the trait the suite's shared `History<O: Op>` (moving from
+/// letters_core::edit into suite-common-core) is generic over. Decks
+/// implements it now so that swap is a one-line change.
+pub trait EditOp: Sized + Clone {
+    type Doc;
+    type Error;
+    fn apply_to(&self, doc: &mut Self::Doc) -> Result<Vec<Self>, Self::Error>;
 }
 
-impl suite_common_core::undo::Command<Vec<Slide>> for OpCommand {
-    fn apply(&self, slides: &mut Vec<Slide>) {
-        *self.inverses.borrow_mut() = apply_all(slides, &self.ops).unwrap_or_default();
+impl EditOp for Op {
+    type Doc = Vec<Slide>;
+    type Error = OpError;
+    fn apply_to(&self, doc: &mut Vec<Slide>) -> Result<Vec<Op>, OpError> {
+        apply(doc, self)
     }
-    fn undo(&self, slides: &mut Vec<Slide>) {
-        let _ = apply_all(slides, &self.inverses.borrow());
+}
+
+/// Apply a group of ops all or nothing; the group's inverse in undo order.
+fn apply_group<O: EditOp>(doc: &mut O::Doc, ops: &[O]) -> Result<Vec<O>, O::Error> {
+    let mut undo: Vec<Vec<O>> = Vec::new();
+    for op in ops {
+        match op.apply_to(doc) {
+            Ok(u) => undo.push(u),
+            Err(e) => {
+                for u in undo.into_iter().rev() {
+                    let _ = apply_group(doc, &u);
+                }
+                return Err(e);
+            }
+        }
     }
-    fn description(&self) -> &str {
-        &self.description
+    Ok(undo.into_iter().rev().flatten().collect())
+}
+
+/// Undo and redo from each step's inverse ops. A thin local stand-in for
+/// the suite's shared `History` (letters_core::edit::History, moving to
+/// suite-common-core), with the same contract: one entry per user action,
+/// undo applies its inverse and records the inverse of that for redo, and
+/// a step that no longer applies clears the history rather than applying
+/// half of it. Swap for the shared one when it lands.
+#[derive(Debug)]
+pub struct History<O: EditOp> {
+    undo: Vec<(String, Vec<O>)>,
+    redo: Vec<(String, Vec<O>)>,
+}
+
+impl<O: EditOp> Default for History<O> {
+    fn default() -> Self {
+        History { undo: Vec::new(), redo: Vec::new() }
+    }
+}
+
+impl<O: EditOp> History<O> {
+    /// Record the inverse ops of one applied action named `description`.
+    pub fn record(&mut self, description: &str, inverse: Vec<O>) {
+        if inverse.is_empty() {
+            return;
+        }
+        self.redo.clear();
+        self.undo.push((description.to_string(), inverse));
+    }
+
+    pub fn can_undo(&self) -> bool {
+        !self.undo.is_empty()
+    }
+
+    pub fn can_redo(&self) -> bool {
+        !self.redo.is_empty()
+    }
+
+    /// The name of the step undo would take back.
+    pub fn undo_description(&self) -> Option<&str> {
+        self.undo.last().map(|(d, _)| d.as_str())
+    }
+
+    /// Undo the last step on `doc`. False when there is nothing to undo.
+    pub fn undo(&mut self, doc: &mut O::Doc) -> bool {
+        let Some((d, ops)) = self.undo.pop() else { return false };
+        match apply_group(doc, &ops) {
+            Ok(inverse) => {
+                self.redo.push((d, inverse));
+                true
+            }
+            Err(_) => {
+                self.clear();
+                false
+            }
+        }
+    }
+
+    /// Redo the last undone step on `doc`.
+    pub fn redo(&mut self, doc: &mut O::Doc) -> bool {
+        let Some((d, ops)) = self.redo.pop() else { return false };
+        match apply_group(doc, &ops) {
+            Ok(inverse) => {
+                self.undo.push((d, inverse));
+                true
+            }
+            Err(_) => {
+                self.clear();
+                false
+            }
+        }
+    }
+
+    pub fn clear(&mut self) {
+        self.undo.clear();
+        self.redo.clear();
     }
 }
 
@@ -375,6 +467,27 @@ mod tests {
         apply_all(&mut d, &undo).unwrap();
         // The tombstone goes when the object comes back.
         assert_eq!(dbg(&d), before);
+    }
+
+    #[test]
+    fn history_undoes_and_redoes_from_inverses() {
+        let mut d = vec![slide("a", 1)];
+        ensure_ids(&mut d);
+        let before = dbg(&d);
+        let (s, o) = (d[0].ids.slide, d[0].ids.objects[0]);
+        let mut h: History<Op> = History::default();
+        let inv = apply_all(&mut d, &[Op::DeleteObject { slide: s, id: o }]).unwrap();
+        h.record("Delete", inv);
+        let after = dbg(&d);
+        assert_eq!(h.undo_description(), Some("Delete"));
+        assert!(h.undo(&mut d));
+        assert_eq!(dbg(&d), before);
+        assert!(h.redo(&mut d));
+        assert_eq!(dbg(&d), after);
+        assert!(!h.redo(&mut d));
+        // A no-op step is not recorded.
+        h.record("Nothing", vec![]);
+        assert_eq!(h.undo_description(), Some("Delete"));
     }
 
     #[test]

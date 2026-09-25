@@ -1,6 +1,7 @@
 // ops_property.rs — RFC-0001 Phase 0 for Decks: random edit sequences
-// applied as ops equal the same edits made directly on the model, and
-// applying every step's inverse, last first, restores the deck.
+// applied as ops equal the same edits made directly on the model, undoing
+// every step through the History restores the deck, and redoing every
+// step brings the edits back.
 // SPDX-License-Identifier: GPL-3.0-or-later
 //
 // Mirrors tables-core's ops tests and letters-core's edit property tests.
@@ -10,7 +11,7 @@
 
 use decks_core::builds::{Build, BuildEffect};
 use decks_core::engine::{Slide, SlideObject, Transition};
-use decks_core::ops::{apply_all, ensure_ids, next_id, Op, SlideProps};
+use decks_core::ops::{apply_all, ensure_ids, next_id, History, Op, SlideProps};
 use proptest::prelude::*;
 
 #[derive(Clone, Debug)]
@@ -214,17 +215,23 @@ proptest! {
         ensure_ids(&mut via_ops);
         let initial = live(&via_ops);
         let mut plain = start;
-        let mut undo: Vec<Vec<Op>> = Vec::new();
+        let mut history: History<Op> = History::default();
         for e in &edits {
             let ops = ops_for(&via_ops, e);
             let inverse = apply_all(&mut via_ops, &ops).expect("a valid edit applies");
-            undo.push(inverse);
+            history.record("edit", inverse);
             direct(&mut plain, e);
             prop_assert_eq!(content(&via_ops), content(&plain), "after {:?}", e);
         }
-        for inverse in undo.into_iter().rev() {
-            apply_all(&mut via_ops, &inverse).expect("an inverse applies");
+        let edited = content(&via_ops);
+        while history.can_undo() {
+            prop_assert!(history.undo(&mut via_ops), "an undo step applies");
         }
         prop_assert_eq!(live(&via_ops), initial);
+        // And redo-all brings the edits back.
+        while history.can_redo() {
+            prop_assert!(history.redo(&mut via_ops), "a redo step applies");
+        }
+        prop_assert_eq!(content(&via_ops), edited);
     }
 }
