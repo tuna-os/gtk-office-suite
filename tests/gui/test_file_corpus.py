@@ -31,8 +31,22 @@ def semantics(app, snapshot):
         return {"sheets": snapshot["sheet_names"],
                 "cells": snapshot["sheet"]["cells"]}
     return {"slide_count": snapshot["slide_count"],
-            "objects": [[{key: obj[key] for key in ("kind", "text", "x", "y")}
+            "objects": [[{"kind": obj["kind"], "text": obj["text"],
+                          "x": to_emu(obj["x"]), "y": to_emu(obj["y"])}
                          for obj in slide["objects"]] for slide in snapshot["slides"]]}
+
+
+# PPTX stores geometry in whole EMU (9525 per point), so a position is only
+# defined to the nearest EMU. A LibreOffice deck is 10080625 EMU wide and
+# Decks' canvas 9144000, so opening one rescales 720000 EMU to
+# 68.567177 pt and the save writes the nearest EMU, 653102, which reads back
+# as 68.567139 pt: the same position, 4e-5 pt apart. Comparing in EMU keeps
+# every real move (one EMU and up) visible, including the one-directional
+# truncation drift #470 fixed, without failing on a difference the format
+# cannot represent. Rounding the value that was opened is idempotent, so
+# a second save cannot move it again.
+def to_emu(points):
+    return round(points * 9525)
 
 
 class FileCorpusJourney(BaseGUITestCase):
