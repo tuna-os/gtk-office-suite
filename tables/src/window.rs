@@ -310,6 +310,7 @@ impl TablesWindow {
             });
             drawing_area.add_controller(right);
         }
+        crate::column_menu::attach(&controller, &drawing_area, &h_adj, &refresh_sel);
 
         // Jumping to a reference: the name box's Enter and Ctrl+G both go
         // through here, so a jump means the same thing however it was

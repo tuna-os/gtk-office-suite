@@ -5,6 +5,7 @@ mod chart_dialog;
 mod window;
 mod format_inspector;
 mod formula_bar;
+mod column_menu;
 mod persistence;
 mod window_dialogs;
 mod preferences;

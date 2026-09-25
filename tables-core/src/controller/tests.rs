@@ -281,6 +281,33 @@
         assert!(sheet.is_row_hidden(3)); // cherry
     }
 
+    /// The column menu's checklist: unticking values hides exactly their
+    /// rows, as one undo step, and ticking everything back clears it.
+    #[test]
+    fn the_column_menu_filters_by_values_and_sorts_either_way() {
+        use crate::sheet::SortDirection;
+        let mut controller = WorkbookController::new(5, 2).unwrap();
+        for (r, v) in ["pear", "10", "apple", "2", "pear"].iter().enumerate() {
+            controller.edit_cell(r, 0, *v);
+        }
+        let hide: std::collections::HashSet<String> = ["pear".to_string(), "2".to_string()].into();
+        controller.filter_column_values(0, &hide);
+        {
+            let state = controller.state.borrow();
+            let hidden: Vec<usize> = (0..5).filter(|&r| state.sheet().is_row_hidden(r)).collect();
+            assert_eq!(hidden, [0, 3, 4]);
+        }
+        assert!(controller.undo());
+        assert!((0..5).all(|r| !controller.state.borrow().sheet().is_row_hidden(r)));
+
+        controller.sort_column(0, SortDirection::Descending);
+        let col: Vec<String> = (0..5).map(|r| controller.state.borrow().sheet().cell(r, 0).to_string()).collect();
+        assert_eq!(col, ["pear", "pear", "apple", "10", "2"]);
+        controller.sort_column(0, SortDirection::Ascending);
+        let col: Vec<String> = (0..5).map(|r| controller.state.borrow().sheet().cell(r, 0).to_string()).collect();
+        assert_eq!(col, ["2", "10", "apple", "pear", "pear"]);
+    }
+
     #[test]
     fn filter_by_value_never_hides_a_completely_blank_row() {
         // Regression: a new document is 100x26 by default, so filtering

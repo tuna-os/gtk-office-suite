@@ -220,13 +220,29 @@ pub fn parse_formula_references(formula: &str) -> Vec<FormulaRef> {
     out
 }
 
-/// Summary statistics over the numeric cells of a selection.
+/// Summary statistics over the numeric cells of a selection: the quick
+/// summary in the status bar (Numbers' and Sheets' "Sum · Average · …").
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct SelectionStats {
     /// Cells in the selection containing a parseable number.
     pub count: usize,
     pub sum: f64,
     pub avg: f64,
+    pub min: f64,
+    pub max: f64,
+    /// Non-empty cells, numbers or not (Excel's "Count", Sheets' "Count A").
+    pub values: usize,
+}
+
+/// One distinct value in a column, for the column menu's filter list.
+#[derive(Debug, Clone, PartialEq)]
+pub struct ColumnValue {
+    /// The value as the cell shows it ("" for blank cells).
+    pub text: String,
+    /// How many rows hold it.
+    pub rows: usize,
+    /// Whether any of those rows is showing now (not filtered or hidden).
+    pub shown: bool,
 }
 
 // ── Screen geometry ─────────────────────────────────────────────────────
@@ -977,25 +993,63 @@ impl SheetModel {
 
     /// Sum/avg/count over numeric cells in the selection. Formula cells
     /// count through their displayed value when it parses as a number.
+    /// Over the cells a person can see: rows filtered out or hidden, and
+    /// hidden columns, don't count, as in Excel and Sheets.
     pub fn selection_stats(&self) -> SelectionStats {
         let (r0, c0, r1, c1) = self.selection_rect();
-        let mut count = 0usize;
-        let mut sum = 0f64;
-        for r in r0..=r1 {
-            for c in c0..=c1 {
-                if let Ok(v) = self.cell(r, c).trim().parse::<f64>() {
+        let (mut count, mut values) = (0usize, 0usize);
+        let (mut sum, mut min, mut max) = (0f64, f64::INFINITY, f64::NEG_INFINITY);
+        for r in (r0..=r1).filter(|&r| !self.is_row_hidden(r)) {
+            for c in (c0..=c1).filter(|&c| !self.is_col_hidden(c)) {
+                let text = self.cell(r, c).trim();
+                if !text.is_empty() {
+                    values += 1;
+                }
+                if let Ok(v) = text.parse::<f64>() {
                     count += 1;
                     sum += v;
+                    min = min.min(v);
+                    max = max.max(v);
                 }
             }
         }
         let avg = if count > 0 { sum / count as f64 } else { 0.0 };
-        SelectionStats { count, sum, avg }
+        if count == 0 {
+            (min, max) = (0.0, 0.0);
+        }
+        SelectionStats { count, sum, avg, min, max, values }
     }
 
-    /// The status-bar text for a range selection: the range, then sum,
-    /// average and count when it holds numbers ("A1:B2  ·  Sum 3  ·  Avg
-    /// 1.50  ·  Count 2"). Empty for a single cell.
+    /// The distinct values in column `col` over the rows holding anything,
+    /// numbers in numeric order before text in case-insensitive order,
+    /// blanks last: the column menu's filter list.
+    pub fn column_values(&self, col: usize) -> Vec<ColumnValue> {
+        // (value as shown, the cell's own value to order by)
+        let mut out: Vec<(ColumnValue, String)> = Vec::new();
+        for r in (0..self.rows).filter(|&r| (0..self.cols).any(|c| !self.cell(r, c).is_empty())) {
+            let raw = self.cell(r, col).trim().to_string();
+            let text = self.formats[r][col].format(&raw);
+            let shown = !self.is_row_hidden(r);
+            match out.iter_mut().find(|(v, _)| v.text == text) {
+                Some((v, _)) => {
+                    v.rows += 1;
+                    v.shown |= shown;
+                }
+                None => out.push((ColumnValue { text, rows: 1, shown }, raw)),
+            }
+        }
+        // Ordered by the value, not how it's shown: $1,234.50 after 15.3%.
+        let key = |raw: &String| (raw.is_empty(), raw.parse::<f64>().is_err(), raw.to_lowercase());
+        out.sort_by(|(_, a), (_, b)| match (a.parse::<f64>(), b.parse::<f64>()) {
+            (Ok(x), Ok(y)) => x.partial_cmp(&y).unwrap_or(std::cmp::Ordering::Equal),
+            _ => key(a).cmp(&key(b)),
+        });
+        out.into_iter().map(|(v, _)| v).collect()
+    }
+
+    /// The status-bar text for a range selection: the range, then the quick
+    /// summary when it holds numbers ("A1:B2  ·  Sum 3  ·  Avg 1.50  ·  Min
+    /// 1  ·  Max 2  ·  Count 2"). Empty for a single cell.
     pub fn selection_status(&self) -> String {
         if !self.has_range_selection() {
             return String::new();
@@ -1009,7 +1063,15 @@ impl SheetModel {
         if stats.count == 0 {
             return range;
         }
-        format!("{}  ·  Sum {}  ·  Avg {}  ·  Count {}", range, fmt(stats.sum), fmt(stats.avg), stats.count)
+        format!(
+            "{}  ·  Sum {}  ·  Avg {}  ·  Min {}  ·  Max {}  ·  Count {}",
+            range,
+            fmt(stats.sum),
+            fmt(stats.avg),
+            fmt(stats.min),
+            fmt(stats.max),
+            stats.count
+        )
     }
 
     pub fn cell(&self, r: usize, c: usize) -> &str {
@@ -1633,10 +1695,31 @@ mod selection_tests {
         s.select_cell(1, 1);
         assert_eq!(s.selection_status(), "", "a single cell has no range status");
         s.extend_selection(2, 2);
-        assert_eq!(s.selection_status(), "B2:C3  ·  Sum 60  ·  Avg 20  ·  Count 3");
+        assert_eq!(s.selection_status(), "B2:C3  ·  Sum 60  ·  Avg 20  ·  Min 10  ·  Max 30  ·  Count 3");
+        // A filtered-out row drops out of the summary.
+        s.hidden_rows.insert(2);
+        assert_eq!(s.selection_status(), "B2:C3  ·  Sum 30  ·  Avg 15  ·  Min 10  ·  Max 20  ·  Count 2");
+        s.hidden_rows.clear();
         s.select_cell(5, 5);
         s.extend_selection(6, 6);
         assert_eq!(s.selection_status(), "F6:G7", "no numbers, just the range");
+    }
+
+    #[test]
+    fn column_values_list_each_value_once_in_order() {
+        let mut s = SheetModel::new("v", 6, 2, 0);
+        for (r, v) in ["pear", "10", "Apple", "0.5", "pear"].iter().enumerate() {
+            s.data[r][0] = (*v).into();
+        }
+        s.data[5][1] = "x".into(); // row 5 holds something, but not in column 0
+        s.formats[3][0] = suite_common_core::format::NumberFormat::new(suite_common_core::format::NumberFormatKind::Percent(0));
+        s.hidden_rows.insert(0);
+        let got: Vec<(String, usize, bool)> = s.column_values(0).into_iter().map(|v| (v.text, v.rows, v.shown)).collect();
+        assert_eq!(
+            got,
+            [("50%".into(), 1, true), ("10".into(), 1, true), ("Apple".into(), 1, true), ("pear".into(), 2, true), ("".into(), 1, true)],
+            "shown formatted, ordered by value"
+        );
     }
 
     #[test]

@@ -2081,6 +2081,73 @@ class TablesCellEntryMixin:
         )
 
 
+class TablesColumnMenuSmoke(TablesCellEntryMixin, BaseGUITestCase):
+    """The column menu (DESIGN-UI.md, Numbers/Sheets): Alt+Down opens the
+    active cell's column menu; Sort Ascending reorders the rows; unticking
+    a value in its checklist filters those rows out, and the status bar's
+    quick summary counts only what is shown. Asserted on the grid's cell
+    names, the menu's buttons and the status label, as AT-SPI reports them."""
+
+    app_name = "tables"
+
+    def _to_grid(self, ref):
+        from dogtail import rawinput
+        rawinput.keyCombo("<Control>g")
+        self.wait_until(lambda: self._focused("Cell reference"), bool,
+                        description="the name box to take focus")
+        rawinput.typeText(ref)
+        rawinput.keyCombo("Return")
+        self.wait_until(lambda: self._focused("Formula input"), bool,
+                        description=f"the jump to {ref}")
+        rawinput.keyCombo("Escape")
+        self.wait_until(lambda: not self._focused("Formula input"), bool,
+                        description="Escape to hand focus to the grid")
+
+    def _button(self, name, role="push button"):
+        found = self.app.findChildren(lambda c: c.roleName == role and c.name == name and c.showing)
+        return found[0] if found else None
+
+    def test_sort_and_filter_from_the_column_menu(self):
+        from dogtail import rawinput
+        import subprocess
+
+        subprocess.run(["gapplication", "action", "org.tunaos.tables", "new-document"])
+        self._wait_for_a_new_document()
+        self._put("A1", "30")
+        self._put("A2", "10")
+        self._put("A3", "20")
+        self._to_grid("A1")
+        rawinput.keyCombo("<Alt>Down")
+        self.wait_until(lambda: self._button("Sort Ascending"), bool, description="the column menu")
+        self._button("Sort Ascending").do_action(0)
+        for name in ("A1: 10", "A2: 20", "A3: 30"):
+            self.wait_until(
+                lambda: self.app.findChildren(lambda c: c.roleName == "table cell" and c.name == name),
+                bool,
+                description=f"{name} after sorting",
+            )
+
+        # Untick 20: its row (now row 2) is filtered out.
+        self._to_grid("A1")
+        rawinput.keyCombo("<Alt>Down")
+        self.wait_until(lambda: self._button("20", "check box"), bool, description="20 in the value list")
+        self._button("20", "check box").do_action(0)
+        rawinput.keyCombo("Escape")
+
+        # Select A1:A3; the quick summary skips the hidden row.
+        self._to_grid("A1")
+        rawinput.keyCombo("<Shift>Down")
+        rawinput.keyCombo("<Shift>Down")
+        labels = lambda: [c.name or "" for c in self.app.findChildren(lambda c: c.roleName == "label")]
+        stats = self.wait_until(labels, lambda ls: any("Sum" in l for l in ls), description="the quick summary")
+        line = next(l for l in stats if "Sum" in l)
+        self.assertIn("Sum 40", line)
+        self.assertIn("Min 10", line)
+        self.assertIn("Max 30", line)
+        self.assertIn("Count 2", line)
+        self.assertIsNone(self.process.poll(), "tables crashed in the column menu")
+
+
 class TablesFormulaAutocompleteSmoke(TablesCellEntryMixin, BaseGUITestCase):
     """The formula editor (DESIGN-UI.md): typing a function name offers the
     functions it could be, Tab inserts the chosen one with its parenthesis,
