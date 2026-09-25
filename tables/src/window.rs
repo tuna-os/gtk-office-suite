@@ -140,21 +140,23 @@ impl TablesWindow {
             // as GTK painted it, headers plus the used range. LibreOffice's
             // reference prints exactly that (headings and gridlines on), so
             // both images show the same cells.
-            let area = drawing_area.clone();
-            let ctl = controller.clone();
+            let (area, ctl, h, v) = (drawing_area.clone(), controller.clone(), h_adj.clone(), v_adj.clone());
             let act = gtk4::gio::SimpleAction::new("test-render-dump", None);
             act.connect_activate(move |_, _| {
                 let Some(dir) = suite_common::render_dump::dump_dir() else { return };
                 let path = suite_common::render_dump::page_path(&dir, 0);
                 let (aw, ah) = (area.width() as f64, area.height() as f64);
+                let state = ctl.borrow().state.clone();
+                crate::grid_render::restore_saved_view(&state, &h, &v);
+                // To the used range's far edge as it is on screen: past a
+                // frozen pane and the scroll the file's view asked for.
                 let used = {
-                    let state = ctl.borrow().state.clone();
                     let state = state.borrow();
                     let sheet = state.sheet();
                     sheet.used_extent().map(|(r, c)| {
                         (
-                            tables_core::sheet::col_x(c + 1, 0.0, &sheet),
-                            tables_core::sheet::row_y(r + 1, 0.0, &sheet),
+                            tables_core::sheet::col_x(c, h.value(), &sheet) + sheet.col_width(c),
+                            tables_core::sheet::row_y(r, v.value(), &sheet) + sheet.row_height(r),
                         )
                     })
                 };
@@ -197,6 +199,7 @@ impl TablesWindow {
                     drop(sh);
                     drop(st);
                 }
+                crate::grid_render::restore_saved_view(&da_state, &da_h, &da_v);
                 draw_grid(cr, &da_state, width as f64, height as f64,
                           da_h.value(), da_v.value(), gl.get(), &da_refs.borrow(),
                           suite_common::accent_rgb(da));
@@ -511,27 +514,18 @@ impl TablesWindow {
             let refresh = refresh_sel.clone();
             let click = gtk4::GestureClick::new();
             click.connect_pressed(move |g, _n, x, y| {
-                let wx = x + h.value();
-                let wy = y + v.value();
                 let st = s.borrow();
                 let sh = st.sheet();
-                // Check if click is in column header zone
-                if wy < COL_HEADER_HEIGHT && wx > ROW_HEADER_WIDTH {
-                    // Find which column was clicked
-                    let mut cx = ROW_HEADER_WIDTH;
-                    let mut clicked_col = None;
-                    for c in 0..sh.cols {
-                        cx += sh.col_width(c);
-                        if wx < cx { clicked_col = Some(c); break; }
-                    }
-                    if let Some(col) = clicked_col {
+                // A click in the column header sorts by that column.
+                if y < COL_HEADER_HEIGHT {
+                    if let Some(col) = tables_core::sheet::col_at(x, h.value(), &sh) {
                         drop(sh); drop(st);
                         ctl.borrow_mut().toggle_sort(col);
                         da.queue_draw();
                         return;
                     }
                 }
-                if let Some((col, row)) = xy_to_cell(wx, wy, h.value(), &sh) {
+                if let Some((col, row)) = xy_to_cell(x, y, h.value(), v.value(), &sh) {
                     drop(sh); drop(st);
                     let shift = g
                         .current_event_state()
@@ -704,10 +698,8 @@ impl TablesWindow {
                         filling.set(Some(sel));
                         return;
                     }
-                    let wx = x + h.value();
-                    let wy = y + v.value();
-                    if hit_col_divider(x, y, h.value(), &sh).is_none() && wy >= COL_HEADER_HEIGHT {
-                        if let Some((col, row)) = xy_to_cell(wx, wy, h.value(), &sh) {
+                    if hit_col_divider(x, y, h.value(), &sh).is_none() && y >= COL_HEADER_HEIGHT {
+                        if let Some((col, row)) = xy_to_cell(x, y, h.value(), v.value(), &sh) {
                             anchor.set(Some((row, col)));
                         }
                     }
@@ -732,9 +724,8 @@ impl TablesWindow {
                     {
                         let st = s.borrow();
                         let sh = st.sheet();
-                        let wx = sx + dx + h.value();
-                        let wy = (sy + dy + v.value()).max(COL_HEADER_HEIGHT);
-                        let Some((col, row)) = xy_to_cell(wx, wy, h.value(), &sh) else { return };
+                        let (x, y) = (sx + dx, (sy + dy).max(COL_HEADER_HEIGHT));
+                        let Some((col, row)) = xy_to_cell(x, y, h.value(), v.value(), &sh) else { return };
                         drop(sh);
                         let mut sh = st.sheet_mut();
                         sh.select_cell(ar, ac);
@@ -769,9 +760,8 @@ impl TablesWindow {
                             let target = {
                                 let st = s.borrow();
                                 let sh = st.sheet();
-                                let wx = sx + dx + h.value();
-                                let wy = (sy + dy + v.value()).max(COL_HEADER_HEIGHT);
-                                xy_to_cell(wx, wy, h.value(), &sh)
+                                let (x, y) = (sx + dx, (sy + dy).max(COL_HEADER_HEIGHT));
+                                xy_to_cell(x, y, h.value(), v.value(), &sh)
                             };
                             if let Some((col, row)) = target {
                                 ctl.borrow_mut().fill(sel, row, col);
@@ -821,13 +811,11 @@ impl TablesWindow {
             dbl.set_touch_only(false);
             dbl.connect_pressed(move |_g, n, x, y| {
                 if n < 2 { return; }
-                let wx = x + h.value();
-                let wy = y + v.value();
                 // Check for divider double-click first (auto-fit)
                 {
                     let st = s.borrow();
                     let sh = st.sheet();
-                    if let Some(col) = hit_col_divider(wx, wy, h.value(), &sh) {
+                    if let Some(col) = hit_col_divider(x, y, h.value(), &sh) {
                         drop(sh); drop(st);
                         // Ask the permanent draw func to measure and
                         // fit this column on its next pass.
@@ -838,12 +826,12 @@ impl TablesWindow {
                 }
                 let st = s.borrow();
                 let sh = st.sheet();
-                if let Some((col, row)) = xy_to_cell(wx, wy, h.value(), &sh) {
+                if let Some((col, row)) = xy_to_cell(x, y, h.value(), v.value(), &sh) {
                     drop(sh); drop(st);
                     let st = s.borrow_mut();
                     let val = st.sheet().data[row][col].clone();
-                    // Compute cell x-offset using per-column widths
-                    let cell_x = tables_core::sheet::col_x(col, 0.0, &st.sheet());
+                    // The cell's on-screen x, frozen columns included.
+                    let sx = tables_core::sheet::col_x(col, h.value(), &st.sheet());
                     let cell_w = st.sheet().col_width(col);
                     drop(st);
                     // Position entry overlay at cell. Re-borrows fresh
@@ -851,7 +839,6 @@ impl TablesWindow {
                     // extended across the borrow_mut above — see
                     // gtk-refcell-signal-reentrancy) after the mutable
                     // borrow used for cell_x/cell_w has been dropped.
-                    let sx = cell_x - h.value();
                     let sy = {
                         let st2 = s.borrow();
                         let sh2 = st2.sheet();

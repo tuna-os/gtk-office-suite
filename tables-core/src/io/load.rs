@@ -260,6 +260,8 @@ pub fn load_xlsx_workbook(path: &str) -> Result<(TablesEngine, Vec<SheetModel>),
             if let Some((rows, cols)) = props.frozen {
                 sheet.frozen_rows = rows.min(sheet.rows);
                 sheet.frozen_cols = cols.min(sheet.cols);
+                sheet.view_top_left =
+                    props.pane_top_left.filter(|&(r, c)| r < sheet.rows && c < sheet.cols);
             }
             // Cell styles: number format, font, fill, alignment and wrap.
             // The reader used to ignore them all, so every value showed raw

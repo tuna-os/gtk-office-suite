@@ -229,18 +229,91 @@ pub struct SelectionStats {
     pub avg: f64,
 }
 
+// ── Screen geometry ─────────────────────────────────────────────────────
+//
+// Frozen panes: the first `frozen_rows` rows and `frozen_cols` columns stay
+// put while the rest of the sheet scrolls under them. So a row's screen
+// position depends on which side of the freeze it is on: frozen rows never
+// move, and scrolled rows move by `scroll_y` and are hidden where they pass
+// under the frozen band (`scrolled_top`). Every function here takes
+// widget-local coordinates and the scroll offsets, and the renderer, the
+// hit-testers and the render lab all go through them, so a cell is where
+// it's drawn and drawn where it's clicked.
+
+/// Width of the frozen columns (hidden ones count as zero).
+pub fn frozen_width(sheet: &SheetModel) -> f64 {
+    (0..sheet.frozen_cols.min(sheet.cols)).filter(|&c| !sheet.is_col_hidden(c)).map(|c| sheet.col_width(c)).sum()
+}
+
+/// Height of the frozen rows (hidden ones count as zero).
+pub fn frozen_height(sheet: &SheetModel) -> f64 {
+    (0..sheet.frozen_rows.min(sheet.rows)).filter(|&r| !sheet.is_row_hidden(r)).map(|r| sheet.row_height(r)).sum()
+}
+
+/// Screen x where the scrolling columns start: the right edge of the
+/// frozen ones. Scrolled columns left of it are under the frozen band.
+pub fn scrolled_left(sheet: &SheetModel) -> f64 {
+    ROW_HEADER_WIDTH + frozen_width(sheet)
+}
+
+/// Screen y where the scrolling rows start.
+pub fn scrolled_top(sheet: &SheetModel) -> f64 {
+    COL_HEADER_HEIGHT + frozen_height(sheet)
+}
+
+/// The scroll offsets that put `(row, col)` at the top-left of the
+/// scrolling pane, right after the frozen rows and columns: how a file's
+/// saved view (`<pane topLeftCell>`) is restored.
+pub fn scroll_to_top_left(row: usize, col: usize, sheet: &SheetModel) -> (f64, f64) {
+    let x = col_x(col, 0.0, sheet) - scrolled_left(sheet);
+    let y = row_y(row, 0.0, sheet) - scrolled_top(sheet);
+    (x.max(0.0), y.max(0.0))
+}
+
 /// Screen x-coordinate of the left edge of `col`, in widget-local
 /// (scroll-adjusted) space — column analog of [[row_y]]: sums each
 /// preceding visible column's own width, hidden columns collapsing to
-/// zero. Shared by the renderer and hit-testers.
+/// zero. Frozen columns don't scroll. Shared by the renderer and
+/// hit-testers.
 pub fn col_x(col: usize, scroll_x: f64, sheet: &SheetModel) -> f64 {
-    let mut x = ROW_HEADER_WIDTH - scroll_x;
-    for c in 0..col {
+    let mut x = ROW_HEADER_WIDTH;
+    for c in 0..col.min(sheet.cols) {
         if !sheet.is_col_hidden(c) {
             x += sheet.col_width(c);
         }
     }
-    x
+    if col >= sheet.frozen_cols { x - scroll_x } else { x }
+}
+
+/// The column under widget x, or `None` over the row header or past the
+/// last column. Over the frozen band it is a frozen column even where a
+/// scrolled one is underneath.
+pub fn col_at(x: f64, scroll_x: f64, sheet: &SheetModel) -> Option<usize> {
+    if x < ROW_HEADER_WIDTH {
+        return None;
+    }
+    let off = x - ROW_HEADER_WIDTH;
+    if off < frozen_width(sheet) { col_at_content_offset(off, sheet) } else { col_at_content_offset(off + scroll_x, sheet) }
+}
+
+/// The row under widget y; see [[col_at]].
+pub fn row_at(y: f64, scroll_y: f64, sheet: &SheetModel) -> Option<usize> {
+    if y < COL_HEADER_HEIGHT {
+        return None;
+    }
+    let off = y - COL_HEADER_HEIGHT;
+    if off < frozen_height(sheet) { row_at_content_offset(off, sheet) } else { row_at_content_offset(off + scroll_y, sheet) }
+}
+
+/// Whether column `c` shows at all: not hidden, and if it scrolls, not
+/// entirely under the frozen band.
+pub fn col_on_screen(c: usize, scroll_x: f64, sheet: &SheetModel) -> bool {
+    !sheet.is_col_hidden(c) && (c < sheet.frozen_cols || col_x(c, scroll_x, sheet) + sheet.col_width(c) > scrolled_left(sheet))
+}
+
+/// Row analog of [[col_on_screen]].
+pub fn row_on_screen(r: usize, scroll_y: f64, sheet: &SheetModel) -> bool {
+    !sheet.is_row_hidden(r) && (r < sheet.frozen_rows || row_y(r, scroll_y, sheet) + sheet.row_height(r) > scrolled_top(sheet))
 }
 
 /// Column analog of [[row_at_content_offset]].
@@ -259,17 +332,13 @@ fn col_at_content_offset(offset: f64, sheet: &SheetModel) -> Option<usize> {
     None
 }
 
+/// The column whose right edge is within 5 px of widget `(x, y)` in the
+/// column header, for resizing.
 pub fn hit_col_divider(x: f64, y: f64, scroll_x: f64, sheet: &SheetModel) -> Option<usize> {
-    if !(0.0..=COL_HEADER_HEIGHT).contains(&y) { return None; }
-    let cx = x - ROW_HEADER_WIDTH + scroll_x;
-    if cx < 0.0 { return None; }
-    let mut accum = 0.0;
-    for c in 0..sheet.cols {
-        if sheet.is_col_hidden(c) { continue; }
-        accum += sheet.col_width(c);
-        if (cx - accum).abs() < 5.0 { return Some(c); }
-    }
-    None
+    if !(0.0..=COL_HEADER_HEIGHT).contains(&y) || x < ROW_HEADER_WIDTH { return None; }
+    (0..sheet.cols)
+        .filter(|&c| col_on_screen(c, scroll_x, sheet))
+        .find(|&c| (x - (col_x(c, scroll_x, sheet) + sheet.col_width(c))).abs() < 5.0)
 }
 
 /// Row-header equivalent of [[hit_col_divider]]: `(x, y)` widget-local,
@@ -277,16 +346,10 @@ pub fn hit_col_divider(x: f64, y: f64, scroll_x: f64, sheet: &SheetModel) -> Opt
 /// header strip) the row header scrolls vertically with the content.
 /// Hidden rows contribute no divider (their height collapses to zero).
 pub fn hit_row_divider(x: f64, y: f64, scroll_y: f64, sheet: &SheetModel) -> Option<usize> {
-    if !(0.0..=ROW_HEADER_WIDTH).contains(&x) { return None; }
-    let cy = y - COL_HEADER_HEIGHT + scroll_y;
-    if cy < 0.0 { return None; }
-    let mut accum = 0.0;
-    for r in 0..sheet.rows {
-        if sheet.is_row_hidden(r) { continue; }
-        accum += sheet.row_height(r);
-        if (cy - accum).abs() < 5.0 { return Some(r); }
-    }
-    None
+    if !(0.0..=ROW_HEADER_WIDTH).contains(&x) || y < COL_HEADER_HEIGHT { return None; }
+    (0..sheet.rows)
+        .filter(|&r| row_on_screen(r, scroll_y, sheet))
+        .find(|&r| (y - (row_y(r, scroll_y, sheet) + sheet.row_height(r))).abs() < 5.0)
 }
 
 /// Half-width in pixels of the fill-handle hit zone (issue #113) — a
@@ -305,7 +368,7 @@ pub fn fill_handle_center(
     scroll_y: f64,
     sheet: &SheetModel,
 ) -> (f64, f64) {
-    let x = col_x(right + 1, scroll_x, sheet);
+    let x = col_x(right, scroll_x, sheet) + sheet.col_width(right);
     let y = row_y(bottom, scroll_y, sheet) + sheet.row_height(bottom);
     (x, y)
 }
@@ -331,13 +394,13 @@ pub fn hit_fill_handle(
 /// Shared by the renderer and hit-testers so they can never disagree
 /// about where a row actually falls on screen.
 pub fn row_y(row: usize, scroll_y: f64, sheet: &SheetModel) -> f64 {
-    let mut y = COL_HEADER_HEIGHT - scroll_y;
-    for r in 0..row {
+    let mut y = COL_HEADER_HEIGHT;
+    for r in 0..row.min(sheet.rows) {
         if !sheet.is_row_hidden(r) {
             y += sheet.row_height(r);
         }
     }
-    y
+    if row >= sheet.frozen_rows { y - scroll_y } else { y }
 }
 
 /// Inverse of the row-position half of [[row_y]]: the row whose visible
@@ -358,12 +421,10 @@ fn row_at_content_offset(offset: f64, sheet: &SheetModel) -> Option<usize> {
     None
 }
 
-pub fn xy_to_cell(x: f64, y: f64, scroll_x: f64, sheet: &SheetModel) -> Option<(usize, usize)> {
-    let content_x = x - ROW_HEADER_WIDTH + scroll_x;
-    if content_x < 0.0 || y < COL_HEADER_HEIGHT { return None; }
-    let row = row_at_content_offset(y - COL_HEADER_HEIGHT, sheet)?;
-    let col = col_at_content_offset(content_x, sheet)?;
-    Some((col, row))
+/// The `(col, row)` under widget-local `(x, y)`, frozen panes and scroll
+/// included, or `None` over the headers or past the sheet.
+pub fn xy_to_cell(x: f64, y: f64, scroll_x: f64, scroll_y: f64, sheet: &SheetModel) -> Option<(usize, usize)> {
+    Some((col_at(x, scroll_x, sheet)?, row_at(y, scroll_y, sheet)?))
 }
 
 /// A cell-value conditional-formatting rule (ADR 0003 §4): when a
@@ -600,6 +661,10 @@ pub struct SheetModel {
     /// Liberation Sans 10.
     pub default_font_family: String,
     pub default_font_size: f64,
+    /// Where the file's view left the scrolling pane: the `(row, col)` at
+    /// its top-left (`<pane topLeftCell>`). The window scrolls there when
+    /// it first shows the sheet, then clears it. View state, not content.
+    pub view_top_left: Option<(usize, usize)>,
     pub merges: Vec<(usize, usize, usize, usize)>,
     /// Charts anchored on this sheet, persisted into xlsx (ADR 0003 §3).
     pub charts: Vec<ChartSpec>,
@@ -678,7 +743,7 @@ impl SheetModel {
             styles: vec![vec![crate::style::CellStyle::default(); cols]; rows],
             sorted_col: None,
             borders: vec![vec![CellBorder::none(); cols]; rows],
-            frozen_rows: 0, frozen_cols: 0,
+            frozen_rows: 0, frozen_cols: 0, view_top_left: None,
             default_font_family: DEFAULT_FONT_FAMILY.to_string(), default_font_size: DEFAULT_FONT_SIZE,
             merges: Vec::new(),
             charts: Vec::new(),
@@ -1283,6 +1348,50 @@ mod selection_tests {
         assert_eq!(hit_row_divider(ROW_HEADER_WIDTH + 5.0, y, 0.0, &s), None);
     }
 
+    /// Frozen panes stay put while the rest scrolls under them: row 0 and
+    /// column 0 frozen, scrolled so the pane starts at E20 (as a saved
+    /// `<pane topLeftCell="E20">` view asks).
+    #[test]
+    fn frozen_rows_and_columns_stay_put_while_the_rest_scrolls() {
+        let mut s = SheetModel::new("f", 40, 10, 0);
+        s.frozen_rows = 1;
+        s.frozen_cols = 1;
+        let (sx, sy) = scroll_to_top_left(19, 4, &s);
+        assert_eq!((sx, sy), (3.0 * COL_WIDTH, 18.0 * ROW_HEIGHT));
+        // Frozen: where they always are.
+        assert_eq!(row_y(0, sy, &s), COL_HEADER_HEIGHT);
+        assert_eq!(col_x(0, sx, &s), ROW_HEADER_WIDTH);
+        // The scrolled pane starts right after them, at E20.
+        assert_eq!(row_y(19, sy, &s), scrolled_top(&s));
+        assert_eq!(col_x(4, sx, &s), scrolled_left(&s));
+        assert_eq!(scrolled_top(&s), COL_HEADER_HEIGHT + ROW_HEIGHT);
+        // Rows 1..19 and columns B..D are under the frozen band.
+        assert!(row_on_screen(0, sy, &s) && row_on_screen(19, sy, &s));
+        assert!(!row_on_screen(1, sy, &s) && !row_on_screen(18, sy, &s));
+        assert!(col_on_screen(0, sx, &s) && col_on_screen(4, sx, &s) && !col_on_screen(3, sx, &s));
+        // Clicks land on what is drawn there.
+        let mid = |a: f64, b: f64| (a + b) / 2.0;
+        let (x_a, x_e) = (mid(ROW_HEADER_WIDTH, scrolled_left(&s)), scrolled_left(&s) + 5.0);
+        let (y_1, y_20) = (mid(COL_HEADER_HEIGHT, scrolled_top(&s)), scrolled_top(&s) + 5.0);
+        assert_eq!(xy_to_cell(x_a, y_1, sx, sy, &s), Some((0, 0)));
+        assert_eq!(xy_to_cell(x_e, y_20, sx, sy, &s), Some((4, 19)));
+        assert_eq!(xy_to_cell(x_a, y_20, sx, sy, &s), Some((0, 19)));
+        assert_eq!(xy_to_cell(x_e, y_1, sx, sy, &s), Some((4, 0)));
+        // A resize handle sits on the drawn edge, not the unscrolled one.
+        assert_eq!(hit_col_divider(scrolled_left(&s) + COL_WIDTH, 5.0, sx, &s), Some(4));
+        assert_eq!(hit_row_divider(5.0, scrolled_top(&s) + ROW_HEIGHT, sy, &s), Some(19));
+    }
+
+    /// Without frozen panes, horizontal scrolling moves every column: the
+    /// click handlers used to add the scroll to x and then pass the scroll
+    /// again, so any scrolled click landed that far to the right.
+    #[test]
+    fn a_click_after_scrolling_right_lands_on_the_drawn_cell() {
+        let s = SheetModel::new("s", 10, 10, 0);
+        let x = col_x(3, 2.0 * COL_WIDTH, &s) + 5.0;
+        assert_eq!(xy_to_cell(x, COL_HEADER_HEIGHT + 5.0, 2.0 * COL_WIDTH, 0.0, &s), Some((3, 0)));
+    }
+
     #[test]
     fn row_y_accounts_for_a_resized_row_above() {
         let mut s = sheet();
@@ -1300,7 +1409,7 @@ mod selection_tests {
         // normal ROW_HEIGHT still lands in row 0, not row 1.
         let y = COL_HEADER_HEIGHT + ROW_HEIGHT * 1.5;
         let x = ROW_HEADER_WIDTH + 5.0;
-        assert_eq!(xy_to_cell(x, y, 0.0, &s), Some((0, 0)));
+        assert_eq!(xy_to_cell(x, y, 0.0, 0.0, &s), Some((0, 0)));
     }
 
     #[test]
@@ -1319,7 +1428,7 @@ mod selection_tests {
         // Screen slot 1 (second visible row) is now data row 2, not 1.
         let y = COL_HEADER_HEIGHT + ROW_HEIGHT * 1.5;
         let x = ROW_HEADER_WIDTH + 5.0;
-        assert_eq!(xy_to_cell(x, y, 0.0, &s), Some((0, 2)));
+        assert_eq!(xy_to_cell(x, y, 0.0, 0.0, &s), Some((0, 2)));
     }
 
     #[test]
@@ -1327,7 +1436,7 @@ mod selection_tests {
         let s = sheet();
         let y = COL_HEADER_HEIGHT + ROW_HEIGHT * (s.rows as f64 + 5.0);
         let x = ROW_HEADER_WIDTH + 5.0;
-        assert_eq!(xy_to_cell(x, y, 0.0, &s), None);
+        assert_eq!(xy_to_cell(x, y, 0.0, 0.0, &s), None);
     }
 
     #[test]
@@ -1355,7 +1464,7 @@ mod selection_tests {
         // Screen slot 1 (second visible col) is now data col 2, not 1.
         let x = ROW_HEADER_WIDTH + COL_WIDTH * 1.5;
         let y = COL_HEADER_HEIGHT + 5.0;
-        assert_eq!(xy_to_cell(x, y, 0.0, &s), Some((2, 0)));
+        assert_eq!(xy_to_cell(x, y, 0.0, 0.0, &s), Some((2, 0)));
     }
 
     #[test]

@@ -302,6 +302,20 @@ pub fn fit_rows_to_content(sheet: &mut SheetModel) {
     }
 }
 
+/// Scroll to where the file's saved view left the active sheet
+/// (`SheetModel::view_top_left`), once, the first time it is shown.
+pub fn restore_saved_view(state: &Rc<RefCell<crate::window::AppState>>, h: &gtk4::Adjustment, v: &gtk4::Adjustment) {
+    let (x, y) = {
+        let st = state.borrow();
+        let mut sheet = st.sheet_mut();
+        let Some((r, c)) = sheet.view_top_left.take() else { return };
+        tables_core::sheet::scroll_to_top_left(r, c, &sheet)
+    };
+    use gtk4::prelude::AdjustmentExt;
+    h.set_value(x);
+    v.set_value(y);
+}
+
 #[allow(clippy::too_many_arguments)]
 pub fn draw_grid(
     cr: &Context, state: &Rc<RefCell<crate::window::AppState>>,
@@ -342,13 +356,20 @@ pub fn draw_grid(
     cr.fill().unwrap();
     // Hidden columns (#113) collapse to zero width, so — like the hidden
     // rows below — this walks every column rather than a fixed-step
-    // range starting at a scroll-derived index.
-    let mut cx = ROW_HEADER_WIDTH - scroll_x;
+    // range starting at a scroll-derived index. Frozen columns' labels
+    // stay put; scrolled ones are clipped where they pass under them.
+    let (left, top) = (tables_core::sheet::scrolled_left(sheet), tables_core::sheet::scrolled_top(sheet));
     for c in 0..sheet.cols {
-        if sheet.is_col_hidden(c) { continue; }
+        if !tables_core::sheet::col_on_screen(c, scroll_x, sheet) { continue; }
         let cw = sheet.col_width(c);
-        if cx + cw < ROW_HEADER_WIDTH { cx += cw; continue; }
+        let cx = tables_core::sheet::col_x(c, scroll_x, sheet);
         if cx > width { break; }
+        let frozen = c < sheet.frozen_cols;
+        cr.save().unwrap();
+        if !frozen {
+            cr.rectangle(left, 0.0, width - left, COL_HEADER_HEIGHT);
+            cr.clip();
+        }
         let label = col_label(c);
         cr.set_source_rgb(hdr_text.0, hdr_text.1, hdr_text.2);
         let text_width = pango_text_width(cr, &label);
@@ -365,7 +386,7 @@ pub fn draw_grid(
         cr.move_to(cx + cw, 0.0);
         cr.line_to(cx + cw, COL_HEADER_HEIGHT);
         cr.stroke().unwrap();
-        cx += cw;
+        cr.restore().unwrap();
     }
     cr.restore().unwrap();
 
@@ -381,33 +402,49 @@ pub fn draw_grid(
     // this app deals with, and the only way to know a row's true screen
     // position once earlier rows may not all be drawn.
     for r in 0..sheet.rows {
-        if sheet.is_row_hidden(r) { continue; }
+        if !tables_core::sheet::row_on_screen(r, scroll_y, sheet) { continue; }
         let ry = tables_core::sheet::row_y(r, scroll_y, sheet);
-        if ry + sheet.row_height(r) < COL_HEADER_HEIGHT { continue; }
         if ry > height { break; }
+        cr.save().unwrap();
+        if r >= sheet.frozen_rows {
+            cr.rectangle(0.0, top, ROW_HEADER_WIDTH, height - top);
+            cr.clip();
+        }
         cr.set_source_rgb(hdr_text.0, hdr_text.1, hdr_text.2);
         let label = (r + 1).to_string();
         let text_width = pango_text_width(cr, &label);
         draw_pango_text(cr, &label, ROW_HEADER_WIDTH - 6.0 - text_width, ry + sheet.row_height(r) / 2.0);
+        cr.restore().unwrap();
     }
     cr.restore().unwrap();
 
-    // Cells
+    // Cells, in four panes: the scrolling one, then the frozen rows, the
+    // frozen columns and their corner over it. Each pane draws only its own
+    // cells, clipped to its own area, so a scrolled cell never shows
+    // through a frozen one. Without frozen panes the last three are empty.
+    let panes = [
+        (false, false, (left, top, width - left, height - top)),
+        (true, false, (left, COL_HEADER_HEIGHT, width - left, top - COL_HEADER_HEIGHT)),
+        (false, true, (ROW_HEADER_WIDTH, top, left - ROW_HEADER_WIDTH, height - top)),
+        (true, true, (ROW_HEADER_WIDTH, COL_HEADER_HEIGHT, left - ROW_HEADER_WIDTH, top - COL_HEADER_HEIGHT)),
+    ];
+    let span = |from: usize, n: usize, size: &dyn Fn(usize) -> f64| (from..from + n.max(1)).map(size).sum::<f64>();
+    for (frozen_r, frozen_c, (px, py, pw, ph)) in panes {
+    if pw <= 0.0 || ph <= 0.0 { continue; }
+    let in_pane = |r: usize, c: usize| (r < sheet.frozen_rows) == frozen_r && (c < sheet.frozen_cols) == frozen_c;
     cr.save().unwrap();
-    cr.rectangle(ROW_HEADER_WIDTH, COL_HEADER_HEIGHT, width - ROW_HEADER_WIDTH, height - COL_HEADER_HEIGHT);
+    cr.rectangle(px, py, pw, ph);
     cr.clip();
     let mut bordered: Vec<(f64, f64, f64, f64, &CellBorder)> = Vec::new();
     for r in 0..sheet.rows {
-        if sheet.is_row_hidden(r) { continue; }
+        if (r < sheet.frozen_rows) != frozen_r || !tables_core::sheet::row_on_screen(r, scroll_y, sheet) { continue; }
         let cy = tables_core::sheet::row_y(r, scroll_y, sheet);
         let rh = sheet.row_height(r);
-        if cy + rh < COL_HEADER_HEIGHT { continue; }
         if cy > height { break; }
-        cx = ROW_HEADER_WIDTH - scroll_x;
         for c in 0..sheet.cols {
-            if sheet.is_col_hidden(c) { continue; }
+            if (c < sheet.frozen_cols) != frozen_c || !tables_core::sheet::col_on_screen(c, scroll_x, sheet) { continue; }
             let cw = sheet.col_width(c);
-            if cx + cw < ROW_HEADER_WIDTH { cx += cw; continue; }
+            let cx = tables_core::sheet::col_x(c, scroll_x, sheet);
             if cx > width { break; }
             let is_sel = show_selection && r == sheet.selected_row && c == sheet.selected_col;
             let (sr0, sc0, sr1, sc1) = sheet.selection_block();
@@ -489,7 +526,6 @@ pub fn draw_grid(
             if merge.is_none() {
                 draw_cell_text(cr, sheet, r, c, (cx, cy, cw, rh), cell_text);
             }
-            cx += cw;
         }
     }
     for &(x, y, w, h, border) in &bordered {
@@ -497,11 +533,11 @@ pub fn draw_grid(
     }
     // Merged blocks: the anchor's value across the whole block, drawn after
     // every cell so the covered cells' backgrounds can't paint over it.
-    for &(mr, mc, rs, cs) in &sheet.merges {
+    for &(mr, mc, rs, cs) in sheet.merges.iter().filter(|m| in_pane(m.0, m.1)) {
         let x = tables_core::sheet::col_x(mc, scroll_x, sheet);
         let y = tables_core::sheet::row_y(mr, scroll_y, sheet);
-        let w = tables_core::sheet::col_x(mc + cs.max(1), scroll_x, sheet) - x;
-        let h = tables_core::sheet::row_y(mr + rs.max(1), scroll_y, sheet) - y;
+        let w = span(mc, cs, &|c| if sheet.is_col_hidden(c) { 0.0 } else { sheet.col_width(c) });
+        let h = span(mr, rs, &|r| if sheet.is_row_hidden(r) { 0.0 } else { sheet.row_height(r) });
         if x > width || y > height || x + w < ROW_HEADER_WIDTH || y + h < COL_HEADER_HEIGHT {
             continue;
         }
@@ -510,7 +546,7 @@ pub fn draw_grid(
     // Charts float above the cells at their anchor. They were read from
     // xlsx and saved back, but only ever drawn in the chart dialog's preview
     // (render lab `tables/chart`).
-    for chart in &sheet.charts {
+    for chart in sheet.charts.iter().filter(|ch| in_pane(ch.anchor.0, ch.anchor.1)) {
         let x = tables_core::sheet::col_x(chart.anchor.1, scroll_x, sheet);
         let y = tables_core::sheet::row_y(chart.anchor.0, scroll_y, sheet);
         let (w, h) = (chart.width_px.round() as i32, chart.height_px.round() as i32);
@@ -532,12 +568,29 @@ pub fn draw_grid(
         cr.stroke().unwrap();
     }
     cr.restore().unwrap();
+    }
+
+    // The freeze lines: where the frozen panes end, through the headers,
+    // as Calc draws them, so it's clear what stays put.
+    cr.set_source_rgb(hdr_text.0, hdr_text.1, hdr_text.2);
+    cr.set_line_width(1.0);
+    if sheet.frozen_cols > 0 {
+        cr.move_to(crisp(left, 1.0), 0.0);
+        cr.line_to(crisp(left, 1.0), height);
+        cr.stroke().unwrap();
+    }
+    if sheet.frozen_rows > 0 {
+        cr.move_to(0.0, crisp(top, 1.0));
+        cr.line_to(width, crisp(top, 1.0));
+        cr.stroke().unwrap();
+    }
 
     // Selection range outline (2px accent around the whole rectangle).
     let (sr0, sc0, sr1, sc1) = sheet.selection_block();
     let px_x = |col: usize| -> f64 { tables_core::sheet::col_x(col, scroll_x, sheet) };
+    let right_of = |col: usize| -> f64 { px_x(col) + sheet.col_width(col) };
     let x0 = px_x(sc0);
-    let x1 = px_x(sc1 + 1);
+    let x1 = right_of(sc1);
     let y0 = tables_core::sheet::row_y(sr0, scroll_y, sheet);
     let y1 = tables_core::sheet::row_y(sr1, scroll_y, sheet) + sheet.row_height(sr1);
     cr.save().unwrap();
@@ -564,10 +617,11 @@ pub fn draw_grid(
     // Print area (#113): a dashed border around the range PDF export
     // will use, same convention as Excel/Sheets — print_area only ever
     // affected the export bounds before this, with no on-screen way to
-    // see what was set.
-    if let Some((pr0, pc0, pr1, pc1)) = sheet.print_area {
+    // see what was set. Editing chrome like the selection: a print never
+    // shows its own print-area border, so the render lab leaves it out.
+    if let Some((pr0, pc0, pr1, pc1)) = sheet.print_area.filter(|_| show_selection) {
         let px0 = px_x(pc0);
-        let px1 = px_x(pc1 + 1);
+        let px1 = right_of(pc1);
         let py0 = tables_core::sheet::row_y(pr0, scroll_y, sheet);
         let py1 = tables_core::sheet::row_y(pr1, scroll_y, sheet) + sheet.row_height(pr1);
         cr.set_source_rgb(hdr_text.0, hdr_text.1, hdr_text.2);
@@ -584,7 +638,7 @@ pub fn draw_grid(
     for (i, &(fr0, fc0, fr1, fc1)) in formula_refs.iter().enumerate() {
         let color = FORMULA_REF_COLORS[i % FORMULA_REF_COLORS.len()];
         let fx0 = px_x(fc0);
-        let fx1 = px_x(fc1 + 1);
+        let fx1 = right_of(fc1);
         let fy0 = tables_core::sheet::row_y(fr0, scroll_y, sheet);
         let fy1 = tables_core::sheet::row_y(fr1, scroll_y, sheet) + sheet.row_height(fr1);
         cr.set_source_rgb(color.0, color.1, color.2);
