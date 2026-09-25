@@ -12,7 +12,7 @@
 
 use adw::prelude::*;
 use decks_core::engine::Deck;
-use decks_core::presenter::{format_elapsed, show_layout, slide_counter, PresenterState};
+use decks_core::presenter::{format_elapsed, show_layout, show_position, PresenterState};
 use gtk4::{self as gtk, gdk, glib};
 use libadwaita as adw;
 use std::cell::RefCell;
@@ -72,7 +72,8 @@ impl Show {
         if let Some(p) = self.presenter.borrow().as_ref() {
             p.current.queue_draw();
             p.next.queue_draw();
-            p.counter.set_text(&slide_counter(i, self.deck.slides.len()));
+            let steps = self.deck.slides.get(i).map_or(0, decks_core::builds::steps);
+            p.counter.set_text(&show_position(i, self.deck.slides.len(), self.state.borrow().build_step(), steps));
             let notes = self.deck.slides.get(i).map(|s| s.notes.trim().to_string()).unwrap_or_default();
             p.notes.set_text(if notes.is_empty() { "No notes for this slide" } else { &notes });
             p.notes.set_css_classes(if notes.is_empty() { &["dim-label"] } else { &[] });
@@ -118,6 +119,7 @@ impl Show {
             match advance {
                 Some(Advance::Build(n)) => {
                     *self.build.borrow_mut() = Some((n, Instant::now()));
+                    self.dump_build_midpoint(n);
                     if let Some((_, area)) = self.audience.borrow().as_ref() {
                         let area = area.clone();
                         let started = Instant::now();
@@ -141,6 +143,25 @@ impl Show {
             }
         }
         self.refresh();
+    }
+
+    /// Under GTK_OFFICE_TEST_MODE with GTK_OFFICE_TRANSITION_DUMP set, the
+    /// midpoint of build `n` as the audience window draws it, written as
+    /// `build-midpoint.png` (1280x720): an animation can't be screenshotted
+    /// deterministically, its frames can.
+    fn dump_build_midpoint(&self, n: usize) {
+        if std::env::var_os("GTK_OFFICE_TEST_MODE").is_none() {
+            return;
+        }
+        let Some(dir) = std::env::var_os("GTK_OFFICE_TRANSITION_DUMP") else { return };
+        let Ok(surface) = gtk::cairo::ImageSurface::create(gtk::cairo::Format::ARgb32, 1280, 720) else { return };
+        if let Ok(cr) = gtk::cairo::Context::new(&surface) {
+            let objects = decks_core::builds::frame(&self.deck.slides[self.index()], n, 0.5);
+            draw_slide_objects(&cr, 1280.0, 720.0, &self.deck.slides, self.index(), &self.deck.masters, Chrome::Show, &objects);
+        }
+        if let Ok(mut f) = std::fs::File::create(std::path::Path::new(&dir).join("build-midpoint.png")) {
+            let _ = surface.write_to_png(&mut f);
+        }
     }
 
     /// What the audience sees now: a build part-way, or the slide as it

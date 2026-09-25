@@ -143,6 +143,16 @@ pub fn slide_counter(index: usize, count: usize) -> String {
     format!("Slide {} of {}", index + 1, count)
 }
 
+/// Where a show is: "Slide 3 of 12", and on a slide with builds how many
+/// have played, "Slide 3 of 12 · Build 1 of 4".
+pub fn show_position(index: usize, count: usize, step: usize, steps: usize) -> String {
+    if steps == 0 {
+        slide_counter(index, count)
+    } else {
+        format!("{} · Build {} of {}", slide_counter(index, count), step, steps)
+    }
+}
+
 /// Which monitor shows what, by index into the display's monitor list.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct ShowLayout {
@@ -203,6 +213,8 @@ mod tests {
         assert_eq!(format_elapsed(Duration::from_secs(65)), "1:05");
         assert_eq!(format_elapsed(Duration::from_secs(3600 + 62)), "1:01:02");
         assert_eq!(slide_counter(2, 12), "Slide 3 of 12");
+        assert_eq!(show_position(2, 12, 0, 0), "Slide 3 of 12");
+        assert_eq!(show_position(2, 12, 1, 4), "Slide 3 of 12 · Build 1 of 4");
     }
 
     #[test]

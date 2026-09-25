@@ -1454,19 +1454,22 @@ fn impress_keeps_our_object_builds() {
         Build { object: 0, effect: BuildEffect::Dissolve, out: true },
     ];
     deck.slides[0].builds = builds.clone();
-    let dir = tempfile::tempdir().unwrap();
-    let path = dir.path().join("builds.pptx");
-    write_pptx(path.to_str().unwrap(), &deck).expect("write pptx");
-    let back = convert(&path, "pptx").expect("Impress rewrites our pptx");
-    let read = decks_core::read_deck(back.to_str().unwrap()).expect("read Impress's pptx");
-    let texts: Vec<String> = read.slides[0]
-        .objects
-        .iter()
-        .map(|o| match o { SlideObject::TextBox { text, .. } => text.clone(), _ => String::new() })
-        .collect();
-    let got: Vec<(String, BuildEffect, bool)> =
-        read.slides[0].builds.iter().map(|b| (texts[b.object].clone(), b.effect, b.out)).collect();
     let want: Vec<(String, BuildEffect, bool)> =
         builds.iter().map(|b| (format!("Point {}", b.object + 1), b.effect, b.out)).collect();
-    assert_eq!(got, want);
+    // Both formats, each rewritten by LibreOffice in the same format.
+    for kind in ["pptx", "odp"] {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join(format!("builds.{kind}"));
+        decks_core::write_deck(path.to_str().unwrap(), &deck).expect("write");
+        let back = convert(&path, kind).unwrap_or_else(|e| panic!("Impress rewrites our {kind}: {e}"));
+        let read = decks_core::read_deck(back.to_str().unwrap()).expect("read Impress's file");
+        let texts: Vec<String> = read.slides[0]
+            .objects
+            .iter()
+            .map(|o| match o { SlideObject::TextBox { text, .. } => text.clone(), _ => String::new() })
+            .collect();
+        let got: Vec<(String, BuildEffect, bool)> =
+            read.slides[0].builds.iter().map(|b| (texts[b.object].clone(), b.effect, b.out)).collect();
+        assert_eq!(got, want, "{kind}");
+    }
 }
