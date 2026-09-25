@@ -73,7 +73,10 @@ Rules each app's op type must follow:
 - Letters (`letters-core`) is on it now: `edit::History` is
   `ops::History<edit::Op>`, and `edit::apply_all` delegates to the shared
   one.
-- Tables and Decks move their own crates onto it, owned by their streams.
+- Tables (`tables-core`) is on it: `controller::Op` implements `ops::Op`,
+  and `WorkbookController` keeps a `History<Op>` (plus each step's name
+  for the Undo menu). It no longer uses `UndoManager`.
+- Decks moves its own crate onto it, owned by its stream.
   Their existing command objects become op types.
 - `UndoManager` remains until the last user moves off it, then goes.
 
