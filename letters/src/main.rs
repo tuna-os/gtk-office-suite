@@ -19,6 +19,7 @@ mod style_picker;
 mod outline;
 mod thumbnails;
 mod focus_mode;
+mod chips_ui;
 
 fn main() {
     let suite = suite_common::SuiteApp::new("org.tunaos.letters");

@@ -2309,6 +2309,7 @@ name = "letters-core"
 version = "0.1.0"
 dependencies = [
  "cairo-rs",
+ "chrono",
  "pango",
  "pangocairo",
  "proptest",

@@ -51,7 +51,10 @@ pub fn make_editable(view: &PageView, buf: &gtk::TextBuffer) {
                 2 => select_word(&buf, &iter),
                 3 => select_paragraph(&buf, &iter),
                 _ if extend => buf.move_mark(&buf.get_insert(), &iter),
-                _ => buf.place_cursor(&iter),
+                _ => {
+                    buf.place_cursor(&iter);
+                    crate::chips_ui::card_on_click(&v, &buf, x, off);
+                }
             }
             anchor.set(Some(buf.iter_at_mark(&buf.selection_bound()).offset()));
         });
@@ -164,6 +167,8 @@ fn insert_text(buf: &gtk::TextBuffer, text: &str) {
             before.backward_char();
             crate::actions::markdown_macro_at(buf, &before);
         }
+        // "@" at the start of a word: the smart chip popover.
+        crate::chips_ui::typed(buf, text);
         return;
     }
     buf.begin_user_action();

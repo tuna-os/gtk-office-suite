@@ -4132,6 +4132,49 @@ class LettersDistractionFreeSmoke(BaseGUITestCase):
         self.assertIsNone(self.process.poll(), "letters crashed in distraction-free typing")
 
 
+class LettersSmartChipsSmoke(BaseGUITestCase):
+    """Smart chips (DESIGN-UI, Docs): "@" at the start of a word offers
+    dates, people and links; the chosen chip is one inline object in the
+    document, read out by its label, and one undo step."""
+
+    app_name = "letters"
+
+    def setUp(self):
+        self._snapshot_path = self.isolate_snapshot(prefix="letters-chips-")
+        super().setUp()
+
+    def _runs(self):
+        s = self.trigger_snapshot("org.tunaos.letters")
+        return s["paragraphs"][0]["runs"] if s["paragraphs"] else []
+
+    def test_at_inserts_a_date_chip(self):
+        from dogtail import rawinput
+
+        self.wait_for_node(name="New Document", roleName="push button").do_action(0)
+        page = self.wait_for_node(name="Print Layout", roleName="text")
+        rawinput.typeText("Due @")
+        self.wait_for_node(name="Smart chip")
+        self.wait_for_node(name="Smart chip suggestions", roleName="list")
+        rawinput.typeText("tom")
+        time.sleep(0.5)
+        rawinput.keyCombo("Return")
+        chip = self.wait_for_condition(
+            lambda: next((r for r in self._runs() if r["style"].get("chip")), None),
+            description="a chip in the document")
+        self.assertEqual(chip["style"]["chip"]["kind"], "Date")
+        self.assertEqual([r["text"] for r in self._runs()][0], "Due ", "the @ was replaced")
+        # Typing continues after the chip, and a screen reader hears its label.
+        rawinput.typeText(" ok")
+        self.wait_for_condition(lambda: page.text == f"Due {chip['text']} ok" or None,
+                                description="the page view's text reading the chip's label")
+        # Undo takes back "ok", then the space, then the chip in one step
+        # (the @ returns).
+        for _ in range(3):
+            rawinput.keyCombo("<Control>z")
+        self.wait_for_condition(lambda: page.text == "Due @" or None, description="undo taking the chip back")
+        self.assertIsNone(self.process.poll(), "letters crashed inserting a chip")
+
+
 class LettersPrintLayoutEditingSmoke(BaseGUITestCase):
     """Print Layout is the default view, and editing there is editing the
     document (ADR 0010, stage 3d).

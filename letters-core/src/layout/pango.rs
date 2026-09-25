@@ -61,6 +61,17 @@ impl PangoShaper {
         Self { context, layouts: HashMap::new() }
     }
 
+    /// A smart chip's label, in the paragraph's font at `size_pt`: what
+    /// the shaper measures and the painter draws.
+    fn chip_label(&self, label: &str, font: &pango::FontDescription, size_pt: f64) -> pango::Layout {
+        let layout = pango::Layout::new(&self.context);
+        let mut font = font.clone();
+        font.set_size(to_units(size_pt * 0.92));
+        layout.set_font_description(Some(&font));
+        layout.set_text(label);
+        layout
+    }
+
     /// The Pango layout of one paragraph, exactly as the engine shapes it.
     pub fn layout(&self, req: &ShapeRequest<'_>) -> pango::Layout {
         let layout = pango::Layout::new(&self.context);
@@ -113,8 +124,18 @@ impl PangoShaper {
                 // painter draws the picture into it (layout_text). A
                 // footnote reference is one too, with no size yet.
                 text.push(super::OBJECT);
-                let (w, h) = if run.style.image.is_some() { super::image_size_pt(run, req.width_pt) } else { (0.0, 0.0) };
-                let rect = pango::Rectangle::new(0, -to_units(h), to_units(w), to_units(h));
+                let rect = if run.style.chip.is_some() {
+                    // A chip holds its pill open: the label's width plus
+                    // padding and gaps, the label's own ascent and descent.
+                    let run_size = run.style.font_size_hp.map_or(size, |hp| f64::from(hp) / 2.0);
+                    let label = self.chip_label(&run.text, &base, run_size);
+                    let (_, logical) = label.extents();
+                    let w = to_pt(logical.width()) + 2.0 * (super::CHIP_PAD_PT + super::CHIP_GAP_PT);
+                    pango::Rectangle::new(0, -label.baseline(), to_units(w), logical.height())
+                } else {
+                    let (w, h) = if run.style.image.is_some() { super::image_size_pt(run, req.width_pt) } else { (0.0, 0.0) };
+                    pango::Rectangle::new(0, -to_units(h), to_units(w), to_units(h))
+                };
                 let mut a: pango::Attribute = pango::AttrShape::new(&rect, &rect).into();
                 a.set_start_index(start);
                 a.set_end_index(text.len() as u32);
@@ -393,6 +414,41 @@ impl Typeset {
         self.loader = Box::new(loader);
     }
 
+    /// A smart chip: a rounded pill in the chip's colour with its label,
+    /// shaped as `PangoShaper::layout` measured it.
+    fn draw_chip(&self, cr: &cairo::Context, para: usize, ch: usize, x: f64, baseline: f64) {
+        let Some(p) = self.doc.paragraphs.get(para) else { return };
+        let Some(run) = super::run_at(&p.runs, ch) else { return };
+        let Some(chip) = &run.style.chip else { return };
+        // The paragraph's own font, as the shaper used it.
+        let req = paragraph_request(p, 1000.0, &self.opts);
+        let base = self.shaper.layout(&ShapeRequest { runs: &[], ..req });
+        let font = base.font_description().unwrap_or_default();
+        let size = run.style.font_size_hp.map_or(to_pt(font.size()), |hp| f64::from(hp) / 2.0);
+        let label = self.shaper.chip_label(&run.text, &font, size);
+        let (_, logical) = label.extents();
+        let (w, h) = (to_pt(logical.width()) + 2.0 * super::CHIP_PAD_PT, to_pt(logical.height()));
+        let (left, top) = (x + super::CHIP_GAP_PT, baseline - to_pt(label.baseline()));
+        // Google's chip colours, light enough to print.
+        let (fill, ink) = match chip.kind {
+            crate::chips::ChipKind::Date => ((0.91, 0.94, 0.99), (0.10, 0.34, 0.71)),
+            crate::chips::ChipKind::Person => ((0.93, 0.93, 0.93), (0.13, 0.13, 0.13)),
+            crate::chips::ChipKind::Link => ((0.90, 0.96, 0.92), (0.09, 0.42, 0.22)),
+        };
+        let r = h / 2.0;
+        let _ = cr.save();
+        cr.new_sub_path();
+        cr.arc(left + r, top + r, r, std::f64::consts::FRAC_PI_2, 3.0 * std::f64::consts::FRAC_PI_2);
+        cr.arc(left + w - r, top + r, r, -std::f64::consts::FRAC_PI_2, std::f64::consts::FRAC_PI_2);
+        cr.close_path();
+        cr.set_source_rgb(fill.0, fill.1, fill.2);
+        let _ = cr.fill();
+        cr.set_source_rgb(ink.0, ink.1, ink.2);
+        cr.move_to(left + super::CHIP_PAD_PT, top);
+        pangocairo::functions::show_layout(cr, &label);
+        let _ = cr.restore();
+    }
+
     fn draw_image(&self, cr: &cairo::Context, src: &str, x: f64, y: f64, w: f64, h: f64) {
         let surface = self.images.borrow_mut().entry(src.to_string()).or_insert_with(|| (self.loader)(src)).clone();
         let _ = cr.save();
@@ -637,6 +693,9 @@ impl Typeset {
                 }
                 Item::Image { src, x_pt, y_pt, width_pt, height_pt, .. } => {
                     self.draw_image(cr, src, *x_pt, *y_pt, *width_pt, *height_pt);
+                }
+                Item::Chip { para, ch, x_pt, baseline_pt } => {
+                    self.draw_chip(cr, *para, *ch, *x_pt, *baseline_pt);
                 }
                 Item::Cell { x_pt, y_pt, width_pt, height_pt, .. } => {
                     // A 0.5 pt rule, at least one device pixel, on whole

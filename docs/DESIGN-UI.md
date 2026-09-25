@@ -211,7 +211,9 @@ rather than layout. So most of the ideas below arrive through RFC-0001
   - a document outline sidebar built from headings (Letters' structured
     editing already has the tree);
   - "pageless" as a view mode alongside real pages;
-  - smart chips (dates, people, links) as inline objects.
+  - smart chips (dates, people, links) as inline objects. ✅ Letters
+    (2026-09-25): "@" or Ctrl+Alt+C; one object char in the model; a date
+    chip's card picks another day. Files keep a chip as its text and link.
 - **Sheets:**
   - formula autocomplete with argument hints;
   - dropdown chips for data validation (the model already has
