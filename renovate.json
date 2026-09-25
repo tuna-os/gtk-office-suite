@@ -1,7 +1,18 @@
 {
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
   "extends": [
-    "local>tuna-os/.github",
     "local>tuna-os/.github"
+  ],
+  "packageRules": [
+    {
+      "description": "Hold the GitHub-hosted runner at ubuntu-24.04. On ubuntu-26.04 (#872) the GUI smoke suite fails wholesale: dogtail stops finding the apps' push buttons over AT-SPI ('New Document', 'Close', 'Add sheet'), and test_gui_harness.py's process-ownership test kills a process it did not start. Moving runners is a migration of the GUI harness, not a version bump. Remove this rule in the PR that makes the suite pass on 26.04.",
+      "matchDatasources": [
+        "github-runners"
+      ],
+      "matchPackageNames": [
+        "ubuntu"
+      ],
+      "allowedVersions": "<26"
+    }
   ]
 }
