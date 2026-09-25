@@ -201,3 +201,108 @@ proptest! {
         prop_assert_eq!(d, doc);
     }
 }
+
+// ── diff and history ──────────────────────────────────────────────────────
+
+fn with_para_styles(mut d: Document, seed: u64) -> Document {
+    for (i, p) in d.paragraphs.iter_mut().enumerate() {
+        match (seed + i as u64) % 4 {
+            0 => p.style.heading = Some(2),
+            1 => p.style.list = ListKind::Bullet,
+            2 => p.style.space_after_pt = 6.0,
+            _ => {}
+        }
+    }
+    d
+}
+
+proptest! {
+    /// Applying `diff(a, b)` to `a` gives `b`, for unrelated documents too,
+    /// and its undo gives `a` back.
+    #[test]
+    fn diff_turns_one_document_into_another(a in arb_doc(), b in arb_doc(), sa in 0u64..4, sb in 0u64..4) {
+        let (a, b) = (with_para_styles(a, sa), with_para_styles(b, sb));
+        let ops = diff(&a, &b);
+        let mut d = a.clone();
+        let undo = apply_all(&mut d, &ops).unwrap();
+        prop_assert_eq!(&d, &b);
+        apply_all(&mut d, &undo).unwrap();
+        prop_assert_eq!(d, a);
+    }
+
+    /// A small edit diffs to small ops: typing in one paragraph is one
+    /// insert, never a rewrite.
+    #[test]
+    fn a_small_edit_diffs_to_a_small_op(a in arb_doc(), at in any::<usize>()) {
+        let mut b = a.clone();
+        let at = at % (doc_len(&a) + 1);
+        apply(&mut b, &Op::Insert { at, content: vec![Paragraph { style: ParaStyle::default(), runs: vec![Run::plain("zz")] }] }).unwrap();
+        let ops = diff(&a, &b);
+        prop_assert!(ops.len() == 1, "{:?}", ops);
+        let is_small_insert = matches!(&ops[0], Op::Insert { content, .. } if seq_len(&content[0].runs) == 2);
+        prop_assert!(is_small_insert, "{:?}", ops);
+    }
+}
+
+#[test]
+fn diff_handles_table_structure_with_a_block_op() {
+    let a = Document::from_plain_text("before\nafter");
+    let mut b = a.clone();
+    b.insert_table_at(1, 2, 2);
+    let ops = diff(&a, &b);
+    assert!(ops.iter().any(|o| matches!(o, Op::SetParagraphs { .. })), "{ops:?}");
+    let mut d = a.clone();
+    let undo = apply_all(&mut d, &ops).unwrap();
+    assert_eq!(d, b);
+    // Typing in a cell is a text op, not a block op.
+    let mut c = b.clone();
+    let cell = c.paragraphs.iter().position(|p| p.style.table_cell.is_some()).unwrap();
+    c.paragraphs[cell].runs = vec![Run::plain("x")];
+    let ops = diff(&b, &c);
+    assert!(matches!(ops.as_slice(), [Op::Insert { .. }]), "{ops:?}");
+    apply_all(&mut d, &undo).unwrap();
+    assert_eq!(d, a);
+}
+
+#[test]
+fn history_undoes_and_redoes_whole_user_actions() {
+    let mut d = Document::from_plain_text("hello");
+    let mut h = History::default();
+    // One action: two ops.
+    h.begin();
+    let op = typing(&d, 5, " there").unwrap();
+    h.record(apply(&mut d, &op).unwrap());
+    h.record(apply(&mut d, &Op::Mark { start: 0, end: 5, key: MarkKey::Bold, value: bold() }).unwrap());
+    h.end();
+    // A second action.
+    let op = typing(&d, 11, "!").unwrap();
+    h.record(apply(&mut d, &op).unwrap());
+    let after = d.clone();
+    h.undo(&mut d).unwrap();
+    assert_eq!(sequence_text(&d), "hello there");
+    h.undo(&mut d).unwrap();
+    assert_eq!(d, Document::from_plain_text("hello"), "both ops of the first action undone together");
+    assert!(!h.can_undo());
+    h.redo(&mut d).unwrap();
+    h.redo(&mut d).unwrap();
+    assert_eq!(d, after);
+    // Typing word characters merges into one step; a space ends the word.
+    let mut e = Document::from_plain_text("");
+    let mut g = History::default();
+    for (i, c) in "ab c".chars().enumerate() {
+        let op = typing(&e, i, &c.to_string()).unwrap();
+        g.set_merge(!c.is_whitespace());
+        g.record(apply(&mut e, &op).unwrap());
+    }
+    g.undo(&mut e).unwrap();
+    assert_eq!(sequence_text(&e), "ab ");
+    g.undo(&mut e).unwrap();
+    assert_eq!(sequence_text(&e), "ab");
+    g.undo(&mut e).unwrap();
+    assert_eq!(sequence_text(&e), "", "'ab' was one step");
+    // A new change clears redo.
+    h.undo(&mut d).unwrap();
+    let op = typing(&d, 0, ">").unwrap();
+    h.record(apply(&mut d, &op).unwrap());
+    assert!(!h.can_redo());
+}

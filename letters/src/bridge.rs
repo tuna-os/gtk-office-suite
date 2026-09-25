@@ -134,6 +134,25 @@ pub fn capture_from_buffer(buf: &gtk::TextBuffer) -> Document {
 /// With `buffer_offset`/`paragraph_offset` it maps a place in the document
 /// to a buffer offset and back: how the page view edits the buffer.
 pub fn capture_with_starts(buf: &gtk::TextBuffer) -> (Document, Vec<usize>) {
+    let (mut paragraphs, mut starts) = capture_span(buf, 0, buf.char_count().max(0));
+    // Footnotes, header, footer and page geometry are document state that has
+    // no representation in the text buffer, so they ride on the buffer itself
+    // (set by render/insert) rather than being reconstructed from the text.
+    // Returning `None` for them here — as this function used to — discarded
+    // them on every save, because `save_buffer_to_path` writes exactly the
+    // Document this returns and both the ODT and DOCX writers emit all three
+    // (#438).
+    capture_tables(&mut paragraphs, &mut starts);
+    let mut doc = Document { paragraphs, ..Document::new() };
+    read_sidecars(buf, &mut doc);
+    (doc, starts)
+}
+
+/// The paragraphs of whole buffer lines from offset `from` (a line start)
+/// to `to` (a line end), and where each one's text starts, without folding
+/// table rows into cells: `capture_with_starts` does that for the whole
+/// buffer, and the live model uses this for the lines an edit touched.
+pub(crate) fn capture_span(buf: &gtk::TextBuffer, from: i32, to: i32) -> (Vec<Paragraph>, Vec<usize>) {
     let table = buf.tag_table();
     let run_tags: Vec<(usize, gtk::TextTag)> = RUN_TAGS
         .iter()
@@ -195,8 +214,10 @@ pub fn capture_with_starts(buf: &gtk::TextBuffer) -> (Document, Vec<usize>) {
     let mut starts: Vec<usize> = Vec::new();
     let mut line_start = 0usize;
 
-    let mut iter = buf.start_iter();
-    while !iter.is_end() {
+    let mut iter = buf.iter_at_offset(from);
+    // An empty line ending the span still has its style read at its end,
+    // as a whole-buffer capture reads it at that line's newline.
+    while !iter.is_end() && (iter.offset() < to || (at_line_start && iter.offset() == to)) {
         if at_line_start {
             line_start = iter.offset().max(0) as usize;
             for (level, tag) in &heading_tags {
@@ -235,6 +256,9 @@ pub fn capture_with_starts(buf: &gtk::TextBuffer) -> (Document, Vec<usize>) {
                 }
             }
             at_line_start = false;
+            if iter.offset() >= to {
+                break;
+            }
         }
         // Embedded images appear as the object-replacement char; the source
         // path and alt text ride on the paintable itself (see render side).
@@ -312,30 +336,13 @@ pub fn capture_with_starts(buf: &gtk::TextBuffer) -> (Document, Vec<usize>) {
         current.runs.push(r);
     }
     if at_line_start {
-        line_start = buf.char_count().max(0) as usize;
+        // An empty last line at the very end of the buffer.
+        line_start = to.max(0) as usize;
     }
     let marker = capture_list_marker(&mut current, line_list_level);
     starts.push(line_start + marker);
     paragraphs.push(current);
-
-    // Footnotes, header, footer and page geometry are document state that has
-    // no representation in the text buffer, so they ride on the buffer itself
-    // (set by render/insert) rather than being reconstructed from the text.
-    // Returning `None` for them here — as this function used to — discarded
-    // them on every save, because `save_buffer_to_path` writes exactly the
-    // Document this returns and both the ODT and DOCX writers emit all three
-    // (#438).
-    let footnotes: Vec<String> = unsafe {
-        buf.data::<Vec<String>>(FOOTNOTES_KEY)
-            .map(|p| p.as_ref().clone())
-            .unwrap_or_default()
-    };
-    let header = header_sidecar(buf);
-    let footer = footer_sidecar(buf);
-    let page = page_sidecar(buf);
-    capture_tables(&mut paragraphs, &mut starts);
-    let heading_styles = heading_styles_sidecar(buf);
-    (Document { paragraphs, footnotes, header, footer, page, base_font: base_font_sidecar(buf), heading_styles }, starts)
+    (paragraphs, starts)
 }
 
 /// Chars a run takes in the layout text (an image or footnote reference is
@@ -360,7 +367,10 @@ fn run_lengths(run: &Run) -> (usize, usize) {
 /// used to pass buffer offsets as document offsets, so a selection after a
 /// list or a table came out shifted by those characters.
 pub fn selection_fragment(buf: &gtk::TextBuffer, start: usize, end: usize) -> letters_core::fragment::Fragment {
-    let (doc, starts) = capture_with_starts(buf);
+    let (doc, starts) = match crate::live::of(buf) {
+        Some(m) => m.borrow_mut().snapshot(buf),
+        None => capture_with_starts(buf),
+    };
     let seq = |off: usize| {
         let (para, offset) = paragraph_offset(&doc, &starts, off);
         letters_core::edit::paragraph_start(&doc, para) + offset
@@ -500,27 +510,6 @@ pub const BASE_FONT_KEY: &str = "letters-base-font";
 // rendered from a Document) from a document that genuinely has no header;
 // both flatten to `None`, but only the former is worth keeping separate for
 // anyone extending this.
-
-/// The run style of the char at `iter`, exactly as `capture_from_buffer`
-/// reads it.
-pub(crate) fn run_style_at(iter: &gtk::TextIter) -> RunStyle {
-    let mut s = RunStyle::default();
-    for tag in iter.tags() {
-        let Some(name) = tag.name() else { continue };
-        match name.as_str() {
-            "bold" => s.bold = true,
-            "italic" => s.italic = true,
-            "underline" => s.underline = true,
-            "strikethrough" => s.strikethrough = true,
-            "highlight" => s.highlight = true,
-            "code" => s.code = true,
-            "superscript" => s.vert_align = Some(letters_core::model::VertAlign::Superscript),
-            "subscript" => s.vert_align = Some(letters_core::model::VertAlign::Subscript),
-            other => apply_dynamic_tag(other, &mut s),
-        }
-    }
-    s
-}
 
 /// Copy the document state that lives beside the buffer's text (footnotes,
 /// header, footer, page geometry, base font) from `buf` into `doc`.
@@ -903,7 +892,19 @@ pub fn render_to_buffer(doc: &Document, buf: &gtk::TextBuffer) {
     let mut insert = buf.start_iter();
     let lines = render_lines(doc);
     let ordinals = letters_core::lists::ordinals(lines.iter().map(|p| &p.style));
-    for (i, para) in lines.iter().map(|p| p.as_ref()).enumerate() {
+    let lines: Vec<&Paragraph> = lines.iter().map(|p| p.as_ref()).collect();
+    render_paragraphs(buf, &mut insert, &lines, &ordinals);
+    buf.set_modified(false);
+}
+
+/// Insert `paras` (not table cells: `render_lines` makes those pipe rows)
+/// at `insert`, one line each, separated by newlines, with their list
+/// markers (`ordinals` gives each numbered item's number), run tags and
+/// paragraph tags. `render_to_buffer` renders a whole document with it; the
+/// live model re-renders just the paragraphs an undo changed.
+pub(crate) fn render_paragraphs(buf: &gtk::TextBuffer, insert: &mut gtk::TextIter, paras: &[&Paragraph], ordinals: &[u32]) {
+    let mut insert = *insert;
+    for (i, para) in paras.iter().copied().enumerate() {
         if i > 0 {
             buf.insert(&mut insert, "\n");
         }
@@ -968,7 +969,13 @@ pub fn render_to_buffer(doc: &Document, buf: &gtk::TextBuffer) {
             buf.apply_tag_by_name(&name, &start, &insert);
         }
     }
-    buf.set_modified(false);
+}
+
+/// Show a freshly opened (or recovered) document in `buf`: its live
+/// model's history starts here, so undo does not un-open it.
+pub fn load_document(doc: &Document, buf: &gtk::TextBuffer) {
+    render_to_buffer(doc, buf);
+    crate::live::reset(buf);
 }
 
 /// Read any supported file through letters-core into the buffer.
@@ -978,7 +985,7 @@ pub fn render_to_buffer(doc: &Document, buf: &gtk::TextBuffer) {
 /// but no longer runs a `.txt` file through the Markdown parser (#436).
 pub fn load_file_to_buffer(path: &str, buf: &gtk::TextBuffer) -> Result<(), String> {
     let doc = letters_core::save::read(std::path::Path::new(path))?;
-    render_to_buffer(&doc, buf);
+    load_document(&doc, buf);
     Ok(())
 }
 
@@ -993,7 +1000,14 @@ pub fn save_buffer_to_file(
     buf: &gtk::TextBuffer,
     path: &std::path::Path,
 ) -> Result<suite_common::interop::CompatibilityReport, String> {
-    letters_core::save::write(&capture_from_buffer(buf), path)
+    // The live model is the document; a buffer without one is read.
+    match crate::live::of(buf) {
+        Some(m) => {
+            let doc = m.borrow_mut().document(buf).clone();
+            letters_core::save::write(&doc, path)
+        }
+        None => letters_core::save::write(&capture_from_buffer(buf), path),
+    }
 }
 
 /// Insert the visible "[n]" marker for footnote index `idx`, tagged
@@ -1032,7 +1046,11 @@ where
         editor.select(start.offset().max(0) as usize, end.offset().max(0) as usize);
     }
     edit(&mut editor);
-    render_to_buffer(editor.document(), buf);
+    // One undoable change to the live model; and a changed document, which
+    // re-rendering (it marks the buffer saved) used to hide from the close
+    // guard.
+    crate::live::rewrite(buf, || render_to_buffer(editor.document(), buf));
+    buf.set_modified(true);
 
     // Re-rendering replaces the buffer's contents, which drops the caret at
     // the start. Put it back where the edit left it so typing continues in

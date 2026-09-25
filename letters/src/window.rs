@@ -699,7 +699,7 @@ impl LettersWindow {
             let tv = tab_view.clone();
             let a = gtk::gio::SimpleAction::new("undo", None);
             a.connect_activate(move |_, _| {
-                if let Some(buf) = active_buffer(&tv) { buf.undo(); }
+                if let Some(buf) = active_buffer(&tv) { crate::live::undo(&buf, false); }
             });
             app.add_action(&a);
             app.set_accels_for_action("app.undo", &["<Primary>z"]);
@@ -708,7 +708,7 @@ impl LettersWindow {
             let tv = tab_view.clone();
             let a = gtk::gio::SimpleAction::new("redo", None);
             a.connect_activate(move |_, _| {
-                if let Some(buf) = active_buffer(&tv) { buf.redo(); }
+                if let Some(buf) = active_buffer(&tv) { crate::live::undo(&buf, true); }
             });
             app.add_action(&a);
             app.set_accels_for_action("app.redo", &["<Primary>y", "<Primary><Shift>z"]);
@@ -932,7 +932,7 @@ impl LettersWindow {
             let Ok(doc) = serde_json::from_slice::<letters_core::model::Document>(&bytes) else { continue };
 
             let (container, buf) = make_doc_widget(Some(&self.settings));
-            crate::bridge::render_to_buffer(&doc, &buf);
+            crate::bridge::load_document(&doc, &buf);
             apply_page_setup_from_buffer(&container, &buf);
             // render_to_buffer ends with buf.set_modified(false) (it's also
             // used for a normal file open); recovered content is unsaved by

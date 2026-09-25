@@ -133,6 +133,12 @@ pub enum Op {
     /// Replace the style of the paragraph holding sequence offset `at`
     /// (its table-cell identity is kept).
     SetParaStyle { at: usize, style: ParaStyle },
+    /// Replace `remove` whole paragraphs from paragraph index `para` with
+    /// `insert`. A block-level op, for what is not a text edit: a table's
+    /// rows and columns (design constraint 6). In a CRDT it is an edit of
+    /// the list of blocks, not of the text sequence. `insert` may carry
+    /// table cells; the document keeps at least one paragraph.
+    SetParagraphs { para: usize, remove: usize, insert: Vec<Paragraph> },
 }
 
 /// Why an op could not be applied. The document is unchanged.
@@ -266,6 +272,17 @@ pub fn apply(doc: &mut Document, op: &Op) -> Result<Vec<Op>, EditError> {
         Op::Insert { at, content } => insert(doc, *at, content),
         Op::Delete { at, len } => delete(doc, *at, *len),
         Op::Mark { start, end, key, value } => mark(doc, *start, *end, *key, value),
+        Op::SetParagraphs { para, remove, insert } => {
+            let (para, remove) = (*para, *remove);
+            if para > doc.paragraphs.len() || para + remove > doc.paragraphs.len() {
+                return Err(EditError::OutOfRange);
+            }
+            if doc.paragraphs.len() - remove + insert.len() == 0 {
+                return Err(EditError::Empty);
+            }
+            let removed: Vec<Paragraph> = doc.paragraphs.splice(para..para + remove, insert.iter().cloned()).collect();
+            Ok(vec![Op::SetParagraphs { para, remove: insert.len(), insert: removed }])
+        }
         Op::SetParaStyle { at, style } => {
             let (pi, _) = locate(doc, *at).ok_or(EditError::OutOfRange)?;
             let para = &mut doc.paragraphs[pi];
@@ -404,6 +421,218 @@ pub fn typing(doc: &Document, at: usize, text: &str) -> Option<Op> {
         })
         .collect();
     Some(Op::Insert { at, content })
+}
+
+/// Ops that turn `a` into `b`, as fine-grained as the change allows: an
+/// edit inside one paragraph becomes a `Delete` and an `Insert` of just the
+/// changed chars (with their styles) and, if needed, a `SetParaStyle`; a
+/// change across paragraphs becomes one `Delete` + `Insert` over the
+/// changed paragraphs; a change to a table's structure becomes
+/// `SetParagraphs`. Applying the result to `a` gives `b` (property-tested).
+///
+/// This is how an edit made anywhere — a formatting command, a structured
+/// edit that rebuilds the document — reaches the live model as ops, so it
+/// has an undo and could be replicated.
+pub fn diff(a: &Document, b: &Document) -> Vec<Op> {
+    let (pa, pb) = (&a.paragraphs, &b.paragraphs);
+    let head = pa.iter().zip(pb).take_while(|(x, y)| x == y).count();
+    if head == pa.len() && head == pb.len() {
+        return Vec::new();
+    }
+    let max_tail = pa.len().min(pb.len()) - head;
+    let tail = pa.iter().rev().zip(pb.iter().rev()).take(max_tail).take_while(|(x, y)| x == y).count();
+    let (mut ra, mut rb) = (head..pa.len() - tail, head..pb.len() - tail);
+    let tables = |ra: &std::ops::Range<usize>, rb: &std::ops::Range<usize>| {
+        pa[ra.clone()].iter().chain(&pb[rb.clone()]).any(|p| p.style.table_cell.is_some())
+    };
+
+    // One paragraph changed on both sides (text inside a table cell too).
+    if ra.len() == 1 && rb.len() == 1 && pa[head].style.table_cell == pb[head].style.table_cell {
+        let at = paragraph_start(a, head);
+        let (x, y) = (&pa[head], &pb[head]);
+        let mut ops = Vec::new();
+        if x.runs != y.runs {
+            let cx = styled_chars(&x.runs);
+            let cy = styled_chars(&y.runs);
+            let pre = cx.iter().zip(&cy).take_while(|(m, n)| m == n).count();
+            let suf = cx[pre..].iter().rev().zip(cy[pre..].iter().rev()).take_while(|(m, n)| m == n).count();
+            let (dx, dy) = (cx.len() - pre - suf, cy.len() - pre - suf);
+            if dx > 0 {
+                ops.push(Op::Delete { at: at + pre, len: dx });
+            }
+            if dy > 0 {
+                let (_, rest) = split_runs(&y.runs, pre);
+                let (mid, _) = split_runs(&rest, dy);
+                ops.push(Op::Insert { at: at + pre, content: vec![Paragraph { style: ParaStyle::default(), runs: mid }] });
+            }
+        }
+        if x.style != y.style {
+            ops.push(Op::SetParaStyle { at, style: y.style.clone() });
+        }
+        return ops;
+    }
+    // Paragraphs only added or only removed: widen both ranges by an
+    // unchanged neighbour, so the change is "rewrite these paragraphs".
+    if ra.is_empty() || rb.is_empty() {
+        if ra.start > 0 {
+            ra.start -= 1;
+            rb.start -= 1;
+        } else {
+            ra.end += 1;
+            rb.end += 1;
+        }
+    }
+    if tables(&ra, &rb) {
+        return vec![Op::SetParagraphs { para: ra.start, remove: ra.len(), insert: pb[rb].to_vec() }];
+    }
+    // Rewrite: delete the old paragraphs' text (leaving the first one
+    // empty), insert the new paragraphs, and give the first its style.
+    let at = paragraph_start(a, ra.start);
+    let len_a: usize = pa[ra.clone()].iter().map(|p| seq_len(&p.runs)).sum::<usize>() + ra.len() - 1;
+    let mut ops = Vec::new();
+    if len_a > 0 {
+        ops.push(Op::Delete { at, len: len_a });
+    }
+    let content: Vec<Paragraph> = pb[rb.clone()].to_vec();
+    if content.len() > 1 || !content[0].runs.is_empty() {
+        ops.push(Op::Insert { at, content });
+    }
+    if pa[ra.start].style != pb[rb.start].style {
+        ops.push(Op::SetParaStyle { at, style: pb[rb.start].style.clone() });
+    }
+    ops
+}
+
+/// (char, style) pairs of runs in sequence order (an object is one pair).
+fn styled_chars(runs: &[Run]) -> Vec<(char, &RunStyle)> {
+    runs.iter()
+        .flat_map(|r| -> Vec<(char, &RunStyle)> {
+            if is_object(r) {
+                vec![(OBJECT, &r.style)]
+            } else {
+                r.text.chars().map(|c| (c, &r.style)).collect()
+            }
+        })
+        .collect()
+}
+
+/// Undo and redo over the live document, from each change's inverse ops.
+/// One entry is one user action (everything between `begin` and `end`,
+/// or one `record` outside them).
+#[derive(Default, Debug, Clone)]
+pub struct History {
+    undo: Vec<Vec<Op>>,
+    redo: Vec<Vec<Op>>,
+    open: Option<Vec<Vec<Op>>>,
+    /// The next recorded step is one typed character; it joins the step
+    /// before it when that was typing just before it, so undo removes a
+    /// word at a time, as GtkTextBuffer's own undo did.
+    merge: bool,
+    /// The top undo step is typed word characters (it may take more).
+    word: bool,
+}
+
+impl History {
+    /// Start grouping changes into one undo step.
+    pub fn begin(&mut self) {
+        if self.open.is_none() {
+            self.open = Some(Vec::new());
+        }
+    }
+
+    /// Close the current group.
+    pub fn end(&mut self) {
+        if let Some(group) = self.open.take() {
+            self.push(group);
+        }
+    }
+
+    fn push(&mut self, group: Vec<Vec<Op>>) {
+        let ops: Vec<Op> = group.into_iter().rev().flatten().collect();
+        let merge = std::mem::take(&mut self.merge);
+        if ops.is_empty() {
+            return;
+        }
+        let word = std::mem::replace(&mut self.word, merge);
+        self.redo.clear();
+        // Typing extends the previous typing step: the undo of "ab" is one
+        // delete of both chars.
+        if let ([Op::Delete { at, len }], Some(last)) = (ops.as_slice(), self.undo.last_mut()) {
+            if let [Op::Delete { at: prev_at, len: prev_len }] = last.as_mut_slice() {
+                if merge && word && *prev_at + *prev_len == *at {
+                    *prev_len += *len;
+                    return;
+                }
+            }
+        }
+        self.undo.push(ops);
+    }
+
+    /// Mark the next recorded step as one typed word character (see
+    /// `merge`); any other step breaks the run.
+    pub fn set_merge(&mut self, merge: bool) {
+        self.merge = merge;
+    }
+
+    /// Record the inverse ops of one applied change.
+    pub fn record(&mut self, inverse: Vec<Op>) {
+        match &mut self.open {
+            Some(group) => group.push(inverse),
+            None => self.push(vec![inverse]),
+        }
+    }
+
+    pub fn can_undo(&self) -> bool {
+        !self.undo.is_empty()
+    }
+
+    pub fn can_redo(&self) -> bool {
+        !self.redo.is_empty()
+    }
+
+    /// Undo the last step on `doc`. Returns the ops applied (for a view to
+    /// follow), or `None` when there is nothing to undo.
+    pub fn undo(&mut self, doc: &mut Document) -> Option<Vec<Op>> {
+        self.end();
+        self.word = false;
+        let ops = self.undo.pop()?;
+        match apply_all(doc, &ops) {
+            Ok(inverse) => {
+                self.redo.push(inverse);
+                Some(ops)
+            }
+            Err(_) => {
+                // History no longer fits the document: drop it rather than
+                // apply half an undo.
+                self.undo.clear();
+                self.redo.clear();
+                None
+            }
+        }
+    }
+
+    /// Redo the last undone step on `doc`.
+    pub fn redo(&mut self, doc: &mut Document) -> Option<Vec<Op>> {
+        self.end();
+        self.word = false;
+        let ops = self.redo.pop()?;
+        match apply_all(doc, &ops) {
+            Ok(inverse) => {
+                self.undo.push(inverse);
+                Some(ops)
+            }
+            Err(_) => {
+                self.undo.clear();
+                self.redo.clear();
+                None
+            }
+        }
+    }
+
+    /// Forget everything (a document was replaced wholesale).
+    pub fn clear(&mut self) {
+        *self = History::default();
+    }
 }
 
 /// A superscript/subscript value for `Op::Mark`.

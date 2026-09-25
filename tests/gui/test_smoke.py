@@ -3608,6 +3608,47 @@ class LettersStructuredEditingSmoke(BaseGUITestCase):
         self.assertIsNone(self.process.poll(), "letters crashed during list editing")
 
 
+class LettersModelUndoSmoke(BaseGUITestCase):
+    """Undo and redo come from the live document model (ADR 0010 stage 3c-3).
+
+    The GtkTextBuffer's own undo is off; Ctrl+Z in the Draft editor must
+    reach the model's history, undo a typed word as one step and a line
+    break as another, and Ctrl+Shift+Z must redo.
+    """
+
+    app_name = "letters"
+
+    def setUp(self):
+        self._snapshot_path = self.isolate_snapshot(prefix="letters-undo-")
+        super().setUp()
+
+    def _text(self):
+        s = self.trigger_snapshot("org.tunaos.letters")
+        return "\n".join("".join(r["text"] for r in p["runs"]) for p in s["paragraphs"])
+
+    def _wait_text(self, want):
+        return self.wait_for_condition(
+            lambda: self._text() == want or None, description=f"the document reading {want!r}")
+
+    def test_undo_and_redo_in_the_draft_editor(self):
+        from dogtail import rawinput
+
+        self.wait_for_node(name="New Document", roleName="push button").do_action(0)
+        self.wait_for_node(roleName="text")
+        rawinput.typeText("hello")
+        rawinput.keyCombo("Return")
+        rawinput.typeText("world")
+        self._wait_text("hello\nworld")
+
+        rawinput.keyCombo("<Control>z")
+        self._wait_text("hello\n")
+        rawinput.keyCombo("<Control>z")
+        self._wait_text("hello")
+        rawinput.keyCombo("<Control><Shift>z")
+        self._wait_text("hello\n")
+        self.assertIsNone(self.process.poll(), "letters crashed during undo")
+
+
 class LettersPrintLayoutEditingSmoke(BaseGUITestCase):
     """Typing in Print Layout edits the document (ADR 0010, stage 3).
 

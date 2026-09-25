@@ -91,9 +91,20 @@ the Letters part concretely.
           captured document (tested after every edit, including 1,500
           seeded random edits). Print Layout reads it instead of capturing
           the buffer on every keystroke.
-        - 3c-3: invert the flow — edits become ops on the model first, the
-          buffer is Draft's view of the model, and the re-capture path goes
-          away. Undo moves to the model's inverse ops.
+        - **3c-3 (done): the model is the source of truth.** Save, copy,
+          the page view and undo read the `LiveModel`; the buffer's own
+          undo is off and Undo/Redo apply the model's `edit::History`
+          (inverse ops; typed words merge into one step). The page view
+          edits the model first (typing, Delete/Backspace, Enter — a list
+          item continues its list, an empty one ends it) and the buffer is
+          re-rendered from the model for just the changed paragraphs
+          (`project`). Buffer-side edits (Draft, formatting actions) become
+          ops by re-reading only the lines they touched and diffing them
+          against the model (`bridge::capture_span`, `edit::diff`):
+          typing, Enter, Backspace across a break, formatting and list
+          markers never read the whole buffer. Tables and inline objects
+          still do (and still become ops, so they are undoable). A
+          200-paragraph keystroke-relayout budget runs in CI.
       - 3d: Print Layout becomes the default view; the TextView path is
         removed once nothing depends on it.
 

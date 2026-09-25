@@ -129,10 +129,71 @@ pub fn make_editable(view: &PageView, buf: &gtk::TextBuffer) {
 
 /// Replace the selection (if any) with `text`, as typing does.
 fn insert_text(buf: &gtk::TextBuffer, text: &str) {
+    // Model first (ADR 0010 stage 3c-3): the text is an op on the live
+    // model, styled by the marks' expand rules, and the buffer follows.
+    if let Some(m) = crate::live::of(buf) {
+        let mut m = m.borrow_mut();
+        let (s, e) = selection_offsets(buf);
+        let (s, e) = (m.sequence_offset(buf, s), m.sequence_offset(buf, e));
+        let doc = m.document(buf).clone();
+        let mut ops = Vec::new();
+        let mut scratch = doc.clone();
+        if e > s {
+            let del = letters_core::edit::Op::Delete { at: s, len: e - s };
+            if letters_core::edit::apply(&mut scratch, &del).is_err() {
+                return;
+            }
+            ops.push(del);
+        }
+        let Some(typed) = typed_ops(&scratch, s, text) else { return };
+        ops.extend(typed);
+        let word = text.chars().count() == 1 && !text.chars().any(char::is_whitespace) && e == s;
+        m.apply_user_ops(buf, &ops, word);
+        return;
+    }
     buf.begin_user_action();
     buf.delete_selection(true, true);
     buf.insert_interactive_at_cursor(text, true);
     buf.end_user_action();
+}
+
+/// The selection (or caret) as buffer offsets, in order.
+fn selection_offsets(buf: &gtk::TextBuffer) -> (usize, usize) {
+    let a = buf.iter_at_mark(&buf.get_insert()).offset().max(0) as usize;
+    let b = buf.iter_at_mark(&buf.selection_bound()).offset().max(0) as usize;
+    (a.min(b), a.max(b))
+}
+
+/// The ops typing `text` at sequence offset `at` makes. Enter in an empty
+/// list item ends the list instead of adding another item.
+fn typed_ops(doc: &letters_core::Document, at: usize, text: &str) -> Option<Vec<letters_core::edit::Op>> {
+    use letters_core::edit::{self, Op};
+    if text == "\n" {
+        let (pi, _) = edit::locate(doc, at)?;
+        let p = &doc.paragraphs[pi];
+        if p.style.list != letters_core::ListKind::None && p.runs.is_empty() {
+            let style = letters_core::ParaStyle { list: letters_core::ListKind::None, list_level: 0, ..p.style.clone() };
+            return Some(vec![Op::SetParaStyle { at, style }]);
+        }
+    }
+    Some(vec![edit::typing(doc, at, text)?])
+}
+
+/// Backspace (`forward` false) or Delete at the caret, or over the
+/// selection, as a model op.
+fn delete_ops(buf: &gtk::TextBuffer, m: &mut crate::live::LiveModel, forward: bool) -> Option<letters_core::edit::Op> {
+    use letters_core::edit::{doc_len, Op};
+    let (s, e) = selection_offsets(buf);
+    let (s, e) = (m.sequence_offset(buf, s), m.sequence_offset(buf, e));
+    if e > s {
+        return Some(Op::Delete { at: s, len: e - s });
+    }
+    let len = doc_len(m.document(buf));
+    match forward {
+        false if s > 0 => Some(Op::Delete { at: s - 1, len: 1 }),
+        true if s < len => Some(Op::Delete { at: s, len: 1 }),
+        _ => None,
+    }
 }
 
 fn select_word(buf: &gtk::TextBuffer, at: &gtk::TextIter) {
@@ -217,6 +278,15 @@ fn handle_key(view: &PageView, buf: &gtk::TextBuffer, key: gdk::Key, state: gdk:
             true
         }
         gdk::Key::BackSpace | gdk::Key::Delete | gdk::Key::KP_Delete => {
+            if let Some(m) = crate::live::of(buf) {
+                let mut m = m.borrow_mut();
+                // An op the model refuses (joining a table's cells) does
+                // nothing, as in a word processor.
+                if let Some(op) = delete_ops(buf, &mut m, key != gdk::Key::BackSpace) {
+                    m.apply_user_ops(buf, &[op], false);
+                }
+                return true;
+            }
             buf.begin_user_action();
             if !buf.delete_selection(true, true) {
                 let mut it = cursor;
@@ -233,7 +303,10 @@ fn handle_key(view: &PageView, buf: &gtk::TextBuffer, key: gdk::Key, state: gdk:
             true
         }
         gdk::Key::Return | gdk::Key::KP_Enter if !ctrl => {
-            if shift || !crate::bridge::enter_in_list(buf) {
+            // With a live model, Enter is a paragraph split op (a list item
+            // continues its list; an empty one ends it). Without, the
+            // buffer's list continuation.
+            if crate::live::of(buf).is_some() || shift || !crate::bridge::enter_in_list(buf) {
                 insert_text(buf, "\n");
             }
             true
