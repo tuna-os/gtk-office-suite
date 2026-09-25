@@ -12,12 +12,14 @@
 // - `numfmt.rs` — xlsx number formats: which one each cell uses, and what it means
 // - `xlsx_styles.rs` — the cell styles (format, font, fill, alignment) styles.xml declares
 // - `ods_styles.rs` — the same, from an ods content.xml's automatic cell styles
+// - `ods_numfmt.rs` — ods data styles (number formats) and ODF date values
 
 mod charts;
 mod condrules;
 mod format;
 mod load;
 mod numfmt;
+mod ods_numfmt;
 mod ods_styles;
 mod xlsx_styles;
 mod props;

@@ -568,7 +568,11 @@ pub fn read_sheet_props_from_ods(
 
     let col_styles = odf_styles_by_family(&xml, "table-column", "style:column-width");
     let row_styles = odf_styles_by_family(&xml, "table-row", "style:row-height");
-    let cell_styles = super::ods_styles::parse_ods_cell_styles(&xml);
+    // Data styles live in content.xml's automatic styles, and a named one
+    // can be in styles.xml.
+    let mut data_styles = super::ods_numfmt::parse_data_styles(&zip.optional_part_to_string("styles.xml", &mut budget));
+    data_styles.extend(super::ods_numfmt::parse_data_styles(&xml));
+    let cell_styles = super::ods_styles::parse_ods_cell_styles(&xml, &data_styles);
 
     for table in split_elements(&xml, "table:table") {
         let head = table.split('>').next().unwrap_or("");
@@ -631,16 +635,12 @@ pub fn read_sheet_props_from_ods(
                 if has_value || (crepeat == 1 && repeat == 1) {
                     for i in 0..crepeat {
                         let style_name = xml_attr(tag, "table:style-name").or_else(|| col_cell_style.get(&(c + i)).copied());
-                        let Some((style, border)) = style_name.and_then(|n| cell_styles.get(n)) else { continue };
-                        if style.is_default() && border.is_none() {
+                        let Some(x) = style_name.and_then(|n| cell_styles.get(n)) else { continue };
+                        if *x == super::XfStyle::default() {
                             continue;
                         }
                         for r in row..row + repeat {
-                            props.cell_styles.push((
-                                r,
-                                c + i,
-                                super::XfStyle { style: style.clone(), border: border.clone(), ..super::XfStyle::default() },
-                            ));
+                            props.cell_styles.push((r, c + i, x.clone()));
                         }
                     }
                 }

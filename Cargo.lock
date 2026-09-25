@@ -4224,6 +4224,7 @@ name = "tables-core"
 version = "0.1.0"
 dependencies = [
  "calamine",
+ "chrono",
  "ironcalc_base",
  "letters-core",
  "proptest",

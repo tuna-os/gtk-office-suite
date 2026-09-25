@@ -21,6 +21,10 @@ fn data_to_string(cell: &Data) -> String {
         Data::Int(i) => i.to_string(),
         Data::Bool(b) => b.to_string(),
         Data::DateTime(d) => d.to_string(),
+        // An ods date (`office:date-value`) arrives as ISO text; it becomes
+        // the serial number an xlsx date is, so formats and formulas treat
+        // both alike. It used to fall through to "" and the date was lost.
+        Data::DateTimeIso(s) => super::ods_numfmt::iso_to_serial(s).map_or_else(|| s.clone(), |n| n.to_string()),
         Data::Error(e) => format!("#{}", e),
         _ => String::new(),
     }
@@ -408,10 +412,11 @@ pub fn load_ods_workbook(path: &str) -> Result<(TablesEngine, Vec<SheetModel>), 
             .copied()
             .filter(|(r, c, _, _)| *r < sheet.rows && *c < sheet.cols)
             .collect();
-        // Cell styles and borders, as the xlsx reader applies them. The
-        // number format stays calamine's: ODF data styles aren't read yet.
+        // Number formats, cell styles and borders, as the xlsx reader
+        // applies them.
         for (r, c, x) in &p.cell_styles {
             if *r < sheet.rows && *c < sheet.cols {
+                sheet.formats[*r][*c] = x.format.clone();
                 sheet.styles[*r][*c] = x.style.clone();
                 sheet.borders[*r][*c] = x.border.clone();
             }
