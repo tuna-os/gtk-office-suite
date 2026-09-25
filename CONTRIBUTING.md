@@ -1,56 +1,99 @@
 # Contributing to GTK Office Suite
 
-Thank you for your interest in contributing to GTK Office Suite (`gtk-office-suite`)! We welcome contributions from developers of all experience levels.
+Thanks for your interest. This repository holds three GNOME apps written in
+Rust with GTK4 and libadwaita: **Letters** (word processor), **Tables**
+(spreadsheet) and **Decks** (presentations). They ship as Flatpaks.
 
-## Overview
+This page is the short version. The detailed guides are:
 
-GTK Office Suite is a modern, native Linux desktop office suite built with Rust, GTK4, and libadwaita. It comprises three core applications:
-- **Letters**: Document editor & processing
-- **Tables**: Spreadsheet calculations & data visualizer
-- **Decks**: Presentation creator & slide show designer
+- [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md): setup, building, where code goes.
+- [docs/TESTING.md](docs/TESTING.md): the test lanes and what each one proves.
+- [AGENTS.md](AGENTS.md): the commands CI runs and the pitfalls that have
+  already bitten us. It's written for agents, but it helps humans too.
 
-## Prerequisites
+## What we're working on
 
-Before building GTK Office Suite locally, ensure you have the following installed:
-- **Rust toolchain** (1.75+ recommended): Install via `rustup`
-- **GTK4 & libadwaita libraries**: Install development headers via your distro's package manager
-  - Fedora: `sudo dnf install gtk4-devel libadwaita-devel`
-  - Ubuntu/Debian: `sudo apt install libgtk-4-dev libadwaita-1-dev`
-  - Arch Linux: `sudo pacman -S gtk4 libadwaita`
+The current priority is the
+[Render Parity Roadmap](docs/RENDER-PARITY-ROADMAP.md): make each app draw
+documents the way LibreOffice does, measured by screenshots in CI. The UI
+direction (ideas from iWork and Google's editors, built with the GNOME HIG
+and libadwaita) is in [docs/DESIGN-UI.md](docs/DESIGN-UI.md). Designs that
+haven't been decided yet are RFCs in [docs/rfc/](docs/rfc/README.md).
 
-## Workspace Structure
+Looking for somewhere to start? Try issues labelled
+[`good first issue`](https://github.com/tuna-os/gtk-office-suite/issues?q=is%3Aissue+is%3Aopen+label%3A%22good+first+issue%22).
 
-- `letters/`, `letters-core/`: Document editor UI and core document model
-- `tables/`, `tables-core/`: Spreadsheet UI and calculation engine
-- `decks/`, `decks-core/`: Presentation UI and slide engine
-- `suite-common/`, `suite-common-core/`: Shared UI components and core data structures
-- `suite-export/`: Export handlers and format converters
-- `tests/`: Integration, GUI, and end-to-end test suites
+## Set up
 
-## Building & Testing
+You need Rust stable 1.80 or newer, GTK ≥ 4.14 and libadwaita ≥ 1.5 with
+their development headers:
 
-### Build the Project
 ```bash
-cargo build
+# Fedora
+sudo dnf install gtk4-devel libadwaita-devel
+# Debian / Ubuntu
+sudo apt-get install libgtk-4-dev libadwaita-1-dev libglib2.0-bin
 ```
 
-### Run Tests
-To run all unit and core integration tests:
+A Nix flake (`flake.nix`) is also provided.
+
+## Build and run
+
 ```bash
-cargo test
+cargo build --bin letters --bin tables --bin decks
 ```
 
-To run tests for a specific workspace crate:
+The apps read GSettings and abort at startup if the schemas aren't
+compiled. Outside Flatpak, compile them once and point the app at them:
+
 ```bash
-cargo test -p tables-core
+mkdir -p /tmp/gtk-office-schemas
+cp flatpak/*.gschema.xml /tmp/gtk-office-schemas/
+glib-compile-schemas /tmp/gtk-office-schemas
+GSETTINGS_SCHEMA_DIR=/tmp/gtk-office-schemas cargo run -p letters
 ```
 
-## Pull Request Workflow
+## Test
 
-1. **Find or create an issue**: Ensure an issue exists for your proposed change or bug fix.
-2. **Create a topic branch**: Branch off `main` for your feature or bug fix.
-3. **Commit with DCO Sign-off**: All commits require DCO sign-off (`git commit -s`).
-4. **Run tests & linters**: Ensure all tests pass (`cargo test`) before pushing.
-5. **Open a Pull Request**: Submit your PR targeting `main`.
+The workspace contains GTK widget tests, and GTK can't start without a
+display, so run the unit tests under Xvfb:
 
-Thank you for helping make native Linux office applications better!
+```bash
+xvfb-run -a cargo test --workspace         # or: cargo test -p tables-core
+tests/gui/run_gui_tests.sh test_smoke.py   # GUI smoke journeys (needs Xvfb and AT-SPI)
+```
+
+CI also runs clippy with warnings denied, so run it before you push:
+
+```bash
+cargo clippy --workspace --all-targets -- -D warnings
+```
+
+If you change what a document looks like on screen, add or update a
+render-lab fixture and check it against LibreOffice with
+`tools/render-lab/run.sh --app <app>`. The
+[roadmap](docs/RENDER-PARITY-ROADMAP.md#running-it) explains how. It's
+fine to push a draft pull request and let CI run the heavy jobs: CI
+renders every app and uploads the report.
+
+## Where code goes
+
+Keep logic out of widget code. Anything that doesn't need a GTK type
+belongs in a GTK-free core crate (`suite-common-core`, `letters-core`,
+`tables-core`, `decks-core`), with a unit test next to it. The app crates
+(`letters`, `tables`, `decks`) and `suite-common` wire up widgets and
+signals. Each app's `window.rs` has a line ceiling (see
+[ROADMAP.md](ROADMAP.md)), so extract code into a module rather than
+growing it.
+
+## Pull requests
+
+1. Open or find an issue for the change.
+2. Branch from `main`.
+3. Write commit messages in the existing style:
+   `feat(tables): …`, `fix(letters-core): …`, `docs: …`.
+4. Make sure the tests and clippy pass, then open the pull request against
+   `main`. Every CI check has to be green before a merge.
+
+GTK Office Suite is licensed under GPL-3.0-or-later (see [LICENSE](LICENSE)).
+By contributing, you agree that your contributions are licensed the same way.
