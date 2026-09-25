@@ -4790,6 +4790,87 @@ class HarnessRepeatedLaunchSmoke(BaseGUITestCase):
         self.assertEqual(len(set(pids)), self.CYCLES + 1)
 
 
+class TablesChartTypesSmoke(BaseGUITestCase):
+    """Chart kinds beyond columns: choose XY (Scatter) in the chart dialog,
+    insert it, save, and the workbook holds a scatter chart over the chosen
+    columns (xVal from column A, yVal from column B) that reads back as
+    one. The render lab compares how each kind is drawn with LibreOffice
+    (`tables/chart-line`, `-area`, `-pie`, `-scatter`)."""
+
+    app_name = "tables"
+
+    def setUp(self):
+        self._dir = self.temp_dir(prefix="tables-chart-types-")
+        self._doc = os.path.join(self._dir, "points.xlsx")
+        with open(self._doc, "wb") as book:
+            book.write(minimal_xlsx_bytes("1"))
+        self.launch_args = [self._doc]
+        super().setUp()
+
+    def test_a_scatter_chart_is_chosen_inserted_and_saved(self):
+        from dogtail import rawinput
+        import subprocess
+        import zipfile
+
+        time.sleep(1.0)
+        for cell, text in (("A2", "2.5"), ("A3", "4"), ("B1", "3"), ("B2", "7"), ("B3", "5")):
+            rawinput.keyCombo("<Control>g")
+            time.sleep(0.3)
+            rawinput.typeText(cell)
+            rawinput.keyCombo("Return")
+            time.sleep(0.3)
+            rawinput.typeText(text)
+            rawinput.keyCombo("Return")
+            time.sleep(0.3)
+        rawinput.keyCombo("<Control>g")
+        time.sleep(0.3)
+        rawinput.typeText("B1")
+        rawinput.keyCombo("Return")
+        time.sleep(0.4)
+        rawinput.keyCombo("Escape")
+        time.sleep(0.3)
+
+        subprocess.run(["gapplication", "action", "org.tunaos.tables", "insert-chart"])
+        insert = self.wait_until(
+            lambda: [c for c in self.app.findChildren(
+                lambda c: c.roleName == "push button" and "Insert into Sheet" in (c.name or ""))],
+            lambda found: bool(found),
+            timeout=10.0,
+            description="the chart dialog's Insert button",
+        )[0]
+        chooser = self.app.findChildren(lambda c: c.roleName == "combo box")[-1]
+
+        # The dropdown's list isn't in the AT-SPI tree; its accessible name
+        # mirrors the selected kind, so open it, go down, and retry until
+        # the last kind is selected (Down at the bottom stays put).
+        def choose_scatter():
+            chooser.child(roleName="toggle button").do_action(0)
+            for _ in range(4):
+                rawinput.keyCombo("Down")
+            rawinput.keyCombo("Return")
+            return chooser.name
+
+        self.wait_until(choose_scatter, lambda name: name == "XY (Scatter)", interval=0.6,
+                        description="the chart type to be XY (Scatter)")
+        insert.do_action(0)
+        time.sleep(1.0)
+        rawinput.keyCombo("<Control>s")
+
+        def saved_chart():
+            try:
+                with zipfile.ZipFile(self._doc) as book:
+                    names = [n for n in book.namelist() if n.startswith("xl/charts/chart")]
+                    return book.read(names[0]).decode() if names else None
+            except (zipfile.BadZipFile, OSError):
+                return None
+        chart = self.wait_until(saved_chart, lambda xml: bool(xml), timeout=10.0,
+                                description="a chart part in the saved workbook")
+        self.assertIn("scatterChart", chart)
+        self.assertIn("$A$1:$A$3", chart, "x values not from column A")
+        self.assertIn("$B$1:$B$3", chart, "y values not from column B")
+        self.assertIsNone(self.process.poll(), "tables crashed with a scatter chart on the sheet")
+
+
 class TablesChartDialogSmoke(BaseGUITestCase):
     """The chart dialog opens, previews the selected column, and inserts.
 

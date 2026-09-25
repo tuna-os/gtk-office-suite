@@ -465,6 +465,48 @@ def tables():
     ws.add_chart(ch, "D2")
     save(wb, "chart", "A bar chart with four bars (3,7,5,9) anchored at D2")
 
+    # The other chart kinds Excel and Calc share, on the same data and at
+    # the same size, so each compares against LibreOffice the way the bar
+    # chart does.
+    from openpyxl.chart import AreaChart, LineChart, PieChart, ScatterChart, Series
+
+    for name, make, what in (
+        ("chart-line", LineChart, "A line chart through 3,7,5,9 over Q1..Q4 anchored at D2"),
+        ("chart-area", AreaChart, "An area chart of 3,7,5,9 over Q1..Q4 anchored at D2"),
+        ("chart-pie", PieChart, "A pie chart of 3,7,5,9 (Q1..Q4) with its legend, anchored at D2"),
+    ):
+        wb, ws = book()
+        for i, v in enumerate((3, 7, 5, 9), start=1):
+            ws.cell(i, 1, f"Q{i}")
+            ws.cell(i, 2, v)
+        ch = make()
+        ch.add_data(Reference(ws, min_col=2, min_row=1, max_row=4))
+        ch.set_categories(Reference(ws, min_col=1, min_row=1, max_row=4))
+        if make is LineChart:
+            # Straight segments, as a new line chart draws in Excel and
+            # Calc; openpyxl marks its series smooth.
+            ch.series[0].smooth = False
+        ch.width, ch.height = 9, 6
+        ws.add_chart(ch, "D2")
+        save(wb, name, what)
+
+    wb, ws = book()
+    for i, (x, y) in enumerate(((1, 3), (2.5, 7), (4, 5), (6, 9)), start=1):
+        ws.cell(i, 1, x)
+        ws.cell(i, 2, y)
+    ch = ScatterChart()
+    series = Series(Reference(ws, min_col=2, min_row=1, max_row=4), Reference(ws, min_col=1, min_row=1, max_row=4))
+    # Points only, as Calc's and Excel's default XY chart draws them.
+    series.marker.symbol = "circle"
+    series.marker.size = 7
+    series.marker.graphicalProperties.solidFill = "4F81BD"
+    series.marker.graphicalProperties.line.solidFill = "4F81BD"
+    series.graphicalProperties.line.noFill = True
+    ch.series.append(series)
+    ch.width, ch.height = 9, 6
+    ws.add_chart(ch, "D2")
+    save(wb, "chart-scatter", "An XY scatter of (1,3) (2.5,7) (4,5) (6,9) as points, anchored at D2")
+
 
 # ── Decks (pptx) ──────────────────────────────────────────────────────────
 def decks(img):
