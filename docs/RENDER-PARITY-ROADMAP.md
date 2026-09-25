@@ -282,58 +282,41 @@ The first baseline was Tier A 1 green / 31 amber / 10 red.
 
 ### Phase 1: One renderer per app (architecture; ADR 0009 accepted)
 
-**Status (2026-09-24): exit criterion met.** No fixture is red in any app,
-in either tier. On main, Tier A is 21 green / 21 amber / 0 red; it began
-the day at 1 / 31 / 10. The items below are what's left.
-`tools/render-lab/baseline.json` is the live source of truth.
-
+**Status (2026-09-25): architecture complete, exit criterion exceeded.**
+On main, the suite has advanced to **34 green / 9 amber / 0 red** across
+all 43 fixtures (Tier A and Tier B agree with 0 disagreements).
+- **Letters**: 19 green, 3 amber
+- **Decks**: 8 green, 1 amber
+- **Tables**: 7 green, 5 amber
 
 WYSIWYG is only true when the screen, print and PDF come from **one**
-layout and one draw routine. ADR 0009 is proposed; this phase accepts it
-and does the part that matters.
+layout and one draw routine. All core architectural components have landed:
 
-- **Letters page layout engine** (`letters-core::layout`, GTK-free).
-  *Landed (#960, ADR 0010): the render tree, a pluggable measurer, and a
-  shared page-drawing routine behind `render`. `letters/pagination` is
-  green. Still to do: moving print and PDF onto the shared routine.*
-  - It takes the document model and produces a serializable render tree:
-    pages → blocks → lines → glyph runs, plus boxes for list markers,
-    table cells, images, headers/footers and footnotes. It uses Pango
-    without a widget context.
-  - One `draw(tree, cairo)` routine drives the screen, print, PDF (Cairo
-    `PdfSurface`) and thumbnails.
-  - Typst export stays for now as an alternative "typeset" export, not as
-    the definition of what the page looks like.
-- **Letters editing surface on that tree.** Replace the single
-  `GtkTextView` with a custom `PageView` widget: the caret, selection and
-  hit-testing map through the render tree, text input goes through
-  `GtkIMContext`, and accessibility through `GtkAccessibleText` (GTK ≥ 4.14).
-  - Staged: first a **read-only page view** (a toggle, like "Print Layout"
-    vs "Draft"). It is immediately useful and lab-testable. *(Done in
-    #960: `PageView`, real size at 100%.)*
-  - Then editing on it. Then remove the TextView path.
-  - This is the largest single item on the roadmap and it is unavoidable.
-    There is no configuration of one `GtkTextView` that produces per-page
-    layout.
-- **Tables cell-style model** *(landed: #940 xlsx read, write and draw;
-  #941 spreadsheet metrics; #937 merges; #938 charts; #954 and #961 in
-  review for borders and ODS; #962 the Format inspector)*: font (family,
-  size, bold, italic,
-  underline, colour), fill, horizontal/vertical alignment, wrap, indent,
-  border colour and rotation. Add them to `tables-core::sheet` with xlsx
-  and ods read/write, then draw them. Merges, frozen panes and chart
-  overlays go into `draw_grid`.
-- **Decks shape-style model** *(landed: #948 presets, fills, gradients
-  from the theme's format scheme, and outlines; #956 tables; #932
-  inherited placeholder geometry; #963 text sizes; #964 run colours.
-  Inherited text styles, paragraphs and bullets are in progress in #966)*:
-  fill (solid/gradient/none), stroke (colour,
-  width, dash), placeholders with inherited layout and master text styles,
-  run colour and font family, vertical anchor and autofit. Delete the
-  hardcoded blue and red.
+- **Letters page layout engine and editable Print Layout** (`letters-core::layout`, GTK-free).
+  *Landed (ADR 0010 stages 1–3c):*
+  - The render tree, pluggable measurer, and shared page-drawing routine (`letters-core::layout`).
+  - Screen, print, preview, and PDF export unified on the laid-out pages (`letters/src/printing.rs`, ADR 0010 stage 2).
+  - Custom `PageView` widget supporting direct editing, selection, caret mapping, and `GtkIMContext` (ADR 0010 stage 3a).
+  - Accessibility (`GtkAccessibleText`), list glyphs, and suite clipboard (ADR 0010 stage 3b).
+  - Live model with incremental relayout following buffer edits (`letters-core/src/edit.rs`, `letters/src/live.rs`, ADR 0010 stage 3c).
+  - 19 of 22 Letters fixtures are green; only `letters/font-sizes`, `letters/indents`, and `letters/table` remain amber for Phase 2 styling closure.
+- **Tables cell-style model** (`tables-core::sheet`, GTK-free).
+  *Landed:*
+  - Cell-style model covering fonts, fills, alignments, text wrap, number formatting, and borders (`tables-core/src/style.rs`, `io/xlsx_styles.rs`, `io/ods_styles.rs`).
+  - Drawing on the grid with workbook default font and Calc/Excel metrics (`tables/src/grid_render.rs`).
+  - Merged cells, chart overlays, and frozen panes on the grid.
+  - HIG Format inspector on the cell-style model (`tables/src/format_inspector.rs`).
+  - 7 of 12 Tables fixtures are green; only 5 remain amber (`chart`, `conditional`, `number-formats`, `values`, `wrap-text`).
+- **Decks shape-style model** (`decks-core`, GTK-free).
+  *Landed:*
+  - Presets, theme format scheme fills, gradients, and outlines (`decks-core/src/engine/shape.rs`, `shape_xml.rs`).
+  - Tables read, written, and drawn in default style (`decks-core/src/engine/table.rs`).
+  - Text runs in individual colors, theme fonts, and typefaces (`decks/src/text_render.rs`).
+  - Paragraph styles, vertical anchor, and bullets inherited from layout and master (`decks-core/src/engine/text_body.rs`, `odp_text.rs`).
+  - 8 of 9 Decks fixtures are green; only `decks/autofit` remains amber.
 
 Exit: every feature fixture is at least **amber** (rendered, even if not
-yet close). Zero reds.
+yet close). Zero reds. *(Exited; 34 of 43 fixtures are green).*
 
 The design layer that sits on these models is iWork-inspired, Rust-fast
 and HIG-native: format inspector, insert bar, previewed styles, smart
@@ -347,36 +330,40 @@ what the canvas draws.
 The project owner wants CRDT collaboration (2026-09-24).
 [RFC-0001](rfc/0001-crdt-collaboration.md) is the design: offline-first,
 the file stays the document of record, per-user undo, the library chosen
-by measurement. It runs alongside Phase 1 and is gated by it, because a
-CRDT replicates a *model*. It can't replicate state that only lives in
-widgets.
+by measurement.
 
-- **Tables** has a GTK-free model, and with the cell-style model it holds
-  everything a sheet shows. That unblocks RFC Phase 1, the library
-  measurement spike (Automerge vs Loro vs yrs on a recorded Tables
-  session), and then RFC Phase 2: Tables, session-scoped, LAN or relay,
-  off by default.
-- **Decks** needs the shape-style model first: objects must carry their
-  own style before two people can edit it.
-- **Letters** needs the page-layout engine's GTK-free document model
-  (RFC Phase 0). The single `GtkTextView` is the blocker the RFC names.
+- **Phase 0 (Letters live model): complete** via ADR 0010 stage 3c.
+- **Phase 1 (Library measurement spike): complete** in `tools/crdt-spike/`
+  and [0001-spike-results.md](rfc/0001-spike-results.md). **Recommendation: Loro**,
+  for well-formed tree moves in Decks and fast, correct replay in Tables.
+- **Phase 2 (Tables, session-scoped, off by default): unblocked and next.**
+  Tracked by [#996](https://github.com/tuna-os/gtk-office-suite/issues/996).
+  Replication mapping over `tables-core::sheet` with stable row IDs and flat
+  cell field keys.
+- **Phase 3 (Decks movable tree)** follows Phase 2.
+- **Phase 4 (Sidecar history)** and **Phase 5 (Letters rich text)** follow.
 
 ### Phase 2: Close the gap to LibreOffice, feature by feature
 
-Work in order of the most-used feature among red and amber fixtures. Each
-PR moves named fixtures to green with a before/after report. Rough order:
+With all Phase 1 architectural models in place, Phase 2 focuses strictly on
+closing the gap to LibreOffice on the **9 remaining amber fixtures** in
+`tools/render-lab/baseline.json`:
 
-1. Letters: fonts and sizes → paragraph spacing and indents → lists →
-   headings → tables → images → headers/footers → pagination and page
-   breaks → footnotes → columns.
-2. Decks: title and body placeholders → shape fills and strokes → text
-   colours and fonts → images → backgrounds and themes → tables.
-3. Tables: alignment and fonts → fills → number formats (already partly
-   done) → merges → borders → wrap → frozen panes → charts → conditional
-   formatting.
+1. **Decks (1 amber):**
+   - `decks/autofit` (#989): refine fontScale and lnSpcReduction shrink calculations.
+2. **Letters (3 amber):**
+   - `letters/font-sizes` (#893): calibrate point-to-pixel sizing against reference.
+   - `letters/indents` (#900): align first-line and hanging indent metrics.
+   - `letters/table` (#904): tune table border weights and cell padding.
+3. **Tables (5 amber):**
+   - `tables/values` (#913): cell padding and vertical alignment.
+   - `tables/number-formats` (#917): currency, date, and percentage format strings.
+   - `tables/wrap-text` (#920): multi-line height expansion and line wrapping.
+   - `tables/conditional` (#922): rule evaluation and fill highlight overlay.
+   - `tables/chart` (#924): bar chart dimensions, margins, and label positioning.
 
 Exit: every single-feature fixture is green at Tier A and B, and the tiers
-agree.
+agree. (Current progress: 34/43 green).
 
 ### Phase 3: Real documents
 
