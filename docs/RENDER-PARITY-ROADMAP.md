@@ -387,6 +387,12 @@ widgets.
 - **Letters** needs the page-layout engine's GTK-free document model
   (RFC Phase 0). The single `GtkTextView` is the blocker the RFC names.
 
+Status (2026-09-25): the spike (RFC Phase 1) is done, and the library is
+**Loro**, behind a `collab` feature that is off by default. A delete beats a
+concurrent move, and only inputs are replicated. The decisions are recorded
+in [RFC-0001](rfc/0001-crdt-collaboration.md). Letters' Phase 0 model has
+shipped. Tables' edit ops, which are the Phase 2 prerequisite, are in progress.
+
 ### Phase 2: Close the gap to LibreOffice, feature by feature
 
 Work in order of the most-used feature among red and amber fixtures. Each

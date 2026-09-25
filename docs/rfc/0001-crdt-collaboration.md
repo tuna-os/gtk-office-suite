@@ -1,6 +1,6 @@
 # RFC-0001: CRDT collaboration for Letters, Tables and Decks
 
-Date: 2026-09-12 · Status: **direction accepted 2026-09-24; library choice and phases as below** · Tracks: [#544](https://github.com/tuna-os/gtk-office-suite/issues/544)
+Date: 2026-09-12 · Status: **accepted 2026-09-25: Loro; decisions below** · Tracks: [#544](https://github.com/tuna-os/gtk-office-suite/issues/544)
 
 > **2026-09-24:** the project owner wants collaboration ("we want the CRDT
 > stuff and collaborations if possible"). This RFC's design and its phase
@@ -9,6 +9,41 @@ Date: 2026-09-12 · Status: **direction accepted 2026-09-24; library choice and 
 > work: [Render Parity Roadmap, "Collaboration track"](../RENDER-PARITY-ROADMAP.md#collaboration-track-rfc-0001).
 > The "why this is a draft" section below describes the situation before
 > that decision.
+
+> **2026-09-25, decisions.** The owner approved Loro and asked for the
+> remaining open questions to be settled on best judgement. These are the
+> calls. Each can be revisited, but work proceeds on them.
+>
+> 1. **Library: Loro**, per the [spike results](0001-spike-results.md). It
+>    was the only candidate whose concurrent deck merge was well-formed. The
+>    build cost of 115 crates and a 198 s clean build is accepted. Loro stays
+>    behind a `collab` cargo feature, off by default, so an ordinary build
+>    and the Flatpak `--locked` build are unaffected until Phase 2 ships.
+> 2. **Delete against concurrent move: delete wins.** Loro's native
+>    behaviour is that the move revives the object. We don't use that path.
+>    Deleting an object sets a tombstone field on the object's node, which no
+>    move clears, and the app never shows tombstoned nodes. So a delete stays
+>    a delete whatever anyone else did at the same time, which is what the
+>    person who pressed Delete expects and matches Google Slides. Undo clears
+>    the tombstone. Tombstoned nodes are collected when history is compacted
+>    (Phase 4). Phase 3 must ship a journey where one peer deletes while the
+>    other moves, and the object stays gone on both.
+> 3. **Web or mobile client: not planned.** The suite is a native GNOME app.
+>    This no longer decides the library anyway, because Loro has maintained
+>    WASM/JS bindings of its own, so a web viewer would remain possible.
+> 4. **Replicate inputs only, not computed values** (open question 2), as
+>    argued below. The guard against the failure mode is a determinism test:
+>    two engines fed the same inputs in different orders must compute
+>    byte-identical values. That test lands with Phase 2.
+> 5. **The first user need** (open question 4) is **one person across two
+>    machines**, then two people passing a document back and forth. Phase 2's
+>    first journey is the same person on two devices.
+> 6. **Local-first portal** (open question 5): we work around its absence
+>    with an explicit peer code or relay, as planned. We revisit
+>    contributing to the portal when Phase 2 has real users.
+> 7. **Phase 0 stands on its own merits** (open question 1). Letters' live
+>    model shipped for undo, performance and testability (ADR 0010 stage 3c).
+>    Tables' edit ops are in progress on the same principle.
 
 ## Summary
 
