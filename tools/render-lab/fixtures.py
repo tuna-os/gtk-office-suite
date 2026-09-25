@@ -369,6 +369,17 @@ def decks(img):
         p.slide_width, p.slide_height = Inches(13.333), Inches(7.5)
         return p
 
+    def fixed_box(tf):
+        # python-pptx's add_textbox writes wrap="none" + spAutoFit. On open
+        # LibreOffice re-fits such a box around its centre, moving the text
+        # hundreds of points; PowerPoint (and Decks) keep the stored
+        # geometry. That is autofit behaviour, not what these fixtures test,
+        # so their boxes wrap and don't resize: then every renderer agrees
+        # on where the box is.
+        from pptx.enum.text import MSO_AUTO_SIZE
+        tf.word_wrap = True
+        tf.auto_size = MSO_AUTO_SIZE.NONE
+
     def save(p, name, expect):
         path = os.path.join(d, f"{name}.pptx")
         p.save(path)
@@ -393,6 +404,7 @@ def decks(img):
     p = deck()
     s = p.slides.add_slide(p.slide_layouts[6])
     tb = s.shapes.add_textbox(Inches(1), Inches(1), Inches(8), Inches(3)).text_frame
+    fixed_box(tb)
     for i, (size, rgb) in enumerate(((14, (0, 0, 0)), (32, (200, 0, 0)), (54, (0, 0, 200)))):
         para = tb.paragraphs[0] if i == 0 else tb.add_paragraph()
         r = para.add_run()
@@ -419,6 +431,7 @@ def decks(img):
     s.background.fill.solid()
     s.background.fill.fore_color.rgb = RGBColor(30, 30, 60)
     tb = s.shapes.add_textbox(Inches(1), Inches(1), Inches(6), Inches(1)).text_frame
+    fixed_box(tb)
     tb.text = "Light text on dark background"
     tb.paragraphs[0].runs[0].font.color.rgb = RGBColor(255, 255, 255)
     save(p, "background", "Dark navy slide background with white text")
