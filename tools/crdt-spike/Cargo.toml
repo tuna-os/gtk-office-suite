@@ -1,0 +1,38 @@
+[package]
+name = "crdt-spike"
+version = "0.0.0"
+edition = "2021"
+publish = false
+description = "RFC-0001 Phase 1: measure automerge, loro and yrs against Tables/Decks/Letters data. Not a product crate."
+license = "GPL-3.0-or-later"
+
+# Deliberately NOT a member of the root workspace (see the root Cargo.toml's
+# `exclude`): the candidates' dependency trees must not reach the product
+# crates or their lockfile. Each candidate sits behind its own feature so it
+# can be built, timed and `cargo tree`d alone.
+[workspace]
+
+[features]
+default = ["automerge", "loro", "yrs"]
+automerge = ["dep:automerge"]
+loro = ["dep:loro"]
+yrs = ["dep:yrs"]
+
+[dependencies]
+tables-core = { path = "../../tables-core" }
+suite-common-core = { path = "../../suite-common-core" }
+automerge = { version = "0.12", optional = true }
+loro = { version = "1.16", optional = true }
+# yrs 0.28.0 (latest) and 0.27.x do not compile on the project's toolchain
+# (rustc 1.94.1): they use `if let` guards, stable only from 1.95, and
+# declare no rust-version. 0.26 is the newest release line that builds here.
+yrs = { version = "0.26", optional = true }
+
+[profile.release]
+debug = false
+
+# Same patch as the root workspace (see its comment and docs/DEPENDENCIES.md):
+# tables-core -> letters-core -> rdocx -> oxml-layout needs it to build.
+[patch.crates-io]
+oxml-layout = { git = "https://github.com/tuna-os/rdocx", rev = "46d220426b635d64890d786959d272b2c210fad8" }
+
