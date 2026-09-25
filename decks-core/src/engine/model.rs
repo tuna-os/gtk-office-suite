@@ -31,6 +31,7 @@ pub struct Slide {
 
 /// A slide transition.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum Transition {
     #[default]
     None,
@@ -89,6 +90,7 @@ impl MasterSlide {
 }
 
 #[derive(Clone, Debug)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum SlideObject {
     TextBox {
         text: String,

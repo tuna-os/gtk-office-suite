@@ -862,8 +862,11 @@ name = "decks-core"
 version = "0.1.0"
 dependencies = [
  "letters-core",
+ "loro",
  "proptest",
  "quick-xml 0.42.0",
+ "serde",
+ "serde_json",
  "suite-common-core",
  "tempfile",
  "zip",

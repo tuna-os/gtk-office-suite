@@ -5,6 +5,8 @@
 // commands. The `decks` binary renders (Cairo/Pango) and wires signals.
 
 pub mod builds;
+#[cfg(feature = "collab")]
+pub mod collab;
 pub mod controller;
 pub mod engine;
 pub mod format;

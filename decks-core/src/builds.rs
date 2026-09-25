@@ -16,6 +16,7 @@ use crate::undo::{obj_bounds, set_obj_origin};
 
 /// Where a moving build comes from (in) or goes to (out).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum Edge {
     Left,
     Right,
@@ -25,6 +26,7 @@ pub enum Edge {
 
 /// How an object builds.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum BuildEffect {
     /// At once.
     Appear,

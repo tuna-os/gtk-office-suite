@@ -30,7 +30,8 @@ ignore = [
     { id = "RUSTSEC-2024-0320", reason = "yaml-rust unmaintained, no patched release; via syntect — display only" },
     # Build-time proc-macro; does not ship in binaries.
     { id = "RUSTSEC-2024-0436", reason = "paste unmaintained proc-macro; via biblatex/hayagriva/rav1e — build-time only" },
-    # Loro (tables-core's `collab` feature, RFC-0001 Phase 2) pulls these in.
+    # Loro (the `collab` feature of tables-core, RFC-0001 Phase 2, and of
+    # decks-core, Phase 3; tracked in #1043) pulls these in.
     # The feature is off in every build that ships. This gate runs with
     # --all-features, which is the only reason it sees them. They must be
     # resolved before `collab` ships to users (RFC-0001 Phase 3), either

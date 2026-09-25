@@ -172,6 +172,14 @@ pub fn apply(slides: &mut Vec<Slide>, op: &Op) -> Result<Vec<Op>, OpError> {
                 return Err(OpError::LastSlide);
             }
             let removed = slides.remove(i);
+            // Its ids stay taken: they go on a neighbour's tombstone list,
+            // so no later slide or object gets one, and an id always means
+            // the same thing (collab.rs tells an undo from a new slide by
+            // it). The list is tombstones, which undo leaves, as for objects.
+            let neighbour = i.min(slides.len() - 1);
+            let keep = &mut slides[neighbour].ids.deleted;
+            keep.push(removed.ids.slide);
+            keep.extend(removed.ids.objects.iter().chain(&removed.ids.deleted));
             Ok(vec![Op::InsertSlide { at: i, slide: Box::new(removed) }])
         }
         Op::MoveSlide { slide, to } => {
@@ -320,6 +328,18 @@ mod tests {
         d[0].objects.push(SlideObject::Rect { x: 0.0, y: 0.0, w: 1.0, h: 1.0, rotation: 0.0 });
         ensure_ids(&mut d);
         assert_ne!(*d[0].ids.objects.last().unwrap(), o, "a tombstoned id is not reused");
+    }
+
+    #[test]
+    fn a_deleted_slides_ids_are_never_given_out_again() {
+        let mut d = vec![slide("a", 1), slide("b", 2)];
+        ensure_ids(&mut d);
+        let gone: Vec<u64> = std::iter::once(d[1].ids.slide).chain(d[1].ids.objects.clone()).collect();
+        let doomed = d[1].ids.slide;
+        apply(&mut d, &Op::DeleteSlide { slide: doomed }).unwrap();
+        apply(&mut d, &Op::InsertSlide { at: 1, slide: Box::new(slide("c", 2)) }).unwrap();
+        let fresh: Vec<u64> = std::iter::once(d[1].ids.slide).chain(d[1].ids.objects.clone()).collect();
+        assert!(fresh.iter().all(|id| !gone.contains(id)), "{fresh:?} reuses one of {gone:?}");
     }
 
     #[test]

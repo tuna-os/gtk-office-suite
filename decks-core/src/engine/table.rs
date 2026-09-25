@@ -14,6 +14,7 @@ use letters_core::model::Run;
 
 /// One cell: its styled text and, when the file says so, its own fill.
 #[derive(Clone, Debug, Default, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct TableCell {
     pub runs: Vec<Run>,
     pub fill: Option<Color>,
@@ -29,6 +30,7 @@ impl TableCell {
 /// and row heights are as the file states them (the drawn table scales them
 /// to its box, as PowerPoint does when the two disagree).
 #[derive(Clone, Debug, Default, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct TableData {
     pub col_widths: Vec<f64>,
     pub row_heights: Vec<f64>,
@@ -57,6 +59,7 @@ impl TableData {
 
 /// How one cell is painted under the table style.
 #[derive(Clone, Copy, Debug, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct CellPaint {
     pub fill: Option<Color>,
     pub text: Color,
