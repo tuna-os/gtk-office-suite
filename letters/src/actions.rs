@@ -200,20 +200,24 @@ pub fn register_formatting_actions(tv: &adw::TabView, app: &adw::Application) {
         app.add_action(&a);
     }
 
-    // Styles
+    // Paragraph styles: body text and headings are the style picker's
+    // model ops (style_picker.rs); code and quote are still buffer tags.
     let styles: &[(&str, &str)] = &[
-        ("style-p", ""),
-        ("style-h1", "h1"), ("style-h2", "h2"), ("style-h3", "h3"),
-        ("style-h4", "h4"), ("style-h5", "h5"), ("style-h6", "h6"),
+        ("style-p", "Normal"),
+        ("style-h1", "Heading 1"), ("style-h2", "Heading 2"), ("style-h3", "Heading 3"),
+        ("style-h4", "Heading 4"), ("style-h5", "Heading 5"), ("style-h6", "Heading 6"),
         ("style-code", "code"), ("style-quote", "blockquote"),
     ];
-    for (action_name, tag_name) in styles {
+    for (action_name, style) in styles {
         let tv = tv.clone();
         let a = gtk::gio::SimpleAction::new(action_name, None);
-        let tag_name = *tag_name;
+        let style = *style;
         a.connect_activate(move |_, _| {
-            if !tag_name.is_empty() {
-                apply_tag_to_active(&tv, tag_name);
+            match active_buffer(&tv) {
+                Some(buf) if crate::style_picker::STYLES.contains(&style) => {
+                    crate::style_picker::apply(&buf, style);
+                }
+                _ => apply_tag_to_active(&tv, style),
             }
         });
         app.add_action(&a);

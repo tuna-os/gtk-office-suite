@@ -68,7 +68,7 @@ gtk-office-suite/
 ├── letters-core/src/        # model.rs  structured.rs  docx.rs  odt.rs
 │                            # markdown.rs  session.rs  fragment.rs
 ├── letters/src/             # window.rs  bridge.rs  actions.rs  doc_tab.rs
-│                            # styles.rs  ruler.rs
+│                            # live.rs  page_view.rs  style_picker.rs  outline.rs
 │
 ├── tables-core/src/         # sheet.rs  engine.rs  controller/  io/
 ├── tables/src/              # window.rs  grid_area.rs  charts.rs

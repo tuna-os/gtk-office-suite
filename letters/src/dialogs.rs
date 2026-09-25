@@ -24,6 +24,75 @@ pub fn active_buffer(tv: &adw::TabView) -> Option<gtk::TextBuffer> {
         .map(|tv| tv.buffer())
 }
 
+/// Call `f(buffer, changed)` for the active tab's buffer whenever its
+/// content changes (`changed`) or its caret moves, and when another tab
+/// becomes active — coalesced to one call per main-loop idle, after the
+/// edit (and the live model's update) is complete.
+pub fn watch_active_buffer(tv: &adw::TabView, f: impl Fn(&gtk::TextBuffer, bool) + 'static) {
+    let f = Rc::new(f);
+    // The buffer (the latest active one) and whether it changed, while a
+    // call is scheduled.
+    let pending: Rc<RefCell<Option<(gtk::TextBuffer, bool)>>> = Rc::default();
+    let schedule = Rc::new(move |buf: &gtk::TextBuffer, changed: bool| {
+        let mut p = pending.borrow_mut();
+        let scheduled = p.is_some();
+        let changed = changed || p.as_ref().is_some_and(|(b, c)| *c && b == buf);
+        *p = Some((buf.clone(), changed));
+        if scheduled {
+            return;
+        }
+        let (f, pending) = (f.clone(), pending.clone());
+        gtk::glib::idle_add_local_once(move || {
+            let next = pending.borrow_mut().take();
+            if let Some((buf, changed)) = next {
+                f(&buf, changed);
+            }
+        });
+    });
+    let handlers: RefCell<Vec<(gtk::glib::WeakRef<gtk::TextBuffer>, gtk::glib::SignalHandlerId)>> = RefCell::default();
+    tv.connect_selected_page_notify(move |tv| {
+        for (buf, id) in handlers.borrow_mut().drain(..) {
+            if let Some(buf) = buf.upgrade() {
+                buf.disconnect(id);
+            }
+        }
+        let Some(buf) = active_buffer(tv) else { return };
+        let s = schedule.clone();
+        let changed = buf.connect_changed(move |b| s(b, true));
+        let s = schedule.clone();
+        let moved = buf.connect_mark_set(move |b, _, mark| {
+            if mark.name().as_deref() == Some("insert") {
+                s(b, false);
+            }
+        });
+        handlers.borrow_mut().extend([(buf.downgrade(), changed), (buf.downgrade(), moved)]);
+        schedule(&buf, true);
+    });
+}
+
+/// Give the keyboard back to the active tab's visible view (the page view
+/// in Print Layout, the Draft editor otherwise), scrolled to its caret.
+pub fn focus_active_view(tv: &adw::TabView) {
+    let Some(child) = tv.selected_page().map(|p| p.child()) else { return };
+    let page_view = child
+        .clone()
+        .downcast::<PageContainer>()
+        .ok()
+        .filter(PageContainer::is_print_layout)
+        .and_then(|pc| pc.page_view());
+    match (page_view, get_textview(&child)) {
+        (Some(view), _) => {
+            view.grab_focus();
+            crate::page_edit::scroll_to_caret(&view);
+        }
+        (None, Some(editor)) => {
+            editor.grab_focus();
+            editor.scroll_to_mark(&editor.buffer().get_insert(), 0.1, false, 0.0, 0.0);
+        }
+        _ => {}
+    }
+}
+
 /// Helper to find the GtkTextView inside a page widget hierarchy.
 pub fn get_textview(widget: &impl IsA<gtk::Widget>) -> Option<gtk::TextView> {
     if let Ok(tv) = widget.clone().upcast::<gtk::Widget>().downcast::<gtk::TextView>() {

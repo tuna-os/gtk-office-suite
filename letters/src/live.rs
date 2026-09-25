@@ -17,10 +17,10 @@
 //   diffed against the model's paragraphs (`edit::diff`). Typing, Enter,
 //   Backspace across a paragraph break, formatting, list markers — all
 //   local, a line or two re-read, never the whole buffer.
-// Only what a local read cannot follow — a table's pipes, an inline image or
-// footnote marker, or a whole-buffer rewrite (open, structured edits) —
-// re-reads the whole buffer, and even then the difference becomes ops, so
-// it is undoable like any other change.
+// A table edit re-reads its whole table block and an inline image is
+// followed like typed text; structured commands (tables, lists, page
+// breaks) and paragraph styles (the style picker) run on the model. Only a
+// whole-buffer rewrite (opening a document) re-reads the whole buffer.
 //
 // The guard is an equivalence test: after every kind of edit, including
 // thousands of seeded random ones, the model equals a fresh
@@ -421,6 +421,39 @@ impl LiveModel {
 
     pub fn can_redo(&self) -> bool {
         self.history.can_redo()
+    }
+
+    /// The style of the paragraph at buffer offset `off`.
+    pub fn paragraph_style_at(&mut self, buf: &gtk::TextBuffer, off: usize) -> Option<letters_core::ParaStyle> {
+        self.resolve(buf);
+        let (para, _) = crate::bridge::paragraph_offset(&self.doc, &self.starts, off);
+        self.doc.paragraphs.get(para).map(|p| p.style.clone())
+    }
+
+    /// Restyle the paragraphs from buffer offset `from` to `to` with `f`,
+    /// as one undo step of `SetParaStyle` ops.
+    pub fn restyle(&mut self, buf: &gtk::TextBuffer, from: usize, to: usize, f: impl Fn(&letters_core::ParaStyle) -> letters_core::ParaStyle) -> bool {
+        self.resolve(buf);
+        let first = crate::bridge::paragraph_offset(&self.doc, &self.starts, from).0;
+        let last = crate::bridge::paragraph_offset(&self.doc, &self.starts, to).0;
+        let ops: Vec<Op> = (first..=last.min(self.doc.paragraphs.len().saturating_sub(1)))
+            .filter_map(|pi| {
+                let style = f(&self.doc.paragraphs[pi].style);
+                (style != self.doc.paragraphs[pi].style)
+                    .then(|| Op::SetParaStyle { at: edit::paragraph_start(&self.doc, pi), style })
+            })
+            .collect();
+        ops.is_empty() || self.apply_user_ops(buf, &ops, false)
+    }
+
+    /// The document's headings (and Title/Subtitle) in order: level, text
+    /// and the buffer offset where each starts.
+    pub fn outline(&mut self, buf: &gtk::TextBuffer) -> Vec<(u8, String, usize)> {
+        self.resolve(buf);
+        letters_core::review::table_of_contents(&self.doc)
+            .into_iter()
+            .filter_map(|e| Some((e.level, e.title, *self.starts.get(e.paragraph)?)))
+            .collect()
     }
 
     /// Undo (or redo) the last step: on the model, then in the buffer.
