@@ -1580,10 +1580,11 @@ pub fn read(path: &str) -> Result<Deck, String> {
     // reopened as odp renders in the font it was saved with even though
     // masters can no longer differ.
     // Read before any coordinate, since every one of them is relative to it.
-    let scale = {
-        let (w, h) = parse_page_size_pt(&styles).unwrap_or(DEFAULT_PAGE_PT);
-        (960.0 / w, 540.0 / h)
-    };
+    let page_pt = parse_page_size_pt(&styles).unwrap_or(DEFAULT_PAGE_PT);
+    let scale = (960.0 / page_pt.0, 540.0 / page_pt.1);
+    // The page size, kept for a pptx save (12700 EMU to the point). This
+    // writer's own page is 960x540pt, left as the default.
+    let page_emu = (page_pt != DEFAULT_PAGE_PT).then_some((page_pt.0 * 12700.0, page_pt.1 * 12700.0));
 
     let doc_font = parse_default_graphic_font(&styles)
         .unwrap_or_else(|| MasterSlide::DEFAULT_FONT.into());
@@ -1602,6 +1603,7 @@ pub fn read(path: &str) -> Result<Deck, String> {
             background: page.slide.background,
             default_font: doc_font.clone(),
             shapes: page.slide.objects,
+            page_emu: None,
         });
     }
     if masters.is_empty() {
@@ -1610,9 +1612,13 @@ pub fn read(path: &str) -> Result<Deck, String> {
             background: "#ffffff".into(),
             default_font: doc_font.clone(),
             shapes: vec![],
+            page_emu: None,
         });
     }
 
+    for m in &mut masters {
+        m.page_emu = page_emu;
+    }
     let mut deck = Deck { slides: Vec::new(), masters };
     let slide_pages = {
         let mut resolve = |href: &str| extract_picture(href, &mut zip, &mut budget);
@@ -1879,6 +1885,7 @@ mod tests {
                 background: "#204060".into(),
                 default_font: "Sans".into(),
                 shapes: vec![],
+                page_emu: None,
             }],
             slides: vec![Slide {
                 title: "one".into(),
@@ -1923,6 +1930,7 @@ mod tests {
                 background: "#ffffff".into(),
                 default_font: "Sans".into(),
                 shapes: vec![],
+                page_emu: None,
             }],
             slides: vec![Slide {
                 title: "p".into(),
@@ -2397,6 +2405,7 @@ mod default_font_tests {
                 background: "#ffffff".into(),
                 default_font: "Liberation Serif".into(),
                 shapes: vec![],
+                page_emu: None,
             }],
         };
         let xml = super::styles_xml(&deck, &mut Vec::new()).unwrap();
@@ -2424,6 +2433,7 @@ mod default_font_tests {
                 background: "#ffffff".into(),
                 default_font: "   ".into(),
                 shapes: vec![],
+                page_emu: None,
             }],
         };
         let xml = super::styles_xml(&deck, &mut Vec::new()).unwrap();

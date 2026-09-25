@@ -64,6 +64,13 @@ pub struct MasterSlide {
     pub background: String,
     pub default_font: String,
     pub shapes: Vec<SlideObject>,
+    /// The size of the slides in the file this deck came from, in EMU
+    /// (pptx `p:sldSz`, or an odp page layout converted). The model is
+    /// always 960x540 whatever this is: readers scale onto it and the pptx
+    /// writer scales back, so a 4:3 or custom-size deck keeps its size.
+    /// `None` is the pptx writer's default, 10in x 5.625in. A pptx has one
+    /// size for the whole deck; the first master's is the one written.
+    pub page_emu: Option<(f64, f64)>,
 }
 
 impl MasterSlide {
@@ -169,6 +176,7 @@ impl Deck {
             background: "#ffffff".into(),
             default_font: MasterSlide::DEFAULT_FONT.into(),
             shapes: vec![],
+            page_emu: None,
         };
         Self {
             slides: vec![Slide {

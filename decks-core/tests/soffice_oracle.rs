@@ -1486,3 +1486,45 @@ fn impress_keeps_our_object_builds() {
         assert_eq!(got, want, "{kind}");
     }
 }
+
+#[test]
+fn impress_sees_the_slide_size_we_kept() {
+    // Issue triage for #440: a 4:3 or custom-size pptx, opened and saved,
+    // used to come back 16:9. LibreOffice is the judge of the saved file:
+    // its own rewrite (as pptx and as odp) must still have the source's
+    // size, and a full-bleed shape must still cover the slide.
+    if !require_or_skip() {
+        return;
+    }
+    for size in [(9_144_000.0, 6_858_000.0), (7_200_000.0, 7_200_000.0)] {
+        let dir = tempfile::tempdir().unwrap();
+        let mut deck = Deck::new();
+        deck.masters[0].page_emu = Some(size);
+        deck.slides[0].objects = vec![SlideObject::Rect { x: 0.0, y: 0.0, w: 960.0, h: 540.0, rotation: 0.0 }];
+        let source = dir.path().join("source.pptx");
+        write_pptx(source.to_str().unwrap(), &deck).expect("write the source");
+        // Open and save, as the app does.
+        let opened = read_pptx(source.to_str().unwrap()).expect("open");
+        let saved = dir.path().join("saved.pptx");
+        write_pptx(saved.to_str().unwrap(), &opened).expect("save");
+        for kind in ["pptx", "odp"] {
+            let back = convert(&saved, kind).unwrap_or_else(|e| panic!("Impress rewrites our pptx as {kind}: {e}"));
+            let read = decks_core::read_deck(back.to_str().unwrap()).expect("read Impress's file");
+            let (cx, cy) = read.masters[0].page_emu.unwrap_or((9_144_000.0, 5_143_500.0));
+            // Impress stores lengths in hundredths of a millimetre (360
+            // EMU), so its size is ours to within that rounding.
+            assert!(
+                (cx - size.0).abs() <= 360.0 && (cy - size.1).abs() <= 360.0,
+                "{kind}: Impress sees {cx}x{cy} EMU, the source was {size:?}"
+            );
+            match read.slides[0].objects.first() {
+                Some(SlideObject::Rect { x, y, w, h, .. }) | Some(SlideObject::Shape { x, y, w, h, .. }) => assert!(
+                    x.abs() < 0.5 && y.abs() < 0.5 && (w - 960.0).abs() < 0.5 && (h - 540.0).abs() < 0.5,
+                    "{kind} {size:?}: the full-bleed shape came back as {:?}",
+                    (x, y, w, h)
+                ),
+                other => panic!("{kind}: the shape came back as {other:?}"),
+            }
+        }
+    }
+}

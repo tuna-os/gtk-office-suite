@@ -1059,6 +1059,7 @@ mod font_tests {
             background: "#ffffff".into(),
             default_font: font.into(),
             shapes: vec![],
+            page_emu: None,
         }
     }
 
