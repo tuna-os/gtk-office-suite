@@ -185,6 +185,44 @@ fn inline_image_survives() {
     assert!(rt.to_plain_text().contains("before"));
 }
 
+/// Reopening a document reuses the image it already extracted rather than
+/// leaving another file in the temp dir on every open (#455). The file
+/// lives in the process's private media cache, not loose in /tmp.
+#[test]
+fn reopening_a_document_does_not_extract_its_image_again() {
+    let png: &[u8] = &[0x89, b'P', b'N', b'G', 0x0D, 0x0A, 0x1A, 0x0A, 1, 2, 3, 4];
+    let dir = tempfile::tempdir().unwrap();
+    let img_path = dir.path().join("dot.png");
+    std::fs::write(&img_path, png).unwrap();
+    let mut d = Document::from_plain_text("before");
+    d.paragraphs.push(Paragraph {
+        style: ParaStyle::default(),
+        runs: vec![Run {
+            text: "pic".into(),
+            style: RunStyle {
+                image: Some(img_path.to_string_lossy().into_owned()),
+                ..Default::default()
+            },
+        }],
+    });
+    let path = dir.path().join("t.docx");
+    let path = path.to_str().unwrap();
+    docx::write(&d, path).expect("write docx");
+
+    let extracted = |doc: &Document| {
+        doc.paragraphs.iter().flat_map(|p| p.runs.iter())
+            .find_map(|r| r.style.image.clone())
+            .expect("image run lost")
+    };
+    let first = extracted(&docx::read(path).expect("read docx"));
+    assert_eq!(std::fs::read(&first).unwrap(), png);
+    for _ in 0..5 {
+        assert_eq!(extracted(&docx::read(path).expect("read docx")), first);
+    }
+    let cache = suite_common_core::media_cache::process_dir().expect("cache exists");
+    assert!(std::path::Path::new(&first).starts_with(&cache), "{first} not in {cache:?}");
+}
+
 #[test]
 fn font_size_color_vertalign_survive() {
     let mut d = Document::from_plain_text("big red super");

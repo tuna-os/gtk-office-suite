@@ -1522,13 +1522,16 @@ fn parse_pages(
 /// Unpack one picture from the package and hand back a path the model can
 /// point at.
 ///
-/// It goes to an unpredictable temporary file, deliberately. The pptx
-/// reader had this wrong once (gh-268): it wrote to
+/// It goes to an unpredictable file in the process's private media cache,
+/// deliberately. The pptx reader had this wrong once (gh-268): it wrote to
 /// `/tmp/decks_img_<id>.<ext>` where both the middle and the suffix came
 /// from the document, so a crafted package could steer the write through
-/// `..` or a pre-created symlink. `NamedTempFile` gives O_EXCL, O_NOFOLLOW
-/// and an unguessable name in one step, and `keep()` leaves it in place
-/// because the model reads it back later.
+/// `..` or a pre-created symlink. The cache directory is created
+/// exclusively with mode 0700 and nothing in a path comes from the
+/// document. The file outlives this call because the model reads it back
+/// later; it lives as long as the process, identical pictures share one
+/// file, and the next process sweeps the directory once this one is gone
+/// (#455) — so reopening a deck no longer leaves a file per picture.
 ///
 /// `href` is document-controlled, so it may only name an entry of *this*
 /// archive: the bytes come from `part_to_bytes`, which resolves inside the
@@ -1543,9 +1546,7 @@ fn extract_picture(
         return None;
     }
     let bytes = zip.part_to_bytes(href, budget).ok()?;
-    let mut tmp = tempfile::NamedTempFile::new().ok()?;
-    tmp.write_all(&bytes).ok()?;
-    let (_, kept) = tmp.keep().ok()?;
+    let kept = suite_common_core::media_cache::persist(&bytes).ok()?;
     Some(kept.to_string_lossy().to_string())
 }
 
@@ -2072,6 +2073,29 @@ mod tests {
             "the picture was unpacked outside the temp dir: {unpacked}",
         );
         assert_eq!(std::fs::read(unpacked).unwrap(), a_png(), "wrong bytes unpacked");
+    }
+
+    /// Reopening a deck reuses the picture it already unpacked instead of
+    /// leaving another file in the temp dir every time (#455), and the
+    /// file lives in the process's private media cache.
+    #[test]
+    fn reopening_a_deck_does_not_unpack_its_picture_again() {
+        let dir = tempfile::tempdir().unwrap();
+        let src = dir.path().join("pic.png");
+        std::fs::write(&src, a_png()).unwrap();
+        let path = dir.path().join("deck.odp");
+        write(&deck_with_picture(src.to_str().unwrap()), path.to_str().unwrap()).unwrap();
+
+        let unpacked = |deck: &Deck| match deck.slides[0].objects.as_slice() {
+            [SlideObject::Image { path, .. }] => path.clone(),
+            other => panic!("expected one picture, got {other:?}"),
+        };
+        let first = unpacked(&read(path.to_str().unwrap()).unwrap());
+        for _ in 0..5 {
+            assert_eq!(unpacked(&read(path.to_str().unwrap()).unwrap()), first);
+        }
+        let cache = suite_common_core::media_cache::process_dir().unwrap();
+        assert!(std::path::Path::new(&first).starts_with(&cache), "{first} not in {cache:?}");
     }
 
     /// An href naming a part the package does not contain yields nothing,

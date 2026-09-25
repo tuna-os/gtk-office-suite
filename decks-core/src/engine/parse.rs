@@ -28,7 +28,6 @@ use super::shape_xml::{frame_tables, sp_styles, theme as read_theme, Theme};
 use super::text_xml::{sp_texts, Inherited};
 
 use std::fs::File;
-use std::io::Write;
 use std::path::Path;
 use quick_xml::events::{Event, BytesStart, BytesRef, BytesText};
 use quick_xml::Reader;
@@ -1455,12 +1454,12 @@ fn resolve_and_extract_picture(
     // path whose middle (embed_id) and suffix (extension) both came from the
     // untrusted document. A crafted PPTX could point the write anywhere via `..`
     // or a pre-created symlink. NamedTempFile gives O_EXCL + O_NOFOLLOW + an
-    // unpredictable name in one step.
-    let mut tmp = tempfile::NamedTempFile::new().ok()?;
-    tmp.write_all(&buffer).ok()?;
-    // Keep the temp file alive for the lifetime of the SlideObject; the model
-    // reads it back later. NamedTempFile deletes on drop, so persist it.
-    let (_, output_path) = tmp.keep().ok()?;
+    // unpredictable name in one step. The media cache keeps those
+    // properties inside a private 0700 per-process directory. The model
+    // reads the file back later, so it lives as long as the process;
+    // identical pictures share one file, and the next process sweeps the
+    // directory once this one is gone (#455).
+    let output_path = suite_common_core::media_cache::persist(&buffer).ok()?;
 
     Some(SlideObject::Image {
         path: output_path.to_string_lossy().to_string(),
@@ -1476,6 +1475,46 @@ fn resolve_and_extract_picture(
 mod tests {
     use super::*;
     use crate::engine::*;
+
+    /// Reopening a pptx reuses the picture it already unpacked instead of
+    /// leaving another temp file per picture per open (#455).
+    #[test]
+    fn reopening_a_pptx_does_not_unpack_its_picture_again() {
+        let dir = tempfile::tempdir().unwrap();
+        let png: &[u8] = &[
+            0x89, b'P', b'N', b'G', 0x0d, 0x0a, 0x1a, 0x0a, 0, 0, 0, 13, b'I', b'H', b'D',
+            b'R', 0, 0, 0, 1, 0, 0, 0, 1, 8, 2, 0, 0, 0, 0x90, 0x77, 0x53, 0xde, 0, 0, 0,
+            12, b'I', b'D', b'A', b'T', 0x08, 0xd7, 0x63, 0xf8, 0xcf, 0xc0, 0, 0, 0, 3, 0,
+            1, 0x9e, 0xdd, 0x22, 0x71, 0, 0, 0, 0, b'I', b'E', b'N', b'D', 0xae, 0x42,
+            0x60, 0x82,
+        ];
+        let src = dir.path().join("pic.png");
+        std::fs::write(&src, png).unwrap();
+        let mut deck = Deck::new();
+        deck.slides[0].objects.push(SlideObject::Image {
+            path: src.to_string_lossy().to_string(),
+            x: 10.0, y: 20.0, w: 30.0, h: 40.0,
+            rotation: 0.0,
+        });
+        let path = dir.path().join("pic.pptx");
+        write_pptx(path.to_str().unwrap(), &deck).unwrap();
+
+        let unpacked = |deck: &Deck| {
+            let found: Vec<String> = deck.slides[0].objects.iter().filter_map(|o| match o {
+                SlideObject::Image { path, .. } => Some(path.clone()),
+                _ => None,
+            }).collect();
+            assert_eq!(found.len(), 1, "expected one picture, got {found:?}");
+            found[0].clone()
+        };
+        let first = unpacked(&read_pptx(path.to_str().unwrap()).unwrap());
+        assert_eq!(std::fs::read(&first).unwrap(), png);
+        for _ in 0..5 {
+            assert_eq!(unpacked(&read_pptx(path.to_str().unwrap()).unwrap()), first);
+        }
+        let cache = suite_common_core::media_cache::process_dir().unwrap();
+        assert!(Path::new(&first).starts_with(&cache), "{first} not in {cache:?}");
+    }
 
     #[test]
     fn test_pptx_roundtrip() {
