@@ -4091,6 +4091,7 @@ dependencies = [
  "chrono",
  "libc",
  "num-format",
+ "proptest",
  "regex",
  "serde",
  "serde_json",

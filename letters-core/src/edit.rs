@@ -391,19 +391,7 @@ fn mark(doc: &mut Document, start: usize, end: usize, key: MarkKey, value: &RunS
 /// Apply `ops` in order; on the first failure, undo what was applied and
 /// return the error. Returns the undo ops of the whole group, in order.
 pub fn apply_all(doc: &mut Document, ops: &[Op]) -> Result<Vec<Op>, EditError> {
-    let mut undo: Vec<Vec<Op>> = Vec::new();
-    for op in ops {
-        match apply(doc, op) {
-            Ok(u) => undo.push(u),
-            Err(e) => {
-                for u in undo.into_iter().rev() {
-                    let _ = apply_all(doc, &u);
-                }
-                return Err(e);
-            }
-        }
-    }
-    Ok(undo.into_iter().rev().flatten().collect())
+    suite_common_core::ops::apply_all(doc, ops)
 }
 
 /// The ops typing `text` at `at` makes: one insert in the typing style,
@@ -516,122 +504,29 @@ fn styled_chars(runs: &[Run]) -> Vec<(char, &RunStyle)> {
         .collect()
 }
 
-/// Undo and redo over the live document, from each change's inverse ops.
-/// One entry is one user action (everything between `begin` and `end`,
-/// or one `record` outside them).
-#[derive(Default, Debug, Clone)]
-pub struct History {
-    undo: Vec<Vec<Op>>,
-    redo: Vec<Vec<Op>>,
-    open: Option<Vec<Vec<Op>>>,
-    /// The next recorded step is one typed character; it joins the step
-    /// before it when that was typing just before it, so undo removes a
-    /// word at a time, as GtkTextBuffer's own undo did.
-    merge: bool,
-    /// The top undo step is typed word characters (it may take more).
-    word: bool,
-}
+/// Undo and redo over the live document: the suite's one op history
+/// (`suite_common_core::ops`, ADR 0011) over Letters' ops. Typed word
+/// characters coalesce because consecutive one-char inserts have
+/// contiguous one-`Delete` inverses (see `coalesce` below).
+pub type History = suite_common_core::ops::History<Op>;
 
-impl History {
-    /// Start grouping changes into one undo step.
-    pub fn begin(&mut self) {
-        if self.open.is_none() {
-            self.open = Some(Vec::new());
-        }
+impl suite_common_core::ops::Op for Op {
+    type Doc = Document;
+    type Error = EditError;
+
+    fn apply(&self, doc: &mut Document) -> Result<Vec<Op>, EditError> {
+        apply(doc, self)
     }
 
-    /// Close the current group.
-    pub fn end(&mut self) {
-        if let Some(group) = self.open.take() {
-            self.push(group);
-        }
-    }
-
-    fn push(&mut self, group: Vec<Vec<Op>>) {
-        let ops: Vec<Op> = group.into_iter().rev().flatten().collect();
-        let merge = std::mem::take(&mut self.merge);
-        if ops.is_empty() {
-            return;
-        }
-        let word = std::mem::replace(&mut self.word, merge);
-        self.redo.clear();
-        // Typing extends the previous typing step: the undo of "ab" is one
-        // delete of both chars.
-        if let ([Op::Delete { at, len }], Some(last)) = (ops.as_slice(), self.undo.last_mut()) {
-            if let [Op::Delete { at: prev_at, len: prev_len }] = last.as_mut_slice() {
-                if merge && word && *prev_at + *prev_len == *at {
-                    *prev_len += *len;
-                    return;
-                }
+    /// The undo of typing "a" then "b" is one delete of both.
+    fn coalesce(&mut self, next: &Op) -> bool {
+        match (self, next) {
+            (Op::Delete { at, len }, Op::Delete { at: next_at, len: next_len }) if *at + *len == *next_at => {
+                *len += next_len;
+                true
             }
+            _ => false,
         }
-        self.undo.push(ops);
-    }
-
-    /// Mark the next recorded step as one typed word character (see
-    /// `merge`); any other step breaks the run.
-    pub fn set_merge(&mut self, merge: bool) {
-        self.merge = merge;
-    }
-
-    /// Record the inverse ops of one applied change.
-    pub fn record(&mut self, inverse: Vec<Op>) {
-        match &mut self.open {
-            Some(group) => group.push(inverse),
-            None => self.push(vec![inverse]),
-        }
-    }
-
-    pub fn can_undo(&self) -> bool {
-        !self.undo.is_empty()
-    }
-
-    pub fn can_redo(&self) -> bool {
-        !self.redo.is_empty()
-    }
-
-    /// Undo the last step on `doc`. Returns the ops applied (for a view to
-    /// follow), or `None` when there is nothing to undo.
-    pub fn undo(&mut self, doc: &mut Document) -> Option<Vec<Op>> {
-        self.end();
-        self.word = false;
-        let ops = self.undo.pop()?;
-        match apply_all(doc, &ops) {
-            Ok(inverse) => {
-                self.redo.push(inverse);
-                Some(ops)
-            }
-            Err(_) => {
-                // History no longer fits the document: drop it rather than
-                // apply half an undo.
-                self.undo.clear();
-                self.redo.clear();
-                None
-            }
-        }
-    }
-
-    /// Redo the last undone step on `doc`.
-    pub fn redo(&mut self, doc: &mut Document) -> Option<Vec<Op>> {
-        self.end();
-        self.word = false;
-        let ops = self.redo.pop()?;
-        match apply_all(doc, &ops) {
-            Ok(inverse) => {
-                self.undo.push(inverse);
-                Some(ops)
-            }
-            Err(_) => {
-                self.undo.clear();
-                self.redo.clear();
-                None
-            }
-        }
-    }
-
-    /// Forget everything (a document was replaced wholesale).
-    pub fn clear(&mut self) {
-        *self = History::default();
     }
 }
 
