@@ -155,6 +155,22 @@
     "A": "green",
     "B": "green"
   },
+  "tables/chart-area": {
+    "A": "green",
+    "B": "green"
+  },
+  "tables/chart-line": {
+    "A": "amber",
+    "B": "amber"
+  },
+  "tables/chart-pie": {
+    "A": "amber",
+    "B": "amber"
+  },
+  "tables/chart-scatter": {
+    "A": "red",
+    "B": "red"
+  },
   "tables/col-row-size": {
     "A": "green",
     "B": "green"
