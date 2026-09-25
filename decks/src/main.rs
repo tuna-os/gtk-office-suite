@@ -6,6 +6,7 @@ mod export;
 mod canvas;
 mod text_render;
 mod format_inspector;
+mod presenter_window;
 mod canvas_area;
 mod canvas_input;
 mod sidebar;
