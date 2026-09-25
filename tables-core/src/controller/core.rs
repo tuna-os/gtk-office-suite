@@ -8,7 +8,6 @@ use std::rc::Rc;
 use suite_common_core::events::{Broadcaster, Hint, Listener};
 use suite_common_core::undo::{Command, UndoManager};
 
-use crate::sheet::SheetModel;
 
 use super::state::*;
 
@@ -63,17 +62,6 @@ impl WorkbookController {
 
     pub fn mark_dirty(&mut self) {
         self.dirty = true;
-    }
-
-    pub fn record_sheet_mutation(&mut self, description: &'static str, before: SheetModel) {
-        let after = self.state.borrow().sheet().clone();
-        let sheet_id = self.state.borrow().sheet().sheet_id;
-        self.execute(Box::new(SheetSnapshotCommand {
-            sheet_id,
-            before,
-            after,
-            description,
-        }));
     }
 
     pub fn undo(&mut self) -> bool {

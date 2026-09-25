@@ -185,23 +185,26 @@ fn apply(controller: &mut WorkbookController, command: &Command) -> Result<(), S
         }
         Command::AddSheet => {
             let name = format!("Sheet{}", controller.state.borrow().sheets.len() + 1);
-            let _ = controller.state.borrow_mut().add_sheet(name, ROWS, COLS);
+            controller.add_sheet(&name);
         }
         Command::SwitchSheet(index) => {
             let _ = controller.state.borrow_mut().switch_sheet(*index);
         }
         Command::RenameSheet { index, name } => {
-            let _ = controller.state.borrow_mut().rename_sheet(*index, name);
+            controller.rename_sheet(*index, name);
         }
         Command::DeleteSheet(index) => {
-            let _ = controller.state.borrow_mut().delete_sheet(*index);
+            controller.delete_sheet(*index);
         }
         Command::ReorderSheets => {
-            let count = controller.state.borrow().sheets.len();
-            // Rotate by one: a permutation that is always valid and that
-            // moves the active sheet, which is the interesting part.
-            let order: Vec<usize> = (0..count).map(|i| (i + 1) % count).collect();
-            let _ = controller.state.borrow_mut().reorder_sheets(&order);
+            // Move the active sheet to the end (or the front if it's
+            // there already): it's the move the sheet bar makes.
+            let (count, active) = {
+                let state = controller.state.borrow();
+                (state.sheets.len(), state.active_sheet)
+            };
+            let to = if active + 1 == count { 0 } else { count - 1 };
+            controller.move_sheet(active, to);
         }
         Command::HideRows => controller.hide_selected_rows(),
         Command::UnhideRows => controller.unhide_all_rows(),
@@ -230,6 +233,10 @@ fn apply(controller: &mut WorkbookController, command: &Command) -> Result<(), S
                 if !controller.redo() {
                     return Err("redo refused immediately after a successful undo".into());
                 }
+                // Undo and redo show the sheet they changed (like the
+                // selection, that's the view, not the document): go back
+                // to the sheet we were on before comparing.
+                let _ = controller.state.borrow_mut().switch_sheet(before.active_sheet_index);
                 let after = take_snapshot(controller);
                 if document(&before) != document(&after) {
                     return Err(format!(

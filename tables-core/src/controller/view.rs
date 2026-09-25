@@ -7,11 +7,16 @@ use std::collections::HashSet;
 
 use crate::sheet::{col_label, SortDirection};
 
-use super::state::*;
+use super::ops::{Op, SheetProp};
 
 use super::core::WorkbookController;
 
 impl WorkbookController {
+    /// Set one sheet-wide property of sheet `sheet_id` as an undo step.
+    fn set_prop(&mut self, description: &'static str, sheet_id: u32, prop: SheetProp) {
+        self.apply_ops(description, vec![Op::SetProp { sheet: sheet_id, prop }]);
+    }
+
     pub fn set_sheet_protection(&mut self, protected: bool, password_hash: Option<String>) {
         self.mutate_sheet("Toggle Sheet Protection", move |sheet| {
             sheet.protection.protected = protected;
@@ -56,10 +61,7 @@ impl WorkbookController {
             .engine
             .model
             .is_valid_defined_name(name, None, &formula)?;
-        self.execute(Box::new(DefinedNameCommand {
-            name: name.to_string(),
-            formula,
-        }));
+        self.apply_ops("Define Name", vec![Op::DefineName { name: name.to_string(), formula: Some(formula) }]);
         Ok(())
     }
 
@@ -82,11 +84,7 @@ impl WorkbookController {
         drop(sheet);
         drop(state);
         if before != after {
-            self.execute(Box::new(FilterCommand {
-                sheet_id,
-                before,
-                after,
-            }));
+            self.set_prop("Filter Rows", sheet_id, SheetProp::Filtered(after));
         }
     }
 
@@ -96,11 +94,7 @@ impl WorkbookController {
         let before = state.sheet().hidden_rows.clone();
         drop(state);
         if !before.is_empty() {
-            self.execute(Box::new(FilterCommand {
-                sheet_id,
-                before,
-                after: HashSet::new(),
-            }));
+            self.set_prop("Clear Filter", sheet_id, SheetProp::Filtered(HashSet::new()));
         }
     }
 
@@ -115,11 +109,7 @@ impl WorkbookController {
         drop(sheet);
         drop(state);
         if before != after {
-            self.execute(Box::new(HideRowsCommand {
-                sheet_id,
-                before,
-                after,
-            }));
+            self.set_prop("Hide Rows", sheet_id, SheetProp::HiddenRows(after));
         }
     }
 
@@ -129,11 +119,7 @@ impl WorkbookController {
         let before = state.sheet().hidden_rows_manual.clone();
         drop(state);
         if !before.is_empty() {
-            self.execute(Box::new(HideRowsCommand {
-                sheet_id,
-                before,
-                after: HashSet::new(),
-            }));
+            self.set_prop("Show Rows", sheet_id, SheetProp::HiddenRows(HashSet::new()));
         }
     }
 
@@ -148,11 +134,7 @@ impl WorkbookController {
         drop(sheet);
         drop(state);
         if before != after {
-            self.execute(Box::new(HideColsCommand {
-                sheet_id,
-                before,
-                after,
-            }));
+            self.set_prop("Hide Columns", sheet_id, SheetProp::HiddenCols(after));
         }
     }
 
@@ -162,11 +144,7 @@ impl WorkbookController {
         let before = state.sheet().hidden_cols.clone();
         drop(state);
         if !before.is_empty() {
-            self.execute(Box::new(HideColsCommand {
-                sheet_id,
-                before,
-                after: HashSet::new(),
-            }));
+            self.set_prop("Show Columns", sheet_id, SheetProp::HiddenCols(HashSet::new()));
         }
     }
 
@@ -177,11 +155,7 @@ impl WorkbookController {
         drop(state);
         let after = Some(sel);
         if before != after {
-            self.execute(Box::new(PrintAreaCommand {
-                sheet_id,
-                before,
-                after,
-            }));
+            self.set_prop("Set Print Area", sheet_id, SheetProp::PrintArea(after));
         }
     }
 
@@ -191,11 +165,7 @@ impl WorkbookController {
         let before = state.sheet().print_area;
         drop(state);
         if before.is_some() {
-            self.execute(Box::new(PrintAreaCommand {
-                sheet_id,
-                before,
-                after: None,
-            }));
+            self.set_prop("Clear Print Area", sheet_id, SheetProp::PrintArea(None));
         }
     }
 
@@ -205,11 +175,7 @@ impl WorkbookController {
         let before = state.sheet().page_setup.clone();
         drop(state);
         if before != setup {
-            self.execute(Box::new(PageSetupCommand {
-                sheet_id,
-                before,
-                after: setup,
-            }));
+            self.set_prop("Page Setup", sheet_id, SheetProp::PageSetup(setup));
         }
     }
 
@@ -244,7 +210,7 @@ impl WorkbookController {
         drop(sheet);
         drop(state);
         if before != after {
-            self.execute(Box::new(FilterCommand { sheet_id, before, after }));
+            self.set_prop("Filter Rows", sheet_id, SheetProp::Filtered(after));
         }
     }
 
@@ -310,44 +276,30 @@ impl WorkbookController {
         });
         drop(state);
 
-        let mut after_inputs = vec![vec![String::new(); before_sheet.cols]; before_sheet.rows];
+        // The sort as ops: every row's inputs in one SetCells (references
+        // moved with their cells), then each cell's format, style, border
+        // and validation where the new order changes them, and the header
+        // arrow. Undo is their inverses.
+        let mut cells = Vec::new();
         {
             let mut state = self.state.borrow_mut();
             for (new_row, &old_row) in order.iter().enumerate() {
-                for column in 0..before_sheet.cols {
-                    after_inputs[new_row][column] = state.engine.move_input(
-                        &before_inputs[old_row][column],
-                        (old_row, column),
-                        (new_row, column),
-                    );
+                for (column, (input, current)) in before_inputs[old_row].iter().zip(&before_inputs[new_row]).enumerate() {
+                    let moved = state.engine.move_input(input, (old_row, column), (new_row, column));
+                    if moved != *current {
+                        cells.push((new_row, column, moved));
+                    }
                 }
             }
         }
         let mut after_sheet = before_sheet.clone();
         after_sheet.sorted_col = Some((col, new_direction));
-        after_sheet.formats = order
-            .iter()
-            .map(|&row| before_sheet.formats[row].clone())
-            .collect();
-        after_sheet.borders = order
-            .iter()
-            .map(|&row| before_sheet.borders[row].clone())
-            .collect();
-        after_sheet.styles = order
-            .iter()
-            .map(|&row| before_sheet.styles[row].clone())
-            .collect();
-        after_sheet.validations = order
-            .iter()
-            .map(|&row| before_sheet.validations[row].clone())
-            .collect();
-
-        self.execute(Box::new(SortCommand {
-            sheet_id,
-            before_inputs,
-            after_inputs,
-            before_sheet,
-            after_sheet,
-        }));
+        after_sheet.formats = order.iter().map(|&row| before_sheet.formats[row].clone()).collect();
+        after_sheet.borders = order.iter().map(|&row| before_sheet.borders[row].clone()).collect();
+        after_sheet.styles = order.iter().map(|&row| before_sheet.styles[row].clone()).collect();
+        after_sheet.validations = order.iter().map(|&row| before_sheet.validations[row].clone()).collect();
+        let mut ops = vec![Op::SetCells { sheet: sheet_id, cells }];
+        ops.extend(super::ops::diff_ops(&before_sheet, &after_sheet));
+        self.apply_ops("Sort", ops);
     }
 }

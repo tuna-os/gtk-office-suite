@@ -4,26 +4,35 @@
 
 
 use super::core::WorkbookController;
+use super::ops::{Op, SheetProp};
 
 impl WorkbookController {
+    /// Add `pivot` to the active sheet and write its table at its target
+    /// cell, as one undo step (the table's cells are ordinary inputs).
     pub fn add_pivot_table(&mut self, pivot: crate::sheet::PivotTableSpec) {
-        let (rows, cols) = (
-            self.state.borrow().sheet().rows,
-            self.state.borrow().sheet().cols,
-        );
         let evaluated_data = self.evaluate_pivot_table(&pivot);
         let (start_r, start_c) = pivot.target_cell;
-
-        self.mutate_sheet("Add Pivot Table", move |sheet| {
-            sheet.pivot_tables.push(pivot);
-            for (dr, row) in evaluated_data.iter().enumerate() {
-                for (dc, val) in row.iter().enumerate() {
-                    if start_r + dr < rows && start_c + dc < cols {
-                        sheet.data[start_r + dr][start_c + dc] = val.clone();
-                    }
+        let (rows, cols, sheet_id, mut pivots) = {
+            let state = self.state.borrow();
+            let sheet = state.sheet();
+            (sheet.rows, sheet.cols, sheet.sheet_id, sheet.pivot_tables.clone())
+        };
+        pivots.push(pivot);
+        let mut cells = Vec::new();
+        for (dr, row) in evaluated_data.into_iter().enumerate() {
+            for (dc, val) in row.into_iter().enumerate() {
+                if start_r + dr < rows && start_c + dc < cols {
+                    cells.push((start_r + dr, start_c + dc, val));
                 }
             }
-        });
+        }
+        self.apply_ops(
+            "Add Pivot Table",
+            vec![
+                Op::SetProp { sheet: sheet_id, prop: SheetProp::Pivots(pivots) },
+                Op::SetCells { sheet: sheet_id, cells },
+            ],
+        );
     }
 
     pub fn evaluate_pivot_table(&self, pivot: &crate::sheet::PivotTableSpec) -> Vec<Vec<String>> {

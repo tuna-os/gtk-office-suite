@@ -8,7 +8,7 @@
 //! - applying the inverses in reverse undoes a whole sequence, and
 //!   applying the ops again (redo) comes back to the same workbook.
 
-use super::ops::{apply, apply_all, blank_lines, Axis, Op, WorkbookImage};
+use super::ops::{apply, apply_all, blank_lines, Axis, Op, SheetProp, WorkbookImage};
 use super::state::WorkbookState;
 use crate::sheet::{BorderStyle, CellBorder};
 use crate::style::{CellStyle, HAlign, Rgb};
@@ -55,7 +55,31 @@ fn random_op(rng: &mut Rng, state: &WorkbookState) -> Op {
     let (row, col) = (rng.below(rows), rng.below(cols));
     let axis = if rng.below(2) == 0 { Axis::Rows } else { Axis::Cols };
     let len = if axis == Axis::Rows { rows } else { cols };
-    match rng.below(13) {
+    match rng.below(20) {
+        13 => Op::MoveSheet { sheet, to: rng.below(state.sheets.len()) },
+        14 => Op::SetCells {
+            sheet,
+            cells: (0..1 + rng.below(4)).map(|i| (rng.below(rows), rng.below(cols), format!("{}", i * 7 + rng.below(50)))).collect(),
+        },
+        15 => Op::SetValidation {
+            sheet,
+            row,
+            col,
+            rule: [None, Some(crate::sheet::ValidationRule::WholeNumber { min: Some(0), max: Some(9) })][rng.below(2)].clone(),
+        },
+        16 => Op::SetLocked { sheet, row, col, protection: crate::sheet::CellProtection { locked: rng.below(2) == 0, hidden_formula: rng.below(2) == 0 } },
+        17 => Op::SetProp {
+            sheet,
+            prop: match rng.below(6) {
+                0 => SheetProp::Filtered((0..rng.below(3)).map(|_| rng.below(rows)).collect()),
+                1 => SheetProp::HiddenCols((0..rng.below(3)).map(|_| rng.below(cols)).collect()),
+                2 => SheetProp::PrintArea(Some((0, 0, rng.below(rows), rng.below(cols)))),
+                3 => SheetProp::Sorted(Some((rng.below(cols), crate::sheet::SortDirection::Descending))),
+                4 => SheetProp::Protection(crate::sheet::SheetProtection { protected: true, ..Default::default() }),
+                _ => SheetProp::HiddenRows(Default::default()),
+            },
+        },
+        18 => Op::DefineName { name: format!("Name{}", rng.below(4)), formula: [None, Some("Sheet1!$A$1".to_string())][rng.below(2)].clone() },
         0..=2 => {
             let input = match rng.below(5) {
                 0 => String::new(),
@@ -163,6 +187,43 @@ fn direct(state: &mut WorkbookState, op: &Op) -> Result<(), String> {
         }
         Op::DeleteSheet { .. } => {
             state.delete_sheet(pos)?;
+            resync_all(state);
+        }
+        Op::MoveSheet { to, .. } => {
+            let mut order: Vec<usize> = (0..state.sheets.len()).collect();
+            let moved = order.remove(pos);
+            order.insert(*to, moved);
+            state.reorder_sheets(&order)?;
+        }
+        Op::SetCells { cells, .. } => {
+            let previous = state.active_sheet;
+            state.engine.set_active_sheet(pos)?;
+            for (r, c, input) in cells {
+                state.engine.set_cell_text(*r, *c, input);
+            }
+            state.engine.set_active_sheet(previous)?;
+            resync_all(state);
+        }
+        Op::SetValidation { row, col, rule, .. } => state.sheets[pos].borrow_mut().validations[*row][*col] = rule.clone(),
+        Op::SetLocked { row, col, protection, .. } => state.sheets[pos].borrow_mut().cell_protections[*row][*col] = protection.clone(),
+        Op::SetProp { prop, .. } => {
+            let mut s = state.sheets[pos].borrow_mut();
+            match prop.clone() {
+                SheetProp::Filtered(v) => s.hidden_rows = v,
+                SheetProp::HiddenRows(v) => s.hidden_rows_manual = v,
+                SheetProp::HiddenCols(v) => s.hidden_cols = v,
+                SheetProp::PrintArea(v) => s.print_area = v,
+                SheetProp::Sorted(v) => s.sorted_col = v,
+                SheetProp::Protection(v) => s.protection = v,
+                SheetProp::CondRules(v) => s.cond_rules = v,
+                SheetProp::Charts(v) => s.charts = v,
+                SheetProp::Pivots(v) => s.pivot_tables = v,
+                SheetProp::PageSetup(v) => s.page_setup = v,
+            }
+        }
+        Op::DefineName { name, formula } => {
+            state.engine.set_defined_name(name, formula.as_deref())?;
+            state.engine.evaluate();
             resync_all(state);
         }
         Op::Unmerge { .. } => unreachable!("not generated"),

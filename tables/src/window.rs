@@ -905,19 +905,9 @@ impl TablesWindow {
         // Calc-style (one bottom bar, tabs left / stats right).
         sheet_bar.append(&stats_label);
 
-        // Rebuild the sheet-name dropdown from the live sheet list. Used
-        // after any structural change (delete/rename/reorder) so the
-        // switcher never drifts from `WorkbookState::sheets`.
-        fn refresh_sheet_model(sm: &gtk4::StringList, state: &Rc<RefCell<WorkbookState>>) {
-            let names: Vec<String> = state
-                .borrow()
-                .sheets
-                .iter()
-                .map(|sheet| sheet.borrow().name.clone())
-                .collect();
-            let refs: Vec<&str> = names.iter().map(String::as_str).collect();
-            sm.splice(0, sm.n_items(), &refs);
-        }
+        // Every sheet-bar edit below is an undoable op on the controller;
+        // `sheet_bar::follow` keeps the switcher in step afterwards.
+        use crate::sheet_bar::follow;
 
         // The sheet operations as app actions, so they exist somewhere
         // other than a button that the narrow breakpoint hides (#520).
@@ -965,7 +955,7 @@ impl TablesWindow {
                 dlg.add_response("rename", &suite_common::i18n("Rename"));
                 dlg.set_response_appearance("rename", adw::ResponseAppearance::Suggested);
                 dlg.set_default_response(Some("rename"));
-                let sm = sm.clone();
+                let (sm, sd, ctl) = (sm.clone(), sd.clone(), ctl.clone());
                 dlg.connect_response(None, move |_, resp| {
                     if resp != "rename" {
                         return;
@@ -974,8 +964,9 @@ impl TablesWindow {
                     if name.is_empty() || name == current_name {
                         return;
                     }
-                    if state.borrow_mut().rename_sheet(idx, &name).is_ok() {
-                        refresh_sheet_model(&sm, &state);
+                    let renamed = ctl.borrow_mut().rename_sheet(idx, &name);
+                    if renamed {
+                        follow(&sm, &sd, &state);
                     }
                 });
                 dlg.present(w.as_ref());
@@ -993,17 +984,11 @@ impl TablesWindow {
                 let state = controller.state.clone();
                 drop(controller);
                 let idx = sd.selected() as usize;
-                if idx == 0 {
-                    return;
-                }
-                let count = state.borrow().sheets.len();
-                let mut order: Vec<usize> = (0..count).collect();
-                order.swap(idx, idx - 1);
-                if state.borrow_mut().reorder_sheets(&order).is_ok() {
-                    refresh_sheet_model(&sm, &state);
-                    // `ctl`'s own borrow is dropped above: set_selected fires
-                    // selected-notify synchronously, which also borrows `ctl`.
-                    sd.set_selected((idx - 1) as u32);
+                // `ctl`'s borrow ends at the `;`: follow() fires the
+                // switcher's selected-notify, which borrows `ctl` too.
+                let moved = idx > 0 && ctl.borrow_mut().move_sheet(idx, idx - 1);
+                if moved {
+                    follow(&sm, &sd, &state);
                     da.queue_draw();
                 }
             });
@@ -1018,17 +1003,9 @@ impl TablesWindow {
                 let state = controller.state.clone();
                 drop(controller);
                 let idx = sd.selected() as usize;
-                let count = state.borrow().sheets.len();
-                if idx + 1 >= count {
-                    return;
-                }
-                let mut order: Vec<usize> = (0..count).collect();
-                order.swap(idx, idx + 1);
-                if state.borrow_mut().reorder_sheets(&order).is_ok() {
-                    refresh_sheet_model(&sm, &state);
-                    // `ctl`'s own borrow is dropped above: set_selected fires
-                    // selected-notify synchronously, which also borrows `ctl`.
-                    sd.set_selected((idx + 1) as u32);
+                let moved = ctl.borrow_mut().move_sheet(idx, idx + 1);
+                if moved {
+                    follow(&sm, &sd, &state);
                     da.queue_draw();
                 }
             });
@@ -1065,21 +1042,14 @@ impl TablesWindow {
                 dlg.add_response("delete", &suite_common::i18n("Delete"));
                 dlg.set_response_appearance("delete", adw::ResponseAppearance::Destructive);
                 dlg.set_default_response(Some("cancel"));
-                let sm = sm.clone();
-                let sd = sd.clone();
-                let da = da.clone();
+                let (sm, sd, da, ctl) = (sm.clone(), sd.clone(), da.clone(), ctl.clone());
                 dlg.connect_response(None, move |_, resp| {
                     if resp != "delete" {
                         return;
                     }
-                    if state.borrow_mut().delete_sheet(idx).is_ok() {
-                        refresh_sheet_model(&sm, &state);
-                        // set_selected() fires selected-notify synchronously,
-                        // which re-borrows `state` mutably -- bind the
-                        // argument first so this borrow ends at the `;`
-                        // instead of lasting through the call.
-                        let active = state.borrow().active_sheet as u32;
-                        sd.set_selected(active);
+                    let deleted = ctl.borrow_mut().delete_sheet(idx);
+                    if deleted {
+                        follow(&sm, &sd, &state);
                         da.queue_draw();
                     }
                 });
@@ -1094,25 +1064,18 @@ impl TablesWindow {
             let sd = sheet_switcher.clone();
             let da = drawing_area.clone();
             add_btn.connect_clicked(move |_| {
-                let idx = ctl.borrow().state.borrow().sheets.len();
-                let name = format!("Sheet{}", idx + 1);
-                {
-                    let controller = ctl.borrow_mut();
-                    controller
-                        .state
-                        .borrow_mut()
-                        .add_sheet(name.clone(), DEFAULT_ROWS, DEFAULT_COLS)
-                        .expect("add worksheet");
-                    controller.state.borrow_mut().switch_sheet(idx).expect("switch worksheet");
-                }
-                sm.append(&name);
-                // Dropped the controller borrow above: GtkDropDown fires
-                // selected-notify synchronously, and that handler also
-                // borrows `ctl` — holding our own borrow across this call
-                // panics with "RefCell already borrowed" (issue found via
+                let state = ctl.borrow().state.clone();
+                let name = format!("Sheet{}", state.borrow().sheets.len() + 1);
+                // The borrow of `ctl` ends at the `;`: GtkDropDown fires
+                // selected-notify synchronously from follow(), and that
+                // handler also borrows `ctl` — holding our own borrow across
+                // it panics with "RefCell already borrowed" (found via the
                 // TablesMultiSheetSmoke GUI test).
-                sd.set_selected(idx as u32);
-                da.queue_draw();
+                let added = ctl.borrow_mut().add_sheet(&name);
+                if added {
+                    follow(&sm, &sd, &state);
+                    da.queue_draw();
+                }
             });
         }
 
@@ -1903,25 +1866,25 @@ impl TablesWindow {
 
         // ── Undo/redo as named actions (window-wide accels) ────────────
         {
-            let ctl = controller.clone();
-            let da = drawing_area.clone();
-            let undo_action = gtk4::gio::SimpleAction::new("undo", None);
-            undo_action.set_enabled(false);
-            undo_action.connect_activate(move |_, _| {
-                if ctl.borrow_mut().undo() {
-                    da.queue_draw();
-                }
-            });
+            // Undo and redo show the sheet they changed; the switcher
+            // follows (and picks up added, removed and renamed sheets).
+            let history_action = |name: &str, step: fn(&mut WorkbookController) -> bool| {
+                let (ctl, da) = (controller.clone(), drawing_area.clone());
+                let (sm, sd, st) = (sheet_model.clone(), sheet_switcher.clone(), state.clone());
+                let action = gtk4::gio::SimpleAction::new(name, None);
+                action.set_enabled(false);
+                action.connect_activate(move |_, _| {
+                    let stepped = step(&mut ctl.borrow_mut());
+                    if stepped {
+                        crate::sheet_bar::follow(&sm, &sd, &st);
+                        da.queue_draw();
+                    }
+                });
+                action
+            };
+            let undo_action = history_action("undo", WorkbookController::undo);
             app.add_action(&undo_action);
-            let ctl = controller.clone();
-            let da = drawing_area.clone();
-            let redo_action = gtk4::gio::SimpleAction::new("redo", None);
-            redo_action.set_enabled(false);
-            redo_action.connect_activate(move |_, _| {
-                if ctl.borrow_mut().redo() {
-                    da.queue_draw();
-                }
-            });
+            let redo_action = history_action("redo", WorkbookController::redo);
             app.add_action(&redo_action);
             controller.borrow().listen_history(Rc::new(HistoryActionListener {
                 undo: undo_action,

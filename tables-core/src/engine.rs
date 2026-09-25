@@ -241,6 +241,46 @@ impl TablesEngine {
         self.model.evaluate();
     }
 
+    /// The formula of workbook-level name `name`, if it's defined.
+    pub fn defined_name(&self, name: &str) -> Option<String> {
+        self.model
+            .workbook
+            .defined_names
+            .iter()
+            .find(|n| n.sheet_id.is_none() && n.name.eq_ignore_ascii_case(name))
+            .map(|n| n.formula.clone())
+    }
+
+    /// Define, redefine or (with `None`) remove workbook-level name `name`.
+    ///
+    /// A name can outlive the sheet it points at (deleting a sheet leaves
+    /// its names' text alone, as Excel shows `#REF!`), and undo has to put
+    /// such a name back exactly. IronCalc won't create a name whose sheet
+    /// is gone but will update one, so a new name goes in as a placeholder
+    /// and is then updated to its formula.
+    pub fn set_defined_name(&mut self, name: &str, formula: Option<&str>) -> Result<(), String> {
+        match (self.defined_name(name), formula) {
+            (None, None) => Ok(()),
+            (Some(_), None) => self.model.delete_defined_name(name, None),
+            (Some(_), Some(f)) => self.model.update_defined_name(name, None, name, None, f),
+            (None, Some(f)) => {
+                if self.model.new_defined_name(name, None, f).is_ok() {
+                    return Ok(());
+                }
+                self.model.workbook.defined_names.push(ironcalc_base::types::DefinedName {
+                    name: name.to_string(),
+                    formula: f.to_string(),
+                    sheet_id: None,
+                });
+                let result = self.model.update_defined_name(name, None, name, None, f);
+                if result.is_err() {
+                    self.model.workbook.defined_names.pop();
+                }
+                result
+            }
+        }
+    }
+
     /// Evaluate all formulas.
     pub fn evaluate(&mut self) {
         self.model.evaluate();

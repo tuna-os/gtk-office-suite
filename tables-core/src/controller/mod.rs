@@ -1,13 +1,14 @@
 //! controller — canonical workbook state and user-facing edit controller.
 //! SPDX-License-Identifier: GPL-3.0-or-later
 //!
-//! Split into seven files:
-//! - `state.rs` — [`WorkbookState`] and the undo [`Command`]s that mutate it
+//! Split into files:
+//! - `state.rs` — [`WorkbookState`], the workbook the ops change
 //! - `core.rs` — [`WorkbookController`] state ownership + undo facade
 //! - `editing.rs` — cell edits, sheet mutations, paste, fill
 //! - `format.rs` — cell styles and borders on the selection (the Format inspector)
 //! - `ops.rs` — workbook operations with exact inverses (RFC-0001 Phase 0)
 //! - `pivot.rs` — pivot-table registration/evaluation
+//! - `sheets.rs` — the sheet bar's add/rename/move/delete, as ops
 //! - `view.rs` — protection, names, filters, visibility, print, sort
 
 mod core;
@@ -15,6 +16,7 @@ mod editing;
 mod format;
 mod ops;
 mod pivot;
+mod sheets;
 mod state;
 mod view;
 

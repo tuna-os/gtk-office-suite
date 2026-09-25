@@ -28,7 +28,7 @@ pub const DEFAULT_FONT_FAMILY: &str = "Calibri";
 /// Points.
 pub const DEFAULT_FONT_SIZE: f64 = 11.0;
 
-#[derive(Clone, Copy, PartialEq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum SortDirection { Ascending, Descending }
 
 /// One edge of a cell border. `Solid` is a thin (1 px) line; `Medium` and
@@ -48,7 +48,7 @@ impl BorderStyle {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub enum ValidationRule {
     List(Vec<String>),
     WholeNumber { min: Option<i64>, max: Option<i64> },

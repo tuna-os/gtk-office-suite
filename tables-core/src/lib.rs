@@ -16,7 +16,6 @@ pub mod sheet;
 pub mod snapshot;
 pub mod sparse;
 pub mod style;
-pub mod undo;
 
 pub use engine::TablesEngine;
 pub use sheet::SheetModel;
