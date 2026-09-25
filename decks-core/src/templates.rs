@@ -171,6 +171,8 @@ pub fn deck(index: usize) -> Option<(Vec<Slide>, Vec<MasterSlide>)> {
         background: theme.background.into(),
         default_font: theme.font.into(),
         shapes: (theme.decorations)(),
+        // Our default 16:9 slide.
+        page_emu: None,
     };
     let title_slide = slide(
         "Title",
