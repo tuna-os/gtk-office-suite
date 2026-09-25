@@ -2084,13 +2084,10 @@ class TablesCellEntryMixin:
 class TablesFormulaAutocompleteSmoke(TablesCellEntryMixin, BaseGUITestCase):
     """The formula editor (DESIGN-UI.md): typing a function name offers the
     functions it could be, Tab inserts the chosen one with its parenthesis,
-    and inside the call the signature is shown. Asserted on the entry's
-    text and the popover's labels, as AT-SPI reports them."""
+    and inside the call the signature is shown. Asserted on the popover's
+    labels, as AT-SPI reports them."""
 
     app_name = "tables"
-
-    def _fx_text(self):
-        return self.app.child(name="Formula input", roleName="text").text
 
     def _labels(self):
         return [c.name or "" for c in self.app.findChildren(lambda c: c.roleName == "label")]
@@ -2113,10 +2110,15 @@ class TablesFormulaAutocompleteSmoke(TablesCellEntryMixin, BaseGUITestCase):
         self.wait_until(self._labels, lambda ls: any(l.startswith("SUMIF") for l in ls),
                         description="SUMIF among the suggestions")
         rawinput.keyCombo("Tab")
-        self.wait_until(self._fx_text, lambda t: t == "=SUM(",
-                        description="Tab to insert the first suggestion")
-        self.wait_until(self._labels, lambda ls: any(l.startswith("SUM(number1") for l in ls),
-                        description="the argument hint for SUM")
+        # GtkEntry's text isn't readable over AT-SPI here (it reads ''),
+        # so the insertion is observed through the popover: once "=SUM("
+        # is in the entry there is nothing left to complete, the
+        # suggestions go, and SUM's argument hint stays.
+        self.wait_until(
+            self._labels,
+            lambda ls: not any(l.startswith("SUMIF") for l in ls) and any(l.startswith("SUM(number1") for l in ls),
+            description="Tab to insert SUM( and leave its argument hint",
+        )
         self.assertIsNone(self.process.poll(), "tables crashed in the formula editor")
 
 
