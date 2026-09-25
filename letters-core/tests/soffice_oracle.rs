@@ -1002,6 +1002,36 @@ fn a_page_break_survives_a_conversion_between_the_two_formats() {
     );
 }
 
+/// A new Letters document opens in LibreOffice in Letters' default font,
+/// not a theme font: after LibreOffice saves it as .docx it reopens in
+/// Liberation Serif, and its .odt default style names Liberation Serif.
+#[test]
+fn a_new_document_keeps_its_font_through_lo() {
+    let Some(bin) = require_or_skip() else { return };
+    let dir = tempfile::tempdir().unwrap();
+    for to in ["docx", "odt"] {
+        let out = dir.path().join(to);
+        std::fs::create_dir_all(&out).unwrap();
+        let input = out.join("new.docx");
+        docx::write(&Document::from_plain_text("hello"), &input).unwrap();
+        let filter = if to == "docx" { "docx:MS Word 2007 XML" } else { "odt" };
+        let _ = soffice_convert(bin, &input, filter);
+        let converted = out.join(format!("new.{to}"));
+        assert!(converted.exists(), "soffice did not convert to {to}");
+        if to == "docx" {
+            let rt = docx::read(converted.to_str().unwrap()).unwrap();
+            let font = rt.paragraphs.iter().flat_map(|p| &p.runs).find_map(|r| r.style.font_family.clone()).or(rt.base_font.family);
+            assert_eq!(font.as_deref(), Some("Liberation Serif"), "LibreOffice's .docx reopens in another font");
+        } else {
+            let mut zip = zip::ZipArchive::new(std::fs::File::open(&converted).unwrap()).unwrap();
+            let mut styles = String::new();
+            std::io::Read::read_to_string(&mut zip.by_name("styles.xml").unwrap(), &mut styles).unwrap();
+            assert!(styles.contains("style:font-name=\"Liberation Serif\""), "LibreOffice's default font is not ours");
+            assert!(!styles.contains("Aptos"), "a theme font leaked into LibreOffice's styles");
+        }
+    }
+}
+
 /// The chips in `doc`, as (kind, value, label).
 fn chips_of(doc: &Document) -> Vec<(letters_core::chips::ChipKind, String, String)> {
     doc.paragraphs

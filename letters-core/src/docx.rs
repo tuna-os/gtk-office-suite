@@ -788,11 +788,31 @@ fn with_letters_styles(package: &[u8], base: &crate::model::BaseFont, heading_st
         if name == "word/styles.xml" {
             let xml = String::from_utf8(data).map_err(|e| e.to_string())?;
             data = patch_styles_xml(&xml, &defaults, &headings).into_bytes();
+        } else if name.starts_with("word/theme/") && name.ends_with(".xml") {
+            let xml = String::from_utf8(data).map_err(|e| e.to_string())?;
+            data = patch_theme_fonts(&xml, &family).into_bytes();
         }
         out.start_file(name, options).map_err(|e| e.to_string())?;
         std::io::Write::write_all(&mut out, &data).map_err(|e| e.to_string())?;
     }
     Ok(out.finish().map_err(|e| e.to_string())?.into_inner())
+}
+
+/// Name `family` as the theme's heading and body fonts (`a:majorFont` and
+/// `a:minorFont`'s Latin typeface). rdocx 0.14 writes Office's default
+/// theme, whose fonts are Aptos Display and Aptos: the text still renders
+/// in `family` (docDefaults names it outright), but Word offers the theme's
+/// fonts as the document's "(Headings)" and "(Body)" fonts, and anything
+/// that resolves a theme font would get Aptos, usually not installed.
+fn patch_theme_fonts(xml: &str, family: &str) -> String {
+    let mut xml = xml.to_string();
+    for scheme in ["<a:majorFont>", "<a:minorFont>"] {
+        let Some(at) = xml.find(scheme) else { continue };
+        let Some(latin) = xml[at..].find("<a:latin ").map(|l| at + l) else { continue };
+        let Some(end) = xml[latin..].find("/>").map(|e| latin + e + 2) else { continue };
+        xml.replace_range(latin..end, &format!("<a:latin typeface=\"{family}\"/>"));
+    }
+    xml
 }
 
 /// Replace `styles.xml`'s docDefaults and its Heading1–6 styles.
