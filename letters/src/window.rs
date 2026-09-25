@@ -265,6 +265,7 @@ impl LettersWindow {
             app.set_accels_for_action("app.toggle-ruler", &["<Primary><Shift>r"]);
             suite_common::actions::register_labels(&[("app.toggle-ruler", &suite_common::i18n("Toggle Ruler"))]);
         }
+        crate::focus_mode::attach(app, &suite_win.window, &suite_win.toolbar_view, &settings);
 
         // ── Paragraph styles, previewed; the headings outline ─────
         let style_picker = crate::style_picker::build(&tab_view);

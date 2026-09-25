@@ -63,6 +63,10 @@
       <default>true</default>
       <summary>Show documents in Print Layout (the laid-out pages; the default) rather than the pageless Draft view</summary>
     </key>
+    <key name="distraction-free" type="b">
+      <default>false</default>
+      <summary>Hide the window's bars while typing; moving the pointer brings them back</summary>
+    </key>
     <key name="zoom-level" type="d">
       <default>100.0</default>
       <range min="50" max="200"/>

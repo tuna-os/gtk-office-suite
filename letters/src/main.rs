@@ -18,6 +18,7 @@ mod printing;
 mod style_picker;
 mod outline;
 mod thumbnails;
+mod focus_mode;
 
 fn main() {
     let suite = suite_common::SuiteApp::new("org.tunaos.letters");
