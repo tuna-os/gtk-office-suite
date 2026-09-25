@@ -2116,12 +2116,14 @@ class TablesFormatInspectorSmoke(TablesCellEntryMixin, BaseGUITestCase):
         self._wait_for_a_new_document()
         self._put("A1", "x")
         self._put("B1", "y")
-        self.app.child(name="Format", roleName="toggle button").click()
+        # do_action, not click(): GTK 4 reports no screen extents over
+        # AT-SPI, so a coordinate click lands at the window's corner.
+        self.app.child(name="Format", roleName="toggle button").do_action(0)
         self.wait_until(lambda: self.app.child(name="Bold", roleName="toggle button").showing, bool,
                         description="the inspector to open")
         self._go("A1")
         self.assertFalse(self._pressed("Bold"), "A1 starts plain")
-        self.app.child(name="Bold", roleName="toggle button").click()
+        self.app.child(name="Bold", roleName="toggle button").do_action(0)
         self.wait_until(lambda: self._pressed("Bold"), bool, description="Bold to press")
         self._go("B1")
         self.wait_until(lambda: not self._pressed("Bold"), bool,

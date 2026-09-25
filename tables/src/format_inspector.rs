@@ -364,10 +364,16 @@ pub fn build(
         });
     }
 
-    // Show the right values the first time it opens.
+    // A closed inspector is not part of the window: an AdwOverlaySplitView
+    // keeps its hidden sidebar in the accessibility tree, where its combo
+    // rows were found by tests (and screen readers) looking for the sheet
+    // switcher. Show the right values each time it opens.
+    page.set_visible(false);
     {
         let sync = sync.clone();
+        let page = page.clone();
         split.connect_show_sidebar_notify(move |s| {
+            page.set_visible(s.shows_sidebar());
             if s.shows_sidebar() {
                 sync();
             }
