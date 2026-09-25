@@ -12,6 +12,7 @@ mod notes_pane;
 mod presenter_window;
 mod canvas_area;
 mod canvas_input;
+mod canvas_keys;
 mod sidebar;
 mod toolbar;
 mod transition;
