@@ -74,7 +74,7 @@ fn main() {
         let store = ws.borrow();
         let win = store.as_ref().unwrap();
         for file in files {
-            if let Some(path) = file.path() {
+            if let Some(path) = persistence::local_path(file, false, Some(&win.window)) {
                 let path_str = path.to_string_lossy().to_string();
                 if let Err(e) = win.open_path(&path_str) {
                     // stderr is not a user interface: launched from a file

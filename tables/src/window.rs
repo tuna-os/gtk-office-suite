@@ -1156,7 +1156,7 @@ impl TablesWindow {
                 dlg.save(parent_win.as_ref(), None::<&gio::Cancellable>,
                     move |result: Result<gio::File, glib::Error>| {
                         if let Ok(file) = result {
-                            if let Some(path) = file.path() {
+                            if let Some(path) = crate::persistence::local_path(&file, true, wr2.borrow().as_ref()) {
                                 let path_str = path.to_string_lossy().to_string();
                                 let mut st = s2.borrow_mut();
                                 // Sync sheet data to engine first
@@ -1169,7 +1169,7 @@ impl TablesWindow {
                                 }
                                 st.engine.evaluate();
                                 let parent_win = wr2.borrow().clone();
-                                if let Err(err_msg) = tables_core::export::to_pdf_with_setup(&st.engine, sheet_model.print_area, &sheet_model.page_setup, &path_str) {
+                                if let Err(err_msg) = tables_core::export::to_pdf_with_setup(&st.engine, sheet_model.print_area, &sheet_model.page_setup, &path_str).and_then(|()| suite_common::locations::commit_save(&path)) {
                                     let alert = adw::AlertDialog::builder()
                                         .heading(suite_common::i18n("Export Failed"))
                                         .body(&err_msg)
@@ -1566,7 +1566,7 @@ impl TablesWindow {
                     let slot = slot.clone();
                     dlg.save(Some(&win), None::<&gio::Cancellable>, move |result| {
                         if let Ok(file) = result {
-                            if let Some(path) = file.path() {
+                            if let Some(path) = crate::persistence::local_path(&file, true, Some(&win2)) {
                                 let path_str = path.to_string_lossy().to_string();
                                 match save_engine_to_xlsx(&path_str, &s.borrow()) {
                                     Ok(()) => {
@@ -1632,7 +1632,7 @@ impl TablesWindow {
                 dlg.open(Some(&w), None::<&gio::Cancellable>,
                     move |result: Result<gio::File, glib::Error>| {
                         if let Ok(file) = result {
-                            if let Some(path) = file.path() {
+                            if let Some(path) = crate::persistence::local_path(&file, false, Some(&w2)) {
                                 let path_str = path.to_string_lossy().to_string();
                                 // `load_workbook` owns the extension dispatch
                                 // so the dialog, drag-and-drop and CLI open all
@@ -1725,7 +1725,7 @@ impl TablesWindow {
                 dlg.save(Some(&w), None::<&gio::Cancellable>,
                     move |result: Result<gio::File, glib::Error>| {
                         if let Ok(file) = result {
-                            if let Some(path) = file.path() {
+                            if let Some(path) = crate::persistence::local_path(&file, true, Some(&w2)) {
                                 let path_str = path.to_string_lossy().to_string();
                                 let ss = s.borrow();
                                 match save_engine_to_xlsx(&path_str, &ss) {

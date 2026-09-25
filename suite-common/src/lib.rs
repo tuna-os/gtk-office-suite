@@ -11,6 +11,7 @@
 //   ToastManager      — toast notification system for save/error feedback
 
 pub mod file_dialogs;
+pub mod locations;
 pub mod autosave_notice;
 pub mod gtk_test;
 pub mod toast_manager;
@@ -409,7 +410,10 @@ where
             let paths: Vec<std::path::PathBuf> = file_list
                 .files()
                 .into_iter()
-                .filter_map(|f| f.path())
+                // Remote locations (GVfs) are staged to a local copy
+                // (RFC-0003); one that can't be read is reported, not
+                // silently dropped.
+                .filter_map(|f| locations::open_location(&f).map_err(|e| eprintln!("{e}")).ok())
                 .collect();
             if !paths.is_empty() {
                 on_files_dropped(paths);

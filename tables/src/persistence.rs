@@ -13,6 +13,7 @@
 use std::cell::RefCell;
 use std::rc::Rc;
 
+use gtk4::prelude::*;
 use tables_core::sheet::SheetModel;
 
 use crate::window::AppState;
@@ -61,7 +62,35 @@ pub(crate) fn save_engine_to_xlsx(path: &str, state: &AppState) -> Result<(), St
         return Err(unsupported_save_format_message(path));
     }
     let sheets: Vec<SheetModel> = state.sheets.iter().map(|s| s.borrow().clone()).collect();
-    tables_core::io::save_sheets_to_xlsx_with_engine(path, &sheets, Some(&state.engine))
+    tables_core::io::save_sheets_to_xlsx_with_engine(path, &sheets, Some(&state.engine))?;
+    // A document at a remote location (RFC-0003) is written to its staged
+    // copy above and uploaded here; a local path needs nothing.
+    suite_common::locations::commit_save(std::path::Path::new(path))
+}
+
+/// The local path for a location a dialog or the desktop handed over:
+/// its own path, or a staged copy of a remote one (RFC-0003). `for_save`
+/// stages a destination to write rather than downloading it. A location
+/// that can't be used is reported in a dialog, never silently ignored.
+pub(crate) fn local_path(
+    file: &gtk4::gio::File,
+    for_save: bool,
+    parent: Option<&impl IsA<gtk4::Widget>>,
+) -> Option<std::path::PathBuf> {
+    let staged = if for_save {
+        suite_common::locations::save_location(file)
+    } else {
+        suite_common::locations::open_location(file)
+    };
+    staged
+        .map_err(|e| {
+            let heading = if for_save { "Error saving file" } else { "Error opening file" };
+            use libadwaita::prelude::{AdwDialogExt, AlertDialogExt};
+            let alert = libadwaita::AlertDialog::builder().heading(suite_common::i18n(heading)).body(&e).build();
+            alert.add_response("ok", &suite_common::i18n("OK"));
+            alert.present(parent);
+        })
+        .ok()
 }
 
 pub(crate) fn autosave_bytes(state: &AppState) -> Result<Vec<u8>, String> {
