@@ -177,7 +177,17 @@ pub fn attach(ctl: &Ctl, grid: &gtk::DrawingArea, h: &gtk::Adjustment, refresh: 
         let (ctl, grid, h, refresh) = (ctl.clone(), grid.clone(), h.clone(), refresh.clone());
         keys.connect_key_pressed(move |_, key, _, mods| {
             if key == gtk::gdk::Key::Down && mods.contains(gtk::gdk::ModifierType::ALT_MASK) {
-                let col = ctl.borrow().state.borrow().sheet().selected_col;
+                let (row, col) = {
+                    let c = ctl.borrow();
+                    let state = c.state.borrow();
+                    let s = state.sheet();
+                    (s.selected_row, s.selected_col)
+                };
+                // A cell with a validation list opens its list instead
+                // (validation_list.rs), as in Excel and Calc.
+                if crate::validation_list::shows_arrow(&ctl.borrow().state.borrow().sheet(), row, col) {
+                    return gtk::glib::Propagation::Proceed;
+                }
                 open(&ctl, &grid, &h, &refresh, col);
                 return gtk::glib::Propagation::Stop;
             }

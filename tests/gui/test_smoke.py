@@ -2035,7 +2035,7 @@ def minimal_pptx_bytes(text):
     return buffer.getvalue()
 
 
-def minimal_xlsx_bytes(a1_value):
+def minimal_xlsx_bytes(a1_value, after_sheet_data=""):
     """The smallest xlsx package Tables will open, with `a1_value` in A1.
 
     Hand-built rather than produced by Tables itself, because two journeys
@@ -2067,7 +2067,7 @@ def minimal_xlsx_bytes(a1_value):
  <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/>
 </Relationships>""",
         "xl/worksheets/sheet1.xml": f"""<?xml version="1.0" encoding="UTF-8"?>
-<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetData><row r="1"><c r="A1"><v>{a1_value}</v></c></row></sheetData></worksheet>""",
+<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetData><row r="1"><c r="A1"><v>{a1_value}</v></c></row></sheetData>{after_sheet_data}</worksheet>""",
     }
     buffer = io.BytesIO()
     with zipfile.ZipFile(buffer, "w", zipfile.ZIP_DEFLATED) as book:
@@ -2131,6 +2131,71 @@ class TablesNotesSmoke(BaseGUITestCase):
                                    description="the note in the saved workbook's comments")
         self.assertIn('ref="A1"', comments)
         self.assertIsNone(self.process.poll(), "tables crashed editing a note")
+
+
+class TablesValidationListSmoke(BaseGUITestCase):
+    """List validation: a cell whose validation is a list offers it. Alt+Down
+    on the cell (or its arrow) opens the list at the cell, choosing an item
+    puts it in the cell, and the saved workbook keeps both the value and
+    the validation."""
+
+    app_name = "tables"
+
+    def setUp(self):
+        self._dir = self.temp_dir(prefix="tables-validation-")
+        self._doc = os.path.join(self._dir, "colours.xlsx")
+        validation = ('<dataValidations count="1"><dataValidation type="list" allowBlank="1" sqref="B1:B3">'
+                      '<formula1>"Red,Green,Blue"</formula1></dataValidation></dataValidations>')
+        with open(self._doc, "wb") as book:
+            book.write(minimal_xlsx_bytes("1", after_sheet_data=validation))
+        self.launch_args = [self._doc]
+        super().setUp()
+
+    def test_a_list_item_is_picked_into_the_cell_and_saved(self):
+        from dogtail import rawinput
+        import zipfile
+
+        time.sleep(1.0)
+        rawinput.keyCombo("<Control>g")
+        time.sleep(0.4)
+        rawinput.typeText("B1")
+        rawinput.keyCombo("Return")
+        time.sleep(0.5)
+        # The jump leaves focus in the formula entry; Escape hands it to
+        # the grid, which Alt+Down is for.
+        rawinput.keyCombo("Escape")
+        time.sleep(0.4)
+
+        def open_list():
+            rawinput.keyCombo("<Alt>Down")
+            time.sleep(0.4)
+            return [c for c in self.app.findChildren(
+                lambda c: c.roleName == "push button" and c.name == "Green")]
+        green = self.wait_until(open_list, lambda found: bool(found), interval=0.6,
+                                description="the list's items")[0]
+        self.assertTrue(self.app.findChildren(lambda c: c.roleName == "push button" and c.name == "Blue"),
+                        "the list shows every item")
+        green.do_action(0)
+
+        self.wait_until(
+            lambda: [c.name for c in self.app.findChildren(lambda c: (c.name or "").startswith("B1"))],
+            lambda names: "B1: Green" in names,
+            timeout=10.0,
+            description="B1 to hold Green",
+        )
+        rawinput.keyCombo("<Control>s")
+
+        def saved():
+            try:
+                with zipfile.ZipFile(self._doc) as book:
+                    return book.read("xl/worksheets/sheet1.xml").decode() + "".join(
+                        book.read(n).decode() for n in book.namelist() if n == "xl/sharedStrings.xml")
+            except (zipfile.BadZipFile, OSError, KeyError):
+                return ""
+        xml = self.wait_until(saved, lambda x: "Green" in x and "dataValidation" in x, timeout=10.0,
+                              description="the value and the validation in the saved workbook")
+        self.assertIn("Red,Green,Blue", xml)
+        self.assertIsNone(self.process.poll(), "tables crashed picking from a list")
 
 
 class TablesUndoSaveReopenSmoke(BaseGUITestCase):

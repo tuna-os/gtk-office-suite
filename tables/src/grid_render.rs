@@ -540,6 +540,9 @@ pub fn draw_grid(
             if sheet.notes[r][c].is_some() {
                 crate::notes::draw_marker(cr, cx, cy, cw);
             }
+            if is_sel && crate::validation_list::shows_arrow(sheet, r, c) {
+                crate::validation_list::draw_arrow(cr, (cx, cy, cw, rh), is_dark);
+            }
         }
     }
     for &(x, y, w, h, border) in &bordered {

@@ -816,3 +816,39 @@ fn notes_survive_calc_both_ways() {
     assert_eq!(from_xlsx[0].notes[1][1].as_deref(), Some("Check with Ann"), "the note after Calc's xlsx");
     assert_eq!(from_xlsx[0].notes[3][0].as_deref(), Some("Two\nlines"));
 }
+
+/// A list validation we write is one Calc keeps: through Calc's ods and
+/// Calc's xlsx it reads back with the same items, on the same cells.
+#[test]
+fn list_validation_survives_calc_both_ways() {
+    use tables_core::sheet::ValidationRule;
+    if !require_or_skip() { return; }
+    let dir = tempfile::tempdir().unwrap();
+    let ours = dir.path().join("lists.xlsx");
+    let mut sheet = SheetModel::new("Sheet1", 5, 3, 0);
+    let colours = ValidationRule::List(vec!["Red".into(), "Green".into(), "Blue".into()]);
+    for r in 1..4 {
+        sheet.validations[r][1] = Some(colours.clone());
+    }
+    sheet.validations[0][2] = Some(ValidationRule::WholeNumber { min: Some(1), max: Some(10) });
+    save_sheets_to_xlsx(ours.to_str().unwrap(), &[sheet]).unwrap();
+
+    let ods = calc_convert(&ours, "ods");
+    let (_, from_ods) = load_workbook(ods.to_str().unwrap()).expect("we read Calc's ods");
+    for r in 1..4 {
+        assert_eq!(from_ods[0].validations[r][1].as_ref(), Some(&colours), "B{} after Calc's ods", r + 1);
+    }
+    assert_eq!(from_ods[0].validations[0][1], None);
+    assert_eq!(from_ods[0].validations[0][2], Some(ValidationRule::WholeNumber { min: Some(1), max: Some(10) }));
+
+    let calc_dir = dir.path().join("calc");
+    std::fs::create_dir_all(&calc_dir).unwrap();
+    let copy = calc_dir.join("lists.ods");
+    std::fs::copy(&ods, &copy).unwrap();
+    let back = calc_convert(&copy, "xlsx");
+    let (_, from_xlsx) = load_workbook(back.to_str().unwrap()).expect("we read Calc's xlsx");
+    for r in 1..4 {
+        assert_eq!(from_xlsx[0].validations[r][1].as_ref(), Some(&colours), "B{} after Calc's xlsx", r + 1);
+    }
+    assert_eq!(from_xlsx[0].validations[0][2], Some(ValidationRule::WholeNumber { min: Some(1), max: Some(10) }));
+}
