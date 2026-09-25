@@ -3158,9 +3158,15 @@ class DecksFormatInspectorSmoke(BaseGUITestCase):
             # do_action, not click(): GTK 4 reports no screen extents
             # over AT-SPI, so a coordinate click lands at the corner.
             toggle.do_action(0)
+        # A shape opens on the Style tab. Only the visible tab's widgets
+        # are in the tree, so switch to Arrange first (the switcher's
+        # buttons are named after their pages).
+        tab = self.wait_until(lambda: self.app.child(name="Arrange"), lambda t: t is not None,
+                              description="the inspector's Arrange tab for the inserted shape")
+        tab.do_action(0)
         back = self.wait_until(lambda: self.app.child(name="Send to Back", roleName="push button"),
                                lambda b: b is not None and b.showing,
-                               description="the inspector to show the inserted shape")
+                               description="the Arrange tab's order buttons")
         back.do_action(0)
         self.wait_until(lambda: self._kinds(aid), lambda k: k == ["Shape", "TextBox"], interval=0.5,
                         description="the shape to go behind the text box")
