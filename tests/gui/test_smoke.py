@@ -247,17 +247,26 @@ class LettersCloseGuardSmoke(BaseGUITestCase):
 
 
 class LettersSaveFailureSmoke(BaseGUITestCase):
-    """Failed writes must never retire edits or the last recovery checkpoint."""
+    """Failed writes must never retire edits or the last recovery checkpoint.
+
+    The document is styled Unicode, not plain ASCII, so the journey that
+    recovers from a failure and reopens (#436's "matching styled Unicode
+    content") compares headings, bold runs, CJK, a combining mark, an emoji
+    and RTL text rather than one word. The RTL run is kept away from the
+    end of the document because every journey types its edit at Ctrl+End.
+    """
 
     app_name = "letters"
+
+    ORIGINAL = "# Überschrift 見出し\n\nשלום **café** é 😀 original\n"
 
     def setUp(self):
         self._dir = self.temp_dir(prefix="letters-save-failure-")
         self._source = os.path.join(self._dir, "source")
         os.mkdir(self._source)
         self._path = os.path.join(self._source, "document.md")
-        with open(self._path, "w") as stream:
-            stream.write("original")
+        with open(self._path, "w", encoding="utf-8") as stream:
+            stream.write(self.ORIGINAL)
         self.launch_args = [self._path]
         self._state = self.isolate_autosave_state()
         self.isolate_snapshot()
@@ -294,8 +303,8 @@ class LettersSaveFailureSmoke(BaseGUITestCase):
         self.assertEqual(self.trigger_snapshot("org.tunaos.letters"), self._edited)
         for path, content in self._checkpoint.items():
             self.assertEqual(path.read_bytes(), content, f"recovery checkpoint changed: {path}")
-        with open(os.path.join(self._backup, "document.md")) as stream:
-            self.assertEqual(stream.read(), "original")
+        with open(os.path.join(self._backup, "document.md"), encoding="utf-8") as stream:
+            self.assertEqual(stream.read(), self.ORIGINAL)
 
     def test_failed_save_retains_edits_and_close_guard(self):
         self._edit_and_checkpoint()
@@ -326,10 +335,170 @@ class LettersSaveFailureSmoke(BaseGUITestCase):
         # Ordinary save must still target the original path after cancellation.
         self.gapplication_action("org.tunaos.letters", "save-file")
         def saved():
-            with open(self._path) as stream:
+            with open(self._path, encoding="utf-8") as stream:
                 return "unsaved edit" in stream.read()
         self.wait_for_condition(saved, description="save to original path after cancellation")
         self.assertEqual(self.trigger_snapshot("org.tunaos.letters"), self._edited)
+
+    def _saved_to_original(self):
+        def saved():
+            with open(self._path, encoding="utf-8") as stream:
+                return "unsaved edit" in stream.read()
+        return self.wait_for_condition(saved, description="a save to the original path")
+
+    def _save_as(self, path):
+        from dogtail import tree
+        self.gapplication_action("org.tunaos.letters", "save-file-as")
+        entry = self.wait_for_condition(
+            lambda: tree.root.findChild(lambda n: n.name == "Name:" and n.roleName == "text"),
+            description="the Save As name entry",
+        )
+        entry.text = path
+        time.sleep(0.3)
+        tree.root.findChild(lambda n: n.name == "Save" and n.roleName == "push button").do_action(0)
+
+    def test_failed_save_as_keeps_identity_edits_and_checkpoint(self):
+        """#436: a Save As that fails after the chooser returned is not a
+        cancel — the error must show, and nothing may move: not the edits,
+        not the recovery checkpoint, and not the document's identity. The
+        last is checked by what a plain Save does next: it must go to the
+        original path, not to the name the failed Save As was given.
+
+        The failure is a destination Letters has no writer for, which fails
+        the same way for every user, root included."""
+        self._edit_and_checkpoint()
+        refused = os.path.join(self._dir, "report.rtf")
+        self._save_as(refused)
+        self.wait_for_node(name="Could not save document")
+        self.assertIsNone(self.process.poll())
+        self.assertEqual(self.trigger_snapshot("org.tunaos.letters"), self._edited)
+        for path, content in self._checkpoint.items():
+            self.assertEqual(path.read_bytes(), content, f"recovery checkpoint changed: {path}")
+        with open(self._path, encoding="utf-8") as stream:
+            self.assertEqual(stream.read(), self.ORIGINAL, "the original changed on a failed Save As")
+        self.assertFalse(os.path.exists(refused), "a refused Save As wrote a file")
+        self.wait_for_node(name="OK", roleName="push button").do_action(0)
+
+        self.gapplication_action("org.tunaos.letters", "save-file")
+        self._saved_to_original()
+        self.assertFalse(os.path.exists(refused), "Save went to the failed Save As name")
+
+    def test_a_save_that_succeeds_after_a_failure_closes_and_reopens_intact(self):
+        """#436's closing acceptance: after a failed save, a successful one
+        must clear the close guard, and the file must reopen as exactly the
+        document that was in the editor — styled Unicode included."""
+        self._edit_and_checkpoint()
+        self._make_destination_unavailable()
+        self.gapplication_action("org.tunaos.letters", "save-file")
+        self._assert_error_preserves_work()
+        self.wait_for_node(name="OK", roleName="push button").do_action(0)
+
+        # The destination comes back; the same Save now has to succeed.
+        os.rename(self._backup, self._source)
+        self.gapplication_action("org.tunaos.letters", "save-file")
+        self._saved_to_original()
+
+        # Clean now, so closing must not ask anything — the window goes.
+        self.wait_for_node(name="Close", roleName="push button").do_action(0)
+        self.assertIsNotNone(self.wait_for_process_exit(),
+                             "a document saved after a failure still blocked the close")
+
+        self.relaunch_app(launch_args=[self._path])
+        self.wait_until(
+            lambda: self.trigger_snapshot("org.tunaos.letters"),
+            lambda snapshot: snapshot == self._edited,
+            description="the reopened file to match the edited document",
+        )
+
+
+class LettersMultiTabSaveFailureSmoke(BaseGUITestCase):
+    """#436: closing a window whose Save All fails on one tab must stop at
+    that tab and keep every other one — a failure may not discard work in a
+    tab it never reached, and a tab it did reach must not lose its own.
+
+    Two named documents in separate directories; only the first one's
+    directory is taken away. The second is opened by a second launch, which
+    GApplication forwards to the running instance as a new tab.
+    """
+
+    app_name = "letters"
+
+    def setUp(self):
+        self._dir = self.temp_dir(prefix="letters-multitab-failure-")
+        self._first_dir = os.path.join(self._dir, "first")
+        self._second_dir = os.path.join(self._dir, "second")
+        os.mkdir(self._first_dir)
+        os.mkdir(self._second_dir)
+        self._first = os.path.join(self._first_dir, "alpha.md")
+        self._second = os.path.join(self._second_dir, "beta.md")
+        for path, text in ((self._first, "alpha original"), (self._second, "beta original")):
+            with open(path, "w", encoding="utf-8") as stream:
+                stream.write(text)
+        self.launch_args = [self._first]
+        self._state = self.isolate_autosave_state()
+        self.isolate_snapshot()
+        self.isolate_gsettings()
+        super().setUp()
+
+    def _type_edit(self, marker):
+        from dogtail import rawinput
+        rawinput.keyCombo("<Control>End")
+        rawinput.typeText(marker)
+        self.wait_until(
+            lambda: self.trigger_snapshot("org.tunaos.letters"),
+            lambda snapshot: marker in "".join(
+                run["text"] for para in snapshot["paragraphs"] for run in para["runs"]),
+            description=f"the edit {marker!r} in the active tab",
+        )
+
+    def _tabs(self):
+        return [node.name for node in self.app.findChildren(lambda n: n.roleName == "page tab")]
+
+    def test_a_failed_save_all_keeps_every_tab_that_was_not_saved(self):
+        import subprocess
+        from pathlib import Path
+        self.wait_for_node(roleName="text")
+        self._type_edit(" alpha edit")
+
+        env = os.environ.copy()
+        env["GDK_BACKEND"] = "x11"
+        env.update(getattr(self, "launch_env", {}))
+        subprocess.run([self.bin_path, self._second], env=env, timeout=15, check=False,
+                       stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        self.wait_until(self._tabs, lambda tabs: len(tabs) == 2,
+                        description="the second document to open as a second tab")
+        self._type_edit(" beta edit")
+
+        self.gapplication_action("org.tunaos.letters", "autosave-now")
+        snapshots = self.wait_until(
+            lambda: sorted(Path(self._state).rglob("*.snapshot")),
+            lambda found: len(found) == 2,
+            description="a recovery checkpoint for each dirty tab",
+        )
+        checkpoint = {path: path.read_bytes() for path in snapshots}
+
+        os.rename(self._first_dir, self._first_dir + "-gone")
+        self.wait_for_node(name="Close", roleName="push button").do_action(0)
+        self.wait_for_node(name="Save All", roleName="push button").do_action(0)
+        self.wait_for_node(name="Could not save document")
+        self.assertIsNone(self.process.poll(), "a failed Save All closed the window")
+
+        # The failed tab is still open, and its checkpoint is untouched.
+        tabs = self._tabs()
+        self.assertTrue(any("alpha" in name for name in tabs), f"the failed tab was discarded: {tabs}")
+        # A checkpoint records its document's original path, which is how
+        # the first tab's is told apart from the second's.
+        alpha_snapshot = next(p for p, content in checkpoint.items() if b"alpha.md" in content)
+        self.assertEqual(alpha_snapshot.read_bytes(), checkpoint[alpha_snapshot],
+                         "the failed tab's recovery checkpoint changed")
+        # The other tab's work is either saved or still open — never lost.
+        with open(self._second, encoding="utf-8") as stream:
+            beta_saved = "beta edit" in stream.read()
+        beta_open = any("beta" in name for name in tabs)
+        self.assertTrue(beta_saved or beta_open,
+                        f"the other tab's edit was neither saved nor kept open: {tabs}")
+        with open(os.path.join(self._first_dir + "-gone", "alpha.md"), encoding="utf-8") as stream:
+            self.assertEqual(stream.read(), "alpha original")
 
 
 class UnattendedAutosaveMixin:
