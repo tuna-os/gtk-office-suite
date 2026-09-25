@@ -72,7 +72,7 @@ jobs:
           cache-to: type=gha,mode=max,scope=render-lab
 
       - name: Cache cargo
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: |
             ~/.cache/render-lab-cargo
@@ -89,7 +89,7 @@ jobs:
 
       - name: Upload captures
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: render-lab-${{ matrix.app }}
           path: |
@@ -127,19 +127,44 @@ jobs:
       # captures arrive as <fixture>/... and must be put back under <app>/.
       # Merging them into one directory lost the app level, the compare
       # found nothing, and the report came out empty but green.
-      - name: Download captures
-        uses: actions/download-artifact@v4
+      #
+      # Each app is downloaded by name straight into render-lab-out/<app>.
+      # A `pattern:` download is not safe here: since download-artifact v5,
+      # a pattern that matches exactly one artifact is extracted flat into
+      # `path` with no <artifact-name>/ level, so on a run where only one lab
+      # uploaded, its fixtures would land at the top and the app would drop
+      # out of the report. A lab that uploaded nothing leaves its download
+      # failed (continue-on-error) and is named by the check below.
+      - name: Download captures (letters)
+        continue-on-error: true
+        uses: actions/download-artifact@v8
         with:
-          pattern: render-lab-*
-          path: render-lab-captures
+          name: render-lab-letters
+          path: render-lab-out/letters
 
-      - name: Arrange captures by app
+      - name: Download captures (tables)
+        continue-on-error: true
+        uses: actions/download-artifact@v8
+        with:
+          name: render-lab-tables
+          path: render-lab-out/tables
+
+      - name: Download captures (decks)
+        continue-on-error: true
+        uses: actions/download-artifact@v8
+        with:
+          name: render-lab-decks
+          path: render-lab-out/decks
+
+      - name: Check every app's captures arrived
         run: |
           mkdir -p render-lab-out
-          for app in letters tables decks; do
-            [ -d "render-lab-captures/render-lab-$app" ] && mv "render-lab-captures/render-lab-$app" "render-lab-out/$app"
-          done
           ls render-lab-out
+          for app in letters tables decks; do
+            n=$(find "render-lab-out/$app" -name '*.png' 2>/dev/null | wc -l)
+            echo "$app: $n captures"
+            [ "$n" -gt 0 ] || echo "::warning::no render-lab captures for $app; its lab job did not upload, so it is missing from this report"
+          done
 
       # The whole-suite report, and the baseline this run would lock in: an
       # agent or reviewer can take `baseline.proposed.json` from the
@@ -162,7 +187,7 @@ jobs:
       - name: Upload report
         if: always()
         id: upload
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: render-parity-report
           path: |
@@ -220,7 +245,7 @@ jobs:
           manifest-path: flatpak/org.tunaos.${{ matrix.app }}.json
           cache-key: render-lab-flatpak-${{ matrix.app }}-${{ github.sha }}
           upload-artifact: false
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: bundle-${{ matrix.app }}
           path: ${{ matrix.app }}.flatpak
@@ -244,14 +269,14 @@ jobs:
           sudo udevadm control --reload-rules && sudo udevadm trigger --name-match=kvm
           sudo apt-get update && sudo apt-get install -y --no-install-recommends qemu-system-x86 qemu-utils cloud-image-utils python3-pil
 
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           pattern: bundle-*
           path: bundles
           merge-multiple: true
 
       - name: Cache prepared guest image
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: vm-work
           key: render-lab-vm-${{ hashFiles('tools/render-lab/vm/prepare.sh', 'tools/render-lab/vm/user-data') }}
@@ -277,7 +302,7 @@ jobs:
 
       - name: Upload VM report
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: render-parity-vm-report
           path: |
