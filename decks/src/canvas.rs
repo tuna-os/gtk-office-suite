@@ -762,7 +762,8 @@ pub fn draw_table(
     font: &pango::FontDescription,
 ) {
     let (cols, rows) = table.fitted(w, h);
-    let (pad_x, pad_y) = (9.6 * scale, 4.8 * scale);
+    let (mx, my) = table.margins();
+    let (pad_x, pad_y) = (mx * scale, my * scale);
     let mut cy = y;
     for (r, rh) in rows.iter().enumerate() {
         let mut cx = x;

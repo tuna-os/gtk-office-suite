@@ -514,6 +514,7 @@ pub(crate) fn frame_tables(xml: &str, theme: &Theme) -> Vec<FrameTable> {
                     first_row: flag("firstRow"),
                     band_row: flag("bandRow"),
                     accent: theme.slot("accent1"),
+                    cell_margins: None,
                 },
             })
         })
