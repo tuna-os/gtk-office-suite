@@ -283,9 +283,11 @@ fn lost(
 pub fn compatibility_report(doc: &Document, format: SaveFormat) -> CompatibilityReport {
     let mut report = CompatibilityReport::new(format.extension());
     let present = survey(doc);
-    // No file format keeps a smart chip as a chip yet: every writer saves
-    // its label, and a link or person chip's hyperlink.
-    lost(&mut report, present.chip, "smart-chips", "Smart chips", "each chip is saved as its text, and as a link where it has one; it opens as text");
+    // .docx and .odt keep smart chips as content controls (docx_chips,
+    // odt::chip_xml); the text formats save a chip's label and link.
+    if !matches!(format, SaveFormat::Odt | SaveFormat::Docx) {
+        lost(&mut report, present.chip, "smart-chips", "Smart chips", "each chip is saved as its text, and as a link where it has one; it opens as text");
+    }
     match format {
         // The package formats are the reference targets: they carry the
         // whole model, and opaque parts on top of it.

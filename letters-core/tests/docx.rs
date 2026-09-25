@@ -15,6 +15,15 @@ fn round_trip(doc: &Document) -> Document {
     docx::read(path).expect("read docx")
 }
 
+/// Smart chips reopen as chips: a date is a Word date content control, a
+/// link or person chip its hyperlink in a tagged control.
+#[test]
+fn smart_chips_survive() {
+    let d = letters_core::chips::sample_document();
+    let rt = round_trip(&d);
+    assert_eq!(rt.paragraphs[0].runs, d.paragraphs[0].runs);
+}
+
 #[test]
 fn plain_paragraphs_survive() {
     let d = Document::from_plain_text("first paragraph\nsecond paragraph");

@@ -111,12 +111,14 @@ pub fn attach(
     let suggestions: std::rc::Rc<std::cell::RefCell<Vec<Run>>> = Default::default();
     let replace_at = std::rc::Rc::new(std::cell::Cell::new(false));
     let refill = {
-        let (list, suggestions) = (list.clone(), suggestions.clone());
+        let (list, suggestions, buf) = (list.clone(), suggestions.clone(), buf.clone());
         move |query: &str| {
             while let Some(r) = list.first_child() {
                 list.remove(&r);
             }
-            let now = chips::suggestions(query, today());
+            // People already mentioned come first (Docs does the same).
+            let known = crate::live::of(&buf).map(|m| chips::people(m.borrow_mut().document(&buf))).unwrap_or_default();
+            let now = chips::suggestions(query, today(), &known);
             for run in &now {
                 list.append(&suggestion_row(run));
             }
