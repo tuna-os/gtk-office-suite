@@ -3506,6 +3506,52 @@ class LettersStructuredEditingSmoke(BaseGUITestCase):
         self.assertIsNone(self.process.poll(), "letters crashed during list editing")
 
 
+class LettersPrintLayoutEditingSmoke(BaseGUITestCase):
+    """Typing in Print Layout edits the document (ADR 0010, stage 3).
+
+    The laid-out page view used to be read-only. It now edits the tab's
+    buffer: keystrokes go through its input method into the same buffer the
+    Draft view shows, so the document snapshot must hold what was typed on
+    the page, and switching back to Draft must show it too.
+    """
+
+    app_name = "letters"
+
+    def setUp(self):
+        self._snapshot_path = self.isolate_snapshot(prefix="letters-print-layout-")
+        super().setUp()
+
+    def _text(self, snapshot):
+        return "\n".join("".join(r["text"] for r in p["runs"]) for p in snapshot["paragraphs"])
+
+    def test_typing_in_print_layout_reaches_the_document(self):
+        from dogtail import rawinput
+
+        self.wait_for_node(name="New Document", roleName="push button").do_action(0)
+        self.wait_for_node(roleName="text")
+        rawinput.typeText("draft")
+        self.wait_for_node(name="1 word", roleName="label")
+
+        # Stateful toggle: activating it switches the tab to Print Layout
+        # and gives the page view the keyboard focus.
+        self.gapplication_action("org.tunaos.letters", "print-layout")
+        time.sleep(1.0)
+        rawinput.typeText(" page")
+        rawinput.keyCombo("Return")
+        rawinput.typeText("more")
+
+        snapshot = self.wait_for_condition(
+            lambda: (lambda s: s if self._text(s) == "draft page\nmore" else None)(
+                self.trigger_snapshot("org.tunaos.letters")),
+            description="the text typed on the page view in the document")
+        self.assertEqual(self._text(snapshot), "draft page\nmore")
+
+        # Back in Draft, the editor shows the same text.
+        self.gapplication_action("org.tunaos.letters", "print-layout")
+        self.wait_for_node(name="3 words", roleName="label")
+        self.assertIsNone(self.process.poll(), "letters crashed while editing on the page view")
+
+
 class _SettingsIsolationProbe:
     """A journey's settings must not reach the next journey, or the machine.
 

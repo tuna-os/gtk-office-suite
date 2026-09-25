@@ -1,9 +1,11 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 //
-// PageView — the read-only Print Layout view (ADR 0010). It draws the
-// pages of a `letters_core::layout::pango::Typeset`: the same render tree
-// and the same `draw_page` that print and PDF use, so what it shows is
-// where the lines and page breaks really are.
+// PageView — the Print Layout view (ADR 0010). It draws the pages of a
+// `letters_core::layout::pango::Typeset`: the same render tree and the same
+// `draw_page` that print and PDF use, so what it shows is where the lines
+// and page breaks really are. It edits the tab's GtkTextBuffer (still the
+// document's live state; see page_edit.rs): the caret and selection are the
+// buffer's, mapped onto the laid-out pages.
 //
 // Zoom is physical: 100% is 96/72 px per point, a Letter page is 816 px
 // wide, as in every other word processor and in the render lab's
@@ -11,7 +13,7 @@
 
 use gtk4::{self as gtk, glib, graphene, gsk, prelude::*};
 use gtk4::subclass::prelude::*;
-use letters_core::layout::pango::Typeset;
+use letters_core::layout::pango::{TextPos, Typeset};
 use std::cell::{Cell, RefCell};
 
 /// Gap between pages and around them, in pixels.
@@ -26,6 +28,11 @@ mod imp {
     #[derive(Default)]
     pub struct PageView {
         pub typeset: RefCell<Option<Typeset>>,
+        /// Buffer offset where each laid-out paragraph's text starts
+        /// (`bridge::capture_with_starts`, taken with the typeset).
+        pub starts: RefCell<Vec<usize>>,
+        /// The buffer this view edits, once editable.
+        pub buffer: RefCell<Option<gtk::TextBuffer>>,
         /// Zoom percentage (100 = physical size).
         pub zoom: Cell<f64>,
     }
@@ -87,7 +94,28 @@ mod imp {
                 cr.rectangle(0.0, 0.0, w, h);
                 cr.clip();
                 cr.scale(scale, scale);
+                let (caret, selection) = obj.caret_and_selection(typeset);
+                // Selection behind the text, caret in front of it. Neither
+                // is document content, so a render-lab capture leaves them
+                // out, as it hides the Draft editor's caret.
+                let chrome = !suite_common::render_dump::active();
+                if chrome {
+                    cr.set_source_rgba(0.21, 0.52, 0.89, 0.30);
+                    for (page, x, top, w, h) in &selection {
+                        if *page == index {
+                            cr.rectangle(*x, *top, *w, *h);
+                        }
+                    }
+                    let _ = cr.fill();
+                }
                 typeset.draw_page(&cr, index);
+                if let (true, Some(c)) = (chrome && obj.has_focus() && selection.is_empty(), caret) {
+                    if c.page == index {
+                        cr.set_source_rgb(0.0, 0.0, 0.0);
+                        cr.rectangle(c.x_pt, c.top_pt, 1.0 / scale, c.height_pt);
+                        let _ = cr.fill();
+                    }
+                }
                 drop(cr);
                 let to_page = gsk::Transform::new().translate(&graphene::Point::new(x as f32, y as f32));
                 snapshot.append_node(gsk::TransformNode::new(&node, Some(&to_page)));
@@ -113,11 +141,113 @@ impl PageView {
         glib::Object::builder().build()
     }
 
-    /// Show `typeset`'s pages.
-    pub fn set_typeset(&self, typeset: Typeset) {
+    /// Show `typeset`'s pages. `starts` maps its paragraphs to the buffer
+    /// (`bridge::capture_with_starts`).
+    pub fn set_typeset(&self, typeset: Typeset, starts: Vec<usize>) {
         self.imp().typeset.replace(Some(typeset));
+        self.imp().starts.replace(starts);
         self.queue_resize();
         self.queue_draw();
+    }
+
+    /// The buffer this view edits.
+    pub fn buffer(&self) -> Option<gtk::TextBuffer> {
+        self.imp().buffer.borrow().clone()
+    }
+
+    pub(crate) fn set_buffer(&self, buf: &gtk::TextBuffer) {
+        self.imp().buffer.replace(Some(buf.clone()));
+    }
+
+    /// The document position of buffer offset `off`.
+    fn text_pos(&self, typeset: &Typeset, off: usize) -> TextPos {
+        let (para, offset) = crate::bridge::paragraph_offset(typeset.document(), &self.imp().starts.borrow(), off);
+        TextPos { para, offset }
+    }
+
+    /// The buffer offset of document position `pos`.
+    fn buffer_off(&self, typeset: &Typeset, pos: TextPos) -> Option<usize> {
+        let para = typeset.document().paragraphs.get(pos.para)?;
+        let start = *self.imp().starts.borrow().get(pos.para)?;
+        Some(crate::bridge::buffer_offset(para, start, pos.offset))
+    }
+
+    /// Caret and selection rectangles for the buffer's current marks.
+    fn caret_and_selection(
+        &self,
+        typeset: &Typeset,
+    ) -> (Option<letters_core::layout::pango::Caret>, Vec<letters_core::layout::pango::SelectionRect>) {
+        let Some(buf) = self.buffer() else { return (None, Vec::new()) };
+        let insert = buf.iter_at_mark(&buf.get_insert()).offset().max(0) as usize;
+        let bound = buf.iter_at_mark(&buf.selection_bound()).offset().max(0) as usize;
+        let caret = typeset.caret(self.text_pos(typeset, insert));
+        let selection = if insert == bound {
+            Vec::new()
+        } else {
+            typeset.selection_rects(self.text_pos(typeset, insert), self.text_pos(typeset, bound))
+        };
+        (caret, selection)
+    }
+
+    /// The page under widget point (`x`, `y`), and the point in that page's
+    /// points. A point between pages belongs to the nearer one.
+    fn page_point(&self, x: f64, y: f64) -> Option<(usize, f64, f64)> {
+        let n = self.page_count();
+        let page = (0..n).min_by(|&a, &b| {
+            let d = |i: usize| {
+                let (_, py, _, ph) = self.page_rect(i);
+                if y < py { py - y } else if y > py + ph { y - py - ph } else { 0.0 }
+            };
+            d(a).partial_cmp(&d(b)).unwrap_or(std::cmp::Ordering::Equal)
+        })?;
+        let (px, py, _, _) = self.page_rect(page);
+        let s = self.scale();
+        Some((page, (x - px) / s, (y - py) / s))
+    }
+
+    /// The buffer offset nearest to widget point (`x`, `y`).
+    pub fn buffer_offset_at(&self, x: f64, y: f64) -> Option<usize> {
+        let typeset = self.imp().typeset.borrow();
+        let typeset = typeset.as_ref()?;
+        let (page, xp, yp) = self.page_point(x, y)?;
+        let pos = typeset.hit_test(page, xp, yp)?;
+        self.buffer_off(typeset, pos)
+    }
+
+    /// The caret box for buffer offset `off`, in widget pixels: (x, y, h).
+    pub fn caret_rect(&self, off: usize) -> Option<(f64, f64, f64)> {
+        let typeset = self.imp().typeset.borrow();
+        let typeset = typeset.as_ref()?;
+        let c = typeset.caret(self.text_pos(typeset, off))?;
+        let (px, py, _, _) = self.page_rect(c.page);
+        let s = self.scale();
+        Some((px + c.x_pt * s, py + c.top_pt * s, c.height_pt * s))
+    }
+
+    /// The buffer offset one line above (`dir` < 0) or below the caret at
+    /// `off`, keeping its x: the next line's nearest position, across page
+    /// boundaries. `None` at the first or last line.
+    pub fn offset_on_adjacent_line(&self, off: usize, dir: i32) -> Option<usize> {
+        let (x, y, h) = self.caret_rect(off)?;
+        // Step past the gap between pages too.
+        for step in [h * 0.75, h + GAP_PX + 4.0] {
+            let ty = if dir < 0 { y - step * 0.5 - 1.0 } else { y + h + step * 0.5 };
+            let target = self.buffer_offset_at(x, ty)?;
+            if let Some((_, ny, _)) = self.caret_rect(target) {
+                if (dir < 0 && ny < y - 0.5) || (dir > 0 && ny > y + 0.5) {
+                    return Some(target);
+                }
+            }
+        }
+        None
+    }
+
+    /// The buffer offsets of the start and end of the laid-out line holding
+    /// the caret at `off` (Home and End).
+    pub fn line_bounds(&self, off: usize) -> Option<(usize, usize)> {
+        let (_, y, h) = self.caret_rect(off)?;
+        let mid = y + h / 2.0;
+        Some((self.buffer_offset_at(-1e6, mid)?, self.buffer_offset_at(1e6, mid)?))
     }
 
     /// Write the pages this view shows as a PDF (the render lab compares its
@@ -220,7 +350,7 @@ mod tests {
                 page: letters_core::model::PageGeometry { width_pt: 612.0, height_pt: 792.0, ..Default::default() },
                 ..Default::default()
             };
-            v.set_typeset(Typeset::new(Document::from_plain_text(&text), opts));
+            v.set_typeset(Typeset::new(Document::from_plain_text(&text), opts), Vec::new());
             assert!(v.page_count() >= 2, "120 lines need more than one page");
             let (_, y0, w0, h0) = v.page_rect(0);
             let (_, y1, _, _) = v.page_rect(1);

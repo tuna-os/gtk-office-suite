@@ -251,6 +251,39 @@ pub struct Typeset {
 /// Decodes the image at a path for drawing.
 type ImageLoader = dyn Fn(&str) -> Option<cairo::ImageSurface>;
 
+/// A place in the document's text: paragraph index and char offset in its
+/// layout text (`layout::layout_text`: an image is one char).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct TextPos {
+    pub para: usize,
+    pub offset: usize,
+}
+
+/// A piece of a selection: (page, x, top, width, height) in points.
+pub type SelectionRect = (usize, f64, f64, f64, f64);
+
+/// A caret's box, in points on page `page`.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Caret {
+    pub page: usize,
+    pub x_pt: f64,
+    pub top_pt: f64,
+    pub height_pt: f64,
+}
+
+/// One body line on a page, as hit-testing needs it.
+struct LineRef {
+    para: usize,
+    line: usize,
+    box_x: f64,
+    box_w: f64,
+    x: f64,
+    top: f64,
+    height: f64,
+    start: usize,
+    end: usize,
+}
+
 /// The built-in image loader: PNG through Cairo.
 fn load_png(path: &str) -> Option<cairo::ImageSurface> {
     let mut f = std::fs::File::open(path).ok()?;
@@ -342,6 +375,120 @@ impl Typeset {
             Ok(()) => Ok(()),
             Err(e) => Err(format!("cannot write {}: {e}", path.as_ref().display())),
         }
+    }
+
+    /// The body line items of `page`: (paragraph, line, box width, line x,
+    /// top, height, char range).
+    fn body_lines(&self, page: usize) -> Vec<LineRef> {
+        let Some(page) = self.tree.pages.get(page) else { return Vec::new() };
+        page.items
+            .iter()
+            .filter_map(|i| match i {
+                Item::Line { source: Source::Paragraph(p), line, box_x_pt, box_width_pt, x_pt, top_pt, height_pt, start, end, .. } => {
+                    Some(LineRef {
+                        para: *p,
+                        line: *line,
+                        box_x: *box_x_pt,
+                        box_w: *box_width_pt,
+                        x: *x_pt,
+                        top: *top_pt,
+                        height: *height_pt,
+                        start: *start,
+                        end: *end,
+                    })
+                }
+                _ => None,
+            })
+            .collect()
+    }
+
+    /// The text position nearest to (`x_pt`, `y_pt`) on page `page`, in
+    /// points from the page's corner: the line under the point (or the
+    /// nearest one), then the character boundary nearest to it on that line.
+    pub fn hit_test(&self, page: usize, x_pt: f64, y_pt: f64) -> Option<TextPos> {
+        let lines = self.body_lines(page);
+        // Distance from the point to a line's box, vertical first: a click
+        // beside a table cell belongs to that cell's row, then its column.
+        let distance = |l: &LineRef| {
+            let dy = if y_pt < l.top { l.top - y_pt } else if y_pt > l.top + l.height { y_pt - l.top - l.height } else { 0.0 };
+            let dx = if x_pt < l.box_x { l.box_x - x_pt } else if x_pt > l.box_x + l.box_w { x_pt - l.box_x - l.box_w } else { 0.0 };
+            (dy, dx)
+        };
+        let best = lines.iter().min_by(|a, b| distance(a).partial_cmp(&distance(b)).unwrap_or(std::cmp::Ordering::Equal))?;
+        let layout = self.paragraph_layout(best.para, best.box_w)?;
+        let line = layout.line_readonly(best.line as i32)?;
+        let hit = line.x_to_index(to_units(x_pt - best.x));
+        let text = layout.text();
+        let byte = (hit.index().max(0) as usize).min(text.len());
+        let mut offset = text[..byte].chars().count() + hit.trailing().max(0) as usize;
+        // The end of a wrapped line is the start of the next one; keep the
+        // caret on the line that was clicked (before its trailing space).
+        let para_len = text.chars().count();
+        if offset >= best.end && best.end < para_len && best.end > best.start {
+            offset = best.end - 1;
+        }
+        Some(TextPos { para: best.para, offset: offset.min(para_len) })
+    }
+
+    /// Where the caret for `pos` is drawn: page, x, line top and height in
+    /// points. The caret at a wrap point is on the later line.
+    pub fn caret(&self, pos: TextPos) -> Option<Caret> {
+        for (index, _) in self.tree.pages.iter().enumerate() {
+            let lines = self.body_lines(index);
+            let para_lines: Vec<&LineRef> = lines.iter().filter(|l| l.para == pos.para).collect();
+            let Some(line) = para_lines
+                .iter()
+                .find(|l| pos.offset >= l.start && (pos.offset < l.end || l.start == l.end))
+                .or_else(|| para_lines.iter().rev().find(|l| pos.offset == l.end))
+            else {
+                continue;
+            };
+            let layout = self.paragraph_layout(line.para, line.box_w)?;
+            let pl = layout.line_readonly(line.line as i32)?;
+            let text = layout.text();
+            let byte = text.char_indices().nth(pos.offset).map_or(text.len(), |(b, _)| b);
+            let x = to_pt(pl.index_to_x(byte as i32, false));
+            return Some(Caret { page: index, x_pt: line.x + x, top_pt: line.top, height_pt: line.height });
+        }
+        None
+    }
+
+    /// Rectangles covering the text from `from` to `to` (in document order),
+    /// one per line piece: (page, x, top, width, height) in points.
+    pub fn selection_rects(&self, from: TextPos, to: TextPos) -> Vec<SelectionRect> {
+        let (a, b) = if (to.para, to.offset) < (from.para, from.offset) { (to, from) } else { (from, to) };
+        let mut out = Vec::new();
+        for index in 0..self.tree.pages.len() {
+            for l in self.body_lines(index) {
+                if l.para < a.para || l.para > b.para {
+                    continue;
+                }
+                let s = if l.para == a.para { a.offset.max(l.start) } else { l.start };
+                let e = if l.para == b.para { b.offset.min(l.end) } else { l.end };
+                let whole_rest = l.para < b.para && l.end >= self.layout_len(l.para);
+                if s > e || (s == e && !whole_rest) {
+                    continue;
+                }
+                let Some(layout) = self.paragraph_layout(l.para, l.box_w) else { continue };
+                let Some(pl) = layout.line_readonly(l.line as i32) else { continue };
+                let text = layout.text();
+                let byte = |c: usize| text.char_indices().nth(c).map_or(text.len(), |(b, _)| b) as i32;
+                let x0 = to_pt(pl.index_to_x(byte(s), false));
+                let mut x1 = to_pt(pl.index_to_x(byte(e), false));
+                // A selection running past the paragraph end shows its
+                // newline as a space's width.
+                if whole_rest {
+                    x1 += 4.0;
+                }
+                out.push((index, l.x + x0.min(x1), l.top, (x1 - x0).abs(), l.height));
+            }
+        }
+        out
+    }
+
+    /// Length of paragraph `para`'s layout text, in chars.
+    pub fn layout_len(&self, para: usize) -> usize {
+        self.doc.paragraphs.get(para).map_or(0, |p| super::layout_text(&p.runs).chars().count())
     }
 
     /// Draw page `index`'s content (not the paper itself). An index out of
@@ -458,6 +605,45 @@ mod tests {
         // Ink inside the first line's box, none above the top margin.
         assert!(dark(72, 72, 160, 86), "no text drawn in the first line box");
         assert!(!dark(0, 0, w as usize, 70), "ink above the top margin");
+    }
+
+    /// Clicking a laid-out character finds it, and its caret is drawn where
+    /// the click was: hit-testing and caret placement are inverse.
+    #[test]
+    fn hit_test_and_caret_are_inverse() {
+        let text = "The quick brown fox jumps over the lazy dog. ".repeat(6);
+        let mut d = doc(3, text.trim_end());
+        d.paragraphs[1].style.alignment = crate::model::Alignment::Center;
+        let t = Typeset::new(d, LayoutOptions::default());
+        for (para, offset) in [(0, 0), (0, 10), (0, 100), (1, 57), (2, 200)] {
+            let c = t.caret(TextPos { para, offset }).expect("a caret");
+            let hit = t.hit_test(c.page, c.x_pt + 0.1, c.top_pt + c.height_pt / 2.0).expect("a hit");
+            assert_eq!(hit, TextPos { para, offset }, "caret {c:?}");
+        }
+        // A click in the left margin lands at the start of that line; one
+        // far below the text, on the last line.
+        let first = t.caret(TextPos { para: 0, offset: 0 }).unwrap();
+        assert_eq!(t.hit_test(0, 10.0, first.top_pt + 2.0), Some(TextPos { para: 0, offset: 0 }));
+        let below = t.hit_test(0, 1000.0, 800.0).unwrap();
+        assert_eq!(below.para, 2);
+        // The caret at the end of a paragraph is after its last char.
+        let len = t.layout_len(2);
+        let end = t.caret(TextPos { para: 2, offset: len }).unwrap();
+        let before = t.caret(TextPos { para: 2, offset: len - 1 }).unwrap();
+        assert!(end.x_pt > before.x_pt);
+    }
+
+    #[test]
+    fn a_selection_covers_whole_lines_between_its_ends() {
+        let text = "The quick brown fox jumps over the lazy dog. ".repeat(6);
+        let t = Typeset::new(doc(2, text.trim_end()), LayoutOptions::default());
+        let rects = t.selection_rects(TextPos { para: 0, offset: 4 }, TextPos { para: 1, offset: 9 });
+        let lines0 = t.tree().pages[0].lines().filter(|i| matches!(i, Item::Line { source: Source::Paragraph(0), .. })).count();
+        assert_eq!(rects.len(), lines0 + 1, "every line of the first paragraph, and one of the second");
+        assert!(rects[0].1 > 72.0, "starts after 'The '");
+        assert!(rects.iter().all(|r| r.3 > 0.0));
+        // Reversed ends select the same text.
+        assert_eq!(rects, t.selection_rects(TextPos { para: 1, offset: 9 }, TextPos { para: 0, offset: 4 }));
     }
 
     /// The PDF is the laid-out pages: as many PDF pages as the tree has,

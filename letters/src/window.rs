@@ -84,7 +84,7 @@ impl LettersWindow {
                 }
             });
         }
-        // View ▸ Print Layout (ADR 0010): the laid-out pages, read-only,
+        // View ▸ Print Layout (ADR 0010): the laid-out pages, editable,
         // for every open tab. Stateful, so the toolbar button shows it.
         {
             let tv = tab_view.clone();
@@ -174,7 +174,7 @@ impl LettersWindow {
             ("insert-link-symbolic", "Insert link (Ctrl+Shift+K)", "app.insertlink"),
             ("view-continuous-symbolic", "Line spacing", "app.cycle-line-spacing"),
             ("view-dual-symbolic", "Column layout", "app.cycle-columns"),
-            ("view-paged-symbolic", "Print layout: the laid-out pages (read-only)", "app.print-layout"),
+            ("view-paged-symbolic", "Print layout: edit on the laid-out pages", "app.print-layout"),
         ];
 
         let suite_win = suite_common::SuiteWindow::new(app, "Letters", primary_toolbar, extended_toolbar);

@@ -126,6 +126,14 @@ fn line_spacing_from_tag_name(name: &str) -> Option<f32> {
 
 /// Rebuild a Document from the buffer's text and tags.
 pub fn capture_from_buffer(buf: &gtk::TextBuffer) -> Document {
+    capture_with_starts(buf).0
+}
+
+/// `capture_from_buffer`, plus where each captured paragraph's text starts
+/// in the buffer (a char offset, after any list marker or table pipe).
+/// With `buffer_offset`/`paragraph_offset` it maps a place in the document
+/// to a buffer offset and back: how the page view edits the buffer.
+pub fn capture_with_starts(buf: &gtk::TextBuffer) -> (Document, Vec<usize>) {
     let table = buf.tag_table();
     let run_tags: Vec<(usize, gtk::TextTag)> = RUN_TAGS
         .iter()
@@ -184,10 +192,13 @@ pub fn capture_from_buffer(buf: &gtk::TextBuffer) -> Document {
     let mut current_run: Option<Run> = None;
     let mut at_line_start = true;
     let mut line_list_level: Option<u8> = None;
+    let mut starts: Vec<usize> = Vec::new();
+    let mut line_start = 0usize;
 
     let mut iter = buf.start_iter();
     while !iter.is_end() {
         if at_line_start {
+            line_start = iter.offset().max(0) as usize;
             for (level, tag) in &heading_tags {
                 if iter.has_tag(tag) {
                     current.style.heading = Some(*level);
@@ -279,7 +290,8 @@ pub fn capture_from_buffer(buf: &gtk::TextBuffer) -> Document {
             if let Some(r) = current_run.take() {
                 current.runs.push(r);
             }
-            capture_list_marker(&mut current, line_list_level);
+            let marker = capture_list_marker(&mut current, line_list_level);
+            starts.push(line_start + marker);
             paragraphs.push(std::mem::take(&mut current));
             at_line_start = true;
         } else {
@@ -299,7 +311,11 @@ pub fn capture_from_buffer(buf: &gtk::TextBuffer) -> Document {
     if let Some(r) = current_run.take() {
         current.runs.push(r);
     }
-    capture_list_marker(&mut current, line_list_level);
+    if at_line_start {
+        line_start = buf.char_count().max(0) as usize;
+    }
+    let marker = capture_list_marker(&mut current, line_list_level);
+    starts.push(line_start + marker);
     paragraphs.push(current);
 
     // Footnotes, header, footer and page geometry are document state that has
@@ -317,8 +333,64 @@ pub fn capture_from_buffer(buf: &gtk::TextBuffer) -> Document {
     let header = header_sidecar(buf);
     let footer = footer_sidecar(buf);
     let page = page_sidecar(buf);
-    capture_tables(&mut paragraphs);
-    Document { paragraphs, footnotes, header, footer, page, base_font: base_font_sidecar(buf) }
+    capture_tables(&mut paragraphs, &mut starts);
+    (Document { paragraphs, footnotes, header, footer, page, base_font: base_font_sidecar(buf) }, starts)
+}
+
+/// Chars a run takes in the layout text (an image is one object char, a
+/// footnote reference none) and in the buffer (a footnote reference is its
+/// visible "[n]" marker).
+fn run_lengths(run: &Run) -> (usize, usize) {
+    if run.style.image.is_some() {
+        (1, 1)
+    } else if let Some(idx) = run.style.footnote {
+        (0, format!("[{}]", idx + 1).chars().count())
+    } else {
+        let n = run.text.chars().count();
+        (n, n)
+    }
+}
+
+/// Buffer offset of char `offset` of paragraph `para`'s layout text, the
+/// paragraph's text starting at buffer offset `start`.
+pub fn buffer_offset(para: &Paragraph, start: usize, offset: usize) -> usize {
+    let (mut layout, mut buffer) = (0usize, 0usize);
+    for run in &para.runs {
+        let (l, b) = run_lengths(run);
+        if offset < layout + l {
+            // Inside this run; text maps char for char.
+            return start + buffer + (offset - layout).min(b);
+        }
+        layout += l;
+        buffer += b;
+    }
+    start + buffer
+}
+
+/// The paragraph and layout offset of buffer offset `off`, given the
+/// captured paragraphs and their buffer starts. An offset inside a list
+/// marker or a table's pipes belongs to the start of the paragraph after it.
+pub fn paragraph_offset(doc: &Document, starts: &[usize], off: usize) -> (usize, usize) {
+    let i = starts.partition_point(|&s| s <= off).saturating_sub(1);
+    let Some(para) = doc.paragraphs.get(i) else { return (0, 0) };
+    let start = starts[i];
+    if off < start {
+        return (i, 0);
+    }
+    let buffer_len: usize = para.runs.iter().map(|r| run_lengths(r).1).sum();
+    if off > start + buffer_len && i + 1 < doc.paragraphs.len() {
+        return (i + 1, 0);
+    }
+    let (mut layout, mut buffer) = (0usize, 0usize);
+    for run in &para.runs {
+        let (l, b) = run_lengths(run);
+        if off - start < buffer + b {
+            return (i, layout + (off - start - buffer).min(l));
+        }
+        layout += l;
+        buffer += b;
+    }
+    (i, layout)
 }
 
 /// Fold rendered pipe grids back into table-cell paragraphs.
@@ -331,10 +403,11 @@ pub fn capture_from_buffer(buf: &gtk::TextBuffer) -> Document {
 /// Without this, `render_to_buffer` → `capture_from_buffer` turned every
 /// table into literal "| a | b |" prose — which is how a table inserted
 /// into the editor used to reach DOCX as text and vanish as a table.
-fn capture_tables(paragraphs: &mut Vec<Paragraph>) {
+fn capture_tables(paragraphs: &mut Vec<Paragraph>, starts: &mut Vec<usize>) {
     use letters_core::table_text;
 
     let mut out: Vec<Paragraph> = Vec::with_capacity(paragraphs.len());
+    let mut out_starts: Vec<usize> = Vec::with_capacity(starts.len());
     let mut table_id = 0u32;
     let mut i = 0;
     while i < paragraphs.len() {
@@ -344,6 +417,7 @@ fn capture_tables(paragraphs: &mut Vec<Paragraph>) {
             .is_some_and(|p| table_text::is_delimiter_line(&p.text()));
         let Some(header_cells) = header_cells.filter(|_| delimiter_ok) else {
             out.push(std::mem::take(&mut paragraphs[i]));
+            out_starts.push(starts[i]);
             i += 1;
             continue;
         };
@@ -353,8 +427,9 @@ fn capture_tables(paragraphs: &mut Vec<Paragraph>) {
         let cols = header_cells.len();
         table_id += 1;
         let mut row = 0u32;
-        let push_row = |out: &mut Vec<Paragraph>, para: &Paragraph, ranges: &[std::ops::Range<usize>], row: u32| {
+        let push_row = |out: &mut Vec<Paragraph>, out_starts: &mut Vec<usize>, para: &Paragraph, start: usize, ranges: &[std::ops::Range<usize>], row: u32| {
             for (col, range) in ranges.iter().enumerate() {
+                out_starts.push(start + range.start);
                 out.push(Paragraph {
                     style: letters_core::ParaStyle {
                         table_cell: Some(letters_core::TableCell { table: table_id, row, col: col as u32 }),
@@ -364,7 +439,7 @@ fn capture_tables(paragraphs: &mut Vec<Paragraph>) {
                 });
             }
         };
-        push_row(&mut out, &paragraphs[i], &header_cells, row);
+        push_row(&mut out, &mut out_starts, &paragraphs[i], starts[i], &header_cells, row);
         i += 2; // header + delimiter
         while i < paragraphs.len() {
             let Some(ranges) = table_text::parse_row(&paragraphs[i].text()) else { break };
@@ -372,11 +447,12 @@ fn capture_tables(paragraphs: &mut Vec<Paragraph>) {
                 break;
             }
             row += 1;
-            push_row(&mut out, &paragraphs[i], &ranges, row);
+            push_row(&mut out, &mut out_starts, &paragraphs[i], starts[i], &ranges, row);
             i += 1;
         }
     }
     *paragraphs = out;
+    *starts = out_starts;
 }
 
 /// GtkTextTag marking a paragraph that starts on a new page. Registered
@@ -609,7 +685,7 @@ pub(crate) fn list_level_tag(buf: &gtk::TextBuffer, level: u8) -> String {
 /// A line without one (typed by hand, or pasted) still counts as a list
 /// item when it starts with a marker; then four leading spaces make one
 /// nesting level. Markdown's "- " and "N. " are accepted as typed markers.
-fn capture_list_marker(para: &mut Paragraph, tag_level: Option<u8>) {
+fn capture_list_marker(para: &mut Paragraph, tag_level: Option<u8>) -> usize {
     let text = para.text();
     let indent = text.len() - text.trim_start_matches(' ').len();
     let body = &text[indent..];
@@ -617,7 +693,7 @@ fn capture_list_marker(para: &mut Paragraph, tag_level: Option<u8>) {
     let separated = |rest: &str| rest.starts_with(['\t', ' ']);
     let (kind, marker_chars) = if let Some(rest) = body.strip_prefix(letters_core::lists::BULLET) {
         if !separated(rest) {
-            return;
+            return 0;
         }
         (letters_core::ListKind::Bullet, 2)
     } else if body.starts_with("- ") {
@@ -626,14 +702,15 @@ fn capture_list_marker(para: &mut Paragraph, tag_level: Option<u8>) {
         let digits = body.chars().take_while(|c| c.is_ascii_digit()).count();
         match body[digits..].strip_prefix('.') {
             Some(rest) if digits > 0 && separated(rest) => (letters_core::ListKind::Numbered, digits + 2),
-            _ => return,
+            _ => return 0,
         }
     };
     para.style.list = kind;
     para.style.list_level = tag_level.unwrap_or((indent / 4) as u8);
     // Remove the indent and marker from the front of the run list. Counts
     // are in chars (the bullet is one char, three bytes), as runs slice.
-    let mut remaining = indent + marker_chars;
+    let stripped = indent + marker_chars;
+    let mut remaining = stripped;
     while remaining > 0 {
         let Some(first) = para.runs.first_mut() else { break };
         let n = first.text.chars().count();
@@ -646,6 +723,7 @@ fn capture_list_marker(para: &mut Paragraph, tag_level: Option<u8>) {
             remaining = 0;
         }
     }
+    stripped
 }
 
 /// Flatten a document's paragraphs into the lines the editor shows.
@@ -991,6 +1069,49 @@ mod tests {
             assert_eq!(tag.size_points(), 18.0);
             assert!(buf.tag_table().lookup("color:C80000").is_some());
             assert!(buf.tag_table().lookup("font:Liberation Mono").is_some());
+        });
+    }
+
+    /// Every character of the captured document maps to the buffer
+    /// character it came from, and back — through list markers, table pipes
+    /// and footnote markers, which exist in the buffer only.
+    #[test]
+    fn document_positions_map_to_buffer_offsets_and_back() {
+        gtk_test(|| {
+            let buf = gtk::TextBuffer::new(None);
+            crate::actions::register_formatting_tags(&buf);
+            let mut d = doc_with_table(&[&["Name", "Qty"], &["Bolts", "12"]]);
+            d.paragraphs.insert(0, Paragraph {
+                style: letters_core::ParaStyle { list: letters_core::ListKind::Numbered, ..Default::default() },
+                runs: vec![Run::plain("first item")],
+            });
+            d.paragraphs.insert(1, Paragraph::default());
+            d.footnotes = vec!["a note".into()];
+            d.paragraphs.push(Paragraph {
+                style: Default::default(),
+                runs: vec![
+                    Run::plain("see"),
+                    Run { text: String::new(), style: RunStyle { footnote: Some(0), ..Default::default() } },
+                    Run::plain(" here"),
+                ],
+            });
+            render_to_buffer(&d, &buf);
+            let (doc, starts) = capture_with_starts(&buf);
+            assert_eq!(starts.len(), doc.paragraphs.len());
+            let text: Vec<char> = buf.text(&buf.start_iter(), &buf.end_iter(), false).chars().collect();
+            for (i, p) in doc.paragraphs.iter().enumerate() {
+                let layout: Vec<char> = letters_core::layout::layout_text(&p.runs).chars().collect();
+                for (k, ch) in layout.iter().enumerate() {
+                    let off = buffer_offset(p, starts[i], k);
+                    assert_eq!(text.get(off), Some(ch), "paragraph {i} char {k} ({:?})", p.text());
+                    assert_eq!(paragraph_offset(&doc, &starts, off), (i, k), "back from buffer offset {off}");
+                }
+                // The end of a paragraph maps to where its text ends.
+                let end = buffer_offset(p, starts[i], layout.len());
+                assert_eq!(paragraph_offset(&doc, &starts, end), (i, layout.len()));
+            }
+            // A click in a list marker lands at the start of that item.
+            assert_eq!(paragraph_offset(&doc, &starts, 0), (0, 0));
         });
     }
 

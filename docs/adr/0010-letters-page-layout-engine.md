@@ -60,7 +60,27 @@ the Letters part concretely.
    3. Editing moves onto the page view (caret, selection and hit-testing
       through the tree, `GtkIMContext`, `GtkAccessibleText`), then the
       TextView path is removed. That step also gives Letters the live
-      GTK-free model that RFC-0001 Phase 0 asks for.
+      GTK-free model that RFC-0001 Phase 0 asks for. In sub-stages, each
+      leaving the app working, with Draft as the fallback throughout:
+      - **3a (done): the page view edits the buffer.** `Typeset::hit_test`,
+        `caret` and `selection_rects` (letters-core, tested) map points on
+        the page to document positions; `bridge::capture_with_starts`,
+        `buffer_offset` and `paragraph_offset` map document positions to
+        buffer offsets through list markers, table pipes and footnote
+        markers. `letters/src/page_edit.rs` places the buffer cursor on
+        click, selects on drag and double/triple click, sends typing
+        through a `GtkIMMulticontext`, and handles editing and movement
+        keys; formatting, undo, find and save keep acting on the buffer.
+        Print Layout lays out again when the main loop is idle after each
+        edit. The GtkTextBuffer is still the live state.
+      - 3b: `GtkAccessibleText` on the page view; list continuation,
+        Markdown shortcuts and the suite clipboard format on the page view.
+      - 3c: the live model. The page view edits a `letters_core::Document`
+        through `StructuredEditor`-style operations and relays out only the
+        paragraphs an edit touched; the buffer becomes Draft's view of the
+        model instead of the other way round. This is RFC-0001 Phase 0.
+      - 3d: Print Layout becomes the default view; the TextView path is
+        removed once nothing depends on it.
 
 ## Consequences
 
