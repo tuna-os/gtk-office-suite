@@ -3796,11 +3796,12 @@ class LettersStylesAndOutlineSmoke(BaseGUITestCase):
         self.wait_for_node(name="Paragraph style", roleName="toggle button").do_action(0)
         # Every style is a named row; pick one from the keyboard (the list
         # opens on the current style, Normal).
-        for name in ("Normal", "Heading 1", "Heading 6"):
+        for name in ("Normal", "Title", "Subtitle", "Heading 1", "Heading 6", "Quote", "Code"):
             self.wait_for_node(name=name, roleName="list item")
         time.sleep(0.5)
-        rawinput.keyCombo("Down")
-        rawinput.keyCombo("Down")
+        # Normal, Title, Subtitle, Heading 1, Heading 2.
+        for _ in range(4):
+            rawinput.keyCombo("Down")
         rawinput.keyCombo("Return")
         self.wait_for_condition(lambda: self._headings() == [2, None] or None,
                                 description="the first paragraph becoming a Heading 2")

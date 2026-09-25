@@ -10,9 +10,8 @@
 // (`LiveModel::restyle`, `SetParaStyle` ops): one undo step, in either view.
 //
 // The list offers the styles the model and the page view both carry: body
-// text and the six heading levels. (The old dropdown's Title, Subtitle, Code
-// and Blockquote were buffer tags the page view never drew and a save
-// dropped; they return when the layout engine renders them.)
+// text, Title and Subtitle, six heading levels, block quotes and code
+// blocks (letters_core::layout::Look).
 
 use gtk4::{self as gtk, prelude::*};
 use letters_core::layout::{self, pango::PangoShaper, LayoutOptions};
@@ -21,23 +20,43 @@ use libadwaita as adw;
 use std::rc::Rc;
 
 /// The styles the picker offers, in order.
-pub const STYLES: [&str; 7] = ["Normal", "Heading 1", "Heading 2", "Heading 3", "Heading 4", "Heading 5", "Heading 6"];
+pub const STYLES: [&str; 11] = [
+    "Normal", "Title", "Subtitle", "Heading 1", "Heading 2", "Heading 3", "Heading 4", "Heading 5", "Heading 6", "Quote", "Code",
+];
 
-/// The name the picker shows for a paragraph's style.
+/// The name the picker shows for a paragraph's style, in the order the
+/// page decides its look: a heading level, a named style, then code and
+/// quote.
 pub fn style_name(style: &ParaStyle) -> String {
-    match (style.heading, style.named_style.as_deref()) {
-        (_, Some(name @ ("Title" | "Subtitle"))) => name.to_string(),
-        (Some(level), _) => format!("Heading {}", level.clamp(1, 6)),
-        _ => "Normal".to_string(),
+    use letters_core::layout::Look;
+    if let Some(level) = style.heading {
+        return format!("Heading {}", level.clamp(1, 6));
     }
+    if style.code_block.is_some() {
+        return "Code".into();
+    }
+    match layout::paragraph_look(style) {
+        Look::Title => "Title",
+        Look::Subtitle => "Subtitle",
+        Look::Quote => "Quote",
+        Look::Body => "Normal",
+    }
+    .into()
 }
 
 /// `style` restyled as the picker's `name`. Picker styles replace one
-/// another (a heading is no longer a Title); alignment, lists, spacing and
-/// the rest of the paragraph's properties are kept.
+/// another (a heading is no longer a Title or a quote); alignment, lists,
+/// spacing and the rest of the paragraph's properties are kept.
 pub fn restyled(style: &ParaStyle, name: &str) -> ParaStyle {
     let heading = name.strip_prefix("Heading ").and_then(|l| l.parse::<u8>().ok()).filter(|l| (1..=6).contains(l));
-    ParaStyle { heading, named_style: None, ..style.clone() }
+    ParaStyle {
+        heading,
+        named_style: matches!(name, "Title" | "Subtitle").then(|| name.to_string()),
+        block_quote: name == "Quote",
+        // A code block keeps its language if it was one already.
+        code_block: (name == "Code").then(|| style.code_block.clone().unwrap_or_default()),
+        ..style.clone()
+    }
 }
 
 /// Restyle the selected paragraphs (or the caret's) of `buf` as `name`, on
@@ -163,6 +182,16 @@ mod tests {
         assert_eq!(style_name(&body), "Title");
         let normal = restyled(&h2, "Normal");
         assert_eq!((normal.heading, style_name(&normal).as_str()), (None, "Normal"));
+        // Every picker style names itself back, and replaces the others.
+        let mut s = ParaStyle { code_block: Some("rust".into()), ..Default::default() };
+        for name in STYLES {
+            s = restyled(&s, name);
+            assert_eq!(style_name(&s), name);
+        }
+        let code = restyled(&ParaStyle { code_block: Some("rust".into()), ..Default::default() }, "Code");
+        assert_eq!(code.code_block.as_deref(), Some("rust"), "a code block keeps its language");
+        let quote = restyled(&code, "Quote");
+        assert!(quote.block_quote && quote.code_block.is_none());
     }
 
     #[test]
