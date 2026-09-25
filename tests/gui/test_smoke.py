@@ -3127,6 +3127,49 @@ class DecksSnapshotSmoke(BaseGUITestCase):
         self.assertIsNone(self.process.poll(), "decks crashed writing a snapshot")
 
 
+class DecksFormatInspectorSmoke(BaseGUITestCase):
+    """The Format inspector (DESIGN-UI.md) edits the selected object as one
+    undoable step: an inserted shape is selected, "Send to Back" in the
+    inspector's Arrange tab puts it behind the text box (the snapshot's
+    object order), and one undo puts it back. The inspector's controls
+    carry accessible names, so this drives them through AT-SPI, not
+    pixels."""
+
+    app_name = "decks"
+
+    def setUp(self):
+        self._snapshot_path = self.isolate_snapshot(prefix="decks-format-")
+        super().setUp()
+
+    def _kinds(self, aid):
+        snap = self.trigger_snapshot(aid)
+        return [o["kind"] for o in snap["slides"][0]["objects"]]
+
+    def test_send_to_back_is_one_undoable_step(self):
+        aid = "org.tunaos.decks"
+        self.gapplication_action(aid, "new-document")
+        self.gapplication_action(aid, "add-text-box")
+        self.gapplication_action(aid, "add-shape")
+        self.wait_until(lambda: self._kinds(aid), lambda k: k == ["TextBox", "Shape"], interval=0.5,
+                        description="a text box, then a shape")
+        toggle = self.app.child(name="Format", roleName="toggle button")
+        import pyatspi
+        if not toggle.getState().contains(pyatspi.STATE_PRESSED):
+            # do_action, not click(): GTK 4 reports no screen extents
+            # over AT-SPI, so a coordinate click lands at the corner.
+            toggle.do_action(0)
+        back = self.wait_until(lambda: self.app.child(name="Send to Back", roleName="push button"),
+                               lambda b: b is not None and b.showing,
+                               description="the inspector to show the inserted shape")
+        back.do_action(0)
+        self.wait_until(lambda: self._kinds(aid), lambda k: k == ["Shape", "TextBox"], interval=0.5,
+                        description="the shape to go behind the text box")
+        self.gapplication_action(aid, "undo")
+        self.wait_until(lambda: self._kinds(aid), lambda k: k == ["TextBox", "Shape"], interval=0.5,
+                        description="one undo to restore the order")
+        self.assertIsNone(self.process.poll(), "decks crashed in the format inspector")
+
+
 class DecksSelectionSmoke(BaseGUITestCase):
     """Object selection updates the canvas a11y description and the
     inspector (fit-to-viewport geometry keeps coordinates stable)."""
