@@ -1471,6 +1471,15 @@ impl TablesWindow {
         let sw = &suite_win;
         let inspector = crate::format_inspector::build(&controller, &drawing_area, &sw.header_bar, &[&sw.medium_breakpoint, &sw.narrow_breakpoint], &stack);
         *inspector_sync.borrow_mut() = Some(inspector.sync.clone());
+        {
+            // The number format code, from the keyboard (Ctrl+Shift+F).
+            let edit = inspector.edit_number_format.clone();
+            let act = gtk4::gio::SimpleAction::new("edit-number-format", None);
+            act.connect_activate(move |_, _| edit());
+            app.add_action(&act);
+            app.set_accels_for_action("app.edit-number-format", &["<Primary><Shift>f"]);
+            suite_common::actions::register_labels(&[("app.edit-number-format", &suite_common::i18n("Number Format…"))]);
+        }
         toast_overlay.set_child(Some(&inspector.split));
         suite_win.set_content(&toast_overlay);
         let autosave_notices = suite_common::autosave_notice::AutosaveNotifier::new(&toast_overlay);

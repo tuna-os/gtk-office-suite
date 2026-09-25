@@ -2561,15 +2561,14 @@ class TablesFormatCodeSmoke(TablesFormatInspectorSmoke):
         subprocess.run(["gapplication", "action", "org.tunaos.tables", "new-document"])
         self._wait_for_a_new_document()
         self._put("A1", "3")
-        self.app.child(name="Format", roleName="toggle button").do_action(0)
-        code = self.wait_until(
-            lambda: [n for n in self.app.findChildren(lambda c: c.name == "Format Code" and c.showing)],
-            bool, description="the inspector's Format Code row")[0]
         self._go("A1")
-        # The row's own entry takes the typing.
-        entry = ([c for c in code.findChildren(lambda c: c.roleName in ("text", "entry"))] or [code])[0]
-        entry.grabFocus()
-        time.sleep(0.3)
+        # Number Format… opens the inspector at the code, ready to type
+        # (GTK 4 offers no AT-SPI focus grab).
+        subprocess.run(["gapplication", "action", "org.tunaos.tables", "edit-number-format"])
+        self.wait_until(
+            lambda: [n for n in self.app.findChildren(lambda c: c.name == "Format Code" and c.showing)],
+            bool, description="the inspector's Format Code row")
+        time.sleep(0.5)
         rawinput.keyCombo("<Control>a")
         rawinput.typeText('0.0 "kg"')
         rawinput.keyCombo("Return")

@@ -48,8 +48,9 @@ fn format_of(code: &str) -> NumberFormat {
     }
 }
 
-/// The Number group, and its sync (call when the selection changes).
-pub fn group(ctl: &Ctl, grid: &gtk::DrawingArea) -> (adw::PreferencesGroup, Rc<dyn Fn()>) {
+/// The Number group, its sync (call when the selection changes), and its
+/// code row, for focusing from the keyboard.
+pub fn group(ctl: &Ctl, grid: &gtk::DrawingArea) -> (adw::PreferencesGroup, Rc<dyn Fn()>, adw::EntryRow) {
     let group = adw::PreferencesGroup::builder().title("Number").build();
 
     let code = adw::EntryRow::builder().title("Format Code").show_apply_button(true).build();
@@ -125,5 +126,5 @@ pub fn group(ctl: &Ctl, grid: &gtk::DrawingArea) -> (adw::PreferencesGroup, Rc<d
             update_preview();
         })
     };
-    (group, sync)
+    (group, sync, code)
 }
