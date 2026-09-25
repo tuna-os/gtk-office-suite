@@ -178,7 +178,11 @@ fixture reports four numbers instead, and the budget is set per fixture:
    fraction of LibreOffice's words found in ours, the median word-centre
    displacement in points, and the line count delta. This catches wrong
    fonts, sizes, spacing, indents, margins and alignment without caring
-   about anti-aliasing.
+   about anti-aliasing. Also **lost lines**: LibreOffice's text lines (as
+   Tesseract groups them) of three or more words with half or more of
+   their words missing from ours. Any lost line keeps a fixture from
+   green: the word fraction is page-wide, so a page's one broken line
+   (a header, a caption) could not move it (see below).
 3. **Colour**: whether each salient colour cluster in the reference (a
    fill, a text colour) is present in ours within ΔE 10, and roughly where.
 4. **SSIM**: structural similarity on grayscale images downsampled 4×. A
@@ -219,12 +223,16 @@ green when the metric can read them (a larger OCR scale for small text is
 the next candidate, and it would have to be checked against every app's
 verdicts first, since `compare.py` is shared).
 
-The opposite blind spot exists too, so look at the images of a green
+The opposite blind spot existed too, so look at the images of a green
 fixture as well: **`letters/page-numbers`** (2026-09-25) was green on
 first run while every page's header read "Page  of" with no numbers (the
-PAGE/NUMPAGES fields were read as empty). A few missing characters in a
-header barely move word-found rate or displacement. It is green now
-because the header reads "Page 2 of 5", as LibreOffice's does.
+PAGE/NUMPAGES fields were read as empty). Two missing words out of about
+500 on a page moved the word fraction by less than a percent. The lost
+lines check closes it: that header is half its words gone. Diffed on two
+CI datasets, all 46 fixtures of all three apps: on the one with the empty
+header, the only verdicts to change were `letters/page-numbers` A and B
+(green to amber); on the current one, none changed (`letters/table` has a
+lost line, one OCR-misread cell label row, and was amber already).
 
 ### Report
 

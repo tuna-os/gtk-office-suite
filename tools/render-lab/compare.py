@@ -12,6 +12,8 @@ Layout expected under <out>/<app>/<feature>/:
 Metrics per page (see docs/RENDER-PARITY-ROADMAP.md, "Metrics"):
     ink        our non-background pixels / LibreOffice's (0 => not rendered)
     words      fraction of LibreOffice's OCR words found in ours
+    lost_lines LibreOffice's text lines (3+ words) of which half or more
+               are missing from ours
     scale      Tables only: our grid's size / LibreOffice's for the same cells
     disp_pt    median displacement of matched word centres, in points
     colors     fraction of LibreOffice's salient colours present in ours
@@ -63,6 +65,13 @@ GREEN_DISP_PT = 6.0
 GREEN_COLORS = 0.90
 GREEN_SSIM = 0.75
 GREEN_SCALE = 0.10  # Tables: our grid within ±10% of LibreOffice's size
+# A line of LibreOffice's text is lost when at least this many words long
+# and half or more of them are missing from ours. `words` is a page-wide
+# fraction, so a header reading "Page  of" instead of "Page 2 of 5" (two
+# words out of ~500 on the page) scored 99% and was green; per line it is
+# half of its words gone. Three words: a two-word line losing one word is
+# too often an OCR split ("8pt text" read as one token) to judge.
+LOST_LINE_MIN_WORDS = 3
 METRICS = ("ink", "words", "disp_pt", "colors", "ssim", "scale")
 TIER_AGREE = 3.0  # grey levels; measured 0.0-0.3 when the tiers agree
 
@@ -287,28 +296,36 @@ def ocr_words(img, sparse=False):
         if conf < 30 or not text:
             continue
         left, top, w, h = (int(v) / k for v in f[6:10])
-        words.append((text, left + w / 2, top + h / 2))
+        # Tesseract's own line: (block, paragraph, line).
+        words.append((text, left + w / 2, top + h / 2, tuple(f[2:5])))
     return words
 
 
 def match_words(ref, ours):
+    """(fraction of `ref`'s words found in `ours`, median displacement in
+    points, lost lines: `ref` lines of LOST_LINE_MIN_WORDS or more words
+    with half or more of them not found)."""
     if ref is None or ours is None or not ref:
-        return None, None
+        return None, None, None
     pool = list(ours)
     found, disp = 0, []
-    for text, x, y in ref:
+    per_line = {}
+    for text, x, y, line in ref:
         best, bi = None, None
-        for i, (t2, x2, y2) in enumerate(pool):
+        for i, (t2, x2, y2, _) in enumerate(pool):
             if t2 == text:
                 d = ((x - x2) ** 2 + (y - y2) ** 2) ** 0.5
                 if best is None or d < best:
                     best, bi = d, i
+        total, hit = per_line.get(line, (0, 0))
+        per_line[line] = (total + 1, hit + (bi is not None))
         if bi is not None:
             found += 1
             disp.append(best)
             pool.pop(bi)
     median = float(np.median(disp)) * PX_TO_PT if disp else None
-    return found / len(ref), median
+    lost = sum(1 for total, hit in per_line.values() if total >= LOST_LINE_MIN_WORDS and 2 * hit <= total)
+    return found / len(ref), median, lost
 
 
 # ── scoring ───────────────────────────────────────────────────────────────
@@ -356,10 +373,11 @@ def compare_page(app, ref, ours, ref_words):
     """`ref_words` is ocr_words(ref), cached by the caller."""
     ref_ink = ink_mask(np.asarray(ref)).sum()
     ink = float(ink_mask(np.asarray(ours)).sum() / ref_ink) if ref_ink else None
-    words, disp = match_words(ref_words, ocr_words(ours, app == "tables") if ref_words is not None else None)
+    words, disp, lost = match_words(ref_words, ocr_words(ours, app == "tables") if ref_words is not None else None)
     return {
         "ink": ink,
         "words": words,
+        "lost_lines": lost,
         "disp_pt": disp,
         "colors": color_presence(ref, ours),
         "ssim": ssim(ref, ours),
@@ -377,6 +395,8 @@ def verdict(m):
     ok = [m["ssim"] >= GREEN_SSIM]
     if m["words"] is not None:
         ok.append(m["words"] >= GREEN_WORDS)
+    if m.get("lost_lines") is not None:
+        ok.append(m["lost_lines"] == 0)
     if m["disp_pt"] is not None:
         ok.append(m["disp_pt"] <= GREEN_DISP_PT)
     if m["colors"] is not None:
@@ -406,7 +426,7 @@ def score_fixture(app, d, tier, ref_words_cache):
     per_page = []
     for i, lo in enumerate(lo_pages):
         if i >= len(ours_pages):
-            per_page.append({"ink": 0.0, "words": 0.0, "disp_pt": None, "colors": 0.0, "ssim": 0.0, "ref_words": None})
+            per_page.append({"ink": 0.0, "words": 0.0, "lost_lines": None, "disp_pt": None, "colors": 0.0, "ssim": 0.0, "ref_words": None})
             continue
         ref, ours, scale = align(app, lo, ours_pages[i])
         key = (lo, ref.size)
@@ -415,6 +435,8 @@ def score_fixture(app, d, tier, ref_words_cache):
         per_page.append(dict(compare_page(app, ref, ours, ref_words_cache[key]), scale=scale))
     m = {k: mean([p.get(k) for p in per_page]) for k in METRICS}
     m["ref_words"] = sum(p["ref_words"] or 0 for p in per_page)
+    lost = [p["lost_lines"] for p in per_page if p.get("lost_lines") is not None]
+    m["lost_lines"] = sum(lost) if lost else None
     m["pages_lo"], m["pages_ours"] = len(lo_pages), len(ours_pages)
     m["page_count_match"] = partial or len(lo_pages) == len(ours_pages)
     m["verdict"] = verdict(m)
@@ -615,7 +637,7 @@ def main():
         print("compare: no captures found for any fixture; the lab produced nothing to judge", file=sys.stderr)
         sys.exit(2)
     card = {
-        k: {t: {"verdict": m["verdict"], **{x: m.get(x) for x in METRICS}} for t, m in v.items() if m}
+        k: {t: {"verdict": m["verdict"], "lost_lines": m.get("lost_lines"), **{x: m.get(x) for x in METRICS}} for t, m in v.items() if m}
         for k, v in results.items()
     }
     with open(os.path.join(args.out, "scorecard.json"), "w") as f:
