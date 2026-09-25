@@ -25,6 +25,9 @@ pub fn register_formatting_tags(buffer: &gtk::TextBuffer) {
         ("h5", &[]),
         ("h6", &[]),
         ("blockquote", &[]),
+        ("h-title", &[]),
+        ("h-subtitle", &[]),
+        ("code-block", &[]),
         ("align-left", &[]),
         ("align-center", &[]),
         ("align-right", &[]),
@@ -59,6 +62,12 @@ pub fn register_formatting_tags(buffer: &gtk::TextBuffer) {
                 "h5" => gtk::TextTag::builder().name(name).weight(700).scale(1.0).build(),
                 "h6" => gtk::TextTag::builder().name(name).weight(700).scale(0.9).build(),
                 "blockquote" => gtk::TextTag::builder().name(name).left_margin(24).style(gtk4::pango::Style::Italic).build(),
+                // The page's Title, Subtitle and code block looks
+                // (letters_core::layout::Look); the document state rides on
+                // the paragraph's `para:` tag, these only draw it.
+                "h-title" => gtk::TextTag::builder().name(name).weight(700).scale(26.0 / 11.0).build(),
+                "h-subtitle" => gtk::TextTag::builder().name(name).scale(15.0 / 11.0).foreground("#666666").build(),
+                "code-block" => gtk::TextTag::builder().name(name).family("monospace").paragraph_background("#f0f0f0").build(),
                 // A page break has no text of its own, so it has to be
                 // visible as space above the paragraph it starts — the
                 // paragraph tag *is* the break (see bridge.rs), and an
