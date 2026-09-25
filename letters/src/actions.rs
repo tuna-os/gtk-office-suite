@@ -330,50 +330,19 @@ pub fn register_structured_actions(tv: &adw::TabView, app: &adw::Application) {
 }
 
 /// Connect list auto-continuation on Enter for a TextView.
+///
+/// Capture phase, so it runs before the TextView inserts its own newline.
+/// The continuation itself is `bridge::enter_in_list`, which the Print
+/// Layout view uses too. This used to insert "• " at the start of the
+/// *following* line and never a newline, and ignored the item's level.
 pub fn connect_list_continuation(editor: &gtk::TextView, buf: &gtk::TextBuffer) {
     let buf = buf.clone();
     let ctrl = gtk::EventControllerKey::new();
-    ctrl.connect_key_pressed(move |_, key, _code, _state| {
-        if key == gtk::gdk::Key::Return || key == gtk::gdk::Key::KP_Enter {
-            let bounds = buf.selection_bounds();
-            let (ins, _) = bounds.unwrap_or((buf.start_iter(), buf.start_iter()));
-            let mut line_start = ins;
-            line_start.backward_line();
-            let mut line_end = ins;
-            line_end.forward_line();
-            let line = buf.text(&line_start, &line_end, false);
-            let trimmed = line.trim_start();
-
-            // Bullet list continuation
-            if trimmed.starts_with("\u{2022}") || trimmed.starts_with("- ") {
-                let indent = line.len() - trimmed.len();
-                let marker = "\u{2022} ";
-                let after_marker = trimmed
-                    .strip_prefix("\u{2022}").or_else(|| trimmed.strip_prefix("- "))
-                    .unwrap_or("").trim_start();
-                if after_marker.is_empty() {
-                    return glib::Propagation::Proceed;
-                }
-                let prefix = format!("{}{}", " ".repeat(indent), marker);
-                buf.insert(&mut line_end, &prefix);
-                return glib::Propagation::Stop;
-            }
-
-            // Numbered list continuation
-            if trimmed.starts_with(|c: char| c.is_ascii_digit()) && trimmed.contains(". ") {
-                let num_str: String = trimmed.chars().take_while(|c| c.is_ascii_digit()).collect();
-                let after_num = &trimmed[num_str.len()..];
-                let rest = after_num.strip_prefix(". ").unwrap_or("");
-                if let Ok(n) = num_str.parse::<usize>() {
-                    if rest.is_empty() {
-                        return glib::Propagation::Proceed;
-                    }
-                    let indent = line.len() - trimmed.len();
-                    let new_prefix = format!("{}{}. ", " ".repeat(indent), n + 1);
-                    buf.insert(&mut line_end, &new_prefix);
-                    return glib::Propagation::Stop;
-                }
-            }
+    ctrl.set_propagation_phase(gtk::PropagationPhase::Capture);
+    ctrl.connect_key_pressed(move |_, key, _code, state| {
+        let plain = !state.intersects(gtk::gdk::ModifierType::CONTROL_MASK | gtk::gdk::ModifierType::SHIFT_MASK);
+        if plain && (key == gtk::gdk::Key::Return || key == gtk::gdk::Key::KP_Enter) && crate::bridge::enter_in_list(&buf) {
+            return glib::Propagation::Stop;
         }
         glib::Propagation::Proceed
     });

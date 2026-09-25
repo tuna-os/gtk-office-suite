@@ -685,26 +685,94 @@ pub(crate) fn list_level_tag(buf: &gtk::TextBuffer, level: u8) -> String {
 /// A line without one (typed by hand, or pasted) still counts as a list
 /// item when it starts with a marker; then four leading spaces make one
 /// nesting level. Markdown's "- " and "N. " are accepted as typed markers.
-fn capture_list_marker(para: &mut Paragraph, tag_level: Option<u8>) -> usize {
-    let text = para.text();
+/// A list marker at the start of an editor line: its kind, the number of
+/// leading spaces, the marker's own length in chars (marker and separator),
+/// and a numbered item's number.
+fn list_marker_prefix(text: &str) -> Option<(letters_core::ListKind, usize, usize, u32)> {
     let indent = text.len() - text.trim_start_matches(' ').len();
     let body = &text[indent..];
     // A marker is followed by a tab (as rendered) or a space (as typed).
     let separated = |rest: &str| rest.starts_with(['\t', ' ']);
-    let (kind, marker_chars) = if let Some(rest) = body.strip_prefix(letters_core::lists::BULLET) {
-        if !separated(rest) {
-            return 0;
+    if let Some(rest) = body.strip_prefix(letters_core::lists::BULLET) {
+        return separated(rest).then_some((letters_core::ListKind::Bullet, indent, 2, 0));
+    }
+    if body.starts_with("- ") {
+        return Some((letters_core::ListKind::Bullet, indent, 2, 0));
+    }
+    let digits = body.chars().take_while(|c| c.is_ascii_digit()).count();
+    match body[digits..].strip_prefix('.') {
+        Some(rest) if digits > 0 && separated(rest) => {
+            Some((letters_core::ListKind::Numbered, indent, digits + 2, body[..digits].parse().unwrap_or(0)))
         }
-        (letters_core::ListKind::Bullet, 2)
-    } else if body.starts_with("- ") {
-        (letters_core::ListKind::Bullet, 2)
+        _ => None,
+    }
+}
+
+/// Enter at the caret inside a list item: continue the list with the next
+/// marker (at the same level), or, on an empty item, end the list by
+/// removing that item's marker. `false` when the caret is not in a list
+/// item, so Enter does what it always does. Shared by both views.
+pub(crate) fn enter_in_list(buf: &gtk::TextBuffer) -> bool {
+    let cursor = buf.iter_at_mark(&buf.get_insert());
+    let mut line_start = cursor;
+    line_start.set_line_offset(0);
+    let mut line_end = cursor;
+    if !line_end.ends_line() {
+        line_end.forward_to_line_end();
+    }
+    let line = buf.text(&line_start, &line_end, false).to_string();
+    let Some((kind, indent, marker, number)) = list_marker_prefix(&line) else { return false };
+    // The caret inside the marker itself is not "in the item".
+    if (cursor.line_offset() as usize) < indent + marker {
+        return false;
+    }
+    let level_tag = line_start
+        .tags()
+        .into_iter()
+        .find(|t| t.name().is_some_and(|n| list_level_from_tag_name(&n).is_some()));
+    let body_empty = line.chars().skip(indent + marker).all(char::is_whitespace);
+    buf.begin_user_action();
+    if body_empty {
+        let mut s = line_start;
+        let mut e = line_start;
+        e.forward_chars((indent + marker) as i32);
+        buf.delete(&mut s, &mut e);
+        if let Some(tag) = &level_tag {
+            let mut end = buf.iter_at_mark(&buf.get_insert());
+            if !end.ends_line() {
+                end.forward_to_line_end();
+            }
+            let mut start = end;
+            start.set_line_offset(0);
+            buf.remove_tag(tag, &start, &end);
+        }
     } else {
-        let digits = body.chars().take_while(|c| c.is_ascii_digit()).count();
-        match body[digits..].strip_prefix('.') {
-            Some(rest) if digits > 0 && separated(rest) => (letters_core::ListKind::Numbered, digits + 2),
-            _ => return 0,
+        buf.delete_selection(true, true);
+        let next = match kind {
+            letters_core::ListKind::Numbered => format!("{}.\t", number + 1),
+            _ => format!("{}\t", letters_core::lists::BULLET),
+        };
+        // An untagged (typed) item keeps its indent as spaces.
+        let prefix = if level_tag.is_some() { next } else { format!("{}{next}", " ".repeat(indent)) };
+        let mut at = buf.iter_at_mark(&buf.get_insert());
+        buf.insert(&mut at, &format!("\n{prefix}"));
+        if let Some(tag) = &level_tag {
+            let mut start = buf.iter_at_mark(&buf.get_insert());
+            start.set_line_offset(0);
+            let mut end = start;
+            if !end.ends_line() {
+                end.forward_to_line_end();
+            }
+            buf.apply_tag(tag, &start, &end);
         }
-    };
+    }
+    buf.end_user_action();
+    true
+}
+
+fn capture_list_marker(para: &mut Paragraph, tag_level: Option<u8>) -> usize {
+    let text = para.text();
+    let Some((kind, indent, marker_chars, _)) = list_marker_prefix(&text) else { return 0 };
     para.style.list = kind;
     para.style.list_level = tag_level.unwrap_or((indent / 4) as u8);
     // Remove the indent and marker from the front of the run list. Counts
@@ -1157,6 +1225,43 @@ mod tests {
             assert_eq!(styles[0], &d.paragraphs[0].style);
             assert_eq!(styles[1], &d.paragraphs[1].style);
             assert_eq!(styles[2], &letters_core::ParaStyle::default());
+        });
+    }
+
+    /// Enter in a list item continues the list at the same level with the
+    /// next number; Enter on an empty item ends the list.
+    #[test]
+    fn enter_continues_and_ends_a_list() {
+        use letters_core::ListKind;
+        gtk_test(|| {
+            let buf = gtk::TextBuffer::new(None);
+            crate::actions::register_formatting_tags(&buf);
+            let mut d = Document::from_plain_text("one\ntwo");
+            for p in &mut d.paragraphs {
+                p.style.list = ListKind::Numbered;
+                p.style.list_level = 1;
+            }
+            render_to_buffer(&d, &buf);
+            buf.place_cursor(&buf.end_iter());
+            assert!(enter_in_list(&buf));
+            buf.insert_at_cursor("three");
+            let doc = capture_from_buffer(&buf);
+            let items: Vec<(ListKind, u8, String)> =
+                doc.paragraphs.iter().map(|p| (p.style.list, p.style.list_level, p.text())).collect();
+            assert_eq!(items[2], (ListKind::Numbered, 1, "three".to_string()));
+            assert_eq!(buf.text(&buf.start_iter(), &buf.end_iter(), false), "1.\tone\n2.\ttwo\n3.\tthree");
+
+            // Enter twice: the second, on the new empty item, ends the list.
+            assert!(enter_in_list(&buf));
+            assert!(enter_in_list(&buf));
+            let doc = capture_from_buffer(&buf);
+            let last = doc.paragraphs.last().unwrap();
+            assert_eq!((last.style.list, last.text().as_str()), (ListKind::None, ""));
+
+            // Outside a list, Enter is not ours.
+            buf.place_cursor(&buf.end_iter());
+            buf.insert_at_cursor("plain");
+            assert!(!enter_in_list(&buf));
         });
     }
 
