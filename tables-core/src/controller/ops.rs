@@ -31,10 +31,14 @@
 //! inverse ops of one op, and [`apply_all`] applies a group all or nothing
 //! and returns the group's inverse, in the order that undoes it.
 //!
-//! Scope, stated rather than implied: the ops cover values, formats,
-//! styles, borders, rows and columns, merges, sizes, freezes and sheets.
-//! Sorting, filtering, conditional formats, charts, validations and names
-//! still undo through whole-sheet snapshots (`SheetSnapshotCommand`).
+//! Scope: every undoable edit is ops. Values, formats, styles, borders,
+//! validations and locks per cell; rows and columns, merges, sizes and
+//! freezes; sheets (add, rename, move, delete); names; and the sheet-wide
+//! properties ([`SheetProp`]: sort arrow, filter, hidden lines, conditional
+//! formats, charts, pivots, protection, print area, page setup), each set
+//! whole. A sort is the `SetCells` that moves the rows plus the per-cell
+//! ops for what moved with them. Closure edits (`mutate_sheet`) become ops
+//! through [`diff_ops`]. There's no whole-sheet snapshot undo left.
 
 use std::cell::RefCell;
 use std::rc::Rc;
@@ -43,7 +47,9 @@ use suite_common_core::format::NumberFormat;
 use suite_common_core::undo::Command;
 
 use super::state::WorkbookState;
-use crate::sheet::{CellBorder, SheetModel};
+use std::collections::HashSet;
+
+use crate::sheet::{CellBorder, CellProtection, SheetModel, ValidationRule};
 use crate::style::CellStyle;
 
 /// Rows or columns.
@@ -61,6 +67,8 @@ pub struct CellContent {
     pub format: NumberFormat,
     pub style: CellStyle,
     pub border: CellBorder,
+    pub validation: Option<ValidationRule>,
+    pub lock: CellProtection,
 }
 
 /// One row or column: its size and its cells in order.
@@ -109,6 +117,72 @@ pub enum Op {
     AddSheet { index: usize, name: String, sheet_id: Option<u32>, content: Option<Box<SheetContent>>, relinks: Vec<Relink> },
     DeleteSheet { sheet: u32 },
     RenameSheet { sheet: u32, name: String },
+    /// Move a sheet to position `to`.
+    MoveSheet { sheet: u32, to: usize },
+    /// Several cells' inputs at once, evaluated once (paste, fill, sort).
+    SetCells { sheet: u32, cells: Vec<(usize, usize, String)> },
+    SetValidation { sheet: u32, row: usize, col: usize, rule: Option<ValidationRule> },
+    SetLocked { sheet: u32, row: usize, col: usize, protection: CellProtection },
+    /// One sheet-wide property: a last-writer-wins register each.
+    SetProp { sheet: u32, prop: SheetProp },
+    /// Define a workbook name (`formula`), or remove it (`None`).
+    DefineName { name: String, formula: Option<String> },
+}
+
+/// The sheet-wide properties, each set whole. Small lists and sets (the
+/// rules, the charts, the hidden rows) are one value: two people editing
+/// the same list at once is rare, and last-writer-wins is what Sheets does.
+#[derive(Clone, Debug, PartialEq)]
+pub enum SheetProp {
+    /// The column and direction the sheet was last sorted by (the header's
+    /// arrow); sorting itself moves cells with `SetCells` and friends.
+    Sorted(Option<(usize, crate::sheet::SortDirection)>),
+    /// Rows hidden by a filter.
+    Filtered(HashSet<usize>),
+    /// Rows and columns hidden by hand.
+    HiddenRows(HashSet<usize>),
+    HiddenCols(HashSet<usize>),
+    CondRules(Vec<crate::sheet::CondRule>),
+    Charts(Vec<crate::sheet::ChartSpec>),
+    Pivots(Vec<crate::sheet::PivotTableSpec>),
+    Protection(crate::sheet::SheetProtection),
+    PrintArea(Option<(usize, usize, usize, usize)>),
+    PageSetup(suite_common_core::print::PageSetup),
+}
+
+impl SheetProp {
+    /// Put this value on `sheet` and return the one it replaced.
+    fn swap(&self, sheet: &mut SheetModel) -> SheetProp {
+        use std::mem::replace;
+        match self {
+            SheetProp::Sorted(v) => SheetProp::Sorted(replace(&mut sheet.sorted_col, *v)),
+            SheetProp::Filtered(v) => SheetProp::Filtered(replace(&mut sheet.hidden_rows, v.clone())),
+            SheetProp::HiddenRows(v) => SheetProp::HiddenRows(replace(&mut sheet.hidden_rows_manual, v.clone())),
+            SheetProp::HiddenCols(v) => SheetProp::HiddenCols(replace(&mut sheet.hidden_cols, v.clone())),
+            SheetProp::CondRules(v) => SheetProp::CondRules(replace(&mut sheet.cond_rules, v.clone())),
+            SheetProp::Charts(v) => SheetProp::Charts(replace(&mut sheet.charts, v.clone())),
+            SheetProp::Pivots(v) => SheetProp::Pivots(replace(&mut sheet.pivot_tables, v.clone())),
+            SheetProp::Protection(v) => SheetProp::Protection(replace(&mut sheet.protection, v.clone())),
+            SheetProp::PrintArea(v) => SheetProp::PrintArea(replace(&mut sheet.print_area, *v)),
+            SheetProp::PageSetup(v) => SheetProp::PageSetup(replace(&mut sheet.page_setup, v.clone())),
+        }
+    }
+
+    /// Every property of `sheet`, in a fixed order.
+    pub fn all(sheet: &SheetModel) -> Vec<SheetProp> {
+        vec![
+            SheetProp::Sorted(sheet.sorted_col),
+            SheetProp::Filtered(sheet.hidden_rows.clone()),
+            SheetProp::HiddenRows(sheet.hidden_rows_manual.clone()),
+            SheetProp::HiddenCols(sheet.hidden_cols.clone()),
+            SheetProp::CondRules(sheet.cond_rules.clone()),
+            SheetProp::Charts(sheet.charts.clone()),
+            SheetProp::Pivots(sheet.pivot_tables.clone()),
+            SheetProp::Protection(sheet.protection.clone()),
+            SheetProp::PrintArea(sheet.print_area),
+            SheetProp::PageSetup(sheet.page_setup.clone()),
+        ]
+    }
 }
 
 fn sheet_ref(state: &WorkbookState, sheet: usize) -> Result<&Rc<RefCell<SheetModel>>, String> {
@@ -140,6 +214,8 @@ fn cell_content(state: &WorkbookState, sheet: usize, row: usize, col: usize) -> 
         format: s.formats[row][col].clone(),
         style: s.styles[row][col].clone(),
         border: s.borders[row][col].clone(),
+        validation: s.validations[row][col].clone(),
+        lock: s.cell_protections[row][col].clone(),
     }
 }
 
@@ -180,8 +256,13 @@ impl Op {
             | Op::Resize { sheet, .. }
             | Op::Freeze { sheet, .. }
             | Op::RenameSheet { sheet, .. }
+            | Op::MoveSheet { sheet, .. }
+            | Op::SetCells { sheet, .. }
+            | Op::SetValidation { sheet, .. }
+            | Op::SetLocked { sheet, .. }
+            | Op::SetProp { sheet, .. }
             | Op::DeleteSheet { sheet } => Some(*sheet),
-            Op::AddSheet { .. } => None,
+            Op::AddSheet { .. } | Op::DefineName { .. } => None,
         }
     }
 
@@ -252,6 +333,8 @@ impl Op {
                             s.formats[r][c] = cell.format.clone();
                             s.styles[r][c] = cell.style.clone();
                             s.borders[r][c] = cell.border.clone();
+                            s.validations[r][c] = cell.validation.clone();
+                            s.cell_protections[r][c] = cell.lock.clone();
                             if !cell.input.is_empty() {
                                 inputs.push((r, c, cell.input.clone()));
                             }
@@ -357,6 +440,57 @@ impl Op {
                 state.rename_sheet(si, name)?;
                 Ok(Op::RenameSheet { sheet: *sheet, name: old })
             }
+            Op::MoveSheet { sheet, to } => {
+                let n = state.sheets.len();
+                if *to >= n {
+                    return Err(format!("no position {to} for a sheet"));
+                }
+                let mut order: Vec<usize> = (0..n).collect();
+                let moved = order.remove(si);
+                order.insert(*to, moved);
+                state.reorder_sheets(&order)?;
+                Ok(Op::MoveSheet { sheet: *sheet, to: si })
+            }
+            Op::SetCells { sheet, cells } => {
+                {
+                    let s = sheet_ref(state, si)?.borrow();
+                    if let Some((r, c, _)) = cells.iter().find(|(r, c, _)| *r >= s.rows || *c >= s.cols) {
+                        return Err(format!("cell ({r}, {c}) is outside sheet {si}"));
+                    }
+                }
+                let old: Vec<(usize, usize, String)> =
+                    cells.iter().map(|(r, c, _)| (*r, *c, state.engine.input_at(si, *r, *c))).collect();
+                state.set_cell_inputs_on_sheet(si, cells.iter().map(|(r, c, i)| (*r, *c, i.as_str())));
+                // Undone in reverse, so a cell set twice in one op gets its
+                // first value back.
+                Ok(Op::SetCells { sheet: *sheet, cells: old.into_iter().rev().collect() })
+            }
+            Op::SetValidation { sheet, row, col, rule } => {
+                check_cell(state, si, *row, *col)?;
+                let old = std::mem::replace(&mut state.sheets[si].borrow_mut().validations[*row][*col], rule.clone());
+                Ok(Op::SetValidation { sheet: *sheet, row: *row, col: *col, rule: old })
+            }
+            Op::SetLocked { sheet, row, col, protection } => {
+                check_cell(state, si, *row, *col)?;
+                let old = std::mem::replace(&mut state.sheets[si].borrow_mut().cell_protections[*row][*col], protection.clone());
+                Ok(Op::SetLocked { sheet: *sheet, row: *row, col: *col, protection: old })
+            }
+            Op::SetProp { sheet, prop } => {
+                let old = prop.swap(&mut sheet_ref(state, si)?.borrow_mut());
+                Ok(Op::SetProp { sheet: *sheet, prop: old })
+            }
+            Op::DefineName { name, formula } => {
+                let old = state.engine.defined_name(name);
+                if old.as_ref() == formula.as_ref() {
+                    return Ok(Op::DefineName { name: name.clone(), formula: old });
+                }
+                state.engine.set_defined_name(name, formula.as_deref())?;
+                state.engine.evaluate();
+                for s in 0..state.sheets.len() {
+                    resync(state, s);
+                }
+                Ok(Op::DefineName { name: name.clone(), formula: old })
+            }
             Op::AddSheet { index, name, sheet_id, content, relinks } => {
                 if *index > state.sheets.len() {
                     return Err(format!("no position {index} for a sheet"));
@@ -404,6 +538,57 @@ impl Op {
             }
         }
     }
+}
+
+/// The ops that turn `before` into `after` (the same sheet, with the same
+/// size and values): per cell, its format, style, border, validation and
+/// lock; per line, its size; the merges, the freeze and the sheet-wide
+/// properties. Selection and view state aren't document changes.
+pub fn diff_ops(before: &SheetModel, after: &SheetModel) -> Vec<Op> {
+    let sheet = before.sheet_id;
+    let mut ops = Vec::new();
+    for r in 0..before.rows.min(after.rows) {
+        for c in 0..before.cols.min(after.cols) {
+            let (row, col) = (r, c);
+            if before.formats[r][c] != after.formats[r][c] {
+                ops.push(Op::SetFormat { sheet, row, col, format: after.formats[r][c].clone() });
+            }
+            if before.styles[r][c] != after.styles[r][c] {
+                ops.push(Op::SetStyle { sheet, row, col, style: after.styles[r][c].clone() });
+            }
+            if before.borders[r][c] != after.borders[r][c] {
+                ops.push(Op::SetBorder { sheet, row, col, border: after.borders[r][c].clone() });
+            }
+            if before.validations[r][c] != after.validations[r][c] {
+                ops.push(Op::SetValidation { sheet, row, col, rule: after.validations[r][c].clone() });
+            }
+            if before.cell_protections[r][c] != after.cell_protections[r][c] {
+                ops.push(Op::SetLocked { sheet, row, col, protection: after.cell_protections[r][c].clone() });
+            }
+        }
+    }
+    for (axis, old, new) in [(Axis::Rows, &before.row_heights, &after.row_heights), (Axis::Cols, &before.col_widths, &after.col_widths)] {
+        for (index, (a, b)) in old.iter().zip(new).enumerate() {
+            if (a - b).abs() > f64::EPSILON {
+                ops.push(Op::Resize { sheet, axis, index, size: *b });
+            }
+        }
+    }
+    for range in before.merges.iter().filter(|m| !after.merges.contains(m)) {
+        ops.push(Op::Unmerge { sheet, range: *range });
+    }
+    for range in after.merges.iter().filter(|m| !before.merges.contains(m)) {
+        ops.push(Op::Merge { sheet, range: *range });
+    }
+    if (before.frozen_rows, before.frozen_cols) != (after.frozen_rows, after.frozen_cols) {
+        ops.push(Op::Freeze { sheet, rows: after.frozen_rows, cols: after.frozen_cols });
+    }
+    for (a, b) in SheetProp::all(before).into_iter().zip(SheetProp::all(after)) {
+        if a != b {
+            ops.push(Op::SetProp { sheet, prop: b });
+        }
+    }
+    ops
 }
 
 /// Apply `op` and return the ops that undo it (as `letters_core::edit::apply`).
@@ -454,15 +639,33 @@ impl Command<WorkbookState> for OpCommand {
     fn apply(&self, state: &mut WorkbookState) {
         // A group that no longer applies (its sheet deleted since) changes
         // nothing and leaves nothing to undo.
-        *self.inverses.borrow_mut() = apply_all(state, &self.ops).unwrap_or_default();
+        let inverses = apply_all(state, &self.ops).unwrap_or_default();
+        show_changed_sheet(state, &self.ops, &inverses);
+        *self.inverses.borrow_mut() = inverses;
     }
 
     fn undo(&self, state: &mut WorkbookState) {
-        let _ = apply_all(state, &self.inverses.borrow());
+        let inverses = self.inverses.borrow();
+        if apply_all(state, &inverses).is_ok() {
+            show_changed_sheet(state, &inverses, &self.ops);
+        }
     }
 
     fn description(&self) -> &str {
         &self.description
+    }
+}
+
+/// After an undo step's `ops` (whose inverses are `inverses`), show the
+/// sheet they changed, as Sheets and Excel do: undoing an edit on another
+/// sheet brings that sheet up, undoing a delete shows the sheet it brought
+/// back. A sheet that no longer exists (the step deleted it) is skipped.
+fn show_changed_sheet(state: &mut WorkbookState, ops: &[Op], inverses: &[Op]) {
+    let target = ops.iter().chain(inverses).filter_map(Op::sheet).find_map(|id| state.sheet_index_for_id(id));
+    if let Some(index) = target {
+        if index != state.active_sheet {
+            let _ = state.switch_sheet(index);
+        }
     }
 }
 
@@ -545,6 +748,8 @@ impl super::core::WorkbookController {
 #[derive(Debug, PartialEq)]
 pub struct WorkbookImage {
     pub sheets: Vec<SheetImage>,
+    /// Workbook-level names, `(name, formula)`, sorted.
+    pub names: Vec<(String, String)>,
 }
 
 #[derive(Debug, PartialEq)]
@@ -561,6 +766,9 @@ pub struct SheetImage {
     pub col_widths: Vec<f64>,
     pub frozen: (usize, usize),
     pub values: Vec<Vec<String>>,
+    pub validations: Vec<Vec<Option<ValidationRule>>>,
+    pub locks: Vec<Vec<CellProtection>>,
+    pub props: Vec<SheetProp>,
 }
 
 impl WorkbookImage {
@@ -593,9 +801,15 @@ impl WorkbookImage {
                     col_widths: s.col_widths.clone(),
                     frozen: (s.frozen_rows, s.frozen_cols),
                     values: (0..s.rows).map(|r| (0..s.cols).map(|c| state.engine.cell_at(i, r, c)).collect()).collect(),
+                    validations: s.validations.clone(),
+                    locks: s.cell_protections.clone(),
+                    props: SheetProp::all(&s),
                 }
             })
             .collect();
-        WorkbookImage { sheets }
+        let mut names: Vec<(String, String)> =
+            state.engine.model.workbook.defined_names.iter().map(|n| (n.name.clone(), n.formula.clone())).collect();
+        names.sort();
+        WorkbookImage { sheets, names }
     }
 }

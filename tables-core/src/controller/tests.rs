@@ -810,9 +810,8 @@
         controller.state.borrow_mut().switch_sheet(1).unwrap();
         assert_eq!(controller.state.borrow().sheet().cell(0, 0), "second sheet");
         assert!(controller.undo());
-        assert_eq!(controller.state.borrow().sheet().cell(0, 0), "second sheet");
-
-        controller.state.borrow_mut().switch_sheet(0).unwrap();
+        // Undo brings up the sheet it changed, as Sheets and Excel do.
+        assert_eq!(controller.state.borrow().active_sheet, 0);
         assert_eq!(controller.state.borrow().sheet().cell(0, 0), "");
         controller.state.borrow_mut().switch_sheet(1).unwrap();
         assert_eq!(controller.state.borrow().sheet().cell(0, 0), "second sheet");

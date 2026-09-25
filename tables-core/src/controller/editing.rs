@@ -6,7 +6,6 @@ use crate::fill::{extend_fill, infer_fill, FillDirection};
 use crate::fragment::Fragment;
 use crate::sheet::SheetModel;
 
-use super::state::*;
 
 use super::core::WorkbookController;
 
@@ -28,23 +27,25 @@ impl WorkbookController {
         self.apply_ops("Edit Cell", vec![super::ops::Op::SetCell { sheet: active, row, col, input: new_input }]);
     }
 
+    /// Change the active sheet's formatting and properties with a
+    /// closure, recorded as the ops that make the difference (one undo
+    /// step). The closure works on a copy; what it changed becomes
+    /// `SetFormat`, `SetStyle`, `SetProp`… ops (`super::ops::diff_ops`).
+    /// Cell values and the sheet's size don't change this way: those go
+    /// through `edit_cell`, paste, fill and the row/column ops.
     pub fn mutate_sheet(
         &mut self,
         description: &'static str,
         mutation: impl FnOnce(&mut SheetModel),
     ) {
-        let state = self.state.borrow();
-        let sheet_id = state.sheet().sheet_id;
-        let before = state.sheet().clone();
-        drop(state);
+        let before = self.state.borrow().sheet().clone();
         let mut after = before.clone();
         mutation(&mut after);
-        self.execute(Box::new(SheetSnapshotCommand {
-            sheet_id,
-            before,
-            after,
-            description,
-        }));
+        debug_assert!(
+            after.data == before.data && (after.rows, after.cols) == (before.rows, before.cols),
+            "mutate_sheet can't change values or size"
+        );
+        self.apply_ops(description, super::ops::diff_ops(&before, &after));
     }
 
     pub fn paste_fragment(&mut self, row: usize, col: usize, fragment: &Fragment) {
@@ -79,28 +80,13 @@ impl WorkbookController {
                 }
             }
         }
-        let changes: Vec<CellInputChange> = new_inputs
-            .into_iter()
-            .filter_map(|(r, c, new_input)| {
-                let old_input = state.cell_input(r, c);
-                (old_input != new_input).then_some(CellInputChange {
-                    row: r,
-                    col: c,
-                    old_input,
-                    new_input,
-                })
-            })
-            .collect();
+        let cells: Vec<(usize, usize, String)> =
+            new_inputs.into_iter().filter(|(r, c, new_input)| state.cell_input(*r, *c) != *new_input).collect();
         drop(state);
-        if !changes.is_empty() {
-            self.undo.execute(Box::new(CellBatchCommand {
-                sheet_id,
-                changes,
-                description: "Paste Cells",
-            }));
+        if !cells.is_empty() {
+            self.apply_ops("Paste Cells", vec![super::ops::Op::SetCells { sheet: sheet_id, cells }]);
         }
     }
-
     pub fn fill(&mut self, sel: (usize, usize, usize, usize), drag_row: usize, drag_col: usize) {
         let Some((direction, distance)) = infer_fill(sel, drag_row, drag_col) else {
             return;
@@ -116,7 +102,6 @@ impl WorkbookController {
         struct Change {
             row: usize,
             col: usize,
-            old_input: String,
             new_input: String,
             formula_source: Option<(usize, usize)>,
         }
@@ -140,7 +125,6 @@ impl WorkbookController {
                             changes.push(Change {
                                 row,
                                 col: c,
-                                old_input,
                                 new_input: input,
                                 formula_source,
                             });
@@ -166,7 +150,6 @@ impl WorkbookController {
                             changes.push(Change {
                                 row: r,
                                 col,
-                                old_input,
                                 new_input: input,
                                 formula_source,
                             });
@@ -194,7 +177,6 @@ impl WorkbookController {
                             changes.push(Change {
                                 row,
                                 col: c,
-                                old_input,
                                 new_input: input,
                                 formula_source,
                             });
@@ -220,7 +202,6 @@ impl WorkbookController {
                             changes.push(Change {
                                 row: r,
                                 col,
-                                old_input,
                                 new_input: input,
                                 formula_source,
                             });
@@ -242,21 +223,9 @@ impl WorkbookController {
                 }
             }
         }
-        let changes: Vec<CellInputChange> = changes
-            .into_iter()
-            .map(|c| CellInputChange {
-                row: c.row,
-                col: c.col,
-                old_input: c.old_input,
-                new_input: c.new_input,
-            })
-            .collect();
-        if !changes.is_empty() {
-            self.undo.execute(Box::new(CellBatchCommand {
-                sheet_id,
-                changes,
-                description: "Fill",
-            }));
+        let cells: Vec<(usize, usize, String)> = changes.into_iter().map(|c| (c.row, c.col, c.new_input)).collect();
+        if !cells.is_empty() {
+            self.apply_ops("Fill", vec![super::ops::Op::SetCells { sheet: sheet_id, cells }]);
         }
     }
 }
