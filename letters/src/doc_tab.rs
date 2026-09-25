@@ -143,22 +143,38 @@ pub(crate) fn refresh_print_layout(container: &PageContainer, buf: &gtk::TextBuf
         return;
     }
     let Some(view) = container.page_view() else { return };
-    view.set_typeset(typeset_for(container, buf));
+    let (typeset, starts) = typeset_with_starts(container, buf);
+    view.set_typeset(typeset, starts);
 }
 
 /// The tab's document laid out into pages (ADR 0010): what Print Layout
 /// shows, and what Print and Export as PDF draw — one layout for all three.
 pub(crate) fn typeset_for(container: &PageContainer, buf: &gtk::TextBuffer) -> letters_core::layout::pango::Typeset {
-    let doc = crate::bridge::capture_from_buffer(buf);
+    typeset_with_starts(container, buf).0
+}
+
+/// `typeset_for`, plus where each laid-out paragraph starts in the buffer,
+/// which the page view needs to edit it.
+fn typeset_with_starts(container: &PageContainer, buf: &gtk::TextBuffer) -> (letters_core::layout::pango::Typeset, Vec<usize>) {
+    let (doc, starts) = crate::bridge::capture_with_starts(buf);
     let mut typeset = letters_core::layout::pango::Typeset::new(doc, layout_options(container));
     typeset.set_image_loader(crate::page_view::load_image);
-    typeset
+    (typeset, starts)
 }
 
 /// Switch a tab between Print Layout and Draft.
 pub(crate) fn set_print_layout(container: &PageContainer, buf: &gtk::TextBuffer, on: bool) {
     container.set_print_layout(on);
     refresh_print_layout(container, buf);
+    // Typing goes to whichever view is showing.
+    let focus: Option<gtk::Widget> = if on {
+        container.page_view().map(|v| v.upcast())
+    } else {
+        crate::dialogs::get_textview(container).map(|t| t.upcast())
+    };
+    if let Some(w) = focus {
+        glib::idle_add_local_once(move || { w.grab_focus(); });
+    }
 }
 
 pub(crate) fn make_doc_widget(settings: Option<&gio::Settings>) -> (PageContainer, gtk::TextBuffer) {
@@ -355,7 +371,8 @@ pub(crate) fn make_doc_widget(settings: Option<&gio::Settings>) -> (PageContaine
         container.load_from_settings(s);
     }
     scroll.set_parent(&container);
-    container.attach_page_view();
+    let page_view = container.attach_page_view();
+    crate::page_edit::make_editable(&page_view, &buffer);
     container.set_zoom(container.zoom_level());
     container.set_vexpand(true); container.set_hexpand(true);
     // A render-lab capture looks at the laid-out pages (ADR 0010).
@@ -381,10 +398,12 @@ pub(crate) fn make_doc_widget(settings: Option<&gio::Settings>) -> (PageContaine
         });
         editor.add_controller(scroll_ctrl);
     }
-    // Pagination (debounced): the page layout engine decides the page
-    // count for both views. The Draft view used to count pages with a
-    // separate pass over unstyled plain text, so headings, spacing and
-    // breaks never moved a page boundary.
+    // Pagination: the page layout engine decides the page count for both
+    // views. The Draft view used to count pages with a separate pass over
+    // unstyled plain text, so headings, spacing and breaks never moved a
+    // page boundary. Print Layout is being edited, so it lays out again as
+    // soon as the main loop is idle (edits in one event coalesce); Draft
+    // only needs the page count, after a pause in typing.
     {
         let pc = container.clone();
         let timer = std::rc::Rc::new(std::cell::RefCell::new(None::<glib::SourceId>));
@@ -392,11 +411,12 @@ pub(crate) fn make_doc_widget(settings: Option<&gio::Settings>) -> (PageContaine
         buffer.connect_changed(move |_| {
             if let Some(id) = timer.borrow_mut().take() { id.remove(); }
             let (buf, pc, t2) = (b2.clone(), pc.clone(), timer.clone());
-            let id = glib::timeout_add_local(std::time::Duration::from_millis(500), move || {
-                let typeset = typeset_for(&pc, &buf);
+            let delay = if pc.is_print_layout() { 0 } else { 500 };
+            let id = glib::timeout_add_local(std::time::Duration::from_millis(delay), move || {
+                let (typeset, starts) = typeset_with_starts(&pc, &buf);
                 pc.set_page_count(typeset.tree().pages.len());
                 if let (true, Some(view)) = (pc.is_print_layout(), pc.page_view()) {
-                    view.set_typeset(typeset);
+                    view.set_typeset(typeset, starts);
                 }
                 t2.borrow_mut().take();
                 glib::ControlFlow::Break

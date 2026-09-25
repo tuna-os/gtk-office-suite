@@ -304,6 +304,10 @@ Each phase must be abandonable without leaving the codebase worse.
   document model for Letters (the `session.rs` question). Scope and justify on
   editing, accessibility and testability grounds; collaboration is a
   beneficiary, not the reason.
+  *Where it lands (2026-09-25):* ADR 0010 stage 3c. The page layout engine and
+  the editable Print Layout view (stages 1–3a) already work from a GTK-free
+  `Document` and map every position between it and the buffer; 3c moves the
+  live state from the buffer to that `Document`.
 - **Phase 1 — spike, no product change.** The measurement above. Output is a
   recommendation with numbers, or a documented dead end.
   Results: [0001-spike-results.md](0001-spike-results.md).
