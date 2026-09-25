@@ -4845,9 +4845,11 @@ class TablesChartTypesSmoke(BaseGUITestCase):
         # the last kind is selected (Down at the bottom stays put).
         def choose_scatter():
             chooser.child(roleName="toggle button").do_action(0)
-            for _ in range(4):
-                rawinput.keyCombo("Down")
+            time.sleep(0.5)  # the popover opens asynchronously
+            rawinput.keyCombo("End")
+            time.sleep(0.2)
             rawinput.keyCombo("Return")
+            time.sleep(0.3)
             return chooser.name
 
         self.wait_until(choose_scatter, lambda name: name == "XY (Scatter)", interval=0.6,

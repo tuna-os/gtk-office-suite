@@ -92,13 +92,26 @@ enum Key {
     Marker,
 }
 
-/// The legend's width for `name`, at the right of the plot.
+/// The legend's width for `name`, at the right of the plot, measured
+/// against LibreOffice's (render lab `tables/chart-line`, `-scatter`).
 fn legend_width(cr: &Context, name: Option<&str>, key: Key) -> f64 {
     let sample = match key {
         Key::Line => 34.0,
-        Key::Square | Key::Marker => 12.0,
+        Key::Square => 12.0,
+        Key::Marker => 14.0,
     };
-    name.map_or(0.0, |n| text_w(cr, n) + sample + 18.0)
+    name.map_or(0.0, |n| text_w(cr, n) + sample + 13.0)
+}
+
+/// A scatter point's marker: a filled circle with a darker rim, the size
+/// Calc draws a 7 pt marker.
+fn marker(cr: &Context, x: f64, y: f64) {
+    cr.arc(x, y, 5.0, 0.0, std::f64::consts::TAU);
+    set(cr, SERIES_1);
+    cr.fill_preserve().unwrap();
+    set(cr, (SERIES_1.0 * 0.75, SERIES_1.1 * 0.75, SERIES_1.2 * 0.75));
+    cr.set_line_width(1.0);
+    cr.stroke().unwrap();
 }
 
 /// A one-entry legend, vertically centred at `(x, mid)`.
@@ -111,9 +124,8 @@ fn draw_legend(cr: &Context, x: f64, mid: f64, name: &str, key: Key) {
             x + 12.0
         }
         Key::Marker => {
-            cr.arc(x + 4.0, mid - 3.0, 3.5, 0.0, std::f64::consts::TAU);
-            cr.fill().unwrap();
-            x + 12.0
+            marker(cr, x + 5.0, mid - 3.0);
+            x + 14.0
         }
         Key::Line => {
             cr.set_line_width(2.5);
@@ -251,7 +263,7 @@ fn draw_category(cr: &Context, data: &[(String, f64)], w: f64, h: f64, series_na
         show(cr, x_of(i) - text_w(cr, cat) / 2.0, bottom + 4.0 + CHART_TEXT_PX, cat);
     }
     if let Some(name) = series_name {
-        draw_legend(cr, right + 12.0, (top_y + bottom) / 2.0, name, key);
+        draw_legend(cr, right + 12.0, h / 2.0 + 3.0, name, key);
     }
 }
 
@@ -264,7 +276,7 @@ fn draw_pie(cr: &Context, data: &[(String, f64)], w: f64, h: f64) {
     }
     let legend_w = data.iter().map(|(c, _)| text_w(cr, c)).fold(0.0, f64::max) + 30.0;
     let plot_w = (w - legend_w - 10.0).max(1.0);
-    let r = ((plot_w.min(h) - 24.0) / 2.0).max(1.0);
+    let r = ((plot_w.min(h) - 30.0) / 2.0).max(1.0);
     let (cx, cy) = (plot_w / 2.0 + 5.0, h / 2.0);
     let mut angle = -std::f64::consts::FRAC_PI_2;
     for (i, (_, val)) in data.iter().enumerate() {
@@ -277,9 +289,9 @@ fn draw_pie(cr: &Context, data: &[(String, f64)], w: f64, h: f64) {
         angle += sweep;
     }
     // The legend: one row per category, centred on the pie.
-    let row = CHART_TEXT_PX * 1.5;
+    let row = 19.0;
     let lx = w - legend_w + 8.0;
-    let y0 = cy - row * data.len() as f64 / 2.0 + row * 0.7;
+    let y0 = cy - row * data.len() as f64 / 2.0 + row * 0.5 + 4.0;
     for (i, (cat, _)) in data.iter().enumerate() {
         let y = y0 + i as f64 * row;
         set(cr, accent(i));
@@ -314,13 +326,11 @@ fn draw_scatter(cr: &Context, data: &[(String, f64)], w: f64, h: f64, series_nam
         let t = x_axis.label(i);
         show(cr, x - text_w(cr, &t) / 2.0, bottom + 4.0 + CHART_TEXT_PX, &t);
     }
-    set(cr, SERIES_1);
     for (x, y) in points {
-        cr.arc(x_of(x), y_of(y), 4.0, 0.0, std::f64::consts::TAU);
-        cr.fill().unwrap();
+        marker(cr, x_of(x), y_of(y));
     }
     if let Some(name) = series_name {
-        draw_legend(cr, right + 12.0, (top_y + bottom) / 2.0, name, Key::Marker);
+        draw_legend(cr, right + 12.0, h / 2.0 + 3.0, name, Key::Marker);
     }
 }
 
