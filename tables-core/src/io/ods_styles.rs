@@ -7,11 +7,13 @@
 // alignment and font. This resolves each into the model's CellStyle and
 // CellBorder, the ODF twin of xlsx_styles.rs.
 //
-// Not read (yet): number formats (ODF data styles), named parent styles in
-// styles.xml, and the document's default font. A cell whose style names no
-// font keeps the workbook default.
+// The number format comes from the style's data style (ods_numfmt.rs).
+// Not read (yet): named parent styles in styles.xml other than the
+// document default (see `document_default_font`).
 
+use super::XfStyle;
 use crate::sheet::{BorderStyle, CellBorder};
+use suite_common_core::format::NumberFormat;
 use crate::style::{CellStyle, HAlign, Rgb, VAlign};
 use std::collections::HashMap;
 
@@ -94,7 +96,10 @@ fn edge(v: &str) -> (BorderStyle, Option<Rgb>) {
 
 /// Style name → (style, border) for every `table-cell` automatic style.
 /// `font-face-decls` resolves a `style:font-name` to its family.
-pub fn parse_ods_cell_styles(content_xml: &str) -> HashMap<String, (CellStyle, CellBorder)> {
+/// Style name → resolved style for every `table-cell` automatic style;
+/// `data_styles` (from ods_numfmt::parse_data_styles) supply the number
+/// formats they name.
+pub fn parse_ods_cell_styles(content_xml: &str, data_styles: &HashMap<String, NumberFormat>) -> HashMap<String, XfStyle> {
     let faces: HashMap<String, String> = content_xml
         .split("<style:font-face")
         .skip(1)
@@ -162,7 +167,8 @@ pub fn parse_ods_cell_styles(content_xml: &str) -> HashMap<String, (CellStyle, C
             right: pick(right),
             color: rgb.to_f64(),
         };
-        out.insert(name.to_string(), (style, border));
+        let format = attr(&head, "style:data-style-name").and_then(|n| data_styles.get(n)).cloned().unwrap_or_default();
+        out.insert(name.to_string(), XfStyle { format, style, border });
     }
     out
 }
@@ -188,7 +194,7 @@ mod tests {
           <style:paragraph-properties fo:text-align="center"/>
           <style:text-properties style:font-name="Liberation Serif1" fo:font-size="20pt" fo:font-style="italic" fo:color="#c00000" style:text-underline-style="solid"/>
         </style:style>
-        <style:style style:name="ce3" style:family="table-cell">
+        <style:style style:name="ce3" style:family="table-cell" style:data-style-name="N11">
           <style:table-cell-properties fo:border="0.74pt solid #000000"/>
         </style:style>
         <style:style style:name="ce4" style:family="table-cell">
@@ -200,14 +206,14 @@ mod tests {
 
     #[test]
     fn fonts_resolve_through_their_font_face() {
-        let styles = parse_ods_cell_styles(CONTENT);
+        let styles = parse_ods_cell_styles(CONTENT, &HashMap::new());
         assert!(!styles.contains_key("co1"), "column styles are not cell styles");
-        let (s, b) = &styles["ce1"];
+        let (s, b) = (&styles["ce1"].style, &styles["ce1"].border);
         assert_eq!(s.font_family.as_deref(), Some("Calibri"));
         assert_eq!(s.font_size, Some(11.0));
         assert!(s.bold && !s.italic);
         assert!(b.is_none());
-        let (s, _) = &styles["ce2"];
+        let s = &styles["ce2"].style;
         assert_eq!(s.font_family.as_deref(), Some("Liberation Serif"));
         assert_eq!(s.font_size, Some(20.0));
         assert!(s.italic && s.underline && !s.bold);
@@ -216,24 +222,35 @@ mod tests {
 
     #[test]
     fn fill_wrap_and_alignment_come_from_the_cell_and_paragraph_properties() {
-        let styles = parse_ods_cell_styles(CONTENT);
-        let (s, _) = &styles["ce2"];
+        let styles = parse_ods_cell_styles(CONTENT, &HashMap::new());
+        let s = &styles["ce2"].style;
         assert_eq!(s.fill, Some(Rgb(0xFF, 0xC7, 0xCE)));
         assert!(s.wrap);
         assert_eq!((s.h_align, s.v_align), (HAlign::Center, VAlign::Center));
-        assert_eq!(styles["ce4"].0.h_align, HAlign::Right, "end is right in a left-to-right sheet");
+        assert_eq!(styles["ce4"].style.h_align, HAlign::Right, "end is right in a left-to-right sheet");
     }
 
     #[test]
     fn borders_read_weight_kind_and_colour_per_side() {
-        let styles = parse_ods_cell_styles(CONTENT);
-        assert_eq!(styles["ce3"].1, CellBorder::outline(BorderStyle::Solid, (0.0, 0.0, 0.0)));
-        let b = &styles["ce4"].1;
+        let styles = parse_ods_cell_styles(CONTENT, &HashMap::new());
+        assert_eq!(styles["ce3"].border, CellBorder::outline(BorderStyle::Solid, (0.0, 0.0, 0.0)));
+        let b = &styles["ce4"].border;
         assert_eq!(b.bottom, BorderStyle::Thick);
         assert_eq!(b.top, BorderStyle::Medium);
         assert_eq!(b.left, BorderStyle::Dashed);
         assert_eq!(b.right, BorderStyle::None);
         let (r, g, bl) = b.color;
         assert_eq!(((r * 255.0).round(), (g * 255.0).round(), (bl * 255.0).round()), (0.0, 112.0, 192.0));
+    }
+
+    #[test]
+    fn a_cell_style_takes_the_number_format_its_data_style_names() {
+        let data = super::super::ods_numfmt::parse_data_styles(
+            r#"<number:percentage-style style:name="N11"><number:number number:decimal-places="1"/><number:text>%</number:text></number:percentage-style>"#,
+        );
+        let styles = parse_ods_cell_styles(CONTENT, &data);
+        use suite_common_core::format::NumberFormatKind;
+        assert_eq!(styles["ce3"].format.kind, NumberFormatKind::Percent(1));
+        assert_eq!(styles["ce1"].format.kind, NumberFormatKind::General);
     }
 }

@@ -742,3 +742,34 @@ fn cell_styles_survive_a_conversion_to_ods() {
     assert_eq!(s.borders[1][1].left, BorderStyle::Thick);
     assert!(s.styles[2][2].is_default() && s.borders[2][2].is_none());
 }
+
+/// Number formats and dates across the same boundary. The ods reader kept
+/// every value raw (0.153 for 15.3%), and dropped date cells entirely:
+/// calamine reports them as ISO text, which the loader turned into "".
+#[test]
+fn number_formats_and_dates_survive_a_conversion_to_ods() {
+    if !require_or_skip() {
+        return;
+    }
+    use suite_common_core::format::{NumberFormat, NumberFormatKind};
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("formats.xlsx");
+    let mut sheet = SheetModel::new("S", 4, 2, 0);
+    let cells = [
+        ("0.153", NumberFormatKind::Percent(1)),
+        ("1234.5", NumberFormatKind::Currency("$".into(), 2)),
+        ("45000", NumberFormatKind::Date("%Y-%m-%d".into())),
+        ("1234567.891", NumberFormatKind::Number(2)),
+    ];
+    for (r, (v, kind)) in cells.iter().enumerate() {
+        sheet.data[r][0] = (*v).into();
+        sheet.formats[r][0] = NumberFormat::new(kind.clone());
+    }
+    save_sheets_to_xlsx(path.to_str().unwrap(), &[sheet]).unwrap();
+
+    let as_ods = convert(&path, "ods").expect("Calc could not convert our xlsx to ods");
+    let (_engine, sheets) = load_workbook(as_ods.to_str().unwrap()).expect("read back the ods");
+    let s = &sheets[0];
+    let shown: Vec<String> = (0..4).map(|r| s.formats[r][0].format(s.cell(r, 0))).collect();
+    assert_eq!(shown, ["15.3%", "$1,234.50", "2023-03-15", "1,234,567.89"], "kinds {:?}", (0..4).map(|r| &s.formats[r][0].kind).collect::<Vec<_>>());
+}
