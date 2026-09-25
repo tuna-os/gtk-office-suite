@@ -48,7 +48,7 @@ use crate::persistence::{
 /// Cell/range references parsed live from the fx entry while editing a
 /// formula (#113), shared between the entry's connect_changed handler
 /// and the renderer.
-type FormulaRefs = Rc<RefCell<Vec<(usize, usize, usize, usize)>>>;
+pub type FormulaRefs = Rc<RefCell<Vec<(usize, usize, usize, usize)>>>;
 
 // ── Main window ────────────────────────────────────────────────────────
 
@@ -236,41 +236,10 @@ impl TablesWindow {
         fx_entry.set_placeholder_text(Some("Formula or value\u{2026}"));
         fx_entry.update_property(&[gtk4::accessible::Property::Label("Formula input")]);
 
-        // Reference highlighting (#113): while typing a formula, outline
-        // each same-sheet cell/range it references, same convention as
-        // Excel/Sheets. A match is excluded if it's actually a defined
-        // name that happens to look like a cell ref (e.g. a name called
-        // "Tax1") rather than a real reference.
-        {
-            let ctl = controller.clone();
-            let refs = formula_refs.clone();
-            let da = drawing_area.clone();
-            fx_entry.connect_changed(move |entry| {
-                let text = entry.text();
-                let new_refs = if text.starts_with('=') {
-                    let ctlb = ctl.borrow();
-                    let state = ctlb.state.borrow();
-                    let sheet_name = state.sheet().name.clone();
-                    let defined_names: Vec<String> =
-                        state.engine.model.workbook.defined_names.iter().map(|n| n.name.clone()).collect();
-                    drop(state);
-                    drop(ctlb);
-                    tables_core::sheet::parse_formula_references(&text)
-                        .into_iter()
-                        .filter(|r| r.sheet_name.is_none() || r.sheet_name.as_deref() == Some(sheet_name.as_str()))
-                        .filter(|r| match &r.single_cell_text {
-                            Some(t) => !defined_names.iter().any(|n| n.eq_ignore_ascii_case(t)),
-                            None => true,
-                        })
-                        .map(|r| r.rect)
-                        .collect()
-                } else {
-                    Vec::new()
-                };
-                *refs.borrow_mut() = new_refs;
-                da.queue_draw();
-            });
-        }
+        // The formula editor (DESIGN-UI.md): references as coloured tokens
+        // matching their outlines on the grid, function autocomplete and
+        // argument hints.
+        crate::formula_bar::attach(&fx_entry, &controller, &formula_refs, &drawing_area);
 
         let fx_bar = gtk4::Box::new(gtk4::Orientation::Horizontal, 6);
         fx_bar.set_margin_start(6); fx_bar.set_margin_end(6);

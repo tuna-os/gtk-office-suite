@@ -2081,6 +2081,45 @@ class TablesCellEntryMixin:
         )
 
 
+class TablesFormulaAutocompleteSmoke(TablesCellEntryMixin, BaseGUITestCase):
+    """The formula editor (DESIGN-UI.md): typing a function name offers the
+    functions it could be, Tab inserts the chosen one with its parenthesis,
+    and inside the call the signature is shown. Asserted on the entry's
+    text and the popover's labels, as AT-SPI reports them."""
+
+    app_name = "tables"
+
+    def _fx_text(self):
+        return self.app.child(name="Formula input", roleName="text").text
+
+    def _labels(self):
+        return [c.name or "" for c in self.app.findChildren(lambda c: c.roleName == "label")]
+
+    def test_typing_a_function_offers_it_and_tab_inserts_it(self):
+        from dogtail import rawinput
+        import subprocess
+
+        subprocess.run(["gapplication", "action", "org.tunaos.tables", "new-document"])
+        self._wait_for_a_new_document()
+        # Ctrl+G then a jump hands focus to the formula entry.
+        rawinput.keyCombo("<Control>g")
+        self.wait_until(lambda: self._focused("Cell reference"), bool,
+                        description="the name box to take focus")
+        rawinput.typeText("B2")
+        rawinput.keyCombo("Return")
+        self.wait_until(lambda: self._focused("Formula input"), bool,
+                        description="the jump to hand focus to fx")
+        rawinput.typeText("=SU")
+        self.wait_until(self._labels, lambda ls: any(l.startswith("SUMIF") for l in ls),
+                        description="SUMIF among the suggestions")
+        rawinput.keyCombo("Tab")
+        self.wait_until(self._fx_text, lambda t: t == "=SUM(",
+                        description="Tab to insert the first suggestion")
+        self.wait_until(self._labels, lambda ls: any(l.startswith("SUM(number1") for l in ls),
+                        description="the argument hint for SUM")
+        self.assertIsNone(self.process.poll(), "tables crashed in the formula editor")
+
+
 class TablesFormatInspectorSmoke(TablesCellEntryMixin, BaseGUITestCase):
     """The Format inspector (DESIGN-UI.md) edits the selected cell's style
     and follows the selection: Bold set on A1 shows as pressed on A1 and
