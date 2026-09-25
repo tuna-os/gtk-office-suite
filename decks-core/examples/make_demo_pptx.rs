@@ -10,6 +10,7 @@ fn slide(title: &str, objects: Vec<SlideObject>, notes: &str) -> Slide {
         objects,
         notes: notes.to_string(),
         master_idx: Some(0),
+        transition: Default::default(),
     }
 }
 

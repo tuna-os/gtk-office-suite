@@ -916,6 +916,25 @@ fn layout_part_xml(master: &MasterSlide) -> Result<Vec<u8>, String> {
     Ok(xml)
 }
 
+/// A slide's `p:transition`, after `p:cSld`. Magic Move is PowerPoint's
+/// Morph, which lives in the 2015 namespace: written as
+/// `mc:AlternateContent` with a fade Fallback, as PowerPoint writes it, so
+/// a reader that doesn't know Morph (LibreOffice) still dissolves.
+fn transition_xml(t: Transition) -> Option<String> {
+    let plain = |kind: &str| format!("<p:transition spd=\"med\"><p:{kind}/></p:transition>");
+    Some(match t {
+        Transition::None => return None,
+        Transition::Fade => plain("fade"),
+        Transition::Push => "<p:transition spd=\"med\"><p:push dir=\"l\"/></p:transition>".into(),
+        Transition::Wipe => "<p:transition spd=\"med\"><p:wipe dir=\"r\"/></p:transition>".into(),
+        Transition::MagicMove => "<mc:AlternateContent xmlns:mc=\"http://schemas.openxmlformats.org/markup-compatibility/2006\">\
+            <mc:Choice xmlns:p159=\"http://schemas.microsoft.com/office/powerpoint/2015/09/main\" Requires=\"p159\">\
+            <p:transition spd=\"slow\"><p159:morph option=\"byObject\"/></p:transition></mc:Choice>\
+            <mc:Fallback><p:transition spd=\"slow\"><p:fade/></p:transition></mc:Fallback></mc:AlternateContent>"
+            .into(),
+    })
+}
+
 /// A relationships part carrying `(kind, target)` in order, numbered from
 /// `rId1`.
 ///
@@ -1186,6 +1205,9 @@ pub fn write_pptx_bytes(deck: &Deck) -> Result<Vec<u8>, String> {
 
             writer.write_event(Event::End(BytesEnd::new("p:spTree"))).map_err(|e| e.to_string())?;
             writer.write_event(Event::End(BytesEnd::new("p:cSld"))).map_err(|e| e.to_string())?;
+            if let Some(xml) = transition_xml(slide.transition) {
+                writer.get_mut().write_all(xml.as_bytes()).map_err(|e| e.to_string())?;
+            }
             writer.write_event(Event::End(BytesEnd::new("p:sld"))).map_err(|e| e.to_string())?;
         }
 
@@ -1313,6 +1335,7 @@ mod emu_rounding_tests {
                     runs: vec![],
                     body: Default::default(),
                 }],
+                transition: Default::default(),
             }],
             ..Default::default()
         }

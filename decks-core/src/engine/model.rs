@@ -17,6 +17,37 @@ pub struct Slide {
     pub objects: Vec<SlideObject>,
     pub notes: String,
     pub master_idx: Option<usize>,
+    /// How this slide arrives when presented (PowerPoint's model: the
+    /// transition belongs to the slide it leads into).
+    pub transition: Transition,
+}
+
+/// A slide transition.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum Transition {
+    #[default]
+    None,
+    Fade,
+    Push,
+    Wipe,
+    /// Keynote's Magic Move (PowerPoint's Morph): objects the two slides
+    /// share glide from their old place, size and angle to their new one;
+    /// the rest fade (decks_core::magic_move).
+    MagicMove,
+}
+
+impl Transition {
+    pub const ALL: [Transition; 5] = [Transition::None, Transition::Fade, Transition::Push, Transition::Wipe, Transition::MagicMove];
+
+    pub fn label(self) -> &'static str {
+        match self {
+            Transition::None => "None",
+            Transition::Fade => "Dissolve",
+            Transition::Push => "Push",
+            Transition::Wipe => "Wipe",
+            Transition::MagicMove => "Magic Move",
+        }
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -137,6 +168,7 @@ impl Deck {
                 objects: vec![],
                 notes: String::new(),
                 master_idx: Some(0),
+                transition: Default::default(),
             }],
             masters: vec![default_master],
         }

@@ -49,6 +49,7 @@ fn slide_of(objects: Vec<SlideObject>, notes: &str, background: &str) -> Slide {
         objects,
         notes: notes.to_string(),
         master_idx: None,
+        transition: Default::default(),
     }
 }
 
@@ -338,6 +339,7 @@ fn masters_survive_a_snapshot() {
                     objects: vec![text_box("on the house master", 10.0, 10.0)],
                     notes: String::new(),
                     master_idx: Some(0),
+                    transition: Default::default(),
                 },
                 // On the *second* master, which is what makes the mapping
                 // testable: a reader that loses it falls back to master 0,
@@ -349,6 +351,7 @@ fn masters_survive_a_snapshot() {
                     objects: vec![text_box("on the second master", 10.0, 10.0)],
                     notes: String::new(),
                     master_idx: Some(1),
+                    transition: Default::default(),
                 },
             ],
         };
@@ -538,6 +541,7 @@ fn the_masters_font_survives_a_snapshot() {
                 objects: vec![text_box("body text", 10.0, 10.0)],
                 notes: String::new(),
                 master_idx: Some(0),
+                transition: Default::default(),
             }],
         };
         let back = through_a_snapshot(&deck, kind, "master-font");
@@ -589,6 +593,7 @@ fn masters_keep_their_own_font_in_pptx_but_share_one_in_odp() {
                 objects: vec![text_box("on first", 10.0, 10.0)],
                 notes: String::new(),
                 master_idx: Some(0),
+                transition: Default::default(),
             },
             Slide {
                 title: String::new(),
@@ -596,6 +601,7 @@ fn masters_keep_their_own_font_in_pptx_but_share_one_in_odp() {
                 objects: vec![text_box("on second", 10.0, 10.0)],
                 notes: String::new(),
                 master_idx: Some(1),
+                transition: Default::default(),
             },
         ],
     };
@@ -645,6 +651,7 @@ fn the_pptx_declares_the_theme_part_it_ships() {
             objects: vec![],
             notes: String::new(),
             master_idx: Some(0),
+            transition: Default::default(),
         }],
     };
     let bytes = decks_core::write_deck_bytes("pptx", &deck).expect("write pptx");
@@ -1493,4 +1500,18 @@ fn a_runs_font_family_survives_a_snapshot() {
         assert_eq!(families.first().copied().flatten(), Some("Liberation Serif"), "{kind}: {runs:?}");
         assert!(families.last().copied().flatten() != Some("Liberation Serif"), "{kind}: {runs:?}");
     }
+}
+
+/// Every slide transition survives our pptx round trip, Magic Move as
+/// PowerPoint's Morph. (odp does not carry transitions yet.)
+#[test]
+fn slide_transitions_survive_a_pptx_snapshot() {
+    use decks_core::engine::Transition;
+    let slides: Vec<Slide> = Transition::ALL
+        .iter()
+        .map(|t| Slide { transition: *t, ..slide_of(vec![text_box("x", 10.0, 10.0)], "", "#ffffff") })
+        .collect();
+    let back = through_a_snapshot(&deck_of(slides), "pptx", "transitions");
+    let got: Vec<Transition> = back.slides.iter().map(|s| s.transition).collect();
+    assert_eq!(got, Transition::ALL.to_vec());
 }

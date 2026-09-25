@@ -378,6 +378,11 @@ pub fn set_styled_text(
     layout.set_attributes(Some(&attrs));
 }
 
+/// `#RRGGBB` as Cairo's 0–1 channels.
+pub fn hex_rgb(hex: &str) -> Option<(f64, f64, f64)> {
+    hex_rgb16(hex).map(|(r, g, b)| (r as f64 / 65535.0, g as f64 / 65535.0, b as f64 / 65535.0))
+}
+
 /// `RRGGBB` (optionally `#`-prefixed) as Pango's 16-bit colour channels.
 fn hex_rgb16(hex: &str) -> Option<(u16, u16, u16)> {
     let hex = hex.trim().trim_start_matches('#');
@@ -512,114 +517,12 @@ pub fn draw_slide_multi(
 
     // Draw objects
     if current_slide < slides.len() {
+        let master = master_for(slides, current_slide, masters);
+        let frame = (ox, oy, slide_w, slide_h);
         for (oi, obj) in slides[current_slide].objects.iter().enumerate() {
-            let is_selected = selected_indices.contains(&oi);
-            let rot = obj.rotation();
-
-            cr.save().unwrap();
-            let (x, y, w, h) = decks_core::undo::obj_bounds(obj);
-            let sx = ox + (x / 960.0) * slide_w;
-            let sy = oy + (y / 540.0) * slide_h;
-            let sw = (w / 960.0) * slide_w;
-            let sh = (h / 540.0) * slide_h;
-
-            if rot != 0.0 {
-                let cx = sx + sw / 2.0;
-                let cy = sy + sh / 2.0;
-                cr.translate(cx, cy);
-                cr.rotate(rot.to_radians());
-                cr.translate(-cx, -cy);
-            }
-
-            match obj {
-                SlideObject::TextBox { text, runs, body, .. } => {
-                    // The colour for runs that name none; runs read from a
-                    // file carry the colour their styles resolve to.
-                    let luminance = 0.299 * slide_bg_rgb.0 + 0.587 * slide_bg_rgb.1 + 0.114 * slide_bg_rgb.2;
-                    if luminance < 0.5 {
-                        cr.set_source_rgb(0.95, 0.95, 0.95);
-                    } else {
-                        cr.set_source_rgb(0.1, 0.1, 0.1);
-                    }
-                    if !body.is_plain() {
-                        let scale = slide_w / 960.0;
-                        let desc = document_font_description(master_for(slides, current_slide, masters), 18.0 * scale);
-                        crate::text_render::draw_text_body(cr, text, runs, body, (sx, sy, sw, sh), scale, &desc);
-                        cr.restore().unwrap();
-                        if is_selected {
-                            draw_selection(cr, selected_indices.len(), (sx, sy, sw, sh), (ar, ag, ab));
-                        }
-                        continue;
-                    }
-                    let layout = pangocairo::functions::create_layout(cr);
-                    layout.set_width(((sw - 8.0).max(8.0) as i32) * pango::SCALE);
-                    layout.set_wrap(pango::WrapMode::WordChar);
-                    let scale = slide_w / 960.0;
-                    let base_pt = 18.0 * scale;
-                    let desc = document_font_description(
-                        master_for(slides, current_slide, masters),
-                        base_pt,
-                    );
-                    layout.set_font_description(Some(&desc));
-                    set_styled_text(&layout, text, runs, scale);
-                    cr.move_to(sx + 4.0, sy + 4.0);
-                    pangocairo::functions::show_layout(cr, &layout);
-                }
-                SlideObject::Rect { .. } => {
-                    cr.set_source_rgb(0.3, 0.5, 0.9);
-                    cr.rectangle(sx, sy, sw, sh);
-                    cr.fill().unwrap();
-                }
-                SlideObject::Shape { kind, style, .. } => {
-                    draw_shape(cr, kind, style, (sx, sy, sw, sh), slide_w / 960.0);
-                }
-                SlideObject::Table { table, .. } => {
-                    let desc = document_font_description(master_for(slides, current_slide, masters), 18.0 * slide_w / 960.0);
-                    draw_table(cr, table, (sx, sy, sw, sh), slide_w / 960.0, &desc);
-                }
-                SlideObject::Circle { x: cx_slide, y: cy_slide, r: r_slide, .. } => {
-                    let cx = ox + (cx_slide / 960.0) * slide_w;
-                    let cy = oy + (cy_slide / 540.0) * slide_h;
-                    let radius = (r_slide / 540.0) * slide_h;
-                    cr.set_source_rgb(0.9, 0.3, 0.2);
-                    cr.arc(cx, cy, radius, 0.0, 2.0 * std::f64::consts::PI);
-                    cr.fill().unwrap();
-                }
-                SlideObject::Image { path, .. } => {
-                    if let Some(img_surf) = load_image(path) {
-                        let iw = img_surf.width() as f64;
-                        let ih = img_surf.height() as f64;
-                        let scale_x = sw / iw;
-                        let scale_y = sh / ih;
-                        let scale = scale_x.min(scale_y);
-                        let dx = sx + (sw - iw * scale) / 2.0;
-                        let dy = sy + (sh - ih * scale) / 2.0;
-                        cr.save().unwrap();
-                        cr.translate(dx, dy);
-                        cr.scale(scale, scale);
-                        cr.set_source_surface(&img_surf, 0.0, 0.0).unwrap();
-                        cr.paint().unwrap();
-                        cr.restore().unwrap();
-                    } else {
-                        cr.set_source_rgb(0.92, 0.92, 0.92);
-                        cr.rectangle(sx, sy, sw, sh);
-                        cr.fill().unwrap();
-                        cr.set_source_rgb(0.6, 0.6, 0.6);
-                        cr.select_font_face("Sans", cairo::FontSlant::Normal, cairo::FontWeight::Normal);
-                        cr.set_font_size(11.0);
-                        let txt = "<image>";
-                        let ext = cr.text_extents(txt).unwrap();
-                        cr.move_to(sx + (sw - ext.width()) / 2.0, sy + (sh + ext.height()) / 2.0);
-                        cr.show_text(txt).unwrap();
-                    }
-                }
-            }
-
-            cr.restore().unwrap();
-
-            // Draw selection handles / outline
-            if is_selected {
-                draw_selection(cr, selected_indices.len(), (sx, sy, sw, sh), (ar, ag, ab));
+            let rect = draw_object(cr, obj, frame, slide_bg_rgb, master);
+            if selected_indices.contains(&oi) {
+                draw_selection(cr, selected_indices.len(), rect, (ar, ag, ab));
             }
         }
     }
@@ -662,6 +565,109 @@ pub fn draw_slide_multi(
         cr.move_to(ox + slide_w - 30.0, oy + 20.0);
         cr.show_text(&badge).unwrap();
     }
+}
+
+/// Draw one slide object in the slide frame `(ox, oy, slide_w, slide_h)`
+/// (canvas pixels), text that names no colour contrasting with
+/// `slide_bg_rgb`. Returns the object's box on the canvas, for selection
+/// handles. Shared by the editor canvas and Magic Move's frames.
+pub fn draw_object(
+    cr: &cairo::Context,
+    obj: &SlideObject,
+    frame: (f64, f64, f64, f64),
+    slide_bg_rgb: (f64, f64, f64),
+    master: Option<&MasterSlide>,
+) -> (f64, f64, f64, f64) {
+    let (ox, oy, slide_w, slide_h) = frame;
+    let rot = obj.rotation();
+    cr.save().unwrap();
+    let (x, y, w, h) = decks_core::undo::obj_bounds(obj);
+    let sx = ox + (x / 960.0) * slide_w;
+    let sy = oy + (y / 540.0) * slide_h;
+    let sw = (w / 960.0) * slide_w;
+    let sh = (h / 540.0) * slide_h;
+
+    if rot != 0.0 {
+        let cx = sx + sw / 2.0;
+        let cy = sy + sh / 2.0;
+        cr.translate(cx, cy);
+        cr.rotate(rot.to_radians());
+        cr.translate(-cx, -cy);
+    }
+
+    match obj {
+        SlideObject::TextBox { text, runs, body, .. } => {
+            // The colour for runs that name none; runs read from a
+            // file carry the colour their styles resolve to.
+            let luminance = 0.299 * slide_bg_rgb.0 + 0.587 * slide_bg_rgb.1 + 0.114 * slide_bg_rgb.2;
+            if luminance < 0.5 {
+                cr.set_source_rgb(0.95, 0.95, 0.95);
+            } else {
+                cr.set_source_rgb(0.1, 0.1, 0.1);
+            }
+            let scale = slide_w / 960.0;
+            let desc = document_font_description(master, 18.0 * scale);
+            if !body.is_plain() {
+                crate::text_render::draw_text_body(cr, text, runs, body, (sx, sy, sw, sh), scale, &desc);
+            } else {
+                let layout = pangocairo::functions::create_layout(cr);
+                layout.set_width(((sw - 8.0).max(8.0) as i32) * pango::SCALE);
+                layout.set_wrap(pango::WrapMode::WordChar);
+                layout.set_font_description(Some(&desc));
+                set_styled_text(&layout, text, runs, scale);
+                cr.move_to(sx + 4.0, sy + 4.0);
+                pangocairo::functions::show_layout(cr, &layout);
+            }
+        }
+        SlideObject::Rect { .. } => {
+            cr.set_source_rgb(0.3, 0.5, 0.9);
+            cr.rectangle(sx, sy, sw, sh);
+            cr.fill().unwrap();
+        }
+        SlideObject::Shape { kind, style, .. } => {
+            draw_shape(cr, kind, style, (sx, sy, sw, sh), slide_w / 960.0);
+        }
+        SlideObject::Table { table, .. } => {
+            let desc = document_font_description(master, 18.0 * slide_w / 960.0);
+            draw_table(cr, table, (sx, sy, sw, sh), slide_w / 960.0, &desc);
+        }
+        SlideObject::Circle { x: cx_slide, y: cy_slide, r: r_slide, .. } => {
+            let cx = ox + (cx_slide / 960.0) * slide_w;
+            let cy = oy + (cy_slide / 540.0) * slide_h;
+            let radius = (r_slide / 540.0) * slide_h;
+            cr.set_source_rgb(0.9, 0.3, 0.2);
+            cr.arc(cx, cy, radius, 0.0, 2.0 * std::f64::consts::PI);
+            cr.fill().unwrap();
+        }
+        SlideObject::Image { path, .. } => {
+            if let Some(img_surf) = load_image(path) {
+                let iw = img_surf.width() as f64;
+                let ih = img_surf.height() as f64;
+                let scale = (sw / iw).min(sh / ih);
+                let dx = sx + (sw - iw * scale) / 2.0;
+                let dy = sy + (sh - ih * scale) / 2.0;
+                cr.save().unwrap();
+                cr.translate(dx, dy);
+                cr.scale(scale, scale);
+                cr.set_source_surface(&img_surf, 0.0, 0.0).unwrap();
+                cr.paint().unwrap();
+                cr.restore().unwrap();
+            } else {
+                cr.set_source_rgb(0.92, 0.92, 0.92);
+                cr.rectangle(sx, sy, sw, sh);
+                cr.fill().unwrap();
+                cr.set_source_rgb(0.6, 0.6, 0.6);
+                cr.select_font_face("Sans", cairo::FontSlant::Normal, cairo::FontWeight::Normal);
+                cr.set_font_size(11.0);
+                let txt = "<image>";
+                let ext = cr.text_extents(txt).unwrap();
+                cr.move_to(sx + (sw - ext.width()) / 2.0, sy + (sh + ext.height()) / 2.0);
+                cr.show_text(txt).unwrap();
+            }
+        }
+    }
+    cr.restore().unwrap();
+    (sx, sy, sw, sh)
 }
 
 /// Smart guides (decks_core::guides) in the accent colour: solid lines
@@ -909,6 +915,7 @@ mod font_tests {
             objects: vec![],
             notes: String::new(),
             master_idx,
+            transition: Default::default(),
         }
     }
 
