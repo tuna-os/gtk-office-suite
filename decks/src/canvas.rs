@@ -587,6 +587,11 @@ pub fn draw_slide_base(
                     cr.move_to(sx + 4.0, sy + 4.0);
                     pangocairo::functions::show_layout(cr, &layout);
                 }
+                // A styled shape (an odp master's, a theme's decoration)
+                // carries its own paint: drawn as on a slide.
+                SlideObject::Shape { .. } => {
+                    draw_object(cr, obj, (ox, oy, slide_w, slide_h), slide_bg_rgb, Some(master));
+                }
                 _ => {}
             }
             cr.restore().unwrap();

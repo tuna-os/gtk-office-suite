@@ -14,25 +14,29 @@ fn slide_thumbnail(
     masters: &[MasterSlide],
     index: usize,
 ) -> Option<gtk::Picture> {
-    render_thumbnail(slides, masters, index, THUMB_W, THUMB_H)
+    render_thumbnail(slides, masters, index, THUMB_W, THUMB_H, None)
 }
 
 /// Slide `index` drawn by the canvas's own renderer at `w`×`h`, as a
-/// picture: the strip's thumbnails and the template chooser's previews.
-pub fn render_thumbnail(slides: &[Slide], masters: &[MasterSlide], index: usize, w: i32, h: i32) -> Option<gtk::Picture> {
+/// picture: the strip's thumbnails (the editor's chrome, `chrome` None)
+/// and the template chooser's previews (`Chrome::Preview`: the slide alone).
+pub fn render_thumbnail(
+    slides: &[Slide],
+    masters: &[MasterSlide],
+    index: usize,
+    w: i32,
+    h: i32,
+    chrome: Option<crate::canvas::Chrome>,
+) -> Option<gtk::Picture> {
     let mut surface = cairo::ImageSurface::create(cairo::Format::ARgb32, w, h).ok()?;
     {
         let cr = cairo::Context::new(&surface).ok()?;
-        crate::canvas::draw_slide(
-            &cr,
-            w as f64,
-            h as f64,
-            slides,
-            index,
-            None,
-            masters,
-            (0.0, 0.5, 1.0), // thumbnails never show selection; unused
-        );
+        if let Some(chrome) = chrome {
+            crate::canvas::draw_slide_in(&cr, w as f64, h as f64, slides, index, masters, chrome);
+        } else {
+            // Thumbnails never show selection, so the accent is unused.
+            crate::canvas::draw_slide(&cr, w as f64, h as f64, slides, index, None, masters, (0.0, 0.5, 1.0));
+        }
     }
     surface.flush();
     let stride = surface.stride() as usize;
