@@ -322,6 +322,13 @@ fn content_xml(doc: &Document) -> String {
     )
 }
 
+/// "{page}" and "{total}" in escaped header or footer text as ODF's page
+/// number and page count fields.
+fn page_fields(text: &str) -> String {
+    text.replace("{page}", "<text:page-number text:select-page=\"current\">1</text:page-number>")
+        .replace("{total}", "<text:page-count>1</text:page-count>")
+}
+
 /// A smart chip's ODF: LibreOffice's own content control
 /// (`loext:content-control`, what Writer makes of a Word content control),
 /// tagged with what the chip is, holding its label (inside its link for a
@@ -388,13 +395,13 @@ fn styles_xml(doc: &Document) -> String {
         if let Some(h) = &doc.header {
             hf.push_str(&format!(
                 "<style:header><text:p>{}</text:p></style:header>",
-                esc(h)
+                page_fields(&esc(h))
             ));
         }
         if let Some(f) = &doc.footer {
             hf.push_str(&format!(
                 "<style:footer><text:p>{}</text:p></style:footer>",
-                esc(f)
+                page_fields(&esc(f))
             ));
         }
         hf.push_str("</style:master-page></office:master-styles>");
@@ -925,6 +932,8 @@ pub fn read(path: &str) -> Result<Document, String> {
         let mut reader = Reader::from_str(&styles);
         let mut in_header = false;
         let mut in_footer = false;
+        // Inside a page number or count field: its shown value is skipped.
+        let mut in_field = false;
         // Returns the geometry instead of writing to `doc` so the borrow ends
         // with the call; `style:columns` needs `doc.page` mutably right after.
         let read_page_layout = |e: &quick_xml::events::BytesStart| -> Option<PageGeometry> {
@@ -963,6 +972,12 @@ pub fn read(path: &str) -> Result<Document, String> {
                 Ok(Event::Start(e)) => match e.name().as_ref() {
                     "style:header" => in_header = true,
                     "style:footer" => in_footer = true,
+                    "text:page-number" | "text:page-count" if in_header || in_footer => {
+                        let placeholder = if e.name().as_ref() == "text:page-number" { "{page}" } else { "{total}" };
+                        let target = if in_header { &mut doc.header } else { &mut doc.footer };
+                        target.get_or_insert_with(String::new).push_str(placeholder);
+                        in_field = true;
+                    }
                     "style:page-layout-properties" => {
                         if let Some(page) = read_page_layout(&e) {
                             doc.page = Some(page);
@@ -973,8 +988,10 @@ pub fn read(path: &str) -> Result<Document, String> {
                 Ok(Event::End(e)) => match e.name().as_ref() {
                     "style:header" => in_header = false,
                     "style:footer" => in_footer = false,
+                    "text:page-number" | "text:page-count" => in_field = false,
                     _ => {}
                 },
+                Ok(Event::Text(_)) if in_field => {}
                 Ok(Event::Text(t)) => {
                     let txt = unescape_text(&t);
                     if in_header && !txt.trim().is_empty() {
@@ -1337,10 +1354,10 @@ mod tests {
     #[test]
     fn header_footer_survive() {
         let mut d = Document::from_plain_text("body");
-        d.header = Some("Report — {page}".into());
+        d.header = Some("Report — {page} of {total}".into());
         d.footer = Some("Confidential".into());
         let rt = round_trip(&d);
-        assert_eq!(rt.header.as_deref(), Some("Report — {page}"));
+        assert_eq!(rt.header.as_deref(), Some("Report — {page} of {total}"));
         assert_eq!(rt.footer.as_deref(), Some("Confidential"));
     }
 

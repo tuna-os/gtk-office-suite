@@ -22,6 +22,9 @@ use crate::model::{Alignment, Document, VertAlign};
 /// Pango's fixed-point scale.
 const SCALE: f64 = pango::SCALE as f64;
 
+/// A smart chip's label size relative to the text around it.
+const CHIP_TEXT_SCALE: f64 = 0.92;
+
 fn to_pt(units: i32) -> f64 {
     f64::from(units) / SCALE
 }
@@ -61,12 +64,13 @@ impl PangoShaper {
         Self { context, layouts: HashMap::new() }
     }
 
-    /// A smart chip's label, in the paragraph's font at `size_pt`: what
-    /// the shaper measures and the painter draws.
-    fn chip_label(&self, label: &str, font: &pango::FontDescription, size_pt: f64) -> pango::Layout {
+    /// A small label (a smart chip's, a footnote reference's number) in
+    /// the paragraph's font at `size_pt`: what the shaper measures and the
+    /// painter draws.
+    fn label(&self, label: &str, font: &pango::FontDescription, size_pt: f64) -> pango::Layout {
         let layout = pango::Layout::new(&self.context);
         let mut font = font.clone();
-        font.set_size(to_units(size_pt * 0.92));
+        font.set_size(to_units(size_pt));
         layout.set_font_description(Some(&font));
         layout.set_text(label);
         layout
@@ -128,10 +132,17 @@ impl PangoShaper {
                     // A chip holds its pill open: the label's width plus
                     // padding and gaps, the label's own ascent and descent.
                     let run_size = run.style.font_size_hp.map_or(size, |hp| f64::from(hp) / 2.0);
-                    let label = self.chip_label(&run.text, &base, run_size);
+                    let label = self.label(&run.text, &base, run_size * CHIP_TEXT_SCALE);
                     let (_, logical) = label.extents();
                     let w = to_pt(logical.width()) + 2.0 * (super::CHIP_PAD_PT + super::CHIP_GAP_PT);
                     pango::Rectangle::new(0, -label.baseline(), to_units(w), logical.height())
+                } else if let Some(n) = run.style.footnote {
+                    // A footnote reference holds its superscript number's
+                    // width; it is drawn raised, so it adds no height.
+                    let run_size = run.style.font_size_hp.map_or(size, |hp| f64::from(hp) / 2.0);
+                    let label = self.label(&(n + 1).to_string(), &base, run_size * super::NOTE_REF_SCALE);
+                    let (_, logical) = label.extents();
+                    pango::Rectangle::new(0, 0, logical.width(), 0)
                 } else {
                     let (w, h) = if run.style.image.is_some() { super::image_size_pt(run, req.width_pt) } else { (0.0, 0.0) };
                     pango::Rectangle::new(0, -to_units(h), to_units(w), to_units(h))
@@ -425,7 +436,7 @@ impl Typeset {
         let base = self.shaper.layout(&ShapeRequest { runs: &[], ..req });
         let font = base.font_description().unwrap_or_default();
         let size = run.style.font_size_hp.map_or(to_pt(font.size()), |hp| f64::from(hp) / 2.0);
-        let label = self.shaper.chip_label(&run.text, &font, size);
+        let label = self.shaper.label(&run.text, &font, size * CHIP_TEXT_SCALE);
         let (_, logical) = label.extents();
         let (w, h) = (to_pt(logical.width()) + 2.0 * super::CHIP_PAD_PT, to_pt(logical.height()));
         let (left, top) = (x + super::CHIP_GAP_PT, baseline - to_pt(label.baseline()));
@@ -445,6 +456,23 @@ impl Typeset {
         let _ = cr.fill();
         cr.set_source_rgb(ink.0, ink.1, ink.2);
         cr.move_to(left + super::CHIP_PAD_PT, top);
+        pangocairo::functions::show_layout(cr, &label);
+        let _ = cr.restore();
+    }
+
+    /// A footnote reference: the note's number, superscript, as the shaper
+    /// measured it.
+    fn draw_note_ref(&self, cr: &cairo::Context, para: usize, ch: usize, x: f64, baseline: f64) {
+        let Some(p) = self.doc.paragraphs.get(para) else { return };
+        let Some(run) = super::run_at(&p.runs, ch) else { return };
+        let Some(n) = run.style.footnote else { return };
+        let req = paragraph_request(p, 1000.0, &self.opts);
+        let base = self.shaper.layout(&ShapeRequest { runs: &[], ..req });
+        let font = base.font_description().unwrap_or_default();
+        let size = run.style.font_size_hp.map_or(to_pt(font.size()), |hp| f64::from(hp) / 2.0);
+        let label = self.shaper.label(&(n + 1).to_string(), &font, size * super::NOTE_REF_SCALE);
+        let _ = cr.save();
+        cr.move_to(x, baseline - size * super::NOTE_REF_RISE - to_pt(label.baseline()));
         pangocairo::functions::show_layout(cr, &label);
         let _ = cr.restore();
     }
@@ -696,6 +724,25 @@ impl Typeset {
                 }
                 Item::Chip { para, ch, x_pt, baseline_pt } => {
                     self.draw_chip(cr, *para, *ch, *x_pt, *baseline_pt);
+                }
+                Item::NoteRef { para, ch, x_pt, baseline_pt } => {
+                    self.draw_note_ref(cr, *para, *ch, *x_pt, *baseline_pt);
+                }
+                Item::Line { source: Source::Footnote(n), line, box_width_pt, x_pt, baseline_pt, .. } => {
+                    let p = super::note_paragraph(&self.doc, *n, &self.opts);
+                    let layout = self.shaper.layout(&paragraph_request(&p, *box_width_pt, &self.opts));
+                    if let Some(l) = layout.line_readonly(*line as i32) {
+                        cr.move_to(*x_pt, *baseline_pt);
+                        pangocairo::functions::show_layout_line(cr, &l);
+                    }
+                }
+                Item::Rule { x_pt, y_pt, width_pt } => {
+                    let _ = cr.save();
+                    cr.set_line_width(0.5);
+                    cr.move_to(*x_pt, *y_pt);
+                    cr.line_to(*x_pt + *width_pt, *y_pt);
+                    let _ = cr.stroke();
+                    let _ = cr.restore();
                 }
                 Item::Cell { x_pt, y_pt, width_pt, height_pt, .. } => {
                     // A 0.5 pt rule, at least one device pixel, on whole

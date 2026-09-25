@@ -204,7 +204,34 @@ pub fn read(path: &str) -> Result<Document, String> {
     let (doc, chips) = open_with_chips(path).map_err(|e| format!("Cannot open .docx {}: {}", path, e))?;
     let mut read = read_opened(path, doc)?;
     crate::docx_chips::restore(&mut read, &chips);
+    // Page-number fields in the header and footer, as "{page}"/"{total}".
+    let (header, footer) = header_footer_templates(path);
+    if header.is_some() {
+        read.header = header;
+    }
+    if footer.is_some() {
+        read.footer = footer;
+    }
     Ok(read)
+}
+
+/// A zip part's text, if it is there.
+fn part_text(zip: &mut zip::ZipArchive<impl std::io::Read + std::io::Seek>, name: &str) -> Option<String> {
+    let mut s = String::new();
+    std::io::Read::read_to_string(&mut zip.by_name(name).ok()?, &mut s).ok()?;
+    Some(s)
+}
+
+/// The default header and footer as templates with their PAGE/NUMPAGES
+/// fields ("{page}", "{total}"); `None` for a part without such fields.
+fn header_footer_templates(path: &str) -> (Option<String>, Option<String>) {
+    let Some(mut zip) = std::fs::File::open(path).ok().and_then(|f| zip::ZipArchive::new(f).ok()) else { return (None, None) };
+    let (Some(document), Some(rels)) = (part_text(&mut zip, "word/document.xml"), part_text(&mut zip, "word/_rels/document.xml.rels")) else {
+        return (None, None);
+    };
+    let (h, f) = crate::docx_fields::default_parts(&document, &rels);
+    let mut template = |part: Option<String>| part.and_then(|p| part_text(&mut zip, &p)).and_then(|xml| crate::docx_fields::template(&xml));
+    (template(h), template(f))
 }
 
 /// The package at `path`, with its chip controls as sentinel runs.
@@ -672,6 +699,22 @@ pub fn write(doc: &Document, path: impl AsRef<std::path::Path>) -> Result<(), St
     } else {
         with_part(&bytes, "word/document.xml", |xml| crate::docx_chips::wrap(xml, &chips))
             .map_err(|e| format!("Cannot save {}: {}", path.as_ref().display(), e))?
+    };
+    // "{page}" and "{total}" in the header and footer become Word's PAGE
+    // and NUMPAGES fields, so every page shows its own number.
+    let fielded = |t: &Option<String>| t.as_deref().is_some_and(|t| t.contains("{page}") || t.contains("{total}"));
+    let bytes = if fielded(&doc.header) || fielded(&doc.footer) {
+        let parts = zip::ZipArchive::new(std::io::Cursor::new(&bytes)).ok().and_then(|mut z| {
+            Some(crate::docx_fields::default_parts(&part_text(&mut z, "word/document.xml")?, &part_text(&mut z, "word/_rels/document.xml.rels")?))
+        });
+        let mut bytes = bytes;
+        for part in parts.into_iter().flat_map(|(h, f)| [h, f]).flatten() {
+            bytes = with_part(&bytes, &part, crate::docx_fields::fields)
+                .map_err(|e| format!("Cannot save {}: {}", path.as_ref().display(), e))?;
+        }
+        bytes
+    } else {
+        bytes
     };
     suite_common_core::atomic_save::atomic_write_bytes(path.as_ref(), &bytes)
 }

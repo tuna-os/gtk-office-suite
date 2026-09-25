@@ -6,6 +6,7 @@
 pub mod chips;
 pub mod docx;
 mod docx_chips;
+mod docx_fields;
 pub mod edit;
 pub mod fragment;
 pub mod layout;
