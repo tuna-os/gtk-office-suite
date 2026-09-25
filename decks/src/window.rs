@@ -90,6 +90,8 @@ impl DecksWindow {
             autosave_state_dir(), next_doc_id(),
         ));
         let snap_enabled = Rc::new(Cell::new(settings.boolean("snap-to-grid")));
+        // Smart guides shown while an object is dragged (canvas_input.rs).
+        let guides: Rc<RefCell<Vec<decks_core::guides::Guide>>> = Rc::default();
         {
             let se = snap_enabled.clone();
             settings.connect_changed(Some("snap-to-grid"), move |s, _| {
@@ -143,6 +145,7 @@ impl DecksWindow {
             let so = selected_object.clone();
             let ts = transition.clone();
             let m = masters.clone();
+            let gd = guides.clone();
             canvas.set_draw_func(move |area, cr, width, height| {
                 let t = ts.borrow();
                 if draw_transition(cr, &t, width as f64, height as f64) {
@@ -182,6 +185,7 @@ impl DecksWindow {
                 let accent = crate::canvas::accent_rgb(area);
                 let selected_set: std::collections::HashSet<usize> = so.get().into_iter().collect();
                 crate::canvas::draw_slide_multi(cr, width as f64, height as f64, &slides, cur, &selected_set, None, &m.borrow(), accent);
+                crate::canvas::draw_guides(cr, width as f64, height as f64, &gd.borrow(), accent);
             });
         }
 
@@ -1003,6 +1007,7 @@ impl DecksWindow {
             &controller,
             &refresh_hud,
             &snap_enabled,
+            &guides,
         );
 
         // ── Double-click: inline text edit on TextBox ───────────────────

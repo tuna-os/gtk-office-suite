@@ -664,6 +664,47 @@ pub fn draw_slide_multi(
     }
 }
 
+/// Smart guides (decks_core::guides) in the accent colour: solid lines
+/// for alignment, and for equal spacing and matched sizes a line with end
+/// ticks across each measured gap or side.
+pub fn draw_guides(cr: &cairo::Context, width: f64, height: f64, guides: &[decks_core::guides::Guide], accent: (f64, f64, f64)) {
+    use decks_core::guides::GuideKind;
+    if guides.is_empty() {
+        return;
+    }
+    let (ox, oy, sw, sh) = slide_geometry(width, height);
+    let (kx, ky) = (sw / 960.0, sh / 540.0);
+    let _ = cr.save();
+    cr.set_source_rgb(accent.0, accent.1, accent.2);
+    cr.set_line_width(1.0);
+    for g in guides {
+        // Canvas coordinates, on the half pixel so a 1 px line is crisp.
+        let (x0, y0, x1, y1) = if g.vertical {
+            let x = (ox + g.at * kx).round() + 0.5;
+            (x, oy + g.from * ky, x, oy + g.to * ky)
+        } else {
+            let y = (oy + g.at * ky).round() + 0.5;
+            (ox + g.from * kx, y, ox + g.to * kx, y)
+        };
+        cr.move_to(x0, y0);
+        cr.line_to(x1, y1);
+        if matches!(g.kind, GuideKind::Spacing | GuideKind::Size) {
+            let t = 4.0;
+            for (x, y) in [(x0, y0), (x1, y1)] {
+                if g.vertical {
+                    cr.move_to(x - t, y);
+                    cr.line_to(x + t, y);
+                } else {
+                    cr.move_to(x, y - t);
+                    cr.line_to(x, y + t);
+                }
+            }
+        }
+    }
+    let _ = cr.stroke();
+    let _ = cr.restore();
+}
+
 /// Handles for a single selection, an outline for one of several.
 fn draw_selection(cr: &cairo::Context, count: usize, rect: (f64, f64, f64, f64), accent: (f64, f64, f64)) {
     let (sx, sy, sw, sh) = rect;
