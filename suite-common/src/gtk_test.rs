@@ -88,20 +88,14 @@
 //     display-less run rather than to one flake. Do not reintroduce
 //     `init_with_retries`.
 //
-// Not yet reproduced outside CI: the failure has only ever been seen in a
-// full-workspace `cargo nextest run` on a runner. With the position
-// argument withdrawn there is no clue left pointing at the rest of the
-// workspace either — what the six samples fit is a per-process chance that
-// one widget test's X connection is refused, which would need many runs to
-// measure rather than one to reproduce.
-//
-// The rate is worth knowing before picking that up: of roughly ten
-// `test`-lane runs across one afternoon's pull requests, four failed this
-// way, and one pull request took three of them consecutively and could not
-// land. At better than one in three this is a gate rather than a
-// curiosity, so the cost of leaving it is paid on every pull request.
-// Whether the failures follow a runner rather than a commit is the
-// question that clustering raises; see gtk-threading.md.
+// Solved (#652, fixed in #1054). Xvfb resets the server whenever its last
+// client disconnects, and refuses connections while it does. The test
+// runner opens a fresh connection for each test process, so one widget test
+// per run sometimes found the display mid-reset and had its connection
+// refused. Measured locally: 13 of 400 connections refused without
+// `-noreset`, 0 of 400 with it. Every Xvfb launcher now passes `-noreset`,
+// and a test keeps the flag there. If this symptom returns, check first
+// that the display in use was started with `-noreset`.
 
 use std::panic;
 use std::sync::mpsc;
