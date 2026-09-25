@@ -212,8 +212,13 @@ impl TablesWindow {
             });
         }
 
-        h_adj.connect_value_changed({ let da = drawing_area.clone(); move |_| da.queue_draw() });
-        v_adj.connect_value_changed({ let da = drawing_area.clone(); move |_| da.queue_draw() });
+        for adj in [&h_adj, &v_adj] {
+            let (ga, s, h, v) = (grid_area.clone(), state.clone(), h_adj.clone(), v_adj.clone());
+            adj.connect_value_changed(move |_| {
+                ga.queue_draw();
+                ga.set_geometry(&s.borrow().sheet(), (h.value(), v.value()));
+            });
+        }
 
         // ── Formula bar: name box (cell ref) + fx entry, Calc-style ────
         let name_box = gtk4::Entry::new();
@@ -296,13 +301,14 @@ impl TablesWindow {
             let s = state.clone();
             let nb = name_box.clone();
             let stats = stats_label.clone();
-            let ga = grid_area.clone();
+            let (ga, h, v) = (grid_area.clone(), h_adj.clone(), v_adj.clone());
             let isync = inspector_sync.clone();
             Rc::new(move || {
                 {
                     let st = s.borrow();
                     let sh = st.sheet();
-                    ga.sync_cells(&sh.data, &sh.formats, &sh.col_widths, sh.selection_rect());
+                    ga.sync_cells(&sh.data, &sh.formats, sh.selection_rect());
+                    crate::grid_render::follow_selection(&ga, &sh, &h, &v);
                     nb.set_text(&format!("{}{}", tables_core::sheet::col_label(sh.selected_col), sh.selected_row + 1));
                     stats.set_text(&sh.selection_status());
                 }

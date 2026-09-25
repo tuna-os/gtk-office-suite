@@ -316,6 +316,64 @@ pub fn row_on_screen(r: usize, scroll_y: f64, sheet: &SheetModel) -> bool {
     !sheet.is_row_hidden(r) && (r < sheet.frozen_rows || row_y(r, scroll_y, sheet) + sheet.row_height(r) > scrolled_top(sheet))
 }
 
+/// How far the scrolling pane can scroll: the content past the frozen
+/// panes, less the part of the view it already fills. `view` is the grid
+/// widget's `(width, height)`.
+pub fn max_scroll(view: (f64, f64), sheet: &SheetModel) -> (f64, f64) {
+    let content_w = col_x(sheet.cols, 0.0, sheet) - scrolled_left(sheet);
+    let content_h = row_y(sheet.rows, 0.0, sheet) - scrolled_top(sheet);
+    let pane_w = view.0 - scrolled_left(sheet);
+    let pane_h = view.1 - scrolled_top(sheet);
+    ((content_w - pane_w).max(0.0), (content_h - pane_h).max(0.0))
+}
+
+/// The scroll offsets that bring cell `(row, col)` fully into a view of
+/// `view` = `(width, height)` px, changing each as little as possible:
+/// a cell above or left of the scrolling pane scrolls to its edge, one
+/// past the far side scrolls just far enough to show all of it, and one
+/// already on screen (or frozen, which is always on screen) leaves the
+/// scroll alone. Keyboard navigation and name-box jumps go through this,
+/// so the active cell never walks off screen.
+pub fn scroll_into_view(row: usize, col: usize, scroll: (f64, f64), view: (f64, f64), sheet: &SheetModel) -> (f64, f64) {
+    let fit = |start: f64, size: f64, pane_start: f64, pane_end: f64, scroll: f64| {
+        if start < pane_start {
+            scroll - (pane_start - start)
+        } else if start + size > pane_end && size <= pane_end - pane_start {
+            scroll + (start + size - pane_end)
+        } else if start + size > pane_end {
+            // Bigger than the pane: show its start.
+            scroll + (start - pane_start)
+        } else {
+            scroll
+        }
+    };
+    let (mut sx, mut sy) = scroll;
+    if col < sheet.cols && col >= sheet.frozen_cols && !sheet.is_col_hidden(col) {
+        sx = fit(col_x(col, sx, sheet), sheet.col_width(col), scrolled_left(sheet), view.0, sx);
+    }
+    if row < sheet.rows && row >= sheet.frozen_rows && !sheet.is_row_hidden(row) {
+        sy = fit(row_y(row, sy, sheet), sheet.row_height(row), scrolled_top(sheet), view.1, sy);
+    }
+    (sx.max(0.0), sy.max(0.0))
+}
+
+/// Where each of the first `n` columns is on screen, `(x, width)` in
+/// widget coordinates: what the accessibility tree reports as each cell's
+/// bounds, so a screen reader or magnifier follows the scroll and the
+/// freeze, as the drawing does.
+pub fn col_spans(n: usize, scroll_x: f64, sheet: &SheetModel) -> Vec<(f64, f64)> {
+    (0..n.min(sheet.cols))
+        .map(|c| (col_x(c, scroll_x, sheet), if sheet.is_col_hidden(c) { 0.0 } else { sheet.col_width(c) }))
+        .collect()
+}
+
+/// Row analog of [[col_spans]]: `(y, height)` for each of the first `n`.
+pub fn row_spans(n: usize, scroll_y: f64, sheet: &SheetModel) -> Vec<(f64, f64)> {
+    (0..n.min(sheet.rows))
+        .map(|r| (row_y(r, scroll_y, sheet), if sheet.is_row_hidden(r) { 0.0 } else { sheet.row_height(r) }))
+        .collect()
+}
+
 /// Column analog of [[row_at_content_offset]].
 fn col_at_content_offset(offset: f64, sheet: &SheetModel) -> Option<usize> {
     let mut accum = 0.0;
@@ -1380,6 +1438,47 @@ mod selection_tests {
         // A resize handle sits on the drawn edge, not the unscrolled one.
         assert_eq!(hit_col_divider(scrolled_left(&s) + COL_WIDTH, 5.0, sx, &s), Some(4));
         assert_eq!(hit_row_divider(5.0, scrolled_top(&s) + ROW_HEIGHT, sy, &s), Some(19));
+    }
+
+    /// Arrowing past the bottom-right of the view scrolls just far enough to
+    /// show the new cell; arrowing back above the scrolled pane scrolls up
+    /// to it; frozen cells never scroll the view.
+    #[test]
+    fn the_active_cell_is_scrolled_into_view() {
+        let mut s = SheetModel::new("v", 100, 30, 0);
+        // A view showing 4 columns and 10 rows of cells past the headers.
+        let view = (ROW_HEADER_WIDTH + 4.0 * COL_WIDTH, COL_HEADER_HEIGHT + 10.0 * ROW_HEIGHT);
+        assert_eq!(scroll_into_view(3, 3, (0.0, 0.0), view, &s), (0.0, 0.0), "already on screen");
+        assert_eq!(scroll_into_view(10, 4, (0.0, 0.0), view, &s), (COL_WIDTH, ROW_HEIGHT), "one past each edge");
+        assert_eq!(scroll_into_view(2, 1, (5.0 * COL_WIDTH, 50.0 * ROW_HEIGHT), view, &s), (COL_WIDTH, 2.0 * ROW_HEIGHT));
+        // Frozen row 0 and column 0: they never move the view, and the
+        // scrolling pane's top edge is below them.
+        s.frozen_rows = 1;
+        s.frozen_cols = 1;
+        let scrolled = (5.0 * COL_WIDTH, 50.0 * ROW_HEIGHT);
+        assert_eq!(scroll_into_view(0, 0, scrolled, view, &s), scrolled);
+        let (sx, sy) = scroll_into_view(1, 1, scrolled, view, &s);
+        assert_eq!((sx, sy), (0.0, 0.0));
+        assert_eq!(row_y(1, sy, &s), scrolled_top(&s), "row 2 lands just under the frozen row");
+        // After a jump, the cell is on screen whatever the start.
+        let (sx, sy) = scroll_into_view(80, 20, (0.0, 0.0), view, &s);
+        assert!(row_y(80, sy, &s) >= scrolled_top(&s) && row_y(80, sy, &s) + ROW_HEIGHT <= view.1);
+        assert!(col_x(20, sx, &s) >= scrolled_left(&s) && col_x(20, sx, &s) + COL_WIDTH <= view.0);
+        let (mx, my) = max_scroll(view, &s);
+        assert!(sx <= mx && sy <= my, "within the scrollable range");
+    }
+
+    #[test]
+    fn accessible_bounds_follow_the_scroll_and_the_freeze() {
+        let mut s = SheetModel::new("a", 10, 10, 0);
+        s.frozen_cols = 1;
+        s.set_row_height(1, 40.0);
+        let cols = col_spans(3, 2.0 * COL_WIDTH, &s);
+        assert_eq!(cols[0], (ROW_HEADER_WIDTH, COL_WIDTH), "frozen: unscrolled");
+        assert_eq!(cols[1].0, ROW_HEADER_WIDTH + COL_WIDTH - 2.0 * COL_WIDTH, "scrolled off to the left");
+        let rows = row_spans(3, 0.0, &s);
+        assert_eq!(rows[1], (COL_HEADER_HEIGHT + ROW_HEIGHT, 40.0), "its own height");
+        assert_eq!(rows[2].0, COL_HEADER_HEIGHT + ROW_HEIGHT + 40.0);
     }
 
     /// Without frozen panes, horizontal scrolling moves every column: the

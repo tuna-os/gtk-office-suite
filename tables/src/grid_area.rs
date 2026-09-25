@@ -13,7 +13,7 @@ use gtk4::{self as gtk, glib, prelude::*, subclass::prelude::*};
 use std::cell::RefCell;
 
 use suite_common::format::NumberFormat;
-use tables_core::sheet::{col_label, COL_HEADER_HEIGHT, ROW_HEADER_WIDTH, ROW_HEIGHT};
+use tables_core::sheet::{col_label, COL_HEADER_HEIGHT, COL_WIDTH, ROW_HEADER_WIDTH, ROW_HEIGHT};
 
 // ── CellAccessible: one virtual cell ─────────────────────────────────
 
@@ -92,8 +92,8 @@ mod imp_cell {
         fn bounds(&self) -> Option<(i32, i32, i32, i32)> {
             let grid = self.grid.get()?.upgrade()?;
             let (x, w) = grid.imp().col_span(self.col.get());
-            let y = COL_HEADER_HEIGHT + self.row.get() as f64 * ROW_HEIGHT;
-            Some((x as i32, y as i32, w as i32, ROW_HEIGHT as i32))
+            let (y, h) = grid.imp().row_span(self.row.get());
+            Some((x.round() as i32, y.round() as i32, w.round() as i32, h.round() as i32))
         }
 
         fn platform_state(&self, _state: gtk::AccessiblePlatformState) -> bool {
@@ -139,7 +139,11 @@ mod imp_grid {
     pub struct GridArea {
         pub cells: RefCell<Vec<CellAccessible>>,
         pub cols: std::cell::Cell<usize>,
-        pub col_widths: RefCell<Vec<f64>>,
+        /// Where each exposed column and row is on screen, `(start, size)`
+        /// in widget coordinates, scroll and frozen panes included (from
+        /// tables_core::sheet::col_spans / row_spans).
+        pub col_spans: RefCell<Vec<(f64, f64)>>,
+        pub row_spans: RefCell<Vec<(f64, f64)>>,
         /// Visible extent so sibling iteration can skip hidden cells.
         pub visible_rows: std::cell::Cell<usize>,
         pub visible_cols: std::cell::Cell<usize>,
@@ -198,12 +202,23 @@ mod imp_grid {
             None
         }
 
-        /// x-origin and width of a column, in widget coordinates.
+        /// x-origin and width of a column, in widget coordinates. A column
+        /// past the last known span continues the default grid after it.
         pub fn col_span(&self, col: usize) -> (f64, f64) {
-            let widths = self.col_widths.borrow();
-            let x: f64 = ROW_HEADER_WIDTH + widths.iter().take(col).sum::<f64>();
-            let w = widths.get(col).copied().unwrap_or(tables_core::sheet::COL_WIDTH);
-            (x, w)
+            let spans = self.col_spans.borrow();
+            spans.get(col).copied().unwrap_or_else(|| {
+                let (x, w) = spans.last().copied().unwrap_or((ROW_HEADER_WIDTH - COL_WIDTH, COL_WIDTH));
+                (x + w + (col - spans.len()) as f64 * COL_WIDTH, COL_WIDTH)
+            })
+        }
+
+        /// y-origin and height of a row; see `col_span`.
+        pub fn row_span(&self, row: usize) -> (f64, f64) {
+            let spans = self.row_spans.borrow();
+            spans.get(row).copied().unwrap_or_else(|| {
+                let (y, h) = spans.last().copied().unwrap_or((COL_HEADER_HEIGHT - ROW_HEIGHT, ROW_HEIGHT));
+                (y + h + (row - spans.len()) as f64 * ROW_HEIGHT, ROW_HEIGHT)
+            })
         }
     }
 }
@@ -224,11 +239,18 @@ impl GridArea {
     /// Rebuild/update the virtual cells for the used data region (plus
     /// the selection), refreshing names, selection state, and geometry.
     /// The child set is rebuilt only when the exposed region grows.
+    /// Where the cells are on screen now: call after anything that moves
+    /// them (a scroll, a resize, a freeze).
+    pub fn set_geometry(&self, sheet: &tables_core::sheet::SheetModel, scroll: (f64, f64)) {
+        let (rows, cols) = (self.imp().visible_rows.get(), self.imp().visible_cols.get());
+        *self.imp().col_spans.borrow_mut() = tables_core::sheet::col_spans(cols, scroll.0, sheet);
+        *self.imp().row_spans.borrow_mut() = tables_core::sheet::row_spans(rows, scroll.1, sheet);
+    }
+
     pub fn sync_cells(
         &self,
         data: &[Vec<String>],
         formats: &[Vec<NumberFormat>],
-        col_widths: &[f64],
         sel: (usize, usize, usize, usize),
     ) {
         // Used extent: rows/cols containing data, plus the selection.
@@ -248,8 +270,6 @@ impl GridArea {
         }
         let rows = (max_r + 1).min(data.len());
         let cols = (max_c + 1).min(data.first().map(|r| r.len()).unwrap_or(0));
-
-        *self.imp().col_widths.borrow_mut() = col_widths.to_vec();
 
         // Persistent flat child list, grown by appending and linked
         // into the existing chain (rebuilding the chain leaves the
