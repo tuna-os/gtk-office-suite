@@ -2,9 +2,9 @@
 """Tables GUI tests — every test exercises a feature and verifies the result."""
 
 import time
-from framework import BaseGUITestCase
+from framework import VisionGUITestCase
 
-class TablesTest(BaseGUITestCase):
+class TablesTest(VisionGUITestCase):
     app_name = "tables"
 
     def _new(self):
@@ -288,7 +288,7 @@ class TablesTest(BaseGUITestCase):
         ], screenshot_path=self.last_screenshot)
 
 
-class Tables113FeatureVisuals(BaseGUITestCase):
+class Tables113FeatureVisuals(VisionGUITestCase):
     """Screenshot-only visual record of every #113 feature shipped in the
     2026-07-24/25 session (row filtering, sort indicator, row resize,
     named ranges, print area, page setup, formula reference

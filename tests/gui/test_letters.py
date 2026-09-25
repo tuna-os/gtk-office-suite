@@ -2,9 +2,9 @@
 """Letters GUI tests — every test exercises a feature and verifies the result."""
 
 import time
-from framework import BaseGUITestCase
+from framework import VisionGUITestCase
 
-class LettersTest(BaseGUITestCase):
+class LettersTest(VisionGUITestCase):
     app_name = "letters"
 
     def _new(self):
