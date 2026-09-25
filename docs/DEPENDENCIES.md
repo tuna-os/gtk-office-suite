@@ -41,8 +41,13 @@ This is why #283 (rdocx 0.7 → 0.13) sat on `hold` for a week.
 | wait for upstream | `oxml-layout` 0.11.0 (2026-09-06) is still the newest release, against a prior cadence of one every one-to-two days, and nobody had reported it |
 
 **The patch.** A wildcard arm, on a fork at
-[tuna-os/rdocx](https://github.com/tuna-os/rdocx), branch
-`fix/oxml-layout-sharedfile-arm`. Naming `SharedFile` explicitly would fail to
+[tuna-os/rdocx](https://github.com/tuna-os/rdocx), one branch per rdocx
+release it is carried on: `fix/oxml-layout-sharedfile-arm` (rdocx 0.13.1,
+oxml-layout 0.11.0) and `fix/oxml-layout-sharedfile-arm-0.14` (rdocx 0.14.0,
+oxml-layout 0.12.1, the one pinned now). rdocx 0.14.0 still matches
+exhaustively, which is why #283 and #972 failed with the same E0004 (#943).
+Each rdocx bump needs the commit carried onto its tag, a new `rev` here and in
+`fuzz/Cargo.toml`, and both lockfiles updated. Naming `SharedFile` explicitly would fail to
 compile whenever `memmap` is *absent*; a wildcard is the only form that
 survives feature unification, and callers already treat `None` as "no byte data
 for this face" and fall back.

@@ -25,4 +25,4 @@ gettext-rs = { version = "0.8", features = ["gettext-system"] }
 # Pinned by `rev`, never a branch: a moving ref would make the build
 # irreproducible, which the release gate exists to prevent.
 [patch.crates-io]
-oxml-layout = { git = "https://github.com/tuna-os/rdocx", rev = "46d220426b635d64890d786959d272b2c210fad8" }
+oxml-layout = { git = "https://github.com/tuna-os/rdocx", rev = "87a8bf2eab4d5df90755432944c3e5203d43c4f8" }
