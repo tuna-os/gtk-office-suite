@@ -92,7 +92,8 @@ let flag2 = flag.clone();
 - **Use numbered suffixes** for readability: `s2`, `s3`, `s4`
 
 #### Module Size
-- `window.rs` ≤ 600 lines → refactor into `canvas.rs`, `toolbar.rs`, `sidebar.rs`
+- `window.rs`: aim for ≤ 600 lines by extracting `canvas.rs`, `toolbar.rs`, `sidebar.rs`. The enforced
+  ceilings and current counts are in the root `ROADMAP.md` table; CI checks it. Re-measure in the same PR.
 - `engine.rs` ≤ 500 lines → split by format (`read.rs`, `write.rs`)
 - New features → new module file, not appended to existing
 
