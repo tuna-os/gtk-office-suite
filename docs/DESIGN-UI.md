@@ -109,6 +109,13 @@ only with its render-lab fixture green or improving.
   - Here: an `AdwNavigationView` start page with a `GtkGridView` of real
     rendered thumbnails. The thumbnails come from the same renderer as the
     canvas (Phase 1), cached on disk, never hand-drawn.
+  - ✅ Decks (2026-09-25): New from Template opens an `AdwDialog` of five
+    built-in themes (`decks_core::templates`: real decks, each a master
+    with background, font and decorations plus a title and a bulleted
+    slide), each tile the theme's title slide drawn by the canvas's
+    renderer. Tiles are a toggle-button group with Cancel / Create in the
+    header bar. Five small previews render on open, so there is no disk
+    cache yet; it becomes worth it with user templates.
 - **Smart guides and snapping**
   - Pattern: iWork's yellow alignment guides for centre and edges, equal
     spacing, and size matching.

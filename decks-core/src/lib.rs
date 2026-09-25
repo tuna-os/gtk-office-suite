@@ -20,6 +20,7 @@ pub mod ops;
 mod odp_text;
 pub mod presenter;
 pub mod snapshot;
+pub mod templates;
 pub mod undo;
 
 pub use controller::DecksController;

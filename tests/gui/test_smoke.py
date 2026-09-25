@@ -3695,6 +3695,58 @@ class DecksShowBuildsSmoke(BaseGUITestCase):
         self.assertIsNone(self.process.poll(), "decks crashed playing builds")
 
 
+class DecksTemplateChooserSmoke(BaseGUITestCase):
+    """New from Template (DESIGN-UI.md, "Templates that look finished"):
+    the chooser lists the built-in themes, and choosing Ocean then Create
+    opens that theme's deck, whose first slide the canvas's renderer draws
+    on the theme's blue background. Asserted on the state snapshot and on
+    the rendered slide."""
+
+    app_name = "decks"
+
+    def setUp(self):
+        self.isolate_snapshot("decks-template-snapshot-")
+        self._dump = self.temp_dir(prefix="decks-template-dump-")
+        self.launch_env = {**self.launch_env, "GTK_OFFICE_RENDER_DUMP": self._dump}
+        super().setUp()
+
+    def _chosen(self, name):
+        import pyatspi
+        states = self.app.child(name=name, roleName="toggle button").getState()
+        return states.contains(pyatspi.STATE_PRESSED) or states.contains(pyatspi.STATE_CHECKED)
+
+    def test_choosing_a_theme_opens_its_deck(self):
+        import subprocess
+        from PIL import Image
+        aid = "org.tunaos.decks"
+        self.gapplication_action(aid, "new-from-template")
+        themes = ["Basic White", "Basic Black", "Ocean", "Paper", "Bold"]
+        # The tiles are a group of toggle buttons, named by theme.
+        self.wait_until(lambda: [n.name for n in self.app.findChildren(
+                            lambda n: n.roleName == "toggle button" and n.name in themes and n.showing)],
+                        lambda names: sorted(names) == sorted(themes), interval=0.25,
+                        description="every theme in the chooser")
+        self.app.child(name="Ocean", roleName="toggle button").do_action(0)
+        self.wait_until(lambda: self._chosen("Ocean"), bool, interval=0.25,
+                        description="Ocean to be the chosen theme")
+        self.assertFalse(self._chosen("Basic White"), "one theme is chosen at a time")
+        self.app.child(name="Create", roleName="push button").do_action(0)
+        snap = self.wait_until(lambda: self.trigger_snapshot(aid), lambda s: s and s.get("slide_count") == 2,
+                               interval=0.5, description="the theme's two slides")
+        self.assertEqual([s["title"] for s in snap["slides"]], ["Title", "Title & Bullets"], snap)
+        subprocess.run(["gapplication", "action", aid, "test-render-dump"], check=True, timeout=5)
+        first = os.path.join(self._dump, "A-1.png")
+        self.wait_until(lambda: os.path.exists(first) and os.path.getsize(first) > 0, bool, interval=0.25,
+                        description="the first slide rendered")
+        img = Image.open(first).convert("RGB")
+        w, h = img.size
+        # A corner of the slide is the theme's background: Ocean's gradient
+        # starts deep blue at the top. White would mean no theme.
+        r, g, b = img.getpixel((w // 20, h // 20))
+        self.assertTrue(b > r + 40 and b < 200, f"the slide's top corner is {(r, g, b)}, not Ocean's blue")
+        self.assertIsNone(self.process.poll(), "decks crashed creating from a template")
+
+
 class DecksInsertBarSmoke(BaseGUITestCase):
     """The Insert buttons in the header bar (DESIGN-UI.md, "Insert
     buttons, not menus"): the Shape button's library is searchable, and

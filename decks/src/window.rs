@@ -1319,6 +1319,36 @@ impl DecksWindow {
             app.add_action(&act);
         }
 
+        // New from Template (template_chooser.rs), in place of the suite's
+        // generic template dialog: the chosen theme's deck and master.
+        {
+            let (cs, sl, ss, ms) = (content_stack.clone(), slide_list.clone(), slides.clone(), masters.clone());
+            let (cs_scroll, path_ref, refresh) = (editor_split.clone(), file_path.clone(), refresh_hud.clone());
+            let (cs_ref, so, w) = (current_slide.clone(), selected_object.clone(), suite_win.window.clone());
+            let act = gtk::gio::SimpleAction::new("new-from-template", None);
+            act.connect_activate(move |_, _| {
+                let (cs, sl, ss, ms) = (cs.clone(), sl.clone(), ss.clone(), ms.clone());
+                let (cs_scroll, path_ref, refresh, cs_ref, so) =
+                    (cs_scroll.clone(), path_ref.clone(), refresh.clone(), cs_ref.clone(), so.clone());
+                crate::template_chooser::present(&w, move |index| {
+                    let Some((slides, masters)) = decks_core::templates::deck(index) else { return };
+                    if cs.child_by_name("editor").is_none() {
+                        cs.add_titled(&cs_scroll, Some("editor"), "Editor");
+                    }
+                    cs.set_visible_child_name("editor");
+                    *ss.borrow_mut() = slides;
+                    *ms.borrow_mut() = masters;
+                    *path_ref.borrow_mut() = None;
+                    cs_ref.set(0);
+                    so.set(None);
+                    rebuild_slide_list(&sl, &ss.borrow().clone(), &ms.borrow(), 0);
+                    cs.queue_draw();
+                    refresh();
+                });
+            });
+            app.add_action(&act);
+        }
+
         {
             let cs = content_stack.clone();
             let sl = slide_list.clone();

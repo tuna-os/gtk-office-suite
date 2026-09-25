@@ -14,13 +14,19 @@ fn slide_thumbnail(
     masters: &[MasterSlide],
     index: usize,
 ) -> Option<gtk::Picture> {
-    let mut surface = cairo::ImageSurface::create(cairo::Format::ARgb32, THUMB_W, THUMB_H).ok()?;
+    render_thumbnail(slides, masters, index, THUMB_W, THUMB_H)
+}
+
+/// Slide `index` drawn by the canvas's own renderer at `w`×`h`, as a
+/// picture: the strip's thumbnails and the template chooser's previews.
+pub fn render_thumbnail(slides: &[Slide], masters: &[MasterSlide], index: usize, w: i32, h: i32) -> Option<gtk::Picture> {
+    let mut surface = cairo::ImageSurface::create(cairo::Format::ARgb32, w, h).ok()?;
     {
         let cr = cairo::Context::new(&surface).ok()?;
         crate::canvas::draw_slide(
             &cr,
-            THUMB_W as f64,
-            THUMB_H as f64,
+            w as f64,
+            h as f64,
             slides,
             index,
             None,
@@ -33,14 +39,14 @@ fn slide_thumbnail(
     let data = surface.data().ok()?.to_vec();
     let bytes = glib::Bytes::from_owned(data);
     let texture = gdk::MemoryTexture::new(
-        THUMB_W,
-        THUMB_H,
+        w,
+        h,
         gdk::MemoryFormat::B8g8r8a8Premultiplied,
         &bytes,
         stride,
     );
     let pic = gtk::Picture::for_paintable(&texture);
-    pic.set_size_request(THUMB_W, THUMB_H);
+    pic.set_size_request(w, h);
     pic.set_can_shrink(true);
     Some(pic)
 }
