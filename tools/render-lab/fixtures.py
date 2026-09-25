@@ -283,7 +283,7 @@ def letters(img):
     save(x, "footnotes", "Superscript 1 and 2 in the text; the two notes at the foot of the page, 10pt, under a short rule")
 
     x = doc()
-    for i in range(38):
+    for i in range(22):
         x.add_paragraph(f"Filler line {i + 1}.")
     add_notes(x, [LOREM * 9])
     p = x.add_paragraph("The line with a long note.")
@@ -293,13 +293,13 @@ def letters(img):
     save(x, "footnote-continued", "A long footnote starts at the foot of page 1 under its reference and continues at the foot of page 2")
 
     x = doc()
-    for i in range(44):
+    for i in range(24):
         x.add_paragraph(f"Filler line {i + 1}.")
     p = x.add_paragraph()
     p.add_run("Chapter Two").bold = True
     p.paragraph_format.keep_with_next = True
     x.add_paragraph(LOREM * 2)
-    save(x, "keep-with-next", "The bold 'Chapter Two' line is kept with the paragraph after it: both start page 2, page 1 ends at 'Filler line 44.'")
+    save(x, "keep-with-next", "The bold 'Chapter Two' line is kept with the paragraph after it: both start page 2, page 1 ends at 'Filler line 24.' (25 lines fit a page with the template's paragraph spacing)")
 
     x = doc()
     cols = x.sections[0]._sectPr.find(qn("w:cols"))
