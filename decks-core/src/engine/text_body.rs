@@ -119,6 +119,40 @@ pub struct ParaStyle {
     pub indent: f64,
     pub space_before: Spacing,
     pub space_after: Spacing,
+    /// How the marker is drawn, where it differs from the text.
+    pub marker: MarkerStyle,
+}
+
+/// A bullet's own font, size and colour (`a:buFont`, `a:buSzPct` or
+/// `a:buSzPts`, `a:buClr`). Each `None` follows the paragraph's first run,
+/// which is also what the `*Tx` elements say. A bullet character is drawn
+/// in its own font: the default template's "•" is Arial's, a good deal
+/// smaller than the body font's.
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct MarkerStyle {
+    pub font: Option<String>,
+    pub size: Option<MarkerSize>,
+    /// `RRGGBB`, lower case.
+    pub color: Option<String>,
+}
+
+/// A marker's size.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum MarkerSize {
+    /// A fraction of the text's size (`buSzPct` / 100000).
+    Relative(f64),
+    /// Points on the model's slide (`buSzPts` / 100, scaled).
+    Points(f64),
+}
+
+impl MarkerSize {
+    /// The marker's size in points for text `text_pt` points tall.
+    pub fn points(self, text_pt: f64) -> f64 {
+        match self {
+            MarkerSize::Relative(f) => text_pt * f,
+            MarkerSize::Points(p) => p,
+        }
+    }
 }
 
 /// Where the block of text sits vertically in its box.
@@ -468,6 +502,12 @@ mod tests {
         let st = ParaStyle { margin_left: 10.0, indent: 20.0, ..Default::default() };
         let g = st.geometry(500.0, 1.0, false);
         assert_eq!((g.text_x, g.text_width, g.first_indent), (10.0, 490.0, 20.0));
+    }
+
+    #[test]
+    fn a_marker_size_is_relative_to_the_text_or_absolute() {
+        assert_eq!(MarkerSize::Relative(0.75).points(32.0), 24.0);
+        assert_eq!(MarkerSize::Points(10.0).points(32.0), 10.0);
     }
 
     #[test]

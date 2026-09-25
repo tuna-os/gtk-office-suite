@@ -12,7 +12,7 @@ use zip::write::SimpleFileOptions;
 use quick_xml::events::{Event, BytesStart, BytesEnd, BytesDecl, BytesText};
 use quick_xml::Writer;
 use letters_core::model::{Run, RunStyle};
-use super::text_body::{Anchor, Bullet, ParaAlign, ParaStyle, Spacing, TextBody};
+use super::text_body::{Anchor, Bullet, MarkerSize, ParaAlign, ParaStyle, Spacing, TextBody};
 
 /// Where a shape sits and how far it is turned — the bounding box in points
 /// plus a rotation in degrees.
@@ -152,6 +152,36 @@ fn write_para_pr<W: std::io::Write>(writer: &mut Writer<W>, st: &ParaStyle) -> R
         e.push_attribute(("val", val.to_string().as_str()));
         writer.write_event(Event::Empty(e))?;
         writer.write_event(Event::End(BytesEnd::new(name)))?;
+    }
+    // CT_TextParagraphProperties order: buClr, buSz*, buFont, then the
+    // bullet itself.
+    if st.bullet != Bullet::None {
+        let m = &st.marker;
+        if let Some(c) = &m.color {
+            writer.write_event(Event::Start(BytesStart::new("a:buClr")))?;
+            let mut clr = BytesStart::new("a:srgbClr");
+            clr.push_attribute(("val", c.to_uppercase().as_str()));
+            writer.write_event(Event::Empty(clr))?;
+            writer.write_event(Event::End(BytesEnd::new("a:buClr")))?;
+        }
+        match m.size {
+            Some(MarkerSize::Relative(f)) => {
+                let mut e = BytesStart::new("a:buSzPct");
+                e.push_attribute(("val", ((f * 100_000.0).round() as i64).to_string().as_str()));
+                writer.write_event(Event::Empty(e))?;
+            }
+            Some(MarkerSize::Points(p)) => {
+                let mut e = BytesStart::new("a:buSzPts");
+                e.push_attribute(("val", ((p * 100.0).round() as i64).to_string().as_str()));
+                writer.write_event(Event::Empty(e))?;
+            }
+            None => {}
+        }
+        if let Some(f) = m.font.as_deref().filter(|f| !f.trim().is_empty()) {
+            let mut e = BytesStart::new("a:buFont");
+            e.push_attribute(("typeface", f));
+            writer.write_event(Event::Empty(e))?;
+        }
     }
     match &st.bullet {
         Bullet::None => writer.write_event(Event::Empty(BytesStart::new("a:buNone")))?,
