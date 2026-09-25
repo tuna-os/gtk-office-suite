@@ -4,6 +4,7 @@ pub mod autosave;
 pub mod palette;
 pub mod format;
 pub mod undo;
+pub mod ops;
 pub mod events;
 pub mod string_pool;
 pub mod units;

@@ -24,3 +24,8 @@ libc = "0.2"
 [lib]
 name = "suite_common_core"
 path = "src/lib.rs"
+
+[dev-dependencies]
+# Property tests for the shared op history (ops.rs); already in the
+# lockfile through letters-core, tables-core and decks-core.
+proptest = "1"
