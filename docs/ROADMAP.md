@@ -11,6 +11,16 @@ Current execution: [September readiness plan](readiness-2026-09/README.md),
 with dependency-ordered issues and acceptance tests in
 [#443](https://github.com/tuna-os/gtk-office-suite/issues/443).
 
+> **Collaboration track (direction accepted 2026-09-24):**
+> [RFC-0001 (CRDT collaboration)](rfc/0001-crdt-collaboration.md) runs
+> alongside Phase 1 of the [Render Parity Roadmap](RENDER-PARITY-ROADMAP.md#collaboration-track-rfc-0001).
+> Tables is unblocked for the RFC's Phase 1 measurement spike now that its
+> cell-style model is complete; Decks waits on its shape-style model and Letters
+> on its GTK-free document model. Standalone Google editor features (outline,
+> pageless view, smart chips, formula autocomplete) are tracked in
+> [DESIGN-UI.md](DESIGN-UI.md#features-we-want-from-google-docs--sheets--slides-direction-set-2026-09-24)
+> and land on the Phase 1 models.
+
 > The post-v1 feature ledger below is retained as historical context. The
 > current product, interoperability, and confidence plan is
 > [Product and Quality Roadmap (2026-07-21)](PRODUCT-QUALITY-ROADMAP-2026-07.md).
