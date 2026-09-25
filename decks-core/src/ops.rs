@@ -293,6 +293,13 @@ impl suite_common_core::ops::Op for Op {
     fn apply(&self, doc: &mut Vec<Slide>) -> Result<Vec<Op>, OpError> {
         apply(doc, self)
     }
+
+    /// Typing in the notes pane: the undo of the first keystroke of a word
+    /// already restores the slide as it was, so a later keystroke's undo
+    /// on the same slide adds nothing.
+    fn coalesce(&mut self, next: &Self) -> bool {
+        matches!((&*self, next), (Op::SetSlide { slide: a, .. }, Op::SetSlide { slide: b, .. }) if a == b)
+    }
 }
 
 #[cfg(test)]

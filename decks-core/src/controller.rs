@@ -347,6 +347,24 @@ impl DecksController {
         self.set_slide_props(slide_idx, |p| p.builds = new)
     }
 
+    /// Set slide `slide_idx`'s speaker notes to `notes`, as the notes pane
+    /// does on every change. Typing a word is one undo step, as in a text
+    /// editor: a letter or digit added to a run of them joins that run's
+    /// step, and anything else (a space, a deletion, a paste) starts one.
+    pub fn set_notes(&self, slide_idx: usize, notes: &str) -> bool {
+        let typing = match self.slides.borrow().get(slide_idx) {
+            Some(s) => one_word_char_added(&s.notes, notes),
+            None => return false,
+        };
+        self.history.borrow_mut().set_merge(typing);
+        let changed = self.set_slide_props(slide_idx, |p| p.notes = notes.to_string());
+        if !changed {
+            // Nothing recorded, so the mark must not reach the next step.
+            self.history.borrow_mut().set_merge(false);
+        }
+        changed
+    }
+
     /// Change slide `slide_idx`'s properties as one undo step.
     fn set_slide_props(&self, slide_idx: usize, change: impl FnOnce(&mut crate::ops::SlideProps)) -> bool {
         let op = {
@@ -401,6 +419,16 @@ impl DecksController {
 }
 
 
+
+/// Whether `new` is `old` with one letter or digit typed into it.
+fn one_word_char_added(old: &str, new: &str) -> bool {
+    let (a, b): (Vec<char>, Vec<char>) = (old.chars().collect(), new.chars().collect());
+    if b.len() != a.len() + 1 {
+        return false;
+    }
+    let at = a.iter().zip(&b).take_while(|(x, y)| x == y).count();
+    b[at].is_alphanumeric() && a[at..] == b[at + 1..]
+}
 
 #[cfg(test)]
 mod tests {
@@ -508,6 +536,62 @@ mod tests {
         let idx = c.move_slide_up(1).unwrap();
         assert_eq!(idx, 0);
         assert_eq!(c.slides.borrow()[0].title, "S1");
+    }
+
+    /// Type `text` into slide 0's notes one character at a time, as the
+    /// notes pane reports it.
+    fn type_notes(c: &DecksController, text: &str) {
+        for ch in text.chars() {
+            let mut now = c.slides.borrow()[0].notes.clone();
+            now.push(ch);
+            c.set_notes(0, &now);
+        }
+    }
+
+    #[test]
+    fn typed_notes_undo_a_word_at_a_time() {
+        let c = DecksController::new(vec![slide("S1")], vec![]);
+        type_notes(&c, "hello world");
+        assert_eq!(c.slides.borrow()[0].notes, "hello world");
+        assert!(c.dirty.get(), "a notes edit makes the deck dirty");
+        assert!(c.undo());
+        assert_eq!(c.slides.borrow()[0].notes, "hello ", "the last word goes in one step");
+        assert!(c.undo());
+        assert_eq!(c.slides.borrow()[0].notes, "hello", "the space is its own step");
+        assert!(c.undo());
+        assert_eq!(c.slides.borrow()[0].notes, "", "and so is the first word");
+        assert!(!c.can_undo());
+        assert!(c.redo() && c.redo() && c.redo());
+        assert_eq!(c.slides.borrow()[0].notes, "hello world");
+    }
+
+    #[test]
+    fn a_notes_paste_or_deletion_is_its_own_step() {
+        let c = DecksController::new(vec![slide("S1")], vec![]);
+        type_notes(&c, "ab");
+        assert!(c.set_notes(0, "ab pasted text"));
+        assert!(c.set_notes(0, "ab pasted tex"));
+        assert!(!c.set_notes(0, "ab pasted tex"), "no change, no step");
+        type_notes(&c, "t");
+        assert!(c.undo());
+        assert_eq!(c.slides.borrow()[0].notes, "ab pasted tex");
+        assert!(c.undo());
+        assert_eq!(c.slides.borrow()[0].notes, "ab pasted text");
+        assert!(c.undo());
+        assert_eq!(c.slides.borrow()[0].notes, "ab");
+        assert!(c.undo());
+        assert_eq!(c.slides.borrow()[0].notes, "");
+    }
+
+    #[test]
+    fn a_word_char_is_one_letter_or_digit_typed_anywhere() {
+        assert!(one_word_char_added("", "a"));
+        assert!(one_word_char_added("hllo", "hello"));
+        assert!(one_word_char_added("abc", "abc7"));
+        assert!(!one_word_char_added("abc", "abc "));
+        assert!(!one_word_char_added("abc", "ab"));
+        assert!(!one_word_char_added("abc", "abxy"));
+        assert!(!one_word_char_added("abc", "xbcd"));
     }
 
     #[test]

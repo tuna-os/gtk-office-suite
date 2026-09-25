@@ -25,6 +25,8 @@ pub struct ObjectSnapshot {
 pub struct SlideSnapshot {
     pub index: usize,
     pub title: String,
+    /// The slide's speaker notes.
+    pub notes: String,
     pub objects: Vec<ObjectSnapshot>,
 }
 
@@ -65,6 +67,7 @@ pub fn snapshot(controller: &DecksController) -> DeckSnapshot {
         .map(|(index, slide)| SlideSnapshot {
             index,
             title: slide.title.clone(),
+            notes: slide.notes.clone(),
             objects: slide
                 .objects
                 .iter()
@@ -125,9 +128,10 @@ impl DeckSnapshot {
                     .collect::<Vec<_>>()
                     .join(",");
                 format!(
-                    "{{\"index\":{},\"title\":{},\"objects\":[{}]}}",
+                    "{{\"index\":{},\"title\":{},\"notes\":{},\"objects\":[{}]}}",
                     s.index,
                     json_str(&s.title),
+                    json_str(&s.notes),
                     objects,
                 )
             })

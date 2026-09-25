@@ -1120,6 +1120,21 @@ struct Page {
     style: Option<String>,
 }
 
+/// Start a paragraph in the text box being read. The break between two
+/// paragraphs goes inside the runs as well as between the lines, so
+/// concatenated run text still equals the box's `text` — the invariant
+/// `SlideObject::TextBox` documents, and the one the pptx walker keeps the
+/// same way.
+fn open_paragraph(textbox: &mut Option<(Vec<String>, Vec<Run>)>, paras: &mut Vec<crate::engine::ParaStyle>, para: crate::engine::ParaStyle) {
+    if let Some((lines, runs)) = textbox.as_mut() {
+        if let Some(last) = runs.last_mut() {
+            last.text.push('\n');
+        }
+        lines.push(String::new());
+        paras.push(para);
+    }
+}
+
 /// Walk a part's pages, collecting frames, shapes and notes.
 ///
 /// `page_tag` is `draw:page` for `content.xml` and `style:master-page` for
@@ -1337,19 +1352,9 @@ fn parse_pages(
                     }
                 }
                 "text:p" => {
-                    if let Some((lines, runs)) = textbox.as_mut() {
-                        // The break between two paragraphs goes inside the
-                        // runs as well as between the lines, so concatenated
-                        // run text still equals the box's `text` — the
-                        // invariant `SlideObject::TextBox` documents, and the
-                        // one the pptx walker keeps the same way.
-                        if let Some(last) = runs.last_mut() {
-                            last.text.push('\n');
-                        }
-                        lines.push(String::new());
-                        let list = lists.iter().flatten().next().map(String::as_str);
-                        paras.push(text_defs.para(attr(e, "text:style-name").as_deref(), list, lists.len(), scale.0));
-                    }
+                    let list = lists.iter().flatten().next().map(String::as_str);
+                    let para = text_defs.para(attr(e, "text:style-name").as_deref(), list, lists.len(), scale.0);
+                    open_paragraph(&mut textbox, &mut paras, para);
                     in_text = true;
                 }
                 "text:span" => {
@@ -1376,6 +1381,13 @@ fn parse_pages(
                 _ => {}
             },
             Ok(Event::Empty(ref e)) => match e.name().as_ref() {
+                // An empty paragraph, `<text:p/>`: how Impress writes a
+                // blank line. It is a paragraph all the same.
+                "text:p" => {
+                    let list = lists.iter().flatten().next().map(String::as_str);
+                    let para = text_defs.para(attr(e, "text:style-name").as_deref(), list, lists.len(), scale.0);
+                    open_paragraph(&mut textbox, &mut paras, para);
+                }
                 "draw:enhanced-geometry" => {
                     if let Some(t) = attr(e, "draw:type") {
                         shape_type = Some(t);

@@ -92,6 +92,10 @@ pub(super) fn extract_notes_text(xml: &str) -> String {
             Ok(Event::Empty(ref e)) if e.name().as_ref() == "a:br" && in_sp => {
                 current.push('\n');
             }
+            // An empty paragraph written as `<a:p/>`: a blank line.
+            Ok(Event::Empty(ref e)) if e.name().as_ref() == "a:p" && in_sp => {
+                sp_parts.push(String::new());
+            }
             Ok(Event::Empty(ref e)) if e.name().as_ref() == "p:ph" && in_sp => {
                 sp_has_ph = true;
                 sp_ph = ph_type(e);
@@ -104,13 +108,13 @@ pub(super) fn extract_notes_text(xml: &str) -> String {
             }
             Ok(Event::End(ref e)) => match e.name().as_ref() {
                 "a:t" => in_t = false,
-                "a:p" if in_sp => {
-                    if !current.is_empty() {
-                        sp_parts.push(std::mem::take(&mut current));
-                    }
-                }
+                // Every paragraph, blank ones too: a blank line between
+                // two paragraphs of notes is the presenter's, and dropping
+                // it ran them together on every save.
+                "a:p" if in_sp => sp_parts.push(std::mem::take(&mut current)),
                 "p:sp" => {
-                    if !sp_parts.is_empty() {
+                    // A shape of nothing but blank paragraphs has no notes.
+                    if sp_parts.iter().any(|p| !p.is_empty()) {
                         match (sp_has_ph, sp_ph.as_deref()) {
                             (true, Some("body")) => body_parts.append(&mut sp_parts),
                             // A placeholder that is not the body one: a slide
