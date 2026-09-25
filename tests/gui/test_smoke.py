@@ -2131,7 +2131,21 @@ class TablesColumnMenuSmoke(TablesCellEntryMixin, BaseGUITestCase):
         self._to_grid("A1")
         rawinput.keyCombo("<Alt>Down")
         self.wait_until(lambda: self._button("20", "check box"), bool, description="20 in the value list")
-        self._button("20", "check box").do_action(0)
+        # GTK 4's check buttons offer no AT-SPI action, so untick it from the
+        # keyboard: Tab from the first item until the focus is on "20".
+        for _ in range(8):
+            if self._button("20", "check box").focused:
+                break
+            rawinput.keyCombo("Tab")
+            time.sleep(0.2)
+        self.assertTrue(self._button("20", "check box").focused, "Tab never reached the 20 check box")
+        rawinput.keyCombo("space")
+        import pyatspi
+        self.wait_until(
+            lambda: not self._button("20", "check box").getState().contains(pyatspi.STATE_CHECKED),
+            bool,
+            description="20 to be unticked",
+        )
         rawinput.keyCombo("Escape")
 
         # Select A1:A3; the quick summary skips the hidden row.
