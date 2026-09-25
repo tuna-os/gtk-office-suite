@@ -198,10 +198,10 @@ mod tests {
     fn every_template_is_a_deck_with_a_title_slide_and_a_bulleted_one() {
         let names: Vec<&str> = templates().iter().map(|t| t.name).collect();
         assert_eq!(names, ["Basic White", "Basic Black", "Ocean", "Paper", "Bold"]);
-        for i in 0..names.len() {
+        for (i, name) in names.iter().enumerate() {
             let (slides, masters) = deck(i).unwrap();
             assert_eq!(slides.len(), 2);
-            assert_eq!(masters[0].name, names[i]);
+            assert_eq!(masters[0].name, *name);
             for s in &slides {
                 for o in &s.objects {
                     if let SlideObject::TextBox { text, runs, .. } = o {
