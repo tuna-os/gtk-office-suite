@@ -202,6 +202,94 @@ def letters(img):
     x.add_paragraph(LOREM)
     save(x, "header-footer", "HEADER TEXT at the top of the page, FOOTER TEXT at the bottom")
 
+    from docx.oxml import OxmlElement
+    from docx.oxml.ns import qn
+
+    def field(paragraph, instr, shown):
+        """A simple field (PAGE, NUMPAGES) at the end of `paragraph`."""
+        fld = OxmlElement("w:fldSimple")
+        fld.set(qn("w:instr"), instr)
+        r = OxmlElement("w:r")
+        t = OxmlElement("w:t")
+        t.text = shown
+        r.append(t)
+        fld.append(r)
+        paragraph._p.append(fld)
+
+    x = doc()
+    s = x.sections[0]
+    hp = s.header.paragraphs[0]
+    hp.text = "Page "
+    field(hp, "PAGE", "1")
+    hp.add_run(" of ")
+    field(hp, "NUMPAGES", "3")
+    fp = s.footer.paragraphs[0]
+    fp.text = "Draft, page "
+    field(fp, "PAGE", "1")
+    for _ in range(70):
+        x.add_paragraph(LOREM)
+    save(x, "page-numbers", "Each page's header reads 'Page N of M' and its footer 'Draft, page N', numbered from the layout")
+
+    x = doc()
+    # python-docx has no footnote API: the footnotes part is written by
+    # hand, with Word's two separator notes and two real ones at 10pt.
+    from docx.opc.constants import RELATIONSHIP_TYPE as RT
+    from docx.opc.packuri import PackURI
+    from docx.opc.part import Part
+
+    W = "http://schemas.openxmlformats.org/wordprocessingml/2006/main"
+
+    def note(n, text):
+        return (
+            f'<w:footnote w:id="{n}"><w:p><w:r><w:rPr><w:vertAlign w:val="superscript"/><w:sz w:val="20"/></w:rPr>'
+            f'<w:footnoteRef/></w:r><w:r><w:rPr><w:sz w:val="20"/></w:rPr><w:t xml:space="preserve"> {text}</w:t></w:r></w:p></w:footnote>'
+        )
+
+    notes = (
+        f'<w:footnotes xmlns:w="{W}">'
+        '<w:footnote w:type="separator" w:id="-1"><w:p><w:r><w:separator/></w:r></w:p></w:footnote>'
+        '<w:footnote w:type="continuationSeparator" w:id="0"><w:p><w:r><w:continuationSeparator/></w:r></w:p></w:footnote>'
+        + note(1, "The first footnote, at the foot of the page.")
+        + note(2, "A second footnote, below the first.")
+        + "</w:footnotes>"
+    )
+    part = Part(
+        PackURI("/word/footnotes.xml"),
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.footnotes+xml",
+        notes.encode(),
+        x.part.package,
+    )
+    x.part.relate_to(part, RT.FOOTNOTES)
+
+    def reference(paragraph, n):
+        r = paragraph.add_run()
+        rpr = OxmlElement("w:rPr")
+        va = OxmlElement("w:vertAlign")
+        va.set(qn("w:val"), "superscript")
+        rpr.append(va)
+        r._r.append(rpr)
+        ref = OxmlElement("w:footnoteReference")
+        ref.set(qn("w:id"), str(n))
+        r._r.append(ref)
+
+    p = x.add_paragraph("A sentence with a note.")
+    reference(p, 1)
+    p.add_run(" " + LOREM)
+    p = x.add_paragraph("Another with a second note.")
+    reference(p, 2)
+    save(x, "footnotes", "Superscript 1 and 2 in the text; the two notes at the foot of the page, 10pt, under a short rule")
+
+    x = doc()
+    cols = x.sections[0]._sectPr.find(qn("w:cols"))
+    if cols is None:
+        cols = OxmlElement("w:cols")
+        x.sections[0]._sectPr.append(cols)
+    cols.set(qn("w:num"), "2")
+    cols.set(qn("w:space"), "720")
+    for _ in range(14):
+        x.add_paragraph(LOREM * 2)
+    save(x, "columns", "Text in two columns half an inch apart, filling the left column before the right")
+
     x = doc()
     x.add_paragraph("Page one.")
     x.add_paragraph().add_run().add_break(WD_BREAK.PAGE)
