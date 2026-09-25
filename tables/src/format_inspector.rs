@@ -224,11 +224,12 @@ pub fn build(
             // selection change catches up.
             let Ok(c) = ctl.try_borrow() else { return };
             let (s, _) = c.active_style();
+            let (default_family, default_size) = c.default_font();
             drop(c);
             syncing.set(true);
-            let family = s.font_family.as_deref().unwrap_or(tables_core::sheet::DEFAULT_FONT_FAMILY);
+            let family = s.font_family.as_deref().unwrap_or(&default_family);
             font.set_label(family);
-            size.set_value(s.font_size.unwrap_or(tables_core::sheet::DEFAULT_FONT_SIZE));
+            size.set_value(s.font_size.unwrap_or(default_size));
             for (t, on) in flags.iter().zip([s.bold, s.italic, s.underline, s.strikethrough]) {
                 t.set_active(on);
             }
@@ -268,7 +269,9 @@ pub fn build(
                     let name = family.name().to_string();
                     b2.set_label(&name);
                     apply("Font", &move |s: &mut CellStyle| {
-                        s.font_family = Some(name.clone()).filter(|f| f != tables_core::sheet::DEFAULT_FONT_FAMILY)
+                        // Explicit, not "the default": which font that is
+                        // depends on the workbook (Calibri, Liberation Sans…).
+                        s.font_family = Some(name.clone())
                     });
                 },
             );
@@ -279,7 +282,7 @@ pub fn build(
         size.connect_value_notify(move |r| {
             let v = r.value();
             apply("Font Size", &move |s: &mut CellStyle| {
-                s.font_size = Some(v).filter(|v| (v - tables_core::sheet::DEFAULT_FONT_SIZE).abs() > f64::EPSILON)
+                s.font_size = Some(v)
             });
         });
     }

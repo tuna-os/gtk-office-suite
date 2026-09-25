@@ -594,6 +594,12 @@ pub struct SheetModel {
     pub borders: Vec<Vec<CellBorder>>,
     pub frozen_rows: usize,
     pub frozen_cols: usize,
+    /// The font a cell with no font of its own is drawn in: the workbook's
+    /// default (xlsx font 0, an ods document's Default cell style).
+    /// Calibri 11 for a new sheet, as Excel's; Calc's own files default to
+    /// Liberation Sans 10.
+    pub default_font_family: String,
+    pub default_font_size: f64,
     pub merges: Vec<(usize, usize, usize, usize)>,
     /// Charts anchored on this sheet, persisted into xlsx (ADR 0003 §3).
     pub charts: Vec<ChartSpec>,
@@ -673,6 +679,7 @@ impl SheetModel {
             sorted_col: None,
             borders: vec![vec![CellBorder::none(); cols]; rows],
             frozen_rows: 0, frozen_cols: 0,
+            default_font_family: DEFAULT_FONT_FAMILY.to_string(), default_font_size: DEFAULT_FONT_SIZE,
             merges: Vec::new(),
             charts: Vec::new(),
             pivot_tables: Vec::new(),

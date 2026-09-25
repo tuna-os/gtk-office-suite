@@ -235,6 +235,9 @@ pub fn load_xlsx_workbook(path: &str) -> Result<(TablesEngine, Vec<SheetModel>),
             if let Some(setup) = &props.page_setup {
                 sheet.page_setup = setup.clone();
             }
+            if let Some((family, size)) = &props.default_font {
+                (sheet.default_font_family, sheet.default_font_size) = (family.clone(), *size);
+            }
             // Layout the writer has always emitted and the reader used to
             // throw away: column widths, row heights, frozen panes and
             // merges. Every one of them survived a save and vanished on
@@ -396,6 +399,9 @@ pub fn load_ods_workbook(path: &str) -> Result<(TablesEngine, Vec<SheetModel>), 
     let props = read_sheet_props_from_ods(path);
     for sheet in &mut sheets {
         let Some(p) = props.get(&sheet.name) else { continue };
+        if let Some((family, size)) = &p.default_font {
+            (sheet.default_font_family, sheet.default_font_size) = (family.clone(), *size);
+        }
         for (&c, &px) in &p.col_widths {
             if c < sheet.col_widths.len() {
                 sheet.col_widths[c] = px;

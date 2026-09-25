@@ -177,8 +177,8 @@ fn cell_layout(cr: &Context, sheet: &SheetModel, r: usize, c: usize, text: &str,
     let style = &sheet.styles[r][c];
     let layout = pangocairo::functions::create_layout(cr);
     let mut font = layout.context().font_description().unwrap_or_default();
-    font.set_family(style.font_family.as_deref().unwrap_or(tables_core::sheet::DEFAULT_FONT_FAMILY));
-    let size = style.font_size.unwrap_or(tables_core::sheet::DEFAULT_FONT_SIZE);
+    font.set_family(style.font_family.as_deref().unwrap_or(&sheet.default_font_family));
+    let size = style.font_size.unwrap_or(sheet.default_font_size);
     font.set_size((size * pango::SCALE as f64) as i32);
     if style.bold {
         font.set_weight(pango::Weight::Bold);
