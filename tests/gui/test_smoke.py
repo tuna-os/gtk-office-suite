@@ -3121,6 +3121,63 @@ class TablesFillHandleSmoke(TablesCanvasCoordsMixin, BaseGUITestCase):
         self.assertIsNone(self.process.poll(), "tables crashed during fill-handle drag")
 
 
+class TablesAutofillSeriesSmoke(TablesCanvasCoordsMixin, BaseGUITestCase):
+    """Autofill series, as Excel and Calc fill them: dragging the fill
+    handle of Mon / Item 1 / 10, 20 down continues the weekdays, counts
+    the numbered text on and extends the number series, rather than
+    repeating them."""
+
+    app_name = "tables"
+
+    def setUp(self):
+        self._snapshot_path = self.isolate_snapshot(prefix="tables-autofill-")
+        super().setUp()
+
+    def test_dragging_the_handle_continues_each_series(self):
+        import json
+        import subprocess
+        from dogtail import rawinput
+
+        aid = "org.tunaos.tables"
+        subprocess.run(["gapplication", "action", aid, "new-document"])
+        time.sleep(1.0)
+        for cell, text in (("A1", "Mon"), ("B1", "Item 1"), ("C1", "10"), ("C2", "20")):
+            rawinput.keyCombo("<Control>g")
+            time.sleep(0.3)
+            rawinput.typeText(cell)
+            rawinput.keyCombo("Return")
+            time.sleep(0.3)
+            rawinput.typeText(text)
+            rawinput.keyCombo("Return")
+            time.sleep(0.3)
+        origin = self.canvas_origin()
+
+        def fill_down(block, handle_row, handle_col, to_row):
+            rawinput.keyCombo("<Control>g")
+            time.sleep(0.3)
+            rawinput.typeText(block)
+            rawinput.keyCombo("Return")
+            time.sleep(0.4)
+            hx = origin[0] + self.ROW_HEADER_WIDTH + (handle_col + 1) * self.COL_WIDTH
+            hy = origin[1] + self.COL_HEADER_HEIGHT + (handle_row + 1) * self.ROW_HEIGHT
+            target_y = origin[1] + self.COL_HEADER_HEIGHT + (to_row + 1) * self.ROW_HEIGHT
+            self.drag(hx, hy, hx, target_y)
+            time.sleep(0.5)
+
+        fill_down("A1:B1", 0, 1, 3)   # Mon, Item 1 down to row 4
+        fill_down("C1:C2", 1, 2, 3)   # 10, 20 down to row 4
+
+        subprocess.run(["gapplication", "action", aid, "test-snapshot"])
+        time.sleep(0.5)
+        with open(self._snapshot_path) as f:
+            snap = json.load(f)
+        cells = {(c["row"], c["col"]): c["value"] for c in snap["sheet"]["cells"]}
+        self.assertEqual([cells.get((r, 0)) for r in (1, 2, 3)], ["Tue", "Wed", "Thu"], f"weekdays: {cells}")
+        self.assertEqual([cells.get((r, 1)) for r in (1, 2, 3)], ["Item 2", "Item 3", "Item 4"], f"numbered text: {cells}")
+        self.assertEqual([cells.get((r, 2)) for r in (2, 3)], ["30", "40"], f"number series: {cells}")
+        self.assertIsNone(self.process.poll(), "tables crashed during an autofill drag")
+
+
 class TablesFormulaReferenceHighlightSmoke(BaseGUITestCase):
     """Formula reference highlighting (#113): typing a formula in the fx
     entry parses and outlines its cell/range references live (a
