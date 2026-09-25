@@ -27,6 +27,7 @@ fn slide(title: &str, objects: Vec<SlideObject>) -> Slide {
         notes: String::new(),
         master_idx: Some(0),
         transition: Default::default(),
+        builds: Vec::new(),
     }
 }
 

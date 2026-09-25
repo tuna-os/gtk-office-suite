@@ -534,6 +534,7 @@ pub fn read_pptx(path: &str) -> Result<Deck, String> {
         }
 
         let mut objects = Vec::new();
+        let mut object_ids: Vec<Option<u32>> = Vec::new();
         let sp_paint = sp_styles(&slide_xml, &theme, scale.x);
         let mut sp_index = 0usize;
         // Tables live in p:graphicFrame, which the walker used to skip.
@@ -586,8 +587,14 @@ pub fn read_pptx(path: &str) -> Result<Deck, String> {
             let mut in_text_element = false;
             let mut in_bg = false;
             let mut in_rpr = false;
+            // The cNvPr id of the last shape seen, and each kept object's:
+            // builds (p:timing) target shapes by it.
+            let mut last_id: Option<u32> = None;
 
             loop {
+                while object_ids.len() < objects.len() {
+                    object_ids.push(last_id);
+                }
                 match reader.read_event_into(&mut buf) {
                     Ok(Event::Start(ref e)) => {
                         let name = e.name();
@@ -663,6 +670,7 @@ pub fn read_pptx(path: &str) -> Result<Deck, String> {
                                     shape.ph = Some(PhKey::from_ph(e));
                                 }
                             }
+                            "p:cNvPr" => last_id = cnvpr_id(e),
                             "p:cNvSpPr" => {
                                 if is_tx_box_attr(e) {
                                     if let Some(shape) = current_shape.as_mut() {
@@ -773,6 +781,7 @@ pub fn read_pptx(path: &str) -> Result<Deck, String> {
                                     shape.ph = Some(PhKey::from_ph(e));
                                 }
                             }
+                            "p:cNvPr" => last_id = cnvpr_id(e),
                             "p:cNvSpPr" => {
                                 if is_tx_box_attr(e) {
                                     if let Some(shape) = current_shape.as_mut() {
@@ -956,6 +965,7 @@ pub fn read_pptx(path: &str) -> Result<Deck, String> {
             notes,
             master_idx: Some(0),
             transition: parse_transition(&slide_xml),
+            builds: super::timing::read_builds(&slide_xml, |spid| object_ids.iter().position(|id| *id == Some(spid))),
         });
     }
 
@@ -1073,10 +1083,19 @@ pub fn read_pptx(path: &str) -> Result<Deck, String> {
             notes: String::new(),
             master_idx: Some(0),
             transition: Default::default(),
+            builds: Vec::new(),
         });
     }
 
     Ok(Deck { slides, masters })
+}
+
+/// A shape's `p:cNvPr id`.
+fn cnvpr_id(e: &BytesStart) -> Option<u32> {
+    e.attributes()
+        .flatten()
+        .find(|a| a.key.as_ref() == "id")
+        .and_then(|a| a.normalized_value(quick_xml::XmlVersion::Implicit1_0).ok()?.parse().ok())
 }
 
 /// A slide's `p:transition`. PowerPoint writes Morph inside

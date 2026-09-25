@@ -11,6 +11,7 @@ fn slide(title: &str, objects: Vec<SlideObject>, notes: &str) -> Slide {
         notes: notes.to_string(),
         master_idx: Some(0),
         transition: Default::default(),
+        builds: Vec::new(),
     }
 }
 

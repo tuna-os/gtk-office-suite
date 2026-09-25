@@ -4,6 +4,7 @@
 // Owns the Deck/Slide/SlideObject model, PPTX read/write, and undo
 // commands. The `decks` binary renders (Cairo/Pango) and wires signals.
 
+pub mod builds;
 pub mod controller;
 pub mod engine;
 pub mod format;

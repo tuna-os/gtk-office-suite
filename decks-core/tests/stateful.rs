@@ -182,6 +182,7 @@ fn blank_slide() -> Slide {
         notes: String::new(),
         master_idx: None,
         transition: Default::default(),
+        builds: Vec::new(),
     }
 }
 

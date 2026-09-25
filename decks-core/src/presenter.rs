@@ -147,8 +147,8 @@ mod tests {
     fn deck() -> Deck {
         Deck {
             slides: vec![
-                Slide { title: "Opening".into(), background: "#fff".into(), objects: vec![], notes: "Welcome".into(), master_idx: Some(0), transition: Default::default() },
-                Slide { title: "Details".into(), background: "#fff".into(), objects: vec![], notes: "Explain this".into(), master_idx: Some(0), transition: Default::default() },
+                Slide { title: "Opening".into(), background: "#fff".into(), objects: vec![], notes: "Welcome".into(), master_idx: Some(0), transition: Default::default(), builds: Vec::new() },
+                Slide { title: "Details".into(), background: "#fff".into(), objects: vec![], notes: "Explain this".into(), master_idx: Some(0), transition: Default::default(), builds: Vec::new() },
             ],
             masters: vec![],
         }
