@@ -409,16 +409,18 @@ pub(crate) fn make_doc_widget(settings: Option<&gio::Settings>) -> (PageContaine
         let pc = container.clone();
         let timer = std::rc::Rc::new(std::cell::RefCell::new(None::<glib::SourceId>));
         let b2 = buffer.clone();
+        // The live model follows the buffer edit by edit (live.rs).
+        let live = crate::live::LiveModel::attach(&buffer);
         buffer.connect_changed(move |_| {
             if let Some(id) = timer.borrow_mut().take() { id.remove(); }
-            let (buf, pc, t2) = (b2.clone(), pc.clone(), timer.clone());
+            let (buf, pc, t2, live) = (b2.clone(), pc.clone(), timer.clone(), live.clone());
             let delay = if pc.is_print_layout() { 0 } else { 500 };
             let id = glib::timeout_add_local(std::time::Duration::from_millis(delay), move || {
                 match pc.page_view().filter(|v| pc.is_print_layout() && v.page_count() > 0) {
                     // Print Layout keeps its typeset and re-shapes only the
                     // paragraphs the edit changed (ADR 0010 stage 3c).
                     Some(view) => {
-                        let (doc, starts) = crate::bridge::capture_with_starts(&buf);
+                        let (doc, starts) = live.borrow_mut().snapshot(&buf);
                         view.update_document(doc, layout_options(&pc), starts);
                         pc.set_page_count(view.page_count());
                     }
