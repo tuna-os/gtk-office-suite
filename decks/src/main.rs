@@ -84,15 +84,11 @@ fn main() {
         let store = ws.borrow();
         let win = store.as_ref().unwrap();
         for file in files {
-            // A remote location is staged to a local copy (RFC-0003).
-            let path = match suite_common::locations::open_location(file) {
-                Ok(path) => Some(path),
-                Err(e) => {
-                    suite_common::show_error_dialog(Some(&win.window), &suite_common::i18n("Could not open file"), &e);
-                    None
-                }
-            };
-            if let Some(path) = path {
+            // A remote presentation downloads without blocking (RFC-0003).
+            let store = ws.clone();
+            suite_common::remote_io::open(&win.window, file, move |path| {
+                let store = store.borrow();
+                let Some(win) = store.as_ref() else { return };
                 let path_str = path.to_string_lossy().to_string();
                 if let Err(e) = win.open_path(&path_str) {
                     // stderr is not a user interface: launched from a file
@@ -110,7 +106,7 @@ fn main() {
 {e}"),
                     );
                 }
-            }
+            });
         }
         win.present();
         suite_common::render_dump::schedule(app);

@@ -40,7 +40,7 @@ impl Listener<Hint> for HistoryActionListener {
 // File I/O lives in tables_core::io; window code only adapts AppState.
 use tables_core::io::load_workbook;
 use crate::persistence::{
-    attach_xlsx_sidecars, autosave_bytes, autosave_state_dir, next_doc_id, save_engine_to_xlsx,
+    attach_xlsx_sidecars, autosave_bytes, autosave_state_dir, next_doc_id,
     unsupported_save_format_message,
 };
 
@@ -1182,15 +1182,15 @@ impl TablesWindow {
                                 }
                                 st.engine.evaluate();
                                 let parent_win = wr2.borrow().clone();
-                                if let Err(err_msg) = tables_core::export::to_pdf_with_setup(&st.engine, sheet_model.print_area, &sheet_model.page_setup, &path_str).and_then(|()| suite_common::locations::commit_save(&path)) {
+                                if let Err(err_msg) = tables_core::export::to_pdf_with_setup(&st.engine, sheet_model.print_area, &sheet_model.page_setup, &path_str) {
                                     let alert = adw::AlertDialog::builder()
                                         .heading(suite_common::i18n("Export Failed"))
                                         .body(&err_msg)
                                         .build();
                                     alert.add_response("ok", &suite_common::i18n("OK"));
                                     alert.present(parent_win.as_ref());
-                                } else {
-                                    println!("PDF exported successfully to {}", path_str);
+                                } else if let Some(w) = parent_win.as_ref() {
+                                    suite_common::remote_io::finish_save(w, &path, |_| {});
                                 }
                             }
                         }
@@ -1547,22 +1547,14 @@ impl TablesWindow {
                     }
                     let existing_path = path_state.borrow().clone();
                     if let Some(path) = existing_path {
-                        match save_engine_to_xlsx(&path.to_string_lossy(), &s.borrow()) {
-                            Ok(()) => {
-                                ctl.borrow_mut().mark_clean();
-                                slot.clear_or_report();
-                                force_close.set(true);
-                                win.close();
-                            }
-                            Err(e) => {
-                                let err = adw::AlertDialog::builder()
-                                    .heading(suite_common::i18n("Error saving file"))
-                                    .body(&e)
-                                    .build();
-                                err.add_response("ok", &suite_common::i18n("OK"));
-                                err.present(Some(&win));
-                            }
-                        }
+                        let (ctl, slot, fc, w, ps) = (ctl.clone(), slot.clone(), force_close.clone(), win.clone(), path_state.clone());
+                        crate::persistence::save_workbook(&win, &path, &s.borrow(), move |saved| {
+                            *ps.borrow_mut() = Some(saved);
+                            ctl.borrow_mut().mark_clean();
+                            slot.clear_or_report();
+                            fc.set(true);
+                            w.close();
+                        });
                         return;
                     }
                     // Never saved: prompt for a destination, then close only
@@ -1580,24 +1572,14 @@ impl TablesWindow {
                     dlg.save(Some(&win), None::<&gio::Cancellable>, move |result| {
                         if let Ok(file) = result {
                             if let Some(path) = crate::persistence::local_path(&file, true, Some(&win2)) {
-                                let path_str = path.to_string_lossy().to_string();
-                                match save_engine_to_xlsx(&path_str, &s.borrow()) {
-                                    Ok(()) => {
-                                        *path_state.borrow_mut() = Some(path);
-                                        ctl.borrow_mut().mark_clean();
-                                        slot.clear_or_report();
-                                        force_close.set(true);
-                                        win2.close();
-                                    }
-                                    Err(e) => {
-                                        let err = adw::AlertDialog::builder()
-                                            .heading(suite_common::i18n("Error saving file"))
-                                            .body(&e)
-                                            .build();
-                                        err.add_response("ok", &suite_common::i18n("OK"));
-                                        err.present(Some(&win2));
-                                    }
-                                }
+                                let w = win2.clone();
+                                crate::persistence::save_workbook(&win2, &path, &s.borrow(), move |saved| {
+                                    *path_state.borrow_mut() = Some(saved);
+                                    ctl.borrow_mut().mark_clean();
+                                    slot.clear_or_report();
+                                    force_close.set(true);
+                                    w.close();
+                                });
                             }
                         }
                     });
@@ -1645,7 +1627,10 @@ impl TablesWindow {
                 dlg.open(Some(&w), None::<&gio::Cancellable>,
                     move |result: Result<gio::File, glib::Error>| {
                         if let Ok(file) = result {
-                            if let Some(path) = crate::persistence::local_path(&file, false, Some(&w2)) {
+                            // A remote document downloads without blocking
+                            // (RFC-0003).
+                            let parent = w2.clone();
+                            suite_common::remote_io::open(&parent, &file, move |path| {
                                 let path_str = path.to_string_lossy().to_string();
                                 // `load_workbook` owns the extension dispatch
                                 // so the dialog, drag-and-drop and CLI open all
@@ -1696,7 +1681,7 @@ impl TablesWindow {
                                         err.present(Some(&w2));
                                     }
                                 }
-                            }
+                            });
                         }
                     },
                 );
@@ -1739,27 +1724,13 @@ impl TablesWindow {
                     move |result: Result<gio::File, glib::Error>| {
                         if let Ok(file) = result {
                             if let Some(path) = crate::persistence::local_path(&file, true, Some(&w2)) {
-                                let path_str = path.to_string_lossy().to_string();
-                                let ss = s.borrow();
-                                match save_engine_to_xlsx(&path_str, &ss) {
-                                    Ok(()) => {
-                                        let settings = gtk4::gio::Settings::new("org.tunaos.tables");
-                                        suite_common::push_recent_file(&settings, &path.to_string_lossy());
-                                        drop(ss);
-                                        *path_state.borrow_mut() = Some(path);
-                                        ctl.borrow_mut().mark_clean();
-                                        slot.clear_or_report();
-                                    }
-                                    Err(e) => {
-                                        let err = adw::AlertDialog::builder()
-                                            .heading(suite_common::i18n("Error saving file"))
-                                            .body(&e)
-                                            .build();
-                                        err.add_response("ok", &suite_common::i18n("OK"));
-                                        err.set_default_response(Some("ok"));
-                                        err.present(Some(&w2));
-                                    }
-                                }
+                                crate::persistence::save_workbook(&w2, &path, &s.borrow(), move |saved| {
+                                    let settings = gtk4::gio::Settings::new("org.tunaos.tables");
+                                    suite_common::push_recent_file(&settings, &saved.to_string_lossy());
+                                    *path_state.borrow_mut() = Some(saved);
+                                    ctl.borrow_mut().mark_clean();
+                                    slot.clear_or_report();
+                                });
                             }
                         }
                     },
@@ -1804,23 +1775,14 @@ impl TablesWindow {
                     prompt.present(Some(&w));
                     return;
                 }
-                match save_engine_to_xlsx(&path_str, &s.borrow()) {
-                    Ok(()) => {
-                        let settings = gtk4::gio::Settings::new("org.tunaos.tables");
-                        suite_common::push_recent_file(&settings, &path_str);
-                        ctl.borrow_mut().mark_clean();
-                        slot.clear_or_report();
-                    }
-                    Err(e) => {
-                        let err = adw::AlertDialog::builder()
-                            .heading(suite_common::i18n("Error saving file"))
-                            .body(&e)
-                            .build();
-                        err.add_response("ok", &suite_common::i18n("OK"));
-                        err.set_default_response(Some("ok"));
-                        err.present(Some(&w));
-                    }
-                }
+                let (ctl, slot, ps) = (ctl.clone(), slot.clone(), path_state.clone());
+                crate::persistence::save_workbook(&w, &path, &s.borrow(), move |saved| {
+                    let settings = gtk4::gio::Settings::new("org.tunaos.tables");
+                    suite_common::push_recent_file(&settings, &saved.to_string_lossy());
+                    *ps.borrow_mut() = Some(saved);
+                    ctl.borrow_mut().mark_clean();
+                    slot.clear_or_report();
+                });
             });
             app.add_action(&act);
         }

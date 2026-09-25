@@ -109,11 +109,14 @@ machine doesn't have.
 
 ## Next steps
 
-1. Letters and Decks call sites: one small PR each (agreed with the
-   orchestrator).
-2. A conflict dialog in place of the error message: Save as copy,
-   Overwrite, or Reload. `CHANGED_ELSEWHERE` is the hook for it.
+1. Done: the Letters and Decks call sites (#1062, #1066).
+2. Done: the conflict dialog and async I/O (`suite_common::remote_io`).
+   - Saving a document that changed elsewhere asks: Save as Copy (the
+     default), Overwrite or Reload. Escape leaves it unsaved.
+   - Downloads and uploads no longer block the main loop. A transfer
+     longer than a second shows progress ("12.1 of 30.0 MB") and can be
+     cancelled; a cancelled upload leaves the server as it was.
+   - The GUI journey `TablesRemoteConflictSmoke` drives this against
+     WsgiDAV in CI.
 3. A session run with real accounts and the Flatpak, to fill in the
    table's missing rows. `tools/cloud-spike/run.sh` shows what to record.
-4. Reads and uploads are synchronous today. Large files on slow links need
-   the async GIO calls and a progress indicator before this ships.

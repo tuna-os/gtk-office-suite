@@ -89,8 +89,11 @@ jobs:
       - name: Install GUI test dependencies
         run: |
           sudo apt-get install -y -qq xvfb dbus at-spi2-core matchbox-window-manager xdotool \
-            x11-utils ffmpeg python3-dogtail python3-pytest python3-pil python3-requests
-          python3 -m pip install --break-system-packages mss
+            x11-utils ffmpeg python3-dogtail python3-pytest python3-pil python3-requests \
+            gvfs gvfs-backends gvfs-daemons
+          # GVfs and WsgiDAV: the remote-document journey (RFC-0003) opens a
+          # workbook from a local WebDAV server, as Nextcloud's files open.
+          python3 -m pip install --break-system-packages mss wsgidav cheroot
 
       # GUI_TEST_VIDEO=failures records every journey and keeps only the
       # clips of the ones that failed. A smoke failure means an app did

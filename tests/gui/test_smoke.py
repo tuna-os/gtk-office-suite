@@ -2076,6 +2076,81 @@ def minimal_xlsx_bytes(a1_value):
     return buffer.getvalue()
 
 
+class TablesRemoteConflictSmoke(BaseGUITestCase):
+    """RFC-0003: a workbook opened from a WebDAV server (through GVfs, as
+    Nextcloud's files are) that someone else changes on the server meanwhile.
+    Saving must not overwrite their version silently: the "Document Changed
+    Elsewhere" dialog asks, and Overwrite then puts this version on the
+    server. WsgiDAV stands in for Nextcloud: like sabre/dav it checks
+    If-Match, and it reports etags through GVfs."""
+
+    app_name = "tables"
+
+    def setUp(self):
+        import shutil
+        import socket
+        import subprocess
+
+        if not shutil.which("wsgidav") or not os.path.exists("/usr/share/gvfs/mounts/dav.mount"):
+            self.skipTest("needs wsgidav and GVfs's WebDAV backend")
+        self._root = self.temp_dir(prefix="tables-dav-")
+        self._served = os.path.join(self._root, "book.xlsx")
+        with open(self._served, "wb") as book:
+            book.write(minimal_xlsx_bytes("1"))
+        with socket.socket() as sock:
+            sock.bind(("127.0.0.1", 0))
+            port = sock.getsockname()[1]
+        self._server = subprocess.Popen(
+            ["wsgidav", "--host", "127.0.0.1", "--port", str(port), "--root", self._root, "--auth", "anonymous"],
+            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        self.addCleanup(self._server.terminate)
+        uri = f"dav://127.0.0.1:{port}/"
+        def mounted():
+            # The server takes a moment to listen; mounting twice is fine.
+            done = subprocess.run(["gio", "mount", uri], stdin=subprocess.DEVNULL, capture_output=True, text=True)
+            return done.returncode == 0 or "already mounted" in done.stderr.lower()
+        self.wait_for_condition(mounted, timeout=15.0, interval=0.5, description=f"gio mount {uri}")
+        self.addCleanup(lambda: subprocess.run(["gio", "mount", "-u", uri], capture_output=True))
+        self.launch_args = [uri + "book.xlsx"]
+        super().setUp()
+
+    def test_a_save_over_someone_elses_change_asks_then_overwrites(self):
+        from dogtail import rawinput
+        import zipfile
+
+        time.sleep(1.0)
+        rawinput.keyCombo("<Control>g")
+        time.sleep(0.5)
+        rawinput.typeText("A1")
+        rawinput.keyCombo("Return")
+        time.sleep(0.5)
+        rawinput.typeText("42")
+        rawinput.keyCombo("Return")
+        time.sleep(0.3)
+
+        # Someone else saves the workbook on the server meanwhile.
+        time.sleep(1.1)  # a new mtime, so a new etag
+        theirs = minimal_xlsx_bytes("their version")
+        with open(self._served, "wb") as book:
+            book.write(theirs)
+
+        rawinput.keyCombo("<Control>s")
+        self.wait_for_node(name="Save as Copy", roleName="push button")
+        with open(self._served, "rb") as book:
+            self.assertEqual(book.read(), theirs, "their version was overwritten without asking")
+
+        self.app.child(name="Overwrite", roleName="push button").do_action(0)
+
+        def mine_on_server():
+            try:
+                with zipfile.ZipFile(self._served) as book:
+                    return ">42<" in book.read("xl/worksheets/sheet1.xml").decode()
+            except (zipfile.BadZipFile, KeyError, OSError):
+                return False
+        self.wait_for_condition(mine_on_server, timeout=10.0, description="this version on the server")
+        self.assertIsNone(self.process.poll(), "tables crashed during the remote save")
+
+
 class TablesUndoSaveReopenSmoke(BaseGUITestCase):
     """Real GTK journey: edit, undo, redo, save, restart, and reopen."""
 

@@ -75,10 +75,11 @@ pub fn export_pdf(win: &adw::ApplicationWindow, container: &PageContainer, buf: 
     let w = win.clone();
     dlg.save(Some(win), None::<&gio::Cancellable>, move |result: Result<gio::File, glib::Error>| {
         let Ok(file) = result else { return };
-        let written = suite_common::locations::save_location(&file)
-            .and_then(|path| typeset.write_pdf(&path).and_then(|()| suite_common::locations::commit_save(&path)));
-        if let Err(e) = written {
-            suite_common::show_error_dialog(Some(&w), &suite_common::i18n("Could not export PDF"), &e);
+        let written = suite_common::locations::save_location(&file).and_then(|path| typeset.write_pdf(&path).map(|()| path));
+        match written {
+            // A remote destination uploads now (RFC-0003).
+            Ok(path) => suite_common::remote_io::finish_save(&w, &path, |_| {}),
+            Err(e) => suite_common::show_error_dialog(Some(&w), &suite_common::i18n("Could not export PDF"), &e),
         }
     });
 }

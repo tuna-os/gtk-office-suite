@@ -147,6 +147,118 @@ pub fn remote_uri(path: &Path) -> Option<String> {
     STAGED.with(|s| s.borrow().get(path).map(|r| r.location.uri().to_string()))
 }
 
+/// The remote location a staged path stands for; `None` for a local path.
+pub fn remote_location(path: &Path) -> Option<gio::File> {
+    STAGED.with(|s| s.borrow().get(path).map(|r| r.location.clone()))
+}
+
+// ---------------------------------------------------------------- async
+
+/// Why an upload didn't happen.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum UploadError {
+    /// The document changed at its location since it was opened or last
+    /// saved here. The message names the location.
+    ChangedElsewhere(String),
+    Failed(String),
+}
+
+/// The chunk a download reads at a time, and so how often progress moves.
+const CHUNK: usize = 256 * 1024;
+
+async fn current_etag_async(location: &gio::File) -> Option<String> {
+    location
+        .query_info_future(gio::FILE_ATTRIBUTE_ETAG_VALUE, gio::FileQueryInfoFlags::NONE, glib::Priority::DEFAULT)
+        .await
+        .ok()
+        .and_then(|info| info.etag())
+        .map(|t| t.to_string())
+        .filter(|t| !t.is_empty())
+}
+
+/// [`open_location`] without blocking: a remote document is read in
+/// chunks, reporting `(bytes so far, total if known)` to `progress`.
+/// Dropping the future (see [`gio::CancellableFuture`]) cancels it.
+pub async fn download(location: &gio::File, progress: impl Fn(u64, Option<u64>)) -> Result<PathBuf, String> {
+    if let Some(path) = native_path(location) {
+        return Ok(path);
+    }
+    let failed = |e: glib::Error| format!("Can't read {}: {}", location.uri(), e.message());
+    let info = location
+        .query_info_future("standard::size,etag::value", gio::FileQueryInfoFlags::NONE, glib::Priority::DEFAULT)
+        .await
+        .ok();
+    let total = info.as_ref().map(|i| i.size()).filter(|s| *s > 0).map(|s| s as u64);
+    let etag = info.and_then(|i| i.etag()).map(|t| t.to_string()).filter(|t| !t.is_empty());
+    let stream = location.read_future(glib::Priority::DEFAULT).await.map_err(failed)?;
+    let mut bytes = Vec::with_capacity(total.unwrap_or(0) as usize);
+    loop {
+        let chunk = stream.read_bytes_future(CHUNK, glib::Priority::DEFAULT).await.map_err(failed)?;
+        if chunk.is_empty() {
+            break;
+        }
+        bytes.extend_from_slice(&chunk);
+        progress(bytes.len() as u64, total);
+    }
+    let _ = stream.close_future(glib::Priority::DEFAULT).await;
+    let path = staging_path(location)?;
+    std::fs::write(&path, &bytes).map_err(|e| format!("Can't stage {}: {e}", location.uri()))?;
+    let etag = match etag {
+        Some(t) => Some(t),
+        None => current_etag_async(location).await,
+    };
+    remember(&path, location, etag);
+    Ok(path)
+}
+
+/// [`commit_save`] without blocking. With `check`, a document changed at
+/// its location since it was opened or last saved is refused with
+/// [`UploadError::ChangedElsewhere`]; without it (the user chose to
+/// overwrite), it's replaced. Dropping the future cancels the upload, and
+/// GIO then leaves the location as it was.
+pub async fn upload(path: &Path, check: bool) -> Result<(), UploadError> {
+    let Some((location, etag)) = STAGED.with(|s| s.borrow().get(path).map(|r| (r.location.clone(), r.etag.clone()))) else {
+        return Ok(());
+    };
+    let changed = || UploadError::ChangedElsewhere(format!("{CHANGED_ELSEWHERE} ({}).", location.uri()));
+    let bytes = std::fs::read(path).map_err(|e| UploadError::Failed(format!("Can't read the saved copy: {e}")))?;
+    let etag = if check { etag } else { None };
+    // Compared here as well as handed to GIO: GVfs's WebDAV backend
+    // doesn't make every server check it (docs/rfc/0003-spike-results.md).
+    if let Some(expected) = &etag {
+        if current_etag_async(&location).await.is_some_and(|now| now != *expected) {
+            return Err(changed());
+        }
+    }
+    let new_etag = location
+        .replace_contents_future(bytes, etag.as_deref(), false, gio::FileCreateFlags::NONE)
+        .await
+        .map(|(_, etag)| etag)
+        .map_err(|(_, e)| {
+            if e.matches(gio::IOErrorEnum::WrongEtag) {
+                changed()
+            } else {
+                UploadError::Failed(format!("Can't save to {}: {}", location.uri(), e.message()))
+            }
+        })?;
+    let new_etag = match new_etag.map(|t| t.to_string()).filter(|t| !t.is_empty()) {
+        Some(t) => Some(t),
+        None => current_etag_async(&location).await,
+    };
+    remember(path, &location, new_etag);
+    Ok(())
+}
+
+/// Stage a copy of the staged or local file `from` for `to`, the "Save as
+/// Copy" destination, so [`upload`] (with no etag to check) puts it there.
+pub fn stage_copy(from: &Path, to: &gio::File) -> Result<PathBuf, String> {
+    let target = save_location(to)?;
+    if target != from {
+        std::fs::copy(from, &target).map_err(|e| format!("Can't copy to {}: {e}", to.uri()))?;
+    }
+    Ok(target)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

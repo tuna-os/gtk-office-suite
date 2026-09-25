@@ -347,10 +347,13 @@ pub(crate) fn make_doc_widget(settings: Option<&gio::Settings>) -> (PageContaine
     // Drag-and-drop for images from file manager
     {
         let buf = buffer.clone();
+        let ed = editor.clone();
         let drop = gtk::DropTarget::new(gio::File::static_type(), gtk4::gdk::DragAction::COPY);
         drop.connect_drop(move |_target, value, _x, _y| {
             if let Ok(file) = value.get::<gio::File>() {
-                if let Ok(path) = suite_common::locations::open_location(&file).map_err(|e| eprintln!("{e}")) {
+                // A remote image downloads without blocking (RFC-0003).
+                let buf = buf.clone();
+                suite_common::remote_io::open(&ed, &file, move |path| {
                     let name = path.file_name()
                         .and_then(|n| n.to_str()).unwrap_or("image");
                     let path_str = path.to_string_lossy();
@@ -359,7 +362,7 @@ pub(crate) fn make_doc_widget(settings: Option<&gio::Settings>) -> (PageContaine
                         .map(|(i,_)| i).unwrap_or_else(|| buf.start_iter());
                     let mut pos = ins;
                     buf.insert(&mut pos, &md);
-                }
+                });
             }
             true
         });
