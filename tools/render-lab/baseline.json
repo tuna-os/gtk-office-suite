@@ -47,6 +47,10 @@
     "A": "green",
     "B": "green"
   },
+  "letters/columns": {
+    "A": "green",
+    "B": "green"
+  },
   "letters/font-families": {
     "A": "green",
     "B": "green"
@@ -54,6 +58,10 @@
   "letters/font-sizes": {
     "A": "amber",
     "B": "amber"
+  },
+  "letters/footnotes": {
+    "A": "green",
+    "B": "green"
   },
   "letters/header-footer": {
     "A": "green",
@@ -96,6 +104,10 @@
     "B": "green"
   },
   "letters/page-margins": {
+    "A": "green",
+    "B": "green"
+  },
+  "letters/page-numbers": {
     "A": "green",
     "B": "green"
   },

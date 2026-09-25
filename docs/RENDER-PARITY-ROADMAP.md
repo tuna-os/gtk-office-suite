@@ -219,6 +219,13 @@ green when the metric can read them (a larger OCR scale for small text is
 the next candidate, and it would have to be checked against every app's
 verdicts first, since `compare.py` is shared).
 
+The opposite blind spot exists too, so look at the images of a green
+fixture as well: **`letters/page-numbers`** (2026-09-25) was green on
+first run while every page's header read "Page  of" with no numbers (the
+PAGE/NUMPAGES fields were read as empty). A few missing characters in a
+header barely move word-found rate or displacement. It is green now
+because the header reads "Page 2 of 5", as LibreOffice's does.
+
 ### Report
 
 `report.html` lays each fixture out as LibreOffice | ours (Tier A) | ours
