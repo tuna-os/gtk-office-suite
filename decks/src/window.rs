@@ -484,7 +484,7 @@ impl DecksWindow {
                     let existing_path = path_state.borrow().clone();
                     if let Some(path) = existing_path {
                         let deck = Deck { slides: ss.borrow().clone(), masters: m.borrow().clone() };
-                        match write_deck(&path, &deck) {
+                        match save_deck(&path, &deck) {
                             Ok(()) => {
                                 dirty.set(false);
                                 slot.clear_or_report();
@@ -520,10 +520,10 @@ impl DecksWindow {
                     let slot = slot.clone();
                     dlg.save(Some(&win), None::<&gio::Cancellable>, move |result| {
                         if let Ok(file) = result {
-                            if let Some(path) = file.path() {
+                            if let Some(path) = local_path(&file, true, &win2) {
                                 let path_str = path.to_string_lossy().to_string();
                                 let deck = Deck { slides: ss.borrow().clone(), masters: m.borrow().clone() };
-                                match write_deck(&path_str, &deck) {
+                                match save_deck(&path_str, &deck) {
                                     Ok(()) => {
                                         *path_state.borrow_mut() = Some(path_str);
                                         dirty.set(false);
@@ -927,7 +927,7 @@ impl DecksWindow {
                 dlg.open(Some(&w), None::<&gio::Cancellable>,
                     move |result: Result<gio::File, glib::Error>| {
                         if let Ok(file) = result {
-                            if let Some(path) = file.path() {
+                            if let Ok(path) = suite_common::locations::open_location(&file).map_err(|e| eprintln!("{e}")) {
                                 let idx = cs_ref.get();
                                 let p = path.to_string_lossy().to_string();
                                 let obj = SlideObject::Image {
@@ -1363,7 +1363,7 @@ impl DecksWindow {
                 dlg.open(Some(&w), None::<&gio::Cancellable>,
                     move |result: Result<gio::File, glib::Error>| {
                         if let Ok(file) = result {
-                            if let Some(path) = file.path() {
+                            if let Some(path) = local_path(&file, false, &w2) {
                                 let path_str = path.to_string_lossy().to_string();
                                 match read_deck(&path_str) {
                                     Ok(deck) => {
@@ -1422,7 +1422,7 @@ impl DecksWindow {
                 let current_path = path_clone.borrow().clone();
                 if let Some(path_str) = current_path {
                     let deck = Deck { slides: ss_clone.borrow().clone(), masters: m_save.borrow().clone() };
-                    match write_deck(&path_str, &deck) {
+                    match save_deck(&path_str, &deck) {
                         Ok(()) => {
                             let settings = gio::Settings::new("org.tunaos.decks");
                             suite_common::push_recent_file(&settings, &path_str);
@@ -1472,10 +1472,10 @@ impl DecksWindow {
                 dlg.save(Some(&w), None::<&gio::Cancellable>,
                     move |result: Result<gio::File, glib::Error>| {
                         if let Ok(file) = result {
-                            if let Some(path) = file.path() {
+                            if let Some(path) = local_path(&file, true, &w2) {
                                 let path_str = path.to_string_lossy().to_string();
                                 let deck = Deck { slides: ss.borrow().clone(), masters: m_inner.borrow().clone() };
-                                match write_deck(&path_str, &deck) {
+                                match save_deck(&path_str, &deck) {
                                     Ok(()) => {
                                         let settings = gio::Settings::new("org.tunaos.decks");
                                         suite_common::push_recent_file(&settings, &path_str);
@@ -1651,3 +1651,27 @@ impl DecksWindow {
 
 // ── Helper: rebuild the slide list widget ────────────────────────────────
 // force rebuild
+
+/// Write `deck` to `path`, then upload it if `path` is the staged copy of
+/// a remote location (RFC-0003). Every save goes through here.
+fn save_deck(path: &str, deck: &Deck) -> Result<(), String> {
+    write_deck(path, deck)?;
+    suite_common::locations::commit_save(std::path::Path::new(path))
+}
+
+/// The local path for a location a dialog handed over: its own, or a
+/// staged copy of a remote one (RFC-0003). One that can't be used is
+/// reported, never silently ignored.
+fn local_path(file: &gio::File, for_save: bool, parent: &adw::ApplicationWindow) -> Option<std::path::PathBuf> {
+    let staged = if for_save {
+        suite_common::locations::save_location(file)
+    } else {
+        suite_common::locations::open_location(file)
+    };
+    staged
+        .map_err(|e| {
+            let heading = if for_save { "Error saving presentation" } else { "Error opening presentation" };
+            suite_common::show_error_dialog(Some(parent), &suite_common::i18n(heading), &e);
+        })
+        .ok()
+}
