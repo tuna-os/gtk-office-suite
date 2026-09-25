@@ -12,10 +12,18 @@ use decks_core::engine::text_body::{markers, paragraphs};
 use decks_core::engine::{ParaAlign, Run, TextBody};
 use gtk4::{cairo, pango};
 
+/// A bullet or number: its layout, left edge, and how far below the
+/// paragraph's top it starts so that the two baselines line up.
+struct Marker {
+    layout: pango::Layout,
+    x: f64,
+    dy: f64,
+}
+
 /// One paragraph, laid out and placed relative to the box's inner origin.
 struct Placed {
     layout: pango::Layout,
-    marker: Option<(pango::Layout, f64)>,
+    marker: Option<Marker>,
     x: f64,
     y: f64,
 }
@@ -98,14 +106,26 @@ fn place(
         if i > 0 {
             y += st.space_before.resolve(line_h / scale) * scale;
         }
-        // The marker takes the first run's size and colour.
-        let marker = marks[i].as_ref().zip(g.marker_x).map(|(m, mx)| {
+        // The marker takes the first run's font, size and colour unless it
+        // has its own, and sits on the first line's baseline.
+        let marker = marks[i].as_ref().zip(g.marker_x).map(|(label, mx)| {
             let ml = pangocairo::functions::create_layout(cr);
             ml.set_font_description(Some(desc));
-            let style = para.first().map(|r| r.style.clone()).unwrap_or_default();
-            let style = decks_core::engine::RunStyle { bold: false, italic: false, underline: false, ..style };
-            set_styled_text(&ml, m, &[Run { text: m.clone(), style }], text_scale);
-            (ml, mx)
+            let first = para.first().map(|r| r.style.clone()).unwrap_or_default();
+            let text_pt = first.font_size_hp.map_or(18.0, |hp| hp as f64 / 2.0);
+            let ms = &st.marker;
+            let style = decks_core::engine::RunStyle {
+                bold: false,
+                italic: false,
+                underline: false,
+                font_family: ms.font.clone().or(first.font_family.clone()),
+                font_size_hp: ms.size.map(|s| (s.points(text_pt) * 2.0).round().max(1.0) as u16).or(first.font_size_hp),
+                color: ms.color.clone().or(first.color.clone()),
+                ..first.clone()
+            };
+            set_styled_text(&ml, label, &[Run { text: label.clone(), style }], text_scale);
+            let dy = (layout.baseline() - ml.baseline()) as f64 / pango::SCALE as f64;
+            Marker { layout: ml, x: mx, dy }
         });
         let h = layout.pixel_size().1 as f64;
         placed.push(Placed { layout, marker, x: g.text_x, y });
@@ -118,8 +138,8 @@ fn place(
     for p in &mut placed {
         p.x += bx + l;
         p.y += by + t + dy;
-        if let Some((_, mx)) = p.marker.as_mut() {
-            *mx += bx + l;
+        if let Some(m) = p.marker.as_mut() {
+            m.x += bx + l;
         }
     }
     placed
@@ -138,9 +158,9 @@ pub fn draw_text_body(
     desc: &pango::FontDescription,
 ) {
     for p in place(cr, text, runs, body, rect, scale, desc) {
-        if let Some((ml, mx)) = &p.marker {
-            cr.move_to(*mx, p.y);
-            pangocairo::functions::show_layout(cr, ml);
+        if let Some(m) = &p.marker {
+            cr.move_to(m.x, p.y + m.dy);
+            pangocairo::functions::show_layout(cr, &m.layout);
         }
         cr.move_to(p.x, p.y);
         pangocairo::functions::show_layout(cr, &p.layout);
@@ -177,9 +197,32 @@ mod tests {
         let placed = place(&ctx(), "One", &runs("One"), &body, (10.0, 10.0, 300.0, 100.0), 1.0, &desc());
         assert_eq!(placed.len(), 1);
         assert_eq!(placed[0].x, 30.0, "text at the margin");
-        let (ml, mx) = placed[0].marker.as_ref().expect("a marker");
-        assert_eq!(*mx, 10.0, "marker at margin + indent");
-        assert_eq!(ml.text().as_str(), "•");
+        let m = placed[0].marker.as_ref().expect("a marker");
+        assert_eq!(m.x, 10.0, "marker at margin + indent");
+        assert_eq!(m.layout.text().as_str(), "•");
+        assert_eq!(m.dy, 0.0, "same size, same baseline");
+    }
+
+    #[test]
+    fn a_smaller_marker_in_its_own_font_sits_on_the_texts_baseline() {
+        use decks_core::engine::{MarkerSize, MarkerStyle};
+        let body = TextBody {
+            paras: vec![ParaStyle {
+                bullet: Bullet::Char("•".into()),
+                marker: MarkerStyle { font: Some("Serif".into()), size: Some(MarkerSize::Relative(0.5)), color: None },
+                ..Default::default()
+            }],
+            insets: Some(Insets { left: 0.0, top: 0.0, right: 0.0, bottom: 0.0 }),
+            ..Default::default()
+        };
+        let big = vec![Run { text: "One".into(), style: RunStyle { font_size_hp: Some(64), ..Default::default() } }];
+        let placed = place(&ctx(), "One", &big, &body, (0.0, 0.0, 300.0, 100.0), 1.0, &desc());
+        let m = placed[0].marker.as_ref().expect("a marker");
+        let base = |l: &pango::Layout| l.baseline() as f64 / pango::SCALE as f64;
+        assert!(base(&m.layout) < base(&placed[0].layout), "the marker is smaller");
+        assert!((m.dy + base(&m.layout) - base(&placed[0].layout)).abs() < 1e-9, "baselines line up");
+        let attrs = m.layout.attributes().expect("styled");
+        assert!(attrs.attributes().iter().any(|a| a.type_() == pango::AttrType::Family), "its own font");
     }
 
     #[test]

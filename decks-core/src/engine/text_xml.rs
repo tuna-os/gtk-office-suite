@@ -26,7 +26,7 @@
 
 use super::placeholders::{inherited_indices, PhKey};
 use super::shape_xml::{first_color, parse_tree, Node, Theme};
-use super::text_body::{Anchor, Autofit, Bullet, Insets, ParaAlign, ParaStyle, Spacing, TextBody};
+use super::text_body::{Anchor, Autofit, Bullet, Insets, MarkerSize, MarkerStyle, ParaAlign, ParaStyle, Spacing, TextBody};
 use super::SlideScale;
 use letters_core::model::RunStyle;
 
@@ -102,13 +102,25 @@ struct LevelProps {
     bullet: Option<Bullet>,
     spc_bef: Option<RawSpacing>,
     spc_aft: Option<RawSpacing>,
+    /// `Some(None)` is a `*Tx` element: follow the text.
+    bu_font: Option<Option<String>>,
+    bu_size: Option<Option<RawBuSize>>,
+    bu_clr: Option<Option<String>>,
     run: RunProps,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+enum RawBuSize {
+    /// Thousandths of a percent.
+    Pct(f64),
+    /// Hundredths of a point.
+    Pts(f64),
 }
 
 impl LevelProps {
     fn over(&mut self, top: &LevelProps) {
         macro_rules! take { ($($f:ident),*) => { $( if top.$f.is_some() { self.$f = top.$f.clone(); } )* } }
-        take!(algn, mar_l, indent, bullet, spc_bef, spc_aft);
+        take!(algn, mar_l, indent, bullet, spc_bef, spc_aft, bu_font, bu_size, bu_clr);
         self.run.over(&top.run);
     }
 
@@ -122,8 +134,17 @@ impl LevelProps {
             s.child("a:spcPct")?.attr("val")?.parse().ok().map(RawSpacing::Percent)
         };
         let mut bullet = None;
+        let (mut bu_font, mut bu_size, mut bu_clr) = (None, None, None);
         for c in &ppr.children {
+            let val = || c.attr("val").and_then(|v| v.parse::<f64>().ok());
             match c.name.as_str() {
+                "a:buFontTx" => bu_font = Some(None),
+                "a:buFont" => bu_font = Some(c.attr("typeface").and_then(|t| theme.typeface(t))),
+                "a:buSzTx" => bu_size = Some(None),
+                "a:buSzPct" => bu_size = Some(val().map(RawBuSize::Pct)),
+                "a:buSzPts" => bu_size = Some(val().map(RawBuSize::Pts)),
+                "a:buClrTx" => bu_clr = Some(None),
+                "a:buClr" => bu_clr = Some(first_color(c, theme, None).map(|c| c.to_hex().to_lowercase())),
                 "a:buNone" => bullet = Some(Bullet::None),
                 "a:buChar" => bullet = c.attr("char").map(|ch| Bullet::Char(ch.to_string())),
                 "a:buAutoNum" => {
@@ -142,6 +163,9 @@ impl LevelProps {
             bullet,
             spc_bef: spacing("a:spcBef"),
             spc_aft: spacing("a:spcAft"),
+            bu_font,
+            bu_size,
+            bu_clr,
             run: ppr.child("a:defRPr").map(|r| RunProps::of(r, theme)).unwrap_or_default(),
         }
     }
@@ -378,6 +402,14 @@ fn resolve_sp_text(sp: &Node, theme: &Theme, inh: &Inherited, scale: SlideScale)
             indent: emu(props.indent.unwrap_or(0.0)),
             space_before: spacing(props.spc_bef),
             space_after: spacing(props.spc_aft),
+            marker: MarkerStyle {
+                font: props.bu_font.clone().flatten(),
+                size: props.bu_size.flatten().map(|s| match s {
+                    RawBuSize::Pct(v) => MarkerSize::Relative(v / 100_000.0),
+                    RawBuSize::Pts(v) => MarkerSize::Points(v / 100.0 * scale.text_factor()),
+                }),
+                color: props.bu_clr.clone().flatten(),
+            },
         });
         for r in p.children.iter().filter(|c| c.name == "a:r" || c.name == "a:fld") {
             let mut run = props.run.clone();
@@ -534,6 +566,30 @@ mod tests {
         assert_eq!(got[1].autofit, None);
         // The sizes themselves are the author's.
         assert_eq!(got[0].runs[0].style().font_size_hp, Some(64));
+    }
+
+    #[test]
+    fn a_bullet_takes_its_own_font_size_and_colour_and_tx_follows_the_text() {
+        let master = MASTER.replace(
+            r#"<a:buChar char="•"/><a:defRPr sz="3200"/>"#,
+            r#"<a:buClr><a:srgbClr val="C00000"/></a:buClr><a:buSzPct val="75000"/><a:buFont typeface="Arial"/><a:buChar char="•"/><a:defRPr sz="3200"/>"#,
+        );
+        let theme = Theme::default();
+        let inh = Inherited::read(LAYOUT, &master, &theme);
+        let got = sp_texts(
+            &slide(&sp(
+                r#"<p:ph idx="2"/>"#,
+                r#"<a:p><a:r><a:t>a</a:t></a:r></a:p><a:p><a:pPr><a:buFontTx/><a:buSzPts val="1200"/></a:pPr><a:r><a:t>b</a:t></a:r></a:p>"#,
+            )),
+            &theme,
+            &inh,
+            SlideScale::default(),
+        );
+        let m = &got[0].paras[0].marker;
+        assert_eq!((m.font.as_deref(), m.size, m.color.as_deref()), (Some("Arial"), Some(MarkerSize::Relative(0.75)), Some("c00000")));
+        let m = &got[0].paras[1].marker;
+        assert_eq!((m.font.as_deref(), m.size), (None, Some(MarkerSize::Points(12.0))));
+        assert_eq!(m.color.as_deref(), Some("c00000"), "the colour is still inherited");
     }
 
     #[test]

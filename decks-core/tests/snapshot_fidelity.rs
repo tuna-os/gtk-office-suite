@@ -1412,6 +1412,11 @@ fn paragraph_styles_survive_a_snapshot() {
                 indent: -36.0,
                 space_before: Spacing::Lines(0.2),
                 space_after: Spacing::Units(8.0),
+                marker: decks_core::engine::MarkerStyle {
+                    font: Some("Arial".into()),
+                    size: Some(decks_core::engine::MarkerSize::Relative(0.75)),
+                    color: Some("c00000".into()),
+                },
                 ..Default::default()
             },
             ParaStyle { bullet: Bullet::AutoNum { scheme: "alphaLcParenR".into(), start: 3 }, ..Default::default() },
@@ -1444,7 +1449,7 @@ fn paragraph_styles_survive_a_snapshot() {
             assert_eq!(got.autofit, body.autofit);
         }
         for (a, b) in got.paras.iter().zip(&body.paras) {
-            assert_eq!((a.align, a.level, &a.bullet), (b.align, b.level, &b.bullet), "{kind}");
+            assert_eq!((a.align, a.level, &a.bullet, &a.marker), (b.align, b.level, &b.bullet, &b.marker), "{kind}");
             assert!((a.margin_left - b.margin_left).abs() < 1e-3 && (a.indent - b.indent).abs() < 1e-3, "{kind}: {a:?}");
             let units = |s: Spacing| match s {
                 Spacing::Units(u) => Some(u),

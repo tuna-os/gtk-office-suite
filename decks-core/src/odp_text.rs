@@ -21,7 +21,7 @@
 //! which ODF paragraph margins can't express. It is written as nothing and
 //! read back as zero.
 
-use crate::engine::text_body::{Anchor, Bullet, Insets, ParaAlign, ParaStyle, Spacing, TextBody};
+use crate::engine::text_body::{Anchor, Bullet, Insets, MarkerSize, MarkerStyle, ParaAlign, ParaStyle, Spacing, TextBody};
 use std::collections::HashMap;
 
 fn pt(v: f64) -> String {
@@ -35,6 +35,7 @@ struct Level {
     bullet: Bullet,
     margin_left: f64,
     indent: f64,
+    marker: MarkerStyle,
 }
 
 /// The automatic styles a part's text boxes need, named under a prefix in
@@ -151,6 +152,7 @@ impl TextStyles {
                         bullet: st.bullet.clone(),
                         margin_left: st.margin_left,
                         indent: st.indent,
+                        marker: st.marker.clone(),
                     });
                 }
             }
@@ -245,9 +247,24 @@ impl TextStyles {
                     pt(l.indent)
                 );
                 let n = l.level + 1;
+                // The bullet's own font and colour, and its size relative
+                // to the text (ODF has no absolute bullet size: points are
+                // written as nothing).
+                let mut tp = String::new();
+                if let Some(f) = l.marker.font.as_deref() {
+                    tp.push_str(&format!(" fo:font-family=\"{}\"", crate::odp::esc(f)));
+                }
+                if let Some(c) = l.marker.color.as_deref() {
+                    tp.push_str(&format!(" fo:color=\"#{c}\""));
+                }
+                let text_props = if tp.is_empty() { String::new() } else { format!("<style:text-properties{tp}/>") };
+                let rel = match l.marker.size {
+                    Some(MarkerSize::Relative(f)) => format!(" text:bullet-relative-size=\"{}%\"", (f * 100.0).round()),
+                    _ => String::new(),
+                };
                 match &l.bullet {
                     Bullet::Char(c) => out.push_str(&format!(
-                        "<text:list-level-style-bullet text:level=\"{n}\" text:bullet-char=\"{}\">{props}</text:list-level-style-bullet>",
+                        "<text:list-level-style-bullet text:level=\"{n}\" text:bullet-char=\"{}\"{rel}>{props}{text_props}</text:list-level-style-bullet>",
                         crate::odp::esc(c)
                     )),
                     Bullet::AutoNum { scheme, start } => {
@@ -383,11 +400,27 @@ impl TextDefs {
                                 start: attr(&e, "text:start-value").and_then(|v| v.parse().ok()).unwrap_or(1),
                             }
                         };
-                        let l = Level { level: n.saturating_sub(1), bullet, margin_left: 0.0, indent: 0.0 };
+                        let marker = MarkerStyle {
+                            size: attr(&e, "text:bullet-relative-size")
+                                .and_then(|v| v.trim_end_matches('%').parse::<f64>().ok())
+                                .map(|p| MarkerSize::Relative(p / 100.0)),
+                            ..MarkerStyle::default()
+                        };
+                        let l = Level { level: n.saturating_sub(1), bullet, margin_left: 0.0, indent: 0.0, marker };
                         if let Some(list) = &list {
                             self.lists.entry(list.clone()).or_default().insert(l.level, l.clone());
                         }
                         level = Some(l);
+                    }
+                    "style:text-properties" if level.is_some() => {
+                        if let (Some(list), Some(l)) = (&list, level.as_mut()) {
+                            l.marker.font = attr(&e, "fo:font-family")
+                                .or_else(|| attr(&e, "style:font-name"))
+                                .map(|f| f.trim().trim_matches('\'').to_string())
+                                .filter(|f| !f.is_empty());
+                            l.marker.color = attr(&e, "fo:color").map(|c| c.trim_start_matches('#').to_lowercase());
+                            self.lists.entry(list.clone()).or_default().insert(l.level, l.clone());
+                        }
                     }
                     "style:list-level-label-alignment" => {
                         if let (Some(list), Some(l)) = (&list, level.as_mut()) {
@@ -427,6 +460,7 @@ impl TextDefs {
             st.level = (depth - 1).min(8) as u8;
             if let Some(l) = list.and_then(|n| self.lists.get(n)).and_then(|ls| ls.get(&st.level)) {
                 st.bullet = l.bullet.clone();
+                st.marker = l.marker.clone();
                 // The paragraph's own indents win; the level's apply when
                 // it states none.
                 if d.margin_left.is_none() {
@@ -467,6 +501,11 @@ mod tests {
         ParaStyle {
             level,
             bullet: Bullet::Char(c.into()),
+            marker: MarkerStyle {
+                font: Some("Arial".into()),
+                size: Some(MarkerSize::Relative(0.75)),
+                color: Some("c00000".into()),
+            },
             margin_left: 36.0 * (level as f64 + 1.0),
             indent: -18.0,
             ..Default::default()
