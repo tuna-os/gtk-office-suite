@@ -10,7 +10,7 @@ use num_format::{Locale, ToFormattedString};
 
 // ── Format kind ────────────────────────────────────────────────────────
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
 pub enum NumberFormatKind {
     /// Default — display value as-is.
     General,
@@ -35,7 +35,7 @@ pub enum NumberFormatKind {
 
 // ── Number format ──────────────────────────────────────────────────────
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct NumberFormat {
     pub kind: NumberFormatKind,
 }

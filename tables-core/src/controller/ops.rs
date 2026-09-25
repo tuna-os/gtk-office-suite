@@ -194,7 +194,7 @@ fn check_cell(state: &WorkbookState, sheet: usize, row: usize, col: usize) -> Re
 }
 
 /// Re-read a sheet's values from the engine after a structural change.
-fn resync(state: &mut WorkbookState, sheet: usize) {
+pub(super) fn resync(state: &mut WorkbookState, sheet: usize) {
     let previous = state.active_sheet;
     if state.engine.set_active_sheet(sheet).is_err() {
         return;
@@ -206,7 +206,7 @@ fn resync(state: &mut WorkbookState, sheet: usize) {
 }
 
 
-fn cell_content(state: &WorkbookState, sheet: usize, row: usize, col: usize) -> CellContent {
+pub(super) fn cell_content(state: &WorkbookState, sheet: usize, row: usize, col: usize) -> CellContent {
     let s = state.sheets[sheet].borrow();
     CellContent {
         input: state.engine.input_at(sheet, row, col),

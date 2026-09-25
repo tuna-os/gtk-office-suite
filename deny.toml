@@ -26,4 +26,15 @@ ignore = [
     { id = "RUSTSEC-2024-0320", reason = "yaml-rust unmaintained, no patched release; via syntect — display only" },
     # Build-time proc-macro; does not ship in binaries.
     { id = "RUSTSEC-2024-0436", reason = "paste unmaintained proc-macro; via biblatex/hayagriva/rav1e — build-time only" },
+    # Loro (tables-core's `collab` feature, RFC-0001 Phase 2) pulls these in.
+    # The feature is off in every build that ships. This gate runs with
+    # --all-features, which is the only reason it sees them. They must be
+    # resolved before `collab` ships to users (RFC-0001 Phase 3), either
+    # by a Loro release without `im` or by a fork.
+    { id = "RUSTSEC-2023-0126", reason = "im OrdSet aliasing (unsound); via loro, collab feature only, not shipped — resolve before collab ships" },
+    { id = "RUSTSEC-2026-0248", reason = "im unmaintained; via loro, collab feature only, not shipped — resolve before collab ships" },
+    { id = "RUSTSEC-2026-0251", reason = "sized-chunks unmaintained; via im/loro, collab feature only, not shipped" },
+    { id = "RUSTSEC-2026-0255", reason = "sized-chunks panic-safety (unsound); via im/loro, collab feature only, not shipped — resolve before collab ships" },
+    { id = "RUSTSEC-2026-0247", reason = "bitmaps unmaintained; via im/loro, collab feature only, not shipped" },
+    { id = "RUSTSEC-2023-0089", reason = "atomic-polyfill unmaintained; reached only with the collab feature's dependencies enabled (--all-features), not in shipped builds" },
 ]

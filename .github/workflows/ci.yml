@@ -204,6 +204,14 @@ jobs:
       - name: cargo test --doc
         run: scripts/with-display.sh cargo test --doc --workspace
 
+      # RFC-0001 Phase 2: the `collab` feature is off in every product
+      # build, so the workspace runs above never compile it. Lint and test
+      # it here on its own.
+      - name: tables-core with the collab feature
+        run: |
+          cargo clippy -p tables-core --features collab --all-targets -- -D warnings
+          cargo test -p tables-core --features collab --lib collab
+
       # C3/C4 for the Rust layers: the ledger's claims must name tests
       # this run actually collected, and none of them may have been
       # skipped or failed. The JUnit report nextest already writes says
