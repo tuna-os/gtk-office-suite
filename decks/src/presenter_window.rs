@@ -147,7 +147,7 @@ impl Show {
 
     /// Under GTK_OFFICE_TEST_MODE with GTK_OFFICE_TRANSITION_DUMP set, the
     /// midpoint of build `n` as the audience window draws it, written as
-    /// `build-midpoint.png` (1280x720): an animation can't be screenshotted
+    /// `build-<n>-midpoint.png` (1280x720, one per build): an animation can't be screenshotted
     /// deterministically, its frames can.
     fn dump_build_midpoint(&self, n: usize) {
         if std::env::var_os("GTK_OFFICE_TEST_MODE").is_none() {
@@ -159,7 +159,7 @@ impl Show {
             let objects = decks_core::builds::frame(&self.deck.slides[self.index()], n, 0.5);
             draw_slide_objects(&cr, 1280.0, 720.0, &self.deck.slides, self.index(), &self.deck.masters, Chrome::Show, &objects);
         }
-        if let Ok(mut f) = std::fs::File::create(std::path::Path::new(&dir).join("build-midpoint.png")) {
+        if let Ok(mut f) = std::fs::File::create(std::path::Path::new(&dir).join(format!("build-{n}-midpoint.png"))) {
             let _ = surface.write_to_png(&mut f);
         }
     }

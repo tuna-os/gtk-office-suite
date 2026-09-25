@@ -3482,7 +3482,7 @@ class DecksShowBuildsSmoke(BaseGUITestCase):
         with zipfile.ZipFile(self._doc, "w") as z:
             z.writestr("mimetype", "application/vnd.oasis.opendocument.presentation")
             z.writestr("content.xml", self.CONTENT)
-        self._frame = os.path.join(self._dir, "build-midpoint.png")
+        self._frame = os.path.join(self._dir, "build-0-midpoint.png")
         self.launch_args = [self._doc]
         self.launch_env = {**getattr(self, "launch_env", {}),
                            "GTK_OFFICE_TEST_MODE": "1", "GTK_OFFICE_TRANSITION_DUMP": self._dir}
