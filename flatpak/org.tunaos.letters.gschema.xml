@@ -60,8 +60,8 @@
       <summary>Use metric units (cm) on ruler instead of imperial (inches)</summary>
     </key>
     <key name="print-layout" type="b">
-      <default>false</default>
-      <summary>Show documents in Print Layout (the laid-out pages, editable) instead of the Draft view</summary>
+      <default>true</default>
+      <summary>Show documents in Print Layout (the laid-out pages; the default) rather than the pageless Draft view</summary>
     </key>
     <key name="zoom-level" type="d">
       <default>100.0</default>

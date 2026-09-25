@@ -338,7 +338,45 @@ fn structured_commands_are_model_ops() {
             steps += 1;
         }
         assert_eq!(steps, 8, "each command and the typed word is one step");
+
         let (fresh, _) = tab(&sample());
         assert_eq!(crate::bridge::capture_from_buffer(&buf), crate::bridge::capture_from_buffer(&fresh));
+    });
+}
+
+/// Markdown shortcuts: "**bold**" and a space makes bold text, typed in
+/// Draft or in Print Layout, and the model has it. (They never fired
+/// before: the pattern's end was taken from an absent selection.)
+#[test]
+fn markdown_shortcuts_work_in_both_views() {
+    gtk_test(|| {
+        let ctx = glib::MainContext::default();
+        let settle = || while ctx.iteration(false) {};
+        // Draft: typed into the buffer.
+        let (buf, live) = tab(&Document::from_plain_text("x"));
+        crate::actions::connect_markdown_macros(&buf);
+        let mut end = buf.end_iter();
+        buf.insert(&mut end, " **bold**");
+        let mut end = buf.end_iter();
+        buf.insert(&mut end, " ");
+        settle();
+        check(&buf, &live, "a Draft shortcut");
+        let doc = live.borrow_mut().snapshot(&buf).0;
+        assert!(doc.paragraphs[0].runs.iter().any(|r| r.text == "bold" && r.style.bold), "{:?}", doc.paragraphs[0].runs);
+        assert_eq!(doc.paragraphs[0].text(), "x bold ");
+
+        // Print Layout: typed as model ops through the page view.
+        let (buf, live) = tab(&Document::from_plain_text("y"));
+        crate::actions::connect_markdown_macros(&buf);
+        let view = crate::page_view::PageView::new();
+        crate::page_edit::make_editable(&view, &buf);
+        buf.place_cursor(&buf.end_iter());
+        for c in " _it_ ".chars() {
+            crate::page_edit::type_text(&buf, &c.to_string());
+        }
+        settle();
+        check(&buf, &live, "a Print Layout shortcut");
+        let doc = live.borrow_mut().snapshot(&buf).0;
+        assert!(doc.paragraphs[0].runs.iter().any(|r| r.text == "it" && r.style.italic), "{:?}", doc.paragraphs[0].runs);
     });
 }

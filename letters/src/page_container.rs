@@ -1,7 +1,14 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 //
-// PageContainer — Cairo custom widget that draws white page rectangles
-// on a gray desktop background, with multi-page support and page breaks.
+// PageContainer — a tab's document area, in one of two views (ADR 0010):
+//
+// - Print Layout (the default): the laid-out pages (page_view.rs), where
+//   lines, page breaks, headers and footers are where they will print.
+// - Draft: the text in one continuous, pageless sheet at the page's text
+//   width (Google Docs' "pageless", DESIGN-UI). It used to draw grey page
+//   rectangles with one GtkTextView laid across all of them and their gaps,
+//   which pretended to show pages that the text never flowed into — the
+//   pages are Print Layout's job now.
 
 use gtk4::{self as gtk, gio, glib, prelude::*};
 use gtk4::subclass::prelude::*;
@@ -12,7 +19,6 @@ pub const A4_WIDTH_PT: f64 = 595.0;
 pub const A4_HEIGHT_PT: f64 = 842.0;
 const DEFAULT_MARGIN_TB: f64 = 72.0;
 const DEFAULT_MARGIN_LR: f64 = 72.0;
-const PAGE_GAP: f64 = 12.0;
 
 mod imp {
     use super::*;
@@ -25,7 +31,6 @@ mod imp {
         pub margin_bottom: Cell<f64>,
         pub margin_left: Cell<f64>,
         pub margin_right: Cell<f64>,
-        pub page_count: Cell<usize>,
         pub header_text: std::cell::RefCell<String>,
         pub footer_text: std::cell::RefCell<String>,
         pub zoom_level: Cell<f64>,
@@ -62,7 +67,6 @@ mod imp {
             self.margin_bottom.set(DEFAULT_MARGIN_TB);
             self.margin_left.set(DEFAULT_MARGIN_LR);
             self.margin_right.set(DEFAULT_MARGIN_LR);
-            self.page_count.set(1);
             self.zoom_level.set(100.0);
             self.column_count.set(1);
         }
@@ -92,154 +96,40 @@ mod imp {
                 return;
             }
 
-            let pw = self.page_width.get();
-            let ph = self.page_height.get();
-            let n_pages = self.page_count.get().max(1);
-
-            let pad = 24.0;
-            let zoom_factor = self.zoom_level.get() / 100.0;
-            let scale = ((w - pad * 2.0) / pw).min(1.5) * zoom_factor;
-            let sw = pw * scale;
-            let sh = ph * scale;
-            let total_height = n_pages as f64 * sh + (n_pages as f64 - 1.0) * PAGE_GAP * scale;
-
-            // Center horizontally, start from top with padding
-            let px = (w - sw) / 2.0;
-            let start_y = ((h - total_height) / 2.0).max(pad);
-
-            // Fill entire widget with desktop gray (theme-aware:
-            // tuna-os/gtk-office-suite#77 — the page itself stays white,
-            // matching every other document editor's paper convention,
-            // but the surrounding canvas backdrop should follow the theme).
+            // Draft: one pageless sheet.
             let is_dark = adw::StyleManager::default().is_dark();
-            let desktop_bg = if is_dark { (0.13, 0.13, 0.13) } else { (0.753, 0.753, 0.753) };
+            let bg = if is_dark { 0.13 } else { 0.753 };
             snapshot.append_color(
-                &gtk4::gdk::RGBA::new(desktop_bg.0 as f32, desktop_bg.1 as f32, desktop_bg.2 as f32, 1.0),
+                &gtk4::gdk::RGBA::new(bg, bg, bg, 1.0),
                 &gtk4::graphene::Rect::new(0.0, 0.0, w as f32, h as f32),
             );
-
-            // Draw each page
-            for page_idx in 0..n_pages {
-                let page_y = start_y + page_idx as f64 * (sh + PAGE_GAP * scale);
-
-                // Cairo region for this page + gap, built at its own origin
-                // and moved into place by an explicit transform node. GTK's
-                // Broadway renderer (4.14 through main) rasterizes a cairo
-                // node's recording surface from (0, 0) without subtracting
-                // the node's origin, so a node whose bounds start at (x, y)
-                // shows its content shifted by (x, y) and clipped; with
-                // snapshot.append_cairo the offset is always folded into the
-                // bounds. Other renderers draw both forms identically.
-                let (ox, oy) = (px - 4.0, page_y - 4.0);
-                let node = gtk4::gsk::CairoNode::new(&gtk4::graphene::Rect::new(
-                    0.0, 0.0, (sw + 8.0) as f32, (sh + 8.0) as f32,
-                ));
-                let cr = node.draw_context();
-                cr.translate(-ox, -oy);
-
-                // Drop shadow
-                cr.set_source_rgba(0.0, 0.0, 0.0, 0.10);
-                draw_rounded_rect(&cr, px + 2.0, page_y + 2.0, sw, sh, 2.0);
-                cr.fill().unwrap();
-
-                // White page
-                cr.set_source_rgb(1.0, 1.0, 1.0);
-                draw_rounded_rect(&cr, px, page_y, sw, sh, 2.0);
-                cr.fill().unwrap();
-
-                // Page border
-                cr.set_source_rgba(0.85, 0.85, 0.85, 0.8);
-                cr.set_line_width(0.5);
-                draw_rounded_rect(&cr, px, page_y, sw, sh, 2.0);
-                cr.stroke().unwrap();
-
-                let ml = self.margin_left.get() * scale;
-                let mr = self.margin_right.get() * scale;
-                let mt = self.margin_top.get() * scale;
-                let mb = self.margin_bottom.get() * scale;
-
+            let (px, sw, scale) = self.obj().sheet_geometry();
+            // A cairo node at (0, 0) moved by a transform node: GTK's
+            // Broadway renderer draws a cairo node's content from (0, 0)
+            // whatever its bounds.
+            let node = gtk4::gsk::CairoNode::new(&gtk4::graphene::Rect::new(0.0, 0.0, (sw + 4.0) as f32, h as f32));
+            let cr = node.draw_context();
+            cr.set_source_rgba(0.0, 0.0, 0.0, 0.10);
+            cr.rectangle(2.0, 0.0, sw, h);
+            let _ = cr.fill();
+            cr.set_source_rgb(1.0, 1.0, 1.0);
+            cr.rectangle(0.0, 0.0, sw, h);
+            let _ = cr.fill();
+            // Margin guides show on hover only (DESIGN-UI).
+            if self.pointer_over.get() {
+                let (ml, mr) = (self.margin_left.get() * scale, self.margin_right.get() * scale);
                 cr.set_source_rgba(0.85, 0.85, 0.85, 0.5);
                 cr.set_line_width(0.5);
                 cr.set_dash(&[4.0, 4.0], 0.0);
-
-                // Margin guides show on hover only (DESIGN-UI); the
-                // margins still shape layout and column separators.
-                if self.pointer_over.get() {
-                    cr.move_to(px + ml, page_y);
-                    cr.line_to(px + ml, page_y + sh);
-                    cr.stroke().unwrap();
-
-                    cr.move_to(px + sw - mr, page_y);
-                    cr.line_to(px + sw - mr, page_y + sh);
-                    cr.stroke().unwrap();
-
-                    cr.move_to(px, page_y + mt);
-                    cr.line_to(px + sw, page_y + mt);
-                    cr.stroke().unwrap();
-
-                    cr.move_to(px, page_y + sh - mb);
-                    cr.line_to(px + sw, page_y + sh - mb);
-                    cr.stroke().unwrap();
+                for x in [ml, sw - mr] {
+                    cr.move_to(x, 0.0);
+                    cr.line_to(x, h);
+                    let _ = cr.stroke();
                 }
-
-                // Column separators
-                let cols = self.column_count.get();
-                if cols > 1 {
-                    let content_w = sw - ml - mr;
-                    let col_w = content_w / cols as f64;
-                    for c in 1..cols {
-                        let cx = px + ml + c as f64 * col_w;
-                        cr.move_to(cx, page_y + mt);
-                        cr.line_to(cx, page_y + sh - mb);
-                        cr.stroke().unwrap();
-                    }
-                }
-
-                // ── Header text ──
-                let header = self.header_text.borrow();
-                if !header.is_empty() {
-                    cr.set_dash(&[], 0.0);
-                    cr.set_source_rgba(0.5, 0.5, 0.5, 0.7);
-                    cr.set_font_size(9.0);
-                    let hdr = header.replace("{page}", &(page_idx + 1).to_string());
-                    // Center the header
-                    let extents = cr.text_extents(&hdr).ok();
-                    let w = extents.map(|e| e.width()).unwrap_or(50.0);
-                    cr.move_to(px + (sw - w) / 2.0, page_y + mt - 8.0);
-                    let _ = cr.show_text(&hdr);
-                }
-
-                // ── Footer text ──
-                let footer = self.footer_text.borrow();
-                if !footer.is_empty() {
-                    cr.set_dash(&[], 0.0);
-                    cr.set_source_rgba(0.5, 0.5, 0.5, 0.7);
-                    cr.set_font_size(9.0);
-                    let ftr = footer.replace("{page}", &(page_idx + 1).to_string());
-                    let ftr_ext = cr.text_extents(&ftr).ok();
-                    let fw = ftr_ext.map(|e| e.width()).unwrap_or(50.0);
-                    cr.move_to(px + (sw - fw) / 2.0, page_y + sh - mb + 12.0);
-                    let _ = cr.show_text(&ftr);
-                }
-
-                // Page number in the gap (between pages)
-                if page_idx > 0 {
-                    let gap_center_y = page_y - PAGE_GAP * scale / 2.0;
-                    cr.set_dash(&[], 0.0);
-                    let gap_ink = if is_dark { (0.75, 0.75, 0.75, 0.7) } else { (0.5, 0.5, 0.5, 0.6) };
-                    cr.set_source_rgba(gap_ink.0, gap_ink.1, gap_ink.2, gap_ink.3);
-                    cr.set_font_size(10.0);
-                    let label = format!("Page {}", page_idx + 1);
-                    cr.move_to(px + sw / 2.0 - 15.0, gap_center_y + 4.0);
-                    let _ = cr.show_text(&label);
-                }
-
-                drop(cr);
-                let to_page = gtk4::gsk::Transform::new()
-                    .translate(&gtk4::graphene::Point::new(ox as f32, oy as f32));
-                snapshot.append_node(gtk4::gsk::TransformNode::new(&node, Some(&to_page)));
             }
-
+            drop(cr);
+            let to = gtk4::gsk::Transform::new().translate(&gtk4::graphene::Point::new(px as f32, 0.0));
+            snapshot.append_node(gtk4::gsk::TransformNode::new(&node, Some(&to)));
             self.parent_snapshot(snapshot);
         }
 
@@ -265,33 +155,13 @@ mod imp {
                     return;
                 }
             }
-            let w = width as f64;
-            let h = height as f64;
-            if w <= 0.0 || h <= 0.0 { return; }
-
-            let pw = self.page_width.get();
-            let ph = self.page_height.get();
-            let n_pages = self.page_count.get().max(1);
-            let pad = 24.0;
-            let zoom_factor = self.zoom_level.get() / 100.0;
-            let scale = ((w - pad * 2.0) / pw).min(1.5) * zoom_factor;
-            let sw = pw * scale;
-            let sh = ph * scale;
-            let total_height = n_pages as f64 * sh + (n_pages as f64 - 1.0) * PAGE_GAP * scale;
-            let px = (w - sw) / 2.0;
-            let start_y = ((h - total_height) / 2.0).max(pad);
-
-            let ml = self.margin_left.get() * scale;
-            let mt = self.margin_top.get() * scale;
-            let mr = self.margin_right.get() * scale;
-            let mb = self.margin_bottom.get() * scale;
-            let content_per_page = sh - mt - mb;
-            let total_content = n_pages as f64 * content_per_page + (n_pages as f64 - 1.0) * PAGE_GAP * scale;
-
+            if width <= 0 || height <= 0 { return; }
+            // The text column of the pageless sheet, the full height.
+            let (px, sw, scale) = self.obj().sheet_geometry();
+            let (ml, mr) = (self.margin_left.get() * scale, self.margin_right.get() * scale);
             let cx = (px + ml) as i32;
-            let cy = (start_y + mt) as i32;
             let cw = ((sw - ml - mr) as i32).max(1);
-            let ch = (total_content as i32).max(1);
+            let (cy, ch) = (0, height.max(1));
             child.size_allocate(&gtk4::Allocation::new(cx, cy, cw, ch), -1);
         }
     }
@@ -325,37 +195,36 @@ impl PageContainer {
         this
     }
 
-    /// On-screen page geometry: (left edge x, pixel width) in this
-    /// widget's coordinates. Mirrors the snapshot math so the ruler can
-    /// align its origin to the visible page edge.
-    pub fn page_screen_geometry(&self) -> (f64, f64) {
+    /// The Draft sheet: (left edge x, width, pixels per point). The page's
+    /// width at the view's zoom (100% is 96/72 px per point, as in Print
+    /// Layout), narrowed to fit the window.
+    fn sheet_geometry(&self) -> (f64, f64, f64) {
         let imp = self.imp();
-        let w = self.width() as f64;
-        let pw = imp.page_width.get();
+        let (w, pw) = (self.width() as f64, imp.page_width.get());
         if w <= 0.0 || pw <= 0.0 {
-            return (0.0, 0.0);
+            return (0.0, 0.0, 1.0);
         }
         let pad = 24.0;
-        let zoom_factor = imp.zoom_level.get() / 100.0;
-        let scale = ((w - pad * 2.0) / pw).min(1.5) * zoom_factor;
+        let physical = crate::page_view::PX_PER_PT * imp.zoom_level.get() / 100.0;
+        let scale = physical.min(((w - 2.0 * pad) / pw).max(0.1));
         let sw = pw * scale;
-        ((w - sw) / 2.0, sw)
+        (((w - sw) / 2.0).floor(), sw, scale)
     }
 
-    /// On-screen rectangle (x, y, w, h) of page `index` in this widget's
-    /// coordinates. Mirrors the snapshot math; used by the render lab's
-    /// Tier A capture to crop exactly one page.
-    pub fn page_rect(&self, index: usize) -> (f64, f64, f64, f64) {
-        let imp = self.imp();
-        let (w, h) = (self.width() as f64, self.height() as f64);
-        let (pw, ph) = (imp.page_width.get(), imp.page_height.get());
-        let n_pages = imp.page_count.get().max(1);
-        let pad = 24.0;
-        let scale = ((w - pad * 2.0) / pw).min(1.5) * imp.zoom_level.get() / 100.0;
-        let (sw, sh) = (pw * scale, ph * scale);
-        let total_height = n_pages as f64 * sh + (n_pages as f64 - 1.0) * PAGE_GAP * scale;
-        let start_y = ((h - total_height) / 2.0).max(pad);
-        ((w - sw) / 2.0, start_y + index as f64 * (sh + PAGE_GAP * scale), sw, sh)
+    /// On-screen page geometry: (left edge x, pixel width) in this
+    /// widget's coordinates, of the Draft sheet or Print Layout's first
+    /// page. The ruler aligns its origin to it.
+    pub fn page_screen_geometry(&self) -> (f64, f64) {
+        if self.width() <= 0 {
+            return (0.0, 0.0);
+        }
+        if let Some(view) = self.page_view().filter(|v| self.is_print_layout() && v.page_count() > 0) {
+            let (x, _, w, _) = view.page_rect(0);
+            let origin = view.compute_point(self, &gtk4::graphene::Point::new(x as f32, 0.0));
+            return (origin.map_or(x, |p| p.x() as f64), w);
+        }
+        let (x, w, _) = self.sheet_geometry();
+        (x, w)
     }
 
     /// Add the Print Layout view as this container's second child. Called
@@ -387,10 +256,6 @@ impl PageContainer {
         self.imp().print_layout.get()
     }
 
-    /// Number of page rectangles currently drawn.
-    pub fn page_count(&self) -> usize {
-        self.imp().page_count.get().max(1)
-    }
 
     pub fn set_page_size(&self, width_pt: f64, height_pt: f64) {
         let imp = self.imp();
@@ -424,12 +289,6 @@ impl PageContainer {
         imp.margin_bottom.set(bottom);
         imp.margin_left.set(left);
         imp.margin_right.set(right);
-        self.queue_resize();
-    }
-
-    /// Set the number of pages to render.
-    pub fn set_page_count(&self, count: usize) {
-        self.imp().page_count.set(count.max(1));
         self.queue_resize();
     }
 
@@ -503,16 +362,6 @@ impl Default for PageContainer {
     fn default() -> Self { Self::new() }
 }
 
-fn draw_rounded_rect(cr: &cairo::Context, x: f64, y: f64, w: f64, h: f64, r: f64) {
-    cr.new_sub_path();
-    let r = r.min(w / 2.0).min(h / 2.0);
-    let pi = std::f64::consts::PI;
-    cr.arc(x + w - r, y + r, r, -pi / 2.0, 0.0);
-    cr.arc(x + w - r, y + h - r, r, 0.0, pi / 2.0);
-    cr.arc(x + r, y + h - r, r, pi / 2.0, pi);
-    cr.arc(x + r, y + r, r, pi, 3.0 * pi / 2.0);
-    cr.close_path();
-}
 
 #[cfg(test)]
 mod tests {
