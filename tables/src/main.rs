@@ -4,6 +4,7 @@ mod charts;
 mod chart_dialog;
 mod window;
 mod format_inspector;
+mod formula_bar;
 mod persistence;
 mod window_dialogs;
 mod preferences;

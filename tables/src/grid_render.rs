@@ -151,16 +151,6 @@ fn draw_sort_arrow(cr: &Context, cx: f64, cy: f64, dir: SortDirection, color: (f
     cr.restore().unwrap();
 }
 
-/// Rotating palette for formula-reference outlines (#113), same
-/// convention as Excel/Sheets — each distinct reference in a formula
-/// gets the next color in order of appearance.
-const FORMULA_REF_COLORS: [(f64, f64, f64); 5] = [
-    (0.13, 0.38, 0.77), // blue
-    (0.77, 0.13, 0.13), // red
-    (0.13, 0.6, 0.2),   // green
-    (0.55, 0.2, 0.7),   // purple
-    (0.85, 0.5, 0.0),   // orange
-];
 
 /// A cell's value through its number format, in a bounded Pango layout
 /// clipped to `rect` (x, y, w, h). Clipping and ellipsizing keep long values
@@ -657,7 +647,9 @@ pub fn draw_grid(
     // formula being edited refers to, cycling through a fixed palette in
     // order of appearance — same convention as Excel/Sheets.
     for (i, &(fr0, fc0, fr1, fc1)) in formula_refs.iter().enumerate() {
-        let color = FORMULA_REF_COLORS[i % FORMULA_REF_COLORS.len()];
+        // The same colour as the reference's token in the formula bar.
+        let (r, g, b) = tables_core::formula_edit::REF_COLORS[i % tables_core::formula_edit::REF_COLORS.len()];
+        let color = (r as f64 / 255.0, g as f64 / 255.0, b as f64 / 255.0);
         let fx0 = px_x(fc0);
         let fx1 = right_of(fc1);
         let fy0 = tables_core::sheet::row_y(fr0, scroll_y, sheet);

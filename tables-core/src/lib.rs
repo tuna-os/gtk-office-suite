@@ -9,6 +9,7 @@ pub mod controller;
 pub mod engine;
 pub mod export;
 pub mod fill;
+pub mod formula_edit;
 pub mod fragment;
 pub mod io;
 pub mod sheet;
