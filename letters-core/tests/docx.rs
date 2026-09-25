@@ -49,6 +49,16 @@ fn the_theme_names_the_documents_fonts() {
     assert_eq!(docx::read(path.to_str().unwrap()).unwrap().base_font.family.as_deref(), Some("DejaVu Sans"));
 }
 
+/// Tracked changes reopen as they were: insertions, deletions (their text
+/// kept) and a deletion of someone else's insertion, with authors and
+/// dates.
+#[test]
+fn tracked_changes_survive() {
+    let d = letters_core::track::sample_document();
+    let rt = round_trip(&d);
+    assert_eq!(rt.paragraphs[0].runs, d.paragraphs[0].runs);
+}
+
 /// Smart chips reopen as chips: a date is a Word date content control, a
 /// link or person chip its hyperlink in a tagged control.
 #[test]

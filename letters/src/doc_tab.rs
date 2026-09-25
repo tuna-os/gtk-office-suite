@@ -376,6 +376,7 @@ pub(crate) fn make_doc_widget(settings: Option<&gio::Settings>) -> (PageContaine
         };
         connect_selection_popover(editor.upcast_ref(), &buffer, locate.clone());
         crate::chips_ui::attach(editor.upcast_ref(), &buffer, locate, true);
+        crate::review_ui::apply_to(&buffer, Some(&editor), crate::review_ui::tracking());
     }
 
     let scroll = gtk::ScrolledWindow::new();

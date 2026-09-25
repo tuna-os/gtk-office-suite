@@ -6,6 +6,7 @@
 pub mod chips;
 pub mod docx;
 mod docx_chips;
+mod docx_revisions;
 mod docx_fields;
 pub mod edit;
 pub mod fragment;
@@ -19,10 +20,11 @@ pub mod save;
 pub mod session;
 pub mod structured;
 pub mod table_text;
+pub mod track;
 pub mod word_count;
 
-pub use model::{Alignment, Document, ListKind, PageGeometry, Paragraph, ParagraphLayout, ParaStyle, Run, RunStyle, StylePatch, TableCell, style_readout};
-pub use review::{base_direction, table_of_contents, BidiDirection, ChangeKind, Comment, ReviewId, ReviewState, TextRange, TocEntry, TrackedChange};
+pub use model::{Alignment, Document, ListKind, PageGeometry, Paragraph, ParagraphLayout, ParaStyle, Revision, RevisionKind, Run, RunStyle, StylePatch, TableCell, style_readout};
+pub use review::{base_direction, table_of_contents, BidiDirection, Comment, ReviewId, ReviewState, TextRange, TocEntry};
 pub use session::DocumentSession;
 pub use structured::StructuredEditor;
 pub use word_count::editor_word_count;

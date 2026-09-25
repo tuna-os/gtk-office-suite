@@ -302,8 +302,23 @@ fn handle_key(view: &PageView, buf: &gtk::TextBuffer, key: gdk::Key, state: gdk:
                 let mut m = m.borrow_mut();
                 // An op the model refuses (joining a table's cells) does
                 // nothing, as in a word processor.
-                if let Some(op) = delete_ops(buf, &mut m, key != gdk::Key::BackSpace) {
-                    m.apply_user_ops(buf, &[op], false);
+                let forward = key != gdk::Key::BackSpace;
+                let (s, e) = selection_offsets(buf);
+                if let Some(op) = delete_ops(buf, &mut m, forward) {
+                    let tracking = m.tracking.is_some();
+                    let (before, after) = (buf.char_count(), buf.iter_at_mark(&buf.get_insert()).offset());
+                    if m.apply_user_ops(buf, &[op], false) && tracking && buf.char_count() == before {
+                        // Tracked: the text stays, marked deleted. Step
+                        // over it as Word does: Delete leaves the caret
+                        // after it, Backspace before it.
+                        let to = match (forward, e > s) {
+                            (_, true) if forward => e as i32,
+                            (_, true) => s as i32,
+                            (true, false) => after + 1,
+                            (false, false) => after - 1,
+                        };
+                        buf.place_cursor(&buf.iter_at_offset(to.max(0)));
+                    }
                 }
                 return true;
             }

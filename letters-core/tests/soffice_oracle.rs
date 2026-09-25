@@ -1032,6 +1032,51 @@ fn a_new_document_keeps_its_font_through_lo() {
     }
 }
 
+/// `doc`'s tracked changes as (kind, author, text, date to the second),
+/// adjacent changes of one kind and author taken as one (a format without
+/// nesting joins a deletion of an insertion to the deletion next to it).
+fn changes_of(doc: &Document) -> Vec<(RevisionKind, String, String, String)> {
+    let mut out: Vec<(RevisionKind, String, String, String)> = Vec::new();
+    for c in letters_core::track::changes(doc) {
+        let date = c.revision.date.chars().take(19).collect::<String>();
+        match out.last_mut() {
+            Some(last) if last.0 == c.revision.kind && last.1 == c.revision.author => last.2.push_str(&c.text),
+            _ => out.push((c.revision.kind, c.revision.author.clone(), c.text.clone(), date)),
+        }
+    }
+    out
+}
+
+/// Tracked changes survive LibreOffice: our .docx and .odt, opened and
+/// saved by Writer in either format, reopen with the same insertions and
+/// deletions (their text, author and date).
+#[test]
+fn tracked_changes_survive_lo_passes() {
+    let Some(bin) = require_or_skip() else { return };
+    let d = letters_core::track::sample_document();
+    let want = changes_of(&d);
+    let dir = tempfile::tempdir().unwrap();
+    for (from, to) in [("docx", "docx"), ("odt", "odt"), ("docx", "odt"), ("odt", "docx")] {
+        let work = dir.path().join(format!("{from}-{to}"));
+        let out = work.join("out");
+        std::fs::create_dir_all(&out).unwrap();
+        let staged = out.join(format!("tracked.{from}"));
+        match from {
+            "docx" => docx::write(&d, &staged).expect("write docx"),
+            _ => letters_core::odt::write(&d, &staged).expect("write odt"),
+        }
+        let filter = if to == "docx" { "docx:MS Word 2007 XML" } else { "odt" };
+        let _ = soffice_convert(bin, &staged, filter);
+        let converted = out.join(format!("tracked.{to}"));
+        assert!(converted.exists(), "soffice did not convert {from} to {to}");
+        let rt = match to {
+            "docx" => docx::read(converted.to_str().unwrap()).expect("read converted docx"),
+            _ => letters_core::odt::read(converted.to_str().unwrap()).expect("read converted odt"),
+        };
+        assert_eq!(changes_of(&rt), want, "{from} -> LibreOffice -> {to} changed the tracked changes: {:?}", rt.paragraphs[0].runs);
+    }
+}
+
 /// The chips in `doc`, as (kind, value, label).
 fn chips_of(doc: &Document) -> Vec<(letters_core::chips::ChipKind, String, String)> {
     doc.paragraphs

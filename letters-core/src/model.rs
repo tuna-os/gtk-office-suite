@@ -49,6 +49,33 @@ pub struct RunStyle {
     /// is its label (`crate::chips`).
     #[serde(default)]
     pub chip: Option<crate::chips::Chip>,
+    /// A tracked change: this text was inserted, or deleted, by someone at
+    /// some time and waits to be accepted or rejected (`crate::track`).
+    /// Deleted text stays in the document, marked, until accepted.
+    #[serde(default)]
+    pub revision: Option<Revision>,
+}
+
+/// What a tracked change did.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub enum RevisionKind {
+    Insert,
+    Delete,
+}
+
+/// A tracked change on a run: what, by whom, when.
+#[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub struct Revision {
+    pub kind: RevisionKind,
+    pub author: String,
+    /// ISO 8601 UTC, to the second ("2026-09-25T20:30:00Z"), as Word and
+    /// ODF store it.
+    pub date: String,
+    /// A deletion of someone else's pending insertion: that insertion.
+    /// Rejecting the deletion brings it back (Word's `w:del` inside
+    /// `w:ins`).
+    #[serde(default)]
+    pub under: Option<Box<Revision>>,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]

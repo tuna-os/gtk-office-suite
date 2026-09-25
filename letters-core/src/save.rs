@@ -204,6 +204,7 @@ struct Present {
     page_layout: bool,
     header_footer: bool,
     chip: bool,
+    revision: bool,
 }
 
 fn styled(run: &Run) -> bool {
@@ -254,6 +255,7 @@ fn survey(doc: &Document) -> Present {
             present.image |= run.style.image.is_some();
             present.footnote |= run.style.footnote.is_some();
             present.chip |= run.style.chip.is_some();
+            present.revision |= run.style.revision.is_some();
         }
     }
     present
@@ -287,6 +289,8 @@ pub fn compatibility_report(doc: &Document, format: SaveFormat) -> Compatibility
     // odt::chip_xml); the text formats save a chip's label and link.
     if !matches!(format, SaveFormat::Odt | SaveFormat::Docx) {
         lost(&mut report, present.chip, "smart-chips", "Smart chips", "each chip is saved as its text, and as a link where it has one; it opens as text");
+        // .docx (w:ins/w:del) and .odt (change regions) keep them.
+        lost(&mut report, present.revision, "tracked-changes", "Tracked changes", "insertions and deletions are saved as plain text, deleted text included; accept or reject them first");
     }
     match format {
         // The package formats are the reference targets: they carry the
