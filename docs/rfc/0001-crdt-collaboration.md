@@ -298,6 +298,7 @@ Each phase must be abandonable without leaving the codebase worse.
   beneficiary, not the reason.
 - **Phase 1 — spike, no product change.** The measurement above. Output is a
   recommendation with numbers, or a documented dead end.
+  Results: [0001-spike-results.md](0001-spike-results.md).
 - **Phase 2 — Tables, session-scoped (option B), LAN or explicit relay, off by
   default.** Exit: the first four journeys above.
 - **Phase 3 — Decks**, exercising the movable tree against object moves and
