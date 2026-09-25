@@ -3300,7 +3300,10 @@ class DecksCanvasDragSmoke(BaseGUITestCase):
         # gesture code. Pinning the magnitude here would bake that factor
         # in as if it were intended, so this asserts what the journey is
         # actually for: the drag reaches the model, along the axis dragged.
-        # The 2x itself is written up on the pull request.
+        # (The 2x was real: the drag moved the object live and the undo
+        # command then applied the same move again on release. Fixed with
+        # the smart guides in canvas_input.rs; the magnitude is still not
+        # asserted here for the AT-SPI reason above.)
         self.assertGreater(dx, 0, f"drag did not move the object right: {before} -> {after}")
         self.assertGreater(dy, 0, f"drag did not move the object down: {before} -> {after}")
         self.assertAlmostEqual(
