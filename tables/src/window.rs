@@ -317,6 +317,7 @@ impl TablesWindow {
         }
         crate::column_menu::attach(&controller, &drawing_area, &h_adj, &refresh_sel);
         crate::notes::attach(app.upcast_ref(), &controller, &drawing_area, &h_adj, &v_adj, &refresh_sel);
+        crate::validation_list::attach(&controller, &drawing_area, &h_adj, &v_adj, &refresh_sel);
 
         // Jumping to a reference: the name box's Enter and Ctrl+G both go
         // through here, so a jump means the same thing however it was

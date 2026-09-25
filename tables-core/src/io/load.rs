@@ -176,6 +176,44 @@ pub fn load_file_into_engine(
 
 /// Load every XLSX worksheet into one calculation engine, preserving sheet
 /// names/order and formula inputs. CSV/ODS remain single-sheet imports.
+/// Put each sheet's validations on its cells. A list that names a range
+/// takes the values in it now (Tables keeps a list's items, not where they
+/// came from); a range on a sheet that doesn't exist is dropped.
+/// A sheet's validations as the file states them: `(sheet index, [(range, source)])`.
+type SheetValidations = (usize, Vec<((usize, usize, usize, usize), super::props::ValidationSource)>);
+
+fn apply_validations(sheets: &mut [SheetModel], per_sheet: &[SheetValidations]) {
+    use super::props::ValidationSource;
+    use crate::sheet::ValidationRule;
+    for (index, list) in per_sheet {
+        for ((top, left, bottom, right), source) in list {
+            let rule = match source {
+                ValidationSource::Rule(rule) => rule.clone(),
+                ValidationSource::ListRange(sheet, (r0, c0, r1, c1)) => {
+                    let from = match sheet {
+                        Some(name) => sheets.iter().position(|s| s.name == *name),
+                        None => Some(*index),
+                    };
+                    let Some(from) = from else { continue };
+                    let s = &sheets[from];
+                    let items: Vec<String> = (*r0..=(*r1).min(s.rows.saturating_sub(1)))
+                        .flat_map(|r| (*c0..=(*c1).min(s.cols.saturating_sub(1))).map(move |c| (r, c)))
+                        .map(|(r, c)| s.cell(r, c).to_string())
+                        .filter(|v| !v.is_empty())
+                        .collect();
+                    ValidationRule::List(items)
+                }
+            };
+            let s = &mut sheets[*index];
+            for r in *top..=(*bottom).min(s.rows.saturating_sub(1)) {
+                for c in *left..=(*right).min(s.cols.saturating_sub(1)) {
+                    s.validations[r][c] = Some(rule.clone());
+                }
+            }
+        }
+    }
+}
+
 pub fn load_xlsx_workbook(path: &str) -> Result<(TablesEngine, Vec<SheetModel>), String> {
     let mut book: calamine::Xlsx<_> =
         open_workbook(path).map_err(|e| format!("Cannot open file: {e}"))?;
@@ -288,6 +326,12 @@ pub fn load_xlsx_workbook(path: &str) -> Result<(TablesEngine, Vec<SheetModel>),
         sheets.push(sheet);
     }
     engine.set_active_sheet(0)?;
+    let validations: Vec<_> = names
+        .iter()
+        .enumerate()
+        .filter_map(|(i, n)| sheet_props.get(n).map(|p| (i, p.validations.clone())))
+        .collect();
+    apply_validations(&mut sheets, &validations);
     // Named ranges (#113): calamine reads each <definedName>'s raw text
     // content, which is already in the '='-free "Sheet1!$A$1:$A$3" form
     // this app's own defined_names formulas use — no reformatting needed.
@@ -440,6 +484,12 @@ pub fn load_ods_workbook(path: &str) -> Result<(TablesEngine, Vec<SheetModel>), 
             }
         }
     }
+    let validations: Vec<_> = sheets
+        .iter()
+        .enumerate()
+        .filter_map(|(i, s)| props.get(&s.name).map(|p| (i, p.validations.clone())))
+        .collect();
+    apply_validations(&mut sheets, &validations);
     Ok((engine, sheets))
 }
 

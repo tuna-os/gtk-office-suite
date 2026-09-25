@@ -7,6 +7,7 @@ mod format_inspector;
 mod formula_bar;
 mod column_menu;
 mod notes;
+mod validation_list;
 mod sheet_bar;
 mod persistence;
 mod window_dialogs;

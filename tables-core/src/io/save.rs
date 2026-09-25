@@ -255,6 +255,28 @@ pub fn save_sheets_to_xlsx_bytes(
                 .map_err(|e| format!("Conditional format error: {}", e))?;
         }
 
+        // Data validation, one range per run of cells down a column that
+        // share a rule. A regex has no xlsx form and isn't written.
+        for c in 0..sh.cols {
+            let mut r = 0;
+            while r < sh.rows {
+                let Some(rule) = sh.validations[r][c].as_ref() else {
+                    r += 1;
+                    continue;
+                };
+                let mut end = r;
+                while end + 1 < sh.rows && sh.validations[end + 1][c].as_ref() == Some(rule) {
+                    end += 1;
+                }
+                if let Some(dv) = xlsx_validation(rule) {
+                    sheet
+                        .add_data_validation(r as u32, c as u16, end as u32, c as u16, &dv)
+                        .map_err(|e| format!("Data validation error: {e}"))?;
+                }
+                r = end + 1;
+            }
+        }
+
         // Cell notes: Excel's notes (the legacy comments part), which Calc
         // reads as comments.
         for (r, row) in sh.notes.iter().enumerate() {
@@ -360,6 +382,33 @@ pub fn save_sheets_to_xlsx_bytes(
     workbook
         .save_to_buffer()
         .map_err(|e| format!("Save error: {}", e))
+}
+
+/// A validation rule in xlsx's terms, or `None` where it has none (a
+/// regex, an empty list, a list longer than Excel's 255 characters, a
+/// range with no bounds).
+fn xlsx_validation(rule: &crate::sheet::ValidationRule) -> Option<rust_xlsxwriter::DataValidation> {
+    use crate::sheet::ValidationRule as V;
+    use rust_xlsxwriter::{DataValidation, DataValidationRule as R};
+    fn bounded<T: rust_xlsxwriter::IntoDataValidationValue + Copy>(min: Option<T>, max: Option<T>) -> Option<R<T>> {
+        match (min, max) {
+            (Some(a), Some(b)) => Some(R::Between(a, b)),
+            (Some(a), None) => Some(R::GreaterThanOrEqualTo(a)),
+            (None, Some(b)) => Some(R::LessThanOrEqualTo(b)),
+            (None, None) => None,
+        }
+    }
+    let clamp = |v: i64| v.clamp(i32::MIN as i64, i32::MAX as i64) as i32;
+    match rule {
+        V::List(items) if !items.is_empty() => DataValidation::new().allow_list_strings(items).ok(),
+        V::List(_) | V::Regex(_) => None,
+        V::WholeNumber { min, max } => bounded(min.map(clamp), max.map(clamp)).map(|r| DataValidation::new().allow_whole_number(r)),
+        V::Decimal { min, max } => bounded(*min, *max).map(|r| DataValidation::new().allow_decimal_number(r)),
+        V::TextLength { min, max } => {
+            let len = |v: usize| v.min(u32::MAX as usize) as u32;
+            bounded(min.map(len), max.map(len)).map(|r| DataValidation::new().allow_text_length(r))
+        }
+    }
 }
 
 /// The xlsx format a cell is written with: its number format and its

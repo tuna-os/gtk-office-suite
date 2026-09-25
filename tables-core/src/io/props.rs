@@ -48,6 +48,144 @@ pub struct SheetXlsxProps {
     /// Cell notes, 0-based `(row, col, text)`: xlsx's `comments` part,
     /// ODF's `office:annotation`.
     pub notes: Vec<(usize, usize, String)>,
+    /// Data validation, 0-based inclusive `(top, left, bottom, right)`
+    /// ranges and what they allow.
+    pub validations: Vec<((usize, usize, usize, usize), ValidationSource)>,
+}
+
+/// A validation as the file states it. A list can name its items or a
+/// range holding them; a range is resolved against the loaded cells.
+#[derive(Debug, Clone, PartialEq)]
+pub enum ValidationSource {
+    Rule(crate::sheet::ValidationRule),
+    /// Items read from `sheet!range` (`None`: the validated sheet).
+    ListRange(Option<String>, (usize, usize, usize, usize)),
+}
+
+/// `A1:B3` or `A1` to 0-based `(top, left, bottom, right)`.
+fn parse_area(s: &str) -> Option<(usize, usize, usize, usize)> {
+    let s = s.replace('$', "");
+    let (a, b) = s.split_once(':').unwrap_or((s.as_str(), s.as_str()));
+    let (r0, c0) = crate::sheet::parse_cell_ref(a.trim())?;
+    let (r1, c1) = crate::sheet::parse_cell_ref(b.trim())?;
+    Some((r0.min(r1), c0.min(c1), r0.max(r1), c0.max(c1)))
+}
+
+/// A list's source formula: `"a,b,c"` (the items, quoted) or a range,
+/// maybe on another sheet (`Sheet2!$A$1:$A$3`, `'My sheet'!A1:A3`).
+fn list_source(formula: &str) -> Option<ValidationSource> {
+    let f = formula.trim().trim_start_matches('=');
+    if let Some(inner) = f.strip_prefix('"').and_then(|r| r.strip_suffix('"')) {
+        let items: Vec<String> = inner.replace("\"\"", "\"").split(',').map(|i| i.trim().to_string()).filter(|i| !i.is_empty()).collect();
+        return Some(ValidationSource::Rule(crate::sheet::ValidationRule::List(items)));
+    }
+    let (sheet, range) = match f.rsplit_once('!') {
+        Some((s, r)) => (Some(s.trim_matches('\'').replace("''", "'")), r),
+        None => (None, f),
+    };
+    Some(ValidationSource::ListRange(sheet, parse_area(range)?))
+}
+
+/// An ODF validation condition (`table:condition`, unescaped) as a rule:
+/// `of:cell-content-is-in-list("a";"b")` or a range, and whole numbers,
+/// decimals and text lengths between bounds.
+pub(super) fn odf_validation(condition: &str) -> Option<ValidationSource> {
+    use crate::sheet::ValidationRule;
+    let c = condition.trim().trim_start_matches("of:").trim_start_matches("oooc:");
+    let args = |name: &str| -> Option<Vec<String>> {
+        let inner = c.split(name).nth(1)?.strip_prefix('(')?;
+        let inner = &inner[..inner.rfind(')')?];
+        // Arguments are separated by `;` (or `,`, which Calc writes in
+        // some conditions), but not inside a quoted item.
+        let mut out = Vec::new();
+        let (mut current, mut quoted) = (String::new(), false);
+        for ch in inner.chars() {
+            match ch {
+                '"' => {
+                    quoted = !quoted;
+                    current.push(ch);
+                }
+                ';' | ',' if !quoted => out.push(std::mem::take(&mut current).trim().to_string()),
+                _ => current.push(ch),
+            }
+        }
+        out.push(current.trim().to_string());
+        Some(out)
+    };
+    if let Some(items) = args("cell-content-is-in-list") {
+        if let [only] = items.as_slice() {
+            if let Some(range) = only.strip_prefix('[').and_then(|r| r.strip_suffix(']')) {
+                // `[.$D$1:.$D$3]` or `[$Other.$A$1:.$A$3]`.
+                let (first, last) = range.split_once(':').unwrap_or((range, range));
+                let (sheet, a) = first.rsplit_once('.').unwrap_or(("", first));
+                let b = last.rsplit('.').next().unwrap_or(last);
+                let sheet = sheet.trim_start_matches('$').trim_matches('\'');
+                let sheet = (!sheet.is_empty()).then(|| sheet.to_string());
+                return Some(ValidationSource::ListRange(sheet, parse_area(&format!("{a}:{b}"))?));
+            }
+        }
+        let items = items.into_iter().map(|i| i.trim_matches('"').replace("\"\"", "\"")).filter(|i| !i.is_empty()).collect();
+        return Some(ValidationSource::Rule(ValidationRule::List(items)));
+    }
+    let between = |name: &str| -> Option<(Option<String>, Option<String>)> {
+        let a = args(name)?;
+        Some((a.first().cloned(), a.get(1).cloned()))
+    };
+    if let Some((lo, hi)) = between("cell-content-text-length-is-between") {
+        return Some(ValidationSource::Rule(ValidationRule::TextLength { min: lo.and_then(|v| v.parse().ok()), max: hi.and_then(|v| v.parse().ok()) }));
+    }
+    let (lo, hi) = between("cell-content-is-between")?;
+    if c.contains("cell-content-is-whole-number") {
+        // Calc may write a whole bound as "10" or "10.0".
+        let whole = |v: Option<String>| v.and_then(|v| v.trim().parse::<f64>().ok()).map(|f| f as i64);
+        Some(ValidationSource::Rule(ValidationRule::WholeNumber { min: whole(lo), max: whole(hi) }))
+    } else if c.contains("cell-content-is-decimal-number") {
+        Some(ValidationSource::Rule(ValidationRule::Decimal { min: lo.and_then(|v| v.parse().ok()), max: hi.and_then(|v| v.parse().ok()) }))
+    } else {
+        None
+    }
+}
+
+/// Every `<dataValidation>` of a sheet's XML that this app has a rule for:
+/// lists, whole numbers, decimals and text lengths, with the bounds of
+/// `between`, `>=`, `<=` and `=`.
+pub(super) fn parse_xlsx_validations(xml: &str) -> Vec<((usize, usize, usize, usize), ValidationSource)> {
+    use crate::sheet::ValidationRule;
+    let mut out = Vec::new();
+    for dv in xml.split("<dataValidation ").skip(1) {
+        let tag = dv.split('>').next().unwrap_or("");
+        let body = dv.split("</dataValidation>").next().unwrap_or("");
+        let formula = |n: &str| -> Option<String> {
+            let open = format!("<formula{n}>");
+            Some(unescape(body.split(&open).nth(1)?.split(&format!("</formula{n}>")).next()?))
+        };
+        let (f1, f2) = (formula("1"), formula("2"));
+        let op = xml_attr(tag, "operator").unwrap_or("between");
+        fn bounds<T: std::str::FromStr + Copy>(op: &str, f1: &Option<String>, f2: &Option<String>) -> Option<(Option<T>, Option<T>)> {
+            let v = |f: &Option<String>| f.as_deref().and_then(|s| s.trim().parse::<T>().ok());
+            match op {
+                "between" => Some((v(f1), v(f2))),
+                "greaterThanOrEqual" => Some((v(f1), None)),
+                "lessThanOrEqual" => Some((None, v(f1))),
+                "equal" => Some((v(f1), v(f1))),
+                _ => None,
+            }
+        }
+        let source = match xml_attr(tag, "type") {
+            Some("list") => f1.as_deref().and_then(list_source),
+            Some("whole") => bounds::<i64>(op, &f1, &f2).map(|(min, max)| ValidationSource::Rule(ValidationRule::WholeNumber { min, max })),
+            Some("decimal") => bounds::<f64>(op, &f1, &f2).map(|(min, max)| ValidationSource::Rule(ValidationRule::Decimal { min, max })),
+            Some("textLength") => bounds::<usize>(op, &f1, &f2).map(|(min, max)| ValidationSource::Rule(ValidationRule::TextLength { min, max })),
+            _ => None,
+        };
+        let Some(source) = source else { continue };
+        for area in xml_attr(tag, "sqref").unwrap_or("").split_whitespace().filter_map(parse_area) {
+            if area.2 < crate::sheet::SHEET_MAX_ROWS && area.3 < crate::sheet::SHEET_MAX_COLS {
+                out.push((area, source.clone()));
+            }
+        }
+    }
+    out
 }
 
 /// XML text to plain text: the five named entities and numeric character
@@ -448,6 +586,8 @@ pub fn read_sheet_props_from_xlsx(
             props.page_setup = Some(setup);
         }
 
+        props.validations = parse_xlsx_validations(&xml);
+
         // Notes: the sheet's rels name its comments part.
         let (dir, file) = part.rsplit_once('/').unwrap_or(("", part.as_str()));
         let rels_part = format!("{dir}/_rels/{file}.rels");
@@ -587,6 +727,62 @@ mod sheet_props_tests {
         assert_eq!(setup.size, PageSize::Legal);
         assert_eq!(setup.orientation, Orientation::Landscape);
         assert!((setup.margin_left_mm - 10.0).abs() < 0.1, "{}", setup.margin_left_mm);
+    }
+
+    /// Validations save as the sheet's dataValidations and load back onto
+    /// every cell of their range; a list naming a range takes its values.
+    #[test]
+    fn validations_round_trip_and_a_list_range_takes_its_values() {
+        use crate::sheet::ValidationRule as V;
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("v.xlsx");
+        let mut s = SheetModel::new("Sheet1", 6, 4, 0);
+        for r in 0..3 {
+            s.validations[r][0] = Some(V::List(vec!["Red".into(), "Green, dark".into(), "Say \"hi\"".into()]));
+        }
+        s.validations[4][1] = Some(V::WholeNumber { min: Some(1), max: Some(10) });
+        s.validations[5][2] = Some(V::TextLength { min: None, max: Some(5) });
+        s.validations[5][3] = Some(V::Decimal { min: Some(0.5), max: None });
+        save_sheets_to_xlsx(path.to_str().unwrap(), &[s]).unwrap();
+        let (_, sheets) = crate::io::load_workbook(path.to_str().unwrap()).unwrap();
+        let v = &sheets[0].validations;
+        // Commas inside an item can't survive xlsx's inline list: Excel
+        // splits on them too.
+        assert_eq!(v[2][0], Some(V::List(vec!["Red".into(), "Green".into(), "dark".into(), "Say \"hi\"".into()])));
+        assert_eq!(v[3][0], None);
+        assert_eq!(v[4][1], Some(V::WholeNumber { min: Some(1), max: Some(10) }));
+        assert_eq!(v[5][2], Some(V::TextLength { min: None, max: Some(5) }));
+        assert_eq!(v[5][3], Some(V::Decimal { min: Some(0.5), max: None }));
+
+        let xml = r#"<dataValidations count="1"><dataValidation type="list" allowBlank="1" sqref="B2:B3 D1"><formula1>$F$1:$F$3</formula1></dataValidation></dataValidations>"#;
+        assert_eq!(
+            parse_xlsx_validations(xml),
+            vec![
+                ((1, 1, 2, 1), ValidationSource::ListRange(None, (0, 5, 2, 5))),
+                ((0, 3, 0, 3), ValidationSource::ListRange(None, (0, 5, 2, 5))),
+            ]
+        );
+    }
+
+    #[test]
+    fn odf_conditions_read_as_rules() {
+        use crate::sheet::ValidationRule as V;
+        assert_eq!(
+            odf_validation(r#"of:cell-content-is-in-list("Red";"Green";"Blue")"#),
+            Some(ValidationSource::Rule(V::List(vec!["Red".into(), "Green".into(), "Blue".into()])))
+        );
+        assert_eq!(
+            odf_validation("of:cell-content-is-in-list([$Lists.$A$1:.$A$4])"),
+            Some(ValidationSource::ListRange(Some("Lists".into()), (0, 0, 3, 0)))
+        );
+        assert_eq!(
+            odf_validation("of:cell-content-is-whole-number() and of:cell-content-is-between(1;10)"),
+            Some(ValidationSource::Rule(V::WholeNumber { min: Some(1), max: Some(10) }))
+        );
+        assert_eq!(
+            odf_validation("of:cell-content-text-length-is-between(2;8)"),
+            Some(ValidationSource::Rule(V::TextLength { min: Some(2), max: Some(8) }))
+        );
     }
 
     /// Notes save as the sheet's comments part and load back onto their
@@ -762,6 +958,17 @@ pub fn read_sheet_props_from_ods(
     data_styles.extend(super::ods_numfmt::parse_data_styles(&xml));
     let cell_styles = super::ods_styles::parse_ods_cell_styles(&xml, &data_styles);
 
+    // Validations are declared once and named by the cells they apply to.
+    let mut validations: std::collections::HashMap<String, ValidationSource> = std::collections::HashMap::new();
+    for v in split_elements(&xml, "table:content-validation") {
+        let tag = v.split('>').next().unwrap_or("");
+        if let (Some(name), Some(cond)) = (xml_attr(tag, "table:name"), xml_attr(tag, "table:condition")) {
+            if let Some(source) = odf_validation(&unescape(cond)) {
+                validations.insert(name.to_string(), source);
+            }
+        }
+    }
+
     for table in split_elements(&xml, "table:table") {
         let head = table.split('>').next().unwrap_or("");
         let Some(name) = xml_attr(head, "table:name") else { continue };
@@ -812,6 +1019,12 @@ pub fn read_sheet_props_from_ods(
                 let rspan = odf_repeat(tag, "table:number-rows-spanned");
                 if !is_covered && (cspan > 1 || rspan > 1) {
                     props.merges.push((row, c, rspan, cspan));
+                }
+                if let Some(source) = xml_attr(tag, "table:content-validation-name").and_then(|n| validations.get(n)) {
+                    let (bottom, right) = (row + repeat - 1, c + odf_repeat(tag, "table:number-columns-repeated") - 1);
+                    if bottom < crate::sheet::SHEET_MAX_ROWS && right < crate::sheet::SHEET_MAX_COLS {
+                        props.validations.push(((row, c, bottom, right), source.clone()));
+                    }
                 }
                 if let Some(note) = odf_annotation(cell) {
                     if row < crate::sheet::SHEET_MAX_ROWS && c < crate::sheet::SHEET_MAX_COLS {
