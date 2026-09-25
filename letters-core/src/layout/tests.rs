@@ -343,3 +343,27 @@ fn relayout_reshapes_only_the_edited_paragraph() {
     cache.prune();
     assert_eq!(tree, lay(&d), "the incremental layout is the full layout");
 }
+
+#[test]
+fn title_subtitle_and_quotes_have_their_own_looks() {
+    let mut d = doc_of(5, "text");
+    d.paragraphs[0].style.named_style = Some("Title".into());
+    d.paragraphs[1].style.named_style = Some("Subtitle".into());
+    d.paragraphs[2].style.block_quote = true;
+    // A heading level wins over a named style.
+    d.paragraphs[3].style = ParaStyle { heading: Some(2), named_style: Some("Title".into()), ..Default::default() };
+    let t = lay(&d);
+    let lines = line_items(&t.pages[0]);
+    let tops: Vec<f64> = lines.iter().map(|l| l.3).collect();
+    let heights: Vec<f64> = tops.windows(2).map(|w| w[1] - w[0]).collect();
+    // MonoShaper lines are 1.25 × size tall.
+    assert!((heights[0] - 12.0 * 26.0 / 11.0 * 1.25).abs() < 1e-6, "Title: {heights:?}");
+    assert!((heights[1] - 12.0 * 15.0 / 11.0 * 1.25).abs() < 1e-6, "Subtitle: {heights:?}");
+    assert!((heights[2] - LINE).abs() < 1e-6, "a quote is body-sized");
+    assert!((heights[3] - 12.0 * heading_scale(2) * 1.25).abs() < 1e-6, "heading 2: {heights:?}");
+    // The quote is indented; the rest start at the margin.
+    let xs: Vec<f64> = lines.iter().map(|l| l.2).collect();
+    assert_eq!(xs[2] - xs[4], QUOTE_INDENT_PT);
+    assert_eq!(xs[0], xs[4]);
+    assert_eq!(paragraph_look(&d.paragraphs[4].style), Look::Body);
+}

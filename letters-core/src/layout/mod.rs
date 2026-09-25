@@ -98,6 +98,8 @@ pub struct ShapeRequest<'a> {
     pub heading: Option<u8>,
     /// Code block: monospace.
     pub code: bool,
+    /// Title, Subtitle or block quote, which have looks of their own.
+    pub look: Look,
     pub alignment: crate::model::Alignment,
     /// Width available to the lines, in points.
     pub width_pt: f64,
@@ -146,7 +148,7 @@ pub fn request_key(req: &ShapeRequest<'_>) -> u64 {
     use std::hash::{Hash, Hasher};
     let mut h = std::collections::hash_map::DefaultHasher::new();
     format!("{:?}", req.runs).hash(&mut h);
-    (req.heading, req.code, format!("{:?}", req.alignment)).hash(&mut h);
+    (req.heading, req.code, req.look, format!("{:?}", req.alignment)).hash(&mut h);
     (req.width_pt.to_bits(), req.first_line_indent_pt.to_bits()).hash(&mut h);
     req.tab_stops_pt.iter().map(|t| t.to_bits()).collect::<Vec<_>>().hash(&mut h);
     (&req.defaults.font_family, req.defaults.font_size_pt.to_bits()).hash(&mut h);
@@ -409,7 +411,51 @@ struct Shaped {
 pub fn paragraph_box_x(p: &Paragraph) -> f64 {
     let st = &p.style;
     let list_indent = if st.list == ListKind::None { 0.0 } else { lists::text_indent_pt(st.list_level) };
-    st.left_indent_pt.max(0.0) + list_indent
+    let quote_indent = if st.block_quote { QUOTE_INDENT_PT } else { 0.0 };
+    st.left_indent_pt.max(0.0) + list_indent + quote_indent
+}
+
+/// How far a block quote is indented from the left, in points (the Draft
+/// editor's `blockquote` tag: 24 px).
+pub const QUOTE_INDENT_PT: f64 = 18.0;
+
+/// A paragraph's look beyond body text, headings and code: the named
+/// Title and Subtitle styles, and block quotes.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum Look {
+    Body,
+    /// Large and bold (Google Docs' and the old Letters stylesheet's 26 pt
+    /// over 11 pt body text).
+    Title,
+    /// Larger than body text, grey (15 pt over 11 pt).
+    Subtitle,
+    /// Italic, indented by `QUOTE_INDENT_PT`.
+    Quote,
+}
+
+impl Look {
+    /// Text size relative to body text.
+    pub fn scale(self) -> f64 {
+        match self {
+            Look::Title => 26.0 / 11.0,
+            Look::Subtitle => 15.0 / 11.0,
+            Look::Body | Look::Quote => 1.0,
+        }
+    }
+}
+
+/// The look of a paragraph styled `st`. A heading level wins over a named
+/// style; a named style is matched as Word and LibreOffice spell it.
+pub fn paragraph_look(st: &crate::model::ParaStyle) -> Look {
+    if st.heading.is_some() {
+        return Look::Body;
+    }
+    match st.named_style.as_deref().map(str::to_ascii_lowercase).as_deref() {
+        Some("title") => Look::Title,
+        Some("subtitle") => Look::Subtitle,
+        _ if st.block_quote => Look::Quote,
+        _ => Look::Body,
+    }
 }
 
 /// The shaping request for paragraph `p` in a text box `box_w` wide. The
@@ -422,6 +468,7 @@ pub fn paragraph_request<'a>(p: &'a Paragraph, box_w: f64, opts: &'a LayoutOptio
         runs: &p.runs,
         heading: st.heading,
         code: st.code_block.is_some(),
+        look: paragraph_look(st),
         alignment: st.alignment,
         width_pt: box_w,
         // A list item's first line starts at its text indent; the marker
@@ -719,6 +766,7 @@ impl<'o> Flow<'o> {
                     runs: &runs,
                     heading: None,
                     code: false,
+                    look: Look::Body,
                     // Left, as a Word or LibreOffice header paragraph is by default.
                     alignment: crate::model::Alignment::Left,
                     width_pt: width,
@@ -770,7 +818,7 @@ impl MonoShaper {
     fn size(req: &ShapeRequest<'_>, run: Option<&Run>) -> f64 {
         let base = match req.heading {
             Some(l) => req.defaults.heading_size_pt(l),
-            None => req.defaults.font_size_pt,
+            None => req.defaults.font_size_pt * req.look.scale(),
         };
         run.and_then(|r| r.style.font_size_hp).map_or(base, |hp| f64::from(hp) / 2.0)
     }

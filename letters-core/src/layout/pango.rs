@@ -16,7 +16,7 @@ use std::collections::HashMap;
 
 use pango::prelude::*;
 
-use super::{paragraph_request, request_key, Item, LayoutOptions, LineBox, RenderTree, ShapeCache, ShapeRequest, Shaper, Source};
+use super::{paragraph_request, request_key, Item, LayoutOptions, LineBox, Look, RenderTree, ShapeCache, ShapeRequest, Shaper, Source};
 use crate::model::{Alignment, Document, VertAlign};
 
 /// Pango's fixed-point scale.
@@ -86,6 +86,16 @@ impl PangoShaper {
                     heading_color = h.color.as_deref().and_then(parse_hex);
                 }
                 None => base.set_weight(pango::Weight::Bold),
+            }
+        }
+        // Title, Subtitle and block quotes (a heading level wins, above).
+        if req.heading.is_none() {
+            size *= req.look.scale();
+            match req.look {
+                Look::Title => base.set_weight(pango::Weight::Bold),
+                Look::Subtitle => heading_color = Some((0x6666, 0x6666, 0x6666)),
+                Look::Quote => base.set_style(pango::Style::Italic),
+                Look::Body => {}
             }
         }
         base.set_size(to_units(size));
@@ -576,6 +586,7 @@ impl Typeset {
                         runs: &runs,
                         heading: None,
                         code: false,
+                        look: Look::Body,
                         alignment: Alignment::Left,
                         width_pt: *box_width_pt,
                         first_line_indent_pt: 0.0,
@@ -762,6 +773,7 @@ mod tests {
                 runs,
                 heading: None,
                 code: false,
+                look: Look::Body,
                 alignment: Alignment::Left,
                 width_pt: w,
                 first_line_indent_pt: 0.0,

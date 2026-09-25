@@ -588,7 +588,7 @@ const PARA_TAG_PREFIX: &str = "para:";
 
 /// The paragraph properties the fixed tags do not carry, as one tag name:
 /// spacing, indents, tab stops, a line spacing no `line-spacing-*` tag
-/// names, block quote, named style and a list restart. `None` when the
+/// names, block quote, code block, named style and a list restart. `None` when the
 /// paragraph has none of them.
 ///
 /// Without it all of these were dropped on the way into the editor, so a
@@ -620,6 +620,9 @@ fn para_tag_name(style: &letters_core::ParaStyle) -> Option<String> {
     if let Some(start) = style.list_start {
         parts.push(format!("n={start}"));
     }
+    if let Some(lang) = &style.code_block {
+        parts.push(format!("c={}", lang.replace(';', "")));
+    }
     if let Some(name) = &style.named_style {
         // Last, and the only free text: everything after "s=" is the name.
         parts.push(format!("s={name}"));
@@ -649,6 +652,7 @@ fn apply_para_tag_name(name: &str, style: &mut letters_core::ParaStyle) {
             "ls" => style.line_spacing = value.parse().unwrap_or(1.0),
             "q" => style.block_quote = true,
             "n" => style.list_start = value.parse().ok(),
+            "c" => style.code_block = Some(value.to_string()),
             _ => {}
         }
     }
@@ -943,10 +947,20 @@ pub(crate) fn render_paragraphs(buf: &gtk::TextBuffer, insert: &mut gtk::TextIte
             }
         }
         let mut para_tags: Vec<String> = Vec::new();
+        // Looks only: the code block's language, a named style and a
+        // quote are read back from the `para:` tag. (Code blocks used to
+        // wear the run-level `code` tag, so the Draft view read them back
+        // as code-formatted text and the paragraph lost its code block.)
         match (para.style.heading, &para.style.code_block) {
             (Some(l), _) => para_tags.push(format!("h{}", l.clamp(1, 6))),
-            (None, Some(_)) => para_tags.push("code".to_string()),
+            (None, Some(_)) => para_tags.push("code-block".to_string()),
             _ => {}
+        }
+        match letters_core::layout::paragraph_look(&para.style) {
+            letters_core::layout::Look::Title => para_tags.push("h-title".into()),
+            letters_core::layout::Look::Subtitle => para_tags.push("h-subtitle".into()),
+            letters_core::layout::Look::Quote => para_tags.push("blockquote".into()),
+            letters_core::layout::Look::Body => {}
         }
         match para.style.alignment {
             letters_core::Alignment::Center => para_tags.push("align-center".into()),
@@ -1957,6 +1971,26 @@ single");
                 (Some("New header".into()), Some("New footer".into())),
                 "the dialog reads back what it wrote"
             );
+        });
+    }
+
+    /// Code blocks, Title, Subtitle and quotes survive the Draft view
+    /// exactly: a code block used to come back as code-formatted body text.
+    #[test]
+    fn code_blocks_titles_and_quotes_survive_the_buffer() {
+        gtk_test(|| {
+            let buf = gtk::TextBuffer::new(None);
+            crate::actions::register_formatting_tags(&buf);
+            let mut d = Document::from_plain_text("Title\nSubtitle\nquoted\nfn main() {}\n}\nbody");
+            d.paragraphs[0].style.named_style = Some("Title".into());
+            d.paragraphs[1].style.named_style = Some("Subtitle".into());
+            d.paragraphs[2].style.block_quote = true;
+            d.paragraphs[3].style.code_block = Some("rust".into());
+            d.paragraphs[4].style.code_block = Some(String::new());
+            assert_eq!(round_trip(&buf, &d), d);
+            let tagged = |line: i32, name: &str| buf.iter_at_line(line).is_some_and(|i| i.has_tag(&buf.tag_table().lookup(name).unwrap()));
+            assert!(tagged(0, "h-title") && tagged(1, "h-subtitle") && tagged(2, "blockquote") && tagged(3, "code-block"));
+            assert!(!tagged(3, "code"), "a code block is not code-formatted text");
         });
     }
 }
