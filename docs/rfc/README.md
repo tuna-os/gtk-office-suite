@@ -12,5 +12,6 @@ status line as the record of the reasoning.
 
 | RFC | Title | Status |
 |---|---|---|
-| [0001](0001-crdt-collaboration.md) | CRDT collaboration for Letters, Tables and Decks | draft |
+| [0001](0001-crdt-collaboration.md) | CRDT collaboration for Letters, Tables and Decks | accepted 2026-09-25 (Loro) |
 | [0002](0002-extension-architecture.md) | Extension architecture — sandboxed WASM and out-of-process IPC | draft |
+| [0003](0003-cloud-documents.md) | Cloud documents: Google Drive, Nextcloud and Microsoft 365 | draft |
