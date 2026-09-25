@@ -197,9 +197,9 @@ pub fn attach(
     }
 
     if draft {
-        let view = view.clone();
+        let watched = view.clone();
         buf.connect_insert_text(move |b, pos, text| {
-            if text != "@" || crate::live::is_busy(b) || !view.is_mapped() {
+            if text != "@" || crate::live::is_busy(b) || !watched.is_mapped() {
                 return;
             }
             let mut before = *pos;
@@ -210,7 +210,36 @@ pub fn attach(
                 glib::idle_add_local_once(move || opener(true));
             }
         });
+        // A click on a chip's label in the Draft editor opens its card,
+        // as it does on the page.
+        if let Ok(editor) = view.clone().downcast::<gtk::TextView>() {
+            let click = gtk::GestureClick::new();
+            let ed = editor.clone();
+            click.connect_released(move |gesture, n_press, x, y| {
+                if n_press != 1 || gesture.current_event_state().contains(gtk::gdk::ModifierType::SHIFT_MASK) {
+                    return;
+                }
+                if let Some((chip, label, range, rect)) = draft_chip_at(&ed, x, y) {
+                    show_card(ed.upcast_ref(), &ed.buffer(), &rect, chip, &label, range);
+                }
+            });
+            editor.add_controller(click);
+        }
     }
+}
+
+/// The chip under point (`x`, `y`) of the Draft editor, with its label,
+/// buffer range and on-screen rectangle.
+fn draft_chip_at(editor: &gtk::TextView, x: f64, y: f64) -> Option<(Chip, String, (usize, usize), gtk::gdk::Rectangle)> {
+    let (bx, by) = editor.window_to_buffer_coords(gtk::TextWindowType::Widget, x as i32, y as i32);
+    let iter = editor.iter_at_location(bx, by)?;
+    let buf = editor.buffer();
+    let (chip, label, range) = chip_at(&buf, iter.offset().max(0) as usize)?;
+    let start = editor.iter_location(&buf.iter_at_offset(range.0 as i32));
+    let end = editor.iter_location(&buf.iter_at_offset(range.1 as i32));
+    let (x0, y0) = editor.buffer_to_window_coords(gtk::TextWindowType::Widget, start.x(), start.y());
+    let (x1, _) = editor.buffer_to_window_coords(gtk::TextWindowType::Widget, end.x(), end.y());
+    Some((chip, label, range, gtk::gdk::Rectangle::new(x0, y0, (x1 - x0).max(1), start.height())))
 }
 
 /// The page view's typing reached the model: open the popover when it was
@@ -443,6 +472,39 @@ mod tests {
             }
             assert!(chip_under_click(&view, &buf, x0 - 20.0, 3).is_none(), "the text before it");
             assert!(chip_under_click(&view, &buf, x1 + 12.0, 16).is_none(), "the text after it");
+        });
+    }
+
+    /// In the Draft editor a chip is its label: a point on the label finds
+    /// the chip and its whole span; a point on the text beside it does not.
+    #[test]
+    fn a_point_on_a_chips_label_in_draft_finds_it() {
+        gtk_test(|| {
+            let buf = tab("Due  ok");
+            buf.place_cursor(&buf.iter_at_offset(4));
+            insert(&buf, chips::date_chip(chips::NaiveDate::from_ymd_opt(2026, 10, 3).unwrap()), false);
+            let editor = gtk::TextView::with_buffer(&buf);
+            let win = gtk::Window::new();
+            win.set_default_size(400, 200);
+            win.set_child(Some(&editor));
+            win.present();
+            let ctx = glib::MainContext::default();
+            let end = std::time::Instant::now() + std::time::Duration::from_millis(300);
+            while std::time::Instant::now() < end {
+                ctx.iteration(false);
+            }
+            // The middle of the label "3 Oct 2026" (buffer 4..14), and "Due".
+            let at = |off: i32| {
+                let r = editor.iter_location(&buf.iter_at_offset(off));
+                let (x, y) = editor.buffer_to_window_coords(gtk::TextWindowType::Widget, r.x(), r.y());
+                (f64::from(x) + 1.0, f64::from(y + r.height() / 2))
+            };
+            let (x, y) = at(8);
+            let hit = draft_chip_at(&editor, x, y).map(|c| (c.0.kind, c.1, c.2));
+            assert_eq!(hit, Some((ChipKind::Date, "3 Oct 2026".to_string(), (4, 14))));
+            let (x, y) = at(1);
+            assert!(draft_chip_at(&editor, x, y).is_none(), "plain text is not a chip");
+            win.close();
         });
     }
 
