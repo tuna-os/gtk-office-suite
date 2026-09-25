@@ -1138,6 +1138,7 @@ fn parse_pages(
                         objects: vec![],
                         notes: String::new(),
                         master_idx: Some(0),
+                        transition: Default::default(),
                     });
                 }
                 "presentation:notes" => in_notes = true,
@@ -1490,6 +1491,7 @@ pub fn read(path: &str) -> Result<Deck, String> {
             objects: vec![],
             notes: String::new(),
             master_idx: Some(0),
+            transition: Default::default(),
         });
     }
     Ok(deck)
@@ -1522,6 +1524,7 @@ mod tests {
             }],
             notes: notes.into(),
             master_idx: Some(0),
+            transition: Default::default(),
         }
     }
 
@@ -1723,6 +1726,7 @@ mod tests {
                 objects: vec![],
                 notes: String::new(),
                 master_idx: Some(0),
+                transition: Default::default(),
             }],
         };
         let styles = styles_xml(&deck, &mut Vec::new()).unwrap();
@@ -1771,6 +1775,7 @@ mod tests {
                 }],
                 notes: String::new(),
                 master_idx: Some(0),
+                transition: Default::default(),
             }],
         }
     }
@@ -1933,6 +1938,7 @@ mod tests {
             ],
             notes: String::new(),
             master_idx: Some(0),
+            transition: Default::default(),
         }];
         let rt = round_trip(&deck);
         let close = |a: f64, b: f64| (a - b).abs() < 0.1;
@@ -1983,6 +1989,7 @@ mod tests {
             }],
             notes: String::new(),
             master_idx: Some(0),
+            transition: Default::default(),
         }];
         let rt = round_trip(&deck);
         let SlideObject::TextBox { runs, .. } = &rt.slides[0].objects[0] else { panic!() };
@@ -2140,6 +2147,7 @@ mod tests {
                     runs: vec![],
                     body: Default::default(),
                 }],
+                transition: Default::default(),
             }],
             ..Default::default()
         }

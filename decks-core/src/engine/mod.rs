@@ -25,7 +25,7 @@ pub mod text_body;
 mod text_xml;
 mod write;
 
-pub use model::{Deck, MasterSlide, Slide, SlideObject};
+pub use model::{Deck, MasterSlide, Slide, SlideObject, Transition};
 pub use text_body::{Anchor, Autofit, Bullet, Insets, MarkerSize, MarkerStyle, ParaAlign, ParaGeometry, ParaStyle, Spacing, TextBody};
 // `SlideObject::TextBox` carries `Vec<Run>`, so `Run`/`RunStyle` are already
 // part of this crate's public surface; re-exported so a consumer can name

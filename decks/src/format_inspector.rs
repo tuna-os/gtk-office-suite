@@ -12,7 +12,7 @@
 
 use adw::prelude::*;
 use decks_core::engine::shape::{Color, ShapeKind};
-use decks_core::engine::{Anchor, ParaAlign};
+use decks_core::engine::{Anchor, ParaAlign, Transition};
 use decks_core::format::{FormatEdit, ListKind, ObjectFormat};
 use decks_core::undo::ZOrderOp;
 use decks_core::DecksController;
@@ -257,12 +257,17 @@ pub fn build(
     view.add_top_bar(&switcher);
     view.set_content(Some(&stack));
 
-    let empty = adw::StatusPage::builder()
-        .icon_name("edit-select-symbolic")
-        .title("No Selection")
+    // Nothing selected: the slide itself (Keynote's Animate/Slide
+    // inspector), with the hint that selecting an object formats it.
+    let slide_group = adw::PreferencesGroup::builder()
+        .title("Slide")
         .description("Select an object on the slide to format it")
         .build();
-    empty.add_css_class("compact");
+    let labels: Vec<&str> = Transition::ALL.iter().map(|t| t.label()).collect();
+    let transition = combo("Transition", &labels);
+    transition.set_subtitle("How this slide arrives");
+    slide_group.add(&transition);
+    let empty = page(&[&slide_group]);
     let outer = gtk::Stack::new();
     outer.add_named(&empty, Some("empty"));
     outer.add_named(&view, Some("inspector"));
@@ -277,12 +282,18 @@ pub fn build(
         let (font, size, bold, italic, text_color) =
             (font.clone(), size.clone(), bold.clone(), italic.clone(), text_color.clone());
         let aligns = [a_left.clone(), a_center.clone(), a_right.clone(), a_just.clone()];
-        let (list, anchor) = (list.clone(), anchor.clone());
+        let (list, anchor, transition) = (list.clone(), anchor.clone(), transition.clone());
         let (x, y, w, h, rotation) = (x.clone(), y.clone(), w.clone(), h.clone(), rotation.clone());
         Rc::new(move || {
             let f: Option<ObjectFormat> = sel.get().and_then(|oi| ctl.object_format(cs.get(), oi));
             let Some(f) = f else {
                 outer.set_visible_child_name("empty");
+                let current = ctl.slides.borrow().get(cs.get()).map(|s| s.transition).unwrap_or_default();
+                syncing.set(true);
+                if let Some(i) = Transition::ALL.iter().position(|t| *t == current) {
+                    transition.set_selected(i as u32);
+                }
+                syncing.set(false);
                 return;
             };
             outer.set_visible_child_name("inspector");
@@ -477,6 +488,20 @@ pub fn build(
             // The selection follows the object to its new place.
             sel.set(Some(decks_core::undo::z_order_index(oi, n, op)));
             changed();
+        });
+    }
+
+    {
+        let (ctl, cs, syncing, changed) = (ctl.clone(), current_slide.clone(), syncing.clone(), changed.clone());
+        transition.connect_selected_notify(move |r| {
+            if syncing.get() {
+                return;
+            }
+            if let Some(t) = Transition::ALL.get(r.selected() as usize) {
+                if ctl.set_transition(cs.get(), *t) {
+                    changed();
+                }
+            }
         });
     }
 

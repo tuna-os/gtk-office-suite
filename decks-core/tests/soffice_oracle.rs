@@ -101,6 +101,7 @@ fn impress_survives_multi_slide_deck() {
             }],
             notes: String::new(),
             master_idx: Some(0),
+            transition: Default::default(),
         });
     }
     let dir = tempfile::tempdir().unwrap();
@@ -149,6 +150,7 @@ fn text_slide(title: &str, text: &str, notes: &str) -> Slide {
         }],
         notes: notes.into(),
         master_idx: Some(0),
+        transition: Default::default(),
     }
 }
 
@@ -248,6 +250,7 @@ fn shape_kinds_survive_impress_rewrite() {
         ],
         notes: String::new(),
         master_idx: Some(0),
+        transition: Default::default(),
     }];
     let Some(rt) = through_impress(&deck, "shapes") else { return };
     let rects = rt.slides[0].objects.iter().filter(|o| is_rect(o)).count();
@@ -265,6 +268,7 @@ fn positions_approx_survive_impress_rewrite() {
         objects: vec![SlideObject::Rect { x: 240.0, y: 180.0, w: 320.0, h: 120.0, rotation: 0.0 }],
         notes: String::new(),
         master_idx: Some(0),
+        transition: Default::default(),
     }];
     let Some(rt) = through_impress(&deck, "pos") else { return };
     let Some((x, y, w, h)) = rt.slides[0]
@@ -305,6 +309,7 @@ fn empty_slide_survives_impress_rewrite() {
             objects: vec![],
             notes: String::new(),
             master_idx: Some(0),
+            transition: Default::default(),
         },
         text_slide("three", "more", ""),
     ];
@@ -334,6 +339,7 @@ fn bold_run_survives_impress_rewrite() {
         }],
         notes: String::new(),
         master_idx: Some(0),
+        transition: Default::default(),
     }];
     let Some(rt) = through_impress(&deck, "boldrun") else { return };
     let bold_text: String = rt.slides[0]
@@ -410,6 +416,7 @@ fn styled_run_slide(runs: Vec<Run>) -> Slide {
         }],
         notes: String::new(),
         master_idx: Some(0),
+        transition: Default::default(),
     }
 }
 
@@ -504,6 +511,7 @@ fn image_object_survives_impress_rewrite() {
         }],
         notes: String::new(),
         master_idx: Some(0),
+        transition: Default::default(),
     }];
     let Some(rt) = through_impress(&deck, "image") else { return };
     let images = rt.slides[0]
@@ -591,6 +599,7 @@ fn odp_geometry_survives_impress_rewrite() {
         objects: vec![SlideObject::Rect { x: 240.0, y: 180.0, w: 320.0, h: 120.0, rotation: 0.0 }],
         notes: String::new(),
         master_idx: Some(0),
+        transition: Default::default(),
     }];
     let Some(rt) = odp_through_impress(&deck, "geom") else { return };
     let Some(SlideObject::Rect { x, y, w, h, .. }) = rt.slides[0]
@@ -655,6 +664,7 @@ fn odp_bold_run_survives_impress_rewrite() {
         }],
         notes: String::new(),
         master_idx: Some(0),
+        transition: Default::default(),
     }];
     let Some(rt) = odp_through_impress(&deck, "boldrun") else { return };
     let bold: String = rt.slides[0]
@@ -1055,6 +1065,7 @@ fn impress_runs_in_one_paragraph_come_back_as_one_line() {
             ],
             body: Default::default(),
         }],
+        transition: Default::default(),
     }];
     let Some(rt) = through_impress(&deck, "tworuns") else { return };
     let text = all_text(&rt.slides[0]);
@@ -1109,6 +1120,7 @@ fn a_styled_multiline_box_keeps_its_break_and_its_styling_through_impress() {
             ],
             body: Default::default(),
         }],
+        transition: Default::default(),
     }];
     let dir = tempfile::tempdir().unwrap();
     let src = dir.path().join("styledlines.odp");
@@ -1231,6 +1243,7 @@ fn geometry_survives_a_conversion_between_the_two_formats() {
             h: 108.0,
             rotation: 0.0,
         }],
+        transition: Default::default(),
     }];
     let want = (96.0, 54.0, 192.0, 108.0);
     let dir = tempfile::tempdir().unwrap();
@@ -1357,4 +1370,24 @@ fn paragraph_styles_survive_impress_rewrite() {
         assert_eq!(body.para(2).level, 1, "{kind}: {body:?}");
         assert!(matches!(body.para(2).bullet, Bullet::Char(_)), "{kind}: {body:?}");
     }
+}
+
+/// Our Magic Move is PowerPoint's Morph inside mc:AlternateContent.
+/// LibreOffice doesn't know Morph, so it must take the Fallback: the file
+/// opens, and its own rewrite still has a transition on that slide.
+#[test]
+fn impress_takes_the_fallback_of_our_magic_move() {
+    use decks_core::engine::Transition;
+    if !require_or_skip() { return; }
+    let mut deck = Deck::new();
+    let mut second = deck.slides[0].clone();
+    second.transition = Transition::MagicMove;
+    deck.slides.push(second);
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("morph.pptx");
+    write_pptx(path.to_str().unwrap(), &deck).expect("write pptx");
+    let back = convert(&path, "pptx").expect("Impress could not import our Morph");
+    let read = decks_core::read_deck(back.to_str().unwrap()).expect("read Impress's pptx");
+    assert_eq!(read.slides.len(), 2);
+    assert_ne!(read.slides[1].transition, Transition::None, "the fade fallback was kept");
 }

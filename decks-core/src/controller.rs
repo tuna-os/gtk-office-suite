@@ -285,6 +285,17 @@ impl DecksController {
         }
     }
 
+    /// Set how slide `slide_idx` arrives when presented, as one undo step.
+    /// Returns whether anything changed.
+    pub fn set_transition(&self, slide_idx: usize, transition: crate::engine::Transition) -> bool {
+        let old = match self.slides.borrow().get(slide_idx) {
+            Some(s) if s.transition != transition => s.transition,
+            _ => return false,
+        };
+        self.execute(Box::new(SetTransitionCmd { slide_idx, old, new: transition }));
+        true
+    }
+
     /// What the inspector shows for object `index` on slide `slide_idx`.
     pub fn object_format(&self, slide_idx: usize, index: usize) -> Option<crate::format::ObjectFormat> {
         let slides = self.slides.borrow();
@@ -308,13 +319,36 @@ impl DecksController {
     }
 }
 
+/// Changes one slide's transition, and back.
+struct SetTransitionCmd {
+    slide_idx: usize,
+    old: crate::engine::Transition,
+    new: crate::engine::Transition,
+}
+
+impl suite_common_core::undo::Command<Vec<Slide>> for SetTransitionCmd {
+    fn apply(&self, slides: &mut Vec<Slide>) {
+        if let Some(s) = slides.get_mut(self.slide_idx) {
+            s.transition = self.new;
+        }
+    }
+    fn undo(&self, slides: &mut Vec<Slide>) {
+        if let Some(s) = slides.get_mut(self.slide_idx) {
+            s.transition = self.old;
+        }
+    }
+    fn description(&self) -> &str {
+        "Transition"
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::engine::Slide;
 
     fn slide(title: &str) -> Slide {
-        Slide { title: title.into(), background: "#fff".into(), objects: vec![], notes: String::new(), master_idx: Some(0) }
+        Slide { title: title.into(), background: "#fff".into(), objects: vec![], notes: String::new(), master_idx: Some(0), transition: Default::default() }
     }
 
     fn rect(x: f64, y: f64) -> SlideObject {
@@ -532,5 +566,18 @@ mod tests {
         assert_eq!(c.object_format(0, 1).unwrap().bounds.2, 20.0, "both in the one step");
         assert!(!c.can_undo());
         assert!(c.dirty.get());
+    }
+
+    #[test]
+    fn a_slides_transition_is_set_as_one_undo_step() {
+        use crate::engine::Transition;
+        let c = DecksController::new(vec![slide("S1"), slide("S2")], vec![]);
+        assert!(c.set_transition(1, Transition::MagicMove));
+        assert_eq!(c.slides.borrow()[1].transition, Transition::MagicMove);
+        assert!(!c.set_transition(1, Transition::MagicMove), "no change, no step");
+        assert!(!c.set_transition(9, Transition::Fade), "no such slide");
+        assert!(c.undo());
+        assert_eq!(c.slides.borrow()[1].transition, Transition::None);
+        assert!(!c.can_undo());
     }
 }

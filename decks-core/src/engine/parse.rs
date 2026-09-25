@@ -955,6 +955,7 @@ pub fn read_pptx(path: &str) -> Result<Deck, String> {
             objects,
             notes,
             master_idx: Some(0),
+            transition: parse_transition(&slide_xml),
         });
     }
 
@@ -1071,10 +1072,59 @@ pub fn read_pptx(path: &str) -> Result<Deck, String> {
             objects: vec![],
             notes: String::new(),
             master_idx: Some(0),
+            transition: Default::default(),
         });
     }
 
     Ok(Deck { slides, masters })
+}
+
+/// A slide's `p:transition`. PowerPoint writes Morph inside
+/// `mc:AlternateContent`: a `p159:morph` Choice and a plain Fallback
+/// (usually a fade), so the first transition kind seen wins and Morph,
+/// read first, is not overwritten by its fallback. A kind we don't draw
+/// reads as a dissolve: the slide still changes with a transition.
+pub fn parse_transition(xml: &str) -> Transition {
+    let mut reader = Reader::from_str(xml);
+    // Nesting below the open p:transition (0: not in one). Only its direct
+    // children name the kind; p:sndAc, p:extLst and their insides don't.
+    let mut level = 0usize;
+    let mut found: Option<Transition> = None;
+    let consider = |name: &str, level: usize, found: &mut Option<Transition>| {
+        if level == 1 && found.is_none() && name != "p:sndAc" && name != "p:extLst" {
+            *found = Some(transition_kind(name));
+        }
+    };
+    loop {
+        match reader.read_event() {
+            Ok(Event::Start(e)) => {
+                if e.name().as_ref() == "p:transition" {
+                    level = 1;
+                } else if level > 0 {
+                    consider(e.name().as_ref(), level, &mut found);
+                    level += 1;
+                }
+            }
+            Ok(Event::Empty(e)) => {
+                if level > 0 {
+                    consider(e.name().as_ref(), level, &mut found);
+                }
+            }
+            Ok(Event::End(_)) if level > 0 => level -= 1,
+            Ok(Event::Eof) | Err(_) => break,
+            _ => {}
+        }
+    }
+    found.unwrap_or_default()
+}
+
+fn transition_kind(name: &str) -> Transition {
+    match name {
+        n if n.ends_with(":morph") => Transition::MagicMove,
+        "p:push" | "p:cover" | "p:pull" => Transition::Push,
+        "p:wipe" | "p:wedge" | "p:split" => Transition::Wipe,
+        _ => Transition::Fade,
+    }
 }
 
 /// The `p:cSld/@name` of a slideMaster or slideLayout part.
@@ -1478,6 +1528,28 @@ mod tests {
 
 #[cfg(test)]
 mod slide_size_tests {
+
+    #[test]
+    fn transitions_are_read_including_powerpoints_morph() {
+        let sld = |t: &str| format!("<p:sld xmlns:p=\"p\"><p:cSld><p:spTree/></p:cSld>{t}</p:sld>");
+        assert_eq!(parse_transition(&sld("")), Transition::None);
+        assert_eq!(parse_transition(&sld("<p:transition spd=\"med\"><p:fade/></p:transition>")), Transition::Fade);
+        assert_eq!(parse_transition(&sld("<p:transition><p:push dir=\"u\"/></p:transition>")), Transition::Push);
+        assert_eq!(parse_transition(&sld("<p:transition><p:wipe/></p:transition>")), Transition::Wipe);
+        assert_eq!(parse_transition(&sld("<p:transition><p:dissolve/></p:transition>")), Transition::Fade, "one we don't draw");
+        // As PowerPoint writes Morph: the Choice first, a fade Fallback.
+        let morph = "<mc:AlternateContent xmlns:mc=\"mc\"><mc:Choice xmlns:p159=\"x\" Requires=\"p159\">\
+            <p:transition spd=\"slow\"><p159:morph option=\"byObject\"/></p:transition></mc:Choice>\
+            <mc:Fallback><p:transition spd=\"slow\"><p:fade/></p:transition></mc:Fallback></mc:AlternateContent>";
+        assert_eq!(parse_transition(&sld(morph)), Transition::MagicMove);
+        // Sound on a transition is not a kind.
+        assert_eq!(parse_transition(&sld("<p:transition><p:sndAc/><p:push/></p:transition>")), Transition::Push);
+        assert_eq!(
+            parse_transition(&sld("<p:transition><p:sndAc><p:stSnd><p:snd/></p:stSnd></p:sndAc><p:wipe/></p:transition>")),
+            Transition::Wipe
+        );
+    }
+
 
     #[test]
     fn text_sizes_scale_with_the_slide_like_its_geometry() {

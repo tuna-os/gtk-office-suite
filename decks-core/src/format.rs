@@ -409,7 +409,7 @@ mod tests {
     }
 
     fn slide(objects: Vec<SlideObject>) -> Slide {
-        Slide { title: String::new(), background: "#ffffff".into(), objects, notes: String::new(), master_idx: None }
+        Slide { title: String::new(), background: "#ffffff".into(), objects, notes: String::new(), master_idx: None, transition: Default::default() }
     }
 
     #[test]

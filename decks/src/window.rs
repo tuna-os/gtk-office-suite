@@ -57,6 +57,7 @@ impl DecksWindow {
                 objects: vec![],
                 notes: String::new(),
                 master_idx: Some(0),
+                transition: Default::default(),
             }],
             vec![MasterSlide {
                 name: "Default".into(),
@@ -705,6 +706,7 @@ impl DecksWindow {
                     objects: vec![],
                     notes: String::new(),
             master_idx: Some(0),
+            transition: Default::default(),
                 };
                 let idx = controller.add_slide(idx, new_slide);
                 rebuild_slide_list(&sl, &ss.borrow().clone(), &masters.borrow(), idx);
@@ -1128,8 +1130,10 @@ impl DecksWindow {
                         if idx > 0 {
                             let sls = ss.borrow();
                             if idx < sls.len() && idx > 0 {
-                                ts.borrow_mut().start(TransitionType::PushLeft,
-                                    &sls[idx], &sls[idx - 1], &cs);
+                                // Backwards, the slide being left plays
+                                // its own transition in reverse.
+                                TransitionState::start(&ts, TransitionType::of(sls[idx].transition),
+                                    &sls[idx], &sls[idx - 1], &m.borrow(), &cs);
                             }
                             // Snapshot + drop before rebuild_slide_list(),
                             // whose select_row() reaches ss.borrow_mut().
@@ -1145,8 +1149,8 @@ impl DecksWindow {
                         let idx = cs_ref.get();
                         let slides = ss.borrow();
                         if idx + 1 < slides.len() {
-                            ts.borrow_mut().start(TransitionType::PushLeft,
-                                &slides[idx], &slides[idx + 1], &cs);
+                            TransitionState::start(&ts, TransitionType::of(slides[idx + 1].transition),
+                                &slides[idx], &slides[idx + 1], &m.borrow(), &cs);
                             let snap = slides.clone();
                             drop(slides);
                             cs_ref.set(idx + 1);
@@ -1219,6 +1223,7 @@ impl DecksWindow {
                         objects: vec![],
                         notes: String::new(),
                         master_idx: Some(0),
+                        transition: Default::default(),
                     }];
                 }
                 *path_ref.borrow_mut() = None;

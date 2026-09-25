@@ -36,6 +36,7 @@ fn decks() -> Vec<(&'static str, Deck)> {
                 objects: vec![text_box(40.0, 40.0, &format!("Slide {index}"), Vec::new())],
                 notes: format!("Speaker notes for slide {index}"),
                 master_idx: None,
+                transition: Default::default(),
             })
             .collect(),
         ..Deck::default()
