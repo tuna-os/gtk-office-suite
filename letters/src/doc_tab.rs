@@ -350,7 +350,7 @@ pub(crate) fn make_doc_widget(settings: Option<&gio::Settings>) -> (PageContaine
         let drop = gtk::DropTarget::new(gio::File::static_type(), gtk4::gdk::DragAction::COPY);
         drop.connect_drop(move |_target, value, _x, _y| {
             if let Ok(file) = value.get::<gio::File>() {
-                if let Some(path) = file.path() {
+                if let Ok(path) = suite_common::locations::open_location(&file).map_err(|e| eprintln!("{e}")) {
                     let name = path.file_name()
                         .and_then(|n| n.to_str()).unwrap_or("image");
                     let path_str = path.to_string_lossy();

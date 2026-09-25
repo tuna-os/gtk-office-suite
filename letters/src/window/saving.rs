@@ -37,7 +37,10 @@ fn save_page_to_path(page: &adw::TabPage, path: &Path) -> SaveOutcome {
     let mut report = None;
     let result = td.0.borrow_mut().save_to(path.to_path_buf(), |path| {
         report = Some(crate::bridge::save_buffer_to_file(&buf, path)?);
-        Ok(())
+        // A document at a remote location is uploaded from its staged copy
+        // (RFC-0003), inside the transaction so a failed upload doesn't
+        // count as saved.
+        suite_common::locations::commit_save(path)
     });
     let commit = match result {
         Ok(commit) => commit,
@@ -49,7 +52,7 @@ fn save_page_to_path(page: &adw::TabPage, path: &Path) -> SaveOutcome {
     if let Some(name) = path.file_name().and_then(|name| name.to_str()) {
         page.set_title(name);
     }
-    page.set_tooltip(&path.to_string_lossy());
+    page.set_tooltip(&suite_common::locations::remote_uri(path).unwrap_or_else(|| path.to_string_lossy().into_owned()));
     // The recent-files list is stored as UTF-8 strings in GSettings, so a
     // path that is not UTF-8 saves normally and simply does not appear
     // there — better than refusing the save, which is what Letters used to
@@ -151,11 +154,9 @@ pub(super) fn save_with_prompt(
     let page = page.clone();
     dialog.save(parent.as_ref(), None::<&gio::Cancellable>, move |result| {
         let outcome = match result {
-            Ok(file) => match file.path() {
-                Some(path) => save_page_to_path(&page, &path),
-                None => SaveOutcome::Failed(suite_common::i18n(
-                    "The selected location is not a local file.",
-                )),
+            Ok(file) => match suite_common::locations::save_location(&file) {
+                Ok(path) => save_page_to_path(&page, &path),
+                Err(error) => SaveOutcome::Failed(error),
             },
             Err(error)
                 if error.matches(gtk::DialogError::Dismissed)

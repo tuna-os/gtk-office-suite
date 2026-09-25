@@ -124,8 +124,14 @@ fn main() {
         let store = ws.borrow();
         let win = store.as_ref().unwrap();
         for file in files {
-            if let Some(path) = file.path() {
-                win.open_path(&path.to_string_lossy());
+            // A remote location is staged to a local copy (RFC-0003).
+            match suite_common::locations::open_location(file) {
+                Ok(path) => win.open_path(&path.to_string_lossy()),
+                Err(e) => suite_common::show_error_dialog(
+                    Some(&win.window),
+                    &suite_common::i18n("Could not open file"),
+                    &e,
+                ),
             }
         }
         win.present();
