@@ -15,6 +15,7 @@ use letters_core::model::Run;
 
 /// Horizontal alignment of a paragraph.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum ParaAlign {
     #[default]
     Left,
@@ -69,6 +70,7 @@ impl ParaAlign {
 
 /// The marker in front of a paragraph.
 #[derive(Clone, Debug, Default, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum Bullet {
     #[default]
     None,
@@ -81,6 +83,7 @@ pub enum Bullet {
 
 /// Space above or below a paragraph.
 #[derive(Clone, Copy, Debug, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum Spacing {
     /// Model units (already scaled onto the model's slide).
     Units(f64),
@@ -107,6 +110,7 @@ impl Spacing {
 
 /// One paragraph's layout.
 #[derive(Clone, Debug, Default, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct ParaStyle {
     pub align: ParaAlign,
     /// List level, 0-based (`a:pPr lvl`).
@@ -129,6 +133,7 @@ pub struct ParaStyle {
 /// in its own font: the default template's "•" is Arial's, a good deal
 /// smaller than the body font's.
 #[derive(Clone, Debug, Default, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct MarkerStyle {
     pub font: Option<String>,
     pub size: Option<MarkerSize>,
@@ -138,6 +143,7 @@ pub struct MarkerStyle {
 
 /// A marker's size.
 #[derive(Clone, Copy, Debug, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum MarkerSize {
     /// A fraction of the text's size (`buSzPct` / 100000).
     Relative(f64),
@@ -157,6 +163,7 @@ impl MarkerSize {
 
 /// Where the block of text sits vertically in its box.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum Anchor {
     #[default]
     Top,
@@ -184,6 +191,7 @@ impl Anchor {
 
 /// Inner margins of a text box, in model units.
 #[derive(Clone, Copy, Debug, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct Insets {
     pub left: f64,
     pub top: f64,
@@ -201,6 +209,7 @@ impl Insets {
 /// recorded by how much it drew it smaller. Kept as stated rather than
 /// applied to the run sizes, so the sizes the author chose survive a save.
 #[derive(Clone, Copy, Debug, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct Autofit {
     /// Multiplier on every run's size (`fontScale` / 100000).
     pub font_scale: f64,
@@ -224,6 +233,7 @@ impl Autofit {
 /// `TextBody` is a plain box: every paragraph left-aligned, no bullets,
 /// the canvas's own small inset, text from the top.
 #[derive(Clone, Debug, Default, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct TextBody {
     pub paras: Vec<ParaStyle>,
     pub anchor: Anchor,

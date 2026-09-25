@@ -216,6 +216,13 @@ jobs:
           cargo clippy -p tables-core --features collab --all-targets -- -D warnings
           cargo test -p tables-core --features collab --lib collab
 
+      # RFC-0001 Phase 3: Decks' deck as a Loro movable tree, likewise off
+      # by default.
+      - name: decks-core with the collab feature
+        run: |
+          cargo clippy -p decks-core --features collab --all-targets -- -D warnings
+          cargo test -p decks-core --features collab --lib collab
+
       # C3/C4 for the Rust layers: the ledger's claims must name tests
       # this run actually collected, and none of them may have been
       # skipped or failed. The JUnit report nextest already writes says

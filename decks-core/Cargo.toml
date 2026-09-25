@@ -15,6 +15,18 @@ quick-xml = "0.42"
 # NamedTempFile for extracted images (gh-268): production code writes
 # document-embedded images to /tmp, which must not use predictable paths.
 tempfile = "3"
+# RFC-0001 Phase 3 (feature `collab`, off by default): the deck as a Loro
+# document with a movable tree (collab.rs). `serde` alone derives the
+# model's serialization, which `collab` stores per field. None of these is
+# built without the features.
+loro = { version = "1.16", optional = true }
+serde = { version = "1", features = ["derive"], optional = true }
+serde_json = { version = "1", features = ["float_roundtrip"], optional = true }
+
+[features]
+default = []
+serde = ["dep:serde"]
+collab = ["serde", "dep:loro", "dep:serde_json"]
 
 [dev-dependencies]
 proptest = "1"
