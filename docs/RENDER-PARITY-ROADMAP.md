@@ -223,15 +223,18 @@ green when the metric can read them (a larger OCR scale for small text is
 the next candidate, and it would have to be checked against every app's
 verdicts first, since `compare.py` is shared).
 
-A known difference in behaviour rather than in the metric: **keep with
-next against orphan control** (2026-09-25, found while building
-`letters/keep-with-next`). Take a paragraph set to keep with next that
-ends up as the last line of a page, followed by a three-line paragraph
-that orphan control won't split 1 + 2. LibreOffice leaves the kept
-paragraph at the foot of the page and starts the next page with the
-follower: it gives the keep up. Letters moves both (as, we believe, Word
-does). The fixture uses a one-line follower, where both keep; this case
-has no fixture.
+A known difference in behaviour, not in the metric, and why it has no
+fixture: **keep with next** (2026-09-25). In LibreOffice's rendering of a
+Word document, a paragraph with a direct `<w:keepNext/>` that falls as
+the last line of a page is *not* moved to keep it with the next
+paragraph: probed with a one-line follower, a three-line follower, and
+keepNext with keepLines, all rendered to PDF by soffice, it stays at the
+foot every time. Word, and the OOXML spec, keep it. Letters follows the
+spec (and Word): a keep-with-next paragraph, a Letters Title or
+Subtitle, or a heading moves with the first lines of what follows it. A
+fixture against LibreOffice would measure LibreOffice's behaviour, not
+ours, so this is covered by the engine's unit tests and the format round
+trips instead.
 
 The opposite blind spot existed too, so look at the images of a green
 fixture as well: **`letters/page-numbers`** (2026-09-25) was green on

@@ -292,16 +292,6 @@ def letters(img):
         x.add_paragraph(f"After the note {i + 1}.")
     save(x, "footnote-continued", "A long footnote starts at the foot of page 1 under its reference and continues at the foot of page 2")
 
-    x = doc()
-    for i in range(24):
-        x.add_paragraph(f"Filler line {i + 1}.")
-    p = x.add_paragraph()
-    p.add_run("Chapter Two").bold = True
-    p.paragraph_format.keep_with_next = True
-    # One line: a longer follower brings in orphan control, where
-    # LibreOffice gives up the keep (see the roadmap's known differences).
-    x.add_paragraph("The chapter begins here.")
-    save(x, "keep-with-next", "The bold 'Chapter Two' line is kept with the paragraph after it: both start page 2, page 1 ends at 'Filler line 24.' (25 lines fit a page with the template's paragraph spacing)")
 
     x = doc()
     cols = x.sections[0]._sectPr.find(qn("w:cols"))
