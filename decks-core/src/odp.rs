@@ -13,7 +13,7 @@ use quick_xml::events::Event;
 use quick_xml::Reader;
 use std::io::Write;
 
-use crate::engine::{Deck, MasterSlide, Slide, SlideObject};
+use crate::engine::{Deck, MasterSlide, Slide, SlideObject, Transition};
 use suite_common_core::zip_guard::{BoundedArchive, ZipBudget};
 
 const MIMETYPE: &str = "application/vnd.oasis.opendocument.presentation";
@@ -534,16 +534,14 @@ fn content_xml(deck: &Deck, media: &mut Vec<Media>) -> Result<String, String> {
     }
 
     let mut auto = declare_run_styles(&styles, SLIDE_STYLE_PREFIX);
-    // Per-slide drawing-page styles carry the background fill.
+    // Per-slide drawing-page styles carry the background fill and the
+    // transition.
     for (i, slide) in deck.slides.iter().enumerate() {
-        let bg = slide.background.trim_start_matches('#');
-        if bg.len() == 6 && !bg.eq_ignore_ascii_case("ffffff") {
+        if let Some(props) = drawing_page_props(slide) {
             auto.push_str(&format!(
                 "<style:style style:name=\"dp{}\" style:family=\"drawing-page\">\
-                 <style:drawing-page-properties draw:fill=\"solid\" \
-                 draw:fill-color=\"#{}\"/></style:style>",
+                 <style:drawing-page-properties{props}/></style:style>",
                 i + 1,
-                bg.to_lowercase()
             ));
         }
     }
@@ -553,8 +551,7 @@ fn content_xml(deck: &Deck, media: &mut Vec<Media>) -> Result<String, String> {
     let mut pages = String::new();
     let mut graphics = GraphicStyles::new("gr");
     for (si, slide) in deck.slides.iter().enumerate() {
-        let bg = slide.background.trim_start_matches('#');
-        let dp_attr = if bg.len() == 6 && !bg.eq_ignore_ascii_case("ffffff") {
+        let dp_attr = if drawing_page_props(slide).is_some() {
             format!(" draw:style-name=\"dp{}\"", si + 1)
         } else {
             String::new()
@@ -606,6 +603,8 @@ fn content_xml(deck: &Deck, media: &mut Vec<Media>) -> Result<String, String> {
          xmlns:style=\"urn:oasis:names:tc:opendocument:xmlns:style:1.0\" \
          xmlns:fo=\"urn:oasis:names:tc:opendocument:xmlns:xsl-fo-compatible:1.0\" \
          xmlns:svg=\"urn:oasis:names:tc:opendocument:xmlns:svg-compatible:1.0\" \
+         xmlns:smil=\"urn:oasis:names:tc:opendocument:xmlns:smil-compatible:1.0\" \
+         xmlns:decks=\"{DECKS_NS}\" \
          xmlns:xlink=\"http://www.w3.org/1999/xlink\" \
          office:version=\"1.2\">\
          <office:automatic-styles>{auto}</office:automatic-styles>\
@@ -912,6 +911,51 @@ fn parse_default_graphic_font(xml: &str) -> Option<String> {
     None
 }
 
+/// Decks' own attributes, for what ODF has no word for (Magic Move).
+/// Foreign attributes are allowed and ignored by other readers.
+const DECKS_NS: &str = "https://tuna-os.org/ns/decks/1.0";
+
+/// A slide transition as ODF's SMIL transition attributes (ODF 1.2
+/// 19.524, on style:drawing-page-properties). Magic Move has none: it is
+/// written as a crossfade, which is what LibreOffice then plays, plus
+/// `decks:transition` so we read our own Magic Move back.
+fn transition_attrs(t: Transition) -> Option<String> {
+    let (ty, sub) = match t {
+        Transition::None => return None,
+        Transition::Fade | Transition::MagicMove => ("fade", "crossfade"),
+        Transition::Push => ("pushWipe", "fromRight"),
+        Transition::Wipe => ("barWipe", "leftToRight"),
+    };
+    let magic = if t == Transition::MagicMove { " decks:transition=\"magic-move\"" } else { "" };
+    Some(format!(" presentation:transition-speed=\"medium\" smil:type=\"{ty}\" smil:subtype=\"{sub}\"{magic}"))
+}
+
+/// The transition `smil:type` (and our own marker) name.
+fn transition_of(smil_type: Option<&str>, decks: Option<&str>) -> Transition {
+    if decks == Some("magic-move") {
+        return Transition::MagicMove;
+    }
+    match smil_type {
+        None => Transition::None,
+        Some("pushWipe") | Some("slideWipe") => Transition::Push,
+        Some("barWipe") | Some("irisWipe") | Some("clockWipe") => Transition::Wipe,
+        Some(_) => Transition::Fade,
+    }
+}
+
+/// A slide's drawing-page style properties, or `None` when it needs no
+/// style (white background, no transition).
+fn drawing_page_props(slide: &Slide) -> Option<String> {
+    let bg = slide.background.trim_start_matches('#');
+    let fill = if bg.len() == 6 && !bg.eq_ignore_ascii_case("ffffff") {
+        format!(" draw:fill=\"solid\" draw:fill-color=\"#{}\"", bg.to_lowercase())
+    } else {
+        String::new()
+    };
+    let trans = transition_attrs(slide.transition).unwrap_or_default();
+    (!fill.is_empty() || !trans.is_empty()).then(|| format!("{fill}{trans}"))
+}
+
 /// Collect the named text styles and drawing-page backgrounds a part
 /// defines. Called for `content.xml` and again for `styles.xml`, because a
 /// master page's background lives in the latter's automatic styles while
@@ -920,6 +964,7 @@ fn parse_styles(
     xml: &str,
     text_styles: &mut std::collections::HashMap<String, RunStyle>,
     page_bg: &mut std::collections::HashMap<String, String>,
+    page_transition: &mut std::collections::HashMap<String, Transition>,
 ) {
     {
         let mut reader = Reader::from_str(xml);
@@ -980,6 +1025,13 @@ fn parse_styles(
                                 if let Some(c) = attr(&e, "draw:fill-color") {
                                     page_bg.insert(name.clone(), c.to_lowercase());
                                 }
+                                let t = transition_of(
+                                    attr(&e, "smil:type").as_deref(),
+                                    attr(&e, "decks:transition").as_deref(),
+                                );
+                                if t != Transition::None {
+                                    page_transition.insert(name.clone(), t);
+                                }
                             }
                         }
                     }
@@ -1001,6 +1053,8 @@ fn parse_styles(
 struct Page {
     slide: Slide,
     uses_master: Option<String>,
+    /// The page's `draw:style-name` (its drawing-page style).
+    style: Option<String>,
 }
 
 /// Walk a part's pages, collecting frames, shapes and notes.
@@ -1081,6 +1135,7 @@ fn parse_pages(
 ) -> Result<Vec<Page>, String> {
     let mut pages: Vec<Page> = Vec::new();
     let mut uses_master: Option<String> = None;
+    let mut page_style: Option<String> = None;
     let mut reader = Reader::from_str(xml);
     reader.config_mut().trim_text(false);
     let mut slide: Option<Slide> = None;
@@ -1130,6 +1185,7 @@ fn parse_pages(
                     // style:name, which is an ODF style token and so is
                     // escaped (LibreOffice writes "Title_20_Slide").
                     uses_master = attr(e, "draw:master-page-name");
+                    page_style = attr(e, "draw:style-name");
                     slide = Some(Slide {
                         title: attr(e, "draw:name")
                             .or_else(|| attr(e, "style:name").map(|n| decode_style_name(&n)))
@@ -1355,7 +1411,7 @@ fn parse_pages(
                 "presentation:notes" => in_notes = false,
                 tag if tag == page_tag => {
                     if let Some(s) = slide.take() {
-                        pages.push(Page { slide: s, uses_master: uses_master.take() });
+                        pages.push(Page { slide: s, uses_master: uses_master.take(), style: page_style.take() });
                     }
                 }
                 _ => {}
@@ -1416,8 +1472,9 @@ pub fn read(path: &str) -> Result<Deck, String> {
     let styles = zip.optional_part_to_string("styles.xml", &mut budget);
     let mut text_styles: std::collections::HashMap<String, RunStyle> = Default::default();
     let mut page_bg: std::collections::HashMap<String, String> = Default::default();
-    parse_styles(&content, &mut text_styles, &mut page_bg);
-    parse_styles(&styles, &mut text_styles, &mut page_bg);
+    let mut page_transition: std::collections::HashMap<String, Transition> = Default::default();
+    parse_styles(&content, &mut text_styles, &mut page_bg, &mut page_transition);
+    parse_styles(&styles, &mut text_styles, &mut page_bg, &mut page_transition);
     let mut text_defs = crate::odp_text::TextDefs::default();
     text_defs.read(&content);
     text_defs.read(&styles);
@@ -1467,6 +1524,9 @@ pub fn read(path: &str) -> Result<Deck, String> {
     };
     for (i, page) in slide_pages.into_iter().enumerate() {
         let mut slide = page.slide;
+        if let Some(t) = page.style.as_ref().and_then(|n| page_transition.get(n)) {
+            slide.transition = *t;
+        }
         // A page that names nothing gets a positional label, the same one
         // the pptx reader falls back to, so an unnamed slide does not come
         // back nameless in one format and labelled in the other. Applied

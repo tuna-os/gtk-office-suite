@@ -1391,3 +1391,28 @@ fn impress_takes_the_fallback_of_our_magic_move() {
     assert_eq!(read.slides.len(), 2);
     assert_ne!(read.slides[1].transition, Transition::None, "the fade fallback was kept");
 }
+
+/// Slide transitions we write to odp are ones LibreOffice keeps: after it
+/// rewrites the file each is still what we wrote. LibreOffice has no Magic
+/// Move and plays it as the crossfade we write beside our marker; it even
+/// keeps the marker (a foreign attribute on the drawing-page style), so
+/// Magic Move survives the round trip through it.
+#[test]
+fn impress_keeps_our_odp_transitions() {
+    use decks_core::engine::Transition;
+    if !require_or_skip() { return; }
+    let mut deck = Deck::new();
+    let base = deck.slides[0].clone();
+    deck.slides = Transition::ALL.iter().map(|t| Slide { transition: *t, ..base.clone() }).collect();
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("transitions.odp");
+    decks_core::write_deck(path.to_str().unwrap(), &deck).expect("write odp");
+    let back = convert(&path, "odp").expect("Impress rewrites our odp");
+    let read = decks_core::read_deck(back.to_str().unwrap()).expect("read Impress's odp");
+    let got: Vec<Transition> = read.slides.iter().map(|s| s.transition).collect();
+    assert_eq!(
+        got,
+        Transition::ALL.to_vec(),
+        "Impress's odp"
+    );
+}
