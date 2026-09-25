@@ -3543,11 +3543,16 @@ class DecksInsertBarSmoke(BaseGUITestCase):
         self.gapplication_action(aid, "new-document")
         # do_action, not click(): GTK 4 reports no screen extents over
         # AT-SPI, so a coordinate click lands at the corner.
-        self.wait_until(lambda: self.app.child(name="Insert Shape"), lambda b: b is not None,
+        # A MenuButton's actionable node is its inner toggle button.
+        self.wait_until(lambda: self.app.child(name="Insert Shape", roleName="toggle button"), lambda b: b is not None,
                         description="the Insert Shape button").do_action(0)
-        search = self.wait_until(lambda: self.app.child(name="Search Shapes"), lambda e: e is not None and e.showing,
-                                 description="the shape library to open")
-        search.text = "tri"
+        self.wait_until(lambda: self.app.child(name="Search Shapes"), lambda e: e is not None and e.showing,
+                        description="the shape library to open")
+        from dogtail import rawinput
+
+        # The popover focuses its search entry on opening: typing searches.
+        time.sleep(0.5)
+        rawinput.typeText("tri")
         self.wait_until(lambda: [n.name for n in self.app.findChildren(
                             lambda n: n.roleName == "push button" and n.name in ("Triangle", "Rectangle") and n.showing)],
                         lambda names: names == ["Triangle"], interval=0.25,
