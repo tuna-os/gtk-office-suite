@@ -120,7 +120,9 @@ only with its render-lab fixture green or improving.
 - **Page thumbnails sidebar and a real page view.** Pages' left sidebar of
   page thumbnails depends on the per-page layout engine (Phase 1: render
   tree → pages). Thumbnails are that tree drawn small, not a second
-  layout.
+  layout. ✅ (2026-09-25): the sidebar's Pages view beside the Outline
+  (Ctrl+Alt+P), drawn by `PageView::draw_page_at` from the page view's
+  own typeset; the real page view is ADR 0010's Print Layout.
 - **Word processing vs. page layout.** Pages has two document kinds: flowing
   text, and free placement of text boxes on pages. Start with flowing
   text on real pages; free placement reuses the Decks object model later.
