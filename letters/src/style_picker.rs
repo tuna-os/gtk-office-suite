@@ -49,9 +49,13 @@ pub fn style_name(style: &ParaStyle) -> String {
 /// spacing and the rest of the paragraph's properties are kept.
 pub fn restyled(style: &ParaStyle, name: &str) -> ParaStyle {
     let heading = name.strip_prefix("Heading ").and_then(|l| l.parse::<u8>().ok()).filter(|l| (1..=6).contains(l));
+    // A Title or Subtitle stays on the page of what follows it (Letters'
+    // own; a Word document's Title says so itself, or not).
+    let titled = matches!(name, "Title" | "Subtitle");
     ParaStyle {
         heading,
-        named_style: matches!(name, "Title" | "Subtitle").then(|| name.to_string()),
+        keep_with_next: titled || (style.keep_with_next && heading.is_some()),
+        named_style: titled.then(|| name.to_string()),
         block_quote: name == "Quote",
         // A code block keeps its language if it was one already.
         code_block: (name == "Code").then(|| style.code_block.clone().unwrap_or_default()),

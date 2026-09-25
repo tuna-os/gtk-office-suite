@@ -396,6 +396,53 @@ fn a_line_moves_to_the_next_page_with_its_note_when_they_do_not_both_fit() {
     assert_eq!(lay(&d).page_of_paragraph(45), Some(0));
 }
 
+/// Footnote lines on page `p`: (note, line index).
+fn note_lines_on(t: &RenderTree, p: usize) -> Vec<(usize, usize)> {
+    t.pages[p]
+        .items
+        .iter()
+        .filter_map(|i| match i { Item::Line { source: Source::Footnote(n), line, .. } => Some((*n, *line)), _ => None })
+        .collect()
+}
+
+#[test]
+fn a_footnote_too_long_for_its_page_continues_on_the_next() {
+    // 40 lines, then a line referencing an 8-line note (its first line
+    // 15 pt, holding the number at body size; the rest 12.5 pt): below the
+    // reference there is 76.9 pt after the separator, room for 5 of them
+    // (65 pt; 6 would take 77.5). 5 stay with the reference and 3 continue
+    // on page 2, at the foot and ahead of anything else there.
+    let mut d = doc_of(40, "x");
+    d.paragraphs.push(with_note("noted", 0));
+    d.paragraphs.extend(doc_of(3, "after").paragraphs);
+    d.footnotes = vec!["word ".repeat(8 * 90 / 5 - 10).trim().to_string()];
+    let t = lay(&d);
+    assert_eq!(t.page_of_paragraph(40), Some(0), "the reference stays on page 1");
+    let one = note_lines_on(&t, 0);
+    let two = note_lines_on(&t, 1);
+    assert_eq!(one.len() + two.len(), 8, "every line of the note is drawn once: {one:?} {two:?}");
+    assert_eq!(one, (0..5).map(|k| (0, k)).collect::<Vec<_>>());
+    assert_eq!(two, [(0, 5), (0, 6), (0, 7)]);
+    // Page 1 is full: what follows the reference goes to page 2, where the
+    // continued lines take room at the foot.
+    assert_eq!(t.page_of_paragraph(41), Some(1));
+    let foot = 841.9 - 72.0;
+    let last = t.pages[1].items.iter().filter_map(|i| match i { Item::Line { source: Source::Footnote(_), top_pt, height_pt, .. } => Some(top_pt + height_pt), _ => None }).fold(0.0, f64::max);
+    assert!((last - foot).abs() < 1e-6);
+}
+
+#[test]
+fn a_paragraph_kept_with_the_next_moves_with_it() {
+    // 45 lines, then a one-line paragraph kept with a two-line one: the
+    // first fits on page 1 but its follower does not, so both go to page 2.
+    let mut d = doc_of(45, "x");
+    d.paragraphs.push(Paragraph { style: ParaStyle { keep_with_next: true, ..Default::default() }, runs: vec![Run::plain("Title")] });
+    d.paragraphs.push(Paragraph { style: ParaStyle::default(), runs: vec![Run::plain("word ".repeat(20).trim())] });
+    assert_eq!(lay(&d).page_of_paragraph(45), Some(1), "kept with its follower");
+    d.paragraphs[45].style.keep_with_next = false;
+    assert_eq!(lay(&d).page_of_paragraph(45), Some(0), "not kept: it fits on page 1");
+}
+
 #[test]
 fn a_smart_chip_is_one_object_drawn_as_a_pill() {
     let mut d = doc_of(1, "Due ");
