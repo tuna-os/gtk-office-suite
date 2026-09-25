@@ -11,7 +11,7 @@ suite-common = { path = "../suite-common" }
 decks-core = { path = "../decks-core" }
 suite-export = { path = "../suite-export" }
 cairo-rs = { version = "0.22", features = ["png"] }
-pango = { version = "0.22" }
+pango = { version = "0.22", features = ["v1_44"] }
 pangocairo = { version = "0.22" }
 pulldown-cmark = "0.13"
 image = "0.25"

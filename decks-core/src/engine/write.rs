@@ -101,7 +101,21 @@ fn write_body_pr<W: std::io::Write>(writer: &mut Writer<W>, body: &TextBody) -> 
     if body.anchor != Anchor::Top {
         b.push_attribute(("anchor", body.anchor.to_drawingml()));
     }
-    writer.write_event(Event::Empty(b))?;
+    let Some(fit) = body.autofit else {
+        writer.write_event(Event::Empty(b))?;
+        return Ok(());
+    };
+    writer.write_event(Event::Start(b))?;
+    let mut n = BytesStart::new("a:normAutofit");
+    let per = |v: f64| ((v * 100_000.0).round() as i64).to_string();
+    if (fit.font_scale - 1.0).abs() > 1e-9 {
+        n.push_attribute(("fontScale", per(fit.font_scale).as_str()));
+    }
+    if fit.line_reduction.abs() > 1e-9 {
+        n.push_attribute(("lnSpcReduction", per(fit.line_reduction).as_str()));
+    }
+    writer.write_event(Event::Empty(n))?;
+    writer.write_event(Event::End(BytesEnd::new("a:bodyPr")))?;
     Ok(())
 }
 
@@ -208,13 +222,22 @@ fn write_paragraphs<W: std::io::Write>(
         if run.style.italic { r_pr.push_attribute(("i", "1")); }
         if run.style.underline { r_pr.push_attribute(("u", "sng")); }
         if run.style.strikethrough { r_pr.push_attribute(("strike", "sngStrike")); }
-        if let Some(color) = &run.style.color {
+        let family = run.style.font_family.as_deref().map(str::trim).filter(|f| !f.is_empty());
+        if run.style.color.is_some() || family.is_some() {
             writer.write_event(Event::Start(r_pr))?;
-            writer.write_event(Event::Start(BytesStart::new("a:solidFill")))?;
-            let mut clr = BytesStart::new("a:srgbClr");
-            clr.push_attribute(("val", color.to_uppercase().as_str()));
-            writer.write_event(Event::Empty(clr))?;
-            writer.write_event(Event::End(BytesEnd::new("a:solidFill")))?;
+            // CT_TextCharacterProperties order: the fill, then a:latin.
+            if let Some(color) = &run.style.color {
+                writer.write_event(Event::Start(BytesStart::new("a:solidFill")))?;
+                let mut clr = BytesStart::new("a:srgbClr");
+                clr.push_attribute(("val", color.to_uppercase().as_str()));
+                writer.write_event(Event::Empty(clr))?;
+                writer.write_event(Event::End(BytesEnd::new("a:solidFill")))?;
+            }
+            if let Some(family) = family {
+                let mut latin = BytesStart::new("a:latin");
+                latin.push_attribute(("typeface", family));
+                writer.write_event(Event::Empty(latin))?;
+            }
             writer.write_event(Event::End(BytesEnd::new("a:rPr")))?;
         } else {
             writer.write_event(Event::Empty(r_pr))?;

@@ -52,6 +52,19 @@ fn place(
     let empty: Vec<bool> = paras.iter().map(|p| p.iter().all(|r| r.text.trim().is_empty())).collect();
     let marks = markers(&styles, &empty);
 
+    // A shrunk box (a:normAutofit fontScale/lnSpcReduction) draws every
+    // size smaller and its lines closer, as the file records.
+    let (font_k, line_factor) = match body.autofit {
+        Some(a) => (a.font_scale, (1.0 - a.line_reduction) as f32),
+        None => (1.0, 0.0),
+    };
+    let text_scale = scale * font_k;
+    let mut desc = desc.clone();
+    if font_k != 1.0 {
+        desc.set_absolute_size(desc.size() as f64 * font_k);
+    }
+    let desc = &desc;
+
     let mut placed = Vec::new();
     let mut y = 0.0;
     for (i, (para, st)) in paras.iter().zip(&styles).enumerate() {
@@ -62,6 +75,7 @@ fn place(
         layout.set_width((g.text_width * pango::SCALE as f64) as i32);
         layout.set_wrap(pango::WrapMode::WordChar);
         layout.set_indent((g.first_indent * pango::SCALE as f64) as i32);
+        layout.set_line_spacing(line_factor);
         match st.align {
             ParaAlign::Left => layout.set_alignment(pango::Alignment::Left),
             ParaAlign::Center => layout.set_alignment(pango::Alignment::Center),
@@ -71,9 +85,9 @@ fn place(
         // An empty paragraph still has its runs' height: give it a space.
         if para_text.is_empty() {
             let style = para.first().map(|r| r.style.clone()).unwrap_or_default();
-            set_styled_text(&layout, " ", &[Run { text: " ".into(), style }], scale);
+            set_styled_text(&layout, " ", &[Run { text: " ".into(), style }], text_scale);
         } else {
-            set_styled_text(&layout, &para_text, para, scale);
+            set_styled_text(&layout, &para_text, para, text_scale);
         }
         let line_h = layout
             .line_readonly(0)
@@ -90,12 +104,15 @@ fn place(
             ml.set_font_description(Some(desc));
             let style = para.first().map(|r| r.style.clone()).unwrap_or_default();
             let style = decks_core::engine::RunStyle { bold: false, italic: false, underline: false, ..style };
-            set_styled_text(&ml, m, &[Run { text: m.clone(), style }], scale);
+            set_styled_text(&ml, m, &[Run { text: m.clone(), style }], text_scale);
             (ml, mx)
         });
         let h = layout.pixel_size().1 as f64;
         placed.push(Placed { layout, marker, x: g.text_x, y });
-        y += h + st.space_after.resolve(line_h / scale) * scale;
+        // Pango tightens the lines after a paragraph's first; the first
+        // line's share of the reduction comes off the advance.
+        let first_cut = body.autofit.map_or(0.0, |a| a.line_reduction) * line_h;
+        y += h - first_cut + st.space_after.resolve(line_h / scale) * scale;
     }
     let dy = body.anchor.offset(inner_h, y);
     for p in &mut placed {
@@ -163,6 +180,21 @@ mod tests {
         let (ml, mx) = placed[0].marker.as_ref().expect("a marker");
         assert_eq!(*mx, 10.0, "marker at margin + indent");
         assert_eq!(ml.text().as_str(), "•");
+    }
+
+    #[test]
+    fn a_shrunk_box_draws_its_text_smaller_and_tighter() {
+        use decks_core::engine::Autofit;
+        let big = vec![Run { text: "a\nb".into(), style: RunStyle { font_size_hp: Some(48), ..Default::default() } }];
+        let plain = TextBody { insets: Some(Insets { left: 0.0, top: 0.0, right: 0.0, bottom: 0.0 }), ..Default::default() };
+        let shrunk = TextBody { autofit: Some(Autofit { font_scale: 0.5, line_reduction: 0.2 }), ..plain.clone() };
+        let rect = (0.0, 0.0, 300.0, 300.0);
+        let a = place(&ctx(), "a\nb", &big, &plain, rect, 1.0, &desc());
+        let b = place(&ctx(), "a\nb", &big, &shrunk, rect, 1.0, &desc());
+        let h = |p: &[Placed]| p[1].y - p[0].y;
+        assert!(h(&b) < h(&a) * 0.5, "half the size and 20% tighter: {} vs {}", h(&b), h(&a));
+        let w = |p: &[Placed]| p[0].layout.pixel_size().0;
+        assert!(w(&b) < w(&a));
     }
 
     #[test]

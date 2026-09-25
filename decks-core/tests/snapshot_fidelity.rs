@@ -1418,6 +1418,7 @@ fn paragraph_styles_survive_a_snapshot() {
         ],
         anchor: Anchor::Middle,
         insets: Some(Insets { left: 9.6, top: 4.8, right: 9.6, bottom: 4.8 }),
+        autofit: Some(decks_core::engine::Autofit { font_scale: 0.625, line_reduction: 0.2 }),
     };
     let deck = deck_of(vec![slide_of(
         vec![SlideObject::TextBox {
@@ -1438,6 +1439,10 @@ fn paragraph_styles_survive_a_snapshot() {
         assert_eq!(text, "a\nb\nc", "{kind}");
         assert_eq!(got.paras.len(), 3, "{kind}: {got:?}");
         assert_eq!(got.anchor, body.anchor, "{kind}");
+        // ODF's shrink-to-fit has no stated scale; only pptx keeps it.
+        if kind == "pptx" {
+            assert_eq!(got.autofit, body.autofit);
+        }
         for (a, b) in got.paras.iter().zip(&body.paras) {
             assert_eq!((a.align, a.level, &a.bullet), (b.align, b.level, &b.bullet), "{kind}");
             assert!((a.margin_left - b.margin_left).abs() < 1e-3 && (a.indent - b.indent).abs() < 1e-3, "{kind}: {a:?}");
@@ -1453,5 +1458,34 @@ fn paragraph_styles_survive_a_snapshot() {
         }
         let (gi, bi) = (got.insets.unwrap(), body.insets.unwrap());
         assert!((gi.left - bi.left).abs() < 1e-3 && (gi.top - bi.top).abs() < 1e-3, "{kind}");
+    }
+}
+
+/// A run's own typeface survives our round trip in both formats. It was
+/// neither read, drawn nor written, so every run came back in the master's
+/// font.
+#[test]
+fn a_runs_font_family_survives_a_snapshot() {
+    let runs = vec![
+        Run { text: "serif ".into(), style: RunStyle { font_family: Some("Liberation Serif".into()), ..RunStyle::default() } },
+        Run { text: "plain".into(), style: RunStyle::default() },
+    ];
+    let deck = deck_of(vec![slide_of(
+        vec![SlideObject::TextBox {
+            text: "serif plain".into(),
+            x: 10.0, y: 10.0, w: 300.0, h: 80.0,
+            rotation: 0.0,
+            runs,
+            body: Default::default(),
+        }],
+        "",
+        "#ffffff",
+    )]);
+    for kind in FORMATS {
+        let back = through_a_snapshot(&deck, kind, "font-family");
+        let SlideObject::TextBox { runs, .. } = &back.slides[0].objects[0] else { panic!("{kind}: not a text box") };
+        let families: Vec<Option<&str>> = runs.iter().map(|r| r.style.font_family.as_deref()).collect();
+        assert_eq!(families.first().copied().flatten(), Some("Liberation Serif"), "{kind}: {runs:?}");
+        assert!(families.last().copied().flatten() != Some("Liberation Serif"), "{kind}: {runs:?}");
     }
 }

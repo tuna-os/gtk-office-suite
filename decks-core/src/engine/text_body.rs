@@ -162,6 +162,25 @@ impl Insets {
     pub const DRAWINGML: Insets = Insets { left: 9.6, top: 4.8, right: 9.6, bottom: 4.8 };
 }
 
+/// Shrink-on-overflow as the file states it (`a:normAutofit`): the
+/// application that last laid the box out found the text too big and
+/// recorded by how much it drew it smaller. Kept as stated rather than
+/// applied to the run sizes, so the sizes the author chose survive a save.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Autofit {
+    /// Multiplier on every run's size (`fontScale` / 100000).
+    pub font_scale: f64,
+    /// Fraction taken off the line spacing (`lnSpcReduction` / 100000).
+    pub line_reduction: f64,
+}
+
+impl Autofit {
+    /// Nothing shrunk: the box autofits, but its text currently fits.
+    pub fn is_identity(&self) -> bool {
+        (self.font_scale - 1.0).abs() < 1e-9 && self.line_reduction.abs() < 1e-9
+    }
+}
+
 /// A text box's paragraph layout and placement.
 ///
 /// `paras` runs parallel to the box's paragraphs (its text split on
@@ -176,6 +195,8 @@ pub struct TextBody {
     pub anchor: Anchor,
     /// `None`: the canvas's default inset.
     pub insets: Option<Insets>,
+    /// `Some` when the box shrinks text on overflow.
+    pub autofit: Option<Autofit>,
 }
 
 impl TextBody {
@@ -184,6 +205,7 @@ impl TextBody {
     pub fn is_plain(&self) -> bool {
         self.anchor == Anchor::Top
             && self.insets.is_none()
+            && self.autofit.is_none()
             && self.paras.iter().all(|p| *p == ParaStyle::default())
     }
 

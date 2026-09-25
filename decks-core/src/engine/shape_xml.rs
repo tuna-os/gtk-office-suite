@@ -129,6 +129,10 @@ pub(super) fn parse_tree(xml: &str) -> Node {
 pub(crate) struct Theme {
     colors: HashMap<String, Color>,
     fmt: Node,
+    /// `a:fontScheme`'s heading (`+mj-lt`) and body (`+mn-lt`) Latin
+    /// typefaces, when the part names them.
+    major_font: Option<String>,
+    minor_font: Option<String>,
 }
 
 impl Default for Theme {
@@ -163,6 +167,8 @@ impl Default for Theme {
             .into_iter()
             .next()
             .unwrap_or_default(),
+            major_font: None,
+            minor_font: None,
         }
     }
 }
@@ -179,6 +185,20 @@ impl Theme {
             other => other,
         };
         self.colors.get(slot).copied()
+    }
+
+    /// A run's `a:latin typeface`, with the theme references `+mj-lt`
+    /// (heading font) and `+mn-lt` (body font) resolved. `None` for a
+    /// reference the theme doesn't answer, or an empty name.
+    pub(super) fn typeface(&self, name: &str) -> Option<String> {
+        let name = match name {
+            "+mj-lt" => self.major_font.as_deref()?,
+            "+mn-lt" => self.minor_font.as_deref()?,
+            n if n.starts_with('+') => return None,
+            n => n,
+        };
+        let name = name.trim();
+        (!name.is_empty()).then(|| name.to_string())
     }
 
     /// The `n`th (1-based) child of a format-scheme list such as
@@ -204,6 +224,19 @@ pub(crate) fn theme(theme_xml: &str) -> Theme {
                 theme.colors.insert(slot.name.trim_start_matches("a:").to_string(), c);
             }
         }
+    }
+    if let Some(fonts) = root.find("a:fontScheme") {
+        let latin = |n: &str| {
+            fonts
+                .child(n)
+                .and_then(|f| f.child("a:latin"))
+                .and_then(|l| l.attr("typeface"))
+                .map(str::trim)
+                .filter(|t| !t.is_empty())
+                .map(String::from)
+        };
+        theme.major_font = latin("a:majorFont");
+        theme.minor_font = latin("a:minorFont");
     }
     if let Some(fmt) = root.find("a:fmtScheme") {
         // Keep the part's own lists; fall back to the default's per list.
