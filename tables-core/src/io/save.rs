@@ -525,28 +525,7 @@ fn cell_format(
 
 /// Map our NumberFormat onto an xlsx number-format code, if non-default.
 fn xlsx_num_format(nf: &suite_common_core::format::NumberFormat) -> Option<String> {
-    use suite_common_core::format::NumberFormatKind::*;
-    match &nf.kind {
-        General => None,
-        Number(d) => Some(if *d == 0 {
-            "#,##0".to_string()
-        } else {
-            format!("#,##0.{}", "0".repeat(*d as usize))
-        }),
-        Currency(sym, d) => Some(if *d == 0 {
-            format!("\"{}\"#,##0", sym)
-        } else {
-            format!("\"{}\"#,##0.{}", sym, "0".repeat(*d as usize))
-        }),
-        Percent(d) => Some(if *d == 0 {
-            "0%".to_string()
-        } else {
-            format!("0.{}%", "0".repeat(*d as usize))
-        }),
-        Date(_) => Some("yyyy-mm-dd".to_string()),
-        Fraction(d) => Some(format!("# {}/{}", "?".repeat(*d as usize), "?".repeat(*d as usize))),
-        _ => None,
-    }
+    super::numfmt::code_for_kind(&nf.kind)
 }
 
 /// The SheetModel default column width in px (COL_WIDTH).

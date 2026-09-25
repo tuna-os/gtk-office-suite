@@ -3,6 +3,7 @@ pub mod atomic_save;
 pub mod autosave;
 pub mod palette;
 pub mod format;
+pub mod format_code;
 pub mod undo;
 pub mod ops;
 pub mod events;
