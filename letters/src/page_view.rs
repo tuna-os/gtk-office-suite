@@ -35,6 +35,9 @@ mod imp {
         pub buffer: RefCell<Option<gtk::TextBuffer>>,
         /// Zoom percentage (100 = physical size).
         pub zoom: Cell<f64>,
+        /// The caret's blink phase: drawn when true.
+        pub caret_on: Cell<bool>,
+        pub blink: RefCell<Option<glib::SourceId>>,
     }
 
     #[glib::object_subclass]
@@ -53,8 +56,15 @@ mod imp {
     }
 
     impl ObjectImpl for PageView {
+        fn dispose(&self) {
+            if let Some(id) = self.blink.take() {
+                id.remove();
+            }
+        }
+
         fn constructed(&self) {
             self.parent_constructed();
+            self.caret_on.set(true);
             self.zoom.set(100.0);
         }
     }
@@ -179,7 +189,8 @@ mod imp {
                     let _ = cr.fill();
                 }
                 typeset.draw_page(&cr, index);
-                if let (true, Some(c)) = (chrome && obj.has_focus() && selection.is_empty(), caret) {
+                let visible = self.caret_on.get() || self.blink.borrow().is_none();
+                if let (true, Some(c)) = (chrome && visible && obj.has_focus() && selection.is_empty(), caret) {
                     if c.page == index {
                         cr.set_source_rgb(0.0, 0.0, 0.0);
                         cr.rectangle(c.x_pt, c.top_pt, 1.0 / scale, c.height_pt);
@@ -234,6 +245,46 @@ impl PageView {
     /// The buffer this view edits.
     pub fn buffer(&self) -> Option<gtk::TextBuffer> {
         self.imp().buffer.borrow().clone()
+    }
+
+    /// Show the caret and (re)start its blinking, as GtkTextView does: per
+    /// the gtk-cursor-blink, -blink-time and -blink-timeout settings, and
+    /// solid after the timeout, while unfocused, and in a render-lab
+    /// capture (where it is left out altogether, like the Draft editor's).
+    pub fn restart_blink(&self) {
+        let imp = self.imp();
+        imp.caret_on.set(true);
+        if let Some(id) = imp.blink.take() {
+            id.remove();
+        }
+        self.queue_draw();
+        let settings = self.settings();
+        if !settings.is_gtk_cursor_blink() || !self.is_focus() || suite_common::render_dump::active() {
+            return;
+        }
+        let period = std::time::Duration::from_millis((settings.gtk_cursor_blink_time().max(100) / 2) as u64);
+        let timeout = settings.gtk_cursor_blink_timeout();
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(timeout.max(1) as u64);
+        let view = self.downgrade();
+        let id = glib::timeout_add_local(period, move || {
+            let Some(view) = view.upgrade() else { return glib::ControlFlow::Break };
+            let imp = view.imp();
+            if std::time::Instant::now() >= deadline || !view.is_focus() {
+                imp.caret_on.set(true);
+                imp.blink.take();
+                view.queue_draw();
+                return glib::ControlFlow::Break;
+            }
+            imp.caret_on.set(!imp.caret_on.get());
+            view.queue_draw();
+            glib::ControlFlow::Continue
+        });
+        imp.blink.replace(Some(id));
+    }
+
+    /// Whether the caret is in the "on" phase of its blink.
+    pub fn caret_visible(&self) -> bool {
+        self.imp().caret_on.get() || self.imp().blink.borrow().is_none()
     }
 
     pub(crate) fn set_buffer(&self, buf: &gtk::TextBuffer) {

@@ -31,7 +31,8 @@ pub fn make_editable(view: &PageView, buf: &gtk::TextBuffer) {
         buf.connect_mark_set(move |_, _, mark| {
             let Some(v) = v.upgrade() else { return };
             if matches!(mark.name().as_deref(), Some("insert") | Some("selection_bound")) {
-                v.queue_draw();
+                // A moved caret is shown at once, then blinks again.
+                v.restart_blink();
             }
         });
     }
@@ -102,12 +103,12 @@ pub fn make_editable(view: &PageView, buf: &gtk::TextBuffer) {
         let (i1, v1) = (im.clone(), view.clone());
         focus.connect_enter(move |_| {
             i1.focus_in();
-            v1.queue_draw();
+            v1.restart_blink();
         });
         let (i2, v2) = (im.clone(), view.clone());
         focus.connect_leave(move |_| {
             i2.focus_out();
-            v2.queue_draw();
+            v2.restart_blink();
         });
         view.add_controller(focus);
     }
@@ -422,6 +423,45 @@ mod tests {
             buf.select_range(&buf.iter_at_offset(0), &buf.iter_at_offset(5));
             let sel = imp.selection();
             assert_eq!((sel[0].start(), sel[0].length()), (0, 5));
+        });
+    }
+
+    #[test]
+    fn the_caret_blinks_per_the_gtk_settings_and_is_solid_without_focus() {
+        gtk_test(|| {
+            let (view, buf) = editable("hello");
+            let win = gtk::Window::new();
+            win.set_child(Some(&view));
+            win.present();
+            let settings = view.settings();
+            settings.set_gtk_cursor_blink(true);
+            settings.set_gtk_cursor_blink_time(200);
+            view.grab_focus();
+            let ctx = glib::MainContext::default();
+            let until = |ms: u64| {
+                let end = std::time::Instant::now() + std::time::Duration::from_millis(ms);
+                while std::time::Instant::now() < end {
+                    ctx.iteration(false);
+                }
+            };
+            buf.place_cursor(&buf.iter_at_offset(2));
+            assert!(view.caret_visible(), "a moved caret shows at once");
+            assert!(view.is_focus(), "the page view has its window's focus");
+            {
+                // Over several half-periods the caret is off at least once.
+                let mut saw_off = false;
+                for _ in 0..8 {
+                    until(60);
+                    saw_off |= !view.caret_visible();
+                }
+                assert!(saw_off, "the caret blinks");
+            }
+            // gtk-cursor-blink off: solid.
+            settings.set_gtk_cursor_blink(false);
+            view.restart_blink();
+            until(300);
+            assert!(view.caret_visible(), "no blinking when the setting is off");
+            win.destroy();
         });
     }
 

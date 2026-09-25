@@ -988,6 +988,7 @@ impl LettersWindow {
                 if let Some(buf) = active_buffer(tv) {
                     update_word_count(&buf, &wc);
                     update_style_readout(&buf, &sl);
+                    crate::live::sync_actions(&buf);
                 }
             });
         }

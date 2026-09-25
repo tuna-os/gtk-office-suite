@@ -26,9 +26,8 @@
 // thousands of seeded random ones, the model equals a fresh
 // `capture_from_buffer` (below).
 
-use gtk4::{self as gtk, glib, prelude::*};
+use gtk4::{self as gtk, gio, glib, prelude::*};
 use letters_core::edit::{self, History, Op};
-use letters_core::layout::is_object;
 use letters_core::{Document, Paragraph};
 use std::cell::RefCell;
 use std::rc::Rc;
@@ -139,8 +138,18 @@ impl LiveModel {
             }
         };
         {
-            let f = stale_on(&model);
-            buf.connect_insert_paintable(move |_, _, _| f());
+            // An inline image is one object char: follow it like text.
+            let m = Rc::downgrade(&model);
+            buf.connect_closure(
+                "insert-paintable",
+                true,
+                glib::closure_local!(move |b: gtk::TextBuffer, end: gtk::TextIter, _p: gtk::gdk::Paintable| {
+                    let Some(m) = m.upgrade() else { return };
+                    let Ok(mut m) = m.try_borrow_mut() else { return };
+                    let from = (end.offset().max(0) as usize).saturating_sub(1);
+                    m.changed(&b, from, from, 1, 0, false);
+                }),
+            );
         }
         {
             let f = stale_on(&model);
@@ -163,6 +172,15 @@ impl LiveModel {
                     m.resolve(b);
                     m.history.end();
                 }
+                sync_actions(b);
+            });
+        }
+        {
+            // A change outside a user action (a formatting command, the
+            // page view's model-first edits) is a step of its own.
+            buf.connect_changed(|b| {
+                let b = b.clone();
+                glib::idle_add_local_once(move || sync_actions(&b));
             });
         }
         // The (usually empty) buffer is the starting document.
@@ -181,56 +199,54 @@ impl LiveModel {
         }
     }
 
-    /// Follow a change by re-reading only the lines it touched. `false`
-    /// when that cannot be exact (tables, objects): read the whole buffer.
+    /// Follow a change by re-reading only the lines it touched, widened to
+    /// whole tables (and any line that could join one). `false` when that
+    /// cannot be exact: then the whole buffer is read.
     fn follow_locally(&mut self, buf: &gtk::TextBuffer, from: usize, old_to: usize, new_len: usize, breaks: isize, typing: bool) -> bool {
         if self.starts.len() != self.doc.paragraphs.len() {
             return false;
         }
         let (p0, _) = crate::bridge::paragraph_offset(&self.doc, &self.starts, from);
         let (p1, _) = crate::bridge::paragraph_offset(&self.doc, &self.starts, old_to);
-        let p1 = p1.max(p0);
-        let unfollowable = |p: &Paragraph| p.style.table_cell.is_some() || p.runs.iter().any(is_object);
-        if self.doc.paragraphs[p0..=p1].iter().any(unfollowable) {
-            return false;
-        }
-        // The same lines, now: from the line holding `from` (unchanged by
-        // the edit, which happens at or after it) down by the paragraph
-        // count, adjusted for breaks added or removed.
-        let first_line = buf.iter_at_offset(from as i32).line();
-        let last_line = first_line + (p1 - p0) as i32 + breaks as i32;
-        if last_line < first_line || last_line >= buf.line_count() {
+        let (s, e) = widen(&self.doc.paragraphs, p0, p1.max(p0));
+        // The region's first line is unchanged by the edit: it starts at
+        // or before `from`.
+        let first_line = buf.iter_at_offset(self.starts[s].min(from) as i32).line();
+        let old_lines = line_count(&self.doc.paragraphs[s..=e]) as isize;
+        let last_line = first_line as isize + old_lines - 1 + breaks;
+        if last_line < first_line as isize || last_line >= buf.line_count() as isize {
             return false;
         }
         let Some(start) = buf.iter_at_line(first_line) else { return false };
-        let Some(mut end) = buf.iter_at_line(last_line) else { return false };
+        let Some(mut end) = buf.iter_at_line(last_line as i32) else { return false };
         if !end.ends_line() {
             end.forward_to_line_end();
         }
-        // A pipe anywhere near is a table in the making or unmaking:
-        // `capture_tables` looks at neighbouring lines, so read it all.
-        let mut around_start = start;
-        around_start.backward_line();
-        let mut around_end = end;
-        around_end.forward_line();
-        if !around_end.ends_line() {
-            around_end.forward_to_line_end();
-        }
-        if buf.text(&around_start, &around_end, true).contains('|') {
-            return false;
-        }
-        let (paras, starts) = crate::bridge::capture_span(buf, start.offset(), end.offset());
-        if paras.len() as isize != (p1 - p0 + 1) as isize + breaks || paras.iter().any(unfollowable) {
-            return false;
-        }
+        let (mut paras, mut starts) = crate::bridge::capture_span(buf, start.offset(), end.offset());
+        let first_id = tables_before(&self.doc.paragraphs, s) + 1;
+        crate::bridge::capture_tables(&mut paras, &mut starts, first_id);
         let mut next = self.doc.clone();
-        next.paragraphs.splice(p0..=p1, paras);
+        let old_tables = table_ids(&self.doc.paragraphs[s..=e]).len() as i64;
+        let new_tables = table_ids(&paras).len() as i64;
+        next.paragraphs.splice(s..=e, paras.iter().cloned());
+        // Tables are numbered in document order: tables after the region
+        // shift when it gains or loses one.
+        if new_tables != old_tables {
+            let after = s + paras.len();
+            for p in &mut next.paragraphs[after..] {
+                if let Some(c) = &mut p.style.table_cell {
+                    c.table = (i64::from(c.table) + new_tables - old_tables) as u32;
+                }
+            }
+        }
         let ops = edit::diff(&self.doc, &next);
         let Ok(inverse) = edit::apply_all(&mut self.doc, &ops) else { return false };
-        debug_assert_eq!(self.doc.paragraphs, next.paragraphs);
+        if self.doc.paragraphs != next.paragraphs {
+            return false;
+        }
         let delta = new_len as isize - (old_to - from) as isize;
-        let tail: Vec<usize> = self.starts[p1 + 1..].iter().map(|s| (*s as isize + delta) as usize).collect();
-        self.starts.truncate(p0);
+        let tail: Vec<usize> = self.starts[e + 1..].iter().map(|x| (*x as isize + delta) as usize).collect();
+        self.starts.truncate(s);
         self.starts.extend(starts);
         self.starts.extend(tail);
         self.history.set_merge(typing);
@@ -292,33 +308,39 @@ impl LiveModel {
         }
         let max_tail = pa.len().min(pb.len()) - head;
         let tail = pa.iter().rev().zip(pb.iter().rev()).take(max_tail).take_while(|(x, y)| x == y).count();
-        let (mut h, mut ea, mut eb) = (head, pa.len() - tail, pb.len() - tail);
-        // Whole lists: a changed item renumbers the items after it.
-        while h > 0 && pa[h - 1].style.list != letters_core::ListKind::None && pb[h - 1].style.list != letters_core::ListKind::None {
-            h -= 1;
+        // The changed paragraphs, widened on both sides to whole tables and
+        // whole lists (a changed item renumbers the rest), until the
+        // widenings agree. `h` is the first; `ta` paragraphs at the end are
+        // unchanged.
+        let (mut h, mut t) = (head, tail);
+        loop {
+            let (sa, ea) = widen_for_render(pa, h, (pa.len() - t).max(h + 1) - 1);
+            let (sb, eb) = widen_for_render(pb, h, (pb.len() - t).max(h + 1) - 1);
+            let (nh, nt) = (sa.min(sb), (pa.len() - 1 - ea).min(pb.len() - 1 - eb).min(t));
+            if (nh, nt) == (h, t) {
+                break;
+            }
+            (h, t) = (nh, nt);
         }
-        while ea < pa.len() && eb < pb.len() && pa[ea].style.list != letters_core::ListKind::None {
-            ea += 1;
-            eb += 1;
-        }
-        // Keep both sides non-empty, as a line range must be.
+        let (ea, eb) = (pa.len() - t, pb.len() - t);
+        // A line range must not be empty on either side.
         if h == ea || h == eb {
             if h > 0 {
                 h -= 1;
             } else {
-                ea += 1;
-                eb += 1;
+                t = t.saturating_sub(1);
             }
         }
+        let (ea, eb) = (pa.len() - t, pb.len() - t);
         let caret_para = head.min(pb.len() - 1);
-        let hard = |p: &Paragraph| p.style.table_cell.is_some() || p.runs.iter().any(is_object);
         self.projecting = true;
-        if ea > pa.len() || eb > pb.len() || pa[h..ea].iter().chain(&pb[h..eb]).any(hard) || self.starts.len() != pa.len() {
+        if self.starts.len() != pa.len() || ea <= h || eb <= h {
             crate::bridge::render_to_buffer(&self.doc, buf);
             self.starts = crate::bridge::capture_with_starts(buf).1;
         } else {
-            let line_of = |p: usize| buf.iter_at_offset(self.starts[p] as i32).line();
-            let (Some(mut s), Some(mut e)) = (buf.iter_at_line(line_of(h)), buf.iter_at_line(line_of(ea - 1))) else {
+            let first_line = buf.iter_at_offset(self.starts[h] as i32).line();
+            let old_lines = line_count(&pa[h..ea]) as i32;
+            let (Some(mut s), Some(mut e)) = (buf.iter_at_line(first_line), buf.iter_at_line(first_line + old_lines - 1)) else {
                 self.projecting = false;
                 return;
             };
@@ -326,18 +348,19 @@ impl LiveModel {
                 e.forward_to_line_end();
             }
             let old_len = e.offset() - s.offset();
-            let first_line = s.line();
             buf.delete(&mut s, &mut e);
-            let ordinals = letters_core::lists::ordinals(pb.iter().map(|p| &p.style));
-            let paras: Vec<&Paragraph> = pb[h..eb].iter().collect();
+            let lines = crate::bridge::render_lines(&pb[h..eb]);
+            let ordinals = letters_core::lists::ordinals(lines.iter().map(|p| &p.style));
+            let lines: Vec<&Paragraph> = lines.iter().map(|p| p.as_ref()).collect();
             let mut at = buf.iter_at_line(first_line).unwrap_or_else(|| buf.end_iter());
             let from = at.offset();
-            crate::bridge::render_paragraphs(buf, &mut at, &paras, &ordinals[h..eb]);
-            let mut end = buf.iter_at_line(first_line + (eb - h) as i32 - 1).unwrap_or_else(|| buf.end_iter());
+            crate::bridge::render_paragraphs(buf, &mut at, &lines, &ordinals);
+            let mut end = buf.iter_at_line(first_line + lines.len() as i32 - 1).unwrap_or_else(|| buf.end_iter());
             if !end.ends_line() {
                 end.forward_to_line_end();
             }
-            let (_, starts) = crate::bridge::capture_span(buf, from, end.offset());
+            let (mut paras, mut starts) = crate::bridge::capture_span(buf, from, end.offset());
+            crate::bridge::capture_tables(&mut paras, &mut starts, tables_before(pb, h) + 1);
             let delta = (end.offset() - from) as isize - old_len as isize;
             let rest: Vec<usize> = self.starts[ea..].iter().map(|x| (*x as isize + delta) as usize).collect();
             self.starts.truncate(h);
@@ -392,12 +415,10 @@ impl LiveModel {
         &self.doc
     }
 
-    #[cfg(test)]
     pub fn can_undo(&self) -> bool {
         self.history.can_undo()
     }
 
-    #[cfg(test)]
     pub fn can_redo(&self) -> bool {
         self.history.can_redo()
     }
@@ -414,6 +435,73 @@ impl LiveModel {
     }
 }
 
+/// Whether paragraph `p` is or could become part of a table on screen: a
+/// table cell, or prose whose line reads as a pipe row.
+fn table_like(p: &Paragraph) -> bool {
+    p.style.table_cell.is_some() || letters_core::table_text::parse_row(&p.text()).is_some()
+}
+
+/// Paragraphs `p0..=p1` widened to whole tables and to every adjacent line
+/// that could join a table. A table is found by reading neighbouring lines
+/// (`bridge::capture_tables`), so this is the smallest span whose re-read
+/// gives the same paragraphs as a whole-buffer read: at its edges are
+/// lines that are no part of any table.
+fn widen(paras: &[Paragraph], p0: usize, p1: usize) -> (usize, usize) {
+    let (mut s, mut e) = (p0.min(paras.len() - 1), p1.min(paras.len() - 1));
+    // Every adjacent table-like line: a whole table, and a row-looking
+    // neighbour that typing a delimiter or a pipe can turn into one.
+    while s > 0 && table_like(&paras[s - 1]) {
+        s -= 1;
+    }
+    while e + 1 < paras.len() && table_like(&paras[e + 1]) {
+        e += 1;
+    }
+    (s, e)
+}
+
+/// `widen`, plus whole list runs (numbers are rendered per run).
+fn widen_for_render(paras: &[Paragraph], p0: usize, p1: usize) -> (usize, usize) {
+    let (mut s, mut e) = widen(paras, p0, p1);
+    let listed = |p: &Paragraph| p.style.list != letters_core::ListKind::None;
+    while s > 0 && listed(&paras[s - 1]) && listed(&paras[s]) {
+        s -= 1;
+    }
+    while e + 1 < paras.len() && listed(&paras[e + 1]) {
+        e += 1;
+    }
+    (s, e)
+}
+
+/// The distinct tables among `paras`, in order.
+fn table_ids(paras: &[Paragraph]) -> Vec<u32> {
+    let mut ids: Vec<u32> = Vec::new();
+    for c in paras.iter().filter_map(|p| p.style.table_cell) {
+        if !ids.contains(&c.table) {
+            ids.push(c.table);
+        }
+    }
+    ids
+}
+
+/// How many tables come before paragraph `para`.
+fn tables_before(paras: &[Paragraph], para: usize) -> u32 {
+    table_ids(&paras[..para.min(paras.len())]).len() as u32
+}
+
+/// Editor lines `paras` (whole tables) take: one per paragraph, and a table
+/// one per row plus its delimiter line.
+fn line_count(paras: &[Paragraph]) -> usize {
+    let prose = paras.iter().filter(|p| p.style.table_cell.is_none()).count();
+    let tables: usize = table_ids(paras)
+        .into_iter()
+        .map(|t| {
+            let rows = paras.iter().filter_map(|p| p.style.table_cell).filter(|c| c.table == t).map(|c| c.row).max().unwrap_or(0);
+            rows as usize + 2
+        })
+        .sum();
+    prose + tables
+}
+
 /// Whether inserted `text` continues a typed word (undo merges those).
 fn word_typing(text: &str) -> bool {
     text.chars().count() == 1 && !text.chars().any(char::is_whitespace)
@@ -427,6 +515,25 @@ pub fn undo(buf: &gtk::TextBuffer, redo: bool) {
         }
         None if redo => buf.redo(),
         None => buf.undo(),
+    }
+    sync_actions(buf);
+}
+
+/// Enable the application's Undo and Redo actions as `buf`'s history
+/// allows: called after every change to it, and when a tab is selected.
+pub fn sync_actions(buf: &gtk::TextBuffer) {
+    let (can_undo, can_redo) = match of(buf) {
+        Some(m) => match m.try_borrow() {
+            Ok(m) => (m.can_undo(), m.can_redo()),
+            Err(_) => return,
+        },
+        None => (buf.can_undo(), buf.can_redo()),
+    };
+    let Some(app) = gio::Application::default() else { return };
+    for (name, on) in [("undo", can_undo), ("redo", can_redo)] {
+        if let Some(a) = app.lookup_action(name).and_then(|a| a.downcast::<gio::SimpleAction>().ok()) {
+            a.set_enabled(on);
+        }
     }
 }
 
