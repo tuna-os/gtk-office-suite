@@ -378,11 +378,6 @@ pub fn set_styled_text(
     layout.set_attributes(Some(&attrs));
 }
 
-/// `#RRGGBB` as Cairo's 0–1 channels.
-pub fn hex_rgb(hex: &str) -> Option<(f64, f64, f64)> {
-    hex_rgb16(hex).map(|(r, g, b)| (r as f64 / 65535.0, g as f64 / 65535.0, b as f64 / 65535.0))
-}
-
 /// `RRGGBB` (optionally `#`-prefixed) as Pango's 16-bit colour channels.
 fn hex_rgb16(hex: &str) -> Option<(u16, u16, u16)> {
     let hex = hex.trim().trim_start_matches('#');
@@ -431,18 +426,21 @@ pub fn draw_slide(
     draw_slide_multi(cr, width, height, slides, current_slide, &selected.into_iter().collect::<std::collections::HashSet<_>>(), None, masters, accent);
 }
 
-#[allow(clippy::too_many_arguments)]
-pub fn draw_slide_multi(
+/// A slide's frame on the canvas `(x, y, w, h)` and the background colour
+/// (Cairo channels) text contrasts with.
+pub type SlideFrame = ((f64, f64, f64, f64), (f64, f64, f64));
+
+/// Everything under a slide's objects: the canvas around it, its shadow,
+/// its background (the master's when the slide has none) and the master's
+/// decorations. Returns the slide's frame on the canvas and the background
+/// colour text contrasts with. Shared by the editor and Magic Move frames.
+pub fn draw_slide_base(
     cr: &cairo::Context, width: f64, height: f64,
-    slides: &[Slide], current_slide: usize, selected_indices: &std::collections::HashSet<usize>,
-    marquee: Option<(f64, f64, f64, f64)>,
-    masters: &[MasterSlide], accent: (f64, f64, f64),
-) {
+    slides: &[Slide], current_slide: usize, masters: &[MasterSlide],
+) -> SlideFrame {
     suite_common::use_ui_font_rendering(cr);
     cr.set_source_rgb(0.86, 0.86, 0.86);
     cr.paint().unwrap();
-
-    let (ar, ag, ab) = accent;
 
     let (ox, oy, slide_w, slide_h) = slide_geometry(width, height);
 
@@ -514,6 +512,20 @@ pub fn draw_slide_multi(
             cr.restore().unwrap();
         }
     }
+
+    ((ox, oy, slide_w, slide_h), slide_bg_rgb)
+}
+
+#[allow(clippy::too_many_arguments)]
+pub fn draw_slide_multi(
+    cr: &cairo::Context, width: f64, height: f64,
+    slides: &[Slide], current_slide: usize, selected_indices: &std::collections::HashSet<usize>,
+    marquee: Option<(f64, f64, f64, f64)>,
+    masters: &[MasterSlide], accent: (f64, f64, f64),
+) {
+    suite_common::use_ui_font_rendering(cr);
+    let (ar, ag, ab) = accent;
+    let ((ox, oy, slide_w, slide_h), slide_bg_rgb) = draw_slide_base(cr, width, height, slides, current_slide, masters);
 
     // Draw objects
     if current_slide < slides.len() {

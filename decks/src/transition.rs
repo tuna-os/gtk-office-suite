@@ -140,21 +140,20 @@ fn render_slide_to_surface(slide: &Slide) -> cairo::ImageSurface {
     surface
 }
 
-/// A Magic Move frame: the backgrounds cross-fade, then every object of
-/// decks_core::magic_move::frame at its place and opacity.
+/// A Magic Move frame: the slide under the objects (background and
+/// master) cross-fades, then every object of decks_core::magic_move::frame
+/// at its place and opacity. Nothing of the editor is drawn: no selection,
+/// no slide number, no "empty slide" caption.
 fn draw_magic_move(cr: &cairo::Context, m: &MagicMove, t: f64, canvas_w: f64, canvas_h: f64) {
-    use crate::canvas::{draw_object, draw_slide_multi, master_for, slide_geometry};
-    let empty = |s: &Slide| Slide { objects: vec![], ..s.clone() };
-    let none = std::collections::HashSet::new();
+    use crate::canvas::{draw_object, draw_slide_base, master_for};
     let e = decks_core::magic_move::ease(t);
-    draw_slide_multi(cr, canvas_w, canvas_h, &[empty(&m.to)], 0, &none, None, &m.masters, (0.0, 0.0, 0.0));
+    let to = std::slice::from_ref(&m.to);
+    let (frame, bg) = draw_slide_base(cr, canvas_w, canvas_h, to, 0, &m.masters);
     cr.push_group();
-    draw_slide_multi(cr, canvas_w, canvas_h, &[empty(&m.from)], 0, &none, None, &m.masters, (0.0, 0.0, 0.0));
+    draw_slide_base(cr, canvas_w, canvas_h, std::slice::from_ref(&m.from), 0, &m.masters);
     let _ = cr.pop_group_to_source();
     let _ = cr.paint_with_alpha(1.0 - e);
-    let frame = slide_geometry(canvas_w, canvas_h);
-    let bg = crate::canvas::hex_rgb(&m.to.background).unwrap_or((1.0, 1.0, 1.0));
-    let master = master_for(std::slice::from_ref(&m.to), 0, &m.masters);
+    let master = master_for(to, 0, &m.masters);
     for f in decks_core::magic_move::frame(&m.from.objects, &m.to.objects, &m.pairs, t) {
         if f.opacity <= 0.001 {
             continue;
@@ -168,6 +167,43 @@ fn draw_magic_move(cr: &cairo::Context, m: &MagicMove, t: f64, canvas_w: f64, ca
             let _ = cr.paint_with_alpha(f.opacity);
         }
     }
+}
+
+/// Under GTK_OFFICE_TEST_MODE with GTK_OFFICE_TRANSITION_DUMP set to a
+/// directory, write the midpoint frame of the transition that just started
+/// there as `transition-midpoint.png`, at the canvas's size: the animation
+/// itself can't be screenshotted deterministically, its frames can.
+pub fn dump_midpoint(state: &TransitionState, area: &gtk4::DrawingArea) {
+    if std::env::var_os("GTK_OFFICE_TEST_MODE").is_none() || !state.active {
+        return;
+    }
+    let Some(dir) = std::env::var_os("GTK_OFFICE_TRANSITION_DUMP") else { return };
+    let (w, h) = (area.width().max(320), area.height().max(180));
+    let path = std::path::Path::new(&dir).join("transition-midpoint.png");
+    if let Err(e) = write_frame_png(state, 0.5, w, h, &path) {
+        eprintln!("transition dump: {e}");
+    }
+}
+
+/// Render the frame of `state`'s transition at `t` on a `w`×`h` canvas,
+/// through the same drawing the animation uses, into a PNG at `path`.
+/// For looking at a transition without a timer (tests, GTK_OFFICE_TEST_MODE).
+pub fn write_frame_png(state: &TransitionState, t: f64, w: i32, h: i32, path: &std::path::Path) -> Result<(), String> {
+    let surface = cairo::ImageSurface::create(cairo::Format::ARgb32, w, h).map_err(|e| e.to_string())?;
+    {
+        let cr = cairo::Context::new(&surface).map_err(|e| e.to_string())?;
+        let frame = TransitionState {
+            from_surface: state.from_surface.clone(),
+            to_surface: state.to_surface.clone(),
+            progress: t,
+            active: true,
+            kind: state.kind,
+            magic: state.magic.clone(),
+        };
+        draw_transition(&cr, &frame, w as f64, h as f64);
+    }
+    let mut f = std::fs::File::create(path).map_err(|e| e.to_string())?;
+    surface.write_to_png(&mut f).map_err(|e| e.to_string())
 }
 
 pub fn draw_transition(cr: &cairo::Context, state: &TransitionState, canvas_w: f64, canvas_h: f64) -> bool {
@@ -292,6 +328,78 @@ pub fn draw_transition(cr: &cairo::Context, state: &TransitionState, canvas_w: f
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// The real Magic Move drawing path (draw_transition → frame →
+    /// draw_object) at its midpoint: a red square that moves right and a
+    /// blue one that only exists on the second slide. Half way, the red
+    /// square's centre is half way along and fully opaque; the blue one is
+    /// half faded in. The PNG is left in target/ for a person to look at.
+    #[test]
+    fn a_magic_move_midpoint_frame_draws_the_shared_object_half_way() {
+        use decks_core::engine::shape::{Color, ShapeKind, ShapeStyle};
+        use decks_core::engine::SlideObject;
+        let sq = |x: f64, c: Color| SlideObject::Shape {
+            kind: ShapeKind::Rect,
+            x,
+            y: 200.0,
+            w: 100.0,
+            h: 100.0,
+            rotation: 0.0,
+            style: ShapeStyle { fill: Some(c), gradient: None, stroke: None },
+        };
+        let (red, blue) = (Color(220, 0, 0), Color(0, 0, 220));
+        let slide = |objects| Slide {
+            title: String::new(),
+            background: "#ffffff".into(),
+            objects,
+            notes: String::new(),
+            master_idx: None,
+            transition: Transition::MagicMove,
+        };
+        let from = slide(vec![sq(100.0, red)]);
+        let mut arriving = sq(430.0, blue);
+        if let SlideObject::Shape { y, .. } = &mut arriving {
+            *y = 380.0;
+        }
+        let to = slide(vec![sq(700.0, red), arriving]);
+        let state = TransitionState {
+            from_surface: None,
+            to_surface: None,
+            progress: 0.0,
+            active: true,
+            kind: TransitionType::MagicMove,
+            magic: Some(MagicMove {
+                pairs: decks_core::magic_move::match_objects(&from.objects, &to.objects),
+                from,
+                to,
+                masters: vec![],
+            }),
+        };
+        let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../target/render-frames");
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("magic-move-midpoint.png");
+        // A 1040x585 canvas: the slide is 92% of it, 956.8 px wide.
+        write_frame_png(&state, 0.5, 1040, 585, &path).unwrap();
+
+        let mut file = std::fs::File::open(&path).unwrap();
+        let mut img = cairo::ImageSurface::create_from_png(&mut file).unwrap();
+        let (ox, oy, sw, _) = crate::canvas::slide_geometry(1040.0, 585.0);
+        let k = sw / 960.0;
+        let stride = img.stride() as usize;
+        let data = img.data().unwrap();
+        let px = |mx: f64, my: f64| {
+            let (x, y) = ((ox + mx * k) as usize, (oy + my * k) as usize);
+            let i = y * stride + x * 4;
+            (data[i + 2], data[i + 1], data[i]) // Cairo ARGB32 is BGRA in memory
+        };
+        // Half way between x=100 and x=700 the red square spans 400..500.
+        assert_eq!(px(450.0, 250.0).0, 220, "the red square's centre at the midpoint: {:?}", px(450.0, 250.0));
+        assert_eq!(px(150.0, 250.0), (255, 255, 255), "it has left its first place");
+        assert_eq!(px(750.0, 250.0), (255, 255, 255), "and hasn't arrived yet");
+        // The blue square fades in, half way: a mid blue on white.
+        let (r, _, b) = px(480.0, 430.0);
+        assert!(b > 200 && (100..160).contains(&r), "half-faded blue: {:?}", px(480.0, 430.0));
+    }
 
     #[test]
     fn test_transition_state_starts_inactive() {

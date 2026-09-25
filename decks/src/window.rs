@@ -925,6 +925,47 @@ impl DecksWindow {
             }
         }
 
+        // "Go to slide N" (0-based), for the command line and automation:
+        // `gapplication action org.tunaos.decks go-to-slide "uint32 1"`.
+        {
+            let (ss, cs_ref, cs, sl, m, so) =
+                (slides.clone(), current_slide.clone(), canvas.clone(), slide_list.clone(), masters.clone(), selected_object.clone());
+            let refresh = refresh_hud.clone();
+            let act = gio::SimpleAction::new("go-to-slide", Some(glib::VariantTy::UINT32));
+            act.connect_activate(move |_, param| {
+                let Some(i) = param.and_then(|p| p.get::<u32>()) else { return };
+                let snap = ss.borrow().clone();
+                let i = i as usize;
+                if i >= snap.len() {
+                    return;
+                }
+                cs_ref.set(i);
+                so.set(None);
+                rebuild_slide_list(&sl, &snap, &m.borrow(), i);
+                cs.queue_draw();
+                refresh();
+            });
+            app.add_action(&act);
+        }
+
+        // "Preview transition": play how the current slide arrives, from
+        // the one before it, on the canvas (the inspector's Slide page).
+        {
+            let (ss, cs_ref, cs, ts, m) = (slides.clone(), current_slide.clone(), canvas.clone(), transition.clone(), masters.clone());
+            let act = gio::SimpleAction::new("preview-transition", None);
+            act.connect_activate(move |_, _| {
+                let slides = ss.borrow();
+                let idx = cs_ref.get();
+                let Some(to) = slides.get(idx) else { return };
+                let blank = Slide { objects: vec![], ..to.clone() };
+                let from = idx.checked_sub(1).and_then(|i| slides.get(i)).unwrap_or(&blank);
+                let kind = TransitionType::of(to.transition);
+                TransitionState::start(&ts, kind, from, to, &m.borrow(), &cs);
+                crate::transition::dump_midpoint(&ts.borrow(), &cs);
+            });
+            app.add_action(&act);
+        }
+
         // ── Cross-app clipboard (DESIGN-UI): Ctrl+C copies the selected
         // text box as a styled fragment; Ctrl+V pastes a fragment as a
         // new text box. Window-level capture, skipped while an entry or
