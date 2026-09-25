@@ -351,6 +351,11 @@ pub fn set_styled_text(
         if run.style.underline {
             add(pango::AttrInt::new_underline(pango::Underline::Single).into());
         }
+        // The run's own typeface (pptx a:latin, theme fonts resolved; odp
+        // fo:font-family). Without it every run took the master's font.
+        if let Some(family) = run.style.font_family.as_deref().filter(|f| !f.trim().is_empty()) {
+            add(pango::AttrString::new_family(family).into());
+        }
         if run.style.strikethrough {
             add(pango::AttrInt::new_strikethrough(true).into());
         }
@@ -907,6 +912,25 @@ mod font_tests {
         assert_eq!((fg[0].start_index(), fg[0].end_index()), (6, 9), "only the red run");
         assert_eq!(hex_rgb16("#0000c8"), Some((0, 0, 0xC8 * 257)));
         assert_eq!(hex_rgb16("bad"), None);
+    }
+
+    /// A run's typeface reaches the layout as a family attribute over
+    /// exactly that run.
+    #[test]
+    fn a_runs_font_family_is_drawn() {
+        let surface = cairo::ImageSurface::create(cairo::Format::ARgb32, 10, 10).unwrap();
+        let cr = cairo::Context::new(&surface).unwrap();
+        let layout = pangocairo::functions::create_layout(&cr);
+        let runs = vec![
+            Run { text: "plain ".into(), style: Default::default() },
+            Run { text: "serif".into(), style: RunStyle { font_family: Some("Liberation Serif".into()), ..Default::default() } },
+        ];
+        set_styled_text(&layout, "plain serif", &runs, 1.0);
+        let attrs = layout.attributes().expect("attributes set");
+        let fam: Vec<_> = attrs.attributes().into_iter().filter(|a| a.type_() == pango::AttrType::Family).collect();
+        assert_eq!(fam.len(), 1);
+        assert_eq!(fam[0].downcast_ref::<pango::AttrString>().unwrap().value().as_str(), "Liberation Serif");
+        assert_eq!((fam[0].start_index(), fam[0].end_index()), (6, 11));
     }
 
     #[test]

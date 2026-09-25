@@ -283,6 +283,9 @@ fn text_style(st: &RunStyle) -> String {
     if let Some(c) = &st.color {
         props.push_str(&format!(" fo:color=\"#{c}\""));
     }
+    if let Some(f) = st.font_family.as_deref().map(str::trim).filter(|f| !f.is_empty()) {
+        props.push_str(&format!(" fo:font-family=\"{}\"", esc(f)));
+    }
     props
 }
 
@@ -959,6 +962,14 @@ fn parse_styles(
                                     st.color =
                                         Some(c.trim_start_matches('#').to_lowercase());
                                 }
+                                // LibreOffice names a face declared in
+                                // office:font-face-decls, whose name is
+                                // the family (or the family plus a
+                                // number when two differ in pitch).
+                                st.font_family = attr(&e, "fo:font-family")
+                                    .or_else(|| attr(&e, "style:font-name"))
+                                    .map(|f| f.trim().trim_matches('\'').to_string())
+                                    .filter(|f| !f.is_empty());
                                 text_styles.insert(name.clone(), st);
                             }
                         }
@@ -1088,7 +1099,7 @@ fn parse_pages(
     let mut paras: Vec<crate::engine::ParaStyle> = Vec::new();
     let body_of = |frame_style: &Option<String>, paras: &mut Vec<crate::engine::ParaStyle>| {
         let (anchor, insets) = text_defs.frame(frame_style.as_deref(), scale);
-        crate::engine::TextBody { paras: std::mem::take(paras), anchor, insets }
+        crate::engine::TextBody { paras: std::mem::take(paras), anchor, insets, autofit: None }
     };
 
     // `svg:x`/`svg:y` place an unrotated shape; a rotated one carries

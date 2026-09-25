@@ -26,7 +26,7 @@
 
 use super::placeholders::{inherited_indices, PhKey};
 use super::shape_xml::{first_color, parse_tree, Node, Theme};
-use super::text_body::{Anchor, Bullet, Insets, ParaAlign, ParaStyle, Spacing, TextBody};
+use super::text_body::{Anchor, Autofit, Bullet, Insets, ParaAlign, ParaStyle, Spacing, TextBody};
 use super::SlideScale;
 use letters_core::model::RunStyle;
 
@@ -50,12 +50,14 @@ pub(crate) struct RunProps {
     strike: Option<bool>,
     /// `RRGGBB`, lower case.
     color: Option<String>,
+    /// The Latin typeface, theme references resolved.
+    latin: Option<String>,
 }
 
 impl RunProps {
     fn over(&mut self, top: &RunProps) {
         macro_rules! take { ($($f:ident),*) => { $( if top.$f.is_some() { self.$f = top.$f.clone(); } )* } }
-        take!(sz, b, i, u, strike, color);
+        take!(sz, b, i, u, strike, color, latin);
     }
 
     fn of(rpr: &Node, theme: &Theme) -> RunProps {
@@ -70,6 +72,7 @@ impl RunProps {
                 .child("a:solidFill")
                 .and_then(|f| first_color(f, theme, None))
                 .map(|c| c.to_hex().to_lowercase()),
+            latin: rpr.child("a:latin").and_then(|l| l.attr("typeface")).and_then(|t| theme.typeface(t)),
         }
     }
 
@@ -82,6 +85,7 @@ impl RunProps {
             strikethrough: self.strike.unwrap_or(false),
             font_size_hp: self.sz.map(|s| (s / 50) as u16),
             color: self.color.clone(),
+            font_family: self.latin.clone(),
             ..RunStyle::default()
         }
     }
@@ -169,6 +173,9 @@ struct BodyProps {
     anchor: Option<Anchor>,
     /// lIns, tIns, rIns, bIns in EMU.
     ins: [Option<f64>; 4],
+    /// `a:normAutofit` (Some) or `a:noAutofit`/`a:spAutoFit` (None), when
+    /// stated.
+    autofit: Option<Option<Autofit>>,
 }
 
 impl BodyProps {
@@ -178,11 +185,25 @@ impl BodyProps {
         BodyProps {
             anchor: b.attr("anchor").and_then(Anchor::from_drawingml),
             ins: [num("lIns"), num("tIns"), num("rIns"), num("bIns")],
+            autofit: if let Some(n) = b.child("a:normAutofit") {
+                let frac = |k: &str| n.attr(k).and_then(|v| v.parse::<f64>().ok()).map(|v| v / 100_000.0);
+                Some(Some(Autofit {
+                    font_scale: frac("fontScale").unwrap_or(1.0).clamp(0.01, 1.0),
+                    line_reduction: frac("lnSpcReduction").unwrap_or(0.0).clamp(0.0, 0.9),
+                }))
+            } else if b.child("a:noAutofit").is_some() || b.child("a:spAutoFit").is_some() {
+                Some(None)
+            } else {
+                None
+            },
         }
     }
     fn over(&mut self, top: &BodyProps) {
         if top.anchor.is_some() {
             self.anchor = top.anchor;
+        }
+        if top.autofit.is_some() {
+            self.autofit = top.autofit;
         }
         for (a, b) in self.ins.iter_mut().zip(top.ins) {
             if b.is_some() {
@@ -281,6 +302,7 @@ pub(crate) struct SpText {
     pub runs: Vec<RunProps>,
     pub anchor: Anchor,
     pub insets: Option<Insets>,
+    pub autofit: Option<Autofit>,
 }
 
 impl SpText {
@@ -291,6 +313,7 @@ impl SpText {
             paras: line_paras.iter().map(|&p| self.paras.get(p).cloned().unwrap_or_default()).collect(),
             anchor: self.anchor,
             insets: self.insets,
+            autofit: self.autofit,
         }
     }
 }
@@ -316,6 +339,9 @@ fn resolve_sp_text(sp: &Node, theme: &Theme, inh: &Inherited, scale: SlideScale)
     let emu = |v: f64| v * scale.x;
     let mut out = SpText {
         anchor: body.anchor.unwrap_or_default(),
+        // A master's plain `a:normAutofit` says "shrink if needed" with
+        // nothing shrunk yet: only a stated scale changes the drawing.
+        autofit: body.autofit.flatten().filter(|a| !a.is_identity()),
         // Only a placeholder or a box that states its insets gets them;
         // a plain box keeps the canvas's default so it draws as before.
         insets: if key.is_some() || body.ins.iter().any(Option::is_some) {
@@ -482,6 +508,62 @@ mod tests {
         // The reader drops the leading empty paragraph: lines are paras 1, 2.
         let body = got[0].body_for(&[1, 2]);
         assert_eq!(body.paras.iter().map(|p| p.level).collect::<Vec<_>>(), [0, 1]);
+    }
+
+    #[test]
+    fn a_content_box_the_layout_has_no_slot_for_takes_the_masters_body_not_the_subtitle() {
+        // LAYOUT is python-pptx's Title Slide plus a content slot at idx 2;
+        // idx 13 is on neither. The body style's bullets apply, not the
+        // subtitle's centred, bullet-less level.
+        let layout = LAYOUT.replace(r#"<p:ph idx="2"/>"#, r#"<p:ph type="dt" idx="10"/>"#);
+        let theme = Theme::default();
+        let inh = Inherited::read(&layout, MASTER, &theme);
+        let got = sp_texts(&slide(&sp(r#"<p:ph idx="13"/>"#, "<a:p><a:r><a:t>a</a:t></a:r></a:p>")), &theme, &inh, SlideScale::default());
+        assert_eq!(got[0].paras[0].bullet, Bullet::Char("•".into()));
+        assert_eq!(got[0].paras[0].align, ParaAlign::Left);
+    }
+
+    #[test]
+    fn a_shrunk_body_keeps_its_scale_and_a_plain_autofit_is_nothing() {
+        let body = |pr: &str| {
+            format!(r#"<p:sp><p:nvSpPr><p:cNvPr id="9" name="x"/><p:cNvSpPr/><p:nvPr><p:ph idx="2"/></p:nvPr></p:nvSpPr><p:spPr/><p:txBody>{pr}<a:lstStyle/><a:p><a:r><a:t>a</a:t></a:r></a:p></p:txBody></p:sp>"#)
+        };
+        let got = resolve(&(body(r#"<a:bodyPr><a:normAutofit fontScale="62500" lnSpcReduction="20000"/></a:bodyPr>"#)
+            + &body(r#"<a:bodyPr><a:normAutofit/></a:bodyPr>"#)));
+        assert_eq!(got[0].autofit, Some(Autofit { font_scale: 0.625, line_reduction: 0.2 }));
+        assert_eq!(got[1].autofit, None);
+        // The sizes themselves are the author's.
+        assert_eq!(got[0].runs[0].style().font_size_hp, Some(64));
+    }
+
+    #[test]
+    fn theme_font_references_resolve_to_the_themes_faces() {
+        let theme = super::super::shape_xml::theme(
+            r#"<a:theme xmlns:a="a"><a:themeElements><a:fontScheme name="x">
+               <a:majorFont><a:latin typeface="Heading Face"/><a:ea typeface=""/></a:majorFont>
+               <a:minorFont><a:latin typeface="Body Face"/></a:minorFont></a:fontScheme></a:themeElements></a:theme>"#,
+        );
+        let master = MASTER.replace(
+            r#"<a:defRPr sz="4400">"#,
+            r#"<a:defRPr sz="4400"><a:latin typeface="+mj-lt"/>"#,
+        ).replace(
+            r#"<a:defRPr sz="3200"/>"#,
+            r#"<a:defRPr sz="3200"><a:latin typeface="+mn-lt"/></a:defRPr>"#,
+        );
+        let inh = Inherited::read(LAYOUT, &master, &theme);
+        let got = sp_texts(
+            &slide(&(sp(r#"<p:ph type="title"/>"#, "<a:p><a:r><a:t>T</a:t></a:r></a:p>")
+                + &sp(r#"<p:ph idx="2"/>"#, r#"<a:p><a:r><a:t>a</a:t></a:r><a:r><a:rPr><a:latin typeface="Own Face"/></a:rPr><a:t>b</a:t></a:r></a:p>"#))),
+            &theme,
+            &inh,
+            SlideScale::default(),
+        );
+        assert_eq!(got[0].runs[0].style().font_family.as_deref(), Some("Heading Face"));
+        assert_eq!(got[1].runs[0].style().font_family.as_deref(), Some("Body Face"));
+        assert_eq!(got[1].runs[1].style().font_family.as_deref(), Some("Own Face"));
+        // A reference the theme can't answer is no font, not "+mj-lt".
+        assert_eq!(Theme::default().typeface("+mj-lt"), None);
+        assert_eq!(Theme::default().typeface("+mn-ea"), None);
     }
 
     #[test]
