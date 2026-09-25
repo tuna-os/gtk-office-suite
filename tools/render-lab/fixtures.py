@@ -298,7 +298,9 @@ def letters(img):
     p = x.add_paragraph()
     p.add_run("Chapter Two").bold = True
     p.paragraph_format.keep_with_next = True
-    x.add_paragraph(LOREM * 2)
+    # One line: a longer follower brings in orphan control, where
+    # LibreOffice gives up the keep (see the roadmap's known differences).
+    x.add_paragraph("The chapter begins here.")
     save(x, "keep-with-next", "The bold 'Chapter Two' line is kept with the paragraph after it: both start page 2, page 1 ends at 'Filler line 24.' (25 lines fit a page with the template's paragraph spacing)")
 
     x = doc()
