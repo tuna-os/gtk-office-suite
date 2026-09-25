@@ -147,9 +147,16 @@ class FileCorpusJourney(BaseGUITestCase):
         # relaunch_app registers the new process with the harness, so
         # tearDown reaps it and no copy outlives the journey.
         self.relaunch_app(launch_args=[str(destination)])
-        self.wait_for_condition(lambda: semantics(self.app_name, self.snapshot()) == edited,
-                                description="reopened edited and untouched content")
-        (self._root / "reopened.json").write_text(json.dumps(self.snapshot(), indent=2))
+        def reopened():
+            current = self.snapshot()
+            # Kept on every poll, so a failure retains what the reopened
+            # document actually held rather than only that it differed.
+            (self._root / "reopened.json").write_text(json.dumps(current, indent=2))
+            return semantics(self.app_name, current)
+        # wait_until reports the last value it saw, so a mismatch names the
+        # differing field instead of timing out silently.
+        self.wait_until(reopened, lambda current: current == edited,
+                        description=f"reopened edited and untouched content (expected {edited})")
 
 
 for fixture in CORPUS["fixtures"]:
