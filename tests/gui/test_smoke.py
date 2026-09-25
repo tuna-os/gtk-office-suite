@@ -3543,9 +3543,13 @@ class DecksInsertBarSmoke(BaseGUITestCase):
         self.gapplication_action(aid, "new-document")
         # do_action, not click(): GTK 4 reports no screen extents over
         # AT-SPI, so a coordinate click lands at the corner.
-        # A MenuButton's actionable node is its inner toggle button.
-        self.wait_until(lambda: self.app.child(name="Insert Shape", roleName="toggle button"), lambda b: b is not None,
-                        description="the Insert Shape button").do_action(0)
+        # A MenuButton's actionable node is its inner toggle button. Both
+        # buttons are found up front: after the popover closes, AT-SPI's
+        # tree walk no longer reaches into the header bar.
+        shape = self.wait_until(lambda: self.app.child(name="Insert Shape", roleName="toggle button"),
+                                lambda b: b is not None, description="the Insert Shape button")
+        table = self.app.child(name="Insert Table", roleName="push button")
+        shape.do_action(0)
         self.wait_until(lambda: self.app.child(name="Search Shapes"), lambda e: e is not None and e.showing,
                         description="the shape library to open")
         from dogtail import rawinput
@@ -3560,7 +3564,7 @@ class DecksInsertBarSmoke(BaseGUITestCase):
         self.app.child(name="Triangle", roleName="push button").do_action(0)
         self.wait_until(self._objects, lambda o: "Triangle" in o, interval=0.25,
                         description="a triangle on the slide")
-        self.app.child(name="Insert Table", roleName="push button").do_action(0)
+        table.do_action(0)
         self.wait_until(self._objects, lambda o: "Table, 3 rows by 3 columns" in o, interval=0.25,
                         description="a 3x3 table on the slide")
         self.assertIsNone(self.process.poll(), "decks crashed inserting")
