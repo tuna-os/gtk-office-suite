@@ -268,6 +268,29 @@ impl DecksController {
         self.execute(Box::new(ZOrderCmd { slide_idx, old_objects, new_objects }));
     }
 
+    /// Apply one Format inspector edit to the objects `indices` on slide
+    /// `slide_idx`, as one undo step. Returns whether anything changed.
+    pub fn format_objects(&self, slide_idx: usize, indices: &[usize], edit: &crate::format::FormatEdit) -> bool {
+        let cmd = {
+            let slides = self.slides.borrow();
+            let Some(slide) = slides.get(slide_idx) else { return false };
+            crate::format::format_command(slide, slide_idx, indices, edit)
+        };
+        match cmd {
+            Some(cmd) => {
+                self.execute(Box::new(cmd));
+                true
+            }
+            None => false,
+        }
+    }
+
+    /// What the inspector shows for object `index` on slide `slide_idx`.
+    pub fn object_format(&self, slide_idx: usize, index: usize) -> Option<crate::format::ObjectFormat> {
+        let slides = self.slides.borrow();
+        slides.get(slide_idx)?.objects.get(index).map(crate::format::ObjectFormat::of)
+    }
+
     pub fn undo(&self) -> bool {
         self.undo.borrow_mut().undo()
     }
@@ -492,5 +515,22 @@ mod tests {
         assert!(matches!(c.slides.borrow()[0].objects[1], SlideObject::Rect { .. }));
         assert!(c.undo());
         assert!(matches!(c.slides.borrow()[0].objects[0], SlideObject::Rect { .. }));
+    }
+
+    #[test]
+    fn a_format_edit_is_one_undo_step_and_a_no_op_is_none() {
+        use crate::format::FormatEdit;
+        let mut s = slide("S1");
+        s.objects.push(SlideObject::Rect { x: 10.0, y: 10.0, w: 20.0, h: 20.0, rotation: 0.0 });
+        s.objects.push(SlideObject::Rect { x: 40.0, y: 10.0, w: 20.0, h: 20.0, rotation: 0.0 });
+        let c = DecksController::new(vec![s], vec![]);
+        assert!(c.format_objects(0, &[0, 1], &FormatEdit::Width(50.0)));
+        assert_eq!(c.object_format(0, 1).unwrap().bounds.2, 50.0);
+        assert!(!c.format_objects(0, &[0, 1], &FormatEdit::Width(50.0)), "nothing to change");
+        assert!(c.undo());
+        assert_eq!(c.object_format(0, 0).unwrap().bounds.2, 20.0);
+        assert_eq!(c.object_format(0, 1).unwrap().bounds.2, 20.0, "both in the one step");
+        assert!(!c.can_undo());
+        assert!(c.dirty.get());
     }
 }

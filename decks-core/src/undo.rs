@@ -152,6 +152,18 @@ pub enum ZOrderOp {
     SendBackward,
 }
 
+/// Where object `index` of `len` ends up after `op`, as
+/// `DecksController::z_order_object` moves it; the selection follows it.
+pub fn z_order_index(index: usize, len: usize, op: ZOrderOp) -> usize {
+    let last = len.saturating_sub(1);
+    match op {
+        ZOrderOp::BringToFront => last,
+        ZOrderOp::SendToBack => 0,
+        ZOrderOp::BringForward => (index + 1).min(last),
+        ZOrderOp::SendBackward => index.saturating_sub(1),
+    }
+}
+
 pub struct ResizeObjectCmd {
     pub slide_idx: usize,
     pub index: usize,
@@ -419,6 +431,15 @@ impl Command<Vec<Slide>> for ReorderSlidesCmd {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn the_selection_follows_a_z_order_move() {
+        assert_eq!(z_order_index(1, 4, ZOrderOp::BringToFront), 3);
+        assert_eq!(z_order_index(1, 4, ZOrderOp::SendToBack), 0);
+        assert_eq!(z_order_index(3, 4, ZOrderOp::BringForward), 3);
+        assert_eq!(z_order_index(0, 4, ZOrderOp::SendBackward), 0);
+        assert_eq!(z_order_index(2, 4, ZOrderOp::SendBackward), 1);
+    }
+
     use super::*;
     use suite_common_core::undo::Command;
 

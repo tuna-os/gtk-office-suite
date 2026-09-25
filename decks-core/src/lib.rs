@@ -6,6 +6,7 @@
 
 pub mod controller;
 pub mod engine;
+pub mod format;
 pub mod fragment;
 pub mod odp;
 mod odp_text;

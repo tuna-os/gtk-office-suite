@@ -192,46 +192,9 @@ impl DecksWindow {
         canvas_scroll.set_min_content_width(400);
         canvas_scroll.set_min_content_height(300);
 
-        // ── Object inspector (right sidebar) ─────────────────────────────
-        // Visible twin of the a11y descriptions: position/size of the
-        // selected object, two-way bound to the model (DESIGN-UI §Decks).
-        let insp_grid = gtk::Grid::new();
-        insp_grid.set_row_spacing(6);
-        insp_grid.set_column_spacing(6);
-        let mk_spin = |label: &str, row: i32, grid: &gtk::Grid| -> gtk::SpinButton {
-            let l = gtk::Label::new(Some(label));
-            l.add_css_class("dim-label");
-            l.set_halign(gtk::Align::Start);
-            let sb = gtk::SpinButton::with_range(-2000.0, 4000.0, 1.0);
-            sb.set_hexpand(true);
-            sb.update_property(&[gtk::accessible::Property::Label(&format!("Object {label}"))]);
-            grid.attach(&l, 0, row, 1, 1);
-            grid.attach(&sb, 1, row, 1, 1);
-            sb
-        };
-        let spin_x = mk_spin("X", 0, &insp_grid);
-        let spin_y = mk_spin("Y", 1, &insp_grid);
-        let spin_w = mk_spin("W", 2, &insp_grid);
-        let spin_h = mk_spin("H", 3, &insp_grid);
-
-        let insp_title = gtk::Label::new(Some("Object"));
-        insp_title.add_css_class("heading");
-        insp_title.set_halign(gtk::Align::Start);
-        let insp_hint = gtk::Label::new(Some("Select an object on the slide"));
-        insp_hint.add_css_class("dim-label");
-        insp_hint.add_css_class("caption");
-        insp_hint.set_halign(gtk::Align::Start);
-        insp_hint.set_wrap(true);
-
-        let inspector = gtk::Box::new(gtk::Orientation::Vertical, 12);
-        inspector.set_margin_start(12);
-        inspector.set_margin_end(12);
-        inspector.set_margin_top(12);
-        inspector.set_margin_bottom(12);
-        inspector.append(&insp_title);
-        inspector.append(&insp_grid);
-        inspector.append(&insp_hint);
-        insp_grid.set_sensitive(false);
+        // The Format inspector (right sidebar) is built once the HUD
+        // refresh exists; it and the HUD refresh each other.
+        let inspector_sync: crate::format_inspector::SyncSlot = Rc::default();
 
         // Status readout: slide x/y + object count (same source as the
         // a11y description).
@@ -269,24 +232,20 @@ impl DecksWindow {
 
         let editor_split = adw::OverlaySplitView::new();
         editor_split.set_sidebar_position(gtk::PackType::End);
-        editor_split.set_sidebar(Some(&inspector));
         editor_split.set_content(Some(&canvas_overlay));
-        editor_split.set_min_sidebar_width(170.0);
-        editor_split.set_max_sidebar_width(220.0);
+        editor_split.set_min_sidebar_width(280.0);
+        editor_split.set_max_sidebar_width(340.0);
 
         // Central HUD refresh: status text + inspector fields.
         // The thumbnail updater is late-bound (the slide list is built
         // after this closure).
         let thumb_updater: ThumbUpdater = Rc::new(RefCell::new(None));
-        let insp_guard = Rc::new(Cell::new(false));
         let refresh_hud: Rc<dyn Fn()> = {
             let ss = slides.clone();
             let cs_ref = current_slide.clone();
             let so = selected_object.clone();
-            let (sx, sy, sw, sh) = (spin_x.clone(), spin_y.clone(), spin_w.clone(), spin_h.clone());
-            let grid = insp_grid.clone();
+            let insp = inspector_sync.clone();
             let status = status_label.clone();
-            let guard = insp_guard.clone();
             let ca = canvas_area.clone();
             let tu = thumb_updater.clone();
             Rc::new(move || {
@@ -308,88 +267,34 @@ impl DecksWindow {
                     n_objects,
                     if n_objects == 1 { "" } else { "s" }
                 ));
-                let obj = so
-                    .get()
-                    .and_then(|oi| slides.get(idx).and_then(|s| s.objects.get(oi)));
-                match obj {
-                    Some(o) => {
-                        guard.set(true);
-                        let (x, y, w, h) = match o {
-                            SlideObject::TextBox { x, y, w, h, .. }
-                            | SlideObject::Rect { x, y, w, h, .. }
-                            | SlideObject::Shape { x, y, w, h, .. }
-                            | SlideObject::Table { x, y, w, h, .. }
-                            | SlideObject::Image { x, y, w, h, .. } => (*x, *y, *w, *h),
-                            SlideObject::Circle { x, y, r, .. } => (*x, *y, r * 2.0, r * 2.0),
-                        };
-                        sx.set_value(x);
-                        sy.set_value(y);
-                        sw.set_value(w);
-                        sh.set_value(h);
-                        grid.set_sensitive(true);
-                        guard.set(false);
-                    }
-                    None => {
-                        guard.set(true);
-                        for sb in [&sx, &sy, &sw, &sh] {
-                            sb.set_value(0.0);
-                        }
-                        guard.set(false);
-                        grid.set_sensitive(false);
-                    }
+                drop(slides);
+                if let Some(sync) = insp.borrow().as_ref() {
+                    sync();
                 }
             })
         };
         refresh_hud();
 
-        // Inspector edits write back to the model.
-        {
-            enum Field { X, Y, W, H }
-            for (spin, field) in [
-                (&spin_x, Field::X),
-                (&spin_y, Field::Y),
-                (&spin_w, Field::W),
-                (&spin_h, Field::H),
-            ] {
-                let ss = slides.clone();
-                let cs_ref = current_slide.clone();
-                let so = selected_object.clone();
-                let da = canvas.clone();
-                let guard = insp_guard.clone();
-                spin.connect_value_changed(move |sb| {
-                    if guard.get() {
-                        return;
-                    }
-                    let Some(oi) = so.get() else { return };
-                    let idx = cs_ref.get();
-                    let mut slides = ss.borrow_mut();
-                    let Some(obj) = slides.get_mut(idx).and_then(|s| s.objects.get_mut(oi))
-                    else {
-                        return;
-                    };
-                    let v = sb.value();
-                    match obj {
-                        SlideObject::TextBox { x, y, w, h, .. }
-                        | SlideObject::Rect { x, y, w, h, .. }
-                        | SlideObject::Shape { x, y, w, h, .. }
-                        | SlideObject::Table { x, y, w, h, .. }
-                        | SlideObject::Image { x, y, w, h, .. } => match field {
-                            Field::X => *x = v,
-                            Field::Y => *y = v,
-                            Field::W => *w = v.max(1.0),
-                            Field::H => *h = v.max(1.0),
-                        },
-                        SlideObject::Circle { x, y, r, .. } => match field {
-                            Field::X => *x = v,
-                            Field::Y => *y = v,
-                            Field::W | Field::H => *r = (v / 2.0).max(1.0),
-                        },
-                    }
-                    drop(slides);
-                    da.queue_draw();
-                });
-            }
-        }
+        // ── Format inspector ─────────────────────────────────────────────
+        let format_toggle = {
+            let refresh = refresh_hud.clone();
+            let da = canvas.clone();
+            let changed: Rc<dyn Fn()> = Rc::new(move || {
+                refresh();
+                da.queue_draw();
+            });
+            let inspector = crate::format_inspector::build(&controller, &current_slide, &selected_object, changed);
+            editor_split.set_sidebar(Some(&inspector.sidebar));
+            *inspector_sync.borrow_mut() = Some(inspector.sync.clone());
+            (inspector.sync)();
+            let show = gtk::ToggleButton::builder()
+                .icon_name("sidebar-show-right-symbolic")
+                .tooltip_text(suite_common::i18n("Format"))
+                .build();
+            show.update_property(&[gtk::accessible::Property::Label("Format")]);
+            show.bind_property("active", &editor_split, "show-sidebar").bidirectional().sync_create().build();
+            show
+        };
 
 
         // ── Content stack ─────────────────────────────────────────────────
@@ -461,6 +366,7 @@ impl DecksWindow {
 
         // ── SuiteWindow chrome ────────────────────────────────────────────
         let suite_win = SuiteWindow::new(app, "Decks", vec![], vec![]);
+        suite_win.header_bar.pack_end(&format_toggle);
         suite_common::bind_window_geometry(&suite_win.window, &settings);
 
         // ── File Drag and Drop Support ────────────────────────────────────
@@ -879,6 +785,7 @@ impl DecksWindow {
             let ss = slides.clone();
             let cs_ref = current_slide.clone();
             let masters = masters.clone();
+            let refresh = refresh_hud.clone();
             let act = gio::SimpleAction::new(name, None);
             act.connect_activate(move |_, _| {
                 let changed = if is_undo { controller.undo() } else { controller.redo() };
@@ -886,6 +793,8 @@ impl DecksWindow {
                     cs.queue_draw();
                     let snapshot = ss.borrow().clone();
                     rebuild_slide_list(&sl, &snapshot, &masters.borrow(), cs_ref.get());
+                    // The inspector shows the undone state too.
+                    refresh();
                 }
             });
             app.add_action(&act);
@@ -897,6 +806,7 @@ impl DecksWindow {
             let cs_ref = current_slide.clone();
             let controller = controller.clone();
             let refresh = refresh_hud.clone();
+            let so = selected_object.clone();
             let act = gio::SimpleAction::new("add-text-box", None);
             act.connect_activate(move |_, _| {
                 let idx = cs_ref.get();
@@ -907,6 +817,8 @@ impl DecksWindow {
                     body: Default::default(),
                 };
                 controller.add_object(idx, obj);
+                // What was just inserted is selected, ready to format.
+                so.set(controller.slides.borrow().get(idx).map(|s| s.objects.len().saturating_sub(1)));
                 cs.queue_draw();
                 refresh();
             });
@@ -924,6 +836,7 @@ impl DecksWindow {
             let shape_count = Rc::new(Cell::new(0u32));
             let controller = controller.clone();
             let refresh = refresh_hud.clone();
+            let so = selected_object.clone();
             let act = gio::SimpleAction::new("add-shape", None);
             act.connect_activate(move |_, _| {
                 let idx = cs_ref.get();
@@ -942,6 +855,7 @@ impl DecksWindow {
                 };
                 drop(ss_snap);
                 controller.add_object(idx, obj);
+                so.set(controller.slides.borrow().get(idx).map(|s| s.objects.len().saturating_sub(1)));
                 cs.queue_draw();
                 refresh();
             });
