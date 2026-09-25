@@ -16,9 +16,10 @@ on:
         type: boolean
         default: false
 
+# Read-only by default. Only the `publish` job below gets write scopes; the
+# evidence gate and the build-only dispatch path never needed them (#1007).
 permissions:
-  contents: write
-  packages: write
+  contents: read
 
 jobs:
   # A tag used to publish Flatpaks regardless of what the evidence workflows
@@ -54,7 +55,17 @@ jobs:
     strategy:
       matrix:
         app: [letters, tables, decks]
-    uses: tuna-os/.github/.github/workflows/publish-flatpak.yml@main
+    # What the reusable workflow does with them: `contents: write` uploads
+    # the bundles to the GitHub release, `packages: write` pushes the OCI
+    # images to GHCR.
+    permissions:
+      contents: write
+      packages: write
+    # Pinned to a reviewed commit, not @main: a job holding write scopes
+    # and the index token must not run whatever the shared branch holds at
+    # publish time (#286, #1007). Renovate proposes digest bumps; review the
+    # tuna-os/.github diff before merging one.
+    uses: tuna-os/.github/.github/workflows/publish-flatpak.yml@60eec34d43721216fb22d9a7c9b82092b6fa82df # main
     with:
       app-id: org.tunaos.${{ matrix.app }}
       manifest-path: flatpak/org.tunaos.${{ matrix.app }}.json
@@ -64,4 +75,8 @@ jobs:
       # `||` would fall through to C and publish anyway regardless of the
       # toggle (caught by testing on mariner, tuna-os/mariner#17).
       publish: ${{ (github.event_name != 'workflow_dispatch' && github.event_name != 'pull_request') || (github.event_name == 'workflow_dispatch' && inputs.publish) }}
-    secrets: inherit
+    # Only the one secret the called workflow declares, not `inherit`
+    # (every repository and organisation secret). GITHUB_TOKEN is passed
+    # implicitly, limited by `permissions` above.
+    secrets:
+      FLATPAK_INDEX_TOKEN: ${{ secrets.FLATPAK_INDEX_TOKEN }}
