@@ -495,6 +495,23 @@ pub fn accent_rgb(widget: &impl IsA<gtk::Widget>) -> (f64, f64, f64) {
         .unwrap_or((0.0, 0.5, 1.0))
 }
 
+/// Render text drawn on `cr` the way GTK renders its own widgets' text:
+/// greyscale antialiasing, slight hinting, unhinted metrics. A canvas that
+/// lays text out with pangocairo on its own Cairo context otherwise takes
+/// fontconfig's raw defaults, which on many systems (and the render-lab
+/// container) are subpixel RGB. The spreadsheet grid and slide canvas then
+/// had coloured fringes that no other GNOME text has, and their layout
+/// metrics differed from the widgets'. Call once per draw, before creating
+/// any layout from `cr`; layouts pick the options up from it.
+pub fn use_ui_font_rendering(cr: &gtk4::cairo::Context) {
+    use gtk4::cairo::{Antialias, FontOptions, HintMetrics, HintStyle};
+    let Ok(mut options) = FontOptions::new() else { return };
+    options.set_antialias(Antialias::Gray);
+    options.set_hint_style(HintStyle::Slight);
+    options.set_hint_metrics(HintMetrics::Off);
+    cr.set_font_options(&options);
+}
+
 /// Theme-aware foreground color for canvas text. Keep the fallback contrast
 /// explicit for high-contrast themes where a named color may be unavailable.
 pub fn canvas_foreground(is_dark: bool) -> (f64, f64, f64) {
