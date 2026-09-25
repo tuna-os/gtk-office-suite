@@ -15,6 +15,40 @@ fn round_trip(doc: &Document) -> Document {
     docx::read(path).expect("read docx")
 }
 
+/// The Latin typefaces of a saved package's theme: (major, minor).
+fn theme_fonts(path: &std::path::Path) -> (String, String) {
+    let mut zip = zip::ZipArchive::new(std::fs::File::open(path).unwrap()).unwrap();
+    let mut xml = String::new();
+    std::io::Read::read_to_string(&mut zip.by_name("word/theme/theme1.xml").expect("a theme part"), &mut xml).unwrap();
+    let face = |scheme: &str| {
+        let at = xml.find(scheme).unwrap();
+        let latin = at + xml[at..].find("<a:latin typeface=\"").unwrap() + "<a:latin typeface=\"".len();
+        xml[latin..latin + xml[latin..].find('"').unwrap()].to_string()
+    };
+    (face("<a:majorFont>"), face("<a:minorFont>"))
+}
+
+/// A new document's theme names Letters' fonts, not the Aptos of the
+/// Office theme rdocx writes, and it reopens in them.
+#[test]
+fn the_theme_names_the_documents_fonts() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("new.docx");
+    docx::write(&Document::from_plain_text("hello"), &path).unwrap();
+    assert_eq!(theme_fonts(&path), ("Liberation Serif".to_string(), "Liberation Serif".to_string()));
+    let rt = docx::read(path.to_str().unwrap()).unwrap();
+    assert_eq!(rt.base_font.family.as_deref(), Some("Liberation Serif"));
+    assert!(rt.paragraphs[0].runs.iter().all(|r| r.style.font_family.is_none()), "text is in the default font");
+
+    // A document's own base font is its theme's too.
+    let mut d = Document::from_plain_text("hello");
+    d.base_font.family = Some("DejaVu Sans".into());
+    let path = dir.path().join("own.docx");
+    docx::write(&d, &path).unwrap();
+    assert_eq!(theme_fonts(&path).1, "DejaVu Sans");
+    assert_eq!(docx::read(path.to_str().unwrap()).unwrap().base_font.family.as_deref(), Some("DejaVu Sans"));
+}
+
 /// Smart chips reopen as chips: a date is a Word date content control, a
 /// link or person chip its hyperlink in a tagged control.
 #[test]
