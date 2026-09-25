@@ -13,26 +13,9 @@
 use std::cell::{Cell, RefCell};
 use std::rc::Rc;
 
-use suite_common_core::events::{Broadcaster, Hint, Listener};
-use suite_common_core::undo::UndoManager;
 
 use crate::engine::{MasterSlide, Slide, SlideObject};
-use crate::ops::{Op, OpCommand};
-
-/// Marks the deck dirty on any undo-stack mutation (execute, undo, or
-/// redo) — driven by the undo manager's own broadcaster rather than set
-/// at each call site, so it can't drift from what the undo history did.
-struct DirtyListener {
-    dirty: Rc<Cell<bool>>,
-}
-
-impl Listener<Hint> for DirtyListener {
-    fn on_event(&self, hint: &Hint) {
-        if let Hint::UndoStateChanged { .. } = hint {
-            self.dirty.set(true);
-        }
-    }
-}
+use crate::ops::{History, Op};
 
 pub struct DecksController {
     pub slides: Rc<RefCell<Vec<Slide>>>,
@@ -43,25 +26,20 @@ pub struct DecksController {
     /// shared cell rather than tracking its own copy (mirrors
     /// tables_core::controller::WorkbookController::file_path).
     pub file_path: Rc<RefCell<Option<String>>>,
-    undo: RefCell<UndoManager<Vec<Slide>>>,
+    /// Every edit's inverse ops (ops.rs). Applying, undoing and redoing
+    /// through it are the only ways the controller changes the slides,
+    /// and each marks the deck dirty.
+    history: RefCell<History<Op>>,
 }
 
 impl DecksController {
     pub fn new(slides: Vec<Slide>, masters: Vec<MasterSlide>) -> Self {
-        let slides = Rc::new(RefCell::new(slides));
-        let mut undo = UndoManager::new(slides.clone());
-        let dirty = Rc::new(Cell::new(false));
-        undo.broadcaster = Some(Rc::new(Broadcaster::new()));
-        undo.broadcaster
-            .as_ref()
-            .unwrap()
-            .listen(Rc::new(DirtyListener { dirty: dirty.clone() }));
         Self {
-            slides,
+            slides: Rc::new(RefCell::new(slides)),
             masters: Rc::new(RefCell::new(masters)),
-            dirty,
+            dirty: Rc::new(Cell::new(false)),
             file_path: Rc::new(RefCell::new(None)),
-            undo: RefCell::new(undo),
+            history: RefCell::new(History::default()),
         }
     }
 
@@ -138,10 +116,8 @@ impl DecksController {
             // Every op addressed something deleted: nothing happened.
             return false;
         }
-        // Undo what was just applied, so the command applies it once, the
-        // path redo takes too.
-        let _ = crate::ops::apply_all(&mut self.slides.borrow_mut(), &inverses);
-        self.execute(Box::new(OpCommand { ops, inverses: Default::default(), description: description.to_string() }));
+        self.history.borrow_mut().record(description, inverses);
+        self.dirty.set(true);
         true
     }
 
@@ -159,14 +135,6 @@ impl DecksController {
             crate::ops::set_objects(&slides, slide_idx, &objects)
         };
         self.apply_ops(description, ops)
-    }
-
-    /// Escape hatch for object-level commands that don't yet have their
-    /// own controller method — still routed through the same owned undo
-    /// history rather than a second one, so slide-list and object edits
-    /// never desync.
-    pub fn execute(&self, cmd: Box<dyn suite_common_core::undo::Command<Vec<Slide>>>) {
-        self.undo.borrow_mut().execute(cmd);
     }
 
     pub fn add_object(&self, slide_idx: usize, object: SlideObject) {
@@ -406,19 +374,27 @@ impl DecksController {
     }
 
     pub fn undo(&self) -> bool {
-        self.undo.borrow_mut().undo()
+        let done = self.history.borrow_mut().undo(&mut self.slides.borrow_mut());
+        if done {
+            self.dirty.set(true);
+        }
+        done
     }
 
     pub fn redo(&self) -> bool {
-        self.undo.borrow_mut().redo()
+        let done = self.history.borrow_mut().redo(&mut self.slides.borrow_mut());
+        if done {
+            self.dirty.set(true);
+        }
+        done
     }
 
     pub fn can_undo(&self) -> bool {
-        self.undo.borrow().can_undo()
+        self.history.borrow().can_undo()
     }
 
     pub fn can_redo(&self) -> bool {
-        self.undo.borrow().can_redo()
+        self.history.borrow().can_redo()
     }
 }
 
