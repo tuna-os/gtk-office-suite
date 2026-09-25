@@ -766,6 +766,9 @@ pub struct SheetModel {
     /// Conditional-formatting rules (ADR 0003 §4).
     pub cond_rules: Vec<CondRule>,
     pub validations: Vec<Vec<Option<ValidationRule>>>,
+    /// Cell notes (Excel's notes, Calc's comments): plain text shown on
+    /// hover, marked by a red corner.
+    pub notes: Vec<Vec<Option<String>>>,
     /// Rows currently hidden by a column-value filter (#113). Purely a
     /// display concern — data, formulas, and formatting for a hidden row
     /// are untouched; rendering and hit-testing are expected to skip
@@ -842,6 +845,7 @@ impl SheetModel {
             cell_protections: vec![vec![CellProtection::default(); cols]; rows],
             cond_rules: Vec::new(),
             validations: vec![vec![None; cols]; rows],
+            notes: vec![vec![None; cols]; rows],
             hidden_rows: std::collections::HashSet::new(),
             hidden_rows_manual: std::collections::HashSet::new(),
             hidden_cols: std::collections::HashSet::new(),
@@ -864,6 +868,7 @@ impl SheetModel {
         insert_matrix_rows(&mut self.borders, at, count, self.cols);
         insert_matrix_rows(&mut self.cell_protections, at, count, self.cols);
         insert_matrix_rows(&mut self.validations, at, count, self.cols);
+        insert_matrix_rows(&mut self.notes, at, count, self.cols);
         self.row_heights.splice(at..at, std::iter::repeat_n(ROW_HEIGHT, count));
         self.rows += count;
         self.shift_row_metadata(at, count as isize);
@@ -880,6 +885,7 @@ impl SheetModel {
         delete_matrix_rows(&mut self.borders, at, end);
         delete_matrix_rows(&mut self.cell_protections, at, end);
         delete_matrix_rows(&mut self.validations, at, end);
+        delete_matrix_rows(&mut self.notes, at, end);
         self.row_heights.drain(at..end);
         self.rows -= count;
         self.shift_row_metadata(at, -(count as isize));
@@ -897,6 +903,7 @@ impl SheetModel {
         insert_matrix_cols(&mut self.borders, at, count);
         insert_matrix_cols(&mut self.cell_protections, at, count);
         insert_matrix_cols(&mut self.validations, at, count);
+        insert_matrix_cols(&mut self.notes, at, count);
         self.col_widths.splice(at..at, std::iter::repeat_n(COL_WIDTH, count));
         self.cols += count;
         self.shift_col_metadata(at, count as isize);
@@ -913,6 +920,7 @@ impl SheetModel {
         delete_matrix_cols(&mut self.borders, at, end);
         delete_matrix_cols(&mut self.cell_protections, at, end);
         delete_matrix_cols(&mut self.validations, at, end);
+        delete_matrix_cols(&mut self.notes, at, end);
         self.col_widths.drain(at..end);
         self.cols -= count;
         self.shift_col_metadata(at, -(count as isize));

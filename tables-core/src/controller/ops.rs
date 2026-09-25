@@ -68,6 +68,7 @@ pub struct CellContent {
     pub border: CellBorder,
     pub validation: Option<ValidationRule>,
     pub lock: CellProtection,
+    pub note: Option<String>,
 }
 
 /// One row or column: its size and its cells in order.
@@ -122,6 +123,8 @@ pub enum Op {
     SetCells { sheet: u32, cells: Vec<(usize, usize, String)> },
     SetValidation { sheet: u32, row: usize, col: usize, rule: Option<ValidationRule> },
     SetLocked { sheet: u32, row: usize, col: usize, protection: CellProtection },
+    /// A cell's note: `None` removes it.
+    SetNote { sheet: u32, row: usize, col: usize, note: Option<String> },
     /// One sheet-wide property: a last-writer-wins register each.
     SetProp { sheet: u32, prop: SheetProp },
     /// Define a workbook name (`formula`), or remove it (`None`).
@@ -215,6 +218,7 @@ pub(super) fn cell_content(state: &WorkbookState, sheet: usize, row: usize, col:
         border: s.borders[row][col].clone(),
         validation: s.validations[row][col].clone(),
         lock: s.cell_protections[row][col].clone(),
+        note: s.notes[row][col].clone(),
     }
 }
 
@@ -259,6 +263,7 @@ impl Op {
             | Op::SetCells { sheet, .. }
             | Op::SetValidation { sheet, .. }
             | Op::SetLocked { sheet, .. }
+            | Op::SetNote { sheet, .. }
             | Op::SetProp { sheet, .. }
             | Op::DeleteSheet { sheet } => Some(*sheet),
             Op::AddSheet { .. } | Op::DefineName { .. } => None,
@@ -333,6 +338,7 @@ impl Op {
                             s.styles[r][c] = cell.style.clone();
                             s.borders[r][c] = cell.border.clone();
                             s.validations[r][c] = cell.validation.clone();
+                            s.notes[r][c] = cell.note.clone();
                             s.cell_protections[r][c] = cell.lock.clone();
                             if !cell.input.is_empty() {
                                 inputs.push((r, c, cell.input.clone()));
@@ -469,6 +475,12 @@ impl Op {
                 let old = std::mem::replace(&mut state.sheets[si].borrow_mut().validations[*row][*col], rule.clone());
                 Ok(Op::SetValidation { sheet: *sheet, row: *row, col: *col, rule: old })
             }
+            Op::SetNote { sheet, row, col, note } => {
+                check_cell(state, si, *row, *col)?;
+                let note = note.clone().filter(|n| !n.is_empty());
+                let old = std::mem::replace(&mut state.sheets[si].borrow_mut().notes[*row][*col], note);
+                Ok(Op::SetNote { sheet: *sheet, row: *row, col: *col, note: old })
+            }
             Op::SetLocked { sheet, row, col, protection } => {
                 check_cell(state, si, *row, *col)?;
                 let old = std::mem::replace(&mut state.sheets[si].borrow_mut().cell_protections[*row][*col], protection.clone());
@@ -563,6 +575,9 @@ pub fn diff_ops(before: &SheetModel, after: &SheetModel) -> Vec<Op> {
             }
             if before.cell_protections[r][c] != after.cell_protections[r][c] {
                 ops.push(Op::SetLocked { sheet, row, col, protection: after.cell_protections[r][c].clone() });
+            }
+            if before.notes[r][c] != after.notes[r][c] {
+                ops.push(Op::SetNote { sheet, row, col, note: after.notes[r][c].clone() });
             }
         }
     }
@@ -741,6 +756,7 @@ pub struct SheetImage {
     pub frozen: (usize, usize),
     pub values: Vec<Vec<String>>,
     pub validations: Vec<Vec<Option<ValidationRule>>>,
+    pub notes: Vec<Vec<Option<String>>>,
     pub locks: Vec<Vec<CellProtection>>,
     pub props: Vec<SheetProp>,
 }
@@ -776,6 +792,7 @@ impl WorkbookImage {
                     frozen: (s.frozen_rows, s.frozen_cols),
                     values: (0..s.rows).map(|r| (0..s.cols).map(|c| state.engine.cell_at(i, r, c)).collect()).collect(),
                     validations: s.validations.clone(),
+                    notes: s.notes.clone(),
                     locks: s.cell_protections.clone(),
                     props: SheetProp::all(&s),
                 }

@@ -45,6 +45,111 @@ pub struct SheetXlsxProps {
     /// CellStyle, 0-based `(row, col, style)`. Cells on the default style
     /// are absent.
     pub cell_styles: Vec<(usize, usize, super::XfStyle)>,
+    /// Cell notes, 0-based `(row, col, text)`: xlsx's `comments` part,
+    /// ODF's `office:annotation`.
+    pub notes: Vec<(usize, usize, String)>,
+}
+
+/// XML text to plain text: the five named entities and numeric character
+/// references (Calc writes a note's line break as `&#10;`).
+fn unescape(s: &str) -> String {
+    let mut out = String::with_capacity(s.len());
+    let mut rest = s;
+    while let Some(i) = rest.find('&') {
+        out.push_str(&rest[..i]);
+        let tail = &rest[i..];
+        let Some(end) = tail.find(';').filter(|&e| e <= 10) else {
+            out.push('&');
+            rest = &tail[1..];
+            continue;
+        };
+        let entity = &tail[1..end];
+        let ch = match entity {
+            "quot" => Some('"'),
+            "apos" => Some('\''),
+            "lt" => Some('<'),
+            "gt" => Some('>'),
+            "amp" => Some('&'),
+            _ => entity
+                .strip_prefix("#x")
+                .or_else(|| entity.strip_prefix("#X"))
+                .map(|h| u32::from_str_radix(h, 16))
+                .or_else(|| entity.strip_prefix('#').map(str::parse::<u32>))
+                .and_then(Result::ok)
+                .and_then(char::from_u32),
+        };
+        match ch {
+            Some(c) => {
+                out.push(c);
+                rest = &tail[end + 1..];
+            }
+            None => {
+                out.push('&');
+                rest = &tail[1..];
+            }
+        }
+    }
+    out.push_str(rest);
+    out
+}
+
+/// The text of every `<t>` (or `<a:t>`, `<text:span>`…) run inside `xml`,
+/// in order: what a note says, without its formatting.
+fn runs_text(xml: &str, run: &str) -> String {
+    let (open, close) = (format!("<{run}"), format!("</{run}>"));
+    let mut out = String::new();
+    for piece in xml.split(&open).skip(1) {
+        // `<t>` or `<t xml:space="preserve">`, but not `<text>`.
+        let Some(rest) = piece.strip_prefix('>').or_else(|| piece.strip_prefix(' ').and_then(|p| p.split_once('>').map(|x| x.1))) else {
+            continue;
+        };
+        out.push_str(&unescape(rest.split(&close).next().unwrap_or("")));
+    }
+    out
+}
+
+/// Notes from an xlsx `comments` part: `<comment ref="B2"><text>…</text>`.
+pub(super) fn parse_xlsx_comments(xml: &str) -> Vec<(usize, usize, String)> {
+    let mut out = Vec::new();
+    for comment in xml.split("<comment ").skip(1) {
+        let tag = comment.split('>').next().unwrap_or("");
+        let Some((r, c)) = xml_attr(tag, "ref").and_then(crate::sheet::parse_cell_ref) else { continue };
+        if r >= crate::sheet::SHEET_MAX_ROWS || c >= crate::sheet::SHEET_MAX_COLS {
+            continue;
+        }
+        let body = comment.split("</comment>").next().unwrap_or("");
+        let text = runs_text(body, "t");
+        if !text.is_empty() {
+            out.push((r, c, text));
+        }
+    }
+    out
+}
+
+/// The note in an ODF cell's `office:annotation`, its paragraphs joined by
+/// newlines; the author and date elements are left out.
+fn odf_annotation(cell: &str) -> Option<String> {
+    let body = cell.split("<office:annotation").nth(1)?.split("</office:annotation>").next()?;
+    let paras: Vec<String> = split_elements(body, "text:p")
+        .into_iter()
+        .map(|p| {
+            let inner = p.split_once('>').map_or("", |x| x.1).split("</text:p>").next().unwrap_or("");
+            // Drop markup (spans, line breaks) and keep the text.
+            let mut text = String::new();
+            let mut in_tag = false;
+            for ch in inner.chars() {
+                match ch {
+                    '<' => in_tag = true,
+                    '>' => in_tag = false,
+                    _ if !in_tag => text.push(ch),
+                    _ => {}
+                }
+            }
+            unescape(&text)
+        })
+        .collect();
+    let text = paras.join("\n");
+    (!text.is_empty()).then_some(text)
 }
 
 /// xlsx stores a column width in character units of the default font's
@@ -343,6 +448,38 @@ pub fn read_sheet_props_from_xlsx(
             props.page_setup = Some(setup);
         }
 
+        // Notes: the sheet's rels name its comments part.
+        let (dir, file) = part.rsplit_once('/').unwrap_or(("", part.as_str()));
+        let rels_part = format!("{dir}/_rels/{file}.rels");
+        if let Ok(rels_xml) = zip.part_to_string(&rels_part, &mut budget) {
+            for rel in rels_xml.split("<Relationship ").skip(1) {
+                let rel = rel.split('>').next().unwrap_or("");
+                if !xml_attr(rel, "Type").is_some_and(|t| t.ends_with("/comments")) {
+                    continue;
+                }
+                let Some(target) = xml_attr(rel, "Target") else { continue };
+                let target = if let Some(abs) = target.strip_prefix('/') {
+                    abs.to_string()
+                } else {
+                    // Relative to the sheet part's folder: "../comments1.xml".
+                    let mut path: Vec<&str> = dir.split('/').collect();
+                    for seg in target.split('/') {
+                        match seg {
+                            ".." => {
+                                path.pop();
+                            }
+                            "." => {}
+                            s => path.push(s),
+                        }
+                    }
+                    path.join("/")
+                };
+                if let Ok(comments) = zip.part_to_string(&target, &mut budget) {
+                    props.notes.extend(parse_xlsx_comments(&comments));
+                }
+            }
+        }
+
         out.insert(name.clone(), props);
     }
     out
@@ -450,6 +587,23 @@ mod sheet_props_tests {
         assert_eq!(setup.size, PageSize::Legal);
         assert_eq!(setup.orientation, Orientation::Landscape);
         assert!((setup.margin_left_mm - 10.0).abs() < 0.1, "{}", setup.margin_left_mm);
+    }
+
+    /// Notes save as the sheet's comments part and load back onto their
+    /// cells, on the right sheet of several.
+    #[test]
+    fn notes_round_trip_per_sheet() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("notes.xlsx");
+        let mut a = SheetModel::new("Plan", 4, 4, 0);
+        a.notes[1][2] = Some("Check with Ann\nby Friday & <soon>".into());
+        let mut b = SheetModel::new("Other", 4, 4, 1);
+        b.notes[0][0] = Some("second sheet".into());
+        save_sheets_to_xlsx(path.to_str().unwrap(), &[a, b]).unwrap();
+        let (_, sheets) = crate::io::load_workbook(path.to_str().unwrap()).unwrap();
+        assert_eq!(sheets[0].notes[1][2].as_deref(), Some("Check with Ann\nby Friday & <soon>"));
+        assert_eq!(sheets[0].notes.iter().flatten().flatten().count(), 1);
+        assert_eq!(sheets[1].notes[0][0].as_deref(), Some("second sheet"));
     }
 
     #[test]
@@ -659,6 +813,11 @@ pub fn read_sheet_props_from_ods(
                 if !is_covered && (cspan > 1 || rspan > 1) {
                     props.merges.push((row, c, rspan, cspan));
                 }
+                if let Some(note) = odf_annotation(cell) {
+                    if row < crate::sheet::SHEET_MAX_ROWS && c < crate::sheet::SHEET_MAX_COLS {
+                        props.notes.push((row, c, note));
+                    }
+                }
                 let crepeat = odf_repeat(tag, "table:number-columns-repeated");
                 // The cell's own style, else its column's default. Only
                 // cells that hold a value or stand alone are styled: a
@@ -813,6 +972,40 @@ mod odf_tests {
         assert_eq!(s.col_widths.get(&3), Some(&192.0), "the fourth column");
         assert_eq!(s.row_heights.get(&0), Some(&48.0));
         assert_eq!(s.row_heights.get(&1), Some(&48.0), "the repeated row");
+    }
+
+    /// A note is the cell's `office:annotation`, paragraphs joined by
+    /// newlines, without the author and date Calc writes beside it; it
+    /// lands on the cell that holds it, after repeated cells.
+    #[test]
+    fn an_annotation_is_its_cells_note() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("n.ods");
+        write_ods_fixture(
+            &path,
+            "<office:body><office:spreadsheet>\
+             <table:table table:name=\"S\">\
+             <table:table-row><table:table-cell table:number-columns-repeated=\"2\"/>\
+             <table:table-cell office:value-type=\"float\" office:value=\"4\">\
+             <office:annotation><dc:creator>Ann</dc:creator><dc:date>2026-09-25T10:00:00</dc:date>\
+             <text:p>Check this</text:p><text:p>with <text:span>Bob</text:span> &amp; co</text:p></office:annotation>\
+             <text:p>4</text:p></table:table-cell></table:table-row>\
+             </table:table></office:spreadsheet></office:body>",
+        );
+        let props = read_sheet_props_from_ods(path.to_str().unwrap());
+        assert_eq!(props["S"].notes, vec![(0, 2, "Check this\nwith Bob & co".to_string())]);
+    }
+
+    #[test]
+    fn xlsx_comments_are_notes_by_cell() {
+        let xml = r#"<comments><authors><author>A</author></authors><commentList>
+            <comment ref="B3" authorId="0"><text><r><rPr><b/></rPr><t>Ann:</t></r><r><t xml:space="preserve">
+Due &lt;Friday&gt;</t></r></text></comment>
+            <comment ref="A1" authorId="0"><text><t>plain</t></text></comment></commentList></comments>"#;
+        assert_eq!(
+            parse_xlsx_comments(xml),
+            vec![(2, 1, "Ann:\nDue <Friday>".to_string()), (0, 0, "plain".to_string())]
+        );
     }
 
     /// A cell takes its own style, else its column's default cell style;

@@ -273,6 +273,11 @@ pub fn load_xlsx_workbook(path: &str) -> Result<(TablesEngine, Vec<SheetModel>),
                     sheet.borders[*r][*c] = x.border.clone();
                 }
             }
+            for (r, c, note) in &props.notes {
+                if *r < sheet.rows && *c < sheet.cols {
+                    sheet.notes[*r][*c] = Some(note.clone());
+                }
+            }
             sheet.merges = props
                 .merges
                 .iter()
@@ -427,6 +432,11 @@ pub fn load_ods_workbook(path: &str) -> Result<(TablesEngine, Vec<SheetModel>), 
                 sheet.formats[*r][*c] = x.format.clone();
                 sheet.styles[*r][*c] = x.style.clone();
                 sheet.borders[*r][*c] = x.border.clone();
+            }
+        }
+        for (r, c, note) in &p.notes {
+            if *r < sheet.rows && *c < sheet.cols {
+                sheet.notes[*r][*c] = Some(note.clone());
             }
         }
     }

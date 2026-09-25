@@ -255,6 +255,19 @@ pub fn save_sheets_to_xlsx_bytes(
                 .map_err(|e| format!("Conditional format error: {}", e))?;
         }
 
+        // Cell notes: Excel's notes (the legacy comments part), which Calc
+        // reads as comments.
+        for (r, row) in sh.notes.iter().enumerate() {
+            for (c, note) in row.iter().enumerate() {
+                if let Some(text) = note.as_deref().filter(|t| !t.is_empty()) {
+                    let note = rust_xlsxwriter::Note::new(text).add_author_prefix(false);
+                    sheet
+                        .insert_note(r as u32, c as u16, &note)
+                        .map_err(|e| format!("Note error: {e}"))?;
+                }
+            }
+        }
+
         for ch in &sh.charts {
             use crate::sheet::{ChartKind, LegendPosition};
             use rust_xlsxwriter::{Chart, ChartLegendPosition, ChartType as XType};

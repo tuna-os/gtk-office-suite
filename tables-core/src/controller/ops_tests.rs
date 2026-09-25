@@ -55,7 +55,8 @@ pub(super) fn random_op(rng: &mut Rng, state: &WorkbookState) -> Op {
     let (row, col) = (rng.below(rows), rng.below(cols));
     let axis = if rng.below(2) == 0 { Axis::Rows } else { Axis::Cols };
     let len = if axis == Axis::Rows { rows } else { cols };
-    match rng.below(20) {
+    match rng.below(21) {
+        19 => Op::SetNote { sheet, row, col, note: [None, Some(format!("note {}", rng.below(9)))][rng.below(2)].clone() },
         13 => Op::MoveSheet { sheet, to: rng.below(state.sheets.len()) },
         14 => Op::SetCells {
             sheet,
@@ -205,6 +206,7 @@ fn direct(state: &mut WorkbookState, op: &Op) -> Result<(), String> {
             resync_all(state);
         }
         Op::SetValidation { row, col, rule, .. } => state.sheets[pos].borrow_mut().validations[*row][*col] = rule.clone(),
+        Op::SetNote { row, col, note, .. } => state.sheets[pos].borrow_mut().notes[*row][*col] = note.clone().filter(|n| !n.is_empty()),
         Op::SetLocked { row, col, protection, .. } => state.sheets[pos].borrow_mut().cell_protections[*row][*col] = protection.clone(),
         Op::SetProp { prop, .. } => {
             let mut s = state.sheets[pos].borrow_mut();

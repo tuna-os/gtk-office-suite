@@ -298,6 +298,7 @@ impl WorkbookController {
         after_sheet.borders = order.iter().map(|&row| before_sheet.borders[row].clone()).collect();
         after_sheet.styles = order.iter().map(|&row| before_sheet.styles[row].clone()).collect();
         after_sheet.validations = order.iter().map(|&row| before_sheet.validations[row].clone()).collect();
+        after_sheet.notes = order.iter().map(|&row| before_sheet.notes[row].clone()).collect();
         let mut ops = vec![Op::SetCells { sheet: sheet_id, cells }];
         ops.extend(super::ops::diff_ops(&before_sheet, &after_sheet));
         self.apply_ops("Sort", ops);
