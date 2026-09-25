@@ -344,6 +344,58 @@ fn relayout_reshapes_only_the_edited_paragraph() {
     assert_eq!(tree, lay(&d), "the incremental layout is the full layout");
 }
 
+/// A paragraph ending in a reference to footnote `n`.
+fn with_note(text: &str, n: usize) -> Paragraph {
+    Paragraph {
+        style: ParaStyle::default(),
+        runs: vec![Run::plain(text), Run { text: String::new(), style: crate::model::RunStyle { footnote: Some(n), ..Default::default() } }],
+    }
+}
+
+#[test]
+fn footnotes_sit_at_the_foot_of_the_page_that_references_them() {
+    let mut d = doc_of(2, "body");
+    d.paragraphs.insert(1, with_note("noted", 0));
+    d.footnotes = vec!["The note.".into()];
+    let t = lay(&d);
+    let page = &t.pages[0];
+    // The reference is drawn as a superscript number after "noted".
+    let refs: Vec<f64> = page.items.iter().filter_map(|i| match i { Item::NoteRef { x_pt, .. } => Some(*x_pt), _ => None }).collect();
+    assert_eq!(refs, [72.0 + 5.0 * 6.0]);
+    // The note: its number at body size (12 pt: 15 pt tall) and 10 pt
+    // text on one line ending at the bottom margin, under a rule a quarter
+    // of the text width.
+    let foot = 841.9 - 72.0;
+    let note: Vec<(f64, f64)> = page
+        .items
+        .iter()
+        .filter_map(|i| match i { Item::Line { source: Source::Footnote(0), top_pt, height_pt, .. } => Some((*top_pt, *height_pt)), _ => None })
+        .collect();
+    assert_eq!(note.len(), 1);
+    assert!((note[0].1 - 15.0).abs() < 1e-9 && (note[0].0 + note[0].1 - foot).abs() < 1e-6, "{note:?}");
+    let rule = page.items.iter().find_map(|i| match i { Item::Rule { y_pt, width_pt, .. } => Some((*y_pt, *width_pt)), _ => None }).unwrap();
+    assert!((rule.0 - (note[0].0 - NOTE_RULE_GAP_PT)).abs() < 1e-9);
+    assert!((rule.1 - (595.3 - 144.0) * NOTE_RULE_FRACTION).abs() < 0.1);
+}
+
+#[test]
+fn a_line_moves_to_the_next_page_with_its_note_when_they_do_not_both_fit() {
+    // The page holds 46 body lines. 45 lines, then a line whose note (and
+    // the separator) no longer fits below it: that line and its note go
+    // to page 2 together.
+    let mut d = doc_of(45, "x");
+    d.paragraphs.push(with_note("noted", 0));
+    d.footnotes = vec!["The note.".into()];
+    let t = lay(&d);
+    assert_eq!(t.page_of_paragraph(45), Some(1), "the referencing line moved on");
+    let on = |p: usize| t.pages[p].items.iter().any(|i| matches!(i, Item::Line { source: Source::Footnote(0), .. }));
+    assert!(!on(0) && on(1), "the note is on the reference's page");
+    // Without the note, the line would have fitted on page 1.
+    d.footnotes.clear();
+    d.paragraphs[45] = doc_of(1, "noted").paragraphs.remove(0);
+    assert_eq!(lay(&d).page_of_paragraph(45), Some(0));
+}
+
 #[test]
 fn a_smart_chip_is_one_object_drawn_as_a_pill() {
     let mut d = doc_of(1, "Due ");

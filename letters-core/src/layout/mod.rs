@@ -218,6 +218,9 @@ pub enum Source {
     Paragraph(usize),
     Header,
     Footer,
+    /// Footnote `Document::footnotes[i]`, at the foot of its page
+    /// (`note_paragraph`).
+    Footnote(usize),
 }
 
 /// A positioned element of a page. Coordinates are points from the page's
@@ -249,6 +252,11 @@ pub enum Item {
     /// as a pill from `x_pt` on the line's baseline (the painter shapes its
     /// label, as the shaper measured it).
     Chip { para: usize, ch: usize, x_pt: f64, baseline_pt: f64 },
+    /// A footnote reference: its run's object char `ch` in paragraph
+    /// `para`, drawn as the note's superscript number from `x_pt`.
+    NoteRef { para: usize, ch: usize, x_pt: f64, baseline_pt: f64 },
+    /// The short rule above a page's footnotes.
+    Rule { x_pt: f64, y_pt: f64, width_pt: f64 },
     /// A table cell's border box.
     Cell { table: u32, row: u32, col: u32, x_pt: f64, y_pt: f64, width_pt: f64, height_pt: f64 },
 }
@@ -363,10 +371,72 @@ pub const CELL_PADDING_PT: f64 = 5.4;
 pub const CELL_RULE_PT: f64 = 0.5;
 
 /// Lay out `doc` into pages.
+/// Footnote text size relative to body text: Word's and LibreOffice's
+/// default, 10 pt notes under 12 pt text.
+pub const NOTE_SCALE: f64 = 10.0 / 12.0;
+
+/// A footnote reference's number: the superscript size and rise relative
+/// to the text it is in (as `VertAlign::Superscript` draws).
+pub const NOTE_REF_SCALE: f64 = 0.58;
+pub const NOTE_REF_RISE: f64 = 0.33;
+
+/// Room between a page's body text and its footnotes, holding the
+/// separator rule `NOTE_RULE_GAP_PT` above the first note (LibreOffice's
+/// footnote area: a thin line and a small gap).
+pub const NOTE_SEPARATOR_PT: f64 = 6.0;
+pub const NOTE_RULE_GAP_PT: f64 = 2.0;
+
+/// Length of the separator rule, relative to the text width (LibreOffice's
+/// default footnote line).
+pub const NOTE_RULE_FRACTION: f64 = 0.25;
+
+/// Footnote `i` as the paragraph drawn at the foot of its page, as
+/// LibreOffice draws a Word footnote: its number at body size, a space, and
+/// its text at `NOTE_SCALE` of it, spaced like the document's body
+/// paragraphs (a note is a Normal paragraph in Word). The engine and the
+/// painter both build it here.
+pub fn note_paragraph(doc: &Document, i: usize, opts: &LayoutOptions) -> Paragraph {
+    let hp = (opts.font_size_pt * NOTE_SCALE * 2.0).round() as u16;
+    let size = crate::model::RunStyle { font_size_hp: Some(hp), ..Default::default() };
+    let text = doc.footnotes.get(i).cloned().unwrap_or_default();
+    let body = doc
+        .paragraphs
+        .iter()
+        .find(|p| p.style.heading.is_none() && p.style.table_cell.is_none() && p.style.list == ListKind::None && p.style.named_style.is_none())
+        .map(|p| &p.style);
+    Paragraph {
+        style: crate::model::ParaStyle {
+            line_spacing: body.map_or(1.0, |s| s.line_spacing),
+            space_after_pt: body.map_or(0.0, |s| s.space_after_pt),
+            ..Default::default()
+        },
+        runs: vec![Run::plain((i + 1).to_string()), Run { text: format!(" {text}"), style: size }],
+    }
+}
+
+/// A footnote's height at the foot of a page, space after included.
+fn note_height(p: &Paragraph, shaped: &Shaped) -> f64 {
+    shaped.lines.iter().map(|l| l.natural_height() * spacing(p)).sum::<f64>() + p.style.space_after_pt.max(0.0)
+}
+
+/// The footnotes referenced on line `lb` of `para`.
+fn line_notes(para: &Paragraph, lb: &LineBox) -> Vec<usize> {
+    lb.objects.iter().filter_map(|&(ch, _)| run_at(&para.runs, ch)?.style.footnote).collect()
+}
+
 pub fn layout(doc: &Document, opts: &LayoutOptions, shaper: &mut dyn Shaper) -> RenderTree {
     let opts = &opts.for_document(doc);
     let geometry = doc.page.unwrap_or(opts.page);
     let mut flow = Flow::new(geometry, opts);
+    // Each footnote's height at the foot of a page, for the flow to keep
+    // room for the notes of the lines it places.
+    let text_w = flow.content_width();
+    flow.note_heights = (0..doc.footnotes.len())
+        .map(|i| {
+            let p = note_paragraph(doc, i, opts);
+            note_height(&p, &shape_paragraph(&p, text_w, opts, shaper))
+        })
+        .collect();
     let ordinals = lists::ordinals(doc.paragraphs.iter().map(|p| &p.style));
     let col_w = flow.column_width();
 
@@ -541,10 +611,17 @@ fn place_paragraph(flow: &mut Flow, idx: usize, para: &Paragraph, shaped: &Shape
     let text: Vec<char> = layout_text(&para.runs).chars().collect();
     let mut line = 0;
     while line < n {
-        // How many lines fit here?
+        // How many lines fit here, each with room for its footnotes?
         let mut fit = 0;
         let mut y = flow.y;
-        while line + fit < n && y + heights[line + fit] <= flow.bottom() + 1e-6 {
+        let mut notes: Vec<usize> = Vec::new();
+        while line + fit < n {
+            let mut with = notes.clone();
+            with.extend(line_notes(para, &shaped.lines[line + fit]));
+            if y + heights[line + fit] > flow.bottom_with(&with) + 1e-6 {
+                break;
+            }
+            notes = with;
             y += heights[line + fit];
             fit += 1;
         }
@@ -575,6 +652,7 @@ fn place_paragraph(flow: &mut Flow, idx: usize, para: &Paragraph, shaped: &Shape
                 }
             }
             emit_line(flow, idx, para, &text, k, lb, x0 + shaped.box_x, shaped.box_w, top, height);
+            flow.add_notes(line_notes(para, lb));
             flow.y += height;
         }
         line += fit;
@@ -608,6 +686,10 @@ fn emit_line(flow: &mut Flow, idx: usize, para: &Paragraph, text: &[char], k: us
         let Some(run) = run_at(&para.runs, ch) else { continue };
         if run.style.chip.is_some() {
             flow.push(Item::Chip { para: idx, ch, x_pt: box_x + x, baseline_pt: baseline });
+            continue;
+        }
+        if run.style.footnote.is_some() {
+            flow.push(Item::NoteRef { para: idx, ch, x_pt: box_x + x, baseline_pt: baseline });
             continue;
         }
         let Some(src) = run.style.image.clone() else { continue };
@@ -693,11 +775,25 @@ struct Flow<'o> {
     column_items: usize,
     /// Space after the last paragraph, not yet added (see place_paragraph).
     pending_after: f64,
+    /// Height of each footnote at the foot of a page.
+    note_heights: Vec<f64>,
+    /// The footnotes referenced on each page, in order.
+    page_notes: Vec<Vec<usize>>,
 }
 
 impl<'o> Flow<'o> {
     fn new(geometry: PageGeometry, opts: &'o LayoutOptions) -> Self {
-        let mut f = Flow { geometry, opts, pages: Vec::new(), column: 0, y: 0.0, column_items: 0, pending_after: 0.0 };
+        let mut f = Flow {
+            geometry,
+            opts,
+            pages: Vec::new(),
+            column: 0,
+            y: 0.0,
+            column_items: 0,
+            pending_after: 0.0,
+            note_heights: Vec::new(),
+            page_notes: Vec::new(),
+        };
         f.new_page();
         f
     }
@@ -723,8 +819,41 @@ impl<'o> Flow<'o> {
         self.geometry.margin_top_pt
     }
 
-    fn bottom(&self) -> f64 {
+    /// The foot of the text area, above the bottom margin.
+    fn foot(&self) -> f64 {
         (self.geometry.height_pt - self.geometry.margin_bottom_pt).max(self.top() + 1.0)
+    }
+
+    /// Room the footnotes `notes` take at the foot of a page: their heights
+    /// and the separator above them.
+    fn notes_height(&self, notes: &[usize]) -> f64 {
+        if notes.is_empty() {
+            return 0.0;
+        }
+        NOTE_SEPARATOR_PT + notes.iter().map(|&i| self.note_heights.get(i).copied().unwrap_or(0.0)).sum::<f64>()
+    }
+
+    /// Where body text must end on this page, above its footnotes.
+    fn bottom(&self) -> f64 {
+        self.bottom_with(&[])
+    }
+
+    /// Where body text must end if the lines being placed add the notes
+    /// `more` to this page's.
+    fn bottom_with(&self, more: &[usize]) -> f64 {
+        let mut notes = self.page_notes.last().cloned().unwrap_or_default();
+        notes.extend(more.iter().filter(|i| !notes.contains(i)).collect::<Vec<_>>());
+        (self.foot() - self.notes_height(&notes)).max(self.top() + 1.0)
+    }
+
+    fn add_notes(&mut self, notes: Vec<usize>) {
+        if let Some(page) = self.page_notes.last_mut() {
+            for i in notes {
+                if !page.contains(&i) {
+                    page.push(i);
+                }
+            }
+        }
     }
 
     fn page_is_empty(&self) -> bool {
@@ -744,6 +873,7 @@ impl<'o> Flow<'o> {
             geometry: self.geometry,
             items: Vec::new(),
         });
+        self.page_notes.push(Vec::new());
         self.column = 0;
         self.y = self.top();
         self.column_items = 0;
@@ -771,6 +901,41 @@ impl<'o> Flow<'o> {
         let total = self.pages.len();
         let width = self.content_width();
         let (left, height) = (self.geometry.margin_left_pt, self.geometry.height_pt);
+        // Each page's footnotes, ending at the foot of its text area under
+        // a short rule.
+        let foot = self.foot();
+        for (page, notes) in self.pages.iter_mut().zip(&self.page_notes) {
+            if notes.is_empty() {
+                continue;
+            }
+            // The last note ends at the foot; its space after is not drawn.
+            let after = notes.last().map_or(0.0, |&i| note_paragraph(doc, i, opts).style.space_after_pt.max(0.0));
+            let mut y = foot + after - notes.iter().map(|&i| self.note_heights.get(i).copied().unwrap_or(0.0)).sum::<f64>();
+            page.items.push(Item::Rule { x_pt: left, y_pt: y - NOTE_RULE_GAP_PT, width_pt: width * NOTE_RULE_FRACTION });
+            for &i in notes {
+                let p = note_paragraph(doc, i, opts);
+                let shaped = shape_paragraph(&p, width, opts, shaper);
+                let chars: Vec<char> = layout_text(&p.runs).chars().collect();
+                let ls = spacing(&p);
+                for (k, lb) in shaped.lines.iter().enumerate() {
+                    page.items.push(Item::Line {
+                        source: Source::Footnote(i),
+                        line: k,
+                        start: lb.start,
+                        end: lb.end,
+                        text: chars[lb.start.min(chars.len())..lb.end.min(chars.len())].iter().collect(),
+                        box_x_pt: left,
+                        box_width_pt: width,
+                        x_pt: left + lb.x_pt,
+                        top_pt: y,
+                        baseline_pt: y + lb.ascent_pt,
+                        height_pt: lb.natural_height() * ls,
+                    });
+                    y += lb.natural_height() * ls;
+                }
+                y += p.style.space_after_pt.max(0.0);
+            }
+        }
         for page in &mut self.pages {
             for (source, template) in [(Source::Header, &doc.header), (Source::Footer, &doc.footer)] {
                 let Some(template) = template.as_deref().filter(|t| !t.is_empty()) else { continue };
@@ -849,8 +1014,9 @@ impl Shaper for MonoShaper {
                 if r.style.image.is_some() {
                     let (w, h) = image_size_pt(r, req.width_pt);
                     vec![(OBJECT, w, h)]
-                } else if r.style.footnote.is_some() {
-                    vec![(OBJECT, 0.0, 0.0)]
+                } else if let Some(n) = r.style.footnote {
+                    let digits = (n + 1).to_string().len() as f64;
+                    vec![(OBJECT, digits * s * NOTE_REF_SCALE * 0.5, 0.0)]
                 } else if r.style.chip.is_some() {
                     let w = r.text.chars().count() as f64 * s * 0.5 + 2.0 * (CHIP_PAD_PT + CHIP_GAP_PT);
                     vec![(OBJECT, w, s)]

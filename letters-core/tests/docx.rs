@@ -337,10 +337,32 @@ fn page_breaks_and_named_styles_survive() {
 fn header_footer_survive() {
     let mut d = Document::from_plain_text("body text");
     d.header = Some("Quarterly Report".into());
-    d.footer = Some("Page {page}".into());
+    d.footer = Some("Page {page} of {total}".into());
     let rt = round_trip(&d);
     assert_eq!(rt.header.as_deref(), Some("Quarterly Report"));
-    assert_eq!(rt.footer.as_deref(), Some("Page {page}"));
+    assert_eq!(rt.footer.as_deref(), Some("Page {page} of {total}"));
+}
+
+/// "{page}" and "{total}" are saved as Word's PAGE and NUMPAGES fields, so
+/// Word and LibreOffice number each page; they were written as literal
+/// "{page}" text.
+#[test]
+fn page_numbers_are_saved_as_fields() {
+    let mut d = Document::from_plain_text("body text");
+    d.footer = Some("Page {page} of {total}".into());
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("f.docx");
+    docx::write(&d, &path).unwrap();
+    let mut zip = zip::ZipArchive::new(std::fs::File::open(&path).unwrap()).unwrap();
+    let mut footers = String::new();
+    for i in 0..zip.len() {
+        let mut part = zip.by_index(i).unwrap();
+        if part.name().starts_with("word/footer") {
+            std::io::Read::read_to_string(&mut part, &mut footers).unwrap();
+        }
+    }
+    assert!(footers.contains("w:instr=\" PAGE \"") && footers.contains("w:instr=\" NUMPAGES \""), "{footers}");
+    assert!(!footers.contains("{page}"), "no literal placeholder is left");
 }
 
 // ── Page geometry & font family round-trip (PARITY stragglers) ───────
