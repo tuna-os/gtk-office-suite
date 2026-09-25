@@ -25,8 +25,9 @@ fn labelled(icon: &str, label: &str, tooltip: &str) -> adw::ButtonContent {
 fn button(icon: &str, label: &str, tooltip: &str, action: &str) -> gtk::Button {
     let b = gtk::Button::builder().child(&labelled(icon, label, tooltip)).action_name(action).build();
     b.add_css_class("flat");
+    // AdwButtonContent labels the button by its visible label ("Table"),
+    // and the tooltip ("Insert Table") becomes its accessible description.
     b.set_tooltip_text(Some(tooltip));
-    b.update_property(&[gtk::accessible::Property::Label(tooltip)]);
     b
 }
 
