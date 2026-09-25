@@ -2,9 +2,9 @@
 """Decks GUI tests — every test exercises a feature and verifies the result."""
 
 import time
-from framework import BaseGUITestCase
+from framework import VisionGUITestCase
 
-class DecksTest(BaseGUITestCase):
+class DecksTest(VisionGUITestCase):
     app_name = "decks"
 
     def _new(self):

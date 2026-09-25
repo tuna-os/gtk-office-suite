@@ -15,10 +15,10 @@ HIG Rules tested per app:
 """
 
 import time
-from framework import BaseGUITestCase
+from framework import VisionGUITestCase
 
 
-class LettersHIGAudit(BaseGUITestCase):
+class LettersHIGAudit(VisionGUITestCase):
     """GNOME HIG audit for Letters word processor."""
     app_name = "letters"
 
@@ -120,7 +120,7 @@ class LettersHIGAudit(BaseGUITestCase):
             pass
 
 
-class DecksHIGAudit(BaseGUITestCase):
+class DecksHIGAudit(VisionGUITestCase):
     """GNOME HIG audit for Decks presentation app."""
     app_name = "decks"
 
@@ -175,7 +175,7 @@ class DecksHIGAudit(BaseGUITestCase):
         time.sleep(1.0)
 
 
-class TablesHIGAudit(BaseGUITestCase):
+class TablesHIGAudit(VisionGUITestCase):
     """GNOME HIG audit for Tables spreadsheet."""
     app_name = "tables"
 
@@ -230,7 +230,7 @@ class TablesHIGAudit(BaseGUITestCase):
         time.sleep(1.0)
 
 
-class CrossAppHIGAudit(BaseGUITestCase):
+class CrossAppHIGAudit(VisionGUITestCase):
     """Cross-app HIG consistency using existing screenshots."""
     app_name = "letters"
 
@@ -241,7 +241,7 @@ class CrossAppHIGAudit(BaseGUITestCase):
             "Letters uses AdwApplicationWindow with a standard HeaderBar pattern",
         ], screenshot_path=self.last_screenshot)
 
-class ToolbarIconsVerification(BaseGUITestCase):
+class ToolbarIconsVerification(VisionGUITestCase):
     """Verify toolbar uses icons not text labels after the fix."""
     app_name = "letters"
     def test_toolbar_buttons_have_icons(self):
@@ -253,7 +253,7 @@ class ToolbarIconsVerification(BaseGUITestCase):
         except: self.app.keyCombo("<Control>n")
         time.sleep(1.0)
 
-class PageRenderingVerification(BaseGUITestCase):
+class PageRenderingVerification(VisionGUITestCase):
     """Verify page rendering correct after dark mode fix."""
     app_name = "letters"
     def test_page_background_is_white(self):
@@ -282,7 +282,7 @@ class PageRenderingVerification(BaseGUITestCase):
         except: self.app.keyCombo("<Control>n")
         time.sleep(1.0)
 
-class SidebarControlsVerification(BaseGUITestCase):
+class SidebarControlsVerification(VisionGUITestCase):
     """Verify sidebar controls properly sized."""
     app_name = "decks"
     def test_sidebar_buttons_large_enough(self):
@@ -294,7 +294,7 @@ class SidebarControlsVerification(BaseGUITestCase):
         except: self.app.keyCombo("<Control>n")
         time.sleep(1.0)
 
-class CrossAppIconsVerification(BaseGUITestCase):
+class CrossAppIconsVerification(VisionGUITestCase):
     """Verify Tables toolbar uses icons."""
     app_name = "tables"
     def test_tables_toolbar_icons(self):
@@ -306,7 +306,7 @@ class CrossAppIconsVerification(BaseGUITestCase):
         except: self.app.keyCombo("<Control>n")
         time.sleep(1.0)
 
-class DocumentRenderingTests(BaseGUITestCase):
+class DocumentRenderingTests(VisionGUITestCase):
     """Verify document content renders correctly."""
     app_name = "letters"
     def test_simple_text_renders_clearly(self):
@@ -321,7 +321,7 @@ class DocumentRenderingTests(BaseGUITestCase):
         except: self.app.keyCombo("<Control>n")
         time.sleep(1.0)
 
-class GridRenderingTests(BaseGUITestCase):
+class GridRenderingTests(VisionGUITestCase):
     """Verify spreadsheet grid renders correctly."""
     app_name = "tables"
     def test_grid_visible_with_headers(self):
@@ -333,7 +333,7 @@ class GridRenderingTests(BaseGUITestCase):
         except: self.app.keyCombo("<Control>n")
         time.sleep(1.0)
 
-class CrossAppToolbarTest(BaseGUITestCase):
+class CrossAppToolbarTest(VisionGUITestCase):
     """Verify Decks toolbar uses icons too."""
     app_name = "decks"
     def test_decks_toolbar_icons(self):

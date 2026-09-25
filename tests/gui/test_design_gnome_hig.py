@@ -18,10 +18,10 @@ The VLM reviews screenshots looking for:
 """
 
 import time
-from framework import BaseGUITestCase
+from framework import VisionGUITestCase
 
 
-class LettersDesignReview(BaseGUITestCase):
+class LettersDesignReview(VisionGUITestCase):
     """GNOME HIG review for Letters (word processor)."""
     app_name = "letters"
 
@@ -53,7 +53,7 @@ class LettersDesignReview(BaseGUITestCase):
         ], screenshot_path=self.last_screenshot)
 
 
-class LettersDarkModeDesignReview(BaseGUITestCase):
+class LettersDarkModeDesignReview(VisionGUITestCase):
     """Dark mode design review for Letters."""
     app_name = "letters"
 
@@ -84,7 +84,7 @@ class LettersDarkModeDesignReview(BaseGUITestCase):
         ], screenshot_path=self.last_screenshot)
 
 
-class DecksDesignReview(BaseGUITestCase):
+class DecksDesignReview(VisionGUITestCase):
     """GNOME HIG review for Decks (presentation editor)."""
     app_name = "decks"
 
@@ -114,7 +114,7 @@ class DecksDesignReview(BaseGUITestCase):
         ], screenshot_path=self.last_screenshot)
 
 
-class TablesDesignReview(BaseGUITestCase):
+class TablesDesignReview(VisionGUITestCase):
     """GNOME HIG review for Tables (spreadsheet)."""
     app_name = "tables"
 
