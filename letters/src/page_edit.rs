@@ -348,7 +348,7 @@ fn handle_key(view: &PageView, buf: &gtk::TextBuffer, key: gdk::Key, state: gdk:
 }
 
 /// Scroll the view's scrolled window so the caret is visible.
-fn scroll_to_caret(view: &PageView) {
+pub(crate) fn scroll_to_caret(view: &PageView) {
     let v = view.clone();
     // After the relayout the edit triggers, so the caret is where it will
     // be drawn.

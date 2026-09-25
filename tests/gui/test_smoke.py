@@ -3764,6 +3764,65 @@ class LettersModelUndoSmoke(BaseGUITestCase):
         self.assertIsNone(self.process.poll(), "letters crashed during undo")
 
 
+class LettersStylesAndOutlineSmoke(BaseGUITestCase):
+    """Paragraph styles are picked from previews, and the outline follows
+    the headings (DESIGN-UI "Styles first"; Docs' outline sidebar).
+
+    The picker's rows are named for screen readers; choosing one restyles
+    the caret's paragraph in the document model, which the outline sidebar
+    then lists. Activating an outline entry puts the caret on that heading.
+    """
+
+    app_name = "letters"
+
+    def setUp(self):
+        self._snapshot_path = self.isolate_snapshot(prefix="letters-styles-")
+        super().setUp()
+
+    def _headings(self):
+        s = self.trigger_snapshot("org.tunaos.letters")
+        return [p["style"]["heading"] for p in s["paragraphs"]]
+
+    def test_pick_a_heading_and_find_it_in_the_outline(self):
+        from dogtail import rawinput
+
+        self.wait_for_node(name="New Document", roleName="push button").do_action(0)
+        self.wait_for_node(name="Print Layout", roleName="text")
+        rawinput.typeText("Intro")
+        rawinput.keyCombo("Return")
+        rawinput.typeText("body")
+        rawinput.keyCombo("Up")
+
+        self.wait_for_node(name="Paragraph style", roleName="toggle button").do_action(0)
+        # Every style is a named row; pick one from the keyboard (the list
+        # opens on the current style, Normal).
+        for name in ("Normal", "Heading 1", "Heading 6"):
+            self.wait_for_node(name=name, roleName="list item")
+        time.sleep(0.5)
+        rawinput.keyCombo("Down")
+        rawinput.keyCombo("Down")
+        rawinput.keyCombo("Return")
+        self.wait_for_condition(lambda: self._headings() == [2, None] or None,
+                                description="the first paragraph becoming a Heading 2")
+        # Typing goes back to the document, into the heading.
+        rawinput.typeText("!")
+        self.wait_for_condition(
+            lambda: (lambda s: "".join(r["text"] for r in s["paragraphs"][0]["runs"]) == "Intro!" or None)(
+                self.trigger_snapshot("org.tunaos.letters")),
+            description="typing continuing in the heading")
+
+        self.gapplication_action("org.tunaos.letters", "toggle-outline")
+        outline = self.wait_for_node(name="Outline", roleName="list")
+        entry = self.wait_for_condition(
+            lambda: next((c for c in outline.children if c.name == "Intro!"), None),
+            description="the heading listed in the outline")
+        self.assertEqual(len(outline.children), 1, "only headings are listed")
+        # The caret is in that heading's section, so its entry is marked.
+        self.wait_for_condition(lambda: entry.selected or None,
+                                description="the caret's section marked in the outline")
+        self.assertIsNone(self.process.poll(), "letters crashed using styles and the outline")
+
+
 class LettersPrintLayoutEditingSmoke(BaseGUITestCase):
     """Print Layout is the default view, and editing there is editing the
     document (ADR 0010, stage 3d).

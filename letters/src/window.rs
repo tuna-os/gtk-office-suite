@@ -44,7 +44,6 @@ impl LettersWindow {
             "Open File\u{2026}",
         );
         stack.add_titled(&empty_page, Some("empty"), "Empty");
-        stack.add_titled(&tab_view, Some("editor"), "Editor");
         stack.set_visible_child_name("empty");
 
         let toast_overlay = adw::ToastOverlay::new();
@@ -267,43 +266,15 @@ impl LettersWindow {
             suite_common::actions::register_labels(&[("app.toggle-ruler", &suite_common::i18n("Toggle Ruler"))]);
         }
 
-        // ── Style dropdown ────────────────────────────────────────
-        let style_sheet = std::rc::Rc::new(std::cell::RefCell::new(
-            crate::styles::StyleSheet::default_styles()
-        ));
-        let all_names: Vec<&str> = crate::styles::style_names();
-        let style_model = gtk4::StringList::new(&all_names);
-        let model = style_model.clone();
-        let style_dropdown = gtk4::DropDown::new(Some(style_model), None::<&gtk4::Expression>);
-        {
-            let tv = tab_view.clone();
-            let ss = style_sheet.clone();
-            style_dropdown.connect_selected_notify(move |dd| {
-                let idx = dd.selected();
-                if idx != gtk4::INVALID_LIST_POSITION {
-                    if let Some(obj) = model.item(idx) {
-                        if let Ok(so) = obj.downcast::<gtk4::StringObject>() {
-                            let name = so.string();
-                            if let Some(buf) = active_buffer(&tv) {
-                                if let Ok(sheet) = ss.try_borrow() {
-                                    crate::styles::ensure_tags_synced(&sheet, &buf.tag_table());
-                                    crate::styles::apply_style(&buf, &sheet, &name);
-                                }
-                            }
-                        }
-                    }
-                }
-            });
-        }
-        // Compact dropdown inside the toolbar (a full-width style band
-        // was the design review's worst double-chrome offender).
-        style_dropdown.set_tooltip_text(Some(&suite_common::i18n("Paragraph style")));
-        suite_win.toolbar.container.prepend(&style_dropdown);
-
-        // Narrow breakpoint (≤ 500sp): hide the style dropdown to save
+        // ── Paragraph styles, previewed; the headings outline ─────
+        let style_picker = crate::style_picker::build(&tab_view);
+        suite_win.toolbar.container.prepend(&style_picker);
+        // Narrow breakpoint (≤ 500sp): hide the style picker to save
         // horizontal space (fixes #79).
-        suite_win.narrow_breakpoint.add_setter(
-            &style_dropdown, "visible", Some(&false.to_value()));
+        suite_win.narrow_breakpoint.add_setter(&style_picker, "visible", Some(&false.to_value()));
+        let breakpoints = [&suite_win.medium_breakpoint, &suite_win.narrow_breakpoint];
+        let outline = crate::outline::build(&tab_view, &tab_view, &suite_win.header_bar, app, &breakpoints);
+        stack.add_titled(&outline, Some("editor"), "Editor");
 
         let win = suite_win.window.clone();
 

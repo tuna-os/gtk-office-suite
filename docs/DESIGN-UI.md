@@ -270,7 +270,11 @@ wired, so action-registry unification is the palette's prerequisite.
 
 1. ✅ Command palette (2026-07-18; prerequisite discovered and done:
    action-registry unification — Tables/Decks toolbars were closure-wired)
-2. ✅ Letters selection popover + style readout (2026-07-18)
+2. ✅ Letters selection popover + style readout (2026-07-18); ✅ paragraph
+   style picker drawn in each style by the page's own shaper, and the
+   headings outline sidebar, both on the live model (2026-09-25). Title,
+   Subtitle, Code and Quote return to the picker once the layout engine
+   draws them.
 3. Tables: ✅ selection stats + name box + range selection + keyboard nav;
    format-cells sheet still open (only the cycle button exists)
 4. Decks: ✅ inspector + presenter pill + status; notes drawer polish and
