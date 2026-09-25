@@ -920,3 +920,47 @@ fn a_written_docx_carries_letters_own_styles() {
     assert!(rt.paragraphs[0].runs.iter().all(|r| r.style.font_size_hp.is_none() && !r.style.bold),
         "a heading's look stays its level, not copied onto its runs");
 }
+
+/// A document's heading styles are how its headings look: Word's and
+/// python-docx's Heading 1 is 14 pt bold blue in the theme's heading font,
+/// not Letters' 1.6x body text. They are read once for the document (not
+/// copied onto every heading run) and written back as the styles.
+#[test]
+fn heading_styles_are_read_and_written_back() {
+    let mut d = Document::from_plain_text("Title\nbody");
+    d.paragraphs[0].style.heading = Some(1);
+    let rt = doctor_parts(&d, |parts| {
+        let st = parts.get_mut("word/styles.xml").unwrap();
+        let a = st.find("w:styleId=\"Heading1\"").map(|i| st[..i].rfind("<w:style ").unwrap());
+        if let Some(a) = a {
+            let b = st[a..].find("</w:style>").unwrap() + a + "</w:style>".len();
+            st.replace_range(a..b, "");
+        }
+        *st = st.replace(
+            "</w:styles>",
+            "<w:style w:type=\"paragraph\" w:styleId=\"Heading1\"><w:name w:val=\"heading 1\"/>\
+             <w:basedOn w:val=\"Normal\"/><w:rPr><w:rFonts w:ascii=\"Carlito\" w:hAnsi=\"Carlito\"/><w:b/>\
+             <w:color w:val=\"365F91\"/><w:sz w:val=\"28\"/></w:rPr></w:style>\
+             <w:style w:type=\"paragraph\" w:styleId=\"Heading2\"><w:name w:val=\"heading 2\"/>\
+             <w:basedOn w:val=\"Normal\"/><w:rPr><w:rFonts w:asciiTheme=\"majorHAnsi\" w:hAnsiTheme=\"majorHAnsi\"/>\
+             </w:rPr></w:style></w:styles>",
+        );
+    });
+    // A derived style's theme font beats its base style's named face (the
+    // body font, set on docDefaults by our writer).
+    assert_eq!(rt.heading_styles[1].font_family.as_deref(), Some("Calibri Light"), "no theme part: Office's default major font");
+    assert_ne!(rt.base_font.family.as_deref(), Some("Calibri Light"));
+    let h1 = rt.heading_styles.first().expect("heading styles read");
+    assert_eq!(
+        (h1.bold, h1.font_family.as_deref(), h1.font_size_hp, h1.color.as_deref()),
+        (true, Some("Carlito"), Some(28), Some("365F91"))
+    );
+    assert!(rt.paragraphs[0].runs.iter().all(|r| r.style == RunStyle::default()), "not copied onto the runs");
+
+    // Written back as the document's Heading 1, and read again the same.
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("h.docx");
+    docx::write(&rt, &path).unwrap();
+    let again = docx::read(path.to_str().unwrap()).unwrap();
+    assert_eq!(again.heading_styles[0], *h1);
+}

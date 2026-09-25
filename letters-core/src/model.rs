@@ -262,6 +262,11 @@ pub struct Document {
     /// of their own are drawn in it.
     #[serde(default)]
     pub base_font: BaseFont,
+    /// How headings 1–6 look (index 0 is level 1), from the document's
+    /// heading styles: font, size, weight, slant, colour. Empty means the
+    /// application's own heading look (`layout::heading_scale`, bold).
+    #[serde(default)]
+    pub heading_styles: Vec<RunStyle>,
 }
 
 /// A document's body font: a docx's docDefaults and Normal style, an ODT's
@@ -337,6 +342,7 @@ impl Document {
             footer: None,
             page: None,
             base_font: BaseFont::default(),
+            heading_styles: Vec::new(),
         }
     }
 

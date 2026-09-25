@@ -467,7 +467,9 @@ mod tests {
         assert!(b.starts_with(&prefix), "unexpected id {b}");
         let n_a: u64 = a.rsplit('-').next().unwrap().parse().unwrap();
         let n_b: u64 = b.rsplit('-').next().unwrap().parse().unwrap();
-        assert_eq!(n_b, n_a + 1);
+        // Increasing, not necessarily by one: `next_doc_id_is_unique` runs
+        // in parallel and takes ids from the same counter (this raced).
+        assert!(n_b > n_a, "{n_a} then {n_b}");
     }
 
     #[test]
