@@ -3217,6 +3217,75 @@ class DecksFormatInspectorSmoke(BaseGUITestCase):
         self.assertIsNone(self.process.poll(), "decks crashed in the format inspector")
 
 
+class DecksMagicMovePreviewSmoke(BaseGUITestCase):
+    """Magic Move, seen: a two-slide deck whose rectangle moves from x=100
+    to x=700, the second slide arriving by Magic Move. Previewing that
+    transition in the running app makes it write the animation's midpoint
+    frame (the same drawing path the animation uses; GTK_OFFICE_TEST_MODE
+    only), and in that frame the rectangle is half way: centred at
+    x=450 of the 960-wide slide."""
+
+    app_name = "decks"
+
+    CONTENT = (
+        '<?xml version="1.0" encoding="UTF-8"?>'
+        '<office:document-content'
+        ' xmlns:office="urn:oasis:names:tc:opendocument:xmlns:office:1.0"'
+        ' xmlns:style="urn:oasis:names:tc:opendocument:xmlns:style:1.0"'
+        ' xmlns:draw="urn:oasis:names:tc:opendocument:xmlns:drawing:1.0"'
+        ' xmlns:presentation="urn:oasis:names:tc:opendocument:xmlns:presentation:1.0"'
+        ' xmlns:svg="urn:oasis:names:tc:opendocument:xmlns:svg-compatible:1.0"'
+        ' xmlns:smil="urn:oasis:names:tc:opendocument:xmlns:smil-compatible:1.0"'
+        ' xmlns:decks="https://tuna-os.org/ns/decks/1.0" office:version="1.2">'
+        '<office:automatic-styles><style:style style:name="dp2" style:family="drawing-page">'
+        '<style:drawing-page-properties smil:type="fade" smil:subtype="crossfade" decks:transition="magic-move"/>'
+        '</style:style></office:automatic-styles>'
+        '<office:body><office:presentation>'
+        '<draw:page draw:name="One"><draw:rect svg:x="100pt" svg:y="200pt" svg:width="100pt" svg:height="100pt"/></draw:page>'
+        '<draw:page draw:name="Two" draw:style-name="dp2"><draw:rect svg:x="700pt" svg:y="200pt" svg:width="100pt" svg:height="100pt"/></draw:page>'
+        '</office:presentation></office:body></office:document-content>'
+    )
+
+    def setUp(self):
+        import zipfile
+        self._dir = self.temp_dir(prefix="decks-magic-move-")
+        self._doc = os.path.join(self._dir, "move.odp")
+        with zipfile.ZipFile(self._doc, "w") as z:
+            z.writestr("mimetype", "application/vnd.oasis.opendocument.presentation")
+            z.writestr("content.xml", self.CONTENT)
+        self._frame = os.path.join(self._dir, "transition-midpoint.png")
+        self.launch_args = [self._doc]
+        self.launch_env = {**getattr(self, "launch_env", {}), "GTK_OFFICE_TRANSITION_DUMP": self._dir}
+        super().setUp()
+
+    def test_the_midpoint_frame_has_the_rectangle_half_way(self):
+        import subprocess
+        from PIL import Image
+        aid = "org.tunaos.decks"
+        self.wait_until(lambda: self.app.child(name="Slide canvas").description,
+                        lambda d: "2 slides" in d or "of 2" in d, interval=0.5,
+                        description="the two-slide deck to open")
+        subprocess.run(["gapplication", "action", aid, "go-to-slide", "uint32 1"], check=True, timeout=5)
+        subprocess.run(["gapplication", "action", aid, "preview-transition"], check=True, timeout=5)
+        self.wait_until(lambda: os.path.exists(self._frame), bool, interval=0.25,
+                        description="the midpoint frame to be written")
+        img = Image.open(self._frame).convert("RGB")
+        w, h = img.size
+        px = img.load()
+        # The slide is the white area; the rectangle the blue one on it.
+        white = [(x, y) for y in range(0, h, 2) for x in range(0, w, 2) if px[x, y] == (255, 255, 255)]
+        self.assertTrue(white, "no slide in the frame")
+        sx0, sx1 = min(p[0] for p in white), max(p[0] for p in white)
+        blue = [x for y in range(0, h, 2) for x in range(0, w, 2)
+                if (lambda r, g, b: b > 180 and r < 120)(*px[x, y])]
+        self.assertTrue(blue, "no rectangle in the frame")
+        centre = (min(blue) + max(blue)) / 2
+        fraction = (centre - sx0) / (sx1 - sx0)
+        self.assertAlmostEqual(fraction, 450 / 960, delta=0.03,
+                               msg=f"rectangle centre at {fraction:.3f} of the slide, not half way (0.469)")
+        self.assertIsNone(self.process.poll(), "decks crashed previewing Magic Move")
+
+
 class DecksSelectionSmoke(BaseGUITestCase):
     """Object selection updates the canvas a11y description and the
     inspector (fit-to-viewport geometry keeps coordinates stable)."""

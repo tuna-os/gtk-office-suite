@@ -266,6 +266,13 @@ pub fn build(
     let labels: Vec<&str> = Transition::ALL.iter().map(|t| t.label()).collect();
     let transition = combo("Transition", &labels);
     transition.set_subtitle("How this slide arrives");
+    let preview = gtk::Button::from_icon_name("media-playback-start-symbolic");
+    preview.set_tooltip_text(Some("Preview Transition"));
+    preview.update_property(&[gtk::accessible::Property::Label("Preview Transition")]);
+    preview.set_valign(gtk::Align::Center);
+    preview.add_css_class("flat");
+    preview.set_action_name(Some("app.preview-transition"));
+    transition.add_suffix(&preview);
     slide_group.add(&transition);
     let empty = page(&[&slide_group]);
     let outer = gtk::Stack::new();
