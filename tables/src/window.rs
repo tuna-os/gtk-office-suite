@@ -2100,7 +2100,7 @@ impl TablesWindow {
         for orphan_id in suite_common::autosave::find_orphaned_snapshots(&state_dir) {
             let orphan = suite_common::autosave::AutosaveSlot::new(state_dir.clone(), orphan_id);
             let Some((bytes, meta)) = orphan.read() else { continue };
-            let tmp = std::env::temp_dir().join(format!("tables-recovery-{}.xlsx", std::process::id()));
+            let tmp = suite_common::autosave::recovery_scratch_path(&state_dir, "xlsx");
             if std::fs::write(&tmp, &bytes).is_err() {
                 continue;
             }

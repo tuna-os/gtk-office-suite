@@ -80,12 +80,6 @@ pub(crate) fn next_doc_id() -> String {
 }
 
 pub(crate) fn autosave_state_dir() -> std::path::PathBuf {
-    // glib::user_state_dir() needs the "v2_72" feature (glib >= 2.72 at the
-    // C level), which this workspace's glib binding doesn't enable — do the
-    // XDG Base Directory fallback ourselves instead.
-    let base = std::env::var_os("XDG_STATE_HOME")
-        .map(std::path::PathBuf::from)
-        .or_else(|| std::env::var_os("HOME").map(|h| std::path::PathBuf::from(h).join(".local/state")))
-        .unwrap_or_else(|| std::path::PathBuf::from("/tmp"));
-    base.join("tables")
+    // XDG state dir, never a fixed name in /tmp (#829): see the shared helper.
+    suite_common::autosave::state_dir("tables")
 }

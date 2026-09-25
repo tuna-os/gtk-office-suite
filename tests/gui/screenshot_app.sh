@@ -13,8 +13,16 @@ REPO_ROOT="$(cd ../.. && pwd)"
 BIN="$REPO_ROOT/target/debug/$APP"
 [ -x "$BIN" ] || { echo "Binary not built: $BIN (run cargo build --bin $APP)"; exit 1; }
 
-SCHEMA_DIR="${GSETTINGS_SCHEMA_DIR:-/tmp/gtk-office-schemas}"
-mkdir -p "$SCHEMA_DIR"
+# A private per-run directory unless one is given, as in run_gui_tests.sh:
+# a fixed /tmp name can be created first by another user (#819).
+SCHEMA_TMP=""
+if [ -n "${GSETTINGS_SCHEMA_DIR:-}" ]; then
+    SCHEMA_DIR="$GSETTINGS_SCHEMA_DIR"
+    mkdir -p "$SCHEMA_DIR"
+else
+    SCHEMA_TMP="$(mktemp -d -t gtk-office-schemas-XXXXXXXX)"
+    SCHEMA_DIR="$SCHEMA_TMP"
+fi
 cp "$REPO_ROOT"/flatpak/*.gschema.xml "$SCHEMA_DIR/"
 glib-compile-schemas "$SCHEMA_DIR"
 export GSETTINGS_SCHEMA_DIR="$SCHEMA_DIR"
@@ -24,7 +32,7 @@ export GDK_BACKEND=x11
 export DISPLAY=:98
 Xvfb :98 -screen 0 1600x1000x24 &
 XVFB_PID=$!
-cleanup() { kill "$XVFB_PID" 2>/dev/null || true; }
+cleanup() { kill "$XVFB_PID" 2>/dev/null || true; [ -z "$SCHEMA_TMP" ] || rm -rf "$SCHEMA_TMP"; }
 trap cleanup EXIT
 sleep 1
 
