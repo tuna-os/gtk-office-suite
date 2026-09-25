@@ -167,9 +167,17 @@ const FORMULA_REF_COLORS: [(f64, f64, f64); 5] = [
 /// inside their cell; the text sits at the top, as the grid always drew it.
 /// Pixels per indent level: three characters, as in Excel.
 const INDENT_PX: f64 = 21.0;
-/// Space between a cell's edge and its text, each side, as Excel and Calc
-/// leave it.
-const CELL_PAD: f64 = 2.0;
+/// Space between a cell's left edge and left-aligned text, and between
+/// right-aligned text and its right edge. Measured on Calc's print of the
+/// render lab's fixtures (tables/values, tables/fills): left-aligned text
+/// starts about 1.5 px in, right-aligned text ends about 3 px in, of which a
+/// pixel or so is the glyphs' own side bearing. A symmetric 2 px put every
+/// left-aligned value 1.5 px right of Calc's.
+const CELL_PAD_LEFT: f64 = 1.0;
+const CELL_PAD_RIGHT: f64 = 2.0;
+/// Space between a cell's bottom edge and the bottom of bottom-aligned text
+/// (the layout's descent line), and the top edge and top-aligned text.
+const CELL_PAD_V: f64 = 2.0;
 
 /// The Pango layout for a cell's text in its style: font, weight, slant,
 /// underline and strikethrough, alignment, and wrapping within `width`.
@@ -199,7 +207,9 @@ fn cell_layout(cr: &Context, sheet: &SheetModel, r: usize, c: usize, text: &str,
         layout.set_attributes(Some(&attrs));
     }
     layout.set_text(text);
-    layout.set_width(((width - 2.0 * CELL_PAD - style.indent as f64 * INDENT_PX).max(1.0) * pango::SCALE as f64) as i32);
+    layout.set_width(
+        ((width - CELL_PAD_LEFT - CELL_PAD_RIGHT - style.indent as f64 * INDENT_PX).max(1.0) * pango::SCALE as f64) as i32,
+    );
     if style.wrap {
         layout.set_wrap(pango::WrapMode::WordChar);
     } else {
@@ -214,11 +224,27 @@ fn cell_layout(cr: &Context, sheet: &SheetModel, r: usize, c: usize, text: &str,
     layout
 }
 
+/// Where a cell's text layout starts, for text `text_h` px tall in a row
+/// `rh` px tall at `cy`. Bottom-aligned text keeps its descent line
+/// CELL_PAD_V above the cell's bottom even when the line box (ascent +
+/// descent, 18 px for Calibri 11) leaves less than that above it in a 20 px
+/// row: the ascent's empty top overflows into the clip, as in Calc and
+/// Excel. Clamping the layout to the cell's top instead pushed every
+/// default-height row's text 1–2 px down.
+fn cell_text_top(v_align: tables_core::style::VAlign, cy: f64, rh: f64, text_h: f64) -> f64 {
+    use tables_core::style::VAlign;
+    match v_align {
+        VAlign::Top => cy + CELL_PAD_V,
+        VAlign::Center => cy + (rh - text_h) / 2.0,
+        VAlign::Bottom => cy + rh - text_h - CELL_PAD_V,
+    }
+}
+
 /// A cell's value through its number format and style, clipped to `rect`
 /// (x, y, w, h). Clipping and ellipsizing keep long values inside their
 /// cell; wrapped cells break across lines instead.
 fn draw_cell_text(cr: &Context, sheet: &SheetModel, r: usize, c: usize, rect: (f64, f64, f64, f64), color: (f64, f64, f64)) {
-    use tables_core::style::{HAlign, VAlign};
+    use tables_core::style::HAlign;
     let val = sheet.cell(r, c);
     if val.is_empty() {
         return;
@@ -235,18 +261,15 @@ fn draw_cell_text(cr: &Context, sheet: &SheetModel, r: usize, c: usize, rect: (f
     if sheet.aligns_right(r, c) && !style.wrap && layout.is_ellipsized() {
         layout = cell_layout(cr, sheet, r, c, "###", cw);
     }
-    let text_h = layout.pixel_size().1 as f64;
-    let y = match style.v_align {
-        VAlign::Top => cy + 2.0,
-        VAlign::Center => cy + (rh - text_h) / 2.0,
-        VAlign::Bottom => cy + rh - text_h - 2.0,
-    };
+    // The layout's exact logical height, not rounded up to whole pixels.
+    let text_h = layout.size().1 as f64 / pango::SCALE as f64;
+    let y = cell_text_top(style.v_align, cy, rh, text_h);
     let indent = style.indent as f64 * INDENT_PX;
-    let x = if sheet.resolved_h_align(r, c) == HAlign::Right { cx + CELL_PAD } else { cx + CELL_PAD + indent };
+    let x = if sheet.resolved_h_align(r, c) == HAlign::Right { cx + CELL_PAD_LEFT } else { cx + CELL_PAD_LEFT + indent };
     cr.save().unwrap();
     cr.rectangle(cx + 1.0, cy + 1.0, (cw - 2.0).max(1.0), (rh - 2.0).max(1.0));
     cr.clip();
-    cr.move_to(x, y.max(cy + 1.0));
+    cr.move_to(x, y);
     pangocairo::functions::show_layout(cr, &layout);
     cr.restore().unwrap();
 }
@@ -571,4 +594,21 @@ pub fn draw_grid(
     }
 
     cr.restore().unwrap();
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use tables_core::style::VAlign;
+
+    /// Calibri 11's line box (17.9 px) in a 20 px row: bottom-aligned text
+    /// starts just above the row, leaving its descent line 2 px clear of the
+    /// bottom, rather than being clamped down to the row's top.
+    #[test]
+    fn bottom_aligned_text_keeps_its_bottom_margin_in_a_default_row() {
+        let top = cell_text_top(VAlign::Bottom, 100.0, 20.0, 17.9);
+        assert!((top - 100.1).abs() < 1e-9, "{top}");
+        assert_eq!(cell_text_top(VAlign::Top, 100.0, 20.0, 17.9), 100.0 + CELL_PAD_V);
+        assert!((cell_text_top(VAlign::Center, 100.0, 20.0, 18.0) - 101.0).abs() < 1e-9);
+    }
 }
