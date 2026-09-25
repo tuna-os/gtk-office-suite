@@ -3255,7 +3255,9 @@ class DecksMagicMovePreviewSmoke(BaseGUITestCase):
             z.writestr("content.xml", self.CONTENT)
         self._frame = os.path.join(self._dir, "transition-midpoint.png")
         self.launch_args = [self._doc]
-        self.launch_env = {**getattr(self, "launch_env", {}), "GTK_OFFICE_TRANSITION_DUMP": self._dir}
+        # The frame dump is test-only (GTK_OFFICE_TEST_MODE).
+        self.launch_env = {**getattr(self, "launch_env", {}),
+                           "GTK_OFFICE_TEST_MODE": "1", "GTK_OFFICE_TRANSITION_DUMP": self._dir}
         super().setUp()
 
     def test_the_midpoint_frame_has_the_rectangle_half_way(self):
