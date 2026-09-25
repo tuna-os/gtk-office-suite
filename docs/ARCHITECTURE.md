@@ -93,20 +93,23 @@ gtk-office-suite/
 
 | File | Soft limit | Split into |
 |---|---|---|
-| `window.rs` | 600 | `canvas.rs`, `toolbar.rs`, `sidebar.rs` |
+| `window.rs` | 600 (target) | `canvas.rs`, `toolbar.rs`, `sidebar.rs` |
 | `engine.rs` | 500 | `read.rs` + `write.rs` for format I/O |
 | `undo.rs` | 250 | By command category (object, slide, format) |
 
-Over the limit today, and known to be (measured, not estimated):
+The 600-line figure for `window.rs` is the target shape, not the enforced limit. Each app's
+`window.rs` has an enforced **ceiling** and a measured count in the table in the root
+[`ROADMAP.md`](../ROADMAP.md). `scripts/release_gate.py` enforces the ceilings, and
+`tests/test_roadmap_figures.py` fails CI if a count drifts or a row is missing. So that table is
+the only place those numbers live.
+
+Other files over their soft limit (measured 2026-09-25):
 
 | File | Lines |
 |---|---|
-| `tables/src/window.rs` | 2,329 |
-| `decks/src/window.rs` | 1,783 |
-| `letters/src/window.rs` | 1,278 |
-| `tables-core/src/sheet.rs` | 1,222 |
-| `suite-common/src/lib.rs` | 1,219 |
-| `letters/src/bridge.rs` | 1,199 |
+| `tables-core/src/sheet.rs` | 1,874 |
+| `suite-common/src/lib.rs` | 1,238 |
+| `letters/src/bridge.rs` | 2,059 |
 
 These are real debt, not a style preference: the reentrancy crashes fixed
 in v2.1.0 all lived in files this size.
