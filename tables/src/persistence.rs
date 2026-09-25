@@ -52,7 +52,7 @@ pub(crate) fn unsupported_save_format_message(path: &str) -> String {
     )
 }
 
-pub(crate) fn save_engine_to_xlsx(path: &str, state: &AppState) -> Result<(), String> {
+fn save_engine_to_xlsx(path: &str, state: &AppState) -> Result<(), String> {
     // Tables imports xls/ods/csv/tsv but writes only xlsx. Every save path —
     // Ctrl+S, Save As, and the close guard's "Save" button — funnels through
     // this one helper, so the refusal lives here rather than at each of the
@@ -62,10 +62,48 @@ pub(crate) fn save_engine_to_xlsx(path: &str, state: &AppState) -> Result<(), St
         return Err(unsupported_save_format_message(path));
     }
     let sheets: Vec<SheetModel> = state.sheets.iter().map(|s| s.borrow().clone()).collect();
-    tables_core::io::save_sheets_to_xlsx_with_engine(path, &sheets, Some(&state.engine))?;
-    // A document at a remote location (RFC-0003) is written to its staged
-    // copy above and uploaded here; a local path needs nothing.
-    suite_common::locations::commit_save(std::path::Path::new(path))
+    tables_core::io::save_sheets_to_xlsx_with_engine(path, &sheets, Some(&state.engine))
+}
+
+/// Save the workbook to `path`, the one way every save goes (Ctrl+S, Save
+/// As, the close guard). The file is written now; a document at a remote
+/// location (RFC-0003) is then uploaded without blocking, and if it changed
+/// elsewhere the user picks Save as Copy, Overwrite or Reload.
+/// `on_saved(path)` runs once the document is saved, with the path it now
+/// is (a copy's, if they chose that). Reload reopens the server's version
+/// through the app's `open`. Errors are shown; `on_saved` doesn't run.
+pub(crate) fn save_workbook(
+    parent: &impl IsA<gtk4::Widget>,
+    path: &std::path::Path,
+    state: &AppState,
+    on_saved: impl FnOnce(std::path::PathBuf) + 'static,
+) {
+    if let Err(e) = save_engine_to_xlsx(&path.to_string_lossy(), state) {
+        show_error(parent, "Error saving file", &e);
+        return;
+    }
+    let window = parent.as_ref().root().and_downcast::<gtk4::Window>();
+    let path_now = path.to_path_buf();
+    suite_common::remote_io::finish_save(parent, path, move |outcome| {
+        use suite_common::remote_io::SaveOutcome;
+        match outcome {
+            SaveOutcome::Saved => on_saved(path_now),
+            SaveOutcome::SavedAs(copy) => on_saved(copy),
+            SaveOutcome::Reload(fresh) => {
+                if let Some(app) = window.and_then(|w| w.application()) {
+                    app.open(&[gtk4::gio::File::for_path(fresh)], "");
+                }
+            }
+            SaveOutcome::Cancelled | SaveOutcome::Failed => {}
+        }
+    });
+}
+
+fn show_error(parent: &impl IsA<gtk4::Widget>, heading: &str, body: &str) {
+    use libadwaita::prelude::{AdwDialogExt, AlertDialogExt};
+    let alert = libadwaita::AlertDialog::builder().heading(suite_common::i18n(heading)).body(body).build();
+    alert.add_response("ok", &suite_common::i18n("OK"));
+    alert.present(Some(parent));
 }
 
 /// The local path for a location a dialog or the desktop handed over:
@@ -85,10 +123,9 @@ pub(crate) fn local_path(
     staged
         .map_err(|e| {
             let heading = if for_save { "Error saving file" } else { "Error opening file" };
-            use libadwaita::prelude::{AdwDialogExt, AlertDialogExt};
-            let alert = libadwaita::AlertDialog::builder().heading(suite_common::i18n(heading)).body(&e).build();
-            alert.add_response("ok", &suite_common::i18n("OK"));
-            alert.present(parent);
+            if let Some(parent) = parent {
+                show_error(parent, heading, &e);
+            }
         })
         .ok()
 }

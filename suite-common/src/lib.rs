@@ -12,6 +12,7 @@
 
 pub mod file_dialogs;
 pub mod locations;
+pub mod remote_io;
 pub mod autosave_notice;
 pub mod gtk_test;
 pub mod toast_manager;
@@ -405,22 +406,28 @@ where
     F: Fn(Vec<std::path::PathBuf>) + 'static,
 {
     let target = gtk::DropTarget::new(gtk4::gdk::FileList::static_type(), gtk4::gdk::DragAction::COPY);
+    let on_files_dropped = std::rc::Rc::new(on_files_dropped);
+    let parent = widget.as_ref().clone();
     target.connect_drop(move |_, val, _, _| {
-        if let Ok(file_list) = val.get::<gtk4::gdk::FileList>() {
-            let paths: Vec<std::path::PathBuf> = file_list
-                .files()
-                .into_iter()
-                // Remote locations (GVfs) are staged to a local copy
-                // (RFC-0003); one that can't be read is reported, not
-                // silently dropped.
-                .filter_map(|f| locations::open_location(&f).map_err(|e| eprintln!("{e}")).ok())
-                .collect();
-            if !paths.is_empty() {
-                on_files_dropped(paths);
-                return true;
-            }
+        let Ok(file_list) = val.get::<gtk4::gdk::FileList>() else { return false };
+        let files = file_list.files();
+        if files.is_empty() {
+            return false;
         }
-        false
+        // Local files arrive together; a remote one (GVfs) downloads
+        // without blocking and arrives on its own (RFC-0003). One that
+        // can't be read is reported there, not silently dropped.
+        let (local, remote): (Vec<gio::File>, Vec<gio::File>) =
+            files.into_iter().partition(|f| f.is_native() && f.path().is_some());
+        let paths: Vec<std::path::PathBuf> = local.iter().filter_map(|f| f.path()).collect();
+        if !paths.is_empty() {
+            on_files_dropped(paths);
+        }
+        for file in remote {
+            let callback = on_files_dropped.clone();
+            remote_io::open(&parent, &file, move |path| callback(vec![path]));
+        }
+        true
     });
     widget.add_controller(target.clone());
     target

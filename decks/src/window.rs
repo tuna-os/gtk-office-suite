@@ -484,22 +484,14 @@ impl DecksWindow {
                     let existing_path = path_state.borrow().clone();
                     if let Some(path) = existing_path {
                         let deck = Deck { slides: ss.borrow().clone(), masters: m.borrow().clone() };
-                        match save_deck(&path, &deck) {
-                            Ok(()) => {
-                                dirty.set(false);
-                                slot.clear_or_report();
-                                force_close.set(true);
-                                win.close();
-                            }
-                            Err(e) => {
-                                let err = adw::AlertDialog::builder()
-                                    .heading(suite_common::i18n("Error saving file"))
-                                    .body(&e)
-                                    .build();
-                                err.add_response("ok", &suite_common::i18n("OK"));
-                                err.present(Some(&win));
-                            }
-                        }
+                        let (dirty, slot, fc, w, ps) = (dirty.clone(), slot.clone(), force_close.clone(), win.clone(), path_state.clone());
+                        save_deck_then(&win, &path, &deck, move |saved| {
+                            *ps.borrow_mut() = Some(saved);
+                            dirty.set(false);
+                            slot.clear_or_report();
+                            fc.set(true);
+                            w.close();
+                        });
                         return;
                     }
                     // Never saved: prompt for a destination, then close only
@@ -523,23 +515,14 @@ impl DecksWindow {
                             if let Some(path) = local_path(&file, true, &win2) {
                                 let path_str = path.to_string_lossy().to_string();
                                 let deck = Deck { slides: ss.borrow().clone(), masters: m.borrow().clone() };
-                                match save_deck(&path_str, &deck) {
-                                    Ok(()) => {
-                                        *path_state.borrow_mut() = Some(path_str);
-                                        dirty.set(false);
-                                        slot.clear_or_report();
-                                        force_close.set(true);
-                                        win2.close();
-                                    }
-                                    Err(e) => {
-                                        let err = adw::AlertDialog::builder()
-                                            .heading(suite_common::i18n("Error saving file"))
-                                            .body(&e)
-                                            .build();
-                                        err.add_response("ok", &suite_common::i18n("OK"));
-                                        err.present(Some(&win2));
-                                    }
-                                }
+                                let w = win2.clone();
+                                save_deck_then(&win2, &path_str, &deck, move |saved| {
+                                    *path_state.borrow_mut() = Some(saved);
+                                    dirty.set(false);
+                                    slot.clear_or_report();
+                                    force_close.set(true);
+                                    w.close();
+                                });
                             }
                         }
                     });
@@ -927,7 +910,8 @@ impl DecksWindow {
                 dlg.open(Some(&w), None::<&gio::Cancellable>,
                     move |result: Result<gio::File, glib::Error>| {
                         if let Ok(file) = result {
-                            if let Ok(path) = suite_common::locations::open_location(&file).map_err(|e| eprintln!("{e}")) {
+                            let (cs, cs_ref, controller) = (cs.clone(), cs_ref.clone(), controller.clone());
+                            suite_common::remote_io::open(&cs.clone(), &file, move |path| {
                                 let idx = cs_ref.get();
                                 let p = path.to_string_lossy().to_string();
                                 let obj = SlideObject::Image {
@@ -935,7 +919,7 @@ impl DecksWindow {
                                 };
                                 controller.add_object(idx, obj);
                                 cs.queue_draw();
-                            }
+                            });
                         }
                     },
                 );
@@ -1363,7 +1347,10 @@ impl DecksWindow {
                 dlg.open(Some(&w), None::<&gio::Cancellable>,
                     move |result: Result<gio::File, glib::Error>| {
                         if let Ok(file) = result {
-                            if let Some(path) = local_path(&file, false, &w2) {
+                            // A remote presentation downloads without
+                            // blocking (RFC-0003).
+                            let parent = w2.clone();
+                            suite_common::remote_io::open(&parent, &file, move |path| {
                                 let path_str = path.to_string_lossy().to_string();
                                 match read_deck(&path_str) {
                                     Ok(deck) => {
@@ -1397,7 +1384,7 @@ impl DecksWindow {
                                         err.present(Some(&w2));
                                     }
                                 }
-                            }
+                            });
                         }
                     },
                 );
@@ -1422,23 +1409,14 @@ impl DecksWindow {
                 let current_path = path_clone.borrow().clone();
                 if let Some(path_str) = current_path {
                     let deck = Deck { slides: ss_clone.borrow().clone(), masters: m_save.borrow().clone() };
-                    match save_deck(&path_str, &deck) {
-                        Ok(()) => {
-                            let settings = gio::Settings::new("org.tunaos.decks");
-                            suite_common::push_recent_file(&settings, &path_str);
-                            dirty_save.set(false);
-                            slot_save.clear_or_report();
-                        }
-                        Err(e) => {
-                            let err = adw::AlertDialog::builder()
-                                .heading(suite_common::i18n("Error saving presentation"))
-                                .body(&e)
-                                .build();
-                            err.add_response("ok", &suite_common::i18n("OK"));
-                            err.set_default_response(Some("ok"));
-                            err.present(Some(&w_clone));
-                        }
-                    }
+                    let (dirty, slot, ps) = (dirty_save.clone(), slot_save.clone(), path_clone.clone());
+                    save_deck_then(&w_clone, &path_str, &deck, move |saved| {
+                        let settings = gio::Settings::new("org.tunaos.decks");
+                        suite_common::push_recent_file(&settings, &saved);
+                        *ps.borrow_mut() = Some(saved);
+                        dirty.set(false);
+                        slot.clear_or_report();
+                    });
                 } else {
                     let _ = gtk4::prelude::WidgetExt::activate_action(&w_clone, "app.save-file-as", None);
                 }
@@ -1475,24 +1453,13 @@ impl DecksWindow {
                             if let Some(path) = local_path(&file, true, &w2) {
                                 let path_str = path.to_string_lossy().to_string();
                                 let deck = Deck { slides: ss.borrow().clone(), masters: m_inner.borrow().clone() };
-                                match save_deck(&path_str, &deck) {
-                                    Ok(()) => {
-                                        let settings = gio::Settings::new("org.tunaos.decks");
-                                        suite_common::push_recent_file(&settings, &path_str);
-                                        *path_ref.borrow_mut() = Some(path_str);
-                                        dirty_as.set(false);
-                                        slot_as.clear_or_report();
-                                    }
-                                    Err(e) => {
-                                        let err = adw::AlertDialog::builder()
-                                            .heading(suite_common::i18n("Error saving presentation"))
-                                            .body(&e)
-                                            .build();
-                                        err.add_response("ok", &suite_common::i18n("OK"));
-                                        err.set_default_response(Some("ok"));
-                                        err.present(Some(&w2));
-                                    }
-                                }
+                                save_deck_then(&w2, &path_str, &deck, move |saved| {
+                                    let settings = gio::Settings::new("org.tunaos.decks");
+                                    suite_common::push_recent_file(&settings, &saved);
+                                    *path_ref.borrow_mut() = Some(saved);
+                                    dirty_as.set(false);
+                                    slot_as.clear_or_report();
+                                });
                             }
                         }
                     },
@@ -1652,11 +1619,32 @@ impl DecksWindow {
 // ── Helper: rebuild the slide list widget ────────────────────────────────
 // force rebuild
 
-/// Write `deck` to `path`, then upload it if `path` is the staged copy of
-/// a remote location (RFC-0003). Every save goes through here.
-fn save_deck(path: &str, deck: &Deck) -> Result<(), String> {
-    write_deck(path, deck)?;
-    suite_common::locations::commit_save(std::path::Path::new(path))
+/// Save `deck` to `path`, the one way every save goes (Ctrl+S, Save As,
+/// the close guard). The file is written now; a presentation at a remote
+/// location (RFC-0003) is then uploaded without blocking, and if it changed
+/// elsewhere the user picks Save as Copy, Overwrite or Reload. `on_saved`
+/// gets the path the presentation now is (a copy's, if they chose that).
+/// Reload reopens the server's version through the app's `open`. Errors
+/// are shown; `on_saved` doesn't run.
+fn save_deck_then(parent: &adw::ApplicationWindow, path: &str, deck: &Deck, on_saved: impl FnOnce(String) + 'static) {
+    if let Err(e) = write_deck(path, deck) {
+        suite_common::show_error_dialog(Some(parent), &suite_common::i18n("Error saving presentation"), &e);
+        return;
+    }
+    let (app, path_now) = (parent.application(), path.to_string());
+    suite_common::remote_io::finish_save(parent, std::path::Path::new(path), move |outcome| {
+        use suite_common::remote_io::SaveOutcome;
+        match outcome {
+            SaveOutcome::Saved => on_saved(path_now),
+            SaveOutcome::SavedAs(copy) => on_saved(copy.to_string_lossy().into_owned()),
+            SaveOutcome::Reload(fresh) => {
+                if let Some(app) = app {
+                    app.open(&[gio::File::for_path(fresh)], "");
+                }
+            }
+            SaveOutcome::Cancelled | SaveOutcome::Failed => {}
+        }
+    });
 }
 
 /// The local path for a location a dialog handed over: its own, or a

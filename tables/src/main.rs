@@ -74,7 +74,11 @@ fn main() {
         let store = ws.borrow();
         let win = store.as_ref().unwrap();
         for file in files {
-            if let Some(path) = persistence::local_path(file, false, Some(&win.window)) {
+            // A remote document downloads without blocking (RFC-0003).
+            let store = ws.clone();
+            suite_common::remote_io::open(&win.window, file, move |path| {
+                let store = store.borrow();
+                let Some(win) = store.as_ref() else { return };
                 let path_str = path.to_string_lossy().to_string();
                 if let Err(e) = win.open_path(&path_str) {
                     // stderr is not a user interface: launched from a file
@@ -92,7 +96,7 @@ fn main() {
 {e}"),
                     );
                 }
-            }
+            });
         }
         win.present();
         suite_common::render_dump::schedule(app);

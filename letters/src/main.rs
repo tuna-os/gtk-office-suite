@@ -124,15 +124,13 @@ fn main() {
         let store = ws.borrow();
         let win = store.as_ref().unwrap();
         for file in files {
-            // A remote location is staged to a local copy (RFC-0003).
-            match suite_common::locations::open_location(file) {
-                Ok(path) => win.open_path(&path.to_string_lossy()),
-                Err(e) => suite_common::show_error_dialog(
-                    Some(&win.window),
-                    &suite_common::i18n("Could not open file"),
-                    &e,
-                ),
-            }
+            // A remote document downloads without blocking (RFC-0003).
+            let store = ws.clone();
+            suite_common::remote_io::open(&win.window, file, move |path| {
+                if let Some(win) = store.borrow().as_ref() {
+                    win.open_path(&path.to_string_lossy());
+                }
+            });
         }
         win.present();
         suite_common::render_dump::schedule(gtk_app);

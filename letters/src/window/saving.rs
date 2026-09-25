@@ -37,10 +37,7 @@ fn save_page_to_path(page: &adw::TabPage, path: &Path) -> SaveOutcome {
     let mut report = None;
     let result = td.0.borrow_mut().save_to(path.to_path_buf(), |path| {
         report = Some(crate::bridge::save_buffer_to_file(&buf, path)?);
-        // A document at a remote location is uploaded from its staged copy
-        // (RFC-0003), inside the transaction so a failed upload doesn't
-        // count as saved.
-        suite_common::locations::commit_save(path)
+        Ok(())
     });
     let commit = match result {
         Ok(commit) => commit,
@@ -116,7 +113,7 @@ pub(super) fn save_with_prompt(
             if let SaveOutcome::Failed(ref error) = outcome {
                 show_message(page, "Could not save document", error);
             }
-            complete(outcome);
+            finish_remote(page, outcome, complete);
             return;
         }
     }
@@ -169,7 +166,58 @@ pub(super) fn save_with_prompt(
         if let SaveOutcome::Failed(ref error) = outcome {
             show_message(&page, "Could not save document", error);
         }
+        finish_remote(&page, outcome, complete);
+    });
+}
+
+/// After a local write: a document at a remote location (RFC-0003) is
+/// uploaded without blocking, and if it changed elsewhere the user picks
+/// Save as Copy, Overwrite or Reload. Until that's done the document isn't
+/// saved, so anything but a finished save marks it modified again. A local
+/// document completes at once, as before.
+fn finish_remote(page: &adw::TabPage, outcome: SaveOutcome, complete: impl FnOnce(SaveOutcome) + 'static) {
+    let path = tab_data_get(&page.child()).and_then(|td| td.0.borrow().file.clone());
+    let (SaveOutcome::Saved, Some(path)) = (&outcome, path) else {
         complete(outcome);
+        return;
+    };
+    let page = page.clone();
+    suite_common::remote_io::finish_save(&page.child(), &path, move |remote| {
+        use suite_common::remote_io::SaveOutcome as Remote;
+        let buf = get_textview(&page.child()).map(|view| view.buffer());
+        match remote {
+            Remote::Saved => complete(SaveOutcome::Saved),
+            Remote::SavedAs(copy) => {
+                if let Some(td) = tab_data_get(&page.child()) {
+                    td.0.borrow_mut().file = Some(copy.clone());
+                }
+                if let Some(name) = copy.file_name().and_then(|n| n.to_str()) {
+                    page.set_title(name);
+                }
+                page.set_tooltip(&suite_common::locations::remote_uri(&copy).unwrap_or_else(|| copy.to_string_lossy().into_owned()));
+                complete(SaveOutcome::Saved)
+            }
+            Remote::Reload(fresh) => {
+                // Their version replaces this one, by the user's choice.
+                if let Some(buf) = &buf {
+                    if let Err(e) = crate::bridge::load_file_to_buffer(&fresh.to_string_lossy(), buf) {
+                        show_message(&page, "Could not reload document", &e);
+                        buf.set_modified(true);
+                        complete(SaveOutcome::Cancelled);
+                        return;
+                    }
+                    buf.set_modified(false);
+                }
+                complete(SaveOutcome::Saved)
+            }
+            Remote::Cancelled | Remote::Failed => {
+                if let Some(buf) = &buf {
+                    buf.set_modified(true);
+                }
+                page.set_needs_attention(true);
+                complete(SaveOutcome::Cancelled)
+            }
+        }
     });
 }
 

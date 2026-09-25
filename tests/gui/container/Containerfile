@@ -43,7 +43,12 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 # mss (screen capture) has no Ubuntu package.
-RUN pip3 install --no-cache-dir --break-system-packages mss==9.0.2
+# GVfs and WsgiDAV for the remote-document journey (RFC-0003), which opens
+# a workbook from a local WebDAV server, as Nextcloud's files open.
+RUN apt-get update && apt-get install -y --no-install-recommends \
+      gvfs gvfs-backends gvfs-daemons \
+    && rm -rf /var/lib/apt/lists/*
+RUN pip3 install --no-cache-dir --break-system-packages mss==9.0.2 wsgidav cheroot
 
 # Rust, pinned so an image rebuild does not silently change compiler
 # behavior underneath a red/green comparison.

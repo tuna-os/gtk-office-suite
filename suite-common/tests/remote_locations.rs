@@ -79,3 +79,37 @@ fn a_document_at_a_remote_location_opens_saves_and_refuses_to_overwrite_a_newer_
     let _ = copy.delete(None::<&gio::Cancellable>);
     let _ = file.delete(None::<&gio::Cancellable>);
 }
+
+#[test]
+fn the_async_download_and_upload_report_progress_and_conflicts() {
+    use suite_common::locations::{download, upload, UploadError};
+    let Some(dir) = remote_dir() else {
+        eprintln!("TUNAOS_REMOTE_DIR isn't set; skipping");
+        return;
+    };
+    let file = dir.child("spike-async.xlsx");
+    let big: Vec<u8> = (0..3_000_000u32).map(|i| (i % 251) as u8).collect();
+    put(&file, &big);
+    let context = gtk4::glib::MainContext::default();
+    let seen = std::cell::RefCell::new(Vec::new());
+    let staged = context.block_on(download(&file, |done, total| seen.borrow_mut().push((done, total)))).unwrap();
+    assert_eq!(std::fs::read(&staged).unwrap(), big);
+    let seen = seen.into_inner();
+    assert!(seen.len() > 1, "progress arrives in chunks: {seen:?}");
+    assert_eq!(seen.last().unwrap().0, big.len() as u64);
+    println!("progress reports: {} (total known: {:?})", seen.len(), seen.last().unwrap().1);
+
+    std::fs::write(&staged, b"mine").unwrap();
+    context.block_on(upload(&staged, true)).unwrap();
+    assert_eq!(get(&file), b"mine");
+
+    std::thread::sleep(std::time::Duration::from_millis(1100));
+    put(&file, b"theirs");
+    std::fs::write(&staged, b"mine again").unwrap();
+    assert!(matches!(context.block_on(upload(&staged, true)), Err(UploadError::ChangedElsewhere(_))));
+    assert_eq!(get(&file), b"theirs");
+    // Overwrite, by choice.
+    context.block_on(upload(&staged, false)).unwrap();
+    assert_eq!(get(&file), b"mine again");
+    let _ = file.delete(None::<&gio::Cancellable>);
+}

@@ -528,11 +528,12 @@ impl LettersWindow {
                 dlg.save(Some(&w), None::<&gio::Cancellable>, move |result: Result<gio::File, glib::Error>| {
                     let Ok(file) = result else { return };
                     let written = suite_common::locations::save_location(&file).and_then(|path| {
-                        crate::engine::export_pdf(&text, &path.to_string_lossy())
-                            .and_then(|()| suite_common::locations::commit_save(&path))
+                        crate::engine::export_pdf(&text, &path.to_string_lossy()).map(|()| path)
                     });
-                    if let Err(e) = written {
-                        suite_common::show_error_dialog(Some(&w2), &suite_common::i18n("Could not export PDF"), &e);
+                    match written {
+                        // A remote destination uploads now (RFC-0003).
+                        Ok(path) => suite_common::remote_io::finish_save(&w2, &path, |_| {}),
+                        Err(e) => suite_common::show_error_dialog(Some(&w2), &suite_common::i18n("Could not export PDF"), &e),
                     }
                 });
             });
@@ -697,10 +698,12 @@ impl LettersWindow {
                 let fl = gio::ListStore::new::<gtk::FileFilter>();
                 fl.append(&f);
                 dlg.set_filters(Some(&fl));
+                let w_img = w.clone();
                 dlg.open(Some(&w), None::<&gio::Cancellable>,
                     move |result: Result<gio::File, glib::Error>| {
                         if let Ok(file) = result {
-                            if let Ok(path) = suite_common::locations::open_location(&file).map_err(|e| eprintln!("{e}")) {
+                            let tv = tv.clone();
+                            suite_common::remote_io::open(&w_img, &file, move |path| {
                                 if let Some(buf) = active_buffer(&tv) {
                                     let path_str = path.to_string_lossy();
                                     let name = path.file_name()
@@ -711,7 +714,7 @@ impl LettersWindow {
                                     let mut pos = ins;
                                     buf.insert(&mut pos, &md);
                                 }
-                            }
+                            });
                         }
                     },
                 );
@@ -1003,16 +1006,12 @@ impl LettersWindow {
                 let w_err = w.clone();
                 dlg.open(Some(&w), None::<&gio::Cancellable>,
                     move |result: Result<gio::File, glib::Error>| {
-                        if let Ok(file) = result {
-                            // A remote location is staged to a local copy
-                            // (RFC-0003); one that can't be read is reported.
-                            let path = match suite_common::locations::open_location(&file) {
-                                Ok(path) => path,
-                                Err(e) => {
-                                    report_open_failure(Some(&w_err), &file.uri(), &e);
-                                    return;
-                                }
-                            };
+                        let Ok(file) = result else { return };
+                        // A remote document downloads without blocking
+                        // (RFC-0003); a failure is reported there.
+                        let (tv, st, s, wc, sl, w_err) = (tv.clone(), st.clone(), s.clone(), wc.clone(), sl.clone(), w_err.clone());
+                        let parent = w_err.clone();
+                        suite_common::remote_io::open(&parent, &file.clone(), move |path| {
                             let name = file.basename().map(|p| p.display().to_string()).unwrap_or_default();
                             let (container, buf) = make_doc_widget(Some(&s));
                             let path_str = path.to_string_lossy().to_string();
@@ -1038,7 +1037,7 @@ impl LettersWindow {
                             connect_word_count(&buf, &wc);
                             connect_style_readout(&buf, &sl);
                             tv.set_selected_page(&page);
-                        }
+                        });
                     },
                 );
             });

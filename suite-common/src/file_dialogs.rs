@@ -87,8 +87,11 @@ impl FileDialogHelper {
             dlg.set_filters(Some(&fl));
         }
         let w = self.parent.clone();
-        dlg.open(Some(&w), None::<&gio::Cancellable>, move |result| {
-            callback(result.ok().and_then(|f| crate::locations::open_location(&f).map_err(|e| eprintln!("{e}")).ok()))
+        let parent = w.clone();
+        dlg.open(Some(&w), None::<&gio::Cancellable>, move |result| match result {
+            // A remote document downloads without blocking (RFC-0003).
+            Ok(file) => crate::remote_io::open(&parent, &file, move |path| callback(Some(path))),
+            Err(_) => callback(None),
         });
     }
 
