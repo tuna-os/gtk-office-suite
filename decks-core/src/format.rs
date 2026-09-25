@@ -46,28 +46,6 @@ pub enum FormatEdit {
     Rotation(f64),
 }
 
-impl FormatEdit {
-    /// The undo step's name.
-    pub fn description(&self) -> &'static str {
-        match self {
-            FormatEdit::Fill(_) => "Fill",
-            FormatEdit::OutlineColor(_) | FormatEdit::OutlineWidth(_) | FormatEdit::NoOutline => "Outline",
-            FormatEdit::Kind(_) => "Shape",
-            FormatEdit::FontFamily(_) => "Font",
-            FormatEdit::FontSize(_) => "Font Size",
-            FormatEdit::Bold(_) => "Bold",
-            FormatEdit::Italic(_) => "Italic",
-            FormatEdit::TextColor(_) => "Text Colour",
-            FormatEdit::Align(_) => "Alignment",
-            FormatEdit::List(_) => "List",
-            FormatEdit::Anchor(_) => "Vertical Alignment",
-            FormatEdit::X(_) | FormatEdit::Y(_) => "Move",
-            FormatEdit::Width(_) | FormatEdit::Height(_) => "Resize",
-            FormatEdit::Rotation(_) => "Rotate",
-        }
-    }
-}
-
 /// What the inspector shows for an object.
 #[derive(Clone, Debug, PartialEq)]
 pub struct ObjectFormat {
