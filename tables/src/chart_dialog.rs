@@ -51,7 +51,7 @@ pub fn opener(
             .content_height(480)
             .build();
 
-        let chart_type = Rc::new(Cell::new(crate::charts::ChartType::Bar));
+        let chart_type = Rc::new(Cell::new(tables_core::sheet::ChartKind::Bar));
         let data_rc = Rc::new(data);
 
         let preview = gtk::DrawingArea::new();
@@ -65,15 +65,21 @@ pub fn opener(
             cr.paint().unwrap();
         });
 
-        let type_combo = gtk::DropDown::from_strings(&["Bar", "Line", "Pie"]);
+        // The kinds Excel and Calc share, in their order.
+        use tables_core::sheet::ChartKind;
+        const KINDS: [(&str, ChartKind); 5] = [
+            ("Column", ChartKind::Bar),
+            ("Line", ChartKind::Line),
+            ("Area", ChartKind::Area),
+            ("Pie", ChartKind::Pie),
+            ("XY (Scatter)", ChartKind::Scatter),
+        ];
+        let names: Vec<String> = KINDS.iter().map(|(n, _)| suite_common::i18n(n)).collect();
+        let type_combo = gtk::DropDown::from_strings(&names.iter().map(String::as_str).collect::<Vec<_>>());
         let ct2 = chart_type.clone();
         let pv = preview.clone();
         type_combo.connect_selected_notify(move |dd| {
-            ct2.set(match dd.selected() {
-                0 => crate::charts::ChartType::Bar,
-                1 => crate::charts::ChartType::Line,
-                _ => crate::charts::ChartType::Pie,
-            });
+            ct2.set(KINDS.get(dd.selected() as usize).map_or(ChartKind::Bar, |k| k.1));
             pv.queue_draw();
         });
 
@@ -93,7 +99,7 @@ pub fn opener(
             let ct = chart_type.clone();
             let dlg = dialog.clone();
             insert_btn.connect_clicked(move |_| {
-                use tables_core::sheet::{ChartKind, ChartSpec};
+                use tables_core::sheet::ChartSpec;
                 let (col, first, last) = {
                     let state = ctl.borrow().state.clone();
                     let st = state.borrow();
@@ -110,11 +116,7 @@ pub fn opener(
                     (col, first, last)
                 };
                 let Some(first) = first else { return };
-                let kind = match ct.get() {
-                    crate::charts::ChartType::Bar => ChartKind::Bar,
-                    crate::charts::ChartType::Line => ChartKind::Line,
-                    crate::charts::ChartType::Pie => ChartKind::Pie,
-                };
+                let kind = ct.get();
                 let chart = ChartSpec {
                     kind,
                     title: String::new(),

@@ -128,6 +128,10 @@ pub fn read_charts_from_xlsx(path: &str) -> Vec<crate::sheet::ChartSpec> {
             ChartKind::Line
         } else if xml.contains("<pieChart") {
             ChartKind::Pie
+        } else if xml.contains("<scatterChart") {
+            ChartKind::Scatter
+        } else if xml.contains("<areaChart") {
+            ChartKind::Area
         } else {
             continue;
         };
@@ -140,8 +144,10 @@ pub fn read_charts_from_xlsx(path: &str) -> Vec<crate::sheet::ChartSpec> {
                 .next()
                 .map(str::to_string)
         };
-        let cat = grab_f("<cat>").and_then(|r| parse_range(&r));
-        let Some(val) = grab_f("<val>").and_then(|r| parse_range(&r)) else {
+        // An XY chart's series has x and y values where the others have
+        // categories and values.
+        let cat = grab_f("<cat>").or_else(|| grab_f("<xVal>")).and_then(|r| parse_range(&r));
+        let Some(val) = grab_f("<val>").or_else(|| grab_f("<yVal>")).and_then(|r| parse_range(&r)) else {
             continue;
         };
         // Title: first a:t inside c:title.
@@ -247,13 +253,15 @@ mod chart_tests {
     }
 
     #[test]
-    fn line_and_pie_kinds_round_trip() {
-        for kind in [ChartKind::Line, ChartKind::Pie] {
+    fn every_kind_round_trips_with_its_ranges() {
+        for kind in [ChartKind::Line, ChartKind::Pie, ChartKind::Scatter, ChartKind::Area] {
             let dir = tempfile::tempdir().unwrap();
             let path = dir.path().join("c.xlsx");
             let mut sh = SheetModel::new("Sheet1", 6, 3, 0);
-            sh.data[0][0] = "A".into();
-            sh.data[0][1] = "1".into();
+            for r in 0..4 {
+                sh.data[r][0] = format!("{}", r + 1);
+                sh.data[r][1] = format!("{}", (r * 7) % 5);
+            }
             sh.charts.push(ChartSpec {
                 kind,
                 title: String::new(),
@@ -261,16 +269,43 @@ mod chart_tests {
                 y_axis_title: None,
                 legend_position: LegendPosition::Right,
                 series: Vec::new(),
-                cat: (0, 0, 0),
-                val: (0, 1, 0),
-                anchor: (2, 0),
+                cat: (0, 0, 3),
+                val: (0, 1, 3),
+                anchor: (2, 2),
                 width_px: 480.0,
                 height_px: 280.0,
             });
             save_sheets_to_xlsx(path.to_str().unwrap(), &[sh]).unwrap();
             let charts = read_charts_from_xlsx(path.to_str().unwrap());
-            assert_eq!(charts.len(), 1);
-            assert_eq!(charts[0].kind, kind);
+            assert_eq!(charts.len(), 1, "{kind:?}");
+            let c = &charts[0];
+            assert_eq!((c.kind, c.cat, c.val, c.anchor), (kind, (0, 0, 3), (0, 1, 3), (2, 2)), "{kind:?}");
         }
+    }
+
+    /// A scatter chart's series names x and y values (`<c:xVal>`,
+    /// `<c:yVal>`), not categories and values, as openpyxl and Calc write it.
+    #[test]
+    fn a_scatter_chart_reads_its_x_and_y_ranges() {
+        use std::io::Write;
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("s.xlsx");
+        {
+            let f = std::fs::File::create(&path).unwrap();
+            let mut z = zip::ZipWriter::new(f);
+            let o = zip::write::SimpleFileOptions::default();
+            z.start_file("xl/charts/chart1.xml", o).unwrap();
+            z.write_all(
+                br#"<c:chartSpace xmlns:c="c"><c:chart><c:plotArea><c:scatterChart><c:ser>
+                <c:xVal><c:numRef><c:f>'Sheet'!$A$1:$A$4</c:f></c:numRef></c:xVal>
+                <c:yVal><c:numRef><c:f>'Sheet'!$B$1:$B$4</c:f></c:numRef></c:yVal>
+                </c:ser></c:scatterChart></c:plotArea></c:chart></c:chartSpace>"#,
+            )
+            .unwrap();
+            z.finish().unwrap();
+        }
+        let charts = read_charts_from_xlsx(path.to_str().unwrap());
+        assert_eq!(charts.len(), 1);
+        assert_eq!((charts[0].kind, charts[0].cat, charts[0].val), (ChartKind::Scatter, (0, 0, 3), (0, 1, 3)));
     }
 }
