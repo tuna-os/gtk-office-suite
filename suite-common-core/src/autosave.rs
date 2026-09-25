@@ -630,6 +630,59 @@ pub fn find_orphaned_snapshots(state_dir: &Path) -> Vec<String> {
     found.into_iter().map(|(_written, doc_id)| doc_id).collect()
 }
 
+/// The directory `app` keeps its autosave snapshots in:
+/// `$XDG_STATE_HOME/<app>`, else `$HOME/.local/state/<app>`, else
+/// `.local/state/<app>` under the account's home directory from the
+/// password database.
+///
+/// Never a shared temporary directory. All three apps used to fall back to
+/// `/tmp/<app>` when neither variable was set: a fixed name in a
+/// world-writable directory, which another local user can create first, or
+/// point a symlink at, and so read the snapshots or plant one that the next
+/// launch offers as recovered work (#829).
+///
+/// `glib::user_state_dir()` would do this, but needs a glib feature this
+/// workspace doesn't enable, and this crate is GTK-free anyway.
+pub fn state_dir(app: &str) -> PathBuf {
+    state_dir_from(std::env::var_os("XDG_STATE_HOME"), std::env::var_os("HOME"), std::env::home_dir, app)
+}
+
+/// `state_dir` with its inputs passed in, so each fallback can be tested
+/// without mutating the process environment. `account_home` is only asked
+/// when neither variable is usable.
+fn state_dir_from(
+    xdg_state_home: Option<std::ffi::OsString>,
+    home: Option<std::ffi::OsString>,
+    account_home: impl FnOnce() -> Option<PathBuf>,
+    app: &str,
+) -> PathBuf {
+    // The XDG spec says to ignore an empty value; a relative one is
+    // ignored too, since it would resolve against the working directory.
+    let usable = |v: std::ffi::OsString| Some(PathBuf::from(v)).filter(|p| p.is_absolute());
+    let base = xdg_state_home
+        .and_then(usable)
+        .or_else(|| home.and_then(usable).map(|h| h.join(".local/state")))
+        // With HOME unset, `std::env::home_dir` reads the password
+        // database. An account with no home directory at all is left with
+        // a path relative to the working directory, which is still not a
+        // directory every user can write to.
+        .unwrap_or_else(|| account_home().unwrap_or_default().join(".local/state"));
+    base.join(app)
+}
+
+/// Where to put recovered bytes so an app can load them through its normal
+/// open-a-file path: inside `state_dir`, which belongs to the user, rather
+/// than at a predictable name in the shared temporary directory. Decks and
+/// Tables used `$TMPDIR/<app>-recovery-<pid>.<ext>`; another user could
+/// create that name first, as a symlink to a file of the victim's, and the
+/// recovery write would truncate it (#841).
+///
+/// The name doesn't end in the snapshot suffix, so a copy left behind by a
+/// crash during recovery is never offered as a snapshot itself.
+pub fn recovery_scratch_path(state_dir: &Path, ext: &str) -> PathBuf {
+    state_dir.join(format!("recovering-{}.{ext}", std::process::id()))
+}
+
 #[cfg(test)]
 mod tests {
 
@@ -1294,6 +1347,52 @@ mod tests {
         slot.write(b"dirty state", &SnapshotMeta { original_path: None, kind: "md".into() }).unwrap();
         // ... a real save happens here, then:
         slot.clear().unwrap();
+        assert!(find_orphaned_snapshots(dir.path()).is_empty());
+    }
+
+    // ── where snapshots live (#829, #841) ────────────────────────────────
+
+    fn no_account_home() -> Option<PathBuf> {
+        panic!("the password database is only the last resort")
+    }
+
+    #[test]
+    fn state_dir_prefers_xdg_state_home() {
+        let dir = state_dir_from(Some("/state".into()), Some("/home/u".into()), no_account_home, "letters");
+        assert_eq!(dir, PathBuf::from("/state/letters"));
+    }
+
+    #[test]
+    fn state_dir_falls_back_to_home_local_state() {
+        let dir = state_dir_from(None, Some("/home/u".into()), no_account_home, "tables");
+        assert_eq!(dir, PathBuf::from("/home/u/.local/state/tables"));
+        // An empty or relative XDG_STATE_HOME is ignored, as the spec says.
+        let dir = state_dir_from(Some("".into()), Some("/home/u".into()), no_account_home, "tables");
+        assert_eq!(dir, PathBuf::from("/home/u/.local/state/tables"));
+        let dir = state_dir_from(Some("rel".into()), Some("/home/u".into()), no_account_home, "tables");
+        assert_eq!(dir, PathBuf::from("/home/u/.local/state/tables"));
+    }
+
+    /// The bug this pins: with neither variable set, all three apps used a
+    /// fixed directory in /tmp, which any local user can create first.
+    #[test]
+    fn state_dir_without_env_uses_the_account_home_never_the_temp_dir() {
+        let dir = state_dir_from(None, None, || Some(PathBuf::from("/home/u")), "decks");
+        assert_eq!(dir, PathBuf::from("/home/u/.local/state/decks"));
+
+        let dir = state_dir_from(Some("".into()), Some("".into()), || None, "decks");
+        assert_eq!(dir, PathBuf::from(".local/state/decks"));
+        assert!(!dir.starts_with(std::env::temp_dir()));
+        assert!(!dir.starts_with("/tmp"));
+    }
+
+    #[test]
+    fn recovery_scratch_file_stays_in_the_state_dir_and_is_not_a_snapshot() {
+        let dir = tempfile::tempdir().unwrap();
+        let scratch = recovery_scratch_path(dir.path(), "pptx");
+        assert_eq!(scratch.parent(), Some(dir.path()));
+        // A copy left behind by a crash mid-recovery is not offered back.
+        fs::write(&scratch, b"recovered bytes").unwrap();
         assert!(find_orphaned_snapshots(dir.path()).is_empty());
     }
 }

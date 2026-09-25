@@ -18,9 +18,13 @@ ignore = [
     # only reachable through typst/usvg, so migration is upstream's call.
     { id = "RUSTSEC-2026-0192", reason = "ttf-parser unmaintained, no patched release; reached via fontdb/oxml-layout/typst/usvg — upstream successor skrifa (see #269)" },
     { id = "RUSTSEC-2026-0206", reason = "rustybuzz unmaintained, no patched release; reached via krilla/typst-layout/usvg — upstream successor harfrust (see #269)" },
-    # quick-xml: already tracked in #225 (fixed in 0.38.5; current lock has 0.41.0).
-    { id = "RUSTSEC-2026-0194", reason = "quick-xml DoS, fixed in 0.38.5; current lock is 0.41.0 — keep ignore in case a transitive pin regresses" },
-    { id = "RUSTSEC-2026-0195", reason = "quick-xml DoS, fixed in 0.38.5; current lock is 0.41.0 — keep ignore in case a transitive pin regresses" },
+    # quick-xml 0.38.4: upstream-blocked, tracked in #225. Only quick-xml
+    # >= 0.41 is patched (there is no 0.38.x fix), and typst -> hayagriva ->
+    # citationberg 0.7.0 (the latest release) requires ^0.38.1, so Cargo.lock
+    # holds 0.38.4 beside the workspace's fixed 0.41. Remove these two entries
+    # once citationberg moves off 0.38; see the note in suite-export/Cargo.toml.
+    { id = "RUSTSEC-2026-0194", reason = "quick-xml 0.38.4 via citationberg 0.7.0 (typst bibliography); no patched 0.38.x; our generated Typst never parses CSL (#225)" },
+    { id = "RUSTSEC-2026-0195", reason = "quick-xml 0.38.4 via citationberg 0.7.0 (typst bibliography); no patched 0.38.x; our generated Typst never parses CSL (#225)" },
     # syntect (syntax highlighting) pulls both; not in the untrusted-input path.
     { id = "RUSTSEC-2025-0141", reason = "bincode development ceased, no patched release; via syntect — build/display only" },
     { id = "RUSTSEC-2024-0320", reason = "yaml-rust unmaintained, no patched release; via syntect — display only" },

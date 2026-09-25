@@ -29,13 +29,8 @@ fn next_doc_id() -> String {
 }
 
 pub(crate) fn autosave_state_dir() -> std::path::PathBuf {
-    // glib::user_state_dir() needs the "v2_72" feature this workspace's
-    // glib binding doesn't enable — do the XDG fallback ourselves.
-    let base = std::env::var_os("XDG_STATE_HOME")
-        .map(std::path::PathBuf::from)
-        .or_else(|| std::env::var_os("HOME").map(|h| std::path::PathBuf::from(h).join(".local/state")))
-        .unwrap_or_else(|| std::path::PathBuf::from("/tmp"));
-    base.join("letters")
+    // XDG state dir, never a fixed name in /tmp (#829): see the shared helper.
+    suite_common::autosave::state_dir("letters")
 }
 
 // ── Per-tab state via widget Qdata ─────────────────────────────────────
@@ -544,13 +539,13 @@ mod tests {
             std::path::PathBuf::from("/custom/home/.local/state/letters")
         );
 
-        // Last resort is /tmp when neither is set.
+        // Neither set: the account's home from the password database, and
+        // never a fixed directory in /tmp that another user could own (#829).
         std::env::remove_var("XDG_STATE_HOME");
         std::env::remove_var("HOME");
-        assert_eq!(
-            autosave_state_dir(),
-            std::path::PathBuf::from("/tmp/letters")
-        );
+        let dir = autosave_state_dir();
+        assert!(dir.ends_with(".local/state/letters"), "{}", dir.display());
+        assert!(!dir.starts_with("/tmp"), "{}", dir.display());
     }
 
     // ── page setup reaches the view (#438) ────────────────────────────────

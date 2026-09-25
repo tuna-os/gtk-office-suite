@@ -11,8 +11,16 @@ OUTDIR="$(cd "$OUTDIR" && pwd)"
 cd "$(dirname "$0")"
 REPO_ROOT="$(cd ../.. && pwd)"
 
-SCHEMA_DIR="${GSETTINGS_SCHEMA_DIR:-/tmp/gtk-office-schemas}"
-mkdir -p "$SCHEMA_DIR"
+# A private per-run directory unless one is given, as in run_gui_tests.sh:
+# a fixed /tmp name can be created first by another user (#819).
+SCHEMA_TMP=""
+if [ -n "${GSETTINGS_SCHEMA_DIR:-}" ]; then
+    SCHEMA_DIR="$GSETTINGS_SCHEMA_DIR"
+    mkdir -p "$SCHEMA_DIR"
+else
+    SCHEMA_TMP="$(mktemp -d -t gtk-office-schemas-XXXXXXXX)"
+    SCHEMA_DIR="$SCHEMA_TMP"
+fi
 cp "$REPO_ROOT"/flatpak/*.gschema.xml "$SCHEMA_DIR/"
 glib-compile-schemas "$SCHEMA_DIR"
 export GSETTINGS_SCHEMA_DIR="$SCHEMA_DIR"
@@ -30,7 +38,7 @@ cp "$REPO_ROOT/tests/gui/demo/quarterly-report.md" "$DEMO_DIR/"
 
 Xvfb :96 -screen 0 1600x1000x24 &
 XVFB_PID=$!
-trap 'kill $XVFB_PID 2>/dev/null || true' EXIT
+trap 'kill $XVFB_PID 2>/dev/null || true; [ -z "$SCHEMA_TMP" ] || rm -rf "$SCHEMA_TMP"' EXIT
 export DISPLAY=:96
 sleep 1
 
