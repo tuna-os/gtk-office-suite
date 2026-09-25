@@ -231,7 +231,8 @@ fn a_delete_wins_over_a_concurrent_move_and_edit_of_the_same_object() {
 #[test]
 fn a_slide_delete_wins_over_a_concurrent_move_and_edit_of_that_slide() {
     let (mut a, mut deck_a, mut b, mut deck_b) = pair();
-    edit(&mut deck_a, &mut a, vec![Op::DeleteSlide { slide: deck_a[1].ids.slide }]);
+    let doomed = deck_a[1].ids.slide;
+    edit(&mut deck_a, &mut a, vec![Op::DeleteSlide { slide: doomed }]);
     let mut props = SlideProps::of(&deck_b[1]);
     props.title = "renamed".into();
     let id = deck_b[1].ids.slide;
