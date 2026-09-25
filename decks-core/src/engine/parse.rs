@@ -374,10 +374,13 @@ pub fn read_pptx(path: &str) -> Result<Deck, String> {
     // Every coordinate in the package is relative to this, so it has to be
     // read before any of them. A package that declares no size gets the one
     // our own writer emits, which is what the old fixed divisor assumed.
-    let scale = match parse_slide_size(&presentation_xml) {
+    let declared = parse_slide_size(&presentation_xml);
+    let scale = match declared {
         Some((cx, cy)) => SlideScale::from_emu(cx, cy),
         None => SlideScale::default(),
     };
+    // Kept on the masters so a save writes the same size back.
+    let page_emu = declared.filter(|&(cx, cy)| cx > 0.0 && cy > 0.0 && (cx, cy) != SlideScale::DEFAULT_EMU);
 
     // 2. Read presentation.xml.rels to resolve slide relationship IDs to paths
     let rels_xml = archive
@@ -1056,6 +1059,7 @@ pub fn read_pptx(path: &str) -> Result<Deck, String> {
                     default_font: theme_font
                         .unwrap_or_else(|| MasterSlide::DEFAULT_FONT.into()),
                     shapes,
+                    page_emu: None,
                 });
                 let idx = masters.len() - 1;
                 layout_to_idx.insert(layout_path.clone(), idx);
@@ -1072,6 +1076,7 @@ pub fn read_pptx(path: &str) -> Result<Deck, String> {
             background: "#ffffff".into(),
             default_font: MasterSlide::DEFAULT_FONT.into(),
             shapes: vec![],
+            page_emu: None,
         });
     }
 
@@ -1088,6 +1093,9 @@ pub fn read_pptx(path: &str) -> Result<Deck, String> {
         });
     }
 
+    for m in &mut masters {
+        m.page_emu = page_emu;
+    }
     Ok(Deck { slides, masters })
 }
 

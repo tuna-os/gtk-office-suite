@@ -66,6 +66,7 @@ impl DecksWindow {
                 background: "#ffffff".into(),
                 default_font: MasterSlide::DEFAULT_FONT.into(),
                 shapes: vec![],
+                page_emu: None,
             }],
         ));
         let slides = controller.slides.clone();

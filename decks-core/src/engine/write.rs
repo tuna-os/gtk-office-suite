@@ -68,24 +68,65 @@ fn write_xfrm<W: std::io::Write>(
     writer.write_event(Event::Start(xfrm))?;
 
     let mut off = BytesStart::new("a:off");
-    off.push_attribute(("x", ((x * 9525.0).round() as i64).to_string().as_str()));
-    off.push_attribute(("y", ((y * 9525.0).round() as i64).to_string().as_str()));
+    off.push_attribute(("x", emu(x).as_str()));
+    off.push_attribute(("y", emu_y(y).as_str()));
     writer.write_event(Event::Empty(off))?;
 
     let mut ext = BytesStart::new("a:ext");
-    ext.push_attribute(("cx", ((w * 9525.0).round() as i64).to_string().as_str()));
-    ext.push_attribute(("cy", ((h * 9525.0).round() as i64).to_string().as_str()));
+    ext.push_attribute(("cx", emu(w).as_str()));
+    ext.push_attribute(("cy", emu_y(h).as_str()));
     writer.write_event(Event::Empty(ext))?;
 
     writer.write_event(Event::End(BytesEnd::new("a:xfrm")))?;
     Ok(())
 }
 
-/// The `a:p` paragraphs of a text body: styled runs when present (shared
-/// Run/RunStyle with Letters), else one default-styled run of `text`.
-/// EMU for a length in model units.
+// EMU per model unit across and down, for the deck being written: its
+// slide size over the model's 960x540 (`MasterSlide::page_emu`).
+// `write_pptx_bytes` sets it for the length of one write.
+thread_local! {
+    static TO_EMU: std::cell::Cell<(f64, f64)> = const { std::cell::Cell::new((9525.0, 9525.0)) };
+}
+
+/// Sets `TO_EMU` for one write, and puts the default back after it.
+struct PageScale;
+
+impl PageScale {
+    fn set(deck: &Deck) -> PageScale {
+        let (cx, cy) = deck.masters.first().and_then(|m| m.page_emu).unwrap_or(super::SlideScale::DEFAULT_EMU);
+        TO_EMU.with(|t| t.set((cx / 960.0, cy / 540.0)));
+        PageScale
+    }
+}
+
+impl Drop for PageScale {
+    fn drop(&mut self) {
+        TO_EMU.with(|t| t.set((9525.0, 9525.0)));
+    }
+}
+
+/// The slide size written to `p:sldSz`.
+fn slide_size_emu() -> (i64, i64) {
+    let (x, y) = TO_EMU.with(|t| t.get());
+    ((960.0 * x).round() as i64, (540.0 * y).round() as i64)
+}
+
+/// EMU for a length across the slide (or one with no direction), in model
+/// units. The readers scale such lengths by the slide's width.
 fn emu(v: f64) -> String {
-    ((v * 9525.0).round() as i64).to_string()
+    ((v * TO_EMU.with(|t| t.get().0)).round() as i64).to_string()
+}
+
+/// EMU for a length down the slide, in model units.
+fn emu_y(v: f64) -> String {
+    ((v * TO_EMU.with(|t| t.get().1)).round() as i64).to_string()
+}
+
+/// A text size (a font size, a spacing or a bullet size in points), from
+/// the model's slide to the file's: the inverse of
+/// `SlideScale::text_factor`, which the readers apply.
+fn file_size(hp: f64) -> f64 {
+    hp * TO_EMU.with(|t| t.get().0) / 9525.0
 }
 
 /// `a:bodyPr` with the box's insets and anchor, where they aren't the
@@ -94,9 +135,9 @@ fn write_body_pr<W: std::io::Write>(writer: &mut Writer<W>, body: &TextBody) -> 
     let mut b = BytesStart::new("a:bodyPr");
     if let Some(i) = body.insets {
         b.push_attribute(("lIns", emu(i.left).as_str()));
-        b.push_attribute(("tIns", emu(i.top).as_str()));
+        b.push_attribute(("tIns", emu_y(i.top).as_str()));
         b.push_attribute(("rIns", emu(i.right).as_str()));
-        b.push_attribute(("bIns", emu(i.bottom).as_str()));
+        b.push_attribute(("bIns", emu_y(i.bottom).as_str()));
     }
     if body.anchor != Anchor::Top {
         b.push_attribute(("anchor", body.anchor.to_drawingml()));
@@ -143,7 +184,7 @@ fn write_para_pr<W: std::io::Write>(writer: &mut Writer<W>, st: &ParaStyle) -> R
     writer.write_event(Event::Start(p))?;
     for (name, sp) in [("a:spcBef", st.space_before), ("a:spcAft", st.space_after)] {
         let (el, val) = match sp {
-            Spacing::Units(u) if u != 0.0 => ("a:spcPts", (u * 72.0 / 96.0 * 100.0).round() as i64),
+            Spacing::Units(u) if u != 0.0 => ("a:spcPts", (file_size(u) * 72.0 / 96.0 * 100.0).round() as i64),
             Spacing::Lines(f) if f != 0.0 => ("a:spcPct", (f * 100_000.0).round() as i64),
             _ => continue,
         };
@@ -172,7 +213,7 @@ fn write_para_pr<W: std::io::Write>(writer: &mut Writer<W>, st: &ParaStyle) -> R
             }
             Some(MarkerSize::Points(p)) => {
                 let mut e = BytesStart::new("a:buSzPts");
-                e.push_attribute(("val", ((p * 100.0).round() as i64).to_string().as_str()));
+                e.push_attribute(("val", ((file_size(p) * 100.0).round() as i64).to_string().as_str()));
                 writer.write_event(Event::Empty(e))?;
             }
             None => {}
@@ -203,6 +244,8 @@ fn write_para_pr<W: std::io::Write>(writer: &mut Writer<W>, st: &ParaStyle) -> R
     Ok(())
 }
 
+/// The `a:p` paragraphs of a text body: styled runs when present (shared
+/// Run/RunStyle with Letters), else one default-styled run of `text`.
 fn write_paragraphs<W: std::io::Write>(
     writer: &mut Writer<W>,
     text: &str,
@@ -246,7 +289,7 @@ fn write_paragraphs<W: std::io::Write>(
         writer.write_event(Event::Start(BytesStart::new("a:r")))?;
         let mut r_pr = BytesStart::new("a:rPr");
         r_pr.push_attribute(("lang", "en-US"));
-        let sz = run.style.font_size_hp.map(|hp| hp as u32 * 50).unwrap_or(1800);
+        let sz = (file_size(run.style.font_size_hp.unwrap_or(36) as f64) * 50.0).round() as u32;
         r_pr.push_attribute(("sz", sz.to_string().as_str()));
         if run.style.bold { r_pr.push_attribute(("b", "1")); }
         if run.style.italic { r_pr.push_attribute(("i", "1")); }
@@ -481,7 +524,7 @@ fn write_shape<W: std::io::Write>(
     match style.stroke {
         Some(stroke) => {
             // Model units, as write_xfrm writes coordinates.
-            ln.push_attribute(("w", ((stroke.width * 9525.0).round() as i64).to_string().as_str()));
+            ln.push_attribute(("w", emu(stroke.width).as_str()));
             writer.write_event(Event::Start(ln))?;
             solid(writer, stroke.color)?;
             writer.write_event(Event::End(BytesEnd::new("a:ln")))?;
@@ -508,7 +551,6 @@ fn write_table<W: std::io::Write>(
     at: Placement,
     table: &super::table::TableData,
 ) -> Result<(), quick_xml::Error> {
-    let emu = |v: f64| ((v * 9525.0).round() as i64).to_string();
     writer.write_event(Event::Start(BytesStart::new("p:graphicFrame")))?;
     writer.write_event(Event::Start(BytesStart::new("p:nvGraphicFramePr")))?;
     let mut c_nv_pr = BytesStart::new("p:cNvPr");
@@ -526,11 +568,11 @@ fn write_table<W: std::io::Write>(
     writer.write_event(Event::Start(BytesStart::new("p:xfrm")))?;
     let mut off = BytesStart::new("a:off");
     off.push_attribute(("x", emu(at.x).as_str()));
-    off.push_attribute(("y", emu(at.y).as_str()));
+    off.push_attribute(("y", emu_y(at.y).as_str()));
     writer.write_event(Event::Empty(off))?;
     let mut ext = BytesStart::new("a:ext");
     ext.push_attribute(("cx", emu(at.w).as_str()));
-    ext.push_attribute(("cy", emu(at.h).as_str()));
+    ext.push_attribute(("cy", emu_y(at.h).as_str()));
     writer.write_event(Event::Empty(ext))?;
     writer.write_event(Event::End(BytesEnd::new("p:xfrm")))?;
 
@@ -562,7 +604,7 @@ fn write_table<W: std::io::Write>(
     writer.write_event(Event::End(BytesEnd::new("a:tblGrid")))?;
     for (r, h) in rows.iter().enumerate() {
         let mut tr = BytesStart::new("a:tr");
-        tr.push_attribute(("h", emu(*h).as_str()));
+        tr.push_attribute(("h", emu_y(*h).as_str()));
         writer.write_event(Event::Start(tr))?;
         for c in 0..cols.len() {
             let cell = table.rows.get(r).and_then(|row| row.get(c)).cloned().unwrap_or_default();
@@ -972,6 +1014,8 @@ pub fn write_pptx(path: &str, deck: &Deck) -> Result<(), String> {
 /// Render the deck to an in-memory .pptx buffer without touching disk —
 /// shared by the real save path (above) and autosave snapshots.
 pub fn write_pptx_bytes(deck: &Deck) -> Result<Vec<u8>, String> {
+    // Every length below goes back onto the deck's own slide size.
+    let _page = PageScale::set(deck);
     // Built fully in memory, then placed atomically — see
     // suite_common_core::atomic_save and odp::write for why.
     let buf = std::io::Cursor::new(Vec::new());
@@ -1054,12 +1098,13 @@ pub fn write_pptx_bytes(deck: &Deck) -> Result<Vec<u8>, String> {
             i + 1
         ));
     }
-    presentation.push_str(
+    let (cx, cy) = slide_size_emu();
+    presentation.push_str(&format!(
         "  </p:sldIdLst>\n\
-           <p:sldSz cx=\"9144000\" cy=\"5143500\"/>\n\
+           <p:sldSz cx=\"{cx}\" cy=\"{cy}\"/>\n\
            <p:notesSz cx=\"6858000\" cy=\"9144000\"/>\n\
          </p:presentation>"
-    );
+    ));
     zip.start_file("ppt/presentation.xml", options).map_err(|e| e.to_string())?;
     zip.write_all(presentation.as_bytes()).map_err(|e| e.to_string())?;
 

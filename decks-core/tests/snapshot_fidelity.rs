@@ -326,12 +326,14 @@ fn masters_survive_a_snapshot() {
                     background: "#204060".into(),
                     default_font: "Cantarell".into(),
                     shapes: vec![text_box("a footer on the master", 20.0, 500.0)],
+                    page_emu: None,
                 },
                 MasterSlide {
                     name: "Second".into(),
                     background: "#a01020".into(),
                     default_font: "Cantarell".into(),
                     shapes: vec![],
+                    page_emu: None,
                 },
             ],
             slides: vec![
@@ -540,6 +542,7 @@ fn the_masters_font_survives_a_snapshot() {
                 // still come back as "Sans" and look like a pass.
                 default_font: "Liberation Serif".into(),
                 shapes: vec![],
+                page_emu: None,
             }],
             slides: vec![Slide {
                 title: String::new(),
@@ -586,12 +589,14 @@ fn masters_keep_their_own_font_in_pptx_but_share_one_in_odp() {
                 background: "#ffffff".into(),
                 default_font: "Liberation Serif".into(),
                 shapes: vec![],
+                page_emu: None,
             },
             MasterSlide {
                 name: "Second".into(),
                 background: "#ffffff".into(),
                 default_font: "Liberation Mono".into(),
                 shapes: vec![],
+                page_emu: None,
             },
         ],
         slides: vec![
@@ -656,6 +661,7 @@ fn the_pptx_declares_the_theme_part_it_ships() {
             background: "#ffffff".into(),
             default_font: "Liberation Serif".into(),
             shapes: vec![],
+            page_emu: None,
         }],
         slides: vec![Slide {
             title: String::new(),
@@ -804,6 +810,7 @@ fn a_master_decorations_run_styling_survives_a_snapshot() {
                     ],
                     body: Default::default(),
                 }],
+                page_emu: None,
             }],
         };
         let back = through_a_snapshot(&deck, kind, "masterruns");
@@ -883,6 +890,7 @@ fn a_masters_run_styles_do_not_collide_with_a_slides_in_odp() {
                 }],
                 body: Default::default(),
             }],
+            page_emu: None,
         }],
     };
     let back = through_a_snapshot(&deck, "odp", "stylecollide");
