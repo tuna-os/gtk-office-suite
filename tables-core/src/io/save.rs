@@ -49,6 +49,20 @@ pub fn save_sheets_to_xlsx_bytes(
 ) -> Result<Vec<u8>, String> {
     use rust_xlsxwriter::{Formula, Workbook};
     let mut workbook = Workbook::new();
+    // The workbook's default font (font 0) is the first sheet's, so a sheet
+    // from Calc (Liberation Sans 10) reopens with that default, and a cell
+    // typed into it later is drawn in it too. Excel's 64 px x 20 px cell
+    // metrics are kept either way: they are this app's column-width model.
+    let wb_font = sheets
+        .first()
+        .map(|sh| (sh.default_font_family.clone(), sh.default_font_size))
+        .unwrap_or((crate::sheet::DEFAULT_FONT_FAMILY.to_string(), crate::sheet::DEFAULT_FONT_SIZE));
+    if wb_font != (crate::sheet::DEFAULT_FONT_FAMILY.to_string(), crate::sheet::DEFAULT_FONT_SIZE) {
+        let format = rust_xlsxwriter::Format::new().set_font_name(&wb_font.0).set_font_size(wb_font.1);
+        workbook
+            .set_default_format(&format, crate::sheet::ROW_HEIGHT as u32, crate::sheet::COL_WIDTH as u32)
+            .map_err(|e| format!("Default font: {e}"))?;
+    }
     for (si, sh) in sheets.iter().enumerate() {
         let sheet = workbook.add_worksheet();
         sheet
@@ -100,12 +114,12 @@ pub fn save_sheets_to_xlsx_bytes(
                     if sh.styles[r][c].is_default() && sh.borders[r][c].is_none() {
                         continue;
                     }
-                    if let Some(f) = cell_format(&sh.formats[r][c], &with_sheet_font(&sh.styles[r][c], sh), &sh.borders[r][c]) {
+                    if let Some(f) = cell_format(&sh.formats[r][c], &with_sheet_font(&sh.styles[r][c], sh, &wb_font), &sh.borders[r][c]) {
                         sheet.write_blank(r as u32, c as u16, &f).map_err(|e| format!("Write error: {}", e))?;
                     }
                     continue;
                 }
-                let format = cell_format(&sh.formats[r][c], &with_sheet_font(&sh.styles[r][c], sh), &sh.borders[r][c]);
+                let format = cell_format(&sh.formats[r][c], &with_sheet_font(&sh.styles[r][c], sh, &wb_font), &sh.borders[r][c]);
                 // Rust's f64::from_str accepts "inf"/"infinity"/"nan"
                 // (any case, optionally signed) as valid floats — but a
                 // user typing that text almost certainly means literal
@@ -133,7 +147,7 @@ pub fn save_sheets_to_xlsx_bytes(
         for (mr, mc, rows, cols) in &sh.merges {
             let (lr, lc) = (mr + (*rows).max(1) - 1, mc + (*cols).max(1) - 1);
             let val = sh.data[*mr][*mc].clone();
-            let format = cell_format(&sh.formats[*mr][*mc], &with_sheet_font(&sh.styles[*mr][*mc], sh), &sh.borders[*mr][*mc]).unwrap_or_default();
+            let format = cell_format(&sh.formats[*mr][*mc], &with_sheet_font(&sh.styles[*mr][*mc], sh, &wb_font), &sh.borders[*mr][*mc]).unwrap_or_default();
             sheet
                 .merge_range(
                     *mr as u32,
@@ -337,13 +351,22 @@ pub fn save_sheets_to_xlsx_bytes(
 
 /// The xlsx format a cell is written with: its number format and its
 /// CellStyle, or `None` when both are the defaults.
-/// `style` with the sheet's default font spelled out when that isn't the
-/// Calibri 11 this writer's workbook declares as its default: a sheet read
-/// from Calc (Liberation Sans 10) keeps its font through an xlsx save.
-fn with_sheet_font<'a>(style: &'a crate::style::CellStyle, sh: &SheetModel) -> std::borrow::Cow<'a, crate::style::CellStyle> {
+/// `style` with the sheet's default font spelled out when that isn't
+/// Calibri 11. rust_xlsxwriter's Format fonts default to Calibri 11 rather
+/// than to the workbook's default, so a styled cell (bold, a fill…) that
+/// relies on a Liberation Sans default would otherwise be written in
+/// Calibri. Spelled out, it matches font 0 and reads back as "no font of
+/// its own"; `wb_font` is font 0, which a later sheet may differ from.
+fn with_sheet_font<'a>(
+    style: &'a crate::style::CellStyle,
+    sh: &SheetModel,
+    wb_font: &(String, f64),
+) -> std::borrow::Cow<'a, crate::style::CellStyle> {
     use crate::sheet::{DEFAULT_FONT_FAMILY, DEFAULT_FONT_SIZE};
-    let family_differs = sh.default_font_family != DEFAULT_FONT_FAMILY && style.font_family.is_none();
-    let size_differs = (sh.default_font_size - DEFAULT_FONT_SIZE).abs() > f64::EPSILON && style.font_size.is_none();
+    let own = |family: &str, size: f64| family != DEFAULT_FONT_FAMILY || (size - DEFAULT_FONT_SIZE).abs() > f64::EPSILON;
+    let spell = own(&sh.default_font_family, sh.default_font_size) || sh.default_font_family != wb_font.0;
+    let family_differs = spell && style.font_family.is_none();
+    let size_differs = spell && style.font_size.is_none();
     if !family_differs && !size_differs {
         return std::borrow::Cow::Borrowed(style);
     }
@@ -593,8 +616,8 @@ mod tests {
     /// and saved that way. Weight, colour and an empty bordered cell all
     /// survive a save and reopen now.
     /// A sheet whose default font isn't Calibri 11 (one read from Calc)
-    /// keeps its font through an xlsx save: the writer's workbook default is
-    /// Calibri, so the font is spelled out on the cells that relied on it.
+    /// keeps it through an xlsx save as the workbook's default font, so a
+    /// cell typed in after reopening is drawn in it too.
     #[test]
     fn a_sheets_default_font_survives_an_xlsx_save() {
         let dir = tempfile::tempdir().unwrap();
@@ -614,6 +637,10 @@ mod tests {
         };
         assert_eq!(font(0, 0), ("Liberation Sans".into(), 10.0));
         assert_eq!(font(1, 1), ("Liberation Sans".into(), 20.0));
+        assert_eq!((s.default_font_family.as_str(), s.default_font_size), ("Liberation Sans", 10.0), "the workbook default");
+        assert!(s.styles[0][0].font_family.is_none(), "a plain cell relies on the default rather than naming it");
+        // Our 64 px default column width still reads back as 64 px.
+        assert_eq!(s.col_width(0), crate::sheet::COL_WIDTH);
     }
 
     #[test]

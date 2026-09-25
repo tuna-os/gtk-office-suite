@@ -302,6 +302,27 @@ pub fn fit_rows_to_content(sheet: &mut SheetModel) {
     }
 }
 
+/// Scroll so the selection's moving end (the active cell, or the far
+/// corner a Shift+arrow is extending) is on screen, frozen panes
+/// included, then tell the accessibility tree where the cells now are.
+pub fn follow_selection(ga: &crate::grid_area::GridArea, sheet: &SheetModel, h: &gtk4::Adjustment, v: &gtk4::Adjustment) {
+    use gtk4::prelude::{AdjustmentExt, WidgetExt};
+    let view = (ga.width() as f64, ga.height() as f64);
+    if view.0 > 0.0 && view.1 > 0.0 {
+        let target = tables_core::sheet::scroll_into_view(sheet.sel_end_row, sheet.sel_end_col, (h.value(), v.value()), view, sheet);
+        for (adj, value) in [(h, target.0), (v, target.1)] {
+            // The scroll range was a fixed guess; a far cell widens it.
+            if value > adj.upper() - adj.page_size() {
+                adj.set_upper(value + adj.page_size());
+            }
+            if (adj.value() - value).abs() > 0.5 {
+                adj.set_value(value);
+            }
+        }
+    }
+    ga.set_geometry(sheet, (h.value(), v.value()));
+}
+
 /// Scroll to where the file's saved view left the active sheet
 /// (`SheetModel::view_top_left`), once, the first time it is shown.
 pub fn restore_saved_view(state: &Rc<RefCell<crate::window::AppState>>, h: &gtk4::Adjustment, v: &gtk4::Adjustment) {
