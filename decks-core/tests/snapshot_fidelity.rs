@@ -50,6 +50,7 @@ fn slide_of(objects: Vec<SlideObject>, notes: &str, background: &str) -> Slide {
         notes: notes.to_string(),
         master_idx: None,
         transition: Default::default(),
+        builds: Vec::new(),
     }
 }
 
@@ -340,6 +341,7 @@ fn masters_survive_a_snapshot() {
                     notes: String::new(),
                     master_idx: Some(0),
                     transition: Default::default(),
+                    builds: Vec::new(),
                 },
                 // On the *second* master, which is what makes the mapping
                 // testable: a reader that loses it falls back to master 0,
@@ -352,6 +354,7 @@ fn masters_survive_a_snapshot() {
                     notes: String::new(),
                     master_idx: Some(1),
                     transition: Default::default(),
+                    builds: Vec::new(),
                 },
             ],
         };
@@ -542,6 +545,7 @@ fn the_masters_font_survives_a_snapshot() {
                 notes: String::new(),
                 master_idx: Some(0),
                 transition: Default::default(),
+                builds: Vec::new(),
             }],
         };
         let back = through_a_snapshot(&deck, kind, "master-font");
@@ -594,6 +598,7 @@ fn masters_keep_their_own_font_in_pptx_but_share_one_in_odp() {
                 notes: String::new(),
                 master_idx: Some(0),
                 transition: Default::default(),
+                builds: Vec::new(),
             },
             Slide {
                 title: String::new(),
@@ -602,6 +607,7 @@ fn masters_keep_their_own_font_in_pptx_but_share_one_in_odp() {
                 notes: String::new(),
                 master_idx: Some(1),
                 transition: Default::default(),
+                builds: Vec::new(),
             },
         ],
     };
@@ -652,6 +658,7 @@ fn the_pptx_declares_the_theme_part_it_ships() {
             notes: String::new(),
             master_idx: Some(0),
             transition: Default::default(),
+            builds: Vec::new(),
         }],
     };
     let bytes = decks_core::write_deck_bytes("pptx", &deck).expect("write pptx");
@@ -1520,4 +1527,22 @@ fn slide_transitions_survive_a_snapshot() {
         assert_eq!(got, Transition::ALL.to_vec(), "{kind}");
         assert_eq!(back.slides[1].background, "#1e1e3c", "{kind}");
     }
+}
+
+/// Object builds survive our pptx round trip, in order and on the right
+/// objects. (odp does not carry builds yet.)
+#[test]
+fn object_builds_survive_a_pptx_snapshot() {
+    use decks_core::builds::{Build, BuildEffect, Edge};
+    let builds = vec![
+        Build { object: 2, effect: BuildEffect::Dissolve, out: false },
+        Build { object: 0, effect: BuildEffect::Move(Edge::Left), out: false },
+        Build { object: 1, effect: BuildEffect::Appear, out: true },
+    ];
+    let slide = Slide {
+        builds: builds.clone(),
+        ..slide_of(vec![text_box("a", 10.0, 10.0), text_box("b", 10.0, 100.0), text_box("c", 10.0, 200.0)], "", "#ffffff")
+    };
+    let back = through_a_snapshot(&deck_of(vec![slide]), "pptx", "builds");
+    assert_eq!(back.slides[0].builds, builds);
 }

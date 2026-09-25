@@ -974,6 +974,7 @@ mod font_tests {
             notes: String::new(),
             master_idx,
             transition: Default::default(),
+            builds: Vec::new(),
         }
     }
 

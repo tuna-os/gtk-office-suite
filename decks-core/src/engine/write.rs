@@ -1208,6 +1208,11 @@ pub fn write_pptx_bytes(deck: &Deck) -> Result<Vec<u8>, String> {
             if let Some(xml) = transition_xml(slide.transition) {
                 writer.get_mut().write_all(xml.as_bytes()).map_err(|e| e.to_string())?;
             }
+            // Builds, after the transition as CT_Slide orders them; shapes
+            // are numbered 2 + index above.
+            if let Some(xml) = super::timing::timing_xml(&slide.builds, |i| 2 + i as u32) {
+                writer.get_mut().write_all(xml.as_bytes()).map_err(|e| e.to_string())?;
+            }
             writer.write_event(Event::End(BytesEnd::new("p:sld"))).map_err(|e| e.to_string())?;
         }
 
@@ -1336,6 +1341,7 @@ mod emu_rounding_tests {
                     body: Default::default(),
                 }],
                 transition: Default::default(),
+                builds: Vec::new(),
             }],
             ..Default::default()
         }

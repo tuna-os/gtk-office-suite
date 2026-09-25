@@ -20,6 +20,9 @@ pub struct Slide {
     /// How this slide arrives when presented (PowerPoint's model: the
     /// transition belongs to the slide it leads into).
     pub transition: Transition,
+    /// Objects that build in or out, one per click, in order
+    /// (decks_core::builds).
+    pub builds: Vec<crate::builds::Build>,
 }
 
 /// A slide transition.
@@ -169,6 +172,7 @@ impl Deck {
                 notes: String::new(),
                 master_idx: Some(0),
                 transition: Default::default(),
+                builds: Vec::new(),
             }],
             masters: vec![default_master],
         }

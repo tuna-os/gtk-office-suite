@@ -58,6 +58,7 @@ impl DecksWindow {
                 notes: String::new(),
                 master_idx: Some(0),
                 transition: Default::default(),
+                builds: Vec::new(),
             }],
             vec![MasterSlide {
                 name: "Default".into(),
@@ -707,6 +708,7 @@ impl DecksWindow {
                     notes: String::new(),
             master_idx: Some(0),
             transition: Default::default(),
+            builds: Vec::new(),
                 };
                 let idx = controller.add_slide(idx, new_slide);
                 rebuild_slide_list(&sl, &ss.borrow().clone(), &masters.borrow(), idx);
@@ -1274,6 +1276,7 @@ impl DecksWindow {
                         notes: String::new(),
                         master_idx: Some(0),
                         transition: Default::default(),
+                        builds: Vec::new(),
                     }];
                 }
                 *path_ref.borrow_mut() = None;

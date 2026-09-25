@@ -241,31 +241,41 @@ impl DecksController {
         let slides = self.slides.borrow();
         if slide_idx >= slides.len() || index >= slides[slide_idx].objects.len() { return; }
         let old_objects = slides[slide_idx].objects.clone();
+        let old_builds = slides[slide_idx].builds.clone();
         let mut new_objects = old_objects.clone();
+        // The same moves on the objects' old indices, for the builds.
+        let mut order: Vec<usize> = (0..old_objects.len()).collect();
         let len = new_objects.len();
 
         match op {
             ZOrderOp::BringToFront => {
                 let obj = new_objects.remove(index);
                 new_objects.push(obj);
+                let o = order.remove(index);
+                order.push(o);
             }
             ZOrderOp::SendToBack => {
                 let obj = new_objects.remove(index);
                 new_objects.insert(0, obj);
+                let o = order.remove(index);
+                order.insert(0, o);
             }
             ZOrderOp::BringForward => {
                 if index + 1 < len {
                     new_objects.swap(index, index + 1);
+                    order.swap(index, index + 1);
                 }
             }
             ZOrderOp::SendBackward => {
                 if index > 0 {
                     new_objects.swap(index, index - 1);
+                    order.swap(index, index - 1);
                 }
             }
         }
         drop(slides);
-        self.execute(Box::new(ZOrderCmd { slide_idx, old_objects, new_objects }));
+        let new_builds = crate::builds::after_reorder(&old_builds, &order);
+        self.execute(Box::new(ZOrderCmd { slide_idx, old_objects, new_objects, old_builds, new_builds }));
     }
 
     /// Apply one Format inspector edit to the objects `indices` on slide
@@ -283,6 +293,35 @@ impl DecksController {
             }
             None => false,
         }
+    }
+
+    /// Set object `index`'s build in (`out` false) or out on slide
+    /// `slide_idx`, or remove it (`effect` None), as one undo step. A new
+    /// build goes last in the slide's build order. Returns whether
+    /// anything changed.
+    pub fn set_build(&self, slide_idx: usize, index: usize, out: bool, effect: Option<crate::builds::BuildEffect>) -> bool {
+        use crate::builds::Build;
+        let (old, new) = {
+            let slides = self.slides.borrow();
+            let Some(slide) = slides.get(slide_idx) else { return false };
+            if index >= slide.objects.len() {
+                return false;
+            }
+            let old = slide.builds.clone();
+            let mut new = old.clone();
+            match (new.iter_mut().find(|b| b.object == index && b.out == out), effect) {
+                (Some(b), Some(e)) => b.effect = e,
+                (Some(_), None) => new.retain(|b| !(b.object == index && b.out == out)),
+                (None, Some(e)) => new.push(Build { object: index, effect: e, out }),
+                (None, None) => {}
+            }
+            (old, new)
+        };
+        if old == new {
+            return false;
+        }
+        self.execute(Box::new(SetBuildsCmd { slide_idx, old, new }));
+        true
     }
 
     /// Set how slide `slide_idx` arrives when presented, as one undo step.
@@ -319,6 +358,29 @@ impl DecksController {
     }
 }
 
+/// Replaces one slide's builds, and back.
+struct SetBuildsCmd {
+    slide_idx: usize,
+    old: Vec<crate::builds::Build>,
+    new: Vec<crate::builds::Build>,
+}
+
+impl suite_common_core::undo::Command<Vec<Slide>> for SetBuildsCmd {
+    fn apply(&self, slides: &mut Vec<Slide>) {
+        if let Some(s) = slides.get_mut(self.slide_idx) {
+            s.builds = self.new.clone();
+        }
+    }
+    fn undo(&self, slides: &mut Vec<Slide>) {
+        if let Some(s) = slides.get_mut(self.slide_idx) {
+            s.builds = self.old.clone();
+        }
+    }
+    fn description(&self) -> &str {
+        "Build"
+    }
+}
+
 /// Changes one slide's transition, and back.
 struct SetTransitionCmd {
     slide_idx: usize,
@@ -348,7 +410,7 @@ mod tests {
     use crate::engine::Slide;
 
     fn slide(title: &str) -> Slide {
-        Slide { title: title.into(), background: "#fff".into(), objects: vec![], notes: String::new(), master_idx: Some(0), transition: Default::default() }
+        Slide { title: title.into(), background: "#fff".into(), objects: vec![], notes: String::new(), master_idx: Some(0), transition: Default::default(), builds: Vec::new() }
     }
 
     fn rect(x: f64, y: f64) -> SlideObject {
@@ -579,5 +641,35 @@ mod tests {
         assert!(c.undo());
         assert_eq!(c.slides.borrow()[1].transition, Transition::None);
         assert!(!c.can_undo());
+    }
+
+    #[test]
+    fn builds_are_set_undoably_and_follow_deletes_and_reorders() {
+        use crate::builds::{Build, BuildEffect};
+        let mut s = slide("S1");
+        for x in [0.0, 50.0, 100.0] {
+            s.objects.push(SlideObject::Rect { x, y: 0.0, w: 20.0, h: 20.0, rotation: 0.0 });
+        }
+        let c = DecksController::new(vec![s], vec![]);
+        assert!(c.set_build(0, 2, false, Some(BuildEffect::Dissolve)));
+        assert!(c.set_build(0, 0, false, Some(BuildEffect::Appear)));
+        assert!(!c.set_build(0, 0, false, Some(BuildEffect::Appear)), "no change");
+        let builds = || c.slides.borrow()[0].builds.clone();
+        assert_eq!(builds().iter().map(|b| b.object).collect::<Vec<_>>(), [2, 0], "in the order they were added");
+        // Deleting object 1 renumbers the build on object 2.
+        let obj = c.slides.borrow()[0].objects[1].clone();
+        c.delete_object(0, 1, obj);
+        assert_eq!(builds().iter().map(|b| b.object).collect::<Vec<_>>(), [1, 0]);
+        assert!(c.undo());
+        assert_eq!(builds().iter().map(|b| b.object).collect::<Vec<_>>(), [2, 0]);
+        // Bringing object 0 to the front: it is now index 2.
+        c.z_order_object(0, 0, crate::undo::ZOrderOp::BringToFront);
+        assert_eq!(builds(), vec![
+            Build { object: 1, effect: BuildEffect::Dissolve, out: false },
+            Build { object: 2, effect: BuildEffect::Appear, out: false },
+        ]);
+        assert!(c.undo());
+        assert!(c.set_build(0, 2, false, None));
+        assert_eq!(builds().len(), 1);
     }
 }

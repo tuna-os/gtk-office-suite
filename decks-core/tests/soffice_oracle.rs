@@ -102,6 +102,7 @@ fn impress_survives_multi_slide_deck() {
             notes: String::new(),
             master_idx: Some(0),
             transition: Default::default(),
+            builds: Vec::new(),
         });
     }
     let dir = tempfile::tempdir().unwrap();
@@ -151,6 +152,7 @@ fn text_slide(title: &str, text: &str, notes: &str) -> Slide {
         notes: notes.into(),
         master_idx: Some(0),
         transition: Default::default(),
+        builds: Vec::new(),
     }
 }
 
@@ -251,6 +253,7 @@ fn shape_kinds_survive_impress_rewrite() {
         notes: String::new(),
         master_idx: Some(0),
         transition: Default::default(),
+        builds: Vec::new(),
     }];
     let Some(rt) = through_impress(&deck, "shapes") else { return };
     let rects = rt.slides[0].objects.iter().filter(|o| is_rect(o)).count();
@@ -269,6 +272,7 @@ fn positions_approx_survive_impress_rewrite() {
         notes: String::new(),
         master_idx: Some(0),
         transition: Default::default(),
+        builds: Vec::new(),
     }];
     let Some(rt) = through_impress(&deck, "pos") else { return };
     let Some((x, y, w, h)) = rt.slides[0]
@@ -310,6 +314,7 @@ fn empty_slide_survives_impress_rewrite() {
             notes: String::new(),
             master_idx: Some(0),
             transition: Default::default(),
+            builds: Vec::new(),
         },
         text_slide("three", "more", ""),
     ];
@@ -340,6 +345,7 @@ fn bold_run_survives_impress_rewrite() {
         notes: String::new(),
         master_idx: Some(0),
         transition: Default::default(),
+        builds: Vec::new(),
     }];
     let Some(rt) = through_impress(&deck, "boldrun") else { return };
     let bold_text: String = rt.slides[0]
@@ -417,6 +423,7 @@ fn styled_run_slide(runs: Vec<Run>) -> Slide {
         notes: String::new(),
         master_idx: Some(0),
         transition: Default::default(),
+        builds: Vec::new(),
     }
 }
 
@@ -512,6 +519,7 @@ fn image_object_survives_impress_rewrite() {
         notes: String::new(),
         master_idx: Some(0),
         transition: Default::default(),
+        builds: Vec::new(),
     }];
     let Some(rt) = through_impress(&deck, "image") else { return };
     let images = rt.slides[0]
@@ -600,6 +608,7 @@ fn odp_geometry_survives_impress_rewrite() {
         notes: String::new(),
         master_idx: Some(0),
         transition: Default::default(),
+        builds: Vec::new(),
     }];
     let Some(rt) = odp_through_impress(&deck, "geom") else { return };
     let Some(SlideObject::Rect { x, y, w, h, .. }) = rt.slides[0]
@@ -665,6 +674,7 @@ fn odp_bold_run_survives_impress_rewrite() {
         notes: String::new(),
         master_idx: Some(0),
         transition: Default::default(),
+        builds: Vec::new(),
     }];
     let Some(rt) = odp_through_impress(&deck, "boldrun") else { return };
     let bold: String = rt.slides[0]
@@ -1066,6 +1076,7 @@ fn impress_runs_in_one_paragraph_come_back_as_one_line() {
             body: Default::default(),
         }],
         transition: Default::default(),
+        builds: Vec::new(),
     }];
     let Some(rt) = through_impress(&deck, "tworuns") else { return };
     let text = all_text(&rt.slides[0]);
@@ -1121,6 +1132,7 @@ fn a_styled_multiline_box_keeps_its_break_and_its_styling_through_impress() {
             body: Default::default(),
         }],
         transition: Default::default(),
+        builds: Vec::new(),
     }];
     let dir = tempfile::tempdir().unwrap();
     let src = dir.path().join("styledlines.odp");
@@ -1244,6 +1256,7 @@ fn geometry_survives_a_conversion_between_the_two_formats() {
             rotation: 0.0,
         }],
         transition: Default::default(),
+        builds: Vec::new(),
     }];
     let want = (96.0, 54.0, 192.0, 108.0);
     let dir = tempfile::tempdir().unwrap();
@@ -1415,4 +1428,45 @@ fn impress_keeps_our_odp_transitions() {
         Transition::ALL.to_vec(),
         "Impress's odp"
     );
+}
+
+/// The builds we write are ones LibreOffice understands: after it rewrites
+/// our pptx, each object still builds, in the same order, with the same
+/// kind of effect.
+#[test]
+fn impress_keeps_our_object_builds() {
+    use decks_core::builds::{Build, BuildEffect, Edge};
+    if !require_or_skip() { return; }
+    let mut deck = Deck::new();
+    for (i, y) in [60.0, 200.0, 340.0].into_iter().enumerate() {
+        deck.slides[0].objects.push(SlideObject::TextBox {
+            text: format!("Point {}", i + 1),
+            x: 60.0, y, w: 400.0, h: 60.0,
+            rotation: 0.0,
+            runs: vec![],
+            body: Default::default(),
+        });
+    }
+    let builds = vec![
+        Build { object: 0, effect: BuildEffect::Appear, out: false },
+        Build { object: 1, effect: BuildEffect::Dissolve, out: false },
+        Build { object: 2, effect: BuildEffect::Move(Edge::Left), out: false },
+        Build { object: 0, effect: BuildEffect::Dissolve, out: true },
+    ];
+    deck.slides[0].builds = builds.clone();
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("builds.pptx");
+    write_pptx(path.to_str().unwrap(), &deck).expect("write pptx");
+    let back = convert(&path, "pptx").expect("Impress rewrites our pptx");
+    let read = decks_core::read_deck(back.to_str().unwrap()).expect("read Impress's pptx");
+    let texts: Vec<String> = read.slides[0]
+        .objects
+        .iter()
+        .map(|o| match o { SlideObject::TextBox { text, .. } => text.clone(), _ => String::new() })
+        .collect();
+    let got: Vec<(String, BuildEffect, bool)> =
+        read.slides[0].builds.iter().map(|b| (texts[b.object].clone(), b.effect, b.out)).collect();
+    let want: Vec<(String, BuildEffect, bool)> =
+        builds.iter().map(|b| (format!("Point {}", b.object + 1), b.effect, b.out)).collect();
+    assert_eq!(got, want);
 }

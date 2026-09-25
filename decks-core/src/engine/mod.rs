@@ -23,6 +23,7 @@ pub mod table;
 mod shape_xml;
 pub mod text_body;
 mod text_xml;
+mod timing;
 mod write;
 
 pub use model::{Deck, MasterSlide, Slide, SlideObject, Transition};

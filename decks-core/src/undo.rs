@@ -249,17 +249,22 @@ pub struct ZOrderCmd {
     pub slide_idx: usize,
     pub old_objects: Vec<SlideObject>,
     pub new_objects: Vec<SlideObject>,
+    /// The builds, renumbered with their objects.
+    pub old_builds: Vec<crate::builds::Build>,
+    pub new_builds: Vec<crate::builds::Build>,
 }
 
 impl Command<Vec<Slide>> for ZOrderCmd {
     fn apply(&self, slides: &mut Vec<Slide>) {
         if self.slide_idx < slides.len() {
             slides[self.slide_idx].objects = self.new_objects.clone();
+            slides[self.slide_idx].builds = self.new_builds.clone();
         }
     }
     fn undo(&self, slides: &mut Vec<Slide>) {
         if self.slide_idx < slides.len() {
             slides[self.slide_idx].objects = self.old_objects.clone();
+            slides[self.slide_idx].builds = self.old_builds.clone();
         }
     }
     fn description(&self) -> &str { "Reorder Object" }
@@ -296,23 +301,31 @@ pub struct DeleteObjectCmd {
     pub slide_idx: usize,
     pub index: usize,
     pub object: SlideObject,
+    /// The slide's builds before the delete, kept by `apply` for `undo`:
+    /// the deleted object's builds go with it and later ones renumber.
+    builds_before: std::cell::RefCell<Vec<crate::builds::Build>>,
 }
 
 impl DeleteObjectCmd {
     pub fn new(slide_idx: usize, index: usize, object: SlideObject) -> Self {
-        Self { slide_idx, index, object }
+        Self { slide_idx, index, object, builds_before: Default::default() }
     }
 }
 
 impl Command<Vec<Slide>> for DeleteObjectCmd {
     fn apply(&self, slides: &mut Vec<Slide>) {
         if self.slide_idx < slides.len() && self.index < slides[self.slide_idx].objects.len() {
-            slides[self.slide_idx].objects.remove(self.index);
+            let slide = &mut slides[self.slide_idx];
+            slide.objects.remove(self.index);
+            *self.builds_before.borrow_mut() = slide.builds.clone();
+            slide.builds = crate::builds::after_delete(&slide.builds, self.index);
         }
     }
     fn undo(&self, slides: &mut Vec<Slide>) {
         if self.slide_idx < slides.len() {
-            slides[self.slide_idx].objects.insert(self.index, self.object.clone());
+            let slide = &mut slides[self.slide_idx];
+            slide.objects.insert(self.index, self.object.clone());
+            slide.builds = self.builds_before.borrow().clone();
         }
     }
     fn description(&self) -> &str { "Delete Object" }
@@ -444,7 +457,7 @@ mod tests {
     use suite_common_core::undo::Command;
 
     fn make_slides() -> Vec<Slide> {
-        vec![Slide { title: "S1".into(), background: "#fff".into(), objects: vec![], notes: String::new(), master_idx: Some(0), transition: Default::default() }]
+        vec![Slide { title: "S1".into(), background: "#fff".into(), objects: vec![], notes: String::new(), master_idx: Some(0), transition: Default::default(), builds: Vec::new() }]
     }
 
     #[test]
@@ -503,7 +516,7 @@ mod tests {
     #[test]
     fn test_add_slide_undo() {
         let mut slides = make_slides();
-        let new_slide = Slide { title: "S2".into(), background: "#fff".into(), objects: vec![], notes: String::new(), master_idx: Some(0), transition: Default::default() };
+        let new_slide = Slide { title: "S2".into(), background: "#fff".into(), objects: vec![], notes: String::new(), master_idx: Some(0), transition: Default::default(), builds: Vec::new() };
         let cmd = AddSlideCmd { index: 1, slide: new_slide };
         cmd.apply(&mut slides);
         assert_eq!(slides.len(), 2);
@@ -514,7 +527,7 @@ mod tests {
     #[test]
     fn test_delete_slide_undo() {
         let mut slides = make_slides();
-        let s2 = Slide { title: "S2".into(), background: "#fff".into(), objects: vec![], notes: String::new(), master_idx: Some(0), transition: Default::default() };
+        let s2 = Slide { title: "S2".into(), background: "#fff".into(), objects: vec![], notes: String::new(), master_idx: Some(0), transition: Default::default(), builds: Vec::new() };
         slides.push(s2.clone());
         let cmd = DeleteSlideCmd { index: 1, slide: s2 };
         cmd.apply(&mut slides);
@@ -526,7 +539,7 @@ mod tests {
     #[test]
     fn test_reorder_slides_undo() {
         let mut slides = make_slides();
-        let s2 = Slide { title: "S2".into(), background: "#fff".into(), objects: vec![], notes: String::new(), master_idx: Some(0), transition: Default::default() };
+        let s2 = Slide { title: "S2".into(), background: "#fff".into(), objects: vec![], notes: String::new(), master_idx: Some(0), transition: Default::default(), builds: Vec::new() };
         slides.push(s2);
         let cmd = ReorderSlidesCmd { from: 0, to: 1 };
         cmd.apply(&mut slides);
@@ -539,7 +552,8 @@ mod tests {
     fn test_slide_notes_preserved() {
         let slide = Slide { title: "S1".into(), background: "#fff".into(),
             objects: vec![], notes: "My notes".into(), master_idx: Some(0),
-            transition: Default::default(), };
+            transition: Default::default(),
+            builds: Vec::new(), };
         assert_eq!(slide.notes, "My notes");
         // Cloning preserves notes
         assert_eq!(slide.clone().notes, "My notes");
