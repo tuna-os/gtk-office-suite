@@ -17,6 +17,10 @@ import unittest
 
 REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 CARGO_TOML = os.path.join(REPO_ROOT, "Cargo.toml")
+# cargo-fuzz's crate is its own workspace, so the root's patches do not reach
+# it. It builds letters-core too, and resolved the unpatched oxml-layout
+# until its manifest mirrored the patch (#883, #936).
+FUZZ_CARGO_TOML = os.path.join(REPO_ROOT, "fuzz", "Cargo.toml")
 DOC = os.path.join(REPO_ROOT, "docs", "DEPENDENCIES.md")
 
 SECTION = re.compile(r"^\[patch\.crates-io\]\s*$", re.M)
@@ -24,7 +28,7 @@ SECTION = re.compile(r"^\[patch\.crates-io\]\s*$", re.M)
 ENTRY = re.compile(r"^([A-Za-z0-9_-]+)\s*=\s*\{(.+)\}\s*$")
 
 
-def patch_entries():
+def patch_entries(manifest=CARGO_TOML):
     """Every crate patched in the workspace manifest, with its spec.
 
     An empty result is a legitimate answer here — the right number of patched
@@ -32,7 +36,7 @@ def patch_entries():
     below are then vacuous *by design*, which is the one case where that is
     the correct outcome.
     """
-    with open(CARGO_TOML, encoding="utf-8") as handle:
+    with open(manifest, encoding="utf-8") as handle:
         lines = handle.read().splitlines()
     starts = [i for i, line in enumerate(lines) if SECTION.match(line)]
     entries = []
@@ -88,6 +92,16 @@ class PatchedDependencies(unittest.TestCase):
         with open(DOC, encoding="utf-8") as handle:
             doc = handle.read().lower()
         self.assertIn("how to remove", doc)
+
+    def test_the_fuzz_workspace_carries_the_same_patches(self):
+        """A separate workspace that builds the same crates needs the same
+        patches, pinned to the same commits; otherwise the nightly fuzz job
+        fails on the bug the root patch exists to avoid."""
+        self.assertEqual(
+            sorted(patch_entries(FUZZ_CARGO_TOML)),
+            sorted(patch_entries()),
+            "fuzz/Cargo.toml's [patch.crates-io] must mirror the root Cargo.toml's",
+        )
 
     def test_a_branch_pin_would_be_rejected(self):
         """The guard has to bite, and with no patch entry the tests above are

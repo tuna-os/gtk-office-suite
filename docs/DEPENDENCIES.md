@@ -53,8 +53,10 @@ irreproducible, which is the opposite of what the release gate is for.
 **How to remove it.** When upstream publishes an `oxml-layout` that handles the
 variant (or adds its own wildcard):
 
-1. drop the `[patch.crates-io]` section from the workspace `Cargo.toml`;
-2. `cargo update -p oxml-layout`;
+1. drop the `[patch.crates-io]` section from the workspace `Cargo.toml`, and
+   its mirror in `fuzz/Cargo.toml` (a separate workspace the root's patches
+   do not reach; the nightly fuzz job failed without it, #883);
+2. `cargo update -p oxml-layout`, in both workspaces;
 3. `cargo check -p letters` — the E0004 above is the thing that must stay gone;
 4. delete this section.
 
