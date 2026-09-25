@@ -646,24 +646,15 @@ impl LettersWindow {
                     eprintln!("render-dump: no PageContainer in the active tab");
                     return;
                 };
-                // Print Layout (ADR 0010) when it is showing: its pages are
-                // the laid-out document. Otherwise the Draft view's pages.
-                let view: gtk::Widget;
-                let rects: Vec<_> = match pc.page_view().filter(|_| pc.is_print_layout()) {
-                    Some(pv) => {
-                        view = pv.clone().upcast();
-                        // The PDF export of the same pages: the lab checks
-                        // that paper and screen agree (print_agreement).
-                        if let Err(e) = pv.write_pdf(&dir.join("print.pdf")) {
-                            eprintln!("render-dump: print.pdf: {e}");
-                        }
-                        (0..pv.page_count()).map(|i| pv.page_rect(i)).collect()
-                    }
-                    None => {
-                        view = pc.clone().upcast();
-                        (0..pc.page_count()).map(|i| pc.page_rect(i)).collect()
-                    }
-                };
+                // Print Layout's pages (ADR 0010): the laid-out document.
+                let Some(pv) = pc.page_view() else { return };
+                // The PDF export of the same pages: the lab checks that
+                // paper and screen agree (print_agreement).
+                if let Err(e) = pv.write_pdf(&dir.join("print.pdf")) {
+                    eprintln!("render-dump: print.pdf: {e}");
+                }
+                let rects: Vec<_> = (0..pv.page_count()).map(|i| pv.page_rect(i)).collect();
+                let view: gtk::Widget = pv.upcast();
                 suite_common::render_dump::write_geometry(&view, &rects);
                 for (i, rect) in rects.iter().enumerate() {
                     let path = suite_common::render_dump::page_path(&dir, i);

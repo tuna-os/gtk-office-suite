@@ -3765,12 +3765,13 @@ class LettersModelUndoSmoke(BaseGUITestCase):
 
 
 class LettersPrintLayoutEditingSmoke(BaseGUITestCase):
-    """Typing in Print Layout edits the document (ADR 0010, stage 3).
+    """Print Layout is the default view, and editing there is editing the
+    document (ADR 0010, stage 3d).
 
-    The laid-out page view used to be read-only. It now edits the tab's
-    buffer: keystrokes go through its input method into the same buffer the
-    Draft view shows, so the document snapshot must hold what was typed on
-    the page, and switching back to Draft must show it too.
+    A new document opens on its laid-out pages; keystrokes go to the page
+    view, into the live model. Screen readers read the page view's text over
+    AT-SPI (GtkAccessibleText). The pageless Draft view is one toggle away
+    and edits the same document.
     """
 
     app_name = "letters"
@@ -3782,36 +3783,39 @@ class LettersPrintLayoutEditingSmoke(BaseGUITestCase):
     def _text(self, snapshot):
         return "\n".join("".join(r["text"] for r in p["runs"]) for p in snapshot["paragraphs"])
 
-    def test_typing_in_print_layout_reaches_the_document(self):
+    def _wait_text(self, want):
+        return self.wait_for_condition(
+            lambda: (lambda s: s if self._text(s) == want else None)(
+                self.trigger_snapshot("org.tunaos.letters")),
+            description=f"the document reading {want!r}")
+
+    def test_print_layout_is_the_default_and_edits_the_document(self):
         from dogtail import rawinput
 
         self.wait_for_node(name="New Document", roleName="push button").do_action(0)
-        self.wait_for_node(roleName="text")
-        rawinput.typeText("draft")
-        self.wait_for_node(name="1 word", roleName="label")
-
-        # Stateful toggle: activating it switches the tab to Print Layout
-        # and gives the page view the keyboard focus.
-        self.gapplication_action("org.tunaos.letters", "print-layout")
-        time.sleep(1.0)
-        rawinput.typeText(" page")
+        # The page view, not the Draft editor, is what opens.
+        page_view = self.wait_for_node(name="Print Layout", roleName="text")
+        rawinput.typeText("page")
         rawinput.keyCombo("Return")
         rawinput.typeText("more")
+        self._wait_text("page\nmore")
+        # Screen readers see the same text on the page view.
+        self.assertEqual(page_view.text, "page\nmore")
 
-        snapshot = self.wait_for_condition(
-            lambda: (lambda s: s if self._text(s) == "draft page\nmore" else None)(
-                self.trigger_snapshot("org.tunaos.letters")),
-            description="the text typed on the page view in the document")
-        self.assertEqual(self._text(snapshot), "draft page\nmore")
-
-        # Screen readers see the same text on the page view (GtkAccessibleText).
-        page_view = self.wait_for_node(name="Print Layout", roleName="text")
-        self.assertEqual(page_view.text, "draft page\nmore")
-
-        # Back in Draft, the editor shows the same text.
+        # The stateful toggle switches the tab to the pageless Draft view,
+        # which edits the same document.
         self.gapplication_action("org.tunaos.letters", "print-layout")
+        time.sleep(1.0)
+        rawinput.typeText(" draft")
+        self._wait_text("page\nmore draft")
         self.wait_for_node(name="3 words", roleName="label")
-        self.assertIsNone(self.process.poll(), "letters crashed while editing on the page view")
+
+        # And back: the pages show the Draft edit.
+        self.gapplication_action("org.tunaos.letters", "print-layout")
+        page_view = self.wait_for_node(name="Print Layout", roleName="text")
+        self.wait_for_condition(lambda: page_view.text == "page\nmore draft" or None,
+                                description="the page view reading the Draft edit")
+        self.assertIsNone(self.process.poll(), "letters crashed while switching views")
 
 
 class _SettingsIsolationProbe:

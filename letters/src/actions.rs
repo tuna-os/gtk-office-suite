@@ -354,26 +354,44 @@ pub fn connect_markdown_macros(buf: &gtk::TextBuffer) {
     let buf_c = buf.clone();
     buf.connect_insert_text(move |b, pos, text| {
         if text != " " && text != "\n" { return; }
+        // Not while the live model is writing into the buffer (Print
+        // Layout's edits, undo): that text is the model's, not typed here.
+        if crate::live::is_busy(b) { return; }
+        // After the insertion completes: a handler that edits the buffer
+        // while GTK is still inserting invalidates the insert position.
+        let (b, at) = (b.clone(), pos.offset());
+        glib::idle_add_local_once(move || {
+            let end = b.iter_at_offset(at);
+            markdown_macro_at(&b, &end);
+        });
+    });
+    let _ = buf_c;
+}
+
+/// Expand a Markdown inline macro ("**bold**", "_it_", …) that ends at
+/// `pos`: Draft runs it as a space or newline is typed, Print Layout after
+/// typing one.
+pub fn markdown_macro_at(b: &gtk::TextBuffer, pos: &gtk::TextIter) {
+    {
         let offset = pos.offset();
         if offset < 2 { return; }
 
         let mut line_start = *pos;
-        line_start.backward_line();
+        line_start.set_line_offset(0);
         let before = b.text(&line_start, pos, false);
 
         if let Some(inner) = extract_md_pattern(&before, "**", "**") {
-            apply_md_pattern(b, &before, "**", inner, "bold");
+            apply_md_pattern(b, pos, "**", inner, "bold");
         } else if let Some(inner) = extract_md_pattern(&before, "_", "_") {
-            apply_md_pattern(b, &before, "_", inner, "italic");
+            apply_md_pattern(b, pos, "_", inner, "italic");
         } else if let Some(inner) = extract_md_pattern(&before, "~~", "~~") {
-            apply_md_pattern(b, &before, "~~", inner, "strikethrough");
+            apply_md_pattern(b, pos, "~~", inner, "strikethrough");
         } else if let Some(inner) = extract_md_pattern(&before, "==", "==") {
-            apply_md_pattern(b, &before, "==", inner, "highlight");
+            apply_md_pattern(b, pos, "==", inner, "highlight");
         } else if let Some(inner) = extract_md_pattern(&before, "`", "`") {
-            apply_md_pattern(b, &before, "`", inner, "code");
+            apply_md_pattern(b, pos, "`", inner, "code");
         }
-    });
-    let _ = buf_c;
+    }
 }
 
 fn extract_md_pattern<'a>(before: &'a str, open: &str, close: &str) -> Option<&'a str> {
@@ -387,22 +405,23 @@ fn extract_md_pattern<'a>(before: &'a str, open: &str, close: &str) -> Option<&'
     Some(inner)
 }
 
-fn apply_md_pattern(buf: &gtk::TextBuffer, before: &str, delimiter: &str, inner: &str, tag_name: &str) {
-    let del_len = delimiter.len() * 2 + inner.len();
-    let bounds = buf.selection_bounds();
-    let (mut end, _) = bounds.unwrap_or((buf.start_iter(), buf.start_iter()));
+/// Replace the "**inner**" ending at `at` with `inner`, tagged. (This
+/// used to take the pattern's end from the selection, which with no
+/// selection is the buffer start: the shortcuts never fired.)
+fn apply_md_pattern(buf: &gtk::TextBuffer, at: &gtk::TextIter, delimiter: &str, inner: &str, tag_name: &str) {
+    let del_len = delimiter.chars().count() * 2 + inner.chars().count();
+    let mut end = *at;
     let mut start = end;
     start.backward_chars(del_len as i32);
     if start < end {
         buf.begin_user_action();
         buf.delete(&mut start, &mut end);
+        let from = start.offset();
+        // `insert` moves the iter to the end of what it inserted.
         buf.insert(&mut start, inner);
         if let Some(tag) = buf.tag_table().lookup(tag_name) {
-            let mut tag_end = start;
-            tag_end.forward_chars(inner.chars().count() as i32);
-            buf.apply_tag(&tag, &start, &tag_end);
+            buf.apply_tag(&tag, &buf.iter_at_offset(from), &start);
         }
         buf.end_user_action();
     }
-    let _ = before;
 }

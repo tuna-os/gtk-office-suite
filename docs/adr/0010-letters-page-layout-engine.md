@@ -102,11 +102,20 @@ the Letters part concretely.
           ops by re-reading only the lines they touched and diffing them
           against the model (`bridge::capture_span`, `edit::diff`):
           typing, Enter, Backspace across a break, formatting and list
-          markers never read the whole buffer. Tables and inline objects
-          still do (and still become ops, so they are undoable). A
+          markers never read the whole buffer; nor do table edits (the
+          span widens to the whole contiguous table block) or inline
+          images (followed like typed text). Structured commands (table,
+          list, page break) run on the model document and are diffed into
+          ops. Undo/Redo sensitivity follows the `History`. A
           200-paragraph keystroke-relayout budget runs in CI.
-      - 3d: Print Layout becomes the default view; the TextView path is
-        removed once nothing depends on it.
+      - **3d (done):** Print Layout is the default view (`print-layout`
+        defaults to true) and takes focus when shown; the selection popover
+        and Markdown shortcuts work on it. Draft stays as an option, now a
+        pageless sheet: one continuous white column at the page's text
+        width, no page boxes, gaps or page count — pages are the page
+        view's job alone, so the old paged-TextView drawing path is gone.
+        The render dump always draws the page view. The `GtkTextBuffer`
+        remains as Draft's view of the model.
 
 ## Design constraints from the CRDT spike
 

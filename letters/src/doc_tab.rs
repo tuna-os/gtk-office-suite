@@ -233,6 +233,62 @@ pub(crate) fn connect_suite_clipboard(widget: &gtk::Widget, buf: &gtk::TextBuffe
     }
 }
 
+/// Selection format popover on `widget` (the Draft editor or the page
+/// view): context reveals capability (DESIGN-UI §1). Shown while `buf` has
+/// a selection *and* `widget` is the view showing it, pointing at the
+/// selection's start (`locate`: buffer offset to a rectangle in `widget`).
+/// Non-autohide so it never steals focus from the editor; buttons fire the
+/// same app actions as the toolbar.
+fn connect_selection_popover(
+    widget: &gtk::Widget,
+    buf: &gtk::TextBuffer,
+    locate: impl Fn(usize) -> Option<gtk4::gdk::Rectangle> + 'static,
+) {
+    let pop = gtk::Popover::new();
+    pop.set_parent(widget);
+    pop.set_autohide(false);
+    pop.set_position(gtk::PositionType::Top);
+    let row = gtk::Box::new(gtk::Orientation::Horizontal, 0);
+    row.add_css_class("linked");
+    for (icon, tooltip, action) in [
+        ("format-text-bold-symbolic", "Bold", "app.bold"),
+        ("format-text-italic-symbolic", "Italic", "app.italic"),
+        ("format-text-underline-symbolic", "Underline", "app.underline"),
+        ("format-text-strikethrough-symbolic", "Strikethrough", "app.strikethrough"),
+        ("color-select-symbolic", "Highlight", "app.highlight"),
+        ("insert-link-symbolic", "Insert link", "app.insertlink"),
+    ] {
+        let b = gtk::Button::from_icon_name(icon);
+        b.add_css_class("flat");
+        b.set_tooltip_text(Some(tooltip));
+        b.set_action_name(Some(action));
+        row.append(&b);
+    }
+    pop.set_child(Some(&row));
+    let (w, pop2) = (widget.downgrade(), pop.clone());
+    buf.connect_mark_set(move |buf, _iter, mark| {
+        let name = mark.name();
+        if !matches!(name.as_deref(), Some("insert") | Some("selection_bound")) {
+            return;
+        }
+        let shown = w.upgrade().is_some_and(|w| w.is_mapped());
+        match buf.selection_bounds().filter(|_| shown) {
+            Some((start, _)) => {
+                if let Some(rect) = locate(start.offset().max(0) as usize) {
+                    pop2.set_pointing_to(Some(&rect));
+                    if !pop2.is_visible() {
+                        pop2.popup();
+                    }
+                }
+            }
+            None if pop2.is_visible() => pop2.popdown(),
+            None => {}
+        }
+    });
+    let pop3 = pop.clone();
+    widget.connect_destroy(move |_| pop3.unparent());
+}
+
 pub(crate) fn make_doc_widget(settings: Option<&gio::Settings>) -> (PageContainer, gtk::TextBuffer) {
     let buffer = gtk::TextBuffer::new(None);
     register_formatting_tags(&buffer);
@@ -316,55 +372,13 @@ pub(crate) fn make_doc_widget(settings: Option<&gio::Settings>) -> (PageContaine
     }
     connect_suite_clipboard(editor.upcast_ref(), &buffer);
 
-    // Selection format popover: context reveals capability (DESIGN-UI §1).
-    // Non-autohide so it never steals focus from the editor; buttons fire
-    // the same app actions as the toolbar.
     {
-        let pop = gtk::Popover::new();
-        pop.set_parent(&editor);
-        pop.set_autohide(false);
-        pop.set_position(gtk::PositionType::Top);
-        let row = gtk::Box::new(gtk::Orientation::Horizontal, 0);
-        row.add_css_class("linked");
-        for (icon, tooltip, action) in [
-            ("format-text-bold-symbolic", "Bold", "app.bold"),
-            ("format-text-italic-symbolic", "Italic", "app.italic"),
-            ("format-text-underline-symbolic", "Underline", "app.underline"),
-            ("format-text-strikethrough-symbolic", "Strikethrough", "app.strikethrough"),
-            ("color-select-symbolic", "Highlight", "app.highlight"),
-            ("insert-link-symbolic", "Insert link", "app.insertlink"),
-        ] {
-            let b = gtk::Button::from_icon_name(icon);
-            b.add_css_class("flat");
-            b.set_tooltip_text(Some(tooltip));
-            b.set_action_name(Some(action));
-            row.append(&b);
-        }
-        pop.set_child(Some(&row));
-
         let ed = editor.clone();
-        let pop2 = pop.clone();
-        buffer.connect_mark_set(move |buf, _iter, mark| {
-            let name = mark.name();
-            let name = name.as_deref();
-            if name != Some("insert") && name != Some("selection_bound") {
-                return;
-            }
-            if let Some((start, _end)) = buf.selection_bounds() {
-                let loc = ed.iter_location(&start);
-                let (x, y) = ed.buffer_to_window_coords(
-                    gtk::TextWindowType::Widget, loc.x(), loc.y());
-                pop2.set_pointing_to(Some(&gtk4::gdk::Rectangle::new(
-                    x, y, 1, loc.height())));
-                if !pop2.is_visible() {
-                    pop2.popup();
-                }
-            } else if pop2.is_visible() {
-                pop2.popdown();
-            }
+        connect_selection_popover(editor.upcast_ref(), &buffer, move |start| {
+            let loc = ed.iter_location(&ed.buffer().iter_at_offset(start as i32));
+            let (x, y) = ed.buffer_to_window_coords(gtk::TextWindowType::Widget, loc.x(), loc.y());
+            Some(gtk4::gdk::Rectangle::new(x, y, 1, loc.height()))
         });
-        let pop3 = pop.clone();
-        editor.connect_destroy(move |_| pop3.unparent());
     }
 
     let scroll = gtk::ScrolledWindow::new();
@@ -379,6 +393,18 @@ pub(crate) fn make_doc_widget(settings: Option<&gio::Settings>) -> (PageContaine
     scroll.set_parent(&container);
     let page_view = container.attach_page_view();
     crate::page_edit::make_editable(&page_view, &buffer);
+    {
+        let pv = page_view.clone();
+        connect_selection_popover(page_view.upcast_ref(), &buffer, move |start| {
+            pv.caret_rect(start).map(|(x, y, h)| gtk4::gdk::Rectangle::new(x as i32, y as i32, 1, h.ceil() as i32))
+        });
+    }
+    // Like the Draft editor: focus the page view whenever it is shown, or
+    // keystrokes fall through to the window's search bar.
+    page_view.connect_map(|v| {
+        let v = v.clone();
+        glib::idle_add_local_once(move || { v.grab_focus(); });
+    });
     connect_suite_clipboard(page_view.upcast_ref(), &buffer);
     container.set_zoom(container.zoom_level());
     container.set_vexpand(true); container.set_hexpand(true);
@@ -420,21 +446,16 @@ pub(crate) fn make_doc_widget(settings: Option<&gio::Settings>) -> (PageContaine
             let (buf, pc, t2, live) = (b2.clone(), pc.clone(), timer.clone(), live.clone());
             let delay = if pc.is_print_layout() { 0 } else { 500 };
             let id = glib::timeout_add_local(std::time::Duration::from_millis(delay), move || {
+                // Print Layout keeps its typeset and re-shapes only the
+                // paragraphs the edit changed (ADR 0010 stage 3c). The
+                // pageless Draft view needs no layout at all.
                 match pc.page_view().filter(|v| pc.is_print_layout() && v.page_count() > 0) {
-                    // Print Layout keeps its typeset and re-shapes only the
-                    // paragraphs the edit changed (ADR 0010 stage 3c).
                     Some(view) => {
                         let (doc, starts) = live.borrow_mut().snapshot(&buf);
                         view.update_document(doc, layout_options(&pc), starts);
-                        pc.set_page_count(view.page_count());
                     }
-                    None => {
-                        let (typeset, starts) = typeset_with_starts(&pc, &buf);
-                        pc.set_page_count(typeset.tree().pages.len());
-                        if let (true, Some(view)) = (pc.is_print_layout(), pc.page_view()) {
-                            view.set_typeset(typeset, starts);
-                        }
-                    }
+                    None if pc.is_print_layout() => refresh_print_layout(&pc, &buf),
+                    None => {}
                 }
                 t2.borrow_mut().take();
                 glib::ControlFlow::Break

@@ -507,6 +507,12 @@ fn word_typing(text: &str) -> bool {
     text.chars().count() == 1 && !text.chars().any(char::is_whitespace)
 }
 
+/// Whether `buf`'s live model is in the middle of a change (writing into
+/// the buffer itself): buffer handlers must not add edits of their own.
+pub fn is_busy(buf: &gtk::TextBuffer) -> bool {
+    of(buf).is_some_and(|m| m.try_borrow_mut().map_or(true, |m| m.projecting))
+}
+
 /// Undo on `buf`'s live model, or the buffer's own undo without one.
 pub fn undo(buf: &gtk::TextBuffer, redo: bool) {
     match of(buf) {

@@ -129,6 +129,12 @@ pub fn make_editable(view: &PageView, buf: &gtk::TextBuffer) {
 }
 
 /// Replace the selection (if any) with `text`, as typing does.
+/// Type `text` at the caret, as a key press on the page view does.
+#[cfg(test)]
+pub(crate) fn type_text(buf: &gtk::TextBuffer, text: &str) {
+    insert_text(buf, text);
+}
+
 fn insert_text(buf: &gtk::TextBuffer, text: &str) {
     // Model first (ADR 0010 stage 3c-3): the text is an op on the live
     // model, styled by the marks' expand rules, and the buffer follows.
@@ -150,6 +156,14 @@ fn insert_text(buf: &gtk::TextBuffer, text: &str) {
         ops.extend(typed);
         let word = text.chars().count() == 1 && !text.chars().any(char::is_whitespace) && e == s;
         m.apply_user_ops(buf, &ops, word);
+        drop(m);
+        // Markdown shortcuts, as in Draft: "**bold**" and a space.
+        if text == " " {
+            let at = buf.iter_at_mark(&buf.get_insert());
+            let mut before = at;
+            before.backward_char();
+            crate::actions::markdown_macro_at(buf, &before);
+        }
         return;
     }
     buf.begin_user_action();
