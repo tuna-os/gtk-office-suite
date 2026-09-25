@@ -1502,7 +1502,6 @@ class TablesAutosaveSmoke(BaseGUITestCase):
         )
 
 
-
 class TablesUnclearableSnapshotSmoke(TablesSavedDocumentMixin, BaseGUITestCase):
     """A snapshot that cannot be cleared must leave a trace.
 
@@ -3925,6 +3924,43 @@ class LettersPageThumbnailsSmoke(BaseGUITestCase):
         self.wait_for_condition(lambda: pages.children[1].selected or None,
                                 description="the caret's page marked")
         self.assertIsNone(self.process.poll(), "letters crashed drawing thumbnails")
+
+
+class LettersDistractionFreeSmoke(BaseGUITestCase):
+    """Distraction-free typing (DESIGN-UI, Letters from Pages): with it on,
+    typing slides the bars away and moving the pointer brings them back."""
+
+    app_name = "letters"
+
+    def _toolbar_hidden(self):
+        """Whether the grey around the pages shows where the toolbar was.
+        AdwToolbarView slides its bars away without unmapping them, so
+        AT-SPI still reports them showing; the screen is the evidence."""
+        from PIL import Image
+
+        path = self.take_screenshot("distraction-free", crop=False)
+        pixel = Image.open(path).convert("RGB").getpixel((30, 72))
+        return all(abs(c - 192) < 12 for c in pixel)
+
+    def test_bars_hide_while_typing_and_return_on_pointer_motion(self):
+        from dogtail import rawinput
+
+        self.wait_for_node(name="New Document", roleName="push button").do_action(0)
+        self.wait_for_node(name="Print Layout", roleName="text")
+        rawinput.absoluteMotion(600, 500)
+        # Off by default: typing leaves the bars alone.
+        rawinput.typeText("calm")
+        time.sleep(1.5)
+        self.assertFalse(self._toolbar_hidden(), "the bars stay while distraction-free typing is off")
+
+        self.gapplication_action("org.tunaos.letters", "distraction-free")
+        time.sleep(0.5)
+        rawinput.typeText(" words")
+        self.wait_for_condition(lambda: self._toolbar_hidden() or None, description="the bars sliding away while typing")
+        rawinput.absoluteMotion(700, 560)
+        rawinput.absoluteMotion(720, 580)
+        self.wait_for_condition(lambda: not self._toolbar_hidden() or None, description="the bars returning on pointer motion")
+        self.assertIsNone(self.process.poll(), "letters crashed in distraction-free typing")
 
 
 class LettersPrintLayoutEditingSmoke(BaseGUITestCase):

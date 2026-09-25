@@ -127,7 +127,9 @@ only with its render-lab fixture green or improving.
   text, and free placement of text boxes on pages. Start with flowing
   text on real pages; free placement reuses the Decks object model later.
 - **Distraction-free typing.** The chrome fades while typing and comes back
-  on pointer motion (`AdwToolbarView` reveal properties).
+  on pointer motion (`AdwToolbarView` reveal properties). ✅ (2026-09-25):
+  `app.distraction-free` (Ctrl+Alt+D), off by default and remembered;
+  shortcuts never hide the bars.
 
 ### Decks (from Keynote)
 
