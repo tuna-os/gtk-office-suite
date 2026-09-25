@@ -28,6 +28,16 @@ APP_IDS = {"letters": "org.tunaos.letters", "tables": "org.tunaos.tables", "deck
 # Big enough that a whole A4/Letter page at the app's fit-width scale and a
 # 16:9 slide are fully on screen.
 WINDOW = (1100, 1700)
+# Decks is landscape: in the portrait window its slide came out 681 px wide
+# on screen (Tier B) against Tier A's 1280 px render, so 10-11 pt text was
+# ~6 px tall and OCR could not read it (decks/table B words 0.33-0.67 on
+# text drawn correctly). A landscape window shows the slide at about the
+# size Tier A renders it.
+WINDOWS = {"decks": (1760, 1100)}
+
+
+def window(app):
+    return WINDOWS.get(app, WINDOW)
 TIMEOUT = 60
 # View preferences that must match how LibreOffice prints the reference.
 # Tables fixtures print without gridlines (fixtures.py says why), so the
@@ -84,8 +94,9 @@ def seed_settings(home, maximized=False, extra=0):
     with open(os.path.join(d, "keyfile"), "w") as f:
         for name, app in APP_IDS.items():
             path = "/".join(app.split("."))
+            w, h = window(name)
             f.write(
-                f"[{path}]\nwindow-width={WINDOW[0] + extra}\nwindow-height={WINDOW[1] + extra}\n"
+                f"[{path}]\nwindow-width={w + extra}\nwindow-height={h + extra}\n"
                 f"window-maximized={'true' if maximized else 'false'}\n{VIEW_SETTINGS.get(name, '')}\n"
             )
 
@@ -178,7 +189,8 @@ def tier_a(app, doc, dest, env):
         + glob.glob(os.path.join(dest, "print.pdf"))
     ):
         os.remove(old)
-    xvfb = start(["Xvfb", ":71", "-screen", "0", f"{WINDOW[0] + 100}x{WINDOW[1] + 100}x24", "-nolisten", "tcp"], env, subprocess.DEVNULL)
+    w, h = window(app)
+    xvfb = start(["Xvfb", ":71", "-screen", "0", f"{w + 100}x{h + 100}x24", "-nolisten", "tcp"], env, subprocess.DEVNULL)
     time.sleep(1)
     e = dict(env, DISPLAY=":71", GDK_BACKEND="x11", GSK_RENDERER="cairo", GTK_OFFICE_RENDER_DUMP=dest)
     with open(os.path.join(dest, "A.log"), "w") as log:
@@ -227,7 +239,8 @@ def tier_b(app, doc, dest, env, browser):
         # Connect the browser *before* the app starts: until a client is
         # attached, broadwayd reports a 1024x768 screen and GTK clamps the
         # window to it, so the page would be cut off at the bottom.
-        page = browser.new_page(viewport={"width": WINDOW[0], "height": WINDOW[1]})
+        w, h = window(app)
+        page = browser.new_page(viewport={"width": w, "height": h})
         try:
             page.goto(f"http://127.0.0.1:{port}/")
             page.wait_for_load_state("networkidle")
