@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 //
-// outline.rs — the document outline sidebar (DESIGN-UI, Docs: "a document
-// outline sidebar built from headings").
+// outline.rs — the document sidebar: the outline (DESIGN-UI, Docs: "a
+// document outline sidebar built from headings") beside the page
+// thumbnails (thumbnails.rs), one AdwViewSwitcher apart.
 //
 // An AdwOverlaySplitView at the start of the window. Its list is the active
 // document's headings (and Title/Subtitle), read from the live model with
@@ -61,14 +62,19 @@ pub fn build(
     let scroll = gtk::ScrolledWindow::builder().child(&list).vexpand(true).build();
     stack.add_named(&scroll, Some("list"));
     stack.add_named(&empty, Some("empty"));
+    // Two views of the document: its headings, and its pages drawn small.
+    let views = adw::ViewStack::new();
+    views.add_titled_with_icon(&stack, Some("outline"), "Outline", "view-list-symbolic");
+    views.add_titled_with_icon(&crate::thumbnails::build(tv), Some("pages"), "Pages", "view-paged-symbolic");
+    let switcher = adw::ViewSwitcher::builder().stack(&views).policy(adw::ViewSwitcherPolicy::Wide).build();
     let sidebar = adw::ToolbarView::new();
     let title = adw::HeaderBar::builder()
-        .title_widget(&adw::WindowTitle::new("Outline", ""))
+        .title_widget(&switcher)
         .show_end_title_buttons(false)
         .show_start_title_buttons(false)
         .build();
     sidebar.add_top_bar(&title);
-    sidebar.set_content(Some(&stack));
+    sidebar.set_content(Some(&views));
 
     let split = adw::OverlaySplitView::builder()
         .sidebar_position(gtk::PackType::Start)
@@ -84,18 +90,27 @@ pub fn build(
 
     let show = gtk::ToggleButton::builder()
         .icon_name("sidebar-show-symbolic")
-        .tooltip_text(suite_common::i18n("Outline"))
+        .tooltip_text(suite_common::i18n("Outline and Pages"))
         .build();
-    show.update_property(&[gtk::accessible::Property::Label(&suite_common::i18n("Outline"))]);
+    show.update_property(&[gtk::accessible::Property::Label(&suite_common::i18n("Outline and Pages"))]);
     show.bind_property("active", &split, "show-sidebar").bidirectional().sync_create().build();
     header.pack_start(&show);
-    {
-        let a = gtk::gio::SimpleAction::new("toggle-outline", None);
-        let show = show.clone();
-        a.connect_activate(move |_, _| show.set_active(!show.is_active()));
+    // Each action opens the sidebar on its view, or closes it if that
+    // view is already showing.
+    for (action, view, accel, label) in [
+        ("toggle-outline", "outline", "<Primary><Alt>o", "Show Outline"),
+        ("toggle-pages", "pages", "<Primary><Alt>p", "Show Page Thumbnails"),
+    ] {
+        let a = gtk::gio::SimpleAction::new(action, None);
+        let (show, views) = (show.clone(), views.clone());
+        a.connect_activate(move |_, _| {
+            let open = show.is_active() && views.visible_child_name().as_deref() == Some(view);
+            views.set_visible_child_name(view);
+            show.set_active(!open);
+        });
         app.add_action(&a);
-        app.set_accels_for_action("app.toggle-outline", &["<Primary><Alt>o"]);
-        suite_common::actions::register_labels(&[("app.toggle-outline", &suite_common::i18n("Show Outline"))]);
+        app.set_accels_for_action(&format!("app.{action}"), &[accel]);
+        suite_common::actions::register_labels(&[(&format!("app.{action}"), &suite_common::i18n(label))]);
     }
 
     let entries: Rc<RefCell<Entries>> = Rc::default();

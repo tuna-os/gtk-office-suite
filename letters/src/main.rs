@@ -17,6 +17,7 @@ mod spell;
 mod printing;
 mod style_picker;
 mod outline;
+mod thumbnails;
 
 fn main() {
     let suite = suite_common::SuiteApp::new("org.tunaos.letters");

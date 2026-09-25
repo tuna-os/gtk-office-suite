@@ -3823,6 +3823,39 @@ class LettersStylesAndOutlineSmoke(BaseGUITestCase):
         self.assertIsNone(self.process.poll(), "letters crashed using styles and the outline")
 
 
+class LettersPageThumbnailsSmoke(BaseGUITestCase):
+    """The sidebar's Pages view is the laid-out pages drawn small (DESIGN-UI,
+    Letters from Pages): one named thumbnail per page, following the
+    layout as the document grows, with the caret's page marked."""
+
+    app_name = "letters"
+
+    def setUp(self):
+        self._snapshot_path = self.isolate_snapshot(prefix="letters-thumbs-")
+        super().setUp()
+
+    def test_thumbnails_follow_the_pages(self):
+        from dogtail import rawinput
+
+        self.wait_for_node(name="New Document", roleName="push button").do_action(0)
+        self.wait_for_node(name="Print Layout", roleName="text")
+        rawinput.typeText("first")
+        self.gapplication_action("org.tunaos.letters", "toggle-pages")
+        pages = self.wait_for_node(name="Pages", roleName="list")
+        self.wait_for_condition(lambda: [c.name for c in pages.children] == ["Page 1"] or None,
+                                description="one thumbnail for one page")
+        # Enough lines for a second page: a thumbnail appears for it, and
+        # it is marked, as the caret is there.
+        for _ in range(55):
+            rawinput.keyCombo("Return")
+        rawinput.typeText("last")
+        self.wait_for_condition(lambda: [c.name for c in pages.children] == ["Page 1", "Page 2"] or None,
+                                description="a thumbnail for the new page")
+        self.wait_for_condition(lambda: pages.children[1].selected or None,
+                                description="the caret's page marked")
+        self.assertIsNone(self.process.poll(), "letters crashed drawing thumbnails")
+
+
 class LettersPrintLayoutEditingSmoke(BaseGUITestCase):
     """Print Layout is the default view, and editing there is editing the
     document (ADR 0010, stage 3d).

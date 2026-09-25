@@ -67,6 +67,12 @@ mod imp {
             self.caret_on.set(true);
             self.zoom.set(100.0);
         }
+
+        /// `laid-out`: the pages changed (a new or updated layout).
+        fn signals() -> &'static [glib::subclass::Signal] {
+            static SIGNALS: std::sync::OnceLock<Vec<glib::subclass::Signal>> = std::sync::OnceLock::new();
+            SIGNALS.get_or_init(|| vec![glib::subclass::Signal::builder("laid-out").build()])
+        }
     }
 
     /// The text screen readers see is the buffer's, the text the page view
@@ -229,6 +235,7 @@ impl PageView {
         self.imp().starts.replace(starts);
         self.queue_resize();
         self.queue_draw();
+        self.emit_by_name::<()>("laid-out", &[]);
     }
 
     /// Lay out an edited version of the document, re-using the shaped
@@ -240,6 +247,15 @@ impl PageView {
         self.imp().starts.replace(starts);
         self.queue_resize();
         self.queue_draw();
+        self.emit_by_name::<()>("laid-out", &[]);
+    }
+
+    /// Call `f` whenever the pages change.
+    pub fn connect_laid_out(&self, f: impl Fn(&Self) + 'static) -> glib::SignalHandlerId {
+        self.connect_local("laid-out", false, move |args| {
+            f(&args[0].get::<Self>().expect("a page view"));
+            None
+        })
     }
 
     /// The buffer this view edits.
@@ -423,6 +439,43 @@ impl PageView {
         self.imp().typeset.borrow().as_ref().map_or(0, |t| t.tree().pages.len())
     }
 
+    /// Size of page `index` in points.
+    pub fn page_size_pt(&self, index: usize) -> Option<(f64, f64)> {
+        let typeset = self.imp().typeset.borrow();
+        typeset.as_ref()?.tree().pages.get(index).map(|p| (p.width_pt, p.height_pt))
+    }
+
+    /// Draw page `index` on white paper at the context's origin, `scale`
+    /// pixels per point: the laid-out page, without caret or selection (a
+    /// page thumbnail is the same render tree drawn small).
+    pub fn draw_page_at(&self, cr: &gtk::cairo::Context, index: usize, scale: f64) -> bool {
+        let typeset = self.imp().typeset.borrow();
+        let Some(typeset) = typeset.as_ref() else { return false };
+        let Some(page) = typeset.tree().pages.get(index) else { return false };
+        cr.set_source_rgb(1.0, 1.0, 1.0);
+        cr.rectangle(0.0, 0.0, page.width_pt * scale, page.height_pt * scale);
+        let _ = cr.fill_preserve();
+        cr.clip();
+        cr.scale(scale, scale);
+        typeset.draw_page(cr, index);
+        true
+    }
+
+    /// The page holding the caret at buffer offset `off`.
+    pub fn page_of_offset(&self, off: usize) -> Option<usize> {
+        let typeset = self.imp().typeset.borrow();
+        let typeset = typeset.as_ref()?;
+        typeset.caret(self.text_pos(typeset, off)).map(|c| c.page)
+    }
+
+    /// Scroll the view's scrolled window to the top of page `index`.
+    pub fn scroll_to_page(&self, index: usize) {
+        let (_, y, _, _) = self.page_rect(index);
+        if let Some(adj) = self.parent().and_then(|p| p.downcast::<gtk::Viewport>().ok()).and_then(|vp| vp.vadjustment()) {
+            adj.set_value((y - GAP_PX / 2.0).max(0.0));
+        }
+    }
+
     /// Zoom percentage; 100 is physical size.
     pub fn set_zoom(&self, percent: f64) {
         self.imp().zoom.set(percent.clamp(25.0, 400.0));
@@ -518,6 +571,35 @@ mod tests {
             assert!(close(y1, y0 + h0 + GAP_PX), "pages stack with one gap: {y0} {h0} {y1}");
             v.set_zoom(50.0);
             assert!(close(v.page_rect(0).2, 408.0));
+        });
+    }
+
+    /// A thumbnail is the laid-out page drawn small, and the view knows
+    /// which page a buffer offset is on; each new layout is announced.
+    #[test]
+    fn thumbnails_draw_the_laid_out_pages() {
+        gtk_test(|| {
+            let v = PageView::new();
+            let announced = std::rc::Rc::new(Cell::new(0));
+            let a = announced.clone();
+            v.connect_laid_out(move |_| a.set(a.get() + 1));
+            let text = "Line of text.\n".repeat(120);
+            let doc = Document::from_plain_text(&text);
+            let starts: Vec<usize> = (0..120).map(|i| i * 14).collect();
+            v.set_typeset(Typeset::new(doc, LayoutOptions::default()), starts);
+            assert_eq!(announced.get(), 1);
+            assert_eq!(v.page_of_offset(0), Some(0));
+            assert_eq!(v.page_of_offset(119 * 14), Some(v.page_count() - 1));
+            let (w, h) = v.page_size_pt(0).unwrap();
+            let k = 100.0 / w;
+            let surface = gtk::cairo::ImageSurface::create(gtk::cairo::Format::Rgb24, 100, (h * k).ceil() as i32).unwrap();
+            let cr = gtk::cairo::Context::new(&surface).unwrap();
+            assert!(v.draw_page_at(&cr, 0, k));
+            assert!(!v.draw_page_at(&cr, 99, k), "no such page");
+            drop(cr);
+            let data = surface.take_data().unwrap();
+            assert!(data.iter().any(|b| *b < 200), "the page's text is drawn");
+            assert!(data.iter().filter(|b| **b == 255).count() > data.len() / 2, "on white paper");
         });
     }
 }
