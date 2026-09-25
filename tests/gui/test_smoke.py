@@ -3288,6 +3288,75 @@ class DecksMagicMovePreviewSmoke(BaseGUITestCase):
         self.assertIsNone(self.process.poll(), "decks crashed previewing Magic Move")
 
 
+class DecksPresenterDisplaySmoke(BaseGUITestCase):
+    """The presenter display (DESIGN-UI.md, "Presenter display"): rehearsing
+    a two-slide deck opens it on the one monitor the test display has, with
+    the slide counter, that slide's notes and a running clock; Next Slide
+    moves the counter and the notes on; End Show closes it. Presenting opens
+    the fullscreen audience window. Asserted through AT-SPI names and label
+    text; the slides themselves are drawn by the same code as the editor's
+    (render lab)."""
+
+    app_name = "decks"
+
+    CONTENT = (
+        '<?xml version="1.0" encoding="UTF-8"?>'
+        '<office:document-content'
+        ' xmlns:office="urn:oasis:names:tc:opendocument:xmlns:office:1.0"'
+        ' xmlns:draw="urn:oasis:names:tc:opendocument:xmlns:drawing:1.0"'
+        ' xmlns:presentation="urn:oasis:names:tc:opendocument:xmlns:presentation:1.0"'
+        ' xmlns:text="urn:oasis:names:tc:opendocument:xmlns:text:1.0"'
+        ' xmlns:svg="urn:oasis:names:tc:opendocument:xmlns:svg-compatible:1.0" office:version="1.2">'
+        '<office:body><office:presentation>'
+        '<draw:page draw:name="One"><draw:rect svg:x="100pt" svg:y="100pt" svg:width="100pt" svg:height="100pt"/>'
+        '<presentation:notes><draw:frame presentation:class="notes" svg:x="0pt" svg:y="0pt" svg:width="100pt" svg:height="50pt">'
+        '<draw:text-box><text:p>Open with the question</text:p></draw:text-box></draw:frame></presentation:notes></draw:page>'
+        '<draw:page draw:name="Two"><draw:rect svg:x="500pt" svg:y="100pt" svg:width="100pt" svg:height="100pt"/>'
+        '<presentation:notes><draw:frame presentation:class="notes" svg:x="0pt" svg:y="0pt" svg:width="100pt" svg:height="50pt">'
+        '<draw:text-box><text:p>Then show the answer</text:p></draw:text-box></draw:frame></presentation:notes></draw:page>'
+        '</office:presentation></office:body></office:document-content>'
+    )
+
+    def setUp(self):
+        import zipfile
+        self._dir = self.temp_dir(prefix="decks-presenter-")
+        self._doc = os.path.join(self._dir, "talk.odp")
+        with zipfile.ZipFile(self._doc, "w") as z:
+            z.writestr("mimetype", "application/vnd.oasis.opendocument.presentation")
+            z.writestr("content.xml", self.CONTENT)
+        self.launch_args = [self._doc]
+        super().setUp()
+
+    def _label(self, name):
+        return self.app.child(name=name, roleName="label")
+
+    def _texts(self):
+        return [n.name for n in self.app.findChildren(lambda n: n.roleName == "label")]
+
+    def test_rehearse_steps_through_slides_notes_and_clock(self):
+        import re
+        import subprocess
+        aid = "org.tunaos.decks"
+        self.wait_until(lambda: self.app.child(name="Slide canvas").description,
+                        lambda d: "of 2" in d, interval=0.5, description="the two-slide deck to open")
+        subprocess.run(["gapplication", "action", aid, "rehearse"], check=True, timeout=5)
+        self.wait_until(self._texts, lambda t: "Slide 1 of 2" in t and "Open with the question" in t,
+                        interval=0.5, description="the presenter display on slide 1 with its notes")
+        self.assertTrue(any(re.fullmatch(r"\d+:\d\d", t or "") for t in self._texts()),
+                        f"no clock among {self._texts()}")
+        self.app.child(name="Next Slide", roleName="push button").do_action(0)
+        self.wait_until(self._texts, lambda t: "Slide 2 of 2" in t and "Then show the answer" in t,
+                        interval=0.5, description="Next Slide to move the counter and notes on")
+        self.app.child(name="End Show", roleName="push button").do_action(0)
+        self.wait_until(self._texts, lambda t: "Slide 2 of 2" not in t, interval=0.5,
+                        description="End Show to close the presenter display")
+        subprocess.run(["gapplication", "action", aid, "present"], check=True, timeout=5)
+        self.wait_until(lambda: [n.name for n in self.app.findChildren(lambda n: n.roleName == "drawing area" or n.name == "Slide show")],
+                        lambda names: "Slide show" in names, interval=0.5,
+                        description="the audience window to open")
+        self.assertIsNone(self.process.poll(), "decks crashed running a show")
+
+
 class DecksSelectionSmoke(BaseGUITestCase):
     """Object selection updates the canvas a11y description and the
     inspector (fit-to-viewport geometry keeps coordinates stable)."""

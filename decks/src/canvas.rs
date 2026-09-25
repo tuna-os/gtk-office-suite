@@ -426,6 +426,47 @@ pub fn draw_slide(
     draw_slide_multi(cr, width, height, slides, current_slide, &selected.into_iter().collect::<std::collections::HashSet<_>>(), None, masters, accent);
 }
 
+/// What surrounds a slide: the editor's (grey, a shadow and a border, a
+/// margin) or a show's (black, the slide as large as fits).
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum Chrome {
+    #[default]
+    Editor,
+    Show,
+    /// A slide shown inside other UI (the presenter display): as large as
+    /// fits, a hairline border, nothing painted around it.
+    Preview,
+}
+
+/// The slide's frame on a `w`×`h` canvas for `chrome`.
+pub fn slide_frame(width: f64, height: f64, chrome: Chrome) -> (f64, f64, f64, f64) {
+    match chrome {
+        Chrome::Editor => slide_geometry(width, height),
+        Chrome::Show | Chrome::Preview => {
+            let k = (width / 960.0).min(height / 540.0).max(0.01);
+            let (w, h) = (960.0 * k, 540.0 * k);
+            ((width - w) / 2.0, (height - h) / 2.0, w, h)
+        }
+    }
+}
+
+/// A whole slide as a show presents it: black around it, no editor
+/// marks. Used by the audience and presenter windows.
+pub fn draw_slide_show(cr: &cairo::Context, width: f64, height: f64, slides: &[Slide], index: usize, masters: &[MasterSlide]) {
+    draw_slide_in(cr, width, height, slides, index, masters, Chrome::Show);
+}
+
+/// A whole slide with `chrome` around it, without editor marks.
+pub fn draw_slide_in(cr: &cairo::Context, width: f64, height: f64, slides: &[Slide], index: usize, masters: &[MasterSlide], chrome: Chrome) {
+    let (frame, bg) = draw_slide_base(cr, width, height, slides, index, masters, chrome);
+    let master = master_for(slides, index, masters);
+    if let Some(slide) = slides.get(index) {
+        for obj in &slide.objects {
+            draw_object(cr, obj, frame, bg, master);
+        }
+    }
+}
+
 /// A slide's frame on the canvas `(x, y, w, h)` and the background colour
 /// (Cairo channels) text contrasts with.
 pub type SlideFrame = ((f64, f64, f64, f64), (f64, f64, f64));
@@ -436,18 +477,21 @@ pub type SlideFrame = ((f64, f64, f64, f64), (f64, f64, f64));
 /// colour text contrasts with. Shared by the editor and Magic Move frames.
 pub fn draw_slide_base(
     cr: &cairo::Context, width: f64, height: f64,
-    slides: &[Slide], current_slide: usize, masters: &[MasterSlide],
+    slides: &[Slide], current_slide: usize, masters: &[MasterSlide], chrome: Chrome,
 ) -> SlideFrame {
     suite_common::use_ui_font_rendering(cr);
-    cr.set_source_rgb(0.86, 0.86, 0.86);
-    cr.paint().unwrap();
-
-    let (ox, oy, slide_w, slide_h) = slide_geometry(width, height);
-
-    // Shadow
-    cr.set_source_rgba(0.0, 0.0, 0.0, 0.15);
-    cr.rectangle(ox + 3.0, oy + 3.0, slide_w, slide_h);
-    cr.fill().unwrap();
+    let (ox, oy, slide_w, slide_h) = slide_frame(width, height, chrome);
+    if chrome == Chrome::Show {
+        cr.set_source_rgb(0.0, 0.0, 0.0);
+        cr.paint().unwrap();
+    } else if chrome == Chrome::Editor {
+        cr.set_source_rgb(0.86, 0.86, 0.86);
+        cr.paint().unwrap();
+        // Shadow
+        cr.set_source_rgba(0.0, 0.0, 0.0, 0.15);
+        cr.rectangle(ox + 3.0, oy + 3.0, slide_w, slide_h);
+        cr.fill().unwrap();
+    }
 
     // Slide background — an unset (white) slide inherits its master's.
     // Captured for the text-color contrast check below
@@ -477,11 +521,13 @@ pub fn draw_slide_base(
     cr.rectangle(ox, oy, slide_w, slide_h);
     cr.fill().unwrap();
 
-    // Border
-    cr.set_source_rgb(0.7, 0.7, 0.7);
-    cr.set_line_width(1.0);
-    cr.rectangle(ox, oy, slide_w, slide_h);
-    cr.stroke().unwrap();
+    if chrome != Chrome::Show {
+        // Border
+        cr.set_source_rgb(0.7, 0.7, 0.7);
+        cr.set_line_width(1.0);
+        cr.rectangle(ox, oy, slide_w, slide_h);
+        cr.stroke().unwrap();
+    }
 
     // Draw master slide shapes (background pattern, logos, headers)
     if let Some(master) = master_for(slides, current_slide, masters) {
@@ -525,7 +571,7 @@ pub fn draw_slide_multi(
 ) {
     suite_common::use_ui_font_rendering(cr);
     let (ar, ag, ab) = accent;
-    let ((ox, oy, slide_w, slide_h), slide_bg_rgb) = draw_slide_base(cr, width, height, slides, current_slide, masters);
+    let ((ox, oy, slide_w, slide_h), slide_bg_rgb) = draw_slide_base(cr, width, height, slides, current_slide, masters, Chrome::Editor);
 
     // Draw objects
     if current_slide < slides.len() {

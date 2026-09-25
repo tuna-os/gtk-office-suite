@@ -59,6 +59,13 @@ impl PresenterState {
         true
     }
 
+    /// Jump to slide `index` (a show starts at the slide being edited).
+    pub fn go_to(&mut self, index: usize, deck: &Deck) -> bool {
+        if index >= deck.slides.len() || index == self.current_index { return false; }
+        self.current_index = index;
+        true
+    }
+
     pub fn previous(&mut self) -> bool {
         if self.current_index == 0 { return false; }
         self.current_index -= 1;
@@ -78,6 +85,39 @@ impl PresenterState {
             elapsed,
             display: self.display.clone(),
         })
+    }
+}
+
+/// The presenter's clock: `m:ss`, or `h:mm:ss` from an hour on.
+pub fn format_elapsed(d: Duration) -> String {
+    let s = d.as_secs();
+    let (h, m, s) = (s / 3600, (s / 60) % 60, s % 60);
+    if h > 0 { format!("{h}:{m:02}:{s:02}") } else { format!("{m}:{s:02}") }
+}
+
+/// "Slide 3 of 12".
+pub fn slide_counter(index: usize, count: usize) -> String {
+    format!("Slide {} of {}", index + 1, count)
+}
+
+/// Which monitor shows what, by index into the display's monitor list.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct ShowLayout {
+    /// The fullscreen slides the audience sees.
+    pub audience: Option<usize>,
+    /// The presenter display: current and next slide, notes, clock.
+    pub presenter: Option<usize>,
+}
+
+/// Where a show goes. With a second monitor the audience gets it (the
+/// usual projector setup) and the presenter display stays on the laptop;
+/// with one monitor the audience has it to themselves. Rehearsing shows
+/// the presenter display alone, on the first monitor.
+pub fn show_layout(monitors: usize, rehearse: bool) -> ShowLayout {
+    match (rehearse, monitors) {
+        (true, _) => ShowLayout { audience: None, presenter: Some(0) },
+        (false, 0 | 1) => ShowLayout { audience: Some(0), presenter: None },
+        (false, _) => ShowLayout { audience: Some(1), presenter: Some(0) },
     }
 }
 
@@ -112,6 +152,33 @@ mod tests {
             ],
             masters: vec![],
         }
+    }
+
+    #[test]
+    fn the_clock_and_counter_read_as_a_presenter_expects() {
+        assert_eq!(format_elapsed(Duration::from_secs(0)), "0:00");
+        assert_eq!(format_elapsed(Duration::from_secs(65)), "1:05");
+        assert_eq!(format_elapsed(Duration::from_secs(3600 + 62)), "1:01:02");
+        assert_eq!(slide_counter(2, 12), "Slide 3 of 12");
+    }
+
+    #[test]
+    fn a_second_monitor_takes_the_audience_and_rehearsal_is_presenter_only() {
+        assert_eq!(show_layout(1, false), ShowLayout { audience: Some(0), presenter: None });
+        assert_eq!(show_layout(0, false), ShowLayout { audience: Some(0), presenter: None });
+        assert_eq!(show_layout(2, false), ShowLayout { audience: Some(1), presenter: Some(0) });
+        assert_eq!(show_layout(3, true), ShowLayout { audience: None, presenter: Some(0) });
+    }
+
+    #[test]
+    fn a_show_starts_at_the_slide_being_edited() {
+        let d = deck();
+        let mut state = PresenterState::new();
+        assert!(state.go_to(1, &d));
+        assert_eq!(state.current_index(), 1);
+        assert!(!state.go_to(1, &d), "already there");
+        assert!(!state.go_to(5, &d), "no such slide");
+        assert!(!state.next(&d), "the last slide");
     }
 
     #[test]

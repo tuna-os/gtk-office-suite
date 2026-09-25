@@ -5,7 +5,6 @@ use gtk4::cairo;
 use gtk4::{prelude::*, glib};
 use std::cell::RefCell;
 use std::rc::Rc;
-use crate::canvas::draw_slide;
 use decks_core::engine::{MasterSlide, Slide, Transition};
 
 // Fade/CoverLeft/SplitHorizontal are drawn (see draw_transition below) but
@@ -61,6 +60,8 @@ pub struct TransitionState {
     pub active: bool,
     pub kind: TransitionType,
     pub magic: Option<MagicMove>,
+    /// The editor's canvas or a show's window.
+    pub chrome: crate::canvas::Chrome,
 }
 
 impl TransitionState {
@@ -72,6 +73,7 @@ impl TransitionState {
             active: false,
             kind: TransitionType::None,
             magic: None,
+            chrome: crate::canvas::Chrome::Editor,
         }
     }
 
@@ -103,8 +105,8 @@ impl TransitionState {
                     masters: masters.to_vec(),
                 });
             } else if s.active {
-                s.from_surface = Some(render_slide_to_surface(from_slide));
-                s.to_surface = Some(render_slide_to_surface(to_slide));
+                s.from_surface = Some(render_slide_to_surface(from_slide, masters));
+                s.to_surface = Some(render_slide_to_surface(to_slide, masters));
             }
         }
         area.queue_draw();
@@ -131,11 +133,13 @@ impl TransitionState {
     }
 }
 
-fn render_slide_to_surface(slide: &Slide) -> cairo::ImageSurface {
+/// The slide alone, edge to edge, with its master: what the surface
+/// transitions slide and fade. (It used to be the editor's rendering,
+/// grey margin and slide-number badge included, without the master.)
+fn render_slide_to_surface(slide: &Slide, masters: &[MasterSlide]) -> cairo::ImageSurface {
     let surface = cairo::ImageSurface::create(cairo::Format::ARgb32, 960, 540).unwrap();
     let cr = cairo::Context::new(&surface).unwrap();
-    draw_slide(&cr, 960.0, 540.0, std::slice::from_ref(slide), 0, None, &[],
-               (0.0, 0.5, 1.0)); // transition snapshots never show selection; unused
+    crate::canvas::draw_slide_show(&cr, 960.0, 540.0, std::slice::from_ref(slide), 0, masters);
     surface.flush();
     surface
 }
@@ -144,13 +148,13 @@ fn render_slide_to_surface(slide: &Slide) -> cairo::ImageSurface {
 /// master) cross-fades, then every object of decks_core::magic_move::frame
 /// at its place and opacity. Nothing of the editor is drawn: no selection,
 /// no slide number, no "empty slide" caption.
-fn draw_magic_move(cr: &cairo::Context, m: &MagicMove, t: f64, canvas_w: f64, canvas_h: f64) {
+fn draw_magic_move(cr: &cairo::Context, m: &MagicMove, t: f64, canvas_w: f64, canvas_h: f64, chrome: crate::canvas::Chrome) {
     use crate::canvas::{draw_object, draw_slide_base, master_for};
     let e = decks_core::magic_move::ease(t);
     let to = std::slice::from_ref(&m.to);
-    let (frame, bg) = draw_slide_base(cr, canvas_w, canvas_h, to, 0, &m.masters);
+    let (frame, bg) = draw_slide_base(cr, canvas_w, canvas_h, to, 0, &m.masters, chrome);
     cr.push_group();
-    draw_slide_base(cr, canvas_w, canvas_h, std::slice::from_ref(&m.from), 0, &m.masters);
+    draw_slide_base(cr, canvas_w, canvas_h, std::slice::from_ref(&m.from), 0, &m.masters, chrome);
     let _ = cr.pop_group_to_source();
     let _ = cr.paint_with_alpha(1.0 - e);
     let master = master_for(to, 0, &m.masters);
@@ -199,6 +203,7 @@ pub fn write_frame_png(state: &TransitionState, t: f64, w: i32, h: i32, path: &s
             active: true,
             kind: state.kind,
             magic: state.magic.clone(),
+            chrome: state.chrome,
         };
         draw_transition(&cr, &frame, w as f64, h as f64);
     }
@@ -210,15 +215,18 @@ pub fn draw_transition(cr: &cairo::Context, state: &TransitionState, canvas_w: f
     if !state.active { return false; }
     let t = state.progress;
     if let (TransitionType::MagicMove, Some(m)) = (state.kind, state.magic.as_ref()) {
-        draw_magic_move(cr, m, t, canvas_w, canvas_h);
+        draw_magic_move(cr, m, t, canvas_w, canvas_h, state.chrome);
         return true;
     }
     let eased = 1.0 - (1.0 - t).powi(3); // ease-out cubic
 
-    let slide_w = canvas_w * 0.85;
-    let _slide_h = slide_w * 9.0 / 16.0;
-    let ox = (canvas_w - slide_w) / 2.0;
-    let oy = (canvas_h - _slide_h) / 2.0;
+    // The slides go exactly where the canvas (or show) puts a slide.
+    let (ox, oy, slide_w, _slide_h) = crate::canvas::slide_frame(canvas_w, canvas_h, state.chrome);
+    match state.chrome {
+        crate::canvas::Chrome::Editor => cr.set_source_rgb(0.86, 0.86, 0.86),
+        crate::canvas::Chrome::Show | crate::canvas::Chrome::Preview => cr.set_source_rgb(0.0, 0.0, 0.0),
+    }
+    let _ = cr.paint();
     let scale_x = slide_w / 960.0;
     let scale_y = _slide_h / 540.0;
 
@@ -368,6 +376,7 @@ mod tests {
             progress: 0.0,
             active: true,
             kind: TransitionType::MagicMove,
+            chrome: crate::canvas::Chrome::Editor,
             magic: Some(MagicMove {
                 pairs: decks_core::magic_move::match_objects(&from.objects, &to.objects),
                 from,

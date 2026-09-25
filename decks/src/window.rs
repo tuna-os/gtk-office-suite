@@ -776,6 +776,7 @@ impl DecksWindow {
             ("app.add-shape", "Add Shape"),
             ("app.add-image", "Add Image…"),
             ("app.present", "Present"),
+            ("app.rehearse", "Rehearse Presentation"),
             ("app.undo", "Undo"),
             ("app.redo", "Redo"),
         ]);
@@ -915,10 +916,18 @@ impl DecksWindow {
 
         // Present
         {
-            let w = suite_win.window.clone();
-            let act = gio::SimpleAction::new("present", None);
-            act.connect_activate(move |_, _| { w.fullscreen(); });
-            app.add_action(&act);
+            // A show from the slide being edited: the audience fullscreen
+            // (on the second monitor if there is one) and, with two
+            // monitors, the presenter display (presenter_window.rs).
+            for (name, rehearse) in [("present", false), ("rehearse", true)] {
+                let (ss, m, cs_ref, app2) = (slides.clone(), masters.clone(), current_slide.clone(), app.clone());
+                let act = gio::SimpleAction::new(name, None);
+                act.connect_activate(move |_, _| {
+                    let deck = Deck { slides: ss.borrow().clone(), masters: m.borrow().clone() };
+                    crate::presenter_window::start(&app2, deck, cs_ref.get(), rehearse);
+                });
+                app.add_action(&act);
+            }
             app.set_accels_for_action("app.present", &["F5"]);
             if let Some(btn) = find_toolbar_child(&toolbar, "view-fullscreen-symbolic") {
                 btn.set_action_name(Some("app.present"));
