@@ -67,35 +67,33 @@ jobs:
     needs: gate
     if: needs.gate.outputs.run == 'true'
     runs-on: ubuntu-24.04
+    # Read only. This job used to build the image from the pull request's
+    # own Containerfile and push it to the shared `:main` tag when that tag
+    # was missing, so a pull request could replace the environment every
+    # other branch tests in (#1008). The image is published only from main,
+    # by gui-container.yml; if it is missing, say so and stop.
     permissions:
       contents: read
-      packages: write
+      packages: read
     outputs:
       ref: ${{ steps.resolve.outputs.ref }}
     steps:
-      - uses: actions/checkout@v7
-
       - uses: docker/login-action@v4
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      # The image is a main-branch artifact (gui-container.yml). Building
-      # it here as a fallback means the very first run of this workflow
-      # works before that one has ever published.
       - id: resolve
         env:
           REPOSITORY: ${{ github.repository }}
         run: |
           ref="ghcr.io/${REPOSITORY}/gui-test:main"
-          if docker manifest inspect "$ref" >/dev/null 2>&1; then
-            echo "Using published image $ref"
-          else
-            echo "No published image yet; building and publishing $ref"
-            docker build -t "$ref" -f tests/gui/container/Containerfile tests/gui/container
-            docker push "$ref"
+          if ! docker manifest inspect "$ref" >/dev/null 2>&1; then
+            echo "::error::$ref is not published. Run gui-container.yml on main first."
+            exit 1
           fi
+          echo "Using published image $ref"
           echo "ref=$ref" >> "$GITHUB_OUTPUT"
 
   record:
@@ -159,7 +157,16 @@ jobs:
       contents: write        # push clips to the ci-evidence branch
       pull-requests: write   # write the evidence block into the PR body
     steps:
+      # The scripts this job runs while holding write scopes come from the
+      # base branch, never from the pull request under test (#1008). A
+      # change to pr_comment.py takes effect here once it is merged; its
+      # unit tests (tests/test_gui_evidence.py) run on the pull request.
+      # The recording itself runs the pull request's code, in `record`,
+      # which has a read-only token.
       - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.pull_request.base.sha || github.sha }}
+          persist-credentials: false
 
       # A record job that died before uploading (build failure, container
       # pull failure) still gets a block saying so — silence would read
