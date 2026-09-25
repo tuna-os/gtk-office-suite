@@ -42,10 +42,13 @@ mod imp {
         const NAME: &'static str = "LettersPageView";
         type Type = super::PageView;
         type ParentType = gtk::Widget;
+        type Interfaces = (gtk::AccessibleText,);
 
         fn class_init(klass: &mut Self::Class) {
             klass.set_css_name("page-view");
-            klass.set_accessible_role(gtk::AccessibleRole::Document);
+            // A multi-line text box, as GtkTextView is: screen readers read
+            // and track the page view's text through GtkAccessibleText.
+            klass.set_accessible_role(gtk::AccessibleRole::TextBox);
         }
     }
 
@@ -53,6 +56,73 @@ mod imp {
         fn constructed(&self) {
             self.parent_constructed();
             self.zoom.set(100.0);
+        }
+    }
+
+    /// The text screen readers see is the buffer's, the text the page view
+    /// edits; offsets are the buffer's char offsets.
+    impl AccessibleTextImpl for PageView {
+        fn contents(&self, start: u32, end: u32) -> Option<glib::Bytes> {
+            let buf = self.buffer.borrow().clone()?;
+            let (s, e) = (buf.iter_at_offset(start as i32), buf.iter_at_offset(end.min(i32::MAX as u32) as i32));
+            Some(glib::Bytes::from_owned(buf.text(&s, &e, false).to_string().into_bytes()))
+        }
+
+        fn contents_at(&self, offset: u32, granularity: gtk::AccessibleTextGranularity) -> Option<(u32, u32, glib::Bytes)> {
+            let buf = self.buffer.borrow().clone()?;
+            let at = buf.iter_at_offset(offset as i32);
+            let (mut s, mut e) = (at, at);
+            match granularity {
+                gtk::AccessibleTextGranularity::Character => {
+                    e.forward_char();
+                }
+                gtk::AccessibleTextGranularity::Word => {
+                    if !s.starts_word() {
+                        s.backward_word_start();
+                    }
+                    e.forward_word_end();
+                }
+                gtk::AccessibleTextGranularity::Sentence => {
+                    if !s.starts_sentence() {
+                        s.backward_sentence_start();
+                    }
+                    e.forward_sentence_end();
+                }
+                // A line is a laid-out line on the page, not a paragraph.
+                gtk::AccessibleTextGranularity::Line => {
+                    let (ls, le) = self.obj().line_bounds(offset as usize).unwrap_or((offset as usize, offset as usize));
+                    s = buf.iter_at_offset(ls as i32);
+                    e = buf.iter_at_offset(le as i32);
+                }
+                _ => {
+                    s.set_line_offset(0);
+                    if !e.ends_line() {
+                        e.forward_to_line_end();
+                    }
+                }
+            }
+            let text = buf.text(&s, &e, false).to_string();
+            Some((s.offset() as u32, e.offset() as u32, glib::Bytes::from_owned(text.into_bytes())))
+        }
+
+        fn caret_position(&self) -> u32 {
+            self.buffer.borrow().as_ref().map_or(0, |b| b.iter_at_mark(&b.get_insert()).offset().max(0) as u32)
+        }
+
+        fn selection(&self) -> Vec<gtk::AccessibleTextRange> {
+            let Some(buf) = self.buffer.borrow().clone() else { return Vec::new() };
+            match buf.selection_bounds() {
+                Some((s, e)) => vec![gtk::AccessibleTextRange::new(s.offset() as usize, (e.offset() - s.offset()) as usize)],
+                None => Vec::new(),
+            }
+        }
+
+        fn attributes(&self, _offset: u32) -> Vec<(gtk::AccessibleTextRange, glib::GString, glib::GString)> {
+            Vec::new()
+        }
+
+        fn default_attributes(&self) -> Vec<(glib::GString, glib::GString)> {
+            Vec::new()
         }
     }
 
@@ -127,7 +197,7 @@ mod imp {
 glib::wrapper! {
     pub struct PageView(ObjectSubclass<imp::PageView>)
         @extends gtk::Widget,
-        @implements gtk::Accessible, gtk::Buildable, gtk::ConstraintTarget;
+        @implements gtk::Accessible, gtk::AccessibleText, gtk::Buildable, gtk::ConstraintTarget;
 }
 
 impl Default for PageView {
@@ -157,6 +227,33 @@ impl PageView {
 
     pub(crate) fn set_buffer(&self, buf: &gtk::TextBuffer) {
         self.imp().buffer.replace(Some(buf.clone()));
+        self.update_property(&[
+            gtk::accessible::Property::Label(&suite_common::i18n("Print Layout")),
+            gtk::accessible::Property::MultiLine(true),
+        ]);
+        // Tell assistive technologies what changed, as GtkTextView does.
+        let v = self.downgrade();
+        buf.connect_insert_text(move |_, at, text| {
+            if let Some(v) = v.upgrade() {
+                let start = at.offset().max(0) as u32;
+                v.update_contents(gtk::AccessibleTextContentChange::Insert, start, start + text.chars().count() as u32);
+            }
+        });
+        let v = self.downgrade();
+        buf.connect_delete_range(move |_, s, e| {
+            if let Some(v) = v.upgrade() {
+                v.update_contents(gtk::AccessibleTextContentChange::Remove, s.offset().max(0) as u32, e.offset().max(0) as u32);
+            }
+        });
+        let v = self.downgrade();
+        buf.connect_mark_set(move |_, _, mark| {
+            let Some(v) = v.upgrade() else { return };
+            match mark.name().as_deref() {
+                Some("insert") => v.update_caret_position(),
+                Some("selection_bound") => v.update_selection_bound(),
+                _ => {}
+            }
+        });
     }
 
     /// The document position of buffer offset `off`.

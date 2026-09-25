@@ -9,10 +9,11 @@
 // Undo, formatting actions, find and save all keep working unchanged,
 // because they act on the same buffer.
 //
-// What is not here yet (the Draft view still has them): list continuation
-// on Enter, Markdown shortcuts, the suite clipboard format, and
-// GtkAccessibleText. Those land in later stages; the Draft view stays the
-// fallback until then.
+// Enter continues and ends lists as in Draft (`bridge::enter_in_list`);
+// Markdown shortcuts act on the buffer, so they work here too; the suite
+// clipboard format is connected by doc_tab; screen readers read the view
+// through GtkAccessibleText (page_view.rs). The Draft view stays the
+// fallback until the live model (ADR 0010 stage 3c).
 
 use gtk4::{self as gtk, gdk, glib, prelude::*};
 
@@ -232,7 +233,9 @@ fn handle_key(view: &PageView, buf: &gtk::TextBuffer, key: gdk::Key, state: gdk:
             true
         }
         gdk::Key::Return | gdk::Key::KP_Enter if !ctrl => {
-            insert_text(buf, "\n");
+            if shift || !crate::bridge::enter_in_list(buf) {
+                insert_text(buf, "\n");
+            }
             true
         }
         gdk::Key::Tab if !ctrl => {
@@ -324,6 +327,28 @@ mod tests {
             assert_eq!((s.offset(), e.offset()), (6, 16));
             assert!(handle_key(&view, &buf, gdk::Key::Right, gdk::ModifierType::empty()));
             assert_eq!(buf.iter_at_mark(&buf.get_insert()).offset(), 16, "right collapses a selection to its end");
+        });
+    }
+
+    /// Screen readers read the page view's text, caret, words and laid-out
+    /// lines through GtkAccessibleText.
+    #[test]
+    fn the_page_view_exposes_its_text_to_assistive_technologies() {
+        use gtk::subclass::prelude::*;
+        gtk_test(|| {
+            let (view, buf) = editable("alpha beta\ngamma");
+            let imp = view.imp();
+            let bytes = imp.contents(0, 16).expect("contents");
+            assert_eq!(std::str::from_utf8(&bytes).unwrap(), "alpha beta\ngamma");
+            buf.place_cursor(&buf.iter_at_offset(7));
+            assert_eq!(imp.caret_position(), 7);
+            let (s, e, word) = imp.contents_at(7, gtk::AccessibleTextGranularity::Word).expect("a word");
+            assert_eq!((s, e, std::str::from_utf8(&word).unwrap()), (6, 10, "beta"));
+            let (s, e, _) = imp.contents_at(12, gtk::AccessibleTextGranularity::Line).expect("a line");
+            assert_eq!((s, e), (11, 16), "the laid-out line holding 'gamma'");
+            buf.select_range(&buf.iter_at_offset(0), &buf.iter_at_offset(5));
+            let sel = imp.selection();
+            assert_eq!((sel[0].start(), sel[0].length()), (0, 5));
         });
     }
 

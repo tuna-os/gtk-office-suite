@@ -177,6 +177,64 @@ pub(crate) fn set_print_layout(container: &PageContainer, buf: &gtk::TextBuffer,
     }
 }
 
+/// Cross-app clipboard (DESIGN-UI) on `widget`, which edits `buf`: Ctrl+C
+/// offers the suite fragment (styled runs) alongside HTML and plain text;
+/// Ctrl+V prefers it. Capture phase so it supersedes the widget's own
+/// plain-text handling only when suite content is involved. Both the
+/// Draft editor and the Print Layout view have it.
+pub(crate) fn connect_suite_clipboard(widget: &gtk::Widget, buf: &gtk::TextBuffer) {
+    {
+        let buf = buf.clone();
+        let ed = widget.clone();
+        let key = gtk::EventControllerKey::new();
+        key.set_propagation_phase(gtk::PropagationPhase::Capture);
+        key.connect_key_pressed(move |_, keyval, _code, mods| {
+            let ctrl = mods.contains(gtk4::gdk::ModifierType::CONTROL_MASK);
+            if ctrl && keyval == gtk4::gdk::Key::c {
+                if let Some((start, end)) = buf.selection_bounds() {
+                    let doc = crate::bridge::capture_from_buffer(&buf);
+                    let frag = letters_core::fragment::from_selection(
+                        &doc,
+                        start.offset() as usize,
+                        end.offset() as usize,
+                    );
+                    let provider = suite_common::clipboard::provider(
+                        letters_core::fragment::MIME,
+                        &frag.to_json(),
+                        &frag.to_html(),
+                        &frag.to_plain(),
+                    );
+                    let _ = ed.clipboard().set_content(Some(&provider));
+                    return gtk4::glib::Propagation::Stop;
+                }
+                return gtk4::glib::Propagation::Proceed;
+            }
+            if ctrl && keyval == gtk4::gdk::Key::v {
+                let clipboard = ed.clipboard();
+                if suite_common::clipboard::offers(&clipboard, letters_core::fragment::MIME) {
+                    let buf = buf.clone();
+                    suite_common::clipboard::read_string(
+                        &clipboard,
+                        letters_core::fragment::MIME,
+                        move |json| {
+                            if let Some(frag) = json
+                                .as_deref()
+                                .and_then(letters_core::fragment::Fragment::from_json)
+                            {
+                                insert_fragment(&buf, &frag);
+                            }
+                        },
+                    );
+                    return gtk4::glib::Propagation::Stop;
+                }
+                return gtk4::glib::Propagation::Proceed;
+            }
+            gtk4::glib::Propagation::Proceed
+        });
+        widget.add_controller(key);
+    }
+}
+
 pub(crate) fn make_doc_widget(settings: Option<&gio::Settings>) -> (PageContainer, gtk::TextBuffer) {
     let buffer = gtk::TextBuffer::new(None);
     register_formatting_tags(&buffer);
@@ -255,60 +313,7 @@ pub(crate) fn make_doc_widget(settings: Option<&gio::Settings>) -> (PageContaine
         });
         editor.add_controller(drop);
     }
-    // Cross-app clipboard (DESIGN-UI): Ctrl+C offers the suite fragment
-    // (styled runs) alongside HTML and plain text; Ctrl+V prefers it.
-    // Capture phase so we can supersede the TextView's built-in
-    // plain-text handling only when suite content is involved.
-    {
-        let buf = buffer.clone();
-        let ed = editor.clone();
-        let key = gtk::EventControllerKey::new();
-        key.set_propagation_phase(gtk::PropagationPhase::Capture);
-        key.connect_key_pressed(move |_, keyval, _code, mods| {
-            let ctrl = mods.contains(gtk4::gdk::ModifierType::CONTROL_MASK);
-            if ctrl && keyval == gtk4::gdk::Key::c {
-                if let Some((start, end)) = buf.selection_bounds() {
-                    let doc = crate::bridge::capture_from_buffer(&buf);
-                    let frag = letters_core::fragment::from_selection(
-                        &doc,
-                        start.offset() as usize,
-                        end.offset() as usize,
-                    );
-                    let provider = suite_common::clipboard::provider(
-                        letters_core::fragment::MIME,
-                        &frag.to_json(),
-                        &frag.to_html(),
-                        &frag.to_plain(),
-                    );
-                    let _ = ed.clipboard().set_content(Some(&provider));
-                    return gtk4::glib::Propagation::Stop;
-                }
-                return gtk4::glib::Propagation::Proceed;
-            }
-            if ctrl && keyval == gtk4::gdk::Key::v {
-                let clipboard = ed.clipboard();
-                if suite_common::clipboard::offers(&clipboard, letters_core::fragment::MIME) {
-                    let buf = buf.clone();
-                    suite_common::clipboard::read_string(
-                        &clipboard,
-                        letters_core::fragment::MIME,
-                        move |json| {
-                            if let Some(frag) = json
-                                .as_deref()
-                                .and_then(letters_core::fragment::Fragment::from_json)
-                            {
-                                insert_fragment(&buf, &frag);
-                            }
-                        },
-                    );
-                    return gtk4::glib::Propagation::Stop;
-                }
-                return gtk4::glib::Propagation::Proceed;
-            }
-            gtk4::glib::Propagation::Proceed
-        });
-        editor.add_controller(key);
-    }
+    connect_suite_clipboard(editor.upcast_ref(), &buffer);
 
     // Selection format popover: context reveals capability (DESIGN-UI §1).
     // Non-autohide so it never steals focus from the editor; buttons fire
@@ -373,6 +378,7 @@ pub(crate) fn make_doc_widget(settings: Option<&gio::Settings>) -> (PageContaine
     scroll.set_parent(&container);
     let page_view = container.attach_page_view();
     crate::page_edit::make_editable(&page_view, &buffer);
+    connect_suite_clipboard(page_view.upcast_ref(), &buffer);
     container.set_zoom(container.zoom_level());
     container.set_vexpand(true); container.set_hexpand(true);
     // A render-lab capture looks at the laid-out pages (ADR 0010).

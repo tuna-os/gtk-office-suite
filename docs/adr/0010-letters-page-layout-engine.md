@@ -73,8 +73,9 @@ the Letters part concretely.
         keys; formatting, undo, find and save keep acting on the buffer.
         Print Layout lays out again when the main loop is idle after each
         edit. The GtkTextBuffer is still the live state.
-      - 3b: `GtkAccessibleText` on the page view; list continuation,
-        Markdown shortcuts and the suite clipboard format on the page view.
+      - **3b (done):** `GtkAccessibleText` on the page view (a "line" is the
+        laid-out line); list continuation shared by both views
+        (`bridge::enter_in_list`); the suite clipboard format on both views.
       - 3c: the live model. The page view edits a `letters_core::Document`
         through `StructuredEditor`-style operations and relays out only the
         paragraphs an edit touched; the buffer becomes Draft's view of the

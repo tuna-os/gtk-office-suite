@@ -3599,6 +3599,10 @@ class LettersPrintLayoutEditingSmoke(BaseGUITestCase):
             description="the text typed on the page view in the document")
         self.assertEqual(self._text(snapshot), "draft page\nmore")
 
+        # Screen readers see the same text on the page view (GtkAccessibleText).
+        page_view = self.wait_for_node(name="Print Layout", roleName="text")
+        self.assertEqual(page_view.text, "draft page\nmore")
+
         # Back in Draft, the editor shows the same text.
         self.gapplication_action("org.tunaos.letters", "print-layout")
         self.wait_for_node(name="3 words", roleName="label")
