@@ -977,6 +977,15 @@ fn heading_styles_are_read_and_written_back() {
     let mut d = Document::from_plain_text("Title\nbody");
     d.paragraphs[0].style.heading = Some(1);
     let rt = doctor_parts(&d, |parts| {
+        // rdocx 0.14 writes Office's current default theme (Aptos Display /
+        // Aptos) into every document. Give its major font a name nothing
+        // else in the package uses, so the assertion below can only pass by
+        // reading the theme.
+        let theme = parts.get_mut("word/theme/theme1.xml").expect("the writer emits a theme part");
+        assert!(theme.contains("<a:majorFont><a:latin typeface=\""), "theme has a latin major font");
+        let at = theme.find("<a:majorFont><a:latin typeface=\"").unwrap() + "<a:majorFont><a:latin typeface=\"".len();
+        let end = theme[at..].find('"').unwrap() + at;
+        theme.replace_range(at..end, "Theme Major Face");
         let st = parts.get_mut("word/styles.xml").unwrap();
         let a = st.find("w:styleId=\"Heading1\"").map(|i| st[..i].rfind("<w:style ").unwrap());
         if let Some(a) = a {
@@ -995,8 +1004,8 @@ fn heading_styles_are_read_and_written_back() {
     });
     // A derived style's theme font beats its base style's named face (the
     // body font, set on docDefaults by our writer).
-    assert_eq!(rt.heading_styles[1].font_family.as_deref(), Some("Calibri Light"), "no theme part: Office's default major font");
-    assert_ne!(rt.base_font.family.as_deref(), Some("Calibri Light"));
+    assert_eq!(rt.heading_styles[1].font_family.as_deref(), Some("Theme Major Face"), "the theme's major font");
+    assert_ne!(rt.base_font.family.as_deref(), Some("Theme Major Face"));
     let h1 = rt.heading_styles.first().expect("heading styles read");
     assert_eq!(
         (h1.bold, h1.font_family.as_deref(), h1.font_size_hp, h1.color.as_deref()),
