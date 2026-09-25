@@ -3721,10 +3721,11 @@ class DecksTemplateChooserSmoke(BaseGUITestCase):
         aid = "org.tunaos.decks"
         self.gapplication_action(aid, "new-from-template")
         themes = ["Basic White", "Basic Black", "Ocean", "Paper", "Bold"]
-        # The tiles are a group of toggle buttons, named by theme.
-        self.wait_until(lambda: [n.name for n in self.app.findChildren(
-                            lambda n: n.roleName == "toggle button" and n.name in themes and n.showing)],
-                        lambda names: sorted(names) == sorted(themes), interval=0.25,
+        # The tiles are a group of toggle buttons, named by theme (a set:
+        # the text toolbar has a Bold toggle too).
+        self.wait_until(lambda: {n.name for n in self.app.findChildren(
+                            lambda n: n.roleName == "toggle button" and n.name in themes and n.showing)},
+                        lambda names: names == set(themes), interval=0.25,
                         description="every theme in the chooser")
         self.app.child(name="Ocean", roleName="toggle button").do_action(0)
         self.wait_until(lambda: self._chosen("Ocean"), bool, interval=0.25,
