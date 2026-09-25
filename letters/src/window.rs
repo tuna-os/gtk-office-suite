@@ -526,8 +526,12 @@ impl LettersWindow {
                 dlg.set_initial_name(Some("Untitled.pdf"));
                 let w2 = w.clone();
                 dlg.save(Some(&w), None::<&gio::Cancellable>, move |result: Result<gio::File, glib::Error>| {
-                    let Some(path) = result.ok().and_then(|f| f.path()) else { return };
-                    if let Err(e) = crate::engine::export_pdf(&text, &path.to_string_lossy()) {
+                    let Ok(file) = result else { return };
+                    let written = suite_common::locations::save_location(&file).and_then(|path| {
+                        crate::engine::export_pdf(&text, &path.to_string_lossy())
+                            .and_then(|()| suite_common::locations::commit_save(&path))
+                    });
+                    if let Err(e) = written {
                         suite_common::show_error_dialog(Some(&w2), &suite_common::i18n("Could not export PDF"), &e);
                     }
                 });
@@ -696,7 +700,7 @@ impl LettersWindow {
                 dlg.open(Some(&w), None::<&gio::Cancellable>,
                     move |result: Result<gio::File, glib::Error>| {
                         if let Ok(file) = result {
-                            if let Some(path) = file.path() {
+                            if let Ok(path) = suite_common::locations::open_location(&file).map_err(|e| eprintln!("{e}")) {
                                 if let Some(buf) = active_buffer(&tv) {
                                     let path_str = path.to_string_lossy();
                                     let name = path.file_name()
@@ -1000,7 +1004,15 @@ impl LettersWindow {
                 dlg.open(Some(&w), None::<&gio::Cancellable>,
                     move |result: Result<gio::File, glib::Error>| {
                         if let Ok(file) = result {
-                            let path = file.path().unwrap_or_default();
+                            // A remote location is staged to a local copy
+                            // (RFC-0003); one that can't be read is reported.
+                            let path = match suite_common::locations::open_location(&file) {
+                                Ok(path) => path,
+                                Err(e) => {
+                                    report_open_failure(Some(&w_err), &file.uri(), &e);
+                                    return;
+                                }
+                            };
                             let name = file.basename().map(|p| p.display().to_string()).unwrap_or_default();
                             let (container, buf) = make_doc_widget(Some(&s));
                             let path_str = path.to_string_lossy().to_string();

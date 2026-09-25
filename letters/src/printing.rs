@@ -74,8 +74,10 @@ pub fn export_pdf(win: &adw::ApplicationWindow, container: &PageContainer, buf: 
     dlg.set_initial_name(Some("Untitled.pdf"));
     let w = win.clone();
     dlg.save(Some(win), None::<&gio::Cancellable>, move |result: Result<gio::File, glib::Error>| {
-        let Some(path) = result.ok().and_then(|f| f.path()) else { return };
-        if let Err(e) = typeset.write_pdf(&path) {
+        let Ok(file) = result else { return };
+        let written = suite_common::locations::save_location(&file)
+            .and_then(|path| typeset.write_pdf(&path).and_then(|()| suite_common::locations::commit_save(&path)));
+        if let Err(e) = written {
             suite_common::show_error_dialog(Some(&w), &suite_common::i18n("Could not export PDF"), &e);
         }
     });
