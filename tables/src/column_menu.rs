@@ -57,8 +57,15 @@ fn open(ctl: &Ctl, grid: &gtk::DrawingArea, h: &gtk::Adjustment, refresh: &Rc<dy
     content.append(&title);
 
     let popover = gtk::Popover::builder().child(&content).position(gtk::PositionType::Bottom).build();
-    popover.set_parent(grid);
-    popover.set_pointing_to(Some(&gtk::gdk::Rectangle::new(x as i32, 0, w as i32, COL_HEADER_HEIGHT as i32)));
+    // Parented beside the grid, not on it: the grid's accessible children
+    // are its cells (grid_area.rs), so a popover inside it was invisible to
+    // screen readers (and to the smoke journey that found this).
+    let host: gtk::Widget = grid.parent().unwrap_or_else(|| grid.clone().upcast());
+    let origin = grid
+        .compute_point(&host, &gtk::graphene::Point::new(x as f32, 0.0))
+        .map_or((x as i32, 0), |p| (p.x() as i32, p.y() as i32));
+    popover.set_parent(&host);
+    popover.set_pointing_to(Some(&gtk::gdk::Rectangle::new(origin.0, origin.1, w as i32, COL_HEADER_HEIGHT as i32)));
     popover.connect_closed(|p| {
         let p = p.clone();
         // Unparent after the close animation has used it.
