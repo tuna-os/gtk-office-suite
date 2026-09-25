@@ -271,6 +271,27 @@ class RoadmapFigures(unittest.TestCase):
             "row each so there is a single figure to re-measure",
         )
 
+    def test_every_app_window_has_a_row(self):
+        """A dropped row is a claim nobody checks any more.
+
+        A rebase resolved a conflict between two adjacent rows by keeping
+        one, and `letters/src/window.rs` vanished from the table. Every other
+        test here checks the rows that are present, so all of them passed:
+        the file was still under its ceiling, just no longer described.
+
+        The apps are named here as well as read from the gate, so removing a
+        file from both places at once still fails.
+        """
+        apps = {"letters/src/window.rs", "tables/src/window.rs", "decks/src/window.rs"}
+        gated = {path for path in enforced_ceilings() if path.endswith("/src/window.rs")}
+        stated = {path for path, _lines, _ceiling in claimed_rows()}
+        self.assertEqual(
+            set(),
+            (apps | gated) - stated,
+            "ROADMAP.md's God-file table has no row for these app windows; "
+            "add one with the measured line count and the gate's ceiling",
+        )
+
     def test_every_stated_line_count_matches_the_file(self):
         for path, claimed, _ceiling in claimed_rows():
             with self.subTest(path=path):
