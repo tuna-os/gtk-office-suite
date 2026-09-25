@@ -3526,6 +3526,41 @@ class DecksShowBuildsSmoke(BaseGUITestCase):
         self.assertIsNone(self.process.poll(), "decks crashed playing builds")
 
 
+class DecksInsertBarSmoke(BaseGUITestCase):
+    """The Insert buttons in the header bar (DESIGN-UI.md, "Insert
+    buttons, not menus"): the Shape button's library is searchable, and
+    choosing a shape from it inserts that shape; the Table button inserts
+    a 3x3 table. Asserted on the slide's accessible objects, which name
+    each object's kind."""
+
+    app_name = "decks"
+
+    def _objects(self):
+        return [n.name for n in self.app.findChildren(lambda n: n.roleName == "list item")]
+
+    def test_shape_library_search_and_table(self):
+        aid = "org.tunaos.decks"
+        self.gapplication_action(aid, "new-document")
+        # do_action, not click(): GTK 4 reports no screen extents over
+        # AT-SPI, so a coordinate click lands at the corner.
+        self.wait_until(lambda: self.app.child(name="Insert Shape"), lambda b: b is not None,
+                        description="the Insert Shape button").do_action(0)
+        search = self.wait_until(lambda: self.app.child(name="Search Shapes"), lambda e: e is not None and e.showing,
+                                 description="the shape library to open")
+        search.text = "tri"
+        self.wait_until(lambda: [n.name for n in self.app.findChildren(
+                            lambda n: n.roleName == "push button" and n.name in ("Triangle", "Rectangle") and n.showing)],
+                        lambda names: names == ["Triangle"], interval=0.25,
+                        description="the search to leave only Triangle")
+        self.app.child(name="Triangle", roleName="push button").do_action(0)
+        self.wait_until(self._objects, lambda o: "Triangle" in o, interval=0.25,
+                        description="a triangle on the slide")
+        self.app.child(name="Insert Table", roleName="push button").do_action(0)
+        self.wait_until(self._objects, lambda o: "Table, 3 rows by 3 columns" in o, interval=0.25,
+                        description="a 3x3 table on the slide")
+        self.assertIsNone(self.process.poll(), "decks crashed inserting")
+
+
 class DecksSelectionSmoke(BaseGUITestCase):
     """Object selection updates the canvas a11y description and the
     inspector (fit-to-viewport geometry keeps coordinates stable)."""

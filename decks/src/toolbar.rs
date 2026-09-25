@@ -17,7 +17,7 @@ pub fn find_toolbar_child(toolbar: &gtk::Box, icon: &str) -> Option<gtk::Button>
     None
 }
 
-/// Build the Decks editing toolbar with formatting, insert, and present buttons.
+/// Build the Decks editing toolbar with formatting and present buttons.
 pub fn build_decks_toolbar() -> gtk::Box {
     let toolbar = gtk::Box::new(gtk::Orientation::Horizontal, 6);
     toolbar.set_margin_start(6);
@@ -36,22 +36,7 @@ pub fn build_decks_toolbar() -> gtk::Box {
     }
 
 
-    let text_box = gtk::Button::builder()
-        .icon_name("insert-text-symbolic").tooltip_text("Add text box").build();
-    text_box.set_margin_start(12);
-    text_box.add_css_class("flat");
-    toolbar.append(&text_box);
-
-    let shape = gtk::Button::builder()
-        .icon_name("insert-object-symbolic").tooltip_text("Add shape").build();
-    shape.add_css_class("flat");
-    toolbar.append(&shape);
-
-    let image = gtk::Button::builder()
-        .icon_name("insert-image-symbolic").tooltip_text("Add image").build();
-    image.add_css_class("flat");
-    toolbar.append(&image);
-
+    // Inserting is the header bar's Insert buttons (insert_bar.rs).
 
     let present = gtk::Button::builder()
         .icon_name("view-fullscreen-symbolic").tooltip_text("Present (F5)").build();
