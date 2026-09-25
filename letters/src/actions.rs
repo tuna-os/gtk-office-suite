@@ -95,16 +95,6 @@ pub fn register_formatting_tags(buffer: &gtk::TextBuffer) {
     }
 }
 
-pub fn apply_tag_to_active(tv: &adw::TabView, tag_name: &str) {
-    if let Some(buf) = active_buffer(tv) {
-        if let Some(tag) = buf.tag_table().lookup(tag_name) {
-            let sel = buf.selection_bounds();
-            if let Some((start, end)) = sel {
-                buf.apply_tag(&tag, &start, &end);
-            }
-        }
-    }
-}
 
 pub fn toggle_tag(tv: &adw::TabView, tag_name: &str) {
     if let Some(buf) = active_buffer(tv) {
@@ -209,24 +199,20 @@ pub fn register_formatting_actions(tv: &adw::TabView, app: &adw::Application) {
         app.add_action(&a);
     }
 
-    // Paragraph styles: body text and headings are the style picker's
-    // model ops (style_picker.rs); code and quote are still buffer tags.
+    // Paragraph styles: the style picker's model ops (style_picker.rs).
     let styles: &[(&str, &str)] = &[
         ("style-p", "Normal"),
         ("style-h1", "Heading 1"), ("style-h2", "Heading 2"), ("style-h3", "Heading 3"),
         ("style-h4", "Heading 4"), ("style-h5", "Heading 5"), ("style-h6", "Heading 6"),
-        ("style-code", "code"), ("style-quote", "blockquote"),
+        ("style-code", "Code"), ("style-quote", "Quote"),
     ];
     for (action_name, style) in styles {
         let tv = tv.clone();
         let a = gtk::gio::SimpleAction::new(action_name, None);
         let style = *style;
         a.connect_activate(move |_, _| {
-            match active_buffer(&tv) {
-                Some(buf) if crate::style_picker::STYLES.contains(&style) => {
-                    crate::style_picker::apply(&buf, style);
-                }
-                _ => apply_tag_to_active(&tv, style),
+            if let Some(buf) = active_buffer(&tv) {
+                crate::style_picker::apply(&buf, style);
             }
         });
         app.add_action(&a);
