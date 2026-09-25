@@ -327,6 +327,54 @@ fn media_type_for(path: &str) -> (&'static str, &'static str) {
     }
 }
 
+/// The xml:id of object `i` on slide `si`.
+fn object_id(si: usize, i: usize) -> String {
+    format!("s{}o{}", si + 1, i + 1)
+}
+
+/// `shapes` (the top-level elements `shapes_xml` wrote, one per object)
+/// with `draw:id` and `xml:id` on each.
+fn with_ids(shapes: &str, count: usize, si: usize) -> String {
+    let mut out = String::with_capacity(shapes.len() + count * 40);
+    let mut depth = 0usize;
+    let mut i = 0usize;
+    let bytes = shapes.as_bytes();
+    let mut k = 0usize;
+    while k < bytes.len() {
+        if bytes[k] == b'<' {
+            let closing = bytes.get(k + 1) == Some(&b'/');
+            // The tag's end, to see whether it closes itself.
+            let end = shapes[k..].find('>').map_or(bytes.len(), |e| k + e);
+            let self_closing = end > 0 && bytes[end - 1] == b'/';
+            if !closing && depth == 0 && i < count {
+                let name_end = shapes[k..].find([' ', '>', '/']).map_or(end, |e| k + e);
+                out.push_str(&shapes[k..name_end]);
+                let id = object_id(si, i);
+                out.push_str(&format!(" draw:id=\"{id}\" xml:id=\"{id}\""));
+                out.push_str(&shapes[name_end..=end.min(bytes.len() - 1)]);
+                i += 1;
+                if !self_closing {
+                    depth += 1;
+                }
+                k = end + 1;
+                continue;
+            }
+            if closing {
+                depth = depth.saturating_sub(1);
+            } else if !self_closing {
+                depth += 1;
+            }
+            out.push_str(&shapes[k..=end.min(bytes.len() - 1)]);
+            k = end + 1;
+            continue;
+        }
+        let next = shapes[k..].find('<').map_or(bytes.len(), |n| k + n);
+        out.push_str(&shapes[k..next]);
+        k = next;
+    }
+    out
+}
+
 /// Emit a page's shapes. Shared by the slides in `content.xml` and the
 /// master pages in `styles.xml`, so a shape kind cannot be written on one
 /// and forgotten on the other.
@@ -575,7 +623,16 @@ fn content_xml(deck: &Deck, media: &mut Vec<Media>) -> Result<String, String> {
                 ))
                 .unwrap_or_default(),
         ));
-        pages.push_str(&shapes_xml(&slide.objects, &style_of, SLIDE_STYLE_PREFIX, media, &mut graphics)?);
+        let shapes = shapes_xml(&slide.objects, &style_of, SLIDE_STYLE_PREFIX, media, &mut graphics)?;
+        if slide.builds.is_empty() {
+            pages.push_str(&shapes);
+        } else {
+            // Builds target their shapes by xml:id: give each object one.
+            pages.push_str(&with_ids(&shapes, slide.objects.len(), si));
+            if let Some(anim) = crate::odp_builds::animations_xml(&slide.builds, |i| object_id(si, i)) {
+                pages.push_str(&anim);
+            }
+        }
         if !slide.notes.is_empty() {
             let notes: String = slide
                 .notes
@@ -604,6 +661,7 @@ fn content_xml(deck: &Deck, media: &mut Vec<Media>) -> Result<String, String> {
          xmlns:fo=\"urn:oasis:names:tc:opendocument:xmlns:xsl-fo-compatible:1.0\" \
          xmlns:svg=\"urn:oasis:names:tc:opendocument:xmlns:svg-compatible:1.0\" \
          xmlns:smil=\"urn:oasis:names:tc:opendocument:xmlns:smil-compatible:1.0\" \
+         xmlns:anim=\"urn:oasis:names:tc:opendocument:xmlns:animation:1.0\" \
          xmlns:decks=\"{DECKS_NS}\" \
          xmlns:xlink=\"http://www.w3.org/1999/xlink\" \
          office:version=\"1.2\">\
@@ -861,6 +919,11 @@ pub(crate) fn parse_length_pt(v: &str) -> Option<f64> {
 /// numbers and colours where an entity never appears, so reading the bytes
 /// verbatim was latent — but a page named `R&D` is escaped in the
 /// attribute, and the raw bytes give back `R&amp;D` as the name itself.
+/// `attr`, for the sibling ODF modules.
+pub(crate) fn attr_of(e: &quick_xml::events::BytesStart, name: &str) -> Option<String> {
+    attr(e, name)
+}
+
 fn attr(e: &quick_xml::events::BytesStart, name: &str) -> Option<String> {
     e.attributes().filter_map(|a| a.ok()).find_map(|a| {
         if a.key.into_inner() == name {
@@ -1174,10 +1237,36 @@ fn parse_pages(
         (x_pt * scale.0, y_pt * scale.1, w_pt * scale.0, h_pt * scale.1, rotation)
     };
 
+    // Builds: each object's xml:id (the shape element it came from), and
+    // the page's animation tree.
+    let mut last_id: Option<String> = None;
+    let mut ids: Vec<Option<String>> = Vec::new();
+    let mut builds = crate::odp_builds::BuildReader::default();
+    const SHAPES: [&str; 5] = ["draw:frame", "draw:rect", "draw:ellipse", "draw:circle", "draw:custom-shape"];
+
     loop {
-        match reader.read_event() {
+        if let Some(s) = slide.as_ref() {
+            while ids.len() < s.objects.len() {
+                ids.push(last_id.clone());
+            }
+        }
+        let event = reader.read_event();
+        match &event {
+            Ok(Event::Start(e)) | Ok(Event::Empty(e)) => {
+                if SHAPES.contains(&e.name().as_ref()) {
+                    last_id = attr(e, "xml:id").or_else(|| attr(e, "draw:id"));
+                }
+                builds.start(e, matches!(event, Ok(Event::Empty(_))));
+            }
+            Ok(Event::End(_)) => builds.end(),
+            _ => {}
+        }
+        match event {
             Ok(Event::Start(ref e)) => match e.name().as_ref() {
                 tag if tag == page_tag => {
+                    ids.clear();
+                    last_id = None;
+                    builds = Default::default();
                     let bg = attr(e, "draw:style-name")
                         .and_then(|n| page_bg.get(&n).cloned())
                         .unwrap_or_else(|| "#ffffff".into());
@@ -1411,7 +1500,11 @@ fn parse_pages(
                 }
                 "presentation:notes" => in_notes = false,
                 tag if tag == page_tag => {
-                    if let Some(s) = slide.take() {
+                    if let Some(mut s) = slide.take() {
+                        while ids.len() < s.objects.len() {
+                            ids.push(last_id.clone());
+                        }
+                        s.builds = builds.builds(&ids);
                         pages.push(Page { slide: s, uses_master: uses_master.take(), style: page_style.take() });
                     }
                 }

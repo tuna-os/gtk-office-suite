@@ -1529,10 +1529,10 @@ fn slide_transitions_survive_a_snapshot() {
     }
 }
 
-/// Object builds survive our pptx round trip, in order and on the right
-/// objects. (odp does not carry builds yet.)
+/// Object builds survive our round trip in both formats, in order and on
+/// the right objects.
 #[test]
-fn object_builds_survive_a_pptx_snapshot() {
+fn object_builds_survive_a_snapshot() {
     use decks_core::builds::{Build, BuildEffect, Edge};
     let builds = vec![
         Build { object: 2, effect: BuildEffect::Dissolve, out: false },
@@ -1543,6 +1543,8 @@ fn object_builds_survive_a_pptx_snapshot() {
         builds: builds.clone(),
         ..slide_of(vec![text_box("a", 10.0, 10.0), text_box("b", 10.0, 100.0), text_box("c", 10.0, 200.0)], "", "#ffffff")
     };
-    let back = through_a_snapshot(&deck_of(vec![slide]), "pptx", "builds");
-    assert_eq!(back.slides[0].builds, builds);
+    for kind in FORMATS {
+        let back = through_a_snapshot(&deck_of(vec![slide.clone()]), kind, "builds");
+        assert_eq!(back.slides[0].builds, builds, "{kind}");
+    }
 }

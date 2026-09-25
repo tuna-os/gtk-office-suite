@@ -3438,6 +3438,94 @@ class DecksPresenterDisplaySmoke(BaseGUITestCase):
         self.assertIsNone(self.process.poll(), "decks crashed running a show")
 
 
+class DecksShowBuildsSmoke(BaseGUITestCase):
+    """A show plays a slide's builds, one per click, before moving on
+    (DESIGN-UI.md, "Object builds"). The deck is an odp whose first slide
+    has two builds: a rectangle that flies in from the left, then one that
+    fades in. Rehearsing it, the presenter display counts the builds
+    ("Build 1 of 2") before "Slide 2 of 2"; the first click writes the
+    build's midpoint frame as the audience sees it (test mode only), and in
+    it the flying rectangle is half way in from beyond the left edge."""
+
+    app_name = "decks"
+
+    CONTENT = (
+        '<?xml version="1.0" encoding="UTF-8"?>'
+        '<office:document-content'
+        ' xmlns:office="urn:oasis:names:tc:opendocument:xmlns:office:1.0"'
+        ' xmlns:draw="urn:oasis:names:tc:opendocument:xmlns:drawing:1.0"'
+        ' xmlns:presentation="urn:oasis:names:tc:opendocument:xmlns:presentation:1.0"'
+        ' xmlns:svg="urn:oasis:names:tc:opendocument:xmlns:svg-compatible:1.0"'
+        ' xmlns:smil="urn:oasis:names:tc:opendocument:xmlns:smil-compatible:1.0"'
+        ' xmlns:anim="urn:oasis:names:tc:opendocument:xmlns:animation:1.0"'
+        ' xmlns:xml="http://www.w3.org/XML/1998/namespace" office:version="1.2">'
+        '<office:body><office:presentation>'
+        '<draw:page draw:name="One">'
+        '<draw:rect xml:id="a" draw:id="a" svg:x="400pt" svg:y="100pt" svg:width="200pt" svg:height="100pt"/>'
+        '<draw:rect xml:id="b" draw:id="b" svg:x="400pt" svg:y="300pt" svg:width="200pt" svg:height="100pt"/>'
+        '<anim:par presentation:node-type="timing-root"><anim:seq presentation:node-type="main-sequence">'
+        '<anim:par smil:begin="next"><anim:par smil:begin="0s"><anim:par smil:begin="0s" presentation:node-type="on-click"'
+        ' presentation:preset-class="entrance" presentation:preset-id="ooo-entrance-fly-in" presentation:preset-sub-type="from-left">'
+        '<anim:set smil:targetElement="a" smil:attributeName="visibility" smil:to="visible"/></anim:par></anim:par></anim:par>'
+        '<anim:par smil:begin="next"><anim:par smil:begin="0s"><anim:par smil:begin="0s" presentation:node-type="on-click"'
+        ' presentation:preset-class="entrance" presentation:preset-id="ooo-entrance-fade-in">'
+        '<anim:set smil:targetElement="b" smil:attributeName="visibility" smil:to="visible"/></anim:par></anim:par></anim:par>'
+        '</anim:seq></anim:par></draw:page>'
+        '<draw:page draw:name="Two"><draw:rect svg:x="100pt" svg:y="100pt" svg:width="100pt" svg:height="100pt"/></draw:page>'
+        '</office:presentation></office:body></office:document-content>'
+    )
+
+    def setUp(self):
+        import zipfile
+        self._dir = self.temp_dir(prefix="decks-builds-")
+        self._doc = os.path.join(self._dir, "builds.odp")
+        with zipfile.ZipFile(self._doc, "w") as z:
+            z.writestr("mimetype", "application/vnd.oasis.opendocument.presentation")
+            z.writestr("content.xml", self.CONTENT)
+        self._frame = os.path.join(self._dir, "build-midpoint.png")
+        self.launch_args = [self._doc]
+        self.launch_env = {**getattr(self, "launch_env", {}),
+                           "GTK_OFFICE_TEST_MODE": "1", "GTK_OFFICE_TRANSITION_DUMP": self._dir}
+        super().setUp()
+
+    def _texts(self):
+        return [n.name for n in self.app.findChildren(lambda n: n.roleName == "label")]
+
+    def _next(self):
+        self.app.child(name="Next Slide", roleName="push button").do_action(0)
+
+    def test_clicks_play_the_builds_then_move_on(self):
+        import subprocess
+        from PIL import Image
+        aid = "org.tunaos.decks"
+        self.wait_until(lambda: self.app.child(name="Slide canvas").description,
+                        lambda d: "of 2" in d, interval=0.5, description="the two-slide deck to open")
+        subprocess.run(["gapplication", "action", aid, "rehearse"], check=True, timeout=5)
+        self.wait_until(self._texts, lambda t: "Slide 1 of 2 · Build 0 of 2" in t, interval=0.5,
+                        description="the presenter display before any build")
+        self._next()
+        self.wait_until(self._texts, lambda t: "Slide 1 of 2 · Build 1 of 2" in t, interval=0.5,
+                        description="the first click to play the first build")
+        self._next()
+        self.wait_until(self._texts, lambda t: "Slide 1 of 2 · Build 2 of 2" in t, interval=0.5,
+                        description="the second click to play the second build")
+        self._next()
+        self.wait_until(self._texts, lambda t: "Slide 2 of 2" in t, interval=0.5,
+                        description="the third click to move on")
+        # The first build's midpoint, as the audience sees it: a 1280x720
+        # frame of a 960-unit slide, the rectangle half way from x=-200 to
+        # x=400, i.e. at 100..300 units = 133..400 px; the second is not
+        # there yet.
+        img = Image.open(self._frame).convert("RGB")
+        px = img.load()
+        k = 1280 / 960
+        blue = lambda p: p[2] > 150 and p[0] < 150
+        self.assertTrue(blue(px[int(200 * k), int(150 * k)]), f"flying rectangle not half way in: {px[int(200 * k), int(150 * k)]}")
+        self.assertFalse(blue(px[int(500 * k), int(150 * k)]), "the rectangle is already at its place")
+        self.assertFalse(blue(px[int(500 * k), int(350 * k)]), "the second build shows before its click")
+        self.assertIsNone(self.process.poll(), "decks crashed playing builds")
+
+
 class DecksSelectionSmoke(BaseGUITestCase):
     """Object selection updates the canvas a11y description and the
     inspector (fit-to-viewport geometry keeps coordinates stable)."""
