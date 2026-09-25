@@ -27,8 +27,19 @@ pub struct PresenterSnapshot {
 #[derive(Clone, Debug)]
 pub struct PresenterState {
     current_index: usize,
+    /// Builds of the current slide already played (decks_core::builds).
+    build_step: usize,
     started_at: Option<Instant>,
     display: DisplayTarget,
+}
+
+/// What one click of a show does.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum Advance {
+    /// Plays build `n` (0-based) of the current slide.
+    Build(usize),
+    /// Moves to the next slide.
+    Slide(usize),
 }
 
 impl Default for PresenterState {
@@ -37,7 +48,7 @@ impl Default for PresenterState {
 
 impl PresenterState {
     pub fn new() -> Self {
-        Self { current_index: 0, started_at: None, display: DisplayTarget::Primary }
+        Self { current_index: 0, build_step: 0, started_at: None, display: DisplayTarget::Primary }
     }
 
     pub fn current_index(&self) -> usize { self.current_index }
@@ -59,10 +70,42 @@ impl PresenterState {
         true
     }
 
-    /// Jump to slide `index` (a show starts at the slide being edited).
+    /// Jump to slide `index` (a show starts at the slide being edited),
+    /// before any of its builds.
     pub fn go_to(&mut self, index: usize, deck: &Deck) -> bool {
         if index >= deck.slides.len() || index == self.current_index { return false; }
         self.current_index = index;
+        self.build_step = 0;
+        true
+    }
+
+    /// Builds of the current slide already played.
+    pub fn build_step(&self) -> usize { self.build_step }
+
+    /// One click: the current slide's next build if it has one left,
+    /// else the next slide; `None` at the end of the show.
+    pub fn advance(&mut self, deck: &Deck) -> Option<Advance> {
+        let slide = deck.slides.get(self.current_index)?;
+        if self.build_step < crate::builds::steps(slide) {
+            self.build_step += 1;
+            return Some(Advance::Build(self.build_step - 1));
+        }
+        if self.current_index + 1 >= deck.slides.len() { return None; }
+        self.current_index += 1;
+        self.build_step = 0;
+        Some(Advance::Slide(self.current_index))
+    }
+
+    /// One click back: undo the last build played, or go to the previous
+    /// slide fully built (as Keynote does). Returns whether anything moved.
+    pub fn back(&mut self, deck: &Deck) -> bool {
+        if self.build_step > 0 {
+            self.build_step -= 1;
+            return true;
+        }
+        if self.current_index == 0 { return false; }
+        self.current_index -= 1;
+        self.build_step = deck.slides.get(self.current_index).map_or(0, crate::builds::steps);
         true
     }
 
@@ -168,6 +211,27 @@ mod tests {
         assert_eq!(show_layout(0, false), ShowLayout { audience: Some(0), presenter: None });
         assert_eq!(show_layout(2, false), ShowLayout { audience: Some(1), presenter: Some(0) });
         assert_eq!(show_layout(3, true), ShowLayout { audience: None, presenter: Some(0) });
+    }
+
+    #[test]
+    fn clicks_play_a_slides_builds_before_moving_on_and_back_undoes_them() {
+        use crate::builds::{Build, BuildEffect};
+        let mut d = deck();
+        d.slides[0].builds = vec![
+            Build { object: 0, effect: BuildEffect::Appear, out: false },
+            Build { object: 1, effect: BuildEffect::Dissolve, out: false },
+        ];
+        let mut s = PresenterState::new();
+        assert_eq!(s.advance(&d), Some(Advance::Build(0)));
+        assert_eq!(s.advance(&d), Some(Advance::Build(1)));
+        assert_eq!(s.advance(&d), Some(Advance::Slide(1)));
+        assert_eq!((s.current_index(), s.build_step()), (1, 0));
+        assert_eq!(s.advance(&d), None, "the end of the show");
+        assert!(s.back(&d));
+        assert_eq!((s.current_index(), s.build_step()), (0, 2), "back to the slide as it was left");
+        assert!(s.back(&d));
+        assert_eq!(s.build_step(), 1);
+        assert!(s.go_to(1, &d) && s.build_step() == 0);
     }
 
     #[test]

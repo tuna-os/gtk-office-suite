@@ -458,13 +458,47 @@ pub fn draw_slide_show(cr: &cairo::Context, width: f64, height: f64, slides: &[S
 
 /// A whole slide with `chrome` around it, without editor marks.
 pub fn draw_slide_in(cr: &cairo::Context, width: f64, height: f64, slides: &[Slide], index: usize, masters: &[MasterSlide], chrome: Chrome) {
+    let objects: Vec<decks_core::magic_move::FrameObject> = slides
+        .get(index)
+        .map(|s| s.objects.iter().map(|o| decks_core::magic_move::FrameObject { object: o.clone(), opacity: 1.0 }).collect())
+        .unwrap_or_default();
+    draw_slide_objects(cr, width, height, slides, index, masters, chrome, &objects);
+}
+
+/// A slide's background and master with `objects` (each at its opacity)
+/// instead of the slide's own: one moment of a build or a Magic Move.
+/// Objects are clipped to the slide, so a build moving in from beyond an
+/// edge enters from the edge.
+#[allow(clippy::too_many_arguments)]
+pub fn draw_slide_objects(
+    cr: &cairo::Context,
+    width: f64,
+    height: f64,
+    slides: &[Slide],
+    index: usize,
+    masters: &[MasterSlide],
+    chrome: Chrome,
+    objects: &[decks_core::magic_move::FrameObject],
+) {
     let (frame, bg) = draw_slide_base(cr, width, height, slides, index, masters, chrome);
     let master = master_for(slides, index, masters);
-    if let Some(slide) = slides.get(index) {
-        for obj in &slide.objects {
-            draw_object(cr, obj, frame, bg, master);
+    let _ = cr.save();
+    cr.rectangle(frame.0, frame.1, frame.2, frame.3);
+    cr.clip();
+    for f in objects {
+        if f.opacity <= 0.001 {
+            continue;
+        }
+        if f.opacity >= 0.999 {
+            draw_object(cr, &f.object, frame, bg, master);
+        } else {
+            cr.push_group();
+            draw_object(cr, &f.object, frame, bg, master);
+            let _ = cr.pop_group_to_source();
+            let _ = cr.paint_with_alpha(f.opacity);
         }
     }
+    let _ = cr.restore();
 }
 
 /// A slide's frame on the canvas `(x, y, w, h)` and the background colour
@@ -956,6 +990,67 @@ pub fn render_slide_png(
 mod font_tests {
     use super::*;
     use decks_core::engine::RunStyle;
+
+    /// A build half way, through the show's own drawing (builds::frame →
+    /// draw_slide_objects): a square moving in from the left edge is half
+    /// way from beyond the edge to its place, clipped to the slide, and a
+    /// dissolving one is half opaque. The PNG is left in target/ to look at.
+    #[test]
+    fn a_build_midpoint_is_drawn_part_way_and_clipped_to_the_slide() {
+        use decks_core::builds::{Build, BuildEffect, Edge};
+        use decks_core::engine::shape::{Color, ShapeKind, ShapeStyle};
+        let sq = |x: f64, y: f64, c: Color| SlideObject::Shape {
+            kind: ShapeKind::Rect,
+            x,
+            y,
+            w: 200.0,
+            h: 100.0,
+            rotation: 0.0,
+            style: ShapeStyle { fill: Some(c), gradient: None, stroke: None },
+        };
+        let slide = Slide {
+            title: String::new(),
+            background: "#ffffff".into(),
+            objects: vec![sq(400.0, 100.0, Color(220, 0, 0)), sq(400.0, 300.0, Color(0, 0, 220))],
+            notes: String::new(),
+            master_idx: None,
+            transition: Default::default(),
+            builds: vec![
+                Build { object: 0, effect: BuildEffect::Move(Edge::Left), out: false },
+                Build { object: 1, effect: BuildEffect::Dissolve, out: false },
+            ],
+        };
+        let slides = [slide];
+        let (w, h) = (960, 540);
+        let draw = |step, t| {
+            let surface = cairo::ImageSurface::create(cairo::Format::ARgb32, w, h).unwrap();
+            {
+                let cr = cairo::Context::new(&surface).unwrap();
+                let objects = decks_core::builds::frame(&slides[0], step, t);
+                draw_slide_objects(&cr, w as f64, h as f64, &slides, 0, &[], Chrome::Show, &objects);
+            }
+            surface
+        };
+        let px = |surface: &mut cairo::ImageSurface, x: usize, y: usize| {
+            let stride = surface.stride() as usize;
+            let d = surface.data().unwrap();
+            let i = y * stride + x * 4;
+            (d[i + 2], d[i + 1], d[i])
+        };
+        // Move in from the left, half way: from x = -200 to 400, now at 100.
+        let mut first = draw(0, 0.5);
+        assert_eq!(px(&mut first, 150, 150), (220, 0, 0), "the red square half way in");
+        assert_eq!(px(&mut first, 450, 150), (255, 255, 255), "not yet at its place");
+        assert_eq!(px(&mut first, 450, 350), (255, 255, 255), "the blue one waits for its click");
+        // After the first build, the second dissolves in.
+        let mut second = draw(1, 0.5);
+        assert_eq!(px(&mut second, 450, 150), (220, 0, 0));
+        let (r, _, b) = px(&mut second, 450, 350);
+        assert!(b > 200 && (100..160).contains(&r), "half-faded blue: {:?}", (r, b));
+        let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../target/render-frames");
+        std::fs::create_dir_all(&dir).unwrap();
+        first.write_to_png(&mut std::fs::File::create(dir.join("build-move-in-midpoint.png")).unwrap()).unwrap();
+    }
 
     fn master(font: &str) -> MasterSlide {
         MasterSlide {

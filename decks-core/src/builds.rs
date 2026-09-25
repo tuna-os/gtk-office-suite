@@ -110,7 +110,8 @@ fn slid(o: &SlideObject, edge: Edge, amount: f64) -> SlideObject {
 /// with every build played; step 0 at t=0 is how the slide first appears.
 pub fn frame(slide: &Slide, step: usize, t: f64) -> Vec<FrameObject> {
     let e = ease(t);
-    let current = slide.builds.get(step);
+    // Before it starts, a build is just the slide as it stands.
+    let current = if t > 0.0 { slide.builds.get(step) } else { None };
     slide
         .objects
         .iter()
@@ -204,7 +205,8 @@ mod tests {
     fn a_move_in_slides_from_beyond_the_edge() {
         let s = slide(vec![Build { object: 2, effect: BuildEffect::Move(Edge::Right), out: false }]);
         let at = |t| xs(&frame(&s, 0, t)).last().copied().unwrap();
-        assert_eq!(at(0.0).0, 960.0);
+        assert_eq!(xs(&frame(&s, 0, 0.0)).len(), 2, "not started: still hidden");
+        assert!(at(0.001).0 > 959.0, "starts beyond the right edge");
         assert_eq!(at(0.5).0, 580.0);
         assert_eq!(at(1.0).0, 200.0);
     }
