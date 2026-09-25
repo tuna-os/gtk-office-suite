@@ -213,8 +213,45 @@ impl WorkbookController {
         }
     }
 
+    /// A header click: sort ascending, then descending, then clear the
+    /// sort indicator.
     pub fn toggle_sort(&mut self, col: usize) {
         use SortDirection::{Ascending, Descending};
+        let sorted = self.state.borrow().sheet().sorted_col;
+        match sorted {
+            Some((current, Ascending)) if current == col => self.sort_column(col, Descending),
+            Some((current, Descending)) if current == col => {
+                self.mutate_sheet("Clear Sort Indicator", |sheet| sheet.sorted_col = None);
+            }
+            _ => self.sort_column(col, Ascending),
+        }
+    }
+
+    /// Hide the rows whose value in `col` (as shown) is in `hidden`, and
+    /// show the rest: the column menu's filter list. One undo step; an
+    /// empty `hidden` clears the filter.
+    pub fn filter_column_values(&mut self, col: usize, hidden: &HashSet<String>) {
+        let state = self.state.borrow();
+        let sheet_id = state.sheet().sheet_id;
+        let sheet = state.sheet();
+        let before = sheet.hidden_rows.clone();
+        let after: HashSet<usize> = (0..sheet.rows)
+            .filter(|&r| {
+                (0..sheet.cols).any(|c| !sheet.cell(r, c).is_empty())
+                    && hidden.contains(&sheet.formats[r][col].format(sheet.cell(r, col)))
+            })
+            .collect();
+        drop(sheet);
+        drop(state);
+        if before != after {
+            self.execute(Box::new(FilterCommand { sheet_id, before, after }));
+        }
+    }
+
+    /// Sort the sheet's rows by `col` in `direction` (numbers numerically,
+    /// text case-insensitively, blanks last), as one undo step.
+    pub fn sort_column(&mut self, col: usize, direction: SortDirection) {
+        use SortDirection::Ascending;
 
         let state = self.state.borrow();
         let sheet_id = state.sheet().sheet_id;
@@ -222,15 +259,7 @@ impl WorkbookController {
         if col >= before_sheet.cols {
             return;
         }
-        let new_direction = match before_sheet.sorted_col {
-            Some((current, Ascending)) if current == col => Descending,
-            Some((current, Descending)) if current == col => {
-                drop(state);
-                self.mutate_sheet("Clear Sort Indicator", |sheet| sheet.sorted_col = None);
-                return;
-            }
-            _ => Ascending,
-        };
+        let new_direction = direction;
         let before_inputs: Vec<Vec<String>> = (0..before_sheet.rows)
             .map(|row| {
                 (0..before_sheet.cols)
