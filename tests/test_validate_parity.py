@@ -225,3 +225,15 @@ def test_validate_clean_file_returns_0(tmp_path):
 """
     p.write_text(clean)
     assert vp.validate(p, repo_root=tmp_path) == 0
+
+
+def test_validate_missing_base_is_an_error_not_a_skip(tmp_path, capsys):
+    # #475: asking for E4 with a --base that does not exist (a typo, or a git
+    # ref where a file is expected) must fail loudly. Exiting 0 would quietly
+    # drop the transition checks while still reporting success.
+    p = tmp_path / "PARITY.md"
+    p.write_text("## letters — x\n\n### Tier 1\n| Feature | Evidence | State |\n"
+                 "|---|---|---|\n| save | I1 round-trip fixture | ✅ |\n")
+    assert vp.validate(p, repo_root=tmp_path) == 0
+    assert vp.validate(p, base=tmp_path / "origin/main", repo_root=tmp_path) == 2
+    assert "base file" in capsys.readouterr().err

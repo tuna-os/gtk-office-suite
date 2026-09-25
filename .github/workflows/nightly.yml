@@ -101,8 +101,30 @@ jobs:
         run: cargo install cargo-llvm-cov --quiet
       - name: Install llvm-tools
         run: rustup component add llvm-tools-preview
+      # One instrumented test run, then three reports from the same profile
+      # data: LCOV and JSON kept as an artifact so a run can be compared with
+      # the previous one (#945), and the summary in the log and job summary.
+      # This is unit and GTK-widget coverage of the workspace tests only;
+      # the oracle and GUI journeys are not in it.
       - name: Run coverage
-        run: scripts/with-display.sh cargo llvm-cov --workspace --summary-only
+        run: |
+          set -o pipefail
+          scripts/with-display.sh cargo llvm-cov --workspace --no-report
+          mkdir -p coverage
+          cargo llvm-cov report --lcov --output-path coverage/llvm-cov.lcov
+          cargo llvm-cov report --json --output-path coverage/llvm-cov.json
+          cargo llvm-cov report --summary-only | tee coverage/summary.txt
+          { echo '### Workspace test coverage (unit + GTK widget tests)'; echo '```'
+            cat coverage/summary.txt; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload coverage report
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: llvm-cov
+          path: coverage/
+          if-no-files-found: error
+          retention-days: 90
 
   fuzz-smoke:
     name: Fuzz importer smoke tests
