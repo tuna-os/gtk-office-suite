@@ -132,3 +132,23 @@ fn a_widescreen_deck_keeps_its_13_33_inch_size() {
     // 24 pt on the model's 10in slide is 32 pt on a 13.33in one.
     assert!(part(&saved, "ppt/slides/slide1.xml").contains("sz=\"3200\""));
 }
+
+#[test]
+fn a_4_3_or_custom_deck_keeps_its_size_through_odp() {
+    // The odp writer used to put every deck on its own 960x540pt page.
+    for size in SIZES {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("deck.odp");
+        decks_core::write_deck(path.to_str().unwrap(), &deck(Some(size))).unwrap();
+        let back = decks_core::read_deck(path.to_str().unwrap()).unwrap();
+        let (cx, cy) = back.masters[0].page_emu.expect("the page size is read back");
+        assert!((cx - size.0).abs() < 1.0 && (cy - size.1).abs() < 1.0, "{size:?}: read back as {cx}x{cy}");
+        for (got, want) in boxes(&back).into_iter().zip(boxes(&deck(Some(size)))) {
+            assert!(near(got, want), "{size:?}: {got:?} is not {want:?}");
+        }
+        // The size survives a second save, and pptx after odp.
+        let again = dir.path().join("again.pptx");
+        decks_core::write_deck(again.to_str().unwrap(), &back).unwrap();
+        assert_eq!(declared(&again), size, "odp then pptx");
+    }
+}

@@ -16,6 +16,7 @@ pub mod insert;
 pub mod magic_move;
 pub mod odp;
 mod odp_builds;
+mod odp_graphics;
 pub mod ops;
 mod odp_text;
 pub mod presenter;

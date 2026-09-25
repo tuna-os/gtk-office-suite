@@ -1037,8 +1037,8 @@ pub fn read_pptx(path: &str) -> Result<Deck, String> {
                     .map(|tp| read_part(&mut archive, &mut budget, &tp))
                     .and_then(|tx| parse_theme_font(&tx));
 
-                let (master_bg, mut shapes) = parse_master_shapes_scaled(&master_xml, scale);
-                let (layout_bg, layout_shapes) = parse_master_shapes_scaled(&layout_xml, scale);
+                let (master_bg, mut shapes) = master_shapes(&master_xml, scale, &theme);
+                let (layout_bg, layout_shapes) = master_shapes(&layout_xml, scale, &theme);
                 shapes.extend(layout_shapes);
                 // The master's own name if either part records one;
                 // the layout's file stem only as a last resort, which is
@@ -1242,6 +1242,15 @@ pub fn parse_master_shapes_scaled(
     xml: &str,
     scale: SlideScale,
 ) -> (Option<String>, Vec<SlideObject>) {
+    master_shapes(xml, scale, &Theme::default())
+}
+
+/// A master's or layout's background and decorations. A shape without text
+/// is read with its preset and paint (fill, gradient, outline, resolved
+/// against `theme`), as on a slide: they used to come back as plain
+/// rectangles and circles, so a themed master lost its decorations on
+/// every save and reopen.
+fn master_shapes(xml: &str, scale: SlideScale, theme: &Theme) -> (Option<String>, Vec<SlideObject>) {
     if xml.is_empty() {
         return (None, Vec::new());
     }
@@ -1265,7 +1274,12 @@ pub fn parse_master_shapes_scaled(
         runs: Vec<Run>,
         pending_breaks: usize,
         cur_style: RunStyle,
+        /// Which `p:sp` of the part this is, in document order: its index
+        /// into `sp_styles`.
+        sp_index: usize,
     }
+    let paints = sp_styles(xml, theme, scale.x);
+    let mut sp_count = 0usize;
     impl Pending {
         fn push_run(&mut self, text: String) {
             close_paragraphs(&mut self.runs, self.pending_breaks);
@@ -1297,7 +1311,9 @@ pub fn parse_master_shapes_scaled(
                         runs: Vec::new(),
                         pending_breaks: 0,
                         cur_style: RunStyle::default(),
+                        sp_index: sp_count,
                     });
+                    sp_count += 1;
                 }
                 "p:ph" => {
                     if let Some(p) = cur.as_mut() {
@@ -1388,20 +1404,20 @@ pub fn parse_master_shapes_scaled(
                                     runs: p.runs,
                                     body: Default::default(),
                                 });
-                            } else if p.prst.as_deref() == Some("ellipse") {
-                                shapes.push(SlideObject::Circle {
-                                    x: p.x + p.w / 2.0,
-                                    y: p.y + p.h / 2.0,
-                                    r: p.w / 2.0,
-                                    rotation: 0.0,
-                                });
                             } else {
-                                shapes.push(SlideObject::Rect {
+                                let paint = paints.get(p.sp_index).cloned().unwrap_or_default();
+                                let mut kind = ShapeKind::from_prst(p.prst.as_deref().unwrap_or("rect"));
+                                if let (ShapeKind::RoundRect { radius }, Some(adj)) = (&mut kind, paint.round_adj) {
+                                    *radius = adj.clamp(0.0, 0.5);
+                                }
+                                shapes.push(SlideObject::Shape {
+                                    kind,
                                     x: p.x,
                                     y: p.y,
                                     w: p.w,
                                     h: p.h,
                                     rotation: 0.0,
+                                    style: paint.style,
                                 });
                             }
                         }
@@ -1722,11 +1738,43 @@ mod master_tests {
         assert_eq!(bg.as_deref(), Some("#1a2b3c"));
         assert_eq!(shapes.len(), 1, "placeholder must be skipped: {shapes:?}");
         match &shapes[0] {
-            SlideObject::Rect { x, y, w, h, .. } => {
+            SlideObject::Shape { kind: ShapeKind::Rect, x, y, w, h, .. } => {
                 assert!((x - 2.0).abs() < 0.01 && (y - 3.0).abs() < 0.01);
                 assert!((w - 20.0).abs() < 0.01 && (h - 10.0).abs() < 0.01);
             }
             other => panic!("expected rect, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn a_masters_decorations_keep_their_preset_fill_gradient_and_outline() {
+        use crate::engine::shape::{Color, GradientStop, LinearGradient, Stroke};
+        let xml = r##"<p:sldMaster xmlns:p="x" xmlns:a="y"><p:cSld><p:spTree>
+            <p:sp><p:spPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="95250" cy="95250"/></a:xfrm>
+              <a:prstGeom prst="rect"/><a:solidFill><a:srgbClr val="E01B24"/></a:solidFill><a:ln><a:noFill/></a:ln></p:spPr></p:sp>
+            <p:sp><p:spPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="95250" cy="95250"/></a:xfrm>
+              <a:prstGeom prst="ellipse"/><a:gradFill><a:gsLst><a:gs pos="0"><a:srgbClr val="0B3D6B"/></a:gs>
+              <a:gs pos="100000"><a:srgbClr val="138D9C"/></a:gs></a:gsLst><a:lin ang="5400000"/></a:gradFill>
+              <a:ln w="19050"><a:solidFill><a:srgbClr val="B55A3C"/></a:solidFill></a:ln></p:spPr></p:sp>
+            </p:spTree></p:cSld></p:sldMaster>"##;
+        let (_, shapes) = parse_master_shapes(xml);
+        match &shapes[0] {
+            SlideObject::Shape { kind: ShapeKind::Rect, style, .. } => {
+                assert_eq!(style.fill, Some(Color(0xE0, 0x1B, 0x24)));
+                assert_eq!(style.stroke, None);
+            }
+            other => panic!("expected the red bar, got {other:?}"),
+        }
+        match &shapes[1] {
+            SlideObject::Shape { kind: ShapeKind::Ellipse, style, .. } => {
+                let want = LinearGradient {
+                    stops: vec![GradientStop { pos: 0.0, color: Color(0x0B, 0x3D, 0x6B) }, GradientStop { pos: 1.0, color: Color(0x13, 0x8D, 0x9C) }],
+                    angle: 90.0,
+                };
+                assert_eq!(style.gradient.as_ref(), Some(&want));
+                assert_eq!(style.stroke, Some(Stroke { color: Color(0xB5, 0x5A, 0x3C), width: 2.0 }));
+            }
+            other => panic!("expected the gradient ellipse, got {other:?}"),
         }
     }
 

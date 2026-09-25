@@ -620,10 +620,10 @@ fn odp_geometry_survives_impress_rewrite() {
         ids: Default::default(),
     }];
     let Some(rt) = odp_through_impress(&deck, "geom") else { return };
-    let Some(SlideObject::Rect { x, y, w, h, .. }) = rt.slides[0]
-        .objects
-        .iter()
-        .find(|o| matches!(o, SlideObject::Rect { .. }))
+    // Impress gives the rect its default graphic style, so it reads back
+    // as a painted Shape.
+    let Some(SlideObject::Rect { x, y, w, h, .. } | SlideObject::Shape { x, y, w, h, .. }) =
+        rt.slides[0].objects.iter().find(|o| is_rect(o))
     else {
         panic!("rect lost: {:?}", rt.slides[0].objects)
     };
@@ -1542,5 +1542,129 @@ fn notes_paragraphs_survive_impress_in_both_formats() {
         let Some(rt) = rt else { return };
         assert_eq!(rt.slides[0].notes, notes, "{kind}: Impress changed the notes");
         assert_eq!(rt.slides[1].notes, "", "{kind}: a slide without notes gained some");
+    }
+}
+
+#[test]
+fn impress_sees_our_odp_on_the_decks_own_page() {
+    // The odp writer used to put every deck on its own 960x540pt page. What
+    // Impress makes of our odp must be what it makes of our pptx of the
+    // same deck, whose size it already reads right: the page, and the
+    // full-bleed shape covering it.
+    if !require_or_skip() {
+        return;
+    }
+    for size in [(9_144_000.0, 6_858_000.0), (7_200_000.0, 7_200_000.0)] {
+        let dir = tempfile::tempdir().unwrap();
+        let mut deck = Deck::new();
+        deck.masters[0].page_emu = Some(size);
+        // Painted by us, so its look doesn't depend on each format's
+        // default style in Impress.
+        let style = decks_core::engine::shape::ShapeStyle { fill: Some(decks_core::engine::shape::Color(0x20, 0x40, 0x60)), gradient: None, stroke: None };
+        deck.slides[0].objects = vec![SlideObject::Shape {
+            kind: decks_core::engine::shape::ShapeKind::Rect,
+            x: 0.0,
+            y: 0.0,
+            w: 960.0,
+            h: 540.0,
+            rotation: 0.0,
+            style,
+        }];
+        let mut seen = Vec::new();
+        for ext in ["pptx", "odp"] {
+            let sub = dir.path().join(ext);
+            std::fs::create_dir_all(&sub).unwrap();
+            let ours = sub.join(format!("deck.{ext}"));
+            decks_core::write_deck(ours.to_str().unwrap(), &deck).expect("write");
+            let back = convert(&ours, "odp").unwrap_or_else(|e| panic!("Impress rewrites our {ext}: {e}"));
+            let read = decks_core::read_deck(back.to_str().unwrap()).expect("read Impress's odp");
+            let Some(SlideObject::Shape { x, y, w, h, style, .. }) = read.slides[0].objects.first().cloned() else {
+                panic!("{ext}: the shape came back as {:?}", read.slides[0].objects)
+            };
+            seen.push((read.masters[0].page_emu, (x, y, w, h), style));
+        }
+        let (pptx, odp) = (&seen[0], &seen[1]);
+        assert!(pptx.0.is_some(), "{size:?}: Impress lost the pptx's size");
+        assert_eq!(odp.0, pptx.0, "{size:?}: Impress sees our odp's page differently from our pptx's");
+        assert_eq!(odp.2, pptx.2, "{size:?}: the paint");
+        // Impress keeps lengths in hundredths of a millimetre. EMU convert
+        // to them exactly and our odp's points don't, so the two can differ
+        // by that one unit, and by no more: here, in model units.
+        let unit = 0.01 / 25.4 * 914_400.0 * 960.0 / size.0;
+        let g = [(odp.1 .0, pptx.1 .0), (odp.1 .1, pptx.1 .1), (odp.1 .2, pptx.1 .2), (odp.1 .3, pptx.1 .3)];
+        assert!(
+            g.iter().all(|(a, b)| (a - b).abs() <= unit + 1e-9),
+            "{size:?}: Impress places our odp's shape at {:?}, our pptx's at {:?} (one 1/100 mm is {unit})",
+            odp.1,
+            pptx.1
+        );
+    }
+}
+
+#[test]
+fn impress_keeps_a_themes_decorations_in_both_formats() {
+    // Every built-in theme's master decorations (fills, a two-colour
+    // gradient, presets) as Impress rewrites our file, in each format.
+    if !require_or_skip() {
+        return;
+    }
+    let look = |o: &SlideObject| -> String {
+        match o {
+            SlideObject::Shape { kind, x, y, w, h, style, .. } => {
+                let r = |v: &f64| v.round();
+                format!("{kind:?} {} {} {} {} {:?} {:?}", r(x), r(y), r(w), r(h), style.fill, style.gradient)
+            }
+            other => format!("{other:?}"),
+        }
+    };
+    for (i, t) in decks_core::templates::templates().iter().enumerate() {
+        let (slides, masters) = decks_core::templates::deck(i).unwrap();
+        let deck = Deck { slides, masters };
+        let want: Vec<String> = deck.masters[0].shapes.iter().map(look).collect();
+        for ext in ["pptx", "odp"] {
+            let dir = tempfile::tempdir().unwrap();
+            let path = dir.path().join(format!("theme.{ext}"));
+            decks_core::write_deck(path.to_str().unwrap(), &deck).expect("write");
+            let back = convert(&path, ext).unwrap_or_else(|e| panic!("Impress rewrites our {ext}: {e}"));
+            let read = decks_core::read_deck(back.to_str().unwrap()).expect("read Impress's file");
+            let got: Vec<String> = read.masters.iter().flat_map(|m| &m.shapes).map(look).collect();
+            assert_eq!(got, want, "{} {ext}: the master's decorations through Impress", t.name);
+        }
+    }
+}
+
+#[test]
+fn impress_turns_our_odp_gradient_into_the_same_drawingml_gradient() {
+    // ODF's gradient angle runs the other way from DrawingML's and starts
+    // from another axis (odp_graphics). A round trip through one format
+    // can't see a wrong conversion; crossing formats can: our odp, saved
+    // as pptx by Impress, must carry the gradient we wrote.
+    if !require_or_skip() {
+        return;
+    }
+    use decks_core::engine::shape::{Color, GradientStop, LinearGradient, ShapeKind, ShapeStyle};
+    for angle in [0.0, 90.0, 45.0] {
+        let gradient = LinearGradient {
+            stops: vec![GradientStop { pos: 0.0, color: Color(0x0B, 0x3D, 0x6B) }, GradientStop { pos: 1.0, color: Color(0x13, 0x8D, 0x9C) }],
+            angle,
+        };
+        let style = ShapeStyle { fill: gradient.mean(), gradient: Some(gradient.clone()), stroke: None };
+        let mut deck = Deck::new();
+        deck.slides[0].objects = vec![SlideObject::Shape { kind: ShapeKind::Rect, x: 100.0, y: 100.0, w: 300.0, h: 200.0, rotation: 0.0, style }];
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("gradient.odp");
+        decks_core::write_deck(path.to_str().unwrap(), &deck).expect("write odp");
+        let back = convert(&path, "pptx").unwrap_or_else(|e| panic!("Impress saves our odp as pptx: {e}"));
+        let read = read_pptx(back.to_str().unwrap()).expect("read Impress's pptx");
+        match read.slides[0].objects.first() {
+            Some(SlideObject::Shape { style, .. }) => {
+                let got = style.gradient.as_ref().unwrap_or_else(|| panic!("{angle}: no gradient: {style:?}"));
+                assert_eq!(got.angle, angle, "{angle}: Impress turned our gradient");
+                let colors: Vec<Color> = got.stops.iter().map(|s| s.color).collect();
+                assert_eq!(colors.first(), Some(&gradient.stops[0].color), "{angle}: start colour");
+                assert_eq!(colors.last(), Some(&gradient.stops[1].color), "{angle}: end colour");
+            }
+            other => panic!("{angle}: the shape came back as {other:?}"),
+        }
     }
 }
