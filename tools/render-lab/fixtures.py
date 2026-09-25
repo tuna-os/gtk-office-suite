@@ -402,6 +402,22 @@ def decks(img):
     save(p, "bullets", "Title plus a bulleted body; 'Sub point' is indented a level")
 
     p = deck()
+    s = p.slides.add_slide(p.slide_layouts[1])
+    s.shapes.title.text = "Autofit"
+    body = s.placeholders[1].text_frame
+    body.text = "Point 1"
+    for i in range(2, 11):
+        body.add_paragraph().text = f"Point {i}"
+    # What PowerPoint records after shrinking an overflowing body: 62.5%
+    # text, 20% less line spacing. Stated, not computed by the renderer.
+    from lxml import etree
+    from pptx.oxml.ns import qn
+    fit = etree.SubElement(body._bodyPr, qn("a:normAutofit"))
+    fit.set("fontScale", "62500")
+    fit.set("lnSpcReduction", "20000")
+    save(p, "autofit", "Ten bullets shrunk to fit the body: 62.5% text, lines 20% closer")
+
+    p = deck()
     s = p.slides.add_slide(p.slide_layouts[6])
     tb = s.shapes.add_textbox(Inches(1), Inches(1), Inches(8), Inches(3)).text_frame
     fixed_box(tb)
