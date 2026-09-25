@@ -24,7 +24,7 @@ const PREVIEW_H: i32 = 126;
 fn tile(index: usize, name: &str, description: &str) -> gtk::ToggleButton {
     let body = gtk::Box::new(gtk::Orientation::Vertical, 6);
     if let Some((slides, masters)) = deck(index) {
-        if let Some(preview) = crate::sidebar::render_thumbnail(&slides, &masters, 0, PREVIEW_W, PREVIEW_H) {
+        if let Some(preview) = crate::sidebar::render_thumbnail(&slides, &masters, 0, PREVIEW_W, PREVIEW_H, Some(crate::canvas::Chrome::Preview)) {
             preview.add_css_class("card");
             preview.set_can_shrink(false);
             preview.set_alternative_text(Some(name));
