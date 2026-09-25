@@ -1502,16 +1502,22 @@ fn a_runs_font_family_survives_a_snapshot() {
     }
 }
 
-/// Every slide transition survives our pptx round trip, Magic Move as
-/// PowerPoint's Morph. (odp does not carry transitions yet.)
+/// Every slide transition survives our round trip in both formats: Magic
+/// Move as PowerPoint's Morph, and in odp as a crossfade marked as ours.
+/// A coloured background shares the drawing-page style with it in odp.
 #[test]
-fn slide_transitions_survive_a_pptx_snapshot() {
+fn slide_transitions_survive_a_snapshot() {
     use decks_core::engine::Transition;
     let slides: Vec<Slide> = Transition::ALL
         .iter()
         .map(|t| Slide { transition: *t, ..slide_of(vec![text_box("x", 10.0, 10.0)], "", "#ffffff") })
         .collect();
-    let back = through_a_snapshot(&deck_of(slides), "pptx", "transitions");
-    let got: Vec<Transition> = back.slides.iter().map(|s| s.transition).collect();
-    assert_eq!(got, Transition::ALL.to_vec());
+    let mut slides = slides;
+    slides[1].background = "#1e1e3c".into();
+    for kind in FORMATS {
+        let back = through_a_snapshot(&deck_of(slides.clone()), kind, "transitions");
+        let got: Vec<Transition> = back.slides.iter().map(|s| s.transition).collect();
+        assert_eq!(got, Transition::ALL.to_vec(), "{kind}");
+        assert_eq!(back.slides[1].background, "#1e1e3c", "{kind}");
+    }
 }
