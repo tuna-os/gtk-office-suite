@@ -555,6 +555,9 @@ pub fn write(doc: &Document, path: impl AsRef<std::path::Path>) -> Result<(), St
         if para.style.page_break_before {
             p = p.page_break_before(true);
         }
+        if para.style.keep_with_next {
+            p = p.keep_with_next(true);
+        }
         if (para.style.line_spacing - 1.0).abs() > 0.01 {
             p = p.line_spacing_multiple(para.style.line_spacing as f64);
         }
@@ -973,6 +976,8 @@ fn map_paragraph(doc: &rdocx::Document, p: &rdocx::ParagraphRef<'_>) -> Paragrap
     // Either spelling counts: the paragraph property, or a run-level
     // break before this paragraph's own text.
     let page_break_before = p.is_page_break_before() || run_page_break(p).leading;
+    // Keep with next: the paragraph's own setting, else its style's.
+    let keep_with_next = p.keep_with_next_value().or(styled.keep_next).unwrap_or(false);
     let (list, list_level) = match paragraph_numbering(doc, p) {
         Some((num_id, level)) => (match doc.numbering_is_bullet(num_id) {
             Some(false) => ListKind::Numbered,
@@ -1096,7 +1101,7 @@ fn map_paragraph(doc: &rdocx::Document, p: &rdocx::ParagraphRef<'_>) -> Paragrap
         style: ParaStyle {
             heading, alignment, list, code_block, block_quote,
             list_level,
-            named_style, page_break_before,
+            named_style, page_break_before, keep_with_next,
             // Absent means "inherit": the paragraph looks the way its style
             // chain says, which the model has no styles to express, so the
             // inherited value is read into the paragraph. Reading only

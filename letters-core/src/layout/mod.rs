@@ -414,9 +414,14 @@ pub fn note_paragraph(doc: &Document, i: usize, opts: &LayoutOptions) -> Paragra
     }
 }
 
-/// A footnote's height at the foot of a page, space after included.
-fn note_height(p: &Paragraph, shaped: &Shaped) -> f64 {
-    shaped.lines.iter().map(|l| l.natural_height() * spacing(p)).sum::<f64>() + p.style.space_after_pt.max(0.0)
+/// Part of a footnote placed at the foot of a page: lines `from..to` of
+/// note `note`. A note that does not fit on its reference's page continues
+/// on the next, as LibreOffice and Word split one.
+#[derive(Clone, Copy, Debug, PartialEq)]
+struct NotePiece {
+    note: usize,
+    from: usize,
+    to: usize,
 }
 
 /// The footnotes referenced on line `lb` of `para`.
@@ -431,12 +436,12 @@ pub fn layout(doc: &Document, opts: &LayoutOptions, shaper: &mut dyn Shaper) -> 
     // Each footnote's height at the foot of a page, for the flow to keep
     // room for the notes of the lines it places.
     let text_w = flow.content_width();
-    flow.note_heights = (0..doc.footnotes.len())
-        .map(|i| {
-            let p = note_paragraph(doc, i, opts);
-            note_height(&p, &shape_paragraph(&p, text_w, opts, shaper))
-        })
-        .collect();
+    for i in 0..doc.footnotes.len() {
+        let p = note_paragraph(doc, i, opts);
+        let shaped = shape_paragraph(&p, text_w, opts, shaper);
+        flow.note_lines.push(shaped.lines.iter().map(|l| l.natural_height() * spacing(&p)).collect());
+        flow.note_after.push(p.style.space_after_pt.max(0.0));
+    }
     let ordinals = lists::ordinals(doc.paragraphs.iter().map(|p| &p.style));
     let col_w = flow.column_width();
 
@@ -453,8 +458,10 @@ pub fn layout(doc: &Document, opts: &LayoutOptions, shaper: &mut dyn Shaper) -> 
             continue;
         }
         let shaped = shape_paragraph(para, col_w, opts, shaper);
-        // Keep a heading with the first lines of what follows it.
-        let keep_next = if para.style.heading.is_some() {
+        // Keep a heading, and any paragraph set to keep with the next (a
+        // Title, a Word style's keepNext), with the first lines of what
+        // follows it.
+        let keep_next = if para.style.heading.is_some() || para.style.keep_with_next {
             doc.paragraphs.get(i + 1).filter(|n| n.style.table_cell.is_none()).map(|n| {
                 let s = shape_paragraph(n, col_w, opts, shaper);
                 let lines = s.lines.len().min(opts.orphans.max(1));
@@ -611,19 +618,24 @@ fn place_paragraph(flow: &mut Flow, idx: usize, para: &Paragraph, shaped: &Shape
     let text: Vec<char> = layout_text(&para.runs).chars().collect();
     let mut line = 0;
     while line < n {
-        // How many lines fit here, each with room for its footnotes?
+        // How many lines fit here, each with room for its footnotes? A line
+        // whose note fits only in part ends the chunk: the note continues
+        // on the next page (`split`: that line, and what carries over).
         let mut fit = 0;
         let mut y = flow.y;
         let mut notes: Vec<usize> = Vec::new();
+        let mut split: Option<(usize, Vec<NotePiece>)> = None;
         while line + fit < n {
             let mut with = notes.clone();
             with.extend(line_notes(para, &shaped.lines[line + fit]));
-            if y + heights[line + fit] > flow.bottom_with(&with) + 1e-6 {
+            let Some(carry) = flow.plan(y + heights[line + fit], &with) else { break };
+            y += heights[line + fit];
+            fit += 1;
+            if !carry.is_empty() {
+                split = Some((line + fit - 1, carry));
                 break;
             }
             notes = with;
-            y += heights[line + fit];
-            fit += 1;
         }
         if line + fit < n {
             // Widows: leave at least `widows` lines for the next column.
@@ -642,6 +654,9 @@ fn place_paragraph(flow: &mut Flow, idx: usize, para: &Paragraph, shaped: &Shape
                 fit = 1;
             }
         }
+        if split.as_ref().is_some_and(|(k, _)| *k >= line + fit) {
+            split = None;
+        }
         for (k, (lb, &height)) in shaped.lines.iter().zip(&heights).enumerate().skip(line).take(fit) {
             let top = flow.y;
             let baseline = top + lb.ascent_pt;
@@ -652,7 +667,11 @@ fn place_paragraph(flow: &mut Flow, idx: usize, para: &Paragraph, shaped: &Shape
                 }
             }
             emit_line(flow, idx, para, &text, k, lb, x0 + shaped.box_x, shaped.box_w, top, height);
-            flow.add_notes(line_notes(para, lb));
+            match split.take_if(|(at, _)| *at == k) {
+                // What fits of the line's notes here, the rest next page.
+                Some((_, carry)) => flow.add_notes_split(line_notes(para, lb), carry),
+                None => flow.add_notes(line_notes(para, lb)),
+            }
             flow.y += height;
         }
         line += fit;
@@ -775,10 +794,14 @@ struct Flow<'o> {
     column_items: usize,
     /// Space after the last paragraph, not yet added (see place_paragraph).
     pending_after: f64,
-    /// Height of each footnote at the foot of a page.
-    note_heights: Vec<f64>,
-    /// The footnotes referenced on each page, in order.
-    page_notes: Vec<Vec<usize>>,
+    /// Each footnote's line heights at the foot of a page, and its space
+    /// after.
+    note_lines: Vec<Vec<f64>>,
+    note_after: Vec<f64>,
+    /// The footnote pieces at the foot of each page, in order.
+    page_notes: Vec<Vec<NotePiece>>,
+    /// What continues at the foot of the next page.
+    carry: Vec<NotePiece>,
 }
 
 impl<'o> Flow<'o> {
@@ -791,8 +814,10 @@ impl<'o> Flow<'o> {
             y: 0.0,
             column_items: 0,
             pending_after: 0.0,
-            note_heights: Vec::new(),
+            note_lines: Vec::new(),
+            note_after: Vec::new(),
             page_notes: Vec::new(),
+            carry: Vec::new(),
         };
         f.new_page();
         f
@@ -824,36 +849,104 @@ impl<'o> Flow<'o> {
         (self.geometry.height_pt - self.geometry.margin_bottom_pt).max(self.top() + 1.0)
     }
 
-    /// Room the footnotes `notes` take at the foot of a page: their heights
-    /// and the separator above them.
-    fn notes_height(&self, notes: &[usize]) -> f64 {
-        if notes.is_empty() {
+    fn note_len(&self, note: usize) -> usize {
+        self.note_lines.get(note).map_or(0, Vec::len)
+    }
+
+    fn whole(&self, note: usize) -> NotePiece {
+        NotePiece { note, from: 0, to: self.note_len(note) }
+    }
+
+    /// A piece's height: its lines, and the note's space after if it ends
+    /// the note.
+    fn piece_height(&self, p: &NotePiece) -> f64 {
+        let lines = self.note_lines.get(p.note).map_or(0.0, |l| l[p.from.min(l.len())..p.to.min(l.len())].iter().sum());
+        lines + if p.to >= self.note_len(p.note) { self.note_after.get(p.note).copied().unwrap_or(0.0) } else { 0.0 }
+    }
+
+    /// Room footnote pieces take at the foot of a page, with the separator.
+    fn reserved(&self, pieces: &[NotePiece]) -> f64 {
+        if pieces.is_empty() {
             return 0.0;
         }
-        NOTE_SEPARATOR_PT + notes.iter().map(|&i| self.note_heights.get(i).copied().unwrap_or(0.0)).sum::<f64>()
+        NOTE_SEPARATOR_PT + pieces.iter().map(|p| self.piece_height(p)).sum::<f64>()
+    }
+
+    fn current_notes(&self) -> &[NotePiece] {
+        self.page_notes.last().map_or(&[], Vec::as_slice)
     }
 
     /// Where body text must end on this page, above its footnotes.
     fn bottom(&self) -> f64 {
-        self.bottom_with(&[])
+        (self.foot() - self.reserved(self.current_notes())).max(self.top() + 1.0)
     }
 
-    /// Where body text must end if the lines being placed add the notes
-    /// `more` to this page's.
-    fn bottom_with(&self, more: &[usize]) -> f64 {
-        let mut notes = self.page_notes.last().cloned().unwrap_or_default();
-        notes.extend(more.iter().filter(|i| !notes.contains(i)).collect::<Vec<_>>());
-        (self.foot() - self.notes_height(&notes)).max(self.top() + 1.0)
-    }
-
-    fn add_notes(&mut self, notes: Vec<usize>) {
-        if let Some(page) = self.page_notes.last_mut() {
-            for i in notes {
-                if !page.contains(&i) {
-                    page.push(i);
-                }
-            }
+    /// Whether body text can reach `y_end` on this page with the notes
+    /// `notes` referenced by it: `None` if not, else the note lines that
+    /// have to continue on the next page (empty when all fit). A note
+    /// splits only when its first line fits with its reference.
+    fn plan(&self, y_end: f64, notes: &[usize]) -> Option<Vec<NotePiece>> {
+        let here = self.current_notes();
+        let new: Vec<usize> = notes.iter().copied().filter(|n| !here.iter().any(|p| p.note == *n)).collect();
+        let sep = if here.is_empty() && !new.is_empty() { NOTE_SEPARATOR_PT } else { 0.0 };
+        let mut avail = self.foot() - self.reserved(here) - sep - y_end;
+        if avail < -1e-6 {
+            return None;
         }
+        let mut carry = Vec::new();
+        let mut placed_any = false;
+        for n in new {
+            let whole = self.whole(n);
+            if !carry.is_empty() {
+                carry.push(whole);
+                continue;
+            }
+            let full = self.piece_height(&whole);
+            if full <= avail + 1e-6 {
+                avail -= full;
+                placed_any = true;
+                continue;
+            }
+            let lines = &self.note_lines[n];
+            let mut k = 0;
+            let mut used = 0.0;
+            while k < lines.len() && used + lines[k] <= avail + 1e-6 {
+                used += lines[k];
+                k += 1;
+            }
+            if k == 0 && !placed_any {
+                return None;
+            }
+            carry.push(NotePiece { note: n, from: k, to: whole.to });
+            avail -= used;
+            placed_any |= k > 0;
+        }
+        Some(carry)
+    }
+
+    /// Put the notes referenced by a placed line at this page's foot.
+    fn add_notes(&mut self, notes: Vec<usize>) {
+        self.add_notes_split(notes, Vec::new());
+    }
+
+    /// As `add_notes`, with `carry` (from `plan`) continuing next page.
+    fn add_notes_split(&mut self, notes: Vec<usize>, carry: Vec<NotePiece>) {
+        let pieces: Vec<NotePiece> = notes
+            .into_iter()
+            .filter(|n| !self.current_notes().iter().any(|p| p.note == *n))
+            .map(|n| {
+                let whole = self.whole(n);
+                match carry.iter().find(|c| c.note == n) {
+                    Some(c) => NotePiece { to: c.from, ..whole },
+                    None => whole,
+                }
+            })
+            .filter(|p| p.to > p.from)
+            .collect();
+        if let Some(page) = self.page_notes.last_mut() {
+            page.extend(pieces);
+        }
+        self.carry.extend(carry);
     }
 
     fn page_is_empty(&self) -> bool {
@@ -873,7 +966,9 @@ impl<'o> Flow<'o> {
             geometry: self.geometry,
             items: Vec::new(),
         });
-        self.page_notes.push(Vec::new());
+        // A footnote continued from the page before comes first.
+        let carried = std::mem::take(&mut self.carry);
+        self.page_notes.push(carried);
         self.column = 0;
         self.y = self.top();
         self.column_items = 0;
@@ -904,20 +999,31 @@ impl<'o> Flow<'o> {
         // Each page's footnotes, ending at the foot of its text area under
         // a short rule.
         let foot = self.foot();
-        for (page, notes) in self.pages.iter_mut().zip(&self.page_notes) {
-            if notes.is_empty() {
+        let page_notes = std::mem::take(&mut self.page_notes);
+        for (page, pieces) in self.pages.iter_mut().zip(&page_notes) {
+            if pieces.is_empty() {
                 continue;
             }
-            // The last note ends at the foot; its space after is not drawn.
-            let after = notes.last().map_or(0.0, |&i| note_paragraph(doc, i, opts).style.space_after_pt.max(0.0));
-            let mut y = foot + after - notes.iter().map(|&i| self.note_heights.get(i).copied().unwrap_or(0.0)).sum::<f64>();
+            // The last piece ends at the foot; a note's space after it is
+            // not drawn.
+            let after = pieces.last().filter(|p| p.to >= self.note_lines.get(p.note).map_or(0, Vec::len)).map_or(0.0, |p| self.note_after[p.note]);
+            let total: f64 = pieces
+                .iter()
+                .map(|p| {
+                    let lines = &self.note_lines[p.note];
+                    lines[p.from.min(lines.len())..p.to.min(lines.len())].iter().sum::<f64>()
+                        + if p.to >= lines.len() { self.note_after[p.note] } else { 0.0 }
+                })
+                .sum();
+            let mut y = foot + after - total;
             page.items.push(Item::Rule { x_pt: left, y_pt: y - NOTE_RULE_GAP_PT, width_pt: width * NOTE_RULE_FRACTION });
-            for &i in notes {
+            for piece in pieces {
+                let i = piece.note;
                 let p = note_paragraph(doc, i, opts);
                 let shaped = shape_paragraph(&p, width, opts, shaper);
                 let chars: Vec<char> = layout_text(&p.runs).chars().collect();
                 let ls = spacing(&p);
-                for (k, lb) in shaped.lines.iter().enumerate() {
+                for (k, lb) in shaped.lines.iter().enumerate().take(piece.to).skip(piece.from) {
                     page.items.push(Item::Line {
                         source: Source::Footnote(i),
                         line: k,
@@ -933,7 +1039,9 @@ impl<'o> Flow<'o> {
                     });
                     y += lb.natural_height() * ls;
                 }
-                y += p.style.space_after_pt.max(0.0);
+                if piece.to >= shaped.lines.len() {
+                    y += p.style.space_after_pt.max(0.0);
+                }
             }
         }
         for page in &mut self.pages {

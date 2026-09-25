@@ -122,6 +122,9 @@ fn para_style_props(st: &ParaStyle) -> String {
     if st.page_break_before {
         props.push_str(" fo:break-before=\"page\"");
     }
+    if st.keep_with_next {
+        props.push_str(" fo:keep-with-next=\"always\"");
+    }
     if (st.line_spacing - 1.0).abs() > 0.01 {
         props.push_str(&format!(" fo:line-height=\"{:.0}%\"", st.line_spacing * 100.0));
     }
@@ -492,6 +495,7 @@ struct AutoStyles {
 struct AutoParaStyle {
     alignment: Alignment,
     page_break_before: bool,
+    keep_with_next: bool,
     line_spacing: f32,
     space_before_pt: f64,
     space_after_pt: f64,
@@ -605,6 +609,7 @@ fn parse_auto_styles(xml: &str) -> AutoStyles {
                             out.para.insert(name, AutoParaStyle {
                                 alignment: align,
                                 page_break_before: brk,
+                                keep_with_next: attr_val(&e, "fo:keep-with-next").as_deref() == Some("always"),
                                 line_spacing: spacing,
                                 // `fo:space-before` is what this writer
                                 // used to emit; still accepted so a
@@ -778,6 +783,7 @@ pub fn read(path: &str) -> Result<Document, String> {
                         if let Some(auto_para) = auto.para.get(&name) {
                             style.alignment = auto_para.alignment;
                             style.page_break_before = auto_para.page_break_before;
+                            style.keep_with_next = auto_para.keep_with_next;
                             style.line_spacing = auto_para.line_spacing;
                             style.space_before_pt = auto_para.space_before_pt;
                             style.space_after_pt = auto_para.space_after_pt;

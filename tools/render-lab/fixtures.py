@@ -245,21 +245,24 @@ def letters(img):
             f'<w:footnoteRef/></w:r><w:r><w:rPr><w:sz w:val="20"/></w:rPr><w:t xml:space="preserve"> {text}</w:t></w:r></w:p></w:footnote>'
         )
 
-    notes = (
-        f'<w:footnotes xmlns:w="{W}">'
-        '<w:footnote w:type="separator" w:id="-1"><w:p><w:r><w:separator/></w:r></w:p></w:footnote>'
-        '<w:footnote w:type="continuationSeparator" w:id="0"><w:p><w:r><w:continuationSeparator/></w:r></w:p></w:footnote>'
-        + note(1, "The first footnote, at the foot of the page.")
-        + note(2, "A second footnote, below the first.")
-        + "</w:footnotes>"
-    )
-    part = Part(
-        PackURI("/word/footnotes.xml"),
-        "application/vnd.openxmlformats-officedocument.wordprocessingml.footnotes+xml",
-        notes.encode(),
-        x.part.package,
-    )
-    x.part.relate_to(part, RT.FOOTNOTES)
+    def add_notes(document, texts):
+        """The footnotes part: Word's two separator notes, then `texts`."""
+        notes = (
+            f'<w:footnotes xmlns:w="{W}">'
+            '<w:footnote w:type="separator" w:id="-1"><w:p><w:r><w:separator/></w:r></w:p></w:footnote>'
+            '<w:footnote w:type="continuationSeparator" w:id="0"><w:p><w:r><w:continuationSeparator/></w:r></w:p></w:footnote>'
+            + "".join(note(i + 1, t) for i, t in enumerate(texts))
+            + "</w:footnotes>"
+        )
+        part = Part(
+            PackURI("/word/footnotes.xml"),
+            "application/vnd.openxmlformats-officedocument.wordprocessingml.footnotes+xml",
+            notes.encode(),
+            document.part.package,
+        )
+        document.part.relate_to(part, RT.FOOTNOTES)
+
+    add_notes(x, ["The first footnote, at the foot of the page.", "A second footnote, below the first."])
 
     def reference(paragraph, n):
         r = paragraph.add_run()
@@ -278,6 +281,25 @@ def letters(img):
     p = x.add_paragraph("Another with a second note.")
     reference(p, 2)
     save(x, "footnotes", "Superscript 1 and 2 in the text; the two notes at the foot of the page, 10pt, under a short rule")
+
+    x = doc()
+    for i in range(38):
+        x.add_paragraph(f"Filler line {i + 1}.")
+    add_notes(x, [LOREM * 9])
+    p = x.add_paragraph("The line with a long note.")
+    reference(p, 1)
+    for i in range(10):
+        x.add_paragraph(f"After the note {i + 1}.")
+    save(x, "footnote-continued", "A long footnote starts at the foot of page 1 under its reference and continues at the foot of page 2")
+
+    x = doc()
+    for i in range(44):
+        x.add_paragraph(f"Filler line {i + 1}.")
+    p = x.add_paragraph()
+    p.add_run("Chapter Two").bold = True
+    p.paragraph_format.keep_with_next = True
+    x.add_paragraph(LOREM * 2)
+    save(x, "keep-with-next", "The bold 'Chapter Two' line is kept with the paragraph after it: both start page 2, page 1 ends at 'Filler line 44.'")
 
     x = doc()
     cols = x.sections[0]._sectPr.find(qn("w:cols"))

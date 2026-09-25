@@ -156,6 +156,11 @@ pub struct ParaStyle {
     /// consecutive paragraphs sharing a `table` id form one table, and
     /// (row, col) recovers the grid.
     pub table_cell: Option<TableCell>,
+    /// Keep this paragraph on the page of the one after it (Word's
+    /// keepNext, ODF's fo:keep-with-next): a Title, or a style that asks.
+    /// Headings are kept with what follows whatever this says.
+    #[serde(default)]
+    pub keep_with_next: bool,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -167,7 +172,7 @@ pub struct TableCell {
 
 impl Default for ParaStyle {
     fn default() -> Self {
-        Self { heading: None, alignment: Alignment::Left, list: ListKind::None, list_level: 0, list_start: None, line_spacing: 1.0, space_before_pt: 0.0, space_after_pt: 0.0, left_indent_pt: 0.0, right_indent_pt: 0.0, first_line_indent_pt: 0.0, tab_stops_pt: Vec::new(), code_block: None, block_quote: false, html_block: false, page_break_before: false, named_style: None, table_cell: None }
+        Self { heading: None, alignment: Alignment::Left, list: ListKind::None, list_level: 0, list_start: None, line_spacing: 1.0, space_before_pt: 0.0, space_after_pt: 0.0, left_indent_pt: 0.0, right_indent_pt: 0.0, first_line_indent_pt: 0.0, tab_stops_pt: Vec::new(), code_block: None, block_quote: false, html_block: false, page_break_before: false, named_style: None, table_cell: None, keep_with_next: false }
     }
 }
 
