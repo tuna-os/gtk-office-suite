@@ -336,7 +336,17 @@ def tables():
         for c in range(1, 10):
             ws.cell(r, c, f"{r},{c}")
     ws.freeze_panes = "B2"
-    save(wb, "frozen", "Row 1 and column A are frozen (visible separator)")
+    # Saved scrolled: the pane after the freeze starts at E20, so the view
+    # is row 1 and column A (frozen) beside E20:I39. A print can't scroll,
+    # but print titles are the print form of a freeze: with row 1 and
+    # column A repeated and the print area E20:I39, Calc prints exactly
+    # that view. Without frozen panes the grid shows A1:I39 instead and
+    # most of the words are missing, so this can't pass by accident.
+    ws.sheet_view.pane.topLeftCell = "E20"
+    ws.print_title_rows = "1:1"
+    ws.print_title_cols = "A:A"
+    ws.print_area = "E20:I39"
+    save(wb, "frozen", "Row 1 and column A stay put beside E20:I39 (the view is saved scrolled there), with freeze lines")
 
     wb, ws = book()
     from openpyxl.chart import BarChart, Reference

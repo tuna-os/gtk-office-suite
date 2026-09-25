@@ -35,6 +35,9 @@ pub struct SheetXlsxProps {
     pub frozen: Option<(usize, usize)>,
     /// The workbook's default cell font, `(family, points)`.
     pub default_font: Option<(String, f64)>,
+    /// The frozen pane's saved scroll position: the `(row, col)` of its
+    /// `topLeftCell`, when that isn't simply the cell after the freeze.
+    pub pane_top_left: Option<(usize, usize)>,
     /// Merged ranges as `(row, col, rowspan, colspan)` — the shape
     /// `SheetModel::merges` uses, so the caller assigns it directly.
     pub merges: Vec<(usize, usize, usize, usize)>,
@@ -269,6 +272,9 @@ pub fn read_sheet_props_from_xlsx(
                         rows.min(crate::sheet::SHEET_MAX_ROWS),
                         cols.min(crate::sheet::SHEET_MAX_COLS),
                     ));
+                    props.pane_top_left = xml_attr(tag, "topLeftCell")
+                        .and_then(crate::sheet::parse_cell_ref)
+                        .filter(|&(r, c)| (r, c) != (rows, cols));
                 }
             }
         }
@@ -361,7 +367,29 @@ mod sheet_props_tests {
     use super::*;
     use crate::io::*;
     use crate::sheet::SheetModel;
-    
+
+    /// A frozen view saved scrolled (Excel's `<pane topLeftCell="E20">`)
+    /// opens scrolled there; one saved unscrolled asks for nothing.
+    #[test]
+    fn a_frozen_panes_saved_scroll_position_is_read() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("pane.xlsx");
+        let mut wb = rust_xlsxwriter::Workbook::new();
+        let ws = wb.add_worksheet().set_name("Scrolled").unwrap();
+        ws.write_string(0, 0, "x").unwrap();
+        ws.set_freeze_panes(1, 1).unwrap();
+        ws.set_freeze_panes_top_cell(19, 4).unwrap();
+        let ws = wb.add_worksheet().set_name("Plain").unwrap();
+        ws.set_freeze_panes(1, 1).unwrap();
+        wb.save(&path).unwrap();
+
+        let names = vec!["Scrolled".to_string(), "Plain".to_string()];
+        let props = read_sheet_props_from_xlsx(path.to_str().unwrap(), &names);
+        assert_eq!(props["Scrolled"].frozen, Some((1, 1)));
+        assert_eq!(props["Scrolled"].pane_top_left, Some((19, 4)));
+        assert_eq!(props["Plain"].pane_top_left, None, "B2 is just the cell after the freeze");
+    }
+
     #[test]
     fn hidden_rows_and_cols_round_trip_per_sheet() {
         let dir = tempfile::tempdir().unwrap();
