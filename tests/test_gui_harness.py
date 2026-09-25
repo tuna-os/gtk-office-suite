@@ -128,6 +128,33 @@ class NoGlobalKilling(unittest.TestCase):
         )
 
 
+class XvfbNeverResets(unittest.TestCase):
+    """Every Xvfb the test lanes start keeps serving between clients (#652).
+
+    Without `-noreset` the server resets each time its last client leaves,
+    and a client that connects during the reset is refused. nextest opens one
+    X connection per widget test process, so the count keeps touching zero
+    and a random GTK widget test failed to initialise against a live display.
+    A source check, because the flag is easy to drop and a run without it
+    still passes most of the time."""
+
+    SCRIPTS = ("scripts/with-display.sh", "tests/gui/run_gui_tests.sh")
+
+    def test_every_xvfb_invocation_passes_noreset(self):
+        repo = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        for rel in self.SCRIPTS:
+            with self.subTest(script=rel):
+                with open(os.path.join(repo, rel), encoding="utf-8") as handle:
+                    code = [line.split("#", 1)[0] for line in handle.read().splitlines()]
+                # An invocation can continue over backslash lines; join them.
+                joined = "\n".join(code).replace("\\\n", " ")
+                calls = [line for line in joined.splitlines()
+                         if re.match(r"\s*Xvfb\b", line)]
+                self.assertTrue(calls, f"{rel} no longer starts Xvfb; update this test")
+                for call in calls:
+                    self.assertIn("-noreset", call, f"{rel}: {call.strip()}")
+
+
 class ReadinessBudget(unittest.TestCase):
     """Setup's waits must be sized for the slowest machine, not the one
     that happened to run them.

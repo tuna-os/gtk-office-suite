@@ -30,7 +30,16 @@ SCREEN="${WITH_DISPLAY_SCREEN:-1920x1080x24}"
 TICKS="${WITH_DISPLAY_TICKS:-600}"
 
 DISPLAY_NUM_FILE="$(mktemp -t with-display-XXXXXXXX)"
-Xvfb -displayfd 3 -screen 0 "$SCREEN" 3>"$DISPLAY_NUM_FILE" &
+# -noreset (#652). An X server resets whenever its last client disconnects:
+# it tears down and rebuilds its state, recompiling the keymap, and a client
+# that connects during that window is refused. nextest runs every test in its
+# own process, so each GTK widget test opens and closes its own connection,
+# and on a runner the client count keeps dropping to zero. The failing run
+# shows it: 43 "XKEYBOARD keymap compiler" banners (one per reset) in the 14
+# seconds of Letters widget tests, and one straight after the single test
+# whose gtk::init was refused by the live display (run 36077975461). With
+# -noreset the server keeps serving between clients.
+Xvfb -displayfd 3 -noreset -screen 0 "$SCREEN" 3>"$DISPLAY_NUM_FILE" &
 XVFB_PID=$!
 # `wait` after the kill so the script reaps its own child rather than
 # leaving a zombie for init. Without it `pgrep Xvfb` still counts the

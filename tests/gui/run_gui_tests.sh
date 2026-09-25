@@ -88,8 +88,11 @@ if [ -z "${GUI_TEST_REUSE_DISPLAY:-}" ]; then
     # -displayfd handshake, so a taken number fails instead of quietly
     # sharing: Xvfb writes the number only once it is serving, and writes
     # nothing at all when the display is already active.
+    # -noreset: see scripts/with-display.sh (#652). Without it the server
+    # resets each time the last client leaves and refuses connections while
+    # it does.
     Xvfb ${GUI_TEST_DISPLAY_NUM:+":${GUI_TEST_DISPLAY_NUM}"} \
-        -displayfd 3 -screen "0" "${GUI_TEST_SCREEN_SIZE}x24" \
+        -displayfd 3 -noreset -screen "0" "${GUI_TEST_SCREEN_SIZE}x24" \
         3>"$DISPLAY_NUM_FILE" &
     XVFB_PID=$!
     trap 'kill ${XVFB_PID:-} 2>/dev/null || true; rm -rf "${SCHEMA_DIR:-}" "${DISPLAY_NUM_FILE:-}"' EXIT
