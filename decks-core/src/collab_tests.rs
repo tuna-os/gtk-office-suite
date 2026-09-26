@@ -5,7 +5,7 @@
 use super::Replica;
 use crate::builds::{Build, BuildEffect};
 use crate::engine::{Slide, SlideObject, Transition};
-use crate::insert::{shape, shape_library, table, text_box};
+use crate::insert::{chart, shape, shape_library, table, text_box, CHART_KINDS};
 use crate::ops::{apply_all, next_id, Op, SlideProps};
 use suite_common_core::ops::History;
 
@@ -65,10 +65,11 @@ fn content(deck: &[Slide]) -> String {
 /// Any kind of object, so every kind goes through the document.
 fn any_object(rng: &mut Rng) -> SlideObject {
     let lib = shape_library();
-    match rng.below(4) {
+    match rng.below(5) {
         0 => rect(rng.below(900) as f64 + 0.5),
         1 => text_box(),
         2 => shape(lib[rng.below(lib.len())].kind.clone()),
+        3 => chart(CHART_KINDS[rng.below(CHART_KINDS.len())]),
         _ => table(1 + rng.below(3), 1 + rng.below(3)),
     }
 }
@@ -81,6 +82,12 @@ fn nudged(object: &SlideObject, dx: f64) -> SlideObject {
             text.push('!');
         }
         SlideObject::Rect { x, .. } | SlideObject::Shape { x, .. } | SlideObject::Image { x, .. } | SlideObject::Table { x, .. } => *x += dx,
+        SlideObject::Chart { x, chart, .. } => {
+            *x += dx;
+            if let Some(p) = chart.points.first_mut() {
+                p.1 += 1.0;
+            }
+        }
         SlideObject::Circle { x, .. } => *x += dx,
     }
     o
