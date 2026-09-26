@@ -346,6 +346,60 @@ fn read_layout_placeholders(
     (parse_placeholders(&layout_xml), parse_placeholders(&master_xml), inherited)
 }
 
+/// A layout part as the model's layout: its name and kind, its own
+/// background (when it differs from the master's), its decorations, and the
+/// places of its title, subtitle and body placeholders (a place it leaves
+/// to the master is the master's).
+fn read_layout(
+    xml: &str,
+    path: &str,
+    master_phs: &[Placeholder],
+    master_bg: Option<&str>,
+    scale: SlideScale,
+    theme: &Theme,
+) -> crate::layouts::Layout {
+    use crate::layouts::{Layout, LayoutKind, LayoutPlaceholder};
+    let (bg, shapes) = master_shapes(xml, scale, theme);
+    let kind = {
+        let mut reader = Reader::from_str(xml);
+        let mut kind = LayoutKind::Custom;
+        loop {
+            match reader.read_event() {
+                Ok(Event::Start(e)) | Ok(Event::Empty(e)) if e.name().as_ref() == "p:sldLayout" => {
+                    let ty = e
+                        .attributes()
+                        .flatten()
+                        .find(|a| a.key.as_ref() == "type")
+                        .and_then(|a| a.normalized_value(quick_xml::XmlVersion::Implicit1_0).ok().map(|v| v.to_string()));
+                    kind = LayoutKind::from_pptx(ty.as_deref());
+                    break;
+                }
+                Ok(Event::Eof) | Err(_) => break,
+                _ => {}
+            }
+        }
+        kind
+    };
+    let layout_phs = parse_placeholders(xml);
+    let placeholders = layout_phs
+        .iter()
+        .filter_map(|p| {
+            let role = crate::layouts::Placeholder::from_pptx(Some(&p.key.ty))?;
+            let r = p.rect.or_else(|| inherited_rect(&p.key, &layout_phs, master_phs))?;
+            Some(LayoutPlaceholder { role, x: r.x * scale.x, y: r.y * scale.y, w: r.w * scale.x, h: r.h * scale.y })
+        })
+        .collect();
+    let name = parse_c_sld_name(xml).unwrap_or_else(|| {
+        Path::new(path).file_stem().map(|s| s.to_string_lossy().to_string()).unwrap_or_else(|| "Layout".into())
+    });
+    Layout { name, kind, background: bg.filter(|b| Some(b.as_str()) != master_bg), shapes, placeholders }
+}
+
+/// A part's own background, if it states one.
+fn parse_layout_background(xml: &str, scale: SlideScale, theme: &Theme) -> Option<String> {
+    master_shapes(xml, scale, theme).0
+}
+
 pub fn read_pptx(path: &str) -> Result<Deck, String> {
     let file = File::open(path).map_err(|e| format!("Cannot open file: {}", e))?;
     let mut archive = zip::ZipArchive::new(file).map_err(|e| format!("Invalid zip archive: {}", e))?;
@@ -830,11 +884,17 @@ pub fn read_pptx(path: &str) -> Result<Deck, String> {
                             if let Some(mut shape) = current_shape.take() {
                                 let text = text_of(&shape.runs);
                                 let has_text = !text.trim().is_empty();
+                                // A title, subtitle or body placeholder is a
+                                // layout slot (decks_core::layouts): kept even
+                                // empty, when the editor shows its prompt and
+                                // a show draws nothing.
+                                let role = shape.ph.as_ref().and_then(|k| crate::layouts::Placeholder::from_pptx(Some(&k.ty)));
                                 if let Some(key) = &shape.ph {
-                                    // An empty placeholder is a prompt in the
-                                    // editor, not content: LibreOffice doesn't
-                                    // draw it, and neither do we.
-                                    if !has_text && !shape.is_tx_box {
+                                    // Any other empty placeholder (a date, a
+                                    // footer) is a prompt, not content:
+                                    // LibreOffice doesn't draw it, and neither
+                                    // do we.
+                                    if !has_text && !shape.is_tx_box && role.is_none() {
                                         buf.clear();
                                         continue;
                                     }
@@ -854,8 +914,12 @@ pub fn read_pptx(path: &str) -> Result<Deck, String> {
                                 
                                 let rotation = shape.rotation.unwrap_or(0.0);
 
-                                if shape.is_tx_box || (shape.has_tx_body && has_text) {
-                                    let (runs, body) = shape.resolve(text_style);
+                                if shape.is_tx_box || (shape.has_tx_body && has_text) || role.is_some() {
+                                    let (runs, mut body) = shape.resolve(text_style);
+                                    body.placeholder = role;
+                                    let blank = role.is_some() && !has_text;
+                                    let text = if blank { String::new() } else { text };
+                                    let runs = if blank { Vec::new() } else { runs };
                                     objects.push(SlideObject::TextBox { text, x, y, w, h, rotation, runs: scale.text_runs(&runs), body });
                                 } else {
                                     // The shape as the file draws it: its own
@@ -969,77 +1033,77 @@ pub fn read_pptx(path: &str) -> Result<Deck, String> {
             transition: parse_transition(&slide_xml),
             builds: super::timing::read_builds(&slide_xml, |spid| object_ids.iter().position(|id| *id == Some(spid))),
             ids: Default::default(),
+            layout: None,
         });
     }
 
-    // ── Masters: one entry per distinct layout (master decorations +
-    // layout decorations, placeholders skipped). ────────────────────────
+    // ── Masters: one per slideMaster part, with all its layouts
+    // (decks_core::layouts): the master's decorations, and each layout's own
+    // background, decorations and placeholder places. A slide names its
+    // master and its layout. ────────────────────────────────────────────
     let mut masters: Vec<MasterSlide> = Vec::new();
     {
-        let mut layout_to_idx: std::collections::HashMap<String, usize> =
-            std::collections::HashMap::new();
+        // Layout part -> (master, layout); `None` for a master this writer
+        // wrote without layouts (one empty blank layout, which is no layout).
+        let mut slot_of: std::collections::HashMap<String, (usize, Option<usize>)> = std::collections::HashMap::new();
         let read_part = |archive: &mut zip::ZipArchive<File>, budget: &mut ZipBudget, name: &str| -> String {
             archive.optional_part_to_string(name, budget)
         };
+        let targets = |rels: &str, kind: &str| -> Vec<String> {
+            rels.split("Target=\"")
+                .skip(1)
+                .filter_map(|s| s.split('"').next())
+                .filter(|t| t.contains(kind))
+                .map(|t| format!("ppt/{}", t.trim_start_matches("../")))
+                .collect()
+        };
+        let rels_of = |archive: &mut zip::ZipArchive<File>, budget: &mut ZipBudget, part: &str| -> String {
+            let dir = Path::new(part).parent().unwrap_or(Path::new("ppt"));
+            let file = Path::new(part).file_name().unwrap_or_default().to_string_lossy().to_string();
+            archive.optional_part_to_string(&format!("{}/_rels/{}.rels", dir.to_string_lossy(), file), budget)
+        };
         for (i, layout_path) in slide_layout_paths.iter().enumerate() {
             let Some(layout_path) = layout_path else { continue };
-            let idx = if let Some(&idx) = layout_to_idx.get(layout_path) {
-                idx
-            } else {
+            if !slot_of.contains_key(layout_path) {
                 let layout_xml = read_part(&mut archive, &mut budget, layout_path);
                 if layout_xml.is_empty() {
                     continue;
                 }
-                // Layout rels → its slideMaster part.
-                let dir = Path::new(layout_path).parent().unwrap_or(Path::new("ppt"));
-                let file = Path::new(layout_path)
-                    .file_name()
-                    .unwrap_or_default()
-                    .to_string_lossy()
-                    .to_string();
-                let rels = read_part(
-                    &mut archive,
-                    &mut budget,
-                    &format!("{}/_rels/{}.rels", dir.to_string_lossy(), file),
-                );
-                let master_path = rels
-                    .split("Target=\"")
-                    .skip(1)
-                    .filter_map(|s| s.split('"').next())
-                    .find(|t| t.contains("slideMaster"))
-                    .map(|t| format!("ppt/{}", t.trim_start_matches("../")));
-                let master_xml = master_path
-                    .as_deref()
-                    .map(|p| read_part(&mut archive, &mut budget, p))
-                    .unwrap_or_default();
-
-                // Master rels → theme part → body font. A master with no
+                let layout_rels = rels_of(&mut archive, &mut budget, layout_path);
+                let master_path = targets(&layout_rels, "slideMaster").into_iter().next();
+                let master_xml = master_path.as_deref().map(|p| read_part(&mut archive, &mut budget, p)).unwrap_or_default();
+                let master_rels = master_path.as_deref().map(|p| rels_of(&mut archive, &mut budget, p)).unwrap_or_default();
+                // Master rels -> theme part -> body font. A master with no
                 // theme relationship is what this writer used to emit, so
                 // the absence has to fall back rather than fail.
-                let theme_font = master_path
-                    .as_deref()
-                    .and_then(|mp| {
-                        let mdir = Path::new(mp).parent().unwrap_or(Path::new("ppt"));
-                        let mfile =
-                            Path::new(mp).file_name().unwrap_or_default().to_string_lossy().to_string();
-                        let mrels = read_part(
-                            &mut archive,
-                            &mut budget,
-                            &format!("{}/_rels/{}.rels", mdir.to_string_lossy(), mfile),
-                        );
-                        mrels
-                            .split("Target=\"")
-                            .skip(1)
-                            .filter_map(|s| s.split('"').next())
-                            .find(|t| t.contains("theme"))
-                            .map(|t| format!("ppt/{}", t.trim_start_matches("../")))
-                    })
+                let theme_font = targets(&master_rels, "theme")
+                    .into_iter()
+                    .next()
                     .map(|tp| read_part(&mut archive, &mut budget, &tp))
                     .and_then(|tx| parse_theme_font(&tx));
-
-                let (master_bg, mut shapes) = master_shapes(&master_xml, scale, &theme);
-                let (layout_bg, layout_shapes) = master_shapes(&layout_xml, scale, &theme);
-                shapes.extend(layout_shapes);
+                let (master_bg, shapes) = master_shapes(&master_xml, scale, &theme);
+                // The master's layouts in its own order; a layout its master
+                // doesn't list (or with no master at all) still belongs.
+                let mut layout_paths = targets(&master_rels, "slideLayout");
+                if !layout_paths.contains(layout_path) {
+                    layout_paths.push(layout_path.clone());
+                }
+                let master_phs = parse_placeholders(&master_xml);
+                let mut layouts = Vec::new();
+                for lp in &layout_paths {
+                    let xml = if lp == layout_path { layout_xml.clone() } else { read_part(&mut archive, &mut budget, lp) };
+                    layouts.push(read_layout(&xml, lp, &master_phs, master_bg.as_deref(), scale, &theme));
+                }
+                // What this writer wrote for a master with no layouts: one
+                // empty blank layout. It is no layout.
+                let none = layouts.len() == 1
+                    && layouts[0].kind == crate::layouts::LayoutKind::Blank
+                    && layouts[0].placeholders.is_empty()
+                    && layouts[0].shapes.is_empty()
+                    && layouts[0].background.is_none();
+                if none {
+                    layouts.clear();
+                }
                 // The master's own name if either part records one;
                 // the layout's file stem only as a last resort, which is
                 // all a package written before this existed offers.
@@ -1051,22 +1115,25 @@ pub fn read_pptx(path: &str) -> Result<Deck, String> {
                             .map(|s| s.to_string_lossy().to_string())
                             .unwrap_or_else(|| "Master".into())
                     });
+                let mi = masters.len();
+                // A layout-less master keeps a layout's background, as the
+                // one blank layout carried the master's.
+                let layout_bg = if none { parse_layout_background(&layout_xml, scale, &theme) } else { None };
                 masters.push(MasterSlide {
                     name,
-                    background: layout_bg
-                        .or(master_bg)
-                        .unwrap_or_else(|| "#ffffff".into()),
-                    default_font: theme_font
-                        .unwrap_or_else(|| MasterSlide::DEFAULT_FONT.into()),
+                    background: master_bg.or(layout_bg).unwrap_or_else(|| "#ffffff".into()),
+                    default_font: theme_font.unwrap_or_else(|| MasterSlide::DEFAULT_FONT.into()),
                     shapes,
                     page_emu: None,
+                    layouts,
                 });
-                let idx = masters.len() - 1;
-                layout_to_idx.insert(layout_path.clone(), idx);
-                idx
-            };
-            if let Some(s) = slides.get_mut(i) {
-                s.master_idx = Some(idx);
+                for (j, lp) in layout_paths.iter().enumerate() {
+                    slot_of.insert(lp.clone(), (mi, (!none).then_some(j)));
+                }
+            }
+            if let (Some(s), Some(&(mi, layout))) = (slides.get_mut(i), slot_of.get(layout_path)) {
+                s.master_idx = Some(mi);
+                s.layout = layout;
             }
         }
     }
@@ -1077,6 +1144,7 @@ pub fn read_pptx(path: &str) -> Result<Deck, String> {
             default_font: MasterSlide::DEFAULT_FONT.into(),
             shapes: vec![],
             page_emu: None,
+            layouts: Vec::new(),
         });
     }
 
@@ -1090,6 +1158,7 @@ pub fn read_pptx(path: &str) -> Result<Deck, String> {
             transition: Default::default(),
             builds: Vec::new(),
             ids: Default::default(),
+            layout: None,
         });
     }
 

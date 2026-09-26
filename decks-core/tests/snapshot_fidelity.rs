@@ -52,6 +52,7 @@ fn slide_of(objects: Vec<SlideObject>, notes: &str, background: &str) -> Slide {
         transition: Default::default(),
         builds: Vec::new(),
         ids: Default::default(),
+        layout: None,
     }
 }
 
@@ -327,6 +328,7 @@ fn masters_survive_a_snapshot() {
                     default_font: "Cantarell".into(),
                     shapes: vec![text_box("a footer on the master", 20.0, 500.0)],
                     page_emu: None,
+                    layouts: Vec::new(),
                 },
                 MasterSlide {
                     name: "Second".into(),
@@ -334,6 +336,7 @@ fn masters_survive_a_snapshot() {
                     default_font: "Cantarell".into(),
                     shapes: vec![],
                     page_emu: None,
+                    layouts: Vec::new(),
                 },
             ],
             slides: vec![
@@ -346,6 +349,7 @@ fn masters_survive_a_snapshot() {
                     transition: Default::default(),
                     builds: Vec::new(),
                     ids: Default::default(),
+                    layout: None,
                 },
                 // On the *second* master, which is what makes the mapping
                 // testable: a reader that loses it falls back to master 0,
@@ -360,6 +364,7 @@ fn masters_survive_a_snapshot() {
                     transition: Default::default(),
                     builds: Vec::new(),
                     ids: Default::default(),
+                    layout: None,
                 },
             ],
         };
@@ -543,6 +548,7 @@ fn the_masters_font_survives_a_snapshot() {
                 default_font: "Liberation Serif".into(),
                 shapes: vec![],
                 page_emu: None,
+                layouts: Vec::new(),
             }],
             slides: vec![Slide {
                 title: String::new(),
@@ -553,6 +559,7 @@ fn the_masters_font_survives_a_snapshot() {
                 transition: Default::default(),
                 builds: Vec::new(),
                 ids: Default::default(),
+                layout: None,
             }],
         };
         let back = through_a_snapshot(&deck, kind, "master-font");
@@ -590,6 +597,7 @@ fn masters_keep_their_own_font_in_pptx_but_share_one_in_odp() {
                 default_font: "Liberation Serif".into(),
                 shapes: vec![],
                 page_emu: None,
+                layouts: Vec::new(),
             },
             MasterSlide {
                 name: "Second".into(),
@@ -597,6 +605,7 @@ fn masters_keep_their_own_font_in_pptx_but_share_one_in_odp() {
                 default_font: "Liberation Mono".into(),
                 shapes: vec![],
                 page_emu: None,
+                layouts: Vec::new(),
             },
         ],
         slides: vec![
@@ -609,6 +618,7 @@ fn masters_keep_their_own_font_in_pptx_but_share_one_in_odp() {
                 transition: Default::default(),
                 builds: Vec::new(),
                 ids: Default::default(),
+                layout: None,
             },
             Slide {
                 title: String::new(),
@@ -619,6 +629,7 @@ fn masters_keep_their_own_font_in_pptx_but_share_one_in_odp() {
                 transition: Default::default(),
                 builds: Vec::new(),
                 ids: Default::default(),
+                layout: None,
             },
         ],
     };
@@ -662,6 +673,7 @@ fn the_pptx_declares_the_theme_part_it_ships() {
             default_font: "Liberation Serif".into(),
             shapes: vec![],
             page_emu: None,
+            layouts: Vec::new(),
         }],
         slides: vec![Slide {
             title: String::new(),
@@ -672,6 +684,7 @@ fn the_pptx_declares_the_theme_part_it_ships() {
             transition: Default::default(),
             builds: Vec::new(),
             ids: Default::default(),
+            layout: None,
         }],
     };
     let bytes = decks_core::write_deck_bytes("pptx", &deck).expect("write pptx");
@@ -811,6 +824,7 @@ fn a_master_decorations_run_styling_survives_a_snapshot() {
                     body: Default::default(),
                 }],
                 page_emu: None,
+                layouts: Vec::new(),
             }],
         };
         let back = through_a_snapshot(&deck, kind, "masterruns");
@@ -891,6 +905,7 @@ fn a_masters_run_styles_do_not_collide_with_a_slides_in_odp() {
                 body: Default::default(),
             }],
             page_emu: None,
+            layouts: Vec::new(),
         }],
     };
     let back = through_a_snapshot(&deck, "odp", "stylecollide");
@@ -1453,6 +1468,7 @@ fn paragraph_styles_survive_a_snapshot() {
         anchor: Anchor::Middle,
         insets: Some(Insets { left: 9.6, top: 4.8, right: 9.6, bottom: 4.8 }),
         autofit: Some(decks_core::engine::Autofit { font_scale: 0.625, line_reduction: 0.2 }),
+        placeholder: None,
     };
     let deck = deck_of(vec![slide_of(
         vec![SlideObject::TextBox {

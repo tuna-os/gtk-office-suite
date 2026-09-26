@@ -27,6 +27,8 @@ pub struct SlideSnapshot {
     pub title: String,
     /// The slide's speaker notes.
     pub notes: String,
+    /// The slide's layout and its name.
+    pub layout: Option<(usize, String)>,
     pub objects: Vec<ObjectSnapshot>,
 }
 
@@ -64,6 +66,7 @@ fn object_snapshot(index: usize, obj: &SlideObject) -> ObjectSnapshot {
 
 pub fn snapshot(controller: &DecksController) -> DeckSnapshot {
     let slides = controller.slides.borrow();
+    let masters_ref = controller.masters.borrow();
     let slide_count = slides.len();
     let snapshots = slides
         .iter()
@@ -72,6 +75,15 @@ pub fn snapshot(controller: &DecksController) -> DeckSnapshot {
             index,
             title: slide.title.clone(),
             notes: slide.notes.clone(),
+            layout: slide.layout.map(|l| {
+                let name = slide
+                    .master_idx
+                    .and_then(|m| masters_ref.get(m))
+                    .and_then(|m| m.layouts.get(l))
+                    .map(|l| l.name.clone())
+                    .unwrap_or_default();
+                (l, name)
+            }),
             objects: slide
                 .objects
                 .iter()
@@ -80,7 +92,7 @@ pub fn snapshot(controller: &DecksController) -> DeckSnapshot {
                 .collect(),
         })
         .collect();
-    let masters = controller.masters.borrow().iter().map(|m| (m.name.clone(), m.shapes.len())).collect();
+    let masters = masters_ref.iter().map(|m| (m.name.clone(), m.shapes.len())).collect();
     DeckSnapshot { slide_count, masters, editing_master: controller.editing_master(), slides: snapshots }
 }
 
@@ -133,10 +145,11 @@ impl DeckSnapshot {
                     .collect::<Vec<_>>()
                     .join(",");
                 format!(
-                    "{{\"index\":{},\"title\":{},\"notes\":{},\"objects\":[{}]}}",
+                    "{{\"index\":{},\"title\":{},\"notes\":{},\"layout\":{},\"objects\":[{}]}}",
                     s.index,
                     json_str(&s.title),
                     json_str(&s.notes),
+                    s.layout.as_ref().map_or("null".to_string(), |(i, n)| format!("{{\"index\":{i},\"name\":{}}}", json_str(n))),
                     objects,
                 )
             })
@@ -162,7 +175,7 @@ mod tests {
     use crate::engine::Slide;
 
     fn slide(title: &str) -> Slide {
-        Slide { title: title.into(), background: "#fff".into(), objects: vec![], notes: String::new(), master_idx: Some(0), transition: Default::default(), builds: Vec::new(), ids: Default::default() }
+        Slide { title: title.into(), background: "#fff".into(), objects: vec![], notes: String::new(), master_idx: Some(0), transition: Default::default(), builds: Vec::new(), ids: Default::default(), layout: None }
     }
 
     #[test]

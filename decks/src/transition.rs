@@ -158,6 +158,7 @@ fn draw_magic_move(cr: &cairo::Context, m: &MagicMove, t: f64, canvas_w: f64, ca
     let _ = cr.pop_group_to_source();
     let _ = cr.paint_with_alpha(1.0 - e);
     let master = master_for(to, 0, &m.masters);
+    let master = master.as_deref();
     for f in decks_core::magic_move::frame(&m.from.objects, &m.to.objects, &m.pairs, t) {
         if f.opacity <= 0.001 {
             continue;
@@ -365,6 +366,7 @@ mod tests {
             transition: Transition::MagicMove,
             builds: Vec::new(),
             ids: Default::default(),
+            layout: None,
         };
         let from = slide(vec![sq(100.0, red)]);
         let mut arriving = sq(430.0, blue);

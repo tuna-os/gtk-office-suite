@@ -39,6 +39,7 @@ fn decks() -> Vec<(&'static str, Deck)> {
                 transition: Default::default(),
                 builds: Vec::new(),
                 ids: Default::default(),
+                layout: None,
             })
             .collect(),
         ..Deck::default()

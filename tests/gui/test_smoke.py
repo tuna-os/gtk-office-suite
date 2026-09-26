@@ -4066,6 +4066,51 @@ class DecksMasterViewSmoke(BaseGUITestCase):
         self.assertIsNone(self.process.poll(), "decks crashed editing the master")
 
 
+class DecksLayoutsSmoke(BaseGUITestCase):
+    """Slide layouts (Keynote's and Google Slides' Layout menu): a deck
+    from a theme has the standard layouts, and the inspector shows the
+    current slide's; putting the bulleted slide on Two Content moves its
+    boxes and adds the second body, and one Undo takes it back.
+    (Saving layouts is decks-core's layouts_round_trip and the oracle.)"""
+
+    app_name = "decks"
+
+    def setUp(self):
+        self.isolate_snapshot("decks-layouts-snapshot-")
+        super().setUp()
+
+    def test_a_slide_goes_on_another_layout_and_back(self):
+        import subprocess
+        aid = "org.tunaos.decks"
+        snap = lambda: self.trigger_snapshot(aid)
+        # A Paper deck, from the template chooser.
+        self.gapplication_action(aid, "new-from-template")
+        self.wait_until(lambda: self.app.child(name="Paper", roleName="toggle button"), lambda b: b is not None and b.showing,
+                        description="the chooser").do_action(0)
+        self.app.child(name="Create", roleName="push button").do_action(0)
+        self.wait_until(snap, lambda s: s and s["slide_count"] == 2, interval=0.5, description="the theme's slides")
+        subprocess.run(["gapplication", "action", aid, "go-to-slide", "uint32 1"], check=True, timeout=5)
+        before = self.wait_until(snap, lambda s: s["slides"][1]["layout"] is not None, interval=0.5, description="the second slide")
+        self.assertEqual(before["slides"][1]["layout"]["name"], "Title and Content", before)
+        self.assertEqual(len(before["slides"][1]["objects"]), 2)
+        # The inspector's Slide group has the Layout row.
+        self.app.child(name="Format", roleName="toggle button").do_action(0)
+        self.wait_until(lambda: self.app.findChild(lambda n: n.name == "Layout" and n.showing, retry=False, requireResult=False),
+                        lambda n: n is not None, description="the Layout row")
+        subprocess.run(["gapplication", "action", aid, "apply-layout", "uint32 3"], check=True, timeout=5)
+        after = self.wait_until(snap, lambda s: (s["slides"][1]["layout"] or {}).get("name") == "Two Content", interval=0.5,
+                                description="the slide on Two Content")
+        objects = after["slides"][1]["objects"]
+        self.assertEqual(len(objects), 3, "the second body is added")
+        self.assertEqual([round(o["x"]) for o in objects], [80, 80, 490], objects)
+        self.gapplication_action(aid, "undo")
+        self.wait_until(snap, lambda s: s["slides"][1]["layout"]["name"] == "Title and Content" and len(s["slides"][1]["objects"]) == 2,
+                        interval=0.5, description="one undo to take the layout back")
+        self.gapplication_action(aid, "redo")
+        self.wait_until(snap, lambda s: s["slides"][1]["layout"]["name"] == "Two Content", interval=0.5, description="redo")
+        self.assertIsNone(self.process.poll(), "decks crashed applying a layout")
+
+
 class DecksInsertBarSmoke(BaseGUITestCase):
     """The Insert buttons in the header bar (DESIGN-UI.md, "Insert
     buttons, not menus"): the Shape button's library is searchable, and

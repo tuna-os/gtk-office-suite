@@ -492,6 +492,30 @@ impl GraphicStyles {
     }
 }
 
+/// A placeholder frame's `presentation:class` (odp_layouts), and, while
+/// it is empty, `presentation:placeholder`. A presentation object takes a
+/// presentation style (`PRESENTATION_STYLE`): Impress reads the class as a
+/// placeholder only on a frame that has one.
+///
+/// `frame_style` is the box's frame style (anchor, padding), if it has one:
+/// a placeholder names its presentation twin instead of it.
+fn frame_attrs(body: &crate::engine::TextBody, text: &str, frame_style: Option<String>) -> String {
+    let empty = if text.is_empty() { " presentation:placeholder=\"true\"" } else { "" };
+    match (body.placeholder, frame_style) {
+        (Some(role), style) => format!(
+            " presentation:style-name=\"{}\" presentation:class=\"{}\"{empty}",
+            style.map_or(PRESENTATION_STYLE.to_string(), |s| format!("{s}pr")),
+            role.to_odf()
+        ),
+        (None, Some(style)) => format!(" draw:style-name=\"{style}\""),
+        (None, None) => String::new(),
+    }
+}
+
+/// The presentation style every placeholder frame names: no fill, no
+/// outline, as a text box of ours has.
+const PRESENTATION_STYLE: &str = "prDecks";
+
 fn shapes_xml(
     shapes: &[SlideObject],
     style_of: &dyn Fn(&RunStyle) -> usize,
@@ -514,17 +538,14 @@ fn shapes_xml(
                             .collect()
                     };
                     let paras = graphics.text.paragraphs(body, &inner);
-                    let style = graphics
-                        .text
-                        .frame_name(body)
-                        .map(|n| format!("draw:style-name=\"{n}\" "))
-                        .unwrap_or_default();
+                    let style = graphics.text.frame_name(body);
                     pages.push_str(&format!(
-                        "<draw:frame {style}{}><draw:text-box>{paras}</draw:text-box></draw:frame>",
-                        geometry(*x, *y, *w, *h, *rotation)
+                        "<draw:frame {}{}><draw:text-box>{paras}</draw:text-box></draw:frame>",
+                        geometry(*x, *y, *w, *h, *rotation),
+                        frame_attrs(body, text, style)
                     ));
                 }
-                SlideObject::TextBox { text, x, y, w, h, rotation, runs, .. } => {
+                SlideObject::TextBox { text, x, y, w, h, rotation, runs, body } => {
                     let inner: String = if runs.is_empty() {
                         text.split('\n')
                             .map(|l| format!("<text:p>{}</text:p>", esc(l)))
@@ -533,9 +554,10 @@ fn shapes_xml(
                         styled_paragraphs(runs, style_of, prefix)
                     };
                     pages.push_str(&format!(
-                        "<draw:frame {}>\
+                        "<draw:frame {}{}>\
                          <draw:text-box>{inner}</draw:text-box></draw:frame>",
-                        geometry(*x, *y, *w, *h, *rotation)
+                        geometry(*x, *y, *w, *h, *rotation),
+                        frame_attrs(body, text, None)
                     ));
                 }
                 SlideObject::Rect { x, y, w, h, rotation } => {
@@ -662,17 +684,25 @@ fn content_xml(deck: &Deck, media: &mut Vec<Media>) -> Result<String, String> {
         } else {
             format!(" draw:name=\"{}\"", esc(&slide.title))
         };
-        pages.push_str(&format!(
-            "<draw:page{name_attr}{dp_attr}{}>",
-            deck
-                .masters
-                .get(slide.master_idx.unwrap_or(0))
-                .map(|m| format!(
-                    " draw:master-page-name=\"{}\"",
-                    esc(&encode_style_name(&m.name))
-                ))
-                .unwrap_or_default(),
-        ));
+        // Its master page, or its layout's own one (odp_layouts), and its
+        // layout's page layout.
+        let master_attrs = deck
+            .masters
+            .get(slide.master_idx.unwrap_or(0))
+            .map(|m| {
+                let style = encode_style_name(&m.name);
+                let layout = slide.layout.filter(|j| *j < m.layouts.len()).or((!m.layouts.is_empty()).then_some(0));
+                let page = match layout {
+                    Some(j) if crate::odp_layouts::has_look(&m.layouts[j]) => crate::odp_layouts::look_page_name(&style, j),
+                    _ => style.clone(),
+                };
+                let layout_attr = layout
+                    .map(|j| format!(" presentation:presentation-page-layout-name=\"{}\"", esc(&crate::odp_layouts::page_layout_name(&style, j))))
+                    .unwrap_or_default();
+                format!(" draw:master-page-name=\"{}\"{layout_attr}", esc(&page))
+            })
+            .unwrap_or_default();
+        pages.push_str(&format!("<draw:page{name_attr}{dp_attr}{master_attrs}>"));
         let shapes = shapes_xml(&slide.objects, &style_of, SLIDE_STYLE_PREFIX, media, &mut graphics)?;
         if slide.builds.is_empty() {
             pages.push_str(&shapes);
@@ -698,6 +728,10 @@ fn content_xml(deck: &Deck, media: &mut Vec<Media>) -> Result<String, String> {
         pages.push_str("</draw:page>");
     }
     auto.push_str(&graphics.declare());
+    auto.push_str(&format!(
+        "<style:style style:name=\"{PRESENTATION_STYLE}\" style:family=\"presentation\">\
+         <style:graphic-properties draw:fill=\"none\" draw:stroke=\"none\"/></style:style>"
+    ));
 
     Ok(format!(
         "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\
@@ -811,6 +845,7 @@ fn styles_xml(deck: &Deck, media: &mut Vec<Media>) -> Result<String, String> {
     );
     let mut pages = String::new();
     let mut master_graphics = GraphicStyles::new("mgr", deck);
+    let mut page_layouts = String::new();
     for (i, master) in deck.masters.iter().enumerate() {
         let bg = master.background.trim_start_matches('#');
         let dp = if bg.len() == 6 {
@@ -836,6 +871,39 @@ fn styles_xml(deck: &Deck, media: &mut Vec<Media>) -> Result<String, String> {
             esc(&encode_style_name(&master.name)),
             shapes_xml(&master.shapes, &style_of, &master_style_prefix(i), media, &mut master_graphics)?,
         ));
+        // A layout with a look of its own: one more master page, the
+        // master's decorations and then the layout's (odp_layouts).
+        let style = encode_style_name(&master.name);
+        for (j, l) in master.layouts.iter().enumerate().filter(|(_, l)| crate::odp_layouts::has_look(l)) {
+            let mut shapes = master.shapes.clone();
+            shapes.extend(l.shapes.iter().cloned());
+            let lstyles = distinct_run_styles(&shapes);
+            let prefix = format!("{}L{}", master_style_prefix(i), j + 1);
+            auto.push_str(&declare_run_styles(&lstyles, &prefix));
+            let style_of = |st: &RunStyle| lstyles.iter().position(|s| s == st).map(|p| p + 1).unwrap_or(0);
+            let bg = l.background.as_deref().unwrap_or(&master.background).trim_start_matches('#').to_string();
+            let ldp = if bg.len() == 6 && !bg.eq_ignore_ascii_case("ffffff") {
+                auto.push_str(&format!(
+                    "<style:style style:name=\"mdp{}l{}\" style:family=\"drawing-page\">\
+                     <style:drawing-page-properties draw:fill=\"solid\" draw:fill-color=\"#{}\"/>\
+                     </style:style>",
+                    i + 1,
+                    j + 1,
+                    bg.to_lowercase(),
+                ));
+                format!(" draw:style-name=\"mdp{}l{}\"", i + 1, j + 1)
+            } else {
+                String::new()
+            };
+            pages.push_str(&format!(
+                "<style:master-page style:name=\"{}\" style:page-layout-name=\"PM1\"{ldp} decks:layout-of=\"{}\" decks:layout=\"{}\">{}</style:master-page>",
+                esc(&crate::odp_layouts::look_page_name(&style, j)),
+                esc(&style),
+                j,
+                shapes_xml(&shapes, &style_of, &prefix, media, &mut master_graphics)?,
+            ));
+        }
+        page_layouts.push_str(&crate::odp_layouts::page_layouts_xml(master, &style, &page_x, &page_y));
     }
     auto.push_str(&master_graphics.declare());
     // ODF wants a font it uses declared as well as referenced; Impress
@@ -861,6 +929,7 @@ fn styles_xml(deck: &Deck, media: &mut Vec<Media>) -> Result<String, String> {
         "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\
          <office:document-styles \
          xmlns:office=\"urn:oasis:names:tc:opendocument:xmlns:office:1.0\" \
+         xmlns:decks=\"{DECKS_NS}\" \
          xmlns:draw=\"urn:oasis:names:tc:opendocument:xmlns:drawing:1.0\" \
          xmlns:presentation=\"urn:oasis:names:tc:opendocument:xmlns:presentation:1.0\" \
          xmlns:text=\"urn:oasis:names:tc:opendocument:xmlns:text:1.0\" \
@@ -871,7 +940,7 @@ fn styles_xml(deck: &Deck, media: &mut Vec<Media>) -> Result<String, String> {
          xmlns:xlink=\"http://www.w3.org/1999/xlink\" \
          office:version=\"1.2\">\
          {font_decls}\
-         <office:styles>{default_style}{gradients}</office:styles>\
+         <office:styles>{default_style}{gradients}{page_layouts}</office:styles>\
          <office:automatic-styles>{auto}</office:automatic-styles>\
          <office:master-styles>{pages}</office:master-styles>\
          </office:document-styles>"
@@ -1175,6 +1244,11 @@ struct Page {
     uses_master: Option<String>,
     /// The page's `draw:style-name` (its drawing-page style).
     style: Option<String>,
+    /// A slide's page layout (`presentation:presentation-page-layout-name`).
+    page_layout: Option<String>,
+    /// A master page that is a layout's look (odp_layouts): its master's
+    /// style name and the layout's index.
+    layout_of: Option<(String, usize)>,
 }
 
 /// Start a paragraph in the text box being read. The break between two
@@ -1275,6 +1349,10 @@ fn parse_pages(
     let mut pages: Vec<Page> = Vec::new();
     let mut uses_master: Option<String> = None;
     let mut page_style: Option<String> = None;
+    let mut page_layout: Option<String> = None;
+    let mut layout_of: Option<(String, usize)> = None;
+    // The frame's `presentation:class`: which placeholder its box fills.
+    let mut frame_class: Option<String> = None;
     let mut reader = Reader::from_str(xml);
     reader.config_mut().trim_text(false);
     let mut slide: Option<Slide> = None;
@@ -1293,7 +1371,7 @@ fn parse_pages(
     let mut paras: Vec<crate::engine::ParaStyle> = Vec::new();
     let body_of = |frame_style: &Option<String>, paras: &mut Vec<crate::engine::ParaStyle>| {
         let (anchor, insets) = text_defs.frame(frame_style.as_deref(), scale);
-        crate::engine::TextBody { paras: std::mem::take(paras), anchor, insets, autofit: None }
+        crate::engine::TextBody { paras: std::mem::take(paras), anchor, insets, autofit: None, placeholder: None }
     };
 
     // `svg:x`/`svg:y` place an unrotated shape; a rotated one carries
@@ -1363,6 +1441,8 @@ fn parse_pages(
                     // escaped (LibreOffice writes "Title_20_Slide").
                     uses_master = attr(e, "draw:master-page-name");
                     page_style = attr(e, "draw:style-name");
+                    page_layout = attr(e, "presentation:presentation-page-layout-name");
+                    layout_of = attr(e, "decks:layout-of").zip(attr(e, "decks:layout").and_then(|j| j.parse().ok()));
                     slide = Some(Slide {
                         title: attr(e, "draw:name")
                             .or_else(|| attr(e, "style:name").map(|n| decode_style_name(&n)))
@@ -1374,12 +1454,15 @@ fn parse_pages(
                         transition: Default::default(),
                         builds: Vec::new(),
                         ids: Default::default(),
+                        layout: None,
                     });
                 }
                 "presentation:notes" => in_notes = true,
                 "draw:frame" => {
                     frame = Some(geo(e));
-                    frame_style = attr(e, "draw:style-name");
+                    // A placeholder frame's style is its presentation style.
+                    frame_style = attr(e, "draw:style-name").or_else(|| attr(e, "presentation:style-name"));
+                    frame_class = attr(e, "presentation:class");
                 }
                 "text:list" => lists.push(attr(e, "text:style-name")),
                 // A picture takes its geometry from the frame around it,
@@ -1553,21 +1636,17 @@ fn parse_pages(
                                 // say both readers lost a styled multi-line
                                 // box's styling, one by discarding it and
                                 // the other by never reading it.
-                                s.objects.push(SlideObject::TextBox {
-                                    text,
-                                    x,
-                                    y,
-                                    w,
-                                    h,
-                                    rotation,
-                                    runs,
-                                    body: body_of(&frame_style, &mut paras),
-                                });
+                                let mut body = body_of(&frame_style, &mut paras);
+                                body.placeholder = frame_class.as_deref().and_then(crate::layouts::Placeholder::from_odf);
+                                s.objects.push(SlideObject::TextBox { text, x, y, w, h, rotation, runs, body });
                             }
                         }
                     }
                 }
-                "draw:frame" => frame = None,
+                "draw:frame" => {
+                    frame = None;
+                    frame_class = None;
+                }
                 "draw:custom-shape" => {
                     if let (Some((lines, runs)), Some((x, y, w, h, rotation))) =
                         (textbox.take(), frame.take())
@@ -1600,7 +1679,13 @@ fn parse_pages(
                             ids.push(last_id.clone());
                         }
                         s.builds = builds.builds(&ids);
-                        pages.push(Page { slide: s, uses_master: uses_master.take(), style: page_style.take() });
+                        pages.push(Page {
+                            slide: s,
+                            uses_master: uses_master.take(),
+                            style: page_style.take(),
+                            page_layout: page_layout.take(),
+                            layout_of: layout_of.take(),
+                        });
                     }
                 }
                 _ => {}
@@ -1693,7 +1778,25 @@ pub fn read(path: &str) -> Result<Deck, String> {
         let mut resolve = |href: &str| extract_picture(href, &mut zip, &mut budget);
         parse_pages(&styles, "style:master-page", &page_bg, &text_styles, &text_defs, &graphic_defs, scale, &mut resolve)?
     };
+    // Layouts (odp_layouts): the page layouts, each master's own (or, in a
+    // file we didn't write, every one), and the master pages that are a
+    // layout's look.
+    let page_layouts = crate::odp_layouts::read_page_layouts(&styles, scale);
+    let tagged = page_layouts.iter().any(|p| p.master.is_some());
+    let mut looks: Vec<Page> = Vec::new();
+    // Per master: its page layouts' style names, in its layouts' order.
+    let mut layout_names: Vec<Vec<String>> = Vec::new();
     for page in master_pages {
+        if page.layout_of.is_some() {
+            looks.push(page);
+            continue;
+        }
+        let style = page.slide.title.clone();
+        let mine: Vec<&crate::odp_layouts::PageLayout> = page_layouts
+            .iter()
+            .filter(|p| if tagged { p.master.as_deref().map(decode_style_name).as_deref() == Some(style.as_str()) } else { true })
+            .collect();
+        layout_names.push(mine.iter().map(|p| p.name.clone()).collect());
         master_idx_by_name.insert(page.slide.title.clone(), masters.len());
         masters.push(MasterSlide {
             name: page.slide.title,
@@ -1701,7 +1804,21 @@ pub fn read(path: &str) -> Result<Deck, String> {
             default_font: doc_font.clone(),
             shapes: page.slide.objects,
             page_emu: None,
+            layouts: mine.into_iter().map(|p| p.layout.clone()).collect(),
         });
+    }
+    // A layout's look page: the master's decorations, then the layout's.
+    let mut look_slot: std::collections::HashMap<String, (usize, usize)> = Default::default();
+    for page in looks {
+        let Some((of, j)) = page.layout_of.clone() else { continue };
+        let Some(&mi) = master_idx_by_name.get(&decode_style_name(&of)) else { continue };
+        let m = &mut masters[mi];
+        let own = m.shapes.len().min(page.slide.objects.len());
+        if let Some(l) = m.layouts.get_mut(j) {
+            l.shapes = page.slide.objects[own..].to_vec();
+            l.background = (page.slide.background != m.background).then(|| page.slide.background.clone());
+            look_slot.insert(page.slide.title.clone(), (mi, j));
+        }
     }
     if masters.is_empty() {
         masters.push(MasterSlide {
@@ -1710,6 +1827,7 @@ pub fn read(path: &str) -> Result<Deck, String> {
             default_font: doc_font.clone(),
             shapes: vec![],
             page_emu: None,
+            layouts: Vec::new(),
         });
     }
 
@@ -1734,12 +1852,18 @@ pub fn read(path: &str) -> Result<Deck, String> {
         if slide.title.trim().is_empty() {
             slide.title = format!("Slide {}", i + 1);
         }
-        slide.master_idx = page
-            .uses_master
-            .as_deref()
-            .map(decode_style_name)
-            .and_then(|n| master_idx_by_name.get(&n).copied())
-            .or(Some(0));
+        let named = page.uses_master.as_deref().map(decode_style_name);
+        if let Some(&(mi, j)) = named.as_ref().and_then(|n| look_slot.get(n)) {
+            slide.master_idx = Some(mi);
+            slide.layout = Some(j);
+        } else {
+            slide.master_idx = named.and_then(|n| master_idx_by_name.get(&n).copied()).or(Some(0));
+            let mi = slide.master_idx.unwrap_or(0);
+            slide.layout = page
+                .page_layout
+                .as_ref()
+                .and_then(|name| layout_names.get(mi)?.iter().position(|n| n == name));
+        }
         deck.slides.push(slide);
     }
 
@@ -1753,6 +1877,7 @@ pub fn read(path: &str) -> Result<Deck, String> {
             transition: Default::default(),
             builds: Vec::new(),
             ids: Default::default(),
+            layout: None,
         });
     }
     Ok(deck)
@@ -1788,6 +1913,7 @@ mod tests {
             transition: Default::default(),
             builds: Vec::new(),
             ids: Default::default(),
+            layout: None,
         }
     }
 
@@ -1983,6 +2109,7 @@ mod tests {
                 default_font: "Sans".into(),
                 shapes: vec![],
                 page_emu: None,
+                layouts: Vec::new(),
             }],
             slides: vec![Slide {
                 title: "one".into(),
@@ -1993,6 +2120,7 @@ mod tests {
                 transition: Default::default(),
                 builds: Vec::new(),
                 ids: Default::default(),
+                layout: None,
             }],
         };
         let styles = styles_xml(&deck, &mut Vec::new()).unwrap();
@@ -2028,6 +2156,7 @@ mod tests {
                 default_font: "Sans".into(),
                 shapes: vec![],
                 page_emu: None,
+                layouts: Vec::new(),
             }],
             slides: vec![Slide {
                 title: "p".into(),
@@ -2045,6 +2174,7 @@ mod tests {
                 transition: Default::default(),
                 builds: Vec::new(),
                 ids: Default::default(),
+                layout: None,
             }],
         }
     }
@@ -2233,6 +2363,7 @@ mod tests {
             transition: Default::default(),
             builds: Vec::new(),
             ids: Default::default(),
+            layout: None,
         }];
         let rt = round_trip(&deck);
         let close = |a: f64, b: f64| (a - b).abs() < 0.1;
@@ -2286,6 +2417,7 @@ mod tests {
             transition: Default::default(),
             builds: Vec::new(),
             ids: Default::default(),
+            layout: None,
         }];
         let rt = round_trip(&deck);
         let SlideObject::TextBox { runs, .. } = &rt.slides[0].objects[0] else { panic!() };
@@ -2446,6 +2578,7 @@ mod tests {
                 transition: Default::default(),
                 builds: Vec::new(),
                 ids: Default::default(),
+                layout: None,
             }],
             ..Default::default()
         }
@@ -2503,6 +2636,7 @@ mod default_font_tests {
                 default_font: "Liberation Serif".into(),
                 shapes: vec![],
                 page_emu: None,
+                layouts: Vec::new(),
             }],
         };
         let xml = super::styles_xml(&deck, &mut Vec::new()).unwrap();
@@ -2531,6 +2665,7 @@ mod default_font_tests {
                 default_font: "   ".into(),
                 shapes: vec![],
                 page_emu: None,
+                layouts: Vec::new(),
             }],
         };
         let xml = super::styles_xml(&deck, &mut Vec::new()).unwrap();

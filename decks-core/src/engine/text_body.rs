@@ -241,6 +241,8 @@ pub struct TextBody {
     pub insets: Option<Insets>,
     /// `Some` when the box shrinks text on overflow.
     pub autofit: Option<Autofit>,
+    /// The layout placeholder the box fills (decks_core::layouts), if any.
+    pub placeholder: Option<crate::layouts::Placeholder>,
 }
 
 impl TextBody {

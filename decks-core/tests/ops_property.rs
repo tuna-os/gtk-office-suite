@@ -57,6 +57,7 @@ fn slide(title: &str, xs: &[f64]) -> Slide {
         transition: Transition::None,
         builds: vec![],
         ids: Default::default(),
+        layout: None,
     }
 }
 

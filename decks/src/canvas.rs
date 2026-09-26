@@ -264,15 +264,22 @@ pub fn accent_rgb(widget: &impl gtk4::prelude::WidgetExt) -> (f64, f64, f64) {
 /// hand-written `mi < masters.len()` bounds check — which is three chances
 /// for the styles applied to one slide to disagree about which master it
 /// even has.
+///
+/// A slide on a layout with a look of its own gets the master with that
+/// layout's background and decorations over it (`layouts::effective_master`).
 pub fn master_for<'a>(
     slides: &[Slide],
     current_slide: usize,
     masters: &'a [MasterSlide],
-) -> Option<&'a MasterSlide> {
-    slides
-        .get(current_slide)?
-        .master_idx
-        .and_then(|mi| masters.get(mi))
+) -> Option<std::borrow::Cow<'a, MasterSlide>> {
+    let slide = slides.get(current_slide)?;
+    let m = slide.master_idx.and_then(|mi| masters.get(mi))?;
+    let own_look = slide.layout.and_then(|l| m.layouts.get(l)).is_some_and(|l| l.background.is_some() || !l.shapes.is_empty());
+    Some(if own_look {
+        std::borrow::Cow::Owned(decks_core::layouts::effective_master(m, slide.layout))
+    } else {
+        std::borrow::Cow::Borrowed(m)
+    })
 }
 
 /// The font family a slide's **document** text is drawn in: the master's
@@ -482,6 +489,7 @@ pub fn draw_slide_objects(
 ) {
     let (frame, bg) = draw_slide_base(cr, width, height, slides, index, masters, chrome);
     let master = master_for(slides, index, masters);
+    let master = master.as_deref();
     let _ = cr.save();
     cr.rectangle(frame.0, frame.1, frame.2, frame.3);
     cr.clip();
@@ -533,7 +541,9 @@ pub fn draw_slide_base(
     let mut slide_bg_rgb: (f64, f64, f64) = (1.0, 1.0, 1.0);
     if current_slide < slides.len() {
         let slide_bg = &slides[current_slide].background;
-        let master_bg = master_for(slides, current_slide, masters)
+        let master = master_for(slides, current_slide, masters);
+        let master_bg = master
+            .as_deref()
             .map(|m| m.background.as_str())
             .filter(|b| !b.is_empty() && *b != "#ffffff");
         let bg: &str = if slide_bg == "#ffffff" || slide_bg.is_empty() {
@@ -565,6 +575,7 @@ pub fn draw_slide_base(
 
     // Draw master slide shapes (background pattern, logos, headers)
     if let Some(master) = master_for(slides, current_slide, masters) {
+        let master: &MasterSlide = &master;
         for obj in &master.shapes {
             cr.save().unwrap();
             // Render master shapes with reduced opacity
@@ -601,6 +612,35 @@ pub fn draw_slide_base(
     ((ox, oy, slide_w, slide_h), slide_bg_rgb)
 }
 
+/// An empty layout placeholder, while editing: a dashed outline and its
+/// prompt ("Click to add title"), dimmed. Never drawn in a show, a
+/// thumbnail or an export, which is where an empty box is simply empty.
+fn draw_placeholder_prompt(cr: &cairo::Context, obj: &SlideObject, rect: (f64, f64, f64, f64), scale: f64, bg: (f64, f64, f64)) {
+    let SlideObject::TextBox { text, body, .. } = obj else { return };
+    let Some(role) = body.placeholder.filter(|_| text.is_empty()) else { return };
+    let dark = 0.299 * bg.0 + 0.587 * bg.1 + 0.114 * bg.2 < 0.5;
+    let ink = if dark { 1.0 } else { 0.0 };
+    let (x, y, w, h) = rect;
+    let _ = cr.save();
+    cr.set_source_rgba(ink, ink, ink, 0.35);
+    cr.set_line_width(1.0);
+    cr.set_dash(&[4.0, 3.0], 0.0);
+    cr.rectangle(x, y, w, h);
+    let _ = cr.stroke();
+    let layout = pangocairo::functions::create_layout(cr);
+    let size = if role == decks_core::layouts::Placeholder::Title { 28.0 } else { 18.0 };
+    // The editor's furniture, like the "Slide N" caption: not the author's font.
+    let mut desc = pango::FontDescription::from_string("Sans");
+    desc.set_absolute_size(size * scale * pango::SCALE as f64);
+    layout.set_font_description(Some(&desc));
+    layout.set_text(role.prompt());
+    let (tw, th) = layout.pixel_size();
+    cr.set_source_rgba(ink, ink, ink, 0.45);
+    cr.move_to(x + (w - tw as f64) / 2.0, y + (h - th as f64) / 2.0);
+    pangocairo::functions::show_layout(cr, &layout);
+    let _ = cr.restore();
+}
+
 #[allow(clippy::too_many_arguments)]
 pub fn draw_slide_multi(
     cr: &cairo::Context, width: f64, height: f64,
@@ -615,9 +655,11 @@ pub fn draw_slide_multi(
     // Draw objects
     if current_slide < slides.len() {
         let master = master_for(slides, current_slide, masters);
+        let master = master.as_deref();
         let frame = (ox, oy, slide_w, slide_h);
         for (oi, obj) in slides[current_slide].objects.iter().enumerate() {
             let rect = draw_object(cr, obj, frame, slide_bg_rgb, master);
+            draw_placeholder_prompt(cr, obj, rect, slide_w / 960.0, slide_bg_rgb);
             if selected_indices.contains(&oi) {
                 draw_selection(cr, selected_indices.len(), rect, (ar, ag, ab));
             }
@@ -1025,6 +1067,7 @@ mod font_tests {
                 Build { object: 1, effect: BuildEffect::Dissolve, out: false },
             ],
             ids: Default::default(),
+            layout: None,
         };
         let slides = [slide];
         let (w, h) = (960, 540);
@@ -1065,6 +1108,7 @@ mod font_tests {
             default_font: font.into(),
             shapes: vec![],
             page_emu: None,
+            layouts: Vec::new(),
         }
     }
 
@@ -1078,6 +1122,7 @@ mod font_tests {
             transition: Default::default(),
             builds: Vec::new(),
             ids: Default::default(),
+            layout: None,
         }
     }
 
@@ -1149,7 +1194,7 @@ mod font_tests {
         let masters = vec![master("A"), master("B")];
         let slides = vec![slide(Some(1))];
         assert_eq!(
-            master_for(&slides, 0, &masters).map(|m| m.default_font.as_str()),
+            master_for(&slides, 0, &masters).map(|m| m.default_font.clone()).as_deref(),
             Some("B")
         );
     }
@@ -1164,7 +1209,7 @@ mod font_tests {
         let slides = vec![slide(Some(7))];
         assert!(master_for(&slides, 0, &masters).is_none());
         // ...and the font falls back rather than panicking on the index.
-        assert_eq!(master_font_family(master_for(&slides, 0, &masters)), "Sans");
+        assert_eq!(master_font_family(master_for(&slides, 0, &masters).as_deref()), "Sans");
     }
 
     #[test]

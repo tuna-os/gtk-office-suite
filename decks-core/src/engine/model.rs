@@ -27,6 +27,9 @@ pub struct Slide {
     /// id, one id per object, and the ids of deleted objects (tombstones).
     /// Readers leave it empty; ops fill it in (`ops::ensure_ids`).
     pub ids: crate::ops::SlideIds,
+    /// Which of its master's layouts the slide uses (an index into
+    /// `MasterSlide::layouts`); `None` for none.
+    pub layout: Option<usize>,
 }
 
 /// A slide transition.
@@ -71,6 +74,10 @@ pub struct MasterSlide {
     /// `None` is the pptx writer's default, 10in x 5.625in. A pptx has one
     /// size for the whole deck; the first master's is the one written.
     pub page_emu: Option<(f64, f64)>,
+    /// Its layouts (decks_core::layouts): the arrangements of placeholders
+    /// its slides use, each with any look of its own. Empty for a master
+    /// read from a file that has none, and for the default master.
+    pub layouts: Vec<crate::layouts::Layout>,
 }
 
 impl MasterSlide {
@@ -177,6 +184,7 @@ impl Deck {
             default_font: MasterSlide::DEFAULT_FONT.into(),
             shapes: vec![],
             page_emu: None,
+            layouts: Vec::new(),
         };
         Self {
             slides: vec![Slide {
@@ -188,6 +196,7 @@ impl Deck {
                 transition: Default::default(),
                 builds: Vec::new(),
                 ids: Default::default(),
+                layout: None,
             }],
             masters: vec![default_master],
         }
