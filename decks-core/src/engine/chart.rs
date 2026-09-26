@@ -422,7 +422,9 @@ const ODF_NS: &str = "xmlns:office=\"urn:oasis:names:tc:opendocument:xmlns:offic
 
 /// An embedded chart object's `content.xml`: the chart, `w_pt` x `h_pt`,
 /// and its data as the object's local table (categories in column A, the
-/// series in B under its name).
+/// series in B under its name). The table is the chart's last child, as
+/// ODF places it: beside `chart:chart` instead, Impress drew the chart's
+/// kind with no data at all (the oracle's odp rewrites).
 pub fn odf_chart_content_xml(chart: &ChartData, w_pt: f64, h_pt: f64) -> String {
     let n = chart.points.len();
     let last = n + 1;
@@ -474,13 +476,13 @@ pub fn odf_chart_content_xml(chart: &ChartData, w_pt: f64, h_pt: f64) -> String 
          <chart:chart svg:width=\"{w_pt}pt\" svg:height=\"{h_pt}pt\" chart:class=\"{class}\">{legend}\
          <chart:plot-area table:cell-range-address=\"local-table.$A$1:.$B${last}\" chart:data-source-has-labels=\"both\">\
          {axes}<chart:series chart:class=\"{class}\" chart:values-cell-range-address=\"{}\" \
-         chart:label-cell-address=\"local-table.$B$1\">{domain}</chart:series></chart:plot-area></chart:chart>\
+         chart:label-cell-address=\"local-table.$B$1\">{domain}</chart:series></chart:plot-area>\
          <table:table table:name=\"local-table\">\
          <table:table-header-columns><table:table-column/></table:table-header-columns>\
          <table:table-columns><table:table-column/></table:table-columns>\
          <table:table-header-rows><table:table-row><table:table-cell><text:p/></table:table-cell>\
          <table:table-cell office:value-type=\"string\"><text:p>{}</text:p></table:table-cell></table:table-row></table:table-header-rows>\
-         <table:table-rows>{rows}</table:table-rows></table:table>\
+         <table:table-rows>{rows}</table:table-rows></table:table></chart:chart>\
          </office:chart></office:body></office:document-content>",
         range(1),
         esc(&chart.series)
