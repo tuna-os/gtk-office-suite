@@ -4825,9 +4825,13 @@ class LettersCommentsSmoke(BaseGUITestCase):
         from dogtail import rawinput
 
         self.wait_for_node(name="New Document", roleName="push button").do_action(0)
-        self.wait_for_node(name="Print Layout", roleName="text")
+        page = self.wait_for_node(name="Print Layout", roleName="text")
         rawinput.typeText("Keep this word")
+        # Keys queue through X while an action arrives over D-Bus at once:
+        # wait for the text, then the selection, before acting on them.
+        self._wait_state(([("Keep this word", [])], []), "the typed text")
         rawinput.keyCombo("<Shift><Control>Left")
+        self.wait_for_condition(lambda: page.queryText().getNSelections() > 0 or None, description="the last word selected")
         self.gapplication_action("org.tunaos.letters", "add-comment")
         self.wait_for_node(name="Comment text", roleName="text")
         rawinput.typeText("Why this word?")
@@ -4837,10 +4841,13 @@ class LettersCommentsSmoke(BaseGUITestCase):
 
         self.gapplication_action("org.tunaos.letters", "toggle-comments")
         self.wait_for_node(name="Comments", roleName="list")
-        reply = self.wait_for_condition(
-            lambda: next((n for n in self.app.findChildren(lambda n: n.roleName == "text" and (n.name or "").startswith("Reply to"))), None),
-            description="the thread's reply field")
-        reply.grabFocus()
+        # Opening the view with the caret in the thread puts the keyboard
+        # in its reply field.
+        def focus_reply():
+            field = next((n for n in self.app.findChildren(lambda n: n.roleName == "text" and (n.name or "").startswith("Reply to"))), None)
+            return field is not None and (field.focused or any(c.focused for c in field.children)) or None
+
+        self.wait_for_condition(focus_reply, description="the reply field to take focus")
         rawinput.typeText("Because.")
         rawinput.keyCombo("Return")
         self._wait_state(([("Keep this ", []), ("word", [1])], [thread, ("Because.", 1, False)]), "the reply in the thread")

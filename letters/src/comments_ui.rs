@@ -64,8 +64,14 @@ fn edit(buf: &gtk::TextBuffer, f: impl FnOnce(&letters_core::Document) -> Vec<le
 
 /// Ask for a comment and add it on the selection (or the word at the caret).
 fn ask(tv: &adw::TabView) {
-    let Some(buf) = crate::dialogs::active_buffer(tv) else { return };
-    let Some((a, b)) = target(&buf) else { return };
+    let Some(buf) = crate::dialogs::active_buffer(tv) else {
+        glib::g_message!("letters", "add-comment: no document");
+        return;
+    };
+    let Some((a, b)) = target(&buf) else {
+        glib::g_message!("letters", "add-comment: nothing selected and no word at the caret");
+        return;
+    };
     let quoted: String = buf.text(&buf.iter_at_offset(a as i32), &buf.iter_at_offset(b as i32), false).chars().take(80).collect();
     let dialog = adw::AlertDialog::new(Some(&suite_common::i18n("Add Comment")), Some(&format!("“{}”", quoted.trim())));
     let entry = gtk::Entry::builder().placeholder_text(suite_common::i18n("Comment")).activates_default(true).build();
@@ -156,8 +162,8 @@ fn comment_box(c: &letters_core::Comment) -> gtk::Box {
 }
 
 /// A thread's row: the text it is on, its comments, a reply field, and
-/// Resolve (or Reopen) and Delete.
-fn thread_row(buf: &gtk::TextBuffer, t: &Thread) -> gtk::ListBoxRow {
+/// Resolve (or Reopen) and Delete. Also its reply field (an open thread's).
+fn thread_row(buf: &gtk::TextBuffer, t: &Thread) -> (gtk::ListBoxRow, Option<gtk::Entry>) {
     let id = t.comment.id;
     let summary = format!("{}: {}", t.comment.author, t.comment.text);
     let column = gtk::Box::new(gtk::Orientation::Vertical, 6);
@@ -174,6 +180,7 @@ fn thread_row(buf: &gtk::TextBuffer, t: &Thread) -> gtk::ListBoxRow {
         reply.set_margin_start(12);
         column.append(&reply);
     }
+    let mut field = None;
     if !t.comment.resolved {
         let entry = gtk::Entry::builder().placeholder_text(suite_common::i18n("Reply…")).build();
         entry.update_property(&[gtk::accessible::Property::Label(&format!("{} {summary}", suite_common::i18n("Reply to")))]);
@@ -187,6 +194,7 @@ fn thread_row(buf: &gtk::TextBuffer, t: &Thread) -> gtk::ListBoxRow {
             }
         });
         column.append(&entry);
+        field = Some(entry);
     }
     let buttons = gtk::Box::new(gtk::Orientation::Horizontal, 6);
     let resolved = t.comment.resolved;
@@ -209,7 +217,13 @@ fn thread_row(buf: &gtk::TextBuffer, t: &Thread) -> gtk::ListBoxRow {
     let row = gtk::ListBoxRow::new();
     row.set_child(Some(&column));
     row.update_property(&[gtk::accessible::Property::Label(&summary)]);
-    row
+    (row, field)
+}
+
+thread_local! {
+    /// Refresh the Comments view and put the keyboard in the reply field of
+    /// the thread at the caret (set by `comments_view`).
+    static OPEN_AT_CARET: std::cell::RefCell<Option<std::rc::Rc<dyn Fn()>>> = const { std::cell::RefCell::new(None) };
 }
 
 /// The sidebar's Comments view: the active document's comment threads.
@@ -229,35 +243,66 @@ pub fn comments_view(tv: &adw::TabView) -> gtk::Widget {
     stack.add_named(&scroll, Some("list"));
     stack.add_named(&none, Some("none"));
     let starts: std::rc::Rc<std::cell::RefCell<Vec<Option<usize>>>> = Default::default();
+    // What the list shows, and each open thread's reply field: the list is
+    // rebuilt only when the threads change, so a reply being typed (and the
+    // keyboard in it) survives edits elsewhere.
+    type Shown = (Vec<(Thread, Option<(usize, usize)>)>, Vec<Option<gtk::Entry>>);
+    let shown: std::rc::Rc<std::cell::RefCell<Option<Shown>>> = Default::default();
 
+    // `focus`: the view was just opened; the thread at the caret takes the
+    // keyboard in its reply field, as a discussion opens in Google Docs.
     let refresh = {
         let (tv, list, stack, starts) = (tv.clone(), list.clone(), stack.clone(), starts.clone());
-        std::rc::Rc::new(move || {
+        std::rc::Rc::new(move |focus: bool| {
             if !stack.is_mapped() {
                 return;
             }
             let Some(buf) = crate::dialogs::active_buffer(&tv) else { return };
             let Some(live) = crate::live::of(&buf) else { return };
             let threads = live.borrow_mut().comment_threads(&buf);
-            while let Some(r) = list.first_child() {
-                list.remove(&r);
+            if shown.borrow().as_ref().map(|(t, _)| t) != Some(&threads) {
+                while let Some(r) = list.first_child() {
+                    list.remove(&r);
+                }
+                let mut fields = Vec::new();
+                for (t, _) in &threads {
+                    let (row, field) = thread_row(&buf, t);
+                    list.append(&row);
+                    fields.push(field);
+                }
+                *starts.borrow_mut() = threads.iter().map(|(_, r)| r.map(|r| r.0)).collect();
+                stack.set_visible_child_name(if threads.is_empty() { "none" } else { "list" });
+                *shown.borrow_mut() = Some((threads, fields));
             }
-            for (t, _) in &threads {
-                list.append(&thread_row(&buf, t));
+            if !focus {
+                return;
             }
-            *starts.borrow_mut() = threads.iter().map(|(_, r)| r.map(|r| r.0)).collect();
-            stack.set_visible_child_name(if threads.is_empty() { "none" } else { "list" });
+            let caret = buf.iter_at_mark(&buf.get_insert()).offset().max(0) as usize;
+            let field = shown.borrow().as_ref().and_then(|(threads, fields)| {
+                let i = threads.iter().position(|(_, r)| r.is_some_and(|(a, b)| a <= caret && caret <= b))?;
+                fields[i].clone()
+            });
+            if let Some(field) = field {
+                // Once the row is on screen: it cannot take focus before.
+                glib::idle_add_local_once(move || {
+                    field.grab_focus();
+                });
+            }
         })
     };
     {
         let refresh = refresh.clone();
         crate::dialogs::watch_active_buffer(tv, move |_, changed| {
             if changed {
-                refresh();
+                refresh(false);
             }
         });
     }
-    stack.connect_map(move |_| refresh());
+    {
+        let refresh = refresh.clone();
+        stack.connect_map(move |_| refresh(true));
+    }
+    OPEN_AT_CARET.with(|o| *o.borrow_mut() = Some(std::rc::Rc::new(move || refresh(true))));
     {
         let tv = tv.clone();
         list.set_activate_on_single_click(true);
@@ -272,9 +317,16 @@ pub fn comments_view(tv: &adw::TabView) -> gtk::Widget {
     stack.upcast()
 }
 
-/// Open the sidebar on the Comments view (a margin mark was clicked).
+/// Open the sidebar on the Comments view at the thread at the caret (a
+/// margin mark was clicked).
 pub fn show(widget: &impl IsA<gtk::Widget>) {
     let _ = widget.activate_action("app.show-comments", None::<&glib::Variant>);
+    // Already open: no map to refresh on.
+    glib::idle_add_local_once(|| {
+        if let Some(open) = OPEN_AT_CARET.with(|o| o.borrow().clone()) {
+            open();
+        }
+    });
 }
 
 #[cfg(test)]
