@@ -544,6 +544,16 @@ impl DecksController {
     }
 
     /// What the inspector shows for object `index` on slide `slide_idx`.
+    /// Edit the chart at object `index` of slide `slide_idx`: one undo
+    /// step, or none when the edit changes nothing.
+    pub fn edit_chart(&self, slide_idx: usize, index: usize, edit: &crate::engine::chart::ChartEdit) -> bool {
+        self.edit_objects(slide_idx, |o| {
+            if let Some(SlideObject::Chart { chart, .. }) = o.get_mut(index) {
+                chart.apply(edit);
+            }
+        })
+    }
+
     pub fn object_format(&self, slide_idx: usize, index: usize) -> Option<crate::format::ObjectFormat> {
         let slides = self.slides.borrow();
         slides.get(slide_idx)?.objects.get(index).map(crate::format::ObjectFormat::of)
@@ -599,6 +609,31 @@ mod tests {
 
     fn rect(x: f64, y: f64) -> SlideObject {
         SlideObject::Rect { x, y, w: 10.0, h: 10.0, rotation: 0.0 }
+    }
+
+    /// Each chart edit is one undo step, and one that changes nothing
+    /// makes none.
+    #[test]
+    fn each_chart_edit_is_one_undo_step() {
+        use crate::engine::chart::{ChartEdit, ChartKind};
+        let c = DecksController::new(vec![slide("S1")], vec![]);
+        c.add_object(0, crate::insert::chart(ChartKind::Bar));
+        let chart = |c: &DecksController| match &c.slides.borrow()[0].objects[0] {
+            SlideObject::Chart { chart, .. } => chart.clone(),
+            _ => panic!("expected a chart"),
+        };
+        let inserted = chart(&c);
+        assert!(c.edit_chart(0, 0, &ChartEdit::Value(1, 9.0)));
+        assert!(c.edit_chart(0, 0, &ChartEdit::Kind(ChartKind::Pie)));
+        assert!(!c.edit_chart(0, 0, &ChartEdit::Kind(ChartKind::Pie)), "no change, no step");
+        assert!(!c.edit_chart(0, 1, &ChartEdit::AddPoint), "no object there");
+        assert_eq!((chart(&c).kind, chart(&c).points[1].1), (ChartKind::Pie, 9.0));
+        assert!(c.undo());
+        assert_eq!((chart(&c).kind, chart(&c).points[1].1), (ChartKind::Bar, 9.0), "one undo, the type");
+        assert!(c.undo());
+        assert_eq!(chart(&c), inserted, "a second, the value");
+        assert!(c.redo());
+        assert_eq!(chart(&c).points[1].1, 9.0);
     }
 
     #[test]

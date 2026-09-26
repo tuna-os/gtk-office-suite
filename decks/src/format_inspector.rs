@@ -2,11 +2,11 @@
 // selected object (docs/DESIGN-UI.md, "The Format inspector").
 // SPDX-License-Identifier: GPL-3.0-or-later
 //
-// Keynote's inspector in libadwaita's form, as Tables' (#962): three
-// AdwViewStack pages switched by an AdwViewSwitcher — Style (fill,
-// outline, shape), Text (font, size, emphasis, colour, alignment, list,
-// vertical anchor) and Arrange (position, size, rotation, order) — each of
-// AdwPreferencesGroup rows. Every edit is a decks_core::format::FormatEdit
+// Keynote's inspector in libadwaita's form, as Tables' (#962): AdwViewStack
+// pages switched by an AdwViewSwitcher — Style (fill, outline, shape),
+// Text (font, size, emphasis, colour, alignment, list, vertical anchor),
+// Chart (type and data, chart_inspector.rs), Arrange (position, size,
+// rotation, order) and Animate — each of AdwPreferencesGroup rows. Every edit is a decks_core::format::FormatEdit
 // applied through DecksController::format_objects: one undo step over the
 // selection. This module only builds widgets and wires signals.
 
@@ -262,10 +262,14 @@ pub fn build(
     build_group.add(&build_order);
     let animate_page = page(&[&build_group]);
 
+    // ── Chart ────────────────────────────────────────────────────────────
+    let chart = crate::chart_inspector::build(ctl, current_slide, selected, changed.clone());
+
     // ── Tabs ─────────────────────────────────────────────────────────────
     let stack = adw::ViewStack::new();
     let style_tab = stack.add_titled_with_icon(&style_page, Some("style"), "Style", "applications-graphics-symbolic");
     let text_tab = stack.add_titled_with_icon(&text_page, Some("text"), "Text", "format-text-rich-symbolic");
+    let chart_tab = stack.add_titled_with_icon(&chart.page, Some("chart"), "Chart", "x-office-spreadsheet-symbolic");
     stack.add_titled_with_icon(&arrange_page, Some("arrange"), "Arrange", "object-select-symbolic");
     stack.add_titled_with_icon(&animate_page, Some("animate"), "Animate", "media-playback-start-symbolic");
     let switcher = adw::ViewSwitcher::builder().stack(&stack).policy(adw::ViewSwitcherPolicy::Wide).build();
@@ -307,7 +311,10 @@ pub fn build(
     let sync: Rc<dyn Fn()> = {
         let (ctl, cs, sel, syncing) = (ctl.clone(), current_slide.clone(), selected.clone(), syncing.clone());
         let (outer, stack) = (outer.clone(), stack.clone());
-        let (style_tab, text_tab) = (style_tab.clone(), text_tab.clone());
+        let (style_tab, text_tab, chart_tab, chart_sync) = (style_tab.clone(), text_tab.clone(), chart_tab.clone(), chart.sync.clone());
+        // The object last shown, so a newly selected chart opens on its
+        // Chart tab.
+        let shown: Rc<Cell<Option<(usize, usize)>>> = Rc::default();
         let (fill, outline, outline_width, kind) = (fill.clone(), outline.clone(), outline_width.clone(), kind.clone());
         let (font, size, bold, italic, text_color) =
             (font.clone(), size.clone(), bold.clone(), italic.clone(), text_color.clone());
@@ -333,14 +340,23 @@ pub fn build(
             syncing.set(true);
             style_tab.set_visible(f.has_style);
             text_tab.set_visible(f.has_text);
+            chart_tab.set_visible(f.chart.is_some());
+            let now = sel.get().map(|oi| (cs.get(), oi));
+            let newly = shown.replace(now) != now;
             let visible = stack.visible_child_name().map(|n| n.to_string());
             let shown_ok = match visible.as_deref() {
                 Some("style") => f.has_style,
                 Some("text") => f.has_text,
+                Some("chart") => f.chart.is_some(),
                 _ => true,
             };
-            if !shown_ok {
+            if f.chart.is_some() && newly {
+                stack.set_visible_child_name("chart");
+            } else if !shown_ok {
                 stack.set_visible_child_name(if f.has_style { "style" } else if f.has_text { "text" } else { "arrange" });
+            }
+            if let Some(c) = &f.chart {
+                chart_sync(c);
             }
             fill.set_rgba(&rgba(f.fill.unwrap_or(Color(0xFF, 0xFF, 0xFF))));
             outline.set_rgba(&rgba(f.outline.map_or(Color(0, 0, 0), |s| s.color)));

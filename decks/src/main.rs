@@ -7,6 +7,7 @@ mod export_ui;
 mod canvas;
 mod text_render;
 mod format_inspector;
+mod chart_inspector;
 mod insert_bar;
 mod layout_picker;
 mod master_view;
