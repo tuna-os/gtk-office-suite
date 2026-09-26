@@ -365,31 +365,15 @@ KEY_MIN = 5
 KEY_MAX = 14
 
 
-def ocr_words(img, sparse=False):
-    """OCR word boxes. `sparse` is for Tables' grids of short values, where
-    page-layout analysis (psm 3) drops most of them. They are read as one
-    uniform block of text (psm 6): sparse-text mode (psm 11) dropped whole
-    cells of short numbers from LibreOffice's own reference (5 of the 10
-    values in tables/conditional, 14 of 25 words in tables/chart) and, just
-    as arbitrarily, different ones from ours, so it measured which blobs
-    tesseract happened to find rather than what was drawn."""
-    if not shutil.which("tesseract"):
-        return None
-    # Upscale: 96 DPI body text is below tesseract's comfortable size, and a
-    # spreadsheet's 10-11 pt cell text more so; at 2x it dropped row numbers
-    # and short values like "1/2" from both images, which is noise in a
-    # fixture with only a handful of words.
+def ocr_pass(g, k, psm):
+    """One tesseract TSV run over greyscale `g` upscaled by `k`. Coordinates
+    come back in 1x pixels so passes at several scales union directly."""
     import tempfile
 
-    k = 4 if sparse else 2
-    with tempfile.NamedTemporaryFile(suffix=".png") as tmp:
-        g = img.convert("L")
-        if sparse:
-            g = Image.fromarray(erase_rules(np.asarray(g), np.asarray(img.convert("RGB"))))
-        g.resize((g.width * k, g.height * k), Image.LANCZOS).save(tmp.name)
-        psm = "6" if sparse else "3"
-        r = subprocess.run(["tesseract", tmp.name, "-", "--psm", psm, "tsv"], capture_output=True, text=True)
     words = []
+    with tempfile.NamedTemporaryFile(suffix=".png") as tmp:
+        g.resize((g.width * k, g.height * k), Image.LANCZOS).save(tmp.name)
+        r = subprocess.run(["tesseract", tmp.name, "-", "--psm", psm, "tsv"], capture_output=True, text=True)
     for line in r.stdout.splitlines()[1:]:
         f = line.split("\t")
         if len(f) < 12 or not f[11].strip():
@@ -405,6 +389,43 @@ def ocr_words(img, sparse=False):
         # Tesseract's own line: (block, paragraph, line).
         words.append((text, left + w / 2, top + h / 2, tuple(f[2:5])))
     return words
+
+
+def union_words(first, second, tol=6.0):
+    """`first` plus the words of `second` with no same-text word within
+    `tol` 1x px: a second OCR scale may only add reads, never take them."""
+    out = list(first)
+    for text, x, y, line in second:
+        if not any(t == text and abs(x - x2) <= tol and abs(y - y2) <= tol for t, x2, y2, _ in out):
+            out.append((text, x, y, line))
+    return out
+
+
+def ocr_words(img, sparse=False):
+    """OCR word boxes. `sparse` is for Tables' grids of short values, where
+    page-layout analysis (psm 3) drops most of them. They are read as one
+    uniform block of text (psm 6): sparse-text mode (psm 11) dropped whole
+    cells of short numbers from LibreOffice's own reference (5 of the 10
+    values in tables/conditional, 14 of 25 words in tables/chart) and, just
+    as arbitrarily, different ones from ours, so it measured which blobs
+    tesseract happened to find rather than what was drawn."""
+    if not shutil.which("tesseract"):
+        return None
+    # Upscale: 96 DPI body text is below tesseract's comfortable size, and a
+    # spreadsheet's 10-11 pt cell text more so; at 2x it dropped row numbers
+    # and short values like "1/2" from both images, which is noise in a
+    # fixture with only a handful of words.
+    g = img.convert("L")
+    if sparse:
+        g = Image.fromarray(erase_rules(np.asarray(g), np.asarray(img.convert("RGB"))))
+    if not sparse:
+        return ocr_pass(g, 2, "3")
+    # Sparse grids read at 4x and 6x unioned: a larger scale reads some
+    # tiny tokens the base scale mis-segments (chart-scatter's "7"s), but
+    # on its own it goes blind elsewhere (number-formats' "###" rows read
+    # 3 of 3, a vacuous green), so neither scale may replace the other.
+    # The union only adds reads, which is what the second scale is for.
+    return union_words(ocr_pass(g, 4, "6"), ocr_pass(g, 6, "6"))
 
 
 def match_words(ref, ours):

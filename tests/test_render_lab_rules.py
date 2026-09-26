@@ -54,5 +54,37 @@ class EraseRulesTest(unittest.TestCase):
         self.assertTrue((out[40:48, 10:18] == 0).all())
 
 
+@unittest.skipIf(np is None, "numpy and Pillow are the render lab's")
+class UnionWordsTest(unittest.TestCase):
+    """union_words (tools/render-lab/compare.py): a second OCR scale may
+    only add reads, never take them."""
+
+    def setUp(self):
+        import compare
+
+        self.union = compare.union_words
+
+    def test_second_scale_adds_a_missed_token(self):
+        base = [("25", 10.0, 10.0, (1, 1, 1))]
+        extra = [("7", 20.0, 10.0, (1, 1, 2))]
+        out = self.union(base, extra)
+        self.assertEqual([t for t, _, _, _ in out], ["25", "7"])
+
+    def test_same_text_nearby_is_one_read(self):
+        first = [("7", 20.0, 10.0, (1, 1, 2))]
+        second = [("7", 22.0, 11.0, (1, 1, 2))]  # same digit, other scale
+        self.assertEqual(len(self.union(first, second)), 1)
+
+    def test_same_text_far_apart_stays_two_reads(self):
+        first = [("7", 20.0, 10.0, (1, 1, 2))]
+        second = [("7", 200.0, 10.0, (1, 1, 3))]  # another "7" elsewhere
+        self.assertEqual(len(self.union(first, second)), 2)
+
+    def test_first_scale_loses_nothing(self):
+        first = [("q2", 10.0, 10.0, (1, 1, 1)), ("qs", 30.0, 10.0, (1, 1, 1))]
+        out = self.union(first, [])
+        self.assertEqual(out, first)
+
+
 if __name__ == "__main__":
     unittest.main()

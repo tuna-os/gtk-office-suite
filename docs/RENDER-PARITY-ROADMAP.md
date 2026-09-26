@@ -217,14 +217,6 @@ loosening a budget:
 - **`letters/table`** (2026-09-25). Cell text sits within 0.2 pt of
   LibreOffice's; Tesseract reads one cell label in ours ("R1C1" as "rici",
   unhinted glyphs at 12 px) and so 6 of 9 cell words match.
-- **`tables/chart-scatter`** (2026-09-26). The points, axes and cells sit
-  within about 1.3 pt of LibreOffice's (SSIM 0.85, scale 1.00x); the images
-  match. At the Tables 4x OCR scale Tesseract misreads three tiny tokens in
-  ours that it reads in the reference — cell "2.5" as "22", cell "7" as
-  "ri", x-axis "7" as "ff" — so 26 of 29 words match (below the 0.9 green
-  bar). The same axis-"7" pixels read as "7" at conf 96 in a cropped
-  re-run, so the read depends on segmentation context, not on what was
-  drawn.
 - **`tables/chart-pie`** (2026-09-26). Pie, cells and legend match (SSIM
   0.95, colours 100%, displacement 1.8 pt). Tesseract's psm-6 block
   segmentation drops our rendered cell digits 3/7/5 outright, and misreads
@@ -236,7 +228,7 @@ loosening a budget:
   as "HHH" in the reference and "HH"/nothing in ours, so 3 of 5 words
   match.
 
-All five are OCR of very small or non-word glyphs, not rendering. They go
+All four are OCR of very small or non-word glyphs, not rendering. They go
 green when the metric can read them. The named next candidate, a larger
 OCR scale for small text, was tried on 2026-09-26 (Tables 4x to 6x,
 re-scored over all 16 Tables fixtures with no other code changed):
@@ -247,6 +239,20 @@ display). A shared scale change trades one fixture's noise for another's,
 so the scale stays and these fixtures stay amber. Any future attempt has
 to be checked against every app's verdicts first, since `compare.py` is
 shared.
+
+The vindicated variant landed the same day (OCR-metric stream): sparse
+grids read at 4x *and* 6x, unioned, the union only adding reads — so the
+6x pass can never take what 4x found, which rules out both the blindness
+and the trade. Re-scored over every fixture in all three apps against CI
+run 36249199562's images: `tables/chart-scatter` goes 26/29 to 28/29
+green in A and B with the reference at its full 29 words (not blind;
+the "7"s come right at 6x, "2.5" still reads "22" at both scales);
+`tables/chart-pie` (8/12) and `tables/number-formats` (3/5) are
+byte-identical; all 27 Letters and 9 Decks fixtures score identically;
+the only other movements are `tables/chart-line`/`chart-area` 23/24 to
+24/26 (the 6x pass adds two reference reads, one matched) and
+`tables/frozen` 0.976 to 0.992, all still green. `tables/chart-scatter`
+is green, not an artifact, from here on.
 
 A known difference in behaviour, not in the metric, and why it has no
 fixture: **keep with next** (2026-09-25). In LibreOffice's rendering of a
