@@ -513,10 +513,9 @@ impl DecksController {
             ops.push(Op::SetSlide { slide: s.ids.slide, props: Box::new(props) });
         }
         ops.extend(crate::ops::set_objects(&slides, slide_idx, &arranged[..kept]));
-        let mut next = crate::ops::next_id(&slides);
-        for (k, o) in arranged[kept..].iter().enumerate() {
-            ops.push(Op::InsertObject { slide: s.ids.slide, at: kept + k, id: next, object: Box::new(o.clone()) });
-            next += 1;
+        let first = crate::ops::next_id(&slides);
+        for (k, (o, id)) in arranged[kept..].iter().zip(first..).enumerate() {
+            ops.push(Op::InsertObject { slide: s.ids.slide, at: kept + k, id, object: Box::new(o.clone()) });
         }
         drop(slides);
         self.apply_ops(ops)
