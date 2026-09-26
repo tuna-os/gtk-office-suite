@@ -851,7 +851,7 @@ fn list_validation_survives_calc_both_ways() {
         assert_eq!(from_xlsx[0].validations[r][1].as_ref(), Some(&colours), "B{} after Calc's xlsx", r + 1);
     }
     assert_eq!(from_xlsx[0].validations[0][2], Some(ValidationRule::WholeNumber { min: Some(1), max: Some(10) }));
-||||||| parent of a1c6af5 (feat(tables): a number-format editor with any Excel/Calc format code and a live preview)
+}
 
 /// Custom format codes draw as Calc draws them. Each row is a value with a
 /// code; Calc's CSV export writes what it shows, which must be what the
