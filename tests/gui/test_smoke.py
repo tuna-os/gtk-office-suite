@@ -3983,6 +3983,61 @@ class DecksSpeakerNotesSmoke(BaseGUITestCase):
         self.assertIsNone(self.process.poll(), "decks crashed editing notes")
 
 
+class DecksMasterViewSmoke(BaseGUITestCase):
+    """Edit Master (Keynote's, Google Slides' Edit theme): from the
+    inspector, the master takes the slides' place with a banner saying
+    so; a shape inserted there lands on the master, not the slide; Done
+    brings the slides back, one Undo takes the whole master edit back, and
+    Save writes the shape into the pptx's slide master."""
+
+    app_name = "decks"
+
+    def setUp(self):
+        self.isolate_snapshot("decks-master-snapshot-")
+        self._dir = self.temp_dir(prefix="decks-master-")
+        self._doc = os.path.join(self._dir, "themed.pptx")
+        with open(self._doc, "wb") as f:
+            f.write(minimal_pptx_bytes("a slide"))
+        self.launch_args = [self._doc]
+        super().setUp()
+
+    def test_a_shape_added_in_the_master_view_lands_on_the_master(self):
+        import subprocess
+        import zipfile
+        aid = "org.tunaos.decks"
+        snap = lambda: self.trigger_snapshot(aid)
+        before = self.wait_until(snap, lambda s: s and s["slide_count"] == 1, interval=0.5, description="the deck to open")
+        master_shapes = before["masters"][0]["shapes"]
+        self.app.child(name="Format", roleName="toggle button").do_action(0)
+        self.wait_until(lambda: self.app.child(name="Edit Master", roleName="push button"), lambda b: b is not None and b.showing,
+                        description="Edit Master in the inspector").do_action(0)
+        self.wait_until(snap, lambda s: s["editing_master"] == 0, interval=0.5, description="the master view to open")
+        self.wait_until(lambda: self.app.findChild(lambda n: "Editing the master" in (n.name or ""), retry=False, requireResult=False),
+                        lambda n: n is not None and n.showing, description="the banner")
+        subprocess.run(["gapplication", "action", aid, "insert-shape", "uint32 3"], check=True, timeout=5)
+        self.wait_until(snap, lambda s: len(s["slides"][0]["objects"]) == master_shapes + 1, interval=0.5,
+                        description="the triangle on the master")
+        self.app.child(name="Done", roleName="push button").do_action(0)
+        after = self.wait_until(snap, lambda s: s["editing_master"] is None, interval=0.5, description="Done to close the view")
+        self.assertEqual(after["masters"][0]["shapes"], master_shapes + 1, after)
+        self.assertEqual(len(after["slides"][0]["objects"]), len(before["slides"][0]["objects"]), "the slide itself is untouched")
+        # One undo takes the whole master edit back, and redo returns it.
+        self.gapplication_action(aid, "undo")
+        self.wait_until(snap, lambda s: s["masters"][0]["shapes"] == master_shapes, interval=0.5, description="undo of the master edit")
+        self.gapplication_action(aid, "redo")
+        self.wait_until(snap, lambda s: s["masters"][0]["shapes"] == master_shapes + 1, interval=0.5, description="redo")
+        self.gapplication_action(aid, "save")
+
+        def master_xml():
+            try:
+                with zipfile.ZipFile(self._doc) as z:
+                    return "".join(z.read(n).decode() for n in z.namelist() if n.startswith("ppt/slideMasters/") and n.endswith(".xml"))
+            except (OSError, zipfile.BadZipFile):
+                return ""
+        self.wait_until(master_xml, lambda x: 'prst="triangle"' in x, interval=0.5, description="the triangle in the saved master")
+        self.assertIsNone(self.process.poll(), "decks crashed editing the master")
+
+
 class DecksInsertBarSmoke(BaseGUITestCase):
     """The Insert buttons in the header bar (DESIGN-UI.md, "Insert
     buttons, not menus"): the Shape button's library is searchable, and

@@ -294,6 +294,7 @@ pub fn build(
     preview.set_action_name(Some("app.preview-transition"));
     transition.add_suffix(&preview);
     slide_group.add(&transition);
+    slide_group.add(&crate::master_view::inspector_row());
     let empty = page(&[&slide_group]);
     let outer = gtk::Stack::new();
     outer.add_named(&empty, Some("empty"));

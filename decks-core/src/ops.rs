@@ -31,7 +31,7 @@
 //    them back.
 
 use crate::builds::{after_delete, after_reorder, Build};
-use crate::engine::{Slide, SlideObject, Transition};
+use crate::engine::{MasterSlide, Slide, SlideObject, Transition};
 
 /// A slide's and its objects' stable ids.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
@@ -92,6 +92,46 @@ pub enum Op {
     /// Move an object to z-position `to` (counted after it is taken out).
     MoveObject { slide: u64, id: u64, to: usize },
     SetObject { slide: u64, id: u64, object: Box<SlideObject> },
+    /// Replace master `index` (its background, font and decorations), as
+    /// the master view's Done commits an edit: one step, whatever was
+    /// changed on the master.
+    SetMaster { index: usize, master: Box<MasterSlide> },
+}
+
+/// What an op edits: the slides, and the masters they use. The controller
+/// keeps the two in separate cells for the views; `with_doc` lends them to
+/// an op as one document.
+#[derive(Clone, Debug, Default)]
+pub struct DeckDoc {
+    pub slides: Vec<Slide>,
+    pub masters: Vec<MasterSlide>,
+}
+
+/// Run `f` on `slides` and `masters` as one `DeckDoc`, and put them back.
+pub fn with_doc<R>(slides: &mut Vec<Slide>, masters: &mut Vec<MasterSlide>, f: impl FnOnce(&mut DeckDoc) -> R) -> R {
+    let mut doc = DeckDoc { slides: std::mem::take(slides), masters: std::mem::take(masters) };
+    let r = f(&mut doc);
+    *slides = doc.slides;
+    *masters = doc.masters;
+    r
+}
+
+/// As `with_doc`, for slides alone (a master op then finds no master).
+pub fn with_slides<R>(slides: &mut Vec<Slide>, f: impl FnOnce(&mut DeckDoc) -> R) -> R {
+    with_doc(slides, &mut Vec::new(), f)
+}
+
+/// Apply one op to the whole document: a master op to the masters, the
+/// rest to the slides (`apply`).
+pub fn apply_doc(doc: &mut DeckDoc, op: &Op) -> Result<Vec<Op>, OpError> {
+    match op {
+        Op::SetMaster { index, master } => {
+            let slot = doc.masters.get_mut(*index).ok_or(OpError::OutOfRange)?;
+            let old = std::mem::replace(slot, (**master).clone());
+            Ok(vec![Op::SetMaster { index: *index, master: Box::new(old) }])
+        }
+        _ => apply(&mut doc.slides, op),
+    }
 }
 
 /// Why an op could not be applied. The deck is unchanged.
@@ -150,6 +190,8 @@ fn object_pos(s: &Slide, id: u64) -> Option<usize> {
 pub fn apply(slides: &mut Vec<Slide>, op: &Op) -> Result<Vec<Op>, OpError> {
     ensure_ids(slides);
     match op {
+        // The masters aren't among the slides: `apply_doc` applies it.
+        Op::SetMaster { .. } => Ok(vec![]),
         Op::InsertSlide { at, slide } => {
             if *at > slides.len() {
                 return Err(OutOfRange);
@@ -267,7 +309,7 @@ use OpError::OutOfRange;
 /// `suite_common_core::ops::apply_all`): on success, the ops that undo the
 /// whole group, in the order to apply them.
 pub fn apply_all(slides: &mut Vec<Slide>, ops: &[Op]) -> Result<Vec<Op>, OpError> {
-    suite_common_core::ops::apply_all(slides, ops)
+    with_slides(slides, |doc| suite_common_core::ops::apply_all(doc, ops))
 }
 
 /// The ops that turn the objects of slide `si` into `objects`, where the
@@ -288,10 +330,10 @@ pub fn set_objects(slides: &[Slide], si: usize, objects: &[SlideObject]) -> Vec<
 /// Decks' ops in the suite's one op/history shape (ADR 0011): undo and
 /// redo are `suite_common_core::ops::History<Op>`.
 impl suite_common_core::ops::Op for Op {
-    type Doc = Vec<Slide>;
+    type Doc = DeckDoc;
     type Error = OpError;
-    fn apply(&self, doc: &mut Vec<Slide>) -> Result<Vec<Op>, OpError> {
-        apply(doc, self)
+    fn apply(&self, doc: &mut DeckDoc) -> Result<Vec<Op>, OpError> {
+        apply_doc(doc, self)
     }
 
     /// Typing in the notes pane: the undo of the first keystroke of a word
@@ -392,11 +434,34 @@ mod tests {
         let mut h: History<Op> = History::default();
         h.record(apply_all(&mut d, &[Op::DeleteObject { slide: s, id: o }]).unwrap());
         let after = dbg(&d);
-        assert!(h.undo(&mut d).is_some());
+        assert!(with_slides(&mut d, |doc| h.undo(doc)).is_some());
         assert_eq!(dbg(&d), before);
-        assert!(h.redo(&mut d).is_some());
+        assert!(with_slides(&mut d, |doc| h.redo(doc)).is_some());
         assert_eq!(dbg(&d), after);
-        assert!(h.redo(&mut d).is_none());
+        assert!(with_slides(&mut d, |doc| h.redo(doc)).is_none());
+    }
+
+    #[test]
+    fn a_master_edit_is_one_step_with_an_exact_inverse() {
+        use suite_common_core::ops::History;
+        let master = |bg: &str| MasterSlide {
+            name: "M".into(),
+            background: bg.into(),
+            default_font: "Sans".into(),
+            shapes: vec![SlideObject::Rect { x: 1.0, y: 2.0, w: 3.0, h: 4.0, rotation: 0.0 }],
+            page_emu: None,
+        };
+        let mut doc = DeckDoc { slides: vec![slide("a", 1)], masters: vec![master("#ffffff")] };
+        let mut h: History<Op> = History::default();
+        let inverse = suite_common_core::ops::apply_all(&mut doc, &[Op::SetMaster { index: 0, master: Box::new(master("#102030")) }]).unwrap();
+        h.record(inverse);
+        assert_eq!(doc.masters[0].background, "#102030");
+        assert!(h.undo(&mut doc).is_some());
+        assert_eq!(format!("{:?}", doc.masters), format!("{:?}", vec![master("#ffffff")]));
+        assert!(h.redo(&mut doc).is_some());
+        assert_eq!(doc.masters[0].background, "#102030");
+        let past_end = Op::SetMaster { index: 1, master: Box::new(master("#000000")) };
+        assert_eq!(apply_doc(&mut doc, &past_end).err(), Some(OpError::OutOfRange));
     }
 
     #[test]
