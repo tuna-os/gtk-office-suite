@@ -224,6 +224,33 @@ impl Autofit {
     }
 }
 
+/// Shrink-to-fit for a `normAutofit` box: the largest font scale in
+/// (0, 1] whose content, measured by `measure`, fits in `inner_h`.
+///
+/// The stored `fontScale`/`lnSpcReduction` are one application's stale
+/// cache, recomputed on the next edit there and recomputed on every open
+/// in LibreOffice (which is why a stated 62.5% can disagree with what
+/// Impress draws). Measuring with our own engine and shrinking only on
+/// overflow converges with LibreOffice by construction, and never grows
+/// text: a box that fits at full size keeps its sizes. The caller passes
+/// `measure` (scale to content height); the search itself is GTK-free.
+pub fn shrink_font_to_fit(inner_h: f64, measure: &mut dyn FnMut(f64) -> f64) -> f64 {
+    if measure(1.0) <= inner_h {
+        return 1.0;
+    }
+    let mut lo = 0.01;
+    let mut hi = 1.0;
+    for _ in 0..10 {
+        let mid = (lo + hi) / 2.0;
+        if measure(mid) <= inner_h {
+            lo = mid;
+        } else {
+            hi = mid;
+        }
+    }
+    lo
+}
+
 /// A text box's paragraph layout and placement.
 ///
 /// `paras` runs parallel to the box's paragraphs (its text split on
@@ -449,6 +476,26 @@ mod tests {
     #[test]
     fn no_runs_is_one_empty_paragraph() {
         assert_eq!(paragraphs(&[]).len(), 1);
+    }
+
+    #[test]
+    fn fitting_text_keeps_full_size() {
+        let got = shrink_font_to_fit(100.0, &mut |s| 60.0 * s);
+        assert_eq!(got, 1.0, "never grows, never shrinks what fits");
+    }
+
+    #[test]
+    fn overflowing_text_shrinks_to_just_fit() {
+        // Content 140 units tall at full size in a 100-unit box.
+        let got = shrink_font_to_fit(100.0, &mut |s| 140.0 * s);
+        assert!((got - 100.0 / 140.0).abs() < 0.01, "fills the box: {got}");
+        assert!(got <= 1.0);
+    }
+
+    #[test]
+    fn hopeless_overflow_clamps_at_the_floor() {
+        let got = shrink_font_to_fit(1.0, &mut |s| 1000.0 * s);
+        assert_eq!(got, 0.01);
     }
 
     #[test]
