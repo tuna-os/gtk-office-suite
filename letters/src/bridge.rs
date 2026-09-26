@@ -737,6 +737,9 @@ fn para_tag_name(style: &letters_core::ParaStyle) -> Option<String> {
     if style.keep_with_next {
         parts.push("k".into());
     }
+    if let Some(level) = style.toc {
+        parts.push(format!("toc={level}"));
+    }
     if let Some(lang) = &style.code_block {
         parts.push(format!("c={}", lang.replace(';', "")));
     }
@@ -769,6 +772,7 @@ fn apply_para_tag_name(name: &str, style: &mut letters_core::ParaStyle) {
             "ls" => style.line_spacing = value.parse().unwrap_or(1.0),
             "q" => style.block_quote = true,
             "k" => style.keep_with_next = true,
+            "toc" => style.toc = value.parse().ok(),
             "n" => style.list_start = value.parse().ok(),
             "c" => style.code_block = Some(value.to_string()),
             _ => {}

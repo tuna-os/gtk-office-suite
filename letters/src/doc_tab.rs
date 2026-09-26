@@ -112,7 +112,7 @@ pub(crate) fn apply_page_setup_from_buffer(container: &PageContainer, buf: &gtk:
 
 /// Layout options for a tab: the container's page setup is the page for a
 /// document that carries none of its own.
-fn layout_options(container: &PageContainer) -> letters_core::layout::LayoutOptions {
+pub(crate) fn layout_options(container: &PageContainer) -> letters_core::layout::LayoutOptions {
     let (width_pt, height_pt) = container.page_size();
     let (margin_top_pt, margin_bottom_pt, margin_left_pt, margin_right_pt) = container.margins();
     letters_core::layout::LayoutOptions {

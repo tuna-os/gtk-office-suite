@@ -73,6 +73,26 @@ fn comments_survive() {
     assert_eq!(rt.paragraphs, d.paragraphs);
 }
 
+/// A table of contents is Word's TOC field around its entries, and reopens
+/// as the same entries (levels, indents, titles and page numbers).
+#[test]
+fn a_table_of_contents_survives() {
+    let d = letters_core::toc::sample_document();
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("toc.docx");
+    docx::write(&d, &path).unwrap();
+    let mut xml = String::new();
+    std::io::Read::read_to_string(&mut zip::ZipArchive::new(std::fs::File::open(&path).unwrap()).unwrap().by_name("word/document.xml").unwrap(), &mut xml).unwrap();
+    assert_eq!(xml.matches("w:fldCharType=\"begin\"").count(), 1, "one TOC field");
+    assert!(xml.contains("TOC \\o") && xml.contains("w:leader=\"dot\""), "{xml}");
+    // A tab is Word's element: a raw one in w:t reads as a space elsewhere.
+    assert!(xml.contains("Introduction</w:t><w:tab/>") && !xml.contains('\t'), "{xml}");
+    let rt = docx::read(path.to_str().unwrap()).unwrap();
+    let entries = |d: &Document| letters_core::toc::blocks(d).into_iter().flat_map(|b| d.paragraphs[b].to_vec()).collect::<Vec<_>>();
+    assert_eq!(entries(&rt), entries(&d));
+    assert_eq!(rt.paragraphs.len(), d.paragraphs.len());
+}
+
 /// Smart chips reopen as chips: a date is a Word date content control, a
 /// link or person chip its hyperlink in a tagged control.
 #[test]

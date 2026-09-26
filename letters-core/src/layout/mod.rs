@@ -107,6 +107,10 @@ pub struct ShapeRequest<'a> {
     pub first_line_indent_pt: f64,
     /// Tab stops in points from the text box's left edge.
     pub tab_stops_pt: Vec<f64>,
+    /// A table of contents entry: its tab is one right-aligned stop at the
+    /// box's right edge, so the page number sits at the margin (the
+    /// painter draws the dot leader).
+    pub right_tab: bool,
     pub defaults: &'a LayoutOptions,
 }
 
@@ -151,6 +155,7 @@ pub fn request_key(req: &ShapeRequest<'_>) -> u64 {
     (req.heading, req.code, req.look, format!("{:?}", req.alignment)).hash(&mut h);
     (req.width_pt.to_bits(), req.first_line_indent_pt.to_bits()).hash(&mut h);
     req.tab_stops_pt.iter().map(|t| t.to_bits()).collect::<Vec<_>>().hash(&mut h);
+    req.right_tab.hash(&mut h);
     (&req.defaults.font_family, req.defaults.font_size_pt.to_bits()).hash(&mut h);
     if let Some(level) = req.heading {
         format!("{:?}", req.defaults.heading_style(level)).hash(&mut h);
@@ -561,7 +566,8 @@ pub fn paragraph_request<'a>(p: &'a Paragraph, box_w: f64, opts: &'a LayoutOptio
         // A list item's first line starts at its text indent; the marker
         // hangs in front of it.
         first_line_indent_pt: if st.list == ListKind::None { st.first_line_indent_pt } else { 0.0 },
-        tab_stops_pt: st.tab_stops_pt.iter().map(|t| t - box_x).filter(|t| *t > 0.0).collect(),
+        tab_stops_pt: if st.toc.is_some() { Vec::new() } else { st.tab_stops_pt.iter().map(|t| t - box_x).filter(|t| *t > 0.0).collect() },
+        right_tab: st.toc.is_some(),
         defaults: opts,
     }
 }
@@ -1059,6 +1065,7 @@ impl<'o> Flow<'o> {
                     width_pt: width,
                     first_line_indent_pt: 0.0,
                     tab_stops_pt: Vec::new(),
+                    right_tab: false,
                     defaults: opts,
                 });
                 let block: f64 = lines.iter().map(LineBox::natural_height).sum();

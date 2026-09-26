@@ -5119,6 +5119,72 @@ class LettersCommentsSmoke(BaseGUITestCase):
         self.assertIsNone(self.process.poll(), "letters crashed commenting")
 
 
+class LettersTableOfContentsSmoke(BaseGUITestCase):
+    """A table of contents (letters_core::toc): inserted from the headings
+    with their page numbers, and updated when a heading is added; each is
+    one undo step."""
+
+    app_name = "letters"
+
+    def setUp(self):
+        self._snapshot_path = self.isolate_snapshot(prefix="letters-toc-")
+        super().setUp()
+
+    def _paragraphs(self):
+        s = self.trigger_snapshot("org.tunaos.letters")
+        return [("".join(r["text"] for r in p["runs"]), p["style"].get("heading"), p["style"].get("toc")) for p in s["paragraphs"]]
+
+    def _wait(self, want, what):
+        seen = []
+
+        def check():
+            seen[:] = [self._paragraphs()]
+            return seen[0] == want or None
+
+        try:
+            return self.wait_for_condition(check, description=what)
+        except AssertionError as e:
+            raise AssertionError(f"{e}; the paragraphs were {seen[0] if seen else '?'}") from None
+
+    def _line(self, text, style, want, what):
+        """Type `text` as the last paragraph, then give it `style` (an
+        app.style-* action): each waited for, as keys and actions race."""
+        from dogtail import rawinput
+        rawinput.typeText(text)
+        self.wait_for_condition(lambda: self._paragraphs()[-1][0] == text or None, description=f"{what} typed")
+        self.gapplication_action("org.tunaos.letters", style)
+        self._wait(want, what)
+
+    def test_insert_and_update_a_table_of_contents(self):
+        from dogtail import rawinput
+
+        self.new_letters_document()
+        doc = [("Intro", 1, None)]
+        self._line("Intro", "style-h1", doc, "the first heading")
+        rawinput.keyCombo("Return")
+        doc += [("Some text", None, None)]
+        self._line("Some text", "style-p", doc, "the body text")
+        rawinput.keyCombo("Return")
+        doc += [("Details", 2, None)]
+        self._line("Details", "style-h2", doc, "the second heading")
+
+        rawinput.keyCombo("<Control>Home")
+        self.gapplication_action("org.tunaos.letters", "insert-toc")
+        toc = [("Intro\t1", None, 1), ("Details\t1", None, 2)]
+        self._wait(toc + doc, "the table of contents before the first heading")
+
+        rawinput.keyCombo("<Control>End")
+        rawinput.keyCombo("Return")
+        more = doc + [("More", 1, None)]
+        self._line("More", "style-h1", toc + more, "a new heading")
+        self.gapplication_action("org.tunaos.letters", "update-toc")
+        updated = toc + [("More\t1", None, 1)]
+        self._wait(updated + more, "the table of contents updated")
+        self.gapplication_action("org.tunaos.letters", "undo")
+        self._wait(toc + more, "undo takes the update back in one step")
+        self.assertIsNone(self.process.poll(), "letters crashed on a table of contents")
+
+
 class LettersPrintLayoutEditingSmoke(BaseGUITestCase):
     """Print Layout is the default view, and editing there is editing the
     document (ADR 0010, stage 3d).
