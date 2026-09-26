@@ -204,40 +204,28 @@ images show our rendering matches LibreOffice's and the metric is what
 disagrees. Recorded here with the measurement, so nobody "fixes" them by
 loosening a budget:
 
-- **`letters/font-sizes`** (2026-09-25). Every line's ink box is within a
-  pixel of LibreOffice's (measured row and column extents). Tesseract reads
-  the 8 pt line as "spt text" on LibreOffice's page and as one token
-  ("bpetext") on ours, so 8 of 10 words match (below the 0.9 green bar).
-  The matcher then pairs LibreOffice's unmatched "text" with the nearest
-  remaining "text" on the next line, and every later pairing shifts by a
-  line: the median displacement (14.8 pt) is that cascade, not a layout
-  error. A globally optimal matcher would fix the displacement but not the
-  word count, so it would not change this verdict, and it was not
-  worth a shared-metric change on its own.
-- **`letters/table`** (2026-09-25). Cell text sits within 0.2 pt of
-  LibreOffice's; Tesseract reads one cell label in ours ("R1C1" as "rici",
-  unhinted glyphs at 12 px) and so 6 of 9 cell words match.
-- **`tables/chart-scatter`** (2026-09-26). The points, axes and cells sit
-  within about 1.3 pt of LibreOffice's (SSIM 0.85, scale 1.00x); the images
-  match. At the Tables 4x OCR scale Tesseract misreads three tiny tokens in
-  ours that it reads in the reference — cell "2.5" as "22", cell "7" as
-  "ri", x-axis "7" as "ff" — so 26 of 29 words match (below the 0.9 green
-  bar). The same axis-"7" pixels read as "7" at conf 96 in a cropped
-  re-run, so the read depends on segmentation context, not on what was
-  drawn.
-- **`tables/chart-pie`** (2026-09-26). Pie, cells and legend match (SSIM
-  0.95, colours 100%, displacement 1.8 pt). Tesseract's psm-6 block
-  segmentation drops our rendered cell digits 3/7/5 outright, and misreads
-  the 2-character legend label Q4 on both sides ("ma" in the reference,
-  "a" in ours), so 8 of 12 words match.
+- **`letters/table`** (2026-09-25, re-measured 2026-09-26). Cell text sits
+  within 0.2 pt of LibreOffice's; Tesseract misreads one cell label in ours
+  ("R1C1" as "rici", unhinted glyphs at 12 px) and so 8 of 9 cell words
+  match, even with the magnifier fallback below (its crops read "ric1"
+  against the reference's "r1c1").
 - **`tables/number-formats`** (2026-09-26). Both sides correctly show "###"
   for the date and the 7-digit value that don't fit the narrow column (the
   overflow display works). "###" is a non-word: Tesseract hallucinates it
-  as "HHH" in the reference and "HH"/nothing in ours, so 3 of 5 words
-  match.
+  chaotically per rendering (HEE, HHH, Ht, HEH, RaH and FER across scales
+  and both sides in the 2026-09-26 probe), so no text read of the two sides
+  can agree, and 3 of 5 words match. Comparing the crops' pixels instead
+  would mask real text bugs (glyphs that differ but cover the same ink),
+  so it was rejected.
 
-All five are OCR of very small or non-word glyphs, not rendering. They go
-green when the metric can read them. The named next candidate, a larger
+Three former entries here went green when the metric learned to read them
+and are recorded under "Fixed metric artifacts" below: `letters/font-sizes`
+(the 8 pt "spt text"/"bpetext" split with its displacement cascade),
+`tables/chart-scatter` (cell "2.5" as "22", "7" as "ri"/"ff") and
+`tables/chart-pie` (dropped cell digits 3/7/5).
+
+Both remaining are OCR of very small or non-word glyphs, not rendering.
+The named next candidate, a larger
 OCR scale for small text, was tried on 2026-09-26 (Tables 4x to 6x,
 re-scored over all 16 Tables fixtures with no other code changed):
 chart-scatter reads 27 of 29 (the two "7"s come right, a "5" drops
@@ -247,6 +235,26 @@ display). A shared scale change trades one fixture's noise for another's,
 so the scale stays and these fixtures stay amber. Any future attempt has
 to be checked against every app's verdicts first, since `compare.py` is
 shared.
+
+#### Fixed metric artifacts (went green when the metric learned to read them)
+
+- **Magnifier fallback** (2026-09-26, `compare.py`: `ocr_words` also returns
+  each word's box; `match_words` takes an optional `reread`; `rescue_unread`
+  re-reads an unmatched word's own box plus a 4 px pad at 3x as a single
+  word). A rescue counts only when both sides read the same non-empty word
+  at the same location, so it measures cross-image agreement; no budget
+  moved. Checked against every app's verdicts by rescoring all 52 fixtures
+  with and without the change, and reproduced by CI from fresh renders:
+  - `tables/chart-scatter` amber to green (26/29 to 29/29 words).
+  - `tables/chart-pie` amber to green (8/12 to 11/12; the Q4 legend label,
+    misread on both sides, still misses).
+  - `letters/font-sizes` amber to green (8/10 to 9/10, displacement 14.8 to
+    2.2 pt; the 8 pt line's split read still misses).
+  - `letters/table` improved but stays amber (6/9 to 8/9, lost lines 1 to 0).
+  - `letters/footnotes` improved but stays green (48/50 to 50/50).
+  - No other fixture in any app moved, including `tables/number-formats`
+    ("###" hallucinates too chaotically to agree) and `tables/wrap-text`
+    (no unmatched words; amber on SSIM, out of scope).
 
 A known difference in behaviour, not in the metric, and why it has no
 fixture: **keep with next** (2026-09-25). In LibreOffice's rendering of a

@@ -56,8 +56,8 @@
     "B": "green"
   },
   "letters/font-sizes": {
-    "A": "amber",
-    "B": "amber"
+    "A": "green",
+    "B": "green"
   },
   "letters/footnote-continued": {
     "A": "green",
@@ -168,12 +168,12 @@
     "B": "green"
   },
   "tables/chart-pie": {
-    "A": "amber",
-    "B": "amber"
+    "A": "green",
+    "B": "green"
   },
   "tables/chart-scatter": {
-    "A": "amber",
-    "B": "amber"
+    "A": "green",
+    "B": "green"
   },
   "tables/col-row-size": {
     "A": "green",

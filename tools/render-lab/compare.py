@@ -41,6 +41,7 @@ With --baseline, exits 1 if any fixture's verdict got worse (the ratchet).
 """
 
 import argparse
+import functools
 import glob
 import html
 import json
@@ -402,33 +403,95 @@ def ocr_words(img, sparse=False):
         if conf < 30 or not text:
             continue
         left, top, w, h = (int(v) / k for v in f[6:10])
-        # Tesseract's own line: (block, paragraph, line).
-        words.append((text, left + w / 2, top + h / 2, tuple(f[2:5])))
+        # Tesseract's own line: (block, paragraph, line). The box (in the
+        # input image's pixels) locates the word for the magnifier fallback
+        # in match_words.
+        words.append((text, left + w / 2, top + h / 2, tuple(f[2:5]), (left, top, w, h)))
     return words
 
 
-def match_words(ref, ours):
+# A word the full-page read could not match gets one closer look: the word's
+# own box plus this pad, magnified RESCUE_K times and read as a single word
+# (psm 8). At 96 DPI a spreadsheet digit is ~7 px tall; the page-wide pass
+# segments it by its neighbours (a "7" beside a gridline reads "ri"), while
+# the crop reads the glyphs it actually holds.
+RESCUE_PAD = 4
+RESCUE_K = 3
+
+
+def ocr_crop_text(grey):
+    """Normalized text of one word-sized greyscale crop, or "": the same
+    confidence floor and normalization as ocr_words."""
+    import tempfile
+
+    with tempfile.NamedTemporaryFile(suffix=".png") as tmp:
+        grey.resize((grey.width * RESCUE_K, grey.height * RESCUE_K), Image.LANCZOS).save(tmp.name)
+        r = subprocess.run(["tesseract", tmp.name, "-", "--psm", "8", "tsv"], capture_output=True, text=True)
+    for line in r.stdout.splitlines()[1:]:
+        f = line.split("\t")
+        if len(f) < 12 or not f[11].strip():
+            continue
+        try:
+            conf = float(f[10])
+        except ValueError:
+            continue
+        text = re.sub(r"[^0-9a-z]", "", f[11].lower())
+        if conf < 30 or not text:
+            continue
+        return text
+    return ""
+
+
+def rescue_unread(ref_grey, ours_grey, box):
+    """The magnified crop of `box` (in either image's pixels) reads as the
+    same non-empty word on both sides, or None. The box comes from the
+    reference's own word, so both crops show the same location: agreement
+    means both renderings draw the same text there, read closely. It only
+    ever adds a match the page-wide pass missed; no budget changes."""
+    l, t, w, h = box
+    area = (
+        max(0, int(l - RESCUE_PAD)),
+        max(0, int(t - RESCUE_PAD)),
+        min(ref_grey.width, int(l + w + RESCUE_PAD)),
+        min(ref_grey.height, int(t + h + RESCUE_PAD)),
+    )
+    ref_text = ocr_crop_text(ref_grey.crop(area))
+    if not ref_text:
+        return None
+    ours_text = ocr_crop_text(ours_grey.crop(area))
+    return ref_text if ours_text == ref_text else None
+
+
+def match_words(ref, ours, reread=None):
     """(fraction of `ref`'s words found in `ours`, median displacement in
     points, lost lines: `ref` lines of LOST_LINE_MIN_WORDS or more words
-    with half or more of them not found)."""
+    with half or more of them not found).
+
+    `reread`, when given, is called with an unmatched reference word's box
+    and returns the word both sides read there on a closer look, or None;
+    a rescued word counts as found where it stands (displacement 0)."""
     if ref is None or ours is None or not ref:
         return None, None, None
     pool = list(ours)
     found, disp = 0, []
     per_line = {}
-    for text, x, y, line in ref:
+    for text, x, y, line, box in ref:
         best, bi = None, None
-        for i, (t2, x2, y2, _) in enumerate(pool):
+        for i, (t2, x2, y2, _, _) in enumerate(pool):
             if t2 == text:
                 d = ((x - x2) ** 2 + (y - y2) ** 2) ** 0.5
                 if best is None or d < best:
                     best, bi = d, i
+        rescued = bi is None and reread is not None and reread(box) is not None
         total, hit = per_line.get(line, (0, 0))
-        per_line[line] = (total + 1, hit + (bi is not None))
+        per_line[line] = (total + 1, hit + (bi is not None or rescued))
         if bi is not None:
             found += 1
             disp.append(best)
             pool.pop(bi)
+        elif rescued:
+            found += 1
+            disp.append(0.0)
     median = float(np.median(disp)) * PX_TO_PT if disp else None
     lost = sum(1 for total, hit in per_line.values() if total >= LOST_LINE_MIN_WORDS and 2 * hit <= total)
     return found / len(ref), median, lost
@@ -479,7 +542,11 @@ def compare_page(app, ref, ours, ref_words):
     """`ref_words` is ocr_words(ref), cached by the caller."""
     ref_ink = ink_mask(np.asarray(ref)).sum()
     ink = float(ink_mask(np.asarray(ours)).sum() / ref_ink) if ref_ink else None
-    words, disp, lost = match_words(ref_words, ocr_words(ours, app == "tables") if ref_words is not None else None)
+    ours_words = ocr_words(ours, app == "tables") if ref_words is not None else None
+    reread = None
+    if ref_words is not None and ours_words is not None:
+        reread = functools.partial(rescue_unread, ref.convert("L"), ours.convert("L"))
+    words, disp, lost = match_words(ref_words, ours_words, reread=reread)
     return {
         "ink": ink,
         "words": words,
