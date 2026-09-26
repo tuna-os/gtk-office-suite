@@ -10,6 +10,7 @@
 //   FileDialogHelper  — shared open/save/export file dialogs with office format filters
 //   ToastManager      — toast notification system for save/error feedback
 
+pub mod charts;
 pub mod file_dialogs;
 pub mod locations;
 pub mod autosave_notice;

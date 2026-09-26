@@ -599,24 +599,6 @@ pub struct ChartSpec {
     pub height_px: f64,
 }
 
-/// A value axis from 0 that holds `max`: `(top, step)` with the step
-/// 1, 2 or 5 times a power of ten and 4 to 10 intervals, as spreadsheet
-/// charts choose them (0..10 by 1 for a maximum of 9).
-pub fn nice_axis(max: f64) -> (f64, f64) {
-    if !max.is_finite() || max <= 0.0 {
-        return (1.0, 0.2);
-    }
-    // The top is the first tick above `max` (headroom over the tallest bar).
-    let top_for = |step: f64| ((max / step).floor() + 1.0) * step;
-    let mag = 10f64.powf((max / 10.0).log10().floor());
-    [1.0, 2.0, 5.0, 10.0, 20.0, 50.0]
-        .iter()
-        .map(|m| m * mag)
-        .map(|step| (top_for(step), step))
-        .find(|(top, step)| (top / step).round() <= 10.0)
-        .unwrap_or((top_for(100.0 * mag), 100.0 * mag))
-}
-
 impl ChartSpec {
     /// The name a single series is shown under: its own, else the one
     /// LibreOffice gives an untitled series, "Column B".
@@ -642,15 +624,10 @@ impl ChartSpec {
     }
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-#[cfg_attr(feature = "collab", derive(serde::Serialize, serde::Deserialize))]
-pub enum ChartKind {
-    Bar,
-    Line,
-    Pie,
-    Scatter,
-    Area,
-}
+// The chart kinds and their value axis are shared with Decks' charts
+// (suite_common_core::charts); re-exported here where Tables has always
+// named them.
+pub use suite_common_core::charts::{nice_axis, ChartKind};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "collab", derive(serde::Serialize, serde::Deserialize))]
