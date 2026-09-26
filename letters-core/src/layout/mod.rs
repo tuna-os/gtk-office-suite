@@ -604,8 +604,16 @@ fn place_paragraph(flow: &mut Flow, idx: usize, para: &Paragraph, shaped: &Shape
     // Between two paragraphs the larger of the space after the first and
     // the space before the second applies, not their sum: LibreOffice
     // draws Word documents that way (render-lab letters/paragraph-spacing:
-    // 10pt after, then 24pt before, is a 24pt gap).
-    flow.y += st.space_before_pt.max(0.0).max(std::mem::take(&mut flow.pending_after));
+    // 10pt after, then 24pt before, is a 24pt gap). Past the first
+    // paragraph neither applies at the top of a page or column: Word and
+    // LibreOffice start the text at the margin there, so a heading's
+    // space before must not ride a page break onto the next page
+    // (render-lab letters/toc). The document's own first paragraph keeps
+    // its space before (render-lab letters/headings).
+    let document_top = flow.pages.len() == 1 && flow.column == 0 && flow.column_is_empty();
+    if !flow.column_is_empty() || document_top {
+        flow.y += st.space_before_pt.max(0.0).max(std::mem::take(&mut flow.pending_after));
+    }
     // Everything that must stay together with the first line: the whole
     // paragraph if short, the orphan lines otherwise, plus a heading's
     // follower.
@@ -618,7 +626,9 @@ fn place_paragraph(flow: &mut Flow, idx: usize, para: &Paragraph, shaped: &Shape
     let needed = head + keep_next.map(|k| st.space_after_pt.max(0.0) + k).unwrap_or(0.0);
     if flow.y + needed > flow.bottom() && !flow.column_is_empty() {
         flow.next_column();
-        flow.y += st.space_before_pt.max(0.0);
+        if !flow.column_is_empty() {
+            flow.y += st.space_before_pt.max(0.0);
+        }
     }
 
     let text: Vec<char> = layout_text(&para.runs).chars().collect();
