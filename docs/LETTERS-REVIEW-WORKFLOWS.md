@@ -70,10 +70,27 @@ Delete; the page tints an open thread's text in its author's colour, with a
 mark in the right margin that opens the thread. Print and PDF show neither,
 as LibreOffice's do not.
 
-The TOC is regenerated, never incrementally patched: explicit heading levels
-win over named styles, named `Title`/`Subtitle` map to levels 1/2, and named
-`Heading 1`…`Heading 6` are accepted. Empty headings are omitted. This makes
-save/reopen and print output stable.
+### Table of contents (added 2026-09-26)
+
+A table of contents is a run of paragraphs marked as its entries
+(`ParaStyle::toc`, the heading level), each the heading's title, a tab and the
+page the heading starts on (`letters_core::toc`). The layout puts the page
+number at the right margin behind a dot leader, as Word and LibreOffice do.
+It is regenerated, never patched entry by entry: explicit heading levels win
+over named styles, named `Title`/`Subtitle` map to levels 1/2, and named
+`Heading 1`…`Heading 6` are accepted; levels 1-3 are listed (Word's default)
+and empty headings are omitted. Inserting one (`app.insert-toc`) and updating
+it (`app.update-toc`) replace its paragraphs whole with `Op::SetParagraphs`,
+one undo step each. Page numbers come from laying the document out as Print
+Layout does, again after the entries themselves have moved headings on
+(`toc::settle`), so the numbers printed are the pages the headings are on.
+
+In .docx it is Word's `TOC \o "1-3" \h \z \u` field around the entries (in
+`TOC1`…`TOC9` styles with a dotted right tab); in .odt a
+`text:table-of-content` index whose source says how to regenerate it, the
+entries in `Contents N` styles. Either way Word or LibreOffice can update it,
+and a table of contents either of them wrote (Word's inside its content
+control) opens as entries.
 
 Paragraph base direction comes from the first strong RTL/LTR character with a
 caller-selected fallback for neutral text. The same value must drive caret
@@ -86,7 +103,7 @@ direction helper intentionally does not classify numbers or punctuation.
 | --- | --- | --- | --- |
 | Comments | `RunStyle::comments` marks and `Document::comments` (`letters_core::comments`) | mapped: DOCX comments part with `w:commentRangeStart`/`End` and references, replies and resolved in `commentsExtended`; ODT `office:annotation` ranges with `loext:parent-name` and `loext:resolved`; LibreOffice oracle in both directions. LibreOffice 24.2 writes no reply parent to .docx for a document it read from .odt, so there a reply opens as a comment of its own on the same text | Kept through save and reopen; Markdown, HTML and text warn and save the text |
 | Tracked insert/delete | `RunStyle::revision` marks (`letters_core::track`) | mapped: DOCX `w:ins`/`w:del` (nested for a deleted insertion), ODT change regions; LibreOffice oracle in both directions | Kept through save and reopen; Markdown, HTML and text warn and save the text |
-| TOC | deterministic derived entries | headings are admitted; field refresh is adapter-owned | Rebuild from headings/styles on reopen and print |
+| TOC | `ParaStyle::toc` entries (`letters_core::toc`) | mapped: DOCX TOC field, ODT `text:table-of-content`; LibreOffice oracle in both directions | Kept through save and reopen, updatable by Word and LibreOffice; Markdown, HTML and text warn and save the text |
 | Bidi paragraph direction | shared base-direction helper | warn if a format cannot encode it | Keep text and direction evidence; never infer from alignment alone |
 
 Until the corresponding DOCX/ODT parts are implemented, a native save with

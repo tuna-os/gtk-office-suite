@@ -211,6 +211,7 @@ pub fn read(path: &str) -> Result<Document, String> {
     if !comments.is_empty() {
         crate::docx_comments::restore(&mut read, comments);
     }
+    crate::docx_toc::restore(&mut read);
     // Page-number fields in the header and footer, as "{page}"/"{total}".
     let (header, footer) = header_footer_templates(path);
     if header.is_some() {
@@ -253,18 +254,38 @@ fn open_with_chips(path: &str) -> Result<(rdocx::Document, Unwrapped), String> {
         .ok()
         .and_then(|mut z| std::io::Read::read_to_string(&mut z.by_name("word/document.xml").ok()?, &mut xml).ok())
         .is_some();
-    if !found || !(xml.contains("<w:sdt") || xml.contains("<w:ins ") || xml.contains("<w:del ") || xml.contains("<w:comment")) {
+    if !found || !(xml.contains("<w:sdt") || xml.contains("<w:ins ") || xml.contains("<w:del ") || xml.contains("<w:comment") || xml.contains("TOC \\")) {
         return Ok((rdocx::Document::open(path).map_err(|e| e.to_string())?, (Vec::new(), Vec::new())));
     }
-    let (patched, chips) = crate::docx_chips::unwrap(&xml);
+    // A table of contents first: it lifts the paragraphs out of their
+    // content control before chips look at controls.
+    let toc = crate::docx_toc::unwrap(&xml);
+    let (patched, chips) = crate::docx_chips::unwrap(toc.as_deref().unwrap_or(&xml));
     let (patched, revisions) = crate::docx_revisions::unwrap(&patched);
     let commented = crate::docx_comments::unwrap(&patched);
     let patched = commented.clone().unwrap_or(patched);
-    if chips.is_empty() && revisions.is_empty() && commented.is_none() {
+    if chips.is_empty() && revisions.is_empty() && commented.is_none() && toc.is_none() {
         return Ok((rdocx::Document::open(path).map_err(|e| e.to_string())?, (Vec::new(), Vec::new())));
     }
     let bytes = with_part(&bytes, "word/document.xml", |_| patched.clone())?;
     Ok((rdocx::Document::from_bytes(&bytes).map_err(|e| e.to_string())?, (chips, revisions)))
+}
+
+/// Tabs in run text as Word's `w:tab` elements. rdocx writes a tab as a
+/// character inside `w:t`, which Word and LibreOffice read as a space.
+fn tabs_as_elements(xml: &str) -> String {
+    let mut out = String::with_capacity(xml.len());
+    let mut rest = xml;
+    while let Some(at) = rest.find("<w:t>").into_iter().chain(rest.find("<w:t ")).min() {
+        let Some(open_end) = rest[at..].find('>').map(|e| at + e + 1) else { break };
+        let Some(close) = rest[open_end..].find("</w:t>").map(|c| open_end + c) else { break };
+        out.push_str(&rest[..open_end]);
+        let text = &rest[open_end..close];
+        out.push_str(&text.replace('\t', "</w:t><w:tab/><w:t xml:space=\"preserve\">"));
+        rest = &rest[close..];
+    }
+    out.push_str(rest);
+    out
 }
 
 /// A run's text as written: bracketed as a tracked change if it is one.
@@ -540,6 +561,10 @@ pub fn write(doc: &Document, path: impl AsRef<std::path::Path>) -> Result<(), St
     let wanted = |run: &Run| -> Vec<u32> { crate::docx_comments::threads_of(&roots, &run.style.comments).collect() };
     // Footnote texts first: model index → docx id.
     let footnote_ids: Vec<i32> = doc.footnotes.iter().map(|t| out.add_footnote(t)).collect();
+    // The text column's width, where a table of contents' page numbers go
+    // (rdocx's default page: Letter with 1in margins).
+    let text_width_pt = doc.page.map_or(468.0, |g| g.width_pt - g.margin_left_pt - g.margin_right_pt);
+    let mut has_toc = false;
     let mut i = 0;
     while i < paras.len() {
         // Consecutive paragraphs sharing a table id become one rdocx table.
@@ -645,8 +670,15 @@ pub fn write(doc: &Document, path: impl AsRef<std::path::Path>) -> Result<(), St
         // were lost on every save in both formats, self round trip
         // included. The model has positions only, so every stop is a
         // left-aligned one.
-        for pos in &para.style.tab_stops_pt {
-            p = p.add_tab_stop(rdocx::TabAlignment::Left, rdocx::Length::pt(*pos));
+        // A table of contents entry: Word's TOC style for its level, and
+        // its page number at a right tab with a dot leader at the margin.
+        if let Some(level) = para.style.toc {
+            p = p.style(&format!("TOC{}", level.clamp(1, 9)));
+            p = p.add_tab_stop_with_leader(rdocx::TabAlignment::Right, rdocx::Length::pt(text_width_pt), rdocx::TabLeader::Dot);
+        } else {
+            for pos in &para.style.tab_stops_pt {
+                p = p.add_tab_stop(rdocx::TabAlignment::Left, rdocx::Length::pt(*pos));
+            }
         }
         p = match para.style.alignment {
             Alignment::Left => p,
@@ -655,6 +687,12 @@ pub fn write(doc: &Document, path: impl AsRef<std::path::Path>) -> Result<(), St
             Alignment::Justify => p.alignment(rdocx::Alignment::Justify),
         };
         let _ = p; // release the builder borrow before append_hyperlink
+        // A table of contents is Word's TOC field around its entries.
+        let toc_edge = |k: usize| paras.get(k).is_none_or(|q| q.style.toc.is_none());
+        if para.style.toc.is_some() && (i < 2 || toc_edge(i - 2)) {
+            let _ = out.last_paragraph_mut().expect("paragraph").add_run(&crate::docx_toc::begin_marker());
+            has_toc = true;
+        }
         for id in std::mem::take(&mut orphans) {
             for start in [true, false] {
                 let _ = out.last_paragraph_mut().expect("paragraph").add_run(&crate::docx_comments::marker(id, start));
@@ -735,6 +773,9 @@ pub fn write(doc: &Document, path: impl AsRef<std::path::Path>) -> Result<(), St
                 None => {}
             }
         }
+        if para.style.toc.is_some() && toc_edge(i) {
+            let _ = out.last_paragraph_mut().expect("paragraph").add_run(&crate::docx_toc::end_marker());
+        }
         // Close the threads the next paragraph's text is not in (all of
         // them before a table, whose cells hold their own).
         let next: Vec<u32> = match paras.get(i) {
@@ -772,12 +813,15 @@ pub fn write(doc: &Document, path: impl AsRef<std::path::Path>) -> Result<(), St
         .map_err(|e| format!("Cannot save {}: {}", path.as_ref().display(), e))?;
     let bytes = with_letters_styles(&bytes, &doc.base_font, &doc.heading_styles)
         .map_err(|e| format!("Cannot save {}: {}", path.as_ref().display(), e))?;
-    let bytes = if chips.is_empty() && revisions.is_empty() && doc.comments.is_empty() {
+    let tabbed = paras.iter().flat_map(|p| &p.runs).any(|r| r.text.contains('\t'));
+    let bytes = if chips.is_empty() && revisions.is_empty() && doc.comments.is_empty() && !has_toc && !tabbed {
         bytes
     } else {
         with_part(&bytes, "word/document.xml", |xml| {
-            let xml = crate::docx_revisions::wrap(&crate::docx_chips::wrap(xml, &chips), &revisions);
-            crate::docx_comments::wrap(&xml, &doc.comments)
+            let xml = if tabbed { tabs_as_elements(xml) } else { xml.to_string() };
+            let xml = crate::docx_revisions::wrap(&crate::docx_chips::wrap(&xml, &chips), &revisions);
+            let xml = crate::docx_comments::wrap(&xml, &doc.comments);
+            if has_toc { crate::docx_toc::wrap(&xml) } else { xml }
         })
         .map_err(|e| format!("Cannot save {}: {}", path.as_ref().display(), e))?
     };
@@ -919,6 +963,16 @@ fn patch_styles_xml(xml: &str, defaults: &str, headings: &str) -> String {
     }
     if let Some(end) = xml.rfind("</w:styles>") {
         xml.insert_str(end, headings);
+    }
+    // Word's table of contents entry styles, which the template lacks; a
+    // table of contents' entries name them (their indents are direct).
+    if !xml.contains("w:styleId=\"TOC1\"") {
+        let toc: String = (1..=9)
+            .map(|n| format!("<w:style w:type=\"paragraph\" w:styleId=\"TOC{n}\"><w:name w:val=\"toc {n}\"/><w:basedOn w:val=\"Normal\"/><w:next w:val=\"Normal\"/><w:uiPriority w:val=\"39\"/><w:unhideWhenUsed/></w:style>"))
+            .collect();
+        if let Some(end) = xml.rfind("</w:styles>") {
+            xml.insert_str(end, &toc);
+        }
     }
     xml
 }

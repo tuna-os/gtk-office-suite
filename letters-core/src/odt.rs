@@ -259,7 +259,9 @@ fn content_xml(doc: &Document) -> String {
 
         // LO built-in named styles win over our automatic styles; the
         // names (Title, Subtitle, Quotations) are ODF/LO conventions.
-        let style_attr = if let Some(name) = &p.style.named_style {
+        let style_attr = if let Some(level) = p.style.toc {
+            format!(" text:style-name=\"Contents_20_{}\"", level.clamp(1, 10))
+        } else if let Some(name) = &p.style.named_style {
             format!(" text:style-name=\"{}\"", esc(name))
         } else if p.style.block_quote {
             " text:style-name=\"Quotations\"".to_string()
@@ -303,7 +305,8 @@ fn content_xml(doc: &Document) -> String {
                 inner.push_str(&chip_xml(chip, &r.text, r.style.link.as_deref()));
                 continue;
             }
-            let mut run_xml = esc(&r.text);
+            // A tab is an element in ODF: a raw one is only whitespace.
+            let mut run_xml = esc(&r.text).replace('\t', "<text:tab/>");
             let plain = RunStyle { revision: None, comments: Vec::new(), ..r.style.clone() };
             if plain != RunStyle::default() {
                 let ti = run_styles.iter().position(|s| *s == plain).unwrap() + 1;
@@ -328,12 +331,22 @@ fn content_xml(doc: &Document) -> String {
         for (id, start) in crate::docx_comments::transition(&mut open, &keep) {
             inner.push_str(&annotate(id, start));
         }
+        // A table of contents: LibreOffice's index, whose source says how
+        // to regenerate it (headings 1-3: text, a dotted right tab, the
+        // page), around the entries.
+        let toc_at = |k: usize| doc.paragraphs.get(k).is_some_and(|q| q.style.toc.is_some());
+        if p.style.toc.is_some() && (pi == 0 || !toc_at(pi - 1)) {
+            body.push_str(&toc_open());
+        }
         if let Some(level) = p.style.heading {
             body.push_str(&format!(
                 "<text:h text:outline-level=\"{level}\"{style_attr}>{inner}</text:h>"
             ));
         } else {
             body.push_str(&format!("<text:p{style_attr}>{inner}</text:p>"));
+        }
+        if p.style.toc.is_some() && !toc_at(pi + 1) {
+            body.push_str("</text:index-body></text:table-of-content>");
         }
     }
     if open_list.map(|l| l != ListKind::None).unwrap_or(false) {
@@ -366,6 +379,38 @@ fn content_xml(doc: &Document) -> String {
          <office:body><office:text>{changes}{body}</office:text></office:body>\
          </office:document-content>"
     )
+}
+
+/// A table of contents index's start: how to regenerate it, then its body.
+fn toc_open() -> String {
+    let templates: String = (1..=crate::toc::LEVELS)
+        .map(|n| {
+            format!(
+                "<text:table-of-content-entry-template text:outline-level=\"{n}\" text:style-name=\"Contents_20_{n}\"><text:index-entry-text/><text:index-entry-tab-stop style:type=\"right\" style:leader-char=\".\"/><text:index-entry-page-number/></text:table-of-content-entry-template>"
+            )
+        })
+        .collect();
+    format!(
+        "<text:table-of-content text:name=\"Table of Contents1\"><text:table-of-content-source text:outline-level=\"{}\">{templates}</text:table-of-content-source><text:index-body>",
+        crate::toc::LEVELS
+    )
+}
+
+/// The "Contents 1".."Contents 10" paragraph styles a table of contents'
+/// entries name: each level indented one step more, with a dotted right
+/// tab at the text column's edge for the page number.
+fn contents_styles(doc: &Document) -> String {
+    let g = doc.page.unwrap_or_default();
+    let width = g.width_pt - g.margin_left_pt - g.margin_right_pt;
+    (1..=10u8)
+        .map(|n| {
+            let indent = crate::toc::INDENT_PT * f64::from(n - 1);
+            format!(
+                "<style:style style:name=\"Contents_20_{n}\" style:display-name=\"Contents {n}\" style:family=\"paragraph\" style:class=\"index\"><style:paragraph-properties fo:margin-left=\"{indent:.2}pt\" fo:margin-right=\"0pt\" fo:text-indent=\"0pt\"><style:tab-stops><style:tab-stop style:position=\"{:.2}pt\" style:type=\"right\" style:leader-style=\"dotted\" style:leader-text=\".\"/></style:tab-stops></style:paragraph-properties></style:style>",
+                width - indent
+            )
+        })
+        .collect()
 }
 
 /// A comment as an ODF annotation; a reply names its thread as
@@ -506,10 +551,12 @@ fn styles_xml(doc: &Document) -> String {
          xmlns:style=\"urn:oasis:names:tc:opendocument:xmlns:style:1.0\" \
          xmlns:fo=\"urn:oasis:names:tc:opendocument:xmlns:xsl-fo-compatible:1.0\" \
          office:version=\"1.2\">\
+         <office:styles>{contents}</office:styles>\
          <office:automatic-styles>\
          <style:page-layout style:name=\"pm1\">{layout}\
          </style:page-layout></office:automatic-styles>{hf}\
-         </office:document-styles>"
+         </office:document-styles>",
+        contents = if doc.paragraphs.iter().any(|p| p.style.toc.is_some()) { contents_styles(doc) } else { String::new() }
     )
 }
 
@@ -871,6 +918,10 @@ pub fn read(path: &str) -> Result<Document, String> {
         })
         .collect();
     let mut next_free = 1u32;
+    // A table of contents index: inside its body (not its title), each
+    // paragraph is an entry of the level its "Contents N" style names.
+    let mut in_toc = false;
+    let mut in_index_title = false;
     let mut comments: Vec<(crate::model::Comment, Option<String>)> = Vec::new();
     type Reading = (crate::model::Comment, Option<String>, Option<&'static str>, usize);
     let mut annotation: Option<Reading> = None;
@@ -1104,6 +1155,14 @@ pub fn read(path: &str) -> Result<Document, String> {
                     }
                     style.list = list_kind;
                     style.list_level = list_level.saturating_sub(1);
+                    if in_toc && !in_index_title {
+                        let name = attr_val(&e, "text:style-name").unwrap_or_default();
+                        let base = auto.para_parent.get(&name).cloned().unwrap_or(name);
+                        let level = base.rsplit(|c: char| !c.is_ascii_digit()).next().and_then(|d| d.parse::<u8>().ok()).filter(|l| (1..=10).contains(l)).unwrap_or(1);
+                        style.toc = Some(level);
+                        style.left_indent_pt = crate::toc::INDENT_PT * f64::from(level - 1);
+                        style.tab_stops_pt.clear();
+                    }
                     para = Some(Paragraph { style, runs: Vec::new() });
                 }
                 "text:span" => {
@@ -1136,6 +1195,8 @@ pub fn read(path: &str) -> Result<Document, String> {
                         chip = Some((crate::chips::Chip { kind: crate::chips::ChipKind::Date, value: v }, String::new(), "text:date"));
                     }
                 }
+                "text:table-of-content" => in_toc = true,
+                "text:index-title" if in_toc => in_index_title = true,
                 "text:list" if in_body => {
                     // Bullet vs numbered comes from the list style name we
                     // write; LO-authored lists fall back to bullet.
@@ -1205,10 +1266,28 @@ pub fn read(path: &str) -> Result<Document, String> {
                 // carries the reference.
                 "text:p" if note.is_some() => {}
                 "text:p" | "text:h" => {
-                    if let Some(p) = para.take() {
+                    if let Some(mut p) = para.take() {
+                        // An entry's link goes to its heading, not a page.
+                        if p.style.toc.is_some() {
+                            for r in &mut p.runs {
+                                if r.style.link.as_deref().is_some_and(|l| l.starts_with('#')) {
+                                    r.style.link = None;
+                                }
+                            }
+                            let mut runs: Vec<Run> = Vec::new();
+                            for r in p.runs.drain(..) {
+                                match runs.last_mut() {
+                                    Some(l) if l.style == r.style && r.style.chip.is_none() && l.style.chip.is_none() => l.text.push_str(&r.text),
+                                    _ => runs.push(r),
+                                }
+                            }
+                            p.runs = runs;
+                        }
                         doc.paragraphs.push(p);
                     }
                 }
+                "text:table-of-content" => in_toc = false,
+                "text:index-title" => in_index_title = false,
                 "text:span" => {
                     span_stack.pop();
                 }
@@ -1414,6 +1493,19 @@ mod tests {
         let d = crate::track::sample_document();
         let rt = round_trip(&d);
         assert_eq!(rt.paragraphs[0].runs, d.paragraphs[0].runs);
+    }
+
+    /// A table of contents is LibreOffice's index, and reopens as the same
+    /// entries; a tab is written as an ODF tab, which a raw tab is not.
+    #[test]
+    fn a_table_of_contents_and_tabs_survive() {
+        let mut d = crate::toc::sample_document();
+        d.paragraphs[5].runs = vec![Run::plain("Why\tit matters.")];
+        let rt = round_trip(&d);
+        let entries = |d: &Document| crate::toc::blocks(d).into_iter().flat_map(|b| d.paragraphs[b].to_vec()).collect::<Vec<_>>();
+        assert_eq!(entries(&rt), entries(&d));
+        assert_eq!(rt.paragraphs[5].text(), "Why\tit matters.");
+        assert_eq!(rt.paragraphs.len(), d.paragraphs.len());
     }
 
     /// Comments reopen as they were: overlapping annotations, a reply in

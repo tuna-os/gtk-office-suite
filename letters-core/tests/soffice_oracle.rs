@@ -1129,6 +1129,39 @@ fn flattened(threads: &[ThreadView]) -> Vec<ThreadView> {
     out
 }
 
+/// A table of contents survives LibreOffice: our .docx (a TOC field) and
+/// .odt (an index), opened and saved by Writer in either format, reopen
+/// with the same entries: level, title and page number.
+#[test]
+fn a_table_of_contents_survives_lo_passes() {
+    let Some(bin) = require_or_skip() else { return };
+    let d = letters_core::toc::sample_document();
+    let entries = |d: &Document| -> Vec<(u8, String)> {
+        letters_core::toc::blocks(d).into_iter().flat_map(|b| d.paragraphs[b].to_vec()).map(|p| (p.style.toc.unwrap(), p.text())).collect()
+    };
+    let want = entries(&d);
+    let dir = tempfile::tempdir().unwrap();
+    for (from, to) in [("docx", "docx"), ("odt", "odt"), ("docx", "odt"), ("odt", "docx")] {
+        let work = dir.path().join(format!("{from}-{to}"));
+        let out = work.join("out");
+        std::fs::create_dir_all(&out).unwrap();
+        let staged = out.join(format!("contents.{from}"));
+        match from {
+            "docx" => docx::write(&d, &staged).expect("write docx"),
+            _ => letters_core::odt::write(&d, &staged).expect("write odt"),
+        }
+        let filter = if to == "docx" { "docx:MS Word 2007 XML" } else { "odt" };
+        let _ = soffice_convert(bin, &staged, filter);
+        let converted = out.join(format!("contents.{to}"));
+        assert!(converted.exists(), "soffice did not convert {from} to {to}");
+        let rt = match to {
+            "docx" => docx::read(converted.to_str().unwrap()).expect("read converted docx"),
+            _ => letters_core::odt::read(converted.to_str().unwrap()).expect("read converted odt"),
+        };
+        assert_eq!(entries(&rt), want, "{from} -> LibreOffice -> {to} changed the table of contents: {:?}", rt.paragraphs.iter().map(|p| (p.style.toc, p.text())).collect::<Vec<_>>());
+    }
+}
+
 /// Comment threads as (anchor, (author, date, text, resolved), replies).
 type ThreadView = (Option<(usize, usize, String)>, (String, String, String, bool), Vec<(String, String, String)>);
 

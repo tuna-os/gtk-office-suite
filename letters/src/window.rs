@@ -269,6 +269,7 @@ impl LettersWindow {
         crate::chips_ui::register_action(app, &tab_view);
         crate::review_ui::register_actions(app, &tab_view, &status_bar);
         crate::comments_ui::register_actions(app, &tab_view);
+        crate::toc_ui::register_actions(app, &tab_view);
 
         // ── Paragraph styles, previewed; the headings outline ─────
         let style_picker = crate::style_picker::build(&tab_view);

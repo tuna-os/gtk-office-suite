@@ -28,7 +28,7 @@ chrono = "0.4"
 # document-embedded images to /tmp, which must not use predictable paths.
 tempfile = "3"
 # Optional, feature `render`: Pango and Cairo are not GTK (ADR 0010).
-pango = { version = "0.22", optional = true, features = ["v1_44"] }
+pango = { version = "0.22", optional = true, features = ["v1_50"] }
 pangocairo = { version = "0.22", optional = true }
 cairo-rs = { version = "0.22", optional = true, features = ["png", "pdf"] }
 
