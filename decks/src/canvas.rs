@@ -452,7 +452,12 @@ pub enum Chrome {
 pub fn slide_frame(width: f64, height: f64, chrome: Chrome) -> (f64, f64, f64, f64) {
     match chrome {
         Chrome::Editor => slide_geometry(width, height),
-        Chrome::Show | Chrome::Preview | Chrome::Export => {
+        // An export is drawn into a box of the deck's own page, 16:9 or
+        // not, and the slide is that whole box: positions take each axis's
+        // own factor and sizes the horizontal one, as the importers map a
+        // page of another size onto the model (`SlideScale`).
+        Chrome::Export => (0.0, 0.0, width, height),
+        Chrome::Show | Chrome::Preview => {
             let k = (width / 960.0).min(height / 540.0).max(0.01);
             let (w, h) = (960.0 * k, 540.0 * k);
             ((width - w) / 2.0, (height - h) / 2.0, w, h)

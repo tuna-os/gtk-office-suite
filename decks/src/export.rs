@@ -7,9 +7,11 @@
 //! master as the editor, with none of its marks. The PDF is vector: cairo's
 //! PDF surface keeps text as text.
 //!
-//! Slides are drawn on the model's 16:9 slide, 10in x 5.625in; a deck of
-//! another size (`MasterSlide::page_emu`) is still exported on that page,
-//! as the editor shows it.
+//! Slides are exported on the deck's own page (`MasterSlide::page_emu`):
+//! 10in x 5.625in for a deck with none, 4:3 or any custom size as the
+//! file declared it, the way PowerPoint and Impress print it. The model's
+//! 960 x 540 maps onto that page as the importers mapped the page onto it:
+//! positions by each axis's own factor, sizes by the horizontal one.
 
 use std::path::Path;
 
@@ -17,29 +19,44 @@ use crate::canvas::{draw_slide_in, Chrome};
 use decks_core::engine::Deck;
 use gtk4::cairo;
 
-/// A slide page: 10in x 5.625in, in points.
+/// A slide page for a deck with no size of its own: 10in x 5.625in, in
+/// points.
 pub const SLIDE_PT: (f64, f64) = (720.0, 405.0);
+
+/// The page `deck` is exported on, in points.
+pub fn page_pt(deck: &Deck) -> (f64, f64) {
+    match deck.masters.first().and_then(|m| m.page_emu) {
+        Some((cx, cy)) if cx > 0.0 && cy > 0.0 => (cx / 12700.0, cy / 12700.0),
+        _ => SLIDE_PT,
+    }
+}
 /// A handout page: A4 portrait, in points.
 pub const HANDOUT_PT: (f64, f64) = (595.276, 841.89);
 
-/// Draw slide `index` into `(x, y, w, h)` of `cr` (a 16:9 box).
+/// Draw slide `index` into `(x, y, w, h)` of `cr`, a box of the deck's
+/// page shape.
 fn draw_into(cr: &cairo::Context, deck: &Deck, index: usize, (x, y, w, h): (f64, f64, f64, f64)) -> Result<(), String> {
     cr.save().map_err(|e| e.to_string())?;
     cr.translate(x, y);
-    // Drawn at the model's own 960 x 540 and scaled onto the box, with
-    // nothing around the slide (a show's black surround left a line along
-    // some boxes' edges in a PDF viewer).
-    cr.scale(w / 960.0, h / 540.0);
-    cr.rectangle(0.0, 0.0, 960.0, 540.0);
+    // Drawn 960 units wide, as the editor lays text out, and scaled
+    // uniformly onto the box; the slide is as tall as the page's shape
+    // makes it (540 for 16:9, 720 for 4:3), with nothing around it (a
+    // show's black surround left a line along some boxes' edges in a PDF
+    // viewer).
+    let k = w / 960.0;
+    let tall = h / k;
+    cr.scale(k, k);
+    cr.rectangle(0.0, 0.0, 960.0, tall);
     cr.clip();
-    draw_slide_in(cr, 960.0, 540.0, &deck.slides, index, &deck.masters, Chrome::Export);
+    draw_slide_in(cr, 960.0, tall, &deck.slides, index, &deck.masters, Chrome::Export);
     cr.restore().map_err(|e| e.to_string())
 }
 
 /// Where the slides go on a handout page of `per_page` (2, 4 or 6): one
-/// column of two, or two columns of two or three rows; each a 16:9 box as
-/// large as its cell allows, with room under it for its number.
-pub fn handout_boxes(per_page: usize) -> Vec<(f64, f64, f64, f64)> {
+/// column of two, or two columns of two or three rows; each a box of the
+/// slide's `(width, height)` shape as large as its cell allows, with room
+/// under it for its number.
+pub fn handout_boxes(per_page: usize, (sw, sh): (f64, f64)) -> Vec<(f64, f64, f64, f64)> {
     let (cols, rows) = match per_page {
         2 => (1, 2),
         4 => (2, 2),
@@ -50,8 +67,8 @@ pub fn handout_boxes(per_page: usize) -> Vec<(f64, f64, f64, f64)> {
     let (cw, ch) = ((pw - 2.0 * margin) / cols as f64, (ph - 2.0 * margin) / rows as f64);
     let label = 18.0;
     let gap = 18.0;
-    let k = ((cw - gap) / 16.0).min((ch - gap - label) / 9.0);
-    let (w, h) = (16.0 * k, 9.0 * k);
+    let k = ((cw - gap) / sw).min((ch - gap - label) / sh);
+    let (w, h) = (sw * k, sh * k);
     let mut out = Vec::new();
     for r in 0..rows {
         for c in 0..cols {
@@ -67,7 +84,8 @@ pub fn handout_boxes(per_page: usize) -> Vec<(f64, f64, f64, f64)> {
 /// or 6) handouts with that many slides to an A4 page, each framed and
 /// numbered.
 pub fn export_pdf(deck: &Deck, path: &Path, per_page: Option<usize>) -> Result<(), String> {
-    let (pw, ph) = if per_page.is_some() { HANDOUT_PT } else { SLIDE_PT };
+    let slide = page_pt(deck);
+    let (pw, ph) = if per_page.is_some() { HANDOUT_PT } else { slide };
     let surface = cairo::PdfSurface::new(pw, ph, path).map_err(|e| e.to_string())?;
     let cr = cairo::Context::new(&surface).map_err(|e| e.to_string())?;
     match per_page {
@@ -78,7 +96,7 @@ pub fn export_pdf(deck: &Deck, path: &Path, per_page: Option<usize>) -> Result<(
             }
         }
         Some(n) => {
-            let boxes = handout_boxes(n);
+            let boxes = handout_boxes(n, slide);
             for (page, chunk) in (0..deck.slides.len()).collect::<Vec<_>>().chunks(boxes.len()).enumerate() {
                 let _ = page;
                 for (i, (x, y, w, h)) in chunk.iter().zip(&boxes) {
@@ -107,12 +125,14 @@ pub fn export_pdf(deck: &Deck, path: &Path, per_page: Option<usize>) -> Result<(
     Ok(())
 }
 
-/// Slide `index` as a PNG `width` pixels wide (16:9) at `path`.
+/// Slide `index` as a PNG `width` pixels wide, of the deck's page shape,
+/// at `path`.
 pub fn export_png(deck: &Deck, index: usize, width: i32, path: &Path) -> Result<(), String> {
     if index >= deck.slides.len() {
         return Err("No such slide".into());
     }
-    let height = width * 9 / 16;
+    let (pw, ph) = page_pt(deck);
+    let height = (width as f64 * ph / pw).round().max(1.0) as i32;
     let surface = cairo::ImageSurface::create(cairo::Format::ARgb32, width, height).map_err(|e| e.to_string())?;
     {
         let cr = cairo::Context::new(&surface).map_err(|e| e.to_string())?;
@@ -180,12 +200,12 @@ mod tests {
     }
 
     #[test]
-    fn handout_boxes_are_16_9_on_the_page_and_do_not_overlap() {
-        for n in [2, 4, 6] {
-            let b = handout_boxes(n);
+    fn handout_boxes_take_the_slides_shape_and_do_not_overlap() {
+        for (n, shape) in [2, 4, 6].into_iter().flat_map(|n| [(n, SLIDE_PT), (n, (720.0, 540.0))]) {
+            let b = handout_boxes(n, shape);
             assert_eq!(b.len(), n);
             for (i, (x, y, w, h)) in b.iter().enumerate() {
-                assert!((w / h - 16.0 / 9.0).abs() < 1e-9);
+                assert!((w / h - shape.0 / shape.1).abs() < 1e-9);
                 assert!(*x >= 0.0 && *y >= 0.0 && x + w <= HANDOUT_PT.0 && y + h + 18.0 <= HANDOUT_PT.1, "{n}: {i}");
                 for (x2, y2, w2, h2) in &b[i + 1..] {
                     assert!(x + w <= *x2 || x2 + w2 <= *x || y + h <= *y2 || y2 + h2 <= *y, "{n}: boxes overlap");
@@ -269,5 +289,64 @@ mod tests {
         assert_eq!((pw, ph), (sw, sh), "96 dpi of 10in x 5.625in is 960 x 540");
         assert!((29_300..=30_000).contains(&sr), "PNG: {sr}");
         assert!((29_300..=30_000).contains(&pr), "PDF: {pr}");
+    }
+
+    /// A 4:3 deck (10in x 7.5in, as PowerPoint's Standard size declares it)
+    /// is exported on its own page, not the 16:9 one: poppler reads the PDF
+    /// page as 720 x 540 pt, the PNG is 4:3, and a full-bleed box fills
+    /// both to every corner. A box in the model's middle stays in the
+    /// page's middle.
+    #[test]
+    fn a_4_3_deck_exports_on_its_own_page() {
+        let mut d = deck(2);
+        for m in &mut d.masters {
+            m.page_emu = Some((9_144_000.0, 6_858_000.0));
+        }
+        for s in &mut d.slides {
+            s.objects.push(SlideObject::Shape {
+                kind: decks_core::engine::shape::ShapeKind::Rect,
+                x: 0.0,
+                y: 0.0,
+                w: 960.0,
+                h: 540.0,
+                rotation: 0.0,
+                style: decks_core::engine::shape::ShapeStyle {
+                    fill: Some(decks_core::engine::shape::Color(0x1C, 0x71, 0xD8)),
+                    gradient: None,
+                    stroke: None,
+                },
+            });
+        }
+        assert_eq!(page_pt(&d), (720.0, 540.0));
+        let dir = tempfile::tempdir().unwrap();
+        let (pdf, png) = (dir.path().join("deck.pdf"), dir.path().join("slide.png"));
+        export_pdf(&d, &pdf, None).unwrap();
+        export_png(&d, 0, 960, &png).unwrap();
+        let blue = |path: &Path| -> (i32, i32, bool) {
+            let s = cairo::ImageSurface::create_from_png(&mut std::fs::File::open(path).unwrap()).unwrap();
+            let (w, h, stride) = (s.width(), s.height(), s.stride() as usize);
+            let data = s.take_data().unwrap();
+            let at = |x: i32, y: i32| {
+                let p = &data[y as usize * stride + x as usize * 4..][..4];
+                p[0] > 180 && p[1] > 90 && p[1] < 140 && p[2] < 60
+            };
+            let corners = [(1, 1), (w - 2, 1), (1, h - 2), (w - 2, h - 2), (w / 2, h / 2)];
+            (w, h, corners.iter().all(|&(x, y)| at(x, y)))
+        };
+        assert_eq!(blue(&png), (960, 720, true), "PNG: 4:3, the box to every corner");
+
+        let p = pdf.to_str().unwrap();
+        let Some(info) = tool("pdfinfo", &[p]) else { return };
+        assert!(info.contains("Page size:       720 x 540 pts"), "{info}");
+        assert!(info.contains("Pages:           2"), "{info}");
+        let prefix = dir.path().join("page");
+        tool("pdftoppm", &["-png", "-r", "96", "-f", "1", "-l", "1", "-singlefile", p, prefix.to_str().unwrap()]).unwrap();
+        assert_eq!(blue(&prefix.with_extension("png")), (960, 720, true), "PDF page 1 at 96 dpi");
+
+        // Handouts frame each slide as a 4:3 box.
+        let handouts = dir.path().join("handouts.pdf");
+        export_pdf(&d, &handouts, Some(2)).unwrap();
+        let info = tool("pdfinfo", &[handouts.to_str().unwrap()]).unwrap();
+        assert!(info.contains("(A4)") && info.contains("Pages:           1"), "{info}");
     }
 }
