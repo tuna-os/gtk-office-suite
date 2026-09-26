@@ -24,17 +24,20 @@ class LettersSmoke(BaseGUITestCase):
         self.assertIsNone(self.process.poll(), "letters exited after launch")
 
     def test_new_document_and_type_updates_word_count(self):
-        # The editor TextView is not currently exposed via AT-SPI (PageContainer
-        # allocates its child inside snapshot(), which breaks the a11y tree —
-        # tracked as a separate issue). Until that is fixed, type via raw input
-        # and assert on the word-count label, which is exposed.
+        # Type as a user does (raw keys into the focused page) and read the
+        # word-count label.
         from dogtail import rawinput
 
-        self.app.child(name="New Document", roleName="push button").do_action(0)
-        time.sleep(1.5)
+        # Type only once the page has the keyboard. This test used to sleep
+        # 1.5 s and type: on the first launch of a run the new tab took
+        # longer than that, the keys arrived while the welcome page was up,
+        # and the window's find bar captured them ("kbrownfo" in the find
+        # bar, "2 words" in the document).
+        started = time.monotonic()
+        self.new_letters_document()
+        print(f"new document ready to type after {time.monotonic() - started:.2f}s", flush=True)
         rawinput.typeText("the quick brown fox")
-        time.sleep(1.0)
-        label = self.app.child(name="4 words", roleName="label")
+        label = self.wait_for_node(name="4 words", roleName="label")
         self.assertIsNotNone(label)
         self.assertIsNone(self.process.poll(), "letters crashed while typing")
 
@@ -79,8 +82,7 @@ class LettersFormattingSmoke(BaseGUITestCase):
         """
         from dogtail import rawinput
 
-        self.app.child(name="New Document", roleName="push button").do_action(0)
-        time.sleep(1.5)
+        self.new_letters_document()
         rawinput.typeText("plain ")
         # Toolbar buttons are action-bound push buttons named by tooltip.
         bold = self.app.child(name="Bold (Ctrl+B)", roleName="push button")
@@ -109,8 +111,7 @@ class LettersPaletteSmoke(BaseGUITestCase):
 
         # Open a document first so the lazily registered formatting
         # actions exist and must therefore be labeled.
-        self.app.child(name="New Document", roleName="push button").do_action(0)
-        time.sleep(1.5)
+        self.new_letters_document()
         rawinput.keyCombo("<Control>k")
         time.sleep(1.0)
 
@@ -134,8 +135,7 @@ class LettersSelectionUXSmoke(BaseGUITestCase):
         from dogtail import rawinput
         import subprocess
 
-        self.app.child(name="New Document", roleName="push button").do_action(0)
-        time.sleep(1.5)
+        self.new_letters_document()
         rawinput.typeText("style readout test")
         time.sleep(0.5)
         # Select all → the floating format popover should appear.
@@ -201,8 +201,7 @@ class LettersCloseGuardSmoke(BaseGUITestCase):
     def _type_into_new_document(self):
         from dogtail import rawinput
 
-        self.app.child(name="New Document", roleName="push button").do_action(0)
-        time.sleep(1.5)
+        self.new_letters_document()
         rawinput.typeText("unsaved letters content")
         time.sleep(0.5)
 
@@ -719,8 +718,7 @@ class LettersPreferenceBindingSmoke(BaseGUITestCase):
     def test_show_toolbar_applies_live_and_persists_across_relaunch(self):
         import subprocess
 
-        self.app.child(name="New Document", roleName="push button").do_action(0)
-        time.sleep(1.5)
+        self.new_letters_document()
         self.assertTrue(self._toolbar_visible(), "toolbar should be visible by default")
 
         self._gsettings("set", "org.tunaos.letters", "show-toolbar", "false")
@@ -729,8 +727,7 @@ class LettersPreferenceBindingSmoke(BaseGUITestCase):
 
         self.relaunch_app()
         time.sleep(1.5)
-        self.app.child(name="New Document", roleName="push button").do_action(0)
-        time.sleep(1.5)
+        self.new_letters_document()
         self.assertFalse(self._toolbar_visible(),
                           "show-toolbar=false did not persist across relaunch")
 
@@ -2777,8 +2774,7 @@ class LettersClipboardSmoke(BaseGUITestCase):
     def test_copy_paste_round_trip(self):
         from dogtail import rawinput
 
-        self.app.child(name="New Document", roleName="push button").do_action(0)
-        time.sleep(1.5)
+        self.new_letters_document()
         rawinput.typeText("alpha beta")
         time.sleep(0.5)
         rawinput.keyCombo("<Control>a")
@@ -2854,8 +2850,7 @@ class CrossAppClipboardSmoke(BaseGUITestCase):
         letters = self.launch_second_app("letters")
         self.focus_app(letters)
         time.sleep(0.5)
-        letters.app.child(name="New Document", roleName="push button").do_action(0)
-        time.sleep(1.5)
+        self.new_letters_document(letters.app)
         rawinput.keyCombo("<Control>v")
         time.sleep(1.5)
 
@@ -2876,8 +2871,7 @@ class CrossAppClipboardSmoke(BaseGUITestCase):
         letters = self.launch_second_app("letters")
         self.focus_app(letters)
         time.sleep(0.5)
-        letters.app.child(name="New Document", roleName="push button").do_action(0)
-        time.sleep(1.5)
+        self.new_letters_document(letters.app)
         rawinput.typeText("gamma")
         time.sleep(0.5)
         rawinput.keyCombo("<Control>a")
@@ -2925,8 +2919,7 @@ class CrossAppClipboardSmoke(BaseGUITestCase):
         letters = self.launch_second_app("letters")
         self.focus_app(letters)
         time.sleep(0.5)
-        letters.app.child(name="New Document", roleName="push button").do_action(0)
-        time.sleep(1.5)
+        self.new_letters_document(letters.app)
 
         # Now close the owner and paste into the survivor.
         self.process.terminate()
