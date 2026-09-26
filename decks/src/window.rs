@@ -870,7 +870,16 @@ impl DecksWindow {
             });
             app.add_action(&act);
             let act = gio::SimpleAction::new("insert-table", None);
-            act.connect_activate(move |_, _| insert(decks_core::insert::table(3, 3)));
+            let ins = insert.clone();
+            act.connect_activate(move |_, _| ins(decks_core::insert::table(3, 3)));
+            app.add_action(&act);
+            // A chart of the kind at the target's index in CHART_KINDS.
+            let act = gio::SimpleAction::new("insert-chart", Some(glib::VariantTy::UINT32));
+            act.connect_activate(move |_, p| {
+                if let Some(kind) = p.and_then(|p| p.get::<u32>()).and_then(|i| decks_core::insert::CHART_KINDS.get(i as usize)) {
+                    insert(decks_core::insert::chart(*kind));
+                }
+            });
             app.add_action(&act);
             crate::insert_bar::build(&suite_win.header_bar);
         }

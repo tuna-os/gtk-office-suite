@@ -686,6 +686,51 @@ fn write_table<W: std::io::Write>(
     Ok(())
 }
 
+/// A chart: a graphic frame naming its chart part by `rel_id`.
+fn write_chart_frame<W: std::io::Write>(
+    writer: &mut Writer<W>,
+    id: usize,
+    name_idx: usize,
+    rel_id: &str,
+    at: Placement,
+) -> Result<(), quick_xml::Error> {
+    writer.write_event(Event::Start(BytesStart::new("p:graphicFrame")))?;
+    writer.write_event(Event::Start(BytesStart::new("p:nvGraphicFramePr")))?;
+    let mut c_nv_pr = BytesStart::new("p:cNvPr");
+    c_nv_pr.push_attribute(("id", id.to_string().as_str()));
+    c_nv_pr.push_attribute(("name", format!("Chart {}", name_idx).as_str()));
+    writer.write_event(Event::Empty(c_nv_pr))?;
+    writer.write_event(Event::Empty(BytesStart::new("p:cNvGraphicFramePr")))?;
+    writer.write_event(Event::Empty(BytesStart::new("p:nvPr")))?;
+    writer.write_event(Event::End(BytesEnd::new("p:nvGraphicFramePr")))?;
+
+    // Unrotated, as a table's frame is: PowerPoint doesn't rotate a
+    // graphic frame.
+    writer.write_event(Event::Start(BytesStart::new("p:xfrm")))?;
+    let mut off = BytesStart::new("a:off");
+    off.push_attribute(("x", emu(at.x).as_str()));
+    off.push_attribute(("y", emu_y(at.y).as_str()));
+    writer.write_event(Event::Empty(off))?;
+    let mut ext = BytesStart::new("a:ext");
+    ext.push_attribute(("cx", emu(at.w).as_str()));
+    ext.push_attribute(("cy", emu_y(at.h).as_str()));
+    writer.write_event(Event::Empty(ext))?;
+    writer.write_event(Event::End(BytesEnd::new("p:xfrm")))?;
+
+    writer.write_event(Event::Start(BytesStart::new("a:graphic")))?;
+    let mut data = BytesStart::new("a:graphicData");
+    data.push_attribute(("uri", super::chart::CHART_NS));
+    writer.write_event(Event::Start(data))?;
+    let mut chart = BytesStart::new("c:chart");
+    chart.push_attribute(("xmlns:c", super::chart::CHART_NS));
+    chart.push_attribute(("r:id", rel_id));
+    writer.write_event(Event::Empty(chart))?;
+    writer.write_event(Event::End(BytesEnd::new("a:graphicData")))?;
+    writer.write_event(Event::End(BytesEnd::new("a:graphic")))?;
+    writer.write_event(Event::End(BytesEnd::new("p:graphicFrame")))?;
+    Ok(())
+}
+
 fn write_image<W: std::io::Write>(
     writer: &mut Writer<W>,
     id: usize,
@@ -851,7 +896,7 @@ fn write_master_shapes<W: std::io::Write>(
                 Placement { x: *x, y: *y, w: *w, h: *h, rotation: *rotation },
                 table,
             )?,
-            SlideObject::Image { .. } => {}
+            SlideObject::Image { .. } | SlideObject::Chart { .. } => {}
         }
     }
     Ok(())
@@ -1114,6 +1159,8 @@ fn transition_xml(t: Transition) -> Option<String> {
 /// Order is load-bearing for a master: `master_part_xml` names its layout
 /// as `rId1` in fixed text, so the layout has to come first and the theme
 /// after it.
+const IMAGE_REL: &str = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/image";
+
 fn rels_part(rels: &[(&str, &str)]) -> String {
     let mut out = String::from(
         "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>\n\
@@ -1158,6 +1205,14 @@ pub fn write_pptx_bytes(deck: &Deck) -> Result<Vec<u8>, String> {
 
     // Track images to add to ppt/media/
     let mut images_to_add = Vec::new();
+    // Chart parts, numbered through the deck in slide and object order.
+    let mut charts: Vec<String> = Vec::new();
+    let chart_total = deck
+        .slides
+        .iter()
+        .flat_map(|s| &s.objects)
+        .filter(|o| matches!(o, SlideObject::Chart { .. }))
+        .count();
 
     // 1. Write [Content_Types].xml
     let mut content_types = String::from(
@@ -1193,6 +1248,12 @@ pub fn write_pptx_bytes(deck: &Deck) -> Result<Vec<u8>, String> {
     for n in 1..=parts.len() {
         content_types.push_str(&format!(
             "  <Override PartName=\"/ppt/slideLayouts/slideLayout{n}.xml\" ContentType=\"application/vnd.openxmlformats-officedocument.presentationml.slideLayout+xml\"/>\n"
+        ));
+    }
+    for n in 1..=chart_total {
+        content_types.push_str(&format!(
+            "  <Override PartName=\"/ppt/charts/chart{n}.xml\" ContentType=\"{}\"/>\n",
+            super::chart::CHART_CONTENT_TYPE
         ));
     }
     content_types.push_str("</Types>");
@@ -1382,9 +1443,15 @@ pub fn write_pptx_bytes(deck: &Deck) -> Result<Vec<u8>, String> {
                         images_to_add.push(path.clone());
 
                         let rel_id = format!("rId{}", slide_rels.len() + 1);
-                        slide_rels.push((rel_id.clone(), format!("../media/image{}.png", img_idx)));
+                        slide_rels.push((rel_id.clone(), IMAGE_REL, format!("../media/image{}.png", img_idx)));
 
                         write_image(&mut writer, id, j + 1, &rel_id, Placement { x: *x, y: *y, w: *w, h: *h, rotation: *rotation }).map_err(|e| e.to_string())?;
+                    }
+                    SlideObject::Chart { x, y, w, h, rotation, chart } => {
+                        charts.push(super::chart::chart_space_xml(chart));
+                        let rel_id = format!("rId{}", slide_rels.len() + 1);
+                        slide_rels.push((rel_id.clone(), super::chart::CHART_REL, format!("../charts/chart{}.xml", charts.len())));
+                        write_chart_frame(&mut writer, id, j + 1, &rel_id, Placement { x: *x, y: *y, w: *w, h: *h, rotation: *rotation }).map_err(|e| e.to_string())?;
                     }
                 }
             }
@@ -1423,13 +1490,13 @@ pub fn write_pptx_bytes(deck: &Deck) -> Result<Vec<u8>, String> {
                  <Relationships xmlns=\"http://schemas.openxmlformats.org/package/2006/relationships\">\n"
             );
             let mut max_rel = 0usize;
-            for (rel_id, target) in &slide_rels {
+            for (rel_id, kind, target) in &slide_rels {
                 if let Some(n) = rel_id.strip_prefix("rId").and_then(|n| n.parse::<usize>().ok()) {
                     max_rel = max_rel.max(n);
                 }
                 rels_str.push_str(&format!(
-                    "  <Relationship Id=\"{}\" Type=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships/image\" Target=\"{}\"/>\n",
-                    rel_id, target
+                    "  <Relationship Id=\"{}\" Type=\"{}\" Target=\"{}\"/>\n",
+                    rel_id, kind, target
                 ));
             }
             if has_notes {
@@ -1493,7 +1560,13 @@ pub fn write_pptx_bytes(deck: &Deck) -> Result<Vec<u8>, String> {
         }
     }
 
-    // 7. Write image media files in ppt/media/
+    // 7. The chart parts the slides name.
+    for (k, xml) in charts.iter().enumerate() {
+        zip.start_file(format!("ppt/charts/chart{}.xml", k + 1), options).map_err(|e| e.to_string())?;
+        zip.write_all(xml.as_bytes()).map_err(|e| e.to_string())?;
+    }
+
+    // 8. Write image media files in ppt/media/
     for (idx, img_path) in images_to_add.iter().enumerate() {
         let zip_img_path = format!("ppt/media/image{}.png", idx + 1);
         let mut img_file = File::open(img_path)

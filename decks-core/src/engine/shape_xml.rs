@@ -521,6 +521,52 @@ pub(crate) fn frame_tables(xml: &str, theme: &Theme) -> Vec<FrameTable> {
         .collect()
 }
 
+// ── Charts ────────────────────────────────────────────────────────────────
+
+/// A chart found in a `p:graphicFrame`: its box (EMU, before scaling) and
+/// the relationship that names its chart part. `index` is the frame's
+/// position among all `p:graphicFrame`s in the part, as a table's is.
+pub(crate) struct FrameChart {
+    pub index: usize,
+    pub x: f64,
+    pub y: f64,
+    pub w: f64,
+    pub h: f64,
+    pub rel_id: String,
+}
+
+/// Every chart in a part's graphic frames: a `c:chart` (in any prefix)
+/// with an `r:id`.
+pub(crate) fn frame_charts(xml: &str) -> Vec<FrameChart> {
+    let root = parse_tree(xml);
+    let mut frames = Vec::new();
+    root.find_all("p:graphicFrame", &mut frames);
+    fn chart_ref(n: &Node) -> Option<&Node> {
+        n.children.iter().find_map(|c| {
+            let local = c.name.rsplit(':').next().unwrap_or(&c.name);
+            if local == "chart" && c.attr("r:id").is_some() { Some(c) } else { chart_ref(c) }
+        })
+    }
+    frames
+        .into_iter()
+        .enumerate()
+        .filter_map(|(index, frame)| {
+            let xfrm = frame.child("p:xfrm")?;
+            let num = |n: Option<&Node>, k: &str| n.and_then(|n| n.attr(k)).and_then(|v| v.parse::<f64>().ok());
+            let (off, ext) = (xfrm.child("a:off"), xfrm.child("a:ext"));
+            let rel_id = chart_ref(frame.child("a:graphic")?)?.attr("r:id")?.to_string();
+            Some(FrameChart {
+                index,
+                x: num(off, "x").unwrap_or(0.0),
+                y: num(off, "y").unwrap_or(0.0),
+                w: num(ext, "cx").unwrap_or(0.0),
+                h: num(ext, "cy").unwrap_or(0.0),
+                rel_id,
+            })
+        })
+        .collect()
+}
+
 /// The painting of every `p:sp` in a slide, layout or master part, in
 /// document order. `scale` converts EMU to model units (for line widths).
 pub(crate) fn sp_styles(xml: &str, theme: &Theme, scale: f64) -> Vec<SpStyle> {

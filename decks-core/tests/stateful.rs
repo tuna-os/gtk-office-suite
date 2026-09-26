@@ -25,6 +25,7 @@ fn size(object: &SlideObject) -> (f64, f64) {
         | SlideObject::Rect { w, h, .. }
         | SlideObject::Shape { w, h, .. }
         | SlideObject::Table { w, h, .. }
+        | SlideObject::Chart { w, h, .. }
         | SlideObject::Image { w, h, .. } => (*w, *h),
         SlideObject::Circle { r, .. } => (*r * 2.0, *r * 2.0),
     }
@@ -335,6 +336,7 @@ fn kind(object: &SlideObject) -> &'static str {
         SlideObject::Circle { .. } => "C",
         SlideObject::Shape { .. } => "S",
         SlideObject::Table { .. } => "B",
+        SlideObject::Chart { .. } => "H",
         SlideObject::Image { .. } => "I",
     }
 }

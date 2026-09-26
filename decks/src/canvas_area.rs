@@ -125,6 +125,7 @@ impl ObjectAccessible {
                 (label, (*x, *y, *w, *h))
             }
             SlideObject::Rect { x, y, w, h, .. } => ("Rectangle".to_string(), (*x, *y, *w, *h)),
+            SlideObject::Chart { x, y, w, h, chart, .. } => (chart.describe(), (*x, *y, *w, *h)),
             SlideObject::Table { x, y, w, h, table, .. } => (
                 format!(
                     "Table, {} rows by {} columns",

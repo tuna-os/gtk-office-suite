@@ -135,6 +135,13 @@ pub enum SlideObject {
         rotation: f64,
         table: super::table::TableData,
     },
+    /// A chart (engine::chart): one series drawn by the renderer Tables
+    /// draws its charts with.
+    Chart {
+        x: f64, y: f64, w: f64, h: f64,
+        rotation: f64,
+        chart: super::chart::ChartData,
+    },
 }
 
 impl SlideObject {
@@ -144,6 +151,7 @@ impl SlideObject {
             | SlideObject::Rect { x, .. }
             | SlideObject::Shape { x, .. }
             | SlideObject::Table { x, .. }
+            | SlideObject::Chart { x, .. }
             | SlideObject::Image { x, .. } => *x,
             SlideObject::Circle { x, r, .. } => *x - *r,
         }
@@ -154,6 +162,7 @@ impl SlideObject {
             | SlideObject::Rect { y, .. }
             | SlideObject::Shape { y, .. }
             | SlideObject::Table { y, .. }
+            | SlideObject::Chart { y, .. }
             | SlideObject::Image { y, .. } => *y,
             SlideObject::Circle { y, r, .. } => *y - *r,
         }
@@ -165,6 +174,7 @@ impl SlideObject {
             | SlideObject::Circle { rotation, .. }
             | SlideObject::Shape { rotation, .. }
             | SlideObject::Table { rotation, .. }
+            | SlideObject::Chart { rotation, .. }
             | SlideObject::Image { rotation, .. } => *rotation,
         }
     }

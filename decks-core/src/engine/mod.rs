@@ -20,6 +20,7 @@ mod parse;
 mod placeholders;
 pub mod shape;
 pub mod table;
+pub mod chart;
 mod shape_xml;
 pub mod text_body;
 mod text_xml;

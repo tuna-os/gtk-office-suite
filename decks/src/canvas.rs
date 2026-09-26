@@ -116,7 +116,7 @@ pub fn hit_test_object(objects: &[SlideObject], sx: f64, sy: f64) -> Option<usiz
                     return Some(oi);
                 }
             }
-            SlideObject::Table { x, y, w, h, .. } => {
+            SlideObject::Table { x, y, w, h, .. } | SlideObject::Chart { x, y, w, h, .. } => {
                 if sx >= *x && sx <= *x + *w && sy >= *y && sy <= *y + *h {
                     return Some(oi);
                 }
@@ -777,6 +777,20 @@ pub fn draw_object(
         SlideObject::Table { table, .. } => {
             let desc = document_font_description(master, 18.0 * slide_w / 960.0);
             draw_table(cr, table, (sx, sy, sw, sh), slide_w / 960.0, &desc);
+        }
+        // Drawn by Tables' renderer in the slide's own units (its text is
+        // 10 pt of a 960-wide slide) and scaled with the slide, so it
+        // stays vector in a PDF export.
+        SlideObject::Chart { chart, .. } => {
+            let k = (slide_w / 960.0).max(1e-6);
+            cr.save().unwrap();
+            cr.translate(sx, sy);
+            cr.scale(k, k);
+            let (w, h) = (sw / k, sh / k);
+            cr.rectangle(0.0, 0.0, w, h);
+            cr.clip();
+            suite_common::charts::draw_chart(cr, &chart.points, chart.kind, w, h, chart.legend());
+            cr.restore().unwrap();
         }
         SlideObject::Circle { x: cx_slide, y: cy_slide, r: r_slide, .. } => {
             let cx = ox + (cx_slide / 960.0) * slide_w;
