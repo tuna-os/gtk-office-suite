@@ -331,6 +331,57 @@ def letters(img):
     r.font.highlight_color = WD_COLOR_INDEX.YELLOW
     save(x, "highlight", "A word on a yellow background")
 
+    x = doc()
+    # A table of contents as Word writes it: a TOC field whose result is
+    # entry paragraphs in TOC1/TOC2 styles, each a title, a tab and its
+    # page number behind a dotted right tab stop at the text column's edge
+    # (Letter with 1in margins: 9360 twips).
+    def toc_edge(paragraph, kind=None, instr=None):
+        r = paragraph.add_run()
+        el = OxmlElement("w:fldChar") if kind is not None else OxmlElement("w:instrText")
+        if kind is not None:
+            el.set(qn("w:fldCharType"), kind)
+        else:
+            el.set(qn("xml:space"), "preserve")
+            el.text = instr
+        r._r.append(el)
+
+    def toc_entry(title, page, level):
+        p = x.add_paragraph()
+        pPr = p._p.get_or_add_pPr()
+        style = OxmlElement("w:pStyle")
+        style.set(qn("w:val"), f"TOC{level}")
+        pPr.append(style)
+        tabs = OxmlElement("w:tabs")
+        tab = OxmlElement("w:tab")
+        tab.set(qn("w:val"), "right")
+        tab.set(qn("w:leader"), "dot")
+        tab.set(qn("w:pos"), "9360")
+        tabs.append(tab)
+        pPr.append(tabs)
+        p.add_run(title)
+        r = p.add_run()
+        r._r.append(OxmlElement("w:tab"))
+        p.add_run(str(page))
+
+    x.add_paragraph().add_run("Contents").bold = True
+    first = x.add_paragraph()
+    toc_edge(first, "begin")
+    toc_edge(first, instr='TOC \\o "1-3" \\h \\z \\u ')
+    toc_edge(first, "separate")
+    toc_entry("Introduction", 1, 1)
+    toc_entry("Method", 2, 1)
+    toc_entry("Details", 2, 2)
+    toc_edge(x.add_paragraph(), "end")
+    x.add_heading("Introduction", level=1)
+    x.add_paragraph(LOREM * 2)
+    x.add_paragraph().add_run().add_break(WD_BREAK.PAGE)
+    x.add_heading("Method", level=1)
+    x.add_paragraph(LOREM * 2)
+    x.add_heading("Details", level=2)
+    x.add_paragraph(LOREM * 2)
+    save(x, "toc", "A table of contents with dot leaders and page numbers 1, 2, 2 above the two pages of headings it lists")
+
 
 # ── Tables (xlsx) ─────────────────────────────────────────────────────────
 def tables():
