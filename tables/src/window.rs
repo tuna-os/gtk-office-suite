@@ -320,7 +320,7 @@ impl TablesWindow {
 
         // Jumping to a reference: the name box's Enter and Ctrl+G both go
         // through here, so a jump means the same thing however it was
-        // asked for. Accepts a bare cell reference or — case-insensitively,
+        // asked for. Accepts a cell, a range (A1:B3) or — case-insensitively,
         // like Excel's name box — a defined name's range (#113).
         let jump_to_reference: Rc<dyn Fn(&str) -> bool> = {
             let s = state.clone();
@@ -329,7 +329,7 @@ impl TablesWindow {
             let refresh = refresh_sel.clone();
             let fx = fx_entry.clone();
             Rc::new(move |text: &str| {
-                let target = tables_core::sheet::parse_cell_ref(text).map(|(r, c)| (r, c, r, c)).or_else(|| {
+                let target = tables_core::sheet::parse_cell_or_range(text).or_else(|| {
                     let ctl = ctl.borrow();
                     let names = &ctl.state.borrow().engine.model.workbook.defined_names;
                     names
