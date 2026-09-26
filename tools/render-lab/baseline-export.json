@@ -1,11 +1,11 @@
 {
   "decks/autofit": {
-    "export": "missing"
+    "export": "green"
   },
   "letters/plain-paragraph": {
-    "export": "missing"
+    "export": "green"
   },
   "letters/toc": {
-    "export": "missing"
+    "export": "green"
   }
 }
