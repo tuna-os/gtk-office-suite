@@ -8,6 +8,7 @@ pub mod comments;
 pub mod docx;
 mod docx_chips;
 mod docx_comments;
+mod docx_toc;
 mod docx_revisions;
 mod docx_fields;
 pub mod edit;
@@ -22,6 +23,7 @@ pub mod save;
 pub mod session;
 pub mod structured;
 pub mod table_text;
+pub mod toc;
 pub mod track;
 pub mod word_count;
 

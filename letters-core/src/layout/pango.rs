@@ -245,7 +245,11 @@ impl PangoShaper {
             _ => pango::Alignment::Left,
         });
         layout.set_justify(req.alignment == Alignment::Justify);
-        if !req.tab_stops_pt.is_empty() {
+        if req.right_tab {
+            let mut tabs = pango::TabArray::new(1, false);
+            tabs.set_tab(0, pango::TabAlign::Right, to_units(req.width_pt));
+            layout.set_tabs(Some(&tabs));
+        } else if !req.tab_stops_pt.is_empty() {
             let mut tabs = pango::TabArray::new(req.tab_stops_pt.len() as i32, false);
             for (i, t) in req.tab_stops_pt.iter().enumerate() {
                 tabs.set_tab(i as i32, pango::TabAlign::Left, to_units(*t));
@@ -677,6 +681,22 @@ impl Typeset {
         out
     }
 
+    /// The page (from 0) each paragraph starts on: a table of contents'
+    /// page numbers (`crate::toc::settle`). None for one with no line.
+    pub fn paragraph_pages(&self) -> Vec<Option<usize>> {
+        let mut out = vec![None; self.doc.paragraphs.len()];
+        for (i, page) in self.tree.pages.iter().enumerate() {
+            for item in &page.items {
+                if let Item::Line { source: Source::Paragraph(p), .. } = item {
+                    if let Some(slot) = out.get_mut(*p).filter(|s| s.is_none()) {
+                        *slot = Some(i);
+                    }
+                }
+            }
+        }
+        out
+    }
+
     /// The open (unresolved) comment threads with text, in document order
     /// (`crate::comments`). Spots on one line sit side by side.
     pub fn comment_marks(&self) -> Vec<CommentMark> {
@@ -696,6 +716,34 @@ impl Typeset {
         out
     }
 
+    /// A table of contents entry's dot leader: dots across its tab's gap on
+    /// `line`, from the page number back, a dot and a half apart.
+    fn draw_leader(&self, cr: &cairo::Context, para: usize, layout: &pango::Layout, line: &pango::LayoutLine, x_pt: f64, baseline_pt: f64) {
+        let text = layout.text();
+        let Some(tab) = text.find('\t') else { return };
+        let start = line.start_index().max(0) as usize;
+        if tab < start || tab >= start + line.length().max(0) as usize {
+            return;
+        }
+        let from = x_pt + to_pt(line.index_to_x(tab as i32, false));
+        let to = x_pt + to_pt(line.index_to_x(tab as i32, true));
+        let Some(p) = self.doc.paragraphs.get(para) else { return };
+        let dot_runs = [crate::model::Run::plain(".")];
+        let mut req = paragraph_request(p, 1000.0, &self.opts);
+        req.runs = &dot_runs;
+        req.right_tab = false;
+        let dot = self.shaper.layout(&req);
+        let Some(dot_line) = dot.line_readonly(0) else { return };
+        let w = to_pt(dot_line.index_to_x(1, false)).max(1.0);
+        let step = w * 1.5;
+        let mut x = to - w - step * 0.5;
+        while x >= from + w * 0.5 {
+            cr.move_to(x, baseline_pt);
+            pangocairo::functions::show_layout_line(cr, &dot_line);
+            x -= step;
+        }
+    }
+
     /// Length of paragraph `para`'s layout text, in chars.
     pub fn layout_len(&self, para: usize) -> usize {
         self.doc.paragraphs.get(para).map_or(0, |p| super::layout_text(&p.runs).chars().count())
@@ -713,6 +761,9 @@ impl Typeset {
                     if let Some(l) = layout.line_readonly(*line as i32) {
                         cr.move_to(*x_pt, *baseline_pt);
                         pangocairo::functions::show_layout_line(cr, &l);
+                        if self.doc.paragraphs.get(*p).is_some_and(|p| p.style.toc.is_some()) {
+                            self.draw_leader(cr, *p, &layout, &l, *x_pt, *baseline_pt);
+                        }
                     }
                 }
                 Item::Line { source: Source::Header | Source::Footer, text, box_x_pt, box_width_pt, top_pt, .. } => {
@@ -726,6 +777,7 @@ impl Typeset {
                         width_pt: *box_width_pt,
                         first_line_indent_pt: 0.0,
                         tab_stops_pt: Vec::new(),
+                        right_tab: false,
                         defaults: &self.opts,
                     };
                     let layout = self.shaper.layout(&req);
@@ -833,6 +885,40 @@ mod tests {
         let mut d = Document::new();
         d.paragraphs = (0..n).map(|_| Paragraph { style: Default::default(), runs: vec![Run::plain(text)] }).collect();
         d
+    }
+
+    /// A table of contents laid out: each page number ends at the right
+    /// margin, a dot leader fills the gap, and the numbers are the pages
+    /// the headings are really on.
+    #[test]
+    fn a_table_of_contents_has_page_numbers_at_the_margin() {
+        let mut d = crate::toc::sample_document();
+        let t = Typeset::new(d.clone(), LayoutOptions::default());
+        let ops = crate::toc::update(&d, &t.paragraph_pages());
+        crate::edit::apply_all(&mut d, &ops).unwrap();
+        assert!(ops.is_empty(), "the sample's pages are the layout's: {:?}", d.paragraphs.iter().map(|p| p.text()).collect::<Vec<_>>());
+        let t = Typeset::new(d.clone(), LayoutOptions::default());
+        let page = &t.tree().pages[0];
+        let right = page.width_pt - page.geometry.margin_right_pt;
+        for p in 0..4 {
+            let end = t.caret(TextPos { para: p, offset: t.layout_len(p) }).unwrap();
+            assert!((end.x_pt - right).abs() < 1.0, "entry {p} ends at {} not {right}", end.x_pt);
+        }
+        // Dots drawn between title and number.
+        let surface = cairo::ImageSurface::create(cairo::Format::Rgb24, page.width_pt as i32, page.height_pt as i32).unwrap();
+        {
+            let cr = cairo::Context::new(&surface).unwrap();
+            cr.set_source_rgb(1.0, 1.0, 1.0);
+            cr.paint().unwrap();
+            t.draw_page(&cr, 0);
+        }
+        let start = t.caret(TextPos { para: 0, offset: "Introduction".len() }).unwrap();
+        let data = surface.take_data().unwrap();
+        let stride = page.width_pt as usize * 4;
+        let dark = (start.x_pt as usize + 20..right as usize - 20)
+            .filter(|&x| (start.top_pt as usize..(start.top_pt + start.height_pt) as usize).any(|y| data[y * stride + x * 4] < 128))
+            .count();
+        assert!(dark > 20, "a leader across the gap: {dark} dark columns");
     }
 
     /// Open threads with text are marked where their text is, with a spot
@@ -953,6 +1039,7 @@ mod tests {
                 width_pt: w,
                 first_line_indent_pt: 0.0,
                 tab_stops_pt: Vec::new(),
+                right_tab: false,
                 defaults: opts,
             }
         }

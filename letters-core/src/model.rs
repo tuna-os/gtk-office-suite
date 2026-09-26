@@ -210,6 +210,12 @@ pub struct ParaStyle {
     /// Headings are kept with what follows whatever this says.
     #[serde(default)]
     pub keep_with_next: bool,
+    /// A table of contents entry for a heading of this level (1..=9): its
+    /// title, a tab and its page number, as `crate::toc` generates it.
+    /// Consecutive entries form one table of contents, which is a field in
+    /// .docx and an index in .odt, so other applications can update it.
+    #[serde(default)]
+    pub toc: Option<u8>,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -221,7 +227,7 @@ pub struct TableCell {
 
 impl Default for ParaStyle {
     fn default() -> Self {
-        Self { heading: None, alignment: Alignment::Left, list: ListKind::None, list_level: 0, list_start: None, line_spacing: 1.0, space_before_pt: 0.0, space_after_pt: 0.0, left_indent_pt: 0.0, right_indent_pt: 0.0, first_line_indent_pt: 0.0, tab_stops_pt: Vec::new(), code_block: None, block_quote: false, html_block: false, page_break_before: false, named_style: None, table_cell: None, keep_with_next: false }
+        Self { heading: None, alignment: Alignment::Left, list: ListKind::None, list_level: 0, list_start: None, line_spacing: 1.0, space_before_pt: 0.0, space_after_pt: 0.0, left_indent_pt: 0.0, right_indent_pt: 0.0, first_line_indent_pt: 0.0, tab_stops_pt: Vec::new(), code_block: None, block_quote: false, html_block: false, page_break_before: false, named_style: None, table_cell: None, keep_with_next: false, toc: None }
     }
 }
 

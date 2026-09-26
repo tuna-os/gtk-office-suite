@@ -206,6 +206,7 @@ struct Present {
     chip: bool,
     revision: bool,
     comment: bool,
+    toc: bool,
 }
 
 fn styled(run: &Run) -> bool {
@@ -251,6 +252,7 @@ fn survey(doc: &Document) -> Present {
         present.code_block |= paragraph.style.code_block.is_some();
         present.alignment |= paragraph.style.alignment != Alignment::Left;
         present.page_layout |= laid_out(paragraph);
+        present.toc |= paragraph.style.toc.is_some();
         for run in &paragraph.runs {
             present.run_style |= styled(run);
             present.link |= run.style.link.is_some();
@@ -295,6 +297,8 @@ pub fn compatibility_report(doc: &Document, format: SaveFormat) -> Compatibility
         lost(&mut report, present.revision, "tracked-changes", "Tracked changes", "insertions and deletions are saved as plain text, deleted text included; accept or reject them first");
         // .docx (the comments part) and .odt (annotations) keep them.
         lost(&mut report, present.comment, "comments", "Comments", "comments and their replies are not saved; the text they are on is");
+        // .docx (a TOC field) and .odt (an index) keep it updatable.
+        lost(&mut report, present.toc, "table-of-contents", "Table of contents", "saved as its text; it opens as ordinary paragraphs that no longer update");
     }
     match format {
         // The package formats are the reference targets: they carry the
