@@ -507,6 +507,23 @@ class BaseGUITestCase(unittest.TestCase):
             description=f"AT-SPI node {criteria!r}",
         )
 
+    def new_letters_document(self, app=None, timeout=20.0):
+        """Start a new Letters document from the welcome page and return its
+        page view once it has the keyboard.
+
+        Never sleep and type instead: on the first launch of a run the new
+        tab can take seconds, and keys that arrive while the welcome page is
+        up are captured by the window's find bar, not the document.
+        """
+        app = app or self.app
+        app.child(name="New Document", roleName="push button").do_action(0)
+        page = self.wait_for_condition(
+            lambda: app.findChild(lambda n: n.name == "Print Layout" and n.roleName == "text", retry=False, requireResult=False),
+            timeout=timeout, description="the new document's page")
+        self.wait_for_condition(lambda: page.focused or None, timeout=timeout,
+                                description="the new page to take the keyboard")
+        return page
+
     def wait_for_file(self, path, timeout=5.0):
         """Wait for a file to be created by a save/portal/recovery action."""
         return self.wait_for_condition(
