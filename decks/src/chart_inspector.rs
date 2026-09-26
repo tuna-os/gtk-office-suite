@@ -6,8 +6,11 @@
 //! Keynote's Chart inspector and PowerPoint's Edit Data in one tab. Every
 //! change is a decks_core::engine::chart::ChartEdit through
 //! DecksController::edit_chart: one undo step when it changes the chart.
-//! A text field commits when Enter is pressed or focus leaves it, so a
-//! word typed into a category is one step, not one per letter.
+//! A text field commits when Enter is pressed, when focus leaves it, or
+//! half a second after the last change, so a word typed into a category
+//! is one step, not one per letter. The pause is also how text set without
+//! the keyboard (a screen reader's editable-text interface, which neither
+//! focuses the field nor activates it) reaches the chart.
 
 use adw::prelude::*;
 use decks_core::engine::chart::{ChartData, ChartEdit, ChartKind};
@@ -43,17 +46,57 @@ fn shown(v: f64) -> String {
     format!("{v}")
 }
 
-/// Call `commit` when `entry` is activated or loses focus.
-fn on_commit(entry: &gtk::Entry, commit: impl Fn(&gtk::Entry) + 'static) {
+/// How long a field waits after the last change before it commits.
+const SETTLE: std::time::Duration = std::time::Duration::from_millis(500);
+
+/// Call `commit(entry, final)` when `entry` is activated or loses focus
+/// (`final`), and when its text has settled after a change that wasn't
+/// the data sheet's own (`!final`: an unfinished value is left alone).
+fn on_commit(entry: &gtk::Entry, syncing: &Rc<Cell<bool>>, commit: impl Fn(&gtk::Entry, bool) + 'static) {
     let commit = Rc::new(commit);
+    let pending: Rc<RefCell<Option<gtk::glib::SourceId>>> = Rc::default();
+    let cancel = {
+        let pending = pending.clone();
+        move || {
+            if let Some(id) = pending.borrow_mut().take() {
+                id.remove();
+            }
+        }
+    };
     {
-        let commit = commit.clone();
-        entry.connect_activate(move |e| commit(e));
+        let (commit, cancel) = (commit.clone(), cancel.clone());
+        entry.connect_activate(move |e| {
+            cancel();
+            commit(e, true);
+        });
+    }
+    {
+        let (commit, pending, cancel, syncing) = (commit.clone(), pending.clone(), cancel.clone(), syncing.clone());
+        entry.connect_changed(move |e| {
+            if syncing.get() {
+                return;
+            }
+            cancel();
+            let (commit, e2, slot) = (commit.clone(), e.clone(), pending.clone());
+            let id = gtk::glib::timeout_add_local_once(SETTLE, move || {
+                slot.borrow_mut().take();
+                commit(&e2, false);
+            });
+            *pending.borrow_mut() = Some(id);
+        });
     }
     let focus = gtk::EventControllerFocus::new();
     let e = entry.clone();
-    focus.connect_leave(move |_| commit(&e));
+    focus.connect_leave(move |_| {
+        cancel();
+        commit(&e, true);
+    });
     entry.add_controller(focus);
+}
+
+/// Whether the person is in `entry`: the data sheet leaves its text alone.
+fn editing(entry: &gtk::Entry) -> bool {
+    entry.state_flags().contains(gtk::StateFlags::FOCUS_WITHIN)
 }
 
 /// A toggle for chart type `kind`: a small drawing of it and its name.
@@ -161,25 +204,30 @@ pub fn build(
     // bound to `sync` and the selected chart below.
     let last: Rc<RefCell<Option<ChartData>>> = Rc::default();
     let resync_slot: Rc<RefCell<Option<Sync>>> = Rc::default();
+    // Set while `resync` runs: it puts a field's value back even while the
+    // field has focus (Enter on something that isn't a number).
+    let forcing = Rc::new(Cell::new(false));
     let resync: Rc<dyn Fn()> = {
-        let (last, slot) = (last.clone(), resync_slot.clone());
+        let (last, slot, forcing) = (last.clone(), resync_slot.clone(), forcing.clone());
         Rc::new(move || {
             let chart = last.borrow().clone();
             let sync = slot.borrow().clone();
             if let (Some(chart), Some(sync)) = (chart, sync) {
+                forcing.set(true);
                 sync(&chart);
+                forcing.set(false);
             }
         })
     };
     let make_row = {
-        let apply = apply.clone();
+        let (apply, syncing) = (apply.clone(), syncing.clone());
         move |i: usize| -> PointRow {
             let n = i + 1;
             let category = gtk::Entry::builder().width_chars(8).max_width_chars(12).valign(gtk::Align::Center).build();
             category.update_property(&[gtk::accessible::Property::Label(&format!("Category {n}"))]);
             {
                 let apply = apply.clone();
-                on_commit(&category, move |e| apply(ChartEdit::Category(i, e.text().to_string())));
+                on_commit(&category, &syncing, move |e, _| apply(ChartEdit::Category(i, e.text().to_string())));
             }
             let value = gtk::Entry::builder()
                 .width_chars(8)
@@ -191,11 +239,14 @@ pub fn build(
             value.update_property(&[gtk::accessible::Property::Label(&format!("Value {n}"))]);
             {
                 let (apply, resync) = (apply.clone(), resync.clone());
-                on_commit(&value, move |e| {
-                    // Not a number: the value it was comes back.
+                on_commit(&value, &syncing, move |e, last| {
+                    // Not a number: left alone while it is being typed
+                    // ("-", "1e"), and the value it was comes back when
+                    // the field is left.
                     match e.text().trim().replace(',', ".").parse::<f64>() {
                         Ok(v) if v.is_finite() => apply(ChartEdit::Value(i, v)),
-                        _ => resync(),
+                        _ if last => resync(),
+                        _ => {}
                     }
                 });
             }
@@ -218,6 +269,7 @@ pub fn build(
 
     let sync: Rc<dyn Fn(&ChartData)> = {
         let (syncing, rows, points_group, series, last) = (syncing.clone(), rows.clone(), points_group.clone(), series.clone(), last.clone());
+        let leave_alone = move |e: &gtk::Entry| editing(e) && !forcing.get();
         Rc::new(move |chart: &ChartData| {
             *last.borrow_mut() = Some(chart.clone());
             syncing.set(true);
@@ -241,10 +293,10 @@ pub fn build(
                 rows.push(r);
             }
             for (r, (category, value)) in rows.iter().zip(&chart.points) {
-                if r.category.text() != *category {
+                if r.category.text() != *category && !leave_alone(&r.category) {
                     r.category.set_text(category);
                 }
-                if r.value.text() != shown(*value) {
+                if r.value.text() != shown(*value) && !leave_alone(&r.value) {
                     r.value.set_text(&shown(*value));
                 }
             }

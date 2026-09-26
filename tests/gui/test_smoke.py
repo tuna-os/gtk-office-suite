@@ -4299,13 +4299,11 @@ class DecksChartSmoke(BaseGUITestCase):
         value = self.wait_until(lambda: self.app.findChild(lambda n: n.name == "Value 1" and n.roleName in ("text", "entry") and n.showing,
                                                            retry=False, requireResult=False),
                                 lambda n: n is not None, description="the data sheet's first value")
-        # GTK 4 implements no AT-SPI grab_focus, so the text is set through
-        # the editable-text interface and committed by the entry's own
-        # "activate" action, which is what Enter does.
+        # Set through the editable-text interface, as a screen reader
+        # would (GTK 4 implements no AT-SPI grab_focus, and its entry's
+        # "activate" action doesn't emit the entry's activate): the field
+        # commits once its text settles.
         value.text = "12.5"
-        names = [value.get_action_name(i) for i in range(value.get_n_actions())]
-        self.assertIn("activate", names, f"the value entry's actions: {names}")
-        value.do_action(names.index("activate"))
 
         def saved_chart():
             try:
@@ -4315,8 +4313,13 @@ class DecksChartSmoke(BaseGUITestCase):
                 return ""
 
         def save_and_see(check, description):
-            self.gapplication_action(aid, "save")
-            self.wait_until(saved_chart, check, interval=0.5, description=description)
+            # Saved on every look: an edit that commits after a pause may
+            # land after the first save.
+            def saved():
+                self.gapplication_action(aid, "save")
+                time.sleep(0.2)
+                return saved_chart()
+            self.wait_until(saved, check, interval=0.5, description=description)
 
         save_and_see(lambda x: "<c:lineChart>" in x and "<c:v>12.5</c:v>" in x, "the typed value in the saved line chart")
         self.app.findChild(lambda n: n.roleName == "push button" and n.name == "Add Value").do_action(0)
