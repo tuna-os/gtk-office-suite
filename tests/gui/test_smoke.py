@@ -4278,7 +4278,6 @@ class DecksChartSmoke(BaseGUITestCase):
         typed into the data sheet is saved, and Add Value adds a point;
         each is one undo step."""
         import zipfile
-        from dogtail import rawinput
         aid = "org.tunaos.decks"
         self.wait_until(lambda: self.app.child(name="Slide canvas"), lambda c: c is not None, description="the deck to open")
         import subprocess
@@ -4300,11 +4299,13 @@ class DecksChartSmoke(BaseGUITestCase):
         value = self.wait_until(lambda: self.app.findChild(lambda n: n.name == "Value 1" and n.roleName in ("text", "entry") and n.showing,
                                                            retry=False, requireResult=False),
                                 lambda n: n is not None, description="the data sheet's first value")
-        value.grabFocus()
-        time.sleep(0.3)
-        rawinput.keyCombo("<Control>a")
-        rawinput.typeText("12.5")
-        rawinput.pressKey("Return")
+        # GTK 4 implements no AT-SPI grab_focus, so the text is set through
+        # the editable-text interface and committed by the entry's own
+        # "activate" action, which is what Enter does.
+        value.text = "12.5"
+        names = [value.get_action_name(i) for i in range(value.get_n_actions())]
+        self.assertIn("activate", names, f"the value entry's actions: {names}")
+        value.do_action(names.index("activate"))
 
         def saved_chart():
             try:
