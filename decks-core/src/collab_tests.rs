@@ -157,7 +157,7 @@ fn undo_or_edit(rng: &mut Rng, deck: &mut Vec<Slide>, replica: &mut Replica, his
 /// applied (the stored inverses), and the replica records those, like any
 /// other group.
 fn undo_step(deck: &mut Vec<Slide>, replica: &mut Replica, history: &mut History<Op>, undo: bool) {
-    let applied = if undo { history.undo(deck) } else { history.redo(deck) };
+    let applied = crate::ops::with_slides(deck, |doc| if undo { history.undo(doc) } else { history.redo(doc) });
     if let Some(ops) = applied {
         replica.record(&ops).expect("an undo step applies to the replica");
     }

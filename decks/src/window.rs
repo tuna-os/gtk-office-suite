@@ -451,8 +451,7 @@ impl DecksWindow {
         // .close() with the guard set so this handler lets it through.
         {
             let dirty = dirty.clone();
-            let ss = slides.clone();
-            let m = masters.clone();
+            let m = controller.clone();
             let path_state = file_path.clone();
             let slot = autosave_slot.clone();
             let force_close = Rc::new(Cell::new(false));
@@ -480,7 +479,6 @@ impl DecksWindow {
                 let win_weak = win.downgrade();
                 let force_close = force_close.clone();
                 let dirty = dirty.clone();
-                let ss = ss.clone();
                 let m = m.clone();
                 let path_state = path_state.clone();
                 let slot = slot.clone();
@@ -497,7 +495,7 @@ impl DecksWindow {
                     }
                     let existing_path = path_state.borrow().clone();
                     if let Some(path) = existing_path {
-                        let deck = Deck { slides: ss.borrow().clone(), masters: m.borrow().clone() };
+                        let deck = m.deck();
                         match save_deck(&path, &deck) {
                             Ok(()) => {
                                 dirty.set(false);
@@ -536,7 +534,7 @@ impl DecksWindow {
                         if let Ok(file) = result {
                             if let Some(path) = local_path(&file, true, &win2) {
                                 let path_str = path.to_string_lossy().to_string();
-                                let deck = Deck { slides: ss.borrow().clone(), masters: m.borrow().clone() };
+                                let deck = m.deck();
                                 match save_deck(&path_str, &deck) {
                                     Ok(()) => {
                                         *path_state.borrow_mut() = Some(path_str);
@@ -599,6 +597,23 @@ impl DecksWindow {
 
         let toolbar = build_decks_toolbar();
         suite_win.add_top_bar(&toolbar);
+        // Edit Master and its banner (master_view.rs).
+        crate::master_view::register(
+            app,
+            |banner| suite_win.add_top_bar(banner),
+            crate::canvas_keys::EditorHandles {
+                window: &suite_win.window,
+                canvas: &canvas,
+                slide_list: &slide_list,
+                slides: &slides,
+                masters: &masters,
+                current_slide: &current_slide,
+                selected_object: &selected_object,
+                controller: &controller,
+                refresh_hud: &refresh_hud,
+                transition: &transition,
+            },
+        );
         // Narrow breakpoint: hide the editing toolbar entirely —
         // only the header bar, canvas, and pill survive.
         suite_win.narrow_breakpoint.add_setter(&toolbar, "visible", Some(&f));
@@ -968,10 +983,10 @@ impl DecksWindow {
             // (on the second monitor if there is one) and, with two
             // monitors, the presenter display (presenter_window.rs).
             for (name, rehearse) in [("present", false), ("rehearse", true)] {
-                let (ss, m, cs_ref, app2) = (slides.clone(), masters.clone(), current_slide.clone(), app.clone());
+                let (m, cs_ref, app2) = (controller.clone(), current_slide.clone(), app.clone());
                 let act = gio::SimpleAction::new(name, None);
                 act.connect_activate(move |_, _| {
-                    let deck = Deck { slides: ss.borrow().clone(), masters: m.borrow().clone() };
+                    let deck = m.deck();
                     crate::presenter_window::start(&app2, deck, cs_ref.get(), rehearse);
                 });
                 app.add_action(&act);
@@ -1204,21 +1219,19 @@ impl DecksWindow {
 
         // Save actions
         {
-            let ss = slides.clone();
             let w = suite_win.window.clone();
             let path_ref = file_path.clone();
 
             let act_save = gtk::gio::SimpleAction::new("save-file", None);
-            let ss_clone = ss.clone();
             let w_clone = w.clone();
             let path_clone = path_ref.clone();
-            let m_save = masters.clone();
+            let m_save = controller.clone();
             let dirty_save = dirty.clone();
             let slot_save = autosave_slot.clone();
             act_save.connect_activate(move |_, _| {
                 let current_path = path_clone.borrow().clone();
                 if let Some(path_str) = current_path {
-                    let deck = Deck { slides: ss_clone.borrow().clone(), masters: m_save.borrow().clone() };
+                    let deck = m_save.deck();
                     match save_deck(&path_str, &deck) {
                         Ok(()) => {
                             let settings = gio::Settings::new("org.tunaos.decks");
@@ -1243,7 +1256,7 @@ impl DecksWindow {
             app.add_action(&act_save);
 
             let act_save_as = gtk::gio::SimpleAction::new("save-file-as", None);
-            let m_as = masters.clone();
+            let m_as = controller.clone();
             let dirty_as = dirty.clone();
             let slot_as = autosave_slot.clone();
             act_save_as.connect_activate(move |_, _| {
@@ -1260,7 +1273,6 @@ impl DecksWindow {
                 dlg.set_filters(Some(&fl));
                 dlg.set_initial_name(Some("Untitled.pptx"));
 
-                let ss = ss.clone();
                 let w2 = w.clone();
                 let path_ref = path_ref.clone();
                 let m_inner = m_as.clone();
@@ -1271,7 +1283,7 @@ impl DecksWindow {
                         if let Ok(file) = result {
                             if let Some(path) = local_path(&file, true, &w2) {
                                 let path_str = path.to_string_lossy().to_string();
-                                let deck = Deck { slides: ss.borrow().clone(), masters: m_inner.borrow().clone() };
+                                let deck = m_inner.deck();
                                 match save_deck(&path_str, &deck) {
                                     Ok(()) => {
                                         let settings = gio::Settings::new("org.tunaos.decks");
@@ -1303,8 +1315,7 @@ impl DecksWindow {
         // own path, and never clears `dirty` — a snapshot is not a save,
         // the close guard still needs to fire.
         {
-            let ss = slides.clone();
-            let m = masters.clone();
+            let m = controller.clone();
             let dirty = dirty.clone();
             let slot = autosave_slot.clone();
             let notices = autosave_notices.clone();
@@ -1314,7 +1325,7 @@ impl DecksWindow {
                 if !dirty.get() {
                     return;
                 }
-                let deck = Deck { slides: ss.borrow().clone(), masters: m.borrow().clone() };
+                let deck = m.deck();
                 let path = path_state.borrow().clone();
                 let kind = autosave_format_hint(&path);
                 if let Ok(bytes) = write_deck_bytes(&kind, &deck) {
@@ -1328,8 +1339,7 @@ impl DecksWindow {
             app.add_action(&act);
         }
         {
-            let ss = slides.clone();
-            let m = masters.clone();
+            let m = controller.clone();
             let dirty = dirty.clone();
             let slot = autosave_slot.clone();
             let notices = autosave_notices.clone();
@@ -1339,7 +1349,7 @@ impl DecksWindow {
             if enabled {
                 glib::source::timeout_add_seconds_local(interval, move || {
                     if dirty.get() {
-                        let deck = Deck { slides: ss.borrow().clone(), masters: m.borrow().clone() };
+                        let deck = m.deck();
                         let path = path_state.borrow().clone();
                         let kind = autosave_format_hint(&path);
                         if let Ok(bytes) = write_deck_bytes(&kind, &deck) {

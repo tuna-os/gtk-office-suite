@@ -31,6 +31,41 @@ pub struct DecksController {
     /// through it are the only ways the controller changes the slides,
     /// and each marks the deck dirty.
     history: RefCell<History<Op>>,
+    /// The master view (`edit_master`): the deck's slides and history while
+    /// the master is in their place.
+    master_edit: RefCell<Option<MasterEdit>>,
+}
+
+/// What the master view put aside, to put back on Done.
+struct MasterEdit {
+    /// The master being edited.
+    index: usize,
+    slides: Vec<Slide>,
+    history: History<Op>,
+    /// The slide the view was opened from, to return to.
+    from: usize,
+}
+
+/// The master as the stand-in slide the master view edits: its
+/// decorations as the slide's objects, its background as the slide's.
+fn master_as_slide(m: &MasterSlide) -> Slide {
+    Slide {
+        title: m.name.clone(),
+        background: m.background.clone(),
+        objects: m.shapes.clone(),
+        notes: String::new(),
+        // No master: its decorations are the objects being edited, and
+        // must not be drawn a second time underneath.
+        master_idx: None,
+        transition: Default::default(),
+        builds: Vec::new(),
+        ids: Default::default(),
+    }
+}
+
+/// `m` with the stand-in slide's edits.
+fn master_from_slide(m: &MasterSlide, s: &Slide) -> MasterSlide {
+    MasterSlide { background: s.background.clone(), shapes: s.objects.clone(), ..m.clone() }
 }
 
 impl DecksController {
@@ -41,7 +76,73 @@ impl DecksController {
             dirty: Rc::new(Cell::new(false)),
             file_path: Rc::new(RefCell::new(None)),
             history: RefCell::new(History::default()),
+            master_edit: RefCell::new(None),
         }
+    }
+
+    // ── The master view ───────────────────────────────────────────────
+    //
+    // Keynote's Edit Master: the master of slide `slide_idx` takes the
+    // slides' place, as one slide whose objects are its decorations, and
+    // every editing command works on it as on a slide, with its own undo.
+    // Done (`finish_master`) puts the deck back and records the whole edit
+    // as one `SetMaster` step. Saving meanwhile saves the deck with the
+    // master as edited so far (`deck`).
+
+    /// Open the master view on slide `slide_idx`'s master. Returns the
+    /// master's index, or `None` when the view is already open or there is
+    /// no such master.
+    pub fn edit_master(&self, slide_idx: usize) -> Option<usize> {
+        if self.master_edit.borrow().is_some() {
+            return None;
+        }
+        let index = self.slides.borrow().get(slide_idx)?.master_idx.unwrap_or(0);
+        let stand_in = master_as_slide(self.masters.borrow().get(index)?);
+        let slides = std::mem::replace(&mut *self.slides.borrow_mut(), vec![stand_in]);
+        let history = std::mem::take(&mut *self.history.borrow_mut());
+        *self.master_edit.borrow_mut() = Some(MasterEdit { index, slides, history, from: slide_idx });
+        Some(index)
+    }
+
+    /// The master being edited, while the master view is open.
+    pub fn editing_master(&self) -> Option<usize> {
+        self.master_edit.borrow().as_ref().map(|e| e.index)
+    }
+
+    /// Close the master view: the slides come back, and the master's edits
+    /// go into the deck's history as one step. Returns the slide the view
+    /// was opened from.
+    pub fn finish_master(&self) -> Option<usize> {
+        let edit = self.master_edit.borrow_mut().take()?;
+        let stand_in = std::mem::replace(&mut *self.slides.borrow_mut(), edit.slides);
+        *self.history.borrow_mut() = edit.history;
+        if let Some(s) = stand_in.first() {
+            let old = self.masters.borrow().get(edit.index).cloned();
+            if let Some(old) = old {
+                let new = master_from_slide(&old, s);
+                if format!("{new:?}") != format!("{old:?}") {
+                    self.apply_ops(vec![Op::SetMaster { index: edit.index, master: Box::new(new) }]);
+                }
+            }
+        }
+        Some(edit.from)
+    }
+
+    /// The deck as it would be saved: while the master view is open, the
+    /// deck's own slides with the master as edited so far.
+    pub fn deck(&self) -> crate::engine::Deck {
+        let edit = self.master_edit.borrow();
+        let mut masters = self.masters.borrow().clone();
+        let slides = match edit.as_ref() {
+            Some(e) => {
+                if let (Some(m), Some(s)) = (masters.get(e.index).cloned(), self.slides.borrow().first()) {
+                    masters[e.index] = master_from_slide(&m, s);
+                }
+                e.slides.clone()
+            }
+            None => self.slides.borrow().clone(),
+        };
+        crate::engine::Deck { slides, masters }
     }
 
     pub fn slide_count(&self) -> usize {
@@ -51,6 +152,10 @@ impl DecksController {
     /// Insert a new slide at `index` (typically the current slide count)
     /// and return the index it landed at.
     pub fn add_slide(&self, index: usize, slide: Slide) -> usize {
+        // The master view has one slide, the master: no others.
+        if self.master_edit.borrow().is_some() {
+            return 0;
+        }
         let index = index.min(self.slides.borrow().len());
         let mut slide = slide;
         slide.ids = Default::default();
@@ -62,6 +167,9 @@ impl DecksController {
     /// selected, or `None` if `index` was the only slide (deletion is a
     /// no-op — Decks always keeps at least one slide).
     pub fn delete_slide(&self, index: usize) -> Option<usize> {
+        if self.master_edit.borrow().is_some() {
+            return None;
+        }
         let (id, new_selected) = {
             let slides = self.ids_ready();
             if slides.len() <= 1 || index >= slides.len() {
@@ -111,7 +219,9 @@ impl DecksController {
         if ops.is_empty() {
             return false;
         }
-        let inverses = crate::ops::apply_all(&mut self.slides.borrow_mut(), &ops);
+        let inverses = crate::ops::with_doc(&mut self.slides.borrow_mut(), &mut self.masters.borrow_mut(), |doc| {
+            suite_common_core::ops::apply_all(doc, &ops)
+        });
         let Ok(inverses) = inverses else { return false };
         if inverses.is_empty() {
             // Every op addressed something deleted: nothing happened.
@@ -394,7 +504,8 @@ impl DecksController {
     }
 
     pub fn undo(&self) -> bool {
-        let done = self.history.borrow_mut().undo(&mut self.slides.borrow_mut()).is_some();
+        let mut history = self.history.borrow_mut();
+        let done = crate::ops::with_doc(&mut self.slides.borrow_mut(), &mut self.masters.borrow_mut(), |doc| history.undo(doc)).is_some();
         if done {
             self.dirty.set(true);
         }
@@ -402,7 +513,8 @@ impl DecksController {
     }
 
     pub fn redo(&self) -> bool {
-        let done = self.history.borrow_mut().redo(&mut self.slides.borrow_mut()).is_some();
+        let mut history = self.history.borrow_mut();
+        let done = crate::ops::with_doc(&mut self.slides.borrow_mut(), &mut self.masters.borrow_mut(), |doc| history.redo(doc)).is_some();
         if done {
             self.dirty.set(true);
         }
@@ -592,6 +704,62 @@ mod tests {
         assert!(!one_word_char_added("abc", "ab"));
         assert!(!one_word_char_added("abc", "abxy"));
         assert!(!one_word_char_added("abc", "xbcd"));
+    }
+
+    fn decorated_master() -> MasterSlide {
+        MasterSlide {
+            name: "Theme".into(),
+            background: "#0b3d6b".into(),
+            default_font: "Sans".into(),
+            shapes: vec![SlideObject::Rect { x: 0.0, y: 0.0, w: 28.0, h: 540.0, rotation: 0.0 }],
+            page_emu: None,
+        }
+    }
+
+    #[test]
+    fn the_master_view_edits_the_master_and_done_is_one_undo_step() {
+        let mut s1 = slide("S1");
+        s1.master_idx = Some(0);
+        let c = DecksController::new(vec![s1, slide("S2")], vec![decorated_master()]);
+        c.add_object(0, SlideObject::Rect { x: 5.0, y: 5.0, w: 5.0, h: 5.0, rotation: 0.0 });
+        assert_eq!(c.edit_master(0), Some(0));
+        assert_eq!(c.editing_master(), Some(0));
+        assert_eq!(c.slide_count(), 1, "the master stands in for the slides");
+        assert_eq!(c.slides.borrow()[0].objects.len(), 1, "its decorations are the objects");
+        assert!(!c.can_undo(), "the view has its own history");
+        // Edits, each undoable inside the view.
+        c.add_object(0, SlideObject::Rect { x: 900.0, y: 0.0, w: 60.0, h: 60.0, rotation: 0.0 });
+        c.move_object(0, 0, 10.0, 0.0);
+        assert!(c.undo());
+        assert_eq!(crate::undo::obj_bounds(&c.slides.borrow()[0].objects[0]).0, 0.0);
+        assert!(c.redo());
+        // Saving now saves the deck, with the master as edited.
+        let saved = c.deck();
+        assert_eq!(saved.slides.len(), 2);
+        assert_eq!(saved.masters[0].shapes.len(), 2);
+        assert_eq!(c.finish_master(), Some(0));
+        assert_eq!(c.editing_master(), None);
+        assert_eq!(c.slide_count(), 2, "the slides are back");
+        assert_eq!(c.masters.borrow()[0].shapes.len(), 2);
+        assert_eq!(c.slides.borrow()[0].objects.len(), 1, "the slide's own objects are untouched");
+        // One step undoes the whole master edit; the slide edit before it
+        // is still in the history.
+        assert!(c.undo());
+        assert_eq!(format!("{:?}", c.masters.borrow()[0]), format!("{:?}", decorated_master()));
+        assert!(c.undo());
+        assert!(c.slides.borrow()[0].objects.is_empty());
+        assert!(c.redo() && c.redo());
+        assert_eq!(c.masters.borrow()[0].shapes.len(), 2);
+    }
+
+    #[test]
+    fn a_master_view_with_no_change_records_nothing() {
+        let c = DecksController::new(vec![slide("S1")], vec![decorated_master()]);
+        c.edit_master(0);
+        assert_eq!(c.edit_master(0), None, "one master view at a time");
+        c.finish_master();
+        assert!(!c.can_undo());
+        assert!(c.finish_master().is_none());
     }
 
     #[test]

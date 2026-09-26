@@ -1668,3 +1668,35 @@ fn impress_turns_our_odp_gradient_into_the_same_drawingml_gradient() {
         }
     }
 }
+
+#[test]
+fn impress_keeps_a_master_view_edit() {
+    // A shape added to a master in the master view, as Impress rewrites
+    // our file in each format: it stays on the master, painted as we
+    // painted it.
+    if !require_or_skip() {
+        return;
+    }
+    use decks_core::engine::shape::{Color, ShapeKind, ShapeStyle};
+    let (slides, masters) = decks_core::templates::deck(3).unwrap();
+    let c = decks_core::DecksController::new(slides, masters);
+    c.edit_master(0).unwrap();
+    let style = ShapeStyle { fill: Some(Color(0xE0, 0x1B, 0x24)), gradient: None, stroke: None };
+    c.add_object(0, SlideObject::Shape { kind: ShapeKind::Triangle, x: 860.0, y: 20.0, w: 80.0, h: 80.0, rotation: 0.0, style: style.clone() });
+    c.finish_master().unwrap();
+    let deck = c.deck();
+    for ext in ["pptx", "odp"] {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join(format!("master.{ext}"));
+        decks_core::write_deck(path.to_str().unwrap(), &deck).expect("write");
+        let back = convert(&path, ext).unwrap_or_else(|e| panic!("Impress rewrites our {ext}: {e}"));
+        let read = decks_core::read_deck(back.to_str().unwrap()).expect("read Impress's file");
+        let found = read.masters.iter().flat_map(|m| &m.shapes).any(|o| {
+            matches!(o, SlideObject::Shape { kind: ShapeKind::Triangle, x, y, w, h, style: s, .. }
+                if x.round() == 860.0 && y.round() == 20.0 && w.round() == 80.0 && h.round() == 80.0 && s.fill == style.fill)
+        });
+        assert!(found, "{ext}: the master's triangle through Impress: {:#?}", read.masters);
+        assert!(read.slides.iter().all(|s| !s.objects.iter().any(|o| matches!(o, SlideObject::Shape { kind: ShapeKind::Triangle, .. }))),
+            "{ext}: the triangle is on the master, not a slide");
+    }
+}

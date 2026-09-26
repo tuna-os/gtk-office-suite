@@ -382,6 +382,8 @@ impl Replica {
                 let at = s.ids.objects.iter().position(|o| o == id).expect("an applied op's object");
                 write_object(&self.meta(self.nodes[id]), &s.objects[at]);
             }
+            // Masters aren't replicated yet (see the module's limits).
+            Op::SetMaster { .. } => {}
         }
     }
 

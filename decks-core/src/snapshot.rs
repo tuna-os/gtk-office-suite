@@ -32,6 +32,10 @@ pub struct SlideSnapshot {
 
 pub struct DeckSnapshot {
     pub slide_count: usize,
+    /// Each master's name and how many decorations it has.
+    pub masters: Vec<(String, usize)>,
+    /// The master being edited, while the master view is open.
+    pub editing_master: Option<usize>,
     pub slides: Vec<SlideSnapshot>,
 }
 
@@ -76,7 +80,8 @@ pub fn snapshot(controller: &DecksController) -> DeckSnapshot {
                 .collect(),
         })
         .collect();
-    DeckSnapshot { slide_count, slides: snapshots }
+    let masters = controller.masters.borrow().iter().map(|m| (m.name.clone(), m.shapes.len())).collect();
+    DeckSnapshot { slide_count, masters, editing_master: controller.editing_master(), slides: snapshots }
 }
 
 fn escape_json(s: &str) -> String {
@@ -137,7 +142,17 @@ impl DeckSnapshot {
             })
             .collect::<Vec<_>>()
             .join(",");
-        format!("{{\"slide_count\":{},\"slides\":[{}]}}", self.slide_count, slides)
+        let masters = self
+            .masters
+            .iter()
+            .map(|(name, shapes)| format!("{{\"name\":{},\"shapes\":{shapes}}}", json_str(name)))
+            .collect::<Vec<_>>()
+            .join(",");
+        let editing = self.editing_master.map_or("null".to_string(), |i| i.to_string());
+        format!(
+            "{{\"slide_count\":{},\"masters\":[{masters}],\"editing_master\":{editing},\"slides\":[{}]}}",
+            self.slide_count, slides
+        )
     }
 }
 
