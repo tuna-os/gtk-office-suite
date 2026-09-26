@@ -9,7 +9,7 @@
 
 use crate::canvas::set_styled_text;
 use decks_core::engine::text_body::{markers, paragraphs};
-use decks_core::engine::{ParaAlign, Run, TextBody};
+use decks_core::engine::{shrink_font_to_fit, Autofit, ParaAlign, Run, TextBody};
 use gtk4::{cairo, pango};
 
 /// A bullet or number: its layout, left edge, and how far below the
@@ -44,6 +44,44 @@ fn place(
     scale: f64,
     desc: &pango::FontDescription,
 ) -> Vec<Placed> {
+    // A `normAutofit` box is measured, not trusted: the file's
+    // `fontScale`/`lnSpcReduction` are the last editor's stale cache (see
+    // `shrink_font_to_fit`), so the fit is recomputed from full size and
+    // only ever shrinks.
+    let fit = match body.autofit {
+        Some(_) => {
+            let inner_h = content_box(body, (rect.2, rect.3), scale).1;
+            let s = shrink_font_to_fit(inner_h, &mut |s| {
+                let trial_fit = Some(Autofit { font_scale: s, line_reduction: 0.0 });
+                place_inner(cr, text, runs, body, rect, scale, desc, trial_fit).1
+            });
+            Some(Autofit { font_scale: s, line_reduction: 0.0 })
+        }
+        None => None,
+    };
+    place_inner(cr, text, runs, body, rect, scale, desc, fit).0
+}
+
+/// The box's inner size after its insets, in canvas pixels.
+fn content_box(body: &TextBody, (bw, bh): (f64, f64), scale: f64) -> (f64, f64) {
+    let (l, t, r, b) = match body.insets {
+        Some(i) => (i.left * scale, i.top * scale, i.right * scale, i.bottom * scale),
+        None => (PLAIN_INSET, PLAIN_INSET, PLAIN_INSET, PLAIN_INSET),
+    };
+    ((bw - l - r).max(8.0), bh - t - b)
+}
+
+#[allow(clippy::too_many_arguments)]
+fn place_inner(
+    cr: &cairo::Context,
+    text: &str,
+    runs: &[Run],
+    body: &TextBody,
+    rect: (f64, f64, f64, f64),
+    scale: f64,
+    desc: &pango::FontDescription,
+    fit: Option<Autofit>,
+) -> (Vec<Placed>, f64) {
     let (bx, by, bw, bh) = rect;
     let (l, t, r, b) = match body.insets {
         Some(i) => (i.left * scale, i.top * scale, i.right * scale, i.bottom * scale),
@@ -60,9 +98,9 @@ fn place(
     let empty: Vec<bool> = paras.iter().map(|p| p.iter().all(|r| r.text.trim().is_empty())).collect();
     let marks = markers(&styles, &empty);
 
-    // A shrunk box (a:normAutofit fontScale/lnSpcReduction) draws every
-    // size smaller and its lines closer, as the file records.
-    let (font_k, line_factor) = match body.autofit {
+    // The recomputed fit draws every size smaller; a plain box draws at
+    // full size with default line spacing.
+    let (font_k, line_factor) = match fit {
         Some(a) => (a.font_scale, (1.0 - a.line_reduction) as f32),
         None => (1.0, 0.0),
     };
@@ -131,9 +169,10 @@ fn place(
         placed.push(Placed { layout, marker, x: g.text_x, y });
         // Pango tightens the lines after a paragraph's first; the first
         // line's share of the reduction comes off the advance.
-        let first_cut = body.autofit.map_or(0.0, |a| a.line_reduction) * line_h;
+        let first_cut = fit.map_or(0.0, |a| a.line_reduction) * line_h;
         y += h - first_cut + st.space_after.resolve(line_h / scale) * scale;
     }
+    let content_h = y;
     let dy = body.anchor.offset(inner_h, y);
     for p in &mut placed {
         p.x += bx + l;
@@ -142,7 +181,7 @@ fn place(
             m.x += bx + l;
         }
     }
-    placed
+    (placed, content_h)
 }
 
 /// Draw a text box whose `body` carries paragraph styles, in the current
@@ -226,18 +265,29 @@ mod tests {
     }
 
     #[test]
-    fn a_shrunk_box_draws_its_text_smaller_and_tighter() {
-        use decks_core::engine::Autofit;
+    fn an_overflowing_autofit_box_shrinks_its_text_to_fit() {
+        let big = vec![Run { text: "a\nb".into(), style: RunStyle { font_size_hp: Some(96), ..Default::default() } }];
+        let plain = TextBody { insets: Some(Insets { left: 0.0, top: 0.0, right: 0.0, bottom: 0.0 }), ..Default::default() };
+        let fit = TextBody { autofit: Some(Autofit { font_scale: 0.5, line_reduction: 0.2 }), ..plain.clone() };
+        let rect = (0.0, 0.0, 300.0, 40.0);
+        let block = |p: &[Placed]| p.last().map(|l| l.y + l.layout.pixel_size().1 as f64).unwrap_or(0.0);
+        let a = place(&ctx(), "a\nb", &big, &plain, rect, 1.0, &desc());
+        assert!(block(&a) > 40.0, "the unshrunk block overflows: {}", block(&a));
+        let b = place(&ctx(), "a\nb", &big, &fit, rect, 1.0, &desc());
+        assert!(block(&b) <= 40.0, "the recomputed fit fits: {}", block(&b));
+        assert!(b[1].y - b[0].y < a[1].y - a[0].y, "its lines are closer");
+    }
+
+    #[test]
+    fn a_stale_autofit_cache_is_recomputed_not_honoured() {
         let big = vec![Run { text: "a\nb".into(), style: RunStyle { font_size_hp: Some(48), ..Default::default() } }];
         let plain = TextBody { insets: Some(Insets { left: 0.0, top: 0.0, right: 0.0, bottom: 0.0 }), ..Default::default() };
-        let shrunk = TextBody { autofit: Some(Autofit { font_scale: 0.5, line_reduction: 0.2 }), ..plain.clone() };
+        let stale = TextBody { autofit: Some(Autofit { font_scale: 0.5, line_reduction: 0.2 }), ..plain.clone() };
         let rect = (0.0, 0.0, 300.0, 300.0);
         let a = place(&ctx(), "a\nb", &big, &plain, rect, 1.0, &desc());
-        let b = place(&ctx(), "a\nb", &big, &shrunk, rect, 1.0, &desc());
-        let h = |p: &[Placed]| p[1].y - p[0].y;
-        assert!(h(&b) < h(&a) * 0.5, "half the size and 20% tighter: {} vs {}", h(&b), h(&a));
-        let w = |p: &[Placed]| p[0].layout.pixel_size().0;
-        assert!(w(&b) < w(&a));
+        let b = place(&ctx(), "a\nb", &big, &stale, rect, 1.0, &desc());
+        assert_eq!(b[0].y, a[0].y, "text that fits is drawn at full size, not at the cached half");
+        assert_eq!(b[0].layout.pixel_size(), a[0].layout.pixel_size());
     }
 
     #[test]

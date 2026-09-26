@@ -28,7 +28,7 @@ mod timing;
 mod write;
 
 pub use model::{Deck, MasterSlide, Slide, SlideObject, Transition};
-pub use text_body::{Anchor, Autofit, Bullet, Insets, MarkerSize, MarkerStyle, ParaAlign, ParaGeometry, ParaStyle, Spacing, TextBody};
+pub use text_body::{shrink_font_to_fit, Anchor, Autofit, Bullet, Insets, MarkerSize, MarkerStyle, ParaAlign, ParaGeometry, ParaStyle, Spacing, TextBody};
 // `SlideObject::TextBox` carries `Vec<Run>`, so `Run`/`RunStyle` are already
 // part of this crate's public surface; re-exported so a consumer can name
 // the type it is handed without depending on letters-core directly.
