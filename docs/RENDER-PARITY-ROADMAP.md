@@ -235,6 +235,24 @@ loosening a budget:
   overflow display works). "###" is a non-word: Tesseract hallucinates it
   as "HHH" in the reference and "HH"/nothing in ours, so 3 of 5 words
   match.
+- **`tables/wrap-text`** (2026-09-26, #920). The fixture expectation holds
+  on both sides: A1 wraps onto three lines and row 1 grows. Every metric
+  but one is inside budget (words 1.0, lost lines 0, scale 1.03x against
+  a ±10% bar, displacement 3.75 pt against a 6.0 bar, identical in both
+  tiers); SSIM alone is 0.43 against a 0.75 bar, so the fixture is amber.
+  The SSIM gap is a one-word line-break difference: we break "This long
+  text | wraps inside | a narrow cell", the LibreOffice print-PDF oracle
+  breaks "This long text | wraps inside a | narrow cell", and the
+  reflowed lines plus the resulting row-height shift dominate the
+  structural score on this tiny crop. Our side is Excel-faithful: the
+  column reads width 12 as 84 px at Calibri 11's 7 px digit width
+  (`width_chars_to_pixels`, pinned by unit test), the wrap flag round-trips
+  through xlsx, and the row auto-fits on open. Excel's own breaking
+  depends on printer metrics, so the headless-PDF oracle is not Excel
+  here; re-breaking our text to match LibreOffice's pixels would tune the
+  product to the oracle against the owner's Excel-faithful call. It stays
+  amber until a renderer-independent check (e.g. line-count and row-growth
+  rather than pixel structure) can tell the two apart.
 
 All five are OCR of very small or non-word glyphs, not rendering. They go
 green when the metric can read them. The named next candidate, a larger

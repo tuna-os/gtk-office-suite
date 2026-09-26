@@ -653,6 +653,28 @@ mod tests {
         assert!(back.styles[2][2].is_default());
     }
 
+    /// #920 (tables/wrap-text): a narrow column holding a wrapped cell —
+    /// the fixture's shape — survives a save and reopen with the wrap
+    /// flag and Excel's pixel width intact (width 12 chars is 84 px at
+    /// Calibri 11's 7 px digit width; the grid draws and auto-fits from
+    /// those two values).
+    #[test]
+    fn narrow_wrapped_column_round_trips_through_xlsx() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("wrap.xlsx").to_string_lossy().into_owned();
+        let mut sheet = SheetModel::new("Sheet1", 3, 3, 0);
+        sheet.data[0][0] = "This long text wraps inside a narrow cell".into();
+        sheet.styles[0][0].wrap = true;
+        sheet.set_col_width(0, 84.0);
+        save_sheets_to_xlsx(&path, &[sheet]).unwrap();
+
+        let (_, sheets) = crate::io::load_xlsx_workbook(&path).unwrap();
+        let back = &sheets[0];
+        assert!(back.styles[0][0].wrap, "wrap flag survives the round trip");
+        assert_eq!(back.col_width(0), 84.0, "width 12 chars reads back as 84 px");
+        assert_eq!(back.col_width(1), crate::sheet::COL_WIDTH, "untouched columns stay default");
+    }
+
     /// Borders were neither read nor written: a boxed table opened unboxed
     /// and saved that way. Weight, colour and an empty bordered cell all
     /// survive a save and reopen now.
