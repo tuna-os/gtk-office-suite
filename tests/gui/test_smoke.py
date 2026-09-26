@@ -4338,6 +4338,45 @@ class DecksChartSmoke(BaseGUITestCase):
                         description="a third undo to put the type back")
         self.assertIsNone(self.process.poll(), "decks crashed editing a chart")
 
+    def test_add_series_draws_and_saves_a_second_series(self):
+        """Add Series in the Chart tab: the chart has a second series,
+        "Series 2", saved as a second c:ser in its own column of the
+        data sheet; one undo takes it out."""
+        import subprocess
+        import zipfile
+        aid = "org.tunaos.decks"
+        self.wait_until(lambda: self.app.child(name="Slide canvas"), lambda c: c is not None, description="the deck to open")
+        subprocess.run(["gapplication", "action", aid, "insert-chart", "uint32 0"], check=True, timeout=5)
+        self.wait_until(lambda: self._chart(aid), lambda c: c == "Bar chart: Sales, 4 values", interval=0.5,
+                        description="a bar chart on the slide")
+        import pyatspi
+        toggle = self.app.child(name="Format", roleName="toggle button")
+        if not toggle.getState().contains(pyatspi.STATE_PRESSED):
+            toggle.do_action(0)
+        add = self.wait_until(lambda: self.app.findChild(lambda n: n.roleName == "push button" and n.name == "Add Series" and n.showing,
+                                                         retry=False, requireResult=False),
+                              lambda b: b is not None, description="the Chart tab's Add Series")
+        add.do_action(0)
+        self.wait_until(lambda: self._chart(aid), lambda c: c == "Bar chart: Sales and Series 2, 4 values each", interval=0.5,
+                        description="a second series")
+
+        def saved_chart():
+            self.gapplication_action(aid, "save")
+            time.sleep(0.2)
+            try:
+                with zipfile.ZipFile(self._doc) as z:
+                    return z.read("ppt/charts/chart1.xml").decode()
+            except (OSError, KeyError, zipfile.BadZipFile):
+                return ""
+        chart = self.wait_until(saved_chart, lambda x: x.count("<c:ser>") == 2, interval=0.5,
+                                description="two series in the saved chart")
+        self.assertIn("<c:f>Sheet1!$C$1</c:f>", chart)
+        self.assertIn("<c:v>Series 2</c:v>", chart)
+        self.gapplication_action(aid, "undo")
+        self.wait_until(lambda: self._chart(aid), lambda c: c == "Bar chart: Sales, 4 values", interval=0.5,
+                        description="one undo to take the series out")
+        self.assertIsNone(self.process.poll(), "decks crashed adding a series")
+
 
 class DecksSelectionSmoke(BaseGUITestCase):
     """Object selection updates the canvas a11y description and the

@@ -105,7 +105,7 @@ mod tests {
             let c = chart(kind);
             assert_eq!(obj_bounds(&c), (240.0, 120.0, 480.0, 300.0));
             let SlideObject::Chart { chart, .. } = c else { panic!() };
-            assert_eq!((chart.kind, chart.series.as_str(), chart.points.len()), (kind, "Sales", 4));
+            assert_eq!((chart.kind, chart.series.len(), chart.series[0].name.as_str(), chart.categories.len()), (kind, 1, "Sales", 4));
         }
     }
 

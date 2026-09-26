@@ -1788,8 +1788,8 @@ fn charts_of(d: &Deck) -> Vec<String> {
             SlideObject::Chart { x, y, w, h, chart, .. } => Some(format!(
                 "{:?} {:?} {:?} {} {} {} {}",
                 chart.kind,
+                chart.categories,
                 chart.series,
-                chart.points,
                 x.round(),
                 y.round(),
                 w.round(),
@@ -1810,7 +1810,15 @@ fn chart_deck() -> Deck {
         .map(|(i, kind)| {
             let mut s = proto.clone();
             s.title = format!("Chart {}", i + 1);
-            s.objects = vec![decks_core::insert::chart(*kind)];
+            let mut chart = decks_core::insert::chart(*kind);
+            // Every kind with a second series, one value of it its own; a
+            // pie keeps its second series in the file though it draws
+            // the first.
+            if let SlideObject::Chart { chart, .. } = &mut chart {
+                chart.apply(&decks_core::engine::chart::ChartEdit::AddSeries);
+                chart.apply(&decks_core::engine::chart::ChartEdit::Value(1, 2, 7.25));
+            }
+            s.objects = vec![chart];
             s
         })
         .collect();

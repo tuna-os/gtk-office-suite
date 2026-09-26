@@ -714,6 +714,18 @@ pub fn draw_slide_multi(
     }
 }
 
+/// `chart` drawn at the origin of `cr`, `w` x `h`, by the renderer Tables
+/// draws its charts with; its legend names the series when `legend`.
+pub fn draw_chart_data(cr: &cairo::Context, chart: &decks_core::engine::chart::ChartData, w: f64, h: f64, legend: bool) {
+    let series: Vec<suite_common::charts::Series> = chart
+        .series
+        .iter()
+        .enumerate()
+        .map(|(k, s)| suite_common::charts::Series { name: if legend { chart.legend(k) } else { None }, values: &s.values })
+        .collect();
+    suite_common::charts::draw_chart_series(cr, &chart.categories, &series, chart.kind, w, h);
+}
+
 /// Draw one slide object in the slide frame `(ox, oy, slide_w, slide_h)`
 /// (canvas pixels), text that names no colour contrasting with
 /// `slide_bg_rgb`. Returns the object's box on the canvas, for selection
@@ -789,7 +801,7 @@ pub fn draw_object(
             let (w, h) = (sw / k, sh / k);
             cr.rectangle(0.0, 0.0, w, h);
             cr.clip();
-            suite_common::charts::draw_chart(cr, &chart.points, chart.kind, w, h, chart.legend());
+            draw_chart_data(cr, chart, w, h, true);
             cr.restore().unwrap();
         }
         SlideObject::Circle { x: cx_slide, y: cy_slide, r: r_slide, .. } => {

@@ -7,7 +7,7 @@
 
 use std::io::Read;
 
-use decks_core::engine::chart::{ChartData, ChartKind};
+use decks_core::engine::chart::{ChartData, ChartKind, ChartSeries};
 use decks_core::engine::{Deck, SlideObject};
 
 fn chart_at(kind: ChartKind, x: f64, y: f64) -> SlideObject {
@@ -15,8 +15,14 @@ fn chart_at(kind: ChartKind, x: f64, y: f64) -> SlideObject {
     if kind == ChartKind::Line {
         // A category and a series name that need escaping, and a
         // negative and a fractional value.
-        chart.series = "Revenue & <costs>".into();
-        chart.points[1] = ("Q2 \"late\"".into(), -1.25);
+        chart.series[0].name = "Revenue & <costs>".into();
+        chart.categories[1] = "Q2 \"late\"".into();
+        chart.series[0].values[1] = -1.25;
+    }
+    if matches!(kind, ChartKind::Bar | ChartKind::Scatter) {
+        // A second series, and a third with no name.
+        chart.series.push(ChartSeries { name: "Costs".into(), values: vec![1.5, 2.0, 2.5, 3.0] });
+        chart.series.push(ChartSeries { name: String::new(), values: vec![0.0, -1.0, 4.0, 2.0] });
     }
     SlideObject::Chart { x, y, w: 400.0, h: 250.0, rotation: 0.0, chart }
 }

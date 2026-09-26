@@ -1,6 +1,6 @@
 //! chart_inspector.rs — the Format inspector's Chart tab: the chart's
-//! type, drawn as each would look, and its data sheet (series name, and a
-//! category and value per point).
+//! type, drawn as each would look, its series (named, added, removed) and
+//! its data sheet (a category per row and each series' value for it).
 //! SPDX-License-Identifier: GPL-3.0-or-later
 //!
 //! Keynote's Chart inspector and PowerPoint's Edit Data in one tab. Every
@@ -31,14 +31,21 @@ pub struct ChartInspector {
     pub sync: Rc<dyn Fn(&ChartData)>,
 }
 
-/// One row of the data sheet.
+/// One row of the data sheet: a category and each series' value.
 struct PointRow {
     row: adw::ActionRow,
     category: gtk::Entry,
-    /// An entry, not a spin button: a spin button shows a fixed number of
+    /// Entries, not spin buttons: a spin button shows a fixed number of
     /// digits, and on leaving it writes the rounded number it shows back
     /// (4.333 became 4.33, an edit nobody made).
-    value: gtk::Entry,
+    values: Vec<gtk::Entry>,
+}
+
+/// One series' row: its name, and the button that takes it out.
+struct SeriesRow {
+    row: adw::ActionRow,
+    name: gtk::Entry,
+    remove: gtk::Button,
 }
 
 /// A value as the data sheet shows it: exactly, with no trailing zeros.
@@ -110,7 +117,7 @@ fn kind_button(kind: ChartKind, group: Option<&gtk::ToggleButton>) -> gtk::Toggl
     area.set_draw_func(move |_, cr, w, h| {
         // Drawn at twice the size and scaled down, so the axis labels fit.
         cr.scale(0.5, 0.5);
-        suite_common::charts::draw_chart(cr, &sample.points, sample.kind, w as f64 * 2.0, h as f64 * 2.0, None);
+        crate::canvas::draw_chart_data(cr, &sample, w as f64 * 2.0, h as f64 * 2.0, false);
     });
     tile.append(&area);
     let label = gtk::Label::new(Some(name));
@@ -171,17 +178,22 @@ pub fn build(
     type_group.add(&kinds);
 
     // ── Data ─────────────────────────────────────────────────────────────
-    let data_group = adw::PreferencesGroup::builder()
-        .title("Data")
-        .description("Each value's category, and the series' name in the legend")
+    let series_group = adw::PreferencesGroup::builder()
+        .title("Series")
+        .description("Each series' name in the legend")
         .build();
-    let series = adw::EntryRow::builder().title("Series Name").show_apply_button(true).build();
+    let add_series = gtk::Button::builder().label("Add Series").valign(gtk::Align::Center).build();
+    add_series.add_css_class("flat");
+    add_series.update_property(&[gtk::accessible::Property::Label("Add Series")]);
     {
         let apply = apply.clone();
-        series.connect_apply(move |r| apply(ChartEdit::Series(r.text().to_string())));
+        add_series.connect_clicked(move |_| apply(ChartEdit::AddSeries));
     }
-    data_group.add(&series);
-    let points_group = adw::PreferencesGroup::new();
+    series_group.set_header_suffix(Some(&add_series));
+    let points_group = adw::PreferencesGroup::builder()
+        .title("Data")
+        .description("A category, and each series' value for it")
+        .build();
     let add = gtk::Button::builder().label("Add Value").halign(gtk::Align::Start).build();
     add.add_css_class("pill");
     add.update_property(&[gtk::accessible::Property::Label("Add Value")]);
@@ -194,11 +206,12 @@ pub fn build(
 
     let page = adw::PreferencesPage::new();
     page.add(&type_group);
-    page.add(&data_group);
+    page.add(&series_group);
     page.add(&points_group);
     page.add(&add_group);
 
-    // The data sheet's rows, rebuilt when the number of points changes.
+    // The rows, rebuilt when the number of series or points changes.
+    let series_rows: Rc<RefCell<Vec<SeriesRow>>> = Rc::default();
     let rows: Rc<RefCell<Vec<PointRow>>> = Rc::default();
     // Shows the chart again (a value that wasn't a number is put back);
     // bound to `sync` and the selected chart below.
@@ -219,37 +232,70 @@ pub fn build(
             }
         })
     };
+    let make_series_row = {
+        let (apply, syncing) = (apply.clone(), syncing.clone());
+        move |k: usize| -> SeriesRow {
+            let n = k + 1;
+            let name = gtk::Entry::builder().hexpand(true).valign(gtk::Align::Center).placeholder_text("No name").build();
+            name.update_property(&[gtk::accessible::Property::Label(&format!("Series {n} Name"))]);
+            {
+                let apply = apply.clone();
+                on_commit(&name, &syncing, move |e, _| apply(ChartEdit::SeriesName(k, e.text().to_string())));
+            }
+            let remove = gtk::Button::from_icon_name("list-remove-symbolic");
+            remove.add_css_class("flat");
+            remove.set_valign(gtk::Align::Center);
+            remove.set_tooltip_text(Some("Remove Series"));
+            remove.update_property(&[gtk::accessible::Property::Label(&format!("Remove Series {n}"))]);
+            {
+                let apply = apply.clone();
+                remove.connect_clicked(move |_| apply(ChartEdit::RemoveSeries(k)));
+            }
+            let row = adw::ActionRow::builder().title(format!("{n}")).build();
+            row.add_suffix(&name);
+            row.add_suffix(&remove);
+            SeriesRow { row, name, remove }
+        }
+    };
     let make_row = {
         let (apply, syncing) = (apply.clone(), syncing.clone());
-        move |i: usize| -> PointRow {
+        move |i: usize, series: usize| -> PointRow {
             let n = i + 1;
-            let category = gtk::Entry::builder().width_chars(8).max_width_chars(12).valign(gtk::Align::Center).build();
+            let category = gtk::Entry::builder().width_chars(6).max_width_chars(10).hexpand(true).valign(gtk::Align::Center).build();
             category.update_property(&[gtk::accessible::Property::Label(&format!("Category {n}"))]);
             {
                 let apply = apply.clone();
                 on_commit(&category, &syncing, move |e, _| apply(ChartEdit::Category(i, e.text().to_string())));
             }
-            let value = gtk::Entry::builder()
-                .width_chars(8)
-                .max_width_chars(12)
-                .xalign(1.0)
-                .input_purpose(gtk::InputPurpose::Number)
-                .valign(gtk::Align::Center)
-                .build();
-            value.update_property(&[gtk::accessible::Property::Label(&format!("Value {n}"))]);
-            {
-                let (apply, resync) = (apply.clone(), resync.clone());
-                on_commit(&value, &syncing, move |e, last| {
-                    // Not a number: left alone while it is being typed
-                    // ("-", "1e"), and the value it was comes back when
-                    // the field is left.
-                    match e.text().trim().replace(',', ".").parse::<f64>() {
-                        Ok(v) if v.is_finite() => apply(ChartEdit::Value(i, v)),
-                        _ if last => resync(),
-                        _ => {}
-                    }
-                });
-            }
+            let row = adw::ActionRow::new();
+            row.add_prefix(&category);
+            let values: Vec<gtk::Entry> = (0..series)
+                .map(|k| {
+                    let value = gtk::Entry::builder()
+                        .width_chars(5)
+                        .max_width_chars(8)
+                        .xalign(1.0)
+                        .input_purpose(gtk::InputPurpose::Number)
+                        .valign(gtk::Align::Center)
+                        .build();
+                    // The first series' values are "Value n", as with one.
+                    let label = if k == 0 { format!("Value {n}") } else { format!("Value {n}, Series {}", k + 1) };
+                    value.update_property(&[gtk::accessible::Property::Label(&label)]);
+                    let (apply, resync) = (apply.clone(), resync.clone());
+                    on_commit(&value, &syncing, move |e, last| {
+                        // Not a number: left alone while it is being typed
+                        // ("-", "1e"), and the value it was comes back when
+                        // the field is left.
+                        match e.text().trim().replace(',', ".").parse::<f64>() {
+                            Ok(v) if v.is_finite() => apply(ChartEdit::Value(k, i, v)),
+                            _ if last => resync(),
+                            _ => {}
+                        }
+                    });
+                    row.add_suffix(&value);
+                    value
+                })
+                .collect();
             let remove = gtk::Button::from_icon_name("list-remove-symbolic");
             remove.add_css_class("flat");
             remove.set_valign(gtk::Align::Center);
@@ -259,16 +305,14 @@ pub fn build(
                 let apply = apply.clone();
                 remove.connect_clicked(move |_| apply(ChartEdit::RemovePoint(i)));
             }
-            let row = adw::ActionRow::new();
-            row.add_prefix(&category);
-            row.add_suffix(&value);
             row.add_suffix(&remove);
-            PointRow { row, category, value }
+            PointRow { row, category, values }
         }
     };
 
     let sync: Rc<dyn Fn(&ChartData)> = {
-        let (syncing, rows, points_group, series, last) = (syncing.clone(), rows.clone(), points_group.clone(), series.clone(), last.clone());
+        let (syncing, rows, points_group, last) = (syncing.clone(), rows.clone(), points_group.clone(), last.clone());
+        let (series_rows, series_group) = (series_rows.clone(), series_group.clone());
         let leave_alone = move |e: &gtk::Entry| editing(e) && !forcing.get();
         Rc::new(move |chart: &ChartData| {
             *last.borrow_mut() = Some(chart.clone());
@@ -278,26 +322,45 @@ pub fn build(
                     b.set_active(true);
                 }
             }
-            if series.text() != chart.series {
-                series.set_text(&chart.series);
-            }
-            let mut rows = rows.borrow_mut();
-            while rows.len() > chart.points.len() {
-                if let Some(r) = rows.pop() {
-                    points_group.remove(&r.row);
+            let k = chart.series.len();
+            let mut series_rows = series_rows.borrow_mut();
+            if series_rows.len() != k {
+                for r in series_rows.drain(..) {
+                    series_group.remove(&r.row);
+                }
+                for s in 0..k {
+                    let r = make_series_row(s);
+                    series_group.add(&r.row);
+                    series_rows.push(r);
                 }
             }
-            while rows.len() < chart.points.len() {
-                let r = make_row(rows.len());
-                points_group.add(&r.row);
-                rows.push(r);
+            for (r, s) in series_rows.iter().zip(&chart.series) {
+                if r.name.text() != s.name && !leave_alone(&r.name) {
+                    r.name.set_text(&s.name);
+                }
+                // A chart keeps one series.
+                r.remove.set_visible(k > 1);
             }
-            for (r, (category, value)) in rows.iter().zip(&chart.points) {
+            let mut rows = rows.borrow_mut();
+            if rows.len() != chart.categories.len() || rows.first().is_some_and(|r| r.values.len() != k) {
+                for r in rows.drain(..) {
+                    points_group.remove(&r.row);
+                }
+                for i in 0..chart.categories.len() {
+                    let r = make_row(i, k);
+                    points_group.add(&r.row);
+                    rows.push(r);
+                }
+            }
+            for (i, (r, category)) in rows.iter().zip(&chart.categories).enumerate() {
                 if r.category.text() != *category && !leave_alone(&r.category) {
                     r.category.set_text(category);
                 }
-                if r.value.text() != shown(*value) && !leave_alone(&r.value) {
-                    r.value.set_text(&shown(*value));
+                for (entry, s) in r.values.iter().zip(&chart.series) {
+                    let v = shown(s.values.get(i).copied().unwrap_or(0.0));
+                    if entry.text() != v && !leave_alone(entry) {
+                        entry.set_text(&v);
+                    }
                 }
             }
             syncing.set(false);

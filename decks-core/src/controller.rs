@@ -623,17 +623,18 @@ mod tests {
             _ => panic!("expected a chart"),
         };
         let inserted = chart(&c);
-        assert!(c.edit_chart(0, 0, &ChartEdit::Value(1, 9.0)));
+        assert!(c.edit_chart(0, 0, &ChartEdit::Value(0, 1, 9.0)));
         assert!(c.edit_chart(0, 0, &ChartEdit::Kind(ChartKind::Pie)));
         assert!(!c.edit_chart(0, 0, &ChartEdit::Kind(ChartKind::Pie)), "no change, no step");
         assert!(!c.edit_chart(0, 1, &ChartEdit::AddPoint), "no object there");
-        assert_eq!((chart(&c).kind, chart(&c).points[1].1), (ChartKind::Pie, 9.0));
+        let value = |c: &DecksController| chart(c).series[0].values[1];
+        assert_eq!((chart(&c).kind, value(&c)), (ChartKind::Pie, 9.0));
         assert!(c.undo());
-        assert_eq!((chart(&c).kind, chart(&c).points[1].1), (ChartKind::Bar, 9.0), "one undo, the type");
+        assert_eq!((chart(&c).kind, value(&c)), (ChartKind::Bar, 9.0), "one undo, the type");
         assert!(c.undo());
         assert_eq!(chart(&c), inserted, "a second, the value");
         assert!(c.redo());
-        assert_eq!(chart(&c).points[1].1, 9.0);
+        assert_eq!(value(&c), 9.0);
     }
 
     #[test]

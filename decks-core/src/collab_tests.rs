@@ -84,8 +84,8 @@ fn nudged(object: &SlideObject, dx: f64) -> SlideObject {
         SlideObject::Rect { x, .. } | SlideObject::Shape { x, .. } | SlideObject::Image { x, .. } | SlideObject::Table { x, .. } => *x += dx,
         SlideObject::Chart { x, chart, .. } => {
             *x += dx;
-            if let Some(p) = chart.points.first_mut() {
-                p.1 += 1.0;
+            if let Some(v) = chart.series.first_mut().and_then(|s| s.values.first_mut()) {
+                *v += 1.0;
             }
         }
         SlideObject::Circle { x, .. } => *x += dx,

@@ -27,8 +27,8 @@ fn identity(o: &SlideObject) -> String {
             format!("table:{}x{}:{}", table.rows.len(), table.rows.first().map_or(0, |r| r.len()), cells.join("|"))
         }
         SlideObject::Chart { chart, .. } => {
-            let points: Vec<String> = chart.points.iter().map(|(c, v)| format!("{c}={v}")).collect();
-            format!("chart:{:?}:{}:{}", chart.kind, chart.series, points.join("|"))
+            let series: Vec<String> = chart.series.iter().map(|s| format!("{}={:?}", s.name, s.values)).collect();
+            format!("chart:{:?}:{}:{}", chart.kind, chart.categories.join("|"), series.join("|"))
         }
     }
 }

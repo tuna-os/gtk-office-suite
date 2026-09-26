@@ -138,7 +138,7 @@ fn chart_menu() -> gtk::MenuButton {
             // Drawn at twice the size and scaled down, so the sample's
             // axis labels fit the tile.
             cr.scale(0.5, 0.5);
-            suite_common::charts::draw_chart(cr, &data.points, data.kind, w as f64 * 2.0, h as f64 * 2.0, None);
+            crate::canvas::draw_chart_data(cr, &data, w as f64 * 2.0, h as f64 * 2.0, false);
         });
         tile.append(&area);
         let label = gtk::Label::new(Some(name));
