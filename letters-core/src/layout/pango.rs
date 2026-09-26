@@ -921,6 +921,37 @@ mod tests {
         assert!(dark > 20, "a leader across the gap: {dark} dark columns");
     }
 
+    /// Space before does not ride a page break onto the next page: past
+    /// the first paragraph, Word and LibreOffice start each page at the
+    /// margin (render-lab letters/toc drew a heading with 24pt before
+    /// 24pt too low on page 2). The document's own first paragraph keeps
+    /// its space (render-lab letters/headings), and mid-page it applies.
+    #[test]
+    fn space_before_is_dropped_at_the_top_of_a_page() {
+        use crate::layout::Source;
+        let top = LayoutOptions::default().page.margin_top_pt;
+        let first_top = |t: &Typeset, page: usize, para: usize| {
+            t.tree().pages[page]
+                .lines()
+                .filter_map(|l| match l {
+                    Item::Line { source: Source::Paragraph(p), top_pt, .. } if *p == para => Some(*top_pt),
+                    _ => None,
+                })
+                .next()
+                .unwrap()
+        };
+        let mut d = doc(3, "body");
+        for p in d.paragraphs.iter_mut() {
+            p.style.space_before_pt = 24.0;
+        }
+        d.paragraphs[2].style.page_break_before = true;
+        let t = Typeset::new(d, LayoutOptions::default());
+        assert_eq!(t.tree().pages.len(), 2);
+        assert!((first_top(&t, 0, 0) - (top + 24.0)).abs() < 0.01, "the document's first paragraph keeps its space");
+        assert!(first_top(&t, 0, 1) - top - 24.0 > 20.0, "mid-page the space applies after two lines: {}", first_top(&t, 0, 1));
+        assert!((first_top(&t, 1, 2) - top).abs() < 0.01, "after the break it starts at the margin");
+    }
+
     /// Open threads with text are marked where their text is, with a spot
     /// in the right margin; a resolved one is not.
     #[test]
