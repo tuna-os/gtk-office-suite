@@ -30,7 +30,6 @@ NEEDS = {
     "letters/header-footer": "letters-page-layout",
     "letters/page-break": "letters-page-layout",
     "letters/pagination": "letters-page-layout",
-    "letters/table": "letters-page-layout",
     "tables/cell-fonts": "tables-cell-style-model",
     "tables/fills": "tables-cell-style-model",
     "tables/alignment": "tables-cell-style-model",
