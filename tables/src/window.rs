@@ -1469,7 +1469,7 @@ impl TablesWindow {
 
         suite_win.add_top_bar(&fx_bar);
         let sw = &suite_win;
-        let inspector = crate::format_inspector::build(&controller, &drawing_area, &sw.header_bar, &[&sw.medium_breakpoint, &sw.narrow_breakpoint], &stack);
+        let inspector = crate::format_inspector::build(&controller, &drawing_area, &refresh_sel, &sw.header_bar, &[&sw.medium_breakpoint, &sw.narrow_breakpoint], &stack);
         *inspector_sync.borrow_mut() = Some(inspector.sync.clone());
         {
             // The number format code, from the keyboard (Ctrl+Shift+F).

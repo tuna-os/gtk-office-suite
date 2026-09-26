@@ -90,6 +90,7 @@ fn clear_button(tooltip: &str) -> gtk::Button {
 pub fn build(
     ctl: &Ctl,
     grid: &gtk::DrawingArea,
+    refresh: &Rc<dyn Fn()>,
     header: &adw::HeaderBar,
     breakpoints: &[&adw::Breakpoint],
     content: &impl IsA<gtk::Widget>,
@@ -186,7 +187,7 @@ pub fn build(
     }
     borders.add(&row("Apply", &b_box));
 
-    let (number, sync_number, code_row) = crate::number_format_editor::group(ctl, grid);
+    let (number, sync_number, code_row) = crate::number_format_editor::group(ctl, grid, refresh);
     let page = adw::PreferencesPage::new();
     page.add(&number);
     page.add(&text);

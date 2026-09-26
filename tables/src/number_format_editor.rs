@@ -50,7 +50,7 @@ fn format_of(code: &str) -> NumberFormat {
 
 /// The Number group, its sync (call when the selection changes), and its
 /// code row, for focusing from the keyboard.
-pub fn group(ctl: &Ctl, grid: &gtk::DrawingArea) -> (adw::PreferencesGroup, Rc<dyn Fn()>, adw::EntryRow) {
+pub fn group(ctl: &Ctl, grid: &gtk::DrawingArea, refresh: &Rc<dyn Fn()>) -> (adw::PreferencesGroup, Rc<dyn Fn()>, adw::EntryRow) {
     let group = adw::PreferencesGroup::builder().title("Number").build();
 
     let code = adw::EntryRow::builder().title("Format Code").show_apply_button(true).build();
@@ -77,7 +77,7 @@ pub fn group(ctl: &Ctl, grid: &gtk::DrawingArea) -> (adw::PreferencesGroup, Rc<d
         code.connect_changed(move |_| update_preview());
     }
     {
-        let (ctl, grid) = (ctl.clone(), grid.clone());
+        let (ctl, grid, refresh) = (ctl.clone(), grid.clone(), refresh.clone());
         code.connect_apply(move |row| {
             let nf = format_of(&row.text());
             ctl.borrow_mut().mutate_sheet("Number Format", move |s| {
@@ -88,6 +88,8 @@ pub fn group(ctl: &Ctl, grid: &gtk::DrawingArea) -> (adw::PreferencesGroup, Rc<d
                     }
                 }
             });
+            // The cells' accessible names are their shown values.
+            refresh();
             grid.queue_draw();
         });
     }
