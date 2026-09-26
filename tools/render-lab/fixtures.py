@@ -335,7 +335,9 @@ def letters(img):
     # A table of contents as Word writes it: a TOC field whose result is
     # entry paragraphs in TOC1/TOC2 styles, each a title, a tab and its
     # page number behind a dotted right tab stop at the text column's edge
-    # (Letter with 1in margins: 9360 twips).
+    # (the python-docx template is Letter with 1.25in side margins, so the
+    # column is 8640 twips wide; a stop past that would overflow into the
+    # margin in Word and LibreOffice, as one did at 9360).
     def toc_edge(paragraph, kind=None, instr=None):
         r = paragraph.add_run()
         el = OxmlElement("w:fldChar") if kind is not None else OxmlElement("w:instrText")
@@ -356,7 +358,7 @@ def letters(img):
         tab = OxmlElement("w:tab")
         tab.set(qn("w:val"), "right")
         tab.set(qn("w:leader"), "dot")
-        tab.set(qn("w:pos"), "9360")
+        tab.set(qn("w:pos"), "8640")
         tabs.append(tab)
         pPr.append(tabs)
         p.add_run(title)
@@ -364,6 +366,25 @@ def letters(img):
         r._r.append(OxmlElement("w:tab"))
         p.add_run(str(page))
 
+    # Real Word files define the TOC1/TOC2 entry styles (indented one
+    # step per level); without them LibreOffice falls back to Normal and
+    # renders every entry unindented, which no Word-authored file does.
+    styles = x.styles.element
+    for level, indent in ((1, 0), (2, 283)):
+        style = OxmlElement("w:style")
+        style.set(qn("w:type"), "paragraph")
+        style.set(qn("w:styleId"), f"TOC{level}")
+        name = OxmlElement("w:name")
+        name.set(qn("w:val"), f"toc {level}")
+        style.append(name)
+        based = OxmlElement("w:basedOn")
+        based.set(qn("w:val"), "Normal")
+        style.append(based)
+        pPr = OxmlElement("w:pPr")
+        ind = OxmlElement("w:ind")
+        ind.set(qn("w:left"), str(indent))
+        pPr.append(ind)
+        styles.append(style)
     x.add_paragraph().add_run("Contents").bold = True
     first = x.add_paragraph()
     toc_edge(first, "begin")
