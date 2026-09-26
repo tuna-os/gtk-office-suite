@@ -49,7 +49,12 @@ NEEDS = {
 EXPORT = {
     "letters/plain-paragraph",
     "letters/toc",
+    "letters/char-emphasis",
+    "letters/headings",
+    "letters/font-families",
     "decks/autofit",
+    "decks/title-layout",
+    "decks/bullets",
 }
 
 

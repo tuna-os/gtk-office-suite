@@ -2,6 +2,21 @@
   "decks/autofit": {
     "export": "green"
   },
+  "decks/bullets": {
+    "export": "missing"
+  },
+  "decks/title-layout": {
+    "export": "missing"
+  },
+  "letters/char-emphasis": {
+    "export": "missing"
+  },
+  "letters/font-families": {
+    "export": "missing"
+  },
+  "letters/headings": {
+    "export": "missing"
+  },
   "letters/plain-paragraph": {
     "export": "green"
   },
