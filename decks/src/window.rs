@@ -140,6 +140,25 @@ impl DecksWindow {
                 }
             });
             app.add_action(&act);
+            // Headless `--export-pdf <out>` (docs/EXPORT-PARITY-SPEC.md item
+            // 1): the presented slides as a Cairo PDF at the model slide's
+            // size — the canvas path, not the Typst one. main.rs schedules
+            // this after the window settles.
+            let ctl = controller.clone();
+            let act = gio::SimpleAction::new("test-export-pdf", None);
+            act.connect_activate(move |_, _| {
+                let Some(out) = std::env::var_os(suite_common::render_dump::EXPORT_PDF_ENV) else { return };
+                let slides = ctl.slides.borrow();
+                let masters = ctl.masters.borrow();
+                if let Err(e) = crate::canvas::render_slides_pdf(
+                    &slides,
+                    &masters,
+                    std::path::Path::new(&out),
+                ) {
+                    eprintln!("export-pdf: {e}");
+                }
+            });
+            app.add_action(&act);
         }
         // No fixed content size: the canvas fills the viewport and the
         // slide scales to fit (slide_geometry) — a fixed 960px minimum

@@ -14,6 +14,88 @@ use gtk4::{gio, glib, prelude::*};
 
 pub const ENV: &str = "GTK_OFFICE_RENDER_DUMP";
 
+/// Environment variable naming the PDF the headless `--export-pdf <out>` hook
+/// writes (docs/EXPORT-PARITY-SPEC.md item 1). Each app's main() sets it from
+/// the flag and schedules `schedule_export`; the app's `test-export-pdf`
+/// action writes exactly this path.
+pub const EXPORT_PDF_ENV: &str = "GTK_OFFICE_EXPORT_PDF";
+
+/// The `--export-pdf` command-line flag each app registers with
+/// `add_main_option` (`OptionArg::Filename`, so GLib hands it over as a
+/// byte string, whatever the locale).
+pub const EXPORT_PDF_FLAG: &str = "export-pdf";
+
+/// Read the `--export-pdf <out>` value out of already-parsed local options:
+/// `Ok(Some(path))` when the flag was given, `Ok(None)` when it was absent,
+/// `Err` when it is present but unusable. Display-free (pure GLib), so this
+/// is unit-tested without a display.
+pub fn export_pdf_path(options: &glib::VariantDict) -> Result<Option<std::path::PathBuf>, String> {
+    if !options.contains(EXPORT_PDF_FLAG) {
+        return Ok(None);
+    }
+    match options.lookup::<Vec<u8>>(EXPORT_PDF_FLAG) {
+        Ok(Some(bytes)) => String::from_utf8(bytes)
+            .map(std::path::PathBuf::from)
+            .map(Some)
+            .map_err(|_| "--export-pdf output path is not UTF-8".to_string()),
+        Ok(None) => Err("--export-pdf needs an output path".to_string()),
+        Err(_) => Err("--export-pdf option has an unexpected type".to_string()),
+    }
+}
+
+/// Headless `--export-pdf` driver: like `schedule`, but activates the app's
+/// `test-export-pdf` action — which writes the PDF named by `EXPORT_PDF_ENV`
+/// and does nothing else — instead of `test-render-dump`, then quits.
+/// No-op unless the variable is set. Kept separate from `schedule` (which it
+/// mirrors) so Tier A capture is untouched.
+pub fn schedule_export(app: &impl IsA<gio::Application>) {
+    let Some(out) = std::env::var_os(EXPORT_PDF_ENV) else {
+        return;
+    };
+    if let Some(parent) = std::path::Path::new(&out).parent() {
+        if !parent.as_os_str().is_empty() {
+            let _ = std::fs::create_dir_all(parent);
+        }
+    }
+    // Same settle wait as `schedule`: Letters relayouts on a 500 ms debounce
+    // and images decode, so exporting on first paint would write a stale page.
+    let app = app.as_ref().clone();
+    let hold = std::env::var_os("GTK_OFFICE_RENDER_HOLD").is_some();
+    let start = std::time::Instant::now();
+    let last = std::cell::Cell::new((0, 0));
+    let stable = std::cell::Cell::new(0u32);
+    glib::timeout_add_local(std::time::Duration::from_millis(250), move || {
+        let window = app.downcast_ref::<gtk4::Application>().and_then(|a| a.active_window());
+        let size = window.as_ref().map_or((0, 0), |w| (w.width(), w.height()));
+        if size == last.get() && size != (0, 0) {
+            stable.set(stable.get() + 1);
+        } else {
+            stable.set(0);
+            last.set(size);
+        }
+        let maximized = !hold || window.as_ref().is_some_and(|w| w.is_maximized());
+        let elapsed = start.elapsed();
+        let ready = elapsed >= std::time::Duration::from_millis(1500) && stable.get() >= 3 && maximized;
+        if !ready && elapsed < std::time::Duration::from_secs(15) {
+            return glib::ControlFlow::Continue;
+        }
+        if !ready {
+            eprintln!("export-pdf: window never settled (size {size:?}, maximized {maximized}); exporting anyway");
+        }
+        if app.lookup_action("test-export-pdf").is_some() {
+            app.activate_action("test-export-pdf", None);
+        } else {
+            eprintln!("export-pdf: app has no test-export-pdf action");
+        }
+        // Tier B keeps the app on screen so a browser can capture it; the
+        // lab kills the process when it is done.
+        if !hold {
+            app.quit();
+        }
+        glib::ControlFlow::Break
+    });
+}
+
 /// Whether this process is a render-lab capture. Cached: widgets ask on
 /// every frame to leave out editing chrome (caret, selection) that is not
 /// document content and that LibreOffice's reference never shows.
@@ -153,4 +235,36 @@ pub fn widget_to_png(
     let viewport = graphene::Rect::new(x as f32, y as f32, cw as f32, ch as f32);
     let texture: gdk::Texture = renderer.render_texture(&node, Some(&viewport));
     texture.save_to_png(path).map_err(|e| e.to_string())
+}
+
+#[cfg(test)]
+mod export_pdf_tests {
+    use super::*;
+
+    fn dict_with(path: &[u8]) -> glib::VariantDict {
+        let dict = glib::VariantDict::new(None);
+        dict.insert_value(EXPORT_PDF_FLAG, &path.to_vec().to_variant());
+        dict
+    }
+
+    #[test]
+    fn an_absent_flag_is_no_export() {
+        let dict = glib::VariantDict::new(None);
+        assert_eq!(export_pdf_path(&dict).unwrap(), None);
+    }
+
+    #[test]
+    fn the_flag_value_is_the_output_path() {
+        let dict = dict_with(b"out.pdf");
+        assert_eq!(
+            export_pdf_path(&dict).unwrap(),
+            Some(std::path::PathBuf::from("out.pdf"))
+        );
+    }
+
+    #[test]
+    fn non_utf8_is_an_error_not_a_silent_skip() {
+        let dict = dict_with(&[0xff, 0xfe]);
+        assert!(export_pdf_path(&dict).is_err());
+    }
 }

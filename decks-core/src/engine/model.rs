@@ -10,6 +10,23 @@ pub struct Deck {
     pub masters: Vec<MasterSlide>,
 }
 
+/// Model units per inch: the model slide is 960x540 units for the sheet our
+/// writer emits (9144000x5143500 EMU = 10in x 5.625in), so 96 units to the
+/// inch — the same 9525 EMU per unit `SlideScale` assumes.
+pub const MODEL_UNITS_PER_INCH: f64 = 96.0;
+
+/// The model slide on a PDF page, in points (10in x 5.625in at 72pt/in).
+/// This is the "real slide size" the Cairo PDF export uses: the readers scale
+/// every source onto the 960x540 model slide, so drawing that slide is what
+/// presenting shows — unlike the fixed 16x9cm page the Typst path assumes.
+pub fn slide_page_size_pt() -> (f64, f64) {
+    const PT_PER_INCH: f64 = 72.0;
+    (
+        960.0 * PT_PER_INCH / MODEL_UNITS_PER_INCH,
+        540.0 * PT_PER_INCH / MODEL_UNITS_PER_INCH,
+    )
+}
+
 #[derive(Clone, Debug)]
 pub struct Slide {
     pub title: String,
@@ -210,5 +227,27 @@ impl Deck {
             }],
             masters: vec![default_master],
         }
+    }
+}
+
+#[cfg(test)]
+mod page_size_tests {
+    use super::*;
+
+    #[test]
+    fn the_pdf_page_is_the_model_slide_in_points() {
+        // The sheet our writer emits is 9144000 EMU wide for 960 model
+        // units, and an inch is 914400 EMU: 914400 / (9144000 / 960) = 96
+        // units to the inch, i.e. a 10in x 5.625in slide.
+        let emu_per_unit = 9144000.0 / 960.0;
+        assert_eq!(emu_per_unit, 9525.0);
+        assert_eq!(MODEL_UNITS_PER_INCH, 914400.0 / emu_per_unit);
+        assert_eq!(slide_page_size_pt(), (720.0, 405.0));
+    }
+
+    #[test]
+    fn the_pdf_page_keeps_the_slide_aspect() {
+        let (w, h) = slide_page_size_pt();
+        assert!((w / h - 16.0 / 9.0).abs() < 1e-9, "16:9 like the model slide: {w}x{h}");
     }
 }

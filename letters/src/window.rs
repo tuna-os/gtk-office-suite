@@ -644,6 +644,29 @@ impl LettersWindow {
                 }
             });
             app.add_action(&act);
+            // Headless `--export-pdf <out>` (docs/EXPORT-PARITY-SPEC.md item
+            // 1): the same laid-out pages `test-render-dump` snapshots,
+            // written as a PDF to GTK_OFFICE_EXPORT_PDF through the printing
+            // path (`Typeset::draw_page` on a PDF surface). main.rs schedules
+            // this after the window settles.
+            let tv = tab_view.clone();
+            let act = gtk::gio::SimpleAction::new("test-export-pdf", None);
+            act.connect_activate(move |_, _| {
+                let Some(out) = std::env::var_os(suite_common::render_dump::EXPORT_PDF_ENV) else { return };
+                let Some(page) = tv.selected_page() else {
+                    eprintln!("export-pdf: no open document");
+                    return;
+                };
+                let Some(pc) = find_page_container(&page.child()) else {
+                    eprintln!("export-pdf: no PageContainer in the active tab");
+                    return;
+                };
+                let Some(pv) = pc.page_view() else { return };
+                if let Err(e) = pv.write_pdf(std::path::Path::new(&out)) {
+                    eprintln!("export-pdf: {e}");
+                }
+            });
+            app.add_action(&act);
         }
 
         // Header/Footer edit dialog action

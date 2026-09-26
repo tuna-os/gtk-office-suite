@@ -25,6 +25,33 @@ mod preferences;
 
 fn main() {
     let suite = suite_common::SuiteApp::new("org.tunaos.decks");
+
+    // Headless `--export-pdf <out>` (docs/EXPORT-PARITY-SPEC.md item 1): a
+    // real GApplication option, so `--help` documents it. Export implies the
+    // test-only actions, the same ones the render lab uses; connect_open
+    // schedules the export once the window settles.
+    suite.app.add_main_option(
+        suite_common::render_dump::EXPORT_PDF_FLAG,
+        gtk4::glib::Char::from(0u8),
+        gtk4::glib::OptionFlags::NONE,
+        gtk4::glib::OptionArg::Filename,
+        "Export the opened presentation to PDF with no dialogs and quit",
+        Some("OUT"),
+    );
+    suite.app.connect_handle_local_options(|_, options| {
+        match suite_common::render_dump::export_pdf_path(options) {
+            Ok(Some(out)) => {
+                std::env::set_var("GTK_OFFICE_TEST_MODE", "1");
+                std::env::set_var(suite_common::render_dump::EXPORT_PDF_ENV, &out);
+            }
+            Ok(None) => {}
+            Err(e) => {
+                eprintln!("decks: {e}");
+                return std::ops::ControlFlow::Break(gtk4::glib::ExitCode::FAILURE);
+            }
+        }
+        std::ops::ControlFlow::Continue(())
+    });
     let shortcuts: &[(&str, &[(&str, &str)])] = &[
         ("Editing", &[
             ("Undo", "<Control>z"),
@@ -77,6 +104,10 @@ fn main() {
             *store = Some(w);
         }
         store.as_ref().unwrap().present();
+        if std::env::var_os(suite_common::render_dump::EXPORT_PDF_ENV).is_some() {
+            eprintln!("decks: --export-pdf needs an input file to export");
+            app.quit();
+        }
     });
 
     // CLI / file-manager launches: `decks talk.pptx` opens the file.
@@ -124,6 +155,9 @@ fn main() {
         }
         win.present();
         suite_common::render_dump::schedule(app);
+        if std::env::var_os(suite_common::render_dump::EXPORT_PDF_ENV).is_some() {
+            suite_common::render_dump::schedule_export(app);
+        }
     });
     suite.run();
 }

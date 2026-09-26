@@ -1055,6 +1055,47 @@ pub fn render_slide_png(
     out.write_to_png(&mut file).map_err(|e| e.to_string())
 }
 
+/// Render every slide to a PDF at `path`, one PDF page per slide at the
+/// model's own size (`decks_core::engine::slide_page_size_pt`) — explicitly
+/// not the Typst path in `export.rs`, which reflows text into plain
+/// paragraphs and replaces shapes with generic rects. Goes through
+/// `draw_slide_in` with `Chrome::Show`, the same chrome-free path presenting
+/// uses (no selection, slide-number badge or editor surround), so the PDF is
+/// what the audience sees. Used by the headless `--export-pdf` hook.
+pub fn render_slides_pdf(
+    slides: &[Slide], masters: &[MasterSlide], path: &std::path::Path,
+) -> Result<(), String> {
+    if slides.is_empty() {
+        return Err("no slides to export".to_string());
+    }
+    let (page_w, page_h) = decks_core::engine::slide_page_size_pt();
+    let surface = cairo::PdfSurface::new(page_w, page_h, path)
+        .map_err(|e| format!("cannot create {}: {e}", path.display()))?;
+    // PDF 1.4 like Letters' export: no compressed object streams, so the
+    // page tree is plain text a test can count.
+    surface.restrict(cairo::PdfVersion::_1_4).map_err(|e| e.to_string())?;
+    let cr = cairo::Context::new(&surface).map_err(|e| e.to_string())?;
+    // Model units are 1/96in; PDF points are 1/72in.
+    const MODEL_W: f64 = 960.0;
+    const MODEL_H: f64 = 540.0;
+    for index in 0..slides.len() {
+        // A slide of another aspect keeps its own page size; today every
+        // slide shares the model's size, but the call is per-page anyway.
+        surface.set_size(page_w, page_h).map_err(|e| e.to_string())?;
+        cr.save().map_err(|e| e.to_string())?;
+        cr.scale(page_w / MODEL_W, page_h / MODEL_H);
+        draw_slide_in(&cr, MODEL_W, MODEL_H, slides, index, masters, Chrome::Show);
+        cr.restore().map_err(|e| e.to_string())?;
+        cr.show_page().map_err(|e| e.to_string())?;
+    }
+    drop(cr);
+    surface.finish();
+    match surface.status() {
+        Ok(()) => Ok(()),
+        Err(e) => Err(format!("cannot write {}: {e}", path.display())),
+    }
+}
+
 #[cfg(test)]
 mod font_tests {
     use super::*;
@@ -1121,6 +1162,42 @@ mod font_tests {
         let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../target/render-frames");
         std::fs::create_dir_all(&dir).unwrap();
         first.write_to_png(&mut std::fs::File::create(dir.join("build-move-in-midpoint.png")).unwrap()).unwrap();
+    }
+
+    /// The headless `--export-pdf` PDF is the presented slides: one PDF page
+    /// per slide at the model slide's size, with the slide's text in it.
+    #[test]
+    fn the_pdf_export_has_one_sized_page_per_slide() {
+        let mut two = slide(Some(0));
+        two.objects.push(SlideObject::TextBox {
+            text: "Hello export".into(),
+            x: 100.0, y: 100.0, w: 400.0, h: 100.0, rotation: 0.0,
+            runs: vec![decks_core::engine::Run::plain("Hello export")],
+            body: Default::default(),
+        });
+        let slides = [slide(Some(0)), two];
+        let masters = [master("Sans")];
+        let dir = std::env::temp_dir().join(format!("decks-export-pdf-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("out.pdf");
+        render_slides_pdf(&slides, &masters, &path).expect("export two slides");
+        let bytes = std::fs::read(&path).unwrap();
+        assert!(bytes.starts_with(b"%PDF"), "a real PDF");
+        assert!(bytes.len() > 1000, "text and pages take space: {}", bytes.len());
+        let text = String::from_utf8_lossy(&bytes);
+        let page_objects = text.matches("/Type /Page").count() - text.matches("/Type /Pages").count();
+        assert_eq!(page_objects, 2, "one PDF page per slide");
+        assert!(text.contains("/MediaBox [ 0 0 720 405 ]"), "pages are the model slide in points");
+        // That the slide's text lands on the page is checked by rasterising
+        // the PDF (pdftoppm) and looking, not here: Cairo may subset fonts.
+    }
+
+    #[test]
+    fn exporting_no_slides_is_an_error_not_an_empty_pdf() {
+        let dir = std::env::temp_dir().join(format!("decks-export-pdf-empty-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let err = render_slides_pdf(&[], &[master("Sans")], &dir.join("out.pdf")).unwrap_err();
+        assert!(err.contains("no slides"), "{err}");
     }
 
     fn master(font: &str) -> MasterSlide {
