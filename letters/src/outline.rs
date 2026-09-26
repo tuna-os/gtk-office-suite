@@ -126,6 +126,7 @@ pub fn build(
             show.set_active(true);
         });
         app.add_action(&a);
+        suite_common::actions::register_labels(&[("app.show-comments", &suite_common::i18n("Open Comments"))]);
     }
 
     let entries: Rc<RefCell<Entries>> = Rc::default();
