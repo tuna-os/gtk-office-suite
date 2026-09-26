@@ -3,19 +3,19 @@
     "export": "green"
   },
   "decks/bullets": {
-    "export": "missing"
+    "export": "green"
   },
   "decks/title-layout": {
-    "export": "missing"
+    "export": "green"
   },
   "letters/char-emphasis": {
-    "export": "missing"
+    "export": "green"
   },
   "letters/font-families": {
-    "export": "missing"
+    "export": "green"
   },
   "letters/headings": {
-    "export": "missing"
+    "export": "green"
   },
   "letters/plain-paragraph": {
     "export": "green"
