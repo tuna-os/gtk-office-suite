@@ -1032,6 +1032,8 @@ pub fn render_to_buffer(doc: &Document, buf: &gtk::TextBuffer) {
 /// live model re-renders just the paragraphs an undo changed.
 pub(crate) fn render_paragraphs(buf: &gtk::TextBuffer, insert: &mut gtk::TextIter, paras: &[&Paragraph], ordinals: &[u32]) {
     let mut insert = *insert;
+    // Paragraph tags are applied after all the text (see below).
+    let mut tagged: Vec<(i32, i32, Vec<String>)> = Vec::new();
     for (i, para) in paras.iter().copied().enumerate() {
         if i > 0 {
             buf.insert(&mut insert, "\n");
@@ -1112,9 +1114,28 @@ pub(crate) fn render_paragraphs(buf: &gtk::TextBuffer, insert: &mut gtk::TextIte
         if let Some(name) = para_tag(buf, &para.style) {
             para_tags.push(name);
         }
-        for name in para_tags {
-            let start = buf.iter_at_offset(para_start);
-            buf.apply_tag_by_name(&name, &start, &insert);
+        tagged.push((para_start, insert.offset(), para_tags));
+    }
+    // Paragraph tags cover their paragraph's text. An empty paragraph owns
+    // no character of its own, and a tag applied over an empty range sticks
+    // to nothing: the capture reads the line back with default spacing,
+    // alignment and style, so an empty styled line lost all three on every
+    // save and drew tight in Print Layout. Its tags cover its terminating
+    // newline instead — the one character an empty line owns. Non-empty
+    // paragraphs keep exactly the range they had, so typing at their ends
+    // inherits what it always did.
+    for (k, (start, end, names)) in tagged.iter().enumerate() {
+        let mut end = *end;
+        if end <= *start && k + 1 < tagged.len() {
+            end = tagged[k + 1].0;
+        }
+        if end <= *start {
+            continue;
+        }
+        let s = buf.iter_at_offset(*start);
+        let e = buf.iter_at_offset(end);
+        for name in names {
+            buf.apply_tag_by_name(name, &s, &e);
         }
     }
 }
@@ -1562,6 +1583,30 @@ mod tests {
             assert_eq!(styles[0], &d.paragraphs[0].style);
             assert_eq!(styles[1], &d.paragraphs[1].style);
             assert_eq!(styles[2], &letters_core::ParaStyle::default());
+        });
+    }
+
+    /// An empty paragraph owns no character, so a tag applied over it
+    /// stuck to nothing and the capture read it back with default
+    /// spacing, alignment, line spacing and style: an empty styled line
+    /// lost all four on every save and drew tight in Print Layout. Its
+    /// tags cover its terminating newline instead.
+    #[test]
+    fn an_empty_styled_paragraph_survives_the_buffer() {
+        gtk_test(|| {
+            let buf = gtk::TextBuffer::new(None);
+            crate::actions::register_formatting_tags(&buf);
+            let mut d = Document::from_plain_text("before\n\nafter");
+            d.paragraphs[1].style.space_before_pt = 4.0;
+            d.paragraphs[1].style.space_after_pt = 10.0;
+            d.paragraphs[1].style.line_spacing = 1.5;
+            d.paragraphs[1].style.alignment = letters_core::Alignment::Center;
+            d.paragraphs[1].style.heading = Some(2);
+            let rt = round_trip(&buf, &d);
+            assert_eq!(rt.paragraphs.len(), 3);
+            assert_eq!(rt.paragraphs[1].style, d.paragraphs[1].style);
+            assert_eq!(rt.paragraphs[0].style, d.paragraphs[0].style);
+            assert_eq!(rt.paragraphs[2].style, d.paragraphs[2].style);
         });
     }
 
