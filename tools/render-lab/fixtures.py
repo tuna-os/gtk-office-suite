@@ -41,16 +41,29 @@ NEEDS = {
 }
 
 
+# Fixtures whose own PDF export is pixel-compared against LibreOffice's PDF
+# of the same file (docs/EXPORT-PARITY-SPEC.md). Opt-in, docx/pptx only,
+# starting small: fixtures with green screenshot baselines, so an export
+# diff measures the exporter and not the on-screen renderer. xlsx is out
+# of scope (spreadsheets are not a published rendered artifact).
+EXPORT = {
+    "letters/plain-paragraph",
+    "letters/toc",
+    "decks/autofit",
+}
+
+
 def add(app, feature, path, expect):
-    MANIFEST.append(
-        {
-            "app": app,
-            "feature": feature,
-            "file": os.path.relpath(path, OUT),
-            "expect": expect,
-            "needs": NEEDS.get(f"{app}/{feature}"),
-        }
-    )
+    entry = {
+        "app": app,
+        "feature": feature,
+        "file": os.path.relpath(path, OUT),
+        "expect": expect,
+        "needs": NEEDS.get(f"{app}/{feature}"),
+    }
+    if f"{app}/{feature}" in EXPORT:
+        entry["export"] = True
+    MANIFEST.append(entry)
 
 
 def test_image(path):

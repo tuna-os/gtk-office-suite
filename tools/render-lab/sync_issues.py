@@ -14,7 +14,7 @@ checks: "fixture <app>/<feature> is green". Issues are:
 Blocked fixtures (manifest "needs") get the `blocked` label and point at
 the architecture item they wait on, so they sort after unblocked work.
 
-Usage: sync_issues.py <summary.json> [--repo OWNER/REPO] [--run-url URL] [--dry-run]
+Usage: sync_issues.py <summary.json> [--repo OWNER/REPO] [--run-url URL] [--dry-run] [--mode render|export]
 Requires `gh` authenticated with issues:write.
 """
 
@@ -25,6 +25,8 @@ import sys
 
 LABEL = "render-parity"
 MARK = "<!-- render-parity:{} -->"
+LABEL_EXPORT = "export-parity"
+MARK_EXPORT = "<!-- export-parity:{} -->"
 RANK = {"missing": 0, "red": 1, "amber": 2, "green": 3}
 NEEDS_TEXT = {
     "letters-page-layout": "Phase 1 Letters page layout engine: a render tree that lays out pages, used for screen, print and PDF",
@@ -53,7 +55,7 @@ def fmt(v, spec):
     return "–" if v is None else spec.format(v)
 
 
-def body(fx, run_url):
+def body(fx, run_url, mode="render"):
     key = fx["fixture"]
     rows = "\n".join(
         f"| {t} | {m['verdict']} | {fmt(m.get('ink'), '{:.2f}')} | {fmt(m.get('words'), '{:.0%}')} | "
@@ -69,6 +71,34 @@ def body(fx, run_url):
             "(docs/RENDER-PARITY-ROADMAP.md, Phase 1).\n"
         )
     run = f"\nLatest CI run with the side-by-side report: {run_url}\n" if run_url else ""
+    if mode == "export":
+        return f"""{MARK_EXPORT.format(key)}
+Our editor's PDF export of the `{key}` fixture does not match LibreOffice's PDF of the same file.
+{blocked}
+**Must be visible:** {fx['expect']}
+
+| tier | verdict | ink | words found | Δ position | colours | SSIM | scale |
+|---|---|---|---|---|---|---|---|
+{rows}
+{run}
+### Acceptance (checked by CI, not by hand)
+
+- The `Render parity` workflow's export job reports `{key}` as **green** for the export tier.
+- `tools/render-lab/baseline-export.json` is updated in the same PR (`tools/render-lab/run-export.sh --app {fx['app']} --update-baseline`).
+- No other export fixture regresses (the export ratchet fails the PR otherwise).
+
+This issue closes itself when the fixture's export turns green on `main`.
+
+### Reproduce
+
+```bash
+podman build -t gui-test tests/gui/container && podman build -t render-lab tools/render-lab
+tools/render-lab/run-export.sh --app {fx['app']}
+xdg-open render-lab-out/export-report.html   # look at {key}
+```
+
+Fixture source: `tools/render-lab/fixtures.py` (`{fx['file']}`). Likely code: {WHERE.get(fx['app'], '')}.
+"""
     return f"""{MARK.format(key)}
 Our editor's on-screen rendering of the `{key}` fixture does not match LibreOffice's rendering of the same file.
 {blocked}
@@ -104,20 +134,23 @@ def main():
     ap.add_argument("--repo")
     ap.add_argument("--run-url")
     ap.add_argument("--dry-run", action="store_true")
+    ap.add_argument("--mode", choices=("render", "export"), default="render")
     args = ap.parse_args()
     repo = ["--repo", args.repo] if args.repo else []
+    label = LABEL_EXPORT if args.mode == "export" else LABEL
+    mark = MARK_EXPORT if args.mode == "export" else MARK
 
     summary = json.load(open(args.summary))
     if not args.dry_run:
-        for name, color in ((LABEL, "d93f0b"), ("blocked", "cccccc"), ("app:letters", "1d76db"), ("app:tables", "0e8a16"), ("app:decks", "fbca04")):
+        for name, color in ((label, "d93f0b"), ("blocked", "cccccc"), ("app:letters", "1d76db"), ("app:tables", "0e8a16"), ("app:decks", "fbca04")):
             subprocess.run(["gh", "label", "create", name, "--color", color, "--force", *repo], capture_output=True)
-        existing = json.loads(gh("issue", "list", *repo, "--label", LABEL, "--state", "open", "--limit", "500", "--json", "number,body"))
+        existing = json.loads(gh("issue", "list", *repo, "--label", label, "--state", "open", "--limit", "500", "--json", "number,body"))
     else:
         existing = []
     by_key = {}
     for issue in existing:
         for fx in summary["fixtures"]:
-            if MARK.format(fx["fixture"]) in (issue["body"] or ""):
+            if mark.format(fx["fixture"]) in (issue["body"] or ""):
                 by_key[fx["fixture"]] = issue["number"]
 
     opened = updated = closed = 0
@@ -131,9 +164,9 @@ def main():
                     gh("issue", "close", str(num), *repo, "--comment", f"`{key}` is green on main. Closing. {args.run_url or ''}")
                 closed += 1
             continue
-        title = f"[render-parity] {key} is {v}: {fx['expect'][:70]}"
-        labels = [LABEL, f"app:{fx['app']}"] + (["blocked"] if fx.get("needs") else [])
-        text = body(fx, args.run_url)
+        title = f"[{label}] {key} is {v}: {fx['expect'][:70]}"
+        labels = [label, f"app:{fx['app']}"] + (["blocked"] if fx.get("needs") else [])
+        text = body(fx, args.run_url, args.mode)
         if num:
             print(f"update #{num} {key} ({v})")
             if not args.dry_run:
@@ -144,7 +177,7 @@ def main():
             if not args.dry_run:
                 gh("issue", "create", *repo, "--title", title, "--label", ",".join(labels), "--body-file", "-", input=text)
             opened += 1
-    print(f"render-parity issues: {opened} opened, {updated} updated, {closed} closed")
+    print(f"{label} issues: {opened} opened, {updated} updated, {closed} closed")
 
 
 if __name__ == "__main__":

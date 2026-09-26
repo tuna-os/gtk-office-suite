@@ -227,6 +227,179 @@ jobs:
           --repo "${GITHUB_REPOSITORY}"
           --run-url "${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
 
+  # Export parity (docs/EXPORT-PARITY-SPEC.md): each app's own PDF export of
+  # the opted-in fixtures (`export: true` in the manifest, docx/pptx only)
+  # rasterized like the LibreOffice reference and scored with the same
+  # metrics. Same shape as the screenshot jobs above: one lab job per app,
+  # then a combine job with the proposed baseline, a sticky PR comment and
+  # issue sync on main. The verdicts ratchet against the SEPARATE
+  # tools/render-lab/baseline-export.json, never baseline.json.
+  export-lab:
+    name: Export lab (${{ matrix.app }})
+    runs-on: ubuntu-24.04
+    timeout-minutes: 75
+    strategy:
+      fail-fast: false
+      matrix:
+        app: [letters, decks]
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: docker/setup-buildx-action@v4
+
+      - name: Build render-lab image
+        uses: docker/build-push-action@v7
+        with:
+          context: tools/render-lab
+          file: tools/render-lab/Containerfile
+          load: true
+          tags: render-lab
+          build-args: BASE=ghcr.io/${{ github.repository }}/gui-test:main
+          cache-from: type=gha,scope=render-lab
+          cache-to: type=gha,mode=max,scope=render-lab
+
+      - name: Cache cargo
+        uses: actions/cache@v6
+        with:
+          path: |
+            ~/.cache/render-lab-cargo
+            target
+          key: render-lab-export-cargo-${{ matrix.app }}-${{ hashFiles('Cargo.lock') }}
+          restore-keys: |
+            render-lab-export-cargo-${{ matrix.app }}-
+            render-lab-cargo-${{ matrix.app }}-
+            render-lab-cargo-
+
+      - name: Run export lab
+        env:
+          CONTAINER_ENGINE: docker
+        run: tools/render-lab/run-export.sh --app ${{ matrix.app }}
+
+      - name: Upload export captures
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: export-lab-${{ matrix.app }}
+          path: |
+            render-lab-out/${{ matrix.app }}/*/ours-*.png
+            render-lab-out/${{ matrix.app }}/*/lo-*.png
+            render-lab-out/${{ matrix.app }}/*/export.pdf
+            render-lab-out/${{ matrix.app }}/*/export.log
+          retention-days: 14
+
+  export-report:
+    name: Export PDF vs LibreOffice PDF
+    needs: export-lab
+    if: always()
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      issues: write
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: docker/setup-buildx-action@v4
+
+      - name: Build render-lab image
+        uses: docker/build-push-action@v7
+        with:
+          context: tools/render-lab
+          file: tools/render-lab/Containerfile
+          load: true
+          tags: render-lab
+          build-args: BASE=ghcr.io/${{ github.repository }}/gui-test:main
+          cache-from: type=gha,scope=render-lab
+
+      - name: Download export captures (letters)
+        continue-on-error: true
+        uses: actions/download-artifact@v8
+        with:
+          name: export-lab-letters
+          path: render-lab-out/letters
+
+      - name: Download export captures (decks)
+        continue-on-error: true
+        uses: actions/download-artifact@v8
+        with:
+          name: export-lab-decks
+          path: render-lab-out/decks
+
+      - name: Check every app's export captures arrived
+        run: |
+          mkdir -p render-lab-out
+          ls render-lab-out
+          for app in letters decks; do
+            n=$(find "render-lab-out/$app" -name 'ours-*.png' 2>/dev/null | wc -l)
+            echo "$app: $n export captures"
+            [ "$n" -gt 0 ] || echo "::warning::no export captures for $app; its export-lab job did not upload, so it is missing from this report"
+          done
+
+      # The export verdicts this run would lock in: an agent or reviewer
+      # takes `baseline-export.proposed.json` from the artifact instead of
+      # re-running the lab locally — after looking at the images.
+      - name: Compare exports
+        id: compare
+        run: |
+          docker run --rm -v "$PWD:/workspace" -w /workspace render-lab bash -c '
+            python3 tools/render-lab/fixtures.py render-lab-out/fixtures >/dev/null &&
+            cp tools/render-lab/baseline-export.json render-lab-out/baseline-export.proposed.json &&
+            python3 tools/render-lab/export_compare.py render-lab-out/fixtures render-lab-out \
+              --baseline render-lab-out/baseline-export.proposed.json --update-baseline >/dev/null &&
+            python3 tools/render-lab/export_compare.py render-lab-out/fixtures render-lab-out \
+              --baseline tools/render-lab/baseline-export.json'
+
+      - name: Job summary
+        if: always()
+        run: cat render-lab-out/summary-export.md >> "$GITHUB_STEP_SUMMARY" || true
+
+      - name: Upload export report
+        if: always()
+        id: upload
+        uses: actions/upload-artifact@v7
+        with:
+          name: export-parity-report
+          path: |
+            render-lab-out/export-report.html
+            render-lab-out/summary-export.json
+            render-lab-out/summary-export.md
+            render-lab-out/scorecard-export.json
+            render-lab-out/baseline-export.proposed.json
+            render-lab-out/*/*/ours-*.png
+            render-lab-out/*/*/lo-*.png
+            render-lab-out/*/*/diff-export-*.png
+            render-lab-out/*/*/export.pdf
+            render-lab-out/*/*/export.log
+          retention-days: 14
+
+      - name: Sticky PR comment
+        if: always() && github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR: ${{ github.event.pull_request.number }}
+          REPORT: ${{ steps.upload.outputs.artifact-url }}
+        run: |
+          [ -f render-lab-out/summary-export.md ] || exit 0
+          { echo '<!-- export-parity-comment -->'; cat render-lab-out/summary-export.md
+            echo; echo "Side-by-side export report (LibreOffice PDF | our PDF | diff), with \`baseline-export.proposed.json\`: ${REPORT}"; } > export-comment.md
+          id=$(gh api "repos/${GITHUB_REPOSITORY}/issues/${PR}/comments" --paginate \
+               --jq '.[] | select(.body | startswith("<!-- export-parity-comment -->")) | .id' | head -1)
+          if [ -n "$id" ]; then
+            gh api -X PATCH "repos/${GITHUB_REPOSITORY}/issues/comments/${id}" -F body=@export-comment.md >/dev/null
+          else
+            gh pr comment "$PR" --body-file export-comment.md
+          fi
+
+      - name: Sync export-parity issues
+        if: always() && github.ref == 'refs/heads/main' && github.event_name != 'pull_request' && needs.export-lab.result == 'success' && hashFiles('render-lab-out/summary-export.json') != ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: >
+          python3 tools/render-lab/sync_issues.py render-lab-out/summary-export.json --mode export
+          --repo "${GITHUB_REPOSITORY}"
+          --run-url "${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+
   flatpak:
     name: Flatpak bundle (${{ matrix.app }})
     if: github.event_name == 'schedule' || inputs.vm
