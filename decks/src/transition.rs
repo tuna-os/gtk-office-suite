@@ -225,7 +225,7 @@ pub fn draw_transition(cr: &cairo::Context, state: &TransitionState, canvas_w: f
     let (ox, oy, slide_w, _slide_h) = crate::canvas::slide_frame(canvas_w, canvas_h, state.chrome);
     match state.chrome {
         crate::canvas::Chrome::Editor => cr.set_source_rgb(0.86, 0.86, 0.86),
-        crate::canvas::Chrome::Show | crate::canvas::Chrome::Preview => cr.set_source_rgb(0.0, 0.0, 0.0),
+        crate::canvas::Chrome::Show | crate::canvas::Chrome::Preview | crate::canvas::Chrome::Export => cr.set_source_rgb(0.0, 0.0, 0.0),
     }
     let _ = cr.paint();
     let scale_x = slide_w / 960.0;
