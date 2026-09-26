@@ -34,10 +34,16 @@ pub fn export_pdf_path(options: &glib::VariantDict) -> Result<Option<std::path::
         return Ok(None);
     }
     match options.lookup::<Vec<u8>>(EXPORT_PDF_FLAG) {
-        Ok(Some(bytes)) => String::from_utf8(bytes)
-            .map(std::path::PathBuf::from)
-            .map(Some)
-            .map_err(|_| "--export-pdf output path is not UTF-8".to_string()),
+        Ok(Some(mut bytes)) => {
+            // GLib hands a Filename over as a NUL-terminated byte string.
+            if bytes.last() == Some(&0) {
+                bytes.pop();
+            }
+            String::from_utf8(bytes)
+                .map(std::path::PathBuf::from)
+                .map(Some)
+                .map_err(|_| "--export-pdf output path is not UTF-8".to_string())
+        }
         Ok(None) => Err("--export-pdf needs an output path".to_string()),
         Err(_) => Err("--export-pdf option has an unexpected type".to_string()),
     }
@@ -266,5 +272,14 @@ mod export_pdf_tests {
     fn non_utf8_is_an_error_not_a_silent_skip() {
         let dict = dict_with(&[0xff, 0xfe]);
         assert!(export_pdf_path(&dict).is_err());
+    }
+
+    #[test]
+    fn the_filename_nul_terminator_is_stripped() {
+        let dict = dict_with(b"out.pdf\0");
+        assert_eq!(
+            export_pdf_path(&dict).unwrap(),
+            Some(std::path::PathBuf::from("out.pdf"))
+        );
     }
 }
