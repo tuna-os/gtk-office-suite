@@ -10,7 +10,7 @@ use letters_core::markdown;
 use letters_core::model::*;
 
 fn doc_with(paragraphs: Vec<Paragraph>) -> Document {
-    Document { paragraphs, footnotes: vec![], header: None, footer: None, page: None, base_font: Default::default(), heading_styles: Vec::new() }
+    Document { paragraphs, footnotes: vec![], header: None, footer: None, page: None, base_font: Default::default(), heading_styles: Vec::new(), comments: Vec::new() }
 }
 
 fn styled_run(text: &str, style: RunStyle) -> Run {

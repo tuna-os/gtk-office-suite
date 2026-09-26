@@ -54,6 +54,28 @@ pub struct RunStyle {
     /// Deleted text stays in the document, marked, until accepted.
     #[serde(default)]
     pub revision: Option<Revision>,
+    /// The comments on this text: ids of `Document::comments`, ascending.
+    /// Each comment is a mark of its own (`edit::MarkKey::Comment`), so
+    /// comments can overlap (`crate::comments`).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub comments: Vec<u32>,
+}
+
+/// A comment: its text, who wrote it and when. A thread's first comment is
+/// anchored to the text marked with its id; a reply names the comment it
+/// answers and has no text of its own (`crate::comments`).
+#[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub struct Comment {
+    pub id: u32,
+    pub author: String,
+    /// ISO 8601 UTC, to the second, as tracked changes are dated.
+    pub date: String,
+    pub text: String,
+    #[serde(default)]
+    pub resolved: bool,
+    /// The comment this one replies to.
+    #[serde(default)]
+    pub parent: Option<u32>,
 }
 
 /// What a tracked change did.
@@ -304,6 +326,9 @@ pub struct Document {
     /// application's own heading look (`layout::heading_scale`, bold).
     #[serde(default)]
     pub heading_styles: Vec<RunStyle>,
+    /// The comments, by ascending id (`crate::comments`).
+    #[serde(default)]
+    pub comments: Vec<Comment>,
 }
 
 /// A document's body font: a docx's docDefaults and Normal style, an ODT's
@@ -380,6 +405,7 @@ impl Document {
             page: None,
             base_font: BaseFont::default(),
             heading_styles: Vec::new(),
+            comments: Vec::new(),
         }
     }
 

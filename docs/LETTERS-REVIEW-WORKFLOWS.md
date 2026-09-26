@@ -43,13 +43,32 @@ are not tracked (a tracked deletion across a break keeps the break); the
 Draft editor is read-only while tracking, because its edits go into the
 buffer rather than through the model's tracked ops.
 
-### Comments
+### Comments are marks on the text too (changed 2026-09-26)
 
-`letters-core::ReviewState` holds comments. They use monotonic IDs and
-global character offsets (the same offset space as `GtkTextBuffer`) and sort
-by `(start, id)` for keyboard navigation. Buffer edits rebase them through
-`ReviewState::rebase_after_edit`. (Comments move to marks too, in their
-own change.)
+A comment thread is anchored to its text by a mark: `RunStyle::comments`
+holds the ids of the threads on a run, and each thread is a mark key of its
+own (`MarkKey::Comment(id)`), so comments overlap without touching each
+other, as Peritext's do. The comments themselves (author, date, text,
+resolved, and the comment a reply answers) are `Document::comments`,
+changed by `Op::SetComment`, whose inverse is the comment as it was
+(`letters_core::comments`). Adding, replying, resolving and deleting are
+each one undo step. This replaces `ReviewState::comments` (a sidecar list of
+global offsets rebased after every edit), for the reasons tracked changes
+moved: an anchor moves with its text through any edit, and every change is
+an op with an exact inverse.
+
+Text typed strictly inside a commented stretch is in the comment; text typed
+at either edge is not. A thread whose text is all deleted keeps its comments
+(an orphan, listed as "The text was deleted") until it is deleted; it saves
+as a comment with an empty range at the start of the document, which reopens
+as the same orphan. Replies share their thread's anchor and are not marked.
+
+In the window: `app.add-comment` (Ctrl+Alt+M) comments on the selection or
+the word at the caret; the sidebar's Comments view (Ctrl+Shift+Alt+A) lists
+the threads in document order with a reply field, Resolve (or Reopen) and
+Delete; the page tints an open thread's text in its author's colour, with a
+mark in the right margin that opens the thread. Print and PDF show neither,
+as LibreOffice's do not.
 
 The TOC is regenerated, never incrementally patched: explicit heading levels
 win over named styles, named `Title`/`Subtitle` map to levels 1/2, and named
@@ -65,7 +84,7 @@ direction helper intentionally does not classify numbers or punctuation.
 
 | Feature | Native model | DOCX/ODT status | Required behavior |
 | --- | --- | --- | --- |
-| Comments | `ReviewState::comments` | warn-until-comment parts are mapped | Never silently drop; preserve as opaque package parts where possible |
+| Comments | `RunStyle::comments` marks and `Document::comments` (`letters_core::comments`) | mapped: DOCX comments part with `w:commentRangeStart`/`End` and references, replies and resolved in `commentsExtended`; ODT `office:annotation` ranges with `loext:parent-name` and `loext:resolved`; LibreOffice oracle in both directions. LibreOffice 24.2 writes no reply parent to .docx for a document it read from .odt, so there a reply opens as a comment of its own on the same text | Kept through save and reopen; Markdown, HTML and text warn and save the text |
 | Tracked insert/delete | `RunStyle::revision` marks (`letters_core::track`) | mapped: DOCX `w:ins`/`w:del` (nested for a deleted insertion), ODT change regions; LibreOffice oracle in both directions | Kept through save and reopen; Markdown, HTML and text warn and save the text |
 | TOC | deterministic derived entries | headings are admitted; field refresh is adapter-owned | Rebuild from headings/styles on reopen and print |
 | Bidi paragraph direction | shared base-direction helper | warn if a format cannot encode it | Keep text and direction evidence; never infer from alignment alone |

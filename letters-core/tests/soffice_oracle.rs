@@ -1077,6 +1077,74 @@ fn tracked_changes_survive_lo_passes() {
     }
 }
 
+/// Comments survive LibreOffice: our .docx and .odt, opened and saved by
+/// Writer in either format, reopen with the same threads (anchor text,
+/// comments, replies, resolved) and the same marks on the text. Ids are
+/// the reader's own, so threads compare without them.
+#[test]
+fn comments_survive_lo_passes() {
+    let Some(bin) = require_or_skip() else { return };
+    let d = letters_core::comments::sample_document();
+    let want = threads_of(&d);
+    let dir = tempfile::tempdir().unwrap();
+    for (from, to) in [("docx", "docx"), ("odt", "odt"), ("docx", "odt"), ("odt", "docx")] {
+        let work = dir.path().join(format!("{from}-{to}"));
+        let out = work.join("out");
+        std::fs::create_dir_all(&out).unwrap();
+        let staged = out.join(format!("commented.{from}"));
+        match from {
+            "docx" => docx::write(&d, &staged).expect("write docx"),
+            _ => letters_core::odt::write(&d, &staged).expect("write odt"),
+        }
+        let filter = if to == "docx" { "docx:MS Word 2007 XML" } else { "odt" };
+        let _ = soffice_convert(bin, &staged, filter);
+        let converted = out.join(format!("commented.{to}"));
+        assert!(converted.exists(), "soffice did not convert {from} to {to}");
+        let rt = match to {
+            "docx" => docx::read(converted.to_str().unwrap()).expect("read converted docx"),
+            _ => letters_core::odt::read(converted.to_str().unwrap()).expect("read converted odt"),
+        };
+        // LibreOffice 24.2 keeps a reply's thread from .odt (odt -> odt)
+        // but does not write it to .docx for a document it read from .odt
+        // (no w15:paraIdParent): there the reply is a comment of its own on
+        // the same text. docx -> docx keeps it.
+        let want = if (from, to) == ("odt", "docx") { flattened(&want) } else { want.clone() };
+        let mut got = threads_of(&rt);
+        if (from, to) == ("odt", "docx") {
+            got.sort();
+        }
+        assert_eq!(got, want, "{from} -> LibreOffice -> {to} changed the comments: {:?}", rt.comments);
+    }
+}
+
+/// `threads` with every reply a thread of its own on its parent's text.
+fn flattened(threads: &[ThreadView]) -> Vec<ThreadView> {
+    let mut out: Vec<ThreadView> = threads
+        .iter()
+        .flat_map(|(anchor, c, replies)| {
+            std::iter::once((anchor.clone(), c.clone(), Vec::new())).chain(replies.iter().map(|(a, d, t)| (anchor.clone(), (a.clone(), d.clone(), t.clone(), false), Vec::new())))
+        })
+        .collect();
+    out.sort();
+    out
+}
+
+/// Comment threads as (anchor, (author, date, text, resolved), replies).
+type ThreadView = (Option<(usize, usize, String)>, (String, String, String, bool), Vec<(String, String, String)>);
+
+fn threads_of(doc: &Document) -> Vec<ThreadView> {
+    letters_core::comments::threads(doc)
+        .into_iter()
+        .map(|t| {
+            (
+                t.anchor.map(|a| (a.start, a.end, a.text)),
+                (t.comment.author, t.comment.date, t.comment.text, t.comment.resolved),
+                t.replies.into_iter().map(|r| (r.author, r.date, r.text)).collect(),
+            )
+        })
+        .collect()
+}
+
 /// The chips in `doc`, as (kind, value, label).
 fn chips_of(doc: &Document) -> Vec<(letters_core::chips::ChipKind, String, String)> {
     doc.paragraphs

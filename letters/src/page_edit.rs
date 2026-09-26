@@ -44,6 +44,12 @@ pub fn make_editable(view: &PageView, buf: &gtk::TextBuffer) {
         let (v, anchor) = (view.clone(), press_anchor.clone());
         click.connect_pressed(move |gesture, n_press, x, y| {
             v.grab_focus();
+            // A comment's margin mark: to its text, and its thread.
+            if let (1, Some(buf), Some(at)) = (n_press, v.buffer(), v.comment_at(x, y)) {
+                buf.place_cursor(&buf.iter_at_offset(at as i32));
+                crate::comments_ui::show(&v);
+                return;
+            }
             let (Some(buf), Some(off)) = (v.buffer(), v.buffer_offset_at(x, y)) else { return };
             let iter = buf.iter_at_offset(off as i32);
             let extend = gesture.current_event_state().contains(gdk::ModifierType::SHIFT_MASK);

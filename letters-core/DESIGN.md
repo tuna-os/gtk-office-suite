@@ -43,12 +43,13 @@ model, so the GTK bridge is offset-for-offset with no translation layer.
 
 ## Review state
 
-`review::ReviewState` is a serializable sidecar to the canonical document.
-Comments and revisions have monotonic IDs, global character ranges, author
-metadata, and deterministic comment navigation. Insert revisions cover their
-visible text; delete revisions retain the removed text at a zero-width anchor.
-Accepting removes a pending revision while rejecting applies the inverse edit
-to `Document`. Callers must call `rebase_after_edit()` for every buffer edit.
+Tracked changes and comments are part of `Document`, as marks on the text
+they cover: `RunStyle::revision` (`track`) and `RunStyle::comments`
+(`comments`, one mark key per thread, so threads overlap), with the comments
+themselves in `Document::comments`. Every review step is an op with an exact
+inverse, so it undoes (and would replicate) like any edit; nothing needs
+rebasing after an edit. See docs/LETTERS-REVIEW-WORKFLOWS.md for why the
+first design, a `ReviewState` sidecar of offsets, was replaced.
 
 `table_of_contents()` derives entries in paragraph order from heading levels,
 `Title`/`Subtitle`, and `Heading 1` through `Heading 6` named styles. The
@@ -56,9 +57,8 @@ to `Document`. Callers must call `rebase_after_edit()` for every buffer edit.
 an explicit fallback, so caret, selection, list-marker, and print layers can
 share the same paragraph direction decision.
 
-Review state is intentionally separate from `Document` until DOCX/ODT
-revision/comment parts are fully mapped. This prevents a save from silently
-pretending that a pending review annotation was preserved.
+.docx and .odt keep both; the other formats warn on save
+(`save::compatibility_report`) rather than drop them silently.
 
 ## I/O layers (separate modules, model stays format-agnostic)
 

@@ -67,6 +67,7 @@ pub fn build(
     views.add_titled_with_icon(&stack, Some("outline"), "Outline", "view-list-symbolic");
     views.add_titled_with_icon(&crate::thumbnails::build(tv), Some("pages"), "Pages", "view-paged-symbolic");
     views.add_titled_with_icon(&crate::review_ui::changes_view(tv), Some("changes"), "Changes", "document-edit-symbolic");
+    views.add_titled_with_icon(&crate::comments_ui::comments_view(tv), Some("comments"), "Comments", "chat-bubble-text-symbolic");
     let switcher = adw::ViewSwitcher::builder().stack(&views).policy(adw::ViewSwitcherPolicy::Wide).build();
     let sidebar = adw::ToolbarView::new();
     let title = adw::HeaderBar::builder()
@@ -102,6 +103,7 @@ pub fn build(
         ("toggle-outline", "outline", "<Primary><Alt>o", "Show Outline"),
         ("toggle-pages", "pages", "<Primary><Alt>p", "Show Page Thumbnails"),
         ("toggle-changes", "changes", "<Primary><Alt>r", "Show Tracked Changes"),
+        ("toggle-comments", "comments", "<Primary><Shift><Alt>a", "Show Comments"),
     ] {
         let a = gtk::gio::SimpleAction::new(action, None);
         let (show, views) = (show.clone(), views.clone());
@@ -113,6 +115,17 @@ pub fn build(
         app.add_action(&a);
         app.set_accels_for_action(&format!("app.{action}"), &[accel]);
         suite_common::actions::register_labels(&[(&format!("app.{action}"), &suite_common::i18n(label))]);
+    }
+
+    {
+        // Open (never close) the Comments view: a comment's margin mark.
+        let a = gtk::gio::SimpleAction::new("show-comments", None);
+        let (show, views) = (show.clone(), views.clone());
+        a.connect_activate(move |_, _| {
+            views.set_visible_child_name("comments");
+            show.set_active(true);
+        });
+        app.add_action(&a);
     }
 
     let entries: Rc<RefCell<Entries>> = Rc::default();

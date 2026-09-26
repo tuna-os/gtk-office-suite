@@ -358,6 +358,27 @@ pub struct TextPos {
 /// A piece of a selection: (page, x, top, width, height) in points.
 pub type SelectionRect = (usize, f64, f64, f64, f64);
 
+/// A comment's margin mark: width and height in points.
+pub const COMMENT_MARK_PT: (f64, f64) = (12.0, 10.0);
+
+/// An open comment thread on the pages, as a view shows it (print and PDF
+/// do not, as LibreOffice's do not): the rectangles its text covers, and
+/// a spot in the right margin beside its first line.
+#[derive(Clone, Debug, PartialEq)]
+pub struct CommentMark {
+    pub id: u32,
+    pub author: String,
+    /// Comments in the thread, the first included.
+    pub count: usize,
+    /// Where its text starts.
+    pub from: TextPos,
+    pub rects: Vec<SelectionRect>,
+    pub page: usize,
+    /// The margin spot's left and top, in points on `page`.
+    pub x_pt: f64,
+    pub y_pt: f64,
+}
+
 /// A caret's box, in points on page `page`.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Caret {
@@ -656,6 +677,25 @@ impl Typeset {
         out
     }
 
+    /// The open (unresolved) comment threads with text, in document order
+    /// (`crate::comments`). Spots on one line sit side by side.
+    pub fn comment_marks(&self) -> Vec<CommentMark> {
+        let mut out: Vec<CommentMark> = Vec::new();
+        let pos = |at: usize| crate::edit::locate(&self.doc, at).map(|(para, offset)| TextPos { para, offset });
+        for t in crate::comments::threads(&self.doc) {
+            let Some(a) = t.anchor.filter(|_| !t.comment.resolved) else { continue };
+            let (Some(from), Some(to)) = (pos(a.start), pos(a.end)) else { continue };
+            let rects = self.selection_rects(from, to);
+            let Some(&(page, _, top, _, _)) = rects.first() else { continue };
+            let Some(p) = self.tree.pages.get(page) else { continue };
+            let mut x = (p.width_pt - p.geometry.margin_right_pt + 8.0).min(p.width_pt - 20.0);
+            // Beside the spots already on this line.
+            x += 16.0 * out.iter().filter(|m| m.page == page && (m.y_pt - top).abs() < 1.0).count() as f64;
+            out.push(CommentMark { id: t.comment.id, author: t.comment.author, count: 1 + t.replies.len(), from, rects, page, x_pt: x, y_pt: top });
+        }
+        out
+    }
+
     /// Length of paragraph `para`'s layout text, in chars.
     pub fn layout_len(&self, para: usize) -> usize {
         self.doc.paragraphs.get(para).map_or(0, |p| super::layout_text(&p.runs).chars().count())
@@ -793,6 +833,24 @@ mod tests {
         let mut d = Document::new();
         d.paragraphs = (0..n).map(|_| Paragraph { style: Default::default(), runs: vec![Run::plain(text)] }).collect();
         d
+    }
+
+    /// Open threads with text are marked where their text is, with a spot
+    /// in the right margin; a resolved one is not.
+    #[test]
+    fn comment_marks_cover_open_threads_beside_their_text() {
+        let d = crate::comments::sample_document();
+        let t = Typeset::new(d, LayoutOptions::default());
+        let marks = t.comment_marks();
+        assert_eq!(marks.iter().map(|m| (m.id, m.count)).collect::<Vec<_>>(), [(1, 2), (2, 1)], "comment 4 is resolved");
+        let page = &t.tree().pages[0];
+        let body_right = page.width_pt - page.geometry.margin_right_pt;
+        for m in &marks {
+            assert!(m.x_pt >= body_right && m.x_pt + 12.0 <= page.width_pt, "in the margin: {m:?}");
+            assert!(m.rects.iter().all(|r| r.0 == 0 && r.1 + r.3 <= body_right + 0.5));
+        }
+        assert_eq!(marks[0].y_pt, marks[1].y_pt, "both on the first line");
+        assert!(marks[1].x_pt > marks[0].x_pt, "side by side");
     }
 
     #[test]

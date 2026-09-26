@@ -304,9 +304,20 @@ impl LiveModel {
     /// re-rendered; a change to a table or an inline object re-renders the
     /// whole buffer. The caret goes to the end of the change.
     fn project(&mut self, buf: &gtk::TextBuffer, old: &Document) {
+        // Comments live beside the text: keep the buffer's copy current.
+        let comments_changed = old.comments != self.doc.comments;
+        if comments_changed {
+            crate::bridge::set_comments(buf, &self.doc.comments);
+        }
         let (pa, pb) = (&old.paragraphs, &self.doc.paragraphs);
         let head = pa.iter().zip(pb).take_while(|(x, y)| x == y).count();
         if head == pa.len() && head == pb.len() {
+            if comments_changed {
+                // No text changed, but the document did: the views follow
+                // the buffer's "changed".
+                buf.set_modified(true);
+                buf.emit_by_name::<()>("changed", &[]);
+            }
             return;
         }
         let max_tail = pa.len().min(pb.len()) - head;
@@ -414,6 +425,33 @@ impl LiveModel {
         self.resolve(buf);
         let ops = letters_core::track::resolve_all(&self.doc, accept);
         !ops.is_empty() && self.apply_ops(buf, &ops, false)
+    }
+
+    /// Apply the comment ops `f` makes from the current document, as one
+    /// undo step (`letters_core::comments`). `false` if there were none.
+    pub fn edit_comments(&mut self, buf: &gtk::TextBuffer, f: impl FnOnce(&Document) -> Vec<Op>) -> bool {
+        self.resolve(buf);
+        crate::bridge::read_sidecars(buf, &mut self.doc);
+        let ops = f(&self.doc);
+        !ops.is_empty() && self.apply_ops(buf, &ops, false)
+    }
+
+    /// The comment threads (`letters_core::comments::threads`), each with
+    /// its text's buffer range (None when the text was deleted).
+    pub fn comment_threads(&mut self, buf: &gtk::TextBuffer) -> Vec<(letters_core::comments::Thread, Option<(usize, usize)>)> {
+        self.resolve(buf);
+        crate::bridge::read_sidecars(buf, &mut self.doc);
+        let at = |doc: &Document, starts: &[usize], seq: usize| {
+            let (p, off) = edit::locate(doc, seq)?;
+            Some(crate::bridge::buffer_offset(&doc.paragraphs[p], *starts.get(p)?, off))
+        };
+        letters_core::comments::threads(&self.doc)
+            .into_iter()
+            .map(|t| {
+                let range = t.anchor.as_ref().and_then(|a| Some((at(&self.doc, &self.starts, a.start)?, at(&self.doc, &self.starts, a.end)?)));
+                (t, range)
+            })
+            .collect()
     }
 
     /// The tracked changes, each with the buffer offset where it starts.

@@ -45,6 +45,11 @@ pub enum MarkKey {
     /// A tracked change (`RunStyle::revision`). Unlike the others it also
     /// marks inline objects: a deleted image is tracked like deleted text.
     Revision,
+    /// Comment `id` (`RunStyle::comments`): each comment is a key of its
+    /// own, so comments overlap without touching each other (Peritext's
+    /// comments). Marks objects too. Not in `ALL`: there is one per
+    /// comment.
+    Comment(u32),
 }
 
 /// What happens to a mark when text is inserted at its edge.
@@ -82,6 +87,9 @@ impl MarkKey {
             // Typing next to someone's tracked change is not part of it:
             // a tracked edit marks its own text (`crate::track`).
             MarkKey::Link | MarkKey::Code | MarkKey::Html | MarkKey::Revision => Expand::None,
+            // Typing at a comment's edge is not commented; typing inside
+            // it is (`typing_style`).
+            MarkKey::Comment(_) => Expand::None,
             _ => Expand::After,
         }
     }
@@ -102,7 +110,23 @@ impl MarkKey {
             MarkKey::VertAlign => to.vert_align = from.vert_align,
             MarkKey::Html => to.html = from.html,
             MarkKey::Revision => to.revision.clone_from(&from.revision),
+            MarkKey::Comment(id) => {
+                let on = from.comments.contains(&id);
+                match to.comments.binary_search(&id) {
+                    Ok(i) if !on => {
+                        to.comments.remove(i);
+                    }
+                    Err(i) if on => to.comments.insert(i, id),
+                    _ => {}
+                }
+            }
         }
+    }
+
+    /// Whether this key marks inline objects too (the others leave an
+    /// object's own style alone).
+    pub fn marks_objects(self) -> bool {
+        matches!(self, MarkKey::Revision | MarkKey::Comment(_))
     }
 
     /// Whether `a` and `b` agree on this key.
@@ -119,6 +143,7 @@ fn marks_only(style: &RunStyle) -> RunStyle {
     for key in MarkKey::ALL {
         key.copy(style, &mut out);
     }
+    out.comments.clone_from(&style.comments);
     out
 }
 
@@ -146,6 +171,10 @@ pub enum Op {
     /// the list of blocks, not of the text sequence. `insert` may carry
     /// table cells; the document keeps at least one paragraph.
     SetParagraphs { para: usize, remove: usize, insert: Vec<Paragraph> },
+    /// Set comment `id`'s body (`Document::comments`) to `comment`, or
+    /// remove it with `None`. Its anchor is marks on the text
+    /// (`MarkKey::Comment`), set by `Mark` ops of their own.
+    SetComment { id: u32, comment: Option<crate::model::Comment> },
 }
 
 /// Why an op could not be applied. The document is unchanged.
@@ -253,6 +282,11 @@ pub fn typing_style(doc: &Document, at: usize) -> RunStyle {
             key.copy(&source, &mut out);
         }
     }
+    // A comment covers text typed inside it: on both sides of `at` (an
+    // object counts), never at its edge.
+    if let (Some(before), Some(after)) = (head.last(), tail.first()) {
+        out.comments = before.style.comments.iter().copied().filter(|id| after.style.comments.contains(id)).collect();
+    }
     out
 }
 
@@ -290,6 +324,7 @@ pub fn apply(doc: &mut Document, op: &Op) -> Result<Vec<Op>, EditError> {
             let removed: Vec<Paragraph> = doc.paragraphs.splice(para..para + remove, insert.iter().cloned()).collect();
             Ok(vec![Op::SetParagraphs { para, remove: insert.len(), insert: removed }])
         }
+        Op::SetComment { id, comment } => Ok(vec![Op::SetComment { id: *id, comment: set_comment(doc, *id, comment.clone()) }]),
         Op::SetParaStyle { at, style } => {
             let (pi, _) = locate(doc, *at).ok_or(EditError::OutOfRange)?;
             let para = &mut doc.paragraphs[pi];
@@ -299,6 +334,21 @@ pub fn apply(doc: &mut Document, op: &Op) -> Result<Vec<Op>, EditError> {
             para.style = new;
             Ok(vec![Op::SetParaStyle { at: *at, style: old }])
         }
+    }
+}
+
+/// Set (or with `None` remove) comment `id`, keeping the comments in id
+/// order; returns what was there.
+fn set_comment(doc: &mut Document, id: u32, comment: Option<crate::model::Comment>) -> Option<crate::model::Comment> {
+    let comment = comment.map(|c| crate::model::Comment { id, ..c });
+    match (doc.comments.binary_search_by_key(&id, |c| c.id), comment) {
+        (Ok(i), Some(c)) => Some(std::mem::replace(&mut doc.comments[i], c)),
+        (Ok(i), None) => Some(doc.comments.remove(i)),
+        (Err(i), Some(c)) => {
+            doc.comments.insert(i, c);
+            None
+        }
+        (Err(_), None) => None,
     }
 }
 
@@ -368,7 +418,7 @@ fn mark(doc: &mut Document, start: usize, end: usize, key: MarkKey, value: &RunS
         let to = if i == ep { eo } else { seq_len(&p.runs) };
         let (head, rest) = split_runs(&p.runs, from);
         let (mut mid, tail) = split_runs(&rest, to - from);
-        for r in mid.iter_mut().filter(|r| !is_object(r) || key == MarkKey::Revision) {
+        for r in mid.iter_mut().filter(|r| !is_object(r) || key.marks_objects()) {
             key.copy(value, &mut r.style);
         }
         let mut runs = head;
@@ -386,7 +436,7 @@ fn mark(doc: &mut Document, start: usize, end: usize, key: MarkKey, value: &RunS
         }
         for r in &p.runs {
             let n = run_len(r);
-            if (!is_object(r) || key == MarkKey::Revision) && !key.same(&r.style, value) {
+            if (!is_object(r) || key.marks_objects()) && !key.same(&r.style, value) {
                 undo.push(Op::Mark { start: pos, end: pos + n, key, value: marks_only(&r.style) });
             }
             pos += n;

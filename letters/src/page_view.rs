@@ -185,6 +185,11 @@ mod imp {
                 // is document content, so a render-lab capture leaves them
                 // out, as it hides the Draft editor's caret.
                 let chrome = !suite_common::render_dump::active();
+                // Open comments: their text tinted, a mark in the margin.
+                // Not document content either (print and PDF leave them
+                // out, as LibreOffice's do).
+                let marks = if chrome { typeset.comment_marks() } else { Vec::new() };
+                draw_comment_tints(&cr, &marks, index);
                 if chrome {
                     cr.set_source_rgba(0.21, 0.52, 0.89, 0.30);
                     for (page, x, top, w, h) in &selection {
@@ -195,6 +200,7 @@ mod imp {
                     let _ = cr.fill();
                 }
                 typeset.draw_page(&cr, index);
+                draw_comment_marks(&cr, &marks, index);
                 let visible = self.caret_on.get() || self.blink.borrow().is_none();
                 if let (true, Some(c)) = (chrome && visible && obj.has_focus() && selection.is_empty(), caret) {
                     if c.page == index {
@@ -208,6 +214,55 @@ mod imp {
                 snapshot.append_node(gsk::TransformNode::new(&node, Some(&to_page)));
             }
         }
+    }
+}
+
+/// The author's colour of a comment mark, as (r, g, b) in 0..1.
+fn mark_color(m: &letters_core::layout::pango::CommentMark) -> (f64, f64, f64) {
+    let (r, g, b) = letters_core::track::author_color(&m.author);
+    (f64::from(r) / 65535.0, f64::from(g) / 65535.0, f64::from(b) / 65535.0)
+}
+
+/// Tint the text of the comments on page `index`, in points.
+fn draw_comment_tints(cr: &gtk::cairo::Context, marks: &[letters_core::layout::pango::CommentMark], index: usize) {
+    for m in marks {
+        let (r, g, b) = mark_color(m);
+        cr.set_source_rgba(r, g, b, 0.16);
+        for (page, x, top, w, h) in &m.rects {
+            if *page == index {
+                cr.rectangle(*x, *top, *w, *h);
+            }
+        }
+        let _ = cr.fill();
+    }
+}
+
+/// A speech bubble in the margin beside each comment on page `index`; a
+/// thread with replies has a second one behind it.
+fn draw_comment_marks(cr: &gtk::cairo::Context, marks: &[letters_core::layout::pango::CommentMark], index: usize) {
+    let (w, h) = letters_core::layout::pango::COMMENT_MARK_PT;
+    for m in marks.iter().filter(|m| m.page == index) {
+        let (r, g, b) = mark_color(m);
+        let bubble = |x: f64, y: f64| {
+            cr.new_sub_path();
+            cr.arc(x + w - 2.0, y + 2.0, 2.0, -std::f64::consts::FRAC_PI_2, 0.0);
+            cr.arc(x + w - 2.0, y + h - 4.0, 2.0, 0.0, std::f64::consts::FRAC_PI_2);
+            cr.line_to(x + 5.0, y + h - 2.0);
+            cr.line_to(x + 2.0, y + h);
+            cr.line_to(x + 3.0, y + h - 2.0);
+            cr.arc(x + 2.0, y + h - 4.0, 2.0, std::f64::consts::FRAC_PI_2, std::f64::consts::PI);
+            cr.arc(x + 2.0, y + 2.0, 2.0, std::f64::consts::PI, 1.5 * std::f64::consts::PI);
+            cr.close_path();
+        };
+        let (x, y) = (m.x_pt, m.y_pt + 1.0);
+        if m.count > 1 {
+            cr.set_source_rgba(r, g, b, 0.45);
+            bubble(x + 2.0, y - 2.0);
+            let _ = cr.fill();
+        }
+        cr.set_source_rgb(r, g, b);
+        bubble(x, y);
+        let _ = cr.fill();
     }
 }
 
@@ -387,6 +442,20 @@ impl PageView {
         let (page, xp, yp) = self.page_point(x, y)?;
         let pos = typeset.hit_test(page, xp, yp)?;
         self.buffer_off(typeset, pos)
+    }
+
+    /// The buffer offset where the comment whose margin mark is under
+    /// widget point (`x`, `y`) starts, if one is.
+    pub fn comment_at(&self, x: f64, y: f64) -> Option<usize> {
+        let typeset = self.imp().typeset.borrow();
+        let typeset = typeset.as_ref()?;
+        let (page, xp, yp) = self.page_point(x, y)?;
+        let (w, h) = letters_core::layout::pango::COMMENT_MARK_PT;
+        let m = typeset
+            .comment_marks()
+            .into_iter()
+            .find(|m| m.page == page && (m.x_pt - 2.0..=m.x_pt + w + 4.0).contains(&xp) && (m.y_pt - 2.0..=m.y_pt + h + 2.0).contains(&yp))?;
+        self.buffer_off(typeset, m.from)
     }
 
     /// The caret box for buffer offset `off`, in widget pixels: (x, y, h).
