@@ -160,16 +160,16 @@
     "B": "green"
   },
   "tables/chart-line": {
-    "A": "amber",
-    "B": "amber"
+    "A": "green",
+    "B": "green"
   },
   "tables/chart-pie": {
     "A": "amber",
     "B": "amber"
   },
   "tables/chart-scatter": {
-    "A": "red",
-    "B": "red"
+    "A": "amber",
+    "B": "amber"
   },
   "tables/col-row-size": {
     "A": "green",

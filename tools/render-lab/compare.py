@@ -261,6 +261,110 @@ def color_presence(ref, ours):
 
 
 # ── OCR ───────────────────────────────────────────────────────────────────
+# A rule is a run of ink at least this long (px at 96 DPI) and at most
+# RULE_THICK thick. No glyph of spreadsheet-sized text has a stroke that
+# long, so what it removes is gridlines, borders and chart axes.
+RULE_MIN = 24
+RULE_THICK = 4
+
+
+def run_lengths(mask):
+    """For each True pixel of `mask`, the length of the horizontal run of
+    True it is part of (0 elsewhere)."""
+    out = np.zeros(mask.shape, dtype=np.int32)
+    for r in range(mask.shape[0]):
+        row = mask[r]
+        if not row.any():
+            continue
+        edges = np.flatnonzero(np.diff(np.concatenate(([0], row.astype(np.int8), [0]))))
+        for a, b in zip(edges[::2], edges[1::2]):
+            out[r, a:b] = b - a
+    return out
+
+
+def erase_rules(g, rgb=None):
+    """`g` (greyscale, uint8 array) with its thin straight lines (grid-,
+    border- and axis lines) painted white.
+
+    Tesseract reads a line that runs past or through short text as part of
+    it: in a chart, LibreOffice's y-axis labels touch the first vertical
+    gridline and came back as "gs", "al", "tot" instead of 9, 8, 7, and our
+    own as "ee" and "40", so the word score measured where gridlines met
+    digits, not the digits (render lab tables/chart-scatter).
+
+    A pixel is a rule's when the ink it is in runs RULE_MIN or more one way
+    and RULE_THICK or less the other. Lengths are counted through crossing
+    lines, so a gridline between two others is still one long run; a
+    filled area (a cell's fill, a bar, a pie slice) is thick both ways and
+    stays, with any text on it."""
+    ink = g < 200
+    across = run_lengths(ink)
+    down = run_lengths(ink.T).T
+    flat = (across >= RULE_MIN) & (down <= RULE_THICK)
+    tall = (down >= RULE_MIN) & (across <= RULE_THICK)
+    # Where two rules cross, the ink is long both ways, like a fill. A
+    # crossing is what joins them: within RULE_THICK of it, the same row
+    # goes on as a flat rule and the same column as a tall one. A fill's
+    # rows and columns are thick, so its edges and corners never are.
+    near_flat = np.zeros_like(flat)
+    near_tall = np.zeros_like(tall)
+    for d in range(1, RULE_THICK + 1):
+        near_flat[:, d:] |= flat[:, :-d]
+        near_flat[:, :-d] |= flat[:, d:]
+        near_tall[d:, :] |= tall[:-d, :]
+        near_tall[:-d, :] |= tall[d:, :]
+    cross = (across >= RULE_MIN) & (down >= RULE_MIN) & near_flat & near_tall
+    rule = flat | tall | cross
+    out = g.copy()
+    out[rule] = 255
+    if rgb is not None:
+        erase_keys(out, ink & ~rule, rgb)
+    return out
+
+
+def erase_keys(out, ink, rgb):
+    """Paint white, in `out`, each solid blob of `ink` KEY_MIN to KEY_MAX px
+    across: a chart's legend keys and data-point markers. Tesseract reads
+    one beside a word as letters ("mqqi" for a key and "Q1", "oo" for a
+    marker), which scores where keys sit, not what the text says. Only a
+    coloured (saturated), square or round, solid blob counts: text is
+    black or grey, or thin-stroked if coloured, and never that solid."""
+    rgbf = rgb.astype(np.float32)
+    saturation = (rgbf.max(axis=2) - rgbf.min(axis=2)) / 255.0
+    h, w = ink.shape
+    seen = np.zeros_like(ink)
+    for y, x in zip(*np.nonzero(ink)):
+        if seen[y, x]:
+            continue
+        stack, pixels = [(y, x)], []
+        seen[y, x] = True
+        while stack:
+            cy, cx = stack.pop()
+            pixels.append((cy, cx))
+            if len(pixels) > KEY_MAX * KEY_MAX:
+                break
+            for ny, nx in ((cy + 1, cx), (cy - 1, cx), (cy, cx + 1), (cy, cx - 1)):
+                if 0 <= ny < h and 0 <= nx < w and ink[ny, nx] and not seen[ny, nx]:
+                    seen[ny, nx] = True
+                    stack.append((ny, nx))
+        if stack:
+            continue  # bigger than a key: a fill, a bar, a slice
+        ys = [p[0] for p in pixels]
+        xs = [p[1] for p in pixels]
+        bh, bw = max(ys) - min(ys) + 1, max(xs) - min(xs) + 1
+        square = 0.8 <= bw / bh <= 1.25
+        coloured = np.mean([saturation[p] for p in pixels]) > 0.25
+        if KEY_MIN <= bh <= KEY_MAX and KEY_MIN <= bw <= KEY_MAX and square and coloured and len(pixels) >= 0.7 * bh * bw:
+            for py, px in pixels:
+                out[py, px] = 255
+
+
+# Legend keys are 8 px squares; markers 7-10 px circles (a circle fills
+# 79% of its box).
+KEY_MIN = 5
+KEY_MAX = 14
+
+
 def ocr_words(img, sparse=False):
     """OCR word boxes. `sparse` is for Tables' grids of short values, where
     page-layout analysis (psm 3) drops most of them. They are read as one
@@ -280,6 +384,8 @@ def ocr_words(img, sparse=False):
     k = 4 if sparse else 2
     with tempfile.NamedTemporaryFile(suffix=".png") as tmp:
         g = img.convert("L")
+        if sparse:
+            g = Image.fromarray(erase_rules(np.asarray(g), np.asarray(img.convert("RGB"))))
         g.resize((g.width * k, g.height * k), Image.LANCZOS).save(tmp.name)
         psm = "6" if sparse else "3"
         r = subprocess.run(["tesseract", tmp.name, "-", "--psm", psm, "tsv"], capture_output=True, text=True)
