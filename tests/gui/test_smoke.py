@@ -4274,9 +4274,9 @@ class DecksChartSmoke(BaseGUITestCase):
         return charts[0] if charts else None
 
     def test_the_chart_tab_edits_type_and_data_one_step_each(self):
-        """The inspector's Chart tab: a chart type is a toggle, Add Value
-        adds a point, and a value typed into the data sheet is saved; each
-        is one undo step."""
+        """The inspector's Chart tab: a chart type is a toggle, a value
+        typed into the data sheet is saved, and Add Value adds a point;
+        each is one undo step."""
         import zipfile
         from dogtail import rawinput
         aid = "org.tunaos.decks"
@@ -4296,16 +4296,6 @@ class DecksChartSmoke(BaseGUITestCase):
         line.do_action(0)
         self.wait_until(lambda: self._chart(aid), lambda c: c == "Line chart: Sales, 4 values", interval=0.5,
                         description="the chart to become a line chart")
-        self.app.findChild(lambda n: n.roleName == "push button" and n.name == "Add Value").do_action(0)
-        self.wait_until(lambda: self._chart(aid), lambda c: c == "Line chart: Sales, 5 values", interval=0.5,
-                        description="a fifth value")
-        # One undo per edit: the added value, then the type.
-        self.gapplication_action(aid, "undo")
-        self.wait_until(lambda: self._chart(aid), lambda c: c == "Line chart: Sales, 4 values", interval=0.5,
-                        description="undo to take the added value back")
-        self.gapplication_action(aid, "undo")
-        self.wait_until(lambda: self._chart(aid), lambda c: c == "Bar chart: Sales, 4 values", interval=0.5,
-                        description="a second undo to put the type back")
         # Type a value into the data sheet and commit it with Enter.
         value = self.wait_until(lambda: self.app.findChild(lambda n: n.name == "Value 1" and n.roleName in ("text", "entry") and n.showing,
                                                            retry=False, requireResult=False),
@@ -4315,16 +4305,33 @@ class DecksChartSmoke(BaseGUITestCase):
         rawinput.keyCombo("<Control>a")
         rawinput.typeText("12.5")
         rawinput.pressKey("Return")
-        self.gapplication_action(aid, "save")
 
-        def saved_values():
+        def saved_chart():
             try:
                 with zipfile.ZipFile(self._doc) as z:
                     return z.read("ppt/charts/chart1.xml").decode()
             except (OSError, KeyError, zipfile.BadZipFile):
                 return ""
-        self.wait_until(saved_values, lambda x: "<c:barChart>" in x and "<c:v>12.5</c:v>" in x, interval=0.5,
-                        description="the typed value in the saved chart")
+
+        def save_and_see(check, description):
+            self.gapplication_action(aid, "save")
+            self.wait_until(saved_chart, check, interval=0.5, description=description)
+
+        save_and_see(lambda x: "<c:lineChart>" in x and "<c:v>12.5</c:v>" in x, "the typed value in the saved line chart")
+        self.app.findChild(lambda n: n.roleName == "push button" and n.name == "Add Value").do_action(0)
+        self.wait_until(lambda: self._chart(aid), lambda c: c == "Line chart: Sales, 5 values", interval=0.5,
+                        description="a fifth value")
+        # One undo per edit: the added value, the typed value, the type.
+        # (Undo clears the selection, so these are read from the model.)
+        self.gapplication_action(aid, "undo")
+        self.wait_until(lambda: self._chart(aid), lambda c: c == "Line chart: Sales, 4 values", interval=0.5,
+                        description="undo to take the added value back")
+        self.gapplication_action(aid, "undo")
+        save_and_see(lambda x: "<c:lineChart>" in x and "<c:v>4.3</c:v>" in x and "12.5" not in x,
+                     "a second undo to put the first value back")
+        self.gapplication_action(aid, "undo")
+        self.wait_until(lambda: self._chart(aid), lambda c: c == "Bar chart: Sales, 4 values", interval=0.5,
+                        description="a third undo to put the type back")
         self.assertIsNone(self.process.poll(), "decks crashed editing a chart")
 
 
