@@ -67,6 +67,8 @@ pub struct ObjectFormat {
     pub anchor: Anchor,
     pub bounds: (f64, f64, f64, f64),
     pub rotation: f64,
+    /// A chart's data, for the Chart tab.
+    pub chart: Option<crate::engine::chart::ChartData>,
 }
 
 /// The size a text box's runs are drawn at when they state none.
@@ -105,6 +107,10 @@ impl ObjectFormat {
             anchor: Anchor::Top,
             bounds: obj_bounds(obj),
             rotation: obj_rotation(obj),
+            chart: match obj {
+                SlideObject::Chart { chart, .. } => Some(chart.clone()),
+                _ => None,
+            },
         };
         let first_run = |runs: &[Run], f: &mut ObjectFormat| {
             if let Some(r) = runs.iter().find(|r| !r.text.trim().is_empty()).or(runs.first()) {

@@ -73,6 +73,86 @@ impl ChartData {
     }
 }
 
+/// One edit the inspector makes to a chart: its type, its series name,
+/// or one point of its data sheet. Each is one undo step.
+#[derive(Clone, Debug, PartialEq)]
+pub enum ChartEdit {
+    Kind(ChartKind),
+    Series(String),
+    /// Point `i`'s category (a scatter chart's x value).
+    Category(usize, String),
+    /// Point `i`'s value.
+    Value(usize, f64),
+    /// A point after the last: the next category and the last value.
+    AddPoint,
+    /// Point `i` taken out; a chart keeps at least one.
+    RemovePoint(usize),
+}
+
+/// The most points a data sheet is given, as many as a Tables chart
+/// draws legibly.
+pub const MAX_POINTS: usize = 100;
+
+impl ChartData {
+    /// `edit` applied. Whether it changed anything: an edit to a point
+    /// that isn't there, a value that isn't a number or a type the chart
+    /// already has changes nothing, and so makes no undo step.
+    pub fn apply(&mut self, edit: &ChartEdit) -> bool {
+        let before = self.clone();
+        match edit {
+            ChartEdit::Kind(k) => self.kind = *k,
+            ChartEdit::Series(s) => self.series = s.trim().to_string(),
+            ChartEdit::Category(i, c) => {
+                if let Some(p) = self.points.get_mut(*i) {
+                    p.0 = c.trim().to_string();
+                }
+            }
+            ChartEdit::Value(i, v) => {
+                if let (Some(p), true) = (self.points.get_mut(*i), v.is_finite()) {
+                    p.1 = *v;
+                }
+            }
+            ChartEdit::AddPoint => {
+                if self.points.len() < MAX_POINTS {
+                    let category = self.next_category();
+                    let value = self.points.last().map_or(0.0, |p| p.1);
+                    self.points.push((category, value));
+                }
+            }
+            ChartEdit::RemovePoint(i) => {
+                if self.points.len() > 1 && *i < self.points.len() {
+                    self.points.remove(*i);
+                }
+            }
+        }
+        *self != before
+    }
+
+    /// The category a new point gets: the next number when they're all
+    /// numbers (a scatter chart's x values, or 1, 2, 3), the next of a
+    /// word and a number ("Q4" → "Q5"), else "Category n" as PowerPoint
+    /// names one.
+    fn next_category(&self) -> String {
+        let n = self.points.len() + 1;
+        let Some((last, _)) = self.points.last() else { return "1".into() };
+        if let Some(xs) = self.numeric_categories() {
+            let step = match xs.as_slice() {
+                [.., a, b] if b > a => b - a,
+                _ => 1.0,
+            };
+            return num(xs.last().copied().unwrap_or(0.0) + step);
+        }
+        let digits = last.len() - last.trim_end_matches(|c: char| c.is_ascii_digit()).len();
+        if digits > 0 {
+            let (word, number) = last.split_at(last.len() - digits);
+            if let Ok(k) = number.parse::<u64>() {
+                return format!("{word}{}", k + 1);
+            }
+        }
+        format!("Category {n}")
+    }
+}
+
 fn esc(s: &str) -> String {
     let mut out = String::with_capacity(s.len());
     for c in s.chars() {
@@ -628,6 +708,47 @@ mod tests {
         assert_eq!(c.kind, ChartKind::Line);
         assert_eq!(c.series, "B");
         assert_eq!(c.points, vec![("Mon".into(), 7.5), ("Tue".into(), 8.0)]);
+    }
+
+    #[test]
+    fn edits_change_the_data_and_say_whether_they_did() {
+        let mut c = ChartData::sample(ChartKind::Bar);
+        assert!(c.apply(&ChartEdit::Kind(ChartKind::Line)));
+        assert!(!c.apply(&ChartEdit::Kind(ChartKind::Line)), "already a line chart");
+        assert!(c.apply(&ChartEdit::Series("  Revenue ".into())));
+        assert_eq!(c.series, "Revenue");
+        assert!(c.apply(&ChartEdit::Category(0, "Jan".into())));
+        assert!(c.apply(&ChartEdit::Value(3, -2.5)));
+        assert!(!c.apply(&ChartEdit::Value(9, 1.0)), "no such point");
+        assert!(!c.apply(&ChartEdit::Value(0, f64::NAN)), "not a number");
+        assert_eq!(c.points[0].0, "Jan");
+        assert_eq!(c.points[3].1, -2.5);
+        assert!(c.apply(&ChartEdit::AddPoint));
+        assert_eq!(c.points[4], ("Q5".into(), -2.5), "the next category, the last value");
+        assert!(c.apply(&ChartEdit::RemovePoint(0)));
+        assert_eq!(c.points.len(), 4);
+        for _ in 0..10 {
+            c.apply(&ChartEdit::RemovePoint(0));
+        }
+        assert_eq!(c.points.len(), 1, "a chart keeps one point");
+        for _ in 0..(MAX_POINTS + 5) {
+            c.apply(&ChartEdit::AddPoint);
+        }
+        assert_eq!(c.points.len(), MAX_POINTS);
+    }
+
+    #[test]
+    fn a_new_point_continues_the_categories() {
+        let next = |cats: &[&str]| {
+            let mut c = ChartData { kind: ChartKind::Bar, series: String::new(), points: cats.iter().map(|s| (s.to_string(), 1.0)).collect() };
+            c.apply(&ChartEdit::AddPoint);
+            c.points.last().unwrap().0.clone()
+        };
+        assert_eq!(next(&["Q1", "Q2"]), "Q3");
+        assert_eq!(next(&["2024", "2025"]), "2026");
+        assert_eq!(next(&["0.5", "1"]), "1.5");
+        assert_eq!(next(&["Apples", "Pears"]), "Category 3");
+        assert_eq!(next(&[]), "1");
     }
 
     #[test]
