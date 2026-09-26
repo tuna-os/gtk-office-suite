@@ -45,11 +45,12 @@ jobs:
       # cleans up. Those are the only pieces of setup the assertions touch
       # (glib-compile-schemas for the schema step, Xvfb for the display
       # handshake, xdpyinfo for the readiness probe); no journey runs here,
-      # so dogtail and the apps are not needed.
+      # so dogtail and the apps are not needed. numpy and Pillow are for
+      # test_render_lab_rules.py, which imports the render lab's compare.py.
       - name: Install pytest and the pieces of GUI setup under test
         run: |
           sudo apt-get update -qq
-          sudo apt-get install -y -qq python3-pytest xvfb x11-utils libglib2.0-bin
+          sudo apt-get install -y -qq python3-pytest xvfb x11-utils libglib2.0-bin python3-numpy python3-pil
 
       - name: Unit tests for the release-gate and parity validators
         run: |
@@ -71,6 +72,7 @@ jobs:
             tests/test_skip_reasons.py \
             tests/test_autosave_defaults.py \
             tests/test_ci_test_list.py \
+            tests/test_render_lab_rules.py \
             tests/adaptive_editor_contract.py
 
       # E1-E3: green rows cite evidence, referenced paths exist, journey-gated
@@ -120,6 +122,7 @@ jobs:
             tests/test_skip_reasons.py \
             tests/test_autosave_defaults.py \
             tests/test_ci_test_list.py \
+            tests/test_render_lab_rules.py \
             tests/adaptive_editor_contract.py > python-collected.txt
           python3 conformance/collect_test_inventory.py \
             --pytest "tests=python-collected.txt" --out python-inventory.json
