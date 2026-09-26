@@ -98,6 +98,9 @@ def main():
     bad = [f"{fx['app']}/{fx['feature']}" for fx in wanted if fx["app"] not in EXPORT_APPS]
     if bad:
         sys.exit(f"export_render: export:true on an app with no --export-pdf hook (xlsx is out of scope): {bad}")
+    for app in {fx["app"] for fx in wanted}:
+        if not (os.path.exists(os.path.join(capture.BIN, app))):
+            sys.exit(f"export_render: no {app} binary in {capture.BIN}; build it first")
 
     home = tempfile.mkdtemp(prefix="render-lab-export-")
     env = capture.base_env(home)
