@@ -4141,12 +4141,14 @@ class DecksExportSmoke(BaseGUITestCase):
         return self.wait_until(lambda: os.path.exists(path) and os.path.getsize(path) > 0, bool, interval=0.25,
                                description=f"{os.path.basename(path)} to be written")
 
-    def _pdf_pages(self, path):
-        import re
+    def _assert_pdf(self, path):
+        # A whole PDF: its header and its end-of-file marker. How many pages
+        # and what is on them is export.rs's unit tests, read with poppler
+        # (cairo compresses the page objects, so they aren't greppable).
         with open(path, "rb") as f:
             data = f.read()
-        self.assertTrue(data.startswith(b"%PDF"), path)
-        return len(re.findall(rb"/Type\s*/Page[^s]", data))
+        self.assertTrue(data.startswith(b"%PDF-"), path)
+        self.assertIn(b"%%EOF", data[-64:], path)
 
     def test_pdf_handouts_and_png(self):
         from PIL import Image
@@ -4156,10 +4158,10 @@ class DecksExportSmoke(BaseGUITestCase):
         # the menu, Export section and all, and the tree had none of it).
         pdf = os.path.join(self._dir, "talk.pdf")
         self._save_through_dialog("export-pdf", None, pdf)
-        self.assertEqual(self._pdf_pages(pdf), 1, "a page per slide")
+        self._assert_pdf(pdf)
         handouts = os.path.join(self._dir, "handouts.pdf")
         self._save_through_dialog("export-handouts", "uint32 4", handouts)
-        self.assertEqual(self._pdf_pages(handouts), 1, "one slide fits on one handout page")
+        self._assert_pdf(handouts)
         png = os.path.join(self._dir, "slide.png")
         self._save_through_dialog("export-png", None, png)
         img = Image.open(png)
