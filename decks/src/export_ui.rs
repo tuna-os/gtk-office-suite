@@ -119,3 +119,29 @@ pub(crate) fn register(app: &adw::Application, window: &adw::ApplicationWindow, 
         app.add_action(&act);
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn action_of(m: &gio::MenuModel, i: i32) -> Option<(String, Option<u32>)> {
+        let action = m.item_attribute_value(i, "action", Some(glib::VariantTy::STRING))?.get::<String>()?;
+        let target = m.item_attribute_value(i, "target", None).and_then(|v| v.get::<u32>());
+        Some((action, target))
+    }
+
+    #[test]
+    fn the_export_section_offers_pdf_handouts_and_png() {
+        let section = menu_section();
+        let m: &gio::MenuModel = section.upcast_ref();
+        assert_eq!(m.n_items(), 3);
+        assert_eq!(action_of(m, 0), Some(("app.export-pdf".into(), None)));
+        assert_eq!(action_of(m, 2), Some(("app.export-png".into(), None)));
+        let handouts = m.item_link(1, "submenu").expect("a handouts submenu");
+        let targets: Vec<Option<(String, Option<u32>)>> = (0..handouts.n_items()).map(|i| action_of(&handouts, i)).collect();
+        assert_eq!(
+            targets,
+            [2, 4, 6].iter().map(|n| Some(("app.export-handouts".to_string(), Some(*n)))).collect::<Vec<_>>()
+        );
+    }
+}

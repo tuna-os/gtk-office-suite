@@ -4112,8 +4112,8 @@ class DecksLayoutsSmoke(BaseGUITestCase):
 
 
 class DecksExportSmoke(BaseGUITestCase):
-    """Export (Keynote's File > Export To, Google Slides' Download): the
-    primary menu has an Export section; Export as PDF writes a page per
+    """Export (Keynote's File > Export To, Google Slides' Download): Export
+    as PDF writes a page per
     slide, Export Handouts writes the chosen number to a page, and Export
     Slide as PNG writes the current slide at 1920 x 1080. Asserted on the
     files, through the save dialog a person uses."""
@@ -4151,12 +4151,9 @@ class DecksExportSmoke(BaseGUITestCase):
     def test_pdf_handouts_and_png(self):
         from PIL import Image
         self.wait_until(lambda: self.app.child(name="Slide canvas"), lambda c: c is not None, description="the deck to open")
-        # The Export section is in the primary menu.
-        self.app.child(name="Menu", roleName="toggle button").do_action(0)
-        self.wait_until(lambda: self.app.findChild(lambda n: "Export as PDF" in (n.name or "") and n.showing, retry=False, requireResult=False),
-                        lambda n: n is not None, description="Export as PDF in the primary menu")
-        from dogtail import rawinput
-        rawinput.keyCombo("Escape")
+        # The menu section itself is export_ui's unit test: a popover
+        # menu's items aren't reliably in the AT-SPI tree (a CI run drew
+        # the menu, Export section and all, and the tree had none of it).
         pdf = os.path.join(self._dir, "talk.pdf")
         self._save_through_dialog("export-pdf", None, pdf)
         self.assertEqual(self._pdf_pages(pdf), 1, "a page per slide")
