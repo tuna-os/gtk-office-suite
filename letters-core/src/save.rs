@@ -205,6 +205,7 @@ struct Present {
     header_footer: bool,
     chip: bool,
     revision: bool,
+    comment: bool,
 }
 
 fn styled(run: &Run) -> bool {
@@ -239,6 +240,7 @@ fn survey(doc: &Document) -> Present {
         footnote: !doc.footnotes.is_empty(),
         header_footer: doc.header.is_some() || doc.footer.is_some(),
         page_layout: doc.page.is_some(),
+        comment: !doc.comments.is_empty(),
         ..Present::default()
     };
     for paragraph in &doc.paragraphs {
@@ -291,6 +293,8 @@ pub fn compatibility_report(doc: &Document, format: SaveFormat) -> Compatibility
         lost(&mut report, present.chip, "smart-chips", "Smart chips", "each chip is saved as its text, and as a link where it has one; it opens as text");
         // .docx (w:ins/w:del) and .odt (change regions) keep them.
         lost(&mut report, present.revision, "tracked-changes", "Tracked changes", "insertions and deletions are saved as plain text, deleted text included; accept or reject them first");
+        // .docx (the comments part) and .odt (annotations) keep them.
+        lost(&mut report, present.comment, "comments", "Comments", "comments and their replies are not saved; the text they are on is");
     }
     match format {
         // The package formats are the reference targets: they carry the

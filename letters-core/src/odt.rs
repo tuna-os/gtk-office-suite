@@ -64,7 +64,7 @@ fn collect_run_styles(doc: &Document) -> Vec<RunStyle> {
     let mut styles: Vec<RunStyle> = Vec::new();
     for p in &doc.paragraphs {
         for r in &p.runs {
-            let style = RunStyle { revision: None, ..r.style.clone() };
+            let style = RunStyle { revision: None, comments: Vec::new(), ..r.style.clone() };
             if style != RunStyle::default() && style.chip.is_none() && !styles.contains(&style) {
                 styles.push(style);
             }
@@ -218,6 +218,24 @@ fn content_xml(doc: &Document) -> String {
     let mut body = String::new();
     // Tracked changes: one changed region per change (text:tracked-changes).
     let mut regions: Vec<String> = Vec::new();
+    // Comment threads: an annotation (with its replies) where a thread's
+    // text starts, an annotation end where it ends; a thread with no text
+    // is an annotation without an end, first.
+    let roots = crate::docx_comments::roots(doc);
+    let mut open: Vec<u32> = Vec::new();
+    let mut orphans: Vec<u32> = {
+        let marked: std::collections::HashSet<u32> = doc.paragraphs.iter().flat_map(|p| &p.runs).flat_map(|r| r.style.comments.iter().copied()).collect();
+        roots.iter().copied().filter(|id| !marked.contains(id)).collect()
+    };
+    let wanted = |run: &Run| -> Vec<u32> { crate::docx_comments::threads_of(&roots, &run.style.comments).collect() };
+    let annotate = |id: u32, start: bool| -> String {
+        let thread = doc.comments.iter().filter(|c| c.id == id || c.parent == Some(id));
+        if start {
+            thread.map(annotation_xml).collect()
+        } else {
+            thread.map(|c| format!("<office:annotation-end office:name=\"__Annotation__{}\"/>", c.id)).collect()
+        }
+    };
     let mut open_list: Option<ListKind> = None;
     for (pi, p) in doc.paragraphs.iter().enumerate() {
         // List grouping: consecutive list paragraphs share one text:list.
@@ -253,7 +271,13 @@ fn content_xml(doc: &Document) -> String {
         };
 
         let mut inner = String::new();
+        for id in std::mem::take(&mut orphans) {
+            inner.push_str(&annotate(id, true));
+        }
         for r in &p.runs {
+            for (id, start) in crate::docx_comments::transition(&mut open, &wanted(r)) {
+                inner.push_str(&annotate(id, start));
+            }
             // A footnote reference is an element, not text: ODF puts the
             // note's whole body inline at the reference point, and the
             // consumer renders the citation and the note area itself. The
@@ -280,7 +304,7 @@ fn content_xml(doc: &Document) -> String {
                 continue;
             }
             let mut run_xml = esc(&r.text);
-            let plain = RunStyle { revision: None, ..r.style.clone() };
+            let plain = RunStyle { revision: None, comments: Vec::new(), ..r.style.clone() };
             if plain != RunStyle::default() {
                 let ti = run_styles.iter().position(|s| *s == plain).unwrap() + 1;
                 run_xml = format!("<text:span text:style-name=\"T{ti}\">{run_xml}</text:span>");
@@ -298,6 +322,12 @@ fn content_xml(doc: &Document) -> String {
             }
         }
 
+        // The threads the next paragraph's text is not in end here.
+        let next: Vec<u32> = doc.paragraphs.get(pi + 1).and_then(|n| n.runs.first()).map(&wanted).unwrap_or_default();
+        let keep: Vec<u32> = open.iter().copied().filter(|id| next.contains(id)).collect();
+        for (id, start) in crate::docx_comments::transition(&mut open, &keep) {
+            inner.push_str(&annotate(id, start));
+        }
         if let Some(level) = p.style.heading {
             body.push_str(&format!(
                 "<text:h text:outline-level=\"{level}\"{style_attr}>{inner}</text:h>"
@@ -335,6 +365,20 @@ fn content_xml(doc: &Document) -> String {
          <office:automatic-styles>{auto}</office:automatic-styles>\
          <office:body><office:text>{changes}{body}</office:text></office:body>\
          </office:document-content>"
+    )
+}
+
+/// A comment as an ODF annotation; a reply names its thread as
+/// LibreOffice does (`loext:parent-name`).
+fn annotation_xml(c: &crate::model::Comment) -> String {
+    let parent = c.parent.map(|p| format!(" loext:parent-name=\"__Annotation__{p}\"")).unwrap_or_default();
+    let paras: String = c.text.split('\n').map(|l| format!("<text:p>{}</text:p>", esc(l))).collect();
+    format!(
+        "<office:annotation office:name=\"__Annotation__{}\"{parent} loext:resolved=\"{}\"><dc:creator>{}</dc:creator><dc:date>{}</dc:date>{paras}</office:annotation>",
+        c.id,
+        c.resolved,
+        esc(&c.author),
+        esc(&c.date)
     )
 }
 
@@ -767,7 +811,7 @@ pub fn read(path: &str) -> Result<Document, String> {
 
     let auto = parse_auto_styles(&content);
 
-    let mut doc = Document { paragraphs: Vec::new(), footnotes: Vec::new(), header: None, footer: None, page: None, base_font: Default::default(), heading_styles: Vec::new() };
+    let mut doc = Document { paragraphs: Vec::new(), footnotes: Vec::new(), header: None, footer: None, page: None, base_font: Default::default(), heading_styles: Vec::new(), comments: Vec::new() };
     let mut reader = Reader::from_str(&content);
     let mut in_body = false;
     let mut para: Option<Paragraph> = None;
@@ -801,9 +845,114 @@ pub fn read(path: &str) -> Result<Document, String> {
     let mut in_changes = false;
     let mut change_field: Option<&'static str> = None;
     let mut rev_stack: Vec<crate::model::Revision> = Vec::new();
+    // Comments: each annotation is read whole into `annotation` (the
+    // comment, its parent's name, the field being read, its paragraphs so
+    // far); one whose range ends somewhere (`ended`) puts a start marker in
+    // the text, and its end an end marker, which `docx_comments::restore`
+    // turns into marks.
+    let ended: std::collections::HashSet<String> = content
+        .match_indices("<office:annotation-end ")
+        .filter_map(|(at, _)| {
+            let tag = &content[at..at + content[at..].find('>')?];
+            let v = tag.find("office:name=\"")? + "office:name=\"".len();
+            Some(tag[v..v + tag[v..].find('"')?].to_string())
+        })
+        .collect();
+    let mut names: std::collections::HashMap<String, u32> = std::collections::HashMap::new();
+    // Ids: ours are in our annotations' names ("__Annotation__7"), so a
+    // document reopens with its own; any other annotation takes a free one.
+    let own_id = |name: &str| name.strip_prefix("__Annotation__").and_then(|n| n.parse::<u32>().ok()).filter(|n| *n > 0);
+    let reserved: std::collections::HashSet<u32> = content
+        .match_indices("<office:annotation ")
+        .filter_map(|(at, _)| {
+            let tag = &content[at..at + content[at..].find('>')?];
+            let v = tag.find("office:name=\"")? + "office:name=\"".len();
+            own_id(&tag[v..v + tag[v..].find('"')?])
+        })
+        .collect();
+    let mut next_free = 1u32;
+    let mut comments: Vec<(crate::model::Comment, Option<String>)> = Vec::new();
+    type Reading = (crate::model::Comment, Option<String>, Option<&'static str>, usize);
+    let mut annotation: Option<Reading> = None;
 
     loop {
-        match reader.read_event() {
+        let event = reader.read_event();
+        if let Some((c, _, field, paras)) = annotation.as_mut() {
+            let field_now = *field;
+            let mut text = |t: &str| match field_now {
+                Some("author") => c.author.push_str(t),
+                Some("date") => c.date.push_str(t),
+                Some(_) => {}
+                None => c.text.push_str(t),
+            };
+            match &event {
+                Ok(Event::Start(e)) => match e.name().as_ref() {
+                    "dc:creator" => *field = Some("author"),
+                    "dc:date" => *field = Some("date"),
+                    "meta:creator-initials" => *field = Some("initials"),
+                    "text:p" | "text:h" => {
+                        if *paras > 0 {
+                            c.text.push('\n');
+                        }
+                        *paras += 1;
+                    }
+                    _ => {}
+                },
+                Ok(Event::End(e)) if e.name().as_ref() == "office:annotation" => {
+                    let (mut c, parent, _, _) = annotation.take().expect("reading one");
+                    c.date = crate::docx_comments::normalize_date(&c.date);
+                    let spans = names.iter().any(|(n, id)| *id == c.id && ended.contains(n));
+                    if let (None, true, Some(p)) = (&parent, spans, para.as_mut()) {
+                        p.runs.push(Run::plain(crate::docx_comments::marker(c.id, true)));
+                    }
+                    comments.push((c, parent));
+                }
+                Ok(Event::End(e)) if matches!(e.name().as_ref(), "dc:creator" | "dc:date" | "meta:creator-initials") => *field = None,
+                Ok(Event::Text(t)) => text(&unescape_text(t)),
+                Ok(Event::GeneralRef(r)) => text(&resolve_general_ref(r)),
+                Ok(Event::Empty(e)) if e.name().as_ref() == "text:s" => {
+                    let n = attr_val(e, "text:c").and_then(|v| v.parse::<usize>().ok()).unwrap_or(1);
+                    text(&" ".repeat(n));
+                }
+                Ok(Event::Empty(e)) if e.name().as_ref() == "text:tab" => text("\t"),
+                Err(e) => return Err(format!("XML parse error: {e}")),
+                _ => {}
+            }
+            continue;
+        }
+        match event {
+            Ok(Event::Start(e)) if e.name().as_ref() == "office:annotation" && para.is_some() && note.is_none() => {
+                let name = attr_val(&e, "office:name");
+                let id = match name.as_deref().and_then(own_id) {
+                    Some(n) if !comments.iter().any(|(c, _)| c.id == n) => n,
+                    _ => {
+                        while reserved.contains(&next_free) || comments.iter().any(|(c, _)| c.id == next_free) {
+                            next_free += 1;
+                        }
+                        next_free
+                    }
+                };
+                if let Some(name) = name {
+                    names.insert(name, id);
+                }
+                let comment = crate::model::Comment {
+                    id,
+                    author: String::new(),
+                    date: String::new(),
+                    text: String::new(),
+                    resolved: attr_val(&e, "loext:resolved").as_deref() == Some("true"),
+                    parent: None,
+                };
+                annotation = Some((comment, attr_val(&e, "loext:parent-name"), None, 0));
+            }
+            Ok(Event::Empty(e)) if e.name().as_ref() == "office:annotation-end" => {
+                let root = attr_val(&e, "office:name")
+                    .and_then(|n| names.get(&n).copied())
+                    .filter(|id| comments.iter().any(|(c, p)| c.id == *id && p.is_none()));
+                if let (Some(id), Some(p)) = (root, para.as_mut()) {
+                    p.runs.push(Run::plain(crate::docx_comments::marker(id, false)));
+                }
+            }
             Ok(Event::Start(e)) if in_changes || e.name().as_ref() == "text:tracked-changes" => match e.name().as_ref() {
                 "text:tracked-changes" => in_changes = true,
                 "text:changed-region" => {
@@ -1078,6 +1227,27 @@ pub fn read(path: &str) -> Result<Document, String> {
             _ => {}
         }
     }
+    if !comments.is_empty() {
+        // A reply names its parent; a reply to a reply is in the thread.
+        let parents: Vec<Option<u32>> = comments.iter().map(|(_, p)| p.as_ref().and_then(|n| names.get(n).copied())).collect();
+        let root = |mut id: u32| {
+            for _ in 0..parents.len() {
+                match comments.iter().position(|(c, _)| c.id == id).and_then(|i| parents[i]) {
+                    Some(p) if p != id => id = p,
+                    _ => break,
+                }
+            }
+            id
+        };
+        let bodies: Vec<crate::model::Comment> = comments
+            .iter()
+            .zip(&parents)
+            .map(|((c, _), p)| crate::model::Comment { parent: p.map(root).filter(|r| *r != c.id), ..c.clone() })
+            .collect();
+        let mut bodies = bodies;
+        bodies.sort_by_key(|c| c.id);
+        crate::docx_comments::restore(&mut doc, bodies);
+    }
 
     // Header/footer and page geometry from styles.xml.
     if !styles.is_empty() {
@@ -1244,6 +1414,20 @@ mod tests {
         let d = crate::track::sample_document();
         let rt = round_trip(&d);
         assert_eq!(rt.paragraphs[0].runs, d.paragraphs[0].runs);
+    }
+
+    /// Comments reopen as they were: overlapping annotations, a reply in
+    /// its thread, a resolved thread, one of two lines, and one whose text
+    /// was deleted (an annotation without an end).
+    #[test]
+    fn comments_survive() {
+        let mut d = crate::comments::sample_document();
+        let (ops, _) = crate::comments::add(&d, 0, 3, "Ada Lovelace", "2026-09-26T11:00:00Z", "Two lines\nof comment").unwrap();
+        crate::edit::apply_all(&mut d, &ops).unwrap();
+        crate::edit::apply_all(&mut d, &[crate::edit::Op::Delete { at: 0, len: 3 }]).unwrap();
+        let rt = round_trip(&d);
+        assert_eq!(crate::comments::threads(&rt), crate::comments::threads(&d));
+        assert_eq!(rt.paragraphs, d.paragraphs);
     }
 
     /// A standard ODF date field from another application opens as a date

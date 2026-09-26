@@ -1,4 +1,4 @@
-// review.rs — review annotations and deterministic navigation for Letters.
+// review.rs — table of contents and text direction for Letters.
 // SPDX-License-Identifier: GPL-3.0-or-later
 //
 // This is deliberately GTK-free.  A view may render these ranges as tags or
@@ -7,94 +7,8 @@
 use crate::model::Document;
 use serde::{Deserialize, Serialize};
 
-pub type ReviewId = u64;
-
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
-pub struct TextRange {
-    pub start: usize,
-    pub end: usize,
-}
-
-impl TextRange {
-    pub fn new(start: usize, end: usize) -> Self {
-        Self { start, end: end.max(start) }
-    }
-
-    pub fn len(&self) -> usize { self.end.saturating_sub(self.start) }
-    pub fn is_empty(&self) -> bool { self.start == self.end }
-
-    /// Rebase an annotation after one buffer edit at `at`.
-    pub fn rebase(&mut self, at: usize, removed: usize, inserted: usize) {
-        let removed_end = at.saturating_add(removed);
-        let delta = inserted as isize - removed as isize;
-        let shift = |offset: usize| -> usize {
-            if offset >= removed_end {
-                offset.saturating_add_signed(delta)
-            } else if offset > at {
-                at.saturating_add(inserted)
-            } else {
-                offset
-            }
-        };
-        self.start = shift(self.start);
-        self.end = shift(self.end).max(self.start);
-    }
-}
-
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
-pub struct Comment {
-    pub id: ReviewId,
-    pub range: TextRange,
-    pub author: String,
-    pub text: String,
-    pub resolved: bool,
-}
-
-#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
-pub struct ReviewState {
-    #[serde(default = "first_review_id")]
-    next_id: ReviewId,
-    pub comments: Vec<Comment>,
-    // Tracked changes are marks on the text they cover (`crate::track`),
-    // not entries here: see docs/LETTERS-REVIEW-WORKFLOWS.md.
-}
-
-fn first_review_id() -> ReviewId { 1 }
-
-impl ReviewState {
-    pub fn new() -> Self { Self { next_id: 1, ..Default::default() } }
-
-    fn id(&mut self) -> ReviewId {
-        let id = self.next_id.max(1);
-        self.next_id = id.saturating_add(1);
-        id
-    }
-
-    pub fn add_comment(&mut self, range: TextRange, author: impl Into<String>, text: impl Into<String>) -> ReviewId {
-        let id = self.id();
-        self.comments.push(Comment { id, range, author: author.into(), text: text.into(), resolved: false });
-        id
-    }
-
-    pub fn resolve_comment(&mut self, id: ReviewId, resolved: bool) -> bool {
-        self.comments.iter_mut().find(|c| c.id == id).map(|c| { c.resolved = resolved; true }).unwrap_or(false)
-    }
-
-    /// Return the next unresolved comment in document order, wrapping once.
-    pub fn next_comment(&self, cursor: usize) -> Option<&Comment> {
-        let mut comments: Vec<&Comment> = self.comments.iter().filter(|c| !c.resolved).collect();
-        comments.sort_by_key(|c| (c.range.start, c.id));
-        if let Some(comment) = comments.iter().copied().find(|c| c.range.start >= cursor) {
-            Some(comment)
-        } else {
-            comments.into_iter().next()
-        }
-    }
-
-    pub fn rebase_after_edit(&mut self, at: usize, removed: usize, inserted: usize) {
-        for c in &mut self.comments { c.range.rebase(at, removed, inserted); }
-    }
-}
+// Comments are marks on the text they cover (`crate::comments`), and so
+// are tracked changes (`crate::track`): see docs/LETTERS-REVIEW-WORKFLOWS.md.
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct TocEntry {
@@ -160,16 +74,6 @@ fn is_ltr(u: u32) -> bool {
 mod tests {
     use super::*;
     use crate::model::ParaStyle;
-
-    #[test]
-    fn comments_navigate_in_document_order_and_wrap() {
-        let mut state = ReviewState::new();
-        let late = state.add_comment(TextRange::new(20, 22), "a", "late");
-        let early = state.add_comment(TextRange::new(2, 4), "b", "early");
-        assert_eq!(state.next_comment(0).unwrap().id, early);
-        assert_eq!(state.next_comment(5).unwrap().id, late);
-        assert_eq!(state.next_comment(30).unwrap().id, early);
-    }
 
     #[test]
     fn toc_uses_heading_and_named_styles() {

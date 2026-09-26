@@ -72,7 +72,35 @@ pub(crate) fn run_tags(buf: &gtk::TextBuffer, style: &RunStyle) -> Vec<String> {
     if let Some(rev) = &style.revision {
         names.push(revision_tag(buf, rev));
     }
+    for id in &style.comments {
+        names.push(comment_tag(buf, *id));
+    }
     names
+}
+
+/// A comment's tag, "comment:ID": the text is tinted while its thread is
+/// open (`set_comments` clears the tint of a resolved one).
+fn comment_tag(buf: &gtk::TextBuffer, id: u32) -> String {
+    let name = format!("{COMMENT_TAG_PREFIX}{id}");
+    if buf.tag_table().lookup(&name).is_none() {
+        let tag = gtk::TextTag::builder().name(&name).build();
+        let resolved = comments_sidecar(buf).iter().any(|c| c.id == id && c.resolved);
+        tint_comment(&tag, !resolved);
+        buf.tag_table().add(&tag);
+    }
+    name
+}
+
+fn tint_comment(tag: &gtk::TextTag, on: bool) {
+    let tint = gtk4::gdk::RGBA::new(0.98, 0.76, 0.1, 0.3);
+    tag.set_background_rgba(on.then_some(&tint));
+}
+
+/// The comments on the char at `iter`.
+fn comments_at(iter: &gtk::TextIter) -> Vec<u32> {
+    let mut ids: Vec<u32> = iter.tags().into_iter().filter_map(|t| t.name()?.strip_prefix(COMMENT_TAG_PREFIX)?.parse().ok()).collect();
+    ids.sort_unstable();
+    ids
 }
 
 /// A tracked change's tag: "rev:" and the revision as JSON (author and
@@ -98,10 +126,11 @@ fn revision_at(iter: &gtk::TextIter) -> Option<letters_core::Revision> {
     })
 }
 
-/// Tag `start..end` with `rev`'s tag (an object's char or label).
-fn tag_revision(buf: &gtk::TextBuffer, start: i32, end: &gtk::TextIter, rev: Option<&letters_core::Revision>) {
-    if let Some(rev) = rev {
-        let name = revision_tag(buf, rev);
+/// Tag an object's char (or chip label) at `start..end` with the marks
+/// objects take: its tracked change and its comments.
+fn tag_object(buf: &gtk::TextBuffer, start: i32, end: &gtk::TextIter, style: &RunStyle) {
+    let names = style.revision.iter().map(|rev| revision_tag(buf, rev)).chain(style.comments.iter().map(|id| comment_tag(buf, *id)));
+    for name in names.collect::<Vec<_>>() {
         buf.apply_tag_by_name(&name, &buf.iter_at_offset(start), end);
     }
 }
@@ -111,6 +140,7 @@ const FONT_TAG_PREFIX: &str = "font:";
 const SIZE_TAG_PREFIX: &str = "size-hp:";
 const COLOR_TAG_PREFIX: &str = "color:";
 const REVISION_TAG_PREFIX: &str = "rev:";
+const COMMENT_TAG_PREFIX: &str = "comment:";
 
 /// Read a per-value tag back into `style`. Inverse of `run_tags`.
 fn apply_dynamic_tag(name: &str, style: &mut RunStyle) {
@@ -124,6 +154,10 @@ fn apply_dynamic_tag(name: &str, style: &mut RunStyle) {
         style.color = Some(color.to_string());
     } else if let Some(json) = name.strip_prefix(REVISION_TAG_PREFIX) {
         style.revision = serde_json::from_str(json).ok();
+    } else if let Some(id) = name.strip_prefix(COMMENT_TAG_PREFIX).and_then(|v| v.parse::<u32>().ok()) {
+        if let Err(i) = style.comments.binary_search(&id) {
+            style.comments.insert(i, id);
+        }
     }
 }
 
@@ -316,7 +350,7 @@ pub(crate) fn capture_span(buf: &gtk::TextBuffer, from: i32, to: i32) -> (Vec<Pa
                 }
                 current.runs.push(Run {
                     text: alt,
-                    style: RunStyle { image: Some(src), image_extent_emu: extent, revision: revision_at(&iter), ..Default::default() },
+                    style: RunStyle { image: Some(src), image_extent_emu: extent, revision: revision_at(&iter), comments: comments_at(&iter), ..Default::default() },
                 });
                 iter.forward_char();
                 continue;
@@ -333,13 +367,14 @@ pub(crate) fn capture_span(buf: &gtk::TextBuffer, from: i32, to: i32) -> (Vec<Pa
                 current.runs.push(r);
             }
             let mut label = String::new();
-            let revision = revision_at(&iter);
+            let (revision, comments) = (revision_at(&iter), comments_at(&iter));
             while !iter.is_end() && iter.char() != '\n' && iter.has_tag(&tag) {
                 label.push(iter.char());
                 iter.forward_char();
             }
             let mut run = letters_core::chips::chip_run(chip, label);
             run.style.revision = revision;
+            run.style.comments = comments;
             current.runs.push(run);
             continue;
         }
@@ -356,7 +391,7 @@ pub(crate) fn capture_span(buf: &gtk::TextBuffer, from: i32, to: i32) -> (Vec<Pa
             }
             current.runs.push(Run {
                 text: String::new(),
-                style: RunStyle { footnote: Some(idx), revision: revision_at(&iter), ..Default::default() },
+                style: RunStyle { footnote: Some(idx), revision: revision_at(&iter), comments: comments_at(&iter), ..Default::default() },
             });
             while !iter.is_end()
                 && iter.tags().iter().any(|t| {
@@ -561,6 +596,8 @@ pub const PAGE_KEY: &str = "letters-page";
 pub const HEADING_STYLES_KEY: &str = "letters-heading-styles";
 /// Buffer data key holding the document's base (body) font.
 pub const BASE_FONT_KEY: &str = "letters-base-font";
+/// The document's comments (`letters_core::comments`).
+pub const COMMENTS_KEY: &str = "letters-comments";
 
 // GObject data is an untyped pointer: reading a key back at a type other than
 // the one it was written with is undefined behaviour, not a panic, and no test
@@ -582,6 +619,22 @@ pub(crate) fn read_sidecars(buf: &gtk::TextBuffer, doc: &mut Document) {
     doc.page = page_sidecar(buf);
     doc.base_font = base_font_sidecar(buf);
     doc.heading_styles = heading_styles_sidecar(buf);
+    doc.comments = comments_sidecar(buf);
+}
+
+fn comments_sidecar(buf: &gtk::TextBuffer) -> Vec<letters_core::Comment> {
+    unsafe { buf.data::<Vec<letters_core::Comment>>(COMMENTS_KEY).map(|p| p.as_ref().clone()).unwrap_or_default() }
+}
+
+/// Keep `comments` beside `buf`'s text (the live model's comment ops change
+/// them without a buffer edit), and tint only open threads' text.
+pub fn set_comments(buf: &gtk::TextBuffer, comments: &[letters_core::Comment]) {
+    unsafe { buf.set_data(COMMENTS_KEY, comments.to_vec()) };
+    for c in comments.iter().filter(|c| c.parent.is_none()) {
+        if let Some(tag) = buf.tag_table().lookup(&format!("{COMMENT_TAG_PREFIX}{}", c.id)) {
+            tint_comment(&tag, !c.resolved);
+        }
+    }
 }
 
 fn header_sidecar(buf: &gtk::TextBuffer) -> Option<String> {
@@ -642,6 +695,7 @@ pub fn set_buffer_sidecars(doc: &Document, buf: &gtk::TextBuffer) {
         buf.set_data(BASE_FONT_KEY, doc.base_font.clone());
         buf.set_data(HEADING_STYLES_KEY, doc.heading_styles.clone());
     }
+    set_comments(buf, &doc.comments);
 }
 
 const PARA_TAG_PREFIX: &str = "para:";
@@ -993,7 +1047,7 @@ pub(crate) fn render_paragraphs(buf: &gtk::TextBuffer, insert: &mut gtk::TextIte
                         }
                         let start = insert.offset();
                         buf.insert_paintable(&mut insert, &texture);
-                        tag_revision(buf, start, &insert, run.style.revision.as_ref());
+                        tag_object(buf, start, &insert, &run.style);
                     }
                     // Unloadable image degrades to visible alt text.
                     Err(_) => buf.insert(&mut insert, &run.text),
@@ -1003,13 +1057,13 @@ pub(crate) fn render_paragraphs(buf: &gtk::TextBuffer, insert: &mut gtk::TextIte
             if let Some(idx) = run.style.footnote {
                 let start = insert.offset();
                 insert_footnote_marker(buf, &mut insert, idx);
-                tag_revision(buf, start, &insert, run.style.revision.as_ref());
+                tag_object(buf, start, &insert, &run.style);
                 continue;
             }
             if run.style.chip.is_some() {
                 let start = insert.offset();
                 insert_chip(buf, &mut insert, run);
-                tag_revision(buf, start, &insert, run.style.revision.as_ref());
+                tag_object(buf, start, &insert, &run.style);
                 continue;
             }
             let tags = run_tags(buf, &run.style);

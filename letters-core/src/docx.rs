@@ -202,10 +202,15 @@ pub fn read(path: &str) -> Result<Document, String> {
     // Smart chips are content controls rdocx does not read runs from:
     // they become sentinel runs first (docx_chips).
     let (doc, (chips, revisions)) = open_with_chips(path).map_err(|e| format!("Cannot open .docx {}: {}", path, e))?;
+    let comments = crate::docx_comments::bodies(&doc);
     let mut read = read_opened(path, doc)?;
     // Tracked changes first: a bracket may hold a chip's sentinel.
     crate::docx_revisions::restore(&mut read, &revisions);
     crate::docx_chips::restore(&mut read, &chips);
+    // Comments last: their markers may sit in a tracked change.
+    if !comments.is_empty() {
+        crate::docx_comments::restore(&mut read, comments);
+    }
     // Page-number fields in the header and footer, as "{page}"/"{total}".
     let (header, footer) = header_footer_templates(path);
     if header.is_some() {
@@ -248,12 +253,14 @@ fn open_with_chips(path: &str) -> Result<(rdocx::Document, Unwrapped), String> {
         .ok()
         .and_then(|mut z| std::io::Read::read_to_string(&mut z.by_name("word/document.xml").ok()?, &mut xml).ok())
         .is_some();
-    if !found || !(xml.contains("<w:sdt") || xml.contains("<w:ins ") || xml.contains("<w:del ")) {
+    if !found || !(xml.contains("<w:sdt") || xml.contains("<w:ins ") || xml.contains("<w:del ") || xml.contains("<w:comment")) {
         return Ok((rdocx::Document::open(path).map_err(|e| e.to_string())?, (Vec::new(), Vec::new())));
     }
     let (patched, chips) = crate::docx_chips::unwrap(&xml);
     let (patched, revisions) = crate::docx_revisions::unwrap(&patched);
-    if chips.is_empty() && revisions.is_empty() {
+    let commented = crate::docx_comments::unwrap(&patched);
+    let patched = commented.clone().unwrap_or(patched);
+    if chips.is_empty() && revisions.is_empty() && commented.is_none() {
         return Ok((rdocx::Document::open(path).map_err(|e| e.to_string())?, (Vec::new(), Vec::new())));
     }
     let bytes = with_part(&bytes, "word/document.xml", |_| patched.clone())?;
@@ -446,6 +453,7 @@ fn read_opened(path: &str, doc: rdocx::Document) -> Result<Document, String> {
         page: read_page_geometry(&doc),
         base_font: read_base_font(&doc),
         heading_styles: read_heading_styles(&doc),
+        comments: Vec::new(),
     })
 }
 
@@ -456,7 +464,17 @@ pub fn read_with_report(path: &str) -> Result<(Document, suite_common_core::inte
     let document = read(path)?;
     let opaque = suite_common_core::interop::OpaquePackage::capture(
         path,
-        &["[Content_Types].xml", "_rels/.rels", "word/document.xml", "word/_rels/document.xml.rels"],
+        &[
+            "[Content_Types].xml",
+            "_rels/.rels",
+            "word/document.xml",
+            "word/_rels/document.xml.rels",
+            // Comments are read (docx_comments) and written anew.
+            "word/comments.xml",
+            "word/commentsExtended.xml",
+            "word/commentsIds.xml",
+            "word/commentsExtensible.xml",
+        ],
     )?;
     let mut report = suite_common_core::interop::CompatibilityReport::new("docx");
     for name in opaque.part_names() {
@@ -509,9 +527,19 @@ pub fn write(doc: &Document, path: impl AsRef<std::path::Path>) -> Result<(), St
     let mut chips: Vec<(crate::chips::Chip, String)> = Vec::new();
     // Tracked changes, written as bracketed text and made w:ins/w:del below.
     let mut revisions: Vec<crate::model::Revision> = Vec::new();
+    let paras = &doc.paragraphs;
+    // Comment threads: marker runs where each one's text starts and ends,
+    // made range elements below. `open` are the threads the text written
+    // so far is in; a thread with no text is written, empty, first.
+    let roots = crate::docx_comments::roots(doc);
+    let mut open: Vec<u32> = Vec::new();
+    let mut orphans: Vec<u32> = {
+        let marked: std::collections::HashSet<u32> = paras.iter().flat_map(|p| &p.runs).flat_map(|r| r.style.comments.iter().copied()).collect();
+        roots.iter().copied().filter(|id| !marked.contains(id)).collect()
+    };
+    let wanted = |run: &Run| -> Vec<u32> { crate::docx_comments::threads_of(&roots, &run.style.comments).collect() };
     // Footnote texts first: model index → docx id.
     let footnote_ids: Vec<i32> = doc.footnotes.iter().map(|t| out.add_footnote(t)).collect();
-    let paras = &doc.paragraphs;
     let mut i = 0;
     while i < paras.len() {
         // Consecutive paragraphs sharing a table id become one rdocx table.
@@ -532,7 +560,14 @@ pub fn write(doc: &Document, path: impl AsRef<std::path::Path>) -> Result<(), St
                 if let Some(mut cell) = tbl.cell(tc.row as usize, tc.col as usize) {
                     filled.insert((tc.row, tc.col));
                     let mut cp = cell.add_paragraph("");
-                    for run in &p.runs {
+                    // A cell's comments open and close inside it.
+                    let mut in_cell: Vec<u32> = Vec::new();
+                    for run in p.runs.iter().map(Some).chain([None]) {
+                        let want = run.map(&wanted).unwrap_or_default();
+                        for (id, start) in crate::docx_comments::transition(&mut in_cell, &want) {
+                            let _ = cp.add_run(&crate::docx_comments::marker(id, start));
+                        }
+                        let Some(run) = run else { break };
                         let mut r = cp.add_run(&run.text);
                         if run.style.bold { r = r.bold(true); }
                         if run.style.italic { r = r.italic(true); }
@@ -620,7 +655,15 @@ pub fn write(doc: &Document, path: impl AsRef<std::path::Path>) -> Result<(), St
             Alignment::Justify => p.alignment(rdocx::Alignment::Justify),
         };
         let _ = p; // release the builder borrow before append_hyperlink
+        for id in std::mem::take(&mut orphans) {
+            for start in [true, false] {
+                let _ = out.last_paragraph_mut().expect("paragraph").add_run(&crate::docx_comments::marker(id, start));
+            }
+        }
         for run in &para.runs {
+            for (id, start) in crate::docx_comments::transition(&mut open, &wanted(run)) {
+                let _ = out.last_paragraph_mut().expect("paragraph").add_run(&crate::docx_comments::marker(id, start));
+            }
             if let Some(src) = &run.style.image {
                 // Images embed via add_picture, which appends its own
                 // paragraph — mid-paragraph images therefore split the
@@ -692,6 +735,16 @@ pub fn write(doc: &Document, path: impl AsRef<std::path::Path>) -> Result<(), St
                 None => {}
             }
         }
+        // Close the threads the next paragraph's text is not in (all of
+        // them before a table, whose cells hold their own).
+        let next: Vec<u32> = match paras.get(i) {
+            Some(n) if n.style.table_cell.is_none() => n.runs.first().map(&wanted).unwrap_or_default(),
+            _ => Vec::new(),
+        };
+        let keep: Vec<u32> = open.iter().copied().filter(|id| next.contains(id)).collect();
+        for (id, start) in crate::docx_comments::transition(&mut open, &keep) {
+            let _ = out.last_paragraph_mut().expect("paragraph").add_run(&crate::docx_comments::marker(id, start));
+        }
     }
     if let Some(h) = &doc.header {
         out.set_header(h);
@@ -719,13 +772,19 @@ pub fn write(doc: &Document, path: impl AsRef<std::path::Path>) -> Result<(), St
         .map_err(|e| format!("Cannot save {}: {}", path.as_ref().display(), e))?;
     let bytes = with_letters_styles(&bytes, &doc.base_font, &doc.heading_styles)
         .map_err(|e| format!("Cannot save {}: {}", path.as_ref().display(), e))?;
-    let bytes = if chips.is_empty() && revisions.is_empty() {
+    let bytes = if chips.is_empty() && revisions.is_empty() && doc.comments.is_empty() {
         bytes
     } else {
         with_part(&bytes, "word/document.xml", |xml| {
-            crate::docx_revisions::wrap(&crate::docx_chips::wrap(xml, &chips), &revisions)
+            let xml = crate::docx_revisions::wrap(&crate::docx_chips::wrap(xml, &chips), &revisions);
+            crate::docx_comments::wrap(&xml, &doc.comments)
         })
         .map_err(|e| format!("Cannot save {}: {}", path.as_ref().display(), e))?
+    };
+    let bytes = if doc.comments.is_empty() {
+        bytes
+    } else {
+        crate::docx_comments::add_parts(&bytes, &doc.comments).map_err(|e| format!("Cannot save {}: {}", path.as_ref().display(), e))?
     };
     // "{page}" and "{total}" in the header and footer become Word's PAGE
     // and NUMPAGES fields, so every page shows its own number.
@@ -1105,6 +1164,7 @@ fn map_paragraph(doc: &rdocx::Document, p: &rdocx::ParagraphRef<'_>) -> Paragrap
                 html: false,
                 chip: None,
                 revision: None,
+                comments: Vec::new(),
                 font_family: family,
                 font_size_hp: size_hp,
                 color,

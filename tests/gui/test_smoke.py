@@ -4792,6 +4792,69 @@ class LettersTrackChangesSmoke(BaseGUITestCase):
         self.assertIsNone(self.process.poll(), "letters crashed reviewing changes")
 
 
+class LettersCommentsSmoke(BaseGUITestCase):
+    """Comments (docs/LETTERS-REVIEW-WORKFLOWS.md): a comment on the
+    selected text marks that text; the Comments sidebar shows the thread,
+    takes a reply and resolves it; each is one undo step."""
+
+    app_name = "letters"
+
+    def setUp(self):
+        self._snapshot_path = self.isolate_snapshot(prefix="letters-comments-")
+        super().setUp()
+
+    def _state(self):
+        s = self.trigger_snapshot("org.tunaos.letters")
+        runs = [(r["text"], r["style"].get("comments", [])) for p in s["paragraphs"] for r in p["runs"]]
+        comments = [(c["text"], c.get("parent"), c.get("resolved", False)) for c in s.get("comments", [])]
+        return runs, comments
+
+    def _wait_state(self, want, what):
+        seen = []
+
+        def check():
+            seen[:] = [self._state()]
+            return seen[0] == want or None
+
+        try:
+            return self.wait_for_condition(check, description=what)
+        except AssertionError as e:
+            raise AssertionError(f"{e}; the document was {seen[0] if seen else '?'}") from None
+
+    def test_a_comment_is_added_replied_to_and_resolved(self):
+        from dogtail import rawinput
+
+        self.wait_for_node(name="New Document", roleName="push button").do_action(0)
+        self.wait_for_node(name="Print Layout", roleName="text")
+        rawinput.typeText("Keep this word")
+        rawinput.keyCombo("<Shift><Control>Left")
+        self.gapplication_action("org.tunaos.letters", "add-comment")
+        self.wait_for_node(name="Comment text", roleName="text")
+        rawinput.typeText("Why this word?")
+        rawinput.keyCombo("Return")
+        thread = ("Why this word?", None, False)
+        self._wait_state(([("Keep this ", []), ("word", [1])], [thread]), "the comment on the selected word")
+
+        self.gapplication_action("org.tunaos.letters", "toggle-comments")
+        self.wait_for_node(name="Comments", roleName="list")
+        reply = self.wait_for_condition(
+            lambda: next((n for n in self.app.findChildren(lambda n: n.roleName == "text" and (n.name or "").startswith("Reply to"))), None),
+            description="the thread's reply field")
+        reply.grabFocus()
+        rawinput.typeText("Because.")
+        rawinput.keyCombo("Return")
+        self._wait_state(([("Keep this ", []), ("word", [1])], [thread, ("Because.", 1, False)]), "the reply in the thread")
+
+        resolve = self.wait_for_condition(
+            lambda: next((n for n in self.app.findChildren(lambda n: n.roleName == "push button" and (n.name or "").startswith("Resolve:"))), None),
+            description="the thread's Resolve button")
+        resolve.do_action(0)
+        self._wait_state(([("Keep this ", []), ("word", [1])], [("Why this word?", None, True), ("Because.", 1, False)]), "the thread resolved")
+        self.gapplication_action("org.tunaos.letters", "undo")
+        self._wait_state(([("Keep this ", []), ("word", [1])], [thread, ("Because.", 1, False)]), "undo reopens it")
+        self.assertIsNone(self.process.poll(), "letters crashed commenting")
+
+
 class LettersPrintLayoutEditingSmoke(BaseGUITestCase):
     """Print Layout is the default view, and editing there is editing the
     document (ADR 0010, stage 3d).

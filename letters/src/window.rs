@@ -268,6 +268,7 @@ impl LettersWindow {
         crate::focus_mode::attach(app, &suite_win.window, &suite_win.toolbar_view, &settings);
         crate::chips_ui::register_action(app, &tab_view);
         crate::review_ui::register_actions(app, &tab_view, &status_bar);
+        crate::comments_ui::register_actions(app, &tab_view);
 
         // ── Paragraph styles, previewed; the headings outline ─────
         let style_picker = crate::style_picker::build(&tab_view);

@@ -59,6 +59,20 @@ fn tracked_changes_survive() {
     assert_eq!(rt.paragraphs[0].runs, d.paragraphs[0].runs);
 }
 
+/// Comments reopen as they were: overlapping anchors, a reply in its
+/// thread, a resolved thread, and a thread whose text was deleted.
+#[test]
+fn comments_survive() {
+    let mut d = letters_core::comments::sample_document();
+    let (ops, _) = letters_core::comments::add(&d, 0, 3, "Ada Lovelace", "2026-09-26T11:00:00Z", "Two lines\nof comment").unwrap();
+    letters_core::edit::apply_all(&mut d, &ops).unwrap();
+    // Deleting "The" leaves that comment without text.
+    letters_core::edit::apply_all(&mut d, &[letters_core::edit::Op::Delete { at: 0, len: 3 }]).unwrap();
+    let rt = round_trip(&d);
+    assert_eq!(letters_core::comments::threads(&rt), letters_core::comments::threads(&d));
+    assert_eq!(rt.paragraphs, d.paragraphs);
+}
+
 /// Smart chips reopen as chips: a date is a Word date content control, a
 /// link or person chip its hyperlink in a tagged control.
 #[test]

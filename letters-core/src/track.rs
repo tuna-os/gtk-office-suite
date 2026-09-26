@@ -96,7 +96,7 @@ pub fn tracked(doc: &Document, ops: &[Op], author: &str, date: &str) -> Option<V
                 vec![Op::Insert { at: *at, content }]
             }
             Op::Delete { at, len } => deletion_ops(&scratch, *at, at + len, &deletion),
-            Op::Mark { .. } | Op::SetParaStyle { .. } => vec![op.clone()],
+            Op::Mark { .. } | Op::SetParaStyle { .. } | Op::SetComment { .. } => vec![op.clone()],
             Op::SetParagraphs { .. } => return None,
         };
         for c in &converted {

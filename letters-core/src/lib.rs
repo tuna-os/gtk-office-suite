@@ -4,8 +4,10 @@
 // See DESIGN.md for the model, invariants, and addressing scheme.
 
 pub mod chips;
+pub mod comments;
 pub mod docx;
 mod docx_chips;
+mod docx_comments;
 mod docx_revisions;
 mod docx_fields;
 pub mod edit;
@@ -23,8 +25,8 @@ pub mod table_text;
 pub mod track;
 pub mod word_count;
 
-pub use model::{Alignment, Document, ListKind, PageGeometry, Paragraph, ParagraphLayout, ParaStyle, Revision, RevisionKind, Run, RunStyle, StylePatch, TableCell, style_readout};
-pub use review::{base_direction, table_of_contents, BidiDirection, Comment, ReviewId, ReviewState, TextRange, TocEntry};
+pub use model::{Alignment, Document, ListKind, PageGeometry, Paragraph, ParagraphLayout, ParaStyle, Comment, Revision, RevisionKind, Run, RunStyle, StylePatch, TableCell, style_readout};
+pub use review::{base_direction, table_of_contents, BidiDirection, TocEntry};
 pub use session::DocumentSession;
 pub use structured::StructuredEditor;
 pub use word_count::editor_word_count;
