@@ -204,24 +204,11 @@ images show our rendering matches LibreOffice's and the metric is what
 disagrees. Recorded here with the measurement, so nobody "fixes" them by
 loosening a budget:
 
-- **`letters/font-sizes`** (2026-09-25). Every line's ink box is within a
-  pixel of LibreOffice's (measured row and column extents). Tesseract reads
-  the 8 pt line as "spt text" on LibreOffice's page and as one token
-  ("bpetext") on ours, so 8 of 10 words match (below the 0.9 green bar).
-  The matcher then pairs LibreOffice's unmatched "text" with the nearest
-  remaining "text" on the next line, and every later pairing shifts by a
-  line: the median displacement (14.8 pt) is that cascade, not a layout
-  error. A globally optimal matcher would fix the displacement but not the
-  word count, so it would not change this verdict, and it was not
-  worth a shared-metric change on its own.
-- **`letters/table`** (2026-09-25). Cell text sits within 0.2 pt of
-  LibreOffice's; Tesseract reads one cell label in ours ("R1C1" as "rici",
-  unhinted glyphs at 12 px) and so 6 of 9 cell words match.
-- **`tables/chart-pie`** (2026-09-26). Pie, cells and legend match (SSIM
-  0.95, colours 100%, displacement 1.8 pt). Tesseract's psm-6 block
-  segmentation drops our rendered cell digits 3/7/5 outright, and misreads
-  the 2-character legend label Q4 on both sides ("ma" in the reference,
-  "a" in ours), so 8 of 12 words match.
+- **`letters/table`** (2026-09-25, re-measured 2026-09-26). Cell text sits
+  within 0.2 pt of LibreOffice's; Tesseract misreads one cell label in ours
+  ("R1C1" as "rici", unhinted glyphs at 12 px) and so 8 of 9 cell words
+  match (up from 6 of 9 with the magnifier fallback below, which rescues
+  "r1c2" and "r1c3" but not the "r1c1" cell).
 - **`tables/number-formats`** (2026-09-26). Both sides correctly show "###"
   for the date and the 7-digit value that don't fit the narrow column (the
   overflow display works). "###" is a non-word: Tesseract hallucinates it
@@ -246,8 +233,8 @@ loosening a budget:
   amber until a renderer-independent check (e.g. line-count and row-growth
   rather than pixel structure) can tell the two apart.
 
-All four are OCR of very small or non-word glyphs, not rendering. They go
-green when the metric can read them. The named next candidate, a larger
+The two remaining are OCR of very small or non-word glyphs, not
+rendering. They go green when the metric can read them. The named next candidate, a larger
 OCR scale for small text, was tried on 2026-09-26 (Tables 4x to 6x,
 re-scored over all 16 Tables fixtures with no other code changed):
 chart-scatter reads 27 of 29 (the two "7"s come right, a "5" drops
@@ -271,6 +258,32 @@ the only other movements are `tables/chart-line`/`chart-area` 23/24 to
 24/26 (the 6x pass adds two reference reads, one matched) and
 `tables/frozen` 0.976 to 0.992, all still green. `tables/chart-scatter`
 is green, not an artifact, from here on.
+
+The magnifier fallback landed the same day (OCR-metric stream, rebased onto
+the union above): a word the page-wide pass cannot match gets one closer
+look — its own box plus a 4 px pad, magnified 3x and read as a single word.
+A rescue counts only when both sides read the same non-empty word at the
+same location, so it measures cross-image agreement, never lowers a budget
+(all green thresholds untouched), and can only move words toward found.
+Re-scored over all 52 fixtures in all three apps against main's images,
+with and without the fallback on the identical PNGs:
+`letters/font-sizes` amber to green in A and B (8/10 to 9/10 words,
+displacement 14.8 to 2.2 pt; the rescued "text" reads as itself on both
+sides, the 8 pt line's split read still misses);
+`tables/chart-pie` amber to green in A and B (8/12 to 11/12, displacement
+1.8 to 1.3 pt; the rescued "3", "7" and "5" read as themselves on both
+sides, the Q4 legend label still misses);
+`letters/table` improved but stays amber (6/9 to 8/9 words, lost lines 1
+to 0; the rescued "r1c2" and "r1c3" read as themselves on both sides);
+`tables/chart-scatter` green at 29/29 (up from 28/29, no verdict change —
+the union had already greened it);
+`letters/footnotes` green at 50/50 (up from 48/50) and
+`tables/chart-line`/`chart-area` green at 25/26 (up from 24/26). No other
+fixture in any app moved, including `tables/number-formats` ("###"
+hallucinates too chaotically per rendering for any two reads to agree) and
+`tables/wrap-text` (no unmatched words; amber on SSIM, out of scope).
+`letters/font-sizes` and `tables/chart-pie` are green, not artifacts, from
+here on.
 
 A known difference in behaviour, not in the metric, and why it has no
 fixture: **keep with next** (2026-09-25). In LibreOffice's rendering of a
