@@ -29,22 +29,34 @@ pub fn render_chart_named(
     let surface = ImageSurface::create(Format::ARgb32, width.max(1), height.max(1)).unwrap();
     let cr = Context::new(&surface).unwrap();
     crate::use_ui_font_rendering(&cr);
+    draw_chart(&cr, data, kind, width as f64, height as f64, series_name);
+    drop(cr);
+    surface.flush();
+    surface
+}
+
+/// Draw the chart into `cr` at its origin, `width` x `height` in its
+/// units, on a white ground: what [`render_chart_named`] draws onto a
+/// surface, for a caller with a context of its own (a slide on the canvas
+/// or in a PDF, where it stays vector).
+pub fn draw_chart(cr: &Context, data: &[(String, f64)], kind: ChartKind, width: f64, height: f64, series_name: Option<&str>) {
+    let _ = cr.save();
     cr.set_source_rgb(1.0, 1.0, 1.0);
-    cr.paint().unwrap();
+    cr.rectangle(0.0, 0.0, width, height);
+    let _ = cr.fill();
     // Chart text is Calibri 10 pt (Carlito where Calibri isn't
     // installed), as Excel and Calc draw a chart that names no font.
     cr.select_font_face("Calibri", gtk4::cairo::FontSlant::Normal, gtk4::cairo::FontWeight::Normal);
     cr.set_font_size(CHART_TEXT_PX);
-    let (w, h) = (width as f64, height as f64);
+    let (w, h) = (width, height);
     match kind {
-        ChartKind::Bar => draw_bars(&cr, data, width, height, series_name),
-        ChartKind::Line => draw_category(&cr, data, w, h, series_name, Style::Line),
-        ChartKind::Area => draw_category(&cr, data, w, h, series_name, Style::Area),
-        ChartKind::Pie => draw_pie(&cr, data, w, h),
-        ChartKind::Scatter => draw_scatter(&cr, data, w, h, series_name),
+        ChartKind::Bar => draw_bars(cr, data, w, h, series_name),
+        ChartKind::Line => draw_category(cr, data, w, h, series_name, Style::Line),
+        ChartKind::Area => draw_category(cr, data, w, h, series_name, Style::Area),
+        ChartKind::Pie => draw_pie(cr, data, w, h),
+        ChartKind::Scatter => draw_scatter(cr, data, w, h, series_name),
     }
-    surface.flush();
-    surface
+    let _ = cr.restore();
 }
 
 /// 10 pt at 96 DPI.
@@ -185,8 +197,7 @@ fn draw_value_axis(cr: &Context, axis: &ValueAxis, left: f64, right: f64, top_y:
 /// A clustered column chart: value axis from 0 with round ticks and
 /// horizontal gridlines, categories under the bars, and the legend at the
 /// right when the series has a name.
-fn draw_bars(cr: &Context, data: &[(String, f64)], w: i32, h: i32, series_name: Option<&str>) {
-    let (w, h) = (w as f64, h as f64);
+fn draw_bars(cr: &Context, data: &[(String, f64)], w: f64, h: f64, series_name: Option<&str>) {
     let axis = ValueAxis::new(data.iter().map(|d| d.1).fold(0.0, f64::max));
     let legend_w = series_name.map_or(0.0, |n| text_w(cr, n) + 30.0);
     let (left, right, top_y, bottom) = (axis.widest(cr) + 14.0, w - 10.0 - legend_w, 12.0, h - CHART_TEXT_PX - 14.0);

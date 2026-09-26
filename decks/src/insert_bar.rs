@@ -6,8 +6,9 @@
 //! popover that is a searchable library of shapes, each drawn by the
 //! canvas's own shape code. What each button inserts is decks_core::insert;
 //! the buttons only fire the app actions (add-text-box, insert-shape,
-//! insert-table, add-image), so keyboard and automation reach the same
-//! code.
+//! insert-table, insert-chart, add-image), so keyboard and automation reach
+//! the same code. The Chart popover draws each kind with the renderer the
+//! slide draws it with.
 
 use adw::prelude::*;
 use decks_core::engine::shape::ShapeStyle;
@@ -114,13 +115,64 @@ fn shape_menu() -> gtk::MenuButton {
     menu
 }
 
+/// The Chart button: a popover of the chart kinds, each drawn with its
+/// sample series.
+fn chart_menu() -> gtk::MenuButton {
+    let grid = gtk::FlowBox::builder()
+        .selection_mode(gtk::SelectionMode::None)
+        .max_children_per_line(3)
+        .min_children_per_line(3)
+        .row_spacing(6)
+        .column_spacing(6)
+        .homogeneous(true)
+        .build();
+    let popover = gtk::Popover::new();
+    for (i, kind) in decks_core::insert::CHART_KINDS.iter().enumerate() {
+        let name = decks_core::engine::chart::ChartData::kind_name(*kind);
+        let tile = gtk::Box::new(gtk::Orientation::Vertical, 6);
+        let area = gtk::DrawingArea::new();
+        area.set_content_width(96);
+        area.set_content_height(64);
+        let data = decks_core::engine::chart::ChartData::sample(*kind);
+        area.set_draw_func(move |_, cr, w, h| {
+            // Drawn at twice the size and scaled down, so the sample's
+            // axis labels fit the tile.
+            cr.scale(0.5, 0.5);
+            suite_common::charts::draw_chart(cr, &data.points, data.kind, w as f64 * 2.0, h as f64 * 2.0, None);
+        });
+        tile.append(&area);
+        let label = gtk::Label::new(Some(name));
+        label.add_css_class("caption");
+        tile.append(&label);
+        let b = gtk::Button::builder().child(&tile).build();
+        b.add_css_class("flat");
+        b.update_property(&[gtk::accessible::Property::Label(name)]);
+        b.set_action_name(Some("app.insert-chart"));
+        b.set_action_target_value(Some(&(i as u32).to_variant()));
+        let p = popover.clone();
+        b.connect_clicked(move |_| p.popdown());
+        grid.append(&b);
+    }
+    grid.set_margin_top(6);
+    grid.set_margin_bottom(6);
+    grid.set_margin_start(6);
+    grid.set_margin_end(6);
+    popover.set_child(Some(&grid));
+    let menu = gtk::MenuButton::builder().child(&labelled("insert-object-symbolic", "C_hart", "Insert Chart")).popover(&popover).build();
+    menu.add_css_class("flat");
+    menu.set_tooltip_text(Some("Insert Chart"));
+    menu.update_property(&[gtk::accessible::Property::Label("Insert Chart")]);
+    menu
+}
+
 /// Pack the Insert buttons at the start of `header`: Text, Shape, Table,
-/// Image.
+/// Chart, Image.
 pub fn build(header: &adw::HeaderBar) {
     let bar = gtk::Box::new(gtk::Orientation::Horizontal, 0);
     bar.append(&button("insert-text-symbolic", "_Text", "Insert Text Box", "app.add-text-box"));
     bar.append(&shape_menu());
     bar.append(&button("x-office-spreadsheet-symbolic", "T_able", "Insert Table", "app.insert-table"));
+    bar.append(&chart_menu());
     bar.append(&button("insert-image-symbolic", "_Image", "Insert Image", "app.add-image"));
     header.pack_start(&bar);
 }

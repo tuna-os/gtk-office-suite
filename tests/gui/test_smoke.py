@@ -4213,6 +4213,61 @@ class DecksInsertBarSmoke(BaseGUITestCase):
         self.assertIsNone(self.process.poll(), "decks crashed inserting")
 
 
+class DecksChartSmoke(BaseGUITestCase):
+    """Charts on slides (Keynote's and PowerPoint's Insert > Chart): the
+    Chart button's popover offers each kind, drawn as it will look;
+    choosing Pie puts a pie chart with the sample series on the slide, and
+    saving writes it as a DrawingML chart part the slide relates to, which
+    PowerPoint and Impress open as their own chart."""
+
+    app_name = "decks"
+
+    def setUp(self):
+        self._dir = self.temp_dir(prefix="decks-chart-")
+        self._doc = os.path.join(self._dir, "talk.pptx")
+        with open(self._doc, "wb") as f:
+            f.write(minimal_pptx_bytes("chart slide"))
+        self.launch_args = [self._doc]
+        super().setUp()
+
+    def _objects(self):
+        return [n.name for n in self.app.findChildren(lambda n: n.roleName == "list item")]
+
+    def test_insert_a_pie_chart_and_save_it(self):
+        import zipfile
+        aid = "org.tunaos.decks"
+        self.wait_until(lambda: self.app.child(name="Slide canvas"), lambda c: c is not None, description="the deck to open")
+        self.wait_until(lambda: self.app.child(name="Insert Chart", roleName="toggle button"),
+                        lambda b: b is not None, description="the Insert Chart button").do_action(0)
+        pie = self.wait_until(lambda: self.app.findChild(lambda n: n.roleName == "push button" and n.name == "Pie" and n.showing,
+                                                         retry=False, requireResult=False),
+                              lambda b: b is not None, description="the chart kinds to open")
+        pie.do_action(0)
+        self.wait_until(self._objects, lambda o: "Pie chart: Sales, 4 values" in o, interval=0.25,
+                        description="a pie chart on the slide")
+        self.gapplication_action(aid, "save")
+
+        def saved():
+            try:
+                with zipfile.ZipFile(self._doc) as z:
+                    names = z.namelist()
+                    if "ppt/charts/chart1.xml" not in names:
+                        return None
+                    return (z.read("ppt/charts/chart1.xml").decode(),
+                            z.read("ppt/slides/_rels/slide1.xml.rels").decode(),
+                            z.read("[Content_Types].xml").decode())
+            except (OSError, KeyError, zipfile.BadZipFile):
+                return None
+        chart, rels, types = self.wait_until(saved, lambda s: s is not None, interval=0.5,
+                                             description="the chart part in the saved pptx")
+        self.assertIn("<c:pieChart>", chart)
+        for value in ("Sales", "Q1", "Q4", "4.3", "4.5"):
+            self.assertIn(f"<c:v>{value}</c:v>", chart)
+        self.assertIn('relationships/chart" Target="../charts/chart1.xml"', rels)
+        self.assertIn("drawingml.chart+xml", types)
+        self.assertIsNone(self.process.poll(), "decks crashed inserting a chart")
+
+
 class DecksSelectionSmoke(BaseGUITestCase):
     """Object selection updates the canvas a11y description and the
     inspector (fit-to-viewport geometry keeps coordinates stable)."""

@@ -146,7 +146,7 @@ impl ObjectFormat {
                     first_run(&cell.runs, &mut f);
                 }
             }
-            SlideObject::Image { .. } => {}
+            SlideObject::Image { .. } | SlideObject::Chart { .. } => {}
         }
         f
     }

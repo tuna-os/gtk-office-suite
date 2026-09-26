@@ -795,6 +795,7 @@ fn impress_reads_our_odp_rotation_with_the_sign_we_wrote() {
             | SlideObject::Circle { rotation, .. }
             | SlideObject::Shape { rotation, .. }
             | SlideObject::Table { rotation, .. }
+            | SlideObject::Chart { rotation, .. }
             | SlideObject::Image { rotation, .. } => *rotation,
         })
         .collect();
@@ -831,6 +832,7 @@ fn we_read_the_rotation_impress_writes_into_an_odp() {
             | SlideObject::Circle { rotation, .. }
             | SlideObject::Shape { rotation, .. }
             | SlideObject::Table { rotation, .. }
+            | SlideObject::Chart { rotation, .. }
             | SlideObject::Image { rotation, .. } => *rotation,
         })
         .collect();
@@ -1772,4 +1774,82 @@ fn impress_keeps_our_layouts_and_placeholders() {
         let read = decks_core::read_deck(back.to_str().unwrap()).expect("read Impress's file");
         assert_eq!(summary(&read), want, "{ext}: layouts and placeholders through Impress");
     }
+}
+
+// ── Charts ───────────────────────────────────────────────────────────
+
+/// Every chart on the deck: its kind, series, points and box, in slide
+/// order.
+fn charts_of(d: &Deck) -> Vec<String> {
+    d.slides
+        .iter()
+        .flat_map(|s| &s.objects)
+        .filter_map(|o| match o {
+            SlideObject::Chart { x, y, w, h, chart, .. } => Some(format!(
+                "{:?} {:?} {:?} {} {} {} {}",
+                chart.kind,
+                chart.series,
+                chart.points,
+                x.round(),
+                y.round(),
+                w.round(),
+                h.round()
+            )),
+            _ => None,
+        })
+        .collect()
+}
+
+/// A slide per chart kind, each chart as the Chart button inserts it.
+fn chart_deck() -> Deck {
+    let mut deck = Deck::new();
+    let proto = deck.slides[0].clone();
+    deck.slides = decks_core::insert::CHART_KINDS
+        .iter()
+        .enumerate()
+        .map(|(i, kind)| {
+            let mut s = proto.clone();
+            s.title = format!("Chart {}", i + 1);
+            s.objects = vec![decks_core::insert::chart(*kind)];
+            s
+        })
+        .collect();
+    deck
+}
+
+/// Our `from` file, rewritten by Impress as `to`, read back by us: every
+/// chart is still there, the same kind with the same series and values.
+/// Across formats, Impress has to have understood our chart part to write
+/// its own.
+fn charts_through_impress(from: &str, to: &str) {
+    if !require_or_skip() {
+        return;
+    }
+    let deck = chart_deck();
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join(format!("charts.{from}"));
+    decks_core::write_deck(path.to_str().unwrap(), &deck).expect("write");
+    let back = convert(&path, to).unwrap_or_else(|e| panic!("Impress converts our {from} to {to}: {e}"));
+    let read = decks_core::read_deck(back.to_str().unwrap()).expect("read Impress's file");
+    assert_eq!(charts_of(&read), charts_of(&deck), "{from} -> Impress -> {to}");
+}
+
+#[test]
+fn charts_survive_impress_pptx_rewrite() {
+    charts_through_impress("pptx", "pptx");
+}
+
+#[test]
+fn charts_survive_impress_odp_rewrite() {
+    charts_through_impress("odp", "odp");
+}
+
+#[test]
+fn impress_reads_our_pptx_charts_as_its_own() {
+    charts_through_impress("pptx", "odp");
+}
+
+#[test]
+fn impress_reads_our_odp_charts_as_its_own() {
+    charts_through_impress("odp", "pptx");
 }

@@ -7,6 +7,7 @@
 // the Shape button's popover lists and searches. GTK-free and unit-tested;
 // decks/src/insert_bar.rs builds the buttons.
 
+use crate::engine::chart::{ChartData, ChartKind};
 use crate::engine::shape::{ShapeKind, ShapeStyle};
 use crate::engine::table::{TableCell, TableData};
 use crate::engine::SlideObject;
@@ -81,10 +82,32 @@ pub fn table(rows: usize, cols: usize) -> SlideObject {
     }
 }
 
+/// The kinds the Chart button offers, in the order it shows them; the
+/// `insert-chart` action's target is an index into this.
+pub const CHART_KINDS: [ChartKind; 5] = [ChartKind::Bar, ChartKind::Line, ChartKind::Area, ChartKind::Pie, ChartKind::Scatter];
+
+/// A new chart of `kind` with PowerPoint's sample series, 480 x 300 in
+/// the middle of the slide.
+pub fn chart(kind: ChartKind) -> SlideObject {
+    let (w, h) = (480.0, 300.0);
+    let (x, y) = centred(w, h);
+    SlideObject::Chart { x, y, w, h, rotation: 0.0, chart: ChartData::sample(kind) }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::undo::obj_bounds;
+
+    #[test]
+    fn a_chart_is_inserted_in_the_middle_with_the_sample_series() {
+        for kind in CHART_KINDS {
+            let c = chart(kind);
+            assert_eq!(obj_bounds(&c), (240.0, 120.0, 480.0, 300.0));
+            let SlideObject::Chart { chart, .. } = c else { panic!() };
+            assert_eq!((chart.kind, chart.series.as_str(), chart.points.len()), (kind, "Sales", 4));
+        }
+    }
 
     #[test]
     fn the_library_is_searched_by_name_and_keyword() {

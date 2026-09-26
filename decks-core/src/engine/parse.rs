@@ -24,7 +24,7 @@ use super::model::*;
 use super::notes::{extract_notes_text, parse_run_style};
 use super::placeholders::{inherited_rect, parse_placeholders, PhKey, Placeholder};
 use super::shape::ShapeKind;
-use super::shape_xml::{frame_tables, sp_styles, theme as read_theme, Theme};
+use super::shape_xml::{frame_charts, frame_tables, sp_styles, theme as read_theme, Theme};
 use super::text_xml::{sp_texts, Inherited};
 
 use std::fs::File;
@@ -601,6 +601,7 @@ pub fn read_pptx(path: &str) -> Result<Deck, String> {
                 cell.runs = scale.text_runs(&cell.runs);
             }
         }
+        let charts = frame_charts(&slide_xml);
         let mut frame_index = 0usize;
 
         // The layout (and through it, the master) this slide's placeholders
@@ -944,6 +945,26 @@ pub fn read_pptx(path: &str) -> Result<Deck, String> {
                                     rotation: 0.0,
                                     table: t.table.clone(),
                                 });
+                            } else if let Some(c) = charts.iter().find(|c| c.index == frame_index) {
+                                // The chart part the frame's relationship
+                                // names, read on the same budget as the
+                                // slide; a part that isn't there or isn't a
+                                // chart we draw leaves no object.
+                                let chart = slide_image_rels
+                                    .get(&c.rel_id)
+                                    .map(|t| part_path(&slide_dir.to_string_lossy(), t))
+                                    .map(|p| archive.optional_part_to_string(&p, &mut budget))
+                                    .and_then(|xml| super::chart::parse_chart_space(&xml));
+                                if let Some(chart) = chart {
+                                    objects.push(SlideObject::Chart {
+                                        x: c.x * scale.x,
+                                        y: c.y * scale.y,
+                                        w: c.w * scale.x,
+                                        h: c.h * scale.y,
+                                        rotation: 0.0,
+                                        chart,
+                                    });
+                                }
                             }
                             frame_index += 1;
                         } else if name.as_ref() == "p:pic" {
@@ -1525,6 +1546,26 @@ struct PictureRect {
     w: f64,
     h: f64,
     rotation: f64,
+}
+
+/// The package path a relationship `target` names, from a part in `dir`:
+/// "../charts/chart1.xml" from "ppt/slides" is "ppt/charts/chart1.xml",
+/// and "/ppt/charts/chart1.xml" is package-absolute.
+fn part_path(dir: &str, target: &str) -> String {
+    if let Some(abs) = target.strip_prefix('/') {
+        return abs.to_string();
+    }
+    let mut parts: Vec<&str> = dir.split('/').filter(|p| !p.is_empty()).collect();
+    for seg in target.split('/') {
+        match seg {
+            ".." => {
+                parts.pop();
+            }
+            "." | "" => {}
+            s => parts.push(s),
+        }
+    }
+    parts.join("/")
 }
 
 fn resolve_and_extract_picture(

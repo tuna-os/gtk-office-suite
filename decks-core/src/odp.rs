@@ -620,6 +620,31 @@ fn shapes_xml(
                         }
                     });
                 }
+                SlideObject::Chart { x, y, w, h, rotation, chart } => {
+                    // An embedded chart object, as Impress writes one: a
+                    // sub-document of its own whose data is its local
+                    // table. Numbered through the package like pictures.
+                    use crate::engine::chart;
+                    let n = media.iter().filter(|m| m.media_type == chart::ODF_CHART_MEDIA_TYPE).count() + 1;
+                    let dir = format!("Object {n}");
+                    pages.push_str(&format!(
+                        "<draw:frame {}>\
+                         <draw:object xlink:href=\"./{dir}\" xlink:type=\"simple\" \
+                         xlink:show=\"embed\" xlink:actuate=\"onLoad\"/></draw:frame>",
+                        geometry(*x, *y, *w, *h, *rotation)
+                    ));
+                    media.push(Media { zip_path: format!("{dir}/"), media_type: chart::ODF_CHART_MEDIA_TYPE.into(), bytes: Vec::new() });
+                    media.push(Media {
+                        zip_path: format!("{dir}/content.xml"),
+                        media_type: "text/xml".into(),
+                        bytes: chart::odf_chart_content_xml(chart, snap(page_x(*w)), snap(page_y(*h))).into_bytes(),
+                    });
+                    media.push(Media {
+                        zip_path: format!("{dir}/styles.xml"),
+                        media_type: "text/xml".into(),
+                        bytes: chart::odf_chart_styles_xml().into_bytes(),
+                    });
+                }
                 SlideObject::Image { path, x, y, w, h, rotation } => {
                     // Named by position in the package rather than after
                     // the source file: two decks can hold pictures called
@@ -1010,6 +1035,11 @@ pub fn write_bytes(deck: &Deck) -> Result<Vec<u8>, String> {
     z.start_file("styles.xml", opt).map_err(|e| e.to_string())?;
     z.write_all(styles.as_bytes()).map_err(|e| e.to_string())?;
     for m in &media {
+        // An embedded object's directory (its manifest entry names it).
+        if m.zip_path.ends_with('/') {
+            z.add_directory(m.zip_path.as_str(), opt).map_err(|e| e.to_string())?;
+            continue;
+        }
         // Stored, not deflated: a PNG or JPEG is already compressed, and
         // deflating it again spends time to grow the archive.
         z.start_file(
@@ -1345,6 +1375,7 @@ fn parse_pages(
     graphics: &crate::odp_graphics::GraphicDefs,
     scale: (f64, f64),
     resolve_image: &mut dyn FnMut(&str) -> Option<String>,
+    charts: &std::collections::HashMap<String, crate::engine::chart::ChartData>,
 ) -> Result<Vec<Page>, String> {
     let mut pages: Vec<Page> = Vec::new();
     let mut uses_master: Option<String> = None;
@@ -1360,6 +1391,9 @@ fn parse_pages(
     // Current draw:frame geometry and rotation; taken by the text-box
     // inside it.
     let mut frame: Option<(f64, f64, f64, f64, f64)> = None;
+    // The frame holds a chart object we read: its replacement picture,
+    // which Impress writes beside the object, is not a second object.
+    let mut frame_has_chart = false;
     let mut textbox: Option<(Vec<String>, Vec<Run>)> = None; // (lines, runs)
     let mut span_style: Option<RunStyle> = None;
     let mut in_text = false;
@@ -1460,6 +1494,7 @@ fn parse_pages(
                 "presentation:notes" => in_notes = true,
                 "draw:frame" => {
                     frame = Some(geo(e));
+                    frame_has_chart = false;
                     // A placeholder frame's style is its presentation style.
                     frame_style = attr(e, "draw:style-name").or_else(|| attr(e, "presentation:style-name"));
                     frame_class = attr(e, "presentation:class");
@@ -1479,13 +1514,21 @@ fn parse_pages(
                 // out of an Impress-written deck, which is why both arms
                 // carry this.
                 "draw:image" => {
-                    if let (Some(s2), false, Some((x, y, w, h, rotation))) =
-                        (slide.as_mut(), in_notes, frame)
+                    if let (Some(s2), false, false, Some((x, y, w, h, rotation))) =
+                        (slide.as_mut(), in_notes, frame_has_chart, frame)
                     {
                         if let Some(path) =
                             attr(e, "xlink:href").and_then(|href| resolve_image(&href))
                         {
                             s2.objects.push(SlideObject::Image { path, x, y, w, h, rotation });
+                        }
+                    }
+                }
+                "draw:object" => {
+                    if let (Some(s2), false, Some((x, y, w, h, rotation))) = (slide.as_mut(), in_notes, frame) {
+                        if let Some(chart) = attr(e, "xlink:href").and_then(|h| charts.get(object_key(&h)).cloned()) {
+                            s2.objects.push(SlideObject::Chart { x, y, w, h, rotation, chart });
+                            frame_has_chart = true;
                         }
                     }
                 }
@@ -1571,13 +1614,22 @@ fn parse_pages(
                 // The empty form, which is what this writer emits — see the
                 // Start arm above for why both are needed.
                 "draw:image" => {
-                    if let (Some(s2), false, Some((x, y, w, h, rotation))) =
-                        (slide.as_mut(), in_notes, frame)
+                    if let (Some(s2), false, false, Some((x, y, w, h, rotation))) =
+                        (slide.as_mut(), in_notes, frame_has_chart, frame)
                     {
                         if let Some(path) =
                             attr(e, "xlink:href").and_then(|href| resolve_image(&href))
                         {
                             s2.objects.push(SlideObject::Image { path, x, y, w, h, rotation });
+                        }
+                    }
+                }
+                // The empty form, which is what this writer emits.
+                "draw:object" => {
+                    if let (Some(s2), false, Some((x, y, w, h, rotation))) = (slide.as_mut(), in_notes, frame) {
+                        if let Some(chart) = attr(e, "xlink:href").and_then(|h| charts.get(object_key(&h)).cloned()) {
+                            s2.objects.push(SlideObject::Chart { x, y, w, h, rotation, chart });
+                            frame_has_chart = true;
                         }
                     }
                 }
@@ -1698,6 +1750,34 @@ fn parse_pages(
     Ok(pages)
 }
 
+/// An embedded object's name from the `xlink:href` that names it:
+/// "./Object 1" and "Object 1/" are both "Object 1".
+fn object_key(href: &str) -> &str {
+    href.trim_start_matches("./").trim_end_matches('/')
+}
+
+/// Every embedded chart object in the package we can draw, by name: an
+/// `Object N/content.xml` holding an ODF chart. Read on the package's
+/// budget, like every other part.
+fn read_chart_objects(
+    zip: &mut zip::ZipArchive<std::fs::File>,
+    budget: &mut ZipBudget,
+) -> std::collections::HashMap<String, crate::engine::chart::ChartData> {
+    let names: Vec<String> = zip
+        .file_names()
+        .filter(|n| n.ends_with("/content.xml") && n.matches('/').count() == 1)
+        .map(str::to_string)
+        .collect();
+    let mut out = std::collections::HashMap::new();
+    for name in names {
+        let Ok(xml) = zip.part_to_string(&name, budget) else { continue };
+        if let Some(chart) = crate::engine::chart::parse_odf_chart(&xml) {
+            out.insert(name.trim_end_matches("/content.xml").to_string(), chart);
+        }
+    }
+    out
+}
+
 /// Unpack one picture from the package and hand back a path the model can
 /// point at.
 ///
@@ -1771,12 +1851,14 @@ pub fn read(path: &str) -> Result<Deck, String> {
     let doc_font = parse_default_graphic_font(&styles)
         .unwrap_or_else(|| MasterSlide::DEFAULT_FONT.into());
 
+    let charts = read_chart_objects(&mut zip, &mut budget);
+
     // Second pass: the master pages, then the slides that name them.
     let mut masters: Vec<MasterSlide> = Vec::new();
     let mut master_idx_by_name: std::collections::HashMap<String, usize> = Default::default();
     let master_pages = {
         let mut resolve = |href: &str| extract_picture(href, &mut zip, &mut budget);
-        parse_pages(&styles, "style:master-page", &page_bg, &text_styles, &text_defs, &graphic_defs, scale, &mut resolve)?
+        parse_pages(&styles, "style:master-page", &page_bg, &text_styles, &text_defs, &graphic_defs, scale, &mut resolve, &charts)?
     };
     // Layouts (odp_layouts): the page layouts, each master's own (or, in a
     // file we didn't write, every one), and the master pages that are a
@@ -1837,7 +1919,7 @@ pub fn read(path: &str) -> Result<Deck, String> {
     let mut deck = Deck { slides: Vec::new(), masters };
     let slide_pages = {
         let mut resolve = |href: &str| extract_picture(href, &mut zip, &mut budget);
-        parse_pages(&content, "draw:page", &page_bg, &text_styles, &text_defs, &graphic_defs, scale, &mut resolve)?
+        parse_pages(&content, "draw:page", &page_bg, &text_styles, &text_defs, &graphic_defs, scale, &mut resolve, &charts)?
     };
     for (i, page) in slide_pages.into_iter().enumerate() {
         let mut slide = page.slide;
