@@ -17,6 +17,9 @@ use libadwaita as adw;
 use std::cell::{Cell, RefCell};
 use std::rc::Rc;
 
+/// Shows a chart's type and data in the tab.
+type Sync = Rc<dyn Fn(&ChartData)>;
+
 /// The Chart tab and its model→widget refresh.
 pub struct ChartInspector {
     pub page: adw::PreferencesPage,
@@ -157,7 +160,7 @@ pub fn build(
     // Shows the chart again (a value that wasn't a number is put back);
     // bound to `sync` and the selected chart below.
     let last: Rc<RefCell<Option<ChartData>>> = Rc::default();
-    let resync_slot: Rc<RefCell<Option<Rc<dyn Fn(&ChartData)>>>> = Rc::default();
+    let resync_slot: Rc<RefCell<Option<Sync>>> = Rc::default();
     let resync: Rc<dyn Fn()> = {
         let (last, slot) = (last.clone(), resync_slot.clone());
         Rc::new(move || {
