@@ -123,6 +123,17 @@ pub fn col_label(c: usize) -> String {
     s
 }
 
+/// A cell ("B2") or a range ("A1:C3", either corner first), as the name box
+/// takes them: 0-based `(top, left, bottom, right)`.
+pub fn parse_cell_or_range(s: &str) -> Option<(usize, usize, usize, usize)> {
+    let cell = |t: &str| parse_cell_ref(t.trim());
+    if let Some((a, b)) = s.split_once(':') {
+        let ((r0, c0), (r1, c1)) = (cell(a)?, cell(b)?);
+        return Some((r0.min(r1), c0.min(c1), r0.max(r1), c0.max(c1)));
+    }
+    cell(s).map(|(r, c)| (r, c, r, c))
+}
+
 /// Parse a cell reference like "A1", "b3", "AA10" → (row, col), 0-based.
 pub fn parse_cell_ref(s: &str) -> Option<(usize, usize)> {
     let s = s.trim();
@@ -1268,6 +1279,14 @@ impl SheetModel {
 #[cfg(test)]
 mod used_extent_tests {
     use super::*;
+
+    #[test]
+    fn the_name_box_takes_a_cell_or_a_range_either_way_round() {
+        assert_eq!(parse_cell_or_range("B2"), Some((1, 1, 1, 1)));
+        assert_eq!(parse_cell_or_range("A1:C3"), Some((0, 0, 2, 2)));
+        assert_eq!(parse_cell_or_range("c3:a1"), Some((0, 0, 2, 2)));
+        assert_eq!(parse_cell_or_range("Total"), None);
+    }
 
     #[test]
     fn numbers_align_right_and_text_left() {
