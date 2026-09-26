@@ -53,6 +53,7 @@ pub struct SlideProps {
     pub master_idx: Option<usize>,
     pub transition: Transition,
     pub builds: Vec<Build>,
+    pub layout: Option<usize>,
 }
 
 impl SlideProps {
@@ -64,6 +65,7 @@ impl SlideProps {
             master_idx: s.master_idx,
             transition: s.transition,
             builds: s.builds.clone(),
+            layout: s.layout,
         }
     }
 
@@ -74,6 +76,7 @@ impl SlideProps {
         s.master_idx = self.master_idx;
         s.transition = self.transition;
         s.builds = self.builds;
+        s.layout = self.layout;
     }
 }
 
@@ -358,6 +361,7 @@ mod tests {
             transition: Default::default(),
             builds: vec![],
             ids: Default::default(),
+            layout: None,
         }
     }
 
@@ -450,6 +454,7 @@ mod tests {
             default_font: "Sans".into(),
             shapes: vec![SlideObject::Rect { x: 1.0, y: 2.0, w: 3.0, h: 4.0, rotation: 0.0 }],
             page_emu: None,
+            layouts: Vec::new(),
         };
         let mut doc = DeckDoc { slides: vec![slide("a", 1)], masters: vec![master("#ffffff")] };
         let mut h: History<Op> = History::default();

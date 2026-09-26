@@ -10,6 +10,7 @@
 use crate::engine::shape::{Color, GradientStop, LinearGradient, ShapeKind, ShapeStyle};
 use crate::engine::text_body::{Anchor, Bullet, ParaAlign, ParaStyle, TextBody};
 use crate::engine::{MasterSlide, Slide, SlideObject};
+use crate::layouts::Placeholder;
 use letters_core::model::{Run, RunStyle};
 
 /// A theme as the chooser lists it.
@@ -118,7 +119,10 @@ pub fn templates() -> Vec<Template> {
     themes().into_iter().map(|t| t.template).collect()
 }
 
+/// A text box filling placeholder `role` of the slide's layout.
+#[allow(clippy::too_many_arguments)]
 fn text(
+    role: Placeholder,
     content: &str,
     (x, y, w, h): (f64, f64, f64, f64),
     color: &str,
@@ -136,7 +140,7 @@ fn text(
         h,
         rotation: 0.0,
         runs: vec![Run { text: content.into(), style }],
-        body: TextBody { paras, anchor, ..Default::default() },
+        body: TextBody { paras, anchor, placeholder: Some(role), ..Default::default() },
     }
 }
 
@@ -148,7 +152,7 @@ fn bullet() -> ParaStyle {
     ParaStyle { bullet: Bullet::Char("\u{2022}".into()), margin_left: 36.0, indent: -28.0, ..Default::default() }
 }
 
-fn slide(title: &str, objects: Vec<SlideObject>) -> Slide {
+fn slide(title: &str, layout: usize, objects: Vec<SlideObject>) -> Slide {
     Slide {
         title: title.into(),
         // White is "unset": the slide shows its master's background.
@@ -159,6 +163,7 @@ fn slide(title: &str, objects: Vec<SlideObject>) -> Slide {
         transition: Default::default(),
         builds: Vec::new(),
         ids: Default::default(),
+        layout: Some(layout),
     }
 }
 
@@ -173,20 +178,25 @@ pub fn deck(index: usize) -> Option<(Vec<Slide>, Vec<MasterSlide>)> {
         shapes: (theme.decorations)(),
         // Our default 16:9 slide.
         page_emu: None,
+        // The standard six: the title slide is on the first, the bulleted
+        // one on Title and Content, in exactly their places.
+        layouts: crate::layouts::standard(),
     };
     let title_slide = slide(
         "Title",
+        0,
         vec![
-            text("Presentation Title", (80.0, 150.0, 800.0, 130.0), theme.title, 48, true, vec![centred()], Anchor::Bottom),
-            text("Subtitle", (80.0, 300.0, 800.0, 60.0), theme.body, 24, false, vec![centred()], Anchor::Top),
+            text(Placeholder::Title, "Presentation Title", (80.0, 150.0, 800.0, 130.0), theme.title, 48, true, vec![centred()], Anchor::Bottom),
+            text(Placeholder::Subtitle, "Subtitle", (80.0, 300.0, 800.0, 60.0), theme.body, 24, false, vec![centred()], Anchor::Top),
         ],
     );
     let points = "First point\nSecond point\nThird point";
     let bullets_slide = slide(
         "Title & Bullets",
+        1,
         vec![
-            text("Slide Title", (80.0, 40.0, 800.0, 90.0), theme.title, 36, true, vec![ParaStyle::default()], Anchor::Bottom),
-            text(points, (80.0, 150.0, 800.0, 320.0), theme.body, 24, false, vec![bullet()], Anchor::Top),
+            text(Placeholder::Title, "Slide Title", (80.0, 40.0, 800.0, 90.0), theme.title, 36, true, vec![ParaStyle::default()], Anchor::Bottom),
+            text(Placeholder::Body, points, (80.0, 150.0, 800.0, 320.0), theme.body, 24, false, vec![bullet()], Anchor::Top),
         ],
     );
     Some((vec![title_slide, bullets_slide], vec![master]))

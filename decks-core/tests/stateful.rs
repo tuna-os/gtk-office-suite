@@ -184,6 +184,7 @@ fn blank_slide() -> Slide {
         transition: Default::default(),
         builds: Vec::new(),
         ids: Default::default(),
+        layout: None,
     }
 }
 

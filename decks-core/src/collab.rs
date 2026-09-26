@@ -291,6 +291,7 @@ impl Replica {
         put(&meta, "notes", &s.notes);
         put(&meta, "master", &json(&s.master_idx));
         put(&meta, "tr", &json(&s.transition));
+        put(&meta, "layout", &json(&s.layout));
         let builds: Vec<StoredBuild> = s
             .builds
             .iter()
@@ -419,6 +420,7 @@ impl Replica {
                 transition: string_at(&meta, "tr").and_then(|t| serde_json::from_str(&t).ok()).unwrap_or(Transition::None),
                 builds: Vec::new(),
                 ids: Default::default(),
+                layout: string_at(&meta, "layout").and_then(|t| serde_json::from_str(&t).ok()).unwrap_or(None),
             };
             s.ids.slide = id_for(node);
             let mut index_of: HashMap<String, usize> = HashMap::new();

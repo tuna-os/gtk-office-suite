@@ -7,6 +7,7 @@ mod canvas;
 mod text_render;
 mod format_inspector;
 mod insert_bar;
+mod layout_picker;
 mod master_view;
 mod template_chooser;
 mod notes_pane;

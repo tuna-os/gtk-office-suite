@@ -62,6 +62,19 @@ pub(crate) fn register(app: &adw::Application, add_bar: impl Fn(&adw::Banner), h
         });
         app.add_action(&act);
     }
+    // Put the current slide on layout n of its master (the inspector's
+    // Layout row does the same; this is the keyboard's and automation's way).
+    {
+        let (ctl, cs, redraw) = (h.controller.clone(), h.current_slide.clone(), redraw.clone());
+        let act = gio::SimpleAction::new("apply-layout", Some(gtk4::glib::VariantTy::UINT32));
+        act.connect_activate(move |_, p| {
+            let Some(n) = p.and_then(|p| p.get::<u32>()) else { return };
+            if ctl.apply_layout(cs.get(), n as usize) {
+                redraw(cs.get());
+            }
+        });
+        app.add_action(&act);
+    }
     {
         let (ctl, cs, so, banner, app2) =
             (h.controller.clone(), h.current_slide.clone(), h.selected_object.clone(), banner.clone(), app.clone());

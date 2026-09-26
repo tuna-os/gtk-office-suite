@@ -60,6 +60,7 @@ fn master_as_slide(m: &MasterSlide) -> Slide {
         transition: Default::default(),
         builds: Vec::new(),
         ids: Default::default(),
+        layout: None,
     }
 }
 
@@ -475,6 +476,52 @@ impl DecksController {
         changed
     }
 
+    /// Put slide `slide_idx` on layout `layout` of its master (Format ▸
+    /// Layout): its placeholder boxes move to the layout's places and it
+    /// gains an empty box for each place it had nothing for
+    /// (`layouts::arrange`). A master with no layouts yet gets the standard
+    /// ones first, and `layout` indexes those. One undo step.
+    pub fn apply_layout(&self, slide_idx: usize, layout: usize) -> bool {
+        if self.master_edit.borrow().is_some() {
+            return false;
+        }
+        let (mi, needs_layouts) = {
+            let slides = self.ids_ready();
+            let Some(s) = slides.get(slide_idx) else { return false };
+            let mi = s.master_idx.unwrap_or(0);
+            let masters = self.masters.borrow();
+            let Some(m) = masters.get(mi) else { return false };
+            (mi, m.layouts.is_empty())
+        };
+        let mut ops = Vec::new();
+        if needs_layouts {
+            let mut m = self.masters.borrow()[mi].clone();
+            m.layouts = crate::layouts::standard();
+            ops.push(Op::SetMaster { index: mi, master: Box::new(m) });
+        }
+        let layouts = if needs_layouts { crate::layouts::standard() } else { self.masters.borrow()[mi].layouts.clone() };
+        let Some(target) = layouts.get(layout) else { return false };
+        let slides = self.slides.borrow();
+        let s = &slides[slide_idx];
+        let arranged = crate::layouts::arrange(s, target);
+        // The boxes the slide has, in place; then the new ones.
+        let kept = s.objects.len();
+        let mut props = crate::ops::SlideProps::of(s);
+        props.layout = Some(layout);
+        props.master_idx = Some(mi);
+        if props != crate::ops::SlideProps::of(s) {
+            ops.push(Op::SetSlide { slide: s.ids.slide, props: Box::new(props) });
+        }
+        ops.extend(crate::ops::set_objects(&slides, slide_idx, &arranged[..kept]));
+        let mut next = crate::ops::next_id(&slides);
+        for (k, o) in arranged[kept..].iter().enumerate() {
+            ops.push(Op::InsertObject { slide: s.ids.slide, at: kept + k, id: next, object: Box::new(o.clone()) });
+            next += 1;
+        }
+        drop(slides);
+        self.apply_ops(ops)
+    }
+
     /// Change slide `slide_idx`'s properties as one undo step.
     fn set_slide_props(&self, slide_idx: usize, change: impl FnOnce(&mut crate::ops::SlideProps)) -> bool {
         let op = {
@@ -548,7 +595,7 @@ mod tests {
     use crate::engine::Slide;
 
     fn slide(title: &str) -> Slide {
-        Slide { title: title.into(), background: "#fff".into(), objects: vec![], notes: String::new(), master_idx: Some(0), transition: Default::default(), builds: Vec::new(), ids: Default::default() }
+        Slide { title: title.into(), background: "#fff".into(), objects: vec![], notes: String::new(), master_idx: Some(0), transition: Default::default(), builds: Vec::new(), ids: Default::default(), layout: None }
     }
 
     fn rect(x: f64, y: f64) -> SlideObject {
@@ -713,6 +760,7 @@ mod tests {
             default_font: "Sans".into(),
             shapes: vec![SlideObject::Rect { x: 0.0, y: 0.0, w: 28.0, h: 540.0, rotation: 0.0 }],
             page_emu: None,
+            layouts: Vec::new(),
         }
     }
 
@@ -760,6 +808,37 @@ mod tests {
         c.finish_master();
         assert!(!c.can_undo());
         assert!(c.finish_master().is_none());
+    }
+
+    #[test]
+    fn applying_a_layout_is_one_step_and_a_bare_master_gets_the_standard_ones() {
+        use crate::layouts::Placeholder;
+        let mut s1 = slide("S1");
+        s1.objects.push(SlideObject::TextBox {
+            text: "Hello".into(),
+            x: 1.0,
+            y: 1.0,
+            w: 10.0,
+            h: 10.0,
+            rotation: 0.0,
+            runs: vec![],
+            body: crate::engine::TextBody { placeholder: Some(Placeholder::Title), ..Default::default() },
+        });
+        let c = DecksController::new(vec![s1], vec![decorated_master()]);
+        assert!(c.apply_layout(0, 1), "Title and Content");
+        assert_eq!(c.masters.borrow()[0].layouts.len(), 6);
+        {
+            let slides = c.slides.borrow();
+            assert_eq!(slides[0].layout, Some(1));
+            assert_eq!(slides[0].objects.len(), 2, "the body is added");
+            assert_eq!(crate::undo::obj_bounds(&slides[0].objects[0]), (80.0, 40.0, 800.0, 90.0), "the title moves");
+        }
+        assert!(!c.apply_layout(0, 9), "no such layout");
+        assert!(c.undo());
+        assert!(c.masters.borrow()[0].layouts.is_empty(), "undo takes the added layouts too");
+        assert_eq!(c.slides.borrow()[0].objects.len(), 1);
+        assert_eq!(c.slides.borrow()[0].layout, None);
+        assert!(!c.can_undo());
     }
 
     #[test]

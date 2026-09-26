@@ -338,6 +338,7 @@ impl SpText {
             anchor: self.anchor,
             insets: self.insets,
             autofit: self.autofit,
+            placeholder: None,
         }
     }
 }

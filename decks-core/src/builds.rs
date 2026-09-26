@@ -174,6 +174,7 @@ mod tests {
             transition: Default::default(),
             builds,
             ids: Default::default(),
+            layout: None,
         }
     }
 

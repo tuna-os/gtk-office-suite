@@ -59,6 +59,7 @@ impl DecksWindow {
                 transition: Default::default(),
                 builds: Vec::new(),
                 ids: Default::default(),
+                layout: None,
             }],
             vec![MasterSlide {
                 name: "Default".into(),
@@ -66,6 +67,7 @@ impl DecksWindow {
                 default_font: MasterSlide::DEFAULT_FONT.into(),
                 shapes: vec![],
                 page_emu: None,
+                layouts: Vec::new(),
             }],
         ));
         let slides = controller.slides.clone();
@@ -742,6 +744,7 @@ impl DecksWindow {
             transition: Default::default(),
             builds: Vec::new(),
             ids: Default::default(),
+            layout: None,
                 };
                 let idx = controller.add_slide(idx, new_slide);
                 rebuild_slide_list(&sl, &ss.borrow().clone(), &masters.borrow(), idx);
@@ -1090,6 +1093,7 @@ impl DecksWindow {
                         transition: Default::default(),
                         builds: Vec::new(),
                         ids: Default::default(),
+                        layout: None,
                     }];
                 }
                 *path_ref.borrow_mut() = None;

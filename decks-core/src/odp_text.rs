@@ -296,11 +296,15 @@ impl TextStyles {
                     pt(crate::odp::page_y(ins.bottom))
                 ));
             }
-            out.push_str(&format!(
-                "<style:style style:name=\"{}F{}\" style:family=\"graphic\"><style:graphic-properties draw:fill=\"none\" draw:stroke=\"none\"{props}/></style:style>",
-                self.prefix,
-                i + 1
-            ));
+            // The same again as a presentation style, for a placeholder
+            // frame (which Impress reads as one only with such a style).
+            for (suffix, family) in [("", "graphic"), ("pr", "presentation")] {
+                out.push_str(&format!(
+                    "<style:style style:name=\"{}F{}{suffix}\" style:family=\"{family}\"><style:graphic-properties draw:fill=\"none\" draw:stroke=\"none\"{props}/></style:style>",
+                    self.prefix,
+                    i + 1
+                ));
+            }
         }
         out
     }
@@ -368,7 +372,8 @@ impl TextDefs {
                         }
                     }
                     "style:graphic-properties" => {
-                        if let Some((name, "graphic")) = style.as_ref().map(|(n, f)| (n, f.as_str())) {
+                        // A placeholder frame's style is a presentation one.
+                        if let Some((name, "graphic" | "presentation")) = style.as_ref().map(|(n, f)| (n, f.as_str())) {
                             let anchor = attr(&e, "draw:textarea-vertical-align").and_then(|v| match v.as_str() {
                                 "top" => Some(Anchor::Top),
                                 "middle" => Some(Anchor::Middle),
@@ -524,6 +529,7 @@ mod tests {
             anchor: Anchor::Middle,
             insets: Some(Insets { left: 9.6, top: 4.8, right: 9.6, bottom: 4.8 }),
             autofit: None,
+            placeholder: None,
         };
         let mut w = TextStyles::new("T");
         let inner: Vec<String> = ["t", "a", "b", "c"].iter().map(|s| s.to_string()).collect();

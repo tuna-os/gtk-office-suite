@@ -104,6 +104,7 @@ fn impress_survives_multi_slide_deck() {
             transition: Default::default(),
             builds: Vec::new(),
             ids: Default::default(),
+            layout: None,
         });
     }
     let dir = tempfile::tempdir().unwrap();
@@ -155,6 +156,7 @@ fn text_slide(title: &str, text: &str, notes: &str) -> Slide {
         transition: Default::default(),
         builds: Vec::new(),
         ids: Default::default(),
+        layout: None,
     }
 }
 
@@ -257,6 +259,7 @@ fn shape_kinds_survive_impress_rewrite() {
         transition: Default::default(),
         builds: Vec::new(),
         ids: Default::default(),
+        layout: None,
     }];
     let Some(rt) = through_impress(&deck, "shapes") else { return };
     let rects = rt.slides[0].objects.iter().filter(|o| is_rect(o)).count();
@@ -277,6 +280,7 @@ fn positions_approx_survive_impress_rewrite() {
         transition: Default::default(),
         builds: Vec::new(),
         ids: Default::default(),
+        layout: None,
     }];
     let Some(rt) = through_impress(&deck, "pos") else { return };
     let Some((x, y, w, h)) = rt.slides[0]
@@ -320,6 +324,7 @@ fn empty_slide_survives_impress_rewrite() {
             transition: Default::default(),
             builds: Vec::new(),
             ids: Default::default(),
+            layout: None,
         },
         text_slide("three", "more", ""),
     ];
@@ -352,6 +357,7 @@ fn bold_run_survives_impress_rewrite() {
         transition: Default::default(),
         builds: Vec::new(),
         ids: Default::default(),
+        layout: None,
     }];
     let Some(rt) = through_impress(&deck, "boldrun") else { return };
     let bold_text: String = rt.slides[0]
@@ -431,6 +437,7 @@ fn styled_run_slide(runs: Vec<Run>) -> Slide {
         transition: Default::default(),
         builds: Vec::new(),
         ids: Default::default(),
+        layout: None,
     }
 }
 
@@ -528,6 +535,7 @@ fn image_object_survives_impress_rewrite() {
         transition: Default::default(),
         builds: Vec::new(),
         ids: Default::default(),
+        layout: None,
     }];
     let Some(rt) = through_impress(&deck, "image") else { return };
     let images = rt.slides[0]
@@ -618,6 +626,7 @@ fn odp_geometry_survives_impress_rewrite() {
         transition: Default::default(),
         builds: Vec::new(),
         ids: Default::default(),
+        layout: None,
     }];
     let Some(rt) = odp_through_impress(&deck, "geom") else { return };
     // Impress gives the rect its default graphic style, so it reads back
@@ -685,6 +694,7 @@ fn odp_bold_run_survives_impress_rewrite() {
         transition: Default::default(),
         builds: Vec::new(),
         ids: Default::default(),
+        layout: None,
     }];
     let Some(rt) = odp_through_impress(&deck, "boldrun") else { return };
     let bold: String = rt.slides[0]
@@ -1088,6 +1098,7 @@ fn impress_runs_in_one_paragraph_come_back_as_one_line() {
         transition: Default::default(),
         builds: Vec::new(),
         ids: Default::default(),
+        layout: None,
     }];
     let Some(rt) = through_impress(&deck, "tworuns") else { return };
     let text = all_text(&rt.slides[0]);
@@ -1145,6 +1156,7 @@ fn a_styled_multiline_box_keeps_its_break_and_its_styling_through_impress() {
         transition: Default::default(),
         builds: Vec::new(),
         ids: Default::default(),
+        layout: None,
     }];
     let dir = tempfile::tempdir().unwrap();
     let src = dir.path().join("styledlines.odp");
@@ -1270,6 +1282,7 @@ fn geometry_survives_a_conversion_between_the_two_formats() {
         transition: Default::default(),
         builds: Vec::new(),
         ids: Default::default(),
+        layout: None,
     }];
     let want = (96.0, 54.0, 192.0, 108.0);
     let dir = tempfile::tempdir().unwrap();
@@ -1627,8 +1640,14 @@ fn impress_keeps_a_themes_decorations_in_both_formats() {
             decks_core::write_deck(path.to_str().unwrap(), &deck).expect("write");
             let back = convert(&path, ext).unwrap_or_else(|e| panic!("Impress rewrites our {ext}: {e}"));
             let read = decks_core::read_deck(back.to_str().unwrap()).expect("read Impress's file");
-            let got: Vec<String> = read.masters.iter().flat_map(|m| &m.shapes).map(look).collect();
-            assert_eq!(got, want, "{} {ext}: the master's decorations through Impress", t.name);
+            // Impress makes a master of each layout a slide uses (its own
+            // model has no layouts), so the theme's decorations are on each
+            // master a slide is on.
+            for s in &read.slides {
+                let m = &read.masters[s.master_idx.unwrap_or(0)];
+                let got: Vec<String> = m.shapes.iter().map(look).collect();
+                assert_eq!(got, want, "{} {ext}: the master's decorations through Impress", t.name);
+            }
         }
     }
 }
@@ -1698,5 +1717,59 @@ fn impress_keeps_a_master_view_edit() {
         assert!(found, "{ext}: the master's triangle through Impress: {:#?}", read.masters);
         assert!(read.slides.iter().all(|s| !s.objects.iter().any(|o| matches!(o, SlideObject::Shape { kind: ShapeKind::Triangle, .. }))),
             "{ext}: the triangle is on the master, not a slide");
+    }
+}
+
+#[test]
+fn impress_keeps_our_layouts_and_placeholders() {
+    // A themed deck whose second slide was put on Two Content (with the
+    // empty second body that added), as Impress rewrites it in each format:
+    // every slide keeps the kind of its layout, and its boxes the
+    // placeholders they fill, in their places, with their text.
+    if !require_or_skip() {
+        return;
+    }
+    let (slides, masters) = decks_core::templates::deck(3).unwrap();
+    let c = decks_core::DecksController::new(slides, masters);
+    assert!(c.apply_layout(1, 3));
+    let deck = c.deck();
+    let summary = |d: &Deck| -> Vec<String> {
+        d.slides
+            .iter()
+            .map(|s| {
+                let kind = s
+                    .master_idx
+                    .and_then(|m| d.masters.get(m))
+                    .and_then(|m| m.layouts.get(s.layout?))
+                    .map(|l| format!("{:?}", l.kind));
+                let boxes: Vec<String> = s
+                    .objects
+                    .iter()
+                    .filter_map(|o| match o {
+                        SlideObject::TextBox { text, x, y, w, h, body, .. } => Some(format!(
+                            "{:?} {:?} {} {} {} {} {:?}",
+                            body.placeholder,
+                            body.anchor,
+                            x.round(),
+                            y.round(),
+                            w.round(),
+                            h.round(),
+                            text
+                        )),
+                        _ => None,
+                    })
+                    .collect();
+                format!("{kind:?} {boxes:?}")
+            })
+            .collect()
+    };
+    let want = summary(&deck);
+    for ext in ["pptx", "odp"] {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join(format!("layouts.{ext}"));
+        decks_core::write_deck(path.to_str().unwrap(), &deck).expect("write");
+        let back = convert(&path, ext).unwrap_or_else(|e| panic!("Impress rewrites our {ext}: {e}"));
+        let read = decks_core::read_deck(back.to_str().unwrap()).expect("read Impress's file");
+        assert_eq!(summary(&read), want, "{ext}: layouts and placeholders through Impress");
     }
 }

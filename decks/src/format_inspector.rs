@@ -294,6 +294,8 @@ pub fn build(
     preview.set_action_name(Some("app.preview-transition"));
     transition.add_suffix(&preview);
     slide_group.add(&transition);
+    let layout = crate::layout_picker::build(ctl, current_slide, changed.clone());
+    slide_group.add(&layout.row);
     slide_group.add(&crate::master_view::inspector_row());
     let empty = page(&[&slide_group]);
     let outer = gtk::Stack::new();
@@ -311,12 +313,14 @@ pub fn build(
             (font.clone(), size.clone(), bold.clone(), italic.clone(), text_color.clone());
         let aligns = [a_left.clone(), a_center.clone(), a_right.clone(), a_just.clone()];
         let (list, anchor, transition) = (list.clone(), anchor.clone(), transition.clone());
+        let layout_sync = layout.sync.clone();
         let (x, y, w, h, rotation) = (x.clone(), y.clone(), w.clone(), h.clone(), rotation.clone());
         let (build_in, build_out, build_order) = (build_in.clone(), build_out.clone(), build_order.clone());
         Rc::new(move || {
             let f: Option<ObjectFormat> = sel.get().and_then(|oi| ctl.object_format(cs.get(), oi));
             let Some(f) = f else {
                 outer.set_visible_child_name("empty");
+                layout_sync();
                 let current = ctl.slides.borrow().get(cs.get()).map(|s| s.transition).unwrap_or_default();
                 syncing.set(true);
                 if let Some(i) = Transition::ALL.iter().position(|t| *t == current) {

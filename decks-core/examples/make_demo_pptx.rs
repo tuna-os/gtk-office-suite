@@ -13,6 +13,7 @@ fn slide(title: &str, objects: Vec<SlideObject>, notes: &str) -> Slide {
         transition: Default::default(),
         builds: Vec::new(),
         ids: Default::default(),
+        layout: None,
     }
 }
 
