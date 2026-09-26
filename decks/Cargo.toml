@@ -9,8 +9,7 @@ gtk4 = { version = "0.11", features = ["v4_14"] }
 libadwaita = { version = "0.9", features = ["v1_5"] }
 suite-common = { path = "../suite-common" }
 decks-core = { path = "../decks-core" }
-suite-export = { path = "../suite-export" }
-cairo-rs = { version = "0.22", features = ["png"] }
+cairo-rs = { version = "0.22", features = ["png", "pdf"] }
 pango = { version = "0.22", features = ["v1_44"] }
 pangocairo = { version = "0.22" }
 pulldown-cmark = "0.13"
@@ -21,3 +20,6 @@ quick-xml = "0.42"
 [[bin]]
 name = "decks"
 path = "src/main.rs"
+
+[dev-dependencies]
+tempfile = "3"

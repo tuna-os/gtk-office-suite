@@ -599,6 +599,8 @@ impl DecksWindow {
 
         let toolbar = build_decks_toolbar();
         suite_win.add_top_bar(&toolbar);
+        // Export as PDF, handouts and PNG, and their menu section (export_ui.rs).
+        crate::export_ui::register(app, &suite_win.window, &suite_win.header_bar, &controller, &current_slide);
         // Edit Master and its banner (master_view.rs).
         crate::master_view::register(
             app,

@@ -443,13 +443,16 @@ pub enum Chrome {
     /// A slide shown inside other UI (the presenter display): as large as
     /// fits, a hairline border, nothing painted around it.
     Preview,
+    /// A slide exported (export.rs): the slide alone, nothing around it
+    /// and no border.
+    Export,
 }
 
 /// The slide's frame on a `w`×`h` canvas for `chrome`.
 pub fn slide_frame(width: f64, height: f64, chrome: Chrome) -> (f64, f64, f64, f64) {
     match chrome {
         Chrome::Editor => slide_geometry(width, height),
-        Chrome::Show | Chrome::Preview => {
+        Chrome::Show | Chrome::Preview | Chrome::Export => {
             let k = (width / 960.0).min(height / 540.0).max(0.01);
             let (w, h) = (960.0 * k, 540.0 * k);
             ((width - w) / 2.0, (height - h) / 2.0, w, h)
@@ -565,7 +568,7 @@ pub fn draw_slide_base(
     cr.rectangle(ox, oy, slide_w, slide_h);
     cr.fill().unwrap();
 
-    if chrome != Chrome::Show {
+    if chrome == Chrome::Editor || chrome == Chrome::Preview {
         // Border
         cr.set_source_rgb(0.7, 0.7, 0.7);
         cr.set_line_width(1.0);

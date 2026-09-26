@@ -3,6 +3,7 @@ use gtk4::gio;
 mod window;
 mod persistence;
 mod export;
+mod export_ui;
 mod canvas;
 mod text_render;
 mod format_inspector;

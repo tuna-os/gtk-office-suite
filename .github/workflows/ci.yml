@@ -178,7 +178,7 @@ jobs:
       - name: Install GTK4 + libadwaita dev libraries and Xvfb
         run: |
           sudo apt-get update -qq
-          sudo apt-get install -y -qq libgtk-4-dev libadwaita-1-dev xvfb
+          sudo apt-get install -y -qq libgtk-4-dev libadwaita-1-dev xvfb poppler-utils
 
       - name: Install Rust stable
         uses: dtolnay/rust-toolchain@stable

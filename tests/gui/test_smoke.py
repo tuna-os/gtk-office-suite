@@ -4111,6 +4111,65 @@ class DecksLayoutsSmoke(BaseGUITestCase):
         self.assertIsNone(self.process.poll(), "decks crashed applying a layout")
 
 
+class DecksExportSmoke(BaseGUITestCase):
+    """Export (Keynote's File > Export To, Google Slides' Download): the
+    primary menu has an Export section; Export as PDF writes a page per
+    slide, Export Handouts writes the chosen number to a page, and Export
+    Slide as PNG writes the current slide at 1920 x 1080. Asserted on the
+    files, through the save dialog a person uses."""
+
+    app_name = "decks"
+
+    def setUp(self):
+        self._dir = self.temp_dir(prefix="decks-export-")
+        self._doc = os.path.join(self._dir, "talk.pptx")
+        with open(self._doc, "wb") as f:
+            f.write(minimal_pptx_bytes("exported text"))
+        self.launch_args = [self._doc]
+        super().setUp()
+
+    def _save_through_dialog(self, action, target, path):
+        import subprocess
+        from dogtail import tree
+        args = ["gapplication", "action", "org.tunaos.decks", action] + ([target] if target else [])
+        subprocess.run(args, check=True, timeout=5)
+        name = self.wait_until(lambda: tree.root.findChild(lambda n: n.name == "Name:" and n.roleName == "text", retry=False, requireResult=False),
+                               lambda n: n is not None, description=f"the {action} save dialog")
+        name.text = path
+        time.sleep(0.3)
+        tree.root.findChild(lambda n: n.name == "Save" and n.roleName == "push button").do_action(0)
+        return self.wait_until(lambda: os.path.exists(path) and os.path.getsize(path) > 0, bool, interval=0.25,
+                               description=f"{os.path.basename(path)} to be written")
+
+    def _pdf_pages(self, path):
+        import re
+        with open(path, "rb") as f:
+            data = f.read()
+        self.assertTrue(data.startswith(b"%PDF"), path)
+        return len(re.findall(rb"/Type\s*/Page[^s]", data))
+
+    def test_pdf_handouts_and_png(self):
+        from PIL import Image
+        self.wait_until(lambda: self.app.child(name="Slide canvas"), lambda c: c is not None, description="the deck to open")
+        # The Export section is in the primary menu.
+        self.app.child(name="Menu", roleName="toggle button").do_action(0)
+        self.wait_until(lambda: self.app.findChild(lambda n: "Export as PDF" in (n.name or "") and n.showing, retry=False, requireResult=False),
+                        lambda n: n is not None, description="Export as PDF in the primary menu")
+        from dogtail import rawinput
+        rawinput.keyCombo("Escape")
+        pdf = os.path.join(self._dir, "talk.pdf")
+        self._save_through_dialog("export-pdf", None, pdf)
+        self.assertEqual(self._pdf_pages(pdf), 1, "a page per slide")
+        handouts = os.path.join(self._dir, "handouts.pdf")
+        self._save_through_dialog("export-handouts", "uint32 4", handouts)
+        self.assertEqual(self._pdf_pages(handouts), 1, "one slide fits on one handout page")
+        png = os.path.join(self._dir, "slide.png")
+        self._save_through_dialog("export-png", None, png)
+        img = Image.open(png)
+        self.assertEqual(img.size, (1920, 1080))
+        self.assertIsNone(self.process.poll(), "decks crashed exporting")
+
+
 class DecksInsertBarSmoke(BaseGUITestCase):
     """The Insert buttons in the header bar (DESIGN-UI.md, "Insert
     buttons, not menus"): the Shape button's library is searchable, and
