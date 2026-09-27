@@ -95,6 +95,11 @@ EXPORT = {
     "tables/values",
     "tables/merged",
     "tables/frozen",
+    "tables/alignment",
+    "tables/borders",
+    "tables/cell-fonts",
+    "tables/fills",
+    "tables/col-row-size",
 }
 
 
