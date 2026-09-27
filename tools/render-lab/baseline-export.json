@@ -23,6 +23,21 @@
   "letters/columns": {
     "export": "green"
   },
+  "decks/background": {
+    "export": "missing"
+  },
+  "decks/rotation": {
+    "export": "missing"
+  },
+  "decks/table": {
+    "export": "missing"
+  },
+  "letters/header-footer": {
+    "export": "missing"
+  },
+  "letters/page-numbers": {
+    "export": "missing"
+  },
   "decks/title-layout": {
     "export": "green"
   },

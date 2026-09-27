@@ -65,6 +65,11 @@ EXPORT = {
     "letters/bullet-list",
     "letters/numbered-list",
     "letters/columns",
+    "decks/background",
+    "decks/rotation",
+    "decks/table",
+    "letters/header-footer",
+    "letters/page-numbers",
 }
 
 
