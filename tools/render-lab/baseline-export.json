@@ -24,19 +24,19 @@
     "export": "green"
   },
   "decks/background": {
-    "export": "missing"
+    "export": "green"
   },
   "decks/rotation": {
-    "export": "missing"
+    "export": "green"
   },
   "decks/table": {
-    "export": "missing"
+    "export": "green"
   },
   "letters/header-footer": {
-    "export": "missing"
+    "export": "green"
   },
   "letters/page-numbers": {
-    "export": "missing"
+    "export": "green"
   },
   "decks/title-layout": {
     "export": "green"
