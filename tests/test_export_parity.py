@@ -126,10 +126,15 @@ except ImportError:
 @unittest.skipIf(not HAVE_FIXTURES, "python-docx and Pillow live in the render-lab image")
 class ExportOptInTest(unittest.TestCase):
     def test_opt_in_is_docx_pptx_only_and_small(self):
+        # Only the three both-green tables fixtures may opt in
+        # (docs/TABLES-EXPORT-PARITY.md carve-out); the rest of xlsx stays
+        # out of scope.
         for key in fixtures.EXPORT:
             app, _ = key.split("/", 1)
-            self.assertIn(app, ("letters", "decks"), f"{key}: xlsx is out of scope")
-        self.assertLessEqual(len(fixtures.EXPORT), 35, "batch 8: 33 + 2 docx fixtures; 3 tables/* requested but xlsx is out of scope")
+            self.assertIn(app, ("letters", "decks", "tables"), f"{key}: xlsx is out of scope")
+            if app == "tables":
+                self.assertIn(key, ("tables/values", "tables/merged", "tables/frozen"), f"{key}: not an opted-in tables fixture")
+        self.assertLessEqual(len(fixtures.EXPORT), 38, "batch 8: 33 + 2 docx fixtures + 3 tables/* carve-out")
 
     def test_every_opt_in_fixture_is_defined(self):
         # An EXPORT key with no save() site would score missing forever.
