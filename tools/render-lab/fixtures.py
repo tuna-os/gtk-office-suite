@@ -70,6 +70,11 @@ EXPORT = {
     "decks/table",
     "letters/header-footer",
     "letters/page-numbers",
+    "letters/highlight",
+    "letters/image",
+    "letters/indents",
+    "letters/line-spacing",
+    "letters/paragraph-spacing",
 }
 
 

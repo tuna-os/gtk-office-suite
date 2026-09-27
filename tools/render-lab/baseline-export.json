@@ -67,5 +67,20 @@
   },
   "letters/toc": {
     "export": "green"
+  },
+  "letters/highlight": {
+    "export": "missing"
+  },
+  "letters/image": {
+    "export": "missing"
+  },
+  "letters/indents": {
+    "export": "missing"
+  },
+  "letters/line-spacing": {
+    "export": "missing"
+  },
+  "letters/paragraph-spacing": {
+    "export": "missing"
   }
 }
