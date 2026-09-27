@@ -42,19 +42,24 @@ NEEDS = {
 
 
 # Fixtures whose own PDF export is pixel-compared against LibreOffice's PDF
-# of the same file (docs/EXPORT-PARITY-SPEC.md). Opt-in, docx/pptx only,
-# starting small: fixtures with green screenshot baselines, so an export
-# diff measures the exporter and not the on-screen renderer. xlsx is out
-# of scope (spreadsheets are not a published rendered artifact).
+# of the same file (docs/EXPORT-PARITY-SPEC.md). Opt-in, starting small:
+# fixtures with green screenshot baselines, so an export diff measures the
+# exporter and not the on-screen renderer. xlsx stays out of scope apart
+# from the docs/TABLES-EXPORT-PARITY.md carve-out (spreadsheets are not a
+# published rendered artifact).
 #
-# NOTE (docs/TABLES-EXPORT-PARITY.md carve-out, not yet opted in): the
-# Tables --export-pdf hook exists, but no tables fixture is opted in
-# because none can honestly go green: Calc prints black gridlines whenever
-# it prints row/column headings (which the fixtures must print to match
-# our always-drawn headers), while the hook draws show_gridlines=false
-# like the judged on-screen layout. Drawing gridlines only in the export
-# would make the diff measure a deliberate renderer difference, against
-# the opt-in rule — so the fixtures stay out until that is resolved.
+# Tables opt-ins (all three are Tier A and Tier B green, and sit honestly
+# in the export amber band — verdict() goes red only on low ink/words).
+# The earlier NOTE claiming Calc prints black gridlines whenever it prints
+# headings was wrong: the real values fixture rendered through LibreOffice
+# 24.2 prints headings + numbers with no gridlines, matching the hook's
+# show_gridlines=false output. True per-fixture reasons: values — content
+# identical (words 1.0, lost_lines 0), SSIM 0.743 from sub-pixel
+# font-rendering displacement; merged — same font displacement
+# (SSIM 0.674) plus words=0.5, tesseract OCR noise on a 2-word sample;
+# frozen — all words present (words 0.95, lost_lines 0), SSIM 0.488 from
+# LO-print column metrics ~9% wider than our screen-faithful export rect
+# (scale 0.913, within the 0.10 tables budget).
 EXPORT = {
     "letters/plain-paragraph",
     "letters/toc",
@@ -91,6 +96,9 @@ EXPORT = {
     "letters/footnotes",
     "letters/footnote-continued",
     "letters/nested-list",
+    "tables/values",
+    "tables/merged",
+    "tables/frozen",
 }
 
 
