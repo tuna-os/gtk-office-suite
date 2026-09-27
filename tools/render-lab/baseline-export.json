@@ -113,7 +113,22 @@
   "tables/cell-fonts": {
     "export": "green"
   },
+  "tables/chart": {
+    "export": "green"
+  },
+  "tables/chart-area": {
+    "export": "green"
+  },
+  "tables/chart-line": {
+    "export": "green"
+  },
+  "tables/chart-scatter": {
+    "export": "green"
+  },
   "tables/col-row-size": {
+    "export": "green"
+  },
+  "tables/conditional": {
     "export": "green"
   },
   "tables/fills": {
