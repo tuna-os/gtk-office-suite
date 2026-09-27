@@ -60,6 +60,11 @@ EXPORT = {
     "decks/title-layout",
     "decks/bullets",
     "decks/text-styles",
+    "decks/shapes",
+    "decks/image",
+    "letters/bullet-list",
+    "letters/numbered-list",
+    "letters/columns",
 }
 
 
