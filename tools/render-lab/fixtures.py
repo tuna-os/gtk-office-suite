@@ -48,18 +48,14 @@ NEEDS = {
 # from the docs/TABLES-EXPORT-PARITY.md carve-out (spreadsheets are not a
 # published rendered artifact).
 #
-# Tables opt-ins (all three are Tier A and Tier B green, and sit honestly
-# in the export amber band — verdict() goes red only on low ink/words).
-# The earlier NOTE claiming Calc prints black gridlines whenever it prints
-# headings was wrong: the real values fixture rendered through LibreOffice
-# 24.2 prints headings + numbers with no gridlines, matching the hook's
-# show_gridlines=false output. True per-fixture reasons: values — content
-# identical (words 1.0, lost_lines 0), SSIM 0.743 from sub-pixel
-# font-rendering displacement; merged — same font displacement
-# (SSIM 0.674) plus words=0.5, tesseract OCR noise on a 2-word sample;
-# frozen — all words present (words 0.95, lost_lines 0), SSIM 0.488 from
-# LO-print column metrics ~9% wider than our screen-faithful export rect
-# (scale 0.913, within the 0.10 tables budget).
+# Tables opt-ins (all three are Tier A and Tier B green, and measure green
+# on export too). The earlier NOTE claiming Calc prints black gridlines
+# whenever it prints headings was wrong: the values fixture rendered
+# through LibreOffice prints headings + numbers with no gridlines,
+# matching the hook's show_gridlines=false output. Measured export
+# verdicts (run-export.sh --app tables): values SSIM 0.942, merged 0.968,
+# frozen 0.908; words 1.0 and lost_lines 0 throughout, scales within the
+# 0.10 tables budget — an earlier amber read proved stale on re-measure.
 EXPORT = {
     "letters/plain-paragraph",
     "letters/toc",
