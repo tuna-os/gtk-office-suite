@@ -6,22 +6,22 @@
     "export": "green"
   },
   "decks/text-styles": {
-    "export": "missing"
+    "export": "green"
   },
   "decks/title-layout": {
+    "export": "green"
+  },
+  "letters/alignment": {
     "export": "green"
   },
   "letters/char-emphasis": {
     "export": "green"
   },
-  "letters/alignment": {
-    "export": "missing"
-  },
   "letters/font-families": {
     "export": "green"
   },
   "letters/font-sizes": {
-    "export": "missing"
+    "export": "green"
   },
   "letters/headings": {
     "export": "green"
@@ -30,10 +30,10 @@
     "export": "green"
   },
   "letters/super-subscript": {
-    "export": "missing"
+    "export": "amber"
   },
   "letters/text-color": {
-    "export": "missing"
+    "export": "green"
   },
   "letters/toc": {
     "export": "green"
