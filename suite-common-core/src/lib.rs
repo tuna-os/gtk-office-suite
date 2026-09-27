@@ -1,5 +1,6 @@
 pub mod actions;
 pub mod charts;
+pub mod color;
 pub mod atomic_save;
 pub mod autosave;
 pub mod palette;

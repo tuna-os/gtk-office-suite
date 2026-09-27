@@ -9,7 +9,7 @@
 // white bold text, banded tinted rows and white rules. The model keeps the
 // style flags, and `cell_paint` resolves them into what each cell draws.
 
-use super::shape::Color;
+use super::shape::{Color, ColorModulation};
 use letters_core::model::Run;
 
 /// One cell: its styled text and, when the file says so, its own fill.

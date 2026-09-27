@@ -7,34 +7,11 @@
 // this, a workbook's bold headers, coloured fills and centred or wrapped cells
 // all opened as plain left-aligned text in one font.
 
-/// An sRGB colour.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
-#[cfg_attr(feature = "collab", derive(serde::Serialize, serde::Deserialize))]
-pub struct Rgb(pub u8, pub u8, pub u8);
-
-impl Rgb {
-    /// From `RRGGBB` or `AARRGGBB` hex, as xlsx writes colours.
-    pub fn from_hex(hex: &str) -> Option<Rgb> {
-        let hex = hex.trim().trim_start_matches('#');
-        let hex = match hex.len() {
-            8 => &hex[2..],
-            6 => hex,
-            _ => return None,
-        };
-        let c = |i: usize| u8::from_str_radix(&hex[i..i + 2], 16).ok();
-        Some(Rgb(c(0)?, c(2)?, c(4)?))
-    }
-
-    /// `RRGGBB`, upper case.
-    pub fn to_hex(self) -> String {
-        format!("{:02X}{:02X}{:02X}", self.0, self.1, self.2)
-    }
-
-    /// Components as 0.0–1.0, for Cairo.
-    pub fn to_f64(self) -> (f64, f64, f64) {
-        (self.0 as f64 / 255.0, self.1 as f64 / 255.0, self.2 as f64 / 255.0)
-    }
-}
+/// An sRGB colour: the canonical [`suite_common_core::color::Color`],
+/// kept under its historic `Rgb` name so call sites don't churn. The
+/// implementation lives in suite-common-core; this re-export keeps one
+/// copy of the parsing, printing and channel maths.
+pub use suite_common_core::color::Color as Rgb;
 
 /// Horizontal alignment. `General` is the spreadsheet default: numbers
 /// right, text left.

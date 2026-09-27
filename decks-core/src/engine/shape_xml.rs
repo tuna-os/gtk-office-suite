@@ -12,7 +12,7 @@
 // The parts involved are small, so they're read into a tiny element tree and
 // resolved with plain recursion rather than a streaming state machine.
 
-use super::shape::{Color, GradientStop, LinearGradient, ShapeStyle, Stroke};
+use super::shape::{Color, ColorModulation, GradientStop, LinearGradient, ShapeStyle, Stroke};
 use quick_xml::events::{BytesStart, Event};
 use quick_xml::Reader;
 use std::collections::HashMap;

@@ -8,69 +8,46 @@
 // square (render lab `decks/shapes`). A `Shape` carries its DrawingML preset
 // and its own fill and outline, read from pptx/odp and written back.
 
-/// An sRGB colour.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-pub struct Color(pub u8, pub u8, pub u8);
+/// An sRGB colour: the canonical [`suite_common_core::color::Color`].
+/// The implementation (parsing, printing, channel maths) lives in
+/// suite-common-core; the DrawingML modulation below stays here,
+/// where the spec knowledge lives.
+pub use suite_common_core::color::Color;
 
-impl Color {
-    /// From `RRGGBB`, `#RRGGBB` or `AARRGGBB` hex.
-    pub fn from_hex(hex: &str) -> Option<Color> {
-        let hex = hex.trim().trim_start_matches('#');
-        let hex = match hex.len() {
-            8 => &hex[2..],
-            6 => hex,
-            _ => return None,
-        };
-        let c = |i: usize| u8::from_str_radix(&hex[i..i + 2], 16).ok();
-        Some(Color(c(0)?, c(2)?, c(4)?))
-    }
+/// DrawingML colour modulation (`a:tint`, `a:shade`, `a:satMod`,
+/// `a:lumMod`/`a:lumOff`). An extension trait rather than inherent
+/// methods because `Color` is defined in suite-common-core; the maths
+/// below is unchanged.
+pub trait ColorModulation {
+    /// `tint`: toward white by `1 - val`, in linear light as Office
+    /// and LibreOffice apply it (val in 1/100000ths).
+    fn tint(self, val: i32) -> Color;
+    /// `shade`: toward black by `1 - val`, in linear light.
+    fn shade(self, val: i32) -> Color;
+    /// `satMod`: saturation scaled by `val`, in HSL.
+    fn sat_mod(self, val: i32) -> Color;
+    /// `lumMod`/`lumOff`, in HSL as the spec defines them (values in
+    /// 1/100000ths).
+    fn lum(self, lum_mod: Option<i32>, lum_off: Option<i32>) -> Color;
+}
 
-    /// `RRGGBB`, upper case, as DrawingML writes it.
-    pub fn to_hex(self) -> String {
-        format!("{:02X}{:02X}{:02X}", self.0, self.1, self.2)
-    }
-
-    /// Components as 0.0–1.0, for Cairo.
-    pub fn to_f64(self) -> (f64, f64, f64) {
-        (self.0 as f64 / 255.0, self.1 as f64 / 255.0, self.2 as f64 / 255.0)
-    }
-
-    /// DrawingML `tint`: toward white by `1 - val`, in linear light as
-    /// Office and LibreOffice apply it (val in 1/100000ths).
-    pub fn tint(self, val: i32) -> Color {
+impl ColorModulation for Color {
+    fn tint(self, val: i32) -> Color {
         let t = (val as f64 / 100_000.0).clamp(0.0, 1.0);
-        self.map_linear(|c| c * t + (1.0 - t))
+        map_linear(self, |c| c * t + (1.0 - t))
     }
 
-    /// DrawingML `shade`: toward black by `1 - val`, in linear light.
-    pub fn shade(self, val: i32) -> Color {
+    fn shade(self, val: i32) -> Color {
         let t = (val as f64 / 100_000.0).clamp(0.0, 1.0);
-        self.map_linear(|c| c * t)
+        map_linear(self, |c| c * t)
     }
 
-    /// DrawingML `satMod`: saturation scaled by `val`, in HSL.
-    pub fn sat_mod(self, val: i32) -> Color {
+    fn sat_mod(self, val: i32) -> Color {
         let (h, s, l) = rgb_to_hsl(self);
         hsl_to_rgb(h, (s * val as f64 / 100_000.0).clamp(0.0, 1.0), l)
     }
 
-    fn map_linear(self, f: impl Fn(f64) -> f64) -> Color {
-        let to_lin = |c: u8| {
-            let c = c as f64 / 255.0;
-            if c <= 0.04045 { c / 12.92 } else { ((c + 0.055) / 1.055).powf(2.4) }
-        };
-        let to_srgb = |c: f64| {
-            let c = c.clamp(0.0, 1.0);
-            let v = if c <= 0.003_130_8 { c * 12.92 } else { 1.055 * c.powf(1.0 / 2.4) - 0.055 };
-            (v * 255.0).round() as u8
-        };
-        Color(to_srgb(f(to_lin(self.0))), to_srgb(f(to_lin(self.1))), to_srgb(f(to_lin(self.2))))
-    }
-
-    /// DrawingML `lumMod`/`lumOff` on this colour, in HSL as the spec
-    /// defines them (values in 1/100000ths).
-    pub fn lum(self, lum_mod: Option<i32>, lum_off: Option<i32>) -> Color {
+    fn lum(self, lum_mod: Option<i32>, lum_off: Option<i32>) -> Color {
         if lum_mod.is_none() && lum_off.is_none() {
             return self;
         }
@@ -78,6 +55,19 @@ impl Color {
         let l = l * lum_mod.unwrap_or(100_000) as f64 / 100_000.0 + lum_off.unwrap_or(0) as f64 / 100_000.0;
         hsl_to_rgb(h, s, l.clamp(0.0, 1.0))
     }
+}
+
+fn map_linear(c: Color, f: impl Fn(f64) -> f64) -> Color {
+    let to_lin = |c: u8| {
+        let c = c as f64 / 255.0;
+        if c <= 0.04045 { c / 12.92 } else { ((c + 0.055) / 1.055).powf(2.4) }
+    };
+    let to_srgb = |c: f64| {
+        let c = c.clamp(0.0, 1.0);
+        let v = if c <= 0.003_130_8 { c * 12.92 } else { 1.055 * c.powf(1.0 / 2.4) - 0.055 };
+        (v * 255.0).round() as u8
+    };
+    Color(to_srgb(f(to_lin(c.0))), to_srgb(f(to_lin(c.1))), to_srgb(f(to_lin(c.2))))
 }
 
 fn rgb_to_hsl(c: Color) -> (f64, f64, f64) {

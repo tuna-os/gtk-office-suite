@@ -260,14 +260,13 @@ impl PangoShaper {
     }
 }
 
-/// "RRGGBB" to 16-bit channels.
+/// "RRGGBB" to 16-bit channels, via the canonical shared colour
+/// (`suite_common_core::color::Color`). Behaviour on the inputs
+/// Letters produces (6-digit RRGGBB, optional '#') is unchanged; the
+/// shared parser additionally trims whitespace and accepts AARRGGBB,
+/// which Letters' model never emits.
 fn parse_hex(hex: &str) -> Option<(u16, u16, u16)> {
-    let hex = hex.trim_start_matches('#');
-    if hex.len() != 6 {
-        return None;
-    }
-    let c = |i: usize| u8::from_str_radix(&hex[i..i + 2], 16).ok().map(|v| u16::from(v) * 257);
-    Some((c(0)?, c(2)?, c(4)?))
+    suite_common_core::color::Color::from_hex(hex).map(|c| c.to_u16())
 }
 
 /// Lines of a layout as `LineBox`es, with char (not byte) offsets.
