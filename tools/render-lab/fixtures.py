@@ -100,6 +100,12 @@ EXPORT = {
     "tables/cell-fonts",
     "tables/fills",
     "tables/col-row-size",
+    "tables/chart",
+    "tables/chart-area",
+    "tables/chart-line",
+    "tables/chart-pie",
+    "tables/chart-scatter",
+    "tables/conditional",
 }
 
 
