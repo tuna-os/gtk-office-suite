@@ -15,13 +15,13 @@
     "export": "green"
   },
   "letters/bullet-list": {
-    "export": "missing"
+    "export": "green"
   },
   "letters/numbered-list": {
-    "export": "missing"
+    "export": "green"
   },
   "letters/columns": {
-    "export": "missing"
+    "export": "green"
   },
   "decks/title-layout": {
     "export": "green"
