@@ -69,18 +69,18 @@
     "export": "green"
   },
   "letters/highlight": {
-    "export": "missing"
+    "export": "green"
   },
   "letters/image": {
-    "export": "missing"
+    "export": "green"
   },
   "letters/indents": {
-    "export": "missing"
+    "export": "green"
   },
   "letters/line-spacing": {
-    "export": "missing"
+    "export": "green"
   },
   "letters/paragraph-spacing": {
-    "export": "missing"
+    "export": "green"
   }
 }
