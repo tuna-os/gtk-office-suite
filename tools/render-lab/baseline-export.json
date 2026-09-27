@@ -9,10 +9,10 @@
     "export": "green"
   },
   "decks/shapes": {
-    "export": "missing"
+    "export": "green"
   },
   "decks/image": {
-    "export": "missing"
+    "export": "green"
   },
   "letters/bullet-list": {
     "export": "missing"
