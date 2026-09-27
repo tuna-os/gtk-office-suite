@@ -103,5 +103,14 @@
   },
   "letters/toc": {
     "export": "green"
+  },
+  "tables/frozen": {
+    "export": "green"
+  },
+  "tables/merged": {
+    "export": "green"
+  },
+  "tables/values": {
+    "export": "green"
   }
 }
