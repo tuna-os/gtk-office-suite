@@ -104,6 +104,21 @@
   "letters/toc": {
     "export": "green"
   },
+  "tables/alignment": {
+    "export": "green"
+  },
+  "tables/borders": {
+    "export": "green"
+  },
+  "tables/cell-fonts": {
+    "export": "green"
+  },
+  "tables/col-row-size": {
+    "export": "green"
+  },
+  "tables/fills": {
+    "export": "green"
+  },
   "tables/frozen": {
     "export": "green"
   },
