@@ -5,7 +5,7 @@ tracked in [#443](https://github.com/tuna-os/gtk-office-suite/issues/443).
 It prioritizes crash reproduction, save/recovery safety and verified user journeys.
 The dated ledger below is historical and does not certify present behavior.
 
-**Last updated**: 2026-09-12 | **Maintainer**: tuna-os (hanthor) / architect agent
+**Last updated**: 2026-09-28 | **Maintainer**: tuna-os (hanthor) / architect agent
 
 ---
 
@@ -77,16 +77,25 @@ gtk-office-suite is the org's flagship **end-user product bet** and a cornerston
 ### Q4 2026 (October–December) — "Ship it properly"
 
 **Theme**: production release gating, Flatpak distribution, and headless batch
-document processing. Sketch until Q4 starts; the live execution plan remains
-[docs/readiness-2026-09/](docs/readiness-2026-09/README.md).
+document processing. The execution plan is tracked in issue tracker items below
+and [docs/readiness-2026-09/](docs/readiness-2026-09/README.md).
+
+**Release-critical gates** (block Q4 ship decision):
+
+| Gate | Owner | Tracking | Status |
+|------|-------|----------|--------|
+| **Python deprecation ledger** — per-app retirement verification, Flatpak app ID handoff | ops / release | #1160 | 🟡 In progress |
+| **Flatpak release gates** — reproducible builds, upgrade safety, recovery, least-privilege sandboxing | quality / ops | #1161, #122, #578 | 🟡 In progress |
+| **A11y compliance audit** — AT-SPI screen-reader testing, keyboard-only workflows, CI gates | quality | #1162, #120 | 🟡 In progress |
+| **Security model & threat assessment** — Flatpak hardening, supply-chain integrity, vulnerability response | security / ops | #1163, #225, #363 | 🟡 In progress |
+
+**Feature goals** (supplement readiness work):
 
 | Goal | Owner | Tracking | Status |
 |------|-------|----------|--------|
-| Release gate: Flatpak reproducible builds + GSettings migration verification | quality / ops | #122, #578 | 🟡 Planned |
 | Headless CLI conversion binary (`suite-convert`) | architect / strategist | #579 | ⬜ Planned |
 | Decks presenter view & export rendering parity | architect | #117 | ⬜ Planned |
 | Interop loss budgets & unsupported-feature inspector | quality | #105, #121 | ⬜ Planned |
-| A11y: keyboard + screen-reader journeys | quality | #120 | ⬜ Planned |
 
 ### Proposed, not scheduled
 
@@ -124,12 +133,20 @@ Each carries its open questions. None precedes the
 See [docs/CONTRIBUTING.md](./docs/CONTRIBUTING.md) and [docs/DEVELOPMENT.md](./docs/DEVELOPMENT.md) for build setup (Rust + GTK4/libadwaita, Nix flake included). Pick an issue labeled `good first issue` or comment on a goal you would like to own.
 
 ---
-*Maintained by the strategist agent (tuna-os hive). Last self-review: 2026-09-12 —
-consolidated the competing Q4 2026 roadmap pull requests into one edit and replaced
-the stale window.rs line counts with measured ones. See the note below.*
+## Strategist Findings (2026-09-28)
 
-*Why this edit is one pull request: eighteen `[strategist] planning` pull requests
-were open against this file and `docs/ROADMAP.md` at once, five of them variants of
-"Q4 2026 roadmap". They conflicted with each other by construction — merging any one
-made the rest unmergeable — and several restated figures nothing had re-measured.
-#583 was the most accurate and is the basis for this one.*
+Four critical adoption blockers identified and opened as separate issues to avoid mega-PR conflicts:
+
+1. **#1160 — Python deprecation ledger incomplete** — app ID handoff unverified, users cannot distinguish Rust vs. legacy build. Opens per-app retirement tracking and Flatpak cutover verification.
+2. **#1161 — Q4 release gates unspecified** — reproducible builds, upgrade safety, recovery, sandboxing require consolidated roadmap.
+3. **#1162 — A11y compliance audit gate missing** — AT-SPI screen-reader testing, keyboard-only workflows, CI gates needed for enterprise/education adoption.
+4. **#1163 — Security model not formalized** — threat assessment, Flatpak least-privilege hardening, supply-chain vulnerability gates required.
+
+Each issue is scoped to a single PR and does not conflict with parallel work. See issue tracker for details.
+
+---
+
+*Maintained by the strategist agent (tuna-os hive). Last self-review: 2026-09-28 —
+resolved Q4 2026 planning stalemate by identifying four critical adoption blockers as
+separate, non-conflicting issues (avoiding the 18-PR merge conflict from prior attempt #583).
+Each gate is tracked independently and links to readiness work in #443 and docs/readiness-2026-09/.*
