@@ -126,19 +126,20 @@ except ImportError:
 @unittest.skipIf(not HAVE_FIXTURES, "python-docx and Pillow live in the render-lab image")
 class ExportOptInTest(unittest.TestCase):
     def test_opt_in_is_docx_pptx_only_and_small(self):
-        # Only the thirteen both-green tables fixtures may opt in
+        # Only the fourteen both-green tables fixtures may opt in
         # (docs/TABLES-EXPORT-PARITY.md carve-out); the rest of xlsx stays
-        # out of scope. tables/chart-pie is both-green on screenshots but
-        # stays out: its export amber is Tesseract noise, not an exporter
-        # gap (the Q4 legend glyph OCRs as "ma" in LibreOffice's PDF and
-        # "mq4" in ours, so exact-match word recall is 0.833 < 0.90 while
-        # the pixels are equivalent) — no honest exporter fix exists.
+        # out of scope. tables/chart-pie is both-green on screenshots and
+        # opted-in-as-amber: its export amber is Tesseract noise, not an
+        # exporter gap (the Q4 legend glyph OCRs as "ma" in LibreOffice's
+        # PDF and "mq4" in ours, so exact-match word recall is 0.833 < 0.90
+        # while the pixels are equivalent) — same class as the
+        # letters/nested-list amber, so it stays inside the ratchet.
         for key in fixtures.EXPORT:
             app, _ = key.split("/", 1)
             self.assertIn(app, ("letters", "decks", "tables"), f"{key}: xlsx is out of scope")
             if app == "tables":
-                self.assertIn(key, ("tables/values", "tables/merged", "tables/frozen", "tables/alignment", "tables/borders", "tables/cell-fonts", "tables/fills", "tables/col-row-size", "tables/chart", "tables/chart-area", "tables/chart-line", "tables/chart-scatter", "tables/conditional"), f"{key}: not an opted-in tables fixture")
-        self.assertLessEqual(len(fixtures.EXPORT), 48, "batch 10: 43 + 5 tables/* carve-out")
+                self.assertIn(key, ("tables/values", "tables/merged", "tables/frozen", "tables/alignment", "tables/borders", "tables/cell-fonts", "tables/fills", "tables/col-row-size", "tables/chart", "tables/chart-area", "tables/chart-line", "tables/chart-pie", "tables/chart-scatter", "tables/conditional"), f"{key}: not an opted-in tables fixture")
+        self.assertLessEqual(len(fixtures.EXPORT), 49, "batch 11: 43 + 6 tables/* carve-out incl. chart-pie as documented amber")
 
     def test_every_opt_in_fixture_is_defined(self):
         # An EXPORT key with no save() site would score missing forever.
