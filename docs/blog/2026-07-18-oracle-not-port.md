@@ -36,7 +36,7 @@ regress; raising it is the definition of progress):
    Writer converts them to .docx *at test time*; our engine must extract
    the same text and styles from what LibreOffice wrote. Nothing is
    vendored — the corpus regenerates on every run. 109 scenarios for
-   Letters, currently 109/109. For Decks, where there's no cheap authoring
+   Letters, all 109/109 passing. For Decks, where there's no cheap authoring
    input, scenarios go *through* the oracle: we write .pptx, Impress
    imports and re-exports it in its own grammar, our reader reads
    LibreOffice's version back. 9/9, including styled runs and speaker notes.
@@ -49,7 +49,7 @@ regress; raising it is the definition of progress):
    as a round-trip-idempotence torture test for the document model
    (630/652 — target met; the remaining 22 are escape/entity/autolink edge
    cases), and 107 table-driven cases keyed to ODF OpenFormula measure the
-   spreadsheet engine — now 107/107.
+   spreadsheet engine — all 107/107 passing.
 
 The corpus pays for itself constantly. It caught table text being silently
 dropped by our DOCX reader, speaker notes that had never once survived a
@@ -86,10 +86,10 @@ off a scoreboard instead of taking on faith.
 
 | Measure | Value |
 |---|---|
-| LibreOffice-authored parity — Letters | 109/109 |
-| LibreOffice-authored parity — Decks | 9/9 |
-| OpenFormula conformance — Tables | 107/107 |
-| CommonMark round-trip idempotence | 630/652 (target met) |
+| LibreOffice-authored parity — Letters | 109/109 ✅ |
+| LibreOffice-authored parity — Decks | 9/9 ✅ |
+| OpenFormula conformance — Tables | 107/107 ✅ |
+| CommonMark round-trip idempotence | 630/652 ✅ (target met) |
 
 Every number prints into the CI job summary on every push, and none of
 them is allowed to go down. Full feature-by-feature detail, including the
@@ -105,7 +105,8 @@ hundred lines of test harness, and it converts "we aim to be compatible"
 into a number that moves.
 
 *Code: [tuna-os/gtk-office-suite](https://github.com/tuna-os/gtk-office-suite)
-(GPL-3.0-or-later). Three of its core crates — suite-common-core,
-suite-export, tables-core — are already on crates.io; `letters-core` isn't
-yet, though the git-pinned dependencies that used to block it are gone
-(`rdocx` and `ironcalc_base` are now ordinary crates.io versions).*
+(GPL-3.0-or-later). Core crates — suite-common-core, suite-export,
+tables-core, and letters-core — are published on crates.io with tracked
+dependencies (`rdocx` 0.7.0, `ironcalc_base` 0.8, `pulldown-cmark` from
+crates.io). The render-lab CI harness and per-feature test matrix live in
+[docs/PARITY.md](../PARITY.md).*
