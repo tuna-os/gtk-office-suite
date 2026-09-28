@@ -103,9 +103,16 @@ EXPORT = {
     "tables/chart",
     "tables/chart-area",
     "tables/chart-line",
+    "tables/chart-pie",
     "tables/chart-scatter",
     "tables/conditional",
 }
+# NOTE (tables/chart-pie, documented amber): both-green on screenshots;
+# export sits in the amber band on Tesseract exact-match noise, not an
+# exporter gap — the Q4 legend glyph OCRs as "ma" in LibreOffice's PDF vs
+# "mq4" in ours (pixels equivalent), so word recall is 0.833 < 0.90 with
+# lost_lines 0. Same class as the letters/nested-list amber; covering it
+# keeps every eligible fixture inside the ratchet instead of outside it.
 
 
 def add(app, feature, path, expect):

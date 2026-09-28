@@ -122,6 +122,9 @@
   "tables/chart-line": {
     "export": "green"
   },
+  "tables/chart-pie": {
+    "export": "amber"
+  },
   "tables/chart-scatter": {
     "export": "green"
   },
