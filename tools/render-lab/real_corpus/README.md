@@ -36,10 +36,12 @@ retrieved).
 The verdicts ratchet against `../baseline-real.json`, separately from
 the fixtures' `baseline.json`. `.github/workflows/render-real.yml` runs
 the corpus nightly, on demand, and on any PR that changes the corpus or
-the lab driver. Real documents mix many features, so the corpus does not
-file one issue per amber document the way the fixture sync does: a
-regression fails the ratchet, and each cause gets reduced to a
-single-feature fixture, which does get its own issue.
+the lab driver. On main, each document that is not green has one
+`render-real` issue (`sync_issues.py --mode real`) that names the
+document, its licence and how to reproduce it, and closes itself when the
+document turns green. Real documents mix many features, so the way to
+move one is to reduce its defect to a single-feature fixture, which gets
+its own `render-parity` issue; a regression fails the ratchet instead.
 
 ## Licences and attribution
 

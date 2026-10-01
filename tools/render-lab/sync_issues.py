@@ -14,12 +14,13 @@ checks: "fixture <app>/<feature> is green". Issues are:
 Blocked fixtures (manifest "needs") get the `blocked` label and point at
 the architecture item they wait on, so they sort after unblocked work.
 
-Usage: sync_issues.py <summary.json> [--repo OWNER/REPO] [--run-url URL] [--dry-run] [--mode render|export]
+Usage: sync_issues.py <summary.json> [--repo OWNER/REPO] [--run-url URL] [--dry-run] [--mode render|export|real]
 Requires `gh` authenticated with issues:write.
 """
 
 import argparse
 import json
+import os
 import subprocess
 import sys
 
@@ -27,6 +28,11 @@ LABEL = "render-parity"
 MARK = "<!-- render-parity:{} -->"
 LABEL_EXPORT = "export-parity"
 MARK_EXPORT = "<!-- export-parity:{} -->"
+# The real-document corpus (real_corpus/, #1200): one issue per document
+# that is not green, under its own label, closing when it turns green.
+LABEL_REAL = "render-real"
+MARK_REAL = "<!-- render-real:{} -->"
+REAL_CORPUS = os.path.join(os.path.dirname(os.path.abspath(__file__)), "real_corpus", "manifest.json")
 RANK = {"missing": 0, "red": 1, "amber": 2, "green": 3}
 NEEDS_TEXT = {
     "letters-page-layout": "Phase 1 Letters page layout engine: a render tree that lays out pages, used for screen, print and PDF",
@@ -71,6 +77,8 @@ def body(fx, run_url, mode="render"):
             "(docs/RENDER-PARITY-ROADMAP.md, Phase 1).\n"
         )
     run = f"\nLatest CI run with the side-by-side report: {run_url}\n" if run_url else ""
+    if mode == "real":
+        return real_body(fx, rows, run)
     if mode == "export":
         return f"""{MARK_EXPORT.format(key)}
 Our editor's PDF export of the `{key}` fixture does not match LibreOffice's PDF of the same file.
@@ -128,17 +136,66 @@ Fixture source: `tools/render-lab/fixtures.py` (`{fx['file']}`). Likely code: {W
 """
 
 
+def real_source(fx):
+    """The corpus entry (source, licence, publisher) for a real document."""
+    try:
+        corpus = json.load(open(REAL_CORPUS))
+    except OSError:
+        return {}
+    return next((e for e in corpus if e["app"] == fx["app"] and e["feature"] == fx["feature"]), {})
+
+
+def real_body(fx, rows, run):
+    key, src = fx["fixture"], real_source(fx)
+    origin = (
+        f"[{src.get('expect', fx['expect'])}]({src['page']}) ({src.get('source')}, {src.get('license')}"
+        + (f", {src['publisher'].split(' | ')[0]}" if src.get("publisher") else "")
+        + f"; [file]({src['url']}))"
+        if src.get("page") else f"`{fx['file']}`"
+    )
+    return f"""{MARK_REAL.format(key)}
+A published document from the real-document corpus does not render like LibreOffice in our editor.
+
+**Document:** {origin}
+
+| tier | verdict | ink | words found | Δ position | colours | SSIM | scale |
+|---|---|---|---|---|---|---|---|
+{rows}
+{run}
+A real document mixes many features, so first find which one is wrong in the side-by-side report and
+reduce it to a single-feature fixture in `tools/render-lab/fixtures.py`: that fixture gets its own
+`render-parity` issue, and fixing it is how this document moves.
+
+### Acceptance (checked by CI, not by hand)
+
+- The `Render parity (real documents)` workflow reports `{key}` as **green** for tiers A and B.
+- `tools/render-lab/baseline-real.json` is updated in the same PR
+  (`RENDER_LAB_CORPUS=real tools/render-lab/run.sh --app {fx['app']} --update-baseline`).
+- No other real document regresses (the ratchet fails the PR otherwise).
+
+This issue closes itself when the document turns green on `main`.
+
+### Reproduce
+
+```bash
+podman build -t gui-test tests/gui/container && podman build -t render-lab tools/render-lab
+RENDER_LAB_CORPUS=real tools/render-lab/run.sh --app {fx['app']}
+xdg-open render-lab-out/report.html   # look at {key}
+```
+"""
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("summary")
     ap.add_argument("--repo")
     ap.add_argument("--run-url")
     ap.add_argument("--dry-run", action="store_true")
-    ap.add_argument("--mode", choices=("render", "export"), default="render")
+    ap.add_argument("--mode", choices=("render", "export", "real"), default="render")
     args = ap.parse_args()
     repo = ["--repo", args.repo] if args.repo else []
-    label = LABEL_EXPORT if args.mode == "export" else LABEL
-    mark = MARK_EXPORT if args.mode == "export" else MARK
+    label = {"export": LABEL_EXPORT, "real": LABEL_REAL}.get(args.mode, LABEL)
+    mark = {"export": MARK_EXPORT, "real": MARK_REAL}.get(args.mode, MARK)
 
     summary = json.load(open(args.summary))
     if not args.dry_run:
