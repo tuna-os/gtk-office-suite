@@ -1201,7 +1201,7 @@ impl TablesWindow {
                                 let sheet_model = st.sheets[active].borrow().clone();
                                 for r in 0..sheet_model.rows {
                                     for c in 0..sheet_model.cols {
-                                        st.engine.set_cell_text(r, c, &sheet_model.data[r][c]);
+                                        st.engine.put_cell_text(r, c, &sheet_model.data[r][c]);
                                     }
                                 }
                                 st.engine.evaluate();
