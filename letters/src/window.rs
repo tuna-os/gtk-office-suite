@@ -274,9 +274,10 @@ impl LettersWindow {
         // ── Paragraph styles, previewed; the headings outline ─────
         let style_picker = crate::style_picker::build(&tab_view);
         suite_win.toolbar.container.prepend(&style_picker);
-        // Narrow breakpoint (≤ 500sp): hide the style picker to save
-        // horizontal space (fixes #79).
-        suite_win.narrow_breakpoint.add_setter(&style_picker, "visible", Some(&false.to_value()));
+        // Kept at every width: hiding it under the narrow breakpoint (#79)
+        // left a narrow window no way to set a paragraph style, and since
+        // the toolbar's extended section folds into More it fits a 360px
+        // window beside the rest.
         let breakpoints = [&suite_win.medium_breakpoint, &suite_win.narrow_breakpoint];
         let outline = crate::outline::build(&tab_view, &tab_view, &suite_win.header_bar, app, &breakpoints);
         stack.add_titled(&outline, Some("editor"), "Editor");

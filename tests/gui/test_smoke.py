@@ -2448,6 +2448,107 @@ class TablesXlsSaveSmoke(TablesFormatSafeSaveMixin, BaseGUITestCase):
     fixture = "budget.xls"
 
 
+class TablesTwoSheetJourneySmoke(TablesCellEntryMixin, BaseGUITestCase):
+    """Two sheets through the whole sheet bar (tables-readiness.md row 3,
+    #1204): a value on Sheet1 and a formula on Sheet2 that reads it; rename
+    Sheet2, move it first, delete it and undo the delete; save, and read
+    the workbook back. Nothing may cross sheets on the way: the formula
+    keeps its reference through the rename, the delete's undo brings back
+    the sheet with its formula, and the saved file has both sheets, in the
+    new order, under their new names, each with its own content."""
+
+    app_name = "tables"
+
+    def setUp(self):
+        self._dir = self.temp_dir(prefix="tables-two-sheets-")
+        self.isolate_snapshot(prefix="tables-two-sheets-snap-")
+        self.isolate_autosave_state()
+        super().setUp()
+
+    def _state(self):
+        s = self.trigger_snapshot("org.tunaos.tables")
+        a1 = next((c for c in s["sheet"]["cells"] if (c["row"], c["col"]) == (0, 0)), None)
+        return s["sheet_names"], s["active_sheet_index"], a1 and (a1["value"], a1.get("formula"))
+
+    def _wait_state(self, want, description):
+        return self.wait_until(self._state, lambda got: got == want, interval=0.3, description=description)
+
+    def _showing(self, role, name):
+        from dogtail import tree
+        return tree.root.findChild(lambda n: n.roleName == role and n.name == name and n.showing,
+                                   retry=False, requireResult=False)
+
+    def _press(self, name):
+        self.wait_until(lambda: self._showing("push button", name), bool,
+                        description=f"the {name} button").do_action(0)
+
+    def test_rename_reorder_delete_undo_save_and_reopen(self):
+        import re
+        import subprocess
+        import zipfile
+        from dogtail import rawinput
+
+        aid = "org.tunaos.tables"
+        subprocess.run(["gapplication", "action", aid, "new-document"])
+        self._wait_for_a_new_document()
+        self._put("A1", "5")
+        subprocess.run(["gapplication", "action", aid, "add-sheet"])
+        self._wait_state((["Sheet1", "Sheet2"], 1, None), "Sheet2 to be added and shown")
+        # A formula shows its result, not what was typed, so this one is
+        # confirmed on the model rather than by _put's grid text.
+        rawinput.keyCombo("<Control>g")
+        self.wait_until(lambda: self._focused("Cell reference"), bool, description="the name box")
+        rawinput.typeText("A1")
+        rawinput.keyCombo("Return")
+        self.wait_until(lambda: self._focused("Formula input"), bool, description="the jump to A1")
+        rawinput.typeText("=Sheet1!A1*2")
+        rawinput.keyCombo("Return")
+        self._wait_state((["Sheet1", "Sheet2"], 1, ("10", "Sheet1!A1*2")), "Sheet2's formula to read Sheet1")
+
+        # Rename Sheet2 through its dialog; the formula on it stays live.
+        rawinput.keyCombo("Escape")
+        self._press("Rename sheet")
+        entry = self.wait_until(lambda: self._showing("text", ""), bool, description="the rename field")
+        entry.text = "Totals"
+        self._press("Rename")
+        self._wait_state((["Sheet1", "Totals"], 1, ("10", "Sheet1!A1*2")), "Sheet2 renamed to Totals")
+
+        # Move it first, then delete it and undo the delete.
+        subprocess.run(["gapplication", "action", aid, "move-sheet-left"])
+        self._wait_state((["Totals", "Sheet1"], 0, ("10", "Sheet1!A1*2")), "Totals moved first")
+        self._press("Delete sheet")
+        self._press("Delete")
+        self._wait_state((["Sheet1"], 0, ("5", None)), "Totals deleted, Sheet1 shown with its own value")
+        subprocess.run(["gapplication", "action", aid, "undo"])
+        self._wait_state((["Totals", "Sheet1"], 0, ("10", "Sheet1!A1*2")),
+                         "the undo to bring Totals back first, formula and all")
+
+        # Save, then read the workbook back.
+        out_path = os.path.join(self._dir, "two-sheets.xlsx")
+        subprocess.run(["gapplication", "action", aid, "save-file-as"])
+        name_entry = self.wait_until(lambda: self._showing("text", "Name:"), bool, description="the Save As dialog")
+        name_entry.text = out_path
+        self._press("Save")
+
+        def saved():
+            try:
+                with zipfile.ZipFile(out_path) as z:
+                    return {n: z.read(n).decode() for n in z.namelist()}
+            except (OSError, KeyError, zipfile.BadZipFile):
+                return None
+        parts = self.wait_until(saved, bool, interval=0.25, description="the workbook on disk")
+        names = re.findall(r'<sheet [^>]*name="([^"]+)"', parts["xl/workbook.xml"])
+        self.assertEqual(names, ["Totals", "Sheet1"], "the saved sheets' names or order")
+        sheets = sorted(n for n in parts if re.fullmatch(r"xl/worksheets/sheet\d+\.xml", n))
+        self.assertEqual(len(sheets), 2, sheets)
+        totals, sheet1 = parts[sheets[0]], parts[sheets[1]]
+        self.assertRegex(totals, r"<f>Sheet1!A1\*2</f>", "Totals lost its formula")
+        self.assertRegex(totals, r"<v>10</v>", "Totals' formula has no cached 10")
+        self.assertRegex(sheet1, r"<v>5</v>", "Sheet1 lost its value")
+        self.assertNotRegex(sheet1, r"<f>", "a formula crossed onto Sheet1")
+        self.assertIsNone(self.process.poll(), "tables crashed in the sheet journey")
+
+
 class TablesColumnMenuSmoke(TablesCellEntryMixin, BaseGUITestCase):
     """The column menu (DESIGN-UI.md, Numbers/Sheets): Alt+Down opens the
     active cell's column menu; Sort Ascending reorders the rows; unticking
@@ -4249,6 +4350,28 @@ class DecksExportSmoke(BaseGUITestCase):
         self.assertIsNone(self.process.poll(), "decks crashed exporting")
 
 
+def decks_insert_button(test, match, description):
+    """The Insert button `match` picks, as a user reaches it: in the header
+    bar, or, in a narrow window, in the Insert menu the header bar folds the
+    buttons into (decks/src/insert_bar.rs), which this opens once. Only the
+    set on screen is showing."""
+    find = lambda pick: test.app.findChild(lambda n: pick(n) and n.showing, retry=False, requireResult=False)
+    opened = []
+
+    def reachable():
+        found = find(match)
+        if found is None and not opened:
+            # Once: the toggle reports no checked state over AT-SPI, and a
+            # second press while the menu opens closes it again.
+            menu = find(lambda n: n.roleName == "toggle button" and n.name == "Insert")
+            if menu is not None:
+                menu.do_action(0)
+                opened.append(menu)
+        return found
+
+    return test.wait_until(reachable, lambda b: b is not None, description=description)
+
+
 class DecksInsertBarSmoke(BaseGUITestCase):
     """The Insert buttons in the header bar (DESIGN-UI.md, "Insert
     buttons, not menus"): the Shape button's library is searchable, and
@@ -4269,10 +4392,11 @@ class DecksInsertBarSmoke(BaseGUITestCase):
         # A MenuButton's actionable node is its inner toggle button. The
         # other Insert buttons are named by their visible label and
         # described by their tooltip.
-        self.wait_until(lambda: self.app.child(name="Insert Shape", roleName="toggle button"),
-                        lambda b: b is not None, description="the Insert Shape button").do_action(0)
-        self.wait_until(lambda: self.app.child(name="Search Shapes"), lambda e: e is not None and e.showing,
-                        description="the shape library to open")
+        decks_insert_button(self, lambda n: "Insert Shape" in (n.name, n.description) and n.actions,
+                            "the Insert Shape button").do_action(0)
+        self.wait_until(lambda: self.app.findChild(lambda n: n.name == "Search Shapes" and n.showing,
+                                                   retry=False, requireResult=False),
+                        lambda e: e is not None, description="the shape library to open")
         from dogtail import rawinput
 
         # The popover focuses its search entry on opening: typing searches.
@@ -4282,11 +4406,11 @@ class DecksInsertBarSmoke(BaseGUITestCase):
                             lambda n: n.roleName == "push button" and n.name in ("Triangle", "Rectangle") and n.showing)],
                         lambda names: names == ["Triangle"], interval=0.25,
                         description="the search to leave only Triangle")
-        self.app.child(name="Triangle", roleName="push button").do_action(0)
+        self.app.findChild(lambda n: n.roleName == "push button" and n.name == "Triangle" and n.showing).do_action(0)
         self.wait_until(self._objects, lambda o: "Triangle" in o, interval=0.25,
                         description="a triangle on the slide")
-        table = self.app.findChild(lambda n: n.roleName == "push button" and n.name == "Table"
-                                   and n.description == "Insert Table")
+        table = decks_insert_button(self, lambda n: n.roleName == "push button" and n.name == "Table"
+                                    and n.description == "Insert Table", "the Table button")
         table.do_action(0)
         self.wait_until(self._objects, lambda o: "Table, 3 rows by 3 columns" in o, interval=0.25,
                         description="a 3x3 table on the slide")
@@ -4318,8 +4442,8 @@ class DecksChartSmoke(BaseGUITestCase):
         import zipfile
         aid = "org.tunaos.decks"
         self.wait_until(lambda: self.app.child(name="Slide canvas"), lambda c: c is not None, description="the deck to open")
-        self.wait_until(lambda: self.app.child(name="Insert Chart", roleName="toggle button"),
-                        lambda b: b is not None, description="the Insert Chart button").do_action(0)
+        decks_insert_button(self, lambda n: "Insert Chart" in (n.name, n.description) and n.actions,
+                            "the Insert Chart button").do_action(0)
         pie = self.wait_until(lambda: self.app.findChild(lambda n: n.roleName == "push button" and n.name == "Pie" and n.showing,
                                                          retry=False, requireResult=False),
                               lambda b: b is not None, description="the chart kinds to open")
@@ -5001,7 +5125,12 @@ class LettersDistractionFreeSmoke(BaseGUITestCase):
         from PIL import Image
 
         path = self.take_screenshot("distraction-free", crop=False)
-        pixel = Image.open(path).convert("RGB").getpixel((30, 72))
+        # x=16 is in the grey gutter left of the page at every width in
+        # the stress campaign's display matrix (the gutter is 24px at
+        # 400px); x=30 was on the white page below about 1000px, so the
+        # bars hid but this never saw it. y=72 is in the toolbar while the
+        # bars are shown.
+        pixel = Image.open(path).convert("RGB").getpixel((16, 72))
         return all(abs(c - 192) < 12 for c in pixel)
 
     def test_bars_hide_while_typing_and_return_on_pointer_motion(self):

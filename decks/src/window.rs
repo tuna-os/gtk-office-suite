@@ -606,8 +606,9 @@ impl DecksWindow {
         nbp.add_setter(&editor_split, "show-sidebar", Some(&f));
         nbp.add_setter(&canvas_scroll, "min-content-width", Some(&glib::Value::from(&180i32)));
         nbp.add_setter(&status_label, "visible", Some(&f));
-        // A phone-width window keeps the slide; notes are the desktop's.
-        nbp.add_setter(&notes.widget, "visible", Some(&f));
+        // The notes stay: hiding them left a narrow window no way to read
+        // or write a slide's notes at all, and the pane is a divider the
+        // user drags, so it costs the slide only what they give it.
 
         let main_box = gtk::Box::new(gtk::Orientation::Vertical, 0);
         main_box.append(&split_view);
@@ -900,7 +901,7 @@ impl DecksWindow {
                 }
             });
             app.add_action(&act);
-            crate::insert_bar::build(&suite_win.header_bar);
+            crate::insert_bar::build(&suite_win.header_bar, &suite_win.narrow_breakpoint);
         }
 
         // "Add Text Box"

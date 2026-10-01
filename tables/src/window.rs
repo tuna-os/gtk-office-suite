@@ -1073,7 +1073,7 @@ impl TablesWindow {
                 let name = state.borrow().sheets[idx].borrow().name.clone();
                 let dlg = adw::AlertDialog::builder()
                     .heading(suite_common::i18n("Delete Sheet?"))
-                    .body(format!("“{name}” will be permanently deleted."))
+                    .body(format!("“{name}” and everything on it will be deleted. Undo brings it back."))
                     .build();
                 dlg.add_response("cancel", &suite_common::i18n("Cancel"));
                 dlg.add_response("delete", &suite_common::i18n("Delete"));
