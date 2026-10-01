@@ -256,3 +256,20 @@ class EveryExportAppRunsInCI(unittest.TestCase):
         for app in sorted(self.apps):
             with self.subTest(app=app):
                 self.assertRegex(check, rf"for app in [^;]*\b{app}\b")
+
+
+class ReportsSkipCancelledRuns(unittest.TestCase):
+    """The jobs that compare the labs' captures and post the verdict run on
+    a failed lab (its missing fixtures are the finding) but not on a
+    cancelled run, whose partial captures read as regressions."""
+
+    def test_report_jobs_do_not_run_on_a_cancelled_run(self):
+        import yaml
+        wf = yaml.safe_load(open(os.path.join(os.path.dirname(__file__), "..", ".github", "workflows", "render-parity.yml")))
+        jobs = wf["jobs"]
+        reports = {name: job for name, job in jobs.items()
+                   if any(n in ("lab", "export-lab") for n in ([job.get("needs")] if isinstance(job.get("needs"), str) else job.get("needs") or []))}
+        self.assertEqual(sorted(reports), ["export-report", "report"])
+        for name, job in reports.items():
+            with self.subTest(job=name):
+                self.assertIn("!cancelled()", str(job.get("if", "")), f"{name} would compare a cancelled run's partial captures")
