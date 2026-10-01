@@ -11,7 +11,6 @@ use std::rc::Rc;
 #[derive(Debug, PartialEq, Eq)]
 pub(super) enum SaveOutcome {
     Saved,
-    NeedsPath,
     Cancelled,
     Failed(String),
 }
@@ -31,12 +30,11 @@ fn save_page_to_path(page: &adw::TabPage, path: &Path) -> SaveOutcome {
     let Some(buf) = get_textview(&child).map(|view| view.buffer()) else {
         return SaveOutcome::Failed(suite_common::i18n("Document editor is unavailable."));
     };
-    // The report comes back out of the session transaction, which only
-    // passes through `Result<(), String>`: the write has to stay inside
-    // `save_to` so a failure cannot advance the savepoint.
-    let mut report = None;
+    // The write stays inside `save_to` so a failure cannot advance the
+    // savepoint. What the format drops was asked about before this
+    // (`save_asking_about_loss`), so the report it returns is not shown again.
     let result = td.0.borrow_mut().save_to(path.to_path_buf(), |path| {
-        report = Some(crate::bridge::save_buffer_to_file(&buf, path)?);
+        crate::bridge::save_buffer_to_file(&buf, path)?;
         // A document at a remote location is uploaded from its staged copy
         // (RFC-0003), inside the transaction so a failed upload doesn't
         // count as saved.
@@ -63,45 +61,90 @@ fn save_page_to_path(page: &adw::TabPage, path: &Path) -> SaveOutcome {
     if let Some(warning) = commit.recovery_warning {
         show_message(page, "Document saved; recovery cleanup failed", &warning);
     }
-    if let Some(report) = report {
-        if let Some(message) = loss_message(&report) {
-            show_message(page, "Saved, with formatting this format cannot hold", &message);
-        }
-    }
     SaveOutcome::Saved
 }
 
-/// What the chosen format dropped, or `None` when it held everything.
+/// The features `report` says the format drops, one bullet each, or `None`
+/// when it holds everything.
 ///
 /// The report is built from the document's actual contents (see
 /// `letters_core::save`), so this stays quiet for an unstyled document
 /// saved as plain text rather than warning on every `.txt` save.
-fn loss_message(report: &suite_common::interop::CompatibilityReport) -> Option<String> {
+fn dropped_features(report: &suite_common::interop::CompatibilityReport) -> Option<String> {
     let dropped: Vec<String> = report
         .destructive_features()
         .iter()
         .map(|feature| format!("\u{2022} {}", suite_common::i18n(&feature.label)))
         .collect();
-    if dropped.is_empty() {
-        return None;
-    }
-    Some(format!(
-        "{}\n\n{}",
-        suite_common::i18n("The file was written, but this format cannot hold:"),
-        dropped.join("\n")
-    ))
+    (!dropped.is_empty()).then(|| dropped.join("\n"))
 }
 
-fn save_page(page: &adw::TabPage) -> SaveOutcome {
-    let Some(td) = tab_data_get(&page.child()) else {
-        return SaveOutcome::Failed(suite_common::i18n("Document session is unavailable."));
+/// Where the page's last "Save Anyway" was given: asked once per target,
+/// not on every Ctrl+S into the same file.
+const LOSS_CONFIRMED_KEY: &str = "letters-loss-confirmed-path";
+
+/// Save to `path`, but first ask when its format cannot hold what the
+/// document has (#1206). Cancel writes nothing: the file on disk keeps its
+/// bytes and the tab stays unsaved. Once the user saves anyway, later saves
+/// to the same path don't ask again.
+fn save_asking_about_loss(
+    page: &adw::TabPage,
+    path: &Path,
+    complete: impl FnOnce(SaveOutcome) + 'static,
+) {
+    let finish = {
+        let page = page.clone();
+        move |outcome: SaveOutcome, complete: Box<dyn FnOnce(SaveOutcome)>| {
+            if let SaveOutcome::Failed(ref error) = outcome {
+                show_message(&page, "Could not save document", error);
+            }
+            complete(outcome);
+        }
     };
-    let path = td.0.borrow().file.clone();
-    match path {
-        Some(path) => save_page_to_path(page, &path),
-        None => SaveOutcome::NeedsPath,
-    }
+    let child = page.child();
+    let confirmed = unsafe { child.data::<std::path::PathBuf>(LOSS_CONFIRMED_KEY) }
+        .is_some_and(|p| unsafe { p.as_ref() }.as_path() == path);
+    // An unknown extension has no report; the write refuses it with the
+    // reason, as before.
+    let loss = (!confirmed)
+        .then(|| letters_core::save::format_for_path(path).ok())
+        .flatten()
+        .and_then(|format| {
+            let buf = get_textview(&child)?.buffer();
+            let doc = crate::bridge::document_of(&buf);
+            let report = letters_core::save::compatibility_report(&doc, format);
+            Some((format, dropped_features(&report)?))
+        });
+    let Some((format, dropped)) = loss else {
+        finish(save_page_to_path(page, path), Box::new(complete));
+        return;
+    };
+    let heading = suite_common::i18n("Save as %s?").replace("%s", &suite_common::i18n(format.label()));
+    let body = format!(
+        "{}\n\n{}\n\n{}",
+        suite_common::i18n("This format cannot hold:"),
+        dropped,
+        suite_common::i18n("Saving keeps the text and loses these. Save as ODT or DOCX to keep everything."),
+    );
+    let dialog = adw::AlertDialog::new(Some(&heading), Some(&body));
+    dialog.add_response("cancel", &suite_common::i18n("_Cancel"));
+    dialog.add_response("save", &suite_common::i18n("_Save Anyway"));
+    dialog.set_response_appearance("save", adw::ResponseAppearance::Destructive);
+    dialog.set_default_response(Some("cancel"));
+    dialog.set_close_response("cancel");
+    let parent = child.root().and_downcast::<gtk::Window>();
+    let page = page.clone();
+    let path = path.to_path_buf();
+    dialog.choose(parent.as_ref(), None::<&gio::Cancellable>, move |response| {
+        if response != "save" {
+            complete(SaveOutcome::Cancelled);
+            return;
+        }
+        unsafe { page.child().set_data(LOSS_CONFIRMED_KEY, path.clone()) };
+        finish(save_page_to_path(&page, &path), Box::new(complete));
+    });
 }
+
 
 /// Capture the target page before awaiting a chooser. Changing the selected
 /// tab must never redirect a pending save to another document.
@@ -111,12 +154,15 @@ pub(super) fn save_with_prompt(
     complete: impl FnOnce(SaveOutcome) + 'static,
 ) {
     if !force_save_as {
-        let outcome = save_page(page);
-        if outcome != SaveOutcome::NeedsPath {
-            if let SaveOutcome::Failed(ref error) = outcome {
-                show_message(page, "Could not save document", error);
-            }
-            complete(outcome);
+        let Some(td) = tab_data_get(&page.child()) else {
+            let error = suite_common::i18n("Document session is unavailable.");
+            show_message(page, "Could not save document", &error);
+            complete(SaveOutcome::Failed(error));
+            return;
+        };
+        let path = td.0.borrow().file.clone();
+        if let Some(path) = path {
+            save_asking_about_loss(page, &path, complete);
             return;
         }
     }
@@ -155,7 +201,10 @@ pub(super) fn save_with_prompt(
     dialog.save(parent.as_ref(), None::<&gio::Cancellable>, move |result| {
         let outcome = match result {
             Ok(file) => match suite_common::locations::save_location(&file) {
-                Ok(path) => save_page_to_path(&page, &path),
+                Ok(path) => {
+                    save_asking_about_loss(&page, &path, complete);
+                    return;
+                }
                 Err(error) => SaveOutcome::Failed(error),
             },
             Err(error)

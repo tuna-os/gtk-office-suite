@@ -5587,10 +5587,12 @@ class LettersSaveFormatSmoke(BaseGUITestCase):
         self.assertNotIn("**", editor.text, f"editor text: {editor.text!r}")
 
         out_path = self._save_as("notes.txt")
+        # Before writing, Letters says what plain text cannot hold, rather
+        # than dropping it silently (#1206), and writes only when told to.
+        self.wait_for_node(name="Save as Plain Text?")
+        self.assertFalse(os.path.exists(out_path), "written before the user answered")
+        self.wait_for_node(name="Save Anyway", roleName="push button").do_action(0)
         self.wait_for_file(out_path)
-        # The dialog reports the formatting the format cannot hold, rather
-        # than dropping it silently.
-        self.wait_for_node(name="Saved, with formatting this format cannot hold")
 
         with open(out_path) as f:
             saved = f.read()
@@ -5624,6 +5626,53 @@ class LettersSaveFormatSmoke(BaseGUITestCase):
             os.path.exists(out_path), "a format with no writer was written anyway"
         )
         self.assertIsNone(self.process.poll(), "letters exited on a refused save")
+
+
+class LettersLossWarningCancelSmoke(BaseGUITestCase):
+    """Real GTK journey: Cancel on a loss warning keeps the bytes (#1206).
+
+    A plain-text file made rich (a bold run) and saved with Ctrl+S would
+    lose the bold. Letters asks first; Cancel must leave the file exactly
+    as it was on disk and the edit still unsaved, which the close guard
+    proves by asking about it.
+    """
+
+    app_name = "letters"
+    ORIGINAL = b"original line\n"
+
+    def setUp(self):
+        self._dir = self.temp_dir(prefix="letters-loss-cancel-")
+        self._doc = os.path.join(self._dir, "plain.txt")
+        with open(self._doc, "wb") as f:
+            f.write(self.ORIGINAL)
+        self.launch_args = [self._doc]
+        super().setUp()
+
+    def test_cancel_on_a_loss_warning_keeps_the_file_and_the_edit(self):
+        from dogtail import rawinput
+
+        self.wait_for_node(roleName="text")
+        rawinput.keyCombo("<Control>End")
+        rawinput.typeText("more")
+        rawinput.keyCombo("<Control>a")
+        self.app.child(name="Bold (Ctrl+B)", roleName="push button").do_action(0)
+        time.sleep(0.5)
+
+        self.gapplication_action("org.tunaos.letters", "save-file")
+        self.wait_for_node(name="Save as Plain Text?")
+        self.wait_for_node(name="Cancel", roleName="push button").do_action(0)
+        time.sleep(1.0)
+
+        with open(self._doc, "rb") as f:
+            self.assertEqual(f.read(), self.ORIGINAL, "Cancel wrote the file anyway")
+        self.assertIsNone(self.process.poll(), "letters exited on Cancel")
+
+        # Still unsaved: closing asks about the edit instead of closing.
+        self.app.child(name="Close", roleName="push button").do_action(0)
+        self.wait_for_node(name="Discard All", roleName="push button").do_action(0)
+        self.assertIsNotNone(self.wait_for_process_exit(), "Discard must close the window")
+        with open(self._doc, "rb") as f:
+            self.assertEqual(f.read(), self.ORIGINAL, "Discard wrote the file")
 
 
 class HarnessRepeatedLaunchSmoke(BaseGUITestCase):
