@@ -4,11 +4,14 @@
 > A visual feature is done only when a screenshot of the running app matches
 > LibreOffice's rendering of the same file within a recorded budget,
 > ratcheted in CI by `tools/render-lab`. Phase 1 (one renderer per app) met its
-> exit criterion on 2026-09-24: no fixture is red. Phase 2 (every
-> single-feature fixture green) is in progress, and
-> [`tools/render-lab/baseline.json`](tools/render-lab/baseline.json) is the live
-> scorecard. Until Phase 2 exits, render parity comes before ordinary feature
-> work. Collaboration follows [RFC-0001](docs/rfc/0001-crdt-collaboration.md)
+> exit criterion on 2026-09-24: no fixture is red. Phase 2 exited on
+> 2026-10-01 (#1198): 49 of 52 single-feature fixtures are green in both
+> tiers, and the three ambers (`letters/table`, `tables/number-formats`,
+> `tables/wrap-text`) are accepted metric artifacts, recorded with their
+> measurements. [`tools/render-lab/baseline.json`](tools/render-lab/baseline.json)
+> is the live scorecard, and `docs/PARITY.md`'s Render column is checked
+> against it in CI. Phase 3 (real documents) is next; render evidence still
+> comes before ordinary feature work. Collaboration follows [RFC-0001](docs/rfc/0001-crdt-collaboration.md)
 > (accepted, Loro) alongside it. The UI direction is in
 > [docs/DESIGN-UI.md](docs/DESIGN-UI.md).
 
@@ -64,7 +67,7 @@ gtk-office-suite is the org's flagship **end-user product bet** and a cornerston
 
 | Priority | Item | Tracking | Status |
 |----------|------|----------|--------|
-| P0 | Render parity: each app's screen matches LibreOffice, fixture by fixture | [docs/RENDER-PARITY-ROADMAP.md](docs/RENDER-PARITY-ROADMAP.md) | 🟡 Phase 2 in progress |
+| P0 | Render parity: each app's screen matches LibreOffice, fixture by fixture | [docs/RENDER-PARITY-ROADMAP.md](docs/RENDER-PARITY-ROADMAP.md) | 🟡 Phase 2 done (2026-10-01); Phase 3 next |
 | P0 | Product quality + daily-driver readiness roadmap (meta-tracker) | #95 | 🟡 In progress |
 | P0 | CI quality gates: fast / GUI / nightly with published capability matrix | #108, #107 | 🟡 In progress |
 | P0 | GUI-layer God-file decomposition (window.rs) | #168 | 🟡 In progress |

@@ -14,12 +14,18 @@ feature is proven. This validator makes that claim machine-checkable in PR CI:
   E4  (with --base) Status transitions vs. the base branch's PARITY.md:
       a row may not silently regress green→non-green, and may not jump to
       green without new evidence.
+  E5  Every Tier 1/2 table ends in a `Render` column (RENDER-PARITY-ROADMAP
+      "Rules the humans enforce in review", rule 1). A Render cell may show
+      ✅ only when every render-lab fixture it names is green in both tiers
+      of tools/render-lab/baseline.json; any fixture it names must exist
+      there. A visual feature with no green fixture says 🟡 file-only (or
+      🟠 with its amber fixture); a feature with nothing to draw says —.
 
 Exit code is non-zero on any violation, so PR CI can gate on it. Tier 3 rows
 are out of scope (not in the scorecard denominator, per PARITY.md).
 
 Usage:
-  python3 conformance/validate_parity.py                 # E1–E3 only
+  python3 conformance/validate_parity.py                 # E1–E3, E5
   python3 conformance/validate_parity.py --base BASE.md  # + E4 transitions
 """
 
@@ -61,6 +67,10 @@ JOURNEY_GATED = ("undo/redo", "multi-sheet", "multi sheet", "preferences")
 
 NON_GREEN = ("❌", "⚠️", "❓")
 
+# A render-lab fixture id as it appears in tools/render-lab/baseline.json.
+FIXTURE_RE = re.compile(r"(?<![A-Za-z0-9_/])(letters|tables|decks)/[a-z0-9][a-z0-9\-]*")
+BASELINE = Path("tools") / "render-lab" / "baseline.json"
+
 
 def strip_markers(s: str) -> str:
     for m in MARKERS:
@@ -76,11 +86,18 @@ def norm(s: str) -> str:
     return s.lower()
 
 
-def parse_parity(path: Path):
-    """Yield (app, tier, feature, row_text, cells) for Tier 1/2 rows."""
+def parse_parity(path: Path, render: list | None = None):
+    """Yield (app, tier, feature, row_text, cells) for Tier 1/2 rows.
+
+    A table whose header ends in a `Render` column has that cell taken out
+    of `cells` and `row_text`, so the Status/evidence checks (E1–E4) read
+    only the file-level claim. When *render* is a list, each row's
+    (app, tier, feature, render_cell_or_None) is appended to it (E5).
+    """
     rows = []
     app = None
     tier = None
+    has_render = False
     for raw in path.read_text().splitlines():
         line = raw.strip()
         if line.startswith("## "):
@@ -90,6 +107,7 @@ def parse_parity(path: Path):
         m = re.match(r"^### Tier ([12])", line)
         if m:
             tier = int(m.group(1))
+            has_render = False
             continue
         if re.match(r"^### Tier 3", line):
             tier = None
@@ -101,8 +119,62 @@ def parse_parity(path: Path):
         cells = [c.strip() for c in line.strip("|").split("|")]
         if len(cells) < 2:
             continue
+        header = cells[0] == "Feature"
+        if header:
+            has_render = cells[-1] == "Render"
+        render_cell = None
+        if has_render:
+            render_cell = cells.pop()
+            line = "| " + " | ".join(cells) + " |"
+        if render is not None and not header:
+            render.append((app, tier, cells[0], render_cell))
         rows.append((app, tier, cells[0], line, cells))
     return rows
+
+
+def load_baseline(repo_root: Path) -> dict | None:
+    import json
+    path = repo_root / BASELINE
+    if not path.exists():
+        return None
+    return json.loads(path.read_text())
+
+
+def check_render(render_rows, baseline, errors):
+    """E5: the Render column exists and its ✅ claims are green fixtures."""
+    for app, tier, feature, cell in render_rows:
+        where = f"E5 {app} T{tier}: '{feature}'"
+        if cell is None:
+            errors.append(
+                f"{where} is in a table without a Render column — every "
+                f"Tier 1/2 table ends in one (✅ fixture, 🟡 file-only, or —)."
+            )
+            continue
+        fixtures = [m.group(0) for m in FIXTURE_RE.finditer(cell)]
+        for fx in fixtures:
+            if baseline is None or fx not in baseline:
+                errors.append(
+                    f"{where} names render fixture '{fx}', which is not in "
+                    f"{BASELINE}."
+                )
+        if GREEN not in cell:
+            continue
+        if not fixtures:
+            errors.append(
+                f"{where} shows ✅ in its Render column without naming a "
+                f"render-lab fixture — say 🟡 file-only until one is green."
+            )
+        for fx in fixtures:
+            tiers = (baseline or {}).get(fx)
+            if tiers is None:
+                continue
+            not_green = sorted(t for t, v in tiers.items() if v != "green")
+            if not_green:
+                errors.append(
+                    f"{where} shows ✅ in its Render column but '{fx}' is "
+                    f"{', '.join(f'{t}={tiers[t]}' for t in not_green)} in "
+                    f"the baseline — mark it 🟠 (or fix the rendering)."
+                )
 
 
 def has_marker(row_text: str) -> bool:
@@ -228,7 +300,7 @@ def check_transitions(base_path, head_rows, errors):
 
 def validate(parity: Path, base: Path | None = None,
              repo_root: Path | None = None) -> int:
-    """Run E1–E3 (and E4 when *base* is given); return 0 when all pass.
+    """Run E1–E3 and E5 (and E4 when *base* is given); return 0 when all pass.
 
     Programmatic entry point so other conformance tooling (scorecard.py,
     CI gates) can call the same checks without re-parsing argv.
@@ -239,10 +311,12 @@ def validate(parity: Path, base: Path | None = None,
         print(f"validate_parity: {parity} not found", file=sys.stderr)
         return 2
 
-    rows = parse_parity(parity)
+    render_rows = []
+    rows = parse_parity(parity, render=render_rows)
     errors, warnings = [], []
     for row in rows:
         check_evidence(row, repo_root, errors, warnings)
+    check_render(render_rows, load_baseline(repo_root), errors)
 
     if base is not None:
         if not base.exists():
