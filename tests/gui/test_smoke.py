@@ -5542,7 +5542,7 @@ class LettersTableOfContentsSmoke(BaseGUITestCase):
     def test_insert_and_update_a_table_of_contents(self):
         from dogtail import rawinput
 
-        self.new_letters_document()
+        page = self.new_letters_document()
         doc = [("Intro", 1, None)]
         self._line("Intro", "style-h1", doc, "the first heading")
         rawinput.keyCombo("Return")
@@ -5553,6 +5553,11 @@ class LettersTableOfContentsSmoke(BaseGUITestCase):
         self._line("Details", "style-h2", doc, "the second heading")
 
         rawinput.keyCombo("<Control>Home")
+        # The key comes through X and the action over D-Bus, so the action
+        # can arrive first: the nightly campaign then inserted the contents
+        # at the end, before "Details" (#1192). Wait for the caret.
+        self.wait_until(lambda: page.queryText().caretOffset, lambda o: o == 0,
+                        description="Ctrl+Home to put the caret at the start")
         self.gapplication_action("org.tunaos.letters", "insert-toc")
         toc = [("Intro\t1", None, 1), ("Details\t1", None, 2)]
         self._wait(toc + doc, "the table of contents before the first heading")
