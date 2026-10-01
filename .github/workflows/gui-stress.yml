@@ -83,7 +83,11 @@ jobs:
       image: ${{ needs.image.outputs.ref }}
       # GTK and Xvfb share memory through /dev/shm; the container default
       # of 64MB makes rendering fail in ways that look like app bugs.
-      options: --shm-size=1g
+      # Privileged so the step below can route core dumps to files: the
+      # runner pipes them to systemd-coredump, out of the container's
+      # reach, and a product crash then leaves no evidence at all (#1192:
+      # Tables crashed twice in one night with an empty stderr).
+      options: --shm-size=1g --privileged
     steps:
       - uses: actions/checkout@v7
 
@@ -124,6 +128,16 @@ jobs:
           cargo test -p decks-core --test malformed_inputs -- --ignored seed_campaign
           cargo test -p tables-core --test malformed_inputs -- --ignored seed_campaign
 
+      # A crash dumps core into the journey's working directory, where the
+      # harness keeps it with the journey's failure artifacts
+      # (framework/base.py); gdb turns it into a backtrace after the run.
+      - name: Route core dumps to files
+        run: |
+          echo 'core.%e.%p' > /proc/sys/kernel/core_pattern
+          echo "core_pattern: $(cat /proc/sys/kernel/core_pattern)"
+          apt-get update -qq && apt-get install -y -qq --no-install-recommends gdb >/dev/null
+          gdb --version | head -1
+
       # Every context value reaches the script through the environment,
       # never through `${{ }}` inside it: an input is attacker-controlled
       # text and expression interpolation pastes it in before bash parses
@@ -131,6 +145,9 @@ jobs:
       - name: Run the campaign
         id: campaign
         env:
+          # A debug build's core is a few hundred MB; it is reduced to a
+          # backtrace below, not uploaded.
+          GUI_TEST_CORE_MAX_MB: '4096'
           REPEAT: ${{ github.event.inputs.repeat || '10' }}
           SEED: ${{ github.event.inputs.seed }}
           MATRIX: ${{ github.event.inputs.matrix || 'none' }}
@@ -151,6 +168,7 @@ jobs:
       - name: Run the display matrix
         if: always() && github.event_name == 'schedule'
         env:
+          GUI_TEST_CORE_MAX_MB: '4096'
           SEED: ${{ github.event.inputs.seed }}
         run: |
           set --
@@ -158,6 +176,21 @@ jobs:
           python3 tests/gui/stress.py \
             --repeat 1 --matrix display \
             --output "$GITHUB_WORKSPACE/campaign-display" "$@"
+
+      # Each retained core becomes a backtrace beside it, printed here too,
+      # and the core itself is removed: it is only readable against this
+      # exact build, and it would dwarf the rest of the evidence. The core
+      # is named core.<executable>.<pid> by the pattern above.
+      - name: Backtraces of crashed apps
+        if: always()
+        run: |
+          find campaign campaign-display -name 'core.*' ! -name '*.txt' -type f 2>/dev/null | while read -r core; do
+            exe="target/debug/$(basename "$core" | cut -d. -f2)"
+            echo "::group::$core ($exe)"
+            gdb -batch -ex 'thread apply all bt' "$exe" "$core" 2>&1 | tee "$core.backtrace.txt"
+            echo "::endgroup::"
+            rm -f "$core"
+          done
 
       # Always: a campaign's failures are its output, so the evidence
       # must survive the run that produced them. Videos and failure

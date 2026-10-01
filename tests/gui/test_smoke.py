@@ -4169,6 +4169,28 @@ class DecksExportSmoke(BaseGUITestCase):
         self.assertIsNone(self.process.poll(), "decks crashed exporting")
 
 
+def decks_insert_button(test, match, description):
+    """The Insert button `match` picks, as a user reaches it: in the header
+    bar, or, in a narrow window, in the Insert menu the header bar folds the
+    buttons into (decks/src/insert_bar.rs), which this opens once. Only the
+    set on screen is showing."""
+    find = lambda pick: test.app.findChild(lambda n: pick(n) and n.showing, retry=False, requireResult=False)
+    opened = []
+
+    def reachable():
+        found = find(match)
+        if found is None and not opened:
+            # Once: the toggle reports no checked state over AT-SPI, and a
+            # second press while the menu opens closes it again.
+            menu = find(lambda n: n.roleName == "toggle button" and n.name == "Insert")
+            if menu is not None:
+                menu.do_action(0)
+                opened.append(menu)
+        return found
+
+    return test.wait_until(reachable, lambda b: b is not None, description=description)
+
+
 class DecksInsertBarSmoke(BaseGUITestCase):
     """The Insert buttons in the header bar (DESIGN-UI.md, "Insert
     buttons, not menus"): the Shape button's library is searchable, and
@@ -4189,10 +4211,11 @@ class DecksInsertBarSmoke(BaseGUITestCase):
         # A MenuButton's actionable node is its inner toggle button. The
         # other Insert buttons are named by their visible label and
         # described by their tooltip.
-        self.wait_until(lambda: self.app.child(name="Insert Shape", roleName="toggle button"),
-                        lambda b: b is not None, description="the Insert Shape button").do_action(0)
-        self.wait_until(lambda: self.app.child(name="Search Shapes"), lambda e: e is not None and e.showing,
-                        description="the shape library to open")
+        decks_insert_button(self, lambda n: "Insert Shape" in (n.name, n.description) and n.actions,
+                            "the Insert Shape button").do_action(0)
+        self.wait_until(lambda: self.app.findChild(lambda n: n.name == "Search Shapes" and n.showing,
+                                                   retry=False, requireResult=False),
+                        lambda e: e is not None, description="the shape library to open")
         from dogtail import rawinput
 
         # The popover focuses its search entry on opening: typing searches.
@@ -4202,11 +4225,11 @@ class DecksInsertBarSmoke(BaseGUITestCase):
                             lambda n: n.roleName == "push button" and n.name in ("Triangle", "Rectangle") and n.showing)],
                         lambda names: names == ["Triangle"], interval=0.25,
                         description="the search to leave only Triangle")
-        self.app.child(name="Triangle", roleName="push button").do_action(0)
+        self.app.findChild(lambda n: n.roleName == "push button" and n.name == "Triangle" and n.showing).do_action(0)
         self.wait_until(self._objects, lambda o: "Triangle" in o, interval=0.25,
                         description="a triangle on the slide")
-        table = self.app.findChild(lambda n: n.roleName == "push button" and n.name == "Table"
-                                   and n.description == "Insert Table")
+        table = decks_insert_button(self, lambda n: n.roleName == "push button" and n.name == "Table"
+                                    and n.description == "Insert Table", "the Table button")
         table.do_action(0)
         self.wait_until(self._objects, lambda o: "Table, 3 rows by 3 columns" in o, interval=0.25,
                         description="a 3x3 table on the slide")
@@ -4238,8 +4261,8 @@ class DecksChartSmoke(BaseGUITestCase):
         import zipfile
         aid = "org.tunaos.decks"
         self.wait_until(lambda: self.app.child(name="Slide canvas"), lambda c: c is not None, description="the deck to open")
-        self.wait_until(lambda: self.app.child(name="Insert Chart", roleName="toggle button"),
-                        lambda b: b is not None, description="the Insert Chart button").do_action(0)
+        decks_insert_button(self, lambda n: "Insert Chart" in (n.name, n.description) and n.actions,
+                            "the Insert Chart button").do_action(0)
         pie = self.wait_until(lambda: self.app.findChild(lambda n: n.roleName == "push button" and n.name == "Pie" and n.showing,
                                                          retry=False, requireResult=False),
                               lambda b: b is not None, description="the chart kinds to open")
@@ -4921,7 +4944,12 @@ class LettersDistractionFreeSmoke(BaseGUITestCase):
         from PIL import Image
 
         path = self.take_screenshot("distraction-free", crop=False)
-        pixel = Image.open(path).convert("RGB").getpixel((30, 72))
+        # x=16 is in the grey gutter left of the page at every width in
+        # the stress campaign's display matrix (the gutter is 24px at
+        # 400px); x=30 was on the white page below about 1000px, so the
+        # bars hid but this never saw it. y=72 is in the toolbar while the
+        # bars are shown.
+        pixel = Image.open(path).convert("RGB").getpixel((16, 72))
         return all(abs(c - 192) < 12 for c in pixel)
 
     def test_bars_hide_while_typing_and_return_on_pointer_motion(self):
