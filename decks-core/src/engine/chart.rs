@@ -625,7 +625,7 @@ pub fn parse_odf_chart(xml: &str) -> Option<ChartData> {
             .collect()
     };
     let header = table.child_q("table:table-header-rows").and_then(|h| h.child_q("table:table-row"));
-    let series_name = header.map(&cells).and_then(|c| c.get(val_col).map(|c| c.0.clone())).unwrap_or_default();
+    let series_name = header.map(cells).and_then(|c| c.get(val_col).map(|c| c.0.clone())).unwrap_or_default();
     let mut rows = Vec::new();
     if let Some(body) = table.child_q("table:table-rows") {
         body.all_q("table:table-row", &mut rows);
