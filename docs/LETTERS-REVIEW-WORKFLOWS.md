@@ -37,8 +37,11 @@ holding its removed text. The marks design won because:
 
 While tracking (`app.track-changes`), typing inserts text marked as the
 author's insertion (continuing their own pending insertion as one change),
-and deleting marks text deleted; deleting one's own pending insertion
-removes it, as Word does. Limits: paragraph breaks and formatting changes
+and deleting marks text deleted (continuing their own pending deletion
+as one change, forwards with Delete and backwards with Backspace, dated
+when it began); deleting one's own pending insertion removes it, as Word
+does. Without the deletion half, each keystroke took the current second
+and two deletions a clock tick apart read as two changes (#1193). Limits: paragraph breaks and formatting changes
 are not tracked (a tracked deletion across a break keeps the break); the
 Draft editor is read-only while tracking, because its edits go into the
 buffer rather than through the model's tracked ops.
