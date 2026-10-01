@@ -528,7 +528,7 @@ fn image_object_survives_impress_rewrite() {
         objects: vec![SlideObject::Image {
             path: png_path.to_string_lossy().to_string(),
             x: 100.0, y: 100.0, w: 200.0, h: 150.0,
-            rotation: 0.0,
+            rotation: 0.0, crop: Default::default()
         }],
         notes: String::new(),
         master_idx: Some(0),
@@ -923,7 +923,7 @@ fn impress_finds_the_picture_we_write_into_an_odp() {
     deck.slides[0].objects.push(SlideObject::Image {
         path: png_path.to_string_lossy().to_string(),
         x: 100.0, y: 100.0, w: 200.0, h: 150.0,
-        rotation: 0.0,
+        rotation: 0.0, crop: Default::default()
     });
     let as_odp = dir.path().join("pictured.odp");
     odp::write(&deck, as_odp.to_str().unwrap()).expect("write odp");
@@ -966,7 +966,7 @@ fn we_read_the_picture_impress_writes_into_an_odp() {
     deck.slides[0].objects.push(SlideObject::Image {
         path: png_path.to_string_lossy().to_string(),
         x: 100.0, y: 100.0, w: 200.0, h: 150.0,
-        rotation: 0.0,
+        rotation: 0.0, crop: Default::default()
     });
     let src = dir.path().join("src.pptx");
     write_pptx(src.to_str().unwrap(), &deck).expect("write pptx");
@@ -1852,4 +1852,56 @@ fn impress_reads_our_pptx_charts_as_its_own() {
 #[test]
 fn impress_reads_our_odp_charts_as_its_own() {
     charts_through_impress("odp", "pptx");
+}
+
+#[path = "support/mod.rs"]
+mod picture_support;
+
+fn the_crop(deck: &Deck) -> decks_core::engine::Crop {
+    deck.slides[0]
+        .objects
+        .iter()
+        .find_map(|o| match o {
+            SlideObject::Image { crop, .. } => Some(*crop),
+            _ => None,
+        })
+        .expect("a picture")
+}
+
+fn close(a: decks_core::engine::Crop, b: decks_core::engine::Crop, what: &str) {
+    for (x, y, side) in [(a.left, b.left, "left"), (a.top, b.top, "top"), (a.right, b.right, "right"), (a.bottom, b.bottom, "bottom")] {
+        assert!((x - y).abs() < 0.01, "{what}: {side} crop {x} != {y} ({a:?} vs {b:?})");
+    }
+}
+
+/// A cropped picture (pptx `a:srcRect`, ODF `fo:clip`) stays cropped by the
+/// same amount through Impress both ways: our pptx → Impress's odp → our
+/// odp reader, and our odp → Impress's pptx → our pptx reader.
+#[test]
+fn a_picture_crop_survives_impress_both_ways() {
+    if !require_or_skip() { return; }
+    let dir = tempfile::tempdir().unwrap();
+    let png = dir.path().join("photo.png");
+    std::fs::write(&png, picture_support::picture(400, 300, 7)).unwrap();
+    let crop = decks_core::engine::Crop { left: 0.25, top: 0.1, right: 0.0, bottom: 0.2 };
+    let mut deck = Deck::new();
+    deck.slides[0].objects.push(SlideObject::Image {
+        path: png.to_string_lossy().to_string(),
+        x: 100.0, y: 100.0, w: 300.0, h: 210.0,
+        rotation: 0.0, crop,
+    });
+
+    let ours_pptx = dir.path().join("crop.pptx");
+    write_pptx(ours_pptx.to_str().unwrap(), &deck).unwrap();
+    close(the_crop(&read_pptx(ours_pptx.to_str().unwrap()).unwrap()), crop, "our own pptx");
+    let impress_odp = convert(&ours_pptx, "odp").expect("Impress converts our pptx");
+    close(the_crop(&odp::read(impress_odp.to_str().unwrap()).unwrap()), crop, "Impress's odp of our pptx");
+
+    let odp_dir = dir.path().join("odp");
+    std::fs::create_dir_all(&odp_dir).unwrap();
+    let ours_odp = odp_dir.join("crop.odp");
+    odp::write(&deck, ours_odp.to_str().unwrap()).unwrap();
+    close(the_crop(&odp::read(ours_odp.to_str().unwrap()).unwrap()), crop, "our own odp");
+    let impress_pptx = convert(&ours_odp, "pptx").expect("Impress converts our odp");
+    close(the_crop(&read_pptx(impress_pptx.to_str().unwrap()).unwrap()), crop, "Impress's pptx of our odp");
 }

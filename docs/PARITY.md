@@ -132,7 +132,7 @@ roadmap-dependent), external file references (decision: likely never),
 | Master slides applied on render | ✅ | I1 placeholder-skip parser + I4 (Impress-authored pptx maps slides→masters); master background inherited on canvas | ✅ decks/background, decks/title-layout |
 | ODP read/write | ✅ | decks-core/src/odp.rs: I2 round-trips (text, runs, geometry, notes, background) + 7 I4 oracle tests (Impress rewrite both ways; reads Impress custom-shape output) | — |
 | Slide reorder / duplicate |  | I1 + I6 | — |
-| Image fit/crop modes |  | I1 geometry | 🟡 file-only |
+| Image fit/crop modes | ✅ | I1 crop geometry and Crop to Fill (decks-core/src/engine/model.rs), one undo step (decks-core/src/controller.rs); I2 pptx `a:srcRect` and odp `fo:clip` own round trips; I4 a_picture_crop_survives_impress_both_ways (decks-core/tests/soffice_oracle.rs); I6 DecksPictureCropSmoke (Tab selects, Crop to Fill, Show All, undo, saved fo:clip) | ✅ decks/image, decks/image-crop |
 
 ### Tier 3 — Advanced
 

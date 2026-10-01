@@ -463,7 +463,7 @@ fn images_survive_a_snapshot() {
             y: 70.0,
             w: 200.0,
             h: 150.0,
-            rotation: 0.0,
+            rotation: 0.0, crop: Default::default()
         }],
         "",
         "",

@@ -242,7 +242,15 @@ pub fn build(
         "Layer",
         &linked(&[to_back.upcast_ref(), backward.upcast_ref(), forward.upcast_ref(), to_front.upcast_ref()]),
     ));
-    let arrange_page = page(&[&pos_group, &size_group, &turn_group, &order_group]);
+    // A picture's crop (pptx srcRect, ODF fo:clip): fill the box without
+    // distorting it, or show all of it again. One undo step each.
+    let picture_group = adw::PreferencesGroup::builder().title("Picture").build();
+    let crop_fill = gtk::Button::with_label("Crop to Fill");
+    crop_fill.set_valign(gtk::Align::Center);
+    let crop_reset = gtk::Button::with_label("Show All");
+    crop_reset.set_valign(gtk::Align::Center);
+    picture_group.add(&row("Crop", &linked(&[crop_fill.upcast_ref(), crop_reset.upcast_ref()])));
+    let arrange_page = page(&[&pos_group, &size_group, &turn_group, &order_group, &picture_group]);
 
     // ── Animate (Keynote's builds) ─────────────────────────────────────────
     let build_group = adw::PreferencesGroup::builder()
@@ -323,6 +331,7 @@ pub fn build(
         let layout_sync = layout.sync.clone();
         let (x, y, w, h, rotation) = (x.clone(), y.clone(), w.clone(), h.clone(), rotation.clone());
         let (build_in, build_out, build_order) = (build_in.clone(), build_out.clone(), build_order.clone());
+        let picture_group = picture_group.clone();
         Rc::new(move || {
             let f: Option<ObjectFormat> = sel.get().and_then(|oi| ctl.object_format(cs.get(), oi));
             let Some(f) = f else {
@@ -341,6 +350,7 @@ pub fn build(
             style_tab.set_visible(f.has_style);
             text_tab.set_visible(f.has_text);
             chart_tab.set_visible(f.chart.is_some());
+            picture_group.set_visible(f.picture);
             let now = sel.get().map(|oi| (cs.get(), oi));
             let newly = shown.replace(now) != now;
             let visible = stack.visible_child_name().map(|n| n.to_string());
@@ -564,6 +574,16 @@ pub fn build(
             // The selection follows the object to its new place.
             sel.set(Some(decks_core::undo::z_order_index(oi, n, op)));
             changed();
+        });
+    }
+
+    for (button, fill) in [(&crop_fill, true), (&crop_reset, false)] {
+        let (ctl, cs, sel, changed) = (ctl.clone(), current_slide.clone(), selected.clone(), changed.clone());
+        button.connect_clicked(move |_| {
+            let Some(oi) = sel.get() else { return };
+            if ctl.crop_picture(cs.get(), oi, fill) {
+                changed();
+            }
         });
     }
 
