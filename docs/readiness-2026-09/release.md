@@ -8,7 +8,17 @@ Depends on #436–#441, #354, #1217 (recovery), #1206 (interoperability), #313/#
 - [ ] All P0 data-loss paths fixed; all admitted daily-driver journeys pass. Deferred features have explicit recorded scope and honest UI/docs.
 - [ ] Build/install/launch each Flatpak; test file-manager MIME activation, open/save portals, recent files, drag/drop and sandbox file access.
 - [ ] Test prior-release upgrade with settings, open documents and interrupted recovery checkpoints.
-- [ ] Validate icons/schemas/desktop metadata/translations and diagnose GTK criticals/crashes.
+- [x] Validate icons/schemas/desktop metadata/translations and diagnose GTK criticals/crashes.
+      Metadata: `release-gate.yml`'s `contract` job runs `scripts/release_gate.py` (icon, manifest, desktop file, schema
+      and metainfo present and consistent per app) and then `desktop-file-validate`, `glib-compile-schemas --strict`,
+      `appstreamcli validate` and `msgfmt --check` on every pull request that touches them and on every tag.
+      **GTK criticals** (#1209): the GUI harness reads each journey's stderr at teardown
+      (`tests/gui/framework/gtk_diagnostics.py`, unit-tested by `tests/test_gtk_diagnostics.py`). A GLib/GTK CRITICAL
+      fails the journey, and every CRITICAL and WARNING is logged per journey and uploaded as the smoke lane's
+      `gtk-diagnostics` artifact. Measured when it went in: 118 journeys, no CRITICAL, and five WARNINGs. Three were
+      the Help dialog's unescaped "&" in Pango markup, which left those group titles blank; that is fixed. Two are
+      GtkLabel min-width warnings in the same dialog, kept as recorded warnings. **Crashes**: the harness already
+      keeps a core dump and a gdb backtrace for a journey whose app dies (gui-stress, #1192).
 - [ ] Exercise supported architectures and reconcile flathub versus development manifests and locked source archives.
 - [ ] Record reproducible-input checksums and compare clean builds; do not equate metadata validation with binary reproducibility.
 - [ ] Publish machine-readable capability matrix, JUnit, independent-reader results, visual/a11y evidence and performance measurements with the release.

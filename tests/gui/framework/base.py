@@ -610,6 +610,35 @@ class BaseGUITestCase(unittest.TestCase):
                 self.process.wait(timeout=2)
             except subprocess.TimeoutExpired:
                 self.process.kill()
+            self._check_gtk_diagnostics()
+
+    def _check_gtk_diagnostics(self):
+        """Fail the journey on a GLib/GTK CRITICAL its app logged (#1209).
+
+        A CRITICAL is a programming error GLib caught and carried on from,
+        so the journey passes straight over it unless someone reads the
+        log. Every diagnostic, warnings included, is also appended to
+        `$GUI_TEST_DIAGNOSTICS_LOG` when that is set.
+        See framework/gtk_diagnostics.py for what was measured.
+        """
+        from . import gtk_diagnostics
+        try:
+            output = self.app_output()
+        except Exception as e:  # a reaped or unreadable pipe is not a verdict
+            print(f"Warning: could not read the app's stderr: {e}")
+            return
+        found = gtk_diagnostics.parse((output or ("", ""))[1])
+        log = os.environ.get("GUI_TEST_DIAGNOSTICS_LOG")
+        if found and log:
+            import json
+            os.makedirs(os.path.dirname(log) or ".", exist_ok=True)
+            with open(log, "a") as f:
+                for d in found:
+                    f.write(json.dumps({"test": self.id(), **d}) + "\n")
+        critical = gtk_diagnostics.criticals(found)
+        if critical and getattr(self, "_test_failed", None) is False:
+            self.fail("the app logged GLib/GTK CRITICALs:\n  " + "\n  ".join(
+                f"{d['domain']}: {d['message']}" for d in critical))
 
     def _core_files(self) -> set:
         """Core dumps present in the directory the app would dump into.
