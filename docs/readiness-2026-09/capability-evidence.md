@@ -40,10 +40,12 @@ named; the reasoning is under the row so a reader can disagree with it.
   - Holds: `LAYERS = ("model", "format", "bridge", "gui", "a11y", "performance")`,
     required per capability and reported per layer; evidence for a layer a
     capability does not require is rejected.
-  - Does not: **persistence** is not a distinct layer. Save durability
-    currently lands under `format` or `model`, so a green format layer can
-    hide an unproven save transaction — the exact conflation this row exists
-    to prevent.
+  - Does not: **persistence** was not a distinct layer, so save durability
+    landed under `format` or `model` and a green format layer could hide an
+    unproven save transaction. **Now it is** (#1207): `persistence` is in
+    `LAYERS`, and `suite.save.atomic-replace` is the first capability to cite
+    it. Still open: moving the existing save-durability evidence out of
+    `format`/`model`, which is why the row stays `[~]`.
 - [x] No marker, closed issue, skipped test, missing oracle, or --no-run report may count as observed success.
   - C4 in `validate_capabilities.py`, with mutation tests for a skipped
     result, a failed result and a test that never ran. Evidence must be a
@@ -57,9 +59,17 @@ named; the reasoning is under the row so a reader can disagree with it.
   - Holds: `check_waivers` requires issue, reason, scope and review date,
     rejects an expired review date, a missing field, a `deferred` capability
     with no waiver, and a waiver for a capability that is not in the ledger.
-  - Does not: `scripts/release_gate.py` reads nothing from the ledger, so a
-    release-critical skipped test does not block the gate. That is the
-    consumption half, coordinated with #326.
+  - **The consumption half is done** (#1207). A capability can be marked
+    `"release_critical": true`. `validate_capabilities.py --release-critical`
+    (C7) refuses unless each one is verified, or deferred under a waiver
+    that passes C5, and unless every test it cites in the namespaces the
+    report covers passed. A skipped one is a refusal. It runs in the PR
+    `test` lane on every revision, and in `release-revision.yml`'s new
+    `release-critical-tests` job, which runs the workspace at the release
+    revision; `publish-flatpak.yml` calls that workflow before it
+    publishes. Mutation tests: `tests/test_validate_capabilities.py::ReleaseCritical`.
+    The journeys' half of a release-critical claim is checked by the GUI
+    lane, not yet by the release job, which is why the row stays `[~]`.
 - [ ] Reconcile README, ROADMAP.md, docs/ROADMAP.md, TESTING.md and the historical implementation plans with the new tracker.
 - [x] Add mutation tests for the validator: nonexistent tests, duplicated IDs, omitted required layers, stale revision, failed or skipped results must be rejected.
   - All five, each as its own test in `tests/test_validate_capabilities.py`,

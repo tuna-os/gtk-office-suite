@@ -263,7 +263,8 @@ jobs:
             --out rust-inventory.json --results-out rust-results.json
           python3 conformance/validate_capabilities.py \
             --lanes conformance/lanes.json --lane test \
-            --collected rust-inventory.json --results rust-results.json
+            --collected rust-inventory.json --results rust-results.json \
+            --release-critical
 
       # The JUnit report above cannot answer "what sat out this run?".
       # nextest omits `#[ignore]` tests from it entirely — not as

@@ -56,3 +56,40 @@ jobs:
           python3 conformance/validate_capabilities.py \
             --lanes conformance/lanes.json \
             --release-revision "$revision"
+
+  # C7 (#1207): run the release-critical Rust evidence at the revision being
+  # released and refuse it when any of it was skipped, failed or never ran.
+  # The PR lane checks C4 for every verified claim on every revision, but
+  # nothing tied that to a release: a tag cut from a commit whose lane was
+  # red, or never ran, published anyway. This is the same workspace run as
+  # ci.yml's `test` job (so the ids match the ledger's), at the release
+  # revision, feeding validate_capabilities.py --release-critical. The
+  # journeys' half of a release-critical claim is still the GUI lane's.
+  release-critical-tests:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ inputs.revision || github.sha }}
+      - name: Install GTK4 + libadwaita dev libraries, Xvfb and poppler
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq libgtk-4-dev libadwaita-1-dev xvfb poppler-utils
+      - uses: dtolnay/rust-toolchain@6bed0761d98439e5a578e2877258200ad565ba87 # stable
+        with:
+          toolchain: stable
+      - uses: taiki-e/install-action@badb8c3638e0b773c6c17a6025c2306a8f1c4303 # nextest
+        with:
+          tool: nextest
+      - name: Run the workspace tests at the release revision
+        run: scripts/with-display.sh cargo nextest run --workspace --profile ci --no-fail-fast
+      - name: Refuse a release whose release-critical evidence did not pass
+        if: always()
+        run: |
+          python3 conformance/collect_test_inventory.py \
+            --junit "=target/nextest/ci/junit.xml" \
+            --out rust-inventory.json --results-out rust-results.json
+          python3 conformance/validate_capabilities.py \
+            --lanes conformance/lanes.json --lane test \
+            --collected rust-inventory.json --results rust-results.json \
+            --release-critical
