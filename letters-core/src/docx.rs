@@ -588,7 +588,7 @@ pub fn write(doc: &Document, path: impl AsRef<std::path::Path>) -> Result<(), St
                     // A cell's comments open and close inside it.
                     let mut in_cell: Vec<u32> = Vec::new();
                     for run in p.runs.iter().map(Some).chain([None]) {
-                        let want = run.map(&wanted).unwrap_or_default();
+                        let want = run.map(wanted).unwrap_or_default();
                         for (id, start) in crate::docx_comments::transition(&mut in_cell, &want) {
                             let _ = cp.add_run(&crate::docx_comments::marker(id, start));
                         }
@@ -779,7 +779,7 @@ pub fn write(doc: &Document, path: impl AsRef<std::path::Path>) -> Result<(), St
         // Close the threads the next paragraph's text is not in (all of
         // them before a table, whose cells hold their own).
         let next: Vec<u32> = match paras.get(i) {
-            Some(n) if n.style.table_cell.is_none() => n.runs.first().map(&wanted).unwrap_or_default(),
+            Some(n) if n.style.table_cell.is_none() => n.runs.first().map(wanted).unwrap_or_default(),
             _ => Vec::new(),
         };
         let keep: Vec<u32> = open.iter().copied().filter(|id| next.contains(id)).collect();
