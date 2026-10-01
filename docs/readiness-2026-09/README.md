@@ -39,7 +39,7 @@ list follows.
 - [~] #322 — recovery lifecycle — [recovery.md](recovery.md) 6/9
 - [~] #374 — live interoperability loss budgets — [interoperability.md](interoperability.md) 0/9
 - [~] #438 — Letters fidelity — [letters-fidelity.md](letters-fidelity.md) 0/6
-- [~] #439 — Tables format safety and authoring — [tables-readiness.md](tables-readiness.md) 1/7
+- [~] #439 — Tables format safety and authoring — [tables-readiness.md](tables-readiness.md) 2/7
 - [ ] #440 — Decks authoring and presentation — [decks-readiness.md](decks-readiness.md) 0/7
 - [ ] #400 — performance, rendering and accessibility evidence — [performance-accessibility.md](performance-accessibility.md) 0/7
 - [ ] #326 — installed-release signoff — [release.md](release.md) 0/9
