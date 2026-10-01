@@ -326,7 +326,7 @@ fn content_xml(doc: &Document) -> String {
         }
 
         // The threads the next paragraph's text is not in end here.
-        let next: Vec<u32> = doc.paragraphs.get(pi + 1).and_then(|n| n.runs.first()).map(&wanted).unwrap_or_default();
+        let next: Vec<u32> = doc.paragraphs.get(pi + 1).and_then(|n| n.runs.first()).map(wanted).unwrap_or_default();
         let keep: Vec<u32> = open.iter().copied().filter(|id| next.contains(id)).collect();
         for (id, start) in crate::docx_comments::transition(&mut open, &keep) {
             inner.push_str(&annotate(id, start));
