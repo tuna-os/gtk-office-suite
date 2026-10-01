@@ -565,6 +565,8 @@ pub fn write(doc: &Document, path: impl AsRef<std::path::Path>) -> Result<(), St
     // (rdocx's default page: Letter with 1in margins).
     let text_width_pt = doc.page.map_or(468.0, |g| g.width_pt - g.margin_left_pt - g.margin_right_pt);
     let mut has_toc = false;
+    // The numIds of the bullet and numbered list definitions, once made.
+    let mut list_ids: [Option<u32>; 2] = [None, None];
     let mut i = 0;
     while i < paras.len() {
         // Consecutive paragraphs sharing a table id become one rdocx table.
@@ -618,10 +620,26 @@ pub fn write(doc: &Document, path: impl AsRef<std::path::Path>) -> Result<(), St
         }
         let para = &paras[i];
         i += 1;
-        let mut p = match para.style.list {
-            ListKind::Bullet => out.add_bullet_list_item("", u32::from(para.style.list_level)),
-            ListKind::Numbered => out.add_numbered_list_item("", u32::from(para.style.list_level)),
-            ListKind::None => out.add_paragraph(""),
+        let level = u32::from(para.style.list_level);
+        let mut p = match (para.style.list, list_ids[usize::from(para.style.list == ListKind::Numbered)]) {
+            (ListKind::None, _) => out.add_paragraph(""),
+            // rdocx's add_*_list_item clones the whole document on every
+            // call (`clone_for_staging`), so a document with n list items
+            // cost O(n²): 5,000 paragraphs took 30 s to save (#1208). It
+            // only needs to allocate the list definition once; later items
+            // are plain paragraphs on that numId, which is the XML the
+            // builder would have written anyway.
+            (ListKind::Bullet | ListKind::Numbered, Some(num_id)) => out.add_paragraph("").numbering(num_id, level),
+            (kind, None) => {
+                let _ = if kind == ListKind::Bullet {
+                    out.add_bullet_list_item("", level)
+                } else {
+                    out.add_numbered_list_item("", level)
+                };
+                list_ids[usize::from(kind == ListKind::Numbered)] =
+                    out.paragraphs().last().and_then(|p| p.numbering()).map(|(num_id, _)| num_id);
+                out.last_paragraph_mut().expect("the list item just added")
+            }
         };
         if let Some(level) = para.style.heading {
             p = p.style(&format!("Heading{}", level.clamp(1, 6)));

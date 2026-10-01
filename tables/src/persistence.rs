@@ -18,19 +18,14 @@ use tables_core::sheet::SheetModel;
 
 use crate::window::AppState;
 
-/// Attach the chart and conditional-formatting sidecars an xlsx package
-/// carries to the first sheet. Both readers return empty for non-xlsx input,
-/// so this is a no-op for ods/xls/csv rather than a special case at each
-/// call site. Rows are auto-fitted to wrapped or resized text first, as
-/// spreadsheets do on open.
-pub(crate) fn attach_xlsx_sidecars(path: &str, sheets: &[Rc<RefCell<SheetModel>>]) {
+/// Finish an opened workbook for display: rows are auto-fitted to wrapped
+/// or resized text, as spreadsheets do on open. Charts and conditional
+/// formats used to be attached here; `load_workbook` reads them itself now,
+/// so every opener gets them, not only the window.
+pub(crate) fn attach_xlsx_sidecars(_path: &str, sheets: &[Rc<RefCell<SheetModel>>]) {
     for sheet in sheets {
         crate::grid_render::fit_rows_to_content(&mut sheet.borrow_mut());
     }
-    let Some(first) = sheets.first() else { return };
-    let mut sheet = first.borrow_mut();
-    sheet.charts = tables_core::io::read_charts_from_xlsx(path);
-    sheet.cond_rules = tables_core::io::read_cond_rules_from_xlsx(path);
 }
 
 /// Message shown when a save target is a format Tables cannot write.

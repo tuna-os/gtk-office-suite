@@ -1574,7 +1574,13 @@ pub fn write_pptx_bytes(deck: &Deck) -> Result<Vec<u8>, String> {
         let mut buffer = Vec::new();
         img_file.read_to_end(&mut buffer).map_err(|e| e.to_string())?;
 
-        zip.start_file(&zip_img_path, options).map_err(|e| e.to_string())?;
+        // Stored, as odp::write does: a picture is already compressed, so
+        // deflating it again spends time (≈90 ms a photo in a debug build,
+        // most of an image-heavy deck's save, #1208) to grow the archive.
+        let media = SimpleFileOptions::default()
+            .compression_method(zip::CompressionMethod::Stored)
+            .unix_permissions(0o755);
+        zip.start_file(&zip_img_path, media).map_err(|e| e.to_string())?;
         zip.write_all(&buffer).map_err(|e| e.to_string())?;
     }
 
