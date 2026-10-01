@@ -9,7 +9,15 @@ Architecture: readers return complete semantic document state plus source-packag
 - [ ] Version fixtures with author/version, format, expected semantics, feature IDs and permitted losses.
 - [ ] Test supported text/styles/images/links/notes/geometry/formulas/sheet order in both directions through LibreOffice.
 - [ ] Verify opaque relationships/content types after unrelated edits; refuse unsafe partial pass-through.
-- [ ] GUI cancel on a loss warning preserves original bytes and dirty state.
+- [~] GUI cancel on a loss warning preserves original bytes and dirty state. **Letters is done** (#1206): every save
+      (Ctrl+S, Save As, the close guard's Save All) builds the target format's `CompatibilityReport` from the
+      document *before* writing and, when the format would drop something the document has, asks "Save as <format>?"
+      with Cancel as the default. Cancel writes nothing and leaves the tab unsaved; "Save Anyway" writes, and later
+      saves to the same path do not ask again. It used to write first and report afterwards ("Saved, with formatting
+      this format cannot hold"), so the bytes were already gone when the user found out. Journey:
+      `tests/gui/test_smoke.py::LettersLossWarningCancelSmoke::test_cancel_on_a_loss_warning_keeps_the_file_and_the_edit`
+      (a bold run in a `.txt` file; on the old code it fails with the file overwritten). Still open: Tables and Decks
+      build no loss report for their save formats, so they have nothing to warn from yet.
 - [~] Harden ZIP/XML/image readers with size/count/decompression limits and malformed/truncated corpus cases; retain
       minimized fuzz failures. **Limits are done**: `suite-common-core/src/zip_guard.rs` holds one set of bounds —
       member count, uncompressed bytes per member, and uncompressed bytes across the whole archive — and every package
@@ -56,7 +64,12 @@ Architecture: readers return complete semantic document state plus source-packag
       Seeds include the 652 vendored CommonMark examples for the markdown target. No crashes were found in any run.
       Still open here: unbounded nesting depth needs the out-of-process lane because a stack overflow aborts rather
       than unwinding and cannot be caught in-process.
-- [ ] Treat missing oracle as failure in required interop/release lanes (REQUIRE_SOFFICE=1), never as observed compatibility.
+- [x] Treat missing oracle as failure in required interop/release lanes (REQUIRE_SOFFICE=1), never as observed compatibility.
+      `tests/test_oracle_lanes.py` (PR lane) finds every test target that starts `soffice` from the sources and checks
+      that each one panics instead of skipping when `REQUIRE_SOFFICE` is set, that every workflow step running one sets
+      `REQUIRE_SOFFICE: "1"`, and that the pull-request `test` lane, which has no LibreOffice, excludes each of them
+      from the evidence it offers (`conformance/lanes.json`). Verified to fail when the variable is removed from the
+      nightly oracle step.
 - [ ] Promote a format feature only when model, live journey and independent-reader evidence all exist.
 
 Depends on #436/#437 and #354; feeds #438/#439/#440 and the capability ledger #441.

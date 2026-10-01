@@ -74,6 +74,7 @@ jobs:
             tests/test_gui_harness.py \
             tests/test_journey_selection.py \
             tests/test_oracle_triggers.py \
+            tests/test_oracle_lanes.py \
             tests/test_patched_dependencies.py \
             tests/test_readiness_citations.py \
             tests/test_roadmap_figures.py \
@@ -130,6 +131,7 @@ jobs:
             tests/test_gui_harness.py \
             tests/test_journey_selection.py \
             tests/test_oracle_triggers.py \
+            tests/test_oracle_lanes.py \
             tests/test_patched_dependencies.py \
             tests/test_readiness_citations.py \
             tests/test_roadmap_figures.py \
