@@ -4,8 +4,20 @@ Use this issue for measured performance work; #354 owns automated journeys, #423
 
 Architecture: benchmark core open/edit/recalculate/save separately from GTK input-to-frame and scrolling. Shared model/geometry drives canvas, print and accessible bounds. Tests must exercise populated scenes, not just empty launch windows.
 
-- [ ] Define representative small/medium/large Letters documents, sparse multi-sheet workbooks and image-heavy decks.
-- [ ] Record baseline hardware/runtime, sample count, p50/p95 latency, peak memory and output semantics; gate measured regressions with explicit budgets.
+- [~] Define representative small/medium/large Letters documents, sparse multi-sheet workbooks and image-heavy decks.
+      **Letters is done** (#1208): `letters-core/tests/performance_budgets.rs` builds small, medium and large documents
+      (20, 500 and 5,000 paragraphs) shaped like real writing, with headings every twenty paragraphs, bold and italic
+      runs, and a bulleted list in each section. Tables already had sparse and dense fixtures
+      (`tables-core/tests/performance_budgets.rs`). Still open: image-heavy decks.
+- [~] Record baseline hardware/runtime, sample count, p50/p95 latency, peak memory and output semantics; gate measured regressions with explicit budgets.
+      For Letters, DOCX and ODT save and open, Markdown serialize and parse, and typing 200 characters through the model
+      each run 7 samples per size and print them with p50 and p95. Each fails when p95 exceeds a budget that scales from
+      small to large, with the runtime and measurements it was set against recorded in the file. It runs in the PR lane.
+      **It found a real defect on its first run:** saving the large document as DOCX took **30 s**, because rdocx's
+      `add_bullet_list_item` clones the whole document on every call, making a save quadratic in list items.
+      `docx::write` now allocates each list definition once and writes later items as paragraphs on its numId, which
+      is the same XML. The save now takes 3.8 s in a debug build, and its 15 s budget fails the old behaviour. Still
+      open: peak memory, and the image-heavy deck fixture.
 - [ ] Test virtualized viewport work scales with visible data, not maximum row/column coordinates.
 - [ ] Fixed-font visual matrix: widths 400/800/1280, light/dark/high contrast, scale 1/2, editor/selection/dialog/error; retain expected/actual/diff plus snapshot.
 - [ ] Keyboard-only edit/save/undo and AT-SPI names/roles/states/bounds match the model after scroll/resize/zoom.
