@@ -128,11 +128,11 @@ fn typing_into_a_document_stays_within_budget() {
         let base = document(size);
         measure(&format!("{} typing 200 characters", size.name), budget(size, 200, 3_000), || {
             let mut doc = base.clone();
-            let mut at = edit::doc_len(&doc).saturating_sub(10);
-            for c in "the quick brown fox jumps over the lazy dog ".chars().cycle().take(200) {
+            let start = edit::doc_len(&doc).saturating_sub(10);
+            let typed = "the quick brown fox jumps over the lazy dog ".chars().cycle().take(200);
+            for (at, c) in (start..).zip(typed) {
                 let op = edit::typing(&doc, at, &c.to_string()).expect("typing op");
                 apply_all(&mut doc, &[op]).expect("apply");
-                at += 1;
             }
             black_box(doc);
         });
