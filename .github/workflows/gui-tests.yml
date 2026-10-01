@@ -103,6 +103,10 @@ jobs:
         env:
           GUI_TEST_VIDEO: failures
           GUI_TEST_VIDEO_DIR: ${{ github.workspace }}/tests/gui/videos
+          # Every GLib/GTK CRITICAL or WARNING the apps log, per journey
+          # (#1209). A CRITICAL also fails its journey; the log keeps the
+          # warnings as evidence, uploaded below.
+          GUI_TEST_DIAGNOSTICS_LOG: ${{ github.workspace }}/gtk-diagnostics/smoke.jsonl
           JOURNEY_FILTER: ${{ steps.affected.outputs.filter }}
         run: |
           set --
@@ -159,6 +163,15 @@ jobs:
           path: |
             tests/gui/failure_artifacts
             tests/gui/videos
+          retention-days: 14
+          if-no-files-found: ignore
+
+      - name: Upload GTK diagnostics
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: gtk-diagnostics
+          path: gtk-diagnostics
           retention-days: 14
           if-no-files-found: ignore
 

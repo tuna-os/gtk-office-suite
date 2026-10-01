@@ -280,20 +280,23 @@ pub fn show_help_dialog(parent: Option<&adw::ApplicationWindow>) {
     content.set_margin_top(12);
     content.set_margin_bottom(12);
 
+    // A group's title is Pango markup: an unescaped "&" made GTK reject
+    // the title and draw the group without one (Gtk-WARNING, found by the
+    // GUI lane's diagnostics check, #1209).
     let formats_group = adw::PreferencesGroup::builder()
-        .title(i18n("Supported Formats & Interoperability"))
+        .title(glib::markup_escape_text(&i18n("Supported Formats & Interoperability")).as_str())
         .description(i18n("Native OpenDocument (.odt, .ods, .odp) and Microsoft Office (.docx, .xlsx, .pptx) with lossless round-tripping and Markdown/plain-text import/export."))
         .build();
     content.append(&formats_group);
 
     let recovery_group = adw::PreferencesGroup::builder()
-        .title(i18n("Crash Recovery & Autosave"))
+        .title(glib::markup_escape_text(&i18n("Crash Recovery & Autosave")).as_str())
         .description(i18n("Documents are safely captured to atomic recovery slots in XDG state directory. If the app terminates unexpectedly, the next session will offer automatic restoration."))
         .build();
     content.append(&recovery_group);
 
     let shortcuts_group = adw::PreferencesGroup::builder()
-        .title(i18n("Keyboard Shortcuts & Command Palette"))
+        .title(glib::markup_escape_text(&i18n("Keyboard Shortcuts & Command Palette")).as_str())
         .description(i18n("Press Ctrl+K anytime to open the searchable Command Palette, or Ctrl+? for the complete Keyboard Shortcuts table."))
         .build();
     content.append(&shortcuts_group);
