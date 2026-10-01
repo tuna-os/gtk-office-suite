@@ -1,4 +1,7 @@
-# ADR 0004 — Tables Advanced Analysis: IronCalc Integration, Dynamic Arrays, Pivot Tables, and Sheet Protection Strategy
+# ADR 0007 — Tables Advanced Analysis: IronCalc Integration, Dynamic Arrays, Pivot Tables, and Sheet Protection Strategy
+
+> Renumbered from 0004 to 0007 on 2026-10-01 (#1205): 0004 was also taken by another ADR. The decision is unchanged.
+
 
 Date: 2026-08-11 · Status: accepted
 
