@@ -14,7 +14,13 @@ A per-tab session owns the complete Document, review state, imported-package con
 - [ ] Apply model operations and undo through one live session; keep review anchors correct across Unicode edits.
 - [ ] Drive editor pagination and print/export from styled paragraph/run metrics; remove byte/character-offset ambiguity.
 - [ ] Wire admitted review/TOC/bidi workflows or report them as unavailable until GUI and format tests pass.
-- [ ] Reconcile duplicate ADR numbers and the conflicting old/new advanced-feature scope without silently expanding scope.
+- [~] Reconcile duplicate ADR numbers and the conflicting old/new advanced-feature scope without silently expanding scope.
+      **The numbers are reconciled** (#1205). 0004 and 0006 were each two ADRs. The Decks workflows ADR keeps 0004,
+      since code and readiness documents cite it as "ADR 0004", and so does the adaptive editor shell's 0006, which
+      `tests/adaptive_editor_contract.py` cites by path. Tables advanced analysis became 0007 and Letters structured
+      editing became 0008, the two free numbers; nothing cited either by number. Each renumbered file says so at the
+      top, and `tests/test_adr_numbers.py` fails on a shared number or a heading that disagrees with its file name.
+      Still open: reconciling the old and new advanced-feature scope (ADR 0003 against the later ADRs).
 
 ## GUI commands that used to write their own markers (fixed 2026-09-11)
 
