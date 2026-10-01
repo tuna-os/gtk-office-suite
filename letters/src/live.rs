@@ -672,6 +672,21 @@ pub fn rewrite(buf: &gtk::TextBuffer, f: impl FnOnce()) {
     }
 }
 
+/// Run `f`, which draws a newly opened document into `buf`, then start the
+/// model's history there. The model does not follow the drawing edit by
+/// edit (a 300-paragraph document would be read back thousands of times):
+/// it is read once, afterwards.
+pub fn load(buf: &gtk::TextBuffer, f: impl FnOnce()) {
+    if let Some(m) = of(buf) {
+        m.borrow_mut().projecting = true;
+    }
+    f();
+    if let Some(m) = of(buf) {
+        m.borrow_mut().projecting = false;
+    }
+    reset(buf);
+}
+
 /// A document was loaded into `buf`: start its history there.
 pub fn reset(buf: &gtk::TextBuffer) {
     if let Some(m) = of(buf) {
