@@ -289,7 +289,7 @@
       "id": "ci.failure-evidence-survives-setup",
       "app": "suite",
       "title": "A journey that fails before its body still leaves evidence",
-      "scope": "unittest skips tearDown when setUp raises, and the app is launched in setUp, so the whole class of startup failures used to retain nothing a reader could debug: in CI exactly one file (journey.mp4), and with video off not even a directory. The app's own stderr — where a startup panic names its file and line — was read only by the capture that never ran, so it reached neither the artifacts nor the run log. Capture is now a cleanup, idempotent with the tearDown path, and records per-artifact whether each one landed so a guarded capture cannot retain nothing quietly. It also keeps what the journey wrote, before the temp-directory cleanups that run next delete it, excluding XDG_CACHE_HOME by exact path so a mesa shader cache cannot bury the evidence; and a core dump where the kernel writes one, with core_pattern recorded either way because a pipe handler leaves no file a container can keep. A passing journey still retains nothing, a skipped one is not a failure, and an artifact that was never applicable is not reported as missing.",
+      "scope": "unittest skips tearDown when setUp raises, and the app is launched in setUp, so the whole class of startup failures used to retain nothing a reader could debug: in CI exactly one file (journey.mp4), and with video off not even a directory. The app's own stderr \u2014 where a startup panic names its file and line \u2014 was read only by the capture that never ran, so it reached neither the artifacts nor the run log. Capture is now a cleanup, idempotent with the tearDown path, and records per-artifact whether each one landed so a guarded capture cannot retain nothing quietly. It also keeps what the journey wrote, before the temp-directory cleanups that run next delete it, excluding XDG_CACHE_HOME by exact path so a mesa shader cache cannot bury the evidence; and a core dump where the kernel writes one, with core_pattern recorded either way because a pipe handler leaves no file a container can keep. A passing journey still retains nothing, a skipped one is not a failure, and an artifact that was never applicable is not reported as missing.",
       "issue": 442,
       "status": "verified",
       "revision": "bcbbee853793e967823524d632586bb7504d9883",
@@ -355,6 +355,31 @@
           "letters-core::lo_parity::libreoffice_parity_ratchet",
           "tables-core::soffice_oracle::calc_recalculates_our_formulas",
           "decks-core::lo_parity::libreoffice_parity_ratchet"
+        ]
+      }
+    },
+    {
+      "id": "suite.save.atomic-replace",
+      "app": "suite",
+      "title": "Saving replaces the file whole or not at all",
+      "scope": "suite-common-core's atomic save, which every app's Save goes through: a failure at any point before the rename leaves the original file byte-for-byte intact and no temporary behind; a successful save replaces it in one rename; concurrent savers never expose a partial or blended file. In Letters, a failed save keeps the edits and the close guard. Not covered: recovery checkpoints (recovery.md, #1217) and remote locations.",
+      "issue": 1207,
+      "status": "verified",
+      "release_critical": true,
+      "revision": "ca4e9909c4fd821c92ea3b7e79d83ea3108d7136",
+      "requires": [
+        "persistence",
+        "gui"
+      ],
+      "evidence": {
+        "persistence": [
+          "suite-common-core::atomic_save::tests::every_pre_commit_boundary_leaves_the_original_intact",
+          "suite-common-core::atomic_save::tests::failed_commit_preserves_destination_and_cleans_temporary_file",
+          "suite-common-core::atomic_save::tests::overwrites_existing_file_atomically",
+          "suite-common-core::atomic_save::tests::concurrent_savers_never_expose_a_partial_or_blended_file"
+        ],
+        "gui": [
+          "tests/gui/test_smoke.py::LettersSaveFailureSmoke::test_failed_save_retains_edits_and_close_guard"
         ]
       }
     }

@@ -24,6 +24,12 @@ claims are real:
       classes with one name means the second silently replaces the first
       and its tests never run (the duplicate TablesNamedRangeSmoke that
       hid a regression).
+  C7  (with --release-critical, used by release-revision.yml) A capability
+      marked `"release_critical": true` must be verified, or deferred under
+      a waiver that passes C5; and with --results every one of its tests in
+      the namespaces the report covers must have passed. A release whose
+      release-critical test was skipped, failed or never ran is refused
+      (#1207). `release_critical` must be a boolean wherever it appears.
 
 Exit code is non-zero on any violation, so CI can gate on it.
 
@@ -33,6 +39,8 @@ Usage:
   python3 conformance/validate_capabilities.py \\
       --collected inventory.json --layer model --layer format   # + C3
   python3 conformance/validate_capabilities.py --results results.json  # + C4
+  python3 conformance/validate_capabilities.py --release-critical \\
+      --collected inventory.json --results results.json              # + C7
 """
 
 import argparse
@@ -47,7 +55,10 @@ LEDGER = REPO_ROOT / "conformance" / "capabilities.json"
 GUI_TEST_DIR = REPO_ROOT / "tests" / "gui"
 
 STATUSES = {"verified", "implemented-unverified", "failing", "deferred"}
-LAYERS = ("model", "format", "bridge", "gui", "a11y", "performance")
+# `persistence` is the save transaction itself (atomic replace, recovery
+# checkpoints): kept apart from `format` so a green round trip cannot stand
+# in for an unproven save (#1207).
+LAYERS = ("model", "format", "persistence", "bridge", "gui", "a11y", "performance")
 # Outcomes that may support a claim. Everything else — skipped, ignored,
 # filtered out, not run — may not (C4).
 PASSING = {"passed", "ok"}
@@ -78,6 +89,9 @@ def check_structure(ledger: dict) -> list:
             errors.append(f"{fid}: no scope — an unbounded claim cannot be proven")
         if not isinstance(feature.get("issue"), int):
             errors.append(f"{fid}: no owner issue number")
+
+        if "release_critical" in feature and not isinstance(feature["release_critical"], bool):
+            errors.append(f"{fid}: release_critical must be true or false")
 
         requires = feature.get("requires", [])
         evidence = feature.get("evidence", {})
@@ -371,6 +385,35 @@ def check_waivers(ledger: dict, today: date) -> list:
     return errors
 
 
+def check_release_critical(ledger: dict, results: dict | None, covers=(), excluded=()) -> list:
+    """C7: nothing release-critical ships unproven.
+
+    A release-critical capability is verified, or deferred under a waiver
+    (whose fields and date C5 checks). With *results*, every test it cites
+    in the namespaces the report covers must have passed: a skipped test is
+    a refused release, not a footnote.
+    """
+    errors = []
+    critical = [f for f in ledger.get("features", []) if f.get("release_critical") is True]
+    if not critical:
+        errors.append("no capability is marked release_critical, so the release gate would "
+                      "certify anything; mark the ones a release must not ship without")
+    waived = {w.get("id") for w in ledger.get("waivers", [])}
+    for feature in critical:
+        fid, status = feature.get("id"), feature.get("status")
+        if status == "deferred" and fid in waived:
+            continue
+        if status != "verified":
+            errors.append(f"{fid}: release-critical but {status} — verify it, or defer it "
+                          "under a dated waiver, before releasing")
+            continue
+        if results is None:
+            continue
+        sub = {"schema": 1, "features": [feature], "waivers": []}
+        errors += [f"release-critical {e}" for e in check_results(sub, results, set(), covers, excluded)]
+    return errors
+
+
 def check_duplicate_tests(test_dir: Path) -> list:
     """C6: a duplicate class or function name silently replaces the first."""
     errors = []
@@ -439,6 +482,9 @@ def main(argv=None) -> int:
     parser.add_argument("--lane",
                         help="with --lanes and --collected: also assert this job's "
                              "declared namespaces match what it actually collected")
+    parser.add_argument("--release-critical", action="store_true",
+                        help="C7: refuse unless every release-critical capability is verified "
+                             "(or waived) and, with --results, every one of its tests passed")
     parser.add_argument("--release-revision",
                         help="with --lanes: refuse to certify this revision with claims "
                              "whose evidence comes from a lane that does not run on "
@@ -466,11 +512,14 @@ def main(argv=None) -> int:
         errors += check_collected(ledger, inventory, args.require_coverage, excluded)
         if lanes is not None and args.lane:
             errors += check_lane_declaration(lanes, args.lane, inventory)
+    results = None
+    covers = load_inventory(args.collected).get("covers", []) if args.collected else []
     if args.results:
         with open(args.results) as f:
             results = json.load(f)
-        covers = load_inventory(args.collected).get("covers", []) if args.collected else []
         errors += check_results(ledger, results, layers, covers, excluded)
+    if args.release_critical:
+        errors += check_release_critical(ledger, results, covers, excluded)
 
     if errors:
         print("CAPABILITY LEDGER VALIDATION FAILED")
@@ -492,6 +541,9 @@ def main(argv=None) -> int:
         checked += ", collected tests"
     if args.results:
         checked += ", results"
+    if args.release_critical:
+        critical = sum(1 for f in features if f.get("release_critical") is True)
+        checked += f", {critical} release-critical"
     print(f"CAPABILITY LEDGER OK: {len(verified)}/{len(features)} verified; "
           f"checked {checked}{scope}")
     return 0
