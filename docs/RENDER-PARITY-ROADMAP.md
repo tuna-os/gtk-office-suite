@@ -329,7 +329,7 @@ development from CI output alone, without anyone looking at screenshots.
 | Job summary + sticky PR comment | every PR | what this PR made better or worse, with a link to the side-by-side report |
 | **Ratchet** (`compare.py --baseline tools/render-lab/baseline.json`) | every PR, gating | fails if any fixture's verdict gets worse (**regressed**), or gets better or is new without the baseline being updated in the same PR (**stale**). Every gain is locked in by the PR that made it. |
 | **One issue per non-green fixture** (`sync_issues.py`) | every push to main and nightly | labels `render-parity`, `app:<app>`, and `blocked` when the fixture needs a Phase 1 architecture item. The acceptance criterion is "CI reports this fixture green". Deduplicated by a hidden marker; closes itself when the fixture turns green on main. |
-| Real-document ratchet (`render-real.yml`, `baseline-real.json`) | nightly, manual dispatch, PRs touching the corpus | the same verdicts over about 30 published documents per app. No per-document issues: each cause found there is reduced to a single-feature fixture. |
+| Real-document ratchet (`render-real.yml`, `baseline-real.json`) | nightly, manual dispatch, PRs touching the corpus | the same verdicts over about 30 published documents per app; on main one `render-real` issue per document that is not green, closing when it turns green. Each cause is reduced to a single-feature fixture to fix it. |
 | Tier C VM report | nightly + manual dispatch | shipped Flatpak on a real GNOME Wayland session. Non-gating until it has run green for a week. |
 
 The baseline stores verdicts only (green/amber/red/missing), not raw

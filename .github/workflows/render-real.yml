@@ -37,6 +37,9 @@ jobs:
     name: Real documents (${{ matrix.app }})
     runs-on: ubuntu-24.04
     timeout-minutes: 90
+    permissions:
+      contents: read
+      issues: write
     strategy:
       fail-fast: false
       matrix:
@@ -76,6 +79,7 @@ jobs:
             render-lab-corpus-${{ matrix.app }}-
 
       - name: Run render lab on the real documents
+        id: run
         env:
           CONTAINER_ENGINE: docker
           RENDER_LAB_CORPUS: real
@@ -84,6 +88,18 @@ jobs:
       - name: Job summary
         if: always()
         run: cat render-lab-out/summary.md >> "$GITHUB_STEP_SUMMARY" || true
+
+      # One `render-real` issue per document that is not green, closed
+      # when it turns green; only from main, and only from a run whose
+      # ratchet passed, so a regression is a failed run, not an issue.
+      - name: Sync render-real issues
+        if: always() && github.ref == 'refs/heads/main' && github.event_name != 'pull_request' && steps.run.outcome == 'success' && hashFiles('render-lab-out/summary.json') != ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: >
+          python3 tools/render-lab/sync_issues.py render-lab-out/summary.json --mode real
+          --repo "${GITHUB_REPOSITORY}"
+          --run-url "${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
 
       - name: Upload report
         if: always()
