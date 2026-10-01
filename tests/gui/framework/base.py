@@ -19,6 +19,22 @@ _dogtail_click = rawinput.click
 _dogtail_key_combo = rawinput.keyCombo
 _dogtail_type_text = rawinput.typeText
 
+
+def describe_exit(code):
+    """How the app under test ended, for its app.log: still running when
+    the harness stopped it (None), a clean exit status, or the signal that
+    killed it (a negative Popen returncode)."""
+    if code is None:
+        return "still running when the harness stopped it"
+    if code < 0:
+        import signal
+        try:
+            name = signal.Signals(-code).name
+        except ValueError:
+            name = f"signal {-code}"
+        return f"killed by {name} before the harness stopped it"
+    return f"exited by itself with status {code} before the harness stopped it"
+
 class _SecondApp:
     """A second application running beside the primary one."""
 
@@ -280,7 +296,11 @@ class BaseGUITestCase(unittest.TestCase):
             process = getattr(self, "process", None)
             if process is None:
                 return None
-            if process.poll() is None:
+            # How the app ended, if it ended before we stopped it: a journey
+            # that lost its app ("the application no longer exists") needs
+            # to know a signal from a clean exit.
+            self._app_exit = process.poll()
+            if self._app_exit is None:
                 process.terminate()
             try:
                 self._app_output = process.communicate(timeout=5)
@@ -345,6 +365,11 @@ class BaseGUITestCase(unittest.TestCase):
             "GDK_DPI_SCALE": "1",
             "GTK_ENABLE_ANIMATIONS": "0",
             "SOURCE_DATE_EPOCH": "0",
+            # A native crash prints its signal and backtrace to stderr,
+            # which lands in the failure's app.log
+            # (suite-common/src/crash_report.rs, #1192): the runners' cores
+            # go to systemd-coredump, out of the container's reach.
+            "GTK_OFFICE_CRASH_BACKTRACE": "1",
             "XDG_CONFIG_HOME": xdg["config"],
             "XDG_DATA_HOME": xdg["data"],
             "XDG_CACHE_HOME": xdg["cache"],
@@ -750,6 +775,8 @@ class BaseGUITestCase(unittest.TestCase):
                     f.write(out or "")
                     f.write("\n--- stderr ---\n")
                     f.write(err or "")
+                    f.write("\n--- exit ---\n")
+                    f.write(describe_exit(getattr(self, "_app_exit", None)) + "\n")
                 failure = None
             else:
                 failure = "no app process was launched"

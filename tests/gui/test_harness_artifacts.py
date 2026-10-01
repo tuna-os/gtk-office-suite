@@ -118,6 +118,10 @@ class StartupFailureArtifacts(unittest.TestCase):
         self.assertIn(self.message, contents,
                       "the app's stderr is missing from the retained log — this is "
                       "exactly what a startup crash leaves nothing else to diagnose")
+        # And how it ended: a journey that lost its app has to tell a
+        # signal from an exit (#1192).
+        self.assertIn("exited by itself with status 101", contents,
+                      "the log does not say how the app ended")
 
     def test_the_other_artifacts_are_retained_too(self):
         class CrashesOnLaunchAgain(BaseGUITestCase):
