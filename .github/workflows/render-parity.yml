@@ -178,6 +178,7 @@ jobs:
         run: |
           docker run --rm -v "$PWD:/workspace" -w /workspace render-lab bash -c '
             python3 tools/render-lab/fixtures.py render-lab-out/fixtures >/dev/null &&
+            python3 tools/render-lab/edit_journeys.py render-lab-out/fixtures --manifest-only &&
             cp tools/render-lab/baseline.json render-lab-out/baseline.proposed.json &&
             python3 tools/render-lab/compare.py render-lab-out/fixtures render-lab-out \
               --baseline render-lab-out/baseline.proposed.json --update-baseline >/dev/null &&

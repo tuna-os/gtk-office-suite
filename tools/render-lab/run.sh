@@ -44,8 +44,6 @@ done
 mkdir -p "$OUT"
 echo "== fixtures"
 python3 "$LAB/fixtures.py" "$OUT/fixtures"
-echo "== LibreOffice reference"
-python3 "$LAB/lo_render.py" "$OUT/fixtures" "$OUT" "${APP_ARGS[@]}" || echo "(some references failed; see above)"
 if [ -z "${RENDER_LAB_SKIP_BUILD:-}" ]; then
     echo "== build"
     # Only the app being tested when --app is given: CI runs one job per
@@ -56,6 +54,13 @@ if [ -z "${RENDER_LAB_SKIP_BUILD:-}" ]; then
         cargo build --bin letters --bin tables --bin decks
     fi
 fi
+echo "== edit journeys"
+# Edit, save and reopen through the GUI; the saved files join the
+# manifest as <app>/edited-journey (#1201), so the LibreOffice reference
+# and the capture below cover them like any fixture.
+python3 "$LAB/edit_journeys.py" "$OUT/fixtures" "${APP_ARGS[@]}" || echo "(an edit journey failed; see above)"
+echo "== LibreOffice reference"
+python3 "$LAB/lo_render.py" "$OUT/fixtures" "$OUT" "${APP_ARGS[@]}" || echo "(some references failed; see above)"
 echo "== capture"
 python3 "$LAB/capture.py" "$OUT/fixtures" "$OUT" "${APP_ARGS[@]}" "${TIER_ARGS[@]}"
 echo "== compare"
