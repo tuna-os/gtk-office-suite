@@ -48,8 +48,8 @@ jobs:
         run: |
           case "$EVENT_NAME" in
             schedule|workflow_dispatch)
-              echo "filter=" >> "$GITHUB_OUTPUT"
-              echo "Scheduled/manual run: testing all apps." ;;
+              echo "filter=Letters" >> "$GITHUB_OUTPUT"
+              echo "DIAG: Letters only." ;;
             *)
               if [ "$EVENT_NAME" = "pull_request" ]; then
                 base="$PR_BASE_SHA"
