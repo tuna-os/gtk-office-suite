@@ -322,6 +322,7 @@ pub fn load_xlsx_workbook(path: &str) -> Result<(TablesEngine, Vec<SheetModel>),
                 .copied()
                 .filter(|(r, c, _, _)| *r < sheet.rows && *c < sheet.cols)
                 .collect();
+            sheet.protection.protected = props.protected;
         }
         sheets.push(sheet);
     }
@@ -348,6 +349,16 @@ pub fn load_xlsx_workbook(path: &str) -> Result<(TablesEngine, Vec<SheetModel>),
             continue;
         }
         let _ = engine.model.new_defined_name(name, None, formula);
+    }
+    // Charts and conditional-formatting rules. Their readers resolve the
+    // first worksheet only, so they attach there (the XLSX loss budget in
+    // tests/xlsx_loss_budget.rs declares the later sheets' as lost). They
+    // used to be attached by the GUI after this returned, so every other
+    // opener of this function (recovery's tests, the corpus tooling)
+    // silently had neither.
+    if let Some(first) = sheets.first_mut() {
+        first.charts = super::read_charts_from_xlsx(path);
+        first.cond_rules = super::read_cond_rules_from_xlsx(path);
     }
     Ok((engine, sheets))
 }

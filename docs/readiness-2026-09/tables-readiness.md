@@ -14,7 +14,15 @@ WorkbookController remains the sole mutation gateway. Stable sheet identities bi
       LibreOffice in tests/gui/fixtures/) open each format, edit B2, press Ctrl+S, and require the original's bytes
       unchanged, the "Cannot save in this format" prompt, Save As offering `budget.xlsx`, and that workbook holding the
       edit. With the guards in `save_engine_to_xlsx` and the save action removed, the journey fails (#1204).
-- [ ] Test formulas, cached values, styles, charts, rules, names, protection and hidden/filter state against a declared XLSX loss budget.
+- [x] Test formulas, cached values, styles, charts, rules, names, protection and hidden/filter state against a declared XLSX loss budget.
+      `tables-core/tests/xlsx_loss_budget.rs` declares the budget, feature by feature, and saves one workbook carrying all
+      of them through the real byte path (`save_sheets_to_xlsx_bytes` with the engine, then `load_workbook`). It fails both
+      ways: a feature declared kept that comes back wrong, and one declared lost that survives, so the declared losses
+      stay exactly the real ones. Writing it found two losses, both fixed here (#1204): **sheet protection** was written
+      and never read back, so a protected workbook reopened unprotected and was saved that way; and **charts and
+      conditional formats** were attached by the GUI after `load_workbook` returned, so recovery tests and corpus tooling
+      opened xlsx files without them. Declared lost, with the reason: a filter's hide reopens as a manual hide (xlsx keeps
+      no filter state here), and charts and rules on a sheet after the first (their readers resolve the first worksheet).
 - [x] Two-sheet journey: edit/formula → rename/reorder/delete/undo → switch → save → reopen; no cross-sheet overwrite or retargeted history.
       `TablesTwoSheetJourneySmoke` (#1204): a value on Sheet1, a formula on Sheet2 reading it, rename through the
       dialog, move first, delete and undo, switch to Sheet1 through the sheet switcher, Save As; the saved xlsx must
@@ -24,7 +32,15 @@ WorkbookController remains the sole mutation gateway. Stable sheet identities bi
 - [ ] Exercise row/column edits, fill, sort/filter, named ranges and protection through actual GUI actions plus controller
       invariants. (Named ranges and the name box now also pass at 400px width: `Ctrl+G` opens a Go to Cell dialog when the
       narrow breakpoint hides the name box — #516, found by the display matrix.)
-- [ ] Resolve the Unicode XLSX property regression tracked in #377/#371/#358/#324 using minimized fixtures; do not weaken the generator just to turn CI green.
+- [x] Resolve the Unicode XLSX property regression tracked in #377/#371/#358/#324 using minimized fixtures; do not weaken the generator just to turn CI green.
+      Resolved by #450 and ticked here on re-verification (#1204). It was neither flaky nor about Unicode: the loader
+      read a calamine `Range` at relative coordinates where `get_value` takes absolute ones, so any sheet whose content
+      did not start at A1 was read shifted or empty. The Unicode strategy only exposed it because it can emit an empty
+      string for A1, which the plain-value strategy never does. The minimized counterexample is pinned as
+      `tables_core::io::load::tests::xlsx_round_trip_keeps_a_lone_bottom_right_cell` and
+      `…::xlsx_round_trip_keeps_content_at_its_own_coordinates`, plus the committed `offset_start.ods` fixture. The
+      generator is unchanged (combining marks, CJK, Hebrew and emoji, empty strings included). Re-run on 2026-10-01 at
+      3,000 cases (`PROPTEST_CASES=3000`, against the PR lane's 64): passes.
 - [x] Verify sparse-grid scaling and accessibility far-navigation regression: the skipped #137 reproduction now runs as
       `TablesNamedRangeSmoke::test_jump_far_and_back_to_a_range_no_longer_crashes`, alongside the far-jump named-range
       journey that reproduced #507. Root cause was not grid lifetime bookkeeping but GTK itself:

@@ -51,6 +51,10 @@ pub struct SheetXlsxProps {
     /// Data validation, 0-based inclusive `(top, left, bottom, right)`
     /// ranges and what they allow.
     pub validations: Vec<((usize, usize, usize, usize), ValidationSource)>,
+    /// `<sheetProtection sheet="1">`: the sheet is protected. Tables writes
+    /// it and used to drop it on open, so a protected workbook came back
+    /// unprotected and was saved that way (#1204).
+    pub protected: bool,
 }
 
 /// A validation as the file states it. A list can name its items or a
@@ -520,6 +524,11 @@ pub fn read_sheet_props_from_xlsx(
                         .filter(|&(r, c)| (r, c) != (rows, cols));
                 }
             }
+        }
+
+        if let Some(tag) = xml.split("<sheetProtection").nth(1) {
+            let tag = tag.split('>').next().unwrap_or("").trim_end_matches('/');
+            props.protected = matches!(xml_attr(tag, "sheet"), Some("1") | Some("true"));
         }
 
         if let Some(block) = xml.split("<mergeCells").nth(1) {
