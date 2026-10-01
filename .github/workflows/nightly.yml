@@ -96,8 +96,12 @@ jobs:
       # Coverage runs the same workspace as the PR job, GTK widget tests
       # included, so it needs the same display. Measuring coverage of tests
       # that skipped reports a number for code nothing executed (#241).
-      - name: Install GTK4 deps and Xvfb
-        run: sudo apt-get update -qq && sudo apt-get install -y -qq libgtk-4-dev libadwaita-1-dev xvfb
+      # And the same packages: the Decks PDF-export tests read their output
+      # with poppler and refuse to skip in CI, so without poppler-utils this
+      # job failed every night while the PR job passed (#1191).
+      # tests/test_workspace_test_lanes.py keeps the two lists in step.
+      - name: Install GTK4 deps, Xvfb and poppler
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq libgtk-4-dev libadwaita-1-dev xvfb poppler-utils
       - uses: dtolnay/rust-toolchain@6bed0761d98439e5a578e2877258200ad565ba87 # stable
         with:
           toolchain: stable

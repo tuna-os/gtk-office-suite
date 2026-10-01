@@ -49,6 +49,48 @@ fn typing_on_from_ones_own_insertion_continues_it() {
     assert_eq!(changes(&d).len(), 2);
 }
 
+/// Deleting on from one's own pending deletion continues it, the
+/// counterpart of typing on from one's own insertion above.
+///
+/// A deletion used to take the current second as its date every time, and
+/// runs only merge when their revisions are equal. Two Delete keystrokes
+/// fifty milliseconds apart usually share a second and read as one change;
+/// straddle a clock tick and they read as two, so the Changes sidebar
+/// showed one entry or two depending on the wall clock (#1193). Forward
+/// (Delete) and backward (Backspace) both continue it; the first date wins.
+#[test]
+fn deleting_on_from_ones_own_deletion_continues_it() {
+    // Forward: "Ke" deleted a char at a time, the second a second later.
+    let mut d = Document::from_plain_text("Keep this");
+    let t = tracked(&d, &[Op::Delete { at: 0, len: 1 }], ME, "2026-01-01T00:00:00Z").unwrap();
+    apply_all(&mut d, &t).unwrap();
+    let t = tracked(&d, &[Op::Delete { at: 1, len: 1 }], ME, "2026-01-01T00:00:01Z").unwrap();
+    apply_all(&mut d, &t).unwrap();
+    let c = changes(&d);
+    assert_eq!(
+        c.iter().map(|c| (c.text.as_str(), c.revision.date.as_str())).collect::<Vec<_>>(),
+        [("Ke", "2026-01-01T00:00:00Z")],
+        "two forward deletions a second apart are one change"
+    );
+
+    // Backward: "is" deleted from its end, a char at a time.
+    let mut d = Document::from_plain_text("Keep this");
+    let t = tracked(&d, &[Op::Delete { at: 8, len: 1 }], ME, "2026-01-01T00:00:00Z").unwrap();
+    apply_all(&mut d, &t).unwrap();
+    let t = tracked(&d, &[Op::Delete { at: 7, len: 1 }], ME, "2026-01-01T00:00:01Z").unwrap();
+    apply_all(&mut d, &t).unwrap();
+    let c = changes(&d);
+    assert_eq!(
+        c.iter().map(|c| (c.text.as_str(), c.revision.date.as_str())).collect::<Vec<_>>(),
+        [("is", "2026-01-01T00:00:00Z")],
+        "two backward deletions a second apart are one change"
+    );
+
+    // Someone else deleting on is a change of their own.
+    edit_tracked(&mut d, &[Op::Delete { at: 6, len: 1 }], "Grace");
+    assert_eq!(changes(&d).len(), 2);
+}
+
 #[test]
 fn tracked_deletion_keeps_the_text_marked_until_accepted() {
     let mut d = Document::from_plain_text("keep this word");
