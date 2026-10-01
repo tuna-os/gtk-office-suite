@@ -75,6 +75,7 @@ jobs:
             tests/test_journey_selection.py \
             tests/test_oracle_triggers.py \
             tests/test_adr_numbers.py \
+            tests/test_readme_status.py \
             tests/test_oracle_lanes.py \
             tests/test_patched_dependencies.py \
             tests/test_readiness_citations.py \
@@ -133,6 +134,7 @@ jobs:
             tests/test_journey_selection.py \
             tests/test_oracle_triggers.py \
             tests/test_adr_numbers.py \
+            tests/test_readme_status.py \
             tests/test_oracle_lanes.py \
             tests/test_patched_dependencies.py \
             tests/test_readiness_citations.py \
@@ -267,7 +269,8 @@ jobs:
             --out rust-inventory.json --results-out rust-results.json
           python3 conformance/validate_capabilities.py \
             --lanes conformance/lanes.json --lane test \
-            --collected rust-inventory.json --results rust-results.json
+            --collected rust-inventory.json --results rust-results.json \
+            --release-critical
 
       # The JUnit report above cannot answer "what sat out this run?".
       # nextest omits `#[ignore]` tests from it entirely — not as

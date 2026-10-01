@@ -116,6 +116,13 @@ the Letters part concretely.
         view's job alone, so the old paged-TextView drawing path is gone.
         The render dump always draws the page view. The `GtkTextBuffer`
         remains as Draft's view of the model.
+      - **3e (#1202, stage 1 done 2026-10-01):** Draft is retired. Print
+        Layout is the only editing surface; the `print-layout` toggle, its
+        toolbar button, palette entry and GSettings key are removed. The
+        `GtkTextView` stays only as the host of the `GtkTextBuffer` the
+        live model is attached to, and is never shown or focused. Stage 2
+        gives the buffer a host of its own and deletes the Draft sheet's
+        drawing and allocation branches.
 
 ## Design constraints from the CRDT spike
 

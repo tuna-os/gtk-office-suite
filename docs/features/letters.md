@@ -13,7 +13,7 @@ Every screenshot is of the running app, captured by
 
 ![A document in Print Layout](img/letters-document.png)
 
-Print Layout is the default view: the document laid out on pages, edited in
+Print Layout is how Letters shows a document: laid out on pages, edited in
 place. The status bar shows the word count, the paragraph style at the
 caret and the zoom. **Ctrl+B / Ctrl+I / Ctrl+U** set bold, italic and
 underline; **Ctrl+Shift+8** and **Ctrl+Shift+7** start bullet and numbered

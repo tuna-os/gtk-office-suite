@@ -83,25 +83,6 @@ impl LettersWindow {
                 }
             });
         }
-        // View ▸ Print Layout (ADR 0010): the laid-out pages, editable,
-        // for every open tab. Stateful, so the toolbar button shows it.
-        {
-            let tv = tab_view.clone();
-            let s = settings.clone();
-            let action = gio::SimpleAction::new_stateful("print-layout", None, &settings.boolean("print-layout").to_variant());
-            action.connect_change_state(move |a, state| {
-                let Some(on) = state.and_then(|v| v.get::<bool>()) else { return };
-                a.set_state(&on.to_variant());
-                let _ = s.set_boolean("print-layout", on);
-                for i in 0..tv.n_pages() {
-                    let child = tv.nth_page(i).child();
-                    if let (Some(pc), Some(ed)) = (find_page_container(&child), crate::dialogs::get_textview(&child)) {
-                        crate::doc_tab::set_print_layout(&pc, &ed.buffer(), on);
-                    }
-                }
-            });
-            app.add_action(&action);
-        }
 
         suite_common::actions::register_labels(&[
             ("app.bold", &suite_common::i18n("Bold")),
@@ -138,7 +119,6 @@ impl LettersWindow {
             ("app.page-setup", &suite_common::i18n("Page Setup…")),
             ("app.print", &suite_common::i18n("Print…")),
             ("app.print-preview", &suite_common::i18n("Print Preview")),
-            ("app.print-layout", &suite_common::i18n("Print Layout")),
             ("app.export-pdf", &suite_common::i18n("Export as PDF…")),
             ("app.export-pdf-typst", &suite_common::i18n("Export as PDF with Typst…")),
             ("app.edit-headers", &suite_common::i18n("Edit Headers and Footers…")),
@@ -173,7 +153,6 @@ impl LettersWindow {
             ("insert-link-symbolic", "Insert link (Ctrl+Shift+K)", "app.insertlink"),
             ("view-continuous-symbolic", "Line spacing", "app.cycle-line-spacing"),
             ("view-dual-symbolic", "Column layout", "app.cycle-columns"),
-            ("view-paged-symbolic", "Print layout: edit on the laid-out pages", "app.print-layout"),
         ];
 
         let suite_win = suite_common::SuiteWindow::new(app, "Letters", primary_toolbar, extended_toolbar);

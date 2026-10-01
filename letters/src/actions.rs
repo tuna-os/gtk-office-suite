@@ -98,19 +98,79 @@ pub fn register_formatting_tags(buffer: &gtk::TextBuffer) {
 
 pub fn toggle_tag(tv: &adw::TabView, tag_name: &str) {
     if let Some(buf) = active_buffer(tv) {
-        if let Some(tag) = buf.tag_table().lookup(tag_name) {
-            let sel = buf.selection_bounds();
-            if let Some((start, end)) = sel {
-                let tags_at_cursor = start.tags();
-                let has = tags_at_cursor.iter().any(|t| t.name().as_deref() == Some(tag_name));
-                if has {
-                    buf.remove_tag(&tag, &start, &end);
-                } else {
-                    buf.apply_tag(&tag, &start, &end);
-                }
-            }
-        }
+        toggle_tag_in(&buf, tag_name);
     }
+}
+
+/// Toggle `tag_name` over the selection, or, with nothing selected, for
+/// the text typed next at the caret: Bold, then type, types bold.
+pub(crate) fn toggle_tag_in(buf: &gtk::TextBuffer, tag_name: &str) {
+    let Some(tag) = buf.tag_table().lookup(tag_name) else { return };
+    let Some((start, end)) = buf.selection_bounds() else {
+        toggle_pending(buf, tag_name);
+        return;
+    };
+    let has = start.tags().iter().any(|t| t.name().as_deref() == Some(tag_name));
+    if has {
+        buf.remove_tag(&tag, &start, &end);
+    } else {
+        buf.apply_tag(&tag, &start, &end);
+    }
+}
+
+/// Character formatting chosen with nothing selected, waiting for the next
+/// text typed at buffer offset `at` (`take_pending`).
+#[derive(Clone, Debug, Default, PartialEq)]
+pub(crate) struct PendingFormat {
+    pub at: i32,
+    /// Formatting name (as `toggle_tag` takes it) and whether it turns on.
+    pub marks: Vec<(String, bool)>,
+}
+
+const PENDING_KEY: &str = "letters-pending-format";
+
+/// The run-style field a toggle name sets, if it is one of the toggles.
+pub(crate) fn style_flag<'a>(style: &'a mut letters_core::RunStyle, name: &str) -> Option<&'a mut bool> {
+    Some(match name {
+        "bold" => &mut style.bold,
+        "italic" => &mut style.italic,
+        "underline" => &mut style.underline,
+        "strikethrough" => &mut style.strikethrough,
+        "highlight" => &mut style.highlight,
+        _ => return None,
+    })
+}
+
+fn toggle_pending(buf: &gtk::TextBuffer, name: &str) {
+    let at = buf.iter_at_mark(&buf.get_insert()).offset();
+    // Pending formatting belongs to one caret position: moved, it is gone.
+    let mut pending = take_pending(buf).filter(|p| p.at == at).unwrap_or(PendingFormat { at, marks: Vec::new() });
+    if let Some(i) = pending.marks.iter().position(|(n, _)| n == name) {
+        // A second press takes the first back.
+        pending.marks.remove(i);
+    } else {
+        // The opposite of what typing here would get: what the model's
+        // typing rule gives at the caret.
+        let mut typed = match crate::live::of(buf) {
+            Some(m) => {
+                let mut m = m.borrow_mut();
+                let seq = m.sequence_offset(buf, at.max(0) as usize);
+                letters_core::edit::typing_style(m.document(buf), seq)
+            }
+            None => letters_core::RunStyle::default(),
+        };
+        let Some(current) = style_flag(&mut typed, name) else { return };
+        pending.marks.push((name.to_string(), !*current));
+    }
+    if !pending.marks.is_empty() {
+        unsafe { buf.set_data(PENDING_KEY, pending) };
+    }
+}
+
+/// Take the formatting waiting for typing at buffer offset `at`; pending
+/// formatting left at another offset is dropped.
+pub(crate) fn take_pending(buf: &gtk::TextBuffer) -> Option<PendingFormat> {
+    unsafe { buf.steal_data::<PendingFormat>(PENDING_KEY) }
 }
 
 /// Toggle the cursor's paragraph between body text and a list item.
