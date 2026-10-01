@@ -2436,6 +2436,66 @@ class TablesFormatSafeSaveMixin(TablesCellEntryMixin):
         self.assertIsNone(self.process.poll(), "tables crashed saving")
 
 
+class TablesOpenGuardSmoke(TablesCellEntryMixin, BaseGUITestCase):
+    """A file handed over by the file manager does not replace unsaved work
+    without asking (data loss, #1190 P0).
+
+    Tables holds one workbook per window, and both Open and a file opened
+    from outside replaced it with no question, dirty or not. The file is
+    handed over exactly as a file manager does it: a second `tables FILE`
+    process, which passes the file to the running one.
+    """
+
+    app_name = "tables"
+
+    def setUp(self):
+        import shutil
+        fixtures = os.path.join(os.path.dirname(os.path.abspath(__file__)), "fixtures")
+        self._dir = self.temp_dir(prefix="tables-open-guard-")
+        self._first = os.path.join(self._dir, "first.csv")
+        self._second = os.path.join(self._dir, "second.ods")
+        shutil.copyfile(os.path.join(fixtures, "budget.csv"), self._first)
+        shutil.copyfile(os.path.join(fixtures, "budget.ods"), self._second)
+        self.launch_args = [self._first]
+        self.isolate_autosave_state()
+        self.isolate_snapshot()
+        super().setUp()
+
+    def _hand_over(self, path):
+        import subprocess
+        env = os.environ.copy()
+        env.update(self.launch_env)
+        subprocess.run([self.bin_path, path], env=env, timeout=30)
+
+    def _title(self):
+        return self.app.child(roleName="frame").name
+
+    def _button(self, name):
+        from dogtail import tree
+        return self.wait_until(
+            lambda: tree.root.findChild(lambda n: n.roleName == "push button" and n.name == name and n.showing,
+                                        retry=False, requireResult=False),
+            bool, description=f"the {name} button")
+
+    def test_unsaved_changes_are_asked_about_before_another_file_replaces_them(self):
+        self.wait_until(self._grid, lambda text: "cell A1: Item" in text, description="first.csv to open")
+        self._put("B2", "1500")
+
+        self._hand_over(self._second)
+        self.wait_for_node(name="Discard unsaved changes?")
+        self._button("Cancel").do_action(0)
+        time.sleep(1.0)
+        self.assertIn("first.csv", self._title(), "Cancel replaced the workbook anyway")
+        cells = self.trigger_snapshot("org.tunaos.tables")["sheet"]["cells"]
+        b2 = next((c["value"] for c in cells if (c["row"], c["col"]) == (1, 1)), None)
+        self.assertEqual(b2, "1500", "Cancel lost the edit")
+
+        self._hand_over(self._second)
+        self._button("Discard").do_action(0)
+        self.wait_until(self._title, lambda t: "second.ods" in t, description="Discard to open second.ods")
+        self.assertIsNone(self.process.poll(), "tables crashed opening a handed-over file")
+
+
 class TablesCsvSaveSmoke(TablesFormatSafeSaveMixin, BaseGUITestCase):
     fixture = "budget.csv"
 
@@ -4770,6 +4830,51 @@ class DecksCloseGuardSmoke(BaseGUITestCase):
                               "Save must close the window once it succeeds")
         self.assertTrue(os.path.exists(out_path), "the deck was not written to disk")
         self.assertGreater(os.path.getsize(out_path), 0)
+
+
+class DecksReplaceGuardSmoke(BaseGUITestCase):
+    """New over a deck with unsaved changes asks first (data loss, #1190 P0).
+
+    Decks holds one deck per window, and New, New from Template, Open and a
+    file from the file manager all replaced it without a word. Cancel keeps
+    the deck and its edit; Discard replaces it.
+    """
+
+    app_name = "decks"
+
+    def setUp(self):
+        self.isolate_snapshot(prefix="decks-replace-guard-")
+        self.isolate_autosave_state(prefix="decks-replace-guard-state-")
+        super().setUp()
+
+    def _objects(self):
+        snap = self.trigger_snapshot("org.tunaos.decks")
+        return sum(len(s["objects"]) for s in snap["slides"])
+
+    def test_new_over_an_unsaved_deck_asks_and_cancel_keeps_it(self):
+        from dogtail import tree
+        aid = "org.tunaos.decks"
+        self.gapplication_action(aid, "new-document")
+        time.sleep(1.0)
+        self.gapplication_action(aid, "add-shape")
+        self.wait_until(self._objects, lambda n: n == 1, description="the shape to be added")
+
+        def button(name):
+            return self.wait_until(
+                lambda: tree.root.findChild(lambda n: n.roleName == "push button" and n.name == name and n.showing,
+                                            retry=False, requireResult=False),
+                bool, description=f"the {name} button")
+
+        self.gapplication_action(aid, "new-document")
+        self.wait_for_node(name="Discard unsaved changes?")
+        button("Cancel").do_action(0)
+        time.sleep(1.0)
+        self.assertEqual(self._objects(), 1, "Cancel replaced the deck anyway")
+
+        self.gapplication_action(aid, "new-document")
+        button("Discard").do_action(0)
+        self.wait_until(self._objects, lambda n: n == 0, description="Discard to start a new deck")
+        self.assertIsNone(self.process.poll(), "decks crashed replacing a deck")
 
 
 class DecksAutosaveSmoke(BaseGUITestCase):

@@ -107,9 +107,18 @@ fn main() {
         }
         let store = ws.borrow();
         let win = store.as_ref().unwrap();
-        for file in files {
-            if let Some(path) = persistence::local_path(file, false, Some(&win.window)) {
-                let path_str = path.to_string_lossy().to_string();
+        let paths: Vec<String> = files
+            .iter()
+            .filter_map(|file| persistence::local_path(file, false, Some(&win.window)))
+            .map(|path| path.to_string_lossy().to_string())
+            .collect();
+        // A file handed over by the file manager replaces the window's
+        // workbook, so unsaved changes are asked about first.
+        let opener = ws.clone();
+        suite_common::confirm_discarding(&win.window, win.is_dirty(), "workbook", move || {
+            let store = opener.borrow();
+            let Some(win) = store.as_ref() else { return };
+            for path_str in paths {
                 if let Err(e) = win.open_path(&path_str) {
                     // stderr is not a user interface: launched from a file
                     // manager or a Flatpak, an unreadable file used to open
@@ -127,7 +136,7 @@ fn main() {
                     );
                 }
             }
-        }
+        });
         win.present();
         suite_common::render_dump::schedule(app);
         if std::env::var_os(suite_common::render_dump::EXPORT_PDF_ENV).is_some() {

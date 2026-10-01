@@ -1661,8 +1661,16 @@ impl TablesWindow {
             let sm = sheet_model.clone();
             let sd = sheet_switcher.clone();
             let path_state = current_path.clone();
+            let ctl = controller.clone();
             let act = gtk4::gio::SimpleAction::new("open-file", None);
             act.connect_activate(move |_, _| {
+                let (s, st, w, fx, da, sm, sd, path_state, ctl) = (
+                    s.clone(), st.clone(), w.clone(), fx.clone(), da.clone(),
+                    sm.clone(), sd.clone(), path_state.clone(), ctl.clone(),
+                );
+                let dirty = ctl.borrow().is_dirty();
+                let parent = w.clone();
+                suite_common::confirm_discarding(&parent, dirty, "workbook", move || {
                 let dlg = gtk4::FileDialog::new();
                 let f = gtk4::FileFilter::new();
                 f.add_pattern("*.xlsx"); f.add_pattern("*.xls");
@@ -1675,6 +1683,7 @@ impl TablesWindow {
                 let w2 = w.clone(); let fx = fx.clone();
                 let da = da.clone(); let sm = sm.clone(); let sd = sd.clone();
                 let path_state = path_state.clone();
+                let ctl = ctl.clone();
                 dlg.open(Some(&w), None::<&gio::Cancellable>,
                     move |result: Result<gio::File, glib::Error>| {
                         if let Ok(file) = result {
@@ -1717,6 +1726,9 @@ impl TablesWindow {
                                             .unwrap_or_default();
                                         w2.set_title(Some(&format!("{name} — Tables")));
                                         *path_state.borrow_mut() = Some(path.clone());
+                                        // The workbook on screen is now the
+                                        // file just read: nothing to save.
+                                        ctl.borrow_mut().mark_clean();
                                         da.queue_draw();
                                     }
                                     Err(e) => {
@@ -1733,6 +1745,7 @@ impl TablesWindow {
                         }
                     },
                 );
+                });
             });
             app.add_action(&act);
         }
@@ -2181,6 +2194,11 @@ impl TablesWindow {
 
     /// Open a spreadsheet file directly (CLI / file-manager open).
     /// Mirrors the open-file-dialog success path.
+    /// Whether the workbook has changes a replacement would lose.
+    pub fn is_dirty(&self) -> bool {
+        self.controller.borrow().is_dirty()
+    }
+
     pub fn open_path(&self, path: &str) -> Result<(), String> {
         // Format dispatch lives in tables_core::io::load_workbook so every
         // open route (CLI, dialog, drag-and-drop) supports the same formats.
@@ -2212,6 +2230,9 @@ impl TablesWindow {
             .unwrap_or_default();
         self.window.set_title(Some(&format!("{name} — Tables")));
         *self.current_path.borrow_mut() = Some(std::path::PathBuf::from(path));
+        // The workbook on screen is the file just read. (Recovery marks it
+        // dirty again afterwards: recovered work is unsaved.)
+        self.controller.borrow_mut().mark_clean();
         let settings = gtk4::gio::Settings::new("org.tunaos.tables");
         suite_common::push_recent_file(&settings, path);
         self.drawing_area.queue_draw();
