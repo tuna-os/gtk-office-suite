@@ -21,7 +21,7 @@ jobs:
   interop-corpus:
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       - name: Validate versioned office corpus
         run: python3 interop/validate_corpus.py
 
@@ -33,7 +33,7 @@ jobs:
     name: Python validators and their tests
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           # E4 below diffs docs/PARITY.md against the base branch, which needs
           # more than the default single-commit checkout.
@@ -70,6 +70,8 @@ jobs:
             tests/test_readiness_citations.py \
             tests/test_roadmap_figures.py \
             tests/test_skip_reasons.py \
+            tests/test_actions_pinned.py \
+            tests/test_advisory_waivers.py \
             tests/test_autosave_defaults.py \
             tests/test_ci_test_list.py \
             tests/test_render_lab_rules.py \
@@ -121,6 +123,8 @@ jobs:
             tests/test_readiness_citations.py \
             tests/test_roadmap_figures.py \
             tests/test_skip_reasons.py \
+            tests/test_actions_pinned.py \
+            tests/test_advisory_waivers.py \
             tests/test_autosave_defaults.py \
             tests/test_ci_test_list.py \
             tests/test_render_lab_rules.py \
@@ -163,8 +167,8 @@ jobs:
     name: RustSec advisory gate
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v7
-      - uses: EmbarkStudios/cargo-deny-action@v2
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: EmbarkStudios/cargo-deny-action@3c6349835b2b7b196a839186cb8b78e02f7b5f25 # v2
         with:
           command: check advisories
 
@@ -172,7 +176,7 @@ jobs:
   test:
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
       # Xvfb because the workspace contains GTK widget tests. Without a
       # display `suite_common::gtk_test::run` cannot initialise GTK, and
@@ -186,10 +190,14 @@ jobs:
           sudo apt-get install -y -qq libgtk-4-dev libadwaita-1-dev xvfb poppler-utils
 
       - name: Install Rust stable
-        uses: dtolnay/rust-toolchain@stable
+        uses: dtolnay/rust-toolchain@6bed0761d98439e5a578e2877258200ad565ba87 # stable
+        with:
+          toolchain: stable
 
       - name: Install cargo-nextest
-        uses: taiki-e/install-action@nextest
+        uses: taiki-e/install-action@badb8c3638e0b773c6c17a6025c2306a8f1c4303 # nextest
+        with:
+          tool: nextest
 
       - name: cargo check
         run: cargo check --workspace
@@ -277,7 +285,7 @@ jobs:
 
       - name: Upload JUnit test results and the skip report
         if: always()
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: junit-results
           path: |
@@ -299,13 +307,13 @@ jobs:
       matrix:
         app: [letters, tables, decks]
     container:
-      image: ghcr.io/flathub-infra/flatpak-github-actions:gnome-50
+      image: ghcr.io/flathub-infra/flatpak-github-actions:gnome-50@sha256:1de59efef01a946d9f28f1ec3458bf6f61dcee3507d7fecdd473f8134da4ec77
       options: --privileged
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
       - name: Build Flatpak — org.tunaos.${{ matrix.app }}
-        uses: flatpak/flatpak-github-actions/flatpak-builder@v6
+        uses: flatpak/flatpak-github-actions/flatpak-builder@79327416609af08178ad73b352877e51450790b3 # v6
         with:
           bundle: ${{ matrix.app }}.flatpak
           manifest-path: flatpak/org.tunaos.${{ matrix.app }}.json
