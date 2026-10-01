@@ -1179,3 +1179,17 @@ fn a_numbering_levels_indent_is_kept_beyond_the_list_indent() {
     let p = back.paragraphs.iter().find(|p| p.runs.iter().any(|r| r.text.contains("toolbar"))).unwrap();
     assert_eq!((p.style.list, p.style.left_indent_pt, p.style.first_line_indent_pt), (ListKind::Bullet, 18.0, 0.0));
 }
+
+#[test]
+fn a_run_coloured_auto_has_no_colour_of_its_own() {
+    // w:color w:val="auto" is Word's "automatic" (the default text colour),
+    // not a colour. It reached GTK as "#AUTO" ("Don't know color") from a
+    // real GOV.UK form in the render lab's corpus (#1200).
+    let d = Document::from_plain_text("plain");
+    let rt = doctor_parts(&d, |parts| {
+        let body = parts.get_mut("word/document.xml").unwrap();
+        *body = body.replacen("<w:r>", "<w:r><w:rPr><w:color w:val=\"auto\"/></w:rPr>", 1);
+        assert!(body.contains("w:val=\"auto\""), "the doctored run: {body}");
+    });
+    assert_eq!(rt.paragraphs[0].runs[0].style.color, None, "{:?}", rt.paragraphs[0].runs);
+}
