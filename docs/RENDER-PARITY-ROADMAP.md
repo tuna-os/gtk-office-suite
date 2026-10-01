@@ -360,8 +360,13 @@ reports as at least amber.
    baseline does not have.
 2. **A PR that adds or changes a visual feature must add or update a
    fixture.** The fixture's "expect" line is the spec.
-3. **README status is generated from `summary.json`** (to do). The
-   "usable for" table cannot claim more than the green fixtures support.
+3. **README status is generated from `summary.json`** (done 2026-10-01,
+   #1211). The "usable for" table cannot claim more than the green
+   fixtures support. `tools/render-lab/readme_status.py` writes it from the
+   ratcheted scorecard (`baseline.json`, or a run's `summary.json`), and
+   `tests/test_readme_status.py` fails CI when README disagrees. An app is
+   called usable only when its single-feature fixtures, its Phase 3 real
+   documents and Tier C are all green.
 
 ## Phases
 
