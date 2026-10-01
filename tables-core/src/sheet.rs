@@ -393,16 +393,70 @@ pub fn scroll_into_view(row: usize, col: usize, scroll: (f64, f64), view: (f64, 
 /// bounds, so a screen reader or magnifier follows the scroll and the
 /// freeze, as the drawing does.
 pub fn col_spans(n: usize, scroll_x: f64, sheet: &SheetModel) -> Vec<(f64, f64)> {
-    (0..n.min(sheet.cols))
-        .map(|c| (col_x(c, scroll_x, sheet), if sheet.is_col_hidden(c) { 0.0 } else { sheet.col_width(c) }))
+    spans_along(n.min(sheet.cols), sheet.frozen_cols, ROW_HEADER_WIDTH, scroll_x,
+        |c| if sheet.is_col_hidden(c) { 0.0 } else { sheet.col_width(c) })
+}
+
+/// [[col_x]] / [[row_y]] for each of the first `n`, with a running sum
+/// rather than re-summing from the start for each one.
+fn spans_along(n: usize, frozen: usize, start: f64, scroll: f64, size: impl Fn(usize) -> f64) -> Vec<(f64, f64)> {
+    let mut at = start;
+    (0..n)
+        .map(|i| {
+            let len = size(i);
+            let pos = if i >= frozen { at - scroll } else { at };
+            at += len;
+            (pos, len)
+        })
         .collect()
 }
 
 /// Row analog of [[col_spans]]: `(y, height)` for each of the first `n`.
 pub fn row_spans(n: usize, scroll_y: f64, sheet: &SheetModel) -> Vec<(f64, f64)> {
-    (0..n.min(sheet.rows))
-        .map(|r| (row_y(r, scroll_y, sheet), if sheet.is_row_hidden(r) { 0.0 } else { sheet.row_height(r) }))
-        .collect()
+    spans_along(n.min(sheet.rows), sheet.frozen_rows, COL_HEADER_HEIGHT, scroll_y,
+        |r| if sheet.is_row_hidden(r) { 0.0 } else { sheet.row_height(r) })
+}
+
+/// The columns that show in a view `width` px wide at `scroll_x`, left to
+/// right, each with its screen x: exactly the columns for which
+/// [[col_on_screen]] holds and [[col_x]] is not past `width`, frozen ones
+/// first. One pass over the column widths, where calling [[col_x]] for
+/// each column re-sums every column before it: the renderer did that for
+/// every row and column of every frame, which is quadratic in the sheet's
+/// size, not in what is on screen.
+pub fn visible_cols(scroll_x: f64, width: f64, sheet: &SheetModel) -> Vec<(usize, f64)> {
+    visible_along(sheet.cols, sheet.frozen_cols, ROW_HEADER_WIDTH, scrolled_left(sheet), scroll_x, width,
+        |c| sheet.is_col_hidden(c), |c| sheet.col_width(c))
+}
+
+/// Row analog of [[visible_cols]].
+pub fn visible_rows(scroll_y: f64, height: f64, sheet: &SheetModel) -> Vec<(usize, f64)> {
+    visible_along(sheet.rows, sheet.frozen_rows, COL_HEADER_HEIGHT, scrolled_top(sheet), scroll_y, height,
+        |r| sheet.is_row_hidden(r), |r| sheet.row_height(r))
+}
+
+#[allow(clippy::too_many_arguments)]
+fn visible_along(
+    count: usize, frozen: usize, start: f64, pane_start: f64, scroll: f64, extent: f64,
+    hidden: impl Fn(usize) -> bool, size: impl Fn(usize) -> f64,
+) -> Vec<(usize, f64)> {
+    let mut out = Vec::new();
+    let mut at = start;
+    for i in 0..count {
+        if hidden(i) {
+            continue;
+        }
+        let len = size(i);
+        let pos = if i >= frozen { at - scroll } else { at };
+        if i < frozen || pos + len > pane_start {
+            if pos > extent {
+                break;
+            }
+            out.push((i, pos));
+        }
+        at += len;
+    }
+    out
 }
 
 /// Column analog of [[row_at_content_offset]].
@@ -425,9 +479,10 @@ fn col_at_content_offset(offset: f64, sheet: &SheetModel) -> Option<usize> {
 /// column header, for resizing.
 pub fn hit_col_divider(x: f64, y: f64, scroll_x: f64, sheet: &SheetModel) -> Option<usize> {
     if !(0.0..=COL_HEADER_HEIGHT).contains(&y) || x < ROW_HEADER_WIDTH { return None; }
-    (0..sheet.cols)
-        .filter(|&c| col_on_screen(c, scroll_x, sheet))
-        .find(|&c| (x - (col_x(c, scroll_x, sheet) + sheet.col_width(c))).abs() < 5.0)
+    visible_cols(scroll_x, x + 5.0, sheet)
+        .into_iter()
+        .find(|&(c, cx)| (x - (cx + sheet.col_width(c))).abs() < 5.0)
+        .map(|(c, _)| c)
 }
 
 /// Row-header equivalent of [[hit_col_divider]]: `(x, y)` widget-local,
@@ -436,9 +491,10 @@ pub fn hit_col_divider(x: f64, y: f64, scroll_x: f64, sheet: &SheetModel) -> Opt
 /// Hidden rows contribute no divider (their height collapses to zero).
 pub fn hit_row_divider(x: f64, y: f64, scroll_y: f64, sheet: &SheetModel) -> Option<usize> {
     if !(0.0..=ROW_HEADER_WIDTH).contains(&x) || y < COL_HEADER_HEIGHT { return None; }
-    (0..sheet.rows)
-        .filter(|&r| row_on_screen(r, scroll_y, sheet))
-        .find(|&r| (y - (row_y(r, scroll_y, sheet) + sheet.row_height(r))).abs() < 5.0)
+    visible_rows(scroll_y, y + 5.0, sheet)
+        .into_iter()
+        .find(|&(r, ry)| (y - (ry + sheet.row_height(r))).abs() < 5.0)
+        .map(|(r, _)| r)
 }
 
 /// Half-width in pixels of the fill-handle hit zone (issue #113) — a
@@ -1874,5 +1930,45 @@ mod sort_tests {
         s.toggle_sort(0);
         let col: Vec<&str> = (0..3).map(|r| s.cell(r, 0)).collect();
         assert_eq!(col, vec!["3", "2", "1"]);
+    }
+
+    /// visible_rows/cols and the spans place exactly what the per-index
+    /// functions do, across hidden, frozen, resized and scrolled sheets.
+    #[test]
+    fn visible_lists_and_spans_match_the_per_index_geometry() {
+        let mut s = SheetModel::new("v", 60, 30, 0);
+        for r in [3, 4, 17, 40] { s.hidden_rows.insert(r); }
+        for c in [2, 9] { s.hidden_cols.insert(c); }
+        s.set_row_height(5, 80.0);
+        s.set_row_height(22, 14.0);
+        s.set_col_width(7, 300.0);
+        for (fr, fc) in [(0, 0), (2, 1), (6, 3)] {
+            s.frozen_rows = fr;
+            s.frozen_cols = fc;
+            for scroll in [0.0, 13.0, 250.0, 900.0] {
+                for extent in [300.0, 700.0, 2_000.0] {
+                    let want_r: Vec<(usize, f64)> = (0..s.rows)
+                        .filter(|&r| row_on_screen(r, scroll, &s))
+                        .map(|r| (r, row_y(r, scroll, &s)))
+                        .take_while(|&(_, y)| y <= extent)
+                        .collect();
+                    assert_eq!(visible_rows(scroll, extent, &s), want_r, "rows fr={fr} scroll={scroll} extent={extent}");
+                    let want_c: Vec<(usize, f64)> = (0..s.cols)
+                        .filter(|&c| col_on_screen(c, scroll, &s))
+                        .map(|c| (c, col_x(c, scroll, &s)))
+                        .take_while(|&(_, x)| x <= extent)
+                        .collect();
+                    assert_eq!(visible_cols(scroll, extent, &s), want_c, "cols fc={fc} scroll={scroll} extent={extent}");
+                }
+                let rows: Vec<(f64, f64)> = (0..s.rows)
+                    .map(|r| (row_y(r, scroll, &s), if s.is_row_hidden(r) { 0.0 } else { s.row_height(r) }))
+                    .collect();
+                assert_eq!(row_spans(s.rows, scroll, &s), rows);
+                let cols: Vec<(f64, f64)> = (0..s.cols)
+                    .map(|c| (col_x(c, scroll, &s), if s.is_col_hidden(c) { 0.0 } else { s.col_width(c) }))
+                    .collect();
+                assert_eq!(col_spans(s.cols, scroll, &s), cols);
+            }
+        }
     }
 }

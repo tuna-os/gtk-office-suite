@@ -369,16 +369,16 @@ pub fn draw_grid(
     cr.set_source_rgb(hdr_bg.0, hdr_bg.1, hdr_bg.2);
     cr.rectangle(ROW_HEADER_WIDTH, 0.0, width, COL_HEADER_HEIGHT);
     cr.fill().unwrap();
-    // Hidden columns (#113) collapse to zero width, so — like the hidden
-    // rows below — this walks every column rather than a fixed-step
-    // range starting at a scroll-derived index. Frozen columns' labels
-    // stay put; scrolled ones are clipped where they pass under them.
+    // Hidden columns (#113) collapse to zero width, which visible_cols
+    // accounts for. Frozen columns' labels stay put; scrolled ones are
+    // clipped where they pass under them.
     let (left, top) = (tables_core::sheet::scrolled_left(sheet), tables_core::sheet::scrolled_top(sheet));
-    for c in 0..sheet.cols {
-        if !tables_core::sheet::col_on_screen(c, scroll_x, sheet) { continue; }
+    // Visible columns once per frame, with their x: computing col_x per
+    // column re-summed every column to its left, quadratic in the sheet.
+    let vis_cols = tables_core::sheet::visible_cols(scroll_x, width, sheet);
+    let vis_rows = tables_core::sheet::visible_rows(scroll_y, height, sheet);
+    for &(c, cx) in &vis_cols {
         let cw = sheet.col_width(c);
-        let cx = tables_core::sheet::col_x(c, scroll_x, sheet);
-        if cx > width { break; }
         let frozen = c < sheet.frozen_cols;
         cr.save().unwrap();
         if !frozen {
@@ -412,14 +412,9 @@ pub fn draw_grid(
     cr.set_source_rgb(hdr_bg.0, hdr_bg.1, hdr_bg.2);
     cr.rectangle(0.0, COL_HEADER_HEIGHT, ROW_HEADER_WIDTH, height);
     cr.fill().unwrap();
-    // Hidden rows (#113 filtering) collapse to zero height, so this walks
-    // every row rather than a fixed-step range — cheap at sheet sizes
-    // this app deals with, and the only way to know a row's true screen
-    // position once earlier rows may not all be drawn.
-    for r in 0..sheet.rows {
-        if !tables_core::sheet::row_on_screen(r, scroll_y, sheet) { continue; }
-        let ry = tables_core::sheet::row_y(r, scroll_y, sheet);
-        if ry > height { break; }
+    // Hidden rows (#113 filtering) collapse to zero height; visible_rows
+    // walks the rows once to place each one that shows.
+    for &(r, ry) in &vis_rows {
         cr.save().unwrap();
         if r >= sheet.frozen_rows {
             cr.rectangle(0.0, top, ROW_HEADER_WIDTH, height - top);
@@ -451,16 +446,12 @@ pub fn draw_grid(
     cr.rectangle(px, py, pw, ph);
     cr.clip();
     let mut bordered: Vec<(f64, f64, f64, f64, &CellBorder)> = Vec::new();
-    for r in 0..sheet.rows {
-        if (r < sheet.frozen_rows) != frozen_r || !tables_core::sheet::row_on_screen(r, scroll_y, sheet) { continue; }
-        let cy = tables_core::sheet::row_y(r, scroll_y, sheet);
+    for &(r, cy) in &vis_rows {
+        if (r < sheet.frozen_rows) != frozen_r { continue; }
         let rh = sheet.row_height(r);
-        if cy > height { break; }
-        for c in 0..sheet.cols {
-            if (c < sheet.frozen_cols) != frozen_c || !tables_core::sheet::col_on_screen(c, scroll_x, sheet) { continue; }
+        for &(c, cx) in &vis_cols {
+            if (c < sheet.frozen_cols) != frozen_c { continue; }
             let cw = sheet.col_width(c);
-            let cx = tables_core::sheet::col_x(c, scroll_x, sheet);
-            if cx > width { break; }
             let is_sel = show_selection && r == sheet.selected_row && c == sheet.selected_col;
             let (sr0, sc0, sr1, sc1) = sheet.selection_block();
             let in_range = show_selection && r >= sr0 && r <= sr1 && c >= sc0 && c <= sc1;

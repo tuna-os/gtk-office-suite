@@ -29,7 +29,15 @@ Architecture: benchmark core open/edit/recalculate/save separately from GTK inpu
       **Writing it found opening an xlsx quadratic in its cells**: every loader recalculated the whole workbook after
       each cell it set, so a 512×128 sheet did not open in twenty minutes. Loaders, paste and PDF export now recalculate
       once (`TablesEngine::put_cell_text`); it opens in 0.8 s, and `performance_budgets.rs` now times that open.
-- [ ] Test virtualized viewport work scales with visible data, not maximum row/column coordinates.
+- [~] Test virtualized viewport work scales with visible data, not maximum row/column coordinates.
+      Tables (#1208): the grid renderer called `row_on_screen` and `row_y` for every row from the first, and each
+      re-summed every row above it, so a frame was quadratic in the sheet's rows (and columns); the divider hit-tests
+      and the accessibility spans did the same. `sheet::visible_rows` / `visible_cols` now place what shows in one pass,
+      and the renderer draws only those. `visible_lists_and_spans_match_the_per_index_geometry` holds them to the old
+      per-index geometry across hidden, frozen, resized and scrolled sheets; `a_frame_at_the_bottom_of_a_tall_sheet`
+      (performance_budgets.rs) requires a 100,000-row frame to draw only a screenful, within 300 ms p95 (38 ms p50 in a
+      debug build). Still open: that one pass is linear in the rows rather than independent of them (prefix sums
+      would remove it), and Letters' and Decks' viewports are unmeasured.
 - [ ] Fixed-font visual matrix: widths 400/800/1280, light/dark/high contrast, scale 1/2, editor/selection/dialog/error; retain expected/actual/diff plus snapshot.
 - [ ] Keyboard-only edit/save/undo and AT-SPI names/roles/states/bounds match the model after scroll/resize/zoom.
 - [ ] Reactivate the closed #137 navigation crash reproduction only after live verification; include inspector/object selection and screen-reader traversal.
