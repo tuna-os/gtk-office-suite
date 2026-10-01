@@ -2451,11 +2451,13 @@ class TablesXlsSaveSmoke(TablesFormatSafeSaveMixin, BaseGUITestCase):
 class TablesTwoSheetJourneySmoke(TablesCellEntryMixin, BaseGUITestCase):
     """Two sheets through the whole sheet bar (tables-readiness.md row 3,
     #1204): a value on Sheet1 and a formula on Sheet2 that reads it; rename
-    Sheet2, move it first, delete it and undo the delete; save, and read
-    the workbook back. Nothing may cross sheets on the way: the formula
-    keeps its reference through the rename, the delete's undo brings back
-    the sheet with its formula, and the saved file has both sheets, in the
-    new order, under their new names, each with its own content."""
+    Sheet2, move it first, delete it and undo the delete; switch sheets
+    through the switcher; save, read the workbook's parts, then reopen it
+    in a fresh process and walk both sheets again. Nothing may cross sheets
+    on the way: the formula keeps its reference through the rename, the
+    delete's undo brings back the sheet with its formula, and the saved
+    file has both sheets, in the new order, under their new names, each
+    with its own content, in its parts and in the app that reopens it."""
 
     app_name = "tables"
 
@@ -2481,6 +2483,24 @@ class TablesTwoSheetJourneySmoke(TablesCellEntryMixin, BaseGUITestCase):
     def _press(self, name):
         self.wait_until(lambda: self._showing("push button", name), bool,
                         description=f"the {name} button").do_action(0)
+
+    def _switch_to(self, name):
+        """Pick `name` in the sheet switcher, as a user does: open it, step
+        towards the sheet, Return. The popup list is not in the AT-SPI tree
+        (see TablesMultiSheetSmoke), so the gesture is retried until the
+        switcher's accessible name, which mirrors the selection, lands."""
+        from dogtail import rawinput
+
+        def step():
+            names, active, _ = self._state()
+            switcher = self.app.child(roleName="combo box")
+            if switcher.name != name:
+                switcher.child(roleName="toggle button").do_action(0)
+                rawinput.keyCombo("Down" if names.index(name) > active else "Up")
+                rawinput.keyCombo("Return")
+            return self.app.child(roleName="combo box").name
+        self.wait_until(step, lambda got: got == name, interval=0.6,
+                        description=f"the sheet switcher to select {name}")
 
     def test_rename_reorder_delete_undo_save_and_reopen(self):
         import re
@@ -2523,6 +2543,10 @@ class TablesTwoSheetJourneySmoke(TablesCellEntryMixin, BaseGUITestCase):
         self._wait_state((["Totals", "Sheet1"], 0, ("10", "Sheet1!A1*2")),
                          "the undo to bring Totals back first, formula and all")
 
+        # Switch to Sheet1 through the switcher: its own value, not the formula.
+        self._switch_to("Sheet1")
+        self._wait_state((["Totals", "Sheet1"], 1, ("5", None)), "the switcher to show Sheet1's own value")
+
         # Save, then read the workbook back.
         out_path = os.path.join(self._dir, "two-sheets.xlsx")
         subprocess.run(["gapplication", "action", aid, "save-file-as"])
@@ -2546,6 +2570,17 @@ class TablesTwoSheetJourneySmoke(TablesCellEntryMixin, BaseGUITestCase):
         self.assertRegex(totals, r"<v>10</v>", "Totals' formula has no cached 10")
         self.assertRegex(sheet1, r"<v>5</v>", "Sheet1 lost its value")
         self.assertNotRegex(sheet1, r"<f>", "a formula crossed onto Sheet1")
+
+        # Reopen it in a fresh process, as `tables two-sheets.xlsx` from a
+        # file manager does, so nothing survives from the session's memory,
+        # and walk both sheets through the switcher.
+        self.relaunch_app(launch_args=[out_path])
+        names = self.wait_until(lambda: self._state()[0], lambda got: got == ["Totals", "Sheet1"],
+                                interval=0.3, description="the reopened workbook's sheets")
+        self._switch_to("Totals")
+        self._wait_state((names, 0, ("10", "Sheet1!A1*2")), "Totals to reopen with its formula and value")
+        self._switch_to("Sheet1")
+        self._wait_state((names, 1, ("5", None)), "Sheet1 to reopen with its own value")
         self.assertIsNone(self.process.poll(), "tables crashed in the sheet journey")
 
 

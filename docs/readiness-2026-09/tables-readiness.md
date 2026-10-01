@@ -15,11 +15,12 @@ WorkbookController remains the sole mutation gateway. Stable sheet identities bi
       unchanged, the "Cannot save in this format" prompt, Save As offering `budget.xlsx`, and that workbook holding the
       edit. With the guards in `save_engine_to_xlsx` and the save action removed, the journey fails (#1204).
 - [ ] Test formulas, cached values, styles, charts, rules, names, protection and hidden/filter state against a declared XLSX loss budget.
-- [ ] Two-sheet journey: edit/formula → rename/reorder/delete/undo → switch → save → reopen; no cross-sheet overwrite or retargeted history.
-      Most of it is now `TablesTwoSheetJourneySmoke` (#1204): a value on Sheet1, a formula on Sheet2 reading it, rename
-      through the dialog, move first, delete and undo, Save As; the saved xlsx must have both sheets in the new order
-      under the new names, the formula with its cached value, and no formula on Sheet1. Still open: switching through
-      the sheet switcher, and reopening the file in the app rather than reading its parts.
+- [x] Two-sheet journey: edit/formula → rename/reorder/delete/undo → switch → save → reopen; no cross-sheet overwrite or retargeted history.
+      `TablesTwoSheetJourneySmoke` (#1204): a value on Sheet1, a formula on Sheet2 reading it, rename through the
+      dialog, move first, delete and undo, switch to Sheet1 through the sheet switcher, Save As; the saved xlsx must
+      have both sheets in the new order under the new names, the formula with its cached value, and no formula on
+      Sheet1. The file is then reopened in a fresh `tables two-sheets.xlsx` process and both sheets are walked
+      through the switcher again, each showing its own content.
 - [ ] Exercise row/column edits, fill, sort/filter, named ranges and protection through actual GUI actions plus controller
       invariants. (Named ranges and the name box now also pass at 400px width: `Ctrl+G` opens a Go to Cell dialog when the
       narrow breakpoint hides the name box — #516, found by the display matrix.)
