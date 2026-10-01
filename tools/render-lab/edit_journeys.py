@@ -39,6 +39,35 @@ JOURNEYS = {
 }
 
 
+def print_like_the_fixtures(xlsx):
+    """Give a saved workbook's sheets the print options every Tables
+    fixture gets in fixtures.py: row and column headings on, gridlines
+    off. Tables draws headings on screen and has no print-headings
+    setting of its own, so without them LibreOffice's PDF lacks the
+    headings our capture shows, and the comparison measures that (and the
+    shift it causes) instead of the cells. Only the print options change;
+    the parts the app wrote are otherwise left byte for byte, and an
+    existing <printOptions> is replaced."""
+    import re
+    import shutil
+    import zipfile
+    tmp = xlsx + ".tmp"
+    with zipfile.ZipFile(xlsx) as src, zipfile.ZipFile(tmp, "w", zipfile.ZIP_DEFLATED) as dst:
+        for item in src.infolist():
+            data = src.read(item.filename)
+            if re.fullmatch(r"xl/worksheets/sheet\d+\.xml", item.filename):
+                xml = re.sub(r"<printOptions[^>]*/>", "", data.decode("utf-8"))
+                opts = '<printOptions headings="1" gridLines="0"/>'
+                # CT_Worksheet order: printOptions comes just before pageMargins.
+                if "<pageMargins" in xml:
+                    xml = xml.replace("<pageMargins", opts + "<pageMargins", 1)
+                else:
+                    xml = xml.replace("</worksheet>", opts + "</worksheet>", 1)
+                data = xml.encode("utf-8")
+            dst.writestr(item, data)
+    shutil.move(tmp, xlsx)
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("fixtures")
@@ -68,6 +97,8 @@ def main():
                 failures += 1
                 print(f"edit {app}: journey failed; no edited-journey fixture", file=sys.stderr)
                 continue
+            if app == "tables":
+                print_like_the_fixtures(saved)
         manifest.append({
             "app": app,
             "feature": "edited-journey",

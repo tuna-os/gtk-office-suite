@@ -233,6 +233,9 @@ fn cell_text_top(v_align: tables_core::style::VAlign, cy: f64, rh: f64, text_h: 
 /// A cell's value through its number format and style, clipped to `rect`
 /// (x, y, w, h). Clipping and ellipsizing keep long values inside their
 /// cell; wrapped cells break across lines instead.
+/// A cell's `(x, y, width, height)` on screen.
+type CellRect = (f64, f64, f64, f64);
+
 fn draw_cell_text(cr: &Context, sheet: &SheetModel, r: usize, c: usize, rect: (f64, f64, f64, f64), color: (f64, f64, f64)) {
     use tables_core::style::HAlign;
     let val = sheet.cell(r, c);
@@ -446,6 +449,9 @@ pub fn draw_grid(
     cr.rectangle(px, py, pw, ph);
     cr.clip();
     let mut bordered: Vec<(f64, f64, f64, f64, &CellBorder)> = Vec::new();
+    // Text spilling into empty neighbours is drawn after every cell of the
+    // pane, or their backgrounds would paint over it.
+    let mut spilled: Vec<(usize, usize, CellRect)> = Vec::new();
     for &(r, cy) in &vis_rows {
         if (r < sheet.frozen_rows) != frozen_r { continue; }
         let rh = sheet.row_height(r);
@@ -530,7 +536,22 @@ pub fn draw_grid(
             // layout.  Clipping/ellipsizing keeps long values inside their
             // cell while still allowing readable text when a column grows.
             if merge.is_none() {
-                draw_cell_text(cr, sheet, r, c, (cx, cy, cw, rh), cell_text);
+                // Left-aligned text runs on over the empty cells after it
+                // (Calc and Excel do; it used to be cut to "Amou…" in a
+                // column a header just overflowed — render lab
+                // tables/edited-journey). Only within this pane.
+                let pos = vis_cols.iter().position(|&(vc, _)| vc == c).unwrap_or(0);
+                let after: Vec<usize> = vis_cols[pos + 1..].iter().map(|&(vc, _)| vc)
+                    .take_while(|&vc| (vc < sheet.frozen_cols) == frozen_c).collect();
+                let n = sheet.overflow_span(r, c, after.len());
+                // overflow_span counts sheet columns; hidden ones are not in
+                // vis_cols and add no width.
+                let extra: f64 = (c + 1..=c + n).filter(|&k| !sheet.is_col_hidden(k)).map(|k| sheet.col_width(k)).sum();
+                if extra > 0.0 {
+                    spilled.push((r, c, (cx, cy, cw + extra, rh)));
+                } else {
+                    draw_cell_text(cr, sheet, r, c, (cx, cy, cw, rh), cell_text);
+                }
             }
             if sheet.notes[r][c].is_some() {
                 crate::notes::draw_marker(cr, cx, cy, cw);
@@ -539,6 +560,9 @@ pub fn draw_grid(
                 crate::validation_list::draw_arrow(cr, (cx, cy, cw, rh), is_dark);
             }
         }
+    }
+    for &(r, c, rect) in &spilled {
+        draw_cell_text(cr, sheet, r, c, rect, cell_text);
     }
     for &(x, y, w, h, border) in &bordered {
         draw_border_edges(cr, x, y, w, h, border, is_dark);
