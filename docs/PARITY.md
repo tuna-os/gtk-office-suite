@@ -23,7 +23,7 @@ anything interactive needs I5 or I6. Cross-app clipboard: fragment matrix I1 + p
 
 **The Render column** says whether the feature *looks* right, next to the
 file-level claim in Status. ✅ names render-lab fixtures that are green in
-both tiers of [`tools/render-lab/baseline.json`](../tools/render-lab/baseline.json)
+every tier measured (A and B, and C, the shipped Flatpak, once it has run) of [`tools/render-lab/baseline.json`](../tools/render-lab/baseline.json)
 (see [RENDER-PARITY-ROADMAP.md](RENDER-PARITY-ROADMAP.md)); 🟠 names a fixture
 that is amber, with the reason; 🟡 file-only is a visual feature proven only
 at the file level, waiting for a fixture; — is a feature with nothing of its
@@ -99,7 +99,7 @@ are not all green, and any fixture name the baseline does not have.
 | Feature | Status | Proven by | Render |
 |---|---|---|---|
 | Formulas surviving save | ✅ | I2+I4: written as formulas with cached results; Calc evaluates ours | — |
-| Charts persisted (bar/line/pie) | ✅ | I2 round-trip (write + own reader) + I4 (survives Calc rewrite); Insert into Sheet dialog | ✅ tables/chart, tables/chart-line, tables/chart-pie, tables/chart-area, tables/chart-scatter |
+| Charts persisted (bar/line/pie) | ✅ | I2 round-trip (write + own reader) + I4 (survives Calc rewrite); Insert into Sheet dialog | 🟠 tables/chart-pie (amber in the shipped Flatpak, Tier C; green in A/B); the other four green in every tier: tables/chart, tables/chart-line, tables/chart-area, tables/chart-scatter |
 | Conditional formatting (cell-value rules) | ✅ | I1 rule matching + I2 round-trip + I4 (survives Calc rewrite); rendered on canvas, dialog | ✅ tables/conditional |
 | Freeze panes / autofill / named ranges |  | I1 each; freeze survives xlsx (I2) | ✅ tables/frozen |
 | Cross-sheet references |  | I1 IronCalc already supports; add coverage | — |

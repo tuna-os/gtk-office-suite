@@ -483,6 +483,10 @@ jobs:
             --build-arg BASE=ghcr.io/${GITHUB_REPOSITORY}/gui-test:main tools/render-lab
           docker run --rm -v "$PWD:/workspace" -w /workspace render-lab bash -c \
             'python3 tools/render-lab/fixtures.py render-lab-out/fixtures && python3 tools/render-lab/lo_render.py render-lab-out/fixtures render-lab-out'
+          # The container wrote render-lab-out as root; the VM capture runs
+          # as the runner and writes its screenshots there (#1199: the first
+          # run to get that far failed on a PermissionError).
+          sudo chown -R "$(id -u):$(id -g)" render-lab-out
 
       - name: Capture in the VM
         run: tools/render-lab/vm/run.sh vm-work bundles render-lab-out/fixtures render-lab-out
