@@ -21,43 +21,52 @@ Tier 3 items each need an explicit decision to enter scope.
 Rule of thumb: every feature needs I1; anything that persists needs I2–I4;
 anything interactive needs I5 or I6. Cross-app clipboard: fragment matrix I1 + per-app GDK glue I6 (copy/paste round trips in Letters and Tables).
 
+**The Render column** says whether the feature *looks* right, next to the
+file-level claim in Status. ✅ names render-lab fixtures that are green in
+both tiers of [`tools/render-lab/baseline.json`](../tools/render-lab/baseline.json)
+(see [RENDER-PARITY-ROADMAP.md](RENDER-PARITY-ROADMAP.md)); 🟠 names a fixture
+that is amber, with the reason; 🟡 file-only is a visual feature proven only
+at the file level, waiting for a fixture; — is a feature with nothing of its
+own to draw. `conformance/validate_parity.py` (E5) fails a ✅ whose fixtures
+are not all green, and any fixture name the baseline does not have.
+
 ---
 
 ## Letters (word processor)
 
 ### Tier 1 — Core (daily-driver writing)
 
-| Feature | Status | Proven by |
-|---|---|---|
-| Styled runs (b/i/u/s, highlight, inline code) | ✅ | I1 model, I2 docx 17/17, I3 109/109, I4, I5 |
-| Headings 1–6 | ✅ | I1, I2, I3, I5 |
-| Paragraph alignment | ✅ | I1–I5 |
-| Bullet/numbered lists (flat) | ✅ | I1–I3 + I5: markers render as the buffer representation and capture back to ListKind (bridge round-trip green) |
-| Hyperlinks | ✅ | I2, I5 (dynamic link:<url> tags) |
-| Code blocks | ✅ | I1, I2 (CommonMark fenced 24/29), I3 |
-| Markdown save/load with formatting | ✅ | I2 CommonMark ratchet **630/652 — target met** (raw HTML preserved verbatim; remaining 22 are escape/entity/autolink edge cases) |
-| DOCX save/load | ✅ | I2, I3, I4 |
-| Undo/redo | ✅ (buffer-level) | **move to model ops + I1**; I6 journey: tests/gui/test_letters.py (undo/redo typed text) |
-| Find & replace | ✅ UI | **extract to core + I1**; I6 |
-| Word count | ✅ | I6 smoke (live) |
-| Spell check | ✅ | dictionaries bundled in Flatpak; squiggle visible over AT-SPI attrs |
-| Print / PDF export | ✅ in-process Typst | I1 suite-export tests (valid PDF, error surfacing) |
-| Inline images | ✅ | I1+I2 byte-identical docx round-trip; I5 buffer paintable round-trip |
+| Feature | Status | Proven by | Render |
+|---|---|---|---|
+| Styled runs (b/i/u/s, highlight, inline code) | ✅ | I1 model, I2 docx 17/17, I3 109/109, I4, I5 | ✅ letters/char-emphasis, letters/highlight |
+| Headings 1–6 | ✅ | I1, I2, I3, I5 | ✅ letters/headings |
+| Paragraph alignment | ✅ | I1–I5 | ✅ letters/alignment |
+| Bullet/numbered lists (flat) | ✅ | I1–I3 + I5: markers render as the buffer representation and capture back to ListKind (bridge round-trip green) | ✅ letters/bullet-list, letters/numbered-list, letters/nested-list |
+| Hyperlinks | ✅ | I2, I5 (dynamic link:<url> tags) | 🟡 file-only |
+| Code blocks | ✅ | I1, I2 (CommonMark fenced 24/29), I3 | 🟡 file-only |
+| Markdown save/load with formatting | ✅ | I2 CommonMark ratchet **630/652 — target met** (raw HTML preserved verbatim; remaining 22 are escape/entity/autolink edge cases) | — |
+| DOCX save/load | ✅ | I2, I3, I4 | — |
+| Undo/redo | ✅ (buffer-level) | **move to model ops + I1**; I6 journey: tests/gui/test_letters.py (undo/redo typed text) | — |
+| Find & replace | ✅ UI | **extract to core + I1**; I6 | — |
+| Word count | ✅ | I6 smoke (live) | — |
+| Spell check | ✅ | dictionaries bundled in Flatpak; squiggle visible over AT-SPI attrs | — |
+| Print / PDF export | ✅ in-process Typst | I1 suite-export tests (valid PDF, error surfacing) | — (export lab, docs/EXPORT-PARITY-SPEC.md) |
+| Inline images | ✅ | I1+I2 byte-identical docx round-trip; I5 buffer paintable round-trip | ✅ letters/image |
 
 ### Tier 2 — Nice-to-have (rounds out the product)
 
-| Feature | How to test |
-|---|---|
-| Tables in documents (cell-tagged model) | ✅ I1+I2 round-trip, I3 structural (table-2x2 asserts coordinates). Interleaved position + UI editing remain |
-| Named paragraph styles (Title, Subtitle, Quote) | ✅ I1+I2 round-trip |
-| Font size / color per run | ✅ I1 + I3 scenarios |
-| Superscript / subscript | ✅ I1 + I3 (incl. LO w:position encoding) |
-| Headers & footers with fields ({page}) | ✅ I2 round-trip (Document.header/footer) |
-| Page setup | breaks ✅ I2 round-trip; size/margins ✅ I2 (PageGeometry in docx sectPr + odt page-layout) + I3 oracle: geometry survives LO odt→docx pass |
-| Font family round-trip | ✅ I2 (RunStyle.font_family; docx rFonts + odt fo:font-family) |
-| Block quotes | ✅ I1 + I3 (BlockQuotation style) + markdown quote round-trip |
-| Line spacing round-trip | ✅ I2 both formats (odt fo:line-height %, docx w:spacing auto rule via rdocx line_spacing_multiple) + I3 oracle through LO in both |
-| ODT read/write | ✅ I2 10-test round-trip (paras, h1–6, b/i/u/s, highlight, size, color, links, alignment, lists, page breaks, header/footer) + I3 oracle 7 tests: LO opens ours, we open LO's, bold survives LO odt→docx pass |
+| Feature | Status | Proven by | Render |
+|---|---|---|---|
+| Tables in documents (cell-tagged model) | ✅ | I1+I2 round-trip, I3 structural (table-2x2 asserts coordinates). Interleaved position + UI editing remain | 🟠 letters/table (accepted metric artifact) |
+| Named paragraph styles (Title, Subtitle, Quote) | ✅ | I1+I2 round-trip | 🟡 file-only |
+| Font size / color per run | ✅ | I1 + I3 scenarios | ✅ letters/font-sizes, letters/text-color |
+| Superscript / subscript | ✅ | I1 + I3 (incl. LO w:position encoding) | ✅ letters/super-subscript |
+| Headers & footers with fields ({page}) | ✅ | I2 round-trip (Document.header/footer) | ✅ letters/header-footer, letters/page-numbers |
+| Page setup |  | breaks ✅ I2 round-trip; size/margins ✅ I2 (PageGeometry in docx sectPr + odt page-layout) + I3 oracle: geometry survives LO odt→docx pass | ✅ letters/page-break, letters/page-margins, letters/landscape |
+| Font family round-trip | ✅ | I2 (RunStyle.font_family; docx rFonts + odt fo:font-family) | ✅ letters/font-families |
+| Block quotes | ✅ | I1 + I3 (BlockQuotation style) + markdown quote round-trip | 🟡 file-only |
+| Line spacing round-trip | ✅ | I2 both formats (odt fo:line-height %, docx w:spacing auto rule via rdocx line_spacing_multiple) + I3 oracle through LO in both | ✅ letters/line-spacing |
+| ODT read/write | ✅ | I2 10-test round-trip (paras, h1–6, b/i/u/s, highlight, size, color, links, alignment, lists, page breaks, header/footer) + I3 oracle 7 tests: LO opens ours, we open LO's, bold survives LO odt→docx pass | — |
 
 ### Tier 3 — Advanced (each needs an explicit scope decision)
 
@@ -74,26 +83,26 @@ anything interactive needs I5 or I6. Cross-app clipboard: fragment matrix I1 + p
 
 ### Tier 1 — Core
 
-| Feature | Status | Proven by |
-|---|---|---|
-| Cell editing + formula evaluation | ✅ IronCalc | I1 engine tests; I6 smoke (extend: type into cell) |
-| OpenFormula function coverage | ✅ 107/107 | I2 ratchet (IronCalc upstream-main patch until next release) |
-| XLSX round-trip | ✅ | I1 io tests, I4 Calc oracle |
-| ODS / CSV / TSV import | ✅ | I1; add I3-style: LO-authored ods/xlsx read |
-| Number formats (currency, %, date) | ✅ | I1 format.rs + I2 xlsx format codes + I6 Format Cells sheet; values render formatted on canvas and in a11y cells |
-| Undo/redo | ✅ | I1 (12 tests) + I6 journey: tests/gui/test_tables.py::test_undo_removes_cell_value, tests/gui/test_smoke.py::TablesUndoSaveReopenSmoke |
-| Multi-sheet | ✅ | I1 + I4: names survive xlsx→Calc→xlsx; I6 journey: tests/gui/test_tables.py (add-sheet tabs) |
-| Sort, cell borders, merge, validation | ✅ model | I1 + I4: merges/frozen panes/column widths persist to xlsx and survive Calc |
+| Feature | Status | Proven by | Render |
+|---|---|---|---|
+| Cell editing + formula evaluation | ✅ IronCalc | I1 engine tests; I6 smoke (extend: type into cell) | ✅ tables/values |
+| OpenFormula function coverage | ✅ 107/107 | I2 ratchet (IronCalc upstream-main patch until next release) | — |
+| XLSX round-trip | ✅ | I1 io tests, I4 Calc oracle | — |
+| ODS / CSV / TSV import | ✅ | I1; add I3-style: LO-authored ods/xlsx read | — |
+| Number formats (currency, %, date) | ✅ | I1 format.rs + I2 xlsx format codes + I6 Format Cells sheet; values render formatted on canvas and in a11y cells | 🟠 tables/number-formats (accepted metric artifact) |
+| Undo/redo | ✅ | I1 (12 tests) + I6 journey: tests/gui/test_tables.py::test_undo_removes_cell_value, tests/gui/test_smoke.py::TablesUndoSaveReopenSmoke | — |
+| Multi-sheet | ✅ | I1 + I4: names survive xlsx→Calc→xlsx; I6 journey: tests/gui/test_tables.py (add-sheet tabs) | — |
+| Sort, cell borders, merge, validation | ✅ model | I1 + I4: merges/frozen panes/column widths persist to xlsx and survive Calc | ✅ tables/borders, tables/merged |
 
 ### Tier 2 — Nice-to-have
 
-| Feature | How to test |
-|---|---|
-| Formulas surviving save | ✅ I2+I4: written as formulas with cached results; Calc evaluates ours |
-| Charts persisted (bar/line/pie) | ✅ | I2 round-trip (write + own reader) + I4 (survives Calc rewrite); Insert into Sheet dialog |
-| Conditional formatting (cell-value rules) | ✅ | I1 rule matching + I2 round-trip + I4 (survives Calc rewrite); rendered on canvas, dialog |
-| Freeze panes / autofill / named ranges | I1 each; freeze survives xlsx (I2) |
-| Cross-sheet references | I1 IronCalc already supports; add coverage |
+| Feature | Status | Proven by | Render |
+|---|---|---|---|
+| Formulas surviving save | ✅ | I2+I4: written as formulas with cached results; Calc evaluates ours | — |
+| Charts persisted (bar/line/pie) | ✅ | I2 round-trip (write + own reader) + I4 (survives Calc rewrite); Insert into Sheet dialog | ✅ tables/chart, tables/chart-line, tables/chart-pie, tables/chart-area, tables/chart-scatter |
+| Conditional formatting (cell-value rules) | ✅ | I1 rule matching + I2 round-trip + I4 (survives Calc rewrite); rendered on canvas, dialog | ✅ tables/conditional |
+| Freeze panes / autofill / named ranges |  | I1 each; freeze survives xlsx (I2) | ✅ tables/frozen |
+| Cross-sheet references |  | I1 IronCalc already supports; add coverage | — |
 
 ### Tier 3 — Advanced
 
@@ -105,25 +114,25 @@ roadmap-dependent), external file references (decision: likely never),
 
 ### Tier 1 — Core
 
-| Feature | Status | Proven by |
-|---|---|---|
-| Slide CRUD + object model | ✅ | I1 (10 tests) |
-| Text boxes, rects, circles, images | ✅ | I1 round-trip |
-| PPTX save/load | ✅ | I1, I4 Impress oracle |
-| Speaker notes | ✅ | I1, LO round-trip (notesSlide parts read+written) |
-| Undo/redo | ✅ | I1 (9 tests) + I6 journey: tests/gui/test_decks.py::test_undo_removes_added_slide |
-| Present mode + transitions | ✅ | I6 smoke: enter/exit presenting; I7 visual |
-| **LO-authored parity corpus for Decks** | ✅ 9/9 | decks-core/tests/lo_parity.rs (pptx through-the-oracle, ratcheted) |
+| Feature | Status | Proven by | Render |
+|---|---|---|---|
+| Slide CRUD + object model | ✅ | I1 (10 tests) | — |
+| Text boxes, rects, circles, images | ✅ | I1 round-trip | ✅ decks/shapes, decks/image |
+| PPTX save/load | ✅ | I1, I4 Impress oracle | — |
+| Speaker notes | ✅ | I1, LO round-trip (notesSlide parts read+written) | — |
+| Undo/redo | ✅ | I1 (9 tests) + I6 journey: tests/gui/test_decks.py::test_undo_removes_added_slide | — |
+| Present mode + transitions | ✅ | I6 smoke: enter/exit presenting; I7 visual | — |
+| **LO-authored parity corpus for Decks** | ✅ 9/9 | decks-core/tests/lo_parity.rs (pptx through-the-oracle, ratcheted) | — |
 
 ### Tier 2 — Nice-to-have
 
-| Feature | How to test |
-|---|---|
-| Styled text inside text boxes (runs, not plain) | ✅ | I3 LO-authored styled-runs (decks-core/tests/lo_parity.rs) + I4 soffice oracle bold_run_survives_impress_rewrite; model+pptx (shared Run/RunStyle) |
-| Master slides applied on render | ✅ | I1 placeholder-skip parser + I4 (Impress-authored pptx maps slides→masters); master background inherited on canvas |
-| ODP read/write | ✅ | decks-core/src/odp.rs: I2 round-trips (text, runs, geometry, notes, background) + 7 I4 oracle tests (Impress rewrite both ways; reads Impress custom-shape output) |
-| Slide reorder / duplicate | I1 + I6 |
-| Image fit/crop modes | I1 geometry |
+| Feature | Status | Proven by | Render |
+|---|---|---|---|
+| Styled text inside text boxes (runs, not plain) | ✅ | I3 LO-authored styled-runs (decks-core/tests/lo_parity.rs) + I4 soffice oracle bold_run_survives_impress_rewrite; model+pptx (shared Run/RunStyle) | ✅ decks/text-styles, decks/bullets |
+| Master slides applied on render | ✅ | I1 placeholder-skip parser + I4 (Impress-authored pptx maps slides→masters); master background inherited on canvas | ✅ decks/background, decks/title-layout |
+| ODP read/write | ✅ | decks-core/src/odp.rs: I2 round-trips (text, runs, geometry, notes, background) + 7 I4 oracle tests (Impress rewrite both ways; reads Impress custom-shape output) | — |
+| Slide reorder / duplicate |  | I1 + I6 | — |
+| Image fit/crop modes |  | I1 geometry | 🟡 file-only |
 
 ### Tier 3 — Advanced
 

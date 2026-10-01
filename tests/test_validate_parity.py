@@ -217,11 +217,11 @@ def test_validate_clean_file_returns_0(tmp_path):
     clean = """## letters — x
 
 ### Tier 1
-| Feature | Evidence | State |
-|---|---|---|
-| undo/redo | I6 journey | ✅ |
-| save | I1 round-trip fixture | ✅ |
-| export | ❌ | ❌ |
+| Feature | Evidence | State | Render |
+|---|---|---|---|
+| undo/redo | I6 journey | ✅ | — |
+| save | I1 round-trip fixture | ✅ | — |
+| export | ❌ | ❌ | — |
 """
     p.write_text(clean)
     assert vp.validate(p, repo_root=tmp_path) == 0
@@ -232,8 +232,84 @@ def test_validate_missing_base_is_an_error_not_a_skip(tmp_path, capsys):
     # ref where a file is expected) must fail loudly. Exiting 0 would quietly
     # drop the transition checks while still reporting success.
     p = tmp_path / "PARITY.md"
-    p.write_text("## letters — x\n\n### Tier 1\n| Feature | Evidence | State |\n"
-                 "|---|---|---|\n| save | I1 round-trip fixture | ✅ |\n")
+    p.write_text("## letters — x\n\n### Tier 1\n| Feature | Evidence | State | Render |\n"
+                 "|---|---|---|---|\n| save | I1 round-trip fixture | ✅ | — |\n")
     assert vp.validate(p, repo_root=tmp_path) == 0
     assert vp.validate(p, base=tmp_path / "origin/main", repo_root=tmp_path) == 2
     assert "base file" in capsys.readouterr().err
+
+
+# ── E5: the Render column ────────────────────────────────────────────────
+
+RENDER_SAMPLE = """## letters — x
+
+### Tier 1
+| Feature | Status | Proven by | Render |
+|---|---|---|---|
+| headings | ✅ | I1 round-trip | {cell} |
+"""
+
+
+def _render_repo(tmp_path, cell, baseline='{"letters/headings": {"A": "green", "B": "green"}, '
+                                          '"letters/table": {"A": "amber", "B": "amber"}}'):
+    (tmp_path / "tools" / "render-lab").mkdir(parents=True)
+    (tmp_path / "tools" / "render-lab" / "baseline.json").write_text(baseline)
+    p = tmp_path / "PARITY.md"
+    p.write_text(RENDER_SAMPLE.format(cell=cell))
+    return p
+
+
+def _e5(tmp_path, cell, **kw):
+    p = _render_repo(tmp_path, cell, **kw)
+    render = []
+    vp.parse_parity(p, render=render)
+    errors = []
+    vp.check_render(render, vp.load_baseline(tmp_path), errors)
+    return errors
+
+
+def test_e5_green_fixture_accepted(tmp_path):
+    assert _e5(tmp_path, "✅ letters/headings") == []
+    assert vp.validate(tmp_path / "PARITY.md", repo_root=tmp_path) == 0
+
+
+def test_e5_file_only_and_dash_accepted(tmp_path):
+    assert _e5(tmp_path, "🟡 file-only") == []
+
+
+def test_e5_amber_fixture_may_not_be_green(tmp_path):
+    errors = _e5(tmp_path, "✅ letters/table")
+    assert len(errors) == 1 and "A=amber" in errors[0], errors
+    # Said as it is, the amber fixture is fine.
+    assert _e5(tmp_path / "x", "🟠 letters/table (metric artifact)") == []
+
+
+def test_e5_green_without_a_fixture_fails(tmp_path):
+    errors = _e5(tmp_path, "✅ looks right")
+    assert len(errors) == 1 and "without naming" in errors[0], errors
+
+
+def test_e5_unknown_fixture_fails_even_when_not_green(tmp_path):
+    errors = _e5(tmp_path, "🟠 letters/nope")
+    assert len(errors) == 1 and "not in" in errors[0], errors
+
+
+def test_e5_table_without_render_column_fails(tmp_path):
+    p = tmp_path / "PARITY.md"
+    p.write_text("## letters — x\n\n### Tier 1\n| Feature | Status | Proven by |\n"
+                 "|---|---|---|\n| save | ✅ | I1 round-trip fixture |\n")
+    assert vp.validate(p, repo_root=tmp_path) == 1
+
+
+def test_e5_render_cell_is_not_read_as_the_status(tmp_path):
+    # A ✅ in Render must not turn a non-green Status green for E1–E4.
+    p = _render_repo(tmp_path, "✅ letters/headings")
+    p.write_text(p.read_text().replace("| ✅ | I1 round-trip |", "| ❌ | |"))
+    rows = vp.parse_parity(p)
+    assert all("letters/headings" not in r[3] for r in rows)
+    assert vp.validate(p, repo_root=tmp_path) == 0
+
+
+def test_real_parity_md_names_only_known_fixtures():
+    root = Path(__file__).resolve().parent.parent
+    assert vp.validate(root / "docs" / "PARITY.md", repo_root=root) == 0
