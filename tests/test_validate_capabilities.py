@@ -582,3 +582,60 @@ class TheRealReleaseRule(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class ReleaseCritical(unittest.TestCase):
+    """C7 (#1207): a release with a skipped release-critical test is refused."""
+
+    RUST = "letters-core::mod::tests::name"
+    GUI = "tests/gui/test_smoke.py::Class::test_name"
+
+    def critical(self, **overrides):
+        return feature(release_critical=True, **overrides)
+
+    def test_a_ledger_with_nothing_release_critical_certifies_nothing(self):
+        errors = vc.check_release_critical(ledger(feature()), None)
+        self.assertIn("no capability is marked release_critical", messages(errors))
+
+    def test_passing_evidence_is_accepted(self):
+        results = {self.RUST: "passed", self.GUI: "passed"}
+        self.assertEqual(vc.check_release_critical(ledger(self.critical()), results), [])
+
+    def test_a_skipped_release_critical_test_refuses_the_release(self):
+        results = {self.RUST: "skipped", self.GUI: "passed"}
+        errors = vc.check_release_critical(ledger(self.critical()), results)
+        self.assertIn("release-critical app.thing: letters-core::mod::tests::name was skipped",
+                      messages(errors))
+
+    def test_a_release_critical_test_that_never_ran_refuses_the_release(self):
+        errors = vc.check_release_critical(ledger(self.critical()), {self.GUI: "passed"})
+        self.assertIn("has no recorded result", messages(errors))
+
+    def test_only_the_namespaces_the_report_covers_are_demanded(self):
+        # A Rust-only report says nothing about the journey: not "never ran".
+        errors = vc.check_release_critical(ledger(self.critical()), {self.RUST: "passed"},
+                                           covers=("letters-core::",))
+        self.assertEqual(errors, [])
+
+    def test_unverified_release_critical_capability_refuses_the_release(self):
+        errors = vc.check_release_critical(ledger(self.critical(status="implemented-unverified")), None)
+        self.assertIn("release-critical but implemented-unverified", messages(errors))
+
+    def test_a_waived_deferral_is_a_decision_not_a_refusal(self):
+        f = self.critical(status="deferred")
+        waiver = {"id": "app.thing", "issue": 1, "reason": "r", "scope": "s",
+                  "review_date": (date.today() + timedelta(days=30)).isoformat()}
+        self.assertEqual(vc.check_release_critical(ledger(f, waivers=[waiver]), None), [])
+
+    def test_release_critical_must_be_a_boolean(self):
+        errors = vc.check_structure(ledger(feature(release_critical="yes")))
+        self.assertIn("release_critical must be true or false", messages(errors))
+
+    def test_persistence_is_its_own_layer(self):
+        f = feature(requires=["persistence"], evidence={"persistence": [self.RUST]})
+        self.assertEqual(vc.check_structure(ledger(f)), [])
+
+    def test_the_real_ledger_names_a_release_critical_capability(self):
+        real = vc.load_ledger(vc.LEDGER)
+        self.assertEqual(vc.check_release_critical(real, None), [])
+        self.assertTrue(any(f.get("release_critical") for f in real["features"]))

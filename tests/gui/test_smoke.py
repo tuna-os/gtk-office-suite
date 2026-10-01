@@ -5124,6 +5124,41 @@ class LettersModelUndoSmoke(BaseGUITestCase):
         self.assertIsNone(self.process.poll(), "letters crashed during undo")
 
 
+class LettersPendingFormatSmoke(BaseGUITestCase):
+    """Bold with nothing selected, then typing, types bold.
+
+    The toolbar's Bold used to act only on a selection: pressed at the caret
+    it did nothing, and the next word came out plain. The document model,
+    read through the snapshot hook, is what says whether the run is bold;
+    GTK 4.14 exposes no font weight over AT-SPI.
+    """
+
+    app_name = "letters"
+
+    def setUp(self):
+        self._snapshot_path = self.isolate_snapshot(prefix="letters-pending-")
+        super().setUp()
+
+    def _runs(self):
+        s = self.trigger_snapshot("org.tunaos.letters")
+        return [(r["text"], bool(r.get("style", {}).get("bold"))) for p in s["paragraphs"] for r in p["runs"]]
+
+    def test_bold_at_the_caret_applies_to_what_is_typed_next(self):
+        from dogtail import rawinput
+
+        self.wait_for_node(name="New Document", roleName="push button").do_action(0)
+        self.wait_for_node(roleName="text")
+        rawinput.typeText("plain ")
+        self.app.child(name="Bold (Ctrl+B)", roleName="push button").do_action(0)
+        time.sleep(0.3)
+        rawinput.typeText("bold")
+        self.wait_for_condition(
+            lambda: self._runs() == [("plain ", False), ("bold", True)] or None,
+            description="'bold' typed as a bold run after 'plain '",
+        )
+        self.assertIsNone(self.process.poll(), "letters crashed while formatting")
+
+
 class LettersStylesAndOutlineSmoke(BaseGUITestCase):
     """Paragraph styles are picked from previews, and the outline follows
     the headings (DESIGN-UI "Styles first"; Docs' outline sidebar).
@@ -5505,8 +5540,8 @@ class LettersPrintLayoutEditingSmoke(BaseGUITestCase):
 
     A new document opens on its laid-out pages; keystrokes go to the page
     view, into the live model. Screen readers read the page view's text over
-    AT-SPI (GtkAccessibleText). The pageless Draft view is one toggle away
-    and edits the same document.
+    AT-SPI (GtkAccessibleText). It is the only editing surface: the pageless
+    Draft view and its toggle are retired (#1202).
     """
 
     app_name = "letters"
@@ -5524,11 +5559,11 @@ class LettersPrintLayoutEditingSmoke(BaseGUITestCase):
                 self.trigger_snapshot("org.tunaos.letters")),
             description=f"the document reading {want!r}")
 
-    def test_print_layout_is_the_default_and_edits_the_document(self):
+    def test_print_layout_is_the_only_view_and_edits_the_document(self):
         from dogtail import rawinput
 
         self.wait_for_node(name="New Document", roleName="push button").do_action(0)
-        # The page view, not the Draft editor, is what opens.
+        # The page view is what opens.
         page_view = self.wait_for_node(name="Print Layout", roleName="text")
         rawinput.typeText("page")
         rawinput.keyCombo("Return")
@@ -5537,20 +5572,17 @@ class LettersPrintLayoutEditingSmoke(BaseGUITestCase):
         # Screen readers see the same text on the page view.
         self.assertEqual(page_view.text, "page\nmore")
 
-        # The stateful toggle switches the tab to the pageless Draft view,
-        # which edits the same document.
-        self.gapplication_action("org.tunaos.letters", "print-layout")
-        time.sleep(1.0)
-        rawinput.typeText(" draft")
-        self._wait_text("page\nmore draft")
-        self.wait_for_node(name="3 words", roleName="label")
+        self.wait_for_node(name="2 words", roleName="label")
 
-        # And back: the pages show the Draft edit.
-        self.gapplication_action("org.tunaos.letters", "print-layout")
-        page_view = self.wait_for_node(name="Print Layout", roleName="text")
-        self.wait_for_condition(lambda: page_view.text == "page\nmore draft" or None,
-                                description="the page view reading the Draft edit")
-        self.assertIsNone(self.process.poll(), "letters crashed while switching views")
+        # One editing surface (#1202): the Draft toggle is gone, and the
+        # page view is the only text a screen reader finds.
+        buttons = [b.name for b in self.app.findChildren(lambda n: n.roleName == "push button")]
+        self.assertIn("Bold (Ctrl+B)", buttons, f"toolbar not found: {buttons!r}")
+        self.assertFalse([b for b in buttons if b.startswith("Print layout")],
+                         f"the Draft toggle is still on the toolbar: {buttons!r}")
+        texts = self.app.findChildren(lambda n: n.roleName == "text" and n.showing)
+        self.assertEqual([t.name for t in texts], ["Print Layout"], "a second editing surface is showing")
+        self.assertIsNone(self.process.poll(), "letters crashed while editing")
 
 
 class _SettingsIsolationProbe:

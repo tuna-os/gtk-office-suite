@@ -360,8 +360,13 @@ reports as at least amber.
    baseline does not have.
 2. **A PR that adds or changes a visual feature must add or update a
    fixture.** The fixture's "expect" line is the spec.
-3. **README status is generated from `summary.json`** (to do). The
-   "usable for" table cannot claim more than the green fixtures support.
+3. **README status is generated from `summary.json`** (done 2026-10-01,
+   #1211). The "usable for" table cannot claim more than the green
+   fixtures support. `tools/render-lab/readme_status.py` writes it from the
+   ratcheted scorecard (`baseline.json`, or a run's `summary.json`), and
+   `tests/test_readme_status.py` fails CI when README disagrees. An app is
+   called usable only when its single-feature fixtures, its Phase 3 real
+   documents and Tier C are all green.
 
 ## Phases
 
@@ -434,7 +439,11 @@ and does the part that matters.
   - Then editing on it. Then remove the TextView path. *(Editing landed:
     #974 caret and input, #976 screen readers and lists, #986/#987/#1015 a
     live model with incremental relayout, and #1022 made Print Layout the
-    default view. The TextView path is still there.)*
+    default view. #1202 stage 1 (2026-10-01) retired the Draft view: Print
+    Layout is the only editing surface, the toggle and its setting are gone,
+    and the `GtkTextView` is kept only as the buffer's host, never shown.
+    Stage 2 replaces that host with a bare buffer and deletes the Draft
+    drawing and allocation code.)*
   - This is the largest single item on the roadmap and it is unavoidable.
     There is no configuration of one `GtkTextView` that produces per-page
     layout.
