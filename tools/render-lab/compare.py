@@ -941,6 +941,13 @@ def ratchet(args, manifest, card, agreement, printed=None):
             json.dump({**base, **now}, f, indent=2, sort_keys=True)
             f.write("\n")
         print(f"baseline written: {args.baseline}")
+        # README's status table is generated from this file (#1211);
+        # rewrite it in the same step so the two are committed together.
+        sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+        import readme_status
+        if os.path.abspath(args.baseline) == readme_status.BASELINE and os.path.exists(readme_status.README):
+            readme_status.main(["--write"])
+            print(f"README status table rewritten: {readme_status.README}")
         return
     if not args.baseline:
         return
