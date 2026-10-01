@@ -945,7 +945,7 @@ def ratchet(args, manifest, card, agreement, printed=None):
         # rewrite it in the same step so the two are committed together.
         sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
         import readme_status
-        if os.path.abspath(args.baseline) == readme_status.BASELINE and os.path.exists(readme_status.README):
+        if os.path.abspath(args.baseline) in (readme_status.BASELINE, readme_status.BASELINE_REAL) and os.path.exists(readme_status.README):
             readme_status.main(["--write"])
             print(f"README status table rewritten: {readme_status.README}")
         return
