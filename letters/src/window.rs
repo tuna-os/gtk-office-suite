@@ -420,6 +420,10 @@ impl LettersWindow {
         // ── Find/Replace revealer ──────────────────────────────────
         let (find_revealer, find_entry) = make_find_replace_widget(&tab_view);
         find_revealer.set_key_capture_widget(Some(&suite_win.window));
+        // At the top only: an overlay child fills the overlay unless told
+        // otherwise, and the bar's background then covered the whole
+        // document while Find was open.
+        find_revealer.set_valign(gtk::Align::Start);
         // Place search bar as overlay on content (not as stacked top bar)
         let content_overlay = gtk::Overlay::new();
         content_overlay.set_child(Some(&toast_overlay));
@@ -460,9 +464,7 @@ impl LettersWindow {
                     save_page_setup_to_settings(&s2, &ps);
                     for i in 0..tv2.n_pages() {
                         let page = tv2.nth_page(i);
-                        if let Some(pc) = page.child().first_child()
-                            .and_then(|c| c.downcast::<crate::page_container::PageContainer>().ok())
-                        {
+                        if let Some(pc) = page_container(&page) {
                             pc.reload_settings(&s2);
                         }
                     }
@@ -676,12 +678,8 @@ impl LettersWindow {
         a.connect_activate(move |_, _| {
             if let Some(buf) = active_buffer(&tv) {
                 // Find the PageContainer and show an edit dialog
-                let page = tv.selected_page();
-                if let Some(page) = page {
-                    let child = page.child();
-                    if let Some(pc) = child.first_child().and_then(|c| c.downcast::<crate::page_container::PageContainer>().ok()) {
-                        show_header_footer_dialog(&pc, &buf);
-                    }
+                if let Some(pc) = tv.selected_page().as_ref().and_then(page_container) {
+                    show_header_footer_dialog(&pc, &buf);
                 }
             }
         });
@@ -847,9 +845,7 @@ impl LettersWindow {
                     // Update all page containers too
                     for i in 0..tv.n_pages() {
                         let page = tv.nth_page(i);
-                        if let Some(pc) = page.child().first_child()
-                            .and_then(|c| c.downcast::<crate::page_container::PageContainer>().ok())
-                        {
+                        if let Some(pc) = page_container(&page) {
                             pc.reload_settings(settings);
                         }
                     }
@@ -1312,4 +1308,12 @@ fn find_page_container(widget: &gtk::Widget) -> Option<crate::page_container::Pa
         child = c.next_sibling();
     }
     None
+}
+
+/// The page container a tab shows. It is the tab's child itself
+/// (doc_tab.rs); these lookups used to take the child's *first child*, which
+/// is the scrolled editor inside it, so Edit Headers and Footers did nothing
+/// and Page Setup and Preferences never reached an open document.
+fn page_container(page: &adw::TabPage) -> Option<crate::page_container::PageContainer> {
+    page.child().downcast::<crate::page_container::PageContainer>().ok()
 }

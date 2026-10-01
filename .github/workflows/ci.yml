@@ -77,6 +77,7 @@ jobs:
             tests/test_ci_test_list.py \
             tests/test_render_lab_rules.py \
             tests/test_export_parity.py \
+            tests/test_feature_docs.py \
             tests/adaptive_editor_contract.py
 
       # E1-E3: green rows cite evidence, referenced paths exist, journey-gated
@@ -131,6 +132,7 @@ jobs:
             tests/test_ci_test_list.py \
             tests/test_render_lab_rules.py \
             tests/test_export_parity.py \
+            tests/test_feature_docs.py \
             tests/adaptive_editor_contract.py > python-collected.txt
           python3 conformance/collect_test_inventory.py \
             --pytest "tests=python-collected.txt" --out python-inventory.json

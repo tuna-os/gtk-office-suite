@@ -42,7 +42,7 @@ jobs:
       - name: Install walkthrough dependencies
         run: |
           sudo apt-get install -y -qq xvfb dbus at-spi2-core \
-            python3-dogtail python3-pil
+            python3-dogtail python3-pil xcompmgr
           python3 -m pip install --break-system-packages mss
 
       - name: Capture walkthrough
@@ -69,7 +69,7 @@ jobs:
         run: |
           git config user.name "screenshot-bot"
           git config user.email "actions@github.com"
-          git add docs/screenshots
+          git add docs/screenshots docs/features/img
           if git diff --cached --quiet; then
             echo "screenshots unchanged"
             exit 0
