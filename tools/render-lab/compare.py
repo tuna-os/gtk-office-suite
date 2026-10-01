@@ -954,7 +954,7 @@ def ratchet(args, manifest, card, agreement, printed=None):
     if regressed:
         print("RATCHET FAILED: rendering got worse:\n  " + "\n  ".join(f"{r['fixture']} {r['tier']}: {r['from']} -> {r['to']}" for r in regressed), file=sys.stderr)
     if improved:
-        print("RATCHET STALE: improved or new fixtures are not in the baseline; lock them in with\n  tools/render-lab/run.sh --update-baseline\nand commit tools/render-lab/baseline.json:\n  " + "\n  ".join(f"{r['fixture']} {r['tier']}: {r['from']} -> {r['to']}" for r in improved), file=sys.stderr)
+        print(f"RATCHET STALE: improved or new fixtures are not in the baseline; lock them in with\n  tools/render-lab/run.sh --update-baseline\nand commit tools/render-lab/{os.path.basename(args.baseline)}:\n  " + "\n  ".join(f"{r['fixture']} {r['tier']}: {r['from']} -> {r['to']}" for r in improved), file=sys.stderr)
     if regressed or improved:
         sys.exit(1)
 
