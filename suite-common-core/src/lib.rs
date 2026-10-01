@@ -21,3 +21,4 @@ pub mod media_cache;
 pub mod recent;
 pub mod templates;
 pub mod session;
+pub mod peak_heap;
