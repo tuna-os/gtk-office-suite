@@ -1,0 +1,101 @@
+name: Render parity (real documents)
+
+# The render lab over published real documents (#1200) instead of the
+# single-feature fixtures: about 30 per app from gov.uk and open.canada.ca,
+# listed with source, licence and sha256 in
+# tools/render-lab/real_corpus/manifest.json. The fixtures find bugs; this
+# shows whether users would notice them.
+#
+# Nightly and on demand, and on a PR that changes the corpus or the lab.
+# Verdicts ratchet against tools/render-lab/baseline-real.json, separately
+# from the fixtures' baseline.json. The documents are fetched once and
+# cached by the corpus manifest's hash, so a source that later disappears
+# does not take the run down; one that cannot be fetched at all shows as
+# `missing` against its baseline verdict.
+
+on:
+  schedule:
+    - cron: '50 3 * * *'
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - tools/render-lab/real_corpus/**
+      - tools/render-lab/fetch_real_corpus.py
+      - tools/render-lab/baseline-real.json
+      - tools/render-lab/run.sh
+      - .github/workflows/render-real.yml
+
+concurrency:
+  group: render-real-${{ github.ref }}-${{ github.event_name }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  lab:
+    name: Real documents (${{ matrix.app }})
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    strategy:
+      fail-fast: false
+      matrix:
+        app: [letters, tables, decks]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4
+
+      - name: Build render-lab image
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7
+        with:
+          context: tools/render-lab
+          file: tools/render-lab/Containerfile
+          load: true
+          tags: render-lab
+          build-args: BASE=ghcr.io/${{ github.repository }}/gui-test:main
+          cache-from: type=gha,scope=render-lab
+
+      - name: Cache cargo
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
+        with:
+          path: |
+            ~/.cache/render-lab-cargo
+            target
+          key: render-lab-cargo-${{ matrix.app }}-${{ hashFiles('Cargo.lock') }}
+          restore-keys: |
+            render-lab-cargo-${{ matrix.app }}-
+            render-lab-cargo-
+
+      - name: Cache the real documents
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
+        with:
+          path: .cache/render-lab-corpus
+          key: render-lab-corpus-${{ matrix.app }}-${{ hashFiles('tools/render-lab/real_corpus/manifest.json') }}
+          restore-keys: |
+            render-lab-corpus-${{ matrix.app }}-
+
+      - name: Run render lab on the real documents
+        env:
+          CONTAINER_ENGINE: docker
+          RENDER_LAB_CORPUS: real
+        run: tools/render-lab/run.sh --app ${{ matrix.app }}
+
+      - name: Job summary
+        if: always()
+        run: cat render-lab-out/summary.md >> "$GITHUB_STEP_SUMMARY" || true
+
+      - name: Upload report
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: render-real-${{ matrix.app }}
+          path: |
+            render-lab-out/report.html
+            render-lab-out/summary.json
+            render-lab-out/summary.md
+            render-lab-out/scorecard.json
+            render-lab-out/fixtures/manifest.json
+            render-lab-out/${{ matrix.app }}/*/*.png
+            render-lab-out/${{ matrix.app }}/*/*.log
+          retention-days: 14

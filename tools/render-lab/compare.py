@@ -614,8 +614,13 @@ def score_fixture(app, d, tier, ref_words_cache):
     if not lo_pages or not ours_pages:
         return None
     # Tier B can only see the pages on screen (capture.py stops at the
-    # viewport), so it is scored on those; Tier A judges the rest.
-    partial = tier == "B"
+    # viewport), so it is scored on those; Tier A judges the rest. Tables
+    # has no pages on screen: its Tier A dump is the grid's viewport too
+    # (tables/src/window.rs writes A-1 only), so a sheet LibreOffice prints
+    # on nine pages scored eight of them as missing. The real corpus showed
+    # it (#1200): every Tables document red in A, amber in B, from the same
+    # picture.
+    partial = tier == "B" or app == "tables"
     if partial:
         lo_pages = lo_pages[: len(ours_pages)]
     per_page = []
@@ -945,7 +950,7 @@ def ratchet(args, manifest, card, agreement, printed=None):
         # rewrite it in the same step so the two are committed together.
         sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
         import readme_status
-        if os.path.abspath(args.baseline) == readme_status.BASELINE and os.path.exists(readme_status.README):
+        if os.path.abspath(args.baseline) in (readme_status.BASELINE, readme_status.BASELINE_REAL) and os.path.exists(readme_status.README):
             readme_status.main(["--write"])
             print(f"README status table rewritten: {readme_status.README}")
         return
@@ -954,7 +959,7 @@ def ratchet(args, manifest, card, agreement, printed=None):
     if regressed:
         print("RATCHET FAILED: rendering got worse:\n  " + "\n  ".join(f"{r['fixture']} {r['tier']}: {r['from']} -> {r['to']}" for r in regressed), file=sys.stderr)
     if improved:
-        print("RATCHET STALE: improved or new fixtures are not in the baseline; lock them in with\n  tools/render-lab/run.sh --update-baseline\nand commit tools/render-lab/baseline.json:\n  " + "\n  ".join(f"{r['fixture']} {r['tier']}: {r['from']} -> {r['to']}" for r in improved), file=sys.stderr)
+        print(f"RATCHET STALE: improved or new fixtures are not in the baseline; lock them in with\n  tools/render-lab/run.sh --update-baseline\nand commit tools/render-lab/{os.path.basename(args.baseline)}:\n  " + "\n  ".join(f"{r['fixture']} {r['tier']}: {r['from']} -> {r['to']}" for r in improved), file=sys.stderr)
     if regressed or improved:
         sys.exit(1)
 

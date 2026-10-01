@@ -25,6 +25,20 @@ class ReadmeStatusGate(unittest.TestCase):
     def test_the_committed_readme_matches_the_scorecard(self):
         self.assertEqual(rs.main(["--check"]), 0)
 
+    def test_the_real_documents_come_from_their_own_baseline(self):
+        import json
+        import tempfile
+        with tempfile.TemporaryDirectory() as d:
+            base, real = os.path.join(d, "baseline.json"), os.path.join(d, "baseline-real.json")
+            with open(base, "w") as f:
+                json.dump({"decks/a": green("A", "B")}, f)
+            self.assertEqual(rs.load(baseline=base, baseline_real=real), {"decks/a": green("A", "B")},
+                             "a missing real-document baseline is not an error")
+            with open(real, "w") as f:
+                json.dump({"decks/real-pitch": {"A": "amber", "B": "green"}}, f)
+            v = rs.load(baseline=base, baseline_real=real)
+        self.assertEqual(rs.app_row("decks", v)[1], "0 / 1 green")
+
     def test_single_feature_green_alone_is_not_usable(self):
         v = {"decks/a": green("A", "B"), "decks/b": green("A", "B")}
         cell, real, c, status = rs.app_row("decks", v)

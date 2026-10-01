@@ -28,3 +28,4 @@ fuzz/corpus/
 /fuzz/corpus/
 /fuzz/artifacts/
 render-lab-out/
+.cache/render-lab-corpus/

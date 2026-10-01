@@ -109,10 +109,10 @@ produce. Each file isolates one feature (`letters/bullet-list`,
 what must be visible. When something regresses, the red row names the
 feature.
 
-A second corpus of *real* documents (LibreOffice-authored templates,
-government forms, public-domain reports) is added in Phase 3. The
-single-feature corpus finds bugs; the real corpus shows whether users
-would notice.
+A second corpus of *real* documents (government forms, open-data
+spreadsheets, published decks) is in `tools/render-lab/real_corpus/`
+(Phase 3, #1200). The single-feature corpus finds bugs; the real corpus
+shows whether users would notice.
 
 ### Reference: LibreOffice
 
@@ -329,6 +329,7 @@ development from CI output alone, without anyone looking at screenshots.
 | Job summary + sticky PR comment | every PR | what this PR made better or worse, with a link to the side-by-side report |
 | **Ratchet** (`compare.py --baseline tools/render-lab/baseline.json`) | every PR, gating | fails if any fixture's verdict gets worse (**regressed**), or gets better or is new without the baseline being updated in the same PR (**stale**). Every gain is locked in by the PR that made it. |
 | **One issue per non-green fixture** (`sync_issues.py`) | every push to main and nightly | labels `render-parity`, `app:<app>`, and `blocked` when the fixture needs a Phase 1 architecture item. The acceptance criterion is "CI reports this fixture green". Deduplicated by a hidden marker; closes itself when the fixture turns green on main. |
+| Real-document ratchet (`render-real.yml`, `baseline-real.json`) | nightly, manual dispatch, PRs touching the corpus | the same verdicts over about 30 published documents per app. No per-document issues: each cause found there is reduced to a single-feature fixture. |
 | Tier C VM report | nightly + manual dispatch | shipped Flatpak on a real GNOME Wayland session. Non-gating until it has run green for a week. |
 
 The baseline stores verdicts only (green/amber/red/missing), not raw
@@ -537,7 +538,11 @@ on those fixtures still shows. PARITY.md marks the two features they cover
 
 - Build a real-world corpus: about 30 per app, with licences recorded, from
   the LibreOffice template gallery, public-sector forms, open-data
-  spreadsheets and conference decks.
+  spreadsheets and conference decks. *(Done, #1200: 90 GOV.UK and
+  open.canada.ca documents under the UK and Canadian open government
+  licences, fetched and sha256-checked by `fetch_real_corpus.py`,
+  ratcheted nightly by `render-real.yml`. See
+  `tools/render-lab/real_corpus/README.md`.)*
 - Score each whole document by average SSIM, word-found rate and word
   displacement. Set budgets and ratchet them.
 - Add **editing journeys with a render check**: type a paragraph, apply
