@@ -1120,3 +1120,62 @@ fn heading_styles_are_read_and_written_back() {
     let again = docx::read(path.to_str().unwrap()).unwrap();
     assert_eq!(again.heading_styles[0], *h1);
 }
+
+/// A list item's saved indent is where Letters draws it, and reads back as
+/// written (#1201). rdocx's numbering levels say 0.5in per level; left to
+/// them, LibreOffice drew our bullets twice as deep as the editor did.
+#[test]
+fn list_items_declare_the_indent_letters_draws_and_read_back_unchanged() {
+    let item = |text: &str, level: u8, left: f64| Paragraph {
+        style: ParaStyle { list: ListKind::Bullet, list_level: level, left_indent_pt: left, ..Default::default() },
+        runs: vec![Run::plain(text)],
+    };
+    let doc = Document {
+        paragraphs: vec![
+            item("top", 0, 0.0),
+            item("nested", 1, 0.0),
+            item("indented", 0, 24.0),
+            Paragraph { style: ParaStyle { left_indent_pt: 36.0, ..Default::default() }, runs: vec![Run::plain("body")] },
+        ],
+        ..Default::default()
+    };
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("lists.docx");
+    docx::write(&doc, path.to_str().unwrap()).unwrap();
+
+    let mut zip = zip::ZipArchive::new(std::fs::File::open(&path).unwrap()).unwrap();
+    let mut xml = String::new();
+    std::io::Read::read_to_string(&mut zip.by_name("word/document.xml").unwrap(), &mut xml).unwrap();
+    let inds: Vec<&str> = xml.match_indices("<w:ind ").map(|(i, _)| &xml[i..i + xml[i..].find("/>").unwrap()]).collect();
+    // 18pt per level plus the paragraph's own indent, hanging 18pt (twips).
+    assert!(inds[0].contains(r#"w:left="360""#) && inds[0].contains(r#"w:hanging="360""#), "{inds:?}");
+    assert!(inds[1].contains(r#"w:left="720""#), "{inds:?}");
+    assert!(inds[2].contains(r#"w:left="840""#), "{inds:?}");
+
+    let back = docx::read(path.to_str().unwrap()).unwrap();
+    let got: Vec<(ListKind, u8, f64, f64)> = back.paragraphs.iter()
+        .map(|p| (p.style.list, p.style.list_level, p.style.left_indent_pt, p.style.first_line_indent_pt))
+        .collect();
+    assert_eq!(got, vec![
+        (ListKind::Bullet, 0, 0.0, 0.0),
+        (ListKind::Bullet, 1, 0.0, 0.0),
+        (ListKind::Bullet, 0, 24.0, 0.0),
+        (ListKind::None, 0, 36.0, 0.0),
+    ]);
+}
+
+/// A list whose depth lives only in its numbering level, as Word's toolbar
+/// bullets (and our own writer before #1201) save it: 0.5in per level.
+/// Word and LibreOffice draw its text 36pt in; the model keeps the 18pt
+/// beyond the layout's own list indent, so Letters draws it there too.
+#[test]
+fn a_numbering_levels_indent_is_kept_beyond_the_list_indent() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("toolbar.docx");
+    let mut d = rdocx::Document::new();
+    d.add_bullet_list_item("from the toolbar", 0);
+    d.save(&path).unwrap();
+    let back = docx::read(path.to_str().unwrap()).unwrap();
+    let p = back.paragraphs.iter().find(|p| p.runs.iter().any(|r| r.text.contains("toolbar"))).unwrap();
+    assert_eq!((p.style.list, p.style.left_indent_pt, p.style.first_line_indent_pt), (ListKind::Bullet, 18.0, 0.0));
+}

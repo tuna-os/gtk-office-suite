@@ -1237,6 +1237,25 @@ impl SheetModel {
         }
     }
 
+    /// How many columns to the right of `(r, c)` its text may spill into:
+    /// the run of empty, unmerged cells that follows it, as spreadsheets
+    /// let a left-aligned label overflow rather than cut it off. Zero for
+    /// anything that must stay in its cell: an empty or merged cell,
+    /// wrapped text, a number (which shows ### instead), or text aligned
+    /// other than left. `limit` bounds the scan (the visible columns).
+    pub fn overflow_span(&self, r: usize, c: usize, limit: usize) -> usize {
+        use crate::style::HAlign;
+        if r >= self.rows || c >= self.cols || self.cell(r, c).is_empty() || self.styles[r][c].wrap
+            || self.merge_covering(r, c).is_some() || self.resolved_h_align(r, c) != HAlign::Left
+        {
+            return 0;
+        }
+        let end = self.cols.min(c + 1 + limit);
+        (c + 1..end)
+            .take_while(|&n| self.cell(r, n).is_empty() && self.merge_covering(r, n).is_none())
+            .count()
+    }
+
     /// Whether the value is a number under the "General" alignment rule
     /// (numbers right, text left).
     pub fn aligns_right(&self, r: usize, c: usize) -> bool {
@@ -1971,4 +1990,28 @@ mod sort_tests {
             }
         }
     }
+
+    #[test]
+    fn left_aligned_text_overflows_into_the_empty_cells_after_it() {
+        use crate::style::HAlign;
+        let mut s = SheetModel::new("o", 3, 6, 0);
+        *s.cell_mut(0, 0) = "A long label".into();
+        *s.cell_mut(0, 3) = "next".into();
+        assert_eq!(s.overflow_span(0, 0, 10), 2, "B1 and C1 are empty; D1 stops it");
+        assert_eq!(s.overflow_span(0, 0, 1), 1, "bounded by the visible columns");
+        assert_eq!(s.overflow_span(0, 3, 10), 2, "the last text runs to the sheet's edge");
+        assert_eq!(s.overflow_span(0, 1, 10), 0, "an empty cell has nothing to spill");
+        *s.cell_mut(1, 0) = "12345".into();
+        assert_eq!(s.overflow_span(1, 0, 10), 0, "a number shows ### rather than overflowing");
+        *s.cell_mut(2, 0) = "wrapped".into();
+        s.styles[2][0].wrap = true;
+        assert_eq!(s.overflow_span(2, 0, 10), 0, "wrapped text stays in its cell");
+        s.styles[2][0].wrap = false;
+        s.styles[2][0].h_align = HAlign::Center;
+        assert_eq!(s.overflow_span(2, 0, 10), 0, "only left-aligned text spills right");
+        s.styles[2][0].h_align = HAlign::Left;
+        s.merges.push((2, 2, 1, 2));
+        assert_eq!(s.overflow_span(2, 0, 10), 1, "a merged block stops the run");
+    }
+
 }

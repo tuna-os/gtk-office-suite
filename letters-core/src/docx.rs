@@ -397,6 +397,7 @@ fn read_opened(path: &str, doc: rdocx::Document) -> Result<Document, String> {
             }
             para.style.tab_stops_pt = tab_twips.iter().map(|tw| tw / 20.0).collect();
         }
+        list_indent_from_declared(&doc, p, &mut para.style);
         paragraphs.push(para);
         carried_break = pending_break;
     }
@@ -669,13 +670,23 @@ pub fn write(doc: &Document, path: impl AsRef<std::path::Path>) -> Result<(), St
         // or `w:spacing` as "inherit from the style", and writing an
         // explicit zero is a different claim, one that overrides a style's
         // own indent with nothing.
-        if para.style.left_indent_pt != 0.0 {
+        if para.style.list != ListKind::None {
+            // A list item says where its text and marker go, as Letters
+            // draws them: the text one list indent per level in from the
+            // paragraph's own indent, the marker one hanging indent before
+            // it. Left to rdocx's numbering definition (0.5in per level)
+            // LibreOffice and Word drew our lists twice as deep as we do;
+            // the edit-render journey's bullet showed it (#1201). The reader
+            // takes the list's own indent back off.
+            let text = para.style.left_indent_pt.max(0.0) + crate::lists::text_indent_pt(para.style.list_level);
+            p = p.indent_left(rdocx::Length::pt(text)).hanging_indent(rdocx::Length::pt(crate::lists::HANGING_PT));
+        } else if para.style.left_indent_pt != 0.0 {
             p = p.indent_left(rdocx::Length::pt(para.style.left_indent_pt));
         }
         if para.style.right_indent_pt != 0.0 {
             p = p.indent_right(rdocx::Length::pt(para.style.right_indent_pt));
         }
-        if para.style.first_line_indent_pt != 0.0 {
+        if para.style.first_line_indent_pt != 0.0 && para.style.list == ListKind::None {
             p = p.first_line_indent(rdocx::Length::pt(para.style.first_line_indent_pt));
         }
         if para.style.space_before_pt != 0.0 {
@@ -1086,6 +1097,34 @@ fn paragraph_numbering(doc: &rdocx::Document, p: &rdocx::ParagraphRef<'_>) -> Op
         .or(resolved.num_ilvl)
         .unwrap_or(0);
     Some((num_id, level))
+}
+
+/// A directly numbered list paragraph's indent, as the model keeps it: the
+/// declared left edge of its text (the paragraph's own `w:ind`, else its
+/// numbering level's) less the list indent the layout adds for its level.
+/// The writer declares exactly `left_indent + text_indent(level)`, so its
+/// own lists come back as written; a Word toolbar list (0.5in per level)
+/// keeps the extra depth it is drawn with in Word and LibreOffice. A list's
+/// hanging indent is the list's own, not a first-line indent.
+///
+/// Paragraphs numbered through a built-in list style ("List Bullet") are
+/// left alone: those styles' 0.25in levels are what the layout already
+/// draws, and their level is the style's, not the numbering's.
+fn list_indent_from_declared(doc: &rdocx::Document, p: &rdocx::ParagraphRef<'_>, style: &mut ParaStyle) {
+    if style.list == ListKind::None {
+        return;
+    }
+    let Some((num_id, level)) = p.numbering().filter(|&(id, _)| id != 0) else { return };
+    let text = crate::lists::text_indent_pt(style.list_level);
+    let declared = if style.left_indent_pt != 0.0 {
+        style.left_indent_pt
+    } else {
+        doc.numbering_level(num_id, level).and_then(|l| l.indent_left).map(twips_pt).unwrap_or(text)
+    };
+    style.left_indent_pt = (declared - text).max(0.0);
+    if style.first_line_indent_pt < 0.0 {
+        style.first_line_indent_pt = 0.0;
+    }
 }
 
 /// The level a Word built-in list style name implies: "List Bullet" and
