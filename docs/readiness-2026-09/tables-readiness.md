@@ -31,7 +31,15 @@ WorkbookController remains the sole mutation gateway. Stable sheet identities bi
 - [ ] Exercise row/column edits, fill, sort/filter, named ranges and protection through actual GUI actions plus controller
       invariants. (Named ranges and the name box now also pass at 400px width: `Ctrl+G` opens a Go to Cell dialog when the
       narrow breakpoint hides the name box — #516, found by the display matrix.)
-- [ ] Resolve the Unicode XLSX property regression tracked in #377/#371/#358/#324 using minimized fixtures; do not weaken the generator just to turn CI green.
+- [x] Resolve the Unicode XLSX property regression tracked in #377/#371/#358/#324 using minimized fixtures; do not weaken the generator just to turn CI green.
+      Resolved by #450 and ticked here on re-verification (#1204). It was neither flaky nor about Unicode: the loader
+      read a calamine `Range` at relative coordinates where `get_value` takes absolute ones, so any sheet whose content
+      did not start at A1 was read shifted or empty. The Unicode strategy only exposed it because it can emit an empty
+      string for A1, which the plain-value strategy never does. The minimized counterexample is pinned as
+      `tables_core::io::load::tests::xlsx_round_trip_keeps_a_lone_bottom_right_cell` and
+      `…::xlsx_round_trip_keeps_content_at_its_own_coordinates`, plus the committed `offset_start.ods` fixture. The
+      generator is unchanged (combining marks, CJK, Hebrew and emoji, empty strings included). Re-run on 2026-10-01 at
+      3,000 cases (`PROPTEST_CASES=3000`, against the PR lane's 64): passes.
 - [x] Verify sparse-grid scaling and accessibility far-navigation regression: the skipped #137 reproduction now runs as
       `TablesNamedRangeSmoke::test_jump_far_and_back_to_a_range_no_longer_crashes`, alongside the far-jump named-range
       journey that reproduced #507. Root cause was not grid lifetime bookkeeping but GTK itself:
