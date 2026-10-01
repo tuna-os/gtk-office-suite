@@ -10,7 +10,11 @@
 #   C-screen.png    a QMP screendump of the whole virtual monitor: proof
 #                   the window was mapped and composited by Mutter
 set -euo pipefail
-WORK="$1"; BUNDLES="$2"; FIX="$(realpath "$3")"; OUT="$(realpath "$4")"
+# Every path is resolved before the cd into the work directory: a relative
+# bundles directory (CI passes `bundles`) was looked up inside it, and the
+# first Tier C run to boot the guest failed on `scp: stat local
+# "bundles/*.flatpak"` (#1199).
+WORK="$1"; BUNDLES="$(realpath "$2")"; FIX="$(realpath "$3")"; OUT="$(realpath "$4")"
 cd "$WORK"
 SSH=(ssh -i id_lab -p 2222 -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o LogLevel=ERROR lab@127.0.0.1)
 SCP=(scp -i id_lab -P 2222 -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o LogLevel=ERROR)
