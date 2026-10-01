@@ -242,6 +242,24 @@ fn model_first_edits_reach_the_buffer() {
     });
 }
 
+#[test]
+fn opening_a_document_reads_it_once_not_edit_by_edit() {
+    // Following each insert and tag of the load re-read the touched lines
+    // thousands of times: a 290-paragraph form took a minute to open.
+    gtk_test(|| {
+        let text: Vec<String> = (0..300).map(|i| format!("Paragraph {i} of an opened document.")).collect();
+        let buf = gtk::TextBuffer::new(None);
+        crate::actions::register_formatting_tags(&buf);
+        let live = LiveModel::attach(&buf);
+        let reads = live.borrow().full_reads;
+        crate::bridge::load_document(&Document::from_plain_text(&text.join("\n")), &buf);
+        assert_eq!(live.borrow().local_reads, 0, "the load was not followed edit by edit");
+        assert_eq!(live.borrow().full_reads, reads + 1, "the loaded document was read once");
+        check(&buf, &live, "opening");
+        assert!(!crate::live::is_busy(&buf), "the model takes edits again after the load");
+    });
+}
+
 /// CI performance gate: one keystroke on a 200-paragraph document — the
 /// buffer edit, the live model following it, and the Print Layout
 /// relayout — within a fixed budget, re-shaping one paragraph only.
