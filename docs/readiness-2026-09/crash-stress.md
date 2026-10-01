@@ -140,6 +140,15 @@ Controller state machines generate valid commands and assert invariants after ev
       retains a core when the kernel writes one (measured locally: a 331 KB `ELF 64-bit LSB core file`)
       and reports the pattern when it does not. Closing the CI half means collecting from
       `coredumpctl` after a failing journey, which is a separate piece of work and not yet done.
+
+      **What CI gets instead (#1192):** every journey launches its app with
+      `GTK_OFFICE_CRASH_BACKTRACE=1`, so a fatal signal (SEGV, BUS, ILL, FPE, ABRT) prints its name,
+      the faulting address and the crashing thread's backtrace to stderr, then re-raises with the
+      default action (`suite-common/src/crash_report.rs`, held by
+      `a_segfault_prints_a_backtrace_and_still_dies_of_the_signal`). That stderr is the failure's
+      `app.log`, which now ends with how the app ended: still running, an exit status, or the signal
+      that killed it. Before this, the nightly Tables column-menu crash left an empty stderr and only
+      "the application no longer exists" to go on.
 - [~] Track first-attempt failure rate and classify product crash, assertion mismatch, timeout, infrastructure setup and nondeterministic rendering separately.
       `summarize()` reports `first_attempt_failure_rate` over every attempt that ran, and
       `by_classification` counts product-crash, assertion-mismatch, timeout, infrastructure and

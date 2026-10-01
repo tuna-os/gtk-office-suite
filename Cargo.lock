@@ -4740,6 +4740,7 @@ dependencies = [
  "gettext-rs",
  "gtk4",
  "libadwaita",
+ "libc",
  "suite-common-core",
 ]
 

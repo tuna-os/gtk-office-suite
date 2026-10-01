@@ -11,6 +11,7 @@
 //   ToastManager      — toast notification system for save/error feedback
 
 pub mod charts;
+pub mod crash_report;
 pub mod file_dialogs;
 pub mod locations;
 pub mod autosave_notice;
@@ -74,6 +75,7 @@ impl SuiteApp {
     /// Registers standard actions: new, open, save, save-as, preferences,
     /// about, keyboard-shortcuts, toggle-dark-mode, quit.
     pub fn new(app_id: &str) -> Self {
+        crash_report::install();
         init_i18n();
         let app = adw::Application::builder()
             .application_id(app_id)
