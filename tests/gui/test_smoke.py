@@ -5019,6 +5019,41 @@ class LettersModelUndoSmoke(BaseGUITestCase):
         self.assertIsNone(self.process.poll(), "letters crashed during undo")
 
 
+class LettersPendingFormatSmoke(BaseGUITestCase):
+    """Bold with nothing selected, then typing, types bold.
+
+    The toolbar's Bold used to act only on a selection: pressed at the caret
+    it did nothing, and the next word came out plain. The document model,
+    read through the snapshot hook, is what says whether the run is bold;
+    GTK 4.14 exposes no font weight over AT-SPI.
+    """
+
+    app_name = "letters"
+
+    def setUp(self):
+        self._snapshot_path = self.isolate_snapshot(prefix="letters-pending-")
+        super().setUp()
+
+    def _runs(self):
+        s = self.trigger_snapshot("org.tunaos.letters")
+        return [(r["text"], bool(r.get("style", {}).get("bold"))) for p in s["paragraphs"] for r in p["runs"]]
+
+    def test_bold_at_the_caret_applies_to_what_is_typed_next(self):
+        from dogtail import rawinput
+
+        self.wait_for_node(name="New Document", roleName="push button").do_action(0)
+        self.wait_for_node(roleName="text")
+        rawinput.typeText("plain ")
+        self.app.child(name="Bold (Ctrl+B)", roleName="push button").do_action(0)
+        time.sleep(0.3)
+        rawinput.typeText("bold")
+        self.wait_for_condition(
+            lambda: self._runs() == [("plain ", False), ("bold", True)] or None,
+            description="'bold' typed as a bold run after 'plain '",
+        )
+        self.assertIsNone(self.process.poll(), "letters crashed while formatting")
+
+
 class LettersStylesAndOutlineSmoke(BaseGUITestCase):
     """Paragraph styles are picked from previews, and the outline follows
     the headings (DESIGN-UI "Styles first"; Docs' outline sidebar).

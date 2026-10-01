@@ -150,6 +150,7 @@ fn insert_text(buf: &gtk::TextBuffer, text: &str) {
     if let Some(m) = crate::live::of(buf) {
         let mut m = m.borrow_mut();
         let (s, e) = selection_offsets(buf);
+        let caret = s as i32;
         let (s, e) = (m.sequence_offset(buf, s), m.sequence_offset(buf, e));
         let doc = m.document(buf).clone();
         let mut ops = Vec::new();
@@ -161,7 +162,22 @@ fn insert_text(buf: &gtk::TextBuffer, text: &str) {
             }
             ops.push(del);
         }
-        let Some(typed) = typed_ops(&scratch, s, text) else { return };
+        let Some(mut typed) = typed_ops(&scratch, s, text) else { return };
+        // Formatting picked with nothing selected types with this text,
+        // in the same op: one undo step, merged with the word being typed.
+        if let Some(pending) = crate::actions::take_pending(buf).filter(|p| e == s && p.at == caret) {
+            for op in &mut typed {
+                if let letters_core::edit::Op::Insert { content, .. } = op {
+                    for run in content.iter_mut().flat_map(|p| p.runs.iter_mut()) {
+                        for (name, on) in &pending.marks {
+                            if let Some(flag) = crate::actions::style_flag(&mut run.style, name) {
+                                *flag = *on;
+                            }
+                        }
+                    }
+                }
+            }
+        }
         ops.extend(typed);
         let word = text.chars().count() == 1 && !text.chars().any(char::is_whitespace) && e == s;
         m.apply_user_ops(buf, &ops, word);
@@ -550,6 +566,44 @@ mod tests {
             assert!(!undo.is_enabled(), "nothing left to undo");
             insert_text(&buf, "!");
             assert!(undo.is_enabled(), "typing left Undo disabled");
+        });
+    }
+
+    /// Runs of the live model's first paragraph as (text, bold).
+    fn bold_runs(buf: &gtk::TextBuffer) -> Vec<(String, bool)> {
+        let m = crate::live::of(buf).unwrap();
+        let mut m = m.borrow_mut();
+        m.document(buf).paragraphs[0].runs.iter().map(|r| (r.text.clone(), r.style.bold)).collect()
+    }
+
+    /// Bold with nothing selected, then typing, types bold (as in every word
+    /// processor); a second press takes it back; a moved caret drops it.
+    #[test]
+    fn formatting_picked_with_no_selection_applies_to_the_next_typing() {
+        gtk_test(|| {
+            let (_view, buf) = editable("plain");
+            crate::live::LiveModel::attach(&buf);
+            buf.place_cursor(&buf.end_iter());
+
+            crate::actions::toggle_tag_in(&buf, "bold");
+            for c in ["b", "o", "l", "d"] {
+                insert_text(&buf, c);
+            }
+            assert_eq!(bold_runs(&buf), vec![("plain".into(), false), ("bold".into(), true)]);
+            // One step: the word typed bold undoes as one, like any word.
+            crate::live::undo(&buf, false);
+            assert_eq!(bold_runs(&buf), vec![("plain".into(), false)]);
+
+            buf.place_cursor(&buf.end_iter());
+            crate::actions::toggle_tag_in(&buf, "bold");
+            crate::actions::toggle_tag_in(&buf, "bold");
+            insert_text(&buf, "!");
+            assert_eq!(bold_runs(&buf), vec![("plain!".into(), false)], "a second press cancels");
+
+            crate::actions::toggle_tag_in(&buf, "bold");
+            buf.place_cursor(&buf.start_iter());
+            insert_text(&buf, ">");
+            assert_eq!(bold_runs(&buf), vec![(">plain!".into(), false)], "a moved caret drops it");
         });
     }
 }
