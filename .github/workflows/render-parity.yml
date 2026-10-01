@@ -101,7 +101,11 @@ jobs:
   report:
     name: Tiers A+B vs LibreOffice
     needs: lab
-    if: always()
+    # Not on a cancelled run: a newer push cancels the labs part-way, and
+    # comparing what they had captured by then reported every fixture they
+    # never reached as a regression to "missing" (PR #1222, 19 Letters
+    # fixtures). A lab that *failed* is still compared and reported.
+    if: ${{ !cancelled() }}
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     permissions:
@@ -294,7 +298,11 @@ jobs:
   export-report:
     name: Export PDF vs LibreOffice PDF
     needs: export-lab
-    if: always()
+    # Not on a cancelled run: a newer push cancels the labs part-way, and
+    # comparing what they had captured by then reported every fixture they
+    # never reached as a regression to "missing" (PR #1222, 19 Letters
+    # fixtures). A lab that *failed* is still compared and reported.
+    if: ${{ !cancelled() }}
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     permissions:
