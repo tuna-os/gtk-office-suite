@@ -2,7 +2,7 @@
 
 Reuse this issue as release signoff owner, related #299/#407 and #390. Reference `e7e4df6`. Existing scripts/release_gate.py checks source metadata; it does not prove installed app behavior.
 
-Depends on #436–#441, #354, #322, #374, #313/#241 and #400.
+Depends on #436–#441, #354, #1217 (recovery), #1206 (interoperability), #313/#241 and #1208 (performance and accessibility).
 
 - [ ] Select a candidate commit and require all capability evidence to identify that exact commit and packaged dependency lock.
 - [ ] All P0 data-loss paths fixed; all admitted daily-driver journeys pass. Deferred features have explicit recorded scope and honest UI/docs.

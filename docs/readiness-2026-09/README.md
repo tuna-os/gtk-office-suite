@@ -29,6 +29,16 @@ drift from the work it summarizes. `[x]` means every row in that document is
 ticked, `[~]` that some are, `[ ]` that none are. Edit the document; the
 list follows.
 
+Four rows used to name **#322, #374, #400 and #326**. Those are bot
+strategist proposals, not readiness trackers: #374, #400 and #326 were
+closed as duplicates, and #322 was auto-closed by a merged pull request
+whose body said "close #322's … row", which GitHub reads as a closing
+keyword. #443's checklist ticked recovery, interoperability and release on
+the issues' closed state while these documents read 6/9, 0/9 and 0/9. The
+documents were right (#1196). The rows now name the live #1190 sub-issues
+that carry the remaining work. A row's marker is derived from its
+document, never from whether an issue happens to be closed.
+
 - [x] #437 — durable shared saves — [atomic-save.md](atomic-save.md) 8/8
 - [x] #436 — Letters save transactions — [save-transactions.md](save-transactions.md) 6/6
 - [x] #241 — GTK test thread/display ownership — [gtk-threading.md](gtk-threading.md) 6/6
@@ -36,13 +46,13 @@ list follows.
 - [~] #313 — CI validator and test gates — [ci-gates.md](ci-gates.md) 7/8
 - [~] #442 — crash and flake campaign — [crash-stress.md](crash-stress.md) 2/8
 - [~] #441 — capability evidence ledger — [capability-evidence.md](capability-evidence.md) 3/7
-- [~] #322 — recovery lifecycle — [recovery.md](recovery.md) 6/9
-- [~] #374 — live interoperability loss budgets — [interoperability.md](interoperability.md) 0/9
+- [~] #1217 — recovery lifecycle — [recovery.md](recovery.md) 6/9
+- [~] #1206 — live interoperability loss budgets — [interoperability.md](interoperability.md) 0/9
 - [~] #438 — Letters fidelity — [letters-fidelity.md](letters-fidelity.md) 0/6
 - [~] #439 — Tables format safety and authoring — [tables-readiness.md](tables-readiness.md) 2/7
 - [ ] #440 — Decks authoring and presentation — [decks-readiness.md](decks-readiness.md) 0/7
-- [ ] #400 — performance, rendering and accessibility evidence — [performance-accessibility.md](performance-accessibility.md) 0/7
-- [ ] #326 — installed-release signoff — [release.md](release.md) 0/9
+- [ ] #1208 — performance, rendering and accessibility evidence — [performance-accessibility.md](performance-accessibility.md) 0/7
+- [ ] #1209 — installed-release signoff — [release.md](release.md) 0/9
 
 | Phase | Execution issue | Exit evidence |
 |---|---|---|
@@ -50,13 +60,13 @@ list follows.
 | P0 — trustworthy testing | #241 GTK thread/display ownership; #354 GUI isolation; #313 CI self-tests | No global process killing, hidden collection or swallowed failures; artifacts on setup/test failure |
 | P0 — crash campaign | #442 seeded repetition/matrix → stateful actions and fault injection | Replayable seeds/traces; failures retained even when a rerun passes |
 | P0 — evidence | #441 capability ledger | Collected tests and observed results linked by feature/layer/revision |
-| P0 — recovery | #322 transactional checkpoints | Multi-document kill/restart and interrupted-save recovery without stale/mixed generations |
-| P1 — interoperability | #374 live loss-budget enforcement | Both format directions, package relationships and GUI warning/cancel tests |
+| P0 — recovery | #1217 transactional checkpoints | Multi-document kill/restart and interrupted-save recovery without stale/mixed generations |
+| P1 — interoperability | #1206 live loss-budget enforcement | Both format directions, package relationships and GUI warning/cancel tests |
 | P1 — Letters | #438 complete document/bridge/layout fidelity | Styled Unicode ODT/DOCX journeys preserve edited and untouched fields |
 | P1 — Tables | #439 workbook authoring depth and format contracts | Multi-sheet structural/formula/protection journeys plus minimized Unicode regression |
 | P1 — Decks | #440 authoring/master/presenter/export | PPTX/ODP journeys and external-display/PDF evidence |
-| P1 — visual/a11y/performance | #400 with #354 and related accessibility issues | Wide/narrow, light/dark/high-contrast, 1x/2x; budgets and screen-reader evidence |
-| Release | #326 | Installed Flatpak candidate, portals/MIME, upgrade/recovery and exact-revision evidence bundle |
+| P1 — visual/a11y/performance | #1208 with #354 and related accessibility issues | Wide/narrow, light/dark/high-contrast, 1x/2x; budgets and screen-reader evidence |
+| Release | #1209 | Installed Flatpak candidate, portals/MIME, upgrade/recovery and exact-revision evidence bundle |
 
 Existing reports #377/#371/#358/#324 (Tables Unicode), #304/#308/#332/#355/#376 (GTK coverage) and #361/PR #362 (temporary snapshots) should be coordinated into the respective owners. Related architecture #284/#285 remains relevant when shared primitives or GUI decomposition are touched. Do not close duplicate reports without checking their evidence.
 
