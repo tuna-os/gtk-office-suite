@@ -10,7 +10,7 @@ use std::time::{Duration, Instant};
 
 use tables_core::engine::TablesEngine;
 use tables_core::io::save_sheets_to_xlsx_bytes;
-use tables_core::sheet::{col_x, row_y, SheetModel};
+use tables_core::sheet::{col_x, hit_row_divider, row_y, visible_cols, visible_rows, SheetModel, ROW_HEADER_WIDTH};
 use tables_core::sparse::SparseGrid;
 
 const SAMPLES: usize = 7;
@@ -160,4 +160,30 @@ fn dense_fixture_enforces_recalc_and_save_budgets() {
         black_box(bytes.len());
     });
     black_box((open, scroll, edit, recalc, save));
+}
+
+/// performance-accessibility.md row 3 (#1208): a frame's geometry scales
+/// with what is on screen, not with how far down the sheet it is. The
+/// renderer used to call row_on_screen and row_y for every row from the
+/// first, and each re-summed every row above it, so a frame at the bottom
+/// of this 100,000-row sheet cost ~5 billion additions. visible_rows walks
+/// the rows once.
+#[test]
+fn a_frame_at_the_bottom_of_a_tall_sheet_stays_within_budget() {
+    let mut sheet = SheetModel::new("Tall", 100_000, 4, 1);
+    sheet.hidden_rows.insert(50_000);
+    sheet.set_row_height(70_000, 60.0);
+    let (view_w, view_h) = (1_280.0, 800.0);
+    let bottom = tables_core::sheet::max_scroll((view_w, view_h), &sheet).1;
+    let frame = p95("tall sheet frame at the bottom", || {
+        let rows = visible_rows(bottom, view_h, &sheet);
+        let cols = visible_cols(0.0, view_w, &sheet);
+        assert_eq!(rows.last().map(|&(r, _)| r), Some(99_999), "the last row is on screen");
+        assert!(rows.len() < 60, "only a screenful of rows: {}", rows.len());
+        let (r, y) = rows[rows.len() / 2];
+        let divider = hit_row_divider(ROW_HEADER_WIDTH / 2.0, y + sheet.row_height(r), bottom, &sheet);
+        assert_eq!(divider, Some(r));
+        black_box((rows, cols));
+    });
+    assert!(frame <= Duration::from_millis(300), "a frame's geometry took {frame:?}");
 }
