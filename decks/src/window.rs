@@ -1107,8 +1107,15 @@ impl DecksWindow {
             let path_ref = file_path.clone();
             let refresh = refresh_hud.clone();
             let masters = masters.clone();
+            let w = suite_win.window.clone();
+            let dirty = dirty.clone();
             let act = gtk::gio::SimpleAction::new("new-document", None);
             act.connect_activate(move |_, _| {
+                let (cs, cs_scroll, ss, path_ref, sl, masters, refresh, dirty) = (
+                    cs.clone(), cs_scroll.clone(), ss.clone(), path_ref.clone(),
+                    sl.clone(), masters.clone(), refresh.clone(), dirty.clone(),
+                );
+                suite_common::confirm_discarding(&w, dirty.get(), "presentation", move || {
                 if cs.child_by_name("editor").is_none() {
                     cs.add_titled(&cs_scroll, Some("editor"), "Editor");
                 }
@@ -1128,9 +1135,11 @@ impl DecksWindow {
                     }];
                 }
                 *path_ref.borrow_mut() = None;
+                dirty.set(false);
                 rebuild_slide_list(&sl, &ss.borrow().clone(), &masters.borrow(), 0);
                 cs.queue_draw();
                 refresh();
+                });
             });
             app.add_action(&act);
         }
@@ -1141,13 +1150,19 @@ impl DecksWindow {
             let (cs, sl, ss, ms) = (content_stack.clone(), slide_list.clone(), slides.clone(), masters.clone());
             let (cs_scroll, path_ref, refresh) = (editor_split.clone(), file_path.clone(), refresh_hud.clone());
             let (cs_ref, so, w) = (current_slide.clone(), selected_object.clone(), suite_win.window.clone());
+            let dirty = dirty.clone();
             let act = gtk::gio::SimpleAction::new("new-from-template", None);
             act.connect_activate(move |_, _| {
                 let (cs, sl, ss, ms) = (cs.clone(), sl.clone(), ss.clone(), ms.clone());
                 let (cs_scroll, path_ref, refresh, cs_ref, so) =
                     (cs_scroll.clone(), path_ref.clone(), refresh.clone(), cs_ref.clone(), so.clone());
+                let (w2, dirty) = (w.clone(), dirty.clone());
                 crate::template_chooser::present(&w, move |index| {
                     let Some((slides, masters)) = decks_core::templates::deck(index) else { return };
+                    let (cs, sl, ss, ms) = (cs.clone(), sl.clone(), ss.clone(), ms.clone());
+                    let (cs_scroll, path_ref, refresh, cs_ref, so, dirty) =
+                        (cs_scroll.clone(), path_ref.clone(), refresh.clone(), cs_ref.clone(), so.clone(), dirty.clone());
+                    suite_common::confirm_discarding(&w2, dirty.get(), "presentation", move || {
                     if cs.child_by_name("editor").is_none() {
                         cs.add_titled(&cs_scroll, Some("editor"), "Editor");
                     }
@@ -1155,11 +1170,13 @@ impl DecksWindow {
                     *ss.borrow_mut() = slides;
                     *ms.borrow_mut() = masters;
                     *path_ref.borrow_mut() = None;
+                    dirty.set(false);
                     cs_ref.set(0);
                     so.set(None);
                     rebuild_slide_list(&sl, &ss.borrow().clone(), &ms.borrow(), 0);
                     cs.queue_draw();
                     refresh();
+                    });
                 });
             });
             app.add_action(&act);
@@ -1176,9 +1193,16 @@ impl DecksWindow {
             let cs_scroll = editor_split.clone();
             let path_ref = file_path.clone();
             let masters = masters.clone();
+            let dirty = dirty.clone();
 
             let act = gtk::gio::SimpleAction::new("open-file", None);
             act.connect_activate(move |_, _| {
+                let (cs, sl, ss, cs_ref, so, da, w, cs_scroll, path_ref, masters, dirty) = (
+                    cs.clone(), sl.clone(), ss.clone(), cs_ref.clone(), so.clone(), da.clone(),
+                    w.clone(), cs_scroll.clone(), path_ref.clone(), masters.clone(), dirty.clone(),
+                );
+                let parent = w.clone();
+                suite_common::confirm_discarding(&parent, dirty.get(), "presentation", move || {
                 let dlg = gtk::FileDialog::new();
                 let all = gtk::FileFilter::new();
                 all.add_pattern("*.pptx");
@@ -1206,6 +1230,7 @@ impl DecksWindow {
                 let cs_scroll = cs_scroll.clone();
                 let path_ref = path_ref.clone();
                 let masters = masters.clone();
+                let dirty = dirty.clone();
 
                 dlg.open(Some(&w), None::<&gio::Cancellable>,
                     move |result: Result<gio::File, glib::Error>| {
@@ -1219,6 +1244,7 @@ impl DecksWindow {
                                         cs_ref.set(0);
                                         so.set(None);
                                         *path_ref.borrow_mut() = Some(path_str);
+                                        dirty.set(false);
                                         if cs.child_by_name("editor").is_none() {
                                             cs.add_titled(&cs_scroll, Some("editor"), "Editor");
                                         }
@@ -1248,6 +1274,7 @@ impl DecksWindow {
                         }
                     },
                 );
+                });
             });
             app.add_action(&act);
         }
@@ -1467,8 +1494,16 @@ impl DecksWindow {
 
     /// Open a .pptx or .odp directly (CLI / file-manager open). Mirrors the
     /// open-file dialog success path.
+    /// Whether the deck has changes a replacement would lose.
+    pub fn is_dirty(&self) -> bool {
+        self.controller.dirty.get()
+    }
+
     pub fn open_path(&self, path: &str) -> Result<(), String> {
         let deck = read_deck(path)?;
+        // The deck on screen becomes the file just read. (Recovery marks it
+        // dirty again afterwards: recovered work is unsaved.)
+        self.controller.dirty.set(false);
         *self.controller.slides.borrow_mut() = deck.slides;
         *self.controller.masters.borrow_mut() = deck.masters;
         self.current_slide.set(0);
