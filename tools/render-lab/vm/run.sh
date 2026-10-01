@@ -10,9 +10,16 @@
 #   C-screen.png    a QMP screendump of the whole virtual monitor: proof
 #                   the window was mapped and composited by Mutter
 set -euo pipefail
-WORK="$1"; BUNDLES="$2"; FIX="$(realpath "$3")"; OUT="$(realpath "$4")"
+# Every path is resolved before the cd into the work directory: a relative
+# bundles directory (CI passes `bundles`) was looked up inside it, and the
+# first Tier C run to boot the guest failed on `scp: stat local
+# "bundles/*.flatpak"` (#1199).
+WORK="$1"; BUNDLES="$(realpath "$2")"; FIX="$(realpath "$3")"; OUT="$(realpath "$4")"
 cd "$WORK"
-SSH=(ssh -i id_lab -p 2222 -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o LogLevel=ERROR lab@127.0.0.1)
+# -n: ssh must not read stdin. The fixture loop below is a `while read`
+# fed by a pipe, and the first ssh inside it swallowed the rest of the
+# list, so the run captured one fixture and "succeeded" (#1199).
+SSH=(ssh -n -i id_lab -p 2222 -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o LogLevel=ERROR lab@127.0.0.1)
 SCP=(scp -i id_lab -P 2222 -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o LogLevel=ERROR)
 
 qemu-system-x86_64 -enable-kvm -cpu host -smp 4 -m 6G \
