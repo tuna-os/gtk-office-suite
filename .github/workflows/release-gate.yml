@@ -66,3 +66,68 @@ jobs:
           name: release-contract-${{ github.sha }}
           path: release-evidence/release-inputs.sha256
           retention-days: 90
+
+  # Binary reproducibility (docs/readiness-2026-09/release.md): the same
+  # commit built twice from clean, on two separate runners, must give
+  # byte-identical release binaries. The checksums above prove which
+  # inputs went in; this proves the build does not add anything of its
+  # own (a timestamp, a path, an unordered map). Measured before it went
+  # in: two clean release builds of Letters in different target
+  # directories gave the same sha256.
+  reproducible-build:
+    name: Reproducible build (${{ matrix.run }})
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    strategy:
+      matrix:
+        run: [first, second]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - name: Install GTK4 + libadwaita dev libraries
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq libgtk-4-dev libadwaita-1-dev
+      - name: Install Rust stable
+        uses: dtolnay/rust-toolchain@6bed0761d98439e5a578e2877258200ad565ba87 # stable
+        with:
+          toolchain: stable
+      # No cache on purpose: each run starts from nothing.
+      - name: Build the release binaries from clean
+        run: |
+          export SOURCE_DATE_EPOCH="$(git show -s --format=%ct HEAD)"
+          rustc --version --verbose
+          cargo build --release --locked --bin letters --bin tables --bin decks
+          mkdir -p repro
+          (cd target/release && sha256sum letters tables decks) > "repro/${{ matrix.run }}.sha256"
+          cat "repro/${{ matrix.run }}.sha256"
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: reproducible-build-${{ matrix.run }}
+          path: repro/${{ matrix.run }}.sha256
+          retention-days: 90
+
+  reproducible-compare:
+    name: Reproducible build (compare)
+    needs: reproducible-build
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        with:
+          pattern: reproducible-build-*
+          path: repro
+          merge-multiple: true
+      - name: The two clean builds are byte-identical
+        run: |
+          cat repro/first.sha256 repro/second.sha256
+          if diff -u repro/first.sha256 repro/second.sha256; then
+            echo "### Reproducible build: identical" >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "::error::two clean builds of the same commit produced different binaries"
+            exit 1
+          fi
+          { echo '```'; cat repro/first.sha256; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: reproducible-build-${{ github.sha }}
+          path: repro/
+          retention-days: 90

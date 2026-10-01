@@ -20,7 +20,12 @@ Depends on #436–#441, #354, #1217 (recovery), #1206 (interoperability), #313/#
       GtkLabel min-width warnings in the same dialog, kept as recorded warnings. **Crashes**: the harness already
       keeps a core dump and a gdb backtrace for a journey whose app dies (gui-stress, #1192).
 - [ ] Exercise supported architectures and reconcile flathub versus development manifests and locked source archives.
-- [ ] Record reproducible-input checksums and compare clean builds; do not equate metadata validation with binary reproducibility.
+- [x] Record reproducible-input checksums and compare clean builds; do not equate metadata validation with binary reproducibility.
+      `release-gate.yml` records the inputs' sha256 (`release-inputs.sha256`) and, separately, builds the three
+      release binaries twice from clean on two runners with the commit's `SOURCE_DATE_EPOCH` and fails unless
+      they are byte-identical (`reproducible-build` / `reproducible-compare`, both checksum lists kept 90 days).
+      Measured first locally: two clean release builds of Letters in different target directories, same sha256
+      (`ee61d9de…`).
 - [ ] Publish machine-readable capability matrix, JUnit, independent-reader results, visual/a11y evidence and performance measurements with the release.
 - [ ] Resolve concrete security/dependency blockers using #268/#269/#225/#347 and verify fixes; no duplicate strategic security project required.
 
