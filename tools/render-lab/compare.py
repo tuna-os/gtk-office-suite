@@ -614,8 +614,13 @@ def score_fixture(app, d, tier, ref_words_cache):
     if not lo_pages or not ours_pages:
         return None
     # Tier B can only see the pages on screen (capture.py stops at the
-    # viewport), so it is scored on those; Tier A judges the rest.
-    partial = tier == "B"
+    # viewport), so it is scored on those; Tier A judges the rest. Tables
+    # has no pages on screen: its Tier A dump is the grid's viewport too
+    # (tables/src/window.rs writes A-1 only), so a sheet LibreOffice prints
+    # on nine pages scored eight of them as missing. The real corpus showed
+    # it (#1200): every Tables document red in A, amber in B, from the same
+    # picture.
+    partial = tier == "B" or app == "tables"
     if partial:
         lo_pages = lo_pages[: len(ours_pages)]
     per_page = []
