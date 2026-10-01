@@ -54,7 +54,7 @@ fn load_range_into_engine(
     let (row0, col0) = range.start().unwrap_or((0, 0));
     for (r, row) in range.rows().enumerate() {
         for (c, cell) in row.iter().enumerate() {
-            engine.set_cell_text(row0 as usize + r, col0 as usize + c, &data_to_string(cell));
+            engine.put_cell_text(row0 as usize + r, col0 as usize + c, &data_to_string(cell));
         }
     }
     engine.evaluate();
@@ -84,14 +84,14 @@ fn load_xlsx_ranges_into_engine(
                     .get_value((row as u32, col as u32))
                     .map(data_to_string)
                     .unwrap_or_default();
-                engine.set_cell_text(row, col, &value);
+                engine.put_cell_text(row, col, &value);
             } else {
                 let input = if formula.starts_with('=') {
                     formula.to_string()
                 } else {
                     format!("={formula}")
                 };
-                engine.set_cell_text(row, col, &input);
+                engine.put_cell_text(row, col, &input);
             }
         }
     }
@@ -163,7 +163,7 @@ pub fn load_file_into_engine(
                 max_cols = max_cols.max(cols.len());
                 for (c, val) in cols.iter().enumerate() {
                     let trimmed = val.trim().trim_matches('"');
-                    engine.set_cell_text(r, c, trimmed);
+                    engine.put_cell_text(r, c, trimmed);
                 }
                 max_rows = r + 1;
             }
@@ -322,6 +322,7 @@ pub fn load_xlsx_workbook(path: &str) -> Result<(TablesEngine, Vec<SheetModel>),
                 .copied()
                 .filter(|(r, c, _, _)| *r < sheet.rows && *c < sheet.cols)
                 .collect();
+            sheet.protection.protected = props.protected;
         }
         sheets.push(sheet);
     }
@@ -348,6 +349,16 @@ pub fn load_xlsx_workbook(path: &str) -> Result<(TablesEngine, Vec<SheetModel>),
             continue;
         }
         let _ = engine.model.new_defined_name(name, None, formula);
+    }
+    // Charts and conditional-formatting rules. Their readers resolve the
+    // first worksheet only, so they attach there (the XLSX loss budget in
+    // tests/xlsx_loss_budget.rs declares the later sheets' as lost). They
+    // used to be attached by the GUI after this returned, so every other
+    // opener of this function (recovery's tests, the corpus tooling)
+    // silently had neither.
+    if let Some(first) = sheets.first_mut() {
+        first.charts = super::read_charts_from_xlsx(path);
+        first.cond_rules = super::read_cond_rules_from_xlsx(path);
     }
     Ok((engine, sheets))
 }
