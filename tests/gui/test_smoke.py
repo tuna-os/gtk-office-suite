@@ -2448,6 +2448,107 @@ class TablesXlsSaveSmoke(TablesFormatSafeSaveMixin, BaseGUITestCase):
     fixture = "budget.xls"
 
 
+class TablesTwoSheetJourneySmoke(TablesCellEntryMixin, BaseGUITestCase):
+    """Two sheets through the whole sheet bar (tables-readiness.md row 3,
+    #1204): a value on Sheet1 and a formula on Sheet2 that reads it; rename
+    Sheet2, move it first, delete it and undo the delete; save, and read
+    the workbook back. Nothing may cross sheets on the way: the formula
+    keeps its reference through the rename, the delete's undo brings back
+    the sheet with its formula, and the saved file has both sheets, in the
+    new order, under their new names, each with its own content."""
+
+    app_name = "tables"
+
+    def setUp(self):
+        self._dir = self.temp_dir(prefix="tables-two-sheets-")
+        self.isolate_snapshot(prefix="tables-two-sheets-snap-")
+        self.isolate_autosave_state()
+        super().setUp()
+
+    def _state(self):
+        s = self.trigger_snapshot("org.tunaos.tables")
+        a1 = next((c for c in s["sheet"]["cells"] if (c["row"], c["col"]) == (0, 0)), None)
+        return s["sheet_names"], s["active_sheet_index"], a1 and (a1["value"], a1.get("formula"))
+
+    def _wait_state(self, want, description):
+        return self.wait_until(self._state, lambda got: got == want, interval=0.3, description=description)
+
+    def _showing(self, role, name):
+        from dogtail import tree
+        return tree.root.findChild(lambda n: n.roleName == role and n.name == name and n.showing,
+                                   retry=False, requireResult=False)
+
+    def _press(self, name):
+        self.wait_until(lambda: self._showing("push button", name), bool,
+                        description=f"the {name} button").do_action(0)
+
+    def test_rename_reorder_delete_undo_save_and_reopen(self):
+        import re
+        import subprocess
+        import zipfile
+        from dogtail import rawinput
+
+        aid = "org.tunaos.tables"
+        subprocess.run(["gapplication", "action", aid, "new-document"])
+        self._wait_for_a_new_document()
+        self._put("A1", "5")
+        subprocess.run(["gapplication", "action", aid, "add-sheet"])
+        self._wait_state((["Sheet1", "Sheet2"], 1, None), "Sheet2 to be added and shown")
+        # A formula shows its result, not what was typed, so this one is
+        # confirmed on the model rather than by _put's grid text.
+        rawinput.keyCombo("<Control>g")
+        self.wait_until(lambda: self._focused("Cell reference"), bool, description="the name box")
+        rawinput.typeText("A1")
+        rawinput.keyCombo("Return")
+        self.wait_until(lambda: self._focused("Formula input"), bool, description="the jump to A1")
+        rawinput.typeText("=Sheet1!A1*2")
+        rawinput.keyCombo("Return")
+        self._wait_state((["Sheet1", "Sheet2"], 1, ("10", "Sheet1!A1*2")), "Sheet2's formula to read Sheet1")
+
+        # Rename Sheet2 through its dialog; the formula on it stays live.
+        rawinput.keyCombo("Escape")
+        self._press("Rename sheet")
+        entry = self.wait_until(lambda: self._showing("text", ""), bool, description="the rename field")
+        entry.text = "Totals"
+        self._press("Rename")
+        self._wait_state((["Sheet1", "Totals"], 1, ("10", "Sheet1!A1*2")), "Sheet2 renamed to Totals")
+
+        # Move it first, then delete it and undo the delete.
+        subprocess.run(["gapplication", "action", aid, "move-sheet-left"])
+        self._wait_state((["Totals", "Sheet1"], 0, ("10", "Sheet1!A1*2")), "Totals moved first")
+        self._press("Delete sheet")
+        self._press("Delete")
+        self._wait_state((["Sheet1"], 0, ("5", None)), "Totals deleted, Sheet1 shown with its own value")
+        subprocess.run(["gapplication", "action", aid, "undo"])
+        self._wait_state((["Totals", "Sheet1"], 0, ("10", "Sheet1!A1*2")),
+                         "the undo to bring Totals back first, formula and all")
+
+        # Save, then read the workbook back.
+        out_path = os.path.join(self._dir, "two-sheets.xlsx")
+        subprocess.run(["gapplication", "action", aid, "save-file-as"])
+        name_entry = self.wait_until(lambda: self._showing("text", "Name:"), bool, description="the Save As dialog")
+        name_entry.text = out_path
+        self._press("Save")
+
+        def saved():
+            try:
+                with zipfile.ZipFile(out_path) as z:
+                    return {n: z.read(n).decode() for n in z.namelist()}
+            except (OSError, KeyError, zipfile.BadZipFile):
+                return None
+        parts = self.wait_until(saved, bool, interval=0.25, description="the workbook on disk")
+        names = re.findall(r'<sheet [^>]*name="([^"]+)"', parts["xl/workbook.xml"])
+        self.assertEqual(names, ["Totals", "Sheet1"], "the saved sheets' names or order")
+        sheets = sorted(n for n in parts if re.fullmatch(r"xl/worksheets/sheet\d+\.xml", n))
+        self.assertEqual(len(sheets), 2, sheets)
+        totals, sheet1 = parts[sheets[0]], parts[sheets[1]]
+        self.assertRegex(totals, r"<f>Sheet1!A1\*2</f>", "Totals lost its formula")
+        self.assertRegex(totals, r"<v>10</v>", "Totals' formula has no cached 10")
+        self.assertRegex(sheet1, r"<v>5</v>", "Sheet1 lost its value")
+        self.assertNotRegex(sheet1, r"<f>", "a formula crossed onto Sheet1")
+        self.assertIsNone(self.process.poll(), "tables crashed in the sheet journey")
+
+
 class TablesColumnMenuSmoke(TablesCellEntryMixin, BaseGUITestCase):
     """The column menu (DESIGN-UI.md, Numbers/Sheets): Alt+Down opens the
     active cell's column menu; Sort Ascending reorders the rows; unticking
