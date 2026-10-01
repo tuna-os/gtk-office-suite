@@ -1169,13 +1169,15 @@ pub fn save_buffer_to_file(
     buf: &gtk::TextBuffer,
     path: &std::path::Path,
 ) -> Result<suite_common::interop::CompatibilityReport, String> {
-    // The live model is the document; a buffer without one is read.
+    letters_core::save::write(&document_of(buf), path)
+}
+
+/// The document `buf` shows: its live model, or a read of a buffer without
+/// one.
+pub fn document_of(buf: &gtk::TextBuffer) -> letters_core::Document {
     match crate::live::of(buf) {
-        Some(m) => {
-            let doc = m.borrow_mut().document(buf).clone();
-            letters_core::save::write(&doc, path)
-        }
-        None => letters_core::save::write(&capture_from_buffer(buf), path),
+        Some(m) => m.borrow_mut().document(buf).clone(),
+        None => capture_from_buffer(buf),
     }
 }
 
