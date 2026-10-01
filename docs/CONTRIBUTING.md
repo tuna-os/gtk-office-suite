@@ -55,7 +55,7 @@ already archived.
 gh issue list --state open --json number,title,labels
 ```
 
-Check [IMPLEMENTATION-QUEUE.md](../IMPLEMENTATION-QUEUE.md) for effort estimates and dependencies.
+The plan of record is [#1190](https://github.com/tuna-os/gtk-office-suite/issues/1190): each sub-issue states its exit as something CI reports. Dependencies and evidence per area are in the [readiness ledger](readiness-2026-09/README.md).
 
 ### 2. Research Before Implementing
 
