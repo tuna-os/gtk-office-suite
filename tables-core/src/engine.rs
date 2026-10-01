@@ -232,13 +232,22 @@ impl TablesEngine {
 
     /// Set cell value or formula (if starts with '=').
     pub fn set_cell_text(&mut self, row: usize, col: usize, val: &str) {
+        self.put_cell_text(row, col, val);
+        // Re-evaluate formulas
+        self.model.evaluate();
+    }
+
+    /// `set_cell_text` without the recalculation, for loops that set many
+    /// cells and call [`evaluate`](Self::evaluate) once at the end. Each
+    /// `evaluate` walks the whole workbook, so recalculating per cell made
+    /// opening a file, pasting a grid and exporting a PDF quadratic in the
+    /// cell count: a 512×128 xlsx did not open in twenty minutes (#1208).
+    pub fn put_cell_text(&mut self, row: usize, col: usize, val: &str) {
         let r = row as i32 + 1; // IronCalc uses 1-based, i32
         let c = col as i32 + 1;
         let _ = self
             .model
             .set_user_input(self.active_sheet as u32, r, c, val.to_string());
-        // Re-evaluate formulas
-        self.model.evaluate();
     }
 
     /// The formula of workbook-level name `name`, if it's defined.

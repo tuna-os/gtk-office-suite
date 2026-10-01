@@ -42,13 +42,13 @@ pub fn paste_at(
                         Some(f) => format!("={f}"),
                         None => cell.value.clone(),
                     };
-                    engine.set_cell_text(row + dr, col + dc, &text);
+                    engine.put_cell_text(row + dr, col + dc, &text);
                 }
             }
         }
         Fragment::Text(paras) => {
             for (dr, p) in paras.iter().enumerate() {
-                engine.set_cell_text(row + dr, col, &p.text());
+                engine.put_cell_text(row + dr, col, &p.text());
             }
         }
     }

@@ -9,7 +9,7 @@ use std::hint::black_box;
 use std::time::{Duration, Instant};
 
 use tables_core::engine::TablesEngine;
-use tables_core::io::save_sheets_to_xlsx_bytes;
+use tables_core::io::{load_workbook, save_sheets_to_xlsx_bytes};
 use tables_core::sheet::{col_x, row_y, SheetModel};
 use tables_core::sparse::SparseGrid;
 
@@ -159,5 +159,17 @@ fn dense_fixture_enforces_recalc_and_save_budgets() {
         assert!(!bytes.is_empty());
         black_box(bytes.len());
     });
-    black_box((open, scroll, edit, recalc, save));
+    // Opening what was just saved. Each loader recalculated the workbook
+    // after every cell it set, so this open was quadratic in the cell
+    // count and did not finish in twenty minutes (#1208).
+    let dir = tempfile::tempdir().expect("temp dir");
+    let path = dir.path().join("dense.xlsx");
+    std::fs::write(&path, save_sheets_to_xlsx_bytes(std::slice::from_ref(&sheet), Some(&engine)).expect("save"))
+        .expect("write fixture");
+    let reopen = p95("dense xlsx open", || {
+        let (_, sheets) = load_workbook(path.to_str().unwrap()).expect("open");
+        assert_eq!(sheets[0].cell(511, 127), sheet.cell(511, 127));
+        black_box(sheets);
+    });
+    black_box((open, scroll, edit, recalc, save, reopen));
 }
