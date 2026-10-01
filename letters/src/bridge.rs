@@ -1143,8 +1143,7 @@ pub(crate) fn render_paragraphs(buf: &gtk::TextBuffer, insert: &mut gtk::TextIte
 /// Show a freshly opened (or recovered) document in `buf`: its live
 /// model's history starts here, so undo does not un-open it.
 pub fn load_document(doc: &Document, buf: &gtk::TextBuffer) {
-    render_to_buffer(doc, buf);
-    crate::live::reset(buf);
+    crate::live::load(buf, || render_to_buffer(doc, buf));
 }
 
 /// Read any supported file through letters-core into the buffer.
