@@ -1,4 +1,7 @@
-# ADR 0006: Structured editing remains model-owned
+# ADR 0008: Structured editing remains model-owned
+
+> Renumbered from 0006 to 0008 on 2026-10-01 (#1205): 0006 was also taken by another ADR. The decision is unchanged.
+
 
 Letters keeps tables and paragraph structure in `letters-core`; the GTK text
 buffer is a rendered/editable view. Table cells remain tagged paragraphs so
