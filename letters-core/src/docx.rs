@@ -1255,8 +1255,11 @@ fn map_paragraph(doc: &rdocx::Document, p: &rdocx::ParagraphRef<'_>) -> Paragrap
             .size()
             .map(|pt| (pt * 2.0).round() as u16)
             .or_else(|| eff.sz.map(|s| s.0.min(u32::from(u16::MAX)) as u16).filter(|hp| Some(*hp) != base.size_hp));
+        // "auto" is Word's automatic (default) text colour, not a colour:
+        // on the run itself it must not hide the style's either.
         let color = r
             .color()
+            .filter(|c| !c.eq_ignore_ascii_case("auto"))
             .map(|c| c.trim_start_matches('#').to_uppercase())
             .or_else(|| eff.color.as_deref().filter(|c| !c.eq_ignore_ascii_case("auto")).map(|c| c.to_uppercase()));
         runs.push(Run {
