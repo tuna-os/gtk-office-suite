@@ -14,7 +14,15 @@ WorkbookController remains the sole mutation gateway. Stable sheet identities bi
       LibreOffice in tests/gui/fixtures/) open each format, edit B2, press Ctrl+S, and require the original's bytes
       unchanged, the "Cannot save in this format" prompt, Save As offering `budget.xlsx`, and that workbook holding the
       edit. With the guards in `save_engine_to_xlsx` and the save action removed, the journey fails (#1204).
-- [ ] Test formulas, cached values, styles, charts, rules, names, protection and hidden/filter state against a declared XLSX loss budget.
+- [x] Test formulas, cached values, styles, charts, rules, names, protection and hidden/filter state against a declared XLSX loss budget.
+      `tables-core/tests/xlsx_loss_budget.rs` declares the budget, feature by feature, and saves one workbook carrying all
+      of them through the real byte path (`save_sheets_to_xlsx_bytes` with the engine, then `load_workbook`). It fails both
+      ways: a feature declared kept that comes back wrong, and one declared lost that survives, so the declared losses
+      stay exactly the real ones. Writing it found two losses, both fixed here (#1204): **sheet protection** was written
+      and never read back, so a protected workbook reopened unprotected and was saved that way; and **charts and
+      conditional formats** were attached by the GUI after `load_workbook` returned, so recovery tests and corpus tooling
+      opened xlsx files without them. Declared lost, with the reason: a filter's hide reopens as a manual hide (xlsx keeps
+      no filter state here), and charts and rules on a sheet after the first (their readers resolve the first worksheet).
 - [ ] Two-sheet journey: edit/formula → rename/reorder/delete/undo → switch → save → reopen; no cross-sheet overwrite or retargeted history.
       Most of it is now `TablesTwoSheetJourneySmoke` (#1204): a value on Sheet1, a formula on Sheet2 reading it, rename
       through the dialog, move first, delete and undo, Save As; the saved xlsx must have both sheets in the new order
