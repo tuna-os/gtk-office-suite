@@ -107,6 +107,29 @@ class ExportRatchetTest(unittest.TestCase):
                 self.args(), MANIFEST, card({"letters/toc": "green", "letters/plain-paragraph": "amber"})
             )
 
+    def test_a_baselined_fixture_with_no_capture_is_a_regression(self):
+        # The ratchet used to `continue` past a fixture with no measurement,
+        # so a verdict could be locked in and then never checked again. That
+        # is how every Tables export fixture sat "green" in the baseline
+        # while CI never exported a single Tables PDF (#1194): an app missing
+        # from the lab is evidence lost, not a clean run.
+        json.dump(base({"letters/toc": "green", "letters/plain-paragraph": "green"}), open(self.base, "w"))
+        with self.assertRaises(SystemExit) as cm:
+            export_compare.ratchet(self.args(), MANIFEST, card({"letters/toc": "green"}))
+        self.assertEqual(cm.exception.code, 1)
+        summary = json.load(open(os.path.join(self.tmp.name, "summary-export.json")))
+        self.assertEqual(
+            summary["regressed"],
+            [{"fixture": "letters/plain-paragraph", "tier": "export", "from": "green", "to": "missing"}],
+        )
+
+    def test_a_fixture_baselined_as_missing_with_no_capture_still_passes(self):
+        # Nothing was ever measured, so nothing was lost: no regression.
+        json.dump(base({"letters/toc": "green", "letters/plain-paragraph": "missing"}), open(self.base, "w"))
+        export_compare.ratchet(self.args(), MANIFEST, card({"letters/toc": "green"}))
+        summary = json.load(open(os.path.join(self.tmp.name, "summary-export.json")))
+        self.assertEqual(summary["regressed"], [])
+
     def test_missing_baseline_means_not_yet_measured(self):
         # The seeded baseline-export.json records every opt-in fixture as
         # missing until real export captures exist; the first measured run
@@ -114,6 +137,47 @@ class ExportRatchetTest(unittest.TestCase):
         json.dump(base({"letters/toc": "missing"}), open(self.base, "w"))
         with self.assertRaises(SystemExit):
             export_compare.ratchet(self.args(), MANIFEST[:1], card({"letters/toc": "amber"}))
+
+
+@unittest.skipIf(not HAVE_EXPORT, "numpy and Pillow are the render lab's")
+class ScreenRatchetTest(unittest.TestCase):
+    """The screenshot ratchet (compare.py) had the same hole as the export
+    one. Each app runs in its own CI job, so an app whose job never uploaded
+    simply had no measurements, and its fixtures dropped out of the ratchet
+    without a word. A tier is counted as run when any fixture was measured
+    in it; within a run tier, a baselined fixture with no measurement is a
+    regression. A tier nobody ran (a local `--tier A`) stays out of it."""
+
+    def setUp(self):
+        import compare
+        self.compare = compare
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        self.base = os.path.join(self.tmp.name, "baseline.json")
+
+    def run_ratchet(self, baseline, measured):
+        write_json(self.base, baseline)
+        manifest = [fx("letters", "toc"), fx("decks", "autofit")]
+        card = {k: {t: {"verdict": v} for t, v in tiers.items()} for k, tiers in measured.items()}
+        args = types.SimpleNamespace(baseline=self.base, update_baseline=False, out=self.tmp.name)
+        self.compare.ratchet(args, manifest, card, {})
+        return json.load(open(os.path.join(self.tmp.name, "summary.json")))
+
+    def test_an_app_missing_from_a_tier_that_ran_is_a_regression(self):
+        with self.assertRaises(SystemExit) as cm:
+            self.run_ratchet(
+                {"letters/toc": {"A": "green"}, "decks/autofit": {"A": "green"}},
+                {"letters/toc": {"A": "green"}},
+            )
+        self.assertEqual(cm.exception.code, 1)
+
+    def test_a_tier_nobody_ran_is_not_a_regression(self):
+        # Baselined in A and B; this run measured A only, for every fixture.
+        summary = self.run_ratchet(
+            {"letters/toc": {"A": "green", "B": "green"}, "decks/autofit": {"A": "green", "B": "green"}},
+            {"letters/toc": {"A": "green"}, "decks/autofit": {"A": "green"}},
+        )
+        self.assertEqual(summary["regressed"], [])
 
 
 try:
@@ -151,3 +215,44 @@ class ExportOptInTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class EveryExportAppRunsInCI(unittest.TestCase):
+    """The apps with an --export-pdf hook are the apps CI must export.
+
+    `export_render.EXPORT_APPS` names the apps that can export; the export
+    lab's matrix, its download steps and its arrival check each restated the
+    list by hand. Tables gained a hook and opted fixtures in, but was added
+    to none of the three, so its export verdicts were never measured in CI
+    and its baseline entries were never enforced (#1194). Derived here so a
+    fourth app cannot repeat it.
+    """
+
+    WORKFLOW = os.path.join(
+        os.path.dirname(__file__), "..", ".github", "workflows", "render-parity.yml"
+    )
+
+    def setUp(self):
+        import yaml
+        sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "tools", "render-lab"))
+        import export_render
+        self.apps = set(export_render.EXPORT_APPS)
+        with open(self.WORKFLOW, encoding="utf-8") as handle:
+            self.jobs = yaml.safe_load(handle)["jobs"]
+        self.assertTrue(self.apps, "export_render.EXPORT_APPS is empty; this check is vacuous")
+
+    def test_the_export_lab_matrix_runs_every_export_app(self):
+        self.assertEqual(set(self.jobs["export-lab"]["strategy"]["matrix"]["app"]), self.apps)
+
+    def test_the_report_downloads_and_checks_every_export_app(self):
+        steps = self.jobs["export-report"]["steps"]
+        downloaded = {
+            step["with"]["name"].removeprefix("export-lab-")
+            for step in steps
+            if "download-artifact" in str(step.get("uses", ""))
+        }
+        self.assertEqual(downloaded, self.apps)
+        check = next(s["run"] for s in steps if s.get("name", "").startswith("Check every app"))
+        for app in sorted(self.apps):
+            with self.subTest(app=app):
+                self.assertRegex(check, rf"for app in [^;]*\b{app}\b")

@@ -154,6 +154,12 @@ def ratchet(args, manifest, card):
         b = base.get(key, {}).get(TIER)
         n = now.get(key, {}).get(TIER)
         if n is None:
+            # No capture. If the baseline holds a measured verdict, that
+            # evidence is lost, not clean: report it rather than skip it.
+            # Skipping is how every Tables export fixture sat green in the
+            # baseline while CI never exported a Tables PDF (#1194).
+            if b is not None and b != "missing":
+                regressed.append({"fixture": key, "tier": TIER, "from": b, "to": "missing"})
             continue
         if b is None:
             if base:

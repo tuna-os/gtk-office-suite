@@ -241,7 +241,11 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        app: [letters, decks]
+        # Tables has had an --export-pdf hook since 17eac2b and its fixtures
+        # are opted in, but it was never added here: its baseline verdicts
+        # came from local runs and nothing in CI exported a Tables PDF, so
+        # the issue sync filed every one of them as "missing" (#1194).
+        app: [letters, decks, tables]
     steps:
       - uses: actions/checkout@v7
 
@@ -326,11 +330,18 @@ jobs:
           name: export-lab-decks
           path: render-lab-out/decks
 
+      - name: Download export captures (tables)
+        continue-on-error: true
+        uses: actions/download-artifact@v8
+        with:
+          name: export-lab-tables
+          path: render-lab-out/tables
+
       - name: Check every app's export captures arrived
         run: |
           mkdir -p render-lab-out
           ls render-lab-out
-          for app in letters decks; do
+          for app in letters decks tables; do
             n=$(find "render-lab-out/$app" -name 'ours-*.png' 2>/dev/null | wc -l)
             echo "$app: $n export captures"
             [ "$n" -gt 0 ] || echo "::warning::no export captures for $app; its export-lab job did not upload, so it is missing from this report"
