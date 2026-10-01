@@ -5,3 +5,4 @@
 # It is recommended to check this file in to source control so that
 # everyone who runs the test benefits from these saved cases.
 cc d4221860ad397ecb81277435e5622252e203f9ca56fa812b0aecae0ccfde7388 # shrinks to start = " aa  a", ops = [(15444225704614957383, 2, true, false), (6564773702266368224, 0, false, true)]
+cc 05d79dd85bddc4668635b273e29e73cdffc0b3face7ad4be35d88f192ccc92ee # shrinks to start = "aa", ops = [(2252480416170186918, 0, true, false), (7818770312752391040, 0, false, true), (7062742044996823020, 0, true, false), (3188449946636097877, 0, false, true)]

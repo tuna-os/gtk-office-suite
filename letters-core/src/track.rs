@@ -95,7 +95,21 @@ pub fn tracked(doc: &Document, ops: &[Op], author: &str, date: &str) -> Option<V
                 }
                 vec![Op::Insert { at: *at, content }]
             }
-            Op::Delete { at, len } => deletion_ops(&scratch, *at, at + len, &deletion),
+            Op::Delete { at, len } => {
+                // Deleting on from one's own pending deletion continues it,
+                // the counterpart of typing on above: Delete extends it
+                // forwards (it sits just before), Backspace backwards (just
+                // after). Without this every keystroke took the current
+                // second, and two deletions a tick apart read as two changes
+                // (#1193). Only a plain deletion continues: one that holds
+                // someone else's insertion `under` it is that insertion's.
+                let own = |r: &Revision| r.kind == RevisionKind::Delete && r.author == author && r.under.is_none();
+                let rev = revision_before(&scratch, *at)
+                    .filter(own)
+                    .or_else(|| revision_at(&scratch, at + len).filter(own))
+                    .unwrap_or_else(|| deletion.clone());
+                deletion_ops(&scratch, *at, at + len, &rev)
+            }
             Op::Mark { .. } | Op::SetParaStyle { .. } | Op::SetComment { .. } => vec![op.clone()],
             Op::SetParagraphs { .. } => return None,
         };
@@ -115,6 +129,21 @@ fn revision_before(doc: &Document, at: usize) -> Option<Revision> {
     for r in &doc.paragraphs[p].runs {
         let n = if is_object(r) { 1 } else { r.text.chars().count() };
         if off > pos && off <= pos + n {
+            return r.style.revision.clone();
+        }
+        pos += n;
+    }
+    None
+}
+
+/// The revision of the char at sequence offset `at` (the one just after
+/// it), in the same paragraph.
+fn revision_at(doc: &Document, at: usize) -> Option<Revision> {
+    let (p, off) = locate(doc, at)?;
+    let mut pos = 0;
+    for r in &doc.paragraphs[p].runs {
+        let n = if is_object(r) { 1 } else { r.text.chars().count() };
+        if off >= pos && off < pos + n {
             return r.style.revision.clone();
         }
         pos += n;

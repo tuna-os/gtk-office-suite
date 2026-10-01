@@ -58,6 +58,7 @@ jobs:
             tests/test_release_gate.py \
             tests/test_release_soak.py \
             tests/test_workflow_credentials.py \
+            tests/test_workspace_test_lanes.py \
             tests/test_validate_parity.py \
             tests/test_gui_evidence.py \
             tests/test_validate_capabilities.py \
@@ -109,6 +110,7 @@ jobs:
             tests/test_release_gate.py \
             tests/test_release_soak.py \
             tests/test_workflow_credentials.py \
+            tests/test_workspace_test_lanes.py \
             tests/test_validate_parity.py \
             tests/test_gui_evidence.py \
             tests/test_validate_capabilities.py \
