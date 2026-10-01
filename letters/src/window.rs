@@ -421,10 +421,6 @@ impl LettersWindow {
         // ── Find/Replace revealer ──────────────────────────────────
         let (find_revealer, find_entry) = make_find_replace_widget(&tab_view);
         find_revealer.set_key_capture_widget(Some(&suite_win.window));
-        // At the top only: an overlay child fills the overlay unless told
-        // otherwise, and the bar's background then covered the whole
-        // document while Find was open.
-        find_revealer.set_valign(gtk::Align::Start);
         // Place search bar as overlay on content (not as stacked top bar)
         let content_overlay = gtk::Overlay::new();
         content_overlay.set_child(Some(&toast_overlay));
