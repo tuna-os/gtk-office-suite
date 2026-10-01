@@ -166,6 +166,9 @@ fn insert_text(buf: &gtk::TextBuffer, text: &str) {
         let word = text.chars().count() == 1 && !text.chars().any(char::is_whitespace) && e == s;
         m.apply_user_ops(buf, &ops, word);
         drop(m);
+        // Now, not on the next idle: a Ctrl+Z that arrives first would
+        // find Undo still disabled and be dropped.
+        crate::live::sync_actions(buf);
         // Markdown shortcuts, as in Draft: "**bold**" and a space.
         if text == " " {
             let at = buf.iter_at_mark(&buf.get_insert());
@@ -326,6 +329,8 @@ fn handle_key(view: &PageView, buf: &gtk::TextBuffer, key: gdk::Key, state: gdk:
                         buf.place_cursor(&buf.iter_at_offset(to.max(0)));
                     }
                 }
+                drop(m);
+                crate::live::sync_actions(buf);
                 return true;
             }
             buf.begin_user_action();
@@ -517,6 +522,34 @@ mod tests {
             assert_eq!(text, "hello worl\n");
             // Formatting shortcuts are the application's, not the view's.
             assert!(!handle_key(&view, &buf, gdk::Key::b, gdk::ModifierType::CONTROL_MASK));
+        });
+    }
+
+    /// Typing and deleting on the page enable Undo at once, before the main
+    /// loop runs again: a Ctrl+Z pressed right after would otherwise meet a
+    /// disabled action and be dropped (the CI flake in LettersModelUndoSmoke).
+    #[test]
+    fn typing_and_deleting_enable_undo_without_waiting_for_the_main_loop() {
+        gtk_test(|| {
+            let app = gtk::gio::Application::new(None, gtk::gio::ApplicationFlags::NON_UNIQUE);
+            for name in ["undo", "redo"] {
+                let a = gtk::gio::SimpleAction::new(name, None);
+                a.set_enabled(false);
+                app.add_action(&a);
+            }
+            app.set_default();
+            let undo = app.lookup_action("undo").unwrap();
+
+            let (view, buf) = editable("hello");
+            crate::live::LiveModel::attach(&buf);
+            buf.place_cursor(&buf.end_iter());
+            assert!(handle_key(&view, &buf, gdk::Key::BackSpace, gdk::ModifierType::empty()));
+            assert!(undo.is_enabled(), "deleting left Undo disabled");
+
+            crate::live::undo(&buf, false);
+            assert!(!undo.is_enabled(), "nothing left to undo");
+            insert_text(&buf, "!");
+            assert!(undo.is_enabled(), "typing left Undo disabled");
         });
     }
 }
