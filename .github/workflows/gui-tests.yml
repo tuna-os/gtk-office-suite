@@ -113,7 +113,9 @@ jobs:
           if [ -n "$JOURNEY_FILTER" ]; then
             set -- -k "$JOURNEY_FILTER"
           fi
-          tests/gui/run_gui_tests.sh test_smoke.py "$@"
+          # test_edit_render.py: the edit -> save -> reopen journeys whose
+          # saved files the render lab also compares against LibreOffice.
+          tests/gui/run_gui_tests.sh test_smoke.py test_edit_render.py "$@"
 
       # Not filtered by app, and deliberately not inside test_smoke.py:
       # these drive a journey that fails on purpose and assert on what it
@@ -147,7 +149,7 @@ jobs:
           # verbosity is (-v count) minus (-q count) — one -q only cancels
           # it back to the tree listing, two gives the node ids this
           # parses.
-          tests/gui/run_gui_tests.sh test_smoke.py test_harness_artifacts.py \
+          tests/gui/run_gui_tests.sh test_smoke.py test_edit_render.py test_harness_artifacts.py \
             --collect-only -q -q > collected.txt
           python3 conformance/collect_test_inventory.py \
             --pytest "tests/gui=collected.txt" --out gui-inventory.json

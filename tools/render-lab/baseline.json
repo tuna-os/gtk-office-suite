@@ -11,6 +11,10 @@
     "A": "green",
     "B": "green"
   },
+  "decks/edited-journey": {
+    "A": "green",
+    "B": "green"
+  },
   "decks/image": {
     "A": "green",
     "B": "green"
@@ -50,6 +54,10 @@
   "letters/columns": {
     "A": "green",
     "B": "green"
+  },
+  "letters/edited-journey": {
+    "A": "amber",
+    "B": "amber"
   },
   "letters/font-families": {
     "A": "green",
@@ -182,6 +190,10 @@
   "tables/conditional": {
     "A": "green",
     "B": "green"
+  },
+  "tables/edited-journey": {
+    "A": "amber",
+    "B": "amber"
   },
   "tables/fills": {
     "A": "green",
