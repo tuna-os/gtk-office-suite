@@ -1,15 +1,18 @@
 {
   "decks/autofit": {
     "A": "green",
-    "B": "green"
+    "B": "green",
+    "C": "green"
   },
   "decks/background": {
     "A": "green",
-    "B": "green"
+    "B": "green",
+    "C": "green"
   },
   "decks/bullets": {
     "A": "green",
-    "B": "green"
+    "B": "green",
+    "C": "green"
   },
   "decks/edited-journey": {
     "A": "green",
@@ -17,43 +20,53 @@
   },
   "decks/image": {
     "A": "green",
-    "B": "green"
+    "B": "green",
+    "C": "green"
   },
   "decks/rotation": {
     "A": "green",
-    "B": "green"
+    "B": "green",
+    "C": "green"
   },
   "decks/shapes": {
     "A": "green",
-    "B": "green"
+    "B": "green",
+    "C": "green"
   },
   "decks/table": {
     "A": "green",
-    "B": "green"
+    "B": "green",
+    "C": "green"
   },
   "decks/text-styles": {
     "A": "green",
-    "B": "green"
+    "B": "green",
+    "C": "green"
   },
   "decks/title-layout": {
     "A": "green",
-    "B": "green"
+    "B": "green",
+    "C": "green"
   },
   "letters/alignment": {
     "A": "green",
-    "B": "green"
+    "B": "green",
+    "C": "green"
   },
   "letters/bullet-list": {
     "A": "green",
-    "B": "green"
+    "B": "green",
+    "C": "green"
   },
   "letters/char-emphasis": {
     "A": "green",
-    "B": "green"
+    "B": "green",
+    "C": "green"
   },
   "letters/columns": {
     "A": "green",
-    "B": "green"
+    "B": "green",
+    "C": "green"
   },
   "letters/edited-journey": {
     "A": "amber",
@@ -61,135 +74,168 @@
   },
   "letters/font-families": {
     "A": "green",
-    "B": "green"
+    "B": "green",
+    "C": "green"
   },
   "letters/font-sizes": {
     "A": "green",
-    "B": "green"
+    "B": "green",
+    "C": "green"
   },
   "letters/footnote-continued": {
     "A": "green",
-    "B": "green"
+    "B": "green",
+    "C": "green"
   },
   "letters/footnotes": {
     "A": "green",
-    "B": "green"
+    "B": "green",
+    "C": "green"
   },
   "letters/header-footer": {
     "A": "green",
-    "B": "green"
+    "B": "green",
+    "C": "green"
   },
   "letters/headings": {
     "A": "green",
-    "B": "green"
+    "B": "green",
+    "C": "green"
   },
   "letters/highlight": {
     "A": "green",
-    "B": "green"
+    "B": "green",
+    "C": "green"
   },
   "letters/image": {
     "A": "green",
-    "B": "green"
+    "B": "green",
+    "C": "green"
   },
   "letters/indents": {
     "A": "green",
-    "B": "green"
+    "B": "green",
+    "C": "green"
   },
   "letters/landscape": {
     "A": "green",
-    "B": "green"
+    "B": "green",
+    "C": "green"
   },
   "letters/line-spacing": {
     "A": "green",
-    "B": "green"
+    "B": "green",
+    "C": "green"
   },
   "letters/nested-list": {
     "A": "green",
-    "B": "green"
+    "B": "green",
+    "C": "green"
   },
   "letters/numbered-list": {
     "A": "green",
-    "B": "green"
+    "B": "green",
+    "C": "green"
   },
   "letters/page-break": {
     "A": "green",
-    "B": "green"
+    "B": "green",
+    "C": "green"
   },
   "letters/page-margins": {
     "A": "green",
-    "B": "green"
+    "B": "green",
+    "C": "green"
   },
   "letters/page-numbers": {
     "A": "green",
-    "B": "green"
+    "B": "green",
+    "C": "green"
   },
   "letters/pagination": {
     "A": "green",
-    "B": "green"
+    "B": "green",
+    "C": "green"
   },
   "letters/paragraph-spacing": {
     "A": "green",
-    "B": "green"
+    "B": "green",
+    "C": "green"
   },
   "letters/plain-paragraph": {
     "A": "green",
-    "B": "green"
+    "B": "green",
+    "C": "green"
   },
   "letters/super-subscript": {
     "A": "green",
-    "B": "green"
+    "B": "green",
+    "C": "green"
   },
   "letters/table": {
     "A": "amber",
-    "B": "amber"
+    "B": "amber",
+    "C": "amber"
   },
   "letters/text-color": {
     "A": "green",
-    "B": "green"
+    "B": "green",
+    "C": "green"
   },
   "letters/toc": {
     "A": "green",
-    "B": "green"
+    "B": "green",
+    "C": "green"
   },
   "tables/alignment": {
     "A": "green",
-    "B": "green"
+    "B": "green",
+    "C": "green"
   },
   "tables/borders": {
     "A": "green",
-    "B": "green"
+    "B": "green",
+    "C": "green"
   },
   "tables/cell-fonts": {
     "A": "green",
-    "B": "green"
+    "B": "green",
+    "C": "green"
   },
   "tables/chart": {
     "A": "green",
-    "B": "green"
+    "B": "green",
+    "C": "green"
   },
   "tables/chart-area": {
     "A": "green",
-    "B": "green"
+    "B": "green",
+    "C": "green"
   },
   "tables/chart-line": {
     "A": "green",
-    "B": "green"
+    "B": "green",
+    "C": "green"
   },
   "tables/chart-pie": {
     "A": "green",
-    "B": "green"
+    "B": "green",
+    "C": "amber"
   },
   "tables/chart-scatter": {
     "A": "green",
-    "B": "green"
+    "B": "green",
+    "C": "green"
   },
   "tables/col-row-size": {
     "A": "green",
-    "B": "green"
+    "B": "green",
+    "C": "green"
   },
   "tables/conditional": {
     "A": "green",
-    "B": "green"
+    "B": "green",
+    "C": "green"
   },
   "tables/edited-journey": {
     "A": "amber",
@@ -197,26 +243,32 @@
   },
   "tables/fills": {
     "A": "green",
-    "B": "green"
+    "B": "green",
+    "C": "green"
   },
   "tables/frozen": {
     "A": "green",
-    "B": "green"
+    "B": "green",
+    "C": "green"
   },
   "tables/merged": {
     "A": "green",
-    "B": "green"
+    "B": "green",
+    "C": "green"
   },
   "tables/number-formats": {
     "A": "amber",
-    "B": "amber"
+    "B": "amber",
+    "C": "amber"
   },
   "tables/values": {
     "A": "green",
-    "B": "green"
+    "B": "green",
+    "C": "green"
   },
   "tables/wrap-text": {
     "A": "amber",
-    "B": "amber"
+    "B": "amber",
+    "C": "amber"
   }
 }
