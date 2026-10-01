@@ -2368,6 +2368,86 @@ class TablesCellEntryMixin:
         )
 
 
+class TablesFormatSafeSaveMixin(TablesCellEntryMixin):
+    """A spreadsheet Tables can open but not write (CSV, ODS, XLS), edited
+    and saved with Ctrl+S: the original file keeps its bytes, the app says
+    it cannot save in that format, and Save As offers the same name as
+    .xlsx, which then holds the edit (tables-readiness.md, first row;
+    #1204). Run once per format by the classes below; the fixtures were
+    written by LibreOffice from budget.csv."""
+
+    app_name = "tables"
+    fixture = None
+
+    def setUp(self):
+        import shutil
+        self._dir = self.temp_dir(prefix=f"tables-format-save-{self.fixture.split('.')[-1]}-")
+        source = os.path.join(os.path.dirname(os.path.abspath(__file__)), "fixtures", self.fixture)
+        self._path = os.path.join(self._dir, self.fixture)
+        shutil.copyfile(source, self._path)
+        with open(self._path, "rb") as f:
+            self._original = f.read()
+        self.launch_args = [self._path]
+        self.isolate_autosave_state()
+        self.isolate_snapshot()
+        super().setUp()
+
+    def _showing(self, role, name):
+        from dogtail import tree
+        return tree.root.findChild(lambda n: n.roleName == role and n.name == name and n.showing,
+                                   retry=False, requireResult=False)
+
+    def test_ctrl_s_keeps_the_original_and_save_as_writes_xlsx(self):
+        import zipfile
+        from dogtail import rawinput
+
+        self.wait_until(self._grid, lambda text: "cell A1: Item" in text, description=f"{self.fixture} to open")
+        self._put("B2", "1500")
+        rawinput.keyCombo("<Control>s")
+        save_as = self.wait_until(lambda: self._showing("push button", "Save As…"), bool,
+                                  description="the app to say it cannot save in this format")
+        with open(self._path, "rb") as f:
+            self.assertEqual(f.read(), self._original, f"Ctrl+S changed {self.fixture}")
+
+        save_as.do_action(0)
+        name_entry = self.wait_until(lambda: self._showing("text", "Name:"), bool,
+                                     description="the Save As dialog")
+        stem = self.fixture.rsplit(".", 1)[0]
+        # dogtail's .text asks for characters 0..-1, which GTK 4's text
+        # interface answers with nothing; ask for the count it reports.
+        def offered():
+            text = name_entry.queryText()
+            return text.getText(0, text.characterCount)
+        self.wait_until(offered, lambda t: t == f"{stem}.xlsx", description=f"Save As to offer {stem}.xlsx")
+        out_path = os.path.join(self._dir, f"{stem}.xlsx")
+        name_entry.text = out_path
+        self.wait_until(lambda: self._showing("push button", "Save"), bool,
+                        description="the dialog's Save button").do_action(0)
+
+        def saved():
+            try:
+                with zipfile.ZipFile(out_path) as z:
+                    return any(b"1500" in z.read(n) for n in z.namelist() if n.startswith("xl/"))
+            except (OSError, zipfile.BadZipFile):
+                return False
+        self.wait_until(saved, bool, interval=0.25, description=f"{stem}.xlsx to hold the edit")
+        with open(self._path, "rb") as f:
+            self.assertEqual(f.read(), self._original, f"Save As changed {self.fixture}")
+        self.assertIsNone(self.process.poll(), "tables crashed saving")
+
+
+class TablesCsvSaveSmoke(TablesFormatSafeSaveMixin, BaseGUITestCase):
+    fixture = "budget.csv"
+
+
+class TablesOdsSaveSmoke(TablesFormatSafeSaveMixin, BaseGUITestCase):
+    fixture = "budget.ods"
+
+
+class TablesXlsSaveSmoke(TablesFormatSafeSaveMixin, BaseGUITestCase):
+    fixture = "budget.xls"
+
+
 class TablesTwoSheetJourneySmoke(TablesCellEntryMixin, BaseGUITestCase):
     """Two sheets through the whole sheet bar (tables-readiness.md row 3,
     #1204): a value on Sheet1 and a formula on Sheet2 that reads it; rename

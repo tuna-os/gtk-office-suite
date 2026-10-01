@@ -862,12 +862,19 @@ def ratchet(args, manifest, card, agreement, printed=None):
     if args.baseline and os.path.exists(args.baseline):
         base = json.load(open(args.baseline))
     regressed, improved = [], []
+    # A tier counts as run when any fixture was measured in it. Within a run
+    # tier, a baselined fixture with no measurement lost its evidence -- an
+    # app whose CI job never uploaded, say -- and is reported, not skipped.
+    # A tier nobody ran (a local `--tier A`) stays out of it entirely.
+    ran = {t for tiers in now.values() for t in tiers}
     for fx in manifest:
         key = f"{fx['app']}/{fx['feature']}"
         for t in TIERS:
             b = base.get(key, {}).get(t)
             n = now.get(key, {}).get(t)
             if n is None:
+                if t in ran and b is not None and b != "missing":
+                    regressed.append({"fixture": key, "tier": t, "from": b, "to": "missing"})
                 continue
             if b is None:
                 if base:  # a baseline exists but doesn't know this fixture yet

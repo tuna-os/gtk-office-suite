@@ -9,7 +9,11 @@ Audited on `e7e4df6`. Keep the existing WorkbookController/IronCalc architecture
 WorkbookController remains the sole mutation gateway. Stable sheet identities bind formulas, selection and undo. IronCalc owns calculation/dependency semantics; the view projects sparse state and does not implement a second formula engine. Format capability is explicit in the session: imported read-only formats require Save As to a writable format until their writers exist.
 
 ## Work and acceptance
-- [ ] Reproduce CSV/ODS/XLS open → edit → Ctrl+S; preserve the original and offer a correctly suffixed Save As when unsupported.
+- [x] Reproduce CSV/ODS/XLS open → edit → Ctrl+S; preserve the original and offer a correctly suffixed Save As when unsupported.
+      `TablesCsvSaveSmoke`, `TablesOdsSaveSmoke` and `TablesXlsSaveSmoke` (tests/gui/test_smoke.py; fixtures written by
+      LibreOffice in tests/gui/fixtures/) open each format, edit B2, press Ctrl+S, and require the original's bytes
+      unchanged, the "Cannot save in this format" prompt, Save As offering `budget.xlsx`, and that workbook holding the
+      edit. With the guards in `save_engine_to_xlsx` and the save action removed, the journey fails (#1204).
 - [ ] Test formulas, cached values, styles, charts, rules, names, protection and hidden/filter state against a declared XLSX loss budget.
 - [ ] Two-sheet journey: edit/formula → rename/reorder/delete/undo → switch → save → reopen; no cross-sheet overwrite or retargeted history.
       Most of it is now `TablesTwoSheetJourneySmoke` (#1204): a value on Sheet1, a formula on Sheet2 reading it, rename
