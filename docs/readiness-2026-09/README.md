@@ -52,7 +52,7 @@ document, never from whether an issue happens to be closed.
 - [~] #439 — Tables format safety and authoring — [tables-readiness.md](tables-readiness.md) 5/7
 - [ ] #440 — Decks authoring and presentation — [decks-readiness.md](decks-readiness.md) 0/7
 - [~] #1208 — performance, rendering and accessibility evidence — [performance-accessibility.md](performance-accessibility.md) 2/7
-- [~] #1209 — installed-release signoff — [release.md](release.md) 1/9
+- [~] #1209 — installed-release signoff — [release.md](release.md) 2/9
 
 | Phase | Execution issue | Exit evidence |
 |---|---|---|
