@@ -46,6 +46,11 @@ written to show features that work. Real-world files look worse (see
 |---|---|
 | ![Letters — command palette](docs/screenshots/letters-palette.png) | ![Decks — object inspector and presenter pill](docs/screenshots/decks.png) |
 
+**Every feature, with a screenshot of each:** the
+[feature overviews](docs/features/README.md) for
+[Letters](docs/features/letters.md), [Tables](docs/features/tables.md) and
+[Decks](docs/features/decks.md), captured the same way.
+
 ---
 
 ## Install
