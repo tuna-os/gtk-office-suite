@@ -408,9 +408,10 @@ pub(crate) fn make_doc_widget(settings: Option<&gio::Settings>) -> (PageContaine
     connect_suite_clipboard(page_view.upcast_ref(), &buffer);
     container.set_zoom(container.zoom_level());
     container.set_vexpand(true); container.set_hexpand(true);
-    // A render-lab capture looks at the laid-out pages (ADR 0010).
-    let print = settings.is_some_and(|s| s.boolean("print-layout")) || suite_common::render_dump::active();
-    set_print_layout(&container, &buffer, print);
+    // Print Layout is the one editing surface (ADR 0010, #1202): the
+    // pageless Draft view and its toggle are retired. The GtkTextView stays
+    // only as the buffer's host and is never shown.
+    set_print_layout(&container, &buffer, true);
     // Zoom via Ctrl+Scroll
     {
         let pc = container.clone();
