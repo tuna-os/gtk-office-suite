@@ -26,7 +26,7 @@ jobs:
       matrix:
         app: [letters, tables, decks]
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       - name: Install office producer and GUI dependencies
         run: |
           sudo apt-get update -qq
@@ -34,8 +34,10 @@ jobs:
             xvfb dbus at-spi2-core matchbox-window-manager xdotool x11-utils gsettings-desktop-schemas \
             python3-dogtail python3-pytest python3-pil python3-requests
           python3 -m pip install --break-system-packages mss
-      - uses: dtolnay/rust-toolchain@stable
-      - uses: Swatinem/rust-cache@v2
+      - uses: dtolnay/rust-toolchain@6bed0761d98439e5a578e2877258200ad565ba87 # stable
+        with:
+          toolchain: stable
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2
       - run: cargo build --locked --bin ${{ matrix.app }}
       - name: Generate and validate actual documents
         run: |
@@ -55,7 +57,7 @@ jobs:
         run: tests/gui/run_gui_tests.sh test_file_corpus.py -k '${{ matrix.app }}' --junitxml='${{ github.workspace }}/target/file-corpus.xml'
       - name: Retain fixtures provenance failures and results
         if: always()
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: file-corpus-${{ matrix.app }}-${{ github.run_id }}
           path: |

@@ -12,12 +12,18 @@
 > (accepted, Loro) alongside it. The UI direction is in
 > [docs/DESIGN-UI.md](docs/DESIGN-UI.md).
 
-The current execution plan is [Roadmap to dependable daily use](docs/readiness-2026-09/README.md),
-tracked in [#443](https://github.com/tuna-os/gtk-office-suite/issues/443).
-It prioritizes crash reproduction, save/recovery safety and verified user journeys.
+**The plan of record to completion is [#1190](https://github.com/tuna-os/gtk-office-suite/issues/1190)
+(since 2026-10-01): v3.0 on Flathub.** Its sub-issues are phased (0: make every
+CI signal true; 1: render parity Phase 2 and real-document evidence; 2: interop
+and recovery tails; 3: release) and each states its exit as something CI
+reports. The per-area evidence stays in the
+[readiness ledger](docs/readiness-2026-09/README.md) (#443), which #1190 drives
+to done. Long-tail ideas are parked in
+[#1216](https://github.com/tuna-os/gtk-office-suite/issues/1216), not in
+separate issues.
 The dated ledger below is historical and does not certify present behavior.
 
-**Last updated**: 2026-09-25 | **Maintainer**: tuna-os (hanthor) / architect agent
+**Last updated**: 2026-10-01 | **Maintainer**: tuna-os (hanthor) / architect agent
 
 ---
 
@@ -38,7 +44,7 @@ gtk-office-suite is the org's flagship **end-user product bet** and a cornerston
   (#443): atomic save (#437), Letters save formats (#436), GUI display/process
   ownership (#241), deterministic GUI infrastructure (#354, 9/10) and CI
   self-tests (#313, 7/8).
-- ✅ **ROADMAP.md published** (this file, tunaos#1359) — internal planning (IMPLEMENTATION-QUEUE.md, docs/IMPLEMENTATION-PLAN.md, docs/PARITY.md) now has a public, dated, prioritized surface, linked from README.
+- ✅ **ROADMAP.md published** (this file, tunaos#1359) — the June planning documents it replaced (the v1.0 queue, plan and handoff) are in [docs/archive/](docs/archive/README.md); they were wrong about the project and are kept for history only.
 - ⚠️ **GUI-layer God-files** (#168) — still architectural debt before feature
   velocity scales, but measured and bounded. Decomposition has started: the chart
   dialog moved out of Tables in #594.
@@ -90,8 +96,10 @@ gtk-office-suite is the org's flagship **end-user product bet** and a cornerston
 ### Q4 2026 (October–December) — "Ship it properly"
 
 **Theme**: production release gating, Flatpak distribution, and headless batch
-document processing. Sketch until Q4 starts; the live execution plan remains
-[docs/readiness-2026-09/](docs/readiness-2026-09/README.md).
+document processing. The goals below are older than the plan of record; where
+they differ, [#1190](https://github.com/tuna-os/gtk-office-suite/issues/1190)
+wins (release gate #1209, Flathub #1210, performance and accessibility #1208,
+interop #1206).
 
 | Goal | Owner | Tracking | Status |
 |------|-------|----------|--------|

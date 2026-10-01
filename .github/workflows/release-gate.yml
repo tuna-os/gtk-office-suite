@@ -31,7 +31,7 @@ jobs:
   contract:
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           fetch-depth: 0
       - name: Set reproducibility timestamp
@@ -61,7 +61,7 @@ jobs:
           mkdir -p release-evidence
           find flatpak flathub po -type f -print0 | sort -z | xargs -0 sha256sum > release-evidence/release-inputs.sha256
           sha256sum Cargo.lock scripts/release_gate.py docs/RELEASE.md >> release-evidence/release-inputs.sha256
-      - uses: actions/upload-artifact@v7
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: release-contract-${{ github.sha }}
           path: release-evidence/release-inputs.sha256

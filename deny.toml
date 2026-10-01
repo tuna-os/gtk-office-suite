@@ -16,30 +16,30 @@ ignore = [
     # .docx/.pptx/.odt files (attacker-supplied binary input), but both are
     # unmaintained with no patched release; successors (skrifa/harfrust) are
     # only reachable through typst/usvg, so migration is upstream's call.
-    { id = "RUSTSEC-2026-0192", reason = "ttf-parser unmaintained, no patched release; reached via fontdb/oxml-layout/typst/usvg — upstream successor skrifa (see #269)" },
-    { id = "RUSTSEC-2026-0206", reason = "rustybuzz unmaintained, no patched release; reached via krilla/typst-layout/usvg — upstream successor harfrust (see #269)" },
+    { id = "RUSTSEC-2026-0192", reason = "ttf-parser unmaintained, no patched release; reached via fontdb/oxml-layout/typst/usvg — upstream successor skrifa (see #269); review by 2027-01-01" },
+    { id = "RUSTSEC-2026-0206", reason = "rustybuzz unmaintained, no patched release; reached via krilla/typst-layout/usvg — upstream successor harfrust (see #269); review by 2027-01-01" },
     # quick-xml 0.38.4: upstream-blocked, tracked in #225. Only quick-xml
     # >= 0.41 is patched (there is no 0.38.x fix), and typst -> hayagriva ->
     # citationberg 0.7.0 (the latest release) requires ^0.38.1, so Cargo.lock
     # holds 0.38.4 beside the workspace's fixed 0.41. Remove these two entries
     # once citationberg moves off 0.38; see the note in suite-export/Cargo.toml.
-    { id = "RUSTSEC-2026-0194", reason = "quick-xml 0.38.4 via citationberg 0.7.0 (typst bibliography); no patched 0.38.x; our generated Typst never parses CSL (#225)" },
-    { id = "RUSTSEC-2026-0195", reason = "quick-xml 0.38.4 via citationberg 0.7.0 (typst bibliography); no patched 0.38.x; our generated Typst never parses CSL (#225)" },
+    { id = "RUSTSEC-2026-0194", reason = "quick-xml 0.38.4 via citationberg 0.7.0 (typst bibliography); no patched 0.38.x; our generated Typst never parses CSL (#225); review by 2027-01-01" },
+    { id = "RUSTSEC-2026-0195", reason = "quick-xml 0.38.4 via citationberg 0.7.0 (typst bibliography); no patched 0.38.x; our generated Typst never parses CSL (#225); review by 2027-01-01" },
     # syntect (syntax highlighting) pulls both; not in the untrusted-input path.
-    { id = "RUSTSEC-2025-0141", reason = "bincode development ceased, no patched release; via syntect — build/display only" },
-    { id = "RUSTSEC-2024-0320", reason = "yaml-rust unmaintained, no patched release; via syntect — display only" },
+    { id = "RUSTSEC-2025-0141", reason = "bincode development ceased, no patched release; via syntect — build/display only (#1197); review by 2027-01-01" },
+    { id = "RUSTSEC-2024-0320", reason = "yaml-rust unmaintained, no patched release; via syntect — display only (#1197); review by 2027-01-01" },
     # Build-time proc-macro; does not ship in binaries.
-    { id = "RUSTSEC-2024-0436", reason = "paste unmaintained proc-macro; via biblatex/hayagriva/rav1e — build-time only" },
+    { id = "RUSTSEC-2024-0436", reason = "paste unmaintained proc-macro; via biblatex/hayagriva/rav1e — build-time only (#1197); review by 2027-01-01" },
     # Loro (the `collab` feature of tables-core, RFC-0001 Phase 2, and of
     # decks-core, Phase 3; tracked in #1043) pulls these in.
     # The feature is off in every build that ships. This gate runs with
     # --all-features, which is the only reason it sees them. They must be
     # resolved before `collab` ships to users (RFC-0001 Phase 3), either
     # by a Loro release without `im` or by a fork.
-    { id = "RUSTSEC-2023-0126", reason = "im OrdSet aliasing (unsound); via loro, collab feature only, not shipped — resolve before collab ships" },
-    { id = "RUSTSEC-2026-0248", reason = "im unmaintained; via loro, collab feature only, not shipped — resolve before collab ships" },
-    { id = "RUSTSEC-2026-0251", reason = "sized-chunks unmaintained; via im/loro, collab feature only, not shipped" },
-    { id = "RUSTSEC-2026-0255", reason = "sized-chunks panic-safety (unsound); via im/loro, collab feature only, not shipped — resolve before collab ships" },
-    { id = "RUSTSEC-2026-0247", reason = "bitmaps unmaintained; via im/loro, collab feature only, not shipped" },
-    { id = "RUSTSEC-2023-0089", reason = "atomic-polyfill unmaintained; reached only with the collab feature's dependencies enabled (--all-features), not in shipped builds" },
+    { id = "RUSTSEC-2023-0126", reason = "im OrdSet aliasing (unsound); via loro, collab feature only, not shipped — resolve before collab ships (#1043); review by 2027-01-01" },
+    { id = "RUSTSEC-2026-0248", reason = "im unmaintained; via loro, collab feature only, not shipped — resolve before collab ships (#1043); review by 2027-01-01" },
+    { id = "RUSTSEC-2026-0251", reason = "sized-chunks unmaintained; via im/loro, collab feature only, not shipped (#1043); review by 2027-01-01" },
+    { id = "RUSTSEC-2026-0255", reason = "sized-chunks panic-safety (unsound); via im/loro, collab feature only, not shipped — resolve before collab ships (#1043); review by 2027-01-01" },
+    { id = "RUSTSEC-2026-0247", reason = "bitmaps unmaintained; via im/loro, collab feature only, not shipped (#1043); review by 2027-01-01" },
+    { id = "RUSTSEC-2023-0089", reason = "atomic-polyfill unmaintained; reached only with the collab feature's dependencies enabled (--all-features), not in shipped builds (#1043); review by 2027-01-01" },
 ]

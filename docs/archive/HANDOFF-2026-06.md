@@ -1,3 +1,12 @@
+> **Archived 2026-10-01 — historical, not current.** This file describes
+> the project as of June 2026 and is wrong about it today (it lists the
+> Tables grid, Decks file I/O and Letters formatting as pending, and calls
+> the suite functionally complete; the README calls it pre-alpha). Nothing
+> checks it against the code, so it drifted silently. The live plan is
+> [#1190](https://github.com/tuna-os/gtk-office-suite/issues/1190) and
+> [docs/readiness-2026-09/](../readiness-2026-09/README.md). Kept only so
+> its history and links stay reachable.
+
 # Handoff — gtk-office-suite (formerly hanthor-rust)
 
 **Date:** 2026-06-23
