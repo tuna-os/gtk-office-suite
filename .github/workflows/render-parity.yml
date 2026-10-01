@@ -53,15 +53,15 @@ jobs:
       matrix:
         app: [letters, tables, decks]
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
-      - uses: docker/setup-buildx-action@v4
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4
 
       # On top of the published GUI test image (gui-container.yml builds,
       # verifies and pushes it from main). A locally built base would be
       # invisible to buildx's docker-container builder.
       - name: Build render-lab image
-        uses: docker/build-push-action@v7
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7
         with:
           context: tools/render-lab
           file: tools/render-lab/Containerfile
@@ -72,7 +72,7 @@ jobs:
           cache-to: type=gha,mode=max,scope=render-lab
 
       - name: Cache cargo
-        uses: actions/cache@v6
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
         with:
           path: |
             ~/.cache/render-lab-cargo
@@ -89,7 +89,7 @@ jobs:
 
       - name: Upload captures
         if: always()
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: render-lab-${{ matrix.app }}
           path: |
@@ -109,12 +109,12 @@ jobs:
       issues: write
       pull-requests: write
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
-      - uses: docker/setup-buildx-action@v4
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4
 
       - name: Build render-lab image
-        uses: docker/build-push-action@v7
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7
         with:
           context: tools/render-lab
           file: tools/render-lab/Containerfile
@@ -137,21 +137,21 @@ jobs:
       # failed (continue-on-error) and is named by the check below.
       - name: Download captures (letters)
         continue-on-error: true
-        uses: actions/download-artifact@v8
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
         with:
           name: render-lab-letters
           path: render-lab-out/letters
 
       - name: Download captures (tables)
         continue-on-error: true
-        uses: actions/download-artifact@v8
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
         with:
           name: render-lab-tables
           path: render-lab-out/tables
 
       - name: Download captures (decks)
         continue-on-error: true
-        uses: actions/download-artifact@v8
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
         with:
           name: render-lab-decks
           path: render-lab-out/decks
@@ -187,7 +187,7 @@ jobs:
       - name: Upload report
         if: always()
         id: upload
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: render-parity-report
           path: |
@@ -247,12 +247,12 @@ jobs:
         # the issue sync filed every one of them as "missing" (#1194).
         app: [letters, decks, tables]
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
-      - uses: docker/setup-buildx-action@v4
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4
 
       - name: Build render-lab image
-        uses: docker/build-push-action@v7
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7
         with:
           context: tools/render-lab
           file: tools/render-lab/Containerfile
@@ -263,7 +263,7 @@ jobs:
           cache-to: type=gha,mode=max,scope=render-lab
 
       - name: Cache cargo
-        uses: actions/cache@v6
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
         with:
           path: |
             ~/.cache/render-lab-cargo
@@ -281,7 +281,7 @@ jobs:
 
       - name: Upload export captures
         if: always()
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: export-lab-${{ matrix.app }}
           path: |
@@ -302,12 +302,12 @@ jobs:
       issues: write
       pull-requests: write
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
-      - uses: docker/setup-buildx-action@v4
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4
 
       - name: Build render-lab image
-        uses: docker/build-push-action@v7
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7
         with:
           context: tools/render-lab
           file: tools/render-lab/Containerfile
@@ -318,14 +318,14 @@ jobs:
 
       - name: Download export captures (letters)
         continue-on-error: true
-        uses: actions/download-artifact@v8
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
         with:
           name: export-lab-letters
           path: render-lab-out/letters
 
       - name: Download export captures (decks)
         continue-on-error: true
-        uses: actions/download-artifact@v8
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
         with:
           name: export-lab-decks
           path: render-lab-out/decks
@@ -368,7 +368,7 @@ jobs:
       - name: Upload export report
         if: always()
         id: upload
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: export-parity-report
           path: |
@@ -416,20 +416,20 @@ jobs:
     if: github.event_name == 'schedule' || inputs.vm
     runs-on: ubuntu-24.04
     container:
-      image: ghcr.io/flathub-infra/flatpak-github-actions:gnome-50
+      image: ghcr.io/flathub-infra/flatpak-github-actions:gnome-50@sha256:1de59efef01a946d9f28f1ec3458bf6f61dcee3507d7fecdd473f8134da4ec77
       options: --privileged
     strategy:
       matrix:
         app: [letters, tables, decks]
     steps:
-      - uses: actions/checkout@v7
-      - uses: flatpak/flatpak-github-actions/flatpak-builder@v6
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: flatpak/flatpak-github-actions/flatpak-builder@79327416609af08178ad73b352877e51450790b3 # v6
         with:
           bundle: ${{ matrix.app }}.flatpak
           manifest-path: flatpak/org.tunaos.${{ matrix.app }}.json
           cache-key: render-lab-flatpak-${{ matrix.app }}-${{ github.sha }}
           upload-artifact: false
-      - uses: actions/upload-artifact@v7
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: bundle-${{ matrix.app }}
           path: ${{ matrix.app }}.flatpak
@@ -445,7 +445,7 @@ jobs:
     # run list and the report either way.
     continue-on-error: true
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
       - name: Enable KVM
         run: |
@@ -453,14 +453,14 @@ jobs:
           sudo udevadm control --reload-rules && sudo udevadm trigger --name-match=kvm
           sudo apt-get update && sudo apt-get install -y --no-install-recommends qemu-system-x86 qemu-utils cloud-image-utils python3-pil
 
-      - uses: actions/download-artifact@v8
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
         with:
           pattern: bundle-*
           path: bundles
           merge-multiple: true
 
       - name: Cache prepared guest image
-        uses: actions/cache@v6
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
         with:
           path: vm-work
           key: render-lab-vm-${{ hashFiles('tools/render-lab/vm/prepare.sh', 'tools/render-lab/vm/user-data') }}
@@ -486,7 +486,7 @@ jobs:
 
       - name: Upload VM report
         if: always()
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: render-parity-vm-report
           path: |

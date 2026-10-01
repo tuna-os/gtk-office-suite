@@ -11,7 +11,7 @@
 #
 # Build:  docker build -t gui-test tests/gui/container
 # Use:    tests/gui/container/run.sh tests/gui/run_gui_tests.sh test_smoke.py
-FROM ubuntu:24.04
+FROM ubuntu:24.04@sha256:008173c23f95b170204355c12626cb5a965d779a7e1283b09e9cffbb1bf33ca3
 
 LABEL org.opencontainers.image.source=https://github.com/tuna-os/gtk-office-suite
 LABEL org.opencontainers.image.description="GTK4 build + AT-SPI GUI journey + screen recording environment for gtk-office-suite"
