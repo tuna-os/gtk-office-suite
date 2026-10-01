@@ -70,6 +70,12 @@ export GSETTINGS_BACKEND=keyfile
 PYTHON_BIN="${GUI_TEST_PYTHON:-/usr/bin/python3}"
 TOUR_DIR="${FEATURE_TOUR_DIR:-$REPO_ROOT/docs/features/img}"
 mkdir -p "$TOUR_DIR"
+# A full tour starts from an empty directory, so a stop that was removed
+# takes its image with it. Safe because a stop that fails fails the run,
+# and nothing is committed from a failed run.
+if [ -z "${FEATURE_TOUR_ONLY:-}" ]; then
+    rm -f "$TOUR_DIR"/*.png
+fi
 export PYTHON_BIN OUTDIR TOUR_DIR REPO_ROOT
 export WALKTHROUGH="${WALKTHROUGH:-1}" FEATURE_TOUR_ONLY="${FEATURE_TOUR_ONLY:-}"
 

@@ -26,9 +26,17 @@ stop's image must be embedded in its app's page, and every image a page
 embeds must come from a stop. So a feature can't silently drop out of the
 docs, and a page can't keep showing a screenshot nothing regenerates.
 
-The [Screenshots workflow](../../.github/workflows/screenshots.yml)
-recaptures them weekly and opens a pull request when they change. To
-recapture locally:
+They stay current by themselves. The
+[Screenshots workflow](../../.github/workflows/screenshots.yml) recaptures
+them on every push to `main` that touches an app, a core crate, the demo
+documents or the tour, and weekly for font and runtime updates.
+`tests/gui/keep_changed_screenshots.py` then drops images whose
+differences are only rendering noise (anti-aliasing, a clock or today's
+date). If anything visibly changed, the workflow opens a pull request with
+the new images, runs CI on it, and sets it to merge itself once CI is
+green.
+
+To recapture locally:
 
 ```bash
 cargo build --bin letters --bin tables --bin decks

@@ -1,10 +1,34 @@
 name: Screenshots
 
-# Regenerate the README/docs walkthrough screenshots from the real apps
-# and commit them when they change. Weekly + on demand; not per-push
-# (font rendering noise would churn the repo).
+# Regenerate the README walkthrough and the feature-overview screenshots
+# (docs/features/) from the real apps, and land them on main when they
+# visibly change.
+#
+# On every push to main that can change what the apps look like, plus
+# weekly (font and runtime updates) and on demand. Rendering noise is not
+# a change: keep_changed_screenshots.py puts back every image whose
+# differences are anti-aliasing or a clock, so a refresh is only proposed
+# when the UI moved.
 
 on:
+  push:
+    branches: [main]
+    paths:
+      - 'letters/**'
+      - 'letters-core/**'
+      - 'tables/**'
+      - 'tables-core/**'
+      - 'decks/**'
+      - 'decks-core/**'
+      - 'suite-common/**'
+      - 'suite-common-core/**'
+      - 'flatpak/*.gschema.xml'
+      - 'tests/gui/walkthrough.py'
+      - 'tests/gui/feature_tour.py'
+      - 'tests/gui/capture_walkthrough.sh'
+      - 'tests/gui/keep_changed_screenshots.py'
+      - 'tests/gui/demo/**'
+      - '.github/workflows/screenshots.yml'
   schedule:
     - cron: '0 7 * * 1'   # Mondays 7am UTC
   workflow_dispatch:
@@ -19,6 +43,8 @@ permissions:
   # branch has already been pushed, which is a worse failure than the one
   # it replaced — work done, nothing proposed.
   pull-requests: write
+  # To start CI on the refresh branch (`gh workflow run`): see below.
+  actions: write
 
 jobs:
   capture:
@@ -45,8 +71,16 @@ jobs:
             python3-dogtail python3-pil xcompmgr
           python3 -m pip install --break-system-packages mss
 
-      - name: Capture walkthrough
+      - name: Capture walkthrough and feature tour
         run: tests/gui/capture_walkthrough.sh docs/screenshots
+
+      # Every capture differs from the last in some pixels; only a visible
+      # change is worth a pull request.
+      - name: Keep only visible changes
+        id: changes
+        run: |
+          python3 tests/gui/keep_changed_screenshots.py docs/screenshots docs/features/img | tee changes.txt
+          echo "count=$(tail -1 changes.txt | sed 's/changed: //')" >> "$GITHUB_OUTPUT"
 
       # Opens a pull request instead of pushing to main, because pushing to
       # main cannot work: `main` requires the `test` status check, and this
@@ -61,49 +95,61 @@ jobs:
       # A deadlock, not a flake, and it had been failing since protection
       # was enabled — silently, because a screenshot run nobody watches
       # failing on its last step looks the same as one that had nothing to
-      # do. `[skip ci]` is gone for the same reason: the pull request needs
-      # CI to run if it is ever to be mergeable.
-      - name: Open a pull request with the updated screenshots
+      # do.
+      #
+      # The pull request then deadlocked the same way, one step later: a
+      # push made with GITHUB_TOKEN starts no workflows, so CI never ran on
+      # the refresh branch, `test` never reported, and #1150 sat unmergeable
+      # with zero checks. A dispatch is the one event that token may start,
+      # so this job runs CI on the branch itself, then turns on auto-merge:
+      # a refresh lands by itself once CI is green, with nobody to remember
+      # it. If the repository does not allow auto-merge, the pull request
+      # is still opened, with its checks, and says so.
+      - name: Open or refresh the pull request, run CI on it, merge when green
+        if: steps.changes.outputs.count != '0'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           git config user.name "screenshot-bot"
           git config user.email "actions@github.com"
-          git add docs/screenshots docs/features/img
+          git add -A docs/screenshots docs/features/img
           if git diff --cached --quiet; then
             echo "screenshots unchanged"
             exit 0
           fi
 
-          # One long-lived branch, force-pushed: successive weekly runs
-          # should replace the pending refresh rather than pile up a branch
-          # and a pull request each. Screenshots are regenerated wholesale,
-          # so there is no history here worth keeping.
+          # One long-lived branch, force-pushed: successive runs replace
+          # the pending refresh rather than pile up a branch and a pull
+          # request each. Screenshots are regenerated wholesale, so there
+          # is no history here worth keeping.
           branch="bot/screenshot-refresh"
-          git commit -m "docs: refresh walkthrough screenshots"
+          git commit -m "docs: refresh screenshots" -m "$(grep -v '^noise' changes.txt)"
           git push --force origin "HEAD:refs/heads/$branch"
 
-          # `gh pr create` fails if one is already open for the branch, and
-          # a reused branch usually means there is. Reuse it: the force
-          # push above has already updated what it proposes.
-          existing=$(gh pr list --head "$branch" --state open \
-            --json number --jq '.[0].number // empty')
-          if [ -n "$existing" ]; then
-            echo "Refreshed the screenshots on existing PR #$existing"
-            exit 0
+          {
+            echo "Regenerated from the real apps by the Screenshots workflow"
+            echo "(\`${GITHUB_SHA::7}\`, run ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID})."
+            echo
+            echo "Only images that visibly changed are included; rendering noise"
+            echo "(anti-aliasing, a clock) was put back by keep_changed_screenshots.py."
+            echo
+            echo '```'
+            grep -v '^noise' changes.txt
+            echo '```'
+            echo
+            echo "Merges itself once CI is green."
+          } > /tmp/pr-body.md
+
+          pr=$(gh pr list --head "$branch" --state open --json number --jq '.[0].number // empty')
+          if [ -n "$pr" ]; then
+            gh pr edit "$pr" --body-file /tmp/pr-body.md
+          else
+            gh pr create --base main --head "$branch" \
+              --title "docs: refresh screenshots" --body-file /tmp/pr-body.md
+            pr=$(gh pr list --head "$branch" --state open --json number --jq '.[0].number')
           fi
-          # Heredoc, not an inline string: a quoted multi-line argument
-          # carries this file's own indentation into the rendered body.
-          cat > /tmp/pr-body.md <<'BODY'
-          Regenerated from the real apps by the Screenshots workflow.
 
-          Font rendering shifts between runner images, so a diff here is not
-          necessarily a UI change — compare the images before merging.
-
-          Opened as a pull request rather than pushed to `main`, which
-          requires the `test` status check.
-          BODY
-          sed -i 's/^          //' /tmp/pr-body.md
-          gh pr create --base main --head "$branch" \
-            --title "docs: refresh walkthrough screenshots" \
-            --body-file /tmp/pr-body.md
+          gh workflow run ci.yml --ref "$branch"
+          if ! gh pr merge "$pr" --auto --squash; then
+            echo "::warning::Auto-merge is not enabled for this repository; PR #$pr has its checks and needs merging by hand."
+          fi
