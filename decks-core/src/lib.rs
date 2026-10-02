@@ -14,6 +14,7 @@ pub mod fragment;
 pub mod guides;
 pub mod insert;
 pub mod layouts;
+pub mod loss;
 pub mod magic_move;
 pub mod odp;
 mod odp_builds;
