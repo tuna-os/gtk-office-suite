@@ -1865,6 +1865,57 @@ class TablesSavedDocumentMixin(SavedDocumentMixin):
         time.sleep(0.5)  # pacing: no state to wait on before the next input
 
 
+class MoreToRecoverMixin:
+    """Two crashed documents, one window: the other is announced (#1422).
+
+    Tables and Decks hold one document per window, so a launch recovers the
+    newest orphan and leaves the rest for later launches. That used to be
+    silent: the second document's work was on disk with nothing saying so.
+    Now the recovered window says how many more are waiting.
+
+    Two orphans are made the only way a single-window app allows: a launch
+    that opens a file skips recovery, so each of two files is opened,
+    edited, snapshotted and killed in turn.
+    """
+
+    def setUp(self):
+        self._state_dir = self.isolate_autosave_state(prefix=f"{self.app_name}-more-to-recover-")
+        self._dir = self.temp_dir(f"{self.app_name}-more-to-recover-docs-")
+        self._files = [os.path.join(self._dir, f"{stem}{self.doc_suffix}") for stem in ("first", "second")]
+        for path in self._files:
+            self._write_document(path)
+        self.launch_args = [self._files[0]]
+        super().setUp()
+
+    def _snapshots(self):
+        snap_dir = os.path.join(self._state_dir, self.app_name)
+        return [f for f in os.listdir(snap_dir) if f.endswith(".snapshot")] if os.path.isdir(snap_dir) else []
+
+    def _edit_and_snapshot(self, expected):
+        from dogtail import rawinput
+        time.sleep(1.5)  # pacing: the opened document's first frame
+        self._edit_the_document(rawinput)
+        self.gapplication_action(f"org.tunaos.{self.app_name}", "autosave-now")
+        self.wait_until(lambda: len(self._snapshots()), lambda n: n == expected,
+                        description=f"{expected} snapshot(s) on disk")
+
+    def test_a_second_crashed_document_is_announced_not_silent(self):
+        self._edit_and_snapshot(1)
+        self.relaunch_app(crash=True, launch_args=[self._files[1]])
+        self._edit_and_snapshot(2)
+
+        self.relaunch_app(crash=True, launch_args=[])
+        self.wait_until(lambda: self.app.child(roleName="frame").name,
+                        lambda name: "Recovered" in name, timeout=20.0,
+                        description="the newest crashed document recovered")
+        from dogtail import tree
+        notice = self.wait_until(
+            lambda: tree.root.findChild(lambda n: "will be offered the next time" in (n.name or "") and n.showing,
+                                        retry=False, requireResult=False),
+            bool, description="the notice that one more document is waiting")
+        self.assertIn(f"1 more unsaved {self.document_noun}", notice.name)
+
+
 class TablesRenamedOriginalSmoke(TablesSavedDocumentMixin, RenamedOriginalMixin, BaseGUITestCase):
     def _assert_the_offer_names_the_work(self, frame_name):
         self.assertIn(
@@ -1897,6 +1948,37 @@ class DecksRenamedOriginalSmoke(RenamedOriginalMixin, BaseGUITestCase):
             f"{self.doc_stem}{self.doc_suffix}", frame_name,
             f"the recovered window should name the original document: {frame_name!r}",
         )
+
+
+class TablesMoreToRecoverSmoke(MoreToRecoverMixin, BaseGUITestCase):
+    app_name = "tables"
+    doc_suffix = ".csv"
+    document_noun = "workbook"
+
+    def _write_document(self, path):
+        with open(path, "w") as f:
+            f.write("item,amount\nrent,1250\n")
+
+    def _edit_the_document(self, rawinput):
+        # A committed cell edit is what makes a workbook dirty.
+        rawinput.typeText("=6*7")
+        rawinput.keyCombo("Return")
+        time.sleep(0.5)  # pacing: no state to wait on before the next input
+
+
+class DecksMoreToRecoverSmoke(MoreToRecoverMixin, BaseGUITestCase):
+    app_name = "decks"
+    doc_suffix = ".pptx"
+    document_noun = "deck"
+
+    def _write_document(self, path):
+        with open(path, "wb") as f:
+            f.write(minimal_pptx_bytes("kept"))
+
+    def _edit_the_document(self, rawinput):
+        import subprocess
+        subprocess.run(["gapplication", "action", "org.tunaos.decks", "add-shape"])
+        time.sleep(1.0)  # pacing: no state to wait on before the next input
 
 
 class TwoDocumentsMixin:

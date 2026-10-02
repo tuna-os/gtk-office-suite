@@ -45,6 +45,7 @@ pub struct DecksWindow {
     /// Ownership of that slot, held for the window's lifetime so another
     /// launch does not offer this open deck as a crash recovery.
     _autosave_owner: Option<suite_common::autosave::SnapshotOwner>,
+    toast_overlay: adw::ToastOverlay,
 }
 
 impl DecksWindow {
@@ -1431,6 +1432,7 @@ impl DecksWindow {
             editor_split,
             file_path,
             refresh_hud,
+            toast_overlay,
         }
     }
 
@@ -1477,6 +1479,14 @@ impl DecksWindow {
             // Order and failure handling: AutosaveSlot::adopt_recovered.
             if self.autosave_slot.adopt_recovered(&bytes, &meta) {
                 orphan.clear_or_report();
+            }
+            // A window holds one deck, so any other orphan waits for a later
+            // launch; say so rather than leave it to be found by chance (#1422).
+            let waiting = suite_common::autosave::find_orphaned_snapshots(&state_dir).len();
+            if let Some(message) = suite_common::autosave::more_to_recover_message(waiting, "deck", "decks", "Decks") {
+                let toast = adw::Toast::new(&message);
+                toast.set_timeout(0);
+                self.toast_overlay.add_toast(toast);
             }
             return true;
         }
