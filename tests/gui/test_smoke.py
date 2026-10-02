@@ -757,6 +757,61 @@ class TablesKeyboardOnlySmoke(KeyboardOnlyMixin, BaseGUITestCase):
             self.assertNotIn("29", z.read("xl/worksheets/sheet1.xml").decode(), "the undone edit was saved")
 
 
+class DarkModeKeptMixin:
+    """The style chosen with Toggle Dark Mode survives a relaunch (#1305):
+    the toggle saves it as the app's `dark-mode` setting and startup
+    restores it. Neither happened, so every restart came back light. The
+    style is read off the screen (the header bar's brightness), which is
+    what the user sees, and the setting from the journey's keyfile."""
+
+    def setUp(self):
+        self.isolate_gsettings(prefix=f"dark-{self.app_name}-")
+        super().setUp()
+
+    def configure_deterministic_environment(self):
+        # libadwaita ignores every colour scheme, the app's own ForceDark
+        # included, while GTK_THEME is set (framework/base.py sets it).
+        super().configure_deterministic_environment()
+        self.launch_env.pop("GTK_THEME", None)
+
+    def _header_brightness(self):
+        import mss
+        with mss.mss() as sct:
+            shot = sct.grab({"left": 0, "top": 0, "width": 200, "height": 40})
+        px = shot.rgb
+        return sum(px) / len(px)
+
+    def _saved(self):
+        path = os.path.join(self.launch_env["XDG_CONFIG_HOME"], "glib-2.0", "settings", "keyfile")
+        return open(path).read() if os.path.exists(path) else ""
+
+    def test_the_toggled_style_survives_a_relaunch(self):
+        import subprocess
+        aid = f"org.tunaos.{self.app_name}"
+        self.wait_until(self._header_brightness, lambda b: b > 128, description="the window to open in light style")
+        subprocess.run(["gapplication", "action", aid, "toggle-dark-mode"], check=True)
+        self.wait_until(self._header_brightness, lambda b: b < 128, description="Toggle Dark Mode to darken the window")
+        self.wait_until(self._saved, lambda s: "dark-mode=true" in s, description="the choice to be saved")
+        self.relaunch_app()
+        self.wait_until(lambda: self.process.poll() is None and self._header_brightness(), lambda b: b and b < 128,
+                        description="the relaunched window to open dark")
+        subprocess.run(["gapplication", "action", aid, "toggle-dark-mode"], check=True)
+        self.wait_until(self._header_brightness, lambda b: b > 128, description="toggling back to light")
+        self.wait_until(self._saved, lambda s: "dark-mode=false" in s, description="light to be saved")
+
+
+class LettersDarkModeKeptSmoke(DarkModeKeptMixin, BaseGUITestCase):
+    app_name = "letters"
+
+
+class TablesDarkModeKeptSmoke(DarkModeKeptMixin, BaseGUITestCase):
+    app_name = "tables"
+
+
+class DecksDarkModeKeptSmoke(DarkModeKeptMixin, BaseGUITestCase):
+    app_name = "decks"
+
+
 class DecksKeyboardOnlySmoke(KeyboardOnlyMixin, BaseGUITestCase):
     app_name = "decks"
 
@@ -2805,6 +2860,109 @@ class TablesOpenGuardSmoke(TablesCellEntryMixin, BaseGUITestCase):
         self._button("Discard").do_action(0)
         self.wait_until(self._title, lambda t: "second.ods" in t, description="Discard to open second.ods")
         self.assertIsNone(self.process.poll(), "tables crashed opening a handed-over file")
+
+
+class TablesLossQuestionSmoke(TablesCellEntryMixin, BaseGUITestCase):
+    """A workbook holding content Tables cannot write (here, a macro
+    project) asks before Ctrl+S drops it (#1272). Cancel leaves the file's
+    bytes alone and the edit unsaved; Save Anyway writes the edit, and
+    the macro is gone as the question said it would be.
+
+    The workbook is built here rather than committed: a minimal xlsx with
+    one sheet, plus `xl/vbaProject.bin`, which is all the loss scan reads.
+    """
+
+    app_name = "tables"
+
+    @staticmethod
+    def _write_macro_workbook(path):
+        import zipfile
+        parts = {
+            "[Content_Types].xml": (
+                '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+                '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">'
+                '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>'
+                '<Default Extension="xml" ContentType="application/xml"/>'
+                '<Default Extension="bin" ContentType="application/vnd.ms-office.vbaProject"/>'
+                '<Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>'
+                '<Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>'
+                '</Types>'),
+            "_rels/.rels": (
+                '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+                '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
+                '<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/>'
+                '</Relationships>'),
+            "xl/workbook.xml": (
+                '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+                '<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" '
+                'xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">'
+                '<sheets><sheet name="Sheet1" sheetId="1" r:id="rId1"/></sheets></workbook>'),
+            "xl/_rels/workbook.xml.rels": (
+                '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+                '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
+                '<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/>'
+                '<Relationship Id="rId2" Type="http://schemas.microsoft.com/office/2006/relationships/vbaProject" Target="vbaProject.bin"/>'
+                '</Relationships>'),
+            "xl/worksheets/sheet1.xml": (
+                '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+                '<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetData>'
+                '<row r="1"><c r="A1" t="inlineStr"><is><t>Item</t></is></c></row>'
+                '</sheetData></worksheet>'),
+            "xl/vbaProject.bin": "not a real macro project, only its presence matters",
+        }
+        with zipfile.ZipFile(path, "w", zipfile.ZIP_DEFLATED) as z:
+            for name, body in parts.items():
+                z.writestr(name, body)
+
+    def setUp(self):
+        self._dir = self.temp_dir(prefix="tables-loss-question-")
+        self._path = os.path.join(self._dir, "macros.xlsx")
+        self._write_macro_workbook(self._path)
+        with open(self._path, "rb") as f:
+            self._original = f.read()
+        self.launch_args = [self._path]
+        self.isolate_autosave_state()
+        self.isolate_snapshot()
+        super().setUp()
+
+    def _showing(self, role, name):
+        from dogtail import tree
+        return tree.root.findChild(lambda n: n.roleName == role and n.name == name and n.showing,
+                                   retry=False, requireResult=False)
+
+    def _button(self, name):
+        return self.wait_until(lambda: self._showing("push button", name), bool,
+                               description=f"the {name} button")
+
+    def test_ctrl_s_asks_before_dropping_a_macro_and_cancel_writes_nothing(self):
+        import zipfile
+        from dogtail import rawinput
+
+        self.wait_until(self._grid, lambda text: "cell A1: Item" in text, description="macros.xlsx to open")
+        self._put("B2", "1500")
+
+        rawinput.keyCombo("<Control>s")
+        self.wait_for_node(name="Save Without This Content?")
+        self._button("Cancel").do_action(0)
+        self.wait_until(lambda: self._showing("push button", "Save Anyway"), lambda n: n is None,
+                        description="the question to close")
+        with open(self._path, "rb") as f:
+            self.assertEqual(f.read(), self._original, "Cancel wrote the file anyway")
+
+        rawinput.keyCombo("<Control>s")
+        self.wait_for_node(name="Save Without This Content?")
+        self._button("Save Anyway").do_action(0)
+
+        def saved():
+            try:
+                with zipfile.ZipFile(self._path) as z:
+                    names = z.namelist()
+                    return "xl/vbaProject.bin" not in names and any(
+                        b"1500" in z.read(n) for n in names if n.startswith("xl/"))
+            except (OSError, zipfile.BadZipFile):
+                return False
+        self.wait_until(saved, bool, interval=0.25, description="Save Anyway to write the edit without the macro")
+        self.assertIsNone(self.process.poll(), "tables crashed saving")
 
 
 class TablesCsvSaveSmoke(TablesFormatSafeSaveMixin, BaseGUITestCase):
