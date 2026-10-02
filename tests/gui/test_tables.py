@@ -300,17 +300,17 @@ class Tables113FeatureVisuals(VisionGUITestCase):
     -k <name>`) any time a #113-area change needs a quick visual sanity
     check instead of re-deriving one from scratch.
 
-    Canvas layout constants match TablesFillHandleSmoke/
-    TablesSortIndicatorSmoke in test_smoke.py — empirically measured
-    against tables-core::sheet's ROW_HEADER_WIDTH/COL_HEADER_HEIGHT/
-    ROW_HEIGHT/COL_WIDTH under matchbox's fullscreen layout, not
-    AT-SPI-reported position (this grid's virtual-cell nodes have their
-    own known position bug, #132/#137)."""
+    The grid's layout constants are tables-core::sheet's ROW_HEADER_WIDTH/
+    COL_HEADER_HEIGHT/ROW_HEIGHT/COL_WIDTH, and its origin is the one the
+    app reports in the test snapshot, as TablesCanvasCoordsMixin in
+    test_smoke.py reads it — not AT-SPI-reported position (this grid's
+    virtual-cell nodes have their own known position bug, #132/#137), and
+    not a measured constant: this class had the origin at y=128, the
+    chrome above the grid grew, and every header click landed on the
+    toolbar instead (#1427)."""
 
     app_name = "tables"
 
-    CANVAS_X = 0
-    CANVAS_Y = 128
     ROW_HEADER_WIDTH = 40
     COL_HEADER_HEIGHT = 20
     ROW_HEIGHT = 20
@@ -327,6 +327,23 @@ class Tables113FeatureVisuals(VisionGUITestCase):
         super().setUp()
 
     # ── shared helpers ────────────────────────────────────────────
+    def _grid_origin(self):
+        """The grid's top-left on screen, as the app reports it. Read once a
+        test: the window does not move under matchbox."""
+        if getattr(self, "_origin", None) is None:
+            origin = self._snapshot().get("grid_origin")
+            self.assertIsNotNone(origin, "snapshot has no grid_origin — is the grid canvas realized?")
+            self._origin = (float(origin["x"]), float(origin["y"]))
+        return self._origin
+
+    @property
+    def CANVAS_X(self):
+        return self._grid_origin()[0]
+
+    @property
+    def CANVAS_Y(self):
+        return self._grid_origin()[1]
+
     def _col_header_center(self, col):
         x = self.CANVAS_X + self.ROW_HEADER_WIDTH + col * self.COL_WIDTH + self.COL_WIDTH / 2
         y = self.CANVAS_Y + self.COL_HEADER_HEIGHT / 2
