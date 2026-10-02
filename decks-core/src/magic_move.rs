@@ -252,7 +252,7 @@ mod tests {
         std::fs::write(&a, b"png bytes").unwrap();
         std::fs::write(&b, b"png bytes").unwrap();
         std::fs::write(&c, b"other").unwrap();
-        let img = |p: &std::path::Path, x| SlideObject::Image { path: p.to_string_lossy().into(), x, y: 0.0, w: 10.0, h: 10.0, rotation: 0.0 };
+        let img = |p: &std::path::Path, x| SlideObject::Image { path: p.to_string_lossy().into(), x, y: 0.0, w: 10.0, h: 10.0, rotation: 0.0, crop: Default::default() };
         assert_eq!(match_objects(&[img(&a, 0.0)], &[img(&c, 0.0), img(&b, 50.0)]), vec![(0, 1)]);
     }
 }

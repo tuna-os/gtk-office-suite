@@ -792,6 +792,14 @@ def decks(img):
     s.shapes.add_picture(img, Inches(3), Inches(2), width=Inches(5))
     save(p, "image", "The four-colour test image, 5in wide, at (3in, 2in)")
 
+    # A cropped picture (a:srcRect): the left quarter and the bottom fifth
+    # of the four-colour image are cut, the rest stretched to the box.
+    p = deck()
+    s = p.slides.add_slide(p.slide_layouts[6])
+    pic = s.shapes.add_picture(img, Inches(3), Inches(2), width=Inches(5), height=Inches(3))
+    pic.crop_left, pic.crop_bottom = 0.25, 0.2
+    save(p, "image-crop", "The test image cropped: left quarter and bottom fifth gone, the rest stretched to a 5x3in box")
+
     p = deck()
     s = p.slides.add_slide(p.slide_layouts[6])
     s.background.fill.solid()

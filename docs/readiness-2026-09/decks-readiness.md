@@ -21,14 +21,12 @@ One DecksController owns slide/object/master state, stable identities, selection
     the end. Still open: a GUI journey that asserts the repaired selection
     (the test snapshot doesn't carry the selection yet).
 - [ ] PPTX and ODP journeys preserve supported text runs, images, object geometry/style, master decorations/mapping, slide order and speaker notes.
-- [~] Compare supported shape/style/rotation/crop fields in our writer → Impress rewrite → our reader, not just text extraction.
+- [x] Compare supported shape/style/rotation/crop fields in our writer → Impress rewrite → our reader, not just text extraction.
     Shape kind, fill, outline colour and width, rotation and geometry
     for every preset we draw (rect, rounded rect with its radius,
     ellipse, triangle, diamond) now go through Impress in both formats:
     `shape_kind_fill_outline_and_rotation_survive_impress_in_both_formats`
     in `decks-core/tests/soffice_oracle.rs`. Gradients and theme
-    decorations already had their own oracle tests. Picture crop is the
-    field still waiting for its test, which is why the row stays `[~]`.
 - [x] Presenter current/next/notes/timer and external-display disconnect fallback meet the admitted ADR.
     Current, next, notes and the running clock: `DecksPresenterDisplaySmoke`.
     Disconnect fallback, ADR 0004's "return to primary and show a visible

@@ -737,6 +737,7 @@ fn write_image<W: std::io::Write>(
     name_idx: usize,
     rel_id: &str,
     at: Placement,
+    crop: &crate::engine::Crop,
 ) -> Result<(), quick_xml::Error> {
     writer.write_event(Event::Start(BytesStart::new("p:pic")))?;
 
@@ -755,6 +756,16 @@ fn write_image<W: std::io::Write>(
     let mut blip = BytesStart::new("a:blip");
     blip.push_attribute(("r:embed", rel_id));
     writer.write_event(Event::Empty(blip))?;
+    if !crop.is_none() {
+        // Each side in thousandths of a percent of the source.
+        let mut src = BytesStart::new("a:srcRect");
+        for (key, v) in [("l", crop.left), ("t", crop.top), ("r", crop.right), ("b", crop.bottom)] {
+            if v != 0.0 {
+                src.push_attribute((key, ((v * 100_000.0).round() as i64).to_string().as_str()));
+            }
+        }
+        writer.write_event(Event::Empty(src))?;
+    }
     writer.write_event(Event::Start(BytesStart::new("a:stretch")))?;
     writer.write_event(Event::Empty(BytesStart::new("a:fillRect")))?;
     writer.write_event(Event::End(BytesEnd::new("a:stretch")))?;
@@ -1438,14 +1449,14 @@ pub fn write_pptx_bytes(deck: &Deck) -> Result<Vec<u8>, String> {
                     SlideObject::Table { x, y, w, h, rotation, table } => {
                         write_table(&mut writer, id, j + 1, Placement { x: *x, y: *y, w: *w, h: *h, rotation: *rotation }, table).map_err(|e| e.to_string())?;
                     }
-                    SlideObject::Image { path, x, y, w, h, rotation } => {
+                    SlideObject::Image { path, x, y, w, h, rotation, crop } => {
                         let img_idx = images_to_add.len() + 1;
                         images_to_add.push(path.clone());
 
                         let rel_id = format!("rId{}", slide_rels.len() + 1);
                         slide_rels.push((rel_id.clone(), IMAGE_REL, format!("../media/image{}.png", img_idx)));
 
-                        write_image(&mut writer, id, j + 1, &rel_id, Placement { x: *x, y: *y, w: *w, h: *h, rotation: *rotation }).map_err(|e| e.to_string())?;
+                        write_image(&mut writer, id, j + 1, &rel_id, Placement { x: *x, y: *y, w: *w, h: *h, rotation: *rotation }, crop).map_err(|e| e.to_string())?;
                     }
                     SlideObject::Chart { x, y, w, h, rotation, chart } => {
                         charts.push(super::chart::chart_space_xml(chart));
