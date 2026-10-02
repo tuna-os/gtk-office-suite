@@ -1,0 +1,7 @@
+# Seeds for failure cases proptest has generated in the past. It is
+# automatically read and these particular cases re-run before any
+# novel cases are generated.
+#
+# It is recommended to check this file in to source control so that
+# everyone who runs the test benefits from these saved cases.
+cc 85db13400a58742bdd4fb4977db60608e299ddf18b1f83d5ddffe51569b4ab02 # shrinks to steps = [AddSlide { at: 3 }, DeleteSlide { slide: 0 }, AddSlide { at: 2 }, SlideUp { slide: 3 }, Undo]
