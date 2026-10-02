@@ -12,7 +12,7 @@ class DecksTest(VisionGUITestCase):
             self.app.child(name="New Document", roleName="push button").do_action(0)
         except Exception:
             self.app.keyCombo("<Control>n")
-        time.sleep(1.0)
+        time.sleep(1.0)  # pacing: no state to wait on before the next input
 
     def _click(self, name, role="toggle button"):
         try:
@@ -44,7 +44,7 @@ class DecksTest(VisionGUITestCase):
     def test_add_slide_creates_slide_2(self):
         self._new()
         self._click("Add Slide", "push button")
-        time.sleep(0.5)
+        time.sleep(0.5)  # pacing: no state to wait on before the next input
         self.take_screenshot("add")
         self.assertVision([
             "Sidebar shows both 'Slide 1' and 'Slide 2' in the list",
@@ -54,7 +54,7 @@ class DecksTest(VisionGUITestCase):
         self._new()
         for _ in range(3):
             self._click("Add Slide", "push button")
-            time.sleep(0.3)
+            time.sleep(0.3)  # pacing: no state to wait on before the next input
         self.take_screenshot("four")
         self.assertVision([
             "Sidebar lists four slides: 'Slide 1', 'Slide 2', 'Slide 3', and 'Slide 4'",
@@ -63,9 +63,9 @@ class DecksTest(VisionGUITestCase):
     def test_delete_slide_removes_from_sidebar(self):
         self._new()
         self._click("Add Slide", "push button")
-        time.sleep(0.3)
+        time.sleep(0.3)  # pacing: no state to wait on before the next input
         self._click("Delete Slide", "push button")
-        time.sleep(0.5)
+        time.sleep(0.5)  # pacing: no state to wait on before the next input
         self.take_screenshot("delete")
         self.assertVision([
             "Sidebar shows only 'Slide 1' — the added slide was removed",
@@ -74,7 +74,7 @@ class DecksTest(VisionGUITestCase):
     def test_bold_button_toggles_visually(self):
         self._new()
         self._click("Bold")
-        time.sleep(0.3)
+        time.sleep(0.3)  # pacing: no state to wait on before the next input
         self.take_screenshot("bold")
         self.assertVision([
             "The Bold toolbar button appears in a pressed/active state",
@@ -83,7 +83,7 @@ class DecksTest(VisionGUITestCase):
     def test_italic_button_toggles_visually(self):
         self._new()
         self._click("Italic")
-        time.sleep(0.3)
+        time.sleep(0.3)  # pacing: no state to wait on before the next input
         self.take_screenshot("italic")
         self.assertVision([
             "The Italic toolbar button appears in a pressed/active state",
@@ -92,7 +92,7 @@ class DecksTest(VisionGUITestCase):
     def test_underline_button_toggles_visually(self):
         self._new()
         self._click("Underline")
-        time.sleep(0.3)
+        time.sleep(0.3)  # pacing: no state to wait on before the next input
         self.take_screenshot("underline")
         self.assertVision([
             "The Underline toolbar button appears in a pressed/active state",
@@ -101,7 +101,7 @@ class DecksTest(VisionGUITestCase):
     def test_add_text_box_inserts_on_canvas(self):
         self._new()
         self._click("Add Text Box", "push button")
-        time.sleep(0.5)
+        time.sleep(0.5)  # pacing: no state to wait on before the next input
         self.take_screenshot("textbox")
         self.assertVision([
             "A text box or text area has been added to the slide canvas",
@@ -110,7 +110,7 @@ class DecksTest(VisionGUITestCase):
     def test_add_shape_inserts_shape_on_canvas(self):
         self._new()
         self._click("Add Shape", "push button")
-        time.sleep(0.5)
+        time.sleep(0.5)  # pacing: no state to wait on before the next input
         self.take_screenshot("shape")
         self.assertVision([
             "A shape (rectangle or circle) has been added to the slide canvas",
@@ -119,7 +119,7 @@ class DecksTest(VisionGUITestCase):
     def test_add_image_button_opens_file_dialog(self):
         self._new()
         self._click("Add Image", "push button")
-        time.sleep(0.5)
+        time.sleep(0.5)  # pacing: no state to wait on before the next input
         self.take_screenshot("image")
         self.assertVision([
             "A file open dialog or file picker window is visible for selecting an image",
@@ -129,7 +129,7 @@ class DecksTest(VisionGUITestCase):
         # The notes pane is always there under the slide (notes_pane.rs);
         # there is no expander to open any more.
         self._new()
-        time.sleep(0.5)
+        time.sleep(0.5)  # pacing: no state to wait on before the next input
         self.take_screenshot("notes")
         self.assertVision([
             "A speaker notes panel or text area is visible, likely below the slide canvas",
@@ -152,7 +152,7 @@ class DecksTest(VisionGUITestCase):
     def test_slide_sidebar_has_move_controls(self):
         self._new()
         self._click("Add Slide", "push button")
-        time.sleep(0.3)
+        time.sleep(0.3)  # pacing: no state to wait on before the next input
         self.take_screenshot("sidebar")
         self.assertVision([
             "Sidebar shows two slides with Move Up and Move Down buttons in the controls",
@@ -161,9 +161,9 @@ class DecksTest(VisionGUITestCase):
     def test_undo_removes_added_slide(self):
         self._new()
         self._click("Add Slide", "push button")
-        time.sleep(0.3)
+        time.sleep(0.3)  # pacing: no state to wait on before the next input
         self.app.keyCombo("<Control>z")
-        time.sleep(0.5)
+        time.sleep(0.5)  # pacing: no state to wait on before the next input
         self.take_screenshot("undo")
         self.assertVision([
             "Sidebar shows only 'Slide 1' after undo removes the added slide",
@@ -175,7 +175,7 @@ class DecksTest(VisionGUITestCase):
             self.app.keyCombo("<Control>comma")
         except Exception:
             pass
-        time.sleep(0.5)
+        time.sleep(0.5)  # pacing: no state to wait on before the next input
         self.take_screenshot("prefs")
         self.assertVision([
             "A Preferences dialog is visible with a 'Snap to Grid' toggle switch",
@@ -190,9 +190,9 @@ class DecksTest(VisionGUITestCase):
         self._new()
         for _ in range(3):
             self._click("Add Slide", "push button")
-            time.sleep(0.25)
+            time.sleep(0.25)  # pacing: no state to wait on before the next input
         self._click("Bold")
-        time.sleep(0.3)
+        time.sleep(0.3)  # pacing: no state to wait on before the next input
         self.take_screenshot("final")
         self.assertVision([
             "Sidebar lists 4 slides: 'Slide 1' through 'Slide 4'",
