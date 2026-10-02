@@ -8,7 +8,16 @@ One DecksController owns slide/object/master state, stable identities, selection
 ## Slices and tests
 - [ ] Inventory each advertised action and prove it mutates canonical state: select/multi-select, move/resize/rotate, align/arrange/group, duplicate/reorder, style and image fit/crop.
 - [ ] Undo/redo mixed object and slide edits, including deletion and selection repair; no detached state or reentrant RefCell panic.
-- [ ] PPTX and ODP journeys preserve supported text runs, images, object geometry/style, master decorations/mapping, slide order and speaker notes.
+- [x] PPTX and ODP journeys preserve supported text runs, images, object geometry/style, master decorations/mapping, slide order and speaker notes.
+    `DecksFormatJourneySmoke` opens a hand-built odp with styled runs, a
+    filled, outlined and rotated shape, an embedded picture, speaker
+    notes, two slides in order and a master with a decoration; adds a
+    shape; Save As pptx and reopens; Save As odp from that and reopens.
+    Each time every object is what was saved, by the test snapshot's new
+    `detail` (the model in full, a picture by a hash of its bytes), and
+    so are the notes, slide names and order and the master's decorations.
+    The journey found the pptx reader truncating run sizes to the half
+    point below (19.84 pt read as 19.5); it rounds now.
 - [~] Compare supported shape/style/rotation/crop fields in our writer → Impress rewrite → our reader, not just text extraction.
     Shape kind, fill, outline colour and width, rotation and geometry
     for every preset we draw (rect, rounded rect with its radius,
