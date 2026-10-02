@@ -1967,3 +1967,46 @@ fn shape_kind_fill_outline_and_rotation_survive_impress_in_both_formats() {
         }
     }
 }
+
+/// Text and run styling across the format boundary, both ways
+/// (docs/INTEROP-EVIDENCE.md, #1276).
+///
+/// The run-styling tests above rewrite a file in its own format, so the
+/// pptx Impress writes from its own model, which is what our pptx reader
+/// meets in the wild, had only been read for pictures, notes and
+/// geometry: here it carries the text and the runs, from our odp. The
+/// other direction reads Impress's odp from our pptx.
+#[test]
+fn text_and_run_styling_survive_a_conversion_between_the_two_formats() {
+    use decks_core::odp;
+    if !require_or_skip() { return; }
+    let mut deck = Deck::new();
+    deck.slides = vec![styled_run_slide(vec![
+        Run { text: "plain ".into(), style: RunStyle::default() },
+        Run { text: "bold".into(), style: RunStyle { bold: true, ..Default::default() } },
+        Run { text: " and ".into(), style: RunStyle::default() },
+        Run { text: "red".into(), style: RunStyle { color: Some("cc0000".into()), ..Default::default() } },
+    ])];
+    let check = |rt: &Deck, what: &str| {
+        let runs = runs_of(&rt.slides[0]);
+        let text: String = runs.iter().map(|r| r.text.as_str()).collect();
+        assert_eq!(text.trim(), "plain bold and red", "the text after {what}: {runs:?}");
+        let bold: String = runs.iter().filter(|r| r.style.bold).map(|r| r.text.as_str()).collect();
+        assert_eq!(bold.trim(), "bold", "bold after {what}: {runs:?}");
+        let red = runs.iter().find(|r| r.text.contains("red")).expect("the red run");
+        assert_eq!(red.style.color.as_deref().map(str::to_lowercase), Some("cc0000".into()), "colour after {what}: {runs:?}");
+    };
+    let dir = tempfile::tempdir().unwrap();
+
+    let as_odp = dir.path().join("styled.odp");
+    odp::write(&deck, as_odp.to_str().unwrap()).expect("write odp");
+    let to_pptx = convert(&as_odp, "pptx").expect("Impress could not convert our odp to pptx");
+    check(&read_pptx(to_pptx.to_str().unwrap()).expect("read Impress's pptx"), "odp -> Impress -> pptx");
+
+    let sub = dir.path().join("b");
+    std::fs::create_dir_all(&sub).unwrap();
+    let as_pptx = sub.join("styled.pptx");
+    write_pptx(as_pptx.to_str().unwrap(), &deck).expect("write pptx");
+    let to_odp = convert(&as_pptx, "odp").expect("Impress could not convert our pptx to odp");
+    check(&odp::read(to_odp.to_str().unwrap()).expect("read Impress's odp"), "pptx -> Impress -> odp");
+}

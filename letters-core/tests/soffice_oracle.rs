@@ -1390,3 +1390,79 @@ fn right_to_left_text_survives_a_conversion_between_the_two_formats() {
     let rt = letters_core::odt::read(b.join("y.odt").to_str().unwrap()).expect("read Writer's odt");
     assert_eq!(texts(&rt), lines, "docx -> Writer -> odt");
 }
+
+// ── Interop evidence gaps (docs/INTEROP-EVIDENCE.md, #1276) ───────────
+
+/// Hyperlinks in our docx, through Writer, into the odt it writes.
+///
+/// `hyperlink_survives_lo_pass` crosses the other way (our odt → Writer's
+/// docx), so neither our docx writer's links nor our odt reader's reading
+/// of Writer's `text:a` had been through LibreOffice.
+#[test]
+fn hyperlinks_in_our_docx_reach_writers_odt() {
+    let Some(bin) = require_or_skip() else { return };
+    let mut d = Document::from_plain_text("");
+    d.paragraphs[0].runs = vec![
+        Run::plain("visit "),
+        Run {
+            text: "gnome".into(),
+            style: RunStyle { link: Some("https://gnome.org/".into()), ..Default::default() },
+        },
+        Run::plain(" today"),
+    ];
+    let dir = tempfile::tempdir().unwrap();
+    let dp = dir.path().join("link.docx");
+    docx::write(&d, &dp).expect("write docx");
+    let _ = soffice_convert(bin, &dp, "odt").ok();
+    let op = dir.path().join("link.odt");
+    assert!(op.exists(), "soffice did not convert the docx");
+    let rt = letters_core::odt::read(op.to_str().unwrap()).expect("read converted odt");
+    let linked: Vec<(String, Option<String>)> = rt
+        .paragraphs
+        .iter()
+        .flat_map(|p| p.runs.iter())
+        .filter(|r| r.style.link.is_some())
+        .map(|r| (r.text.clone(), r.style.link.clone()))
+        .collect();
+    assert_eq!(
+        linked,
+        vec![("gnome".to_string(), Some("https://gnome.org/".to_string()))],
+        "the link did not survive docx -> Writer -> odt: {:?}",
+        rt.paragraphs
+    );
+}
+
+/// A picture Writer itself places, read from the docx Writer writes.
+///
+/// `inline_image_survives_lo_docx_pass` re-saves our own docx, so the
+/// drawing markup it reads back is still shaped by our writer. Here the
+/// source is a flat ODT whose `draw:frame` carries the picture inline, so
+/// every byte of the docx's drawing comes from Writer.
+#[test]
+fn we_read_a_picture_writer_places_in_a_docx() {
+    let Some(bin) = require_or_skip() else { return };
+    let dir = tempfile::tempdir().unwrap();
+    let src = dir.path().join("pic.fodt");
+    std::fs::write(&src, r#"<?xml version="1.0" encoding="UTF-8"?>
+<office:document xmlns:office="urn:oasis:names:tc:opendocument:xmlns:office:1.0"
+  xmlns:text="urn:oasis:names:tc:opendocument:xmlns:text:1.0"
+  xmlns:draw="urn:oasis:names:tc:opendocument:xmlns:drawing:1.0"
+  xmlns:svg="urn:oasis:names:tc:opendocument:xmlns:svg-compatible:1.0"
+  xmlns:xlink="http://www.w3.org/1999/xlink"
+  office:version="1.3" office:mimetype="application/vnd.oasis.opendocument.text">
+ <office:body><office:text>
+  <text:p>before the picture</text:p>
+  <text:p><draw:frame draw:name="dot" text:anchor-type="as-char" svg:width="1cm" svg:height="1cm"><draw:image><office:binary-data>iVBORw0KGgoAAAANSUhEUgAAAAIAAAACCAIAAAD91JpzAAAAFUlEQVR4nGL6z8DA8B+I/zMwMAAAAP//AwArEQT5AAAAAElFTkSuQmCC</office:binary-data></draw:image></draw:frame></text:p>
+  <text:p>after the picture</text:p>
+ </office:text></office:body>
+</office:document>
+"#).unwrap();
+    let _ = soffice_convert(bin, &src, "docx").ok();
+    let dp = dir.path().join("pic.docx");
+    assert!(dp.exists(), "soffice did not convert the flat odt");
+    let rt = docx::read(dp.to_str().unwrap()).expect("read Writer's docx");
+    let text = norm(&rt.to_plain_text());
+    assert!(text.contains("before the picture") && text.contains("after the picture"), "{text:?}");
+    let pictures = rt.paragraphs.iter().flat_map(|p| p.runs.iter()).filter(|r| r.style.image.is_some()).count();
+    assert_eq!(pictures, 1, "the picture Writer placed was not read: {:?}", rt.paragraphs);
+}
