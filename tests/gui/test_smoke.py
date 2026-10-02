@@ -6764,6 +6764,40 @@ class DecksSlideOrderSmoke(BaseGUITestCase):
         self.assertIsNone(self.process.poll(), "decks crashed reordering slides")
 
 
+def minimal_docx_bytes(text):
+    """The smallest docx package Letters will open, one paragraph of
+    `text`. Built here, like `minimal_pptx_bytes`, because the fuzz seed
+    corpus the suite's writers generate is not committed."""
+    import io
+    import zipfile
+
+    parts = {
+        "[Content_Types].xml": (
+            '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+            '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">'
+            '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>'
+            '<Default Extension="xml" ContentType="application/xml"/>'
+            '<Override PartName="/word/document.xml" '
+            'ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>'
+            '</Types>'),
+        "_rels/.rels": (
+            '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+            '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
+            '<Relationship Id="rId1" '
+            'Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" '
+            'Target="word/document.xml"/></Relationships>'),
+        "word/document.xml": (
+            '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+            '<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">'
+            f'<w:body><w:p><w:r><w:t>{text}</w:t></w:r></w:p></w:body></w:document>'),
+    }
+    buffer = io.BytesIO()
+    with zipfile.ZipFile(buffer, "w", zipfile.ZIP_DEFLATED) as doc:
+        for name, content in parts.items():
+            doc.writestr(name, content)
+    return buffer.getvalue()
+
+
 def with_opaque_parts(package_bytes):
     """`package_bytes` (an OOXML package) plus parts no app models: a
     custom XML data part with its properties part and their relationship,
@@ -6846,19 +6880,14 @@ class OpaquePartsSurviveMixin:
     agree. Each app writes its document from its model, so before #1274
     every save dropped them."""
 
-    corpus = None  # (fuzz/corpus/<dir>, name) or a callable returning bytes
+    corpus = None  # a callable returning the package's bytes
     file_name = None
 
     def setUp(self):
         self._dir = self.temp_dir(prefix=f"{self.app_name}-opaque-")
         self.isolate_autosave_state()
         self.isolate_snapshot(prefix=f"{self.app_name}-opaque-snap-")
-        if callable(self.corpus):
-            source = self.corpus()
-        else:
-            root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-            with open(os.path.join(root, "fuzz", "corpus", *self.corpus), "rb") as f:
-                source = f.read()
+        source = self.corpus()
         self._doc = os.path.join(self._dir, self.file_name)
         with open(self._doc, "wb") as f:
             f.write(with_opaque_parts(source))
@@ -6901,7 +6930,7 @@ class OpaquePartsSurviveMixin:
 
 class LettersOpaquePartsSmoke(OpaquePartsSurviveMixin, BaseGUITestCase):
     app_name = "letters"
-    corpus = ("letters_docx", "plain.docx")
+    corpus = staticmethod(lambda: minimal_docx_bytes("plain words"))
     file_name = "plain.docx"
 
     def test_custom_xml_and_a_thumbnail_survive_an_edit_and_save(self):
@@ -6957,9 +6986,7 @@ class LettersUnreadContentSmoke(OpaquePartsSurviveMixin, BaseGUITestCase):
     def corpus():
         import io
         import zipfile
-        root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-        with open(os.path.join(root, "fuzz", "corpus", "letters_docx", "plain.docx"), "rb") as f:
-            buf = io.BytesIO(f.read())
+        buf = io.BytesIO(minimal_docx_bytes("plain words"))
         with zipfile.ZipFile(buf, "a") as z:
             z.writestr("word/vbaProject.bin", "not a real macro project, only its presence matters")
         return buf.getvalue()
