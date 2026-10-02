@@ -260,6 +260,147 @@ pub struct ColumnValue {
     pub shown: bool,
 }
 
+// ── Tracked fields and the geometry cache (#1282) ───────────────────────
+//
+// Where a row is on screen is the sum of the heights of the visible rows
+// above it. Summing them for each lookup made a frame at the bottom of a
+// tall sheet cost a pass over every row; prefix sums make it a lookup and a
+// binary search. They have to be rebuilt whenever a height or a hidden set
+// changes, and those fields are public and written in dozens of places, so
+// rather than route every write through a setter each field is `Tracked`:
+// any mutable access stamps it with a fresh version, and the cache is
+// rebuilt when the versions it was built from are no longer the fields'.
+
+static NEXT_VERSION: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(1);
+
+fn next_version() -> u64 {
+    NEXT_VERSION.fetch_add(1, std::sync::atomic::Ordering::Relaxed)
+}
+
+/// A value whose every mutable access gives it a new version, unique
+/// across all values, so a replaced value can never pass for the old one.
+/// Reads go through `Deref` as if it were the value itself.
+#[derive(Clone, Debug)]
+pub struct Tracked<T> {
+    value: T,
+    version: u64,
+}
+
+impl<T> Tracked<T> {
+    pub fn new(value: T) -> Self {
+        Tracked { value, version: next_version() }
+    }
+
+    /// The version of the current value.
+    pub fn version(&self) -> u64 {
+        self.version
+    }
+}
+
+impl<T: Default> Default for Tracked<T> {
+    fn default() -> Self {
+        Tracked::new(T::default())
+    }
+}
+
+impl<T> From<T> for Tracked<T> {
+    fn from(value: T) -> Self {
+        Tracked::new(value)
+    }
+}
+
+impl<T> std::ops::Deref for Tracked<T> {
+    type Target = T;
+    fn deref(&self) -> &T {
+        &self.value
+    }
+}
+
+impl<T> std::ops::DerefMut for Tracked<T> {
+    fn deref_mut(&mut self) -> &mut T {
+        self.version = next_version();
+        &mut self.value
+    }
+}
+
+impl<T: PartialEq> PartialEq for Tracked<T> {
+    fn eq(&self, other: &Self) -> bool {
+        self.value == other.value
+    }
+}
+
+impl<'a, T> IntoIterator for &'a Tracked<T>
+where
+    &'a T: IntoIterator,
+{
+    type Item = <&'a T as IntoIterator>::Item;
+    type IntoIter = <&'a T as IntoIterator>::IntoIter;
+    fn into_iter(self) -> Self::IntoIter {
+        (&self.value).into_iter()
+    }
+}
+
+/// `prefix[i]` is the total size of the visible lines before line `i`
+/// (hidden lines count as zero), for `i` in `0..=count`; `key` is what it
+/// was built from.
+#[derive(Clone, Debug, Default)]
+struct Prefix {
+    key: (usize, u64, u64, u64),
+    prefix: std::rc::Rc<Vec<f64>>,
+}
+
+#[derive(Clone, Debug, Default)]
+struct GeometryCache {
+    rows: std::cell::RefCell<Option<Prefix>>,
+    cols: std::cell::RefCell<Option<Prefix>>,
+}
+
+impl SheetModel {
+    /// Prefix sums of the visible row heights: `row_prefix()[r]` is how far
+    /// row `r` starts below the first row, at no scroll.
+    pub fn row_prefix(&self) -> std::rc::Rc<Vec<f64>> {
+        let key = (self.rows, self.row_heights.version(), self.hidden_rows.version(), self.hidden_rows_manual.version());
+        let mut slot = self.geometry.rows.borrow_mut();
+        if let Some(p) = slot.as_ref().filter(|p| p.key == key) {
+            return p.prefix.clone();
+        }
+        let prefix = std::rc::Rc::new(prefix_sums(self.rows, |r| if self.is_row_hidden(r) { 0.0 } else { self.row_height(r) }));
+        *slot = Some(Prefix { key, prefix: prefix.clone() });
+        prefix
+    }
+
+    /// Column analog of [`Self::row_prefix`].
+    pub fn col_prefix(&self) -> std::rc::Rc<Vec<f64>> {
+        let key = (self.cols, self.col_widths.version(), self.hidden_cols.version(), 0);
+        let mut slot = self.geometry.cols.borrow_mut();
+        if let Some(p) = slot.as_ref().filter(|p| p.key == key) {
+            return p.prefix.clone();
+        }
+        let prefix = std::rc::Rc::new(prefix_sums(self.cols, |c| if self.is_col_hidden(c) { 0.0 } else { self.col_width(c) }));
+        *slot = Some(Prefix { key, prefix: prefix.clone() });
+        prefix
+    }
+}
+
+fn prefix_sums(count: usize, size: impl Fn(usize) -> f64) -> Vec<f64> {
+    let mut out = Vec::with_capacity(count + 1);
+    let mut at = 0.0;
+    out.push(at);
+    for i in 0..count {
+        at += size(i);
+        out.push(at);
+    }
+    out
+}
+
+/// The first line whose far edge is past `offset` (content space), or
+/// `None` past the last: a binary search, since the prefix only grows.
+fn line_at_offset(offset: f64, prefix: &[f64]) -> Option<usize> {
+    let count = prefix.len().saturating_sub(1);
+    let i = prefix[1..].partition_point(|&end| end <= offset);
+    (i < count && offset >= 0.0).then_some(i)
+}
+
 // ── Screen geometry ─────────────────────────────────────────────────────
 //
 // Frozen panes: the first `frozen_rows` rows and `frozen_cols` columns stay
@@ -307,12 +448,7 @@ pub fn scroll_to_top_left(row: usize, col: usize, sheet: &SheetModel) -> (f64, f
 /// zero. Frozen columns don't scroll. Shared by the renderer and
 /// hit-testers.
 pub fn col_x(col: usize, scroll_x: f64, sheet: &SheetModel) -> f64 {
-    let mut x = ROW_HEADER_WIDTH;
-    for c in 0..col.min(sheet.cols) {
-        if !sheet.is_col_hidden(c) {
-            x += sheet.col_width(c);
-        }
-    }
+    let x = ROW_HEADER_WIDTH + sheet.col_prefix()[col.min(sheet.cols)];
     if col >= sheet.frozen_cols { x - scroll_x } else { x }
 }
 
@@ -420,59 +556,58 @@ pub fn row_spans(n: usize, scroll_y: f64, sheet: &SheetModel) -> Vec<(f64, f64)>
 /// The columns that show in a view `width` px wide at `scroll_x`, left to
 /// right, each with its screen x: exactly the columns for which
 /// [[col_on_screen]] holds and [[col_x]] is not past `width`, frozen ones
-/// first. One pass over the column widths, where calling [[col_x]] for
-/// each column re-sums every column before it: the renderer did that for
-/// every row and column of every frame, which is quadratic in the sheet's
-/// size, not in what is on screen.
+/// first. The renderer once called a summing [[col_x]] for every row and
+/// column of every frame, quadratic in the sheet's size; this looks the
+/// first one up and walks only what is on screen.
 pub fn visible_cols(scroll_x: f64, width: f64, sheet: &SheetModel) -> Vec<(usize, f64)> {
-    visible_along(sheet.cols, sheet.frozen_cols, ROW_HEADER_WIDTH, scrolled_left(sheet), scroll_x, width,
-        |c| sheet.is_col_hidden(c), |c| sheet.col_width(c))
+    visible_along(sheet.frozen_cols, ROW_HEADER_WIDTH, scrolled_left(sheet), scroll_x, width,
+        |c| sheet.is_col_hidden(c), &sheet.col_prefix())
 }
 
 /// Row analog of [[visible_cols]].
 pub fn visible_rows(scroll_y: f64, height: f64, sheet: &SheetModel) -> Vec<(usize, f64)> {
-    visible_along(sheet.rows, sheet.frozen_rows, COL_HEADER_HEIGHT, scrolled_top(sheet), scroll_y, height,
-        |r| sheet.is_row_hidden(r), |r| sheet.row_height(r))
+    visible_along(sheet.frozen_rows, COL_HEADER_HEIGHT, scrolled_top(sheet), scroll_y, height,
+        |r| sheet.is_row_hidden(r), &sheet.row_prefix())
 }
 
-#[allow(clippy::too_many_arguments)]
+/// The lines that show: the frozen ones, then from the first scrolled line
+/// that reaches past `pane_start` (found by binary search on the prefix
+/// sums, #1282) until one starts past `extent`. So a frame costs the same
+/// at the bottom of a million-row sheet as at the top.
 fn visible_along(
-    count: usize, frozen: usize, start: f64, pane_start: f64, scroll: f64, extent: f64,
-    hidden: impl Fn(usize) -> bool, size: impl Fn(usize) -> f64,
+    frozen: usize, start: f64, pane_start: f64, scroll: f64, extent: f64,
+    hidden: impl Fn(usize) -> bool, prefix: &[f64],
 ) -> Vec<(usize, f64)> {
+    let count = prefix.len() - 1;
+    let frozen = frozen.min(count);
     let mut out = Vec::new();
-    let mut at = start;
-    for i in 0..count {
+    for (i, &before) in prefix.iter().enumerate().take(frozen) {
         if hidden(i) {
             continue;
         }
-        let len = size(i);
-        let pos = if i >= frozen { at - scroll } else { at };
-        if i < frozen || pos + len > pane_start {
-            if pos > extent {
-                break;
-            }
-            out.push((i, pos));
+        let pos = start + before;
+        if pos > extent {
+            return out;
         }
-        at += len;
+        out.push((i, pos));
+    }
+    let first = frozen + prefix[frozen + 1..].partition_point(|&end| start + end - scroll <= pane_start);
+    for (i, &before) in prefix.iter().enumerate().take(count).skip(first) {
+        if hidden(i) {
+            continue;
+        }
+        let pos = start + before - scroll;
+        if pos > extent {
+            break;
+        }
+        out.push((i, pos));
     }
     out
 }
 
 /// Column analog of [[row_at_content_offset]].
 fn col_at_content_offset(offset: f64, sheet: &SheetModel) -> Option<usize> {
-    let mut accum = 0.0;
-    for c in 0..sheet.cols {
-        if sheet.is_col_hidden(c) {
-            continue;
-        }
-        let w = sheet.col_width(c);
-        if offset < accum + w {
-            return Some(c);
-        }
-        accum += w;
-    }
-    None
+    line_at_offset(offset, &sheet.col_prefix())
 }
 
 /// The column whose right edge is within 5 px of widget `(x, y)` in the
@@ -539,12 +674,7 @@ pub fn hit_fill_handle(
 /// Shared by the renderer and hit-testers so they can never disagree
 /// about where a row actually falls on screen.
 pub fn row_y(row: usize, scroll_y: f64, sheet: &SheetModel) -> f64 {
-    let mut y = COL_HEADER_HEIGHT;
-    for r in 0..row.min(sheet.rows) {
-        if !sheet.is_row_hidden(r) {
-            y += sheet.row_height(r);
-        }
-    }
+    let y = COL_HEADER_HEIGHT + sheet.row_prefix()[row.min(sheet.rows)];
     if row >= sheet.frozen_rows { y - scroll_y } else { y }
 }
 
@@ -552,18 +682,7 @@ pub fn row_y(row: usize, scroll_y: f64, sheet: &SheetModel) -> f64 {
 /// band contains content-space offset `offset` (i.e. `y - COL_HEADER_HEIGHT`
 /// at zero scroll), or `None` past the last visible row.
 fn row_at_content_offset(offset: f64, sheet: &SheetModel) -> Option<usize> {
-    let mut accum = 0.0;
-    for r in 0..sheet.rows {
-        if sheet.is_row_hidden(r) {
-            continue;
-        }
-        let h = sheet.row_height(r);
-        if offset < accum + h {
-            return Some(r);
-        }
-        accum += h;
-    }
-    None
+    line_at_offset(offset, &sheet.row_prefix())
 }
 
 /// The `(col, row)` under widget-local `(x, y)`, frozen panes and scroll
@@ -777,10 +896,10 @@ pub struct SheetModel {
     /// single-cell selection). Kept valid by select_cell/extend_selection.
     pub sel_end_row: usize,
     pub sel_end_col: usize,
-    pub col_widths: Vec<f64>,
+    pub col_widths: Tracked<Vec<f64>>,
     /// Per-row heights (#113), mirroring col_widths — a row not yet
     /// resized uses ROW_HEIGHT (see row_height()).
-    pub row_heights: Vec<f64>,
+    pub row_heights: Tracked<Vec<f64>>,
     pub formulas: Vec<Vec<bool>>,
     pub formats: Vec<Vec<NumberFormat>>,
     /// Font, fill, alignment and wrap per cell (crate::style).
@@ -817,15 +936,15 @@ pub struct SheetModel {
     /// display concern — data, formulas, and formatting for a hidden row
     /// are untouched; rendering and hit-testing are expected to skip
     /// indices in this set.
-    pub hidden_rows: std::collections::HashSet<usize>,
+    pub hidden_rows: Tracked<std::collections::HashSet<usize>>,
     /// Rows/columns manually hidden by the user (#113 "row/column
     /// hiding"), independent of `hidden_rows`'s filter — clearing a
     /// filter must not reveal a row the user deliberately hid, and vice
     /// versa. `is_row_hidden`/`is_col_hidden` fold both concepts together
     /// for rendering/hit-testing, which don't need to distinguish why a
     /// row or column is hidden, only that it is.
-    pub hidden_rows_manual: std::collections::HashSet<usize>,
-    pub hidden_cols: std::collections::HashSet<usize>,
+    pub hidden_rows_manual: Tracked<std::collections::HashSet<usize>>,
+    pub hidden_cols: Tracked<std::collections::HashSet<usize>>,
     /// Print area (#113): (top, left, bottom, right), 0-based inclusive.
     /// `None` means "print the whole used range" (export's existing
     /// default). Purely an export-time concern — doesn't affect editing.
@@ -837,6 +956,9 @@ pub struct SheetModel {
     /// added, deleted, or reordered — undo commands key off this instead of
     /// a positional index so they keep targeting the right sheet.
     pub sheet_id: u32,
+    /// Prefix sums of the row heights and column widths, rebuilt when a
+    /// size or hidden set it was built from has changed (#1282).
+    geometry: GeometryCache,
 }
 
 fn insert_matrix_rows<T: Default>(matrix: &mut Vec<Vec<T>>, at: usize, count: usize, cols: usize) {
@@ -873,8 +995,8 @@ impl SheetModel {
             rows, cols,
             selected_row: 0, selected_col: 0,
             sel_end_row: 0, sel_end_col: 0,
-            col_widths: vec![COL_WIDTH; cols],
-            row_heights: vec![ROW_HEIGHT; rows],
+            col_widths: vec![COL_WIDTH; cols].into(),
+            row_heights: vec![ROW_HEIGHT; rows].into(),
             formulas: vec![vec![false; cols]; rows],
             formats: vec![vec![NumberFormat::default(); cols]; rows],
             styles: vec![vec![crate::style::CellStyle::default(); cols]; rows],
@@ -890,12 +1012,13 @@ impl SheetModel {
             cond_rules: Vec::new(),
             validations: vec![vec![None; cols]; rows],
             notes: vec![vec![None; cols]; rows],
-            hidden_rows: std::collections::HashSet::new(),
-            hidden_rows_manual: std::collections::HashSet::new(),
-            hidden_cols: std::collections::HashSet::new(),
+            hidden_rows: Default::default(),
+            hidden_rows_manual: Default::default(),
+            hidden_cols: Default::default(),
             print_area: None,
             page_setup: suite_common_core::print::PageSetup::default(),
             sheet_id,
+            geometry: GeometryCache::default(),
         }
     }
 
@@ -975,8 +1098,8 @@ impl SheetModel {
             if *value >= at { *value = value.checked_add_signed(delta).unwrap_or(at); }
         };
         shift(&mut self.selected_row); shift(&mut self.sel_end_row);
-        self.hidden_rows = shift_set(&self.hidden_rows, at, delta);
-        self.hidden_rows_manual = shift_set(&self.hidden_rows_manual, at, delta);
+        *self.hidden_rows = shift_set(&self.hidden_rows, at, delta);
+        *self.hidden_rows_manual = shift_set(&self.hidden_rows_manual, at, delta);
         // (row, col, rowspan, colspan): only the anchor row moves. Shifting
         // field 2 as if it were an end row stretched every merge below an
         // inserted row.
@@ -1002,7 +1125,7 @@ impl SheetModel {
             if *value >= at { *value = value.checked_add_signed(delta).unwrap_or(at); }
         };
         shift(&mut self.selected_col); shift(&mut self.sel_end_col);
-        self.hidden_cols = shift_set(&self.hidden_cols, at, delta);
+        *self.hidden_cols = shift_set(&self.hidden_cols, at, delta);
         for range in &mut self.merges { shift(&mut range.1); }
         for rule in &mut self.cond_rules { shift(&mut rule.range.1); shift(&mut rule.range.3); }
         for chart in &mut self.charts {
@@ -1646,6 +1769,51 @@ mod selection_tests {
         let s = SheetModel::new("s", 10, 10, 0);
         let x = col_x(3, 2.0 * COL_WIDTH, &s) + 5.0;
         assert_eq!(xy_to_cell(x, COL_HEADER_HEIGHT + 5.0, 2.0 * COL_WIDTH, 0.0, &s), Some((3, 0)));
+    }
+
+    #[test]
+    fn prefix_geometry_matches_summing_and_follows_direct_writes() {
+        // The cached prefix sums (#1282) against the definition they
+        // replace, before and after writes that go straight to the public
+        // fields rather than through a setter: each must invalidate it.
+        fn summed_y(row: usize, s: &SheetModel) -> f64 {
+            COL_HEADER_HEIGHT + (0..row.min(s.rows)).filter(|&r| !s.is_row_hidden(r)).map(|r| s.row_height(r)).sum::<f64>()
+        }
+        fn summed_x(col: usize, s: &SheetModel) -> f64 {
+            ROW_HEADER_WIDTH + (0..col.min(s.cols)).filter(|&c| !s.is_col_hidden(c)).map(|c| s.col_width(c)).sum::<f64>()
+        }
+        let check = |s: &SheetModel| {
+            for r in 0..=s.rows {
+                assert_eq!(row_y(r, 0.0, s), summed_y(r, s), "row {r}");
+            }
+            for c in 0..=s.cols {
+                assert_eq!(col_x(c, 0.0, s), summed_x(c, s), "col {c}");
+            }
+            for y in (0..(summed_y(s.rows, s) as i64 + 30)).step_by(3) {
+                let off = y as f64;
+                let linear = (0..s.rows).find(|&r| !s.is_row_hidden(r) && off >= summed_y(r, s) - COL_HEADER_HEIGHT && off < summed_y(r, s) - COL_HEADER_HEIGHT + s.row_height(r));
+                assert_eq!(row_at_content_offset(off, s), linear, "offset {off}");
+            }
+        };
+        let mut s = SheetModel::new("S", 12, 6, 0);
+        check(&s);
+        s.row_heights[3] = 50.0;
+        check(&s);
+        s.hidden_rows.insert(5);
+        s.hidden_rows_manual.insert(0);
+        check(&s);
+        s.col_widths[2] = 200.0;
+        s.hidden_cols.insert(4);
+        check(&s);
+        s.insert_rows(2, 3);
+        check(&s);
+        s.delete_rows(0, 1);
+        s.frozen_rows = 2;
+        check(&s);
+        let copy = s.clone();
+        s.hidden_rows.clear();
+        check(&s);
+        check(&copy);
     }
 
     #[test]
