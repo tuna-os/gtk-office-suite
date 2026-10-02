@@ -1035,13 +1035,19 @@ fn a_new_document_keeps_its_font_through_lo() {
 /// `doc`'s tracked changes as (kind, author, text, date to the second),
 /// adjacent changes of one kind and author taken as one (a format without
 /// nesting joins a deletion of an insertion to the deletion next to it).
-fn changes_of(doc: &Document) -> Vec<(RevisionKind, String, String, String)> {
-    let mut out: Vec<(RevisionKind, String, String, String)> = Vec::new();
+/// A tracked change as compared through Writer: kind, author, text, date,
+/// and the pending change it was made to (a deletion of someone else's
+/// insertion, `Revision::under`: #1297), as kind and author.
+type Change = (RevisionKind, String, String, String, Option<(RevisionKind, String)>);
+
+fn changes_of(doc: &Document) -> Vec<Change> {
+    let mut out: Vec<Change> = Vec::new();
     for c in letters_core::track::changes(doc) {
         let date = c.revision.date.chars().take(19).collect::<String>();
+        let under = c.revision.under.as_ref().map(|u| (u.kind, u.author.clone()));
         match out.last_mut() {
-            Some(last) if last.0 == c.revision.kind && last.1 == c.revision.author => last.2.push_str(&c.text),
-            _ => out.push((c.revision.kind, c.revision.author.clone(), c.text.clone(), date)),
+            Some(last) if last.0 == c.revision.kind && last.1 == c.revision.author && last.4 == under => last.2.push_str(&c.text),
+            _ => out.push((c.revision.kind, c.revision.author.clone(), c.text.clone(), date, under)),
         }
     }
     out
@@ -1055,18 +1061,30 @@ fn tracked_changes_survive_lo_passes() {
     let Some(bin) = require_or_skip() else { return };
     let d = letters_core::track::sample_document();
     let want = changes_of(&d);
+    assert!(want.iter().any(|c| c.4.is_some()), "the sample needs a deletion of a pending insertion");
     let dir = tempfile::tempdir().unwrap();
     for (from, to) in [("docx", "docx"), ("odt", "odt"), ("docx", "odt"), ("odt", "docx")] {
         let work = dir.path().join(format!("{from}-{to}"));
         let out = work.join("out");
         std::fs::create_dir_all(&out).unwrap();
-        let staged = out.join(format!("tracked.{from}"));
+        let staged = work.join(format!("tracked.{from}"));
         match from {
             "docx" => docx::write(&d, &staged).expect("write docx"),
             _ => letters_core::odt::write(&d, &staged).expect("write odt"),
         }
         let filter = if to == "docx" { "docx:MS Word 2007 XML" } else { "odt" };
-        let _ = soffice_convert(bin, &staged, filter);
+        // Into a directory of its own: converting onto the input itself,
+        // Writer writes nothing, and the same-format passes read our own
+        // file back.
+        let st = Command::new(bin)
+            .arg("--headless")
+            .arg(format!("-env:UserInstallation=file://{}", work.join("lo").display()))
+            .args(["--convert-to", filter, "--outdir"])
+            .arg(&out)
+            .arg(&staged)
+            .output()
+            .expect("soffice");
+        assert!(st.status.success(), "{}", String::from_utf8_lossy(&st.stderr));
         let converted = out.join(format!("tracked.{to}"));
         assert!(converted.exists(), "soffice did not convert {from} to {to}");
         let rt = match to {
@@ -1091,13 +1109,23 @@ fn comments_survive_lo_passes() {
         let work = dir.path().join(format!("{from}-{to}"));
         let out = work.join("out");
         std::fs::create_dir_all(&out).unwrap();
-        let staged = out.join(format!("commented.{from}"));
+        let staged = work.join(format!("commented.{from}"));
         match from {
             "docx" => docx::write(&d, &staged).expect("write docx"),
             _ => letters_core::odt::write(&d, &staged).expect("write odt"),
         }
         let filter = if to == "docx" { "docx:MS Word 2007 XML" } else { "odt" };
-        let _ = soffice_convert(bin, &staged, filter);
+        // Into a directory of its own, as above: onto the input itself
+        // Writer writes nothing.
+        let st = Command::new(bin)
+            .arg("--headless")
+            .arg(format!("-env:UserInstallation=file://{}", work.join("lo").display()))
+            .args(["--convert-to", filter, "--outdir"])
+            .arg(&out)
+            .arg(&staged)
+            .output()
+            .expect("soffice");
+        assert!(st.status.success(), "{}", String::from_utf8_lossy(&st.stderr));
         let converted = out.join(format!("commented.{to}"));
         assert!(converted.exists(), "soffice did not convert {from} to {to}");
         let rt = match to {
@@ -1636,4 +1664,42 @@ fn we_read_the_table_writer_writes_into_an_odt() {
     let _ = soffice_convert(bin, &dp, "odt").ok();
     let rt = letters_core::odt::read(dir.path().join("t.odt").to_str().unwrap()).expect("read Writer's odt");
     assert_eq!(table_shape(&rt), table_shape(&d));
+}
+
+/// How headings look, through Writer, in odt (#1297): Writer rewrites our
+/// odt, and converts it to docx; both keep heading 1's colour, size, weight
+/// and face, which the odt writer used not to write at all.
+#[test]
+fn heading_looks_survive_writer_in_odt() {
+    let Some(bin) = require_or_skip() else { return };
+    let mut d = Document::from_plain_text("A heading\nbody");
+    d.paragraphs[0].style.heading = Some(1);
+    d.heading_styles = vec![RunStyle { color: Some("c00000".into()), font_size_hp: Some(40), bold: true, font_family: Some("DejaVu Serif".into()), ..Default::default() }];
+    let dir = tempfile::tempdir().unwrap();
+    let src = dir.path().join("in").join("h.odt");
+    std::fs::create_dir_all(src.parent().unwrap()).unwrap();
+    letters_core::odt::write(&d, &src).expect("write odt");
+    let out_dir = dir.path().join("out");
+    std::fs::create_dir(&out_dir).unwrap();
+    for to in ["odt", "docx:MS Word 2007 XML"] {
+        let st = std::process::Command::new(bin)
+            .arg("--headless")
+            .arg(format!("-env:UserInstallation=file://{}", dir.path().join("lo").display()))
+            .args(["--convert-to", to, "--outdir"])
+            .arg(&out_dir)
+            .arg(&src)
+            .output()
+            .expect("soffice");
+        assert!(st.status.success());
+    }
+    let from_odt = letters_core::odt::read(out_dir.join("h.odt").to_str().unwrap()).expect("read Writer's odt");
+    let from_docx = docx::read(out_dir.join("h.docx").to_str().unwrap()).expect("read Writer's docx");
+    for (what, rt) in [("odt -> Writer -> odt", &from_odt), ("odt -> Writer -> docx", &from_docx)] {
+        let h1 = rt.heading_styles.first().cloned().unwrap_or_default();
+        assert_eq!(h1.color.as_deref().map(str::to_lowercase).as_deref(), Some("c00000"), "{what}: colour {:?}", rt.heading_styles);
+        assert_eq!(h1.font_size_hp, Some(40), "{what}: size");
+        assert!(h1.bold, "{what}: weight");
+        assert_eq!(h1.font_family.as_deref(), Some("DejaVu Serif"), "{what}: face");
+        assert_eq!(rt.paragraphs[0].style.heading, Some(1), "{what}: still a heading");
+    }
 }

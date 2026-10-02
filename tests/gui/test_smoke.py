@@ -7925,3 +7925,292 @@ class LettersUnreadContentSmoke(OpaquePartsSurviveMixin, BaseGUITestCase):
         self._assert_parts_survived("macroedit")
         with zipfile.ZipFile(self._doc) as z:
             self.assertNotIn("word/vbaProject.bin", z.namelist(), "Save Anyway kept the macro it said it would drop")
+
+
+class OpenPathsMixin:
+    """The two open paths no journey covered (#1316): the Open… dialog,
+    driven through the file chooser's location entry, and drag and drop,
+    through the test-mode `test-drop-files` action that runs the same code
+    a real drop does."""
+
+    def _drop(self, *paths):
+        import subprocess
+        variant = "'" + "\\n".join(paths) + "'"
+        result = subprocess.run(["gapplication", "action", self.aid, "test-drop-files", variant],
+                                capture_output=True, text=True, timeout=5)
+        self.assertEqual(result.returncode, 0, f"test-drop-files: {result.stderr}")
+
+    def _open_through_dialog(self, path):
+        """Choose `path` in the Open… dialog and wait for the window's
+        title to name it.
+
+        The dialog's location entry completes names inline, from a folder
+        listing it loads in the background, and a key that lands before a
+        late completion is typed twice. The dialog then hands the app a
+        file that doesn't exist, and the app says it can't open it. That is
+        the harness's typing racing GTK, not the open path under test, so
+        the error is dismissed and the path chosen again, up to three
+        times."""
+        name = os.path.basename(path)
+        for _attempt in range(3):
+            self._type_into_open_dialog(path)
+            outcome = self.wait_until(
+                lambda: "opened" if name in self._title() else self._error_ok(),
+                bool, description=f"{name} to open, or an error")
+            if outcome == "opened":
+                return
+            outcome.do_action(0)
+            self.wait_until(self._error_ok, lambda b: b is None, description="the error to close")
+        self.fail(f"the Open dialog never opened {path}")
+
+    def _error_ok(self):
+        from dogtail import tree
+        return tree.root.findChild(lambda n: n.roleName == "push button" and n.name in ("OK", "Ok") and n.showing,
+                                   retry=False, requireResult=False)
+
+    def _type_into_open_dialog(self, path):
+        import subprocess
+        from dogtail import rawinput, tree
+        self.gapplication_action(self.aid, "open-file")
+        dialog = self.wait_until(
+            lambda: tree.root.findChild(lambda n: n.name == "Pick a File" and n.showing,
+                                        retry=False, requireResult=False),
+            bool, description="the Open dialog")
+        # Synthetic input goes to the window `_win_id` names, which is the
+        # app's main window: point it at the dialog's own window while the
+        # path is typed, then back.
+        found = self.wait_until(
+            lambda: subprocess.run(["xdotool", "search", "--pid", str(self.process.pid), "--name", "Pick a File"],
+                                   capture_output=True, text=True, timeout=5).stdout.split(),
+            bool, description="the Open dialog's window")
+        self._win_id = found[-1]
+        try:
+            rawinput.keyCombo("<Control>l")
+            entry = self.wait_until(
+                lambda: dialog.findChild(lambda n: n.roleName == "text" and n.showing, retry=False, requireResult=False),
+                bool, description="the dialog's location entry")
+            # A component at a time, each after its folder has had time to
+            # load, which makes a late completion rare.
+            for part in path.strip("/").split("/"):
+                subprocess.run(["xdotool", "windowactivate", "--sync", self._win_id], capture_output=True, timeout=5)
+                subprocess.run(["xdotool", "type", "--delay", "60", "/" + part], capture_output=True, timeout=60)
+                time.sleep(0.8)  # pacing: the folder listing the completion reads
+            self._repair_location(entry, path)
+            rawinput.keyCombo("Return")
+            self.wait_until(
+                lambda: tree.root.findChild(lambda n: n.name == "Pick a File" and n.showing, retry=False, requireResult=False),
+                lambda d: d is None, description="the dialog to close")
+        finally:
+            self._win_id = self._primary_win_id
+
+    def _repair_location(self, entry, path):
+        """Make the location entry read exactly `path` before it is opened.
+
+        Rare is not never. On a loaded CI runner a completion of `/tmp/le`
+        landed after the rest of the component had been typed and left its
+        suffix behind the cursor (`/tmp/letters-open-paths-juf2wmhvtters-open-paths-`).
+        Every later component went in front of it, the dialog was handed a
+        file that doesn't exist, and the retry met the same race. So the
+        entry is read back over AT-SPI and corrected until it says what was
+        meant: a completion trailing the path is deleted, anything else is
+        typed again."""
+        import subprocess
+        from dogtail import rawinput
+
+        def read():
+            # Up to an explicit length: GTK 4 answers the usual "to the
+            # end" (-1), which dogtail's `.text` asks for, with nothing.
+            text = entry.queryText()
+            return text.getText(0, text.characterCount)
+
+        for _attempt in range(5):
+            text = read()
+            if text == path:
+                return
+            if text.startswith(path):
+                rawinput.keyCombo("End")
+                for _ in range(len(text) - len(path)):
+                    rawinput.keyCombo("BackSpace")
+            else:
+                rawinput.keyCombo("<Control>a")
+                subprocess.run(["xdotool", "type", "--delay", "60", path], capture_output=True, timeout=60)
+            time.sleep(0.8)  # pacing: a completion the correction itself prompts
+        self.assertEqual(read(), path, "the Open dialog's location entry never read the path typed into it")
+
+    def _title(self):
+        return self.app.child(roleName="frame").name
+
+    def _button(self, name):
+        from dogtail import tree
+        return self.wait_until(
+            lambda: tree.root.findChild(lambda n: n.roleName == "push button" and n.name == name and n.showing,
+                                        retry=False, requireResult=False),
+            bool, description=f"the {name} button")
+
+
+class LettersOpenPathsSmoke(OpenPathsMixin, BaseGUITestCase):
+    """Letters opens a dropped file, or one chosen in Open…, in a tab of its
+    own. A drop used to load into the active tab over unsaved work, and that
+    tab kept its path, so the next Ctrl+S wrote the dropped document over
+    the original file."""
+
+    app_name = "letters"
+    aid = "org.tunaos.letters"
+
+    def setUp(self):
+        self._dir = self.temp_dir(prefix="letters-open-paths-")
+        self._doc = os.path.join(self._dir, "mine.md")
+        self._other = os.path.join(self._dir, "dropped.md")
+        with open(self._doc, "w") as f:
+            f.write("my own words\n")
+        with open(self._other, "w") as f:
+            f.write("somebody else's words\n")
+        self.launch_args = [self._doc]
+        self.isolate_autosave_state()
+        self.isolate_snapshot(prefix="letters-open-paths-snap-")  # test mode, for test-drop-files
+        super().setUp()
+
+    def test_a_drop_opens_a_new_tab_and_leaves_the_edited_one_alone(self):
+        from dogtail import rawinput
+        self.wait_until(lambda: self.app.child(roleName="text").text, lambda t: "my own words" in t,
+                        description="mine.md to open")
+        rawinput.keyCombo("<Control>End")
+        rawinput.typeText(" unsaved")
+        self.wait_until(lambda: self.app.child(roleName="text").text, lambda t: "unsaved" in t,
+                        description="the edit in the editor")
+
+        self._drop(self._other)
+        self.wait_until(self._title, lambda t: "dropped.md" in t, description="the drop to open dropped.md")
+        # The active tab is now the dropped file's own: saving it can't
+        # touch mine.md.
+        rawinput.keyCombo("<Control>s")
+        time.sleep(1.0)  # settling: a save that wrote the wrong file would have by now
+        with open(self._doc) as f:
+            self.assertEqual(f.read(), "my own words\n", "the drop's save wrote over mine.md")
+        with open(self._other) as f:
+            self.assertIn("somebody else's words", f.read())
+
+        # mine.md's tab still holds its unsaved edit.
+        rawinput.keyCombo("<Control>Page_Up")
+        self.wait_until(self._title, lambda t: "mine.md" in t, description="back to mine.md's tab")
+        self.assertIn("unsaved", self.app.child(roleName="text").text)
+        self.assertIsNone(self.process.poll(), "letters crashed opening a dropped file")
+
+    def test_open_dialog_opens_the_chosen_file(self):
+        self.wait_until(lambda: self.app.child(roleName="text").text, lambda t: "my own words" in t,
+                        description="mine.md to open")
+        self._open_through_dialog(self._other)
+        self.wait_until(self._title, lambda t: "dropped.md" in t, description="Open… to open dropped.md")
+        self.assertIsNone(self.process.poll(), "letters crashed opening through the dialog")
+
+
+class TablesDropGuardSmoke(OpenPathsMixin, TablesOpenGuardSmoke):
+    """A file dropped on the window does not replace unsaved work without
+    asking (#1316): the same journey as a file manager's hand-over, with
+    the file dropped instead. The drop used to replace the workbook
+    without a word."""
+
+    aid = "org.tunaos.tables"
+
+    def _hand_over(self, path):
+        self._drop(path)
+
+
+class TablesOpenDialogSmoke(OpenPathsMixin, TablesCellEntryMixin, BaseGUITestCase):
+    """Open… opens the workbook chosen in the file dialog (#1316)."""
+
+    app_name = "tables"
+    aid = "org.tunaos.tables"
+
+    def setUp(self):
+        import shutil
+        fixtures = os.path.join(os.path.dirname(os.path.abspath(__file__)), "fixtures")
+        self._dir = self.temp_dir(prefix="tables-open-dialog-")
+        self._first = os.path.join(self._dir, "first.csv")
+        self._second = os.path.join(self._dir, "second.ods")
+        shutil.copyfile(os.path.join(fixtures, "budget.csv"), self._first)
+        shutil.copyfile(os.path.join(fixtures, "budget.ods"), self._second)
+        self.launch_args = [self._first]
+        self.isolate_autosave_state()
+        self.isolate_snapshot()
+        super().setUp()
+
+    def test_open_dialog_opens_the_chosen_file(self):
+        self.wait_until(self._grid, lambda text: "cell A1: Item" in text, description="first.csv to open")
+        self._open_through_dialog(self._second)
+        self.wait_until(self._title, lambda t: "second.ods" in t, description="Open… to open second.ods")
+        self.assertIsNone(self.process.poll(), "tables crashed opening through the dialog")
+
+
+# The smallest valid PNG: one transparent pixel.
+ONE_PIXEL_PNG = bytes.fromhex(
+    "89504e470d0a1a0a0000000d4948445200000001000000010806000000"
+    "1f15c4890000000d49444154789c6360000002000005000155a8a8"
+    "0000000049454e44ae426082")
+
+
+class DecksOpenPathsSmoke(OpenPathsMixin, BaseGUITestCase):
+    """A deck dropped on the window asks before it replaces unsaved work,
+    and a picture dropped on it goes on the slide, without asking
+    (#1316). The drop used to replace the deck without a word. Open…
+    opens the deck chosen in the file dialog."""
+
+    app_name = "decks"
+    aid = "org.tunaos.decks"
+
+    def setUp(self):
+        self._dir = self.temp_dir(prefix="decks-open-paths-")
+        self.isolate_snapshot(prefix="decks-open-paths-snap-")
+        self.isolate_autosave_state()
+        self._doc = os.path.join(self._dir, "mine.pptx")
+        self._other = os.path.join(self._dir, "other.pptx")
+        self._picture = os.path.join(self._dir, "dot.png")
+        with open(self._doc, "wb") as f:
+            f.write(minimal_pptx_bytes("mine"))
+        with open(self._other, "wb") as f:
+            f.write(minimal_pptx_bytes("other"))
+        with open(self._picture, "wb") as f:
+            f.write(ONE_PIXEL_PNG)
+        self.launch_args = [self._doc]
+        super().setUp()
+
+    def _objects(self):
+        snap = self.trigger_snapshot(self.aid)
+        return sum(len(s["objects"]) for s in snap["slides"])
+
+    def _opened(self):
+        self.wait_until(lambda: self.app.child(name="Slide canvas"), lambda c: c is not None,
+                        description="the deck to open")
+        self.wait_until(self._title, lambda t: "mine.pptx" in t, description="mine.pptx to open")
+
+    def test_a_dropped_deck_asks_before_replacing_unsaved_work(self):
+        self._opened()
+        self.gapplication_action(self.aid, "add-shape")
+        self.wait_until(self._objects, lambda n: n == 2, description="the shape to be added")
+
+        self._drop(self._other)
+        self.wait_for_node(name="Discard unsaved changes?")
+        self._button("Cancel").do_action(0)
+        time.sleep(1.0)  # settling: a Cancel that replaced the deck would have by now
+        self.assertIn("mine.pptx", self._title(), "Cancel replaced the deck anyway")
+        self.assertEqual(self._objects(), 2, "Cancel lost the edit")
+
+        self._drop(self._other)
+        self._button("Discard").do_action(0)
+        self.wait_until(self._title, lambda t: "other.pptx" in t, description="Discard to open other.pptx")
+        self.assertIsNone(self.process.poll(), "decks crashed opening a dropped deck")
+
+    def test_a_dropped_picture_goes_on_the_slide(self):
+        self._opened()
+        self._drop(self._picture)
+        self.wait_until(self._objects, lambda n: n == 2, description="the picture on the slide")
+        from dogtail import tree
+        self.assertIsNone(tree.root.findChild(lambda n: n.name == "Discard unsaved changes?", retry=False, requireResult=False),
+                          "a picture isn't a document: nothing to ask")
+        self.assertIn("mine.pptx", self._title())
+
+    def test_open_dialog_opens_the_chosen_file(self):
+        self._opened()
+        self._open_through_dialog(self._other)
+        self.wait_until(self._title, lambda t: "other.pptx" in t, description="Open… to open other.pptx")
+        self.assertIsNone(self.process.poll(), "decks crashed opening through the dialog")

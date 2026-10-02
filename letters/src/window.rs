@@ -463,19 +463,10 @@ impl LettersWindow {
         crate::actions::register_structured_actions(&tab_view, app);
 
         // ── Drag and Drop file opening ────────────────────────────
-        {
-            let tv_for_drop = tab_view.clone();
-            let settings_for_drop = settings.clone();
-            suite_common::attach_file_drop_target(&win, move |paths| {
-                for path in paths {
-                    let path_str = path.to_string_lossy().to_string();
-                    if let Some(buf) = active_buffer(&tv_for_drop) {
-                        let _ = crate::bridge::load_file_to_buffer(&path_str, &buf);
-                        suite_common::push_recent_file(&settings_for_drop, &path_str);
-                    }
-                }
-            });
-        }
+        // A dropped file opens the way one from the file manager does,
+        // through GApplication::open: in a new tab (#1316). It used to load
+        // into the active tab, over unsaved work, keeping that tab's path.
+        suite_common::open_files_on_drop(&win, app, |_| false);
 
         // ── Print, Export as PDF, Print Preview ─────────────────────
         // All three draw the tab's laid-out pages (printing.rs, ADR 0010).

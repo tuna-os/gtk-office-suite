@@ -19,6 +19,8 @@ pub mod gtk_test;
 pub mod toast_manager;
 pub mod render_dump;
 pub mod dialogs;
+pub mod file_drop;
+pub use file_drop::open_files_on_drop;
 pub mod popover;
 pub use suite_common_core::{actions, palette, format, undo, events, string_pool, units, props, style, search, print, atomic_save, autosave, interop, carry, recent, templates, session};
 
@@ -392,33 +394,6 @@ where
     dialog.set_child(Some(&main_box));
 
     dialog.present(parent.map(|w| w.upcast_ref::<gtk::Widget>()));
-}
-
-/// Attach a file drop target to a widget to handle opening dragged files.
-pub fn attach_file_drop_target<F>(widget: &impl IsA<gtk::Widget>, on_files_dropped: F) -> gtk::DropTarget
-where
-    F: Fn(Vec<std::path::PathBuf>) + 'static,
-{
-    let target = gtk::DropTarget::new(gtk4::gdk::FileList::static_type(), gtk4::gdk::DragAction::COPY);
-    target.connect_drop(move |_, val, _, _| {
-        if let Ok(file_list) = val.get::<gtk4::gdk::FileList>() {
-            let paths: Vec<std::path::PathBuf> = file_list
-                .files()
-                .into_iter()
-                // Remote locations (GVfs) are staged to a local copy
-                // (RFC-0003); one that can't be read is reported, not
-                // silently dropped.
-                .filter_map(|f| locations::open_location(&f).map_err(|e| eprintln!("{e}")).ok())
-                .collect();
-            if !paths.is_empty() {
-                on_files_dropped(paths);
-                return true;
-            }
-        }
-        false
-    });
-    widget.add_controller(target.clone());
-    target
 }
 
 /// Read recent files from GSettings, pruning non-existent files.

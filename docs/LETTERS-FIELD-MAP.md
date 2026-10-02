@@ -21,7 +21,7 @@ Building this map found five fields that didn't cross, all fixed with it:
 | `Document.footer` | footer sidecar on the buffer | `letters-core/tests/soffice_oracle.rs::header_footer_survive_lo_pass` | `letters-core/tests/soffice_oracle.rs::header_footer_survive_lo_pass` |
 | `Document.page` | page-geometry sidecar on the buffer | `letters-core/tests/soffice_oracle.rs::page_geometry_survives_lo_conversion` | `letters-core/tests/soffice_oracle.rs::page_geometry_survives_lo_conversion` |
 | `Document.base_font` | base-font sidecar on the buffer | `letters-core/tests/soffice_oracle.rs::a_new_document_keeps_its_font_through_lo` | `letters-core/tests/soffice_oracle.rs::a_new_document_keeps_its_font_through_lo` |
-| `Document.heading_styles` | heading-styles sidecar on the buffer | `letters-core/tests/soffice_oracle.rs::heading_styles_and_picture_size_survive_writer_rewriting_a_docx` | n/a: the odt writer and reader don't carry the heading look (#1297) |
+| `Document.heading_styles` | heading-styles sidecar on the buffer | `letters-core/tests/soffice_oracle.rs::heading_styles_and_picture_size_survive_writer_rewriting_a_docx` | `letters-core/tests/soffice_oracle.rs::heading_looks_survive_writer_in_odt` |
 | `Document.comments` | comments sidecar; anchors are `comment:ID` tags | `letters-core/tests/soffice_oracle.rs::comments_survive_lo_passes` | `letters-core/tests/soffice_oracle.rs::comments_survive_lo_passes` |
 | `Paragraph.style` | the paragraph tags below | n/a: a container; its fields have their own rows | n/a: a container; its fields have their own rows |
 | `Paragraph.runs` | the paragraph's text and run tags | n/a: a container; its fields have their own rows | n/a: a container; its fields have their own rows |
@@ -77,7 +77,7 @@ Building this map found five fields that didn't cross, all fixed with it:
 | `Revision.kind` | in the `rev:` tag's JSON | `letters-core/tests/soffice_oracle.rs::tracked_changes_survive_lo_passes` | `letters-core/tests/soffice_oracle.rs::tracked_changes_survive_lo_passes` |
 | `Revision.author` | in the `rev:` tag's JSON | `letters-core/tests/soffice_oracle.rs::tracked_changes_survive_lo_passes` | `letters-core/tests/soffice_oracle.rs::tracked_changes_survive_lo_passes` |
 | `Revision.date` | in the `rev:` tag's JSON | `letters-core/tests/soffice_oracle.rs::tracked_changes_survive_lo_passes` | `letters-core/tests/soffice_oracle.rs::tracked_changes_survive_lo_passes` |
-| `Revision.under` | in the `rev:` tag's JSON | n/a: no test nests a deletion in an insertion through Writer (#1297) | n/a: no test nests a deletion in an insertion through Writer (#1297) |
+| `Revision.under` | in the `rev:` tag's JSON | `letters-core/tests/soffice_oracle.rs::tracked_changes_survive_lo_passes` | `letters-core/tests/soffice_oracle.rs::tracked_changes_survive_lo_passes` |
 | `BaseFont.family` | base-font sidecar | `letters-core/tests/soffice_oracle.rs::a_new_document_keeps_its_font_through_lo` | `letters-core/tests/soffice_oracle.rs::a_new_document_keeps_its_font_through_lo` |
 | `BaseFont.size_hp` | base-font sidecar | `letters-core/tests/soffice_oracle.rs::a_new_document_keeps_its_font_through_lo` | `letters-core/tests/soffice_oracle.rs::a_new_document_keeps_its_font_through_lo` |
 | `PageGeometry.width_pt` | page-geometry sidecar | `letters-core/tests/soffice_oracle.rs::page_geometry_survives_lo_conversion` | `letters-core/tests/soffice_oracle.rs::page_geometry_survives_lo_conversion` |
