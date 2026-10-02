@@ -1,0 +1,90 @@
+# Letters: the document model, field by field
+
+Every field of the Letters document model (`letters-core/src/model.rs`): where the editor keeps it while a document is open, and the test that carries it across the format boundary through LibreOffice Writer for each file format (#1205).
+
+A self round trip doesn't count, because our writer and reader share every convention. So each cited test either converts between formats in Writer (odt → docx or docx → odt), or has Writer rewrite the file in a directory of its own (a file it can't convert onto itself). Each cell names the test, or says `n/a` with the reason; a gap names its issue.
+
+`tests/test_letters_field_map.py` checks that every model field has a row and every cited test exists. `StylePatch` (an edit command) and `ParagraphLayout` (derived for layout) aren't document state and have no rows.
+
+Building this map found five fields that didn't cross, all fixed with it:
+- **List restarts** (`list_start`) were written and read by neither format.
+- **Nested list items** were flattened by the odt writer.
+- **Code blocks and inline code** were lost through Writer both ways. Our docx named styles it never defined, and our odt named a font it never declared.
+- **Block quotes** were lost from docx to odt, for the same reason.
+- **The kind of a Writer list style** is now read from its definition, not guessed from its name (`WWNum2` is a bullet list).
+
+| Field | In the editor | docx | odt |
+|---|---|---|---|
+| `Document.paragraphs` | buffer text, one line per paragraph | `letters-core/tests/soffice_oracle.rs::oracle_reads_plain_paragraphs` | `letters-core/tests/soffice_oracle.rs::odt_oracle_reads_plain_paragraphs` |
+| `Document.footnotes` | buffer data `letters-footnotes`; each reference is a visible `[n]` tagged `fnref:N` | `letters-core/tests/soffice_oracle.rs::footnotes_survive_a_conversion_between_the_two_formats` | `letters-core/tests/soffice_oracle.rs::footnotes_survive_a_conversion_between_the_two_formats` |
+| `Document.header` | header sidecar on the buffer | `letters-core/tests/soffice_oracle.rs::header_footer_survive_lo_pass` | `letters-core/tests/soffice_oracle.rs::header_footer_survive_lo_pass` |
+| `Document.footer` | footer sidecar on the buffer | `letters-core/tests/soffice_oracle.rs::header_footer_survive_lo_pass` | `letters-core/tests/soffice_oracle.rs::header_footer_survive_lo_pass` |
+| `Document.page` | page-geometry sidecar on the buffer | `letters-core/tests/soffice_oracle.rs::page_geometry_survives_lo_conversion` | `letters-core/tests/soffice_oracle.rs::page_geometry_survives_lo_conversion` |
+| `Document.base_font` | base-font sidecar on the buffer | `letters-core/tests/soffice_oracle.rs::a_new_document_keeps_its_font_through_lo` | `letters-core/tests/soffice_oracle.rs::a_new_document_keeps_its_font_through_lo` |
+| `Document.heading_styles` | heading-styles sidecar on the buffer | `letters-core/tests/soffice_oracle.rs::heading_styles_and_picture_size_survive_writer_rewriting_a_docx` | n/a: the odt writer and reader don't carry the heading look (#1297) |
+| `Document.comments` | comments sidecar; anchors are `comment:ID` tags | `letters-core/tests/soffice_oracle.rs::comments_survive_lo_passes` | `letters-core/tests/soffice_oracle.rs::comments_survive_lo_passes` |
+| `Paragraph.style` | the paragraph tags below | n/a: a container; its fields have their own rows | n/a: a container; its fields have their own rows |
+| `Paragraph.runs` | the paragraph's text and run tags | n/a: a container; its fields have their own rows | n/a: a container; its fields have their own rows |
+| `Run.text` | buffer text | `letters-core/tests/soffice_oracle.rs::oracle_reads_plain_paragraphs` | `letters-core/tests/soffice_oracle.rs::odt_oracle_reads_plain_paragraphs` |
+| `Run.style` | the run tags below | n/a: a container; its fields have their own rows | n/a: a container; its fields have their own rows |
+| `ParaStyle.heading` | `h1`–`h6` tags | `letters-core/tests/soffice_oracle.rs::paragraph_and_run_attributes_survive_a_conversion_between_the_two_formats` | `letters-core/tests/soffice_oracle.rs::paragraph_and_run_attributes_survive_a_conversion_between_the_two_formats` |
+| `ParaStyle.alignment` | `align-center`/`-right`/`-justify` tags | `letters-core/tests/soffice_oracle.rs::paragraph_and_run_attributes_survive_a_conversion_between_the_two_formats` | `letters-core/tests/soffice_oracle.rs::paragraph_and_run_attributes_survive_a_conversion_between_the_two_formats` |
+| `ParaStyle.list` | the marker (`•`, `N.`) and a tab in the text, never captured as text; `list-level-N` tag | `letters-core/tests/soffice_oracle.rs::paragraph_and_run_attributes_survive_a_conversion_between_the_two_formats` | `letters-core/tests/soffice_oracle.rs::paragraph_and_run_attributes_survive_a_conversion_between_the_two_formats` |
+| `ParaStyle.list_level` | `list-level-N` tag | `letters-core/tests/soffice_oracle.rs::paragraph_and_run_attributes_survive_a_conversion_between_the_two_formats` | `letters-core/tests/soffice_oracle.rs::paragraph_and_run_attributes_survive_a_conversion_between_the_two_formats` |
+| `ParaStyle.list_start` | `para:` tag, `n=` | `letters-core/tests/soffice_oracle.rs::paragraph_and_run_attributes_survive_a_conversion_between_the_two_formats` | `letters-core/tests/soffice_oracle.rs::paragraph_and_run_attributes_survive_a_conversion_between_the_two_formats` |
+| `ParaStyle.line_spacing` | line-spacing tags, else `para:` `ls=` | `letters-core/tests/soffice_oracle.rs::line_spacing_survives_lo_docx_pass` | `letters-core/tests/soffice_oracle.rs::line_spacing_survives_lo_odt_pass` |
+| `ParaStyle.space_before_pt` | `para:` tag, `b=` | `letters-core/tests/soffice_oracle.rs::indents_and_spacing_survive_a_conversion_between_the_two_formats` | `letters-core/tests/soffice_oracle.rs::indents_and_spacing_survive_a_conversion_between_the_two_formats` |
+| `ParaStyle.space_after_pt` | `para:` tag, `a=` | `letters-core/tests/soffice_oracle.rs::indents_and_spacing_survive_a_conversion_between_the_two_formats` | `letters-core/tests/soffice_oracle.rs::indents_and_spacing_survive_a_conversion_between_the_two_formats` |
+| `ParaStyle.left_indent_pt` | `para:` tag, `l=` | `letters-core/tests/soffice_oracle.rs::indents_and_spacing_survive_a_conversion_between_the_two_formats` | `letters-core/tests/soffice_oracle.rs::indents_and_spacing_survive_a_conversion_between_the_two_formats` |
+| `ParaStyle.right_indent_pt` | `para:` tag, `r=` | `letters-core/tests/soffice_oracle.rs::paragraph_and_run_attributes_survive_a_conversion_between_the_two_formats` | `letters-core/tests/soffice_oracle.rs::paragraph_and_run_attributes_survive_a_conversion_between_the_two_formats` |
+| `ParaStyle.first_line_indent_pt` | `para:` tag, `f=` | `letters-core/tests/soffice_oracle.rs::paragraph_and_run_attributes_survive_a_conversion_between_the_two_formats` | `letters-core/tests/soffice_oracle.rs::paragraph_and_run_attributes_survive_a_conversion_between_the_two_formats` |
+| `ParaStyle.tab_stops_pt` | `para:` tag, `t=` | `letters-core/tests/soffice_oracle.rs::tab_stops_survive_a_conversion_between_the_two_formats` | `letters-core/tests/soffice_oracle.rs::tab_stops_survive_a_conversion_between_the_two_formats` |
+| `ParaStyle.code_block` | `code-block` look tag; `para:` `c=` holds the language | `letters-core/tests/soffice_oracle.rs::paragraph_and_run_attributes_survive_a_conversion_between_the_two_formats` | `letters-core/tests/soffice_oracle.rs::paragraph_and_run_attributes_survive_a_conversion_between_the_two_formats` |
+| `ParaStyle.block_quote` | `blockquote` look tag; `para:` `q` | `letters-core/tests/soffice_oracle.rs::paragraph_and_run_attributes_survive_a_conversion_between_the_two_formats` | `letters-core/tests/soffice_oracle.rs::paragraph_and_run_attributes_survive_a_conversion_between_the_two_formats` |
+| `ParaStyle.html_block` | buffer text, verbatim | n/a: Markdown source only; neither format has a raw-HTML block | n/a: Markdown source only; neither format has a raw-HTML block |
+| `ParaStyle.page_break_before` | `page-break` tag | `letters-core/tests/soffice_oracle.rs::a_page_break_survives_a_conversion_between_the_two_formats` | `letters-core/tests/soffice_oracle.rs::a_page_break_survives_a_conversion_between_the_two_formats` |
+| `ParaStyle.named_style` | `h-title`/`h-subtitle` look tags; `para:` `s=` | `letters-core/tests/soffice_oracle.rs::paragraph_and_run_attributes_survive_a_conversion_between_the_two_formats` | `letters-core/tests/soffice_oracle.rs::paragraph_and_run_attributes_survive_a_conversion_between_the_two_formats` |
+| `ParaStyle.table_cell` | table text: cells between pipe characters (`letters-core/src/table_text.rs`) | `letters-core/tests/soffice_oracle.rs::table_grid_survives_lo_docx_pass` | n/a: the odt writer and reader have no tables (#1296) |
+| `ParaStyle.keep_with_next` | `para:` tag, `k` | `letters-core/tests/soffice_oracle.rs::paragraph_and_run_attributes_survive_a_conversion_between_the_two_formats` | `letters-core/tests/soffice_oracle.rs::paragraph_and_run_attributes_survive_a_conversion_between_the_two_formats` |
+| `ParaStyle.toc` | `para:` tag, `toc=` | `letters-core/tests/soffice_oracle.rs::a_table_of_contents_survives_lo_passes` | `letters-core/tests/soffice_oracle.rs::a_table_of_contents_survives_lo_passes` |
+| `TableCell.table` | as `ParaStyle.table_cell` | `letters-core/tests/soffice_oracle.rs::table_grid_survives_lo_docx_pass` | n/a: the odt writer and reader have no tables (#1296) |
+| `TableCell.row` | as `ParaStyle.table_cell` | `letters-core/tests/soffice_oracle.rs::table_grid_survives_lo_docx_pass` | n/a: the odt writer and reader have no tables (#1296) |
+| `TableCell.col` | as `ParaStyle.table_cell` | `letters-core/tests/soffice_oracle.rs::table_grid_survives_lo_docx_pass` | n/a: the odt writer and reader have no tables (#1296) |
+| `RunStyle.bold` | `bold` tag | `letters-core/tests/soffice_oracle.rs::odt_styles_survive_lo_conversion_to_docx` | `letters-core/tests/soffice_oracle.rs::odt_styles_survive_lo_conversion_to_docx` |
+| `RunStyle.italic` | `italic` tag | `letters-core/tests/soffice_oracle.rs::paragraph_and_run_attributes_survive_a_conversion_between_the_two_formats` | `letters-core/tests/soffice_oracle.rs::paragraph_and_run_attributes_survive_a_conversion_between_the_two_formats` |
+| `RunStyle.underline` | `underline` tag | `letters-core/tests/soffice_oracle.rs::paragraph_and_run_attributes_survive_a_conversion_between_the_two_formats` | `letters-core/tests/soffice_oracle.rs::paragraph_and_run_attributes_survive_a_conversion_between_the_two_formats` |
+| `RunStyle.strikethrough` | `strikethrough` tag | `letters-core/tests/soffice_oracle.rs::paragraph_and_run_attributes_survive_a_conversion_between_the_two_formats` | `letters-core/tests/soffice_oracle.rs::paragraph_and_run_attributes_survive_a_conversion_between_the_two_formats` |
+| `RunStyle.highlight` | `highlight` tag | `letters-core/tests/soffice_oracle.rs::highlight_survives_lo_pass` | `letters-core/tests/soffice_oracle.rs::highlight_survives_lo_pass` |
+| `RunStyle.code` | `code` tag | `letters-core/tests/soffice_oracle.rs::paragraph_and_run_attributes_survive_a_conversion_between_the_two_formats` | `letters-core/tests/soffice_oracle.rs::paragraph_and_run_attributes_survive_a_conversion_between_the_two_formats` |
+| `RunStyle.link` | `link:URL` tag | `letters-core/tests/soffice_oracle.rs::hyperlink_survives_lo_pass` | `letters-core/tests/soffice_oracle.rs::hyperlink_survives_lo_pass` |
+| `RunStyle.image` | an object character holding the picture | `letters-core/tests/soffice_oracle.rs::inline_image_survives_lo_docx_pass` | n/a: the odt writer and reader have no images (#1292) |
+| `RunStyle.image_extent_emu` | the object's displayed size | `letters-core/tests/soffice_oracle.rs::heading_styles_and_picture_size_survive_writer_rewriting_a_docx` | n/a: the odt writer and reader have no images (#1292) |
+| `RunStyle.font_family` | `font:FAMILY` tag | `letters-core/tests/soffice_oracle.rs::font_family_size_color_survive_lo_pass` | `letters-core/tests/soffice_oracle.rs::font_family_size_color_survive_lo_pass` |
+| `RunStyle.font_size_hp` | `size-hp:N` tag | `letters-core/tests/soffice_oracle.rs::font_family_size_color_survive_lo_pass` | `letters-core/tests/soffice_oracle.rs::font_family_size_color_survive_lo_pass` |
+| `RunStyle.color` | `color:RRGGBB` tag | `letters-core/tests/soffice_oracle.rs::font_family_size_color_survive_lo_pass` | `letters-core/tests/soffice_oracle.rs::font_family_size_color_survive_lo_pass` |
+| `RunStyle.vert_align` | `superscript`/`subscript` tags | `letters-core/tests/soffice_oracle.rs::superscript_survives_lo_pass` | `letters-core/tests/soffice_oracle.rs::superscript_survives_lo_pass` |
+| `RunStyle.footnote` | the reference's `[n]`, tagged `fnref:N` | `letters-core/tests/soffice_oracle.rs::footnotes_survive_a_conversion_between_the_two_formats` | `letters-core/tests/soffice_oracle.rs::footnotes_survive_a_conversion_between_the_two_formats` |
+| `RunStyle.html` | buffer text, verbatim | n/a: Markdown source only; neither format has raw inline HTML | n/a: Markdown source only; neither format has raw inline HTML |
+| `RunStyle.chip` | the chip's label with its object anchor | `letters-core/tests/soffice_oracle.rs::smart_chips_survive_lo_passes` | `letters-core/tests/soffice_oracle.rs::smart_chips_survive_lo_passes` |
+| `RunStyle.revision` | `rev:` tag holding the revision as JSON | `letters-core/tests/soffice_oracle.rs::tracked_changes_survive_lo_passes` | `letters-core/tests/soffice_oracle.rs::tracked_changes_survive_lo_passes` |
+| `RunStyle.comments` | `comment:ID` tags | `letters-core/tests/soffice_oracle.rs::comments_survive_lo_passes` | `letters-core/tests/soffice_oracle.rs::comments_survive_lo_passes` |
+| `Comment.id` | comments sidecar | `letters-core/tests/soffice_oracle.rs::comments_survive_lo_passes` | `letters-core/tests/soffice_oracle.rs::comments_survive_lo_passes` |
+| `Comment.author` | comments sidecar | `letters-core/tests/soffice_oracle.rs::comments_survive_lo_passes` | `letters-core/tests/soffice_oracle.rs::comments_survive_lo_passes` |
+| `Comment.date` | comments sidecar | `letters-core/tests/soffice_oracle.rs::comments_survive_lo_passes` | `letters-core/tests/soffice_oracle.rs::comments_survive_lo_passes` |
+| `Comment.text` | comments sidecar | `letters-core/tests/soffice_oracle.rs::comments_survive_lo_passes` | `letters-core/tests/soffice_oracle.rs::comments_survive_lo_passes` |
+| `Comment.resolved` | comments sidecar | `letters-core/tests/soffice_oracle.rs::comments_survive_lo_passes` | `letters-core/tests/soffice_oracle.rs::comments_survive_lo_passes` |
+| `Comment.parent` | comments sidecar | `letters-core/tests/soffice_oracle.rs::comments_survive_lo_passes` | `letters-core/tests/soffice_oracle.rs::comments_survive_lo_passes` |
+| `Revision.kind` | in the `rev:` tag's JSON | `letters-core/tests/soffice_oracle.rs::tracked_changes_survive_lo_passes` | `letters-core/tests/soffice_oracle.rs::tracked_changes_survive_lo_passes` |
+| `Revision.author` | in the `rev:` tag's JSON | `letters-core/tests/soffice_oracle.rs::tracked_changes_survive_lo_passes` | `letters-core/tests/soffice_oracle.rs::tracked_changes_survive_lo_passes` |
+| `Revision.date` | in the `rev:` tag's JSON | `letters-core/tests/soffice_oracle.rs::tracked_changes_survive_lo_passes` | `letters-core/tests/soffice_oracle.rs::tracked_changes_survive_lo_passes` |
+| `Revision.under` | in the `rev:` tag's JSON | n/a: no test nests a deletion in an insertion through Writer (#1297) | n/a: no test nests a deletion in an insertion through Writer (#1297) |
+| `BaseFont.family` | base-font sidecar | `letters-core/tests/soffice_oracle.rs::a_new_document_keeps_its_font_through_lo` | `letters-core/tests/soffice_oracle.rs::a_new_document_keeps_its_font_through_lo` |
+| `BaseFont.size_hp` | base-font sidecar | `letters-core/tests/soffice_oracle.rs::a_new_document_keeps_its_font_through_lo` | `letters-core/tests/soffice_oracle.rs::a_new_document_keeps_its_font_through_lo` |
+| `PageGeometry.width_pt` | page-geometry sidecar | `letters-core/tests/soffice_oracle.rs::page_geometry_survives_lo_conversion` | `letters-core/tests/soffice_oracle.rs::page_geometry_survives_lo_conversion` |
+| `PageGeometry.height_pt` | page-geometry sidecar | `letters-core/tests/soffice_oracle.rs::page_geometry_survives_lo_conversion` | `letters-core/tests/soffice_oracle.rs::page_geometry_survives_lo_conversion` |
+| `PageGeometry.margin_top_pt` | page-geometry sidecar | `letters-core/tests/soffice_oracle.rs::page_geometry_survives_lo_conversion` | `letters-core/tests/soffice_oracle.rs::page_geometry_survives_lo_conversion` |
+| `PageGeometry.margin_bottom_pt` | page-geometry sidecar | `letters-core/tests/soffice_oracle.rs::page_geometry_survives_lo_conversion` | `letters-core/tests/soffice_oracle.rs::page_geometry_survives_lo_conversion` |
+| `PageGeometry.margin_left_pt` | page-geometry sidecar | `letters-core/tests/soffice_oracle.rs::page_geometry_survives_lo_conversion` | `letters-core/tests/soffice_oracle.rs::page_geometry_survives_lo_conversion` |
+| `PageGeometry.margin_right_pt` | page-geometry sidecar | `letters-core/tests/soffice_oracle.rs::page_geometry_survives_lo_conversion` | `letters-core/tests/soffice_oracle.rs::page_geometry_survives_lo_conversion` |
+| `PageGeometry.columns` | page-geometry sidecar | `letters-core/tests/soffice_oracle.rs::columns_survive_a_conversion_between_the_two_formats` | `letters-core/tests/soffice_oracle.rs::columns_survive_a_conversion_between_the_two_formats` |
+| `PageGeometry.column_gap_pt` | page-geometry sidecar | `letters-core/tests/soffice_oracle.rs::columns_survive_a_conversion_between_the_two_formats` | `letters-core/tests/soffice_oracle.rs::columns_survive_a_conversion_between_the_two_formats` |
