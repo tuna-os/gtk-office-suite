@@ -48,7 +48,17 @@ A per-tab session owns the complete Document, review state, imported-package con
       the app: it comments on a word, types `é👍中` before it through the input method, and undoes. It found one bug in
       the live model's partial re-render, fixed here. When an empty line was the last line of the span, its style was
       dropped, and the stale paragraph tags it had replaced stayed behind on its newline.
-- [ ] Drive editor pagination and print/export from styled paragraph/run metrics; remove byte/character-offset ambiguity.
+- [x] Drive editor pagination and print/export from styled paragraph/run metrics; remove byte/character-offset ambiguity.
+      One layout paginates everything (#1280): `letters_core::layout::pango::Typeset`, from the document's styled runs,
+      paragraph spacing and page geometry. Print Layout, Print, Print Preview, Export as PDF and the headless
+      `--export-pdf` all draw one Typeset's pages (`letters/src/doc_tab.rs::typeset_for`, `PageView::write_pdf`).
+      "Export as PDF with Typst" is a separately labelled alternative engine and is not the document's PDF.
+      `Typeset::page_breaks` reports where each page starts as a character offset in the document's text. Line
+      ranges were already character offsets, converted from Pango's byte indices in one place (`line_boxes`).
+      `the_pdf_has_the_typesets_pages_with_the_text_its_breaks_say` (`letters-core/tests/pagination.rs`, PR lane)
+      lays out a document whose breaks depend on run sizes and spacing, with multi-byte text before every break. The
+      PDF it writes, read back with poppler, has the same page count, and each page holds exactly the text between
+      its breaks.
 - [ ] Wire admitted review/TOC/bidi workflows or report them as unavailable until GUI and format tests pass.
 - [~] Reconcile duplicate ADR numbers and the conflicting old/new advanced-feature scope without silently expanding scope.
       **The numbers are reconciled** (#1205). 0004 and 0006 were each two ADRs. The Decks workflows ADR keeps 0004,

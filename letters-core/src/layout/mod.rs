@@ -290,6 +290,24 @@ pub struct RenderTree {
 }
 
 impl RenderTree {
+    /// Where each page starts, as a character offset in `doc`'s text
+    /// (paragraphs joined by one newline, `Document::paragraph_offset`):
+    /// the first body line on the page (#1280). Print Layout, printing and
+    /// PDF export all draw this tree, so these are their page breaks; a
+    /// page with no body line of its own starts where the previous ended.
+    pub fn page_breaks(&self, doc: &crate::model::Document) -> Vec<usize> {
+        let mut out: Vec<usize> = Vec::with_capacity(self.pages.len());
+        for page in &self.pages {
+            let first = page.items.iter().find_map(|i| match i {
+                Item::Line { source: Source::Paragraph(p), start, .. } => Some(doc.paragraph_offset(*p) + start),
+                _ => None,
+            });
+            let previous = out.last().copied().unwrap_or(0);
+            out.push(first.unwrap_or(previous).max(previous));
+        }
+        out
+    }
+
     /// The page holding the first line of paragraph `para`, if any.
     pub fn page_of_paragraph(&self, para: usize) -> Option<usize> {
         self.pages.iter().position(|p| {
