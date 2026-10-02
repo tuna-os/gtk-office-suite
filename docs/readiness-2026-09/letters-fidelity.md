@@ -37,7 +37,11 @@ A per-tab session owns the complete Document, review state, imported-package con
       - a cell's own leading and trailing spaces trimmed away;
       - table ids compared by value rather than by grouping.
 
-      Deleting the empty line between two tables still runs them together (#1299).
+      Deleting the empty line between two tables no longer runs them together (#1299): a row followed by a delimiter
+      row starts the next table, and the property test's deletes now reach the lines next to a table. Doing so found that
+      the live model could give two tables one id: a local re-read numbered its region from its position, and an
+      inserted table (numbered past the highest) left later ones out of order. Tables are now renumbered in document
+      order after every local re-read.
 - [x] Apply model operations and undo through one live session; keep review anchors correct across Unicode edits.
       `review_anchors_hold_across_unicode_edits_and_one_history_undoes_them` (`letters/src/live/tests.rs`, #1279) runs
       40 seeded interleavings of typing (a combining accent, a non-BMP emoji with a skin-tone modifier, CJK, Enter),

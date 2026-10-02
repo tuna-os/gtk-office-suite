@@ -600,6 +600,13 @@ pub(crate) fn capture_tables(paragraphs: &mut Vec<Paragraph>, starts: &mut Vec<u
             if ranges.len() != cols || table_text::is_delimiter_line(&paragraphs[i].text()) {
                 break;
             }
+            // A row followed by a delimiter row is the next table's header:
+            // two tables with nothing between them stay two (#1299). Read
+            // as this table's body, the header joined it and its delimiter
+            // came back as the user's own prose.
+            if paragraphs.get(i + 1).is_some_and(|p| table_text::is_delimiter_line(&p.text())) {
+                break;
+            }
             row += 1;
             push_row(&mut out, &mut out_starts, &paragraphs[i], starts[i], &ranges, row);
             i += 1;
@@ -1375,6 +1382,30 @@ mod tests {
     use super::*;
     use suite_common::gtk_test::run as gtk_test;
     use letters_core::model::StylePatch;
+
+    /// Two tables with nothing between them read as two (#1299): the
+    /// second's header row is followed by its own delimiter row, so it
+    /// starts a table rather than ending the first one's body, and its
+    /// delimiter does not come back as prose.
+    #[test]
+    fn adjacent_tables_capture_as_two() {
+        let lines = ["| a | b |", "| --- | --- |", "| 1 | 2 |", "| x | y |", "| --- | --- |", "| 3 | 4 |", "after"];
+        let mut paras: Vec<Paragraph> = lines.iter().map(|l| Paragraph { style: Default::default(), runs: vec![letters_core::Run::plain(*l)] }).collect();
+        let mut starts: Vec<usize> = (0..paras.len()).map(|i| i * 20).collect();
+        capture_tables(&mut paras, &mut starts, 1);
+        type Cells = Vec<(Option<(u32, u32, u32)>, String)>;
+        let cells: Cells =
+            paras.iter().map(|p| (p.style.table_cell.map(|c| (c.table, c.row, c.col)), p.text().trim().to_string())).collect();
+        let want: Cells = [
+            (Some((1, 0, 0)), "a"), (Some((1, 0, 1)), "b"), (Some((1, 1, 0)), "1"), (Some((1, 1, 1)), "2"),
+            (Some((2, 0, 0)), "x"), (Some((2, 0, 1)), "y"), (Some((2, 1, 0)), "3"), (Some((2, 1, 1)), "4"),
+            (None, "after"),
+        ]
+        .into_iter()
+        .map(|(c, t)| (c, t.to_string()))
+        .collect();
+        assert_eq!(cells, want);
+    }
 
     // ── line-spacing tag mapping (pure, no GTK) ──────────────────────
 

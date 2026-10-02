@@ -229,19 +229,13 @@ impl LiveModel {
         let first_id = tables_before(&self.doc.paragraphs, s) + 1;
         crate::bridge::capture_tables(&mut paras, &mut starts, first_id);
         let mut next = self.doc.clone();
-        let old_tables = table_ids(&self.doc.paragraphs[s..=e]).len() as i64;
-        let new_tables = table_ids(&paras).len() as i64;
         next.paragraphs.splice(s..=e, paras.iter().cloned());
-        // Tables are numbered in document order: tables after the region
-        // shift when it gains or loses one.
-        if new_tables != old_tables {
-            let after = s + paras.len();
-            for p in &mut next.paragraphs[after..] {
-                if let Some(c) = &mut p.style.table_cell {
-                    c.table = (i64::from(c.table) + new_tables - old_tables) as u32;
-                }
-            }
-        }
+        // Tables are numbered in document order, as a whole-buffer read
+        // numbers them. Shifting the ones after the region by the count it
+        // gained or lost assumed the model was already in that order, and
+        // an inserted table is not (it takes the highest id): a re-read
+        // region then gave a table an id a later one still had (#1299).
+        renumber_tables(&mut next.paragraphs);
         let ops = edit::diff(&self.doc, &next);
         let Ok(inverse) = edit::apply_all(&mut self.doc, &ops) else { return false };
         if self.doc.paragraphs != next.paragraphs {
@@ -582,6 +576,24 @@ fn widen_for_render(paras: &[Paragraph], p0: usize, p1: usize) -> (usize, usize)
         e += 1;
     }
     (s, e)
+}
+
+/// Number the tables in `paras` 1, 2, … in document order. A table is a
+/// run of cells with one id: a cell after prose, or after another table's
+/// cell, starts the next, so two tables never merge however they were
+/// numbered before.
+fn renumber_tables(paras: &mut [Paragraph]) {
+    let (mut n, mut prev) = (0u32, None);
+    for p in paras {
+        let id = p.style.table_cell.map(|c| c.table);
+        if let Some(c) = &mut p.style.table_cell {
+            if prev != Some(c.table) {
+                n += 1;
+            }
+            c.table = n;
+        }
+        prev = id;
+    }
 }
 
 /// The distinct tables among `paras`, in order.
