@@ -48,7 +48,18 @@ One DecksController owns slide/object/master state, stable identities, selection
     and `DecksExportSmoke.test_a_failed_export_is_shown_and_leaves_the_deck_alone`
     exports into `/proc`, sees "Export Failed", and finds the deck and
     its file unchanged.
-- [ ] Missing media and unsupported animation/comment content is preserved or blocked/warned by #374 before save.
+- [x] Missing media and unsupported animation/comment content is preserved or blocked/warned by #374 before save.
+    Warned. `decks_core::loss::content_a_save_drops` reads the file a save
+    would replace or copy from and lists what the writers can't carry:
+    comments, audio and video, embedded OLE objects, SmartArt, emphasis
+    and motion-path animations, and pictures the file names but doesn't
+    contain (unit tests for both formats in `decks-core/src/loss.rs`).
+    Save and Save As ask first (`decks/src/loss_ui.rs`, "Save Without This
+    Content?"); Cancel writes nothing. On the 70 real pptx files of the
+    render-lab corpus it flags 9: six with SmartArt, two with OLE objects,
+    one with motion paths, and no false comment from PowerPoint's authors
+    list. GUI: `DecksUnsupportedContentSmoke` (Cancel keeps the file's
+    bytes, Save Anyway drops the comment, the next save doesn't ask).
 
 Exit: deterministic GUI snapshots plus reopened-file semantics for authoring; display fallback test and exported-PDF evidence for presentation. A documentation checklist alone cannot close this issue. Depends on #354, #374 and the shared P0 persistence work.
 
