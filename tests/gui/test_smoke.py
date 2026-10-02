@@ -4822,7 +4822,7 @@ class DecksUnsupportedContentSmoke(BaseGUITestCase):
         self.gapplication_action(aid, "save-file")
         self.wait_for_node(name="Save Without This Content?")
         self.wait_for_node(name="Cancel", roleName="push button").do_action(0)
-        time.sleep(1.0)
+        time.sleep(1.0)  # settling: a Cancel that wrote would have by now
         self.assertEqual(self._bytes(), self._original, "Cancel wrote the file")
 
         self.gapplication_action(aid, "save-file")
@@ -4834,7 +4834,7 @@ class DecksUnsupportedContentSmoke(BaseGUITestCase):
             self.assertIn(b"kept", b"".join(z.read(n) for n in names if n.startswith("ppt/slides/slide")))
 
         before = os.stat(self._doc).st_mtime_ns
-        time.sleep(0.05)
+        time.sleep(0.05)  # pacing: the next save gets a later mtime
         self.gapplication_action(aid, "save-file")
         self.wait_until(lambda: os.stat(self._doc).st_mtime_ns, lambda m: m != before,
                         description="a save of the file Decks wrote, without asking")
