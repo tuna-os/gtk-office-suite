@@ -1843,6 +1843,78 @@ class RenamedOriginalMixin(SavedDocumentMixin):
         self._assert_the_offer_names_the_work(frame)
 
 
+class KilledMidSaveMixin(SavedDocumentMixin):
+    """SIGKILL the real app in the middle of a save (recovery.md, #1217).
+
+    `atomic_save::fault` arms every boundary of a durable write, but
+    in-process and in tests only: it can fail a write, not kill a process,
+    and a kill is the case that runs no error path and no destructor.
+    Racing a real save with a kill only lands while the temporary exists,
+    which is milliseconds, because a save builds its bytes first. So the app
+    is told, in test mode only, to hold the save at a stage
+    (`GTK_OFFICE_TEST_SAVE_PAUSE`): with the temporary just created and
+    empty, or with the new bytes written and synced but not yet renamed over
+    the document. The journey waits for that state on disk and kills it.
+
+    Both stages are before the rename, so the document must be exactly the
+    old one, with the temporary stranded beside it (the next save's sweep
+    is what removes it). Nothing is lost either: the unsaved edit was
+    snapshotted first, and the next launch offers it back.
+    """
+
+    def setUp(self):
+        self._state_dir = self.isolate_autosave_state(prefix=f"{self.app_name}-killed-save-state-")
+        self._dir = self.temp_dir(f"{self.app_name}-killed-save-docs-")
+        super().setUp()
+
+    def _temporaries(self):
+        return [n for n in os.listdir(self._dir) if n.startswith(".office-save-")]
+
+    def _kill_mid_save(self, stage):
+        out_path = self._save_a_real_document()
+        with open(out_path, "rb") as f:
+            original = f.read()
+        self.launch_env = {
+            **getattr(self, "launch_env", {}),
+            "GTK_OFFICE_TEST_MODE": "1",
+            "GTK_OFFICE_TEST_SAVE_PAUSE": f"{stage}:{os.path.basename(out_path)}",
+        }
+        self._dirty_the_saved_document(out_path)
+
+        # Not `gapplication_action`: that waits for the action to return, and
+        # this one is held on purpose. The call ends when the app dies.
+        import subprocess
+        saving = subprocess.Popen(["gapplication", "action", f"org.tunaos.{self.app_name}", "save-file"],
+                                  stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        self.addCleanup(lambda: saving.poll() is None and saving.kill())
+        temporary = self.wait_until(self._temporaries, bool, timeout=20,
+                                    description=f"the save's temporary, held at {stage!r}")[0]
+        path = os.path.join(self._dir, temporary)
+        if stage == "written":
+            # The pause is after the sync, so the size settles and stays.
+            def settled():
+                first = os.path.getsize(path)
+                time.sleep(0.2)  # pacing: a size that holds this long is the finished write
+                return first if first == os.path.getsize(path) and first > 0 else None
+            self.wait_until(settled, bool, timeout=20, description="the new bytes written to the temporary")
+        self.process.kill()
+        self.process.wait(timeout=5)
+
+        with open(out_path, "rb") as f:
+            self.assertEqual(f.read(), original, f"a kill at {stage!r} changed the document")
+        self.assertIn(temporary, self._temporaries(), "the killed save's temporary should be stranded, not gone")
+
+        self.relaunch_app(crash=True)
+        self.wait_until(lambda: self.app.child(roleName="frame").name,
+                        lambda name: "Recovered" in name, timeout=20.0,
+                        description="the unsaved edit offered back after the kill")
+
+    def test_a_kill_with_the_temporary_just_created_leaves_the_document(self):
+        self._kill_mid_save("created")
+
+    def test_a_kill_with_the_new_bytes_unrenamed_leaves_the_document(self):
+        self._kill_mid_save("written")
+
 class TablesSavedDocumentMixin(SavedDocumentMixin):
     """How Tables specifically gets a dirty saved workbook.
 
@@ -1863,6 +1935,16 @@ class TablesSavedDocumentMixin(SavedDocumentMixin):
         rawinput.typeText("=6*7" if nth == 1 else "=1+1")
         rawinput.keyCombo("Return")
         time.sleep(0.5)  # pacing: no state to wait on before the next input
+
+
+class TablesKilledMidSaveSmoke(TablesSavedDocumentMixin, KilledMidSaveMixin, BaseGUITestCase):
+    pass
+
+
+class LettersKilledMidSaveSmoke(KilledMidSaveMixin, BaseGUITestCase):
+    app_name = "letters"
+    doc_suffix = ".md"
+    save_button_label = "Save All"
 
 
 class TablesRenamedOriginalSmoke(TablesSavedDocumentMixin, RenamedOriginalMixin, BaseGUITestCase):
@@ -1897,6 +1979,18 @@ class DecksRenamedOriginalSmoke(RenamedOriginalMixin, BaseGUITestCase):
             f"{self.doc_stem}{self.doc_suffix}", frame_name,
             f"the recovered window should name the original document: {frame_name!r}",
         )
+
+
+class DecksKilledMidSaveSmoke(KilledMidSaveMixin, BaseGUITestCase):
+    app_name = "decks"
+    doc_suffix = ".pptx"
+
+    def _edit_the_document(self, rawinput, nth):
+        # Dirtied as every Decks journey dirties a deck: another shape.
+        import subprocess
+
+        subprocess.run(["gapplication", "action", "org.tunaos.decks", "add-shape"])
+        time.sleep(1.0)  # pacing: no state to wait on before the next input
 
 
 class TwoDocumentsMixin:

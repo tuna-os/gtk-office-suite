@@ -663,7 +663,7 @@ AutosaveSlot used to store bytes and metadata in separate atomic writes. Each wr
       folder away and saves: the app reports the failure, the edit is still
       in the document, the checkpoint and the original file are byte for
       byte unchanged, and closing the window still asks.
-- [~] Inject failures before/after each checkpoint/rename and kill the real app; verify old-or-new complete state, never a mismatched generation. The headless half is done: `atomic_save::fault` arms any of the six boundaries of a durable write (temp create, permission preservation, data write, data sync, rename, directory sync) and any arrival at one, so "fail the second commit of this transaction" is expressible. A sweep asserts that every pre-commit boundary leaves the destination byte-identical with no temporary left behind, that the one post-rename boundary reports the replacement rather than claiming a rollback, and that no boundary or arrival in a snapshot write can pair two generations. The hook is `cfg(test)` only — a release build contains no branch to take.
+- [x] Inject failures before/after each checkpoint/rename and kill the real app; verify old-or-new complete state, never a mismatched generation. The headless half is done: `atomic_save::fault` arms any of the six boundaries of a durable write (temp create, permission preservation, data write, data sync, rename, directory sync) and any arrival at one, so "fail the second commit of this transaction" is expressible. A sweep asserts that every pre-commit boundary leaves the destination byte-identical with no temporary left behind, that the one post-rename boundary reports the replacement rather than claiming a rollback, and that no boundary or arrival in a snapshot write can pair two generations. The hook is `cfg(test)` only — a release build contains no branch to take.
       **What a real kill does was then measured rather than assumed, and it
       found a defect the fault sweep structurally could not.** A SIGKILL
       during a 600 MiB `atomic_write_bytes` left the destination intact —
@@ -725,14 +725,29 @@ AutosaveSlot used to store bytes and metadata in separate atomic writes. Each wr
         backdates the file past the floor and holds a real lock on it,
         which leaves the lock as the only thing between the sweep and that
         file.
-      Still open: killing the real app under the GUI harness. The hook is
-      `cfg(test)`-only by design, so a journey cannot arm a boundary in a
-      release binary, and racing a real save with SIGKILL only reaches the
-      window if the document is big enough to make the write slow — which
-      is not something a journey can type in. A probabilistic sweep of that
-      shape belongs in the nightly stress workflow rather than in a
-      deterministic journey, and the measurement above is what a first pass
-      at it would have produced.
+      **The real app is now killed under the GUI harness, deterministically.**
+      Racing a save with SIGKILL could not do it: a save builds its bytes
+      first and only then creates the temporary, which lives just for the
+      write, sync and rename of bytes already in memory. A 15,000-row
+      workbook took 1.1 s to serialize in a debug build, all of it before
+      the temporary existed, and the app took longer than the harness's
+      fifteen-second launch wait to open it, so a bigger document is no
+      way to widen the window. Instead, in test
+      mode only (`GTK_OFFICE_TEST_MODE`, which already gates the apps' other
+      test-only actions), `GTK_OFFICE_TEST_SAVE_PAUSE=<stage>:<file name>`
+      holds `atomic_write_bytes` at `created` (temporary made, empty) or
+      `written` (new bytes synced, not renamed); naming the file keeps an
+      autosave in the same process from stalling
+      (`a_test_pause_needs_test_mode_its_stage_and_its_file`).
+      `KilledMidSaveMixin` saves a real document, reopens and edits it,
+      snapshots the edit, starts a save, waits on disk for the held stage,
+      and kills the app. The document must be byte-identical, the temporary
+      stranded beside it, and the next launch must offer the edit back:
+      `{Tables,Letters,Decks}KilledMidSaveSmoke`, both stages each. Making the
+      save write half the new bytes in place first fails the journey ("a kill
+      at 'created' changed the document"). The post-rename half needs no
+      kill: the rename is the commit, and the fault sweep covers the one
+      boundary after it.
 - [x] Cover multiple windows, multiple documents, renamed/missing originals, unsaved documents, duplicate recovery attempts and schema upgrades. All six have headless lifecycle tests in `suite-common-core/src/autosave.rs` and a real kill/relaunch journey in every app, which is what this row's completion note asks for.
       | scenario | Tables | Letters | Decks | journey |
       |---|---|---|---|---|
