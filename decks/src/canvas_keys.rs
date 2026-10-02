@@ -195,6 +195,7 @@ pub(crate) fn register(h: EditorHandles) {
         let controller = controller.clone();
         let ts = transition.clone();
         let m = masters.clone();
+        let refresh = refresh_hud.clone();
         let key = gtk::EventControllerKey::new();
         key.connect_key_pressed(move |_, keyval, _code, mods| {
             // Ctrl+Z: undo
@@ -227,6 +228,20 @@ pub(crate) fn register(h: EditorHandles) {
             match keyval {
                 gtk::gdk::Key::Escape => {
                     w.unfullscreen();
+                    glib::Propagation::Stop
+                }
+                // Tab and Shift+Tab select the slide's objects in turn, so
+                // the keyboard reaches what the pointer does: the inspector
+                // follows the selection (PowerPoint and Keynote do the same).
+                gtk::gdk::Key::Tab | gtk::gdk::Key::ISO_Left_Tab => {
+                    let count = ss.borrow().get(cs_ref.get()).map_or(0, |s| s.objects.len());
+                    if count == 0 {
+                        return glib::Propagation::Proceed;
+                    }
+                    let back = keyval == gtk::gdk::Key::ISO_Left_Tab || mods.contains(gtk::gdk::ModifierType::SHIFT_MASK);
+                    so.set(Some(next_object(so.get(), count, back)));
+                    refresh();
+                    cs.queue_draw();
                     glib::Propagation::Stop
                 }
                 gtk::gdk::Key::Left | gtk::gdk::Key::Up => {
@@ -302,5 +317,31 @@ pub(crate) fn register(h: EditorHandles) {
             }
         });
         canvas.add_controller(key);
+    }
+}
+
+/// The object Tab (or, `back`, Shift+Tab) selects next among `count`,
+/// from `current`: in order, wrapping round, starting at the first (or the
+/// last) when nothing is selected.
+fn next_object(current: Option<usize>, count: usize, back: bool) -> usize {
+    match (current, back) {
+        (None, false) => 0,
+        (None, true) => count - 1,
+        (Some(i), false) => (i + 1) % count,
+        (Some(i), true) => (i + count - 1) % count,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::next_object;
+
+    #[test]
+    fn tab_walks_the_objects_round_in_both_directions() {
+        assert_eq!(next_object(None, 3, false), 0);
+        assert_eq!(next_object(Some(2), 3, false), 0, "Tab wraps to the first");
+        assert_eq!(next_object(None, 3, true), 2);
+        assert_eq!(next_object(Some(0), 3, true), 2, "Shift+Tab wraps to the last");
+        assert_eq!(next_object(Some(1), 3, true), 0);
     }
 }

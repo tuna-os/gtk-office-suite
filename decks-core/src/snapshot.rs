@@ -76,7 +76,12 @@ fn object_snapshot(index: usize, obj: &SlideObject) -> ObjectSnapshot {
         SlideObject::Shape { .. } => ("Shape", None),
         SlideObject::Table { .. } => ("Table", None),
         SlideObject::Chart { chart, .. } => ("Chart", Some(chart.describe())),
-        SlideObject::Image { .. } => ("Image", None),
+        // A picture states its crop, as a chart states its data: the crop
+        // cut from each side, left, top, right, bottom.
+        SlideObject::Image { crop, .. } => (
+            "Image",
+            (!crop.is_none()).then(|| format!("crop {:.3} {:.3} {:.3} {:.3}", crop.left, crop.top, crop.right, crop.bottom)),
+        ),
     };
     // Circle's x/y are its centre; the snapshot has always reported them so.
     let (x, y) = match obj {
@@ -266,7 +271,7 @@ mod tests {
             SlideObject::TextBox { text: "t".into(), x: 1.0, y: 2.0, w: 3.0, h: 4.0, rotation: 0.0, runs: vec![], body: Default::default() },
             SlideObject::Rect { x: 1.0, y: 2.0, w: 3.0, h: 4.0, rotation: 0.0 },
             SlideObject::Circle { x: 1.0, y: 2.0, r: 3.0, rotation: 0.0 },
-            SlideObject::Image { path: "p.png".into(), x: 1.0, y: 2.0, w: 3.0, h: 4.0, rotation: 0.0 },
+            SlideObject::Image { path: "p.png".into(), x: 1.0, y: 2.0, w: 3.0, h: 4.0, rotation: 0.0, crop: Default::default() },
         ];
         let kinds = objs.iter().enumerate().map(|(i, o)| object_snapshot(i, o)).collect::<Vec<_>>();
         assert_eq!(kinds[0].kind, "TextBox");

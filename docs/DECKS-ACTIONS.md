@@ -42,6 +42,7 @@ calls them with more than one; they keep their unit tests
 | `app.apply-layout` | the current slide's layout and placeholders | `DecksLayoutsSmoke` |
 | `app.edit-master` | opens the master view: edits go to the master | `DecksMasterViewSmoke` |
 | `app.finish-master` | closes the master view as one undo step | `DecksMasterViewSmoke` |
+| `app.focus-slide` | moves focus to the slide canvas; Tab then selects objects | `DecksPictureCropSmoke` |
 | `app.focus-notes` | moves focus to the notes; typing edits the slide's notes | `DecksSpeakerNotesSmoke` |
 | `app.preview-transition` | none: plays the slide's transition | `DecksMagicMovePreviewSmoke` |
 | `app.present` | none: runs a show | `DecksPresenterDisplaySmoke` |
@@ -66,5 +67,7 @@ action of their own; each is one undo step:
 | Text ▸ Italic, font, size, colour, alignment, list | the text box's runs and paragraphs | `text_edits_style_every_run_of_a_plain_box`, `a_list_gives_every_paragraph_a_marker_on_a_hanging_indent_and_back` |
 | Arrange ▸ position, size, rotation fields | the object's geometry | `arrange_edits_move_resize_and_rotate` |
 | Arrange ▸ Send to Back, Bring to Front, … | the object order | `DecksFormatInspectorSmoke` |
+| Tab / Shift+Tab on the canvas | the selection, object by object | `DecksPictureCropSmoke` |
+| Picture ▸ Crop to Fill, Show All | the picture's crop, one undo step | `DecksPictureCropSmoke` |
 | Animate ▸ build in/out | the slide's builds | `builds_are_set_undoably_and_follow_deletes_and_reorders` |
 | Transition | the slide's transition | `a_slides_transition_is_set_as_one_undo_step` |

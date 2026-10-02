@@ -49,6 +49,51 @@ pub struct Slide {
     pub layout: Option<usize>,
 }
 
+/// How much of a picture's source is cut from each side, as fractions of
+/// its width (left, right) and height (top, bottom): pptx's `a:srcRect`
+/// and ODF's `fo:clip`. The rest is stretched to the picture's box, which
+/// is how PowerPoint and Impress draw a picture, cropped or not.
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub struct Crop {
+    pub left: f64,
+    pub top: f64,
+    pub right: f64,
+    pub bottom: f64,
+}
+
+impl Crop {
+    /// Nothing is cut.
+    pub fn is_none(&self) -> bool {
+        *self == Crop::default()
+    }
+
+    /// The part of a `iw`×`ih` source that is shown: (x, y, w, h).
+    pub fn source_rect(&self, iw: f64, ih: f64) -> (f64, f64, f64, f64) {
+        let (l, t) = (self.left.clamp(0.0, 1.0), self.top.clamp(0.0, 1.0));
+        let w = (1.0 - l - self.right.clamp(0.0, 1.0)).max(1e-6);
+        let h = (1.0 - t - self.bottom.clamp(0.0, 1.0)).max(1e-6);
+        (l * iw, t * ih, w * iw, h * ih)
+    }
+
+    /// The crop that fills a `bw`×`bh` box with a `iw`×`ih` source without
+    /// distorting it, cutting the overflow equally from both sides
+    /// (PowerPoint's Crop to Fill).
+    pub fn fill(iw: f64, ih: f64, bw: f64, bh: f64) -> Crop {
+        if iw <= 0.0 || ih <= 0.0 || bw <= 0.0 || bh <= 0.0 {
+            return Crop::default();
+        }
+        let (src, dst) = (iw / ih, bw / bh);
+        if src > dst {
+            let cut = (1.0 - dst / src) / 2.0;
+            Crop { left: cut, right: cut, ..Default::default() }
+        } else {
+            let cut = (1.0 - src / dst) / 2.0;
+            Crop { top: cut, bottom: cut, ..Default::default() }
+        }
+    }
+}
+
 /// A slide transition.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
@@ -145,7 +190,12 @@ pub enum SlideObject {
         style: super::shape::ShapeStyle,
     },
     Circle { x: f64, y: f64, r: f64, rotation: f64 },
-    Image { path: String, x: f64, y: f64, w: f64, h: f64, rotation: f64 },
+    /// A picture, stretched to its box after `crop` trims its source.
+    Image {
+        path: String, x: f64, y: f64, w: f64, h: f64, rotation: f64,
+        #[cfg_attr(feature = "serde", serde(default))]
+        crop: Crop,
+    },
     /// A table (engine::table): a grid of styled cells in a box.
     Table {
         x: f64, y: f64, w: f64, h: f64,
@@ -249,5 +299,29 @@ mod page_size_tests {
     fn the_pdf_page_keeps_the_slide_aspect() {
         let (w, h) = slide_page_size_pt();
         assert!((w / h - 16.0 / 9.0).abs() < 1e-9, "16:9 like the model slide: {w}x{h}");
+    }
+}
+
+#[cfg(test)]
+mod crop_tests {
+    use super::Crop;
+
+    #[test]
+    fn the_source_rect_is_what_the_crop_leaves() {
+        let c = Crop { left: 0.25, top: 0.1, right: 0.0, bottom: 0.2 };
+        let (x, y, w, h) = c.source_rect(400.0, 300.0);
+        assert_eq!((x, w), (100.0, 300.0));
+        assert!((y - 30.0).abs() < 1e-9 && (h - 210.0).abs() < 1e-9);
+        assert_eq!(Crop::default().source_rect(400.0, 300.0), (0.0, 0.0, 400.0, 300.0));
+    }
+
+    #[test]
+    fn fill_cuts_the_overflow_equally_and_never_distorts() {
+        let tall = Crop::fill(100.0, 400.0, 100.0, 100.0);
+        assert_eq!((tall.left, tall.right), (0.0, 0.0));
+        assert!((tall.top - 0.375).abs() < 1e-9 && (tall.bottom - 0.375).abs() < 1e-9);
+        let (_, _, w, h) = tall.source_rect(100.0, 400.0);
+        assert!((w / h - 1.0).abs() < 1e-9, "what is left has the box's shape");
+        assert!(Crop::fill(200.0, 100.0, 400.0, 200.0).is_none(), "same shape: nothing to cut");
     }
 }

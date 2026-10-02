@@ -17,7 +17,7 @@ One DecksController owns slide/object/master state, stable identities, selection
     so Delete and the arrow keys did nothing, and the odp reader dropped
     a page written as one empty element. Multi-select, grouping and
     multi-object align are not offered, and the inventory says so. Image
-    crop is the inspector's Picture group (DecksPictureCropSmoke, #1257).
+    crop is the inspector's Picture group (`DecksPictureCropSmoke`).
 - [x] Undo/redo mixed object and slide edits, including deletion and selection repair; no detached state or reentrant RefCell panic.
     `decks-core/tests/controller_property.rs` drives DecksController, the
     API the window calls, with random mixes of object edits (add, delete,
@@ -29,10 +29,6 @@ One DecksController owns slide/object/master state, stable identities, selection
     slide and selected object pointing at something that exists, and both
     undo paths in the window (`app.undo`/`app.redo`, the canvas keys) now
     apply it: before, undoing an added slide or object left indices past
-    the end. GUI: `DecksUndoSelectionSmoke` adds a shape to a duplicated
-    slide, undoes both and redoes one, reading the window's current slide
-    and selection from the test snapshot (`current_slide`, `selected`);
-    without the repair it is left on slide 2 of 1.
 - [x] PPTX and ODP journeys preserve supported text runs, images, object geometry/style, master decorations/mapping, slide order and speaker notes.
     `DecksFormatJourneySmoke` opens a hand-built odp with styled runs, a
     filled, outlined and rotated shape, an embedded picture, speaker
@@ -43,14 +39,15 @@ One DecksController owns slide/object/master state, stable identities, selection
     so are the notes, slide names and order and the master's decorations.
     The journey found the pptx reader truncating run sizes to the half
     point below (19.84 pt read as 19.5); it rounds now.
-- [~] Compare supported shape/style/rotation/crop fields in our writer → Impress rewrite → our reader, not just text extraction.
+- [x] Compare supported shape/style/rotation/crop fields in our writer → Impress rewrite → our reader, not just text extraction.
     Shape kind, fill, outline colour and width, rotation and geometry
     for every preset we draw (rect, rounded rect with its radius,
     ellipse, triangle, diamond) now go through Impress in both formats:
     `shape_kind_fill_outline_and_rotation_survive_impress_in_both_formats`
     in `decks-core/tests/soffice_oracle.rs`. Gradients and theme
-    decorations already had their own oracle tests. Picture crop is the
-    field still waiting for its test, which is why the row stays `[~]`.
+    decorations already had their own oracle tests. Picture crop:
+    `a_picture_crop_survives_impress_both_ways` (pptx `a:srcRect` and ODF
+    `fo:clip`, through Impress in both directions).
 - [ ] Presenter current/next/notes/timer and external-display disconnect fallback meet the admitted ADR.
 - [x] PDF/print uses the same slide size/order/master content; export failure is visible and leaves the source document untouched.
     Size: `a_4_3_deck_exports_on_its_own_page` and

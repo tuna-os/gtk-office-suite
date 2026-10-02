@@ -261,6 +261,25 @@ impl DecksController {
         self.apply_ops(ops)
     }
 
+    /// Crop the picture at `index` so it fills its box without distorting
+    /// it, the overflow cut equally from both sides (PowerPoint's Crop to
+    /// Fill), or, with `fill` false, show all of it again. One undo step;
+    /// `false` when it is not a picture or nothing changes.
+    pub fn crop_picture(&self, slide_idx: usize, index: usize, fill: bool) -> bool {
+        self.edit_objects(slide_idx, |objects| {
+            if let Some(SlideObject::Image { path, w, h, crop, .. }) = objects.get_mut(index) {
+                *crop = if fill {
+                    match crate::image_px::natural_size_pt(path) {
+                        Some((iw, ih)) => crate::engine::Crop::fill(iw, ih, *w, *h),
+                        None => *crop,
+                    }
+                } else {
+                    crate::engine::Crop::default()
+                };
+            }
+        })
+    }
+
     pub fn add_object(&self, slide_idx: usize, object: SlideObject) {
         let op = {
             let slides = self.ids_ready();
@@ -739,6 +758,36 @@ mod tests {
         let c = DecksController::new(vec![slide("Only")], vec![]);
         assert_eq!(c.delete_slide(0), None);
         assert_eq!(c.slide_count(), 1);
+    }
+
+    #[test]
+    fn crop_to_fill_trims_the_long_side_and_reset_shows_it_all() {
+        let dir = tempfile::tempdir().unwrap();
+        let png = dir.path().join("wide.png");
+        // A 400×200 PNG header is all the size needs.
+        let mut head = b"\x89PNG\r\n\x1a\n\0\0\0\rIHDR".to_vec();
+        head.extend_from_slice(&400u32.to_be_bytes());
+        head.extend_from_slice(&200u32.to_be_bytes());
+        std::fs::write(&png, head).unwrap();
+        let mut s = slide("S1");
+        s.objects.push(SlideObject::Image {
+            path: png.to_string_lossy().into(), x: 0.0, y: 0.0, w: 100.0, h: 100.0, rotation: 0.0,
+            crop: Default::default(),
+        });
+        let c = DecksController::new(vec![s], vec![]);
+        let crop = |c: &DecksController| match &c.slides.borrow()[0].objects[0] {
+            SlideObject::Image { crop, .. } => *crop,
+            _ => unreachable!(),
+        };
+        assert!(c.crop_picture(0, 0, true));
+        let fill = crop(&c);
+        assert!((fill.left - 0.25).abs() < 1e-9 && (fill.right - 0.25).abs() < 1e-9, "a 2:1 picture in a square box loses a quarter each side: {fill:?}");
+        assert_eq!((fill.top, fill.bottom), (0.0, 0.0));
+        assert!(!c.crop_picture(0, 0, true), "already filled: no step");
+        assert!(c.crop_picture(0, 0, false));
+        assert!(crop(&c).is_none());
+        assert!(c.undo());
+        assert_eq!(crop(&c), fill, "one undo puts the crop back");
     }
 
     #[test]

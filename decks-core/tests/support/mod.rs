@@ -83,7 +83,7 @@ pub fn deck(slides: usize, dir: &std::path::Path) -> Deck {
                     runs: vec![],
                     body: Default::default(),
                 },
-                SlideObject::Image { path: path.to_string_lossy().into(), x: 60.0, y: 120.0, w: 400.0, h: 300.0, rotation: 0.0 },
+                SlideObject::Image { path: path.to_string_lossy().into(), x: 60.0, y: 120.0, w: 400.0, h: 300.0, rotation: 0.0 , crop: Default::default()},
             ];
             s
         })
