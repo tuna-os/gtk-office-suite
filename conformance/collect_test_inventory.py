@@ -113,6 +113,46 @@ def parse_junit(text: str) -> dict:
     return outcomes, sorted(covers)
 
 
+def parse_pytest_junit(text: str, prefix: str) -> tuple:
+    """Test ids and outcomes from a pytest JUnit report, in the ledger's
+    shape.
+
+    pytest names a test by module and class (`classname="test_smoke.
+    LettersSaveFailureSmoke"`), relative to the directory it ran in; the
+    ledger names it by path (`tests/gui/test_smoke.py::LettersSaveFailureSmoke
+    ::test_x`). `prefix` is that directory. It covers exactly the tests it
+    holds: the release job runs a chosen few journeys, and a report that
+    claimed their whole file would vouch for every journey it did not run.
+    """
+    outcomes = {}
+    covers = set()
+    root = ET.fromstring(text)
+    suites = root.iter("testsuite") if root.tag != "testsuite" else [root]
+    for suite in suites:
+        for case in suite.iter("testcase"):
+            name, classname = case.get("name"), case.get("classname") or ""
+            if not name or not classname:
+                continue
+            module, _, cls = classname.rpartition(".")
+            if not cls[:1].isupper():
+                # A module-level test function: the whole classname is the module.
+                module, cls = classname, ""
+            path = f"{prefix.rstrip('/')}/{module.replace('.', '/')}.py"
+            test_id = f"{path}::{cls}::{name}" if cls else f"{path}::{name}"
+            covers.add(test_id)
+            outcome = "passed"
+            for child in case:
+                tag = child.tag.lower()
+                if tag in ("failure", "error"):
+                    outcome = "failed"
+                    break
+                if tag == "skipped":
+                    outcome = "skipped"
+                    break
+            outcomes[test_id] = outcome
+    return outcomes, sorted(covers)
+
+
 def main(argv=None) -> int:
     parser = argparse.ArgumentParser(description=__doc__,
                                      formatter_class=argparse.RawDescriptionHelpFormatter)
@@ -124,6 +164,9 @@ def main(argv=None) -> int:
                         help="nextest JUnit XML; contributes ids and outcomes. The covered "
                              "namespaces are read from the report unless PREFIX is given "
                              "(repeatable)")
+    parser.add_argument("--pytest-junit", action="append", default=[], metavar="PREFIX=FILE",
+                        help="pytest JUnit XML from tests run in PREFIX; contributes ids and "
+                             "outcomes for the files it holds (repeatable)")
     parser.add_argument("--results-out", help="write the id->outcome map here")
     parser.add_argument("--out", default="-", help="write the inventory here, or - for stdout")
     args = parser.parse_args(argv)
@@ -158,6 +201,16 @@ def main(argv=None) -> int:
         with open(path) as f:
             outcomes, seen = parse_junit(f.read())
         covers += seen if not prefix else [prefix]
+        tests += outcomes.keys()
+        results.update(outcomes)
+
+    for spec in args.pytest_junit:
+        prefix, _, path = spec.partition("=")
+        if not path:
+            parser.error(f"--pytest-junit expects PREFIX=FILE, got {spec!r}")
+        with open(path) as f:
+            outcomes, seen = parse_pytest_junit(f.read(), prefix)
+        covers += seen
         tests += outcomes.keys()
         results.update(outcomes)
 
