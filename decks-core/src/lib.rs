@@ -15,6 +15,7 @@ pub mod guides;
 pub mod image_px;
 pub mod insert;
 pub mod layouts;
+pub mod loss;
 pub mod magic_move;
 pub mod odp;
 mod odp_builds;

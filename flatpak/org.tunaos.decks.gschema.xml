@@ -52,6 +52,12 @@
       <range min="10" max="3600"/>
       <summary>Auto-save interval in seconds</summary>
     </key>
+    <key name="presentation-display" type="i">
+      <default>-1</default>
+      <range min="-1" max="15"/>
+      <summary>Display the audience sees a show on</summary>
+      <description>-1 is automatic: the second display when there is one. Otherwise the index of a display in the system's list; one that isn't connected falls back to automatic.</description>
+    </key>
     <key name="palette-recent" type="as">
       <default>[]</default>
       <summary>Recently used command-palette actions</summary>
