@@ -17,7 +17,7 @@ One DecksController owns slide/object/master state, stable identities, selection
     in `decks-core/tests/soffice_oracle.rs`. Gradients and theme
     decorations already had their own oracle tests. Picture crop is the
     field still waiting for its test, which is why the row stays `[~]`.
-- [~] Presenter current/next/notes/timer and external-display disconnect fallback meet the admitted ADR.
+- [x] Presenter current/next/notes/timer and external-display disconnect fallback meet the admitted ADR.
     Current, next, notes and the running clock: `DecksPresenterDisplaySmoke`.
     Disconnect fallback, ADR 0004's "return to primary and show a visible
     status": `decks_core::presenter::layout_after_monitor_change` moves a
@@ -27,9 +27,14 @@ One DecksController owns slide/object/master state, stable identities, selection
     slides and as a banner on the presenter display.
     `DecksPresenterDisplayLostSmoke` lays a show out for two monitors
     (test mode only), reports the one real monitor, and sees the banner,
-    Dismiss, and the show going on. Still open: the ADR's "explicit
-    external display selection" (the show picks the second monitor
-    itself).
+    Dismiss, and the slides back "On display 1". Explicit display
+    selection: Preferences ▸ Presentation Display (Automatic or a display
+    by name, the `presentation-display` key); `show_layout_on` gives the
+    chosen display the slides and the presenter display another, and a
+    choice that isn't connected is automatic.
+    `DecksPresentationDisplayChoiceSmoke` plants the setting and finds the
+    slides "On display 1" (the slide area's accessible description, also
+    what tells a screen reader where the show is).
 - [ ] PDF/print uses the same slide size/order/master content; export failure is visible and leaves the source document untouched.
 - [ ] Missing media and unsupported animation/comment content is preserved or blocked/warned by #374 before save.
 

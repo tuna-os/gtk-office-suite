@@ -12,7 +12,7 @@
 
 use adw::prelude::*;
 use decks_core::engine::Deck;
-use decks_core::presenter::{format_elapsed, layout_after_monitor_change, show_layout, show_position, PresenterState, ShowLayout, DISPLAY_LOST};
+use decks_core::presenter::{format_elapsed, layout_after_monitor_change, show_layout_on, show_position, PresenterState, ShowLayout, DISPLAY_LOST};
 use gtk4::{self as gtk, gdk, gio, glib};
 use libadwaita as adw;
 use std::cell::{Cell, RefCell};
@@ -206,11 +206,12 @@ impl Show {
         let moved_audience = after.audience != self.layout.get().audience;
         self.layout.set(after);
         if moved_audience {
-            if let Some((window, _)) = self.audience.borrow().as_ref() {
+            if let Some((window, area)) = self.audience.borrow().as_ref() {
                 match after.audience.and_then(monitor) {
                     Some(mon) => window.fullscreen_on_monitor(&mon),
                     None => window.fullscreen(),
                 }
+                describe_display(area, after.audience);
             }
         }
         // Hidden, not only unrevealed, until needed: an unrevealed status
@@ -303,8 +304,17 @@ fn slide_area(show: &Rc<Show>, offset: usize, label: &str) -> gtk::DrawingArea {
     area
 }
 
+/// Which display the slides are on, for assistive technology: "On display 2".
+fn describe_display(area: &gtk::DrawingArea, monitor: Option<usize>) {
+    if let Some(m) = monitor {
+        area.update_property(&[gtk::accessible::Property::Description(&format!("On display {}", m + 1))]);
+    }
+}
+
 fn build_audience(app: &adw::Application, show: &Rc<Show>) -> (gtk::Window, gtk::DrawingArea, gtk::Revealer) {
-    let area = gtk::DrawingArea::new();
+    // An image to assistive technology: a plain drawing area isn't exposed
+    // at all, so its name and display ("On display 2") would be lost.
+    let area = gtk::DrawingArea::builder().accessible_role(gtk::AccessibleRole::Img).build();
     area.set_hexpand(true);
     area.set_vexpand(true);
     area.update_property(&[gtk::accessible::Property::Label("Slide show")]);
@@ -455,7 +465,9 @@ pub fn start(app: &adw::Application, deck: Deck, start: usize, rehearse: bool) {
     if deck.slides.is_empty() {
         return;
     }
-    let layout = show_layout(monitors_for_layout(), rehearse);
+    // Preferences ▸ Presentation Display: -1 is automatic.
+    let chosen = usize::try_from(gio::Settings::new("org.tunaos.decks").int("presentation-display")).ok();
+    let layout = show_layout_on(monitors_for_layout(), rehearse, chosen);
     let mut state = PresenterState::new();
     state.go_to(start.min(deck.slides.len() - 1), &deck);
     state.start_at(Instant::now());
@@ -485,6 +497,7 @@ pub fn start(app: &adw::Application, deck: Deck, start: usize, rehearse: bool) {
             Some(mon) => window.fullscreen_on_monitor(&mon),
             None => window.fullscreen(),
         }
+        describe_display(&area, Some(m));
         window.present();
         *show.audience.borrow_mut() = Some((window, area));
     }

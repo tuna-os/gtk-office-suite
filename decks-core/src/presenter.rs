@@ -174,6 +174,21 @@ pub fn show_layout(monitors: usize, rehearse: bool) -> ShowLayout {
     }
 }
 
+/// Where a show goes when the presenter chose the audience's display
+/// (Preferences ▸ Presentation Display, ADR 0004's "explicit external
+/// display selection"). The chosen monitor gets the slides and the
+/// presenter display goes on another one, the first that isn't it; with
+/// only the chosen one, the slides alone. A choice that isn't connected,
+/// or none, is [`show_layout`]'s automatic one. Rehearsing ignores it.
+pub fn show_layout_on(monitors: usize, rehearse: bool, chosen: Option<usize>) -> ShowLayout {
+    match chosen {
+        Some(m) if !rehearse && m < monitors => {
+            ShowLayout { audience: Some(m), presenter: (0..monitors).find(|&p| p != m) }
+        }
+        _ => show_layout(monitors, rehearse),
+    }
+}
+
 /// What a running show does when the display's monitors change: `None`
 /// while every window it uses still has its monitor, else the layout with
 /// each lost window back on the primary one (0). ADR 0004, "Presenter
@@ -211,6 +226,23 @@ pub fn missing_media(deck: &Deck) -> Vec<MissingMedia> {
 mod tests {
     use super::*;
     use crate::engine::{Deck, Slide};
+
+    #[test]
+    fn a_chosen_display_gets_the_slides_and_the_presenter_display_another() {
+        // Projector on the laptop's own screen, presenter display on the other.
+        assert_eq!(show_layout_on(2, false, Some(0)), ShowLayout { audience: Some(0), presenter: Some(1) });
+        assert_eq!(show_layout_on(3, false, Some(2)), ShowLayout { audience: Some(2), presenter: Some(0) });
+        assert_eq!(show_layout_on(1, false, Some(0)), ShowLayout { audience: Some(0), presenter: None });
+        // Not connected, or automatic: the usual layout.
+        assert_eq!(show_layout_on(2, false, Some(5)), show_layout(2, false));
+        assert_eq!(show_layout_on(2, false, None), show_layout(2, false));
+        assert_eq!(show_layout_on(2, true, Some(1)), show_layout(2, true), "a rehearsal is the presenter display alone");
+        // And losing the chosen display falls back like any other.
+        assert_eq!(
+            layout_after_monitor_change(show_layout_on(3, false, Some(2)), 2),
+            Some(ShowLayout { audience: Some(0), presenter: Some(0) })
+        );
+    }
 
     #[test]
     fn a_lost_external_display_brings_the_show_back_to_the_primary_one() {
