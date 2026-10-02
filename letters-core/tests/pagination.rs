@@ -21,7 +21,10 @@ fn document() -> Document {
             Paragraph {
                 style: ParaStyle { space_before_pt: (i % 4) as f64 * 9.0, space_after_pt: (i % 5) as f64 * 6.0, ..Default::default() },
                 runs: vec![
-                    Run { text: format!("¶{i} Ünïcödé — 中文テキスト ✨ "), style: big },
+                    // Multi-byte, but only in scripts every runner's fonts
+                    // cover: a glyph with no font is drawn as a hex box,
+                    // which pdftotext reads back as its hex digits.
+                    Run { text: format!("¶{i} Ünïcödé — "), style: big },
                     Run::plain("plain words that wrap across the line more than once in a long enough paragraph of text."),
                 ],
             }
