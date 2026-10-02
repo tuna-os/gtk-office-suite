@@ -174,9 +174,9 @@ impl SheetProp {
     pub fn all(sheet: &SheetModel) -> Vec<SheetProp> {
         vec![
             SheetProp::Sorted(sheet.sorted_col),
-            SheetProp::Filtered(sheet.hidden_rows.clone()),
-            SheetProp::HiddenRows(sheet.hidden_rows_manual.clone()),
-            SheetProp::HiddenCols(sheet.hidden_cols.clone()),
+            SheetProp::Filtered((*sheet.hidden_rows).clone()),
+            SheetProp::HiddenRows((*sheet.hidden_rows_manual).clone()),
+            SheetProp::HiddenCols((*sheet.hidden_cols).clone()),
             SheetProp::CondRules(sheet.cond_rules.clone()),
             SheetProp::Charts(sheet.charts.clone()),
             SheetProp::Pivots(sheet.pivot_tables.clone()),
@@ -787,8 +787,8 @@ impl WorkbookImage {
                     styles: s.styles.clone(),
                     borders: s.borders.clone(),
                     merges,
-                    row_heights: s.row_heights.clone(),
-                    col_widths: s.col_widths.clone(),
+                    row_heights: (*s.row_heights).clone(),
+                    col_widths: (*s.col_widths).clone(),
                     frozen: (s.frozen_rows, s.frozen_cols),
                     values: (0..s.rows).map(|r| (0..s.cols).map(|c| state.engine.cell_at(i, r, c)).collect()).collect(),
                     validations: s.validations.clone(),

@@ -207,13 +207,33 @@ fn content_xml(doc: &Document) -> String {
             body
         ));
     }
-    auto.push_str(
-        "<text:list-style style:name=\"LB\"><text:list-level-style-bullet \
-         text:level=\"1\" text:bullet-char=\"•\"/></text:list-style>\
-         <text:list-style style:name=\"LN\"><text:list-level-style-number \
-         text:level=\"1\" style:num-format=\"1\" style:num-suffix=\".\"/>\
-         </text:list-style>",
-    );
+    // Every level of both lists: a nested item takes its level's style,
+    // and a level a style doesn't define draws unindented and unmarked.
+    let bullets = ["•", "◦", "▪"];
+    let level_props = |level: usize| {
+        let indent = crate::lists::text_indent_pt(level as u8);
+        format!(
+            "<style:list-level-properties text:list-level-position-and-space-mode=\"label-alignment\">\
+             <style:list-level-label-alignment text:label-followed-by=\"listtab\" fo:text-indent=\"-{h}pt\" fo:margin-left=\"{indent}pt\"/>\
+             </style:list-level-properties>",
+            h = crate::lists::HANGING_PT,
+        )
+    };
+    auto.push_str("<text:list-style style:name=\"LB\">");
+    for level in 0..10 {
+        auto.push_str(&format!(
+            "<text:list-level-style-bullet text:level=\"{}\" text:bullet-char=\"{}\">{}</text:list-level-style-bullet>",
+            level + 1, bullets[level % bullets.len()], level_props(level)
+        ));
+    }
+    auto.push_str("</text:list-style><text:list-style style:name=\"LN\">");
+    for level in 0..10 {
+        auto.push_str(&format!(
+            "<text:list-level-style-number text:level=\"{}\" style:num-format=\"1\" style:num-suffix=\".\">{}</text:list-level-style-number>",
+            level + 1, level_props(level)
+        ));
+    }
+    auto.push_str("</text:list-style>");
 
     let mut body = String::new();
     // Tracked changes: one changed region per change (text:tracked-changes).
@@ -236,25 +256,46 @@ fn content_xml(doc: &Document) -> String {
             thread.map(|c| format!("<office:annotation-end office:name=\"__Annotation__{}\"/>", c.id)).collect()
         }
     };
-    let mut open_list: Option<ListKind> = None;
+    // List grouping: consecutive items of one kind share one text:list,
+    // and an item at level n sits in a text:list nested n deep (#1205: the
+    // writer used to put every level in one flat list, so a nested item
+    // came back at the top level). `depth` lists are open, each with an
+    // open item.
+    let mut open_list = ListKind::None;
+    let mut depth = 0usize;
     for (pi, p) in doc.paragraphs.iter().enumerate() {
-        // List grouping: consecutive list paragraphs share one text:list.
-        if open_list != Some(p.style.list) {
-            if open_list.map(|l| l != ListKind::None).unwrap_or(false) {
-                body.push_str("</text:list-item></text:list>");
-            }
-            open_list = Some(p.style.list);
-            match p.style.list {
-                ListKind::Bullet => {
-                    body.push_str("<text:list text:style-name=\"LB\"><text:list-item>")
+        let kind = p.style.list;
+        if kind != open_list {
+            body.push_str(&"</text:list-item></text:list>".repeat(depth));
+            depth = 0;
+            open_list = kind;
+        }
+        if kind != ListKind::None {
+            let target = usize::from(p.style.list_level) + 1;
+            let start = p.style.list_start.map(|n| format!(" text:start-value=\"{n}\"")).unwrap_or_default();
+            if depth == 0 {
+                let style = if kind == ListKind::Numbered { "LN" } else { "LB" };
+                body.push_str(&format!("<text:list text:style-name=\"{style}\">"));
+                depth = 1;
+                if target == 1 {
+                    body.push_str(&format!("<text:list-item{start}>"));
+                } else {
+                    body.push_str("<text:list-item>");
                 }
-                ListKind::Numbered => {
-                    body.push_str("<text:list text:style-name=\"LN\"><text:list-item>")
+            } else {
+                while depth > target {
+                    body.push_str("</text:list-item></text:list>");
+                    depth -= 1;
                 }
-                ListKind::None => {}
+                if depth == target {
+                    body.push_str(&format!("</text:list-item><text:list-item{start}>"));
+                }
             }
-        } else if p.style.list != ListKind::None {
-            body.push_str("</text:list-item><text:list-item>");
+            while depth < target {
+                depth += 1;
+                let attr = if depth == target { start.as_str() } else { "" };
+                body.push_str(&format!("<text:list><text:list-item{attr}>"));
+            }
         }
 
         // LO built-in named styles win over our automatic styles; the
@@ -265,6 +306,8 @@ fn content_xml(doc: &Document) -> String {
             format!(" text:style-name=\"{}\"", esc(name))
         } else if p.style.block_quote {
             " text:style-name=\"Quotations\"".to_string()
+        } else if p.style.code_block.is_some() && p.style.heading.is_none() {
+            " text:style-name=\"Preformatted_20_Text\"".to_string()
         } else {
             match para_style_idx[pi] {
                 Some(i) => format!(" text:style-name=\"P{}\"", i + 1),
@@ -312,6 +355,12 @@ fn content_xml(doc: &Document) -> String {
                 let ti = run_styles.iter().position(|s| *s == plain).unwrap() + 1;
                 run_xml = format!("<text:span text:style-name=\"T{ti}\">{run_xml}</text:span>");
             }
+            // Inline code as Writer's "Source Text" (#1205): the monospace
+            // font alone named a face the file never declared, so Writer
+            // dropped it and the run came back as plain text.
+            if r.style.code {
+                run_xml = format!("<text:span text:style-name=\"Source_20_Text\">{run_xml}</text:span>");
+            }
             if let Some(href) = &r.style.link {
                 run_xml = format!(
                     "<text:a xlink:type=\"simple\" xlink:href=\"{}\">{}</text:a>",
@@ -349,9 +398,7 @@ fn content_xml(doc: &Document) -> String {
             body.push_str("</text:index-body></text:table-of-content>");
         }
     }
-    if open_list.map(|l| l != ListKind::None).unwrap_or(false) {
-        body.push_str("</text:list-item></text:list>");
-    }
+    body.push_str(&"</text:list-item></text:list>".repeat(depth));
     let changes = if regions.is_empty() {
         String::new()
     } else {
@@ -556,9 +603,20 @@ fn styles_xml(doc: &Document) -> String {
          <style:page-layout style:name=\"pm1\">{layout}\
          </style:page-layout></office:automatic-styles>{hf}\
          </office:document-styles>",
-        contents = if doc.paragraphs.iter().any(|p| p.style.toc.is_some()) { contents_styles(doc) } else { String::new() }
+        contents = CODE_STYLES.to_string()
+            + &if doc.paragraphs.iter().any(|p| p.style.toc.is_some()) { contents_styles(doc) } else { String::new() }
     )
 }
+
+/// Writer's code block and inline code styles, which code paragraphs and
+/// runs name (#1205). Writer drops a reference to a spaced built-in name
+/// ("Preformatted Text") that the file doesn't define, so a code block
+/// came back from Writer as plain text.
+const CODE_STYLES: &str = "<style:style style:name=\"Preformatted_20_Text\" style:display-name=\"Preformatted Text\" \
+     style:family=\"paragraph\" style:class=\"html\"><style:paragraph-properties fo:margin-top=\"0pt\" fo:margin-bottom=\"0pt\"/>\
+     <style:text-properties fo:font-family=\"'Liberation Mono'\" fo:font-size=\"10pt\"/></style:style>\
+     <style:style style:name=\"Source_20_Text\" style:display-name=\"Source Text\" style:family=\"text\">\
+     <style:text-properties fo:font-family=\"'Liberation Mono'\"/></style:style>";
 
 const MANIFEST: &str = "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\
 <manifest:manifest xmlns:manifest=\"urn:oasis:names:tc:opendocument:xmlns:manifest:1.0\" manifest:version=\"1.2\">\
@@ -622,6 +680,8 @@ struct AutoStyles {
     /// Automatic paragraph style → its style:parent-style-name (LO
     /// rewrites named styles as autos inheriting from the built-in).
     para_parent: std::collections::HashMap<String, String>,
+    /// Automatic text style → its parent, as for paragraphs.
+    text_parent: std::collections::HashMap<String, String>,
 }
 
 /// Paragraph-level values read off one automatic style. Lengths are points.
@@ -640,8 +700,41 @@ struct AutoParaStyle {
     tab_stops_pt: Vec<f64>,
 }
 
+/// Each `text:list-style` in `xml`: whether each of its levels is numbered,
+/// by level (1-based in the file, 0-based here). LibreOffice names the list
+/// styles it writes "WWNum1", "L2"…, so the kind can't be read off the name.
+fn list_style_kinds(xml: &str) -> std::collections::HashMap<String, Vec<ListKind>> {
+    let mut out: std::collections::HashMap<String, Vec<ListKind>> = Default::default();
+    let mut reader = Reader::from_str(xml);
+    let mut current: Option<String> = None;
+    loop {
+        match reader.read_event() {
+            Ok(Event::Start(e)) | Ok(Event::Empty(e)) => match e.name().as_ref() {
+                "text:list-style" => current = attr_val(&e, "style:name"),
+                name @ ("text:list-level-style-number" | "text:list-level-style-bullet" | "text:list-level-style-image") => {
+                    let (Some(style), Some(level)) = (current.as_ref(), attr_val(&e, "text:level").and_then(|l| l.parse::<usize>().ok())) else { continue };
+                    let kinds = out.entry(style.clone()).or_default();
+                    if (1..=10).contains(&level) {
+                        if kinds.len() < level {
+                            kinds.resize(level, ListKind::Bullet);
+                        }
+                        let numbered = name == "text:list-level-style-number"
+                            && attr_val(&e, "style:num-format").is_some_and(|f| !f.is_empty());
+                        kinds[level - 1] = if numbered { ListKind::Numbered } else { ListKind::Bullet };
+                    }
+                }
+                _ => {}
+            },
+            Ok(Event::End(e)) if e.name().as_ref() == "text:list-style" => current = None,
+            Ok(Event::Eof) | Err(_) => break,
+            _ => {}
+        }
+    }
+    out
+}
+
 fn parse_auto_styles(xml: &str) -> AutoStyles {
-    let mut out = AutoStyles { text: Default::default(), para: Default::default(), para_parent: Default::default() };
+    let mut out = AutoStyles { text: Default::default(), para: Default::default(), para_parent: Default::default(), text_parent: Default::default() };
     let mut reader = Reader::from_str(xml);
     let mut cur_name: Option<String> = None;
     let mut cur_family = String::new();
@@ -652,11 +745,11 @@ fn parse_auto_styles(xml: &str) -> AutoStyles {
                     "style:style" => {
                         cur_name = attr_val(&e, "style:name");
                         cur_family = attr_val(&e, "style:family").unwrap_or_default();
-                        if cur_family == "paragraph" {
-                            if let (Some(n), Some(parent)) =
-                                (cur_name.clone(), attr_val(&e, "style:parent-style-name"))
-                            {
-                                out.para_parent.insert(n, parent);
+                        if let (Some(n), Some(parent)) = (cur_name.clone(), attr_val(&e, "style:parent-style-name")) {
+                            match cur_family.as_str() {
+                                "paragraph" => { out.para_parent.insert(n, parent); }
+                                "text" => { out.text_parent.insert(n, parent); }
+                                _ => {}
                             }
                         }
                     }
@@ -857,6 +950,8 @@ pub fn read(path: &str) -> Result<Document, String> {
     let styles = zip.optional_part_to_string("styles.xml", &mut budget);
 
     let auto = parse_auto_styles(&content);
+    let mut list_styles = list_style_kinds(&styles);
+    list_styles.extend(list_style_kinds(&content));
 
     let mut doc = Document { paragraphs: Vec::new(), footnotes: Vec::new(), header: None, footer: None, page: None, base_font: Default::default(), heading_styles: Vec::new(), comments: Vec::new() };
     let mut reader = Reader::from_str(&content);
@@ -867,6 +962,14 @@ pub fn read(path: &str) -> Result<Document, String> {
     let mut link_stack: Vec<String> = Vec::new();
     let mut list_kind = ListKind::None;
     let mut list_level: u8 = 0;
+    // The kind of each open text:list, so a nested list without a style of
+    // its own takes its parent's, and closing it restores the parent's.
+    let mut list_kinds: Vec<ListKind> = Vec::new();
+    // The list style of each open text:list: a nested list naming none
+    // continues its parent's, at its own level.
+    let mut list_style_names: Vec<Option<String>> = Vec::new();
+    // A list item's `text:start-value`, for the item's first paragraph.
+    let mut pending_start: Option<u32> = None;
     // A `text:note` nests its body *inside* the referencing paragraph, so
     // its `text:p` children have to be kept out of the body stream: while
     // a note is open, text accumulates into the note instead. The citation
@@ -1149,12 +1252,16 @@ pub fn read(path: &str) -> Result<Document, String> {
                         let base = base.replace("_20_", " ");
                         match base.as_str() {
                             "Title" | "Subtitle" => style.named_style = Some(base),
-                            "Quotations" => style.block_quote = true,
+                            // Writer's own quote style, and the name a docx
+                            // "Quote" arrives under (#1205).
+                            "Quotations" | "Quote" => style.block_quote = true,
+                            "Preformatted Text" => style.code_block = Some(String::new()),
                             _ => {}
                         }
                     }
                     style.list = list_kind;
                     style.list_level = list_level.saturating_sub(1);
+                    style.list_start = pending_start.take();
                     if in_toc && !in_index_title {
                         let name = attr_val(&e, "text:style-name").unwrap_or_default();
                         let base = auto.para_parent.get(&name).cloned().unwrap_or(name);
@@ -1166,9 +1273,16 @@ pub fn read(path: &str) -> Result<Document, String> {
                     para = Some(Paragraph { style, runs: Vec::new() });
                 }
                 "text:span" => {
-                    let st = attr_val(&e, "text:style-name")
-                        .and_then(|n| auto.text.get(&n).cloned())
-                        .unwrap_or_default();
+                    let name = attr_val(&e, "text:style-name");
+                    let mut st = name.as_ref().and_then(|n| auto.text.get(n).cloned()).unwrap_or_default();
+                    // Inline code is Writer's "Source Text", named or as
+                    // the parent of an automatic style (#1205).
+                    if let Some(n) = &name {
+                        if n == "Source_20_Text" || auto.text_parent.get(n).is_some_and(|p| p == "Source_20_Text") {
+                            st.code = true;
+                            st.font_family = None;
+                        }
+                    }
                     span_stack.push(st);
                 }
                 "text:a" => {
@@ -1199,12 +1313,27 @@ pub fn read(path: &str) -> Result<Document, String> {
                 "text:index-title" if in_toc => in_index_title = true,
                 "text:list" if in_body => {
                     // Bullet vs numbered comes from the list style name we
-                    // write; LO-authored lists fall back to bullet.
-                    let name = attr_val(&e, "text:style-name").unwrap_or_default();
-                    list_kind = if name.contains('N') && !name.contains("LB") {
-                        ListKind::Numbered
-                    } else { ListKind::Bullet };
+                    // write; LO-authored lists fall back to bullet. A nested
+                    // list naming no style is its parent's kind (#1205: it
+                    // read as a bullet, so a numbered sub-list changed kind).
+                    let name = attr_val(&e, "text:style-name").or_else(|| list_style_names.last().cloned().flatten());
+                    let level = usize::from(list_level);
+                    list_kind = match name.as_ref().and_then(|n| list_styles.get(n)) {
+                        // The style's own definition of this level.
+                        Some(kinds) => kinds.get(level).or(kinds.last()).copied().unwrap_or(ListKind::Bullet),
+                        // Not defined here: our own names, else the parent's kind.
+                        None => match &name {
+                            Some(n) if n.contains('N') && !n.contains("LB") => ListKind::Numbered,
+                            Some(_) => ListKind::Bullet,
+                            None => list_kinds.last().copied().unwrap_or(ListKind::Bullet),
+                        },
+                    };
+                    list_style_names.push(name);
+                    list_kinds.push(list_kind);
                     list_level = list_level.saturating_add(1);
+                }
+                "text:list-item" if in_body => {
+                    pending_start = attr_val(&e, "text:start-value").and_then(|v| v.parse().ok());
                 }
                 _ => {}
             },
@@ -1224,7 +1353,7 @@ pub fn read(path: &str) -> Result<Document, String> {
                 }
                 "text:p" if note.is_some() => {}
                 "text:p" | "text:h" if in_body => {
-                    let style = ParaStyle { list: list_kind, list_level: list_level.saturating_sub(1), ..Default::default() };
+                    let style = ParaStyle { list: list_kind, list_level: list_level.saturating_sub(1), list_start: pending_start.take(), ..Default::default() };
                     doc.paragraphs.push(Paragraph { style, runs: Vec::new() });
                 }
                 _ => {}
@@ -1296,7 +1425,9 @@ pub fn read(path: &str) -> Result<Document, String> {
                 }
                 "text:list" => {
                     list_level = list_level.saturating_sub(1);
-                    if list_level == 0 { list_kind = ListKind::None; }
+                    list_kinds.pop();
+                    list_style_names.pop();
+                    list_kind = if list_level == 0 { ListKind::None } else { list_kinds.last().copied().unwrap_or(ListKind::Bullet) };
                 },
                 "office:text" => in_body = false,
                 _ => {}

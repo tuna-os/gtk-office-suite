@@ -9,7 +9,20 @@ Audited on `e7e4df6`. Follow-up to closed #109–#111; existing models are found
 A per-tab session owns the complete Document, review state, imported-package context, selection and save revision. GTK's buffer is an editing adapter: operations use explicit character offsets and preserve non-buffer state. Keep the established StructuredEditor and engines; first establish lossless capture/render adapters, then migrate commands incrementally. Do not create another unsynchronized document copy.
 
 ## Dependency-ordered slices
-- [~] Record and test a field-by-field Document ↔ buffer/sidecar mapping, including tables, lists, run styles, images, footnotes, headers/footers and page geometry. **Tables, lists and page breaks done** (`letters-core/src/table_text.rs`, the `page-break` tag, bridge render/capture, DOCX chain); images, footnotes and geometry already mapped; page geometry and review state ride on buffer sidecars.
+- [x] Record and test a field-by-field Document ↔ buffer/sidecar mapping, including tables, lists, run styles, images, footnotes, headers/footers and page geometry.
+      [`docs/LETTERS-FIELD-MAP.md`](../LETTERS-FIELD-MAP.md) (#1205) has one row per model field: where the editor keeps it,
+      and the test that carries it through LibreOffice Writer for docx and for odt. A self round trip doesn't count.
+      `tests/test_letters_field_map.py` fails on a model field with no row or a cited test that doesn't exist. Building it
+      found five losses through Writer, all fixed here, with
+      `paragraph_and_run_attributes_survive_a_conversion_between_the_two_formats` crossing each both ways:
+      - list restarts were carried by neither format;
+      - the odt writer flattened nested lists;
+      - code blocks and inline code were lost both ways (styles named but never defined, a font never declared);
+      - block quotes were lost from docx to odt;
+      - the odt reader guessed a Writer list's kind from its style name.
+
+      `heading_styles_and_picture_size_survive_writer_rewriting_a_docx` covers the two docx-only fields. Three gaps are
+      tracked: odt images (#1292), odt tables (#1296), and odt heading styles and nested revisions (#1297).
 - [ ] Preserve fields across unrelated edits and structured commands; distinguish user text from rendered list markers.
 - [ ] Apply model operations and undo through one live session; keep review anchors correct across Unicode edits.
 - [ ] Drive editor pagination and print/export from styled paragraph/run metrics; remove byte/character-offset ambiguity.
