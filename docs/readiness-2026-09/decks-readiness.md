@@ -30,7 +30,17 @@ One DecksController owns slide/object/master state, stable identities, selection
     decorations already had their own oracle tests. Picture crop is the
     field still waiting for its test, which is why the row stays `[~]`.
 - [ ] Presenter current/next/notes/timer and external-display disconnect fallback meet the admitted ADR.
-- [ ] PDF/print uses the same slide size/order/master content; export failure is visible and leaves the source document untouched.
+- [x] PDF/print uses the same slide size/order/master content; export failure is visible and leaves the source document untouched.
+    Size: `a_4_3_deck_exports_on_its_own_page` and
+    `a_pdf_has_a_page_per_slide_with_its_text` (poppler reads the page
+    size). Order: each page's text, in `decks/src/export.rs`. Master
+    content: `every_pdf_page_carries_the_masters_decorations` rasterises
+    each page and finds the master's band. Same renderer as the editor:
+    `a_pdf_page_and_the_png_show_the_same_slide`. Failure:
+    `an_export_that_cannot_be_written_is_an_error_and_writes_nothing`,
+    and `DecksExportSmoke.test_a_failed_export_is_shown_and_leaves_the_deck_alone`
+    exports into `/proc`, sees "Export Failed", and finds the deck and
+    its file unchanged.
 - [x] Missing media and unsupported animation/comment content is preserved or blocked/warned by #374 before save.
     Warned. `decks_core::loss::content_a_save_drops` reads the file a save
     would replace or copy from and lists what the writers can't carry:
