@@ -53,6 +53,10 @@
     "B": "green",
     "C": "green"
   },
+  "letters/block-quote": {
+    "A": "green",
+    "B": "green"
+  },
   "letters/bullet-list": {
     "A": "green",
     "B": "green",
@@ -62,6 +66,10 @@
     "A": "green",
     "B": "green",
     "C": "green"
+  },
+  "letters/code-block": {
+    "A": "green",
+    "B": "green"
   },
   "letters/columns": {
     "A": "green",
@@ -107,6 +115,10 @@
     "B": "green",
     "C": "green"
   },
+  "letters/hyperlink": {
+    "A": "green",
+    "B": "green"
+  },
   "letters/image": {
     "A": "green",
     "B": "green",
@@ -126,6 +138,10 @@
     "A": "green",
     "B": "green",
     "C": "green"
+  },
+  "letters/named-styles": {
+    "A": "green",
+    "B": "green"
   },
   "letters/nested-list": {
     "A": "green",
