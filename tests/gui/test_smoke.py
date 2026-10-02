@@ -4520,6 +4520,167 @@ class DecksLayoutsSmoke(BaseGUITestCase):
         self.assertIsNone(self.process.poll(), "decks crashed applying a layout")
 
 
+def rich_odp_parts(png):
+    """A two-slide odp holding what a Decks journey must keep through a save
+    (decks-readiness row 11): styled runs, a filled and outlined rotated
+    shape, an embedded picture, speaker notes, slide order and a master
+    page with a decoration. Built by hand: the GUI image has no
+    presentation library."""
+    ns = (
+        'xmlns:office="urn:oasis:names:tc:opendocument:xmlns:office:1.0" '
+        'xmlns:style="urn:oasis:names:tc:opendocument:xmlns:style:1.0" '
+        'xmlns:text="urn:oasis:names:tc:opendocument:xmlns:text:1.0" '
+        'xmlns:draw="urn:oasis:names:tc:opendocument:xmlns:drawing:1.0" '
+        'xmlns:fo="urn:oasis:names:tc:opendocument:xmlns:xsl-fo-compatible:1.0" '
+        'xmlns:svg="urn:oasis:names:tc:opendocument:xmlns:svg-compatible:1.0" '
+        'xmlns:xlink="http://www.w3.org/1999/xlink" '
+        'xmlns:presentation="urn:oasis:names:tc:opendocument:xmlns:presentation:1.0" office:version="1.3"'
+    )
+    def notes(t):
+        return ('<presentation:notes><draw:frame presentation:class="notes" svg:x="1cm" svg:y="1cm" svg:width="10cm" svg:height="5cm">'
+                f'<draw:text-box><text:p>{t}</text:p></draw:text-box></draw:frame></presentation:notes>')
+    styles = (
+        f'<?xml version="1.0" encoding="UTF-8"?><office:document-styles {ns}>'
+        '<office:styles/>'
+        '<office:automatic-styles>'
+        '<style:page-layout style:name="PM1"><style:page-layout-properties fo:page-width="28cm" fo:page-height="15.75cm"/></style:page-layout>'
+        '<style:style style:name="Mdeco" style:family="graphic"><style:graphic-properties draw:fill="solid" draw:fill-color="#1c71d8" draw:stroke="none"/></style:style>'
+        '</office:automatic-styles>'
+        '<office:master-styles><style:master-page style:name="Brand" style:page-layout-name="PM1">'
+        '<draw:rect draw:style-name="Mdeco" svg:x="0cm" svg:y="14.75cm" svg:width="28cm" svg:height="1cm"/>'
+        '</style:master-page></office:master-styles></office:document-styles>'
+    )
+    content = (
+        f'<?xml version="1.0" encoding="UTF-8"?><office:document-content {ns}>'
+        '<office:automatic-styles>'
+        '<style:style style:name="T1" style:family="text"><style:text-properties fo:font-weight="bold" fo:color="#c01c28"/></style:style>'
+        '<style:style style:name="T2" style:family="text"><style:text-properties fo:font-style="italic" fo:font-size="28pt"/></style:style>'
+        '<style:style style:name="G1" style:family="graphic"><style:graphic-properties draw:fill="solid" draw:fill-color="#26a269" draw:stroke="solid" svg:stroke-color="#613583" svg:stroke-width="0.1cm"/></style:style>'
+        '</office:automatic-styles>'
+        '<office:body><office:presentation>'
+        '<draw:page draw:name="Opening" draw:master-page-name="Brand">'
+        '<draw:frame svg:x="2cm" svg:y="2cm" svg:width="20cm" svg:height="3cm"><draw:text-box>'
+        '<text:p><text:span text:style-name="T1">Bold red</text:span> and <text:span text:style-name="T2">big italic</text:span></text:p>'
+        '</draw:text-box></draw:frame>'
+        '<draw:rect draw:style-name="G1" svg:width="6cm" svg:height="4cm" draw:transform="rotate (-0.5235987755982988) translate (4cm 8cm)"/>'
+        f'{notes("Start with the question")}'
+        '</draw:page>'
+        '<draw:page draw:name="Evidence" draw:master-page-name="Brand">'
+        '<draw:frame svg:x="14cm" svg:y="4cm" svg:width="8cm" svg:height="4cm">'
+        '<draw:image xlink:href="Pictures/chart.png" xlink:type="simple" xlink:show="embed" xlink:actuate="onLoad"/></draw:frame>'
+        f'{notes("Then show the data")}'
+        '</draw:page>'
+        '</office:presentation></office:body></office:document-content>'
+    )
+    manifest = (
+        '<?xml version="1.0" encoding="UTF-8"?>'
+        '<manifest:manifest xmlns:manifest="urn:oasis:names:tc:opendocument:xmlns:manifest:1.0" manifest:version="1.3">'
+        '<manifest:file-entry manifest:full-path="/" manifest:media-type="application/vnd.oasis.opendocument.presentation"/>'
+        '<manifest:file-entry manifest:full-path="content.xml" manifest:media-type="text/xml"/>'
+        '<manifest:file-entry manifest:full-path="styles.xml" manifest:media-type="text/xml"/>'
+        '<manifest:file-entry manifest:full-path="Pictures/chart.png" manifest:media-type="image/png"/>'
+        '</manifest:manifest>'
+    )
+    return [
+        ("mimetype", "application/vnd.oasis.opendocument.presentation"),
+        ("content.xml", content),
+        ("styles.xml", styles),
+        ("META-INF/manifest.xml", manifest),
+        ("Pictures/chart.png", png),
+    ]
+
+
+class DecksFormatJourneySmoke(BaseGUITestCase):
+    """decks-readiness row 11: a pptx and an odp journey keep what Decks
+    supports. A hand-built odp (rich_odp_parts) holds styled runs, a filled,
+    outlined and rotated shape, an embedded picture, speaker notes, two
+    slides in order and a master with a decoration. Decks opens it, a shape
+    is added, Save As writes a pptx; reopened, every object, note, slide
+    and master decoration is what was saved (the snapshot's `detail`: the
+    model in full, a picture by a hash of its bytes). Then Save As odp from
+    the pptx, reopened, the same again."""
+
+    app_name = "decks"
+    AID = "org.tunaos.decks"
+
+    def setUp(self):
+        import io
+        from PIL import Image
+        self._dir = self.temp_dir(prefix="decks-journey-")
+        self.isolate_snapshot(prefix="decks-journey-snap-")
+        self.isolate_autosave_state()
+        png = io.BytesIO()
+        Image.new("RGB", (160, 80), (30, 120, 200)).save(png, "PNG")
+        self._odp = os.path.join(self._dir, "talk.odp")
+        import zipfile
+        with zipfile.ZipFile(self._odp, "w") as z:
+            for part, data in rich_odp_parts(png.getvalue()):
+                z.writestr(part, data, compress_type=zipfile.ZIP_STORED if part == "mimetype" else zipfile.ZIP_DEFLATED)
+        self.launch_args = [self._odp]
+        super().setUp()
+
+    @staticmethod
+    def _normal(detail):
+        """A detail with lengths to the nearest unit (EMU, points and
+        hundredths of a millimetre don't map onto each other exactly) and a
+        run with no size of its own at the 18 pt it is drawn at."""
+        import re
+        detail = detail.replace("font_size_hp: None", "font_size_hp: Some(36)")
+        return re.sub(r"-?\d+\.\d+", lambda m: str(round(float(m.group()))), detail)
+
+    def _deck(self):
+        snap = self.trigger_snapshot(self.AID)
+        return {
+            "slides": [
+                (s["title"], s["notes"], [self._normal(o["detail"]) for o in s["objects"]]) for s in snap["slides"]
+            ],
+            "masters": [[self._normal(d) for d in m["details"]] for m in snap["masters"]],
+        }
+
+    def _save_as(self, path):
+        import subprocess
+        from dogtail import tree
+        subprocess.run(["gapplication", "action", self.AID, "save-file-as"], check=True, timeout=5)
+        name = self.wait_until(lambda: tree.root.findChild(lambda n: n.name == "Name:" and n.roleName == "text", retry=False, requireResult=False),
+                               lambda n: n is not None, description="the Save As dialog")
+        name.text = path
+        time.sleep(0.3)
+        tree.root.findChild(lambda n: n.name == "Save" and n.roleName == "push button").do_action(0)
+        self.wait_until(lambda: os.path.exists(path) and os.path.getsize(path) > 0, bool, interval=0.25,
+                        description=f"{os.path.basename(path)} to be written")
+
+    def _reopened(self, path, want):
+        self.relaunch_app(launch_args=[path])
+        got = self.wait_until(self._deck, lambda d: len(d["slides"]) == len(want["slides"]), interval=0.5,
+                              description=f"{os.path.basename(path)} to reopen")
+        for i, (w, g) in enumerate(zip(want["slides"], got["slides"])):
+            self.assertEqual(g[0], w[0], f"slide {i + 1}'s name")
+            self.assertEqual(g[1], w[1], f"slide {i + 1}'s notes")
+            self.assertEqual(len(g[2]), len(w[2]), f"slide {i + 1}'s objects: {g[2]}")
+            for j, (wo, go) in enumerate(zip(w[2], g[2])):
+                self.assertEqual(go, wo, f"slide {i + 1} object {j + 1} through {os.path.basename(path)}")
+        self.assertEqual(got["masters"][0], want["masters"][0], "the master's decorations")
+        return got
+
+    def test_a_rich_deck_survives_save_as_pptx_and_odp(self):
+        start = self.wait_until(self._deck, lambda d: len(d["slides"]) == 2, interval=0.5, description="the deck to open")
+        kinds = [d.split(" ")[0] for _, _, objs in start["slides"] for d in objs]
+        self.assertEqual(kinds, ["TextBox", "Shape", "Image"], start)
+        self.assertTrue(start["masters"][0], "the master's decoration")
+
+        self.gapplication_action(self.AID, "add-shape")
+        edited = self.wait_until(self._deck, lambda d: len(d["slides"][0][2]) == 3, interval=0.5, description="the added shape")
+
+        pptx = os.path.join(self._dir, "talk.pptx")
+        self._save_as(pptx)
+        self._reopened(pptx, edited)
+
+        odp = os.path.join(self._dir, "again.odp")
+        self._save_as(odp)
+        self._reopened(odp, edited)
+        self.assertIsNone(self.process.poll(), "decks crashed on the journey")
+
+
 class DecksExportSmoke(BaseGUITestCase):
     """Export (Keynote's File > Export To, Google Slides' Download): Export
     as PDF writes a page per
