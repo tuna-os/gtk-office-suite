@@ -1580,12 +1580,16 @@ impl TablesWindow {
                     }
                     let existing_path = path_state.borrow().clone();
                     if let Some(path) = existing_path {
-                        match save_engine_to_xlsx(&path.to_string_lossy(), &s.borrow()) {
+                        let path_str = path.to_string_lossy().into_owned();
+                        let (s2, ctl, slot, force_close, win2, target) =
+                            (s.clone(), ctl.clone(), slot.clone(), force_close.clone(), win.clone(), path_str.clone());
+                        crate::loss_ui::save_after_asking(&win, Some(&path_str), &path_str, &s.borrow(), move || {
+                        match save_engine_to_xlsx(&target, &s2.borrow()) {
                             Ok(()) => {
                                 ctl.borrow_mut().mark_clean();
                                 slot.clear_or_report();
                                 force_close.set(true);
-                                win.close();
+                                win2.close();
                             }
                             Err(e) => {
                                 let err = adw::AlertDialog::builder()
@@ -1593,9 +1597,10 @@ impl TablesWindow {
                                     .body(&e)
                                     .build();
                                 err.add_response("ok", &suite_common::i18n("OK"));
-                                err.present(Some(&win));
+                                err.present(Some(&win2));
                             }
                         }
+                        });
                         return;
                     }
                     // Never saved: prompt for a destination, then close only
@@ -1614,13 +1619,18 @@ impl TablesWindow {
                         if let Ok(file) = result {
                             if let Some(path) = crate::persistence::local_path(&file, true, Some(&win2)) {
                                 let path_str = path.to_string_lossy().to_string();
-                                match save_engine_to_xlsx(&path_str, &s.borrow()) {
+                                let (s2, ctl, slot, force_close, path_state, win3, target) = (
+                                    s.clone(), ctl.clone(), slot.clone(), force_close.clone(),
+                                    path_state.clone(), win2.clone(), path_str.clone(),
+                                );
+                                crate::loss_ui::save_after_asking(&win2, None, &path_str, &s.borrow(), move || {
+                                match save_engine_to_xlsx(&target, &s2.borrow()) {
                                     Ok(()) => {
                                         *path_state.borrow_mut() = Some(path);
                                         ctl.borrow_mut().mark_clean();
                                         slot.clear_or_report();
                                         force_close.set(true);
-                                        win2.close();
+                                        win3.close();
                                     }
                                     Err(e) => {
                                         let err = adw::AlertDialog::builder()
@@ -1628,9 +1638,10 @@ impl TablesWindow {
                                             .body(&e)
                                             .build();
                                         err.add_response("ok", &suite_common::i18n("OK"));
-                                        err.present(Some(&win2));
+                                        err.present(Some(&win3));
                                     }
                                 }
+                                });
                             }
                         }
                     });
@@ -1786,8 +1797,12 @@ impl TablesWindow {
                         if let Ok(file) = result {
                             if let Some(path) = crate::persistence::local_path(&file, true, Some(&w2)) {
                                 let path_str = path.to_string_lossy().to_string();
+                                let source = path_state.borrow().as_ref().map(|p| p.to_string_lossy().into_owned());
+                                let (s, ctl, slot, path_state, w3) = (s.clone(), ctl.clone(), slot.clone(), path_state.clone(), w2.clone());
+                                let target = path_str.clone();
+                                crate::loss_ui::save_after_asking(&w2, source.as_deref(), &path_str, &s.clone().borrow(), move || {
                                 let ss = s.borrow();
-                                match save_engine_to_xlsx(&path_str, &ss) {
+                                match save_engine_to_xlsx(&target, &ss) {
                                     Ok(()) => {
                                         let settings = gtk4::gio::Settings::new("org.tunaos.tables");
                                         suite_common::push_recent_file(&settings, &path.to_string_lossy());
@@ -1803,9 +1818,10 @@ impl TablesWindow {
                                             .build();
                                         err.add_response("ok", &suite_common::i18n("OK"));
                                         err.set_default_response(Some("ok"));
-                                        err.present(Some(&w2));
+                                        err.present(Some(&w3));
                                     }
                                 }
+                                });
                             }
                         }
                     },
@@ -1850,10 +1866,14 @@ impl TablesWindow {
                     prompt.present(Some(&w));
                     return;
                 }
-                match save_engine_to_xlsx(&path_str, &s.borrow()) {
+                // Ask first when the save would drop content the file
+                // holds (#1272); cancelling writes nothing.
+                let (s2, ctl, slot, w2, target) = (s.clone(), ctl.clone(), slot.clone(), w.clone(), path_str.clone());
+                crate::loss_ui::save_after_asking(&w, Some(&path_str), &path_str, &s.borrow(), move || {
+                match save_engine_to_xlsx(&target, &s2.borrow()) {
                     Ok(()) => {
                         let settings = gtk4::gio::Settings::new("org.tunaos.tables");
-                        suite_common::push_recent_file(&settings, &path_str);
+                        suite_common::push_recent_file(&settings, &target);
                         ctl.borrow_mut().mark_clean();
                         slot.clear_or_report();
                     }
@@ -1864,9 +1884,10 @@ impl TablesWindow {
                             .build();
                         err.add_response("ok", &suite_common::i18n("OK"));
                         err.set_default_response(Some("ok"));
-                        err.present(Some(&w));
+                        err.present(Some(&w2));
                     }
                 }
+                });
             });
             app.add_action(&act);
         }
