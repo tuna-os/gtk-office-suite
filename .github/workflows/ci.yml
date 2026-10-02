@@ -78,6 +78,7 @@ jobs:
             tests/test_adr_numbers.py \
             tests/test_readme_status.py \
             tests/test_sync_issues.py \
+            tests/test_save_paths.py \
             tests/test_fixture_manifests.py \
             tests/test_interop_evidence.py \
             tests/test_oracle_lanes.py \
@@ -141,6 +142,7 @@ jobs:
             tests/test_adr_numbers.py \
             tests/test_readme_status.py \
             tests/test_sync_issues.py \
+            tests/test_save_paths.py \
             tests/test_fixture_manifests.py \
             tests/test_interop_evidence.py \
             tests/test_oracle_lanes.py \
