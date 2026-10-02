@@ -350,3 +350,33 @@ impl GridArea {
         }
     }
 }
+
+// ── The grid's own description ──────────────────────────────────────
+
+/// Describe the selected cell on the grid itself, for screen readers that
+/// read the focused widget rather than its virtual cells.
+pub(crate) fn update_grid_a11y(da: &gtk4::DrawingArea, col: &str, row: usize, value: &str) {
+    let desc = if value.is_empty() {
+        format!("cell {}{}, empty", col, row + 1)
+    } else {
+        format!("cell {}{}: {}", col, row + 1, value)
+    };
+    da.update_property(&[gtk4::accessible::Property::Description(&desc)]);
+}
+
+/// Recompute the grid's a11y description from the currently active sheet's
+/// selection. Sheet switches change which cell "A1" refers to without
+/// necessarily moving the on-screen selection, so anything that changes the
+/// active sheet (add, switch, delete, reorder) must call this — otherwise
+/// screen readers keep announcing the previous sheet's stale content.
+pub(crate) fn refresh_grid_a11y(
+    da: &gtk4::DrawingArea,
+    state: &std::rc::Rc<RefCell<tables_core::controller::WorkbookState>>,
+) {
+    let st = state.borrow();
+    let sh = st.sheet();
+    let (r, c) = (sh.selected_row, sh.selected_col);
+    let shown = sh.cell(r, c).to_string();
+    drop(sh);
+    update_grid_a11y(da, &tables_core::sheet::col_label(c), r, &shown);
+}
