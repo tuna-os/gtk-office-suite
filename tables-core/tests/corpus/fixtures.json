@@ -1,0 +1,8 @@
+{
+  "schema": 1,
+  "about": "No committed fixture files: the OpenFormula corpus is generated at test time by tests/openformula.rs.",
+  "fixtures": {},
+  "not_fixtures": {
+    "openformula-baseline.txt": "ratchet count for tests/openformula.rs"
+  }
+}
