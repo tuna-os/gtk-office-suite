@@ -17,6 +17,7 @@ use decks_core::engine::{MasterSlide, Slide, SlideObject};
 use decks_core::DecksController;
 
 /// The editor state the handlers here share with the window.
+#[derive(Clone, Copy)]
 pub(crate) struct EditorHandles<'a> {
     pub window: &'a adw::ApplicationWindow,
     pub canvas: &'a gtk::DrawingArea,

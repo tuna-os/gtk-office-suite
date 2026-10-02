@@ -77,6 +77,7 @@ jobs:
             tests/test_gtk_diagnostics.py \
             tests/test_adr_numbers.py \
             tests/test_readme_status.py \
+            tests/test_sync_issues.py \
             tests/test_oracle_lanes.py \
             tests/test_patched_dependencies.py \
             tests/test_readiness_citations.py \
@@ -137,6 +138,7 @@ jobs:
             tests/test_gtk_diagnostics.py \
             tests/test_adr_numbers.py \
             tests/test_readme_status.py \
+            tests/test_sync_issues.py \
             tests/test_oracle_lanes.py \
             tests/test_patched_dependencies.py \
             tests/test_readiness_citations.py \
