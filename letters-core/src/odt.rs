@@ -2000,7 +2000,8 @@ mod tests {
         ]);
         d.paragraphs.push(Paragraph { style: ParaStyle::default(), runs: vec![Run::plain("after")] });
         let rt = round_trip(&d);
-        let shape = |doc: &Document| -> Vec<(Option<(u32, u32, u32)>, String, bool)> {
+        type Shape = Vec<(Option<(u32, u32, u32)>, String, bool)>;
+        let shape = |doc: &Document| -> Shape {
             doc.paragraphs.iter().map(|p| (p.style.table_cell.map(|c| (c.table, c.row, c.col)), p.text(), p.runs.iter().any(|r| r.style.bold))).collect()
         };
         assert_eq!(shape(&rt), shape(&d));
