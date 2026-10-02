@@ -211,9 +211,9 @@ fn direct(state: &mut WorkbookState, op: &Op) -> Result<(), String> {
         Op::SetProp { prop, .. } => {
             let mut s = state.sheets[pos].borrow_mut();
             match prop.clone() {
-                SheetProp::Filtered(v) => s.hidden_rows = v,
-                SheetProp::HiddenRows(v) => s.hidden_rows_manual = v,
-                SheetProp::HiddenCols(v) => s.hidden_cols = v,
+                SheetProp::Filtered(v) => *s.hidden_rows = v,
+                SheetProp::HiddenRows(v) => *s.hidden_rows_manual = v,
+                SheetProp::HiddenCols(v) => *s.hidden_cols = v,
                 SheetProp::PrintArea(v) => s.print_area = v,
                 SheetProp::Sorted(v) => s.sorted_col = v,
                 SheetProp::Protection(v) => s.protection = v,
