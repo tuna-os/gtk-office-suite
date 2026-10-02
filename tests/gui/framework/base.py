@@ -361,7 +361,10 @@ class BaseGUITestCase(unittest.TestCase):
             "LC_ALL": "C.UTF-8",
             "TZ": "UTC",
             "GTK_THEME": "Adwaita",
-            "GDK_SCALE": "1",
+            # A display matrix's scale (tests/gui/stress.py, the visual
+            # matrix) arrives through the environment; fixing it at 1 here
+            # made every scale-2 config render at scale 1.
+            "GDK_SCALE": os.environ.get("GDK_SCALE", "1"),
             "GDK_DPI_SCALE": "1",
             "GTK_ENABLE_ANIMATIONS": "0",
             "SOURCE_DATE_EPOCH": "0",
@@ -383,6 +386,28 @@ class BaseGUITestCase(unittest.TestCase):
         if os.path.exists(font_config):
             defaults["FONTCONFIG_FILE"] = font_config
         self.launch_env = {**defaults, **getattr(self, "launch_env", {})}
+        self._apply_display_preferences()
+
+    def _apply_display_preferences(self):
+        """Hand a display matrix's colour scheme and high contrast to the
+        app (tests/gui/stress.py, the visual matrix).
+
+        run_gui_tests.sh's `gsettings set` lands in the session's default
+        backend, which a journey's isolated keyfile backend never reads,
+        and libadwaita ignores the colour scheme altogether while GTK_THEME
+        is set, so every dark config used to render light. libadwaita's
+        ADW_DEBUG_COLOR_SCHEME / ADW_DEBUG_HIGH_CONTRAST set the system
+        preference directly; GTK_THEME is dropped for those configs only
+        (libadwaita draws its own Adwaita stylesheet without it)."""
+        scheme = os.environ.get("GUI_TEST_COLOR_SCHEME", "default")
+        contrast = os.environ.get("GUI_TEST_HIGH_CONTRAST") == "1"
+        if scheme == "default" and not contrast:
+            return
+        if scheme != "default":
+            self.launch_env["ADW_DEBUG_COLOR_SCHEME"] = scheme
+        if contrast:
+            self.launch_env["ADW_DEBUG_HIGH_CONTRAST"] = "1"
+        self.launch_env.pop("GTK_THEME", None)
 
     # ── Video evidence ─────────────────────────────────────────────────
     # A journey asserts what the app did; the recording shows it. CI keeps
