@@ -86,13 +86,13 @@ class LettersHIGAudit(VisionGUITestCase):
             self.app.child(name="New Document", roleName="push button").do_action(0)
         except:
             self.app.keyCombo("<Control>n")
-        time.sleep(1.0)
+        time.sleep(1.0)  # pacing: no state to wait on before the next input
 
     def _open_menu(self):
         try:
             btn = self.app.child(name="Menu", roleName="toggle button")
             btn.do_action(0)
-            time.sleep(0.4)
+            time.sleep(0.4)  # pacing: no state to wait on before the next input
         except:
             pass
 
@@ -108,14 +108,14 @@ class LettersHIGAudit(VisionGUITestCase):
         try:
             import subprocess
             subprocess.run(["gsettings", "set", "org.gnome.desktop.interface", "color-scheme", "prefer-dark"], timeout=5)
-            time.sleep(0.5)
+            time.sleep(0.5)  # pacing: no state to wait on before the next input
         except:
             pass
     def _toggle_light(self):
         try:
             import subprocess
             subprocess.run(["gsettings", "set", "org.gnome.desktop.interface", "color-scheme", "default"], timeout=5)
-            time.sleep(0.5)
+            time.sleep(0.5)  # pacing: no state to wait on before the next input
         except:
             pass
 
@@ -172,7 +172,7 @@ class DecksHIGAudit(VisionGUITestCase):
             self.app.child(name="New Document", roleName="push button").do_action(0)
         except:
             self.app.keyCombo("<Control>n")
-        time.sleep(1.0)
+        time.sleep(1.0)  # pacing: no state to wait on before the next input
 
 
 class TablesHIGAudit(VisionGUITestCase):
@@ -227,7 +227,7 @@ class TablesHIGAudit(VisionGUITestCase):
             self.app.child(name="New Document", roleName="push button").do_action(0)
         except:
             self.app.keyCombo("<Control>n")
-        time.sleep(1.0)
+        time.sleep(1.0)  # pacing: no state to wait on before the next input
 
 
 class CrossAppHIGAudit(VisionGUITestCase):
@@ -251,7 +251,7 @@ class ToolbarIconsVerification(VisionGUITestCase):
     def _new_doc(self):
         try: self.app.child(name="New Document",roleName="push button").do_action(0)
         except: self.app.keyCombo("<Control>n")
-        time.sleep(1.0)
+        time.sleep(1.0)  # pacing: no state to wait on before the next input
 
 class PageRenderingVerification(VisionGUITestCase):
     """Verify page rendering correct after dark mode fix."""
@@ -265,7 +265,7 @@ class PageRenderingVerification(VisionGUITestCase):
         e = self.app.child(roleName="text")
         e.typeText("Text on white page")
         e.keyCombo("<Control>a")
-        time.sleep(0.3)
+        time.sleep(0.3)  # pacing: no state to wait on before the next input
         self.take_screenshot("vrf_text_bg")
         self.assertVision(["Typed text appears on WHITE page background and is readable"], screenshot_path=self.last_screenshot)
     def test_dark_mode_white_page(self):
@@ -274,13 +274,13 @@ class PageRenderingVerification(VisionGUITestCase):
             import subprocess
             subprocess.run(["gsettings", "set", "org.gnome.desktop.interface", "color-scheme", "prefer-dark"], timeout=5)
         except: pass
-        time.sleep(0.4)
+        time.sleep(0.4)  # pacing: no state to wait on before the next input
         self.take_screenshot("vrf_dark_page")
         self.assertVision(["Dark mode active but document page background is WHITE not black"], screenshot_path=self.last_screenshot)
     def _new_doc(self):
         try: self.app.child(name="New Document",roleName="push button").do_action(0)
         except: self.app.keyCombo("<Control>n")
-        time.sleep(1.0)
+        time.sleep(1.0)  # pacing: no state to wait on before the next input
 
 class SidebarControlsVerification(VisionGUITestCase):
     """Verify sidebar controls properly sized."""
@@ -292,7 +292,7 @@ class SidebarControlsVerification(VisionGUITestCase):
     def _new_pres(self):
         try: self.app.child(name="New Document",roleName="push button").do_action(0)
         except: self.app.keyCombo("<Control>n")
-        time.sleep(1.0)
+        time.sleep(1.0)  # pacing: no state to wait on before the next input
 
 class CrossAppIconsVerification(VisionGUITestCase):
     """Verify Tables toolbar uses icons."""
@@ -304,7 +304,7 @@ class CrossAppIconsVerification(VisionGUITestCase):
     def _new_ss(self):
         try: self.app.child(name="New Document",roleName="push button").do_action(0)
         except: self.app.keyCombo("<Control>n")
-        time.sleep(1.0)
+        time.sleep(1.0)  # pacing: no state to wait on before the next input
 
 class DocumentRenderingTests(VisionGUITestCase):
     """Verify document content renders correctly."""
@@ -313,13 +313,13 @@ class DocumentRenderingTests(VisionGUITestCase):
         self._new_doc()
         e = self.app.child(roleName="text")
         e.typeText("The quick brown fox jumps over the lazy dog.")
-        time.sleep(0.3)
+        time.sleep(0.3)  # pacing: no state to wait on before the next input
         self.take_screenshot("vrf_render_text")
         self.assertVision(["The typed sentence is clearly rendered on the page"], screenshot_path=self.last_screenshot)
     def _new_doc(self):
         try: self.app.child(name="New Document",roleName="push button").do_action(0)
         except: self.app.keyCombo("<Control>n")
-        time.sleep(1.0)
+        time.sleep(1.0)  # pacing: no state to wait on before the next input
 
 class GridRenderingTests(VisionGUITestCase):
     """Verify spreadsheet grid renders correctly."""
@@ -331,7 +331,7 @@ class GridRenderingTests(VisionGUITestCase):
     def _new_ss(self):
         try: self.app.child(name="New Document",roleName="push button").do_action(0)
         except: self.app.keyCombo("<Control>n")
-        time.sleep(1.0)
+        time.sleep(1.0)  # pacing: no state to wait on before the next input
 
 class CrossAppToolbarTest(VisionGUITestCase):
     """Verify Decks toolbar uses icons too."""
@@ -343,4 +343,4 @@ class CrossAppToolbarTest(VisionGUITestCase):
     def _new_pres(self):
         try: self.app.child(name="New Document",roleName="push button").do_action(0)
         except: self.app.keyCombo("<Control>n")
-        time.sleep(1.0)
+        time.sleep(1.0)  # pacing: no state to wait on before the next input
