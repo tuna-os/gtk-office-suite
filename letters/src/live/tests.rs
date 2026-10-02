@@ -177,7 +177,7 @@ fn undo_and_redo_run_on_the_model_and_the_buffer_follows() {
         let original = sample();
         let (buf, live) = tab(&original);
         let loaded = crate::bridge::capture_from_buffer(&buf);
-        // Edits as user actions, as the TextView makes them.
+        // Edits as user actions, as the buffer receives them.
         let action = |f: &dyn Fn()| {
             buf.begin_user_action();
             f();
@@ -406,15 +406,15 @@ fn structured_commands_are_model_ops() {
     });
 }
 
-/// Markdown shortcuts: "**bold**" and a space makes bold text, typed in
-/// Draft or in Print Layout, and the model has it. (They never fired
+/// Markdown shortcuts: "**bold**" and a space makes bold text, typed into
+/// the buffer or in Print Layout, and the model has it. (They never fired
 /// before: the pattern's end was taken from an absent selection.)
 #[test]
 fn markdown_shortcuts_work_in_both_views() {
     gtk_test(|| {
         let ctx = glib::MainContext::default();
         let settle = || while ctx.iteration(false) {};
-        // Draft: typed into the buffer.
+        // Typed into the buffer.
         let (buf, live) = tab(&Document::from_plain_text("x"));
         crate::actions::connect_markdown_macros(&buf);
         let mut end = buf.end_iter();
@@ -422,7 +422,7 @@ fn markdown_shortcuts_work_in_both_views() {
         let mut end = buf.end_iter();
         buf.insert(&mut end, " ");
         settle();
-        check(&buf, &live, "a Draft shortcut");
+        check(&buf, &live, "a buffer shortcut");
         let doc = live.borrow_mut().snapshot(&buf).0;
         assert!(doc.paragraphs[0].runs.iter().any(|r| r.text == "bold" && r.style.bold), "{:?}", doc.paragraphs[0].runs);
         assert_eq!(doc.paragraphs[0].text(), "x bold ");

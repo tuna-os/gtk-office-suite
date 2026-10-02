@@ -286,34 +286,6 @@ fn is_word_byte(c: u8) -> bool {
 // suggestions menu described above (not wired into the text view's popup
 // handler yet). Kept rather than deleted.
 
-/// Find the word at a given (x, y) position in the text view.
-#[allow(dead_code)]
-pub fn word_at_point(tv: &gtk::TextView, x: f64, y: f64) -> Option<String> {
-    // Convert widget coords to buffer position using text view's coordinate mapping
-    let (bx, by) = tv.window_to_buffer_coords(gtk::TextWindowType::Widget, x as i32, y as i32);
-    if let Some(iter) = tv.iter_at_location(bx, by) {
-        let buf = tv.buffer();
-        if iter.offset() < 0 { return None; }
-        let mut start = iter;
-        let mut end = iter;
-        // Expand backward to word start
-        while start.backward_char() {
-            let c = start.char();
-            if !c.is_ascii_alphabetic() && c != '\'' { start.forward_char(); break; }
-        }
-        // Expand forward to word end
-        while end.forward_char() {
-            let c = end.char();
-            if !c.is_ascii_alphabetic() && c != '\'' { break; }
-        }
-        let word = buf.text(&start, &end, false).to_string();
-        if word.len() >= 2 && word.chars().any(|c| c.is_ascii_alphabetic()) {
-            return Some(word);
-        }
-    }
-    None
-}
-
 #[allow(dead_code)]
 pub fn make_spell_menu(word: &str, suggestions: &[String]) -> gio::Menu {
     let menu = gio::Menu::new();

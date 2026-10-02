@@ -19,9 +19,7 @@ pub struct FindState {
 
 /// Helper to get the active GtkTextBuffer from an AdwTabView.
 pub fn active_buffer(tv: &adw::TabView) -> Option<gtk::TextBuffer> {
-    tv.selected_page()
-        .and_then(|p| get_textview(&p.child()))
-        .map(|tv| tv.buffer())
+    tv.selected_page().and_then(|p| crate::page_container::buffer_of(&p.child()))
 }
 
 /// Call `f(buffer, changed)` for the active tab's buffer whenever its
@@ -70,42 +68,14 @@ pub fn watch_active_buffer(tv: &adw::TabView, f: impl Fn(&gtk::TextBuffer, bool)
     });
 }
 
-/// Give the keyboard back to the active tab's visible view (the page view
-/// in Print Layout, the Draft editor otherwise), scrolled to its caret.
+/// Give the keyboard back to the active tab's page view, scrolled to its
+/// caret.
 pub fn focus_active_view(tv: &adw::TabView) {
     let Some(child) = tv.selected_page().map(|p| p.child()) else { return };
-    let page_view = child
-        .clone()
-        .downcast::<PageContainer>()
-        .ok()
-        .filter(PageContainer::is_print_layout)
-        .and_then(|pc| pc.page_view());
-    match (page_view, get_textview(&child)) {
-        (Some(view), _) => {
-            view.grab_focus();
-            crate::page_edit::scroll_to_caret(&view);
-        }
-        (None, Some(editor)) => {
-            editor.grab_focus();
-            editor.scroll_to_mark(&editor.buffer().get_insert(), 0.1, false, 0.0, 0.0);
-        }
-        _ => {}
+    if let Some(view) = crate::page_container::find(&child).and_then(|pc| pc.page_view()) {
+        view.grab_focus();
+        crate::page_edit::scroll_to_caret(&view);
     }
-}
-
-/// Helper to find the GtkTextView inside a page widget hierarchy.
-pub fn get_textview(widget: &impl IsA<gtk::Widget>) -> Option<gtk::TextView> {
-    if let Ok(tv) = widget.clone().upcast::<gtk::Widget>().downcast::<gtk::TextView>() {
-        return Some(tv);
-    }
-    let mut child = widget.first_child();
-    while let Some(c) = child {
-        if let Some(tv) = get_textview(&c) {
-            return Some(tv);
-        }
-        child = c.next_sibling();
-    }
-    None
 }
 
 /// Show the header and footer configuration dialog.
@@ -454,10 +424,8 @@ pub fn navigate_match(tv: &adw::TabView, state: &RefCell<FindState>, ml: &gtk::L
 }
 
 pub fn scroll_to_cursor(tv: &adw::TabView) {
-    if let Some(page) = tv.selected_page() {
-        if let Some(text_view) = get_textview(&page.child()) {
-            let mark = text_view.buffer().get_insert();
-            text_view.scroll_to_mark(&mark, 0.1, false, 0.0, 0.0);
-        }
+    let Some(page) = tv.selected_page() else { return };
+    if let Some(view) = crate::page_container::find(&page.child()).and_then(|pc| pc.page_view()) {
+        crate::page_edit::scroll_to_caret(&view);
     }
 }

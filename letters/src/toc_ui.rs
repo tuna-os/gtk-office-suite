@@ -92,7 +92,7 @@ mod tests {
             let text = || buf.text(&buf.start_iter(), &buf.end_iter(), false).to_string();
             assert_eq!(text(), "Intro\t1\nEnd\t1\nIntro\ntext\nEnd");
             let d = live.borrow_mut().document(&buf).clone();
-            assert_eq!(crate::bridge::capture_with_starts(&buf).0.paragraphs, d.paragraphs, "Draft reads the entries back");
+            assert_eq!(crate::bridge::capture_with_starts(&buf).0.paragraphs, d.paragraphs, "the buffer reads the entries back");
             assert_eq!(d.paragraphs[1].style.toc, Some(2));
             // A new heading, then an update.
             buf.insert(&mut buf.end_iter(), "\nMore");

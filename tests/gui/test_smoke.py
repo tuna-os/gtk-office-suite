@@ -6756,7 +6756,7 @@ class LettersStructuredEditingSmoke(BaseGUITestCase):
 class LettersModelUndoSmoke(BaseGUITestCase):
     """Undo and redo come from the live document model (ADR 0010 stage 3c-3).
 
-    The GtkTextBuffer's own undo is off; Ctrl+Z in the Draft editor must
+    The GtkTextBuffer's own undo is off; Ctrl+Z on the page must
     reach the model's history, undo a typed word as one step and a line
     break as another, and Ctrl+Shift+Z must redo.
     """
@@ -6775,7 +6775,7 @@ class LettersModelUndoSmoke(BaseGUITestCase):
         return self.wait_for_condition(
             lambda: self._text() == want or None, description=f"the document reading {want!r}")
 
-    def test_undo_and_redo_in_the_draft_editor(self):
+    def test_undo_and_redo_on_the_page(self):
         from dogtail import rawinput
 
         self.wait_for_node(name="New Document", roleName="push button").do_action(0)
@@ -7310,6 +7310,24 @@ class LettersPrintLayoutEditingSmoke(BaseGUITestCase):
         texts = self.app.findChildren(lambda n: n.roleName == "text" and n.showing)
         self.assertEqual([t.name for t in texts], ["Print Layout"], "a second editing surface is showing")
         self.assertIsNone(self.process.poll(), "letters crashed while editing")
+
+    def test_ctrl_scroll_zooms_the_pages(self):
+        """Ctrl+scroll over the pages zooms them (#1202). The handler was on
+        the Draft editor, and after that view was retired nothing reached
+        it: Ctrl+scroll did nothing at all."""
+        import subprocess
+
+        self.wait_for_node(name="New Document", roleName="push button").do_action(0)
+        page_view = self.wait_for_node(name="Print Layout", roleName="text")
+        zoom = lambda: self.trigger_snapshot("org.tunaos.letters")["view"]["zoom"]
+        before = zoom()
+        (x, y), (w, h) = page_view.position, page_view.size
+        self._activate_window()
+        subprocess.run(["xdotool", "mousemove", "--sync", str(x + w // 2), str(y + h // 3),
+                        "keydown", "ctrl", "click", "4", "keyup", "ctrl"],
+                       capture_output=True, timeout=5)
+        self.wait_until(zoom, lambda z: z > before, description=f"the zoom to grow past {before}")
+        self.assertIsNone(self.process.poll(), "letters crashed zooming")
 
 
 class _SettingsIsolationProbe:

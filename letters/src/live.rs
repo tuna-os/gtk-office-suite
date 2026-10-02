@@ -9,10 +9,10 @@
 //
 // Edits reach it two ways:
 // - Model first: the Print Layout view turns typing and deleting into ops
-//   (`apply_user_ops`), applies them to the model, and the buffer — now the
-//   Draft view of the model — is updated from the model (`project`).
-// - Buffer first: the Draft TextView, formatting actions and anything else
-//   that edits the GtkTextBuffer. Each change is turned into ops at once:
+//   (`apply_user_ops`), applies them to the model, and the buffer is updated
+//   from the model (`project`).
+// - Buffer first: formatting actions and anything else that edits the
+//   GtkTextBuffer. Each change is turned into ops at once:
 //   the buffer lines it touched are read back (`bridge::capture_span`) and
 //   diffed against the model's paragraphs (`edit::diff`). Typing, Enter,
 //   Backspace across a paragraph break, formatting, list markers — all
@@ -293,7 +293,7 @@ impl LiveModel {
         self.fresh = true;
     }
 
-    /// Update the buffer — the Draft view — to the model, after the model
+    /// Update the buffer to the model, after the model
     /// changed from `old`. Only the changed paragraphs' lines are
     /// re-rendered; a change to a table or an inline object re-renders the
     /// whole buffer. The caret goes to the end of the change.

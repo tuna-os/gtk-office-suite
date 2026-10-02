@@ -1,13 +1,13 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 //
 // Ruler — horizontal ruler widget with tick marks, margin/indent markers,
-// and tab stop management. Syncs with GtkTextView indentation.
+// and tab stop management. Syncs with the buffer's indentation.
 //
 // Architecture:
 //   - Custom GTK Widget using Cairo drawing (via snapshot + append_cairo)
 //   - GestureClick for drag operations on margin/indent/tab markers
 //   - EventControllerMotion for hover detection
-//   - Updates from GtkTextView cursor position changes
+//   - Updates from the buffer's cursor position changes
 //
 // Reference: AbiWord ruler widget (concept only)
 

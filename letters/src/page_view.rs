@@ -183,7 +183,7 @@ mod imp {
                 let (caret, selection) = obj.caret_and_selection(typeset);
                 // Selection behind the text, caret in front of it. Neither
                 // is document content, so a render-lab capture leaves them
-                // out, as it hides the Draft editor's caret.
+                // out.
                 let chrome = !suite_common::render_dump::active();
                 // Open comments: their text tinted, a mark in the margin.
                 // Not document content either (print and PDF leave them
@@ -321,7 +321,7 @@ impl PageView {
     /// Show the caret and (re)start its blinking, as GtkTextView does: per
     /// the gtk-cursor-blink, -blink-time and -blink-timeout settings, and
     /// solid after the timeout, while unfocused, and in a render-lab
-    /// capture (where it is left out altogether, like the Draft editor's).
+    /// capture (where it is left out altogether).
     pub fn restart_blink(&self) {
         let imp = self.imp();
         imp.caret_on.set(true);
@@ -599,7 +599,7 @@ impl PageView {
 }
 
 /// Decode an image for the page view through GdkTexture, which reads every
-/// format the Draft editor shows (the core's own loader reads PNG only).
+/// format GTK can (the core's own loader reads PNG only).
 pub fn load_image(path: &str) -> Option<cairo::ImageSurface> {
     let texture = gtk::gdk::Texture::from_filename(path).ok()?;
     let mut surface = cairo::ImageSurface::create(cairo::Format::ARgb32, texture.width(), texture.height()).ok()?;

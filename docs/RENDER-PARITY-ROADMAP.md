@@ -442,9 +442,11 @@ and does the part that matters.
     live model with incremental relayout, and #1022 made Print Layout the
     default view. #1202 stage 1 (2026-10-01) retired the Draft view: Print
     Layout is the only editing surface, the toggle and its setting are gone,
-    and the `GtkTextView` is kept only as the buffer's host, never shown.
-    Stage 2 replaces that host with a bare buffer and deletes the Draft
-    drawing and allocation code.)*
+    and the `GtkTextView` was kept only as the buffer's host, never shown.
+    Stage 2 (2026-10-02) removed it: the tab's `PageContainer` holds the
+    buffer, and the Draft drawing and allocation code is deleted. What is
+    left is the buffer itself, which formatting, find, spelling and
+    comments still edit through the bridge.)*
   - This is the largest single item on the roadmap and it is unavoidable.
     There is no configuration of one `GtkTextView` that produces per-page
     layout.

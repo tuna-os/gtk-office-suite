@@ -10,7 +10,7 @@ This document provides a manual testing guide for validating keyboard navigation
 1. **Launch Letters**: Start `letters`.
    - **Expected Orca announcement**: "Letters, window, Untitled Document — Letters, document text".
 2. **Keyboard Navigation & Structure**:
-   - Focus is automatically placed in the main `GtkTextView`.
+   - Focus is automatically placed in the page view ("Print Layout", a multi-line text).
    - Type headings `# Heading 1`, list items `- Item 1`, links `[label](http://example.com)`, tables, and bold/italic text using keyboard shortcuts (`Ctrl+B`, `Ctrl+I`, etc.).
    - Navigate paragraph-by-paragraph with Up/Down arrow keys. Orca announces formatting tags, headings, links, and list items.
 3. **Find & Replace**:

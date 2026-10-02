@@ -224,7 +224,7 @@ mod tests {
                 live.borrow_mut().document(buf).paragraphs.iter().map(|p| p.style.heading).collect()
             };
             assert_eq!(styles(&buf), [Some(2), Some(2), None]);
-            // The Draft view shows it, and reads back the same document.
+            // The buffer has it, and reads back the same document.
             assert_eq!(crate::bridge::capture_with_starts(&buf).0.paragraphs[1].style.heading, Some(2));
             crate::live::undo(&buf, false);
             assert_eq!(styles(&buf), [None, None, None]);

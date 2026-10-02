@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // GTK save adapter. All entry points use one session transaction and writer.
 
-use super::{get_textview, tab_data_get};
+use super::tab_data_get;
 use adw::prelude::*;
 use gtk4::{self as gtk, gio, prelude::*};
 use libadwaita as adw;
@@ -27,7 +27,7 @@ fn save_page_to_path(page: &adw::TabPage, path: &Path) -> SaveOutcome {
     let Some(td) = tab_data_get(&child) else {
         return SaveOutcome::Failed(suite_common::i18n("Document session is unavailable."));
     };
-    let Some(buf) = get_textview(&child).map(|view| view.buffer()) else {
+    let Some(buf) = crate::page_container::buffer_of(&child) else {
         return SaveOutcome::Failed(suite_common::i18n("Document editor is unavailable."));
     };
     // The write stays inside `save_to` so a failure cannot advance the
@@ -113,7 +113,7 @@ fn save_asking_about_loss(
     // reason, as before.
     let format = (!confirmed).then(|| letters_core::save::format_for_path(path).ok()).flatten();
     let format_loss = format.and_then(|format| {
-        let buf = get_textview(&child)?.buffer();
+        let buf = crate::page_container::buffer_of(&child)?;
         let doc = crate::bridge::document_of(&buf);
         let report = letters_core::save::compatibility_report(&doc, format);
         Some((format, dropped_features(&report)?))
