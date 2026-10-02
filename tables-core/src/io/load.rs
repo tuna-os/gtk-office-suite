@@ -150,7 +150,10 @@ pub fn load_file_into_engine(
             let range = wb
                 .worksheet_range(&sheet_names[0])
                 .map_err(|e| format!("Cannot read sheet: {}", e))?;
-            Ok(load_range_into_engine(&range, engine))
+            let formulas = wb
+                .worksheet_formula(&sheet_names[0])
+                .map_err(|e| format!("Cannot read formulas: {}", e))?;
+            Ok(load_xlsx_ranges_into_engine(&range, &super::odf_formula::a1_formulas(&formulas), engine))
         }
         "csv" | "tsv" => {
             let content =
@@ -405,6 +408,15 @@ fn load_single_sheet(path: &str) -> Result<(TablesEngine, Vec<SheetModel>), Stri
 fn build_named_workbook(source: Vec<(String, calamine::Range<Data>)>)
     -> Result<(TablesEngine, Vec<SheetModel>), String>
 {
+    build_named_workbook_with_formulas(source.into_iter().map(|(n, r)| (n, r, None)).collect())
+}
+
+/// `build_named_workbook`, with each sheet's formulas (in A1 syntax) where
+/// the format has them: a cell with a formula is loaded as that formula,
+/// any other as its value.
+fn build_named_workbook_with_formulas(source: Vec<(String, calamine::Range<Data>, Option<calamine::Range<String>>)>)
+    -> Result<(TablesEngine, Vec<SheetModel>), String>
+{
     if source.is_empty() {
         return Err("No sheets found".into());
     }
@@ -414,20 +426,28 @@ fn build_named_workbook(source: Vec<(String, calamine::Range<Data>)>)
     // that already holds data (#447). Every other load path has always applied
     // this floor; the workbook loaders did not.
     use crate::sheet::{DEFAULT_COLS, DEFAULT_ROWS};
-    let max_rows = source.iter().map(|(_, range)| range_extent(range).0).max()
+    let extent = |range: &calamine::Range<Data>, formulas: &Option<calamine::Range<String>>| {
+        let (r, c) = range_extent(range);
+        let (fr, fc) = formulas.as_ref().map_or((0, 0), range_extent);
+        (r.max(fr), c.max(fc))
+    };
+    let max_rows = source.iter().map(|(_, range, f)| extent(range, f).0).max()
         .unwrap_or(0).max(DEFAULT_ROWS);
-    let max_cols = source.iter().map(|(_, range)| range_extent(range).1).max()
+    let max_cols = source.iter().map(|(_, range, f)| extent(range, f).1).max()
         .unwrap_or(0).max(DEFAULT_COLS);
-    let names: Vec<String> = source.iter().map(|(name, _)| name.clone()).collect();
+    let names: Vec<String> = source.iter().map(|(name, _, _)| name.clone()).collect();
     let mut engine = TablesEngine::new(max_rows.max(1), max_cols.max(1))?;
     engine.rename_sheet(0, &names[0])?;
     for name in names.iter().skip(1) {
         engine.add_sheet(name)?;
     }
     let mut sheets = Vec::with_capacity(source.len());
-    for (index, (name, range)) in source.into_iter().enumerate() {
+    for (index, (name, range, formulas)) in source.into_iter().enumerate() {
         engine.set_active_sheet(index)?;
-        let (rows, cols) = load_range_into_engine(&range, &mut engine);
+        let (rows, cols) = match &formulas {
+            Some(f) => load_xlsx_ranges_into_engine(&range, f, &mut engine),
+            None => load_range_into_engine(&range, &mut engine),
+        };
         let sheet_id = engine.sheet_id_at(index).unwrap_or(index as u32);
         let mut sheet = SheetModel::new(&name, rows.max(DEFAULT_ROWS), cols.max(DEFAULT_COLS), sheet_id);
         sheet.sync_from_engine(&engine);
@@ -446,9 +466,13 @@ pub fn load_ods_workbook(path: &str) -> Result<(TablesEngine, Vec<SheetModel>), 
     for name in names {
         let range = book.worksheet_range(&name)
             .map_err(|e| format!("Cannot read sheet: {e}"))?;
-        source.push((name, range));
+        // Formulas too, in A1 syntax: before this an .ods lost every formula
+        // to its cached value on opening (odf_formula.rs).
+        let formulas = book.worksheet_formula(&name)
+            .map_err(|e| format!("Cannot read formulas: {e}"))?;
+        source.push((name, range, Some(super::odf_formula::a1_formulas(&formulas))));
     }
-    let (engine, mut sheets) = build_named_workbook(source)?;
+    let (engine, mut sheets) = build_named_workbook_with_formulas(source)?;
 
     // The same layout the xlsx reader learned in #716. calamine reports
     // cell values only, so without this an .ods opened here lost every

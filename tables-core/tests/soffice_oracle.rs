@@ -910,3 +910,51 @@ fn custom_format_codes_draw_as_calc_draws_them() {
     }
     assert!(wrong.is_empty(), "drawn differently from Calc:\n{}", wrong.join("\n"));
 }
+
+/// A formula on one sheet that reads another, named with a space so it
+/// needs quoting ('My rates'!A1): Calc keeps it a live cross-sheet formula
+/// through its xlsx and its ods, and in what we read back it still is one
+/// (the value follows the other sheet's cell) on the right sheet.
+#[test]
+fn a_cross_sheet_formula_survives_calc_both_ways() {
+    if !require_or_skip() { return; }
+    let dir = tempfile::tempdir().unwrap();
+    let ours = dir.path().join("cross.xlsx");
+    let mut e = TablesEngine::new(3, 3).unwrap();
+    e.add_sheet("My rates").unwrap();
+    e.set_active_sheet(1).unwrap();
+    e.set_cell_text(0, 0, "3");
+    e.set_active_sheet(0).unwrap();
+    e.set_cell_text(0, 0, "='My rates'!A1*2");
+    assert_eq!(e.cell(0, 0), "6", "we evaluate the quoted reference ourselves");
+    let mut sheets = Vec::new();
+    for (i, name) in ["Sheet1", "My rates"].into_iter().enumerate() {
+        e.set_active_sheet(i).unwrap();
+        let mut s = SheetModel::new(name, 3, 3, i as u32);
+        s.sync_from_engine(&e);
+        sheets.push(s);
+    }
+    e.set_active_sheet(0).unwrap();
+    tables_core::io::save_sheets_to_xlsx_with_engine(ours.to_str().unwrap(), &sheets, Some(&e)).unwrap();
+
+    let check = |path: &std::path::Path, what: &str| {
+        let (mut loaded, read) = load_workbook(path.to_str().unwrap()).unwrap_or_else(|e| panic!("we read {what}: {e}"));
+        assert_eq!(read.iter().map(|s| s.name.as_str()).collect::<Vec<_>>(), ["Sheet1", "My rates"], "{what}");
+        loaded.set_active_sheet(0).unwrap();
+        assert_eq!(loaded.cell(0, 0), "6", "the value after {what}");
+        let formula = loaded.formula(0, 0).unwrap_or_default();
+        assert!(formula.contains("My rates") && formula.contains("A1"), "still a reference to the other sheet after {what}: {formula:?}");
+        loaded.set_active_sheet(1).unwrap();
+        loaded.set_cell_text(0, 0, "10");
+        loaded.set_active_sheet(0).unwrap();
+        assert_eq!(loaded.cell(0, 0), "20", "the formula is live after {what}");
+    };
+
+    let ods = calc_convert(&ours, "ods");
+    check(&ods, "Calc's ods");
+    let calc_dir = dir.path().join("calc");
+    std::fs::create_dir_all(&calc_dir).unwrap();
+    let copy = calc_dir.join("cross.ods");
+    std::fs::copy(&ods, &copy).unwrap();
+    check(&calc_convert(&copy, "xlsx"), "Calc's xlsx");
+}

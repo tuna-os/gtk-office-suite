@@ -19,6 +19,7 @@ mod condrules;
 mod format;
 mod load;
 mod numfmt;
+mod odf_formula;
 mod ods_numfmt;
 mod ods_styles;
 mod xlsx_styles;

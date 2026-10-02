@@ -1905,3 +1905,65 @@ fn a_picture_crop_survives_impress_both_ways() {
     let impress_pptx = convert(&ours_odp, "pptx").expect("Impress converts our odp");
     close(the_crop(&read_pptx(impress_pptx.to_str().unwrap()).unwrap()), crop, "Impress's pptx of our odp");
 }
+
+#[test]
+fn shape_kind_fill_outline_and_rotation_survive_impress_in_both_formats() {
+    // Not just the text: each preset we draw, with its own fill, outline
+    // and rotation, as Impress rewrites our file in the same format.
+    if !require_or_skip() {
+        return;
+    }
+    use decks_core::engine::shape::{Color, ShapeKind, ShapeStyle, Stroke};
+    let shape = |kind: ShapeKind, x: f64, rotation: f64, fill: Color, line: Color| SlideObject::Shape {
+        kind,
+        x,
+        y: 120.0,
+        w: 160.0,
+        h: 100.0,
+        rotation,
+        style: ShapeStyle { fill: Some(fill), gradient: None, stroke: Some(Stroke { color: line, width: 3.0 }) },
+    };
+    let mut deck = Deck::new();
+    deck.slides[0].objects = vec![
+        shape(ShapeKind::Rect, 20.0, 0.0, Color(0xE0, 0x1B, 0x24), Color(0x10, 0x20, 0x30)),
+        shape(ShapeKind::RoundRect { radius: 0.25 }, 200.0, 30.0, Color(0x26, 0xA2, 0x69), Color(0x40, 0x00, 0x40)),
+        shape(ShapeKind::Ellipse, 380.0, 0.0, Color(0x35, 0x84, 0xE4), Color(0x80, 0x40, 0x00)),
+        shape(ShapeKind::Triangle, 560.0, 315.0, Color(0xF6, 0xD3, 0x2D), Color(0x00, 0x00, 0x00)),
+        shape(ShapeKind::Diamond, 740.0, 90.0, Color(0x91, 0x41, 0xAC), Color(0xFF, 0xFF, 0xFF)),
+    ];
+    let want = deck.slides[0].objects.clone();
+    for ext in ["pptx", "odp"] {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join(format!("shapes.{ext}"));
+        decks_core::write_deck(path.to_str().unwrap(), &deck).expect("write");
+        let back = convert(&path, ext).unwrap_or_else(|e| panic!("Impress rewrites our {ext}: {e}"));
+        let read = decks_core::read_deck(back.to_str().unwrap()).expect("read Impress's file");
+        let got = &read.slides[0].objects;
+        assert_eq!(got.len(), want.len(), "{ext}: the shapes came back as {got:?}");
+        for (w, g) in want.iter().zip(got) {
+            let (
+                SlideObject::Shape { kind: wk, x: wx, y: wy, w: ww, h: wh, rotation: wr, style: ws },
+                SlideObject::Shape { kind: gk, x: gx, y: gy, w: gw, h: gh, rotation: gr, style: gs },
+            ) = (w, g)
+            else {
+                panic!("{ext}: {w:?} came back as {g:?}")
+            };
+            let what = format!("{ext} {wk:?}");
+            match (wk, gk) {
+                (ShapeKind::RoundRect { radius: a }, ShapeKind::RoundRect { radius: b }) => {
+                    assert!((a - b).abs() < 0.01, "{what}: corner radius {b}")
+                }
+                _ => assert_eq!(wk, gk, "{what}: the preset"),
+            }
+            assert_eq!(gs.fill, ws.fill, "{what}: the fill");
+            let (Some(wl), Some(gl)) = (&ws.stroke, &gs.stroke) else { panic!("{what}: the outline came back as {:?}", gs.stroke) };
+            assert_eq!(gl.color, wl.color, "{what}: the outline colour");
+            assert!((gl.width - wl.width).abs() < 0.1, "{what}: the outline width {}", gl.width);
+            let turn = (gr - wr).rem_euclid(360.0);
+            assert!(turn < 0.1 || turn > 359.9, "{what}: rotation {gr}, wrote {wr}");
+            for (a, b, n) in [(gx, wx, "x"), (gy, wy, "y"), (gw, ww, "w"), (gh, wh, "h")] {
+                assert!((a - b).abs() < 0.5, "{what}: {n} {a}, wrote {b}");
+            }
+        }
+    }
+}

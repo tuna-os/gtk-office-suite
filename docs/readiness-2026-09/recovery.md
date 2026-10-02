@@ -586,7 +586,7 @@ AutosaveSlot used to store bytes and metadata in separate atomic writes. Each wr
       the defect. They now assert the intent directly and more strictly: the
       recovered orphan is gone, and the recovered document is itself covered.
       The rewritten assertions still fail against the old code.
-- [~] Surface snapshot/write/cleanup errors; keep dirty state on failed commit.
+- [x] Surface snapshot/write/cleanup errors; keep dirty state on failed commit.
       **Snapshot write failures now reach the user.** Every autosave write
       site in the three apps read `let _ = slot.write(&bytes, &meta);` — five
       of them. A snapshot write fails for ordinary reasons (a read-only home,
@@ -654,9 +654,15 @@ AutosaveSlot used to store bytes and metadata in separate atomic writes. Each wr
       app's stderr. Blocking the whole state directory instead would have
       passed while proving nothing — the snapshot would never exist, so the
       clear would succeed with nothing to do.
-      Still open in this row, and why it is `[~]` rather than `[x]`: "keep
-      dirty state on failed commit" is the save transaction rather than the
-      snapshot — #436 and #437 own it.
+      "Keep dirty state on failed commit" is the save transaction rather
+      than the snapshot; #436 and #437 built it, and it is now proven in all
+      three apps through the real GUI: `LettersSaveFailureSmoke`, and
+      `TablesSaveFailureSmoke` and `DecksSaveFailureSmoke`
+      (`FailedSaveKeepsWorkMixin` in `tests/gui/test_smoke.py`). Each edits
+      a document, takes a recovery checkpoint, renames the destination's
+      folder away and saves: the app reports the failure, the edit is still
+      in the document, the checkpoint and the original file are byte for
+      byte unchanged, and closing the window still asks.
 - [~] Inject failures before/after each checkpoint/rename and kill the real app; verify old-or-new complete state, never a mismatched generation. The headless half is done: `atomic_save::fault` arms any of the six boundaries of a durable write (temp create, permission preservation, data write, data sync, rename, directory sync) and any arrival at one, so "fail the second commit of this transaction" is expressible. A sweep asserts that every pre-commit boundary leaves the destination byte-identical with no temporary left behind, that the one post-rename boundary reports the replacement rather than claiming a rollback, and that no boundary or arrival in a snapshot write can pair two generations. The hook is `cfg(test)` only — a release build contains no branch to take.
       **What a real kill does was then measured rather than assumed, and it
       found a defect the fault sweep structurally could not.** A SIGKILL
