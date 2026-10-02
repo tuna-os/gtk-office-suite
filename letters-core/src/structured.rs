@@ -5,7 +5,7 @@
 // document's paragraph vectors. It is also the seam used by keyboard journey
 // tests and format adapters.
 
-use crate::model::{Document, ListKind, ParagraphLayout, StylePatch, TableCell};
+use crate::model::{Document, ListKind, Paragraph, ParagraphLayout, StylePatch, TableCell};
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct StructuredEditor {
@@ -182,7 +182,22 @@ impl StructuredEditor {
         } else {
             cursor_para + 1
         };
+        // Never directly against another table: as text, two adjacent
+        // tables read as one, the second's header as the first's body and
+        // its delimiter row as prose (#1278). An empty paragraph keeps
+        // them apart, as a document has to anyway (OOXML wants a paragraph
+        // after every table).
+        let is_cell = |doc: &Document, i: usize| doc.paragraphs.get(i).is_some_and(|p| p.style.table_cell.is_some());
+        let mut at = at;
+        if rows > 0 && cols > 0 && at > 0 && is_cell(&self.document, at - 1) {
+            self.document.paragraphs.insert(at, Paragraph::default());
+            at += 1;
+        }
+        let after_is_table = is_cell(&self.document, at);
         let table = self.document.insert_table_at(at, rows, cols);
+        if rows > 0 && cols > 0 && after_is_table {
+            self.document.paragraphs.insert(at + (rows * cols) as usize, Paragraph::default());
+        }
         if rows > 0 && cols > 0 {
             self.table_cell = Some(TableCell { table, row: 0, col: 0 });
             self.cursor = self.document.paragraph_offset(at);
@@ -267,12 +282,23 @@ impl StructuredEditor {
         self.document.paragraph_at(self.cursor)
     }
 
+    fn in_table_cell(&self, paragraph: usize) -> bool {
+        self.document.paragraphs.get(paragraph).is_some_and(|p| p.style.table_cell.is_some())
+    }
+
     /// Turn the cursor's paragraph into a list item of `kind`, or back into
     /// body text when it already is one — the toggle a "Bullet List" button
     /// performs. Returns the kind the paragraph ended up with.
+    ///
+    /// Not in a table cell: the editor shows a cell as table text, which
+    /// has no list marker, so a list there would hold in the model and be
+    /// gone from the editor's next reading of it (#1278).
     pub fn toggle_list_at_cursor(&mut self, kind: ListKind) -> ListKind {
         let idx = self.cursor_paragraph();
         let current = self.document.paragraphs.get(idx).map(|p| p.style.list).unwrap_or(ListKind::None);
+        if self.in_table_cell(idx) {
+            return current;
+        }
         let next = if current == kind { ListKind::None } else { kind };
         let level = self.document.paragraphs.get(idx).map(|p| p.style.list_level).unwrap_or(0);
         self.document.set_list_item(idx, next, if next == ListKind::None { 0 } else { level }, None);
@@ -308,8 +334,13 @@ impl StructuredEditor {
 
     /// Toggle "start this paragraph on a new page" on the cursor's
     /// paragraph, and report the state it ended in.
+    /// Not in a table cell, for the reason [`Self::toggle_list_at_cursor`]
+    /// gives: a cell's text has nowhere to show the break.
     pub fn toggle_page_break_at_cursor(&mut self) -> bool {
         let idx = self.cursor_paragraph();
+        if self.in_table_cell(idx) {
+            return self.document.paragraphs[idx].style.page_break_before;
+        }
         let Some(para) = self.document.paragraphs.get_mut(idx) else { return false };
         para.style.page_break_before = !para.style.page_break_before;
         para.style.page_break_before
@@ -350,7 +381,7 @@ impl StructuredEditor {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::model::{Paragraph, ParaStyle, Run};
+    use crate::model::{ParaStyle, Run};
 
     #[test]
     fn replacement_and_selection_style_share_one_cursor_surface() {
@@ -565,5 +596,35 @@ mod tests {
         assert!(editor.move_table_cell(1, 0, 0, false));
         assert_eq!(editor.table_cell(), Some(TableCell { table: 1, row: 0, col: 1 }));
         assert!(!editor.move_table_cell(1, 0, 1, false));
+    }
+
+    #[test]
+    fn list_and_page_break_commands_leave_a_table_cell_alone() {
+        // The editor shows a cell as table text, with no marker or break,
+        // so a list or break there would hold in the model only (#1278).
+        let mut doc = Document::from_plain_text("before");
+        let table = doc.insert_table_at(1, 1, 1);
+        let cell = doc.paragraphs.iter().position(|p| p.style.table_cell.is_some_and(|c| c.table == table)).unwrap();
+        doc.paragraphs[cell].runs = vec![Run::plain("cell")];
+        let at = doc.paragraph_offset(cell) + 1;
+        let mut editor = StructuredEditor::new(doc);
+        editor.set_cursor(at);
+        assert_eq!(editor.toggle_list_at_cursor(ListKind::Bullet), ListKind::None);
+        assert!(!editor.toggle_page_break_at_cursor());
+        let style = &editor.document().paragraphs[cell].style;
+        assert_eq!((style.list, style.page_break_before), (ListKind::None, false));
+    }
+
+    #[test]
+    fn a_table_inserted_next_to_another_is_kept_apart_from_it() {
+        // As text, two adjacent tables read as one (#1278).
+        let mut doc = Document::from_plain_text("before\nafter");
+        let first = doc.insert_table_at(1, 1, 1);
+        let cell = doc.paragraphs.iter().position(|p| p.style.table_cell.is_some_and(|c| c.table == first)).unwrap();
+        let mut editor = StructuredEditor::new(doc);
+        editor.set_cursor(editor.document().paragraph_offset(cell));
+        let second = editor.insert_table(1, 1);
+        let tables: Vec<Option<u32>> = editor.document().paragraphs.iter().map(|p| p.style.table_cell.map(|c| c.table)).collect();
+        assert_eq!(tables, vec![None, Some(first), None, Some(second), None], "{tables:?}");
     }
 }
