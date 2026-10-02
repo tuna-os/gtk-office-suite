@@ -4908,7 +4908,7 @@ class DecksFormatJourneySmoke(BaseGUITestCase):
         name = self.wait_until(lambda: tree.root.findChild(lambda n: n.name == "Name:" and n.roleName == "text", retry=False, requireResult=False),
                                lambda n: n is not None, description="the Save As dialog")
         name.text = path
-        time.sleep(0.3)
+        time.sleep(0.3)  # pacing: no state to wait on before the next input
         tree.root.findChild(lambda n: n.name == "Save" and n.roleName == "push button").do_action(0)
         self.wait_until(lambda: os.path.exists(path) and os.path.getsize(path) > 0, bool, interval=0.25,
                         description=f"{os.path.basename(path)} to be written")
@@ -4982,7 +4982,7 @@ class DecksUnsupportedContentSmoke(BaseGUITestCase):
         self.gapplication_action(aid, "save-file")
         self.wait_for_node(name="Save Without This Content?")
         self.wait_for_node(name="Cancel", roleName="push button").do_action(0)
-        time.sleep(1.0)
+        time.sleep(1.0)  # settling: a Cancel that wrote would have by now
         self.assertEqual(self._bytes(), self._original, "Cancel wrote the file")
 
         self.gapplication_action(aid, "save-file")
@@ -4994,7 +4994,7 @@ class DecksUnsupportedContentSmoke(BaseGUITestCase):
             self.assertIn(b"kept", b"".join(z.read(n) for n in names if n.startswith("ppt/slides/slide")))
 
         before = os.stat(self._doc).st_mtime_ns
-        time.sleep(0.05)
+        time.sleep(0.05)  # pacing: the next save gets a later mtime
         self.gapplication_action(aid, "save-file")
         self.wait_until(lambda: os.stat(self._doc).st_mtime_ns, lambda m: m != before,
                         description="a save of the file Decks wrote, without asking")
