@@ -5305,6 +5305,27 @@ class DecksUnsupportedContentSmoke(BaseGUITestCase):
                           "a file Decks wrote has nothing to lose, so no question")
         self.assertIsNone(self.process.poll(), "decks crashed saving")
 
+    def test_the_close_guards_save_asks_too(self):
+        """The close guard's Save is a save like any other (#1273): it wrote
+        straight over the file, comment and all, without asking."""
+        import subprocess
+        aid = "org.tunaos.decks"
+        self.wait_until(lambda: self.app.child(name="Slide canvas"), lambda c: c is not None, description="the deck to open")
+        subprocess.run(["gapplication", "action", aid, "add-shape"], check=True)
+        self.app.child(name="Close", roleName="push button").do_action(0)
+        self.wait_for_node(name="Save", roleName="push button").do_action(0)
+        self.wait_for_node(name="Save Without This Content?")
+        self.wait_for_node(name="Cancel", roleName="push button").do_action(0)
+        time.sleep(1.0)  # settling: a Cancel that wrote would write now
+        self.assertEqual(self._bytes(), self._original, "Cancel wrote the file")
+        self.assertIsNone(self.process.poll(), "Cancel closed the window")
+
+        self.app.child(name="Close", roleName="push button").do_action(0)
+        self.wait_for_node(name="Save", roleName="push button").do_action(0)
+        self.wait_for_node(name="Save Anyway", roleName="push button").do_action(0)
+        self.assertIsNotNone(self.wait_for_process_exit(), "Save Anyway saved and closed")
+        self.assertNotEqual(self._bytes(), self._original, "Save Anyway wrote the file")
+
 
 class DecksExportSmoke(BaseGUITestCase):
     """Export (Keynote's File > Export To, Google Slides' Download): Export
