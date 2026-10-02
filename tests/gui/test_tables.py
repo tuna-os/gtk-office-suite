@@ -12,7 +12,7 @@ class TablesTest(VisionGUITestCase):
             self.app.child(name="New Document", roleName="push button").do_action(0)
         except Exception:
             self.app.keyCombo("<Control>n")
-        time.sleep(1.0)
+        time.sleep(1.0)  # pacing: no state to wait on before the next input
 
     def _fx(self):
         return self.app.child(roleName="text")
@@ -48,7 +48,7 @@ class TablesTest(VisionGUITestCase):
         fx = self._fx()
         fx.typeText("123")
         fx.keyCombo("Return")
-        time.sleep(0.5)
+        time.sleep(0.5)  # pacing: no state to wait on before the next input
         self.take_screenshot("number")
         self.assertVision([
             "Cell A1 displays the number '123'",
@@ -59,7 +59,7 @@ class TablesTest(VisionGUITestCase):
         fx = self._fx()
         fx.typeText("Hello Tables")
         fx.keyCombo("Return")
-        time.sleep(0.5)
+        time.sleep(0.5)  # pacing: no state to wait on before the next input
         self.take_screenshot("text")
         self.assertVision([
             "Cell A1 displays the text 'Hello Tables'",
@@ -70,12 +70,12 @@ class TablesTest(VisionGUITestCase):
         fx = self._fx()
         fx.typeText("10")
         fx.keyCombo("Return")
-        time.sleep(0.3)
+        time.sleep(0.3)  # pacing: no state to wait on before the next input
         self.app.keyCombo("Down")
-        time.sleep(0.15)
+        time.sleep(0.15)  # pacing: no state to wait on before the next input
         fx.typeText("=A1*2")
         fx.keyCombo("Return")
-        time.sleep(0.5)
+        time.sleep(0.5)  # pacing: no state to wait on before the next input
         self.take_screenshot("formula")
         self.assertVision([
             "Cell A1 shows '10'",
@@ -88,13 +88,13 @@ class TablesTest(VisionGUITestCase):
         for val in ["5", "10", "15"]:
             fx.typeText(val)
             fx.keyCombo("Return")
-            time.sleep(0.2)
+            time.sleep(0.2)  # pacing: no state to wait on before the next input
             self.app.keyCombo("Down")
-            time.sleep(0.1)
-        time.sleep(0.2)
+            time.sleep(0.1)  # pacing: no state to wait on before the next input
+        time.sleep(0.2)  # pacing: no state to wait on before the next input
         fx.typeText("=SUM(A1:A3)")
         fx.keyCombo("Return")
-        time.sleep(0.5)
+        time.sleep(0.5)  # pacing: no state to wait on before the next input
         self.take_screenshot("sum")
         self.assertVision([
             "Cells A1, A2, A3 show values 5, 10, 15",
@@ -119,7 +119,7 @@ class TablesTest(VisionGUITestCase):
     def test_add_sheet_creates_sheet2_tab(self):
         self._new()
         self._click("Add sheet", "push button")
-        time.sleep(0.5)
+        time.sleep(0.5)  # pacing: no state to wait on before the next input
         self.take_screenshot("addsheet")
         self.assertVision([
             "Sheet tabs show both 'Sheet1' and 'Sheet2'",
@@ -129,7 +129,7 @@ class TablesTest(VisionGUITestCase):
         self._new()
         for _ in range(2):
             self._click("Add sheet", "push button")
-            time.sleep(0.3)
+            time.sleep(0.3)  # pacing: no state to wait on before the next input
         self.take_screenshot("threesheets")
         self.assertVision([
             "Sheet tabs show 'Sheet1', 'Sheet2', and 'Sheet3'",
@@ -138,7 +138,7 @@ class TablesTest(VisionGUITestCase):
     def test_sheet_switcher_dropdown_lists_sheets(self):
         self._new()
         self._click("Add sheet", "push button")
-        time.sleep(0.3)
+        time.sleep(0.3)  # pacing: no state to wait on before the next input
         self.take_screenshot("switcher")
         self.assertVision([
             "Sheet tabs or switcher shows Sheet1 and Sheet2 names",
@@ -163,9 +163,9 @@ class TablesTest(VisionGUITestCase):
         fx = self._fx()
         fx.typeText("Undo this value")
         fx.keyCombo("Return")
-        time.sleep(0.3)
+        time.sleep(0.3)  # pacing: no state to wait on before the next input
         self.app.keyCombo("<Control>z")
-        time.sleep(0.5)
+        time.sleep(0.5)  # pacing: no state to wait on before the next input
         self.take_screenshot("undo")
         self.assertVision([
             "Cell A1 is empty or no longer shows the previously entered text",
@@ -177,20 +177,20 @@ class TablesTest(VisionGUITestCase):
         fx = self._fx()
         fx.typeText("Sales")
         fx.keyCombo("Right")
-        time.sleep(0.1)
+        time.sleep(0.1)  # pacing: no state to wait on before the next input
         fx.typeText("100")
         fx.keyCombo("Return")
-        time.sleep(0.3)
+        time.sleep(0.3)  # pacing: no state to wait on before the next input
         self.app.keyCombo("Down")
-        time.sleep(0.1)
+        time.sleep(0.1)  # pacing: no state to wait on before the next input
         fx.typeText("Costs")
         fx.keyCombo("Right")
-        time.sleep(0.1)
+        time.sleep(0.1)  # pacing: no state to wait on before the next input
         fx.typeText("50")
         fx.keyCombo("Return")
-        time.sleep(0.3)
+        time.sleep(0.3)  # pacing: no state to wait on before the next input
         self._click("Chart", "push button")
-        time.sleep(0.5)
+        time.sleep(0.5)  # pacing: no state to wait on before the next input
         self.take_screenshot("chart")
         self.assertVision([
             "A chart dialog or chart preview is visible with data from the spreadsheet",
@@ -201,9 +201,9 @@ class TablesTest(VisionGUITestCase):
         fx = self._fx()
         fx.typeText("Test")
         fx.keyCombo("Return")
-        time.sleep(0.3)
+        time.sleep(0.3)  # pacing: no state to wait on before the next input
         self._click("Toggle Cell Border", "push button")
-        time.sleep(0.4)
+        time.sleep(0.4)  # pacing: no state to wait on before the next input
         self.take_screenshot("border")
         self.assertVision([
             "The selected cell shows a border or outline around it",
@@ -214,9 +214,9 @@ class TablesTest(VisionGUITestCase):
         fx = self._fx()
         fx.typeText("42")
         fx.keyCombo("Return")
-        time.sleep(0.3)
+        time.sleep(0.3)  # pacing: no state to wait on before the next input
         self._click("Toggle Number Format", "push button")
-        time.sleep(0.4)
+        time.sleep(0.4)  # pacing: no state to wait on before the next input
         self.take_screenshot("format")
         self.assertVision([
             "The cell value '42' shows a different number format (currency, percent, or decimal) after toggling",
@@ -227,11 +227,11 @@ class TablesTest(VisionGUITestCase):
         fx = self._fx()
         fx.typeText("Merged")
         fx.keyCombo("Return")
-        time.sleep(0.3)
+        time.sleep(0.3)  # pacing: no state to wait on before the next input
         self.app.keyCombo("Tab")  # move to B1
-        time.sleep(0.1)
+        time.sleep(0.1)  # pacing: no state to wait on before the next input
         self._click("Merge Cells", "push button")
-        time.sleep(0.4)
+        time.sleep(0.4)  # pacing: no state to wait on before the next input
         self.take_screenshot("merge")
         self.assertVision([
             "The two adjacent cells (A1 and B1) appear merged into a single wider cell",
@@ -240,7 +240,7 @@ class TablesTest(VisionGUITestCase):
     def test_export_pdf_button_triggers_save_dialog(self):
         self._new()
         self._click("Export PDF", "push button")
-        time.sleep(0.5)
+        time.sleep(0.5)  # pacing: no state to wait on before the next input
         self.take_screenshot("export")
         self.assertVision([
             "A file save dialog for exporting a PDF is visible on screen",
@@ -252,7 +252,7 @@ class TablesTest(VisionGUITestCase):
             self.app.keyCombo("<Control>comma")
         except Exception:
             pass
-        time.sleep(0.5)
+        time.sleep(0.5)  # pacing: no state to wait on before the next input
         self.take_screenshot("prefs")
         self.assertVision([
             "A Preferences dialog with a 'Show Gridlines' toggle switch is visible",
@@ -269,15 +269,15 @@ class TablesTest(VisionGUITestCase):
         for val in ["100", "200", "300"]:
             fx.typeText(val)
             fx.keyCombo("Return")
-            time.sleep(0.15)
+            time.sleep(0.15)  # pacing: no state to wait on before the next input
             self.app.keyCombo("Down")
-            time.sleep(0.1)
-        time.sleep(0.15)
+            time.sleep(0.1)  # pacing: no state to wait on before the next input
+        time.sleep(0.15)  # pacing: no state to wait on before the next input
         fx.typeText("=SUM(A1:A3)")
         fx.keyCombo("Return")
-        time.sleep(0.4)
+        time.sleep(0.4)  # pacing: no state to wait on before the next input
         self._click("Add sheet", "push button")
-        time.sleep(0.3)
+        time.sleep(0.3)  # pacing: no state to wait on before the next input
         self.take_screenshot("final")
         self.assertVision([
             "Cell A1 shows '100'",
@@ -341,7 +341,7 @@ class Tables113FeatureVisuals(VisionGUITestCase):
         import subprocess
 
         subprocess.run(["gapplication", "action", "org.tunaos.tables", "test-snapshot"])
-        time.sleep(0.5)
+        time.sleep(0.5)  # pacing: no state to wait on before the next input
         with open(self._snapshot_path) as f:
             return json.load(f)
 
@@ -349,19 +349,19 @@ class Tables113FeatureVisuals(VisionGUITestCase):
         from dogtail import rawinput
 
         rawinput.keyCombo("<Control>g")
-        time.sleep(0.2)
+        time.sleep(0.2)  # pacing: no state to wait on before the next input
         rawinput.typeText(ref)
         rawinput.keyCombo("Return")
-        time.sleep(0.3)
+        time.sleep(0.3)  # pacing: no state to wait on before the next input
         rawinput.typeText(value)
         rawinput.keyCombo("Return")
-        time.sleep(0.3)
+        time.sleep(0.3)  # pacing: no state to wait on before the next input
 
     def _new_document(self):
         import subprocess
 
         subprocess.run(["gapplication", "action", "org.tunaos.tables", "new-document"])
-        time.sleep(1.5)
+        time.sleep(1.5)  # pacing: no state to wait on before the next input
 
     def _screenshot_when_changed(self, suffix, baseline_path, max_wait=6.0, poll_interval=0.4):
         """take_screenshot(), but poll until the pixels differ from
@@ -396,7 +396,7 @@ class Tables113FeatureVisuals(VisionGUITestCase):
         deadline = time.time() + max_wait
         path = self.take_screenshot(suffix)
         while file_hash(path) == baseline_hash and time.time() < deadline:
-            time.sleep(poll_interval)
+            time.sleep(poll_interval)  # pacing: no state to wait on before the next input
             path = self.take_screenshot(suffix)
         return path
 
@@ -410,7 +410,7 @@ class Tables113FeatureVisuals(VisionGUITestCase):
         self._put("A3", "apple")
         self._put("A4", "cherry")
         subprocess.run(["gapplication", "action", "org.tunaos.tables", "filter-by-column"])
-        time.sleep(0.8)
+        time.sleep(0.8)  # pacing: no state to wait on before the next input
         from dogtail import rawinput, tree
         rawinput.typeText("apple")
         self.take_screenshot("filter_dialog")
@@ -418,7 +418,7 @@ class Tables113FeatureVisuals(VisionGUITestCase):
         # the "Filter" button applies it, so Return here is a no-op.
         confirm = tree.root.findChild(lambda n: n.name == "Filter" and n.roleName == "push button")
         confirm.do_action(0)
-        time.sleep(0.5)
+        time.sleep(0.5)  # pacing: no state to wait on before the next input
         self.take_screenshot("filter_applied")
         snap = self._snapshot()
         hidden = set(snap["sheet"]["hidden_rows"])
@@ -426,7 +426,7 @@ class Tables113FeatureVisuals(VisionGUITestCase):
         self.assertNotIn(0, hidden)
         self.assertNotIn(2, hidden)
         subprocess.run(["gapplication", "action", "org.tunaos.tables", "clear-filter"])
-        time.sleep(0.5)
+        time.sleep(0.5)  # pacing: no state to wait on before the next input
         self.take_screenshot("filter_cleared")
         self.assertIsNone(self.process.poll(), "tables crashed during filter visual check")
 
@@ -445,24 +445,24 @@ class Tables113FeatureVisuals(VisionGUITestCase):
 
         # Select row 2 (A2) and hide it.
         rawinput.keyCombo("<Control>g")
-        time.sleep(0.2)
+        time.sleep(0.2)  # pacing: no state to wait on before the next input
         rawinput.typeText("A2")
         rawinput.keyCombo("Return")
-        time.sleep(0.3)
+        time.sleep(0.3)  # pacing: no state to wait on before the next input
         subprocess.run(["gapplication", "action", aid, "hide-selected-rows"])
-        time.sleep(0.5)
+        time.sleep(0.5)  # pacing: no state to wait on before the next input
         self.take_screenshot("row_hidden")
         snap = self._snapshot()
         self.assertIn(1, snap["sheet"]["hidden_rows"], f"row 2 should be hidden: {snap}")
 
         # Select column B and hide it too.
         rawinput.keyCombo("<Control>g")
-        time.sleep(0.2)
+        time.sleep(0.2)  # pacing: no state to wait on before the next input
         rawinput.typeText("B1")
         rawinput.keyCombo("Return")
-        time.sleep(0.3)
+        time.sleep(0.3)  # pacing: no state to wait on before the next input
         subprocess.run(["gapplication", "action", aid, "hide-selected-cols"])
-        time.sleep(0.5)
+        time.sleep(0.5)  # pacing: no state to wait on before the next input
         self.take_screenshot("row_and_col_hidden")
         snap = self._snapshot()
         self.assertIn(1, snap["sheet"]["hidden_rows"], f"row 2 should still be hidden: {snap}")
@@ -470,7 +470,7 @@ class Tables113FeatureVisuals(VisionGUITestCase):
 
         subprocess.run(["gapplication", "action", aid, "unhide-all-rows"])
         subprocess.run(["gapplication", "action", aid, "unhide-all-cols"])
-        time.sleep(0.5)
+        time.sleep(0.5)  # pacing: no state to wait on before the next input
         self.take_screenshot("row_and_col_unhidden")
         snap = self._snapshot()
         self.assertEqual(snap["sheet"]["hidden_rows"], [], f"rows should be unhidden: {snap}")
@@ -525,7 +525,7 @@ class Tables113FeatureVisuals(VisionGUITestCase):
         divider_x = self.ROW_HEADER_WIDTH / 2
         divider_y = self._row_divider_y(0)
         self.drag(divider_x, divider_y, divider_x, divider_y + 40)
-        time.sleep(0.5)
+        time.sleep(0.5)  # pacing: no state to wait on before the next input
         self.take_screenshot("row_resized")
         self.assertIsNone(self.process.poll(), "tables crashed during row-resize visual check")
 
@@ -538,20 +538,20 @@ class Tables113FeatureVisuals(VisionGUITestCase):
         self._put("A1", "10")
         self._put("A2", "20")
         rawinput.keyCombo("<Control>g")
-        time.sleep(0.2)
+        time.sleep(0.2)  # pacing: no state to wait on before the next input
         rawinput.typeText("A1")
         rawinput.keyCombo("Return")
-        time.sleep(0.3)
+        time.sleep(0.3)  # pacing: no state to wait on before the next input
         rawinput.keyCombo("<Shift>Down")
-        time.sleep(0.3)
+        time.sleep(0.3)  # pacing: no state to wait on before the next input
         subprocess.run(["gapplication", "action", "org.tunaos.tables", "define-name"])
-        time.sleep(0.8)
+        time.sleep(0.8)  # pacing: no state to wait on before the next input
         name_entry = tree.root.findChild(lambda n: n.name == "Name" and n.roleName == "text")
         name_entry.text = "MyRange"
         self.take_screenshot("define_name_dialog")
         confirm = tree.root.findChild(lambda n: n.name == "Define" and n.roleName == "push button")
         confirm.do_action(0)
-        time.sleep(0.5)
+        time.sleep(0.5)  # pacing: no state to wait on before the next input
         self.take_screenshot("define_name_done")
         self.assertIsNone(self.process.poll(), "tables crashed during named-range visual check")
 
@@ -564,14 +564,14 @@ class Tables113FeatureVisuals(VisionGUITestCase):
         self._put("A1", "10")
         self._put("A2", "20")
         rawinput.keyCombo("<Control>g")
-        time.sleep(0.2)
+        time.sleep(0.2)  # pacing: no state to wait on before the next input
         rawinput.typeText("A1")
         rawinput.keyCombo("Return")
-        time.sleep(0.3)
+        time.sleep(0.3)  # pacing: no state to wait on before the next input
         rawinput.keyCombo("<Shift>Down")
-        time.sleep(0.3)
+        time.sleep(0.3)  # pacing: no state to wait on before the next input
         subprocess.run(["gapplication", "action", "org.tunaos.tables", "set-print-area"])
-        time.sleep(0.5)
+        time.sleep(0.5)  # pacing: no state to wait on before the next input
         self.take_screenshot("print_area_set")
         # print_area isn't in the #104 state snapshot (only hidden_rows/
         # selection/sorted_col are) — this test is visual-only, relying
@@ -585,10 +585,10 @@ class Tables113FeatureVisuals(VisionGUITestCase):
 
         self._new_document()
         subprocess.run(["gapplication", "action", "org.tunaos.tables", "page-setup"])
-        time.sleep(0.8)
+        time.sleep(0.8)  # pacing: no state to wait on before the next input
         self.take_screenshot("page_setup_dialog")
         rawinput.keyCombo("Escape")
-        time.sleep(0.3)
+        time.sleep(0.3)  # settling: gives a wrong outcome its chance before the check that it didn't happen
         self.assertIsNone(self.process.poll(), "tables crashed during page-setup visual check")
 
     # ── formula reference highlighting ──────────────────────────
@@ -600,16 +600,17 @@ class Tables113FeatureVisuals(VisionGUITestCase):
         self._put("A2", "20")
         self._put("A3", "30")
         rawinput.keyCombo("<Control>g")
-        time.sleep(0.2)
+        time.sleep(0.2)  # pacing: no state to wait on before the next input
         rawinput.typeText("C1")
         rawinput.keyCombo("Return")
-        time.sleep(0.3)
+        time.sleep(0.3)  # pacing: no state to wait on before the next input
         rawinput.typeText("=A1+A2+A3")
-        time.sleep(0.5)
+        time.sleep(0.5)  # pacing: no state to wait on before the next input
         self.take_screenshot("formula_highlighting")
         rawinput.keyCombo("Return")
-        time.sleep(0.5)
-        snap = self._snapshot()
-        cells = {(c["row"], c["col"]): c["value"] for c in snap["sheet"]["cells"]}
-        self.assertEqual(cells.get((0, 2)), "60", f"C1 should compute 60: {cells}")
-        self.assertIsNone(self.process.poll(), "tables crashed during formula-highlight visual check")
+        def _settled():
+            snap = self._snapshot()
+            cells = {(c["row"], c["col"]): c["value"] for c in snap["sheet"]["cells"]}
+            self.assertEqual(cells.get((0, 2)), "60", f"C1 should compute 60: {cells}")
+            self.assertIsNone(self.process.poll(), "tables crashed during formula-highlight visual check")
+        self.eventually(_settled)

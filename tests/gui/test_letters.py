@@ -12,7 +12,7 @@ class LettersTest(VisionGUITestCase):
             self.app.child(name="New Document", roleName="push button").do_action(0)
         except Exception:
             self.app.keyCombo("<Control>n")
-        time.sleep(1.0)
+        time.sleep(1.0)  # pacing: no state to wait on before the next input
 
     def _ed(self):
         return self.app.child(roleName="text")
@@ -46,7 +46,7 @@ class LettersTest(VisionGUITestCase):
     def test_word_count_updates_on_type(self):
         self._new()
         self._ed().typeText("one two three four five six seven eight nine ten")
-        time.sleep(0.3)
+        time.sleep(0.3)  # pacing: no state to wait on before the next input
         self.take_screenshot("word_count")
         self.assertVision([
             "Status bar shows '10 words' reflecting the typed text count",
@@ -57,9 +57,9 @@ class LettersTest(VisionGUITestCase):
         e = self._ed()
         e.typeText("Bold text here")
         e.keyCombo("<Control>a")
-        time.sleep(0.1)
+        time.sleep(0.1)  # pacing: no state to wait on before the next input
         self._click("bold")
-        time.sleep(0.4)
+        time.sleep(0.4)  # pacing: no state to wait on before the next input
         self.take_screenshot("bold")
         self.assertVision([
             "The text 'Bold text here' appears in bold weight (thicker letters) in the editor",
@@ -70,9 +70,9 @@ class LettersTest(VisionGUITestCase):
         e = self._ed()
         e.typeText("Italic text here")
         e.keyCombo("<Control>a")
-        time.sleep(0.1)
+        time.sleep(0.1)  # pacing: no state to wait on before the next input
         self._click("italic")
-        time.sleep(0.4)
+        time.sleep(0.4)  # pacing: no state to wait on before the next input
         self.take_screenshot("italic")
         self.assertVision([
             "The text 'Italic text here' appears slanted/italic in the editor",
@@ -83,9 +83,9 @@ class LettersTest(VisionGUITestCase):
         e = self._ed()
         e.typeText("Underlined words")
         e.keyCombo("<Control>a")
-        time.sleep(0.1)
+        time.sleep(0.1)  # pacing: no state to wait on before the next input
         self._click("underline")
-        time.sleep(0.4)
+        time.sleep(0.4)  # pacing: no state to wait on before the next input
         self.take_screenshot("underline")
         self.assertVision([
             "The text 'Underlined words' has a line drawn beneath it",
@@ -96,9 +96,9 @@ class LettersTest(VisionGUITestCase):
         e = self._ed()
         e.typeText("Struck through")
         e.keyCombo("<Control>a")
-        time.sleep(0.1)
+        time.sleep(0.1)  # pacing: no state to wait on before the next input
         self._click("strikethrough", "push button")
-        time.sleep(0.4)
+        time.sleep(0.4)  # pacing: no state to wait on before the next input
         self.take_screenshot("strikethrough")
         self.assertVision([
             "The text 'Struck through' has a horizontal line drawn through its middle",
@@ -109,9 +109,9 @@ class LettersTest(VisionGUITestCase):
         e = self._ed()
         e.typeText("Highlighted passage")
         e.keyCombo("<Control>a")
-        time.sleep(0.1)
+        time.sleep(0.1)  # pacing: no state to wait on before the next input
         self._click("highlight", "push button")
-        time.sleep(0.4)
+        time.sleep(0.4)  # pacing: no state to wait on before the next input
         self.take_screenshot("highlight")
         self.assertVision([
             "The text 'Highlighted passage' has a colored background highlight behind it",
@@ -122,11 +122,11 @@ class LettersTest(VisionGUITestCase):
         e = self._ed()
         e.typeText("All three formats")
         e.keyCombo("<Control>a")
-        time.sleep(0.1)
+        time.sleep(0.1)  # pacing: no state to wait on before the next input
         for f in ["bold", "italic", "underline"]:
             self._click(f)
-            time.sleep(0.1)
-        time.sleep(0.3)
+            time.sleep(0.1)  # pacing: no state to wait on before the next input
+        time.sleep(0.3)  # pacing: no state to wait on before the next input
         self.take_screenshot("combined")
         self.assertVision([
             "The text 'All three formats' is simultaneously bold, italic, and underlined",
@@ -135,9 +135,9 @@ class LettersTest(VisionGUITestCase):
     def test_center_align_moves_text_to_middle(self):
         self._new()
         self._ed().typeText("Centered line of text")
-        time.sleep(0.1)
+        time.sleep(0.1)  # pacing: no state to wait on before the next input
         self._click("center", "push button")
-        time.sleep(0.4)
+        time.sleep(0.4)  # pacing: no state to wait on before the next input
         self.take_screenshot("center")
         self.assertVision([
             "The text 'Centered line of text' is horizontally centered in the editor",
@@ -146,9 +146,9 @@ class LettersTest(VisionGUITestCase):
     def test_right_align_moves_text_to_right(self):
         self._new()
         self._ed().typeText("Right aligned text")
-        time.sleep(0.1)
+        time.sleep(0.1)  # pacing: no state to wait on before the next input
         self._click("right", "push button")
-        time.sleep(0.4)
+        time.sleep(0.4)  # pacing: no state to wait on before the next input
         self.take_screenshot("right")
         self.assertVision([
             "The text 'Right aligned text' is aligned to the right edge of the editor",
@@ -161,9 +161,9 @@ class LettersTest(VisionGUITestCase):
         e.keyCombo("Return")
         e.typeText("Bananas")
         e.keyCombo("<Control>a")
-        time.sleep(0.1)
+        time.sleep(0.1)  # pacing: no state to wait on before the next input
         self._click("bullet", "push button")
-        time.sleep(0.4)
+        time.sleep(0.4)  # pacing: no state to wait on before the next input
         self.take_screenshot("bullets")
         self.assertVision([
             "The list starts with a bullet character before 'Apples'",
@@ -177,9 +177,9 @@ class LettersTest(VisionGUITestCase):
         e.keyCombo("Return")
         e.typeText("Second task")
         e.keyCombo("<Control>a")
-        time.sleep(0.1)
+        time.sleep(0.1)  # pacing: no state to wait on before the next input
         self._click("ordered", "push button")
-        time.sleep(0.4)
+        time.sleep(0.4)  # pacing: no state to wait on before the next input
         self.take_screenshot("numbers")
         self.assertVision([
             "The first line is prefixed with '1.' before 'First task'",
@@ -191,9 +191,9 @@ class LettersTest(VisionGUITestCase):
         e = self._ed()
         e.typeText("Bigger Text Sample")
         e.keyCombo("<Control>a")
-        time.sleep(0.1)
+        time.sleep(0.1)  # pacing: no state to wait on before the next input
         e.keyCombo("<Control><Shift>greater")
-        time.sleep(0.4)
+        time.sleep(0.4)  # pacing: no state to wait on before the next input
         self.take_screenshot("bigger")
         self.assertVision([
             "The text 'Bigger Text Sample' is visibly larger than the default font size",
@@ -204,9 +204,9 @@ class LettersTest(VisionGUITestCase):
         e = self._ed()
         e.typeText("click here")
         e.keyCombo("<Control>a")
-        time.sleep(0.1)
+        time.sleep(0.1)  # pacing: no state to wait on before the next input
         e.keyCombo("<Control>k")
-        time.sleep(0.4)
+        time.sleep(0.4)  # pacing: no state to wait on before the next input
         self.take_screenshot("link")
         self.assertVision([
             "The editor contains markdown link syntax with brackets and parentheses: [click here](url)",
@@ -215,7 +215,7 @@ class LettersTest(VisionGUITestCase):
     def test_find_bar_opens_via_ctrl_f(self):
         self._new()
         self._ed().keyCombo("<Control>f")
-        time.sleep(0.5)
+        time.sleep(0.5)  # pacing: no state to wait on before the next input
         self.take_screenshot("find")
         self.assertVision([
             "A find bar with a search text entry field is visible above or within the editor area",
@@ -227,11 +227,11 @@ class LettersTest(VisionGUITestCase):
         for _ in range(3):
             e.typeText(f"Line of text number here")
             e.keyCombo("Return")
-            time.sleep(0.1)
+            time.sleep(0.1)  # pacing: no state to wait on before the next input
         e.keyCombo("<Control>a")
-        time.sleep(0.1)
+        time.sleep(0.1)  # pacing: no state to wait on before the next input
         self._click("format-line-spacing", "push button")
-        time.sleep(0.4)
+        time.sleep(0.4)  # pacing: no state to wait on before the next input
         self.take_screenshot("spacing")
         self.assertVision([
             "The three lines of text have more than single spacing between them (visible gaps between lines)",
@@ -261,7 +261,7 @@ class LettersTest(VisionGUITestCase):
     def test_spell_check_underlines_misspelled_word(self):
         self._new()
         self._ed().typeText("This is a misspelled wurd zzzz")
-        time.sleep(0.3)
+        time.sleep(0.3)  # pacing: no state to wait on before the next input
         self.take_screenshot("spell")
         self.assertVision([
             "Misspelled words like 'wurd' and 'zzzz' have red wavy underlines beneath them",
@@ -272,7 +272,7 @@ class LettersTest(VisionGUITestCase):
         try:
             import subprocess
             subprocess.run(["gsettings", "set", "org.gnome.desktop.interface", "color-scheme", "prefer-dark"], timeout=5)
-            time.sleep(0.5)
+            time.sleep(0.5)  # pacing: no state to wait on before the next input
         except Exception as e:
             print(f"Could not set dark mode: {e}")
         self.take_screenshot("dark")
@@ -283,13 +283,13 @@ class LettersTest(VisionGUITestCase):
         try:
             import subprocess
             subprocess.run(["gsettings", "set", "org.gnome.desktop.interface", "color-scheme", "default"], timeout=5)
-            time.sleep(0.3)
+            time.sleep(0.3)  # pacing: no state to wait on before the next input
         except:
             pass
 
     def test_menu_button_shows_file_edit_help(self):
         self._click("Menu", "toggle button")
-        time.sleep(0.4)
+        time.sleep(0.4)  # pacing: no state to wait on before the next input
         self.take_screenshot("menu")
         self.assertVision([
             "A popup menu is visible with 'New', 'Open', 'Save', 'Preferences', and 'About' menu items",
@@ -298,46 +298,46 @@ class LettersTest(VisionGUITestCase):
     def test_preferences_opens_with_tabs(self):
         self._new()
         self.app.keyCombo("<Control>comma")
-        time.sleep(0.5)
+        time.sleep(0.5)  # pacing: no state to wait on before the next input
         self.take_screenshot("prefs")
         self.assertVision([
             "A Preferences dialog window is visible",
             "The preferences have at least 'General', 'Editing', and 'Appearance' sections",
         ], screenshot_path=self.last_screenshot)
         self.app.keyCombo("Escape")
-        time.sleep(0.2)
+        time.sleep(0.2)  # pacing: no state to wait on before the next input
 
     def test_page_setup_dialog_opens(self):
         self._new()
         self._ed().keyCombo("<Control><Shift>l")
-        time.sleep(0.5)
+        time.sleep(0.5)  # pacing: no state to wait on before the next input
         self.take_screenshot("pagesetup")
         self.assertVision([
             "A 'Page Setup' dialog with paper size and margin settings is visible",
         ], screenshot_path=self.last_screenshot)
         self.app.keyCombo("Escape")
-        time.sleep(0.2)
+        time.sleep(0.2)  # pacing: no state to wait on before the next input
 
     def test_print_preview_shows_document(self):
         self._new()
         e = self._ed()
         e.typeText("Print preview test content goes here")
-        time.sleep(0.2)
+        time.sleep(0.2)  # pacing: no state to wait on before the next input
         e.keyCombo("<Control><Shift>p")
-        time.sleep(0.5)
+        time.sleep(0.5)  # pacing: no state to wait on before the next input
         self.take_screenshot("printprev")
         self.assertVision([
             "A print preview window showing the document content is visible",
         ], screenshot_path=self.last_screenshot)
         self.app.keyCombo("Escape")
-        time.sleep(0.2)
+        time.sleep(0.2)  # pacing: no state to wait on before the next input
 
     def test_undo_removes_typed_text(self):
         self._new()
         self._ed().typeText("This will be undone")
-        time.sleep(0.3)
+        time.sleep(0.3)  # pacing: no state to wait on before the next input
         self._ed().keyCombo("<Control>z")
-        time.sleep(0.5)
+        time.sleep(0.5)  # pacing: no state to wait on before the next input
         self.take_screenshot("undo")
         self.assertVision([
             "The editor is empty or the text 'This will be undone' is no longer present",
@@ -346,11 +346,11 @@ class LettersTest(VisionGUITestCase):
     def test_redo_restores_undone_text(self):
         self._new()
         self._ed().typeText("Redo test string here")
-        time.sleep(0.15)
+        time.sleep(0.15)  # pacing: no state to wait on before the next input
         self._ed().keyCombo("<Control>z")
-        time.sleep(0.3)
+        time.sleep(0.3)  # pacing: no state to wait on before the next input
         self._ed().keyCombo("<Control>y")
-        time.sleep(0.4)
+        time.sleep(0.4)  # pacing: no state to wait on before the next input
         self.take_screenshot("redo")
         self.assertVision([
             "The text 'Redo test string here' is visible in the editor after redo",
@@ -359,7 +359,7 @@ class LettersTest(VisionGUITestCase):
     def test_two_tabs_visible_in_tab_bar(self):
         self._new()
         self._ed().keyCombo("<Control>n")
-        time.sleep(0.5)
+        time.sleep(0.5)  # pacing: no state to wait on before the next input
         self.take_screenshot("tabs")
         self.assertVision([
             "The tab bar shows two tabs, both labeled 'Untitled Document'",
@@ -371,21 +371,21 @@ class LettersTest(VisionGUITestCase):
         e = self._ed()
         e.typeText("Project Notes")
         e.keyCombo("<Control>a")
-        time.sleep(0.1)
+        time.sleep(0.1)  # pacing: no state to wait on before the next input
         self._click("bold")
-        time.sleep(0.2)
+        time.sleep(0.2)  # pacing: no state to wait on before the next input
         e.keyCombo("Right")
         e.keyCombo("Return")
         e.keyCombo("Return")
-        time.sleep(0.1)
+        time.sleep(0.1)  # pacing: no state to wait on before the next input
         e.typeText("Completed the initial review of the system architecture.")
-        time.sleep(0.15)
+        time.sleep(0.15)  # pacing: no state to wait on before the next input
         e.keyCombo("Return")
         e.typeText("Need to update the deployment configuration")
         e.keyCombo("<Control>a")
-        time.sleep(0.1)
+        time.sleep(0.1)  # pacing: no state to wait on before the next input
         self._click("bullet", "push button")
-        time.sleep(0.3)
+        time.sleep(0.3)  # pacing: no state to wait on before the next input
         self.take_screenshot("full")
         self.assertVision([
             "The heading 'Project Notes' appears in bold at the top",
