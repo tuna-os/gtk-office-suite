@@ -27,10 +27,16 @@ One DecksController owns slide/object/master state, stable identities, selection
     ellipse, triangle, diamond) now go through Impress in both formats:
     `shape_kind_fill_outline_and_rotation_survive_impress_in_both_formats`
     in `decks-core/tests/soffice_oracle.rs`. Gradients and theme
-    decorations already had their own oracle tests. Picture crop:
-    `a_picture_crop_survives_impress_both_ways` (pptx `a:srcRect` and ODF
-    `fo:clip`, through Impress in both directions).
-- [ ] Presenter current/next/notes/timer and external-display disconnect fallback meet the admitted ADR.
+- [x] Presenter current/next/notes/timer and external-display disconnect fallback meet the admitted ADR.
+    Current, next, notes and the running clock: `DecksPresenterDisplaySmoke`.
+    Disconnect fallback, ADR 0004's "return to primary and show a visible
+    status": `decks_core::presenter::layout_after_monitor_change` moves a
+    window whose monitor went away back to the primary one; the show
+    watches GDK's monitor list, puts the audience window back fullscreen
+    there, and shows "The external display was disconnected…" over the
+    slides and as a banner on the presenter display.
+    `DecksPresenterDisplayLostSmoke` lays a show out for two monitors
+    (test mode only), reports the one real monitor, and sees the banner,
 - [x] PDF/print uses the same slide size/order/master content; export failure is visible and leaves the source document untouched.
     Size: `a_4_3_deck_exports_on_its_own_page` and
     `a_pdf_has_a_page_per_slide_with_its_text` (poppler reads the page
