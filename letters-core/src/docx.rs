@@ -321,6 +321,7 @@ fn with_part(package: &[u8], name: &str, f: impl Fn(&str) -> String) -> Result<V
 
 fn read_opened(path: &str, doc: rdocx::Document) -> Result<Document, String> {
     THEME.with(|t| *t.borrow_mut() = theme_fonts(path));
+    RESTARTED.with(|r| r.borrow_mut().clear());
     STYLE_FONTS.with(|s| *s.borrow_mut() = style_fonts(path));
 
     // Paragraph properties rdocx cannot hand back: strict-spelled indents
@@ -648,6 +649,9 @@ pub fn write(doc: &Document, path: impl AsRef<std::path::Path>) -> Result<(), St
         if para.style.block_quote {
             p = p.style("Quote");
         }
+        if para.style.code_block.is_some() && para.style.heading.is_none() {
+            p = p.style("PreformattedText");
+        }
         if let Some(name) = &para.style.named_style {
             p = p.style(name);
         }
@@ -716,6 +720,20 @@ pub fn write(doc: &Document, path: impl AsRef<std::path::Path>) -> Result<(), St
             Alignment::Justify => p.alignment(rdocx::Alignment::Justify),
         };
         let _ = p; // release the builder borrow before append_hyperlink
+        // A numbered item that restarts the count (#1205): its own instance
+        // of the numbered list's definition, with a start override at its
+        // level, which the items after it continue. Without it a list
+        // restarted at 5 counted on from the previous one.
+        if let (ListKind::Numbered, Some(start), Some(num_id)) = (para.style.list, para.style.list_start, list_ids[1]) {
+            let definition = out.numbering_instance(num_id).map(|n| n.definition_id);
+            let override_ = rdocx::NumberingLevelOverride {
+                level, start: Some(start), replacement: None, paragraph_style_link: None, has_unmodeled_properties: false,
+            };
+            if let Some(Ok(id)) = definition.map(|d| out.add_numbering_instance(d, &[override_])) {
+                out.last_paragraph_mut().expect("the list item").set_numbering(id, level);
+                list_ids[1] = Some(id);
+            }
+        }
         // A table of contents is Word's TOC field around its entries.
         let toc_edge = |k: usize| paras.get(k).is_none_or(|q| q.style.toc.is_none());
         if para.style.toc.is_some() && (i < 2 || toc_edge(i - 2)) {
@@ -993,6 +1011,22 @@ fn patch_styles_xml(xml: &str, defaults: &str, headings: &str) -> String {
     if let Some(end) = xml.rfind("</w:styles>") {
         xml.insert_str(end, headings);
     }
+    // The quote, code block and inline code styles paragraphs and runs
+    // name, which the template lacks (#1205). A style a paragraph names
+    // but the file doesn't define is dropped by LibreOffice, so a block
+    // quote and inline code read back as plain text after a pass through
+    // Writer. The names are the ones Writer itself uses for these.
+    for (id, def) in [
+        ("Quote", "<w:style w:type=\"paragraph\" w:styleId=\"Quote\"><w:name w:val=\"Quote\"/><w:basedOn w:val=\"Normal\"/><w:next w:val=\"Normal\"/><w:qFormat/><w:pPr><w:ind w:left=\"720\" w:right=\"720\"/></w:pPr><w:rPr><w:i/></w:rPr></w:style>"),
+        ("PreformattedText", "<w:style w:type=\"paragraph\" w:styleId=\"PreformattedText\"><w:name w:val=\"Preformatted Text\"/><w:basedOn w:val=\"Normal\"/><w:qFormat/><w:pPr><w:spacing w:before=\"0\" w:after=\"0\"/></w:pPr><w:rPr><w:rFonts w:ascii=\"Liberation Mono\" w:hAnsi=\"Liberation Mono\" w:cs=\"Liberation Mono\"/><w:sz w:val=\"20\"/></w:rPr></w:style>"),
+        ("SourceText", "<w:style w:type=\"character\" w:styleId=\"SourceText\"><w:name w:val=\"Source Text\"/><w:qFormat/><w:rPr><w:rFonts w:ascii=\"Liberation Mono\" w:hAnsi=\"Liberation Mono\" w:cs=\"Liberation Mono\"/></w:rPr></w:style>"),
+    ] {
+        if !xml.contains(&format!("w:styleId=\"{id}\"")) {
+            if let Some(end) = xml.rfind("</w:styles>") {
+                xml.insert_str(end, def);
+            }
+        }
+    }
     // Word's table of contents entry styles, which the template lacks; a
     // table of contents' entries name them (their indents are direct).
     if !xml.contains("w:styleId=\"TOC1\"") {
@@ -1172,7 +1206,8 @@ fn map_paragraph(doc: &rdocx::Document, p: &rdocx::ParagraphRef<'_>) -> Paragrap
     let page_break_before = p.is_page_break_before() || run_page_break(p).leading;
     // Keep with next: the paragraph's own setting, else its style's.
     let keep_with_next = p.keep_with_next_value().or(styled.keep_next).unwrap_or(false);
-    let (list, list_level) = match paragraph_numbering(doc, p) {
+    let numbering = paragraph_numbering(doc, p);
+    let (list, list_level) = match numbering {
         Some((num_id, level)) => (match doc.numbering_is_bullet(num_id) {
             Some(false) => ListKind::Numbered,
             // Unknown num_id defaults to bullet — the safer visual guess.
@@ -1180,6 +1215,12 @@ fn map_paragraph(doc: &rdocx::Document, p: &rdocx::ParagraphRef<'_>) -> Paragrap
         }, level.min(8) as u8),
         None => (ListKind::None, 0),
     };
+    // Where a list restarts: a start override on this instance at this
+    // level (#1205). Only the first item of that instance carries it.
+    let list_start = numbering.and_then(|(num_id, level)| {
+        let start = doc.numbering_instance(num_id)?.level_overrides.iter().find(|o| o.level == level)?.start?;
+        RESTARTED.with(|r| r.borrow_mut().insert((num_id, level))).then_some(start)
+    });
 
     // Per-run link URLs from hyperlink spans (indexes into the runs vec).
     let spans = p.hyperlink_spans();
@@ -1299,7 +1340,7 @@ fn map_paragraph(doc: &rdocx::Document, p: &rdocx::ParagraphRef<'_>) -> Paragrap
     let mut para = Paragraph {
         style: ParaStyle {
             heading, alignment, list, code_block, block_quote,
-            list_level,
+            list_level, list_start,
             named_style, page_break_before, keep_with_next,
             // Absent means "inherit": the paragraph looks the way its style
             // chain says, which the model has no styles to express, so the
@@ -1477,6 +1518,12 @@ fn style_fonts(path: &str) -> StyleFonts {
         Ok(out)
     }
     scan(path).unwrap_or_default()
+}
+
+thread_local! {
+    /// The `(num_id, level)` list restarts already given to a paragraph in
+    /// the document being read: only the first item of a restart carries it.
+    static RESTARTED: std::cell::RefCell<std::collections::HashSet<(u32, u32)>> = Default::default();
 }
 
 thread_local! {
