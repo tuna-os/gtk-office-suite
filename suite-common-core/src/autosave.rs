@@ -588,6 +588,18 @@ fn lock_path(state_dir: &Path, doc_id: &str) -> PathBuf {
     state_dir.join(format!("{doc_id}{LOCK_SUFFIX}"))
 }
 
+/// What a single-document window says after recovering one snapshot when
+/// `waiting` more are still on disk (#1422): they are offered on later
+/// launches, one each, and the user should know they exist rather than
+/// find out by chance. `None` when nothing is waiting.
+pub fn more_to_recover_message(waiting: usize, document: &str, documents: &str, app: &str) -> Option<String> {
+    match waiting {
+        0 => None,
+        1 => Some(format!("1 more unsaved {document} will be offered the next time {app} starts")),
+        n => Some(format!("{n} more unsaved {documents} will be offered, one each time {app} starts")),
+    }
+}
+
 pub fn find_orphaned_snapshots(state_dir: &Path) -> Vec<String> {
     let Ok(entries) = fs::read_dir(state_dir) else { return Vec::new() };
     let mut found: Vec<(std::time::SystemTime, String)> = entries
@@ -716,6 +728,19 @@ mod tests {
         assert_eq!(read_back.kind, "md");
     }
     use super::*;
+
+    #[test]
+    fn the_waiting_message_counts_what_is_left() {
+        assert_eq!(more_to_recover_message(0, "workbook", "workbooks", "Tables"), None);
+        assert_eq!(
+            more_to_recover_message(1, "workbook", "workbooks", "Tables").as_deref(),
+            Some("1 more unsaved workbook will be offered the next time Tables starts")
+        );
+        assert_eq!(
+            more_to_recover_message(3, "deck", "decks", "Decks").as_deref(),
+            Some("3 more unsaved decks will be offered, one each time Decks starts")
+        );
+    }
 
     use crate::atomic_save::fault;
 
