@@ -13,6 +13,7 @@ use suite_common::events::{Hint, Listener};
 use tables_core::controller::{WorkbookController, WorkbookState};
 use tables_core::sheet::*;
 use crate::grid_render::{draw_grid, auto_fit_column};
+use crate::grid_area::{refresh_grid_a11y, update_grid_a11y};
 use crate::window_dialogs::{
     show_conditional_format_dialog, show_define_name_dialog, show_filter_dialog,
     show_format_cells_dialog, show_page_setup_dialog,
@@ -504,6 +505,7 @@ impl TablesWindow {
                     }
                     (r, c)
                 };
+                if crate::sheet_actions::refuse_locked(&ctl, &toasts, r, c) { return; }
                 ctl.borrow_mut().edit_cell(r, c, val);
                 let shown = s.borrow().engine.cell(r, c);
                 update_grid_a11y(&da, &tables_core::sheet::col_label(c), r, &shown);
@@ -826,6 +828,7 @@ impl TablesWindow {
             let h = h_adj.clone();
             let v = v_adj.clone();
             let autofit = pending_autofit.clone();
+            let toasts = toast_overlay.clone();
             let dbl = gtk4::GestureClick::new();
             dbl.set_button(1);
             dbl.set_touch_only(false);
@@ -848,6 +851,7 @@ impl TablesWindow {
                 let sh = st.sheet();
                 if let Some((col, row)) = xy_to_cell(x, y, h.value(), v.value(), &sh) {
                     drop(sh); drop(st);
+                    if crate::sheet_actions::refuse_locked(&ctl, &toasts, row, col) { return; }
                     let st = s.borrow_mut();
                     let val = st.sheet().data[row][col].clone();
                     // The cell's on-screen x, frozen columns included.
@@ -1452,7 +1456,9 @@ impl TablesWindow {
             ("document-send-symbolic", "Export PDF", "app.export-pdf"),
         ];
 
+        let extended_toolbar = [extended_toolbar, crate::sheet_actions::toolbar_items()].concat();
         let suite_win = suite_common::SuiteWindow::new(app, "Tables", vec![], extended_toolbar);
+        crate::sheet_actions::install(app, &controller, &drawing_area, &toast_overlay, refresh_sel.clone());
         suite_common::bind_window_geometry(&suite_win.window, &settings);
         *win_ref.borrow_mut() = Some(suite_win.window.clone());
 
@@ -1955,6 +1961,7 @@ impl TablesWindow {
             let da = drawing_area.clone();
             let fx = fx_entry.clone();
             let refresh = refresh_sel.clone();
+            let toasts = toast_overlay.clone();
             let key = gtk4::EventControllerKey::new();
             key.connect_key_pressed(move |_, keyval, _code, mods| {
                 use gtk4::gdk::Key;
@@ -2079,6 +2086,7 @@ impl TablesWindow {
                         let sh = st.sheet();
                         (sh.selected_row, sh.selected_col)
                     };
+                    if crate::sheet_actions::refuse_locked(&ctl, &toasts, r, c) { return gtk4::glib::Propagation::Stop; }
                     ctl.borrow_mut().edit_cell(r, c, "");
                     da.queue_draw();
                     return gtk4::glib::Propagation::Stop;
@@ -2234,30 +2242,4 @@ impl TablesWindow {
         self.drawing_area.queue_draw();
         Ok(())
     }
-}
-
-// ── Coordinate conversion ─────────────────────────────────────────────
-
-
-fn update_grid_a11y(da: &gtk4::DrawingArea, col: &str, row: usize, value: &str) {
-    let desc = if value.is_empty() {
-        format!("cell {}{}, empty", col, row + 1)
-    } else {
-        format!("cell {}{}: {}", col, row + 1, value)
-    };
-    da.update_property(&[gtk4::accessible::Property::Description(&desc)]);
-}
-
-/// Recompute the grid's a11y description from the currently active sheet's
-/// selection. Sheet switches change which cell "A1" refers to without
-/// necessarily moving the on-screen selection, so anything that changes the
-/// active sheet (add, switch, delete, reorder) must call this — otherwise
-/// screen readers keep announcing the previous sheet's stale content.
-fn refresh_grid_a11y(da: &gtk4::DrawingArea, state: &Rc<RefCell<WorkbookState>>) {
-    let st = state.borrow();
-    let sh = st.sheet();
-    let (r, c) = (sh.selected_row, sh.selected_col);
-    let shown = sh.cell(r, c).to_string();
-    drop(sh);
-    update_grid_a11y(da, &tables_core::sheet::col_label(c), r, &shown);
 }

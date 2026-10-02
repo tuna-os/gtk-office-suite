@@ -4512,6 +4512,150 @@ class TablesFilterSmoke(TablesCellEntryMixin, BaseGUITestCase):
         self.assertIsNone(self.process.poll(), "tables crashed during filter/clear-filter")
 
 
+class TablesSheetStructureSmoke(TablesCellEntryMixin, BaseGUITestCase):
+    """Rows and columns inserted and deleted, a sort under a frozen header,
+    and sheet protection, through the app's actions (#1277). Each is
+    asserted on the model through the test snapshot, never the widgets,
+    and each checks that formulas are rewritten and recalculated (no
+    stale cached value) and that undo restores the sheet."""
+
+    app_name = "tables"
+    AID = "org.tunaos.tables"
+
+    def setUp(self):
+        self.isolate_snapshot(prefix="tables-structure-")
+        super().setUp()
+        import subprocess
+        subprocess.run(["gapplication", "action", self.AID, "new-document"])
+        self._wait_for_a_new_document()
+
+    def _act(self, name):
+        import subprocess
+        subprocess.run(["gapplication", "action", self.AID, name], check=True)
+
+    def _cells(self):
+        snap = self.trigger_snapshot(self.AID)
+        return {(c["row"], c["col"]): (c["value"], c["formula"]) for c in snap["sheet"]["cells"]}, snap
+
+    def _wait_cells(self, check, description):
+        return self.wait_until(lambda: self._cells()[0], check, interval=0.2, description=description)
+
+    def _select(self, ref):
+        from dogtail import rawinput
+        rawinput.keyCombo("<Control>g")
+        self.wait_until(lambda: self._focused("Cell reference"), bool, description="the name box to take focus")
+        rawinput.typeText(ref)
+        rawinput.keyCombo("Return")
+        self.wait_until(lambda: self._focused("Formula input"), bool, description=f"the jump to {ref}")
+
+    def _formula(self, ref, formula, row, col):
+        from dogtail import rawinput
+        self._select(ref)
+        rawinput.typeText(formula)
+        rawinput.keyCombo("Return")
+        # The snapshot reports a formula without its "=".
+        self._wait_cells(lambda c: (c.get((row, col)) or ("", None))[1] == formula.lstrip("="), f"{ref} to hold {formula}")
+
+    def test_inserting_and_deleting_lines_rewrites_formulas_and_undo_restores(self):
+        self._put("A1", "head")
+        self._put("A2", "1")
+        self._put("A3", "2")
+        self._put("C1", "far")
+        self._formula("A4", "=A2+A3", 3, 0)
+        original = self._cells()[0]
+
+        # A row inserted above A3: the formula, now in A5, follows its input.
+        self._select("A3")
+        self._act("insert-rows")
+        cells = self._wait_cells(lambda c: (4, 0) in c, "the formula to move down a row")
+        self.assertEqual(cells[(4, 0)], ("3", "A2+A4"), cells)
+        self.assertEqual(cells[(3, 0)][0], "2", cells)
+        # No stale value: changing the moved input recalculates the formula.
+        self._put("A4", "10")
+        self._wait_cells(lambda c: c.get((4, 0), ("",))[0] == "11", "the formula to recalculate after the insert")
+        self._act("undo")
+        self._act("undo")
+        self._wait_cells(lambda c: c == original, "two undos to restore the sheet")
+
+        # A column inserted left of A: everything moves right, references too.
+        self._select("A1")
+        self._act("insert-cols")
+        cells = self._wait_cells(lambda c: (3, 1) in c, "the formula to move right")
+        self.assertEqual(cells[(3, 1)], ("3", "B2+B3"), cells)
+        self.assertEqual(cells[(0, 3)][0], "far", cells)
+        self._act("undo")
+        self._wait_cells(lambda c: c == original, "undo to restore the columns")
+
+        # The header row deleted: the formula moves up and still adds 1 + 2.
+        self._select("A1")
+        self._act("delete-rows")
+        cells = self._wait_cells(lambda c: (2, 0) in c and (3, 0) not in c, "the rows to move up")
+        self.assertEqual(cells[(2, 0)], ("3", "A1+A2"), cells)
+        self._act("undo")
+        self._wait_cells(lambda c: c == original, "undo to restore the deleted row")
+
+        # Column B deleted: C1 moves to B1; column A's formula is untouched.
+        self._select("B1")
+        self._act("delete-cols")
+        cells = self._wait_cells(lambda c: (0, 1) in c, "column C to move into B")
+        self.assertEqual(cells[(0, 1)][0], "far", cells)
+        self.assertEqual(cells[(3, 0)], ("3", "A2+A3"), cells)
+        self._act("undo")
+        self._wait_cells(lambda c: c == original, "undo to restore the deleted column")
+        self.assertIsNone(self.process.poll(), "tables crashed editing rows and columns")
+
+    def test_sort_leaves_the_frozen_header_and_undo_restores(self):
+        from dogtail import rawinput, tree
+        for row, value in enumerate(["Name", "banana", "apple", "cherry"]):
+            self._put(f"A{row + 1}", value)
+        column = lambda c: [c.get((r, 0), ("",))[0] for r in range(4)]  # noqa: E731
+        self._select("A1")
+        self._act("toggle-freeze-rows")
+
+        def sort(label):
+            # Alt+Down is the grid's: hand it focus on A2 first.
+            self._select("A2")
+            rawinput.keyCombo("Escape")
+            self.wait_until(lambda: not self._focused("Formula input"), bool, description="the grid to take focus")
+            rawinput.keyCombo("<Alt>Down")
+            button = self.wait_until(
+                lambda: tree.root.findChild(lambda n: n.roleName == "push button" and n.name == label and n.showing,
+                                            retry=False, requireResult=False),
+                bool, description=f"the column menu's {label}")
+            button.do_action(0)
+
+        sort("Sort Ascending")
+        self._wait_cells(lambda c: column(c) == ["Name", "apple", "banana", "cherry"], "an ascending sort under the header")
+        sort("Sort Descending")
+        self._wait_cells(lambda c: column(c) == ["Name", "cherry", "banana", "apple"], "a descending sort under the header")
+        self._act("undo")
+        self._act("undo")
+        self._wait_cells(lambda c: column(c) == ["Name", "banana", "apple", "cherry"], "two undos to restore the order")
+        self.assertIsNone(self.process.poll(), "tables crashed sorting")
+
+    def test_a_protected_sheet_refuses_an_edit_with_a_message_and_unprotect_allows_it(self):
+        from dogtail import rawinput, tree
+        self._put("A1", "kept")
+        self._act("toggle-sheet-protection")
+        self.wait_until(lambda: self._cells()[1]["sheet"]["protected"], bool, description="the sheet to be protected")
+
+        message = "This sheet is protected. Unprotect it to make changes."
+        self._select("A1")
+        rawinput.typeText("changed")
+        rawinput.keyCombo("Return")
+        self.wait_until(
+            lambda: tree.root.findChild(lambda n: n.name == message and n.showing, retry=False, requireResult=False),
+            bool, description="the refused edit to say why")
+        self.assertEqual(self._cells()[0][(0, 0)][0], "kept", "a protected cell changed")
+        self._act("insert-rows")
+        self.assertEqual(self._cells()[0][(0, 0)][0], "kept", "a protected sheet took a row insert")
+
+        self._act("toggle-sheet-protection")
+        self.wait_until(lambda: not self._cells()[1]["sheet"]["protected"], bool, description="the sheet to be unprotected")
+        self._put("A1", "changed")
+        self.assertIsNone(self.process.poll(), "tables crashed under protection")
+
+
 class TablesNamedRangeSmoke(BaseGUITestCase):
     """Named ranges (#113): Define Name captures the current selection;
     typing that name into the name box (instead of a cell reference)
