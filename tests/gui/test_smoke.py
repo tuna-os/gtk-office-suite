@@ -214,10 +214,9 @@ class LettersCloseGuardSmoke(BaseGUITestCase):
         self.app.child(name="Close", roleName="push button").do_action(0)
         time.sleep(0.8)  # pacing: no state to wait on before the next input
         self.app.child(name="Cancel", roleName="push button").do_action(0)
-        def _settled():
-            self.assertIsNone(self.process.poll(), "Cancel must not close the window")
-            self.assertIsNotNone(self.app.child(roleName="frame"), "window should still be open")
-        self.eventually(_settled)
+        time.sleep(0.5)  # settling: gives a wrong outcome its chance before the check that it didn't happen
+        self.assertIsNone(self.process.poll(), "Cancel must not close the window")
+        self.assertIsNotNone(self.app.child(roleName="frame"), "window should still be open")
 
         self.app.child(name="Close", roleName="push button").do_action(0)
         time.sleep(0.8)  # pacing: no state to wait on before the next input
@@ -1030,10 +1029,9 @@ class TablesCloseGuardSmoke(BaseGUITestCase):
         self.app.child(name="Close", roleName="push button").do_action(0)
         time.sleep(0.8)  # pacing: no state to wait on before the next input
         self.app.child(name="Cancel", roleName="push button").do_action(0)
-        def _settled():
-            self.assertIsNone(self.process.poll(), "Cancel must not close the window")
-            self.assertIsNotNone(self.app.child(roleName="frame"), "window should still be open")
-        self.eventually(_settled)
+        time.sleep(0.5)  # settling: gives a wrong outcome its chance before the check that it didn't happen
+        self.assertIsNone(self.process.poll(), "Cancel must not close the window")
+        self.assertIsNotNone(self.app.child(roleName="frame"), "window should still be open")
 
         self.app.child(name="Close", roleName="push button").do_action(0)
         time.sleep(0.8)  # pacing: no state to wait on before the next input
@@ -1361,25 +1359,22 @@ class LiveOwnerMixin:
         # rather than a pid written into a file.
         self.process.kill()
         self.process.wait(timeout=5)
-        def _settled():
-            self.assertTrue(os.path.exists(lock_path), f"{lock_path} should survive a crash")
-        self.eventually(_settled)
+        time.sleep(0.5)  # settling: gives a wrong outcome its chance before the check that it didn't happen
+        self.assertTrue(os.path.exists(lock_path), f"{lock_path} should survive a crash")
         holder = open(lock_path, "r+b")
         self.addCleanup(holder.close)
         fcntl.flock(holder.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
 
         self.relaunch_app(crash=True)
-        def _settled():
-            frame = self.app.child(roleName="frame")
-            self.assertNotIn(
-                "Recovered", frame.name,
-                "a document owned by a live window was offered as a recovery: "
-                f"window came up as {frame.name!r}",
-            )
-            self.assertEqual(len(self._snapshots()), 1,
-                              "the owner's snapshot must be left alone, not cleared")
-            return frame
-        frame = self.eventually(_settled)
+        time.sleep(2.0)  # settling: gives a wrong outcome its chance before the check that it didn't happen
+        frame = self.app.child(roleName="frame")
+        self.assertNotIn(
+            "Recovered", frame.name,
+            "a document owned by a live window was offered as a recovery: "
+            f"window came up as {frame.name!r}",
+        )
+        self.assertEqual(len(self._snapshots()), 1,
+                          "the owner's snapshot must be left alone, not cleared")
 
         # Release it and the same state recovers, which is what makes the
         # assertion above about ownership rather than about timing.
@@ -1773,9 +1768,8 @@ class TablesAutosaveSmoke(BaseGUITestCase):
         import subprocess
 
         subprocess.run(["gapplication", "action", "org.tunaos.tables", "autosave-now"])
-        def _settled():
-            self.assertEqual(self._snapshot_files(), [], "a clean, untouched workbook must not snapshot")
-        self.eventually(_settled)
+        time.sleep(0.5)  # settling: gives a wrong outcome its chance before the check that it didn't happen
+        self.assertEqual(self._snapshot_files(), [], "a clean, untouched workbook must not snapshot")
 
         self._edit_a1()
         subprocess.run(["gapplication", "action", "org.tunaos.tables", "autosave-now"])
@@ -2645,12 +2639,11 @@ class TablesOpenGuardSmoke(TablesCellEntryMixin, BaseGUITestCase):
         self._hand_over(self._second)
         self.wait_for_node(name="Discard unsaved changes?")
         self._button("Cancel").do_action(0)
-        def _settled():
-            self.assertIn("first.csv", self._title(), "Cancel replaced the workbook anyway")
-            cells = self.trigger_snapshot("org.tunaos.tables")["sheet"]["cells"]
-            b2 = next((c["value"] for c in cells if (c["row"], c["col"]) == (1, 1)), None)
-            self.assertEqual(b2, "1500", "Cancel lost the edit")
-        self.eventually(_settled)
+        time.sleep(1.0)  # settling: gives a wrong outcome its chance before the check that it didn't happen
+        self.assertIn("first.csv", self._title(), "Cancel replaced the workbook anyway")
+        cells = self.trigger_snapshot("org.tunaos.tables")["sheet"]["cells"]
+        b2 = next((c["value"] for c in cells if (c["row"], c["col"]) == (1, 1)), None)
+        self.assertEqual(b2, "1500", "Cancel lost the edit")
 
         self._hand_over(self._second)
         self._button("Discard").do_action(0)
@@ -4999,10 +4992,9 @@ class DecksCloseGuardSmoke(BaseGUITestCase):
         self.app.child(name="Close", roleName="push button").do_action(0)
         time.sleep(0.8)  # pacing: no state to wait on before the next input
         self.app.child(name="Cancel", roleName="push button").do_action(0)
-        def _settled():
-            self.assertIsNone(self.process.poll(), "Cancel must not close the window")
-            self.assertIsNotNone(self.app.child(roleName="frame"), "window should still be open")
-        self.eventually(_settled)
+        time.sleep(0.5)  # settling: gives a wrong outcome its chance before the check that it didn't happen
+        self.assertIsNone(self.process.poll(), "Cancel must not close the window")
+        self.assertIsNotNone(self.app.child(roleName="frame"), "window should still be open")
 
         self.app.child(name="Close", roleName="push button").do_action(0)
         time.sleep(0.8)  # pacing: no state to wait on before the next input
@@ -5068,9 +5060,8 @@ class DecksReplaceGuardSmoke(BaseGUITestCase):
         self.gapplication_action(aid, "new-document")
         self.wait_for_node(name="Discard unsaved changes?")
         button("Cancel").do_action(0)
-        def _settled():
-            self.assertEqual(self._objects(), 1, "Cancel replaced the deck anyway")
-        self.eventually(_settled)
+        time.sleep(1.0)  # settling: gives a wrong outcome its chance before the check that it didn't happen
+        self.assertEqual(self._objects(), 1, "Cancel replaced the deck anyway")
 
         self.gapplication_action(aid, "new-document")
         button("Discard").do_action(0)
