@@ -17,6 +17,7 @@
 mod charts;
 mod condrules;
 mod format;
+pub mod loss;
 mod load;
 mod numfmt;
 mod odf_formula;
