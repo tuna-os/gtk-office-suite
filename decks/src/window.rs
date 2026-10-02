@@ -1203,21 +1203,7 @@ impl DecksWindow {
                 let parent = w.clone();
                 suite_common::confirm_discarding(&parent, dirty.get(), "presentation", move || {
                 let dlg = gtk::FileDialog::new();
-                let all = gtk::FileFilter::new();
-                all.add_pattern("*.pptx");
-                all.add_pattern("*.odp");
-                all.set_name(Some("Presentations (.pptx, .odp)"));
-                let f = gtk::FileFilter::new();
-                f.add_pattern("*.pptx");
-                f.set_name(Some("PowerPoint Presentations (.pptx)"));
-                let odp = gtk::FileFilter::new();
-                odp.add_pattern("*.odp");
-                odp.set_name(Some("OpenDocument Presentations (.odp)"));
-                let fl = gio::ListStore::new::<gtk::FileFilter>();
-                fl.append(&all);
-                fl.append(&f);
-                fl.append(&odp);
-                dlg.set_filters(Some(&fl));
+                dlg.set_filters(Some(&suite_common::file_dialogs::open_filters("Presentations (.pptx, .odp)", decks_core::FORMATS)));
 
                 let cs = cs.clone();
                 let sl = sl.clone();

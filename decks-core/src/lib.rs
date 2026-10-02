@@ -57,12 +57,39 @@ pub fn read_deck_with_report(path: &str) -> Result<(engine::Deck, suite_common_c
     Ok((deck, report, opaque))
 }
 
-/// Write a presentation, dispatching on extension (.pptx or .odp).
+/// The formats Decks opens and saves, declared once (#1206): the Open
+/// dialog's filter is built from this, and tests hold the desktop entry's
+/// MIME types and docs/FORMATS.md to it.
+pub const FORMATS: &[suite_common_core::file_formats::FileFormat] = {
+    use suite_common_core::file_formats::FileFormat;
+    &[
+        FileFormat {
+            label: "PowerPoint presentation",
+            extensions: &["pptx"],
+            mime: "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+            writable: true,
+        },
+        FileFormat {
+            label: "OpenDocument Presentation",
+            extensions: &["odp"],
+            mime: "application/vnd.oasis.opendocument.presentation",
+            writable: true,
+        },
+    ]
+};
+
+/// Write a presentation in the format its extension names (.pptx or .odp).
+///
+/// Any other name is refused before anything is written. It used to get
+/// PowerPoint bytes whatever it was called, so a Save As to `talk.key` or
+/// `talk` wrote a file its name misdescribed (#1206).
 pub fn write_deck(path: &str, deck: &engine::Deck) -> Result<(), String> {
-    if path.to_lowercase().ends_with(".odp") {
-        odp::write(deck, path)
-    } else {
-        engine::write_pptx(path, deck)
+    match suite_common_core::file_formats::for_path(FORMATS, path).map(|format| format.extension()) {
+        Some("odp") => odp::write(deck, path),
+        Some(_) => engine::write_pptx(path, deck),
+        None => Err(format!(
+            "Decks cannot tell which format to write \"{path}\" in. Save it as .pptx or .odp."
+        )),
     }
 }
 
@@ -79,5 +106,39 @@ pub fn write_deck_bytes(format_hint: &str, deck: &engine::Deck) -> Result<Vec<u8
         odp::write_bytes(deck)
     } else {
         engine::write_pptx_bytes(deck)
+    }
+}
+
+
+#[cfg(test)]
+mod format_tests {
+    #[test]
+    fn the_declared_formats_agree_with_the_docs_and_the_desktop_entry() {
+        let problems = suite_common_core::file_formats::disagreements(
+            super::FORMATS,
+            "Decks",
+            include_str!("../../flatpak/org.tunaos.decks.desktop"),
+            include_str!("../../docs/FORMATS.md"),
+        );
+        assert!(problems.is_empty(), "{problems:#?}");
+    }
+
+    /// A name that is neither .pptx nor .odp is refused and nothing is
+    /// written; both declared formats, in any case, still save and reopen.
+    #[test]
+    fn a_save_under_an_unknown_extension_is_refused_and_writes_nothing() {
+        let dir = tempfile::tempdir().unwrap();
+        let deck = crate::Deck::new();
+        for name in ["talk.key", "talk", "talk.ppt"] {
+            let path = dir.path().join(name);
+            let error = super::write_deck(path.to_str().unwrap(), &deck).expect_err(name);
+            assert!(error.contains(".pptx or .odp"), "{error}");
+            assert!(!path.exists(), "{name} was written");
+        }
+        for name in ["talk.pptx", "talk.ODP"] {
+            let path = dir.path().join(name);
+            super::write_deck(path.to_str().unwrap(), &deck).expect(name);
+            super::read_deck(path.to_str().unwrap()).expect(name);
+        }
     }
 }

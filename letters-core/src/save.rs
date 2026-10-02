@@ -24,6 +24,26 @@ use crate::model::{Alignment, Document, ListKind, Paragraph, Run};
 use std::path::Path;
 use suite_common_core::interop::{CompatibilityReport, FeatureDisposition, UnsupportedFeature};
 
+/// The formats Letters opens and saves, declared once (#1206): the Open
+/// dialog's filter is built from this, and tests hold the desktop entry's
+/// MIME types and docs/FORMATS.md to it. Every one is also a [`SaveFormat`];
+/// a file with any other extension still opens, as Markdown (see [`read`]).
+pub const FORMATS: &[suite_common_core::file_formats::FileFormat] = {
+    use suite_common_core::file_formats::FileFormat;
+    &[
+        FileFormat { label: "OpenDocument Text", extensions: &["odt"], mime: "application/vnd.oasis.opendocument.text", writable: true },
+        FileFormat {
+            label: "Word document",
+            extensions: &["docx"],
+            mime: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            writable: true,
+        },
+        FileFormat { label: "Markdown", extensions: &["md", "markdown"], mime: "text/markdown", writable: true },
+        FileFormat { label: "HTML", extensions: &["html", "htm"], mime: "text/html", writable: true },
+        FileFormat { label: "Plain text", extensions: &["txt", "text"], mime: "text/plain", writable: true },
+    ]
+};
+
 /// Every format Letters can write. `ALL` is the list the Preferences
 /// window offers, so a format cannot appear in the UI without a writer.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -640,6 +660,27 @@ fn list_html(group: &[Paragraph], footnote_numbers: &mut Vec<usize>) -> String {
 
 #[cfg(test)]
 mod tests {
+    /// `FORMATS` and `SaveFormat` describe the same five formats with the
+    /// same spellings, and the desktop entry and docs/FORMATS.md agree.
+    #[test]
+    fn the_declared_formats_are_the_save_formats_and_the_docs_and_desktop_entry_say_so() {
+        assert_eq!(super::FORMATS.len(), super::SaveFormat::ALL.len());
+        for format in super::FORMATS {
+            for extension in format.extensions {
+                let save = super::SaveFormat::from_extension(extension)
+                    .unwrap_or_else(|| panic!(".{extension} is declared but no SaveFormat accepts it"));
+                assert_eq!(save.extension(), format.extension(), "{} saves under .{}", format.label, save.extension());
+            }
+        }
+        let problems = suite_common_core::file_formats::disagreements(
+            super::FORMATS,
+            "Letters",
+            include_str!("../../flatpak/org.tunaos.letters.desktop"),
+            include_str!("../../docs/FORMATS.md"),
+        );
+        assert!(problems.is_empty(), "{problems:#?}");
+    }
+
     use super::*;
     use crate::model::{ParaStyle, RunStyle, TableCell, VertAlign};
 
