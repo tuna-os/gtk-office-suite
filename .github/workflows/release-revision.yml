@@ -64,7 +64,9 @@ jobs:
   # red, or never ran, published anyway. This is the same workspace run as
   # ci.yml's `test` job (so the ids match the ledger's), at the release
   # revision, feeding validate_capabilities.py --release-critical. The
-  # journeys' half of a release-critical claim is still the GUI lane's.
+  # journeys' half runs here too: the release-critical capabilities' GUI
+  # tests, at the same revision, so a release whose journey failed, was
+  # skipped or never ran is refused like one whose Rust test was.
   release-critical-tests:
     runs-on: ubuntu-24.04
     steps:
@@ -83,11 +85,39 @@ jobs:
           tool: nextest
       - name: Run the workspace tests at the release revision
         run: scripts/with-display.sh cargo nextest run --workspace --profile ci --no-fail-fast
+      - name: Build the app binaries the journeys drive
+        run: cargo build --bin letters --bin tables --bin decks
+      - name: Install GUI test dependencies
+        run: |
+          sudo apt-get install -y -qq xvfb dbus at-spi2-core matchbox-window-manager xdotool \
+            x11-utils python3-dogtail python3-pytest python3-pil python3-requests
+          python3 -m pip install --break-system-packages mss
+      - name: Run the release-critical journeys at the release revision
+        if: always()
+        run: |
+          python3 - > journeys.txt <<'PY'
+          import json
+          ledger = json.load(open("conformance/capabilities.json"))
+          for feature in ledger["features"]:
+              if feature.get("release_critical"):
+                  for test in feature.get("evidence", {}).get("gui", []):
+                      print(test.removeprefix("tests/gui/"))
+          PY
+          if [ ! -s journeys.txt ]; then
+            echo "No release-critical capability names a journey."
+            exit 0
+          fi
+          # The journeys' verdicts are read from the report below, so a
+          # failure here is recorded rather than ending the job early.
+          tests/gui/run_gui_tests.sh $(cat journeys.txt) \
+            --junitxml="$GITHUB_WORKSPACE/gui-junit.xml" || true
       - name: Refuse a release whose release-critical evidence did not pass
         if: always()
         run: |
+          gui=()
+          if [ -f gui-junit.xml ]; then gui=(--pytest-junit "tests/gui=gui-junit.xml"); fi
           python3 conformance/collect_test_inventory.py \
-            --junit "=target/nextest/ci/junit.xml" \
+            --junit "=target/nextest/ci/junit.xml" "${gui[@]}" \
             --out rust-inventory.json --results-out rust-results.json
           python3 conformance/validate_capabilities.py \
             --lanes conformance/lanes.json --lane test \

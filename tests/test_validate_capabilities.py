@@ -86,6 +86,14 @@ class StructureTests(unittest.TestCase):
         f["evidence"]["performance"] = ["letters-core::perf::tests::x"]
         self.assertIn("which it does not require", messages(vc.check_structure(ledger(f))))
 
+    def test_save_durability_evidence_must_be_filed_under_persistence(self):
+        f = feature(requires=["model", "persistence"])
+        f["evidence"]["model"] = ["suite-common-core::atomic_save::tests::overwrites_existing_file_atomically"]
+        f["evidence"]["persistence"] = ["suite-common-core::autosave::tests::recovery_round_trip"]
+        errors = messages(vc.check_structure(ledger(f)))
+        self.assertIn("belongs to `persistence`, not `model`", errors)
+        self.assertNotIn("not `persistence`", errors)
+
     def test_the_same_test_listed_twice_is_rejected(self):
         f = feature()
         f["evidence"]["model"] = ["letters-core::mod::tests::name"] * 2
@@ -239,6 +247,28 @@ class JUnitParsingTests(unittest.TestCase):
         _, covers = collect_test_inventory.parse_junit(self.REPORT)
         self.assertEqual(covers, ["letters-core::", "letters::"])
         self.assertFalse("tests/gui/x.py::A::b".startswith(tuple(covers)))
+
+
+class PytestJUnitParsingTests(unittest.TestCase):
+    """The release job runs its release-critical journeys and records their
+    outcomes in pytest's JUnit, which names tests by module and class."""
+
+    REPORT = """<?xml version="1.0"?>
+    <testsuites><testsuite name="pytest" tests="3">
+      <testcase classname="test_smoke.LettersSaveFailureSmoke" name="test_failed_save_retains_edits"/>
+      <testcase classname="test_smoke.TablesSmoke" name="test_launch"><skipped message="x"/></testcase>
+      <testcase classname="test_harness" name="test_module_level"><failure message="y"/></testcase>
+    </testsuite></testsuites>"""
+
+    def test_ids_take_the_ledger_s_path_shape(self):
+        outcomes, covers = collect_test_inventory.parse_pytest_junit(self.REPORT, "tests/gui")
+        self.assertEqual(outcomes, {
+            "tests/gui/test_smoke.py::LettersSaveFailureSmoke::test_failed_save_retains_edits": "passed",
+            "tests/gui/test_smoke.py::TablesSmoke::test_launch": "skipped",
+            "tests/gui/test_harness.py::test_module_level": "failed",
+        })
+        # It speaks for the tests it ran, not for their files or tests/gui.
+        self.assertEqual(covers, sorted(outcomes))
 
 
 class InventoryParsingTests(unittest.TestCase):
