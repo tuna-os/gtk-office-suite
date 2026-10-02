@@ -869,6 +869,13 @@ impl DecksWindow {
             });
             app.add_action(&act);
         }
+        // Wherever the focus is: without these, Ctrl+Z reached the deck only
+        // while the canvas had focus, so an object inserted from the palette
+        // or the Insert menu could not be undone from the keyboard (#1208).
+        // Text being edited (notes, a text box) handles the keys first and
+        // keeps its own undo, as in Letters and Tables.
+        app.set_accels_for_action("app.undo", &["<Primary>z"]);
+        app.set_accels_for_action("app.redo", &["<Primary>y", "<Primary><Shift>z"]);
 
         // Insert buttons in the header bar (insert_bar.rs): a shape from the
         // library by its index, or a 3x3 table; each selected once in.
