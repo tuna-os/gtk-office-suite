@@ -3729,9 +3729,9 @@ class TablesAccessibleGeometrySmoke(BaseGUITestCase):
 
     def _resize(self):
         """Toggle the Format panel, which takes its width from the view.
-        (The window itself can't be resized here: the harness's Xvfb has
-        no window manager, and GTK puts back its own size after an
-        external XResizeWindow.)"""
+        (The window itself can't be resized here: the harness's window
+        manager, matchbox, sizes every window to the screen and undoes an
+        external resize.)"""
         grid = self.app.child(name="Spreadsheet grid")
         size = lambda: (grid.queryComponent().getExtents(2).width, grid.queryComponent().getExtents(2).height)
         before = size()
@@ -3838,9 +3838,9 @@ class DecksAccessibleGeometrySmoke(BaseGUITestCase):
 
     def _resize(self):
         """Toggle the Format panel, which takes its width from the view.
-        (The window itself can't be resized here: the harness's Xvfb has
-        no window manager, and GTK puts back its own size after an
-        external XResizeWindow.)"""
+        (The window itself can't be resized here: the harness's window
+        manager, matchbox, sizes every window to the screen and undoes an
+        external resize.)"""
         grid = self._canvas()
         size = lambda: (grid.queryComponent().getExtents(2).width, grid.queryComponent().getExtents(2).height)
         before = size()

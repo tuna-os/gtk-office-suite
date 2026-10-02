@@ -54,8 +54,8 @@ Architecture: benchmark core open/edit/recalculate/save separately from GTK inpu
       and the canvas's fit rule. Letters: the page view (one text box, read through GtkAccessibleText) at 150% and
       60% zoom and scrolled to the end, against the snapshot's page sizes, zoom and scroll. Writing the Tables
       journey found that **an opened workbook had no accessible cells until the selection moved**; opening now
-      builds them. Limits: the harness's Xvfb has no window manager and GTK keeps its own window size there, so
-      "resize" is the view's widget resizing, not the window's. Tables and Decks have no zoom. Letters can't report
+      builds them. Limits: the harness's window manager (matchbox) sizes every window to the screen and undoes an
+      external resize, so "resize" is the view's widget resizing, not the window's. Tables and Decks have no zoom. Letters can't report
       per-character bounds until the suite builds against GTK 4.16 (AccessibleText extents).
 - [ ] Reactivate the closed #137 navigation crash reproduction only after live verification; include inspector/object selection and screen-reader traversal.
 - [ ] Complete the manual Orca checklist for release; record environment and deviations rather than treating an automated role check as full usability.
