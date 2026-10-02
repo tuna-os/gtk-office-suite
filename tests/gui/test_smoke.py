@@ -6357,6 +6357,44 @@ class TablesChartDialogSmoke(BaseGUITestCase):
         )
 
 
+class DecksUndoSelectionSmoke(BaseGUITestCase):
+    """decks-readiness row 10, the window half: undo repairs the selection
+    (DecksController::repair_selection). A shape is added to a duplicated
+    slide and selected; one undo takes the shape away and the selection
+    with it; another takes the duplicate away and the current slide moves
+    back onto one that exists. Asserted on the snapshot's current_slide
+    and selected, which the window fills in."""
+
+    app_name = "decks"
+    AID = "org.tunaos.decks"
+
+    def setUp(self):
+        self.isolate_snapshot(prefix="decks-undo-selection-")
+        super().setUp()
+
+    def _state(self):
+        snap = self.trigger_snapshot(self.AID)
+        return (snap["slide_count"], snap["current_slide"], snap["selected"])
+
+    def _wait(self, want, what):
+        return self.wait_until(self._state, lambda s: s == want, description=what)
+
+    def test_undo_takes_the_selection_with_what_it_removes(self):
+        self.gapplication_action(self.AID, "new-document")
+        self._wait((1, 0, None), "a new one-slide deck")
+        self.gapplication_action(self.AID, "duplicate-slide")
+        self._wait((2, 1, None), "the copy, current")
+        self.gapplication_action(self.AID, "add-shape")
+        self._wait((2, 1, 0), "a shape on the copy, selected")
+        self.gapplication_action(self.AID, "undo")
+        self._wait((2, 1, None), "undo to take the shape and its selection away")
+        self.gapplication_action(self.AID, "undo")
+        self._wait((1, 0, None), "undo to take the copy away and come back to the slide that is left")
+        self.gapplication_action(self.AID, "redo")
+        self._wait((2, 0, None), "redo to bring the copy back; the current slide stays put")
+        self.assertIsNone(self.process.poll(), "decks crashed undoing")
+
+
 class DecksSlideOrderSmoke(BaseGUITestCase):
     """Duplicate and reorder slides (PARITY.md, Decks Tier 2): the sidebar's
     Duplicate button copies the current slide, objects and all, right

@@ -7,7 +7,7 @@ One DecksController owns slide/object/master state, stable identities, selection
 
 ## Slices and tests
 - [ ] Inventory each advertised action and prove it mutates canonical state: select/multi-select, move/resize/rotate, align/arrange/group, duplicate/reorder, style and image fit/crop.
-- [~] Undo/redo mixed object and slide edits, including deletion and selection repair; no detached state or reentrant RefCell panic.
+- [x] Undo/redo mixed object and slide edits, including deletion and selection repair; no detached state or reentrant RefCell panic.
     `decks-core/tests/controller_property.rs` drives DecksController, the
     API the window calls, with random mixes of object edits (add, delete,
     move, resize, rotate, z-order), slide edits (add, delete, duplicate,
@@ -18,8 +18,10 @@ One DecksController owns slide/object/master state, stable identities, selection
     slide and selected object pointing at something that exists, and both
     undo paths in the window (`app.undo`/`app.redo`, the canvas keys) now
     apply it: before, undoing an added slide or object left indices past
-    the end. Still open: a GUI journey that asserts the repaired selection
-    (the test snapshot doesn't carry the selection yet).
+    the end. GUI: `DecksUndoSelectionSmoke` adds a shape to a duplicated
+    slide, undoes both and redoes one, reading the window's current slide
+    and selection from the test snapshot (`current_slide`, `selected`);
+    without the repair it is left on slide 2 of 1.
 - [x] PPTX and ODP journeys preserve supported text runs, images, object geometry/style, master decorations/mapping, slide order and speaker notes.
     `DecksFormatJourneySmoke` opens a hand-built odp with styled runs, a
     filled, outlined and rotated shape, an embedded picture, speaker

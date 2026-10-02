@@ -46,6 +46,9 @@ pub struct DeckSnapshot {
     /// The master being edited, while the master view is open.
     pub editing_master: Option<usize>,
     pub slides: Vec<SlideSnapshot>,
+    /// The window's current slide and selected object, which the window
+    /// (not the controller) holds and fills in.
+    pub selection: Option<(usize, Option<usize>)>,
 }
 
 /// `obj` in full, its picture (if any) named by a hash of the bytes.
@@ -113,7 +116,7 @@ pub fn snapshot(controller: &DecksController) -> DeckSnapshot {
         .collect();
     let masters = masters_ref.iter().map(|m| (m.name.clone(), m.shapes.len())).collect();
     let master_details = masters_ref.iter().map(|m| m.shapes.iter().map(detail).collect()).collect();
-    DeckSnapshot { slide_count, masters, master_details, editing_master: controller.editing_master(), slides: snapshots }
+    DeckSnapshot { slide_count, masters, master_details, editing_master: controller.editing_master(), slides: snapshots, selection: None }
 }
 
 fn escape_json(s: &str) -> String {
@@ -187,8 +190,12 @@ impl DeckSnapshot {
             .collect::<Vec<_>>()
             .join(",");
         let editing = self.editing_master.map_or("null".to_string(), |i| i.to_string());
+        let (current, selected) = match self.selection {
+            Some((c, s)) => (c.to_string(), s.map_or("null".to_string(), |s| s.to_string())),
+            None => ("null".to_string(), "null".to_string()),
+        };
         format!(
-            "{{\"slide_count\":{},\"masters\":[{masters}],\"editing_master\":{editing},\"slides\":[{}]}}",
+            "{{\"slide_count\":{},\"masters\":[{masters}],\"editing_master\":{editing},\"current_slide\":{current},\"selected\":{selected},\"slides\":[{}]}}",
             self.slide_count, slides
         )
     }
