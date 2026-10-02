@@ -106,3 +106,54 @@ fn typing_into_a_document_stays_within_budget() {
         });
     }
 }
+
+/// Scrolling a 500-page document (#1282): a frame finds the pages in view
+/// by binary search and draws only those, so it costs the same at the last
+/// page as at the first. The Print Layout view used to re-sum every page
+/// above each page it placed, testing every page each frame: quadratic in
+/// the pages, and repeated on every pointer motion over them.
+#[cfg(feature = "render")]
+#[test]
+fn a_frame_of_a_500_page_document_draws_only_the_visible_pages() {
+    use letters_core::layout::pango::Typeset;
+    use letters_core::layout::LayoutOptions;
+    let mut paragraphs = LARGE.paragraphs;
+    let typeset = loop {
+        let t = Typeset::new(document(&Size { name: "long", paragraphs }), LayoutOptions::default());
+        if t.tree().pages.len() >= 500 {
+            break t;
+        }
+        paragraphs = paragraphs * 500 / t.tree().pages.len().max(1) + 100;
+    };
+    let pages = typeset.tree().pages.len();
+    let scale = 96.0 / 72.0;
+    let stack = typeset.tree().page_stack(scale, 24.0);
+    let (w, h) = stack.size(0);
+    let surface = cairo::ImageSurface::create(cairo::Format::ARgb32, w.ceil() as i32, h.ceil() as i32).unwrap();
+    let view_h = 1_000.0;
+    let frame = |top: f64| {
+        let visible = stack.visible(top, top + view_h);
+        assert!(!visible.is_empty() && visible.len() <= 3, "{} pages in view", visible.len());
+        let cr = cairo::Context::new(&surface).unwrap();
+        cr.scale(scale, scale);
+        for index in visible {
+            typeset.draw_page(&cr, index);
+        }
+    };
+    let bottom = stack.height() - view_h;
+    for (name, top) in [("first page", 0.0), ("last page", bottom)] {
+        measure(&format!("{pages}-page document, frame at the {name}"), Duration::from_millis(250), || frame(top));
+    }
+    // And finding them costs nothing measurable at either end.
+    let find = |top: f64| {
+        let start = Instant::now();
+        for _ in 0..1_000 {
+            black_box(stack.visible(top, top + view_h));
+            black_box(stack.nearest(top + view_h / 2.0));
+        }
+        start.elapsed()
+    };
+    let (at_top, at_bottom) = (find(0.0), find(bottom));
+    eprintln!("1000 lookups: top {at_top:?}, bottom {at_bottom:?}");
+    assert!(at_bottom <= at_top * 4 + Duration::from_millis(1), "lookup at the bottom {at_bottom:?} vs top {at_top:?}");
+}
