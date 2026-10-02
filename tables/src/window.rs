@@ -13,6 +13,7 @@ use suite_common::events::{Hint, Listener};
 use tables_core::controller::{WorkbookController, WorkbookState};
 use tables_core::sheet::*;
 use crate::grid_render::{draw_grid, auto_fit_column};
+use crate::grid_area::{refresh_grid_a11y, update_grid_a11y};
 use crate::window_dialogs::{
     show_conditional_format_dialog, show_define_name_dialog, show_filter_dialog,
     show_format_cells_dialog, show_page_setup_dialog,
@@ -62,6 +63,10 @@ pub struct TablesWindow {
     sheet_model: gtk4::StringList,
     sheet_switcher: gtk4::DropDown,
     current_path: Rc<RefCell<Option<std::path::PathBuf>>>,
+    /// Rebuilds the accessible cells, name box and status from the
+    /// selection; an open runs it so a screen reader sees the new file's
+    /// cells before anything is clicked (#1283).
+    refresh_sel: Rc<dyn Fn()>,
     /// This window's own snapshot slot. A field rather than only a
     /// constructor local because recovery has to write to it before it
     /// clears the orphan it recovered from — see `recover_from_snapshot`.
@@ -122,10 +127,13 @@ impl TablesWindow {
         if std::env::var_os("GTK_OFFICE_TEST_MODE").is_some() {
             let ctl = controller.clone();
             let snap_area = drawing_area.clone();
+            let (sh, sv) = (h_adj.clone(), v_adj.clone());
             let act = gtk4::gio::SimpleAction::new("test-snapshot", None);
             act.connect_activate(move |_, _| {
                 let Ok(path) = std::env::var("GTK_OFFICE_SNAPSHOT_PATH") else { return };
                 let mut snap = tables_core::snapshot::snapshot(&ctl.borrow(), 0..100, 0..26);
+                let view = (f64::from(snap_area.width()), f64::from(snap_area.height()));
+                snap.cell_rects = tables_core::snapshot::cell_rects(&ctl.borrow().state.borrow().sheet(), (sh.value(), sv.value()), view);
                 // In the window's *surface* coordinates, which is what
                 // input arrives in: the root widget starts inside the CSD
                 // resize border, which a window that isn't maximized has
@@ -2159,6 +2167,7 @@ impl TablesWindow {
             sheet_model,
             sheet_switcher,
             current_path,
+            refresh_sel,
         }
     }
 
@@ -2263,33 +2272,8 @@ impl TablesWindow {
         self.controller.borrow_mut().mark_clean();
         let settings = gtk4::gio::Settings::new("org.tunaos.tables");
         suite_common::push_recent_file(&settings, path);
+        (self.refresh_sel)();
         self.drawing_area.queue_draw();
         Ok(())
     }
-}
-
-// ── Coordinate conversion ─────────────────────────────────────────────
-
-
-fn update_grid_a11y(da: &gtk4::DrawingArea, col: &str, row: usize, value: &str) {
-    let desc = if value.is_empty() {
-        format!("cell {}{}, empty", col, row + 1)
-    } else {
-        format!("cell {}{}: {}", col, row + 1, value)
-    };
-    da.update_property(&[gtk4::accessible::Property::Description(&desc)]);
-}
-
-/// Recompute the grid's a11y description from the currently active sheet's
-/// selection. Sheet switches change which cell "A1" refers to without
-/// necessarily moving the on-screen selection, so anything that changes the
-/// active sheet (add, switch, delete, reorder) must call this — otherwise
-/// screen readers keep announcing the previous sheet's stale content.
-fn refresh_grid_a11y(da: &gtk4::DrawingArea, state: &Rc<RefCell<WorkbookState>>) {
-    let st = state.borrow();
-    let sh = st.sheet();
-    let (r, c) = (sh.selected_row, sh.selected_col);
-    let shown = sh.cell(r, c).to_string();
-    drop(sh);
-    update_grid_a11y(da, &tables_core::sheet::col_label(c), r, &shown);
 }

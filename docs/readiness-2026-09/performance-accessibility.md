@@ -54,16 +54,24 @@ Architecture: benchmark core open/edit/recalculate/save separately from GTK inpu
         `a_300_slide_strip_renders_thumbnails_only_in_view_and_the_canvas_one_slide` requires a 300-slide rebuild to
         render none (15 ms p50) and the canvas to draw its one slide within 100 ms p95 (1 ms p50).
 - [ ] Fixed-font visual matrix: widths 400/800/1280, light/dark/high contrast, scale 1/2, editor/selection/dialog/error; retain expected/actual/diff plus snapshot.
-- [~] Keyboard-only edit/save/undo and AT-SPI names/roles/states/bounds match the model after scroll/resize/zoom.
+- [x] Keyboard-only edit/save/undo and AT-SPI names/roles/states/bounds match the model after scroll/resize/zoom.
       **Keyboard-only edit, undo and save is done for all three apps** (#1208): `LettersKeyboardOnlySmoke`,
       `TablesKeyboardOnlySmoke` and `DecksKeyboardOnlySmoke` (`KeyboardOnlyMixin` in `tests/gui/test_smoke.py`) open
       a document at launch and edit, undo and save it with keys alone (no pointer, no D-Bus action), asserting on the
       snapshot and on the saved file. Decks inserts through the command palette (Ctrl+K). Writing them found that
       **Decks' Ctrl+Z and Ctrl+Shift+Z worked only while the canvas had focus**, so an object inserted from the
       palette or the Insert menu could not be undone from the keyboard; Decks now binds them app-wide, as Letters and
-      Tables do. Still open: AT-SPI bounds against the model after scroll, resize and zoom (Tables' accessible bounds
-      follow the scroll and the freeze, `accessible_bounds_follow_the_scroll_and_the_freeze`; Letters and Decks are
-      unmeasured).
+      Tables do. **The AT-SPI half is done too** (#1283): `TablesAccessibleGeometrySmoke`,
+      `DecksAccessibleGeometrySmoke` and `LettersAccessibleGeometrySmoke` check every visible accessible node's name,
+      role, states and bounds, to the pixel, against the snapshot after each step. Tables: every visible cell after
+      a jump that scrolls and after the Format panel narrows and widens the grid, against the snapshot's
+      `cell_rects`. Decks: every slide object as the canvas narrows and widens, against the snapshot's object boxes
+      and the canvas's fit rule. Letters: the page view (one text box, read through GtkAccessibleText) at 150% and
+      60% zoom and scrolled to the end, against the snapshot's page sizes, zoom and scroll. Writing the Tables
+      journey found that **an opened workbook had no accessible cells until the selection moved**; opening now
+      builds them. Limits: the harness's window manager (matchbox) sizes every window to the screen and undoes an
+      external resize, so "resize" is the view's widget resizing, not the window's. Tables and Decks have no zoom. Letters can't report
+      per-character bounds until the suite builds against GTK 4.16 (AccessibleText extents).
 - [ ] Reactivate the closed #137 navigation crash reproduction only after live verification; include inspector/object selection and screen-reader traversal.
 - [ ] Complete the manual Orca checklist for release; record environment and deviations rather than treating an automated role check as full usability.
 

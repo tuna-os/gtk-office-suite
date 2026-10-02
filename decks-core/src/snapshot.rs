@@ -20,6 +20,10 @@ pub struct ObjectSnapshot {
     pub text: Option<String>,
     pub x: f64,
     pub y: f64,
+    /// The bounding box's size (`SlideObject::size`), so a test can say
+    /// where the canvas draws the object.
+    pub w: f64,
+    pub h: f64,
     /// Everything the model holds for the object (runs, style, geometry,
     /// rotation, crop), a picture by a hash of its bytes rather than the
     /// temporary file it was unpacked to: what a save and reopen must
@@ -88,7 +92,8 @@ fn object_snapshot(index: usize, obj: &SlideObject) -> ObjectSnapshot {
         SlideObject::Circle { x, y, .. } => (*x, *y),
         o => (o.x(), o.y()),
     };
-    ObjectSnapshot { index, kind, text, x, y, detail: detail(obj) }
+    let (w, h) = obj.size();
+    ObjectSnapshot { index, kind, text, x, y, w, h, detail: detail(obj) }
 }
 
 pub fn snapshot(controller: &DecksController) -> DeckSnapshot {
@@ -162,12 +167,14 @@ impl DeckSnapshot {
                     .iter()
                     .map(|o| {
                         format!(
-                            "{{\"index\":{},\"kind\":{},\"text\":{},\"x\":{},\"y\":{},\"detail\":{}}}",
+                            "{{\"index\":{},\"kind\":{},\"text\":{},\"x\":{},\"y\":{},\"w\":{},\"h\":{},\"detail\":{}}}",
                             o.index,
                             json_str(o.kind),
                             json_opt_str(&o.text),
                             o.x,
                             o.y,
+                            o.w,
+                            o.h,
                             json_str(&o.detail),
                         )
                     })
@@ -200,7 +207,7 @@ impl DeckSnapshot {
             None => ("null".to_string(), "null".to_string()),
         };
         format!(
-            "{{\"slide_count\":{},\"masters\":[{masters}],\"editing_master\":{editing},\"current_slide\":{current},\"selected\":{selected},\"slides\":[{}]}}",
+            "{{\"slide_count\":{},\"masters\":[{masters}],\"editing_master\":{editing},\"current_slide\":{current},\"selected\":{selected},\"selected_object\":{selected},\"slides\":[{}]}}",
             self.slide_count, slides
         )
     }
