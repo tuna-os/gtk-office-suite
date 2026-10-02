@@ -47,7 +47,11 @@ pub(crate) fn unsupported_save_format_message(path: &str) -> String {
     )
 }
 
-pub(crate) fn save_engine_to_xlsx(path: &str, state: &AppState) -> Result<(), String> {
+/// `source` is the file the document came from, if it has one: its safe
+/// unmodelled parts (a thumbnail, custom XML, custom properties) are
+/// carried into the saved file (#1274, `suite_common::carry`). They are
+/// read before the write, which may replace that very file.
+pub(crate) fn save_engine_to_xlsx(path: &str, source: Option<&str>, state: &AppState) -> Result<(), String> {
     // Tables imports xls/ods/csv/tsv but writes only xlsx. Every save path —
     // Ctrl+S, Save As, and the close guard's "Save" button — funnels through
     // this one helper, so the refusal lives here rather than at each of the
@@ -56,8 +60,13 @@ pub(crate) fn save_engine_to_xlsx(path: &str, state: &AppState) -> Result<(), St
     if !tables_core::io::is_writable_format(path) {
         return Err(unsupported_save_format_message(path));
     }
+    let carried = source.map(|s| suite_common::carry::capture(std::path::Path::new(s))).unwrap_or_default();
     let sheets: Vec<SheetModel> = state.sheets.iter().map(|s| s.borrow().clone()).collect();
-    tables_core::io::save_sheets_to_xlsx_with_engine(path, &sheets, Some(&state.engine))?;
+    // The carried parts go in with the same atomic replace (#1274).
+    carried.write_with(std::path::Path::new(path), |p| {
+        let p = p.to_str().ok_or_else(|| "save path is not UTF-8".to_string())?;
+        tables_core::io::save_sheets_to_xlsx_with_engine(p, &sheets, Some(&state.engine))
+    })?;
     // A document at a remote location (RFC-0003) is written to its staged
     // copy above and uploaded here; a local path needs nothing.
     suite_common::locations::commit_save(std::path::Path::new(path))

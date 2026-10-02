@@ -538,7 +538,7 @@ impl DecksWindow {
                         let deck = m.deck();
                         let w = win.clone();
                         let target = path.clone();
-                        crate::loss_ui::save_after_asking(&win, Some(&target), &target, move || match save_deck(&path, &deck) {
+                        crate::loss_ui::save_after_asking(&win, Some(&target), &target, move || match save_deck(&path, Some(&path), &deck) {
                             Ok(()) => {
                                 dirty.set(false);
                                 slot.clear_or_report();
@@ -582,7 +582,7 @@ impl DecksWindow {
                                 // A deck never saved has no source to lose
                                 // content from; the question still decides,
                                 // as Save As's does.
-                                crate::loss_ui::save_after_asking(&win2, None, &target, move || match save_deck(&path_str, &deck) {
+                                crate::loss_ui::save_after_asking(&win2, None, &target, move || match save_deck(&path_str, None, &deck) {
                                     Ok(()) => {
                                         *path_state.borrow_mut() = Some(path_str);
                                         dirty.set(false);
@@ -1312,7 +1312,7 @@ impl DecksWindow {
                     let deck = m_save.deck();
                     let (w_clone, dirty_save, slot_save) = (w_clone.clone(), dirty_save.clone(), slot_save.clone());
                     let target = path_str.clone();
-                    crate::loss_ui::save_after_asking(&w_clone.clone(), Some(&target), &target, move || match save_deck(&path_str, &deck) {
+                    crate::loss_ui::save_after_asking(&w_clone.clone(), Some(&target), &target, move || match save_deck(&path_str, Some(&path_str), &deck) {
                         Ok(()) => {
                             let settings = gio::Settings::new("org.tunaos.decks");
                             suite_common::push_recent_file(&settings, &path_str);
@@ -1367,7 +1367,8 @@ impl DecksWindow {
                                 let source = path_ref.borrow().clone();
                                 let (w2, path_ref, dirty_as, slot_as) = (w2.clone(), path_ref.clone(), dirty_as.clone(), slot_as.clone());
                                 let target = path_str.clone();
-                                crate::loss_ui::save_after_asking(&w2.clone(), source.as_deref(), &target, move || match save_deck(&path_str, &deck) {
+                                let source_for_carry = source.clone();
+                                crate::loss_ui::save_after_asking(&w2.clone(), source.as_deref(), &target, move || match save_deck(&path_str, source_for_carry.as_deref(), &deck) {
                                     Ok(()) => {
                                         let settings = gio::Settings::new("org.tunaos.decks");
                                         suite_common::push_recent_file(&settings, &path_str);
@@ -1551,9 +1552,15 @@ impl DecksWindow {
 // force rebuild
 
 /// Write `deck` to `path`, then upload it if `path` is the staged copy of
-/// a remote location (RFC-0003). Every save goes through here.
-fn save_deck(path: &str, deck: &Deck) -> Result<(), String> {
-    write_deck(path, deck)?;
+/// a remote location (RFC-0003). Every save goes through here. `source`
+/// is the file the deck came from: its safe unmodelled parts (a thumbnail,
+/// custom XML) are carried into the saved file, read before the write
+/// replaces it (#1274, `suite_common::carry`).
+fn save_deck(path: &str, source: Option<&str>, deck: &Deck) -> Result<(), String> {
+    let carried = source.map(|s| suite_common::carry::capture(std::path::Path::new(s))).unwrap_or_default();
+    carried.write_with(std::path::Path::new(path), |p| {
+        write_deck(p.to_str().ok_or_else(|| "save path is not UTF-8".to_string())?, deck)
+    })?;
     suite_common::locations::commit_save(std::path::Path::new(path))
 }
 

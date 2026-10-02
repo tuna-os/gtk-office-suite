@@ -121,7 +121,7 @@ macro_rules! fail_point {
 /// The prefix every save temporary carries. Named because two places need
 /// to agree on it: the writer that creates them and the sweep that clears
 /// the ones a crash stranded.
-const TEMP_PREFIX: &str = ".office-save-";
+pub(crate) const TEMP_PREFIX: &str = ".office-save-";
 
 /// A floor on how new a temporary can be and still be swept.
 ///

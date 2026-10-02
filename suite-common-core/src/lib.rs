@@ -16,6 +16,7 @@ pub mod style;
 pub mod search;
 pub mod print;
 pub mod interop;
+pub mod carry;
 pub mod zip_guard;
 pub mod media_cache;
 pub mod recent;

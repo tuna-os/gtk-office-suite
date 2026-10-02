@@ -33,8 +33,13 @@ fn save_page_to_path(page: &adw::TabPage, path: &Path) -> SaveOutcome {
     // The write stays inside `save_to` so a failure cannot advance the
     // savepoint. What the format drops was asked about before this
     // (`save_asking_about_loss`), so the report it returns is not shown again.
+    // Parts the editor doesn't model but that are safe to keep (custom XML,
+    // a thumbnail, ODF settings) are read from the file the tab came from
+    // before the write replaces it, then put back (#1274).
+    let source = td.0.borrow().file.clone();
     let result = td.0.borrow_mut().save_to(path.to_path_buf(), |path| {
-        crate::bridge::save_buffer_to_file(&buf, path)?;
+        let carried = source.as_deref().map(suite_common::carry::capture).unwrap_or_default();
+        carried.write_with(path, |p| crate::bridge::save_buffer_to_file(&buf, p).map(|_| ()))?;
         // A document at a remote location is uploaded from its staged copy
         // (RFC-0003), inside the transaction so a failed upload doesn't
         // count as saved.
@@ -106,26 +111,48 @@ fn save_asking_about_loss(
         .is_some_and(|p| unsafe { p.as_ref() }.as_path() == path);
     // An unknown extension has no report; the write refuses it with the
     // reason, as before.
-    let loss = (!confirmed)
-        .then(|| letters_core::save::format_for_path(path).ok())
-        .flatten()
-        .and_then(|format| {
-            let buf = get_textview(&child)?.buffer();
-            let doc = crate::bridge::document_of(&buf);
-            let report = letters_core::save::compatibility_report(&doc, format);
-            Some((format, dropped_features(&report)?))
-        });
-    let Some((format, dropped)) = loss else {
+    let format = (!confirmed).then(|| letters_core::save::format_for_path(path).ok()).flatten();
+    let format_loss = format.and_then(|format| {
+        let buf = get_textview(&child)?.buffer();
+        let doc = crate::bridge::document_of(&buf);
+        let report = letters_core::save::compatibility_report(&doc, format);
+        Some((format, dropped_features(&report)?))
+    });
+    // What the file the tab came from holds that Letters never read and
+    // can't carry (macros, embedded objects): any save leaves it out
+    // (#1274). Read from disk now, so a file Letters wrote never asks.
+    let source = tab_data_get(&child).and_then(|td| td.0.borrow().file.clone());
+    let source_loss = format
+        .and(source.as_ref())
+        .and_then(|source| Some((source.clone(), dropped_features(&letters_core::loss::content_a_save_drops(source))?)));
+    if format_loss.is_none() && source_loss.is_none() {
         finish(save_page_to_path(page, path), Box::new(complete));
         return;
+    }
+    let heading = match &format_loss {
+        Some((format, _)) => suite_common::i18n("Save as %s?").replace("%s", &suite_common::i18n(format.label())),
+        None => suite_common::i18n("Save Without This Content?"),
     };
-    let heading = suite_common::i18n("Save as %s?").replace("%s", &suite_common::i18n(format.label()));
-    let body = format!(
-        "{}\n\n{}\n\n{}",
-        suite_common::i18n("This format cannot hold:"),
-        dropped,
-        suite_common::i18n("Saving keeps the text and loses these. Save as ODT or DOCX to keep everything."),
-    );
+    let mut sections = Vec::new();
+    if let Some((_, dropped)) = &format_loss {
+        sections.push(format!("{}\n\n{}", suite_common::i18n("This format cannot hold:"), dropped));
+    }
+    if let Some((source, dropped)) = &source_loss {
+        let name = source.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
+        sections.push(format!("{}\n\n{}", suite_common::i18n("%s has content Letters can't keep:").replace("%s", &name), dropped));
+    }
+    if format_loss.is_some() {
+        sections.push(suite_common::i18n("Saving keeps the text and loses these. Save as ODT or DOCX to keep everything."));
+    }
+    if let Some((source, _)) = &source_loss {
+        sections.push(if source.as_path() == path {
+            suite_common::i18n("Saving replaces the file without them. Save a copy instead to keep the original as it is.")
+        } else {
+            let name = source.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
+            suite_common::i18n("The new file will not have them; %s keeps them.").replace("%s", &name)
+        });
+    }
+    let body = sections.join("\n\n");
     let dialog = adw::AlertDialog::new(Some(&heading), Some(&body));
     dialog.add_response("cancel", &suite_common::i18n("_Cancel"));
     dialog.add_response("save", &suite_common::i18n("_Save Anyway"));

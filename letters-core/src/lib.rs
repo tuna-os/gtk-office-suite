@@ -15,6 +15,7 @@ pub mod edit;
 pub mod fragment;
 pub mod layout;
 pub mod lists;
+pub mod loss;
 pub mod markdown;
 pub mod model;
 pub mod odt;
