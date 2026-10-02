@@ -69,6 +69,8 @@ pub struct ObjectFormat {
     pub rotation: f64,
     /// A chart's data, for the Chart tab.
     pub chart: Option<crate::engine::chart::ChartData>,
+    /// A picture: the Picture group (crop) applies.
+    pub picture: bool,
 }
 
 /// The size a text box's runs are drawn at when they state none.
@@ -111,6 +113,7 @@ impl ObjectFormat {
                 SlideObject::Chart { chart, .. } => Some(chart.clone()),
                 _ => None,
             },
+            picture: matches!(obj, SlideObject::Image { .. }),
         };
         let first_run = |runs: &[Run], f: &mut ObjectFormat| {
             if let Some(r) = runs.iter().find(|r| !r.text.trim().is_empty()).or(runs.first()) {

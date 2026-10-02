@@ -114,6 +114,11 @@ impl DecksWindow {
         canvas.set_hexpand(true);
         canvas.set_accessible_role(gtk::AccessibleRole::List);
         canvas.update_property(&[gtk::accessible::Property::Label("Slide canvas")]);
+        // Keys reach the slide (navigation, Tab through objects, Delete)
+        // only when it has focus: a click gives it, and so does Tab from
+        // the panes around it.
+        canvas.set_focusable(true);
+        canvas.set_focus_on_click(true);
         if std::env::var_os("GTK_OFFICE_TEST_MODE").is_some() {
             // Render lab Tier A (docs/RENDER-PARITY-ROADMAP.md): every
             // slide as the canvas draws it, 1280 px wide (13.33 in at 96
@@ -466,7 +471,7 @@ impl DecksWindow {
                             y: 100.0,
                             w: 300.0,
                             h: 200.0,
-                            rotation: 0.0,
+                            rotation: 0.0, crop: Default::default()
                         };
                         ctl.add_object(idx, obj);
                         cs.queue_draw();
@@ -725,6 +730,18 @@ impl DecksWindow {
             });
         }
 
+        // Back to the slide from the notes or the inspector (the palette's
+        // and automation's way; a click or Tab does it too).
+        {
+            let canvas = canvas.clone();
+            let act = gio::SimpleAction::new("focus-slide", None);
+            act.connect_activate(move |_, _| {
+                canvas.grab_focus();
+            });
+            app.add_action(&act);
+            suite_common::actions::register_labels(&[("app.focus-slide", "Go to Slide")]);
+        }
+
         // Go to Speaker Notes (Google Slides' Ctrl+Alt+Shift+S): the
         // keyboard's way into the pane.
         {
@@ -978,7 +995,7 @@ impl DecksWindow {
                                 let idx = cs_ref.get();
                                 let p = path.to_string_lossy().to_string();
                                 let obj = SlideObject::Image {
-                                    path: p, x: 200.0, y: 200.0, w: 200.0, h: 150.0, rotation: 0.0,
+                                    path: p, x: 200.0, y: 200.0, w: 200.0, h: 150.0, rotation: 0.0, crop: Default::default()
                                 };
                                 controller.add_object(idx, obj);
                                 cs.queue_draw();
