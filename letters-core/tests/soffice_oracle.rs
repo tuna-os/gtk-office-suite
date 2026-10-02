@@ -1703,3 +1703,38 @@ fn heading_looks_survive_writer_in_odt() {
         assert_eq!(rt.paragraphs[0].style.heading, Some(1), "{what}: still a heading");
     }
 }
+
+/// A table nested in a cell, as LibreOffice writes it to docx: its text is
+/// read into the outer cell, and a save is told the nesting will be
+/// flattened (#1419). The two inner cells used to be dropped without a word.
+#[test]
+fn a_nested_table_lo_wrote_keeps_its_text() {
+    let Some(bin) = require_or_skip() else { return };
+    let dir = tempfile::tempdir().unwrap();
+    let html = dir.path().join("nested.html");
+    std::fs::write(
+        &html,
+        "<html><body><p>before</p><table><tr><td>outer A<table><tr><td>inner one</td><td>inner two</td></tr></table></td><td>outer B</td></tr></table><p>after</p></body></html>",
+    )
+    .unwrap();
+    let profile = dir.path().join("p");
+    let out = Command::new(bin)
+        .arg("--headless")
+        .arg(format!("-env:UserInstallation=file://{}", profile.display()))
+        .args(["--infilter=HTML (StarWriter)", "--convert-to", "docx:MS Word 2007 XML", "--outdir"])
+        .arg(dir.path())
+        .arg(&html)
+        .output()
+        .expect("soffice");
+    assert!(out.status.success(), "{}", String::from_utf8_lossy(&out.stderr));
+    let docx_path = dir.path().join("nested.docx");
+    let doc = docx::read(docx_path.to_str().unwrap()).expect("read");
+    let outer_a = para_with_text(&doc, "outer A").style.table_cell.expect("outer A is in a cell");
+    for inner in ["inner one", "inner two"] {
+        let cell = para_with_text(&doc, inner).style.table_cell;
+        assert_eq!(cell, Some(outer_a), "{inner} should be in outer A's cell");
+    }
+    let report = letters_core::loss::content_a_save_drops(&docx_path);
+    let ids: Vec<String> = report.destructive_features().iter().map(|f| f.id.clone()).collect();
+    assert!(ids.contains(&"nested-tables".to_string()), "{ids:?}");
+}
