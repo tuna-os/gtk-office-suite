@@ -29,9 +29,11 @@ Controller state machines generate valid commands and assert invariants after ev
       the recorded journeys use. A campaign records the revision, the app binaries' SHA-256, the seed, each attempt's
       order, verdict, duration, JUnit report, log and retained artifacts, and classifies every failure as product crash,
       assertion mismatch, timeout, infrastructure or unclassified. There is no retry: a green rerun does not unfail the
-      first attempt. Display axis covers 400/800/1280/1920 widths, light and dark, and scale 1 and 2; **high contrast is
-      not covered** — it needs a theme the container does not ship, and an env var that changes nothing would be a worse
-      lie than a visible gap.
+      first attempt. Display axis covers 400/800/1280/1920 widths, light and dark, and scale 1 and 2. **Until #1284 the dark
+      and scale-2 configs did not take effect**: the harness pinned `GDK_SCALE=1` and `GTK_THEME=Adwaita` (with which
+      libadwaita ignores the colour scheme), so they ran at scale 1 in light style; `framework/base.py` now passes both
+      through. High contrast is not in the campaign; the visual matrix covers it (`ADW_DEBUG_HIGH_CONTRAST`,
+      performance-accessibility.md).
 - [~] Fixed regression seeds on every PR; a bounded random-seed campaign nightly; larger soak and complete
       matrix on the release candidate. Two of those three hold, and the bare unchecked box was hiding both
       what exists and what is actually left.
