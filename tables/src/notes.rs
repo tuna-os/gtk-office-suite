@@ -63,13 +63,6 @@ fn host_of(grid: &gtk::DrawingArea) -> gtk::Widget {
     grid.parent().unwrap_or_else(|| grid.clone().upcast())
 }
 
-fn unparent_when_closed(popover: &gtk::Popover) {
-    popover.connect_closed(|p| {
-        let p = p.clone();
-        glib::idle_add_local_once(move || p.unparent());
-    });
-}
-
 /// Open the note editor for the active cell.
 fn edit(ctl: &Ctl, grid: &gtk::DrawingArea, h: &gtk::Adjustment, v: &gtk::Adjustment, refresh: &Rc<dyn Fn()>) {
     let (row, col) = {
@@ -103,8 +96,10 @@ fn edit(ctl: &Ctl, grid: &gtk::DrawingArea, h: &gtk::Adjustment, v: &gtk::Adjust
     scroller.add_css_class("card");
     content.append(&scroller);
 
-    let popover = gtk::Popover::builder().child(&content).position(gtk::PositionType::Right).build();
-    popover.set_parent(&host);
+    // Reused, not unparented on close: see suite_common::popover (#1192).
+    let popover = suite_common::popover::reused(&host, "note-editor");
+    popover.set_child(Some(&content));
+    popover.set_position(gtk::PositionType::Right);
     popover.set_pointing_to(Some(&cell_rect(ctl, grid, &host, h.value(), v.value(), row, col)));
 
     // Delete, for a note that exists: the popover then closes, and nothing
@@ -124,7 +119,7 @@ fn edit(ctl: &Ctl, grid: &gtk::DrawingArea, h: &gtk::Adjustment, v: &gtk::Adjust
 
     {
         let (ctl, grid, refresh, text) = (ctl.clone(), grid.clone(), refresh.clone(), text.clone());
-        popover.connect_closed(move |_| {
+        suite_common::popover::on_next_close(&popover, move || {
             let b = text.buffer();
             let typed = b.text(&b.start_iter(), &b.end_iter(), false).to_string();
             let note = (!deleted.get()).then_some(typed);
@@ -135,7 +130,6 @@ fn edit(ctl: &Ctl, grid: &gtk::DrawingArea, h: &gtk::Adjustment, v: &gtk::Adjust
             grid.grab_focus();
         });
     }
-    unparent_when_closed(&popover);
     popover.popup();
     text.grab_focus();
 }
@@ -198,16 +192,13 @@ pub fn attach(
                     .margin_start(6)
                     .margin_end(6)
                     .build();
-                let popover = gtk::Popover::builder()
-                    .child(&label)
-                    .position(gtk::PositionType::Right)
-                    .autohide(false)
-                    .can_focus(false)
-                    .has_arrow(true)
-                    .build();
-                popover.set_parent(&host);
+                let popover = suite_common::popover::reused(&host, "note-hover");
+                popover.set_child(Some(&label));
+                popover.set_position(gtk::PositionType::Right);
+                popover.set_autohide(false);
+                popover.set_can_focus(false);
+                popover.set_has_arrow(true);
                 popover.set_pointing_to(Some(&cell_rect(&ctl, &grid, &host, h.value(), v.value(), row, col)));
-                unparent_when_closed(&popover);
                 popover.popup();
                 *shown.borrow_mut() = Some((row, col, popover));
             });
