@@ -588,6 +588,18 @@ impl DecksController {
         done
     }
 
+    /// The current slide and selected object after an undo or redo: the
+    /// slide kept if it is still there (the last one if not), and the
+    /// object kept only if its slide is and still has it. An undone insert
+    /// can take away either, and the window used to keep indices past the
+    /// end.
+    pub fn repair_selection(&self, current: usize, selected: Option<usize>) -> (usize, Option<usize>) {
+        let slides = self.slides.borrow();
+        let kept = current.min(slides.len().saturating_sub(1));
+        let selected = selected.filter(|i| kept == current && slides.get(current).is_some_and(|s| *i < s.objects.len()));
+        (kept, selected)
+    }
+
     pub fn can_undo(&self) -> bool {
         self.history.borrow().can_undo()
     }
