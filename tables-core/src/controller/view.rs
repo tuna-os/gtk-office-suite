@@ -69,7 +69,7 @@ impl WorkbookController {
         let state = self.state.borrow();
         let sheet_id = state.sheet().sheet_id;
         let sheet = state.sheet();
-        let before = sheet.hidden_rows.clone();
+        let before = (*sheet.hidden_rows).clone();
         let after: HashSet<usize> = if needle.is_empty() {
             HashSet::new()
         } else {
@@ -91,7 +91,7 @@ impl WorkbookController {
     pub fn clear_filter(&mut self) {
         let state = self.state.borrow();
         let sheet_id = state.sheet().sheet_id;
-        let before = state.sheet().hidden_rows.clone();
+        let before = (*state.sheet().hidden_rows).clone();
         drop(state);
         if !before.is_empty() {
             self.set_prop("Clear Filter", sheet_id, SheetProp::Filtered(HashSet::new()));
@@ -102,7 +102,7 @@ impl WorkbookController {
         let state = self.state.borrow();
         let sheet_id = state.sheet().sheet_id;
         let sheet = state.sheet();
-        let before = sheet.hidden_rows_manual.clone();
+        let before = (*sheet.hidden_rows_manual).clone();
         let (r0, _, r1, _) = sheet.selection_rect();
         let mut after = before.clone();
         after.extend(r0..=r1);
@@ -116,7 +116,7 @@ impl WorkbookController {
     pub fn unhide_all_rows(&mut self) {
         let state = self.state.borrow();
         let sheet_id = state.sheet().sheet_id;
-        let before = state.sheet().hidden_rows_manual.clone();
+        let before = (*state.sheet().hidden_rows_manual).clone();
         drop(state);
         if !before.is_empty() {
             self.set_prop("Show Rows", sheet_id, SheetProp::HiddenRows(HashSet::new()));
@@ -127,7 +127,7 @@ impl WorkbookController {
         let state = self.state.borrow();
         let sheet_id = state.sheet().sheet_id;
         let sheet = state.sheet();
-        let before = sheet.hidden_cols.clone();
+        let before = (*sheet.hidden_cols).clone();
         let (_, c0, _, c1) = sheet.selection_rect();
         let mut after = before.clone();
         after.extend(c0..=c1);
@@ -141,7 +141,7 @@ impl WorkbookController {
     pub fn unhide_all_cols(&mut self) {
         let state = self.state.borrow();
         let sheet_id = state.sheet().sheet_id;
-        let before = state.sheet().hidden_cols.clone();
+        let before = (*state.sheet().hidden_cols).clone();
         drop(state);
         if !before.is_empty() {
             self.set_prop("Show Columns", sheet_id, SheetProp::HiddenCols(HashSet::new()));
@@ -200,7 +200,7 @@ impl WorkbookController {
         let state = self.state.borrow();
         let sheet_id = state.sheet().sheet_id;
         let sheet = state.sheet();
-        let before = sheet.hidden_rows.clone();
+        let before = (*sheet.hidden_rows).clone();
         let after: HashSet<usize> = (0..sheet.rows)
             .filter(|&r| {
                 (0..sheet.cols).any(|c| !sheet.cell(r, c).is_empty())

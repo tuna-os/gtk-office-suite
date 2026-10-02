@@ -271,8 +271,8 @@ pub fn load_xlsx_workbook(path: &str) -> Result<(TablesEngine, Vec<SheetModel>),
             // filter/manual as separate concepts — a saved-then-reopened
             // xlsx has no filter state left to restore, only hidden rows,
             // same as real Excel/Sheets after a filter is "applied".
-            sheet.hidden_rows_manual = props.hidden_rows.clone();
-            sheet.hidden_cols = props.hidden_cols.clone();
+            *sheet.hidden_rows_manual = props.hidden_rows.clone();
+            *sheet.hidden_cols = props.hidden_cols.clone();
             if let Some(setup) = &props.page_setup {
                 sheet.page_setup = setup.clone();
             }
