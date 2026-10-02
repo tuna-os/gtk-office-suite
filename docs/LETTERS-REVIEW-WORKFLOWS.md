@@ -42,9 +42,10 @@ as one change, forwards with Delete and backwards with Backspace, dated
 when it began); deleting one's own pending insertion removes it, as Word
 does. Without the deletion half, each keystroke took the current second
 and two deletions a clock tick apart read as two changes (#1193). Limits: paragraph breaks and formatting changes
-are not tracked (a tracked deletion across a break keeps the break); the
-Draft editor is read-only while tracking, because its edits go into the
-buffer rather than through the model's tracked ops.
+are not tracked (a tracked deletion across a break keeps the break). The
+Draft editor was read-only while tracking, because its edits went into the
+buffer rather than through the model's tracked ops; it was retired in #1228,
+and Print Layout, which edits through the model, is the one surface.
 
 ### Comments are marks on the text too (changed 2026-09-26)
 

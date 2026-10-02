@@ -77,8 +77,8 @@ steps need a human and are written down in
 
 ## Project status
 
-Current release: **[v2.1.0](https://github.com/tuna-os/gtk-office-suite/releases/latest)**
-— a version number, not a maturity claim.
+Current release: **[the latest on GitHub](https://github.com/tuna-os/gtk-office-suite/releases/latest)**
+— its version number is not a maturity claim.
 
 **Honest status: pre-alpha, not a daily driver.** The file-format engines
 (reading and writing DOCX/ODT/XLSX/ODS/PPTX/ODP) are the most mature part
@@ -266,7 +266,7 @@ from the deprecated Python applications, see the
 | [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) | Environment setup |
 | [docs/GNOME-GUIDELINES.md](docs/GNOME-GUIDELINES.md) | HIG compliance rules and widget patterns |
 | [docs/PARITY.md](docs/PARITY.md) | Feature-by-feature compatibility truth table |
-| [docs/TESTING.md](docs/TESTING.md), [docs/TEST-PLAN.md](docs/TEST-PLAN.md) | Test strategy |
+| [docs/TESTING.md](docs/TESTING.md) | Test strategy ([docs/TEST-PLAN.md](docs/TEST-PLAN.md) is the v1.0 plan, kept as history) |
 | [docs/GUI-TESTING-SPEC.md](docs/GUI-TESTING-SPEC.md) | The AT-SPI journey harness |
 | [docs/CI-QUALITY-GATES.md](docs/CI-QUALITY-GATES.md) | What CI enforces and why |
 | [docs/readiness-2026-09/](docs/readiness-2026-09/README.md) | Current readiness work, item by item |

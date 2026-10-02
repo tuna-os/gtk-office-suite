@@ -45,7 +45,7 @@ document, never from whether an issue happens to be closed.
 - [~] #354 — deterministic GUI infrastructure — [gui-testing.md](gui-testing.md) 9/10
 - [~] #313 — CI validator and test gates — [ci-gates.md](ci-gates.md) 7/8
 - [~] #442 — crash and flake campaign — [crash-stress.md](crash-stress.md) 2/8
-- [~] #441 — capability evidence ledger — [capability-evidence.md](capability-evidence.md) 3/7
+- [~] #441 — capability evidence ledger — [capability-evidence.md](capability-evidence.md) 4/7
 - [~] #1217 — recovery lifecycle — [recovery.md](recovery.md) 7/9
 - [~] #1206 — live interoperability loss budgets — [interoperability.md](interoperability.md) 5/9
 - [~] #438 — Letters fidelity — [letters-fidelity.md](letters-fidelity.md) 5/6

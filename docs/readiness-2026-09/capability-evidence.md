@@ -70,7 +70,19 @@ named; the reasoning is under the row so a reader can disagree with it.
     publishes. Mutation tests: `tests/test_validate_capabilities.py::ReleaseCritical`.
     The journeys' half of a release-critical claim is checked by the GUI
     lane, not yet by the release job, which is why the row stays `[~]`.
-- [ ] Reconcile README, ROADMAP.md, docs/ROADMAP.md, TESTING.md and the historical implementation plans with the new tracker.
+- [x] Reconcile README, ROADMAP.md, docs/ROADMAP.md, TESTING.md and the historical implementation plans with the new tracker.
+  - #1285. ROADMAP.md's status columns are gone: an item's state is its
+    issue's, and progress is this ledger's. The figures left in README,
+    ROADMAP.md and `docs/TESTING.md` are each checked by
+    `tests/test_roadmap_figures.py`: the corpus scores against the ratchet
+    baselines and the corpus sizes (recorded in `*-total.txt` beside each
+    baseline and held there by each corpus's own test), the oracle floors
+    against the oracle suites, and `StatusDocuments` fails on any other
+    `n/m` figure. Two were stale when checked: ROADMAP.md's CommonMark
+    630/652 (the baseline is the whole spec) and `conformance/scorecard.py`'s
+    Letters corpus out of 104 (it has 109). `docs/ROADMAP.md`, the July
+    product roadmap and backlog and the v1.0 test plan now open by saying
+    they are history, which the same test requires.
 - [x] Add mutation tests for the validator: nonexistent tests, duplicated IDs, omitted required layers, stale revision, failed or skipped results must be rejected.
   - All five, each as its own test in `tests/test_validate_capabilities.py`,
     plus a mutated copy of the real ledger that must be rejected.

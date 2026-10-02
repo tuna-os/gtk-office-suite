@@ -3,6 +3,7 @@
   "about": "No committed fixture files: the OpenFormula corpus is generated at test time by tests/openformula.rs.",
   "fixtures": {},
   "not_fixtures": {
-    "openformula-baseline.txt": "ratchet count for tests/openformula.rs"
+    "openformula-baseline.txt": "ratchet count for tests/openformula.rs",
+    "openformula-total.txt": "the number of cases in tests/openformula.rs, which the docs quote beside the baseline"
   }
 }

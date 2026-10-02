@@ -309,3 +309,13 @@ fn libreoffice_parity_ratchet() {
         println!("IMPROVEMENT: {passed} > baseline {base} — bump tests/corpus/lo-parity-baseline.txt");
     }
 }
+
+/// The corpus size the docs quote next to the baseline (README.md,
+/// ROADMAP.md), recorded so `tests/test_roadmap_figures.py` can check those
+/// figures without running this corpus. Adding or removing a case means
+/// updating `tests/corpus/lo-parity-total.txt` as well as the baseline.
+#[test]
+fn the_recorded_total_is_the_corpus_size() {
+    let recorded: usize = include_str!("corpus/lo-parity-total.txt").trim().parse().expect("total int");
+    assert_eq!(scenarios().len(), recorded, "the LibreOffice-authored scenarios changed size: update tests/corpus/lo-parity-total.txt");
+}

@@ -68,7 +68,8 @@ Architecture: benchmark core open/edit/recalculate/save separately from GTK inpu
         text; fixed, re-recorded, and those cells now match exactly too.
       - **Bugs found while building it.** The harness pinned `GDK_SCALE=1` and `GTK_THEME=Adwaita` (with which
         libadwaita ignores the colour scheme), so the stress campaign's scale-2 and dark configs never took effect;
-        both now pass through. The persisted `dark-mode` preference is never saved or restored (#1305). At 400 px
+        both now pass through. The persisted `dark-mode` preference was never saved or restored (#1305); the toggle now
+        saves it and startup restores it, in all three apps (`*DarkModeKeptSmoke`, #1309). At 400 px
         the Keyboard Shortcuts window was wider than the screen and cut its key labels off (#1307); it is now an
         adaptive dialog, and the dialog cells were re-recorded.
       - **Still open:** the row's exit is the nightly `.github/workflows/visual-matrix.yml` (non-gating) with its

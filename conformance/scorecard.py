@@ -94,8 +94,13 @@ def main():
     lo_base = read_baseline("letters-core/tests/corpus/lo-parity-baseline.txt")
 
     if no_run:
-        rows.append(("CommonMark round-trip", f"baseline {cm_base}/652"))
-        rows.append(("LO-authored parity (Letters)", f"baseline {lo_base}/104"))
+        # The totals are recorded beside the baselines and held to the
+        # corpus sizes by each corpus's own test; this line said /104 for
+        # the Letters corpus after it had grown to 109.
+        cm_total = read_baseline("letters-core/tests/corpus/roundtrip-total.txt")
+        lo_total = read_baseline("letters-core/tests/corpus/lo-parity-total.txt")
+        rows.append(("CommonMark round-trip", f"baseline {cm_base}/{cm_total}"))
+        rows.append(("LO-authored parity (Letters)", f"baseline {lo_base}/{lo_total}"))
     else:
         p, t, ok = run_corpus("letters-core", "markdown_corpus",
                               r"round-trip idempotence: (\d+)/(\d+)")

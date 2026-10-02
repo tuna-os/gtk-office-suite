@@ -1,21 +1,14 @@
-# Roadmap
+# Roadmap (July 2026 ledger)
 
-> **Top priority as of 2026-09-24: [Render Parity Roadmap](RENDER-PARITY-ROADMAP.md).**
-> The apps do not yet render documents correctly on screen, and nothing
-> measured that. Until its Phase 1 exits, it takes precedence over the
-> plans below. A visual feature is done only when a screenshot of the
-> running app matches LibreOffice's rendering of the same file within
-> budget.
-
-Current execution: [September readiness plan](readiness-2026-09/README.md),
-with dependency-ordered issues and acceptance tests in
-[#443](https://github.com/tuna-os/gtk-office-suite/issues/443).
-
-> The post-v1 feature ledger below is retained as historical context. The
-> current product, interoperability, and confidence plan is
-> [Product and Quality Roadmap (2026-07-21)](PRODUCT-QUALITY-ROADMAP-2026-07.md).
-> That roadmap supersedes check-mark-only completeness and requires model,
-> GUI-journey, data-safety, and interoperability evidence.
+> **Historical, not current.** This is the feature ledger as it stood on
+> 2026-07-18, kept for the history and the issue numbers it cites. Its
+> figures (oracle and smoke counts, the CommonMark score) are that day's and
+> nothing checks them now. The plan of record is
+> [#1190](https://github.com/tuna-os/gtk-office-suite/issues/1190), progress
+> is the [readiness ledger](readiness-2026-09/README.md), current figures
+> are in the [README](../README.md) and [ROADMAP.md](../ROADMAP.md), where
+> `tests/test_roadmap_figures.py` checks them, and render work follows the
+> [Render Parity Roadmap](RENDER-PARITY-ROADMAP.md).
 
 State as of 2026-07-18: the surfacing wave, format-parity stragglers, and
 the oracle expansion are done (see PARITY.md for the row-by-row truth;

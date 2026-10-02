@@ -5,12 +5,11 @@
 > LibreOffice's rendering of the same file within a recorded budget,
 > ratcheted in CI by `tools/render-lab`. Phase 1 (one renderer per app) met its
 > exit criterion on 2026-09-24: no fixture is red. Phase 2 exited on
-> 2026-10-01 (#1198): 49 of 52 single-feature fixtures are green in both
-> tiers, and the three ambers (`letters/table`, `tables/number-formats`,
-> `tables/wrap-text`) are accepted metric artifacts, recorded with their
+> 2026-10-01 (#1198): every single-feature fixture is green in both tiers
+> except the ambers accepted as metric artifacts, recorded with their
 > measurements. [`tools/render-lab/baseline.json`](tools/render-lab/baseline.json)
-> is the live scorecard, and `docs/PARITY.md`'s Render column is checked
-> against it in CI. Phase 3 (real documents) is next; render evidence still
+> is the live scorecard; the README's per-app table is generated from it,
+> and `docs/PARITY.md`'s Render column is checked against it, both in CI. Phase 3 (real documents) is next; render evidence still
 > comes before ordinary feature work. Collaboration follows [RFC-0001](docs/rfc/0001-crdt-collaboration.md)
 > (accepted, Loro) alongside it. The UI direction is in
 > [docs/DESIGN-UI.md](docs/DESIGN-UI.md).
@@ -26,7 +25,14 @@ to done. Long-tail ideas are parked in
 separate issues.
 The dated ledger below is historical and does not certify present behavior.
 
-**Last updated**: 2026-10-01 | **Maintainer**: tuna-os (hanthor) / architect agent
+This file states no status of its own. Whether an item is open or done is
+its issue's state, and progress is the
+[readiness ledger](docs/readiness-2026-09/README.md)'s. The only figures
+here are the ones `tests/test_roadmap_figures.py` checks against the
+repository, and that test fails on any other `n/m` figure added to this
+file, README.md, `docs/ROADMAP.md` or `docs/TESTING.md`.
+
+**Last updated**: 2026-10-02 | **Maintainer**: tuna-os (hanthor) / architect agent
 
 ---
 
@@ -38,17 +44,19 @@ gtk-office-suite is the org's flagship **end-user product bet** and a cornerston
 
 ---
 
-## Current Status (September 2026)
+## Current Status
 
 - **Post-v1.0**: all three apps (Letters, Tables, Decks) build, run, and ship as Flatpaks.
-- **Measured parity** (ratcheted corpora, docs/PARITY.md): CommonMark 630/652, LO-Letters 109/109, LO-Decks 9/9, OpenFormula 107/107.
+- **Measured parity** (ratcheted corpora, docs/PARITY.md; each figure is the
+  corpus baseline over the corpus size): CommonMark 652/652, LO-Letters 109/109,
+  LO-Decks 9/9, OpenFormula 107/107.
 - Ctrl+K command palette; per-app live status surfaces; GUI smoke journeys deterministic (#187).
 - Readiness work is tracked per-item in [docs/readiness-2026-09/](docs/readiness-2026-09/README.md)
   (#443): atomic save (#437), Letters save formats (#436), GUI display/process
   ownership (#241), deterministic GUI infrastructure (#354, 9/10) and CI
   self-tests (#313, 7/8).
-- ✅ **ROADMAP.md published** (this file, tunaos#1359) — the June planning documents it replaced (the v1.0 queue, plan and handoff) are in [docs/archive/](docs/archive/README.md); they were wrong about the project and are kept for history only.
-- ⚠️ **GUI-layer God-files** (#168) — still architectural debt before feature
+- The June planning documents this file replaced (the v1.0 queue, plan and handoff) are in [docs/archive/](docs/archive/README.md); they were wrong about the project and are kept for history only.
+- **GUI-layer God-files** (#168) — still architectural debt before feature
   velocity scales, but measured and bounded. Decomposition has started: the chart
   dialog moved out of Tables in #594.
 
@@ -65,20 +73,24 @@ gtk-office-suite is the org's flagship **end-user product bet** and a cornerston
 
 ### Priorities
 
-| Priority | Item | Tracking | Status |
-|----------|------|----------|--------|
-| P0 | Render parity: each app's screen matches LibreOffice, fixture by fixture | [docs/RENDER-PARITY-ROADMAP.md](docs/RENDER-PARITY-ROADMAP.md) | 🟡 Phase 2 done (2026-10-01); Phase 3 next |
-| P0 | Product quality + daily-driver readiness roadmap (meta-tracker) | #95 | 🟡 In progress |
-| P0 | CI quality gates: fast / GUI / nightly with published capability matrix | #108, #107 | 🟡 In progress |
-| P0 | GUI-layer God-file decomposition (window.rs) | #168 | 🟡 In progress |
-| P1 | Letters: structured editing (tables/lists/paragraphs/sections), review workflows, pagination | #109, #110, #111 | 🟡 In progress |
-| P1 | Tables: sparse virtual grid + performance budgets | #112 | 🟡 In progress |
-| P1 | Headless CLI document conversion binary (`suite-convert`) | #579 | ⬜ Planned |
-| P1 | Decks: direct manipulation, themes/layouts, presenter view | #115, #116, #117 | ⬜ Not started |
-| P1 | GNOME platform integration: recent files, portals, drag/drop | #119 | ⬜ Not started |
-| P2 | Interop: unsupported-feature inspector + versioned fixture corpus with loss budgets | #105, #121 | ⬜ Not started |
-| P2 | Release gate: Flatpak, upgrade, recovery, localization, reproducible builds | #122, #578 | 🟡 In progress |
-| P2 | A11y: keyboard + screen-reader journeys | #120 | ⬜ Not started |
+Each item's state is its tracking issue's; the table no longer repeats it,
+because a hand-typed status column is the kind of claim that drifted here
+before: nothing re-read it when the issue moved.
+
+| Priority | Item | Tracking |
+|----------|------|----------|
+| P0 | Render parity: each app's screen matches LibreOffice, fixture by fixture | [docs/RENDER-PARITY-ROADMAP.md](docs/RENDER-PARITY-ROADMAP.md) |
+| P0 | Product quality + daily-driver readiness roadmap (meta-tracker) | #95 |
+| P0 | CI quality gates: fast / GUI / nightly with published capability matrix | #108, #107 |
+| P0 | GUI-layer God-file decomposition (window.rs) | #168 |
+| P1 | Letters: structured editing (tables/lists/paragraphs/sections), review workflows, pagination | #109, #110, #111 |
+| P1 | Tables: sparse virtual grid + performance budgets | #112 |
+| P1 | Headless CLI document conversion binary (`suite-convert`) | #579 |
+| P1 | Decks: direct manipulation, themes/layouts, presenter view | #115, #116, #117 |
+| P1 | GNOME platform integration: recent files, portals, drag/drop | #119 |
+| P2 | Interop: unsupported-feature inspector + versioned fixture corpus with loss budgets | #105, #121 |
+| P2 | Release gate: Flatpak, upgrade, recovery, localization, reproducible builds | #122, #578 |
+| P2 | A11y: keyboard + screen-reader journeys | #120 |
 
 ---
 
@@ -86,15 +98,17 @@ gtk-office-suite is the org's flagship **end-user product bet** and a cornerston
 
 ### Q3 2026 (July–September) — "Daily-driver editing"
 
-**Theme**: make Letters/Tables/Decks genuinely usable for daily work.
+**Theme**: make Letters/Tables/Decks genuinely usable for daily work. The
+quarter has ended; this is what it set out to do, and each goal's outcome is
+its issue's state.
 
-| Goal | Owner | Tracking | Status |
-|------|-------|----------|--------|
-| Product-quality roadmap live + published capability matrix | architect / quality | #95, #108 | 🟡 In progress |
-| Letters structured editing + pagination completeness | architect | #109, #110 | 🟡 In progress |
-| Tables virtual grid + performance budgets | architect | #112 | 🟡 In progress |
-| GUI God-file decomposition started | architect | #168 | 🟡 In progress |
-| ROADMAP.md published and linked from README / org coverage (#1295) | strategist | tunaos#1359 | ✅ Done |
+| Goal | Owner | Tracking |
+|------|-------|----------|
+| Product-quality roadmap live + published capability matrix | architect / quality | #95, #108 |
+| Letters structured editing + pagination completeness | architect | #109, #110 |
+| Tables virtual grid + performance budgets | architect | #112 |
+| GUI God-file decomposition started | architect | #168 |
+| ROADMAP.md published and linked from README / org coverage | strategist | tunaos#1359 |
 
 ### Q4 2026 (October–December) — "Ship it properly"
 
@@ -104,13 +118,13 @@ they differ, [#1190](https://github.com/tuna-os/gtk-office-suite/issues/1190)
 wins (release gate #1209, Flathub #1210, performance and accessibility #1208,
 interop #1206).
 
-| Goal | Owner | Tracking | Status |
-|------|-------|----------|--------|
-| Release gate: Flatpak reproducible builds + GSettings migration verification | quality / ops | #122, #578 | 🟡 Planned |
-| Headless CLI conversion binary (`suite-convert`) | architect / strategist | #579 | ⬜ Planned |
-| Decks presenter view & export rendering parity | architect | #117 | ⬜ Planned |
-| Interop loss budgets & unsupported-feature inspector | quality | #105, #121 | ⬜ Planned |
-| A11y: keyboard + screen-reader journeys | quality | #120 | ⬜ Planned |
+| Goal | Owner | Tracking |
+|------|-------|----------|
+| Release gate: Flatpak reproducible builds + GSettings migration verification | quality / ops | #122, #578 |
+| Headless CLI conversion binary (`suite-convert`) | architect / strategist | #579 |
+| Decks presenter view & export rendering parity | architect | #117 |
+| Interop loss budgets & unsupported-feature inspector | quality | #105, #121 |
+| A11y: keyboard + screen-reader journeys | quality | #120 |
 
 ### Proposed, not scheduled
 
@@ -139,8 +153,7 @@ Each carries its open questions. None precedes the
 | Item | Issue | Priority | Effort |
 |------|-------|----------|--------|
 | GUI-layer God-files (window.rs — line counts under Current Status) | #168 | P0 | L |
-| ~~Dual maintenance burden: Python office suite (letters/tables/decks) + Rust suite~~ — ✅ the Python repos are archived and feature-frozen; the remaining retirement gates are tracked in [docs/PYTHON-DEPRECATION.md](docs/PYTHON-DEPRECATION.md) | #82 | P1 | L |
-| ~~spell.rs `generate_candidates("")` panic (0..n-1, n=0)~~ — ✅ fixed, `saturating_sub(1)` in the transposition loop | #172 | P1 | S |
+| Retiring the Python office suite: the repos are archived and feature-frozen, and the remaining gates are in [docs/PYTHON-DEPRECATION.md](docs/PYTHON-DEPRECATION.md) | #82 | P1 | L |
 
 ---
 

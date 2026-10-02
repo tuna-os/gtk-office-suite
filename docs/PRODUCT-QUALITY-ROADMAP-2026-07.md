@@ -1,5 +1,12 @@
 # Product and Quality Roadmap
 
+> **Historical, not current.** This is the product and quality plan as of
+> its August 2026 snapshot, kept for its history and the issue numbers it
+> cites. Its status marks and figures are that day's and nothing checks them
+> now. The plan of record is
+> [#1190](https://github.com/tuna-os/gtk-office-suite/issues/1190), and
+> progress is the [readiness ledger](readiness-2026-09/README.md).
+
 Date: 2026-08-11 (progress snapshot)
 
 Execution is tracked in the [scoped issue backlog](ISSUE-BACKLOG-2026-07.md)

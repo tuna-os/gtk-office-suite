@@ -49,6 +49,69 @@ EXECUTION_ROW = re.compile(
 CHECKBOX = re.compile(r"^- \[([ xX~])\]", re.M)
 
 
+README = os.path.join(REPO_ROOT, "README.md")
+TESTING = os.path.join(REPO_ROOT, "docs", "TESTING.md")
+# The documents whose status claims #1285 reconciled with the tracker. Any
+# `n/m` figure in them must be one of the figures checked below.
+STATUS_DOCUMENTS = (README, ROADMAP, TESTING)
+
+# corpus → (baseline file, total file). The baseline is the ratchet's floor;
+# the total is the corpus size, which each corpus's own
+# `the_recorded_total_is_the_corpus_size` test holds the file to.
+CORPORA = {
+    "commonmark": ("letters-core/tests/corpus/roundtrip-baseline.txt",
+                   "letters-core/tests/corpus/roundtrip-total.txt"),
+    "letters": ("letters-core/tests/corpus/lo-parity-baseline.txt",
+                "letters-core/tests/corpus/lo-parity-total.txt"),
+    "decks": ("decks-core/tests/corpus/lo-parity-baseline.txt",
+              "decks-core/tests/corpus/lo-parity-total.txt"),
+    "openformula": ("tables-core/tests/corpus/openformula-baseline.txt",
+                    "tables-core/tests/corpus/openformula-total.txt"),
+}
+# "| CommonMark 0.31.2 | 652 / 652 |" in the README's corpus table, and
+# "CommonMark 652/652, LO-Letters 109/109" in ROADMAP.md's status list.
+CORPUS_FIGURE = re.compile(
+    r"(CommonMark(?: 0\.31\.2 \|)?|LibreOffice ↔ Letters \||LibreOffice ↔ Decks \||"
+    r"OpenFormula(?: \|)?|LO-Letters|LO-Decks)\s*(\d+) ?/ ?(\d+)"
+)
+# Any "n/m" or "n / m" standing on its own: not part of a path, a version
+# or a date.
+ANY_FIGURE = re.compile(r"(?<![\w/.-])\d+ ?/ ?\d+(?![\w/.-])")
+# The README's per-app render table, generated from the render-lab
+# scorecard and checked against it by tools/render-lab/readme_status.py.
+GENERATED_RENDER_TABLE = re.compile(r"<!-- render-status:begin.*?render-status:end -->", re.S)
+# "at least 25 Letters, 20 Tables\nand 20 Decks tests" in docs/TESTING.md.
+ORACLE_FLOORS = re.compile(r"at least (\d+) Letters, (\d+) Tables\s+and (\d+) Decks")
+# Planning documents kept as history: each must say so before anything else.
+HISTORICAL_PLANS = (
+    "docs/ROADMAP.md",
+    "docs/PRODUCT-QUALITY-ROADMAP-2026-07.md",
+    "docs/ISSUE-BACKLOG-2026-07.md",
+    "docs/TEST-PLAN.md",
+    "docs/archive/HANDOFF-2026-06.md",
+    "docs/archive/IMPLEMENTATION-PLAN-2026-06.md",
+    "docs/archive/IMPLEMENTATION-QUEUE-2026-06.md",
+)
+
+
+def corpus_key(label):
+    label = label.lower()
+    for key in ("commonmark", "openformula", "letters", "decks"):
+        if key in label:
+            return key
+    raise AssertionError(f"unknown corpus label {label!r}")
+
+
+def read_number(rel):
+    with open(os.path.join(REPO_ROOT, rel), encoding="utf-8") as handle:
+        return int(handle.read().strip())
+
+
+def read(path):
+    with open(path, encoding="utf-8") as handle:
+        return handle.read()
+
+
 def claimed_rows():
     """The file/lines/ceiling rows the roadmap states.
 
@@ -330,6 +393,87 @@ class RoadmapFigures(unittest.TestCase):
         for path, lines, ceiling in claimed_rows():
             with self.subTest(path=path):
                 self.assertLessEqual(lines, ceiling, f"{path} is over its ceiling")
+
+
+class CorpusFigures(unittest.TestCase):
+    """The corpus scores are the ratchets' own numbers.
+
+    ROADMAP.md said CommonMark 630/652 for weeks after the baseline reached
+    652, and `conformance/scorecard.py --no-run` printed the Letters corpus
+    out of 104 after it had grown to 109. Both were typed once and never
+    re-read. The numerator is the committed baseline; the denominator is the
+    recorded corpus size, which the corpus's own test checks.
+    """
+
+    def claimed(self, path):
+        found = [(corpus_key(label), int(n), int(m)) for label, n, m in CORPUS_FIGURE.findall(read(path))]
+        self.assertTrue(found, f"{path} states no corpus scores to check")
+        return found
+
+    def test_every_status_document_states_every_corpus_once(self):
+        for path in (README, ROADMAP):
+            with self.subTest(path=path):
+                keys = [key for key, _n, _m in self.claimed(path)]
+                self.assertEqual(sorted(keys), sorted(CORPORA), f"{path} should state each corpus once")
+
+    def test_every_corpus_score_is_its_baseline_over_its_size(self):
+        for path in (README, ROADMAP):
+            for key, n, m in self.claimed(path):
+                with self.subTest(path=path, corpus=key):
+                    baseline, total = (read_number(rel) for rel in CORPORA[key])
+                    self.assertEqual(
+                        (n, m), (baseline, total),
+                        f"{os.path.basename(path)} says {key} is {n}/{m}; the "
+                        f"baseline is {baseline} and the corpus has {total}",
+                    )
+
+    def test_no_baseline_claims_more_than_its_corpus(self):
+        for key, (baseline, total) in CORPORA.items():
+            with self.subTest(corpus=key):
+                self.assertLessEqual(read_number(baseline), read_number(total))
+
+
+class OracleFloors(unittest.TestCase):
+    """docs/TESTING.md's oracle floors are numbers the suites must meet."""
+
+    def test_each_oracle_suite_meets_its_floor(self):
+        found = ORACLE_FLOORS.search(read(TESTING))
+        self.assertIsNotNone(found, "docs/TESTING.md states no oracle floors")
+        floors = dict(zip(("letters-core", "tables-core", "decks-core"), map(int, found.groups())))
+        for crate, floor in floors.items():
+            with self.subTest(crate=crate):
+                suite = read(os.path.join(REPO_ROOT, crate, "tests", "soffice_oracle.rs"))
+                count = suite.count("#[test]")
+                self.assertGreaterEqual(count, floor, f"{crate} has {count} oracle tests, under its floor of {floor}")
+
+
+class StatusDocuments(unittest.TestCase):
+    """README, ROADMAP.md and docs/TESTING.md state no figure nobody checks (#1285)."""
+
+    def test_every_figure_is_a_checked_one(self):
+        for path in STATUS_DOCUMENTS:
+            with self.subTest(path=path):
+                text = GENERATED_RENDER_TABLE.sub("", read(path))
+                checked = set()
+                for pattern in (CORPUS_FIGURE, PROGRESS):
+                    for found in pattern.finditer(text):
+                        checked.update(range(*found.span()))
+                stray = [
+                    f"line {text.count(chr(10), 0, found.start()) + 1}: {found.group(0)!r}"
+                    for found in ANY_FIGURE.finditer(text)
+                    if found.start() not in checked
+                ]
+                self.assertEqual(
+                    [], stray,
+                    f"{os.path.basename(path)} states figures no test checks; derive them "
+                    "from the tracker and check them here, or link the tracker instead",
+                )
+
+    def test_the_historical_plans_say_so_first(self):
+        for rel in HISTORICAL_PLANS:
+            with self.subTest(plan=rel):
+                head = "\n".join(read(os.path.join(REPO_ROOT, rel)).splitlines()[:6]).lower()
+                self.assertIn("historical, not current", head, f"{rel} does not open by saying it is history")
 
 
 if __name__ == "__main__":

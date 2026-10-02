@@ -1,5 +1,12 @@
 # Test Verification Plan — Issue #21
 
+> **Historical, not current.** This is the verification plan written for the
+> v1.0 claim (#21), kept for its history and the issue numbers it cites. Its
+> status marks and figures are that day's and nothing checks them now. The
+> plan of record is
+> [#1190](https://github.com/tuna-os/gtk-office-suite/issues/1190), and
+> progress is the [readiness ledger](readiness-2026-09/README.md).
+
 > All tests exist but can ONLY run on a machine with GTK4 dev libraries installed.
 > This document tracks what we need to verify before claiming v1.0 is truly complete.
 
