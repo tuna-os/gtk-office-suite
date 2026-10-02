@@ -74,7 +74,11 @@ pub fn parse(md: &str) -> Document {
                 if let Some(p) = current.take() { paragraphs.push(p); }
                 in_html_block = false;
             }
-            Event::Html(t) | Event::InlineHtml(t) if in_html_block => {
+            // pulldown-cmark reports an HTML block's indentation (CommonMark
+            // example 150: " <div>") as Text inside the block. It is the
+            // block's own source, not a paragraph of prose: read as one, it
+            // came back escaped ("&#32;\<div\>") and split the block (#1290).
+            Event::Html(t) | Event::InlineHtml(t) | Event::Text(t) if in_html_block => {
                 let mut lines = t.split('\n').peekable();
                 while let Some(line) = lines.next() {
                     if line.is_empty() && lines.peek().is_none() { break; }
