@@ -1,0 +1,118 @@
+name: Visual matrix
+
+# Every app in four states (editor, a selection, a dialog, an error) at
+# widths 400/800/1280, light/dark/high contrast and scales 1 and 2,
+# compared with the committed expected images (tests/gui/visual_matrix.py,
+# #1284). Fonts are pinned to the bundled DejaVu (tests/gui/visual/fonts.conf)
+# and rendering to GSK's cairo renderer, so an image changes when the UI
+# does, not when the machine does.
+#
+# Non-gating while it beds in: the job's result is the evidence, and the
+# artifact keeps expected/actual/diff and the app's state snapshot for
+# every cell. A dispatch with update=true records new expected images from
+# this environment instead; download the `visual-matrix-expected` artifact
+# and commit it over tests/gui/visual/expected to accept them.
+
+on:
+  schedule:
+    - cron: '30 4 * * *'   # nightly, after the stress campaign
+  workflow_dispatch:
+    inputs:
+      update:
+        description: 'Record new expected images instead of comparing'
+        required: false
+        default: 'false'
+      only:
+        description: 'Run configs whose name contains this (e.g. w800)'
+        required: false
+        default: ''
+
+concurrency:
+  group: visual-matrix-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  image:
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      packages: write
+    outputs:
+      ref: ${{ steps.resolve.outputs.ref }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # The same image as the recorded journeys and the stress campaign.
+      - id: resolve
+        env:
+          REPOSITORY: ${{ github.repository }}
+        run: |
+          ref="ghcr.io/${REPOSITORY}/gui-test:main"
+          if docker manifest inspect "$ref" >/dev/null 2>&1; then
+            echo "Using published image $ref"
+          else
+            echo "No published image yet; building and publishing $ref"
+            docker build -t "$ref" -f tests/gui/container/Containerfile tests/gui/container
+            docker push "$ref"
+          fi
+          echo "ref=$ref" >> "$GITHUB_OUTPUT"
+
+  matrix:
+    needs: image
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    # Non-gating at first (#1284): a red run is reported, not blocking.
+    continue-on-error: true
+    container:
+      image: ${{ needs.image.outputs.ref }}
+      options: --shm-size=1g
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2
+
+      - name: Build app binaries
+        run: cargo build --bin letters --bin tables --bin decks
+
+      # Inputs reach the script through the environment, never through
+      # `${{ }}` inside it (#492).
+      - name: Run the visual matrix
+        env:
+          UPDATE: ${{ github.event.inputs.update || 'false' }}
+          ONLY: ${{ github.event.inputs.only }}
+        run: |
+          set --
+          [ "$UPDATE" = "true" ] && set -- "$@" --update
+          [ -n "$ONLY" ] && set -- "$@" --only "$ONLY"
+          python3 tests/gui/visual_matrix.py --out "$GITHUB_WORKSPACE/visual" "$@"
+
+      - name: Summary
+        if: always()
+        run: |
+          [ -f visual/report.md ] && cat visual/report.md >> "$GITHUB_STEP_SUMMARY" || echo "No report: the matrix did not run." >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload evidence
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: visual-matrix
+          path: visual
+          retention-days: 30
+          if-no-files-found: warn
+
+      - name: Upload recorded expected images
+        if: always() && github.event.inputs.update == 'true'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: visual-matrix-expected
+          path: tests/gui/visual/expected
+          retention-days: 30
