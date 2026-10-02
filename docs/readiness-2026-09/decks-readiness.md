@@ -10,7 +10,19 @@ One DecksController owns slide/object/master state, stable identities, selection
 - [ ] Undo/redo mixed object and slide edits, including deletion and selection repair; no detached state or reentrant RefCell panic.
 - [ ] PPTX and ODP journeys preserve supported text runs, images, object geometry/style, master decorations/mapping, slide order and speaker notes.
 - [ ] Compare supported shape/style/rotation/crop fields in our writer → Impress rewrite → our reader, not just text extraction.
-- [ ] Presenter current/next/notes/timer and external-display disconnect fallback meet the admitted ADR.
+- [~] Presenter current/next/notes/timer and external-display disconnect fallback meet the admitted ADR.
+    Current, next, notes and the running clock: `DecksPresenterDisplaySmoke`.
+    Disconnect fallback, ADR 0004's "return to primary and show a visible
+    status": `decks_core::presenter::layout_after_monitor_change` moves a
+    window whose monitor went away back to the primary one; the show
+    watches GDK's monitor list, puts the audience window back fullscreen
+    there, and shows "The external display was disconnected…" over the
+    slides and as a banner on the presenter display.
+    `DecksPresenterDisplayLostSmoke` lays a show out for two monitors
+    (test mode only), reports the one real monitor, and sees the banner,
+    Dismiss, and the show going on. Still open: the ADR's "explicit
+    external display selection" (the show picks the second monitor
+    itself).
 - [ ] PDF/print uses the same slide size/order/master content; export failure is visible and leaves the source document untouched.
 - [ ] Missing media and unsupported animation/comment content is preserved or blocked/warned by #374 before save.
 

@@ -174,6 +174,21 @@ pub fn show_layout(monitors: usize, rehearse: bool) -> ShowLayout {
     }
 }
 
+/// What a running show does when the display's monitors change: `None`
+/// while every window it uses still has its monitor, else the layout with
+/// each lost window back on the primary one (0). ADR 0004, "Presenter
+/// display": "If external display disappears, return to primary and show
+/// a visible status" ([`DISPLAY_LOST`]). A monitor coming back changes
+/// nothing: the show stays where the presenter can see it.
+pub fn layout_after_monitor_change(layout: ShowLayout, monitors: usize) -> Option<ShowLayout> {
+    let back = |m: Option<usize>| m.map(|m| if m >= monitors { 0 } else { m });
+    let after = ShowLayout { audience: back(layout.audience), presenter: back(layout.presenter) };
+    (after != layout).then_some(after)
+}
+
+/// The status a show shows when its external display goes away.
+pub const DISPLAY_LOST: &str = "The external display was disconnected. The show continues on this screen.";
+
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct MissingMedia {
     pub slide_index: usize,
@@ -196,6 +211,24 @@ pub fn missing_media(deck: &Deck) -> Vec<MissingMedia> {
 mod tests {
     use super::*;
     use crate::engine::{Deck, Slide};
+
+    #[test]
+    fn a_lost_external_display_brings_the_show_back_to_the_primary_one() {
+        let two = show_layout(2, false);
+        assert_eq!(two, ShowLayout { audience: Some(1), presenter: Some(0) });
+        assert_eq!(layout_after_monitor_change(two, 2), None, "nothing lost");
+        assert_eq!(layout_after_monitor_change(two, 3), None, "a monitor added changes nothing");
+        assert_eq!(
+            layout_after_monitor_change(two, 1),
+            Some(ShowLayout { audience: Some(0), presenter: Some(0) }),
+            "the slides come back to the laptop, the presenter display stays"
+        );
+        // Unplugged with no monitor reported at all, still the primary.
+        assert_eq!(layout_after_monitor_change(two, 0), Some(ShowLayout { audience: Some(0), presenter: Some(0) }));
+        // A one-monitor show or a rehearsal has nothing to lose.
+        assert_eq!(layout_after_monitor_change(show_layout(1, false), 1), None);
+        assert_eq!(layout_after_monitor_change(show_layout(2, true), 1), None);
+    }
 
     fn deck() -> Deck {
         Deck {
