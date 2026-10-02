@@ -615,7 +615,7 @@ impl LettersWindow {
                 if let Err(e) = pv.write_pdf(&dir.join("print.pdf")) {
                     eprintln!("render-dump: print.pdf: {e}");
                 }
-                let rects: Vec<_> = (0..pv.page_count()).map(|i| pv.page_rect(i)).collect();
+                let rects = pv.page_rects();
                 let view: gtk::Widget = pv.upcast();
                 suite_common::render_dump::write_geometry(&view, &rects);
                 for (i, rect) in rects.iter().enumerate() {
