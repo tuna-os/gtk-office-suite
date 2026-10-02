@@ -12,6 +12,12 @@ test-only `test-snapshot` action and waits for the JSON write to complete. The
 action is registered by the application only when `GTK_OFFICE_TEST_MODE=1`,
 so no diagnostic backdoor is present in production launches.
 
+In the same mode, `GTK_OFFICE_TEST_SAVE_PAUSE=<stage>:<file name>` holds a save
+of that file for twenty seconds at `created` (its temporary just made) or
+`written` (the new bytes synced, not yet renamed), so a journey can SIGKILL the
+real app mid-write instead of racing a write that lasts milliseconds
+(`KilledMidSaveMixin`, #1217).
+
 On failure, the base class retains the screenshot, AT-SPI tree, application
 log, input trace, and snapshot (when configured) under
 `tests/gui/failure_artifacts/`.

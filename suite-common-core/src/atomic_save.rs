@@ -202,6 +202,36 @@ fn sweep_stranded_temps(dir: &Path, now: std::time::SystemTime) {
     }
 }
 
+/// Whether a save of `path` should hold at `stage` for a GUI journey to
+/// kill the real app there (#1217). Only in test mode
+/// (`GTK_OFFICE_TEST_MODE`, which already gates the apps' other test-only
+/// actions), and only when `GTK_OFFICE_TEST_SAVE_PAUSE` names this stage and
+/// this file as `<stage>:<file name>`, so an autosave in the same process
+/// never stalls.
+///
+/// `atomic_save::fault` arms every boundary, but in-process and in tests
+/// only: it can fail a write, not kill a process, and a kill is the case
+/// that runs no error path and no destructor. Racing a real save with a
+/// kill reaches the window only for a document whose write is slow, and a
+/// save builds its bytes first, so the temporary exists for milliseconds.
+fn test_pause_requested(test_mode: bool, spec: Option<&str>, stage: &str, path: &Path) -> bool {
+    let Some((at, name)) = spec.and_then(|spec| spec.split_once(':')) else {
+        return false;
+    };
+    test_mode && at == stage && path.file_name().is_some_and(|file| file == name)
+}
+
+/// How long a requested pause holds: far longer than a journey needs to see
+/// the temporary and kill the app.
+const TEST_PAUSE: std::time::Duration = std::time::Duration::from_secs(20);
+
+fn test_pause(stage: &str, path: &Path) {
+    let spec = std::env::var("GTK_OFFICE_TEST_SAVE_PAUSE").ok();
+    if test_pause_requested(std::env::var_os("GTK_OFFICE_TEST_MODE").is_some(), spec.as_deref(), stage, path) {
+        std::thread::sleep(TEST_PAUSE);
+    }
+}
+
 /// Write `bytes` to `path` atomically: write to a temporary file in the same
 /// directory, flush and sync it to disk, then rename it over the
 /// destination. `rename` within one filesystem is atomic, so a reader can
@@ -238,10 +268,12 @@ pub fn atomic_write_bytes(path: &Path, bytes: &[u8]) -> Result<(), String> {
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
         Err(e) => return Err(format!("Failed to inspect destination: {e}")),
     }
+    test_pause("created", path);
     fail_point!(fault::Boundary::WriteData, tmp.write_all(bytes))
         .map_err(|e| format!("Failed to write file: {e}"))?;
     fail_point!(fault::Boundary::SyncData, tmp.as_file().sync_all())
         .map_err(|e| format!("Failed to sync file: {e}"))?;
+    test_pause("written", path);
     fail_point!(fault::Boundary::Persist, Ok(()))
         .and_then(|()| tmp.persist(path).map_err(std::io::Error::from))
         .map_err(|e| format!("Failed to finalize save: {e}"))?;
@@ -264,6 +296,18 @@ pub fn atomic_write_bytes(path: &Path, bytes: &[u8]) -> Result<(), String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// The pause is asked for by stage and file name, and only in test mode.
+    #[test]
+    fn a_test_pause_needs_test_mode_its_stage_and_its_file() {
+        let path = Path::new("/docs/large.xlsx");
+        assert!(test_pause_requested(true, Some("written:large.xlsx"), "written", path));
+        assert!(!test_pause_requested(false, Some("written:large.xlsx"), "written", path), "outside test mode");
+        assert!(!test_pause_requested(true, Some("written:large.xlsx"), "created", path), "another stage");
+        assert!(!test_pause_requested(true, Some("written:other.xlsx"), "written", path), "another file");
+        assert!(!test_pause_requested(true, Some("written"), "written", path), "no file named");
+        assert!(!test_pause_requested(true, None, "written", path));
+    }
 
     /// Serializes the one test that changes the process working directory.
     static CWD_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
