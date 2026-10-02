@@ -434,6 +434,12 @@ impl Typeset {
         &self.tree
     }
 
+    /// Where each page starts, as a character offset in the document's
+    /// text (`RenderTree::page_breaks`).
+    pub fn page_breaks(&self) -> Vec<usize> {
+        self.tree.page_breaks(&self.doc)
+    }
+
     /// Lay out `doc` in place of the current document, re-shaping only the
     /// paragraphs that changed (ADR 0010 stage 3c). Returns how many were
     /// shaped.
