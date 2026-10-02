@@ -2963,6 +2963,25 @@ class TablesOpenGuardSmoke(TablesCellEntryMixin, BaseGUITestCase):
         self.assertIsNone(self.process.poll(), "tables crashed opening a handed-over file")
 
 
+def assert_close_guard_asks(test):
+    """Closing must ask about unsaved work, which shows a document is still
+    dirty; the guard's own Cancel then leaves it open for the journey to go
+    on. A loss question's Cancel has to keep both the bytes on disk and the
+    edit (interoperability.md, #1206), and this is the second half."""
+    from dogtail import tree
+
+    def showing(name):
+        return tree.root.findChild(lambda n: n.roleName == "push button" and n.name == name and n.showing,
+                                   retry=False, requireResult=False)
+
+    test.app.child(name="Close", roleName="push button").do_action(0)
+    test.wait_until(lambda: showing("Discard"), bool,
+                    description="the close guard: the document must still be unsaved")
+    showing("Cancel").do_action(0)
+    test.wait_until(lambda: showing("Discard"), lambda n: n is None, description="the close guard to close")
+    test.assertIsNone(test.process.poll(), "the close guard's Cancel closed the window")
+
+
 class TablesLossQuestionSmoke(TablesCellEntryMixin, BaseGUITestCase):
     """A workbook holding content Tables cannot write (here, a macro
     project) asks before Ctrl+S drops it (#1272). Cancel leaves the file's
@@ -3049,6 +3068,7 @@ class TablesLossQuestionSmoke(TablesCellEntryMixin, BaseGUITestCase):
                         description="the question to close")
         with open(self._path, "rb") as f:
             self.assertEqual(f.read(), self._original, "Cancel wrote the file anyway")
+        assert_close_guard_asks(self)
 
         rawinput.keyCombo("<Control>s")
         self.wait_for_node(name="Save Without This Content?")
@@ -5553,9 +5573,9 @@ class DecksUnsupportedContentSmoke(BaseGUITestCase):
     """Content Decks can't keep is warned about before a save drops it
     (decks-readiness.md, "unsupported animation/comment content is ...
     warned by #374 before save"; decks_core::loss). A pptx with a comment:
-    Ctrl+S asks; Cancel leaves the file's bytes as they were; Save Anyway
-    writes it without the comment; the next save, of a file Decks wrote,
-    doesn't ask."""
+    Ctrl+S asks; Cancel leaves the file's bytes as they were and the edit
+    unsaved; Save Anyway writes the edit without the comment; the next save,
+    of a file Decks wrote, doesn't ask."""
 
     app_name = "decks"
 
@@ -5579,20 +5599,32 @@ class DecksUnsupportedContentSmoke(BaseGUITestCase):
         with open(self._doc, "rb") as f:
             return f.read()
 
+    @staticmethod
+    def _shape_count(data):
+        import io
+        import zipfile
+        with zipfile.ZipFile(io.BytesIO(data)) as z:
+            return sum(z.read(n).count(b"<p:sp>") + z.read(n).count(b"<p:sp ")
+                       for n in z.namelist() if n.startswith("ppt/slides/slide") and n.endswith(".xml"))
+
     def test_a_save_that_drops_a_comment_asks_first(self):
         import io
         import zipfile
         aid = "org.tunaos.decks"
         self.wait_until(lambda: self.app.child(name="Slide canvas"), lambda c: c is not None, description="the deck to open")
+        shapes = self._shape_count(self._original)
+        self.gapplication_action(aid, "add-shape")
         self.gapplication_action(aid, "save-file")
         self.wait_for_node(name="Save Without This Content?")
         self.wait_for_node(name="Cancel", roleName="push button").do_action(0)
         time.sleep(1.0)  # settling: a Cancel that wrote would have by now
         self.assertEqual(self._bytes(), self._original, "Cancel wrote the file")
+        assert_close_guard_asks(self)
 
         self.gapplication_action(aid, "save-file")
         self.wait_for_node(name="Save Anyway", roleName="push button").do_action(0)
         self.wait_until(self._bytes, lambda b: b != self._original, description="Save Anyway to write the file")
+        self.assertEqual(self._shape_count(self._bytes()), shapes + 1, "the shape added before Cancel was not saved")
         with zipfile.ZipFile(io.BytesIO(self._bytes())) as z:
             names = z.namelist()
             self.assertFalse([n for n in names if n.startswith("ppt/comments/")], names)

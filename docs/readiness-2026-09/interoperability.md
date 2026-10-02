@@ -13,7 +13,20 @@ Architecture: readers return complete semantic document state plus source-packag
       question**; it asks now (`DecksUnsupportedContentSmoke.test_the_close_guards_save_asks_too`). It also found that the
       Open dialog and drag-and-drop have no journey in any app, and that a drop replaces a document with unsaved
       changes (#1316).
-- [ ] Define exact readable/writable formats per app; prohibit overwriting CSV/ODS with XLSX bytes (#439).
+- [x] Define exact readable/writable formats per app; prohibit overwriting CSV/ODS with XLSX bytes (#439).
+      [`docs/FORMATS.md`](../FORMATS.md) lists, per app, each format's extensions, MIME type and whether it opens
+      and saves. Each core crate declares the same list once (`letters_core::save::FORMATS`,
+      `tables_core::io::FORMATS`, `decks_core::FORMATS`, of `suite_common_core::file_formats::FileFormat`). The
+      Open dialogs build their filters from it (`suite_common::file_dialogs::open_filters`), and a test in each
+      crate fails when the page or the app's desktop entry says otherwise. Declaring it found four disagreements:
+      **Decks wrote PowerPoint bytes under any name that wasn't `.odp`**, so a Save As to `talk.key` misdescribed
+      the file; it now refuses, as Letters does
+      (`decks_core::format_tests::a_save_under_an_unknown_extension_is_refused_and_writes_nothing`). Tables' loader
+      sent `.xlsb`, a binary container, to the xlsx reader, which failed with "Cannot open file"; it now says Tables
+      can't read `.xlsb` (`an_xlsb_workbook_is_refused_with_the_reason`). Tables' Open dialog omitted `.xlsm` and
+      `.tsv`, which it reads, and its desktop entry omitted `.xls`, `.xlsm` and `.tsv`. The CSV/ODS half is
+      #1204's: a format Tables only reads is never overwritten with xlsx bytes (`TablesCsvSaveSmoke`,
+      `TablesOdsSaveSmoke`, `TablesXlsSaveSmoke`, `tables-core/tests/save_capability.rs`).
 - [x] Version fixtures with author/version, format, expected semantics, feature IDs and permitted losses.
       Each fixture set has a `fixtures.json` beside its files (#1275): per file, the authoring app and version, the
       format, the feature IDs it proves, the semantics the round trip checks, the losses it is permitted (each naming
@@ -41,15 +54,20 @@ Architecture: readers return complete semantic document state plus source-packag
       (open → edit → Ctrl+S, then the parts are byte-identical and `ooxml_package_problems` is empty), and
       `LettersUnreadContentSmoke`. Building the journeys found that adding the parts after the writer replaced the file
       left a moment when the file on disk had the edit without them; the save now writes once.
-- [~] GUI cancel on a loss warning preserves original bytes and dirty state. **Letters is done** (#1206): every save
+- [x] GUI cancel on a loss warning preserves original bytes and dirty state. **Letters** (#1206): every save
       (Ctrl+S, Save As, the close guard's Save All) builds the target format's `CompatibilityReport` from the
       document *before* writing and, when the format would drop something the document has, asks "Save as <format>?"
       with Cancel as the default. Cancel writes nothing and leaves the tab unsaved; "Save Anyway" writes, and later
       saves to the same path do not ask again. It used to write first and report afterwards ("Saved, with formatting
       this format cannot hold"), so the bytes were already gone when the user found out. Journey:
       `tests/gui/test_smoke.py::LettersLossWarningCancelSmoke::test_cancel_on_a_loss_warning_keeps_the_file_and_the_edit`
-      (a bold run in a `.txt` file; on the old code it fails with the file overwritten). Still open: Tables and Decks
-      build no loss report for their save formats, so they have nothing to warn from yet.
+      (a bold run in a `.txt` file; on the old code it fails with the file overwritten). **Tables** (#1272) and
+      **Decks** (`decks_core::loss`) ask the same way before a save drops content their writers can't hold (a macro
+      project, a comment). `TablesLossQuestionSmoke` and `DecksUnsupportedContentSmoke` edit, press Ctrl+S, Cancel,
+      and require the file's bytes unchanged and the close guard still asking about the edit
+      (`assert_close_guard_asks`); then Save Anyway writes the edit. The Decks journey used to save a deck it had
+      never edited, so it could not tell a Cancel that kept the edit from one that lost it; it adds a shape first
+      and checks the saved file holds it.
 - [x] Harden ZIP/XML/image readers with size/count/decompression limits and malformed/truncated corpus cases; retain
       minimized fuzz failures. **Limits are done**: `suite-common-core/src/zip_guard.rs` holds one set of bounds —
       member count, uncompressed bytes per member, and uncompressed bytes across the whole archive — and every package

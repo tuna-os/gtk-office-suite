@@ -99,6 +99,12 @@ fn load_xlsx_ranges_into_engine(
     (rows.max(1), cols.max(1))
 }
 
+/// `.xlsb` is a binary container, not the XML package the xlsx reader
+/// parses; it used to be handed to that reader anyway and fail with a bare
+/// "Cannot open file" (#1206).
+const XLSB_UNSUPPORTED: &str = "Tables cannot open Excel binary workbooks (.xlsb). \
+     Save it as .xlsx in Excel or LibreOffice, then open that.";
+
 /// Load a spreadsheet file into the engine. Returns (rows, cols).
 pub fn load_file_into_engine(
     path: &str,
@@ -125,7 +131,8 @@ pub fn load_file_into_engine(
                 .map_err(|e| format!("Cannot read sheet: {}", e))?;
             Ok(load_range_into_engine(&range, engine))
         }
-        "xlsx" | "xlsm" | "xlsb" => {
+        "xlsb" => Err(XLSB_UNSUPPORTED.to_string()),
+        "xlsx" | "xlsm" => {
             let mut wb: calamine::Xlsx<_> =
                 open_workbook(path).map_err(|e| format!("Cannot open file: {}", e))?;
             let sheet_names = wb.sheet_names().to_vec();
@@ -383,7 +390,8 @@ pub fn load_workbook(path: &str) -> Result<(TablesEngine, Vec<SheetModel>), Stri
         .unwrap_or("")
         .to_ascii_lowercase();
     match extension.as_str() {
-        "xlsx" | "xlsm" | "xlsb" => load_xlsx_workbook(path),
+        "xlsb" => Err(XLSB_UNSUPPORTED.to_string()),
+        "xlsx" | "xlsm" => load_xlsx_workbook(path),
         "xls" => load_xls_workbook(path),
         "ods" => load_ods_workbook(path),
         _ => load_single_sheet(path),
