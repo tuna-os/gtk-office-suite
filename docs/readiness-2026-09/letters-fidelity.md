@@ -57,7 +57,21 @@ A per-tab session owns the complete Document, review state, imported-package con
       lays out a document whose breaks depend on run sizes and spacing, with multi-byte text before every break. The
       PDF it writes, read back with poppler, has the same page count, and each page holds exactly the text between
       its breaks.
-- [ ] Wire admitted review/TOC/bidi workflows or report them as unavailable until GUI and format tests pass.
+- [x] Wire admitted review/TOC/bidi workflows or report them as unavailable until GUI and format tests pass.
+      Inventory (#1281), workflow by workflow, as `docs/LETTERS-REVIEW-WORKFLOWS.md` admits them. A format test means
+      our file crossing LibreOffice and back, in docx and in odt (`letters-core/tests/soffice_oracle.rs`).
+      - **Comments**: wired. GUI: `LettersCommentsSmoke` (add, reply, resolve, undo; stays on its word across Unicode
+        typing). Format: `comments_survive_lo_passes`.
+      - **Tracked changes**: wired. GUI: `LettersTrackChangesSmoke.test_tracked_edits_are_reviewed`. Format:
+        `tracked_changes_survive_lo_passes`. Documented limits: paragraph breaks and formatting changes aren't tracked,
+        and the Draft editor is read-only while tracking.
+      - **Table of contents**: wired. GUI: `LettersTableOfContentsSmoke` (insert, update, undo). Format:
+        `a_table_of_contents_survives_lo_passes`.
+      - **Smart chips**: wired. GUI: `LettersSmartChipsSmoke`. Format: `smart_chips_survive_lo_passes`.
+      - **Paragraph direction (bidi)**: unavailable, and now said so in the workflows document. No control sets a
+        direction, no writer stores one, and the screen detects it per paragraph. What is promised, right-to-left
+        text kept exactly, is tested: `right_to_left_text_survives_a_conversion_between_the_two_formats`. There is no
+        entry point to hide.
 - [~] Reconcile duplicate ADR numbers and the conflicting old/new advanced-feature scope without silently expanding scope.
       **The numbers are reconciled** (#1205). 0004 and 0006 were each two ADRs. The Decks workflows ADR keeps 0004,
       since code and readiness documents cite it as "ADR 0004", and so does the adaptive editor shell's 0006, which
