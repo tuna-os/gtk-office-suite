@@ -2074,7 +2074,19 @@ class TablesUnclearableSnapshotSmoke(TablesSavedDocumentMixin, BaseGUITestCase):
         os.mkdir(blocked)
 
         # The workbook already has a path, so Ctrl+S writes it and clears.
+        before = os.stat(out_path).st_mtime_ns
         rawinput.keyCombo("<Control>s")
+        # `app_output` stops the app to read its stderr, so it can only be
+        # asked once the save has finished: asked any earlier, it killed the
+        # app between writing the file and clearing the snapshot, and every
+        # later poll got the same cached stderr with no report in it. The
+        # file changing says the save handler is running; an accessibility
+        # query is answered on the same main loop, so its answer comes only
+        # after that handler, clear included, has returned.
+        def _written():
+            self.assertNotEqual(os.stat(out_path).st_mtime_ns, before, "Ctrl+S has not written the file")
+        self.eventually(_written)
+        self.app.child(roleName="frame")
         def _settled():
             self.assertTrue(os.path.isdir(blocked), "the clear should not have removed it")
             _out, err = self.app_output()
