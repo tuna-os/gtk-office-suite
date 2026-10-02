@@ -748,6 +748,61 @@ class TablesKeyboardOnlySmoke(KeyboardOnlyMixin, BaseGUITestCase):
             self.assertNotIn("29", z.read("xl/worksheets/sheet1.xml").decode(), "the undone edit was saved")
 
 
+class DarkModeKeptMixin:
+    """The style chosen with Toggle Dark Mode survives a relaunch (#1305):
+    the toggle saves it as the app's `dark-mode` setting and startup
+    restores it. Neither happened, so every restart came back light. The
+    style is read off the screen (the header bar's brightness), which is
+    what the user sees, and the setting from the journey's keyfile."""
+
+    def setUp(self):
+        self.isolate_gsettings(prefix=f"dark-{self.app_name}-")
+        super().setUp()
+
+    def configure_deterministic_environment(self):
+        # libadwaita ignores every colour scheme, the app's own ForceDark
+        # included, while GTK_THEME is set (framework/base.py sets it).
+        super().configure_deterministic_environment()
+        self.launch_env.pop("GTK_THEME", None)
+
+    def _header_brightness(self):
+        import mss
+        with mss.mss() as sct:
+            shot = sct.grab({"left": 0, "top": 0, "width": 200, "height": 40})
+        px = shot.rgb
+        return sum(px) / len(px)
+
+    def _saved(self):
+        path = os.path.join(self.launch_env["XDG_CONFIG_HOME"], "glib-2.0", "settings", "keyfile")
+        return open(path).read() if os.path.exists(path) else ""
+
+    def test_the_toggled_style_survives_a_relaunch(self):
+        import subprocess
+        aid = f"org.tunaos.{self.app_name}"
+        self.wait_until(self._header_brightness, lambda b: b > 128, description="the window to open in light style")
+        subprocess.run(["gapplication", "action", aid, "toggle-dark-mode"], check=True)
+        self.wait_until(self._header_brightness, lambda b: b < 128, description="Toggle Dark Mode to darken the window")
+        self.wait_until(self._saved, lambda s: "dark-mode=true" in s, description="the choice to be saved")
+        self.relaunch_app()
+        self.wait_until(lambda: self.process.poll() is None and self._header_brightness(), lambda b: b and b < 128,
+                        description="the relaunched window to open dark")
+        subprocess.run(["gapplication", "action", aid, "toggle-dark-mode"], check=True)
+        self.wait_until(self._header_brightness, lambda b: b > 128, description="toggling back to light")
+        self.wait_until(self._saved, lambda s: "dark-mode=false" in s, description="light to be saved")
+
+
+class LettersDarkModeKeptSmoke(DarkModeKeptMixin, BaseGUITestCase):
+    app_name = "letters"
+
+
+class TablesDarkModeKeptSmoke(DarkModeKeptMixin, BaseGUITestCase):
+    app_name = "tables"
+
+
+class DecksDarkModeKeptSmoke(DarkModeKeptMixin, BaseGUITestCase):
+    app_name = "decks"
+
+
 class DecksKeyboardOnlySmoke(KeyboardOnlyMixin, BaseGUITestCase):
     app_name = "decks"
 
