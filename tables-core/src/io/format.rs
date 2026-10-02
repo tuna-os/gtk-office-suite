@@ -10,12 +10,45 @@
 // Capability is therefore explicit and lives here, GTK-free, so every save
 // path can consult the same answer.
 
+/// The formats Tables opens, and the one it saves, declared once (#1206):
+/// the Open dialog's filter is built from this, and tests hold the desktop
+/// entry's MIME types, docs/FORMATS.md and the loader to it. `.xlsb` is not
+/// here: it is a binary container the xlsx reader cannot parse, and the
+/// loader says so instead of failing with "Cannot open file".
+pub const FORMATS: &[suite_common_core::file_formats::FileFormat] = {
+    use suite_common_core::file_formats::FileFormat;
+    &[
+        FileFormat {
+            label: "Excel workbook",
+            extensions: &["xlsx"],
+            mime: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            writable: true,
+        },
+        FileFormat {
+            label: "Excel macro-enabled workbook",
+            extensions: &["xlsm"],
+            mime: "application/vnd.ms-excel.sheet.macroEnabled.12",
+            writable: false,
+        },
+        FileFormat { label: "Excel 97–2003 workbook", extensions: &["xls"], mime: "application/vnd.ms-excel", writable: false },
+        FileFormat {
+            label: "OpenDocument Spreadsheet",
+            extensions: &["ods"],
+            mime: "application/vnd.oasis.opendocument.spreadsheet",
+            writable: false,
+        },
+        FileFormat { label: "Comma-separated values", extensions: &["csv"], mime: "text/csv", writable: false },
+        FileFormat { label: "Tab-separated values", extensions: &["tsv"], mime: "text/tab-separated-values", writable: false },
+    ]
+};
+
 /// Extensions `save_sheets_to_xlsx` produces a valid file for.
 ///
-/// Deliberately just `xlsx`. `xlsm` and `xlsb` are excluded even though the
-/// loader reads them: the writer emits a plain xlsx package, so writing it
-/// under `.xlsm` would silently drop the macros that are the only reason the
-/// file was `.xlsm`, and `.xlsb` is a different container entirely.
+/// Deliberately just `xlsx`. `xlsm` is excluded even though the loader
+/// reads it: the writer emits a plain xlsx package, so writing it under
+/// `.xlsm` would silently drop the macros that are the only reason the file
+/// was `.xlsm`. `.xlsb` is a different container entirely, and the loader
+/// refuses it too.
 const WRITABLE_EXTENSIONS: [&str; 1] = ["xlsx"];
 
 /// Whether Tables can write `path` without changing what the file claims to
@@ -60,6 +93,30 @@ fn extension_of(path: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// The declaration, the save gate, the desktop entry and docs/FORMATS.md
+    /// say the same thing.
+    #[test]
+    fn the_declared_formats_agree_with_the_save_gate_the_docs_and_the_desktop_entry() {
+        for format in FORMATS {
+            for extension in format.extensions {
+                assert_eq!(
+                    is_writable_format(&format!("book.{extension}")),
+                    format.writable,
+                    "{} is declared writable={} but the save gate disagrees",
+                    format.label,
+                    format.writable
+                );
+            }
+        }
+        let problems = suite_common_core::file_formats::disagreements(
+            FORMATS,
+            "Tables",
+            include_str!("../../../flatpak/org.tunaos.tables.desktop"),
+            include_str!("../../../docs/FORMATS.md"),
+        );
+        assert!(problems.is_empty(), "{problems:#?}");
+    }
 
     #[test]
     fn xlsx_is_the_only_writable_format() {

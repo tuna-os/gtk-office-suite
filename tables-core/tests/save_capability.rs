@@ -83,7 +83,7 @@ fn xlsx_opens_and_is_writable() {
 #[test]
 fn every_readable_extension_has_a_decided_capability() {
     let writable = ["xlsx"];
-    let read_only = ["xls", "xlsm", "xlsb", "ods", "csv", "tsv"];
+    let read_only = ["xls", "xlsm", "ods", "csv", "tsv"];
 
     for extension in writable {
         assert!(
@@ -101,4 +101,17 @@ fn every_readable_extension_has_a_decided_capability() {
         // or Save As would hand the user a target the save path then refuses.
         assert!(is_writable_format(&xlsx_save_as_name(&path)));
     }
+}
+
+/// `.xlsb` is neither read nor written: the loader says why, rather than
+/// handing a binary workbook to the xlsx reader and reporting "Cannot open
+/// file" (#1206), and the save gate refuses it as well.
+#[test]
+fn an_xlsb_workbook_is_refused_with_the_reason() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("binary.xlsb");
+    std::fs::write(&path, b"PK\x03\x04 not parsed").unwrap();
+    let error = load_workbook(path.to_str().unwrap()).err().expect("an .xlsb must not open");
+    assert!(error.contains(".xlsb") && error.contains(".xlsx"), "{error}");
+    assert!(!is_writable_format("binary.xlsb"));
 }

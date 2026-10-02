@@ -998,12 +998,7 @@ impl LettersWindow {
                 let tv = tv.clone(); let st = st.clone(); let w = w.clone(); let s = s.clone(); let wc = wc.clone();
                 let sl = sl.clone();
                 let dlg = gtk::FileDialog::new();
-                let f = gtk::FileFilter::new();
-                f.add_pattern("*.md"); f.add_pattern("*.txt"); f.add_pattern("*.html"); f.add_pattern("*.docx"); f.add_pattern("*.odt");
-                f.set_name(Some("Documents"));
-                let fl = gio::ListStore::new::<gtk::FileFilter>();
-                fl.append(&f);
-                dlg.set_filters(Some(&fl));
+                dlg.set_filters(Some(&suite_common::file_dialogs::open_filters("Documents", letters_core::save::FORMATS)));
                 let w_err = w.clone();
                 dlg.open(Some(&w), None::<&gio::Cancellable>,
                     move |result: Result<gio::File, glib::Error>| {
