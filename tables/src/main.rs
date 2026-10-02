@@ -1,5 +1,7 @@
 use gtk4::prelude::*;
 use gtk4::gio;
+use std::cell::RefCell;
+use std::rc::Rc;
 mod charts;
 mod chart_dialog;
 mod window;
@@ -68,82 +70,101 @@ fn main() {
     suite.app.add_action(&act_shortcuts);
     suite.app.set_accels_for_action("app.show-shortcuts", &["<Primary>question"]);
     let act_prefs = gtk4::gio::SimpleAction::new("preferences", None);
-    let parent_win = std::rc::Rc::new(std::cell::RefCell::new(None::<gtk4::Window>));
-    let pw = parent_win.clone();
+    let app_for_prefs = suite.app.clone();
     act_prefs.connect_activate(move |_, _| {
         let settings = gio::Settings::new("org.tunaos.tables");
         let prefs_win = preferences::TablesPreferences::new(&settings);
-        libadwaita::prelude::AdwDialogExt::present(&prefs_win.window, pw.borrow().as_ref());
+        libadwaita::prelude::AdwDialogExt::present(&prefs_win.window, app_for_prefs.active_window().as_ref());
     });
     suite.app.add_action(&act_prefs);
     suite.app.set_accels_for_action("app.preferences", &["<Control>comma"]);
-    let win_store = std::rc::Rc::new(std::cell::RefCell::new(None::<window::TablesWindow>));
-    let pw_store = parent_win.clone();
-    let ws = win_store.clone();
+
+    // One window per workbook (#1422): a crash with two workbooks open
+    // brings both back, and a file opened from the file manager no longer
+    // replaces the one already open.
+    let windows: Windows = Rc::new(RefCell::new(Vec::new()));
+    let ws = windows.clone();
     suite.app.connect_activate(move |app| {
-        let mut store = ws.borrow_mut();
-        if store.is_none() {
-            let win = window::TablesWindow::new(app);
-            win.recover_from_snapshot();
-            *pw_store.borrow_mut() = Some(win.window.clone().upcast::<gtk4::Window>());
-            *store = Some(win);
+        if let Some(active) = app.active_window() {
+            active.present();
+        } else {
+            // Every orphan comes back in a window of its own. The bound
+            // stops a snapshot that recovers but cannot be cleared from
+            // being offered again and again.
+            let orphans = suite_common::autosave::find_orphaned_snapshots(&persistence::autosave_state_dir()).len();
+            let mut recovered = 0;
+            for _ in 0..orphans {
+                let win = new_window(app, &ws);
+                if !win.recover_from_snapshot() {
+                    win.window.destroy();
+                    break;
+                }
+                win.present();
+                recovered += 1;
+            }
+            if recovered == 0 {
+                new_window(app, &ws).present();
+            }
         }
-        store.as_ref().unwrap().present();
         if std::env::var_os(suite_common::render_dump::EXPORT_PDF_ENV).is_some() {
             eprintln!("tables: --export-pdf needs an input file to export");
             app.quit();
         }
     });
 
-    // CLI / file-manager launches: `tables budget.xlsx` opens the file.
-    let pw_store = parent_win.clone();
-    let ws = win_store.clone();
+    // CLI / file-manager launches: `tables budget.xlsx` opens the file, in
+    // the window in front if that one is an untouched new workbook and in a
+    // new window otherwise.
+    let ws = windows.clone();
     suite.app.connect_open(move |app, files, _hint| {
-        {
-            let mut store = ws.borrow_mut();
-            if store.is_none() {
-                let win = window::TablesWindow::new(app);
-                *pw_store.borrow_mut() = Some(win.window.clone().upcast::<gtk4::Window>());
-                *store = Some(win);
-            }
-        }
-        let store = ws.borrow();
-        let win = store.as_ref().unwrap();
-        let paths: Vec<String> = files
-            .iter()
-            .filter_map(|file| persistence::local_path(file, false, Some(&win.window)))
-            .map(|path| path.to_string_lossy().to_string())
-            .collect();
-        // A file handed over by the file manager replaces the window's
-        // workbook, so unsaved changes are asked about first.
-        let opener = ws.clone();
-        suite_common::confirm_discarding(&win.window, win.is_dirty(), "workbook", move || {
-            let store = opener.borrow();
-            let Some(win) = store.as_ref() else { return };
-            for path_str in paths {
-                if let Err(e) = win.open_path(&path_str) {
-                    // stderr is not a user interface: launched from a file
-                    // manager or a Flatpak, an unreadable file used to open
-                    // an empty window with no explanation at all (#447).
-                    let name = std::path::Path::new(&path_str)
-                        .file_name()
-                        .map(|name| name.to_string_lossy().to_string())
-                        .unwrap_or_else(|| path_str.clone());
-                    suite_common::show_error_dialog(
-                        Some(&win.window),
-                        &suite_common::i18n("Could not open file"),
-                        &format!("{name}
-
-{e}"),
-                    );
-                }
-            }
+        let mut reuse = app.active_window().and_then(|active| {
+            ws.borrow().iter().find(|w| w.window.upcast_ref::<gtk4::Window>() == &active && w.is_pristine()).cloned()
         });
-        win.present();
+        for file in files {
+            let win = reuse.take().unwrap_or_else(|| new_window(app, &ws));
+            let Some(path) = persistence::local_path(file, false, Some(&win.window)) else {
+                continue;
+            };
+            let path_str = path.to_string_lossy().to_string();
+            if let Err(e) = win.open_path(&path_str) {
+                // stderr is not a user interface: launched from a file
+                // manager or a Flatpak, an unreadable file used to open an
+                // empty window with no explanation at all (#447).
+                let name = path.file_name()
+                    .map(|name| name.to_string_lossy().to_string())
+                    .unwrap_or_else(|| path_str.clone());
+                suite_common::show_error_dialog(
+                    Some(&win.window),
+                    &suite_common::i18n("Could not open file"),
+                    &format!("{name}\n\n{e}"),
+                );
+            }
+            win.present();
+        }
         suite_common::render_dump::schedule(app);
         if std::env::var_os(suite_common::render_dump::EXPORT_PDF_ENV).is_some() {
             suite_common::render_dump::schedule_export(app);
         }
     });
     suite.run();
+}
+
+type Windows = Rc<RefCell<Vec<Rc<window::TablesWindow>>>>;
+
+/// A new workbook window. The application's document actions (`app.save-file`
+/// and the rest) act on whichever window is active, and the window is
+/// forgotten once it closes.
+fn new_window(app: &libadwaita::Application, windows: &Windows) -> Rc<window::TablesWindow> {
+    let registration = suite_common::window_actions::begin(app);
+    let win = Rc::new(window::TablesWindow::new(app));
+    registration.finish(app, &win.window);
+    let weak = Rc::downgrade(windows);
+    let closing = win.window.clone();
+    win.window.connect_destroy(move |_| {
+        if let Some(windows) = weak.upgrade() {
+            windows.borrow_mut().retain(|w| w.window != closing);
+        }
+    });
+    windows.borrow_mut().push(win.clone());
+    win
 }
