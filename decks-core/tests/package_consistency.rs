@@ -28,24 +28,30 @@ fn pptx_and_odp_packages_are_consistent() {
     }
 }
 
+/// Decks of several shapes are written, read back and written again: the
+/// second write is of a package Decks wrote itself, the case every later
+/// save of a presentation is.
 #[test]
-fn rewriting_the_fuzz_seed_decks_gives_consistent_packages() {
-    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../fuzz/corpus");
+fn rewriting_written_decks_gives_consistent_packages() {
     let dir = tempfile::tempdir().unwrap();
-    let mut checked = 0;
-    for (sub, ext) in [("decks_pptx", "pptx"), ("decks_odp", "odp")] {
-        for entry in std::fs::read_dir(root.join(sub)).unwrap() {
-            let src = entry.unwrap().path();
-            // Seeds that aren't decks (the corpus holds edge cases).
-            if src.extension().and_then(|e| e.to_str()) != Some(ext) {
-                continue;
-            }
-            let Ok(deck) = decks_core::read_deck(src.to_str().unwrap()) else { continue };
-            let out = dir.path().join(format!("{}.{ext}", src.file_stem().unwrap().to_string_lossy()));
-            decks_core::write_deck(out.to_str().unwrap(), &deck).unwrap();
-            assert_eq!(suite_common_core::carry::problems(&out), Vec::<String>::new(), "{}", src.display());
-            checked += 1;
+    let mut empty = Deck::new();
+    empty.slides[0].objects.clear();
+    let mut several = Deck::new();
+    several.slides[0].notes = "first".into();
+    several.slides[0].objects.push(SlideObject::Rect { x: 50.0, y: 250.0, w: 200.0, h: 90.0, rotation: 15.0 });
+    let mut second = several.slides[0].clone();
+    second.notes = "second".into();
+    several.slides.push(second.clone());
+    several.slides.push(second);
+    for (name, deck) in [("empty", empty), ("several", several)] {
+        for ext in ["pptx", "odp"] {
+            let first = dir.path().join(format!("{name}-0.{ext}"));
+            decks_core::write_deck(first.to_str().unwrap(), &deck).unwrap();
+            assert_eq!(suite_common_core::carry::problems(&first), Vec::<String>::new(), "{name}.{ext}");
+            let reread = decks_core::read_deck(first.to_str().unwrap()).unwrap();
+            let again = dir.path().join(format!("{name}-1.{ext}"));
+            decks_core::write_deck(again.to_str().unwrap(), &reread).unwrap();
+            assert_eq!(suite_common_core::carry::problems(&again), Vec::<String>::new(), "{name}.{ext} rewritten");
         }
     }
-    assert!(checked >= 3, "only {checked} seed decks read");
 }
