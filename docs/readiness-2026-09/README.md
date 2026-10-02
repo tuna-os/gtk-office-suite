@@ -46,7 +46,7 @@ document, never from whether an issue happens to be closed.
 - [~] #313 — CI validator and test gates — [ci-gates.md](ci-gates.md) 7/8
 - [~] #442 — crash and flake campaign — [crash-stress.md](crash-stress.md) 2/8
 - [~] #441 — capability evidence ledger — [capability-evidence.md](capability-evidence.md) 6/7
-- [~] #1217 — recovery lifecycle — [recovery.md](recovery.md) 7/9
+- [~] #1217 — recovery lifecycle — [recovery.md](recovery.md) 8/9
 - [x] #1206 — live interoperability loss budgets — [interoperability.md](interoperability.md) 9/9
 - [~] #438 — Letters fidelity — [letters-fidelity.md](letters-fidelity.md) 5/6
 - [~] #439 — Tables format safety and authoring — [tables-readiness.md](tables-readiness.md) 6/7

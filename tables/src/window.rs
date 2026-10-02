@@ -74,7 +74,6 @@ pub struct TablesWindow {
     /// Ownership of that slot, held for the window's lifetime so another
     /// launch does not offer this open workbook as a crash recovery.
     _autosave_owner: Option<suite_common::autosave::SnapshotOwner>,
-    toast_overlay: adw::ToastOverlay,
 }
 
 impl TablesWindow {
@@ -2129,7 +2128,6 @@ impl TablesWindow {
             sheet_switcher,
             current_path,
             refresh_sel,
-            toast_overlay,
         }
     }
 
@@ -2186,14 +2184,6 @@ impl TablesWindow {
             if self.autosave_slot.adopt_recovered(&bytes, &meta) {
                 orphan.clear_or_report();
             }
-            // A window holds one workbook, so any other orphan waits for a later
-            // launch; say so rather than leave it to be found by chance (#1422).
-            let waiting = suite_common::autosave::find_orphaned_snapshots(&state_dir).len();
-            if let Some(message) = suite_common::autosave::more_to_recover_message(waiting, "workbook", "workbooks", "Tables") {
-                let toast = adw::Toast::new(&message);
-                toast.set_timeout(0);
-                self.toast_overlay.add_toast(toast);
-            }
             return true;
         }
         false
@@ -2204,6 +2194,12 @@ impl TablesWindow {
     /// Whether the workbook has changes a replacement would lose.
     pub fn is_dirty(&self) -> bool {
         self.controller.borrow().is_dirty()
+    }
+
+    /// A new workbook nobody has typed in: a file opened while it is in
+    /// front takes its window rather than a new one.
+    pub fn is_pristine(&self) -> bool {
+        self.current_path.borrow().is_none() && !self.is_dirty()
     }
 
     pub fn open_path(&self, path: &str) -> Result<(), String> {

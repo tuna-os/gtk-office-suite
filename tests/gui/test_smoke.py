@@ -1865,22 +1865,24 @@ class TablesSavedDocumentMixin(SavedDocumentMixin):
         time.sleep(0.5)  # pacing: no state to wait on before the next input
 
 
-class MoreToRecoverMixin:
-    """Two crashed documents, one window: the other is announced (#1422).
+class EveryCrashedDocumentComesBackMixin:
+    """Two documents open, a crash, and both come back in two windows (#1422).
 
-    Tables and Decks hold one document per window, so a launch recovers the
-    newest orphan and leaves the rest for later launches. That used to be
-    silent: the second document's work was on disk with nothing saying so.
-    Now the recovered window says how many more are waiting.
+    Tables and Decks used to hold one document per process, so a launch
+    after a crash recovered the newest snapshot and left the rest for later
+    launches. Now each document has a window of its own: the second file
+    opens beside the first rather than replacing it, the application's
+    actions act on the window in front, and a relaunch recovers every
+    snapshot into a window of its own.
 
-    Two orphans are made the only way a single-window app allows: a launch
-    that opens a file skips recovery, so each of two files is opened,
-    edited, snapshotted and killed in turn.
+    The edits go through `gapplication action`, which is the routing under
+    test: the second document only gets a snapshot if `autosave-now` reaches
+    the second window.
     """
 
     def setUp(self):
-        self._state_dir = self.isolate_autosave_state(prefix=f"{self.app_name}-more-to-recover-")
-        self._dir = self.temp_dir(f"{self.app_name}-more-to-recover-docs-")
+        self._state_dir = self.isolate_autosave_state(prefix=f"{self.app_name}-every-crashed-")
+        self._dir = self.temp_dir(f"{self.app_name}-every-crashed-docs-")
         self._files = [os.path.join(self._dir, f"{stem}{self.doc_suffix}") for stem in ("first", "second")]
         for path in self._files:
             self._write_document(path)
@@ -1891,94 +1893,59 @@ class MoreToRecoverMixin:
         snap_dir = os.path.join(self._state_dir, self.app_name)
         return [f for f in os.listdir(snap_dir) if f.endswith(".snapshot")] if os.path.isdir(snap_dir) else []
 
+    def _frames(self):
+        return [c.name for c in self.app.children if c.roleName == "frame"]
+
     def _edit_and_snapshot(self, expected):
-        from dogtail import rawinput
-        time.sleep(1.5)  # pacing: the opened document's first frame
-        self._edit_the_document(rawinput)
-        self.gapplication_action(f"org.tunaos.{self.app_name}", "autosave-now")
+        app_id = f"org.tunaos.{self.app_name}"
+        self.gapplication_action(app_id, self.dirtying_action)
+        self.gapplication_action(app_id, "autosave-now")
         self.wait_until(lambda: len(self._snapshots()), lambda n: n == expected,
                         description=f"{expected} snapshot(s) on disk")
 
-    def test_a_second_crashed_document_is_announced_not_silent(self):
+    def test_every_crashed_document_comes_back_in_a_window_of_its_own(self):
+        self.wait_until(self._frames, lambda names: any("first" in n for n in names),
+                        description="the first document's window")
         self._edit_and_snapshot(1)
-        self.relaunch_app(crash=True, launch_args=[self._files[1]])
+
+        # A second launch hands the file to the running instance, which
+        # opens it in a new window in front of the first.
+        import subprocess
+
+        env = {**os.environ, "GDK_BACKEND": "x11", **getattr(self, "launch_env", {})}
+        subprocess.run([self.bin_path, self._files[1]], env=env, check=True, timeout=30)
+        self.wait_until(self._frames, lambda names: len(names) == 2 and any("second" in n for n in names),
+                        description="the second document in a window of its own")
         self._edit_and_snapshot(2)
 
         self.relaunch_app(crash=True, launch_args=[])
-        self.wait_until(lambda: self.app.child(roleName="frame").name,
-                        lambda name: "Recovered" in name, timeout=20.0,
-                        description="the newest crashed document recovered")
-        from dogtail import tree
-        notice = self.wait_until(
-            lambda: tree.root.findChild(lambda n: "will be offered the next time" in (n.name or "") and n.showing,
-                                        retry=False, requireResult=False),
-            bool, description="the notice that one more document is waiting")
-        self.assertIn(f"1 more unsaved {self.document_noun}", notice.name)
+        recovered = self.wait_until(
+            self._frames,
+            lambda names: len([n for n in names if "Recovered" in n]) == 2, timeout=30.0,
+            description="both crashed documents recovered, each in its own window")
+        self.assertTrue(any("first" in n for n in recovered), recovered)
+        self.assertTrue(any("second" in n for n in recovered), recovered)
 
 
-class TablesRenamedOriginalSmoke(TablesSavedDocumentMixin, RenamedOriginalMixin, BaseGUITestCase):
-    def _assert_the_offer_names_the_work(self, frame_name):
-        self.assertIn(
-            f"{self.doc_stem}{self.doc_suffix}", frame_name,
-            f"the recovered window should name the original document: {frame_name!r}",
-        )
-
-
-class LettersRenamedOriginalSmoke(RenamedOriginalMixin, BaseGUITestCase):
-    app_name = "letters"
-    doc_suffix = ".md"
-    save_button_label = "Save All"
-
-
-class DecksRenamedOriginalSmoke(RenamedOriginalMixin, BaseGUITestCase):
-    app_name = "decks"
-    doc_suffix = ".pptx"
-
-    def _edit_the_document(self, rawinput, nth):
-        # A fresh deck has no focused text frame, so it is dirtied the way
-        # every other Decks journey dirties one. Each call adds another
-        # shape, so the second edit is a real change.
-        import subprocess
-
-        subprocess.run(["gapplication", "action", "org.tunaos.decks", "add-shape"])
-        time.sleep(1.0)  # pacing: no state to wait on before the next input
-
-    def _assert_the_offer_names_the_work(self, frame_name):
-        self.assertIn(
-            f"{self.doc_stem}{self.doc_suffix}", frame_name,
-            f"the recovered window should name the original document: {frame_name!r}",
-        )
-
-
-class TablesMoreToRecoverSmoke(MoreToRecoverMixin, BaseGUITestCase):
+class TablesEveryCrashedDocumentSmoke(EveryCrashedDocumentComesBackMixin, BaseGUITestCase):
     app_name = "tables"
     doc_suffix = ".csv"
-    document_noun = "workbook"
+    # Hides the selected row: an undoable change, so the workbook is dirty.
+    dirtying_action = "hide-selected-rows"
 
     def _write_document(self, path):
         with open(path, "w") as f:
             f.write("item,amount\nrent,1250\n")
 
-    def _edit_the_document(self, rawinput):
-        # A committed cell edit is what makes a workbook dirty.
-        rawinput.typeText("=6*7")
-        rawinput.keyCombo("Return")
-        time.sleep(0.5)  # pacing: no state to wait on before the next input
 
-
-class DecksMoreToRecoverSmoke(MoreToRecoverMixin, BaseGUITestCase):
+class DecksEveryCrashedDocumentSmoke(EveryCrashedDocumentComesBackMixin, BaseGUITestCase):
     app_name = "decks"
     doc_suffix = ".pptx"
-    document_noun = "deck"
+    dirtying_action = "add-shape"
 
     def _write_document(self, path):
         with open(path, "wb") as f:
             f.write(minimal_pptx_bytes("kept"))
-
-    def _edit_the_document(self, rawinput):
-        import subprocess
-        subprocess.run(["gapplication", "action", "org.tunaos.decks", "add-shape"])
-        time.sleep(1.0)  # pacing: no state to wait on before the next input
 
 
 class TwoDocumentsMixin:

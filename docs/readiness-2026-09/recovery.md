@@ -25,7 +25,7 @@ AutosaveSlot used to store bytes and metadata in separate atomic writes. Each wr
       one is lost work. Wired into all three apps: Tables and Decks hold the
       claim as a window field, Letters on `DocumentSession` so a per-tab
       document gets a per-tab lock.
-- [~] Enumerate all recoverable documents deterministically; corrupt/incomplete candidates do not hide valid later ones. `find_orphaned_snapshots` now lists a snapshot only if it reads back whole — a truncated or checksum-failing envelope, and a legacy data file whose metadata never landed, are skipped rather than offered — so one damaged candidate no longer hides a valid one. It costs one read per candidate at launch.
+- [x] Enumerate all recoverable documents deterministically; corrupt/incomplete candidates do not hide valid later ones. `find_orphaned_snapshots` now lists a snapshot only if it reads back whole — a truncated or checksum-failing envelope, and a legacy data file whose metadata never landed, are skipped rather than offered — so one damaged candidate no longer hides a valid one. It costs one read per candidate at launch.
       **Deterministic ordering is done.** The function used to return
       `read_dir` order — whatever the filesystem handed back — and its own
       test had to sort the result to assert anything, which was the tell that
@@ -46,15 +46,22 @@ AutosaveSlot used to store bytes and metadata in separate atomic writes. Each wr
       one won again on every subsequent launch: one unloadable snapshot could
       bury a user's recoverable work indefinitely. Both now try each
       candidate in turn.
-      **Still open: the single-document windows recover one snapshot per
-      launch.** Tables and Decks hold one workbook or deck per window, so
-      with two valid orphans they reopen the newest and leave the rest on
-      disk for the next launch rather than discarding them. Presenting
-      several at once needs a window per document, tracked as #1422; Letters
-      already does it per tab. Meanwhile the rest are no longer silent: the
-      recovered window says how many more are waiting
-      (`autosave::more_to_recover_message`; `TablesMoreToRecoverSmoke`,
-      `DecksMoreToRecoverSmoke` crash two documents and require the notice).
+      **Every orphan comes back at once, in Tables and Decks too (#1422).**
+      They used to hold one workbook or deck per process, so two crashed
+      documents meant the newest came back and the other waited for a later
+      launch. Each document now has a window of its own: a file opened from
+      the file manager opens beside the one already open instead of
+      replacing it, and a launch after a crash recovers every orphan into a
+      window of its own. The application-level actions every shortcut, menu
+      and `gapplication action` names (`app.save-file`, `app.autosave-now`, …)
+      act on the window in front: `suite_common::window_actions` records
+      which actions each window's constructor registered and puts them back
+      whenever that window becomes the active one. Letters already did this
+      per tab. `TablesEveryCrashedDocumentSmoke` and
+      `DecksEveryCrashedDocumentSmoke` open two documents in one running
+      app, edit and snapshot each through `gapplication action`, kill it,
+      and require both back in two windows; against the one-window launcher
+      the Tables journey fails waiting for the second window.
 - [x] Preserve imported non-buffer metadata and model state; no recovery format silently strips supported content. **Tables is done and was badly wrong.** Its snapshot is an xlsx package from `save_sheets_to_xlsx_bytes`, read back by the same `load_workbook` a plain Open uses — and that reader parsed no column widths, no row heights, no frozen panes and no merged ranges. All four were written correctly and silently dropped on the way back in, so the loss was never specific to recovery: any save-then-reopen lost them too, and recovered work inherited that.
       The gap survived because the tests that covered it were about the
       wrong program. `soffice_oracle.rs` has
