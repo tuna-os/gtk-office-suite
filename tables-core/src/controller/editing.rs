@@ -32,6 +32,21 @@ impl WorkbookController {
         self.apply_ops(description, vec![super::ops::Op::SetNote { sheet, row, col, note }])
     }
 
+    /// Whether an edit to (`row`, `col`) on the active sheet is refused:
+    /// the sheet is protected and the cell is locked. [`Self::edit_cell`]
+    /// ignores such an edit; the app asks first so it can say why.
+    pub fn refuses_edit(&self, row: usize, col: usize) -> bool {
+        let state = self.state.borrow();
+        let sheet = state.sheet();
+        sheet.protection.protected && sheet.cell_protections.get(row).and_then(|r| r.get(col)).is_some_and(|c| c.locked)
+    }
+
+    /// Whether the active sheet is protected, which also refuses inserting
+    /// and deleting rows and columns.
+    pub fn sheet_is_protected(&self) -> bool {
+        self.state.borrow().sheet().protection.protected
+    }
+
     pub fn edit_cell(&mut self, row: usize, col: usize, input: impl Into<String>) {
         let new_input = input.into();
         let state = self.state.borrow();
