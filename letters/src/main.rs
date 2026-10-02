@@ -124,11 +124,6 @@ fn main() {
     let s = settings.clone();
     let ws = win_store.clone();
     suite.app.connect_activate(move |gtk_app| {
-        // Restore dark mode after GTK init
-        if s.boolean("dark-mode") {
-            let sm = adw::StyleManager::default();
-            sm.set_color_scheme(adw::ColorScheme::ForceDark);
-        }
         let mut store = ws.borrow_mut();
         if store.is_none() {
             let win = window::LettersWindow::new(gtk_app, s.clone());
@@ -149,9 +144,6 @@ fn main() {
         {
             let mut store = ws.borrow_mut();
             if store.is_none() {
-                if s.boolean("dark-mode") {
-                    adw::StyleManager::default().set_color_scheme(adw::ColorScheme::ForceDark);
-                }
                 *store = Some(window::LettersWindow::new(gtk_app, s.clone()));
             }
         }
