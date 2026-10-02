@@ -1300,7 +1300,9 @@ impl DecksWindow {
                 let current_path = path_clone.borrow().clone();
                 if let Some(path_str) = current_path {
                     let deck = m_save.deck();
-                    match save_deck(&path_str, &deck) {
+                    let (w_clone, dirty_save, slot_save) = (w_clone.clone(), dirty_save.clone(), slot_save.clone());
+                    let target = path_str.clone();
+                    crate::loss_ui::save_after_asking(&w_clone.clone(), Some(&target), &target, move || match save_deck(&path_str, &deck) {
                         Ok(()) => {
                             let settings = gio::Settings::new("org.tunaos.decks");
                             suite_common::push_recent_file(&settings, &path_str);
@@ -1316,7 +1318,7 @@ impl DecksWindow {
                             err.set_default_response(Some("ok"));
                             err.present(Some(&w_clone));
                         }
-                    }
+                    });
                 } else {
                     let _ = gtk4::prelude::WidgetExt::activate_action(&w_clone, "app.save-file-as", None);
                 }
@@ -1352,7 +1354,10 @@ impl DecksWindow {
                             if let Some(path) = local_path(&file, true, &w2) {
                                 let path_str = path.to_string_lossy().to_string();
                                 let deck = m_inner.deck();
-                                match save_deck(&path_str, &deck) {
+                                let source = path_ref.borrow().clone();
+                                let (w2, path_ref, dirty_as, slot_as) = (w2.clone(), path_ref.clone(), dirty_as.clone(), slot_as.clone());
+                                let target = path_str.clone();
+                                crate::loss_ui::save_after_asking(&w2.clone(), source.as_deref(), &target, move || match save_deck(&path_str, &deck) {
                                     Ok(()) => {
                                         let settings = gio::Settings::new("org.tunaos.decks");
                                         suite_common::push_recent_file(&settings, &path_str);
@@ -1369,7 +1374,7 @@ impl DecksWindow {
                                         err.set_default_response(Some("ok"));
                                         err.present(Some(&w2));
                                     }
-                                }
+                                });
                             }
                         }
                     },
