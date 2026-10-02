@@ -1661,13 +1661,7 @@ impl TablesWindow {
                 let parent = w.clone();
                 suite_common::confirm_discarding(&parent, dirty, "workbook", move || {
                 let dlg = gtk4::FileDialog::new();
-                let f = gtk4::FileFilter::new();
-                f.add_pattern("*.xlsx"); f.add_pattern("*.xls");
-                f.add_pattern("*.ods"); f.add_pattern("*.csv");
-                f.set_name(Some("Spreadsheets"));
-                let fl = gio::ListStore::new::<gtk4::FileFilter>();
-                fl.append(&f);
-                dlg.set_filters(Some(&fl));
+                dlg.set_filters(Some(&suite_common::file_dialogs::open_filters("Spreadsheets", tables_core::io::FORMATS)));
                 let s = s.clone(); let st = st.clone();
                 let w2 = w.clone(); let fx = fx.clone();
                 let da = da.clone(); let sm = sm.clone(); let sd = sd.clone();

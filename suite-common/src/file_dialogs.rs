@@ -63,6 +63,32 @@ pub fn all_documents_filter() -> gtk::FileFilter {
     f
 }
 
+/// An Open dialog's filters: everything the app opens first, then one per
+/// format, built from the app's declared `FORMATS` so the dialog cannot
+/// offer a format the app doesn't read or hide one it does (#1206).
+/// Suffixes rather than patterns, so `REPORT.DOCX` matches too.
+pub fn open_filters(all_label: &str, formats: &[suite_common_core::file_formats::FileFormat]) -> gio::ListStore {
+    let list = gio::ListStore::new::<gtk::FileFilter>();
+    let all = gtk::FileFilter::new();
+    for format in formats {
+        for extension in format.extensions {
+            all.add_suffix(extension);
+        }
+    }
+    all.set_name(Some(all_label));
+    list.append(&all);
+    for format in formats {
+        let filter = gtk::FileFilter::new();
+        for extension in format.extensions {
+            filter.add_suffix(extension);
+        }
+        let extensions: Vec<String> = format.extensions.iter().map(|extension| format!(".{extension}")).collect();
+        filter.set_name(Some(&format!("{} ({})", format.label, extensions.join(", "))));
+        list.append(&filter);
+    }
+    list
+}
+
 /// Helper for showing open/save/export file dialogs.
 pub struct FileDialogHelper {
     parent: adw::ApplicationWindow,

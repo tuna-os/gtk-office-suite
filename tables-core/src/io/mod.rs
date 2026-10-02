@@ -28,7 +28,7 @@ mod props;
 mod save;
 
 pub use charts::read_charts_from_xlsx;
-pub use format::{is_writable_format, xlsx_save_as_name};
+pub use format::{is_writable_format, xlsx_save_as_name, FORMATS};
 pub use numfmt::{code_for_kind, kind_for_code};
 pub use xlsx_styles::{parse_cell_styles, XfStyle};
 pub use condrules::read_cond_rules_from_xlsx;
