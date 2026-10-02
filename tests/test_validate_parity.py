@@ -198,10 +198,46 @@ def test_e4_jumped_green_without_new_evidence(tmp_path):
 
 def test_e4_evidence_change_allows_transition(tmp_path):
     base = _parity_md(tmp_path, [("save", "I1", "❌")], "BASE.md")
-    head = _parity_md(tmp_path, [("save", "I1 + I6", "✅")], "HEAD.md")
+    head = _parity_md(tmp_path, [("save", "I1 + I4 + I6", "✅")], "HEAD.md")
     errors, warnings = [], []
     vp.check_transitions(base, vp.parse_parity(head), errors)
     assert errors == []
+
+
+# ── promotion evidence (E6) ──────────────────────────────────────────────
+
+def _promote(tmp_path, feature, evidence, before="❌"):
+    base = _parity_md(tmp_path, [(feature, "I1", before)], "BASE.md")
+    head = _parity_md(tmp_path, [(feature, evidence, "✅")], "HEAD.md")
+    errors = []
+    vp.check_transitions(base, vp.parse_parity(head), errors)
+    return [e for e in errors if e.startswith("E6")]
+
+
+def test_e6_format_promotion_needs_model_journey_and_reader(tmp_path):
+    assert _promote(tmp_path, "DOCX save/load", "I1 + I6 + I4") == []
+    (only_model,) = _promote(tmp_path, "DOCX save/load", "I1 model")
+    assert "live journey" in only_model and "independent reader" in only_model
+    (no_journey,) = _promote(tmp_path, "Tab stops", "I1, I2 round-trip, I4 oracle")
+    assert "lacks live journey" in no_journey and "lacks model" not in no_journey
+
+
+def test_e6_paths_and_ranges_count_as_evidence(tmp_path):
+    assert _promote(tmp_path, "ODT read/write", "I1–I4 + tests/gui/test_smoke.py journey") == []
+    assert _promote(tmp_path, "Footnotes", "letters-core/tests/docx.rs, tests/gui/x, soffice_oracle") == []
+
+
+def test_e6_a_new_green_row_is_a_promotion_and_an_old_one_is_not(tmp_path):
+    base = _parity_md(tmp_path, [("Headings", "I1, I2, I3, I5", "✅")], "BASE.md")
+    head = _parity_md(tmp_path, [("Headings", "I1, I2, I3, I5", "✅"), ("XLSX charts", "I2", "✅")], "HEAD.md")
+    errors = []
+    vp.check_transitions(base, vp.parse_parity(head), errors)
+    e6 = [e for e in errors if e.startswith("E6")]
+    assert len(e6) == 1 and "xlsx charts" in e6[0], e6
+
+
+def test_e6_ignores_features_that_are_not_format_features(tmp_path):
+    assert _promote(tmp_path, "Word count", "I6 smoke (live)") == []
 
 
 # ── validate() entry point ───────────────────────────────────────────────

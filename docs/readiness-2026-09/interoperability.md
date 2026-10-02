@@ -102,6 +102,13 @@ Architecture: readers return complete semantic document state plus source-packag
       `REQUIRE_SOFFICE: "1"`, and that the pull-request `test` lane, which has no LibreOffice, excludes each of them
       from the evidence it offers (`conformance/lanes.json`). Verified to fail when the variable is removed from the
       nightly oracle step.
-- [ ] Promote a format feature only when model, live journey and independent-reader evidence all exist.
+- [x] Promote a format feature only when model, live journey and independent-reader evidence all exist.
+      `conformance/validate_parity.py` E6, run against the base branch's PARITY.md on every pull request: a row that
+      turns green, or arrives green, and is a format feature (its evidence cites I2–I4, or its name is a file format or
+      a save, load or round trip) must cite the model (I1 or a `*-core/` path), a live journey (I6 or a `tests/gui/`
+      path) and an independent reader (I3/I4, `lo_parity` or `soffice_oracle`). Instrument ranges such as `I1–I5`
+      count as each instrument in them. Tests: `tests/test_validate_parity.py::test_e6_*`. The rule governs promotion,
+      so rows green before it are not re-judged; several (Headings, for one) cite no journey, and PARITY.md says so
+      beside the rule rather than letting the rule imply they were checked.
 
 Depends on #436/#437 and #354; feeds #438/#439/#440 and the capability ledger #441.
