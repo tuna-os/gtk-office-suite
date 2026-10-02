@@ -36,7 +36,16 @@ A per-tab session owns the complete Document, review state, imported-package con
       - an empty last paragraph's style (a heading, a page break) lost on capture, and so on save;
       - a cell's own leading and trailing spaces trimmed away;
       - table ids compared by value rather than by grouping.
-- [ ] Apply model operations and undo through one live session; keep review anchors correct across Unicode edits.
+- [x] Apply model operations and undo through one live session; keep review anchors correct across Unicode edits.
+      `review_anchors_hold_across_unicode_edits_and_one_history_undoes_them` (`letters/src/live/tests.rs`, #1279) runs
+      40 seeded interleavings of typing (a combining accent, a non-BMP emoji with a skin-tone modifier, CJK, Enter),
+      structured commands, and undo and redo, all around a commented word and a tracked insertion. After every step
+      the comment covers exactly its word, the insertion exactly its own, and the model equals the editor's reading.
+      Undoing everything then restores the loaded document, because typing and commands share one history.
+      `LettersCommentsSmoke.test_a_comment_stays_on_its_word_across_unicode_typed_before_it_and_undo` does the same in
+      the app: it comments on a word, types `é👍中` before it through the input method, and undoes. It found one bug in
+      the live model's partial re-render, fixed here. When an empty line was the last line of the span, its style was
+      dropped, and the stale paragraph tags it had replaced stayed behind on its newline.
 - [ ] Drive editor pagination and print/export from styled paragraph/run metrics; remove byte/character-offset ambiguity.
 - [ ] Wire admitted review/TOC/bidi workflows or report them as unavailable until GUI and format tests pass.
 - [~] Reconcile duplicate ADR numbers and the conflicting old/new advanced-feature scope without silently expanding scope.

@@ -1159,6 +1159,19 @@ pub(crate) fn render_paragraphs(buf: &gtk::TextBuffer, insert: &mut gtk::TextIte
         let mut end = *end;
         if end <= *start && k + 1 < tagged.len() {
             end = tagged[k + 1].0;
+        } else if end <= *start && buf.iter_at_offset(*start).char() == '\n' {
+            // The last line of a partial render (the live model re-renders
+            // only what changed) still has its newline, just past the
+            // span: an empty line's style held in the model and was gone
+            // from the next capture (#1279). That newline kept the old
+            // line's paragraph tags, which the new style replaces.
+            let (s, e) = (buf.iter_at_offset(*start), buf.iter_at_offset(*start + 1));
+            for tag in s.tags() {
+                if tag.name().is_some_and(|n| is_paragraph_tag(&n)) {
+                    buf.remove_tag(&tag, &s, &e);
+                }
+            }
+            end = *start + 1;
         }
         if end <= *start {
             continue;
@@ -1169,6 +1182,17 @@ pub(crate) fn render_paragraphs(buf: &gtk::TextBuffer, insert: &mut gtk::TextIte
             buf.apply_tag_by_name(name, &s, &e);
         }
     }
+}
+
+/// Whether `name` is one of the tags that carry a paragraph's style
+/// (render_paragraphs's `para_tags`), as opposed to a run's.
+fn is_paragraph_tag(name: &str) -> bool {
+    matches!(name, "h1" | "h2" | "h3" | "h4" | "h5" | "h6" | "h-title" | "h-subtitle" | "blockquote" | "code-block")
+        || name.starts_with("align-")
+        || name.starts_with("line-spacing-")
+        || name == PAGE_BREAK_TAG
+        || name.starts_with(PARA_TAG_PREFIX)
+        || list_level_from_tag_name(name).is_some()
 }
 
 /// Show a freshly opened (or recovered) document in `buf`: its live
