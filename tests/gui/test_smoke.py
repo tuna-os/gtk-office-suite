@@ -727,16 +727,22 @@ class TablesKeyboardOnlySmoke(KeyboardOnlyMixin, BaseGUITestCase):
         cells = self.trigger_snapshot("org.tunaos.tables")["sheet"]["cells"]
         return next((c["value"] for c in cells if (c["row"], c["col"]) == (row, col)), None)
 
+    def _name_box_focused(self):
+        import pyatspi
+        return self.app.findChild(lambda n: n.name == "Cell reference" and n.getState().contains(pyatspi.STATE_FOCUSED),
+                                  retry=False, requireResult=False)
+
     def test_type_undo_and_save_with_keys_alone(self):
         from dogtail import rawinput
         self.wait_until(lambda: self._cell(0, 0), lambda v: v == "start", description="book.xlsx to open")
         self._activate_window()
-        for ref, value in (("B1", "13"), ("B2", "29")):
+        for ref, value, row in (("B1", "13", 0), ("B2", "29", 1)):
             rawinput.keyCombo("<Control>g")
-            time.sleep(0.3)
+            self.wait_until(lambda: self._name_box_focused(), bool, description="Ctrl+G to focus the name box")
             rawinput.typeText(ref)
             rawinput.keyCombo("Return")
-            time.sleep(0.3)
+            self.wait_until(lambda: self.trigger_snapshot("org.tunaos.tables")["sheet"]["selection"][:2],
+                            lambda s, row=row: s == [row, 1], description=f"the jump to {ref}")
             rawinput.typeText(value)
             rawinput.keyCombo("Return")
         self.wait_until(lambda: self._cell(1, 1), lambda v: v == "29", description="29 typed into B2")
@@ -766,7 +772,9 @@ class DecksKeyboardOnlySmoke(KeyboardOnlyMixin, BaseGUITestCase):
         rawinput.keyCombo("<Control>k")
         self.wait_for_node(name="Command Palette")
         rawinput.typeText(command)
-        time.sleep(0.5)
+        # The palette filters its list on idle and exposes no state that
+        # says the filter has run; Return picks the first row.
+        time.sleep(0.5)  # pacing: let the filter run
         rawinput.keyCombo("Return")
 
     def test_insert_undo_redo_and_save_with_keys_alone(self):
