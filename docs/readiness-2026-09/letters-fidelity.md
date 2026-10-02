@@ -38,8 +38,6 @@ A per-tab session owns the complete Document, review state, imported-package con
       - an empty last paragraph's style (a heading, a page break) lost on capture, and so on save;
       - a cell's own leading and trailing spaces trimmed away;
       - table ids compared by value rather than by grouping.
-
-      Deleting the empty line between two tables still runs them together (#1299).
 - [x] Apply model operations and undo through one live session; keep review anchors correct across Unicode edits.
       `review_anchors_hold_across_unicode_edits_and_one_history_undoes_them` (`letters/src/live/tests.rs`, #1279) runs
       40 seeded interleavings of typing (a combining accent, a non-BMP emoji with a skin-tone modifier, CJK, Enter),

@@ -199,3 +199,45 @@ fn a_frame_at_the_bottom_of_a_tall_sheet_stays_within_budget() {
     });
     assert!(frame <= Duration::from_millis(300), "a frame's geometry took {frame:?}");
 }
+
+/// Prefix sums (#1282): placing the visible rows costs the same at the
+/// bottom of a million-row sheet as at the top. Before them a frame walked
+/// every row above the first visible one, so the bottom cost a pass over
+/// the whole sheet and the top almost nothing. The prefix is built once per
+/// change to the sizes or hidden rows, not per frame.
+#[test]
+fn a_frame_costs_the_same_at_the_top_and_the_bottom_of_a_million_rows() {
+    let mut sheet = SheetModel::new("Million", 1_000_000, 1, 1);
+    sheet.hidden_rows.insert(500_000);
+    sheet.set_row_height(700_000, 60.0);
+    let (view_w, view_h) = (1_280.0, 800.0);
+    let bottom = tables_core::sheet::max_scroll((view_w, view_h), &sheet).1;
+    let frame = |scroll: f64| {
+        let rows = visible_rows(scroll, view_h, &sheet);
+        assert!(!rows.is_empty() && rows.len() < 60, "a screenful of rows: {}", rows.len());
+        let (r, _) = rows[rows.len() / 2];
+        black_box(row_y(r, scroll, &sheet));
+        black_box(rows);
+    };
+    let time = |scroll: f64| {
+        let mut samples: Vec<Duration> = (0..25)
+            .map(|_| {
+                let start = Instant::now();
+                frame(scroll);
+                start.elapsed()
+            })
+            .collect();
+        samples.sort_unstable();
+        (samples[12], samples[23])
+    };
+    frame(bottom); // builds the prefix once
+    let (top_p50, top_p95) = time(0.0);
+    let (bottom_p50, bottom_p95) = time(bottom);
+    eprintln!("million-row frame: top p50={top_p50:?} p95={top_p95:?}, bottom p50={bottom_p50:?} p95={bottom_p95:?}");
+    // Within noise: the bottom may not cost more than a small multiple of
+    // the top plus a fixed allowance. A walk over the rows is ~1000x.
+    let allowance = Duration::from_micros(500);
+    assert!(bottom_p50 <= top_p50 * 4 + allowance, "bottom p50 {bottom_p50:?} vs top {top_p50:?}");
+    assert!(bottom_p95 <= top_p95 * 4 + allowance, "bottom p95 {bottom_p95:?} vs top {top_p95:?}");
+    assert!(bottom_p95 <= Duration::from_millis(5), "a frame's geometry took {bottom_p95:?}");
+}
