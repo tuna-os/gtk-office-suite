@@ -1444,13 +1444,25 @@ fn parse_pages(
     let mut builds = crate::odp_builds::BuildReader::default();
     const SHAPES: [&str; 5] = ["draw:frame", "draw:rect", "draw:ellipse", "draw:circle", "draw:custom-shape"];
 
+    // A page with nothing on it may be one self-closing element
+    // (`<draw:page draw:name="A"/>`): it is read as its start, then its end.
+    let mut close_page: Option<quick_xml::events::BytesEnd<'static>> = None;
     loop {
         if let Some(s) = slide.as_ref() {
             while ids.len() < s.objects.len() {
                 ids.push(last_id.clone());
             }
         }
-        let event = reader.read_event();
+        let event = match close_page.take() {
+            Some(end) => Ok(Event::End(end)),
+            None => match reader.read_event() {
+                Ok(Event::Empty(e)) if e.name().as_ref() == page_tag => {
+                    close_page = Some(quick_xml::events::BytesEnd::new(page_tag.to_string()));
+                    Ok(Event::Start(e))
+                }
+                other => other,
+            },
+        };
         match &event {
             Ok(Event::Start(e)) | Ok(Event::Empty(e)) => {
                 if SHAPES.contains(&e.name().as_ref()) {
@@ -1968,6 +1980,24 @@ pub fn read(path: &str) -> Result<Deck, String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn an_empty_page_written_as_one_element_is_still_a_slide() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("empty.odp");
+        let mut z = zip::ZipWriter::new(std::fs::File::create(&path).unwrap());
+        z.start_file("mimetype", zip::write::SimpleFileOptions::default()).unwrap();
+        std::io::Write::write_all(&mut z, b"application/vnd.oasis.opendocument.presentation").unwrap();
+        z.start_file("content.xml", zip::write::SimpleFileOptions::default()).unwrap();
+        std::io::Write::write_all(
+            &mut z,
+            br#"<office:document-content xmlns:office="o" xmlns:draw="d"><office:body><office:presentation><draw:page draw:name="A"/><draw:page draw:name="B"></draw:page><draw:page draw:name="C"/></office:presentation></office:body></office:document-content>"#,
+        )
+        .unwrap();
+        z.finish().unwrap();
+        let deck = read(path.to_str().unwrap()).unwrap();
+        assert_eq!(deck.slides.iter().map(|s| s.title.as_str()).collect::<Vec<_>>(), ["A", "B", "C"]);
+    }
 
     fn round_trip(deck: &Deck) -> Deck {
         let dir = tempfile::tempdir().unwrap();

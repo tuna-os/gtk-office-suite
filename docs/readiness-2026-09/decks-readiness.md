@@ -6,7 +6,18 @@ Audited on `e7e4df6`. Follow-up verification to closed #115–#117, using `docs/
 One DecksController owns slide/object/master state, stable identities, selection, history and dirty revision. Canvas and inspector apply the same commands. A drag/resize gesture commits one undoable operation. Rendering, thumbnails, presentation and PDF export consume the same model and geometry. Imported package context travels with the document into the loss-budget save boundary.
 
 ## Slices and tests
-- [ ] Inventory each advertised action and prove it mutates canonical state: select/multi-select, move/resize/rotate, align/arrange/group, duplicate/reorder, style and image fit/crop.
+- [x] Inventory each advertised action and prove it mutates canonical state: select/multi-select, move/resize/rotate, align/arrange/group, duplicate/reorder, style and image fit/crop.
+    [DECKS-ACTIONS.md](../DECKS-ACTIONS.md): every `app.*` action and every
+    canvas and inspector control, what it changes in the model and the
+    test that proves it; `tests/test_decks_action_inventory.py` fails on
+    an action with no row or a cited test that isn't there. New journey
+    `DecksAdvertisedActionsSmoke` covers what had none: No Fill and Bold
+    (one undo step each), Delete on the selected object, Add Image and
+    Open. It found two bugs: the canvas could never take keyboard focus,
+    so Delete and the arrow keys did nothing, and the odp reader dropped
+    a page written as one empty element. Multi-select, grouping and
+    multi-object align are not offered, and the inventory says so. Image
+    crop is the inspector's Picture group (DecksPictureCropSmoke, #1257).
 - [x] Undo/redo mixed object and slide edits, including deletion and selection repair; no detached state or reentrant RefCell panic.
     `decks-core/tests/controller_property.rs` drives DecksController, the
     API the window calls, with random mixes of object edits (add, delete,

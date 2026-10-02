@@ -115,6 +115,11 @@ impl DecksWindow {
         canvas.set_hexpand(true);
         canvas.set_accessible_role(gtk::AccessibleRole::List);
         canvas.update_property(&[gtk::accessible::Property::Label("Slide canvas")]);
+        // Keys reach the slide (navigation, Tab through objects, Delete)
+        // only when it has focus: a click gives it, and so does Tab from
+        // the panes around it.
+        canvas.set_focusable(true);
+        canvas.set_focus_on_click(true);
         if std::env::var_os("GTK_OFFICE_TEST_MODE").is_some() {
             // Render lab Tier A (docs/RENDER-PARITY-ROADMAP.md): every
             // slide as the canvas draws it, 1280 px wide (13.33 in at 96
@@ -972,7 +977,7 @@ impl DecksWindow {
                 let cs_ref = cs_ref.clone();
                 let controller = controller.clone();
                 let _refresh = refresh.clone();
-                dlg.open(Some(&w), None::<&gio::Cancellable>,
+                crate::file_pick::open(&dlg, &w,
                     move |result: Result<gio::File, glib::Error>| {
                         if let Ok(file) = result {
                             if let Ok(path) = suite_common::locations::open_location(&file).map_err(|e| eprintln!("{e}")) {
@@ -1215,7 +1220,7 @@ impl DecksWindow {
                 let masters = masters.clone();
                 let dirty = dirty.clone();
 
-                dlg.open(Some(&w), None::<&gio::Cancellable>,
+                crate::file_pick::open(&dlg, &w,
                     move |result: Result<gio::File, glib::Error>| {
                         if let Ok(file) = result {
                             if let Some(path) = local_path(&file, false, &w2) {

@@ -62,7 +62,7 @@ pub fn detail(obj: &SlideObject) -> String {
                 bytes.hash(&mut h);
                 *path = format!("picture:{:016x}:{}", h.finish(), bytes.len());
             }
-            Err(_) => *path = "picture:missing".into(),
+            Err(_) => *path = format!("picture:missing:{path}"),
         }
     }
     format!("{obj:?}")

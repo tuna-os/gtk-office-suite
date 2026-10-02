@@ -4980,26 +4980,9 @@ class DecksSelectionSmoke(BaseGUITestCase):
         self.assertIsNone(self.process.poll(), "decks crashed during selection")
 
 
-class DecksCanvasDragSmoke(BaseGUITestCase):
-    """Dragging an object on the canvas moves it in the model.
-
-    The move, resize and rotate gestures had no journey at all.
-    `DecksSelectionSmoke` clicks to select and stops there, and the
-    harness's own `drag()` helper was unused by any Decks test. That gap
-    only became visible when `canvas_input.rs` was split out of
-    `window.rs`: "all ten Decks journeys pass" turned out to say nothing
-    about most of the 203 lines that moved, since only the click-to-select
-    path was ever exercised.
-
-    So this asserts the model, not the canvas description: a drag that
-    selects but fails to move would still satisfy a description check.
-    """
-
-    app_name = "decks"
-
-    def setUp(self):
-        self._snapshot_path = self.isolate_snapshot(prefix="decks-drag-")
-        super().setUp()
+class DecksCanvasGeometry:
+    """Slide coordinates to window ones, for journeys that click or drag on
+    the Decks canvas."""
 
     def _slide_to_window(self):
         """Map slide (960x540) coordinates to window-local ones.
@@ -5022,6 +5005,28 @@ class DecksCanvasDragSmoke(BaseGUITestCase):
         ox = (cw - 960.0 * scale) / 2.0
         oy = (ch - 540.0 * scale) / 2.0
         return lambda sx, sy: (cx + ox + sx * scale, cy + oy + sy * scale)
+
+
+class DecksCanvasDragSmoke(DecksCanvasGeometry, BaseGUITestCase):
+    """Dragging an object on the canvas moves it in the model.
+
+    The move, resize and rotate gestures had no journey at all.
+    `DecksSelectionSmoke` clicks to select and stops there, and the
+    harness's own `drag()` helper was unused by any Decks test. That gap
+    only became visible when `canvas_input.rs` was split out of
+    `window.rs`: "all ten Decks journeys pass" turned out to say nothing
+    about most of the 203 lines that moved, since only the click-to-select
+    path was ever exercised.
+
+    So this asserts the model, not the canvas description: a drag that
+    selects but fails to move would still satisfy a description check.
+    """
+
+    app_name = "decks"
+
+    def setUp(self):
+        self._snapshot_path = self.isolate_snapshot(prefix="decks-drag-")
+        super().setUp()
 
     def test_dragging_an_object_moves_it_in_the_model(self):
         aid = "org.tunaos.decks"
@@ -5067,6 +5072,120 @@ class DecksCanvasDragSmoke(BaseGUITestCase):
             msg=f"movement is not proportional to the drag: {before} -> {after}",
         )
         self.assertIsNone(self.process.poll(), "decks crashed during the drag")
+
+
+class DecksAdvertisedActionsSmoke(DecksCanvasGeometry, BaseGUITestCase):
+    """decks-readiness row 9: the advertised actions that had no journey,
+    each asserted on the model (the snapshot's object detail), not on the
+    widgets: No Fill and Bold in the Format inspector (one undo step each),
+    Delete on a selected object (a click gives the canvas the keyboard),
+    Add Image and Open from the file their dialog chooses (the dialog
+    itself is GTK's; decks/src/file_pick.rs). The inventory of every action and its proof is
+    docs/DECKS-ACTIONS.md."""
+
+    AID = "org.tunaos.decks"
+
+    app_name = "decks"
+
+    def _objects(self):
+        return self.trigger_snapshot(self.AID)["slides"][0]["objects"]
+
+    def _wait_objects(self, pred, what):
+        return self.wait_until(self._objects, pred, interval=0.5, description=what)
+
+    def _inspector_tab(self, name):
+        import pyatspi
+        toggle = self.app.child(name="Format", roleName="toggle button")
+        if not toggle.getState().contains(pyatspi.STATE_PRESSED):
+            toggle.do_action(0)
+        self.wait_until(lambda: self.app.child(name=name), lambda t: t is not None,
+                        description=f"the inspector's {name} tab").do_action(0)
+
+    def _button(self, name, role="push button"):
+        return self.wait_until(lambda: self.app.child(name=name, roleName=role),
+                               lambda b: b is not None and b.showing, description=f"the {name} control")
+
+    def test_no_fill_bold_and_delete_change_the_model(self):
+        from dogtail import rawinput
+        self.gapplication_action(self.AID, "new-document")
+        self.gapplication_action(self.AID, "add-shape")
+        self._wait_objects(lambda o: len(o) == 1 and "fill: Some(" in o[0]["detail"], "a filled shape")
+
+        self._inspector_tab("Style")
+        self._button("No Fill").do_action(0)
+        self._wait_objects(lambda o: "fill: None" in o[0]["detail"], "No Fill to take the fill off")
+        self.gapplication_action(self.AID, "undo")
+        self._wait_objects(lambda o: "fill: Some(" in o[0]["detail"], "one undo to put it back")
+
+        self.gapplication_action(self.AID, "add-text-box")
+        self._wait_objects(lambda o: [x["kind"] for x in o] == ["Shape", "TextBox"], "a text box, selected")
+        self._inspector_tab("Text")
+        self._button("Bold", "toggle button").do_action(0)
+        self._wait_objects(lambda o: "bold: true" in o[1]["detail"], "Bold on the text box's runs")
+        self.gapplication_action(self.AID, "undo")
+        self._wait_objects(lambda o: "bold: true" not in o[1]["detail"], "one undo to take it off")
+
+        # Select the shape by clicking it (the first shape is 200x150 at
+        # 200,200), which also gives the canvas the keyboard, then Delete.
+        to_window = self._slide_to_window()
+        x, y = to_window(300.0, 275.0)
+        self._activate_window()
+        rawinput.click(int(x), int(y))
+        self.wait_until(lambda: self.trigger_snapshot(self.AID)["selected"], lambda s: s == 0,
+                        description="the click to select the shape")
+        rawinput.keyCombo("Delete")
+        self._wait_objects(lambda o: [x["kind"] for x in o] == ["TextBox"], "Delete to remove the selected shape")
+        self.gapplication_action(self.AID, "undo")
+        self._wait_objects(lambda o: [x["kind"] for x in o] == ["Shape", "TextBox"], "undo to bring it back")
+        self.assertIsNone(self.process.poll(), "decks crashed")
+
+    def _pick(self, path):
+        """What the next open dialog chooses (decks/src/file_pick.rs: test
+        mode only; GTK's own dialog can't be driven reliably here)."""
+        with open(self._pick_file, "w") as f:
+            f.write(path)
+
+    def setUp(self):
+        self.isolate_snapshot(prefix="decks-actions-")
+        self._pick_file = os.path.join(self.temp_dir(prefix="decks-pick-"), "pick")
+        self.launch_env = {**getattr(self, "launch_env", {}), "GTK_OFFICE_TEST_MODE": "1", "GTK_OFFICE_TEST_PICK": self._pick_file}
+        super().setUp()
+
+    def test_add_image_and_open_use_the_chosen_file(self):
+        import io
+        import zipfile
+        from PIL import Image
+        d = self.temp_dir(prefix="decks-actions-")
+        png = os.path.join(d, "dot.png")
+        Image.new("RGB", (40, 20), (200, 40, 40)).save(png, "PNG")
+        self.gapplication_action(self.AID, "new-document")
+        self._wait_objects(lambda o: o == [], "an empty slide")
+        self._pick(png)
+        self.gapplication_action(self.AID, "add-image")
+        self._wait_objects(lambda o: len(o) == 1 and o[0]["kind"] == "Image" and "picture:missing" not in o[0]["detail"],
+                           "the picture on the slide, its bytes readable")
+
+        odp = os.path.join(d, "other.odp")
+        buf = io.BytesIO()
+        with zipfile.ZipFile(buf, "w") as z:
+            z.writestr("mimetype", "application/vnd.oasis.opendocument.presentation", compress_type=zipfile.ZIP_STORED)
+            z.writestr("content.xml",
+                       '<?xml version="1.0" encoding="UTF-8"?><office:document-content '
+                       'xmlns:office="urn:oasis:names:tc:opendocument:xmlns:office:1.0" '
+                       'xmlns:draw="urn:oasis:names:tc:opendocument:xmlns:drawing:1.0" office:version="1.3">'
+                       '<office:body><office:presentation><draw:page draw:name="Elsewhere"/><draw:page draw:name="Second"/>'
+                       '</office:presentation></office:body></office:document-content>')
+        with open(odp, "wb") as f:
+            f.write(buf.getvalue())
+        self.gapplication_action(self.AID, "open-file")
+        # The deck has unsaved changes: Open asks first.
+        discard = self.wait_until(lambda: self.app.child(name="Discard", roleName="push button"),
+                                  lambda b: b is not None, description="the unsaved-changes question")
+        self._pick(odp)
+        discard.do_action(0)
+        self.wait_until(lambda: (self.trigger_snapshot(self.AID)["slide_count"], self.app.child(roleName="frame").name),
+                        lambda t: t[0] == 2 and "other.odp" in t[1], interval=0.5, description="the chosen file to open")
+        self.assertIsNone(self.process.poll(), "decks crashed")
 
 
 class DecksCloseGuardSmoke(BaseGUITestCase):
