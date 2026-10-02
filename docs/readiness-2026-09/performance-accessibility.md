@@ -53,7 +53,28 @@ Architecture: benchmark core open/edit/recalculate/save separately from GTK inpu
         and a row's thumbnail is drawn from the live deck when it comes within a screen of the viewport.
         `a_300_slide_strip_renders_thumbnails_only_in_view_and_the_canvas_one_slide` requires a 300-slide rebuild to
         render none (15 ms p50) and the canvas to draw its one slide within 100 ms p95 (1 ms p50).
-- [ ] Fixed-font visual matrix: widths 400/800/1280, light/dark/high contrast, scale 1/2, editor/selection/dialog/error; retain expected/actual/diff plus snapshot.
+- [~] Fixed-font visual matrix: widths 400/800/1280, light/dark/high contrast, scale 1/2, editor/selection/dialog/error; retain expected/actual/diff plus snapshot.
+      **The matrix exists and holds locally** (#1284). `tests/gui/visual_matrix.py` runs `test_visual_matrix.py`
+      once per config, which is all 18 combinations of width, theme and scale. Each run captures every app in the
+      four states: a fixed document just opened, a selection, the Keyboard Shortcuts window, and the "Could not open"
+      message a corrupt file gets. That makes 216 cells, compared with committed expected images
+      (`tests/gui/visual/expected`, stored at half resolution, 4 MB) against a per-cell threshold
+      (`visual/thresholds.json`). Every cell keeps its screenshot, the app's state snapshot and the result, plus
+      expected and diff on a mismatch; `--update` rewrites expectations on purpose.
+      - **Pinned rendering.** Fonts are pinned to bundled DejaVu (`visual/fonts.conf` loads no system fonts),
+        rendering to GSK's cairo renderer, and the caret doesn't blink.
+      - **Deterministic.** A second full run matched 202 of 216 cells pixel for pixel. The other 14 were Letters'
+        error message quoting a random temp path, which also showed that the comparison catches a changed line of
+        text; fixed, re-recorded, and those cells now match exactly too.
+      - **Bugs found while building it.** The harness pinned `GDK_SCALE=1` and `GTK_THEME=Adwaita` (with which
+        libadwaita ignores the colour scheme), so the stress campaign's scale-2 and dark configs never took effect;
+        both now pass through. The persisted `dark-mode` preference is never saved or restored (#1305). At 400 px
+        the Keyboard Shortcuts window is wider than the screen, so its key labels are cut off (#1307; recorded as the
+        expected image for now).
+      - **Still open:** the row's exit is the nightly `.github/workflows/visual-matrix.yml` (non-gating) with its
+        first green run linked. Its expected images were recorded on a developer container with the same Ubuntu
+        24.04 packages as the GUI image; if the image draws a cell differently, a dispatch with `update=true`
+        records that environment's expectations as an artifact.
 - [x] Keyboard-only edit/save/undo and AT-SPI names/roles/states/bounds match the model after scroll/resize/zoom.
       **Keyboard-only edit, undo and save is done for all three apps** (#1208): `LettersKeyboardOnlySmoke`,
       `TablesKeyboardOnlySmoke` and `DecksKeyboardOnlySmoke` (`KeyboardOnlyMixin` in `tests/gui/test_smoke.py`) open

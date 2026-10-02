@@ -49,11 +49,14 @@ APPS = ("letters", "tables", "decks")
 #
 # Bounded on purpose: every config multiplies the campaign's wall time,
 # and a matrix nobody can afford to run is not coverage. These are the
-# axes the harness can actually set today — screen geometry, scale
-# factor and the light/dark preference. High contrast is NOT covered
-# here: it needs a theme the container does not ship, and claiming the
-# axis with an env var that changes nothing would be worse than leaving
-# it visibly undone (see docs/readiness-2026-09/crash-stress.md).
+# axes the harness can actually set — screen geometry, scale factor and
+# the light/dark preference. Until #1284 the last two never reached the
+# app: the harness pinned GDK_SCALE=1 and GTK_THEME=Adwaita (which makes
+# libadwaita ignore the colour scheme), so the scale-2 and dark configs
+# ran at scale 1 in light style. framework/base.py now passes both
+# through (ADW_DEBUG_COLOR_SCHEME). High contrast is covered by the visual
+# matrix (tests/gui/visual_matrix.py, GUI_TEST_HIGH_CONTRAST=1) rather
+# than here, which keeps the campaign's wall time bounded.
 
 
 @dataclass(frozen=True)
