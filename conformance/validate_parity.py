@@ -14,6 +14,13 @@ feature is proven. This validator makes that claim machine-checkable in PR CI:
   E4  (with --base) Status transitions vs. the base branch's PARITY.md:
       a row may not silently regress green→non-green, and may not jump to
       green without new evidence.
+  E6  (with --base) A format feature is promoted — turned green, or added
+      green — only with all three kinds of evidence: the model (I1 or a
+      `*-core/` path), a live journey (I6 or a `tests/gui/` path) and an
+      independent reader (I3/I4, `lo_parity`, `soffice_oracle`). A format
+      feature is a row whose evidence cites I2–I4 or whose name is a file
+      format or a save/load/round trip (interoperability.md, #1206). Rows
+      already green are not re-judged: the rule governs promotion.
   E5  Every Tier 1/2 table ends in a `Render` column (RENDER-PARITY-ROADMAP
       "Rules the humans enforce in review", rule 1). A Render cell may show
       ✅ only when every render-lab fixture it names is green in both tiers
@@ -66,6 +73,15 @@ EVIDENCE_RE = re.compile(
 JOURNEY_GATED = ("undo/redo", "multi-sheet", "multi sheet", "preferences")
 
 NON_GREEN = ("❌", "⚠️", "❓")
+
+# E6: what makes a row a format feature, and the three kinds of evidence a
+# promotion needs.
+FORMAT_FEATURE_RE = re.compile(
+    r"\b(save|load|read|write|round[- ]?trip|docx|odt|xlsx|xlsm|xls|ods|csv|tsv|pptx|odp)\b",
+    re.IGNORECASE,
+)
+INSTRUMENT_RANGE_RE = re.compile(r"\bI([1-7])\s*[–-]\s*I?([1-7])\b")
+INSTRUMENT_RE = re.compile(r"\bI([1-7])\b")
 
 # A render-lab fixture id as it appears in tools/render-lab/baseline.json.
 FIXTURE_RE = re.compile(r"(?<![A-Za-z0-9_/])(letters|tables|decks)/[a-z0-9][a-z0-9\-]*")
@@ -263,6 +279,31 @@ def check_evidence(row, repo_root, errors, warnings):
             )
 
 
+def instruments(evidence: str) -> set:
+    """The instruments `evidence` cites, with ranges (`I1–I5`) expanded."""
+    cited = {int(m.group(1)) for m in INSTRUMENT_RE.finditer(evidence)}
+    for m in INSTRUMENT_RANGE_RE.finditer(evidence):
+        cited.update(range(int(m.group(1)), int(m.group(2)) + 1))
+    return cited
+
+
+def missing_promotion_evidence(feature: str, evidence: str) -> list:
+    """E6: which of model, live journey and independent reader a format
+    feature's evidence lacks; empty for a feature that isn't a format one."""
+    cited = instruments(evidence)
+    if not (cited & {2, 3, 4} or FORMAT_FEATURE_RE.search(feature)):
+        return []
+    lowered = evidence.lower()
+    missing = []
+    if 1 not in cited and "-core/" not in lowered:
+        missing.append("model (I1 or a *-core/ path)")
+    if 6 not in cited and "tests/gui/" not in lowered:
+        missing.append("live journey (I6 or a tests/gui/ path)")
+    if not (cited & {3, 4} or "lo_parity" in lowered or "soffice_oracle" in lowered):
+        missing.append("independent reader (I3/I4, lo_parity or soffice_oracle)")
+    return missing
+
+
 def build_index(rows):
     idx = {}
     for app, tier, feature, _, cells in rows:
@@ -272,6 +313,8 @@ def build_index(rows):
         idx[key] = {
             "green": GREEN in " ".join(cells),
             "evidence": norm(" ".join(cells[1:])),
+            "raw_evidence": " ".join(cells[1:]),
+            "feature": feature,
         }
     return idx
 
@@ -296,6 +339,19 @@ def check_transitions(base_path, head_rows, errors):
                     f"row can only go green when its evidence cell changes "
                     f"(add the test/instrument that proves it)."
                 )
+    # E6: a promotion is a row that turned green, or one that arrived green.
+    for key in sorted(head_idx):
+        h = head_idx[key]
+        if not h["green"] or base_idx.get(key, {}).get("green"):
+            continue
+        missing = missing_promotion_evidence(h["feature"], h["raw_evidence"])
+        if missing:
+            feature = " | ".join(str(x) for x in key)
+            errors.append(
+                f"E6 {feature}: a format feature goes green only with model, "
+                f"live-journey and independent-reader evidence; it lacks "
+                f"{', '.join(missing)}."
+            )
 
 
 def validate(parity: Path, base: Path | None = None,
