@@ -21,6 +21,7 @@ pub mod render_dump;
 pub mod dialogs;
 pub mod file_drop;
 pub use file_drop::open_files_on_drop;
+pub mod popover;
 pub use suite_common_core::{actions, palette, format, undo, events, string_pool, units, props, style, search, print, atomic_save, autosave, interop, carry, recent, templates, session};
 
 pub use file_dialogs::FileDialogHelper;
