@@ -80,6 +80,7 @@ jobs:
             tests/test_sync_issues.py \
             tests/test_decks_action_inventory.py \
             tests/test_fixture_manifests.py \
+            tests/test_interop_evidence.py \
             tests/test_oracle_lanes.py \
             tests/test_patched_dependencies.py \
             tests/test_readiness_citations.py \
@@ -143,6 +144,7 @@ jobs:
             tests/test_sync_issues.py \
             tests/test_decks_action_inventory.py \
             tests/test_fixture_manifests.py \
+            tests/test_interop_evidence.py \
             tests/test_oracle_lanes.py \
             tests/test_patched_dependencies.py \
             tests/test_readiness_citations.py \

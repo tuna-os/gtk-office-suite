@@ -5,6 +5,7 @@ mod persistence;
 mod export;
 mod export_ui;
 mod file_pick;
+mod loss_ui;
 mod canvas;
 mod text_render;
 mod format_inspector;

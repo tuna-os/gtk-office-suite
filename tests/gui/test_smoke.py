@@ -4904,6 +4904,65 @@ class DecksFormatJourneySmoke(BaseGUITestCase):
         self._reopened(odp, edited)
         self.assertIsNone(self.process.poll(), "decks crashed on the journey")
 
+class DecksUnsupportedContentSmoke(BaseGUITestCase):
+    """Content Decks can't keep is warned about before a save drops it
+    (decks-readiness.md, "unsupported animation/comment content is ...
+    warned by #374 before save"; decks_core::loss). A pptx with a comment:
+    Ctrl+S asks; Cancel leaves the file's bytes as they were; Save Anyway
+    writes it without the comment; the next save, of a file Decks wrote,
+    doesn't ask."""
+
+    app_name = "decks"
+
+    def setUp(self):
+        import io
+        import zipfile
+        self._dir = self.temp_dir(prefix="decks-loss-")
+        self.isolate_snapshot(prefix="decks-loss-snap-")
+        self.isolate_autosave_state()
+        self._doc = os.path.join(self._dir, "talk.pptx")
+        buf = io.BytesIO(minimal_pptx_bytes("kept"))
+        with zipfile.ZipFile(buf, "a") as z:
+            z.writestr("ppt/comments/comment1.xml", '<p:cmLst xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main"/>')
+        with open(self._doc, "wb") as f:
+            f.write(buf.getvalue())
+        self._original = buf.getvalue()
+        self.launch_args = [self._doc]
+        super().setUp()
+
+    def _bytes(self):
+        with open(self._doc, "rb") as f:
+            return f.read()
+
+    def test_a_save_that_drops_a_comment_asks_first(self):
+        import io
+        import zipfile
+        aid = "org.tunaos.decks"
+        self.wait_until(lambda: self.app.child(name="Slide canvas"), lambda c: c is not None, description="the deck to open")
+        self.gapplication_action(aid, "save-file")
+        self.wait_for_node(name="Save Without This Content?")
+        self.wait_for_node(name="Cancel", roleName="push button").do_action(0)
+        time.sleep(1.0)
+        self.assertEqual(self._bytes(), self._original, "Cancel wrote the file")
+
+        self.gapplication_action(aid, "save-file")
+        self.wait_for_node(name="Save Anyway", roleName="push button").do_action(0)
+        self.wait_until(self._bytes, lambda b: b != self._original, description="Save Anyway to write the file")
+        with zipfile.ZipFile(io.BytesIO(self._bytes())) as z:
+            names = z.namelist()
+            self.assertFalse([n for n in names if n.startswith("ppt/comments/")], names)
+            self.assertIn(b"kept", b"".join(z.read(n) for n in names if n.startswith("ppt/slides/slide")))
+
+        before = os.stat(self._doc).st_mtime_ns
+        time.sleep(0.05)
+        self.gapplication_action(aid, "save-file")
+        self.wait_until(lambda: os.stat(self._doc).st_mtime_ns, lambda m: m != before,
+                        description="a save of the file Decks wrote, without asking")
+        from dogtail import tree
+        self.assertIsNone(tree.root.findChild(lambda n: n.name == "Save Anyway" and n.roleName == "push button", retry=False, requireResult=False),
+                          "a file Decks wrote has nothing to lose, so no question")
+        self.assertIsNone(self.process.poll(), "decks crashed saving")
+
 
 class DecksExportSmoke(BaseGUITestCase):
     """Export (Keynote's File > Export To, Google Slides' Download): Export
