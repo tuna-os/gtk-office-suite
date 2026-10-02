@@ -17,6 +17,7 @@ import json
 import os
 import shutil
 import signal
+import socket
 import subprocess
 import sys
 import tempfile
@@ -161,6 +162,27 @@ def start(argv, env, log):
     return subprocess.Popen(argv, env=env, stdout=log, stderr=subprocess.STDOUT, start_new_session=True)
 
 
+def start_xvfb(display, size, env):
+    """Start Xvfb on `display` (":71") at `size` ("WxH") and return once it
+    accepts connections. A fixed one-second sleep raced a cold CI runner:
+    the app started first, printed "Failed to open display" and exited, and
+    the fixture was reported as an export with no PDF."""
+    xvfb = start(["Xvfb", display, "-screen", "0", f"{size}x24", "-nolisten", "tcp"], env, subprocess.DEVNULL)
+    sock = f"/tmp/.X11-unix/X{display.lstrip(':')}"
+    deadline = time.monotonic() + 30
+    while time.monotonic() < deadline:
+        if xvfb.poll() is not None:
+            raise RuntimeError(f"Xvfb {display} exited with {xvfb.returncode}")
+        try:
+            with socket.socket(socket.AF_UNIX) as s:
+                s.connect(sock)
+            return xvfb
+        except OSError:
+            time.sleep(0.1)
+    stop(xvfb)
+    raise RuntimeError(f"Xvfb {display} did not accept connections within 30s")
+
+
 def stop(proc):
     if proc and proc.poll() is None:
         os.killpg(proc.pid, signal.SIGTERM)
@@ -190,8 +212,7 @@ def tier_a(app, doc, dest, env):
     ):
         os.remove(old)
     w, h = window(app)
-    xvfb = start(["Xvfb", ":71", "-screen", "0", f"{w + 100}x{h + 100}x24", "-nolisten", "tcp"], env, subprocess.DEVNULL)
-    time.sleep(1)
+    xvfb = start_xvfb(":71", f"{w + 100}x{h + 100}", env)
     e = dict(env, DISPLAY=":71", GDK_BACKEND="x11", GSK_RENDERER="cairo", GTK_OFFICE_RENDER_DUMP=dest)
     with open(os.path.join(dest, "A.log"), "w") as log:
         p = start(app_argv(app, doc), e, log)
