@@ -6342,3 +6342,49 @@ class TablesChartDialogSmoke(BaseGUITestCase):
             timeout=10.0,
             description="the chart dialog to close after inserting",
         )
+
+
+class DecksSlideOrderSmoke(BaseGUITestCase):
+    """Duplicate and reorder slides (PARITY.md, Decks Tier 2): the sidebar's
+    Duplicate button copies the current slide, objects and all, right
+    after it; Ctrl+Shift+Page Up moves the current slide up; each is one
+    undo step. Asserted on the snapshot's slide order and objects."""
+
+    app_name = "decks"
+
+    def setUp(self):
+        self._snapshot_path = self.isolate_snapshot(prefix="decks-slide-order-")
+        super().setUp()
+
+    def _slides(self):
+        snap = self.trigger_snapshot("org.tunaos.decks")
+        return [[o["kind"] for o in s["objects"]] for s in snap["slides"]]
+
+    def _wait_slides(self, want, what):
+        return self.wait_until(self._slides, lambda s: s == want, description=what)
+
+    def test_duplicate_then_move_up_and_undo(self):
+        from dogtail import rawinput
+
+        aid = "org.tunaos.decks"
+        self.gapplication_action(aid, "new-document")
+        self.gapplication_action(aid, "add-shape")
+        self._wait_slides([["Shape"]], "a shape on the first slide")
+
+        self.wait_for_node(name="Duplicate slide", roleName="push button").do_action(0)
+        self._wait_slides([["Shape"], ["Shape"]], "the copy after it, with the shape")
+
+        # The copy is selected: what is added now goes on it.
+        self.gapplication_action(aid, "add-text-box")
+        self._wait_slides([["Shape"], ["Shape", "TextBox"]], "a text box on the copy")
+
+        self._activate_window()
+        rawinput.keyCombo("<Control><Shift>Page_Up")
+        self._wait_slides([["Shape", "TextBox"], ["Shape"]], "Ctrl+Shift+Page Up to move the copy first")
+
+        self.gapplication_action(aid, "undo")
+        self._wait_slides([["Shape"], ["Shape", "TextBox"]], "one undo to put it back")
+        self.gapplication_action(aid, "undo")
+        self.gapplication_action(aid, "undo")
+        self._wait_slides([["Shape"]], "two more to remove the text box and the copy")
+        self.assertIsNone(self.process.poll(), "decks crashed reordering slides")
