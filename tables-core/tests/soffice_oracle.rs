@@ -958,3 +958,50 @@ fn a_cross_sheet_formula_survives_calc_both_ways() {
     std::fs::copy(&ods, &copy).unwrap();
     check(&calc_convert(&copy, "xlsx"), "Calc's xlsx");
 }
+
+/// Cell styles in the xlsx Calc writes (docs/INTEROP-EVIDENCE.md, #1276).
+///
+/// `cell_styles_survive_a_conversion_to_ods` proves the ods reader on
+/// Calc's styles. This reads Calc's own xlsx, written from Calc's ods, so
+/// neither the styles part nor the cell `s` indexes come from our writer.
+#[test]
+fn cell_styles_survive_calc_into_its_xlsx() {
+    use tables_core::sheet::{BorderStyle, CellBorder};
+    use tables_core::style::{CellStyle, HAlign, Rgb};
+    if !require_or_skip() { return; }
+    let dir = tempfile::tempdir().unwrap();
+    let ours = dir.path().join("styled.xlsx");
+    let mut sheet = SheetModel::new("S", 4, 4, 0);
+    sheet.data[0][0] = "head".into();
+    sheet.styles[0][0] = CellStyle {
+        bold: true,
+        italic: true,
+        color: Some(Rgb(0xC0, 0, 0)),
+        fill: Some(Rgb(0xFF, 0xC7, 0xCE)),
+        h_align: HAlign::Center,
+        ..CellStyle::default()
+    };
+    sheet.data[1][1] = "boxed".into();
+    sheet.borders[1][1] = CellBorder::outline(BorderStyle::Thick, (0.0, 0.0, 0.0));
+    save_sheets_to_xlsx(ours.to_str().unwrap(), &[sheet]).unwrap();
+
+    let ods = calc_convert(&ours, "ods");
+    let calc_dir = dir.path().join("calc");
+    std::fs::create_dir_all(&calc_dir).unwrap();
+    let copy = calc_dir.join("styled.ods");
+    std::fs::copy(&ods, &copy).unwrap();
+    let back = calc_convert(&copy, "xlsx");
+    let (_, read) = load_workbook(back.to_str().unwrap()).expect("we read Calc's xlsx");
+    let s = &read[0];
+    let head = &s.styles[0][0];
+    assert!(head.bold && head.italic, "{head:?}");
+    // Not the font colour: LibreOffice 24.2 writes it to this xlsx as
+    // `<color theme="1"/>` once the workbook carries the Office theme (its
+    // ods still says #c00000), and Calc reads its own file back black. That
+    // loss is Calc's export; the same colour in an xlsx Calc writes from a
+    // workbook without the theme reads back red.
+    assert_eq!(head.fill, Some(Rgb(0xFF, 0xC7, 0xCE)));
+    assert_eq!(head.h_align, HAlign::Center);
+    assert_eq!(s.borders[1][1].top, BorderStyle::Thick, "{:?}", s.borders[1][1]);
+    assert!(s.styles[2][2].is_default() && s.borders[2][2].is_none());
+}
