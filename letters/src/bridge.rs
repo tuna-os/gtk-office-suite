@@ -686,6 +686,11 @@ fn heading_styles_sidecar(buf: &gtk::TextBuffer) -> Vec<RunStyle> {
     unsafe { buf.data::<Vec<RunStyle>>(HEADING_STYLES_KEY).map(|p| p.as_ref().clone()).unwrap_or_default() }
 }
 
+/// Set the body font of the document in `buf`, beside its text.
+pub fn set_base_font(buf: &gtk::TextBuffer, base: letters_core::model::BaseFont) {
+    unsafe { buf.set_data(BASE_FONT_KEY, base) };
+}
+
 fn base_font_sidecar(buf: &gtk::TextBuffer) -> letters_core::model::BaseFont {
     unsafe { buf.data::<letters_core::model::BaseFont>(BASE_FONT_KEY).map(|p| p.as_ref().clone()).unwrap_or_default() }
 }
