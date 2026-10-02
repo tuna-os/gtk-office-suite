@@ -321,6 +321,24 @@ struct PendingPicture {
     w: Option<f64>,
     h: Option<f64>,
     rotation: Option<f64>,
+    crop: crate::engine::Crop,
+}
+
+/// A picture's `a:srcRect`: each side in thousandths of a percent of the
+/// source (`l="25000"` cuts a quarter from the left).
+fn parse_src_rect(e: &BytesStart) -> crate::engine::Crop {
+    let mut crop = crate::engine::Crop::default();
+    for a in e.attributes().filter_map(|a| a.ok()) {
+        let v = a.value.parse::<f64>().unwrap_or(0.0) / 100_000.0;
+        match a.key.as_ref() {
+            "l" => crop.left = v,
+            "t" => crop.top = v,
+            "r" => crop.right = v,
+            "b" => crop.bottom = v,
+            _ => {}
+        }
+    }
+    crop
 }
 
 /// The placeholders of a slide layout and of the master it belongs to, for
@@ -685,6 +703,7 @@ pub fn read_pptx(path: &str) -> Result<Deck, String> {
                                     w: None,
                                     h: None,
                                     rotation: None,
+                                    crop: Default::default(),
                                 });
                             }
                             "a:xfrm" => {
@@ -745,6 +764,11 @@ pub fn read_pptx(path: &str) -> Result<Deck, String> {
                                     if let Some(embed) = parse_blip_embed(e) {
                                         pic.embed_id = Some(embed);
                                     }
+                                }
+                            }
+                            "a:srcRect" => {
+                                if let Some(pic) = current_picture.as_mut() {
+                                    pic.crop = parse_src_rect(e);
                                 }
                             }
                             "a:t" => {
@@ -851,6 +875,11 @@ pub fn read_pptx(path: &str) -> Result<Deck, String> {
                                     if let Some(embed) = parse_blip_embed(e) {
                                         pic.embed_id = Some(embed);
                                     }
+                                }
+                            }
+                            "a:srcRect" => {
+                                if let Some(pic) = current_picture.as_mut() {
+                                    pic.crop = parse_src_rect(e);
                                 }
                             }
                             "a:srgbClr" if in_bg => {
@@ -977,7 +1006,7 @@ pub fn read_pptx(path: &str) -> Result<Deck, String> {
                                     
                                     if let Some(obj) = resolve_and_extract_picture(
                                         &embed_id,
-                                        PictureRect { x, y, w, h, rotation: pic.rotation.unwrap_or(0.0) },
+                                        PictureRect { x, y, w, h, rotation: pic.rotation.unwrap_or(0.0), crop: pic.crop },
                                         &slide_image_rels,
                                         &mut archive,
                                         &mut budget,
@@ -1546,6 +1575,7 @@ struct PictureRect {
     w: f64,
     h: f64,
     rotation: f64,
+    crop: crate::engine::Crop,
 }
 
 /// The package path a relationship `target` names, from a part in `dir`:
@@ -1575,7 +1605,7 @@ fn resolve_and_extract_picture(
     archive: &mut zip::ZipArchive<File>,
     budget: &mut ZipBudget,
 ) -> Option<SlideObject> {
-    let PictureRect { x, y, w, h, rotation } = rect;
+    let PictureRect { x, y, w, h, rotation, crop } = rect;
     let target = rels.get(embed_id)?;
     let relative_path = target.trim_start_matches("../");
     let full_zip_path = format!("ppt/{}", relative_path);
@@ -1602,6 +1632,7 @@ fn resolve_and_extract_picture(
         w,
         h,
         rotation,
+        crop,
     })
 }
 
@@ -1628,7 +1659,7 @@ mod tests {
         deck.slides[0].objects.push(SlideObject::Image {
             path: src.to_string_lossy().to_string(),
             x: 10.0, y: 20.0, w: 30.0, h: 40.0,
-            rotation: 0.0,
+            rotation: 0.0, crop: Default::default()
         });
         let path = dir.path().join("pic.pptx");
         write_pptx(path.to_str().unwrap(), &deck).unwrap();

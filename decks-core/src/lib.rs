@@ -12,6 +12,7 @@ pub mod engine;
 pub mod format;
 pub mod fragment;
 pub mod guides;
+pub mod image_px;
 pub mod insert;
 pub mod layouts;
 pub mod loss;

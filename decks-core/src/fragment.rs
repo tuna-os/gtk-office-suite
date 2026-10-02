@@ -86,7 +86,7 @@ mod tests {
     fn copy_non_textbox_returns_none() {
         assert!(copy_object(&SlideObject::Rect { x: 0.0, y: 0.0, w: 1.0, h: 1.0, rotation: 0.0 }).is_none());
         assert!(copy_object(&SlideObject::Circle { x: 0.0, y: 0.0, r: 1.0, rotation: 0.0 }).is_none());
-        assert!(copy_object(&SlideObject::Image { path: "p.png".into(), x: 0.0, y: 0.0, w: 1.0, h: 1.0, rotation: 0.0 }).is_none());
+        assert!(copy_object(&SlideObject::Image { path: "p.png".into(), x: 0.0, y: 0.0, w: 1.0, h: 1.0, rotation: 0.0, crop: Default::default() }).is_none());
     }
 
     #[test]

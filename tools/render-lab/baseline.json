@@ -23,6 +23,10 @@
     "B": "green",
     "C": "green"
   },
+  "decks/image-crop": {
+    "A": "green",
+    "B": "green"
+  },
   "decks/rotation": {
     "A": "green",
     "B": "green",
