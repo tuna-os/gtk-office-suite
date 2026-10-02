@@ -1360,6 +1360,37 @@ fn heading_styles_and_picture_size_survive_writer_rewriting_a_docx() {
     assert!(w.abs_diff(extent.0) < 20_000 && h.abs_diff(extent.1) < 20_000, "size came back as {w} x {h} EMU");
 }
 
+/// Right-to-left text through Writer in both formats (#1281). Paragraph
+/// direction is not a Letters feature yet (docs/LETTERS-REVIEW-WORKFLOWS.md
+/// lists it as unavailable): no control sets it and neither writer writes
+/// one, and the screen detects it per paragraph. What is promised is the
+/// text: Hebrew, Arabic and mixed lines come back exactly, in logical order,
+/// after Writer converts our odt to docx and our docx to odt.
+#[test]
+fn right_to_left_text_survives_a_conversion_between_the_two_formats() {
+    let Some(bin) = require_or_skip() else { return };
+    let lines = ["שלום עולם", "مرحبا بالعالم", "Mixed: שלום and مرحبا 123"];
+    let d = Document::from_plain_text(&lines.join("\n"));
+    let texts = |doc: &Document| doc.paragraphs.iter().map(|p| p.text()).filter(|t| !t.is_empty()).collect::<Vec<_>>();
+    let dir = tempfile::tempdir().unwrap();
+
+    let a = dir.path().join("a");
+    std::fs::create_dir_all(&a).unwrap();
+    let op = a.join("x.odt");
+    letters_core::odt::write(&d, op.to_str().unwrap()).expect("write odt");
+    let _ = soffice_convert(bin, &op, "docx:MS Word 2007 XML").ok();
+    let rt = docx::read(a.join("x.docx").to_str().unwrap()).expect("read Writer's docx");
+    assert_eq!(texts(&rt), lines, "odt -> Writer -> docx");
+
+    let b = dir.path().join("b");
+    std::fs::create_dir_all(&b).unwrap();
+    let dp = b.join("y.docx");
+    docx::write(&d, &dp).expect("write docx");
+    let _ = soffice_convert(bin, &dp, "odt").ok();
+    let rt = letters_core::odt::read(b.join("y.odt").to_str().unwrap()).expect("read Writer's odt");
+    assert_eq!(texts(&rt), lines, "docx -> Writer -> odt");
+}
+
 // ── Interop evidence gaps (docs/INTEROP-EVIDENCE.md, #1276) ───────────
 
 /// Hyperlinks in our docx, through Writer, into the odt it writes.

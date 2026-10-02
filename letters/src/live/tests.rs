@@ -227,6 +227,34 @@ fn undo_and_redo_run_on_the_model_and_the_buffer_follows() {
     });
 }
 
+/// Deleting the empty line between two tables leaves two tables (#1299):
+/// the editor's reading and the model agree, and neither runs the second
+/// table's header into the first one's body.
+#[test]
+fn deleting_the_line_between_two_tables_keeps_them_two() {
+    gtk_test(|| {
+        let mut d = Document::from_plain_text("before\n\nafter");
+        d.insert_table_at(2, 2, 2);
+        d.insert_table_at(1, 2, 2);
+        let (buf, live) = tab(&d);
+        check(&buf, &live, "loading");
+        let tables = |doc: &Document| doc.paragraphs.iter().filter_map(|p| p.style.table_cell.map(|c| c.table)).collect::<std::collections::BTreeSet<_>>().len();
+        assert_eq!(tables(&crate::bridge::capture_from_buffer(&buf)), 2, "two tables to begin with");
+        // The empty line between them: the line after the first table's
+        // last row.
+        let t = text(&buf);
+        let gap = t.find("|\n\n|").expect("an empty line between the tables") + 2;
+        let at = t[..gap].chars().count() as i32;
+        let (mut s, mut e) = (buf.iter_at_offset(at), buf.iter_at_offset(at + 1));
+        buf.delete(&mut s, &mut e);
+        assert!(!text(&buf).contains("|\n\n|"), "the empty line is gone");
+        check(&buf, &live, "deleting the empty line");
+        let read = crate::bridge::capture_from_buffer(&buf);
+        assert_eq!(tables(&read), 2, "still two tables: {:?}", read.paragraphs.iter().map(|p| p.text()).collect::<Vec<_>>());
+        assert!(read.paragraphs.iter().all(|p| p.style.table_cell.is_some() || !p.text().contains('|')), "a delimiter came back as prose");
+    });
+}
+
 /// The page view edits the model first; the buffer shows the result.
 #[test]
 fn model_first_edits_reach_the_buffer() {
@@ -510,25 +538,45 @@ fn unrelated_edits_and_commands_leave_every_other_field_alone() {
                         ops.push(format!("type {t:?}"));
                     }
                     3 => {
-                        // Text, not a table: deleting a table line's pipes
-                        // or the breaks between its rows takes the table
-                        // apart, which leaves its pieces as the user's own
-                        // text.
+                        // Text, not a table's own text: deleting a table
+                        // line's pipes, or the break between two of its
+                        // rows, takes the table apart, which leaves its
+                        // pieces as the user's own text. Deleting next to a
+                        // table is fair game, the empty line between two
+                        // tables included (#1299: that used to run them
+                        // together).
                         let a = in_zone(next(span + 1));
                         let b = (a + 1 + next(4) as i32).min(end);
                         let (mut s, mut e) = (buf.iter_at_offset(a), buf.iter_at_offset(b));
-                        // From the line before the range to the line after
-                        // it: removing the empty line between two tables
-                        // runs them together (#1299).
-                        let near_table = (s.line() - 1..=e.line() + 1).any(|l| {
+                        let is_table_line = |l: i32| {
                             let Some(l0) = buf.iter_at_line(l) else { return false };
                             let mut l1 = l0;
                             if !l1.ends_line() {
                                 l1.forward_to_line_end();
                             }
                             buf.text(&l0, &l1, false).contains('|')
-                        });
-                        if near_table {
+                        };
+                        // Lines whose own characters the range deletes; a
+                        // range starting at a line's end takes only its
+                        // break, and one ending at a line's start none of it.
+                        let first = s.line() + i32::from(s.ends_line());
+                        let last = e.line() - i32::from(e.starts_line());
+                        // A deleted break joins what is left of the first
+                        // line to what is left of the last: a table line
+                        // joined to anything (a row, prose) is no longer a
+                        // row. Joined to nothing, as when the empty line
+                        // between two tables goes, it stays intact.
+                        let mut line_start = s;
+                        line_start.set_line_offset(0);
+                        let mut line_end = e;
+                        if !line_end.ends_line() {
+                            line_end.forward_to_line_end();
+                        }
+                        let joins = s.line() != e.line()
+                            && !buf.text(&line_start, &s, false).is_empty()
+                            && !buf.text(&e, &line_end, false).is_empty()
+                            && (is_table_line(s.line()) || is_table_line(e.line()));
+                        if joins || (first..=last).any(is_table_line) {
                             continue;
                         }
                         buf.delete(&mut s, &mut e);
