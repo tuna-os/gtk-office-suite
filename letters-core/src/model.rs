@@ -252,6 +252,22 @@ pub struct Paragraph {
     pub runs: Vec<Run>,
 }
 
+/// Join each run into the one before it when `mergeable` says so, in one
+/// pass. The readers used to do this with `Vec::remove` in a loop, which
+/// shifts every later run on each join: a paragraph of n same-styled runs
+/// took O(n²), and a 40 KB Markdown file of nested brackets took four
+/// seconds to open (#1206).
+pub(crate) fn merge_adjacent_runs(runs: &mut Vec<Run>, mergeable: impl Fn(&Run, &Run) -> bool) {
+    let mut merged: Vec<Run> = Vec::with_capacity(runs.len());
+    for run in runs.drain(..) {
+        match merged.last_mut() {
+            Some(last) if mergeable(last, &run) => last.text.push_str(&run.text),
+            _ => merged.push(run),
+        }
+    }
+    *runs = merged;
+}
+
 impl Paragraph {
     pub fn char_len(&self) -> usize {
         self.runs.iter().map(Run::char_len).sum()
@@ -267,20 +283,10 @@ impl Paragraph {
     fn normalize(&mut self) {
         self.runs
             .retain(|r| !r.text.is_empty() || crate::layout::is_object(r));
-        let mut i = 0;
-        while i + 1 < self.runs.len() {
-            // Objects are never merged: two chips side by side stay two.
-            if crate::layout::is_object(&self.runs[i]) || crate::layout::is_object(&self.runs[i + 1]) {
-                i += 1;
-                continue;
-            }
-            if self.runs[i].style == self.runs[i + 1].style {
-                let next = self.runs.remove(i + 1);
-                self.runs[i].text.push_str(&next.text);
-            } else {
-                i += 1;
-            }
-        }
+        // Objects are never merged: two chips side by side stay two.
+        merge_adjacent_runs(&mut self.runs, |a, b| {
+            !crate::layout::is_object(a) && !crate::layout::is_object(b) && a.style == b.style
+        });
     }
 
     /// Split at a character offset within this paragraph; self keeps the

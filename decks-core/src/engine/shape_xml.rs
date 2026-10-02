@@ -39,13 +39,18 @@ impl Node {
         self.children.iter().filter(move |c| c.name == name)
     }
     /// Every descendant named `name`, in document order, not descending
-    /// into matches.
+    /// into matches. A walk with its own stack: a slide of nested groups is
+    /// as deep as its author made it, and recursion overflowed the thread's
+    /// stack on one 100,000 deep (#1206).
     pub(super) fn find_all<'a>(&'a self, name: &str, out: &mut Vec<&'a Node>) {
-        for c in &self.children {
-            if c.name == name {
-                out.push(c);
-            } else {
-                c.find_all(name, out);
+        let mut stack = vec![self.children.iter()];
+        while let Some(level) = stack.last_mut() {
+            match level.next() {
+                None => {
+                    stack.pop();
+                }
+                Some(c) if c.name == name => out.push(c),
+                Some(c) => stack.push(c.children.iter()),
             }
         }
     }
@@ -53,6 +58,17 @@ impl Node {
         let mut v = Vec::new();
         self.find_all(name, &mut v);
         v.into_iter().next()
+    }
+}
+
+/// Freed a level at a time: the derived drop recurses once per level of
+/// nesting, which overflows on a deep enough part before anything reads it.
+impl Drop for Node {
+    fn drop(&mut self) {
+        let mut pending = std::mem::take(&mut self.children);
+        while let Some(mut node) = pending.pop() {
+            pending.append(&mut node.children);
+        }
     }
 }
 
@@ -156,14 +172,14 @@ impl Default for Theme {
             colors: slots.iter().filter_map(|(k, v)| Some((k.to_string(), Color::from_hex(v)?))).collect(),
             // Office 2013's format scheme, flat: a fill style is phClr, and
             // the three line widths are 6350, 12700 and 19050 EMU.
-            fmt: parse_tree(
+            fmt: std::mem::take(&mut parse_tree(
                 r#"<a:fmtScheme><a:fillStyleLst><a:solidFill><a:schemeClr val="phClr"/></a:solidFill>
                 <a:solidFill><a:schemeClr val="phClr"/></a:solidFill><a:solidFill><a:schemeClr val="phClr"/></a:solidFill></a:fillStyleLst>
                 <a:lnStyleLst><a:ln w="6350"><a:solidFill><a:schemeClr val="phClr"/></a:solidFill></a:ln>
                 <a:ln w="12700"><a:solidFill><a:schemeClr val="phClr"/></a:solidFill></a:ln>
                 <a:ln w="19050"><a:solidFill><a:schemeClr val="phClr"/></a:solidFill></a:ln></a:lnStyleLst></a:fmtScheme>"#,
             )
-            .children
+            .children)
             .into_iter()
             .next()
             .unwrap_or_default(),
@@ -240,7 +256,8 @@ pub(crate) fn theme(theme_xml: &str) -> Theme {
     }
     if let Some(fmt) = root.find("a:fmtScheme") {
         // Keep the part's own lists; fall back to the default's per list.
-        let mut merged = Node { name: fmt.name.clone(), ..Node::default() };
+        let mut merged = Node::default();
+        merged.name = fmt.name.clone();
         for list in ["a:fillStyleLst", "a:lnStyleLst", "a:bgFillStyleLst"] {
             if let Some(own) = fmt.child(list) {
                 merged.children.push(clone_node(own));
@@ -253,12 +270,31 @@ pub(crate) fn theme(theme_xml: &str) -> Theme {
     theme
 }
 
+/// A deep copy, built with its own stack: the theme part it copies from is
+/// as deep as its author made it (#1206).
 fn clone_node(n: &Node) -> Node {
-    Node {
-        name: n.name.clone(),
-        attrs: n.attrs.clone(),
-        children: n.children.iter().map(clone_node).collect(),
-        text: n.text.clone(),
+    let shallow = |n: &Node| {
+        let mut copy = Node::default();
+        copy.name = n.name.clone();
+        copy.attrs = n.attrs.clone();
+        copy.text = n.text.clone();
+        copy
+    };
+    // Each entry: a source node, its copy so far, and the next child to copy.
+    let mut stack: Vec<(&Node, Node, usize)> = vec![(n, shallow(n), 0)];
+    loop {
+        let (source, _, next) = stack.last_mut().expect("the root is popped last");
+        let source: &Node = source;
+        if let Some(child) = source.children.get(*next) {
+            *next += 1;
+            stack.push((child, shallow(child), 0));
+            continue;
+        }
+        let (_, done, _) = stack.pop().expect("checked above");
+        match stack.last_mut() {
+            Some((_, parent, _)) => parent.children.push(done),
+            None => return done,
+        }
     }
 }
 

@@ -341,3 +341,169 @@ fn seed_campaign() {
     );
     println!("{count} seeds × 2 mutation modes from seed {from}: no panics");
 }
+
+// ── unbounded nesting, out of process ─────────────────────────────────
+// A stack overflow aborts the process instead of unwinding, so the bounded
+// cases above stop at 10,000 levels and `catch_unwind` could not see past
+// them. Here the readers run in a child process — this test binary again,
+// with `DEEP_NESTING_CHILD` set — on 100,000 levels, far past what a
+// recursive reader's stack holds, and the parent fails when the child dies,
+// which is how an overflow shows, or overruns its budget, which is how
+// super-linear work shows (#1206). `DEEP_NESTING_DEPTH` raises the depth.
+//
+// Its first run found the second: a Markdown paragraph of nested brackets
+// took O(n²) to normalize, four seconds for a 40 KB file, because runs were
+// merged with `Vec::remove` in a loop (`model::merge_adjacent_runs`).
+
+const DEEP_NESTING_CHILD: &str = "DEEP_NESTING_CHILD";
+
+fn depth() -> usize {
+    std::env::var("DEEP_NESTING_DEPTH").ok().and_then(|v| v.parse().ok()).unwrap_or(100_000)
+}
+
+fn nested(open: &str, close: &str, inner: &str, depth: usize) -> String {
+    let mut xml = String::from(
+        "<office:document-content xmlns:office=\"o\" xmlns:text=\"t\" xmlns:table=\"ta\">\
+         <office:body><office:text>",
+    );
+    xml.push_str(&open.repeat(depth));
+    xml.push_str(inner);
+    xml.push_str(&close.repeat(depth));
+    xml.push_str("</office:text></office:body></office:document-content>");
+    xml
+}
+
+/// Runs only as the child `deep_nesting_neither_overflows_nor_crawls` starts.
+#[test]
+#[ignore = "the child process of deep_nesting_neither_overflows_nor_crawls"]
+fn deep_nesting_child() {
+    if std::env::var_os(DEEP_NESTING_CHILD).is_none() {
+        return;
+    }
+    let depth = depth();
+    let odt = [
+        ("spans", nested("<text:span>", "</text:span>", "x", depth)),
+        ("lists", nested("<text:list><text:list-item>", "</text:list-item></text:list>", "<text:p>x</text:p>", depth)),
+        ("sections", nested("<text:section>", "</text:section>", "<text:p>x</text:p>", depth)),
+        (
+            "tables",
+            nested(
+                "<table:table><table:table-row><table:table-cell>",
+                "</table:table-cell></table:table-row></table:table>",
+                "<text:p>x</text:p>",
+                depth,
+            ),
+        ),
+    ];
+    for (name, xml) in odt {
+        eprintln!("reading odt {name}");
+        let _ = read_without_unwinding(&package(&xml));
+    }
+    let docx_body = |open: &str, close: &str, inner: &str| {
+        format!(
+            "<w:document xmlns:w=\"http://schemas.openxmlformats.org/wordprocessingml/2006/main\"><w:body>{}{}{}</w:body></w:document>",
+            open.repeat(depth),
+            inner,
+            close.repeat(depth)
+        )
+    };
+    for (name, document) in [
+        ("tables", docx_body("<w:tbl><w:tr><w:tc>", "</w:tc></w:tr></w:tbl>", "<w:p><w:r><w:t>x</w:t></w:r></w:p>")),
+        ("content controls", docx_body("<w:sdt><w:sdtContent>", "</w:sdtContent></w:sdt>", "<w:p><w:r><w:t>x</w:t></w:r></w:p>")),
+        ("hyperlinks", docx_body("<w:p>", "</w:p>", "").replace("<w:p></w:p>", &format!(
+            "<w:p>{}<w:r><w:t>x</w:t></w:r>{}</w:p>", "<w:hyperlink>".repeat(depth), "</w:hyperlink>".repeat(depth)))),
+    ] {
+        eprintln!("reading docx {name}");
+        read_docx_without_unwinding(&docx_with_document(&document));
+    }
+    for (name, markdown) in [
+        ("block quotes", format!("{}x\n", ">".repeat(depth))),
+        ("lists", (0..depth / 100).map(|i| format!("{}- x\n", "  ".repeat(i))).collect::<String>()),
+        ("emphasis", format!("{}x{}", "*".repeat(depth), "*".repeat(depth))),
+        ("links", format!("{}x{}", "[".repeat(depth), "](u)".repeat(depth))),
+    ] {
+        eprintln!("reading markdown {name}");
+        let _ = catch_unwind(AssertUnwindSafe(|| letters_core::markdown::parse(&markdown)));
+    }
+    eprintln!("deep nesting: all read");
+}
+
+/// A docx Letters wrote, its `word/document.xml` replaced by `document`.
+fn docx_with_document(document: &str) -> Vec<u8> {
+    use std::io::Read;
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("deep.docx");
+    letters_core::docx::write(&letters_core::Document::from_plain_text("x"), &path).unwrap();
+    let mut source = zip::ZipArchive::new(std::fs::File::open(&path).unwrap()).unwrap();
+    let mut buffer = Vec::new();
+    {
+        let mut writer = zip::ZipWriter::new(Cursor::new(&mut buffer));
+        for i in 0..source.len() {
+            let mut entry = source.by_index(i).unwrap();
+            let name = entry.name().to_string();
+            let mut bytes = Vec::new();
+            entry.read_to_end(&mut bytes).unwrap();
+            if name == "word/document.xml" {
+                bytes = document.as_bytes().to_vec();
+            }
+            writer.start_file(name, SimpleFileOptions::default()).unwrap();
+            writer.write_all(&bytes).unwrap();
+        }
+        writer.finish().unwrap();
+    }
+    buffer
+}
+
+fn read_docx_without_unwinding(bytes: &[u8]) {
+    let mut file = tempfile::Builder::new().suffix(".docx").tempfile().unwrap();
+    file.write_all(bytes).unwrap();
+    file.flush().unwrap();
+    let path = file.path().to_str().unwrap().to_string();
+    let _ = catch_unwind(AssertUnwindSafe(|| letters_core::docx::read(&path)));
+}
+
+#[test]
+fn deep_nesting_neither_overflows_nor_crawls() {
+    run_deep_nesting_child(std::time::Duration::from_secs(120));
+}
+
+/// Start `deep_nesting_child` in a process of its own and fail on its death
+/// or on its overrunning `budget`, naming the input it had reached.
+fn run_deep_nesting_child(budget: std::time::Duration) {
+    use std::io::Read;
+    let mut child = std::process::Command::new(std::env::current_exe().unwrap())
+        .args(["deep_nesting_child", "--exact", "--ignored", "--nocapture", "--test-threads=1"])
+        .env(DEEP_NESTING_CHILD, "1")
+        .env_remove("RUST_MIN_STACK")
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::piped())
+        .spawn()
+        .expect("start the child");
+    let mut stderr = child.stderr.take().unwrap();
+    let reader = std::thread::spawn(move || {
+        let mut text = String::new();
+        let _ = stderr.read_to_string(&mut text);
+        text
+    });
+    let started = std::time::Instant::now();
+    let status = loop {
+        if let Some(status) = child.try_wait().unwrap() {
+            break Some(status);
+        }
+        if started.elapsed() > budget {
+            let _ = child.kill();
+            let _ = child.wait();
+            break None;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(100));
+    };
+    let text = reader.join().unwrap();
+    let reached = text.lines().rfind(|l| l.starts_with("reading ")).unwrap_or("(nothing)");
+    match status {
+        None => panic!("deep nesting took over {budget:?}; it was {reached}"),
+        Some(status) => {
+            assert!(status.success(), "a reader died on deep nesting ({status}) {reached}");
+            assert!(text.contains("deep nesting: all read"), "the child stopped early:\n{text}");
+        }
+    }
+}

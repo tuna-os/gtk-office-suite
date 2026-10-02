@@ -50,7 +50,7 @@ Architecture: readers return complete semantic document state plus source-packag
       `tests/gui/test_smoke.py::LettersLossWarningCancelSmoke::test_cancel_on_a_loss_warning_keeps_the_file_and_the_edit`
       (a bold run in a `.txt` file; on the old code it fails with the file overwritten). Still open: Tables and Decks
       build no loss report for their save formats, so they have nothing to warn from yet.
-- [~] Harden ZIP/XML/image readers with size/count/decompression limits and malformed/truncated corpus cases; retain
+- [x] Harden ZIP/XML/image readers with size/count/decompression limits and malformed/truncated corpus cases; retain
       minimized fuzz failures. **Limits are done**: `suite-common-core/src/zip_guard.rs` holds one set of bounds —
       member count, uncompressed bytes per member, and uncompressed bytes across the whole archive — and every package
       reader in the suite now reads through it (odt, odp, pptx, the three best-effort xlsx readers, and
@@ -94,8 +94,21 @@ Architecture: readers return complete semantic document state plus source-packag
       Without seeds libFuzzer never escaped 6-to-9-byte inputs, because a package needs a valid local header, central
       directory and CRC before a reader looks at any XML, and it does not reach that by chance in a bounded run.
       Seeds include the 652 vendored CommonMark examples for the markdown target. No crashes were found in any run.
-      Still open here: unbounded nesting depth needs the out-of-process lane because a stack overflow aborts rather
-      than unwinding and cannot be caught in-process.
+      **Unbounded nesting runs out of process.** A stack overflow aborts rather than unwinding, so the in-process
+      cases stop at 10,000 levels. `deep_nesting_neither_overflows_nor_crawls` in each
+      `{letters,decks,tables}-core/tests/malformed_inputs.rs` starts its own test binary again as a child that reads
+      documents nested 100,000 deep — odt spans, lists, sections and tables; docx tables, content controls and
+      hyperlinks; Markdown quotes, lists, emphasis and links; odp spans, frames, groups and lists; pptx groups; xlsx
+      unknown elements and rich text; ods spans — and fails when the child dies (an overflow) or overruns two minutes
+      (super-linear work), naming the input it had reached. It was verified to detect an overflow by injecting one.
+      Its first runs found three defects: **Decks aborted on a pptx slide of nested groups**, because its element trees
+      (`shape_xml::Node`, `chart::El`) were searched, cloned and dropped by recursion; they now walk with their own
+      stacks. **Letters aborted on 25 nested docx tables** on a 2 MiB thread, because rdocx parses a nested table by
+      recursing at about 100 KB a level in a debug build: `docx::read` now refuses a package whose XML nests past
+      256 (`zip_guard::check_xml_depth`, a scan that cannot recurse) and reads on a thread with 64 MiB of stack.
+      **A Markdown paragraph of nested brackets took O(n²) to open**, four seconds for 40 KB, because runs were merged
+      with `Vec::remove` in a loop; `model::merge_adjacent_runs` merges in one pass, in the docx reader and the model
+      too. A fourth finding is not a crash and is tracked: docx tables nested in a cell lose their text (#1419).
 - [x] Treat missing oracle as failure in required interop/release lanes (REQUIRE_SOFFICE=1), never as observed compatibility.
       `tests/test_oracle_lanes.py` (PR lane) finds every test target that starts `soffice` from the sources and checks
       that each one panics instead of skipping when `REQUIRE_SOFFICE` is set, that every workflow step running one sets

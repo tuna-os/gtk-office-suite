@@ -364,3 +364,110 @@ fn seed_campaign() {
     );
     println!("{count} seeds × 2 mutation modes from seed {from}: no panics");
 }
+
+// ── unbounded nesting, out of process ─────────────────────────────────
+// A stack overflow aborts the process instead of unwinding, so the bounded
+// "deeply-nested" case above stops at 10,000 levels. Here every reader runs
+// in a child process — this test binary again, with `DEEP_NESTING_CHILD`
+// set — on 100,000 levels, and the parent fails when the child dies (an
+// overflow) or overruns its budget (super-linear work) (#1206).
+// `DEEP_NESTING_DEPTH` raises the depth.
+
+const DEEP_NESTING_CHILD: &str = "DEEP_NESTING_CHILD";
+
+fn depth() -> usize {
+    std::env::var("DEEP_NESTING_DEPTH").ok().and_then(|v| v.parse().ok()).unwrap_or(100_000)
+}
+
+/// Runs only as the child `deep_nesting_neither_overflows_nor_crawls` starts.
+#[test]
+#[ignore = "the child process of deep_nesting_neither_overflows_nor_crawls"]
+fn deep_nesting_child() {
+    if std::env::var_os(DEEP_NESTING_CHILD).is_none() {
+        return;
+    }
+    let depth = depth();
+    for (name, sheet) in [
+        ("unknown elements", format!("<worksheet>{}x{}</worksheet>", "<a>".repeat(depth), "</a>".repeat(depth))),
+        (
+            "rich text",
+            format!(
+                "<worksheet xmlns=\"http://schemas.openxmlformats.org/spreadsheetml/2006/main\"><sheetData><row r=\"1\">\
+                 <c r=\"A1\" t=\"inlineStr\"><is>{}<t>x</t>{}</is></c></row></sheetData></worksheet>",
+                "<r>".repeat(depth),
+                "</r>".repeat(depth)
+            ),
+        ),
+    ] {
+        eprintln!("reading xlsx {name}");
+        let _ = read_all_without_unwinding(&package_with_sheet(&sheet));
+    }
+    eprintln!("reading ods tables");
+    let content = format!(
+        "<office:document-content xmlns:office=\"urn:oasis:names:tc:opendocument:xmlns:office:1.0\" \
+         xmlns:table=\"urn:oasis:names:tc:opendocument:xmlns:table:1.0\" xmlns:text=\"urn:oasis:names:tc:opendocument:xmlns:text:1.0\">\
+         <office:body><office:spreadsheet><table:table table:name=\"S\"><table:table-row><table:table-cell>{}<text:p>x</text:p>{}\
+         </table:table-cell></table:table-row></table:table></office:spreadsheet></office:body></office:document-content>",
+        "<text:span>".repeat(depth),
+        "</text:span>".repeat(depth)
+    );
+    let ods = package(&[
+        ("mimetype", "application/vnd.oasis.opendocument.spreadsheet".to_string()),
+        ("content.xml", content),
+    ]);
+    let mut file = tempfile::Builder::new().suffix(".ods").tempfile().unwrap();
+    file.write_all(&ods).unwrap();
+    file.flush().unwrap();
+    let path = file.path().to_str().unwrap().to_string();
+    let _ = catch_unwind(AssertUnwindSafe(|| {
+        let _ = tables_core::io::load_workbook(&path);
+        let _ = tables_core::io::read_sheet_props_from_ods(&path);
+    }));
+    eprintln!("deep nesting: all read");
+}
+
+#[test]
+fn deep_nesting_neither_overflows_nor_crawls() {
+    run_deep_nesting_child(std::time::Duration::from_secs(120));
+}
+
+/// Start `deep_nesting_child` in a process of its own and fail on its death
+/// or on its overrunning `budget`, naming the input it had reached.
+fn run_deep_nesting_child(budget: std::time::Duration) {
+    use std::io::Read;
+    let mut child = std::process::Command::new(std::env::current_exe().unwrap())
+        .args(["deep_nesting_child", "--exact", "--ignored", "--nocapture", "--test-threads=1"])
+        .env(DEEP_NESTING_CHILD, "1")
+        .env_remove("RUST_MIN_STACK")
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::piped())
+        .spawn()
+        .expect("start the child");
+    let mut stderr = child.stderr.take().unwrap();
+    let reader = std::thread::spawn(move || {
+        let mut text = String::new();
+        let _ = stderr.read_to_string(&mut text);
+        text
+    });
+    let started = std::time::Instant::now();
+    let status = loop {
+        if let Some(status) = child.try_wait().unwrap() {
+            break Some(status);
+        }
+        if started.elapsed() > budget {
+            let _ = child.kill();
+            let _ = child.wait();
+            break None;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(100));
+    };
+    let text = reader.join().unwrap();
+    let reached = text.lines().rfind(|l| l.starts_with("reading ")).unwrap_or("(nothing)");
+    match status {
+        None => panic!("deep nesting took over {budget:?}; it was {reached}"),
+        Some(status) => {
+            assert!(status.success(), "a reader died on deep nesting ({status}) {reached}");
+            assert!(text.contains("deep nesting: all read"), "the child stopped early:\n{text}");
+        }
+    }
+}

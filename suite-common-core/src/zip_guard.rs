@@ -206,9 +206,104 @@ impl<R: Read + Seek> BoundedArchive for ZipArchive<R> {
     }
 }
 
+/// How deeply `xml`'s elements nest, at the deepest point.
+///
+/// A scan of the bytes, not a parse: it needs no parser of its own and
+/// cannot recurse. Comments, CDATA, processing instructions and
+/// declarations open nothing, and a `>` inside a quoted attribute value
+/// does not end its tag.
+pub fn xml_depth(xml: &[u8]) -> usize {
+    let (mut depth, mut deepest, mut i) = (0usize, 0usize, 0usize);
+    let skip_to = |from: usize, end: &[u8]| {
+        xml[from..].windows(end.len()).position(|w| w == end).map_or(xml.len(), |p| from + p + end.len())
+    };
+    while i < xml.len() {
+        if xml[i] != b'<' {
+            i += 1;
+            continue;
+        }
+        let rest = &xml[i..];
+        if rest.starts_with(b"<!--") {
+            i = skip_to(i + 4, b"-->");
+        } else if rest.starts_with(b"<![CDATA[") {
+            i = skip_to(i + 9, b"]]>");
+        } else if rest.starts_with(b"<?") {
+            i = skip_to(i + 2, b"?>");
+        } else if rest.starts_with(b"<!") {
+            i = skip_to(i + 2, b">");
+        } else if rest.starts_with(b"</") {
+            depth = depth.saturating_sub(1);
+            i = skip_to(i + 2, b">");
+        } else {
+            // An opening or self-closing tag: find its end outside quotes.
+            let (mut j, mut quote) = (i + 1, None::<u8>);
+            while j < xml.len() {
+                match (quote, xml[j]) {
+                    (Some(q), c) if c == q => quote = None,
+                    (None, b'"' | b'\'') => quote = Some(xml[j]),
+                    (None, b'>') => break,
+                    _ => {}
+                }
+                j += 1;
+            }
+            if j > i + 1 && xml[j.min(xml.len() - 1)] == b'>' && xml[j - 1] == b'/' {
+                // `<a/>` opens and closes; it is as deep as its parent's child.
+                deepest = deepest.max(depth + 1);
+            } else {
+                depth += 1;
+                deepest = deepest.max(depth);
+            }
+            i = j + 1;
+        }
+    }
+    deepest
+}
+
+/// Refuse the package at `path` if any of its XML members nests deeper than
+/// `limit`, reading them under the default limits.
+///
+/// For readers that hand the package to a parser which recurses once per
+/// level: such a parser overflows the thread's stack on a deep enough part,
+/// and an overflow aborts the process rather than returning an error, so
+/// the depth has to be known before it is called (#1206).
+pub fn check_xml_depth(path: &std::path::Path, limit: usize) -> Result<(), String> {
+    let file = std::fs::File::open(path).map_err(|e| e.to_string())?;
+    let mut archive = ZipArchive::new(file).map_err(|e| e.to_string())?;
+    let mut budget = ZipBudget::default();
+    budget.check_entry_count(archive.len())?;
+    for index in 0..archive.len() {
+        let mut entry = archive.by_index(index).map_err(|e| e.to_string())?;
+        let name = entry.name().to_string();
+        if !(name.ends_with(".xml") || name.ends_with(".rels")) {
+            continue;
+        }
+        let bytes = budget.read_entry(&mut entry, &name)?;
+        let depth = xml_depth(&bytes);
+        if depth > limit {
+            return Err(format!(
+                "{name} nests its elements {depth} deep, past the {limit} this reader will open"
+            ));
+        }
+    }
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn xml_depth_counts_elements_and_nothing_else() {
+        assert_eq!(xml_depth(b""), 0);
+        assert_eq!(xml_depth(b"<a/>"), 1);
+        assert_eq!(xml_depth(b"<?xml version=\"1.0\"?><a><b><c/></b><b/></a>"), 3);
+        assert_eq!(xml_depth(b"<a><!-- <b><c><d> --><![CDATA[<x><y>]]></a>"), 1);
+        assert_eq!(xml_depth(b"<!DOCTYPE a><a t=\"1 > 0\" u='<'><b/></a>"), 2);
+        let deep = format!("{}{}", "<w:tbl><w:tr><w:tc>".repeat(1_000), "</w:tc></w:tr></w:tbl>".repeat(1_000));
+        assert_eq!(xml_depth(deep.as_bytes()), 3_000);
+        // Unclosed or truncated input still measures what it opened.
+        assert_eq!(xml_depth(b"<a><b><c"), 3);
+    }
 
     fn tiny() -> ZipLimits {
         ZipLimits { max_entries: 3, max_entry_bytes: 16, max_total_bytes: 24 }

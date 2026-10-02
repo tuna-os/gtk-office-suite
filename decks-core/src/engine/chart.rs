@@ -328,30 +328,59 @@ impl El {
     fn child_q(&self, name: &str) -> Option<&El> {
         self.children.iter().find(|c| c.name == name)
     }
+    /// The descendants that `matches`, depth first in document order, not
+    /// descending into a match; stopping at the first when `first`. A walk
+    /// with its own stack, as in `shape_xml`: a chart part is as deep as its
+    /// author made it, and recursion overflows on a deep one (#1206).
+    fn matching(&self, matches: impl Fn(&El) -> bool, first: bool) -> Vec<&El> {
+        let mut out = Vec::new();
+        let mut stack = vec![self.children.iter()];
+        while let Some(level) = stack.last_mut() {
+            match level.next() {
+                None => {
+                    stack.pop();
+                }
+                Some(c) if matches(c) => {
+                    out.push(c);
+                    if first {
+                        break;
+                    }
+                }
+                Some(c) => stack.push(c.children.iter()),
+            }
+        }
+        out
+    }
     /// The first descendant, depth first, whose local name is `local`.
     fn find(&self, local: &str) -> Option<&El> {
-        self.children.iter().find_map(|c| if c.local == local { Some(c) } else { c.find(local) })
+        self.matching(|c| c.local == local, true).into_iter().next()
     }
     /// The first descendant, depth first, named `name` (qualified).
     fn find_q(&self, name: &str) -> Option<&El> {
-        self.children.iter().find_map(|c| if c.name == name { Some(c) } else { c.find_q(name) })
+        self.matching(|c| c.name == name, true).into_iter().next()
     }
     fn all_q<'a>(&'a self, name: &str, out: &mut Vec<&'a El>) {
-        for c in &self.children {
-            if c.name == name {
-                out.push(c);
-            } else {
-                c.all_q(name, out);
-            }
-        }
+        out.extend(self.matching(|c| c.name == name, false));
     }
     /// All the text inside, depth first.
     fn deep_text(&self) -> String {
-        let mut s = self.text.clone();
-        for c in &self.children {
-            s.push_str(&c.deep_text());
+        let mut s = String::new();
+        let mut stack = vec![self];
+        while let Some(el) = stack.pop() {
+            s.push_str(&el.text);
+            stack.extend(el.children.iter().rev());
         }
         s
+    }
+}
+
+/// Freed a level at a time, as `shape_xml::Node` is.
+impl Drop for El {
+    fn drop(&mut self) {
+        let mut pending = std::mem::take(&mut self.children);
+        while let Some(mut el) = pending.pop() {
+            pending.append(&mut el.children);
+        }
     }
 }
 
