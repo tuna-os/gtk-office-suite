@@ -110,12 +110,16 @@ pub fn is_delimiter_line(line: &str) -> bool {
 pub fn parse_row(line: &str) -> Option<Vec<Range<usize>>> {
     let cells = split_row(line)?;
     let mut ranges = Vec::with_capacity(cells.len());
+    // Only the one space of padding on each side is layout (`layout_row`
+    // writes "| " and " |"): any more is the cell's own text. Trimming it
+    // all dropped a cell's leading and trailing spaces on every capture,
+    // so a space typed at a cell's start held in the model and was gone
+    // from the editor's next reading (#1278).
     for (start, text) in cells {
-        let leading = text.len() - text.trim_start().len();
-        let trimmed_len = text.trim().chars().count();
-        let lead_chars = text[..leading].chars().count();
-        let cell_start = start + lead_chars;
-        ranges.push(cell_start..cell_start + trimmed_len);
+        let lead = usize::from(text.starts_with(' '));
+        let len = text.chars().count();
+        let trail = usize::from(len > lead && text.ends_with(' '));
+        ranges.push(start + lead..start + len - trail);
     }
     Some(ranges)
 }
