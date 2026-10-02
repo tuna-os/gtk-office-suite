@@ -235,7 +235,33 @@ fn contextual_styles(path: &str) -> std::collections::HashSet<String> {
 }
 
 /// Read a .docx file into a Document.
+/// How deeply a docx's XML may nest before it is refused unread. rdocx
+/// parses a table inside a cell by recursing, at about 100 KB of stack a
+/// level in a debug build, and an overflow aborts the app rather than
+/// failing the read: 25 nested tables were enough on a 2 MiB thread
+/// (#1206). Real documents nest a few dozen elements deep.
+pub const MAX_XML_DEPTH: usize = 256;
+
+/// The stack a docx is read on: room for [`MAX_XML_DEPTH`] levels of the
+/// deepest recursion with a wide margin. Only the pages used are committed.
+const READ_STACK_BYTES: usize = 64 << 20;
+
+/// Read a docx: refused when it nests past [`MAX_XML_DEPTH`], otherwise
+/// read on a thread with [`READ_STACK_BYTES`] of stack, whatever thread
+/// asked. A panic in the reader reaches the caller as before.
 pub fn read(path: &str) -> Result<Document, String> {
+    suite_common_core::zip_guard::check_xml_depth(std::path::Path::new(path), MAX_XML_DEPTH)
+        .map_err(|e| format!("Cannot open .docx {path}: {e}"))?;
+    let owned = path.to_string();
+    let reader = std::thread::Builder::new()
+        .name("docx-read".into())
+        .stack_size(READ_STACK_BYTES)
+        .spawn(move || read_on_this_thread(&owned))
+        .map_err(|e| format!("Cannot open .docx {path}: {e}"))?;
+    reader.join().unwrap_or_else(|panic| std::panic::resume_unwind(panic))
+}
+
+fn read_on_this_thread(path: &str) -> Result<Document, String> {
     // Smart chips are content controls rdocx does not read runs from:
     // they become sentinel runs first (docx_chips).
     let (doc, (chips, revisions)) = open_with_chips(path).map_err(|e| format!("Cannot open .docx {}: {}", path, e))?;
@@ -1653,23 +1679,64 @@ fn style_id_to_heading(id: &str) -> Option<u8> {
 fn normalize(p: &mut Paragraph) {
     p.runs
         .retain(|r| !r.text.is_empty() || r.style.image.is_some() || r.style.footnote.is_some());
-    let mut i = 0;
-    while i + 1 < p.runs.len() {
-        if p.runs[i].style.footnote.is_some() || p.runs[i + 1].style.footnote.is_some() {
-            i += 1;
-            continue;
-        }
-        if p.runs[i].style == p.runs[i + 1].style {
-            let next = p.runs.remove(i + 1);
-            p.runs[i].text.push_str(&next.text);
-        } else {
-            i += 1;
-        }
-    }
+    crate::model::merge_adjacent_runs(&mut p.runs, |a, b| {
+        a.style.footnote.is_none() && b.style.footnote.is_none() && a.style == b.style
+    });
 }
 
 #[cfg(test)]
 mod tests {
+    /// 31 nested tables, inside rdocx's own cap of 32, read on whichever
+    /// thread asks: on a 2 MiB test thread they overflowed the stack before
+    /// the read moved to its own. Deeper, up to [`super::MAX_XML_DEPTH`],
+    /// is refused by rdocx rather than crashing, and one level past it is
+    /// refused unread (#1206).
+    #[test]
+    fn nesting_is_read_up_to_the_limit_and_refused_past_it() {
+        use std::io::{Read, Write};
+        let dir = tempfile::tempdir().unwrap();
+        let base = dir.path().join("base.docx");
+        super::write(&Document::from_plain_text("x"), &base).unwrap();
+        let with_tables = |levels: usize, name: &str| {
+            let body = format!(
+                "<w:document xmlns:w=\"http://schemas.openxmlformats.org/wordprocessingml/2006/main\"><w:body>{}<w:p><w:r><w:t>x</w:t></w:r></w:p>{}</w:body></w:document>",
+                "<w:tbl><w:tr><w:tc>".repeat(levels),
+                "</w:tc></w:tr></w:tbl>".repeat(levels)
+            );
+            let mut source = zip::ZipArchive::new(std::fs::File::open(&base).unwrap()).unwrap();
+            let path = dir.path().join(name);
+            let mut writer = zip::ZipWriter::new(std::fs::File::create(&path).unwrap());
+            for i in 0..source.len() {
+                let mut entry = source.by_index(i).unwrap();
+                let entry_name = entry.name().to_string();
+                let mut bytes = Vec::new();
+                entry.read_to_end(&mut bytes).unwrap();
+                if entry_name == "word/document.xml" {
+                    bytes = body.clone().into_bytes();
+                }
+                writer.start_file(entry_name, zip::write::SimpleFileOptions::default()).unwrap();
+                writer.write_all(&bytes).unwrap();
+            }
+            writer.finish().unwrap();
+            path
+        };
+        let nested = with_tables(31, "nested.docx");
+        // What survives of the inner tables is #1419's; here, that reading
+        // them returns at all.
+        super::read(nested.to_str().unwrap()).expect("31 nested tables read");
+
+        // Three elements a level, between <w:document><w:body> and the
+        // innermost cell's <w:p><w:r><w:t>.
+        let deepest = (super::MAX_XML_DEPTH - 5) / 3;
+        let inside = with_tables(deepest, "inside.docx");
+        if let Err(error) = super::read(inside.to_str().unwrap()) {
+            assert!(!error.contains("nests its elements"), "refused inside the limit: {error}");
+        }
+        let past = with_tables(deepest + 1, "past.docx");
+        let error = super::read(past.to_str().unwrap()).expect_err("a docx past the limit is refused");
+        assert!(error.contains("nests its elements"), "{error}");
+    }
+
     use super::*;
     use crate::model::{Paragraph, Run, RunStyle};
 

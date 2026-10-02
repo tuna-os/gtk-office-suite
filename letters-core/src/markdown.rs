@@ -223,15 +223,7 @@ pub fn parse(md: &str) -> Document {
 
 fn normalize_para(p: &mut Paragraph) {
     p.runs.retain(|r| !r.text.is_empty());
-    let mut i = 0;
-    while i + 1 < p.runs.len() {
-        if p.runs[i].style == p.runs[i + 1].style {
-            let next = p.runs.remove(i + 1);
-            p.runs[i].text.push_str(&next.text);
-        } else {
-            i += 1;
-        }
-    }
+    crate::model::merge_adjacent_runs(&mut p.runs, |a, b| a.style == b.style);
 }
 
 fn heading_to_u8(level: HeadingLevel) -> u8 {
