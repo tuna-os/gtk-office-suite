@@ -1947,22 +1947,24 @@ class LettersKilledMidSaveSmoke(KilledMidSaveMixin, BaseGUITestCase):
     save_button_label = "Save All"
 
 
-class MoreToRecoverMixin:
-    """Two crashed documents, one window: the other is announced (#1422).
+class EveryCrashedDocumentComesBackMixin:
+    """Two documents open, a crash, and both come back in two windows (#1422).
 
-    Tables and Decks hold one document per window, so a launch recovers the
-    newest orphan and leaves the rest for later launches. That used to be
-    silent: the second document's work was on disk with nothing saying so.
-    Now the recovered window says how many more are waiting.
+    Tables and Decks used to hold one document per process, so a launch
+    after a crash recovered the newest snapshot and left the rest for later
+    launches. Now each document has a window of its own: the second file
+    opens beside the first rather than replacing it, the application's
+    actions act on the window in front, and a relaunch recovers every
+    snapshot into a window of its own.
 
-    Two orphans are made the only way a single-window app allows: a launch
-    that opens a file skips recovery, so each of two files is opened,
-    edited, snapshotted and killed in turn.
+    The edits go through `gapplication action`, which is the routing under
+    test: the second document only gets a snapshot if `autosave-now` reaches
+    the second window.
     """
 
     def setUp(self):
-        self._state_dir = self.isolate_autosave_state(prefix=f"{self.app_name}-more-to-recover-")
-        self._dir = self.temp_dir(f"{self.app_name}-more-to-recover-docs-")
+        self._state_dir = self.isolate_autosave_state(prefix=f"{self.app_name}-every-crashed-")
+        self._dir = self.temp_dir(f"{self.app_name}-every-crashed-docs-")
         self._files = [os.path.join(self._dir, f"{stem}{self.doc_suffix}") for stem in ("first", "second")]
         for path in self._files:
             self._write_document(path)
@@ -1973,29 +1975,38 @@ class MoreToRecoverMixin:
         snap_dir = os.path.join(self._state_dir, self.app_name)
         return [f for f in os.listdir(snap_dir) if f.endswith(".snapshot")] if os.path.isdir(snap_dir) else []
 
+    def _frames(self):
+        return [c.name for c in self.app.children if c.roleName == "frame"]
+
     def _edit_and_snapshot(self, expected):
-        from dogtail import rawinput
-        time.sleep(1.5)  # pacing: the opened document's first frame
-        self._edit_the_document(rawinput)
-        self.gapplication_action(f"org.tunaos.{self.app_name}", "autosave-now")
+        app_id = f"org.tunaos.{self.app_name}"
+        self.gapplication_action(app_id, self.dirtying_action)
+        self.gapplication_action(app_id, "autosave-now")
         self.wait_until(lambda: len(self._snapshots()), lambda n: n == expected,
                         description=f"{expected} snapshot(s) on disk")
 
-    def test_a_second_crashed_document_is_announced_not_silent(self):
+    def test_every_crashed_document_comes_back_in_a_window_of_its_own(self):
+        self.wait_until(self._frames, lambda names: any("first" in n for n in names),
+                        description="the first document's window")
         self._edit_and_snapshot(1)
-        self.relaunch_app(crash=True, launch_args=[self._files[1]])
+
+        # A second launch hands the file to the running instance, which
+        # opens it in a new window in front of the first.
+        import subprocess
+
+        env = {**os.environ, "GDK_BACKEND": "x11", **getattr(self, "launch_env", {})}
+        subprocess.run([self.bin_path, self._files[1]], env=env, check=True, timeout=30)
+        self.wait_until(self._frames, lambda names: len(names) == 2 and any("second" in n for n in names),
+                        description="the second document in a window of its own")
         self._edit_and_snapshot(2)
 
         self.relaunch_app(crash=True, launch_args=[])
-        self.wait_until(lambda: self.app.child(roleName="frame").name,
-                        lambda name: "Recovered" in name, timeout=20.0,
-                        description="the newest crashed document recovered")
-        from dogtail import tree
-        notice = self.wait_until(
-            lambda: tree.root.findChild(lambda n: "will be offered the next time" in (n.name or "") and n.showing,
-                                        retry=False, requireResult=False),
-            bool, description="the notice that one more document is waiting")
-        self.assertIn(f"1 more unsaved {self.document_noun}", notice.name)
+        recovered = self.wait_until(
+            self._frames,
+            lambda names: len([n for n in names if "Recovered" in n]) == 2, timeout=30.0,
+            description="both crashed documents recovered, each in its own window")
+        self.assertTrue(any("first" in n for n in recovered), recovered)
+        self.assertTrue(any("second" in n for n in recovered), recovered)
 
 
 class TablesRenamedOriginalSmoke(TablesSavedDocumentMixin, RenamedOriginalMixin, BaseGUITestCase):
@@ -2044,57 +2055,42 @@ class DecksKilledMidSaveSmoke(KilledMidSaveMixin, BaseGUITestCase):
         time.sleep(1.0)  # pacing: no state to wait on before the next input
 
 
-class TablesMoreToRecoverSmoke(MoreToRecoverMixin, BaseGUITestCase):
+class TablesEveryCrashedDocumentSmoke(EveryCrashedDocumentComesBackMixin, BaseGUITestCase):
     app_name = "tables"
     doc_suffix = ".csv"
-    document_noun = "workbook"
+    # Hides the selected row: an undoable change, so the workbook is dirty.
+    dirtying_action = "hide-selected-rows"
 
     def _write_document(self, path):
         with open(path, "w") as f:
             f.write("item,amount\nrent,1250\n")
 
-    def _edit_the_document(self, rawinput):
-        # A committed cell edit is what makes a workbook dirty.
-        rawinput.typeText("=6*7")
-        rawinput.keyCombo("Return")
-        time.sleep(0.5)  # pacing: no state to wait on before the next input
 
-
-class DecksMoreToRecoverSmoke(MoreToRecoverMixin, BaseGUITestCase):
+class DecksEveryCrashedDocumentSmoke(EveryCrashedDocumentComesBackMixin, BaseGUITestCase):
     app_name = "decks"
     doc_suffix = ".pptx"
-    document_noun = "deck"
+    dirtying_action = "add-shape"
 
     def _write_document(self, path):
         with open(path, "wb") as f:
             f.write(minimal_pptx_bytes("kept"))
 
-    def _edit_the_document(self, rawinput):
-        import subprocess
-        subprocess.run(["gapplication", "action", "org.tunaos.decks", "add-shape"])
-        time.sleep(1.0)  # pacing: no state to wait on before the next input
-
 
 class TwoDocumentsMixin:
-    """Two crashed documents, and a defined answer about which comes back.
+    """Two planted crash snapshots, and both come back, newest first.
 
     `find_orphaned_snapshots` returns the newest snapshot first, breaking
-    mtime ties on the document id, so that a launch recovering one document
-    per window is making a choice somebody made rather than taking whatever
-    the directory listed first. That ordering is unit-tested; nothing had
-    checked that a real launch honours it, or that the document it does not
-    take is left intact for the next one.
+    mtime ties on the document id, so recovery happens in an order somebody
+    chose rather than whatever the directory listed first. That ordering is
+    unit-tested. This journey used to check that a one-window launch took
+    the newest and left the older one intact for the next launch; since
+    #1422 each document has a window of its own and a launch recovers both,
+    so it now checks that, with snapshots in the legacy two-file format
+    `EveryCrashedDocumentComesBackMixin` never writes.
 
-    Both snapshots are planted rather than produced by two crashed runs: the
-    app is single-instance, so getting two genuine orphans means two
-    sequential runs, and the first relaunch would consume one of them before
-    the second existed. Planting makes the newer one explicit.
-
-    Tables and Decks need this; Letters does not, and that is not an
-    omission. A Letters window holds a document per tab, so two dirty tabs
-    are two documents with two slots, and `LettersAutosaveSmoke` has
-    asserted since #99 that a crash recovers both. The single-document apps
-    are the ones that have to *choose*.
+    Both snapshots are planted rather than produced by crashed runs, which
+    makes the newer one explicit. Letters has done this per tab since #99
+    (`LettersAutosaveSmoke`).
     """
 
     def setUp(self):
@@ -2103,14 +2099,8 @@ class TwoDocumentsMixin:
         os.makedirs(snap_dir, exist_ok=True)
         self._older = os.path.join(snap_dir, "doc-older.snapshot")
         self._newer = os.path.join(snap_dir, "doc-newer.snapshot")
-        # Kept, not regenerated, for the untouched-bytes assertion below:
-        # both builders produce a zip, and zip entries carry a modification
-        # time, so the same call a second later returns different bytes.
-        # Comparing against a fresh copy failed on one timestamp byte and
-        # read as "the snapshot was rewritten".
-        self._older_bytes = self.planted_bytes("older")
         for path, payload, name in (
-            (self._older, self._older_bytes, f"older{self.doc_suffix}"),
+            (self._older, self.planted_bytes("older"), f"older{self.doc_suffix}"),
             (self._newer, self.planted_bytes("newer"), f"newer{self.doc_suffix}"),
         ):
             with open(path, "wb") as data:
@@ -2124,30 +2114,20 @@ class TwoDocumentsMixin:
         os.utime(f"{self._older}.meta", (old_time, old_time))
         super().setUp()
 
-    def test_the_newest_crashed_document_is_recovered_and_the_other_kept(self):
-        frame = self.wait_until(
-            lambda: self.app.child(roleName="frame").name,
-            lambda name: "Recovered" in name,
+    def test_both_crashed_documents_are_recovered_each_in_its_own_window(self):
+        frames = self.wait_until(
+            lambda: [c.name for c in self.app.children if c.roleName == "frame"],
+            lambda names: len([n for n in names if "Recovered" in n]) == 2,
             timeout=20.0,
-            description="a recovered window title",
+            description="two recovered windows",
         )
-        self.assertIn(
-            f"newer{self.doc_suffix}", frame,
-            f"the newest snapshot should be the one recovered: {frame!r}",
-        )
-
-        # The one it did not take must still be there, whole, for the next
-        # launch — clearing or damaging it would lose a second document's
-        # unsaved work to the recovery of the first.
-        self.assertTrue(os.path.exists(self._older),
-                        "the older document's snapshot was cleared by the recovery of the newer")
-        self.assertTrue(os.path.exists(f"{self._older}.meta"),
-                        "the older document's metadata was cleared")
-        with open(self._older, "rb") as kept:
-            self.assertEqual(
-                kept.read(), self._older_bytes,
-                "the older document's snapshot was rewritten",
-            )
+        for stem in ("newer", "older"):
+            self.assertTrue(any(f"{stem}{self.doc_suffix}" in n for n in frames),
+                            f"the {stem} snapshot should be recovered: {frames!r}")
+        # Each recovered window now owns its document's work, so the planted
+        # orphans are gone rather than offered again at the next launch.
+        self.assertFalse(os.path.exists(self._older), "the older snapshot is still an orphan")
+        self.assertFalse(os.path.exists(self._newer), "the newer snapshot is still an orphan")
 
 
 class TablesTwoDocumentsSmoke(TwoDocumentsMixin, BaseGUITestCase):
@@ -3079,15 +3059,11 @@ class TablesFormatSafeSaveMixin(TablesCellEntryMixin):
         self.assertIsNone(self.process.poll(), "tables crashed saving")
 
 
-class TablesOpenGuardSmoke(TablesCellEntryMixin, BaseGUITestCase):
-    """A file handed over by the file manager does not replace unsaved work
-    without asking (data loss, #1190 P0).
-
-    Tables holds one workbook per window, and both Open and a file opened
-    from outside replaced it with no question, dirty or not. The file is
-    handed over exactly as a file manager does it: a second `tables FILE`
-    process, which passes the file to the running one.
-    """
+class TablesHandOverMixin:
+    """A workbook with unsaved work in it, and a second file arriving:
+    shared by the file-manager hand-over and the drop journeys, which take
+    the same path (#1316) and, since #1422, open the file in a window of
+    its own rather than replacing the unsaved one."""
 
     app_name = "tables"
 
@@ -3113,30 +3089,38 @@ class TablesOpenGuardSmoke(TablesCellEntryMixin, BaseGUITestCase):
     def _title(self):
         return self.app.child(roleName="frame").name
 
-    def _button(self, name):
-        from dogtail import tree
-        return self.wait_until(
-            lambda: tree.root.findChild(lambda n: n.roleName == "push button" and n.name == name and n.showing,
-                                        retry=False, requireResult=False),
-            bool, description=f"the {name} button")
-
-    def test_unsaved_changes_are_asked_about_before_another_file_replaces_them(self):
+    def _opens_beside_unsaved_work(self):
         self.wait_until(self._grid, lambda text: "cell A1: Item" in text, description="first.csv to open")
         self._put("B2", "1500")
 
         self._hand_over(self._second)
-        self.wait_for_node(name="Discard unsaved changes?")
-        self._button("Cancel").do_action(0)
-        time.sleep(1.0)  # settling: gives a wrong outcome its chance before the check that it didn't happen
-        self.assertIn("first.csv", self._title(), "Cancel replaced the workbook anyway")
-        cells = self.trigger_snapshot("org.tunaos.tables")["sheet"]["cells"]
-        b2 = next((c["value"] for c in cells if (c["row"], c["col"]) == (1, 1)), None)
-        self.assertEqual(b2, "1500", "Cancel lost the edit")
+        frames = self.wait_until(
+            lambda: [c.name for c in self.app.children if c.roleName == "frame"],
+            lambda names: len(names) == 2 and any("second.ods" in n for n in names),
+            description="second.ods in a window of its own")
+        self.assertTrue(any("first.csv" in n for n in frames), f"the unsaved workbook was replaced: {frames!r}")
+        from dogtail import tree
+        self.assertIsNone(
+            tree.root.findChild(lambda n: n.name == "Discard unsaved changes?" and n.showing,
+                                retry=False, requireResult=False),
+            "nothing is being replaced, so nothing should be asked")
+        self.assertIsNone(self.process.poll(), "tables crashed opening the file")
 
-        self._hand_over(self._second)
-        self._button("Discard").do_action(0)
-        self.wait_until(self._title, lambda t: "second.ods" in t, description="Discard to open second.ods")
-        self.assertIsNone(self.process.poll(), "tables crashed opening a handed-over file")
+
+class TablesOpenGuardSmoke(TablesHandOverMixin, TablesCellEntryMixin, BaseGUITestCase):
+    """A file handed over by the file manager never replaces unsaved work
+    (data loss, #1190 P0).
+
+    Tables used to hold one workbook per process, and a file opened from
+    outside replaced it with no question, dirty or not; then it asked
+    first. Since #1422 the file opens in a window of its own, beside the
+    unsaved one, which is left as it was. The file is handed over exactly
+    as a file manager does it: a second `tables FILE` process, which passes
+    the file to the running one.
+    """
+
+    def test_a_handed_over_file_opens_beside_unsaved_work(self):
+        self._opens_beside_unsaved_work()
 
 
 def assert_close_guard_asks(test):
@@ -8461,16 +8445,19 @@ class LettersOpenPathsSmoke(OpenPathsMixin, BaseGUITestCase):
         self.assertIsNone(self.process.poll(), "letters crashed opening through the dialog")
 
 
-class TablesDropGuardSmoke(OpenPathsMixin, TablesOpenGuardSmoke):
-    """A file dropped on the window does not replace unsaved work without
-    asking (#1316): the same journey as a file manager's hand-over, with
-    the file dropped instead. The drop used to replace the workbook
-    without a word."""
+class TablesDropGuardSmoke(OpenPathsMixin, TablesHandOverMixin, TablesCellEntryMixin, BaseGUITestCase):
+    """A file dropped on the window never replaces unsaved work (#1316):
+    the same journey as a file manager's hand-over, with the file dropped
+    instead. The drop used to replace the workbook without a word; then it
+    asked first; since #1422 it opens in a window of its own."""
 
     aid = "org.tunaos.tables"
 
     def _hand_over(self, path):
         self._drop(path)
+
+    def test_a_dropped_file_opens_beside_unsaved_work(self):
+        self._opens_beside_unsaved_work()
 
 
 class TablesOpenDialogSmoke(OpenPathsMixin, TablesCellEntryMixin, BaseGUITestCase):
@@ -8507,10 +8494,11 @@ ONE_PIXEL_PNG = bytes.fromhex(
 
 
 class DecksOpenPathsSmoke(OpenPathsMixin, BaseGUITestCase):
-    """A deck dropped on the window asks before it replaces unsaved work,
-    and a picture dropped on it goes on the slide, without asking
-    (#1316). The drop used to replace the deck without a word. Open…
-    opens the deck chosen in the file dialog."""
+    """A deck dropped on the window opens beside unsaved work rather than
+    replacing it, and a picture dropped on it goes on the slide (#1316).
+    The drop used to replace the deck without a word; then it asked first;
+    since #1422 the deck gets a window of its own. Open… opens the deck
+    chosen in the file dialog."""
 
     app_name = "decks"
     aid = "org.tunaos.decks"
@@ -8540,21 +8528,21 @@ class DecksOpenPathsSmoke(OpenPathsMixin, BaseGUITestCase):
                         description="the deck to open")
         self.wait_until(self._title, lambda t: "mine.pptx" in t, description="mine.pptx to open")
 
-    def test_a_dropped_deck_asks_before_replacing_unsaved_work(self):
+    def test_a_dropped_deck_opens_beside_unsaved_work(self):
         self._opened()
         self.gapplication_action(self.aid, "add-shape")
         self.wait_until(self._objects, lambda n: n == 2, description="the shape to be added")
 
         self._drop(self._other)
-        self.wait_for_node(name="Discard unsaved changes?")
-        self._button("Cancel").do_action(0)
-        time.sleep(1.0)  # settling: a Cancel that replaced the deck would have by now
-        self.assertIn("mine.pptx", self._title(), "Cancel replaced the deck anyway")
-        self.assertEqual(self._objects(), 2, "Cancel lost the edit")
-
-        self._drop(self._other)
-        self._button("Discard").do_action(0)
-        self.wait_until(self._title, lambda t: "other.pptx" in t, description="Discard to open other.pptx")
+        frames = self.wait_until(
+            lambda: [c.name for c in self.app.children if c.roleName == "frame"],
+            lambda names: len(names) == 2 and any("other.pptx" in n for n in names),
+            description="other.pptx in a window of its own")
+        self.assertTrue(any("mine.pptx" in n for n in frames), f"the unsaved deck was replaced: {frames!r}")
+        from dogtail import tree
+        self.assertIsNone(tree.root.findChild(lambda n: n.name == "Discard unsaved changes?" and n.showing,
+                                              retry=False, requireResult=False),
+                          "nothing is being replaced, so nothing should be asked")
         self.assertIsNone(self.process.poll(), "decks crashed opening a dropped deck")
 
     def test_a_dropped_picture_goes_on_the_slide(self):
