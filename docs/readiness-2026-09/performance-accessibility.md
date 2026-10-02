@@ -69,8 +69,8 @@ Architecture: benchmark core open/edit/recalculate/save separately from GTK inpu
       - **Bugs found while building it.** The harness pinned `GDK_SCALE=1` and `GTK_THEME=Adwaita` (with which
         libadwaita ignores the colour scheme), so the stress campaign's scale-2 and dark configs never took effect;
         both now pass through. The persisted `dark-mode` preference is never saved or restored (#1305). At 400 px
-        the Keyboard Shortcuts window is wider than the screen, so its key labels are cut off (#1307; recorded as the
-        expected image for now).
+        the Keyboard Shortcuts window was wider than the screen and cut its key labels off (#1307); it is now an
+        adaptive dialog, and the dialog cells were re-recorded.
       - **Still open:** the row's exit is the nightly `.github/workflows/visual-matrix.yml` (non-gating) with its
         first green run linked. Its expected images were recorded on a developer container with the same Ubuntu
         24.04 packages as the GUI image; if the image draws a cell differently, a dispatch with `update=true`
