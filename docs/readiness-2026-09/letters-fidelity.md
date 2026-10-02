@@ -23,10 +23,6 @@ A per-tab session owns the complete Document, review state, imported-package con
 
       `heading_styles_and_picture_size_survive_writer_rewriting_a_docx` covers the two docx-only fields. Odt images
       (#1292) now cross both ways (`pictures_in_our_odt_survive_writer_rewriting_it`,
-      `we_read_a_picture_writer_places_in_an_odt`). Odt tables (#1296) cross too
-      (`tables_in_our_odt_survive_writer_rewriting_it`, `we_read_the_table_writer_writes_into_an_odt`); the second
-      found that our docx writer opened every table cell with a blank line, hidden by our reader skipping empty cell
-      paragraphs. One gap is tracked: odt heading styles and nested revisions (#1297).
 - [x] Preserve fields across unrelated edits and structured commands; distinguish user text from rendered list markers.
       `unrelated_edits_and_commands_leave_every_other_field_alone` (`letters/src/live/tests.rs`, #1278) loads a document
       with every model field set into a live editing session. It then runs 60 seeded sequences of typing (multi-byte
@@ -40,6 +36,12 @@ A per-tab session owns the complete Document, review state, imported-package con
       - an empty last paragraph's style (a heading, a page break) lost on capture, and so on save;
       - a cell's own leading and trailing spaces trimmed away;
       - table ids compared by value rather than by grouping.
+
+      Deleting the empty line between two tables no longer runs them together (#1299): a row followed by a delimiter
+      row starts the next table, and the property test's deletes now reach the lines next to a table. Doing so found that
+      the live model could give two tables one id: a local re-read numbered its region from its position, and an
+      inserted table (numbered past the highest) left later ones out of order. Tables are now renumbered in document
+      order after every local re-read.
 - [x] Apply model operations and undo through one live session; keep review anchors correct across Unicode edits.
       `review_anchors_hold_across_unicode_edits_and_one_history_undoes_them` (`letters/src/live/tests.rs`, #1279) runs
       40 seeded interleavings of typing (a combining accent, a non-BMP emoji with a skin-tone modifier, CJK, Enter),

@@ -56,21 +56,18 @@ fn open(ctl: &Ctl, grid: &gtk::DrawingArea, h: &gtk::Adjustment, refresh: &Rc<dy
     title.set_margin_bottom(6);
     content.append(&title);
 
-    let popover = gtk::Popover::builder().child(&content).position(gtk::PositionType::Bottom).build();
     // Parented beside the grid, not on it: the grid's accessible children
     // are its cells (grid_area.rs), so a popover inside it was invisible to
-    // screen readers (and to the smoke journey that found this).
+    // screen readers (and to the smoke journey that found this). Reused, not
+    // unparented on close: see suite_common::popover (#1192).
     let host: gtk::Widget = grid.parent().unwrap_or_else(|| grid.clone().upcast());
+    let popover = suite_common::popover::reused(&host, "column-menu");
+    popover.set_child(Some(&content));
+    popover.set_position(gtk::PositionType::Bottom);
     let origin = grid
         .compute_point(&host, &gtk::graphene::Point::new(x as f32, 0.0))
         .map_or((x as i32, 0), |p| (p.x() as i32, p.y() as i32));
-    popover.set_parent(&host);
     popover.set_pointing_to(Some(&gtk::gdk::Rectangle::new(origin.0, origin.1, w as i32, COL_HEADER_HEIGHT as i32)));
-    popover.connect_closed(|p| {
-        let p = p.clone();
-        // Unparent after the close animation has used it.
-        gtk::glib::idle_add_local_once(move || p.unparent());
-    });
 
     for (icon, label, direction) in [
         ("view-sort-ascending-symbolic", "Sort Ascending", SortDirection::Ascending),

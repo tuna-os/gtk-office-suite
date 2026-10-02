@@ -69,21 +69,17 @@ pub fn open(ctl: &Ctl, grid: &gtk::DrawingArea, h: &gtk::Adjustment, v: &gtk::Ad
         .map_or((rect.0 as i32, rect.1 as i32), |p| (p.x() as i32, p.y() as i32));
 
     let list = gtk::Box::new(gtk::Orientation::Vertical, 0);
-    let popover = gtk::Popover::builder().child(&gtk::ScrolledWindow::builder()
+    // Reused, not unparented on close: see suite_common::popover (#1192).
+    let popover = suite_common::popover::reused(&host, "validation-list");
+    popover.set_child(Some(&gtk::ScrolledWindow::builder()
         .child(&list)
         .hscrollbar_policy(gtk::PolicyType::Never)
         .propagate_natural_height(true)
         .max_content_height(320)
-        .build())
-        .position(gtk::PositionType::Bottom)
-        .build();
+        .build()));
+    popover.set_position(gtk::PositionType::Bottom);
     popover.add_css_class("menu");
-    popover.set_parent(&host);
     popover.set_pointing_to(Some(&gtk::gdk::Rectangle::new(origin.0, origin.1, rect.2 as i32, rect.3 as i32)));
-    popover.connect_closed(|p| {
-        let p = p.clone();
-        gtk::glib::idle_add_local_once(move || p.unparent());
-    });
 
     let mut first_button = None;
     for item in items {
