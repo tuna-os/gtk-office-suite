@@ -97,9 +97,9 @@ without a test that fails first.
 
 ## Later — scoped by ADR 0003, executed 2026-07-18
 
-- ✅ **CommonMark**: 630 → **651/652** (fences, code-span padding,
+- ✅ **CommonMark**: 630 → **652/652** (fences, code-span padding,
   autolinks, !/& escapes, entity newlines, emphasis depth counters).
-  Spec 150 is the accepted model ceiling.
+  Spec 150, once thought the model's ceiling, round-trips since #1290.
 - ✅ **Footnotes**: docx round-trip via the rdocx fork's new footnote
   API, Writer-oracle proven, Insert Footnote action (Ctrl+Alt+F).
   Comments/track changes remain out (ADR 0003 §2).
