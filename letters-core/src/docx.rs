@@ -631,7 +631,13 @@ pub fn write(doc: &Document, path: impl AsRef<std::path::Path>) -> Result<(), St
             for p in group {
                 let tc = p.style.table_cell.expect("grouped by table_cell");
                 if let Some(mut cell) = tbl.cell(tc.row as usize, tc.col as usize) {
-                    filled.insert((tc.row, tc.col));
+                    // A new cell already holds an empty paragraph: replace
+                    // it, or every cell opens with a blank line in Writer
+                    // and Word (our reader skipped empty cell paragraphs,
+                    // which hid it; #1296).
+                    if filled.insert((tc.row, tc.col)) {
+                        cell.remove_first_empty_paragraph();
+                    }
                     let mut cp = cell.add_paragraph("");
                     // A cell paragraph's indents and alignment, which the
                     // reader maps the same way it maps a body paragraph's.
@@ -665,16 +671,8 @@ pub fn write(doc: &Document, path: impl AsRef<std::path::Path>) -> Result<(), St
                     }
                 }
             }
-            // OOXML requires a paragraph in every cell and one after a table.
-            for r in 0..rows {
-                for c in 0..cols {
-                    if !filled.contains(&(r as u32, c as u32)) {
-                        if let Some(mut cell) = tbl.cell(r, c) {
-                            cell.add_paragraph("");
-                        }
-                    }
-                }
-            }
+            // OOXML requires a paragraph in every cell, which a cell left
+            // empty keeps from its creation, and one after a table.
             out.add_paragraph("");
             continue;
         }

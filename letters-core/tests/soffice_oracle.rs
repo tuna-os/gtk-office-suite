@@ -1572,3 +1572,68 @@ fn we_read_a_picture_writer_places_in_an_odt() {
     assert!(w.abs_diff(720_000) <= 360 && h.abs_diff(360_000) <= 360, "2cm x 1cm read as {:?} EMU", (w, h));
     assert_eq!(pics[0].text, "a red dot", "alt text");
 }
+
+/// A table's paragraphs as (table, row, col, text), body paragraphs as None.
+fn table_shape(doc: &Document) -> Vec<(Option<(u32, u32)>, String)> {
+    doc.paragraphs
+        .iter()
+        .filter(|p| p.style.table_cell.is_some() || !p.text().trim().is_empty())
+        .map(|p| (p.style.table_cell.map(|c| (c.row, c.col)), p.text().trim().to_string()))
+        .collect()
+}
+
+fn table_document() -> Document {
+    let cell = |row, col, text: &str| Paragraph {
+        style: ParaStyle { table_cell: Some(TableCell { table: 0, row, col }), ..Default::default() },
+        runs: if text.is_empty() { Vec::new() } else { vec![Run::plain(text)] },
+    };
+    let mut d = Document::from_plain_text("before the table");
+    d.paragraphs.extend([
+        cell(0, 0, "Item"), cell(0, 1, "Q1"), cell(0, 2, "Q2"),
+        cell(1, 0, "Rent"), cell(1, 1, ""), cell(1, 2, "1250"),
+    ]);
+    d.paragraphs.push(Paragraph { style: ParaStyle::default(), runs: vec![Run::plain("after the table")] });
+    d
+}
+
+/// A table in our odt, rewritten by Writer, read back cell by cell
+/// (#1296): every cell in its place, the empty one included, and the text
+/// around the table outside it.
+#[test]
+fn tables_in_our_odt_survive_writer_rewriting_it() {
+    let Some(bin) = require_or_skip() else { return };
+    let d = table_document();
+    let dir = tempfile::tempdir().unwrap();
+    let src = dir.path().join("in").join("t.odt");
+    std::fs::create_dir_all(src.parent().unwrap()).unwrap();
+    letters_core::odt::write(&d, &src).expect("write odt");
+    let out_dir = dir.path().join("out");
+    std::fs::create_dir(&out_dir).unwrap();
+    let st = std::process::Command::new(bin)
+        .arg("--headless")
+        .arg(format!("-env:UserInstallation=file://{}", dir.path().join("lo").display()))
+        .args(["--convert-to", "odt", "--outdir"])
+        .arg(&out_dir)
+        .arg(&src)
+        .output()
+        .expect("soffice");
+    assert!(st.status.success());
+    let rewritten = out_dir.join("t.odt");
+    assert_ne!(std::fs::read(&rewritten).unwrap(), std::fs::read(&src).unwrap(), "Writer did not rewrite the odt");
+    let rt = letters_core::odt::read(rewritten.to_str().unwrap()).expect("read Writer's odt");
+    assert_eq!(table_shape(&rt), table_shape(&d));
+}
+
+/// A table Writer writes into an odt, converting our docx (#1296): the
+/// table markup is all Writer's.
+#[test]
+fn we_read_the_table_writer_writes_into_an_odt() {
+    let Some(bin) = require_or_skip() else { return };
+    let d = table_document();
+    let dir = tempfile::tempdir().unwrap();
+    let dp = dir.path().join("t.docx");
+    docx::write(&d, &dp).expect("write docx");
+    let _ = soffice_convert(bin, &dp, "odt").ok();
+    let rt = letters_core::odt::read(dir.path().join("t.odt").to_str().unwrap()).expect("read Writer's odt");
+    assert_eq!(table_shape(&rt), table_shape(&d));
+}

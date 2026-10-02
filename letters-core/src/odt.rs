@@ -232,6 +232,59 @@ fn length_emu(s: &str) -> Option<u64> {
     (inches > 0.0).then(|| (inches * EMU_PER_INCH).round() as u64)
 }
 
+/// A table being written (#1296): its size and the cell being filled.
+struct OpenTable {
+    id: u32,
+    rows: u32,
+    cols: u32,
+    row: u32,
+    col: u32,
+    /// Whether the current cell has a paragraph yet (ODF wants one).
+    filled: bool,
+}
+
+impl OpenTable {
+    const CELL: &'static str = "<table:table-cell office:value-type=\"string\">";
+
+    fn close_cell(&mut self, body: &mut String) {
+        if !self.filled {
+            body.push_str("<text:p/>");
+        }
+        body.push_str("</table:table-cell>");
+    }
+
+    /// Move to cell (row, col), closing the ones before it; a paragraph
+    /// out of grid order stays in the current cell.
+    fn move_to(&mut self, body: &mut String, row: u32, col: u32) {
+        while (self.row, self.col) < (row, col) && self.row < self.rows {
+            self.close_cell(body);
+            if self.col + 1 < self.cols {
+                self.col += 1;
+            } else {
+                body.push_str("</table:table-row>");
+                self.row += 1;
+                self.col = 0;
+                if self.row == self.rows {
+                    return;
+                }
+                body.push_str("<table:table-row>");
+            }
+            body.push_str(Self::CELL);
+            self.filled = false;
+        }
+    }
+
+    fn close(mut self, body: &mut String) {
+        let (last_row, last_col) = (self.rows - 1, self.cols - 1);
+        self.move_to(body, last_row, last_col);
+        if self.row < self.rows {
+            self.close_cell(body);
+            body.push_str("</table:table-row>");
+        }
+        body.push_str("</table:table>");
+    }
+}
+
 fn content_xml(doc: &Document) -> String {
     let run_styles = collect_run_styles(doc);
     let mut pictures_written = 0usize;
@@ -332,7 +385,40 @@ fn content_xml(doc: &Document) -> String {
     // open item.
     let mut open_list = ListKind::None;
     let mut depth = 0usize;
+    // Tables: consecutive paragraphs of one table id are its cells, in
+    // grid order, as the docx writer groups them (#1296).
+    let mut table: Option<OpenTable> = None;
+    let mut tables_written = 0u32;
     for (pi, p) in doc.paragraphs.iter().enumerate() {
+        let cell = p.style.table_cell;
+        let here = table.as_ref().map(|t| (t.id, t.row, t.col));
+        if cell.map(|c| (c.table, c.row, c.col)) != here {
+            // Lists don't cross a cell boundary.
+            body.push_str(&"</text:list-item></text:list>".repeat(depth));
+            depth = 0;
+            open_list = ListKind::None;
+            if table.as_ref().is_some_and(|t| cell.map(|c| c.table) != Some(t.id)) {
+                table.take().expect("checked").close(&mut body);
+            }
+            if let Some(c) = cell {
+                if table.is_none() {
+                    let group = doc.paragraphs[pi..].iter().map_while(|q| q.style.table_cell.filter(|qc| qc.table == c.table));
+                    let (rows, cols) = group.fold((0, 0), |(r, k), qc| (r.max(qc.row + 1), k.max(qc.col + 1)));
+                    tables_written += 1;
+                    body.push_str(&format!(
+                        "<table:table table:name=\"Table{tables_written}\"><table:table-column table:number-columns-repeated=\"{cols}\"/><table:table-row>{}",
+                        OpenTable::CELL
+                    ));
+                    table = Some(OpenTable { id: c.table, rows, cols, row: 0, col: 0, filled: false });
+                }
+                if let Some(t) = table.as_mut() {
+                    t.move_to(&mut body, c.row, c.col);
+                }
+            }
+        }
+        if let Some(t) = table.as_mut() {
+            t.filled = true;
+        }
         let kind = p.style.list;
         if kind != open_list {
             body.push_str(&"</text:list-item></text:list>".repeat(depth));
@@ -489,6 +575,9 @@ fn content_xml(doc: &Document) -> String {
         }
     }
     body.push_str(&"</text:list-item></text:list>".repeat(depth));
+    if let Some(t) = table.take() {
+        t.close(&mut body);
+    }
     let changes = if regions.is_empty() {
         String::new()
     } else {
@@ -504,6 +593,7 @@ fn content_xml(doc: &Document) -> String {
          xmlns:fo=\"urn:oasis:names:tc:opendocument:xmlns:xsl-fo-compatible:1.0\" \
          xmlns:xlink=\"http://www.w3.org/1999/xlink\" \
          xmlns:draw=\"urn:oasis:names:tc:opendocument:xmlns:drawing:1.0\" \
+         xmlns:table=\"urn:oasis:names:tc:opendocument:xmlns:table:1.0\" \
          xmlns:svg=\"urn:oasis:names:tc:opendocument:xmlns:svg-compatible:1.0\" \
          xmlns:loext=\"urn:org:documentfoundation:names:experimental:office:xmlns:loext:1.0\" \
          xmlns:dc=\"http://purl.org/dc/elements/1.1/\" \
@@ -1154,6 +1244,16 @@ fn read_parts(path: &str) -> Result<(Document, Vec<String>), String> {
     let mut annotation: Option<Reading> = None;
     let mut frame: Option<FrameReading> = None;
     let mut frame_depth = 0usize;
+    // The outermost table being read (#1296): its id, the current row and
+    // column (-1 before the first), its element depth, and whether the
+    // current cell has had a paragraph. A table nested in a cell belongs
+    // to its outer cell.
+    let mut table: Option<(u32, i64, i64, usize, bool)> = None;
+    let mut table_depth = 0usize;
+    let mut tables_read = 0u32;
+    let cell_of = |t: &Option<(u32, i64, i64, usize, bool)>| {
+        t.map(|(id, r, c, _, _)| crate::model::TableCell { table: id, row: r.max(0) as u32, col: c.max(0) as u32 })
+    };
     let mut consumed: Vec<String> = Vec::new();
 
     loop {
@@ -1326,6 +1426,25 @@ fn read_parts(path: &str) -> Result<(Document, Vec<String>), String> {
             }
             Ok(Event::Start(e)) => match e.name().as_ref() {
                 "office:text" => in_body = true,
+                "table:table" if in_body && note.is_none() => {
+                    table_depth += 1;
+                    if table.is_none() {
+                        table = Some((tables_read, -1, -1, table_depth, false));
+                        tables_read += 1;
+                    }
+                }
+                "table:table-row" => {
+                    if let Some(t) = table.as_mut().filter(|t| t.3 == table_depth) {
+                        t.1 += 1;
+                        t.2 = -1;
+                    }
+                }
+                "table:table-cell" | "table:covered-table-cell" => {
+                    if let Some(t) = table.as_mut().filter(|t| t.3 == table_depth) {
+                        t.2 += 1;
+                        t.4 = false;
+                    }
+                }
                 "draw:frame" => {
                     frame_depth += 1;
                     if frame.is_none() && para.is_some() && note.is_none() {
@@ -1488,6 +1607,13 @@ fn read_parts(path: &str) -> Result<(Document, Vec<String>), String> {
                 _ => {}
             },
             Ok(Event::Empty(e)) => match e.name().as_ref() {
+                // A cell with no paragraph still holds its grid position.
+                "table:table-cell" | "table:covered-table-cell" => {
+                    if let Some(t) = table.as_mut().filter(|t| t.3 == table_depth) {
+                        t.2 += 1;
+                        doc.paragraphs.push(Paragraph { style: ParaStyle { table_cell: cell_of(&table), ..Default::default() }, runs: Vec::new() });
+                    }
+                }
                 "draw:image" => {
                     if let Some(f) = frame.as_mut().filter(|f| f.href.is_none()) {
                         f.href = attr_val(&e, "xlink:href");
@@ -1508,7 +1634,10 @@ fn read_parts(path: &str) -> Result<(Document, Vec<String>), String> {
                 }
                 "text:p" if note.is_some() => {}
                 "text:p" | "text:h" if in_body => {
-                    let style = ParaStyle { list: list_kind, list_level: list_level.saturating_sub(1), list_start: pending_start.take(), ..Default::default() };
+                    let style = ParaStyle { list: list_kind, list_level: list_level.saturating_sub(1), list_start: pending_start.take(), table_cell: cell_of(&table), ..Default::default() };
+                    if let Some(t) = table.as_mut() {
+                        t.4 = true;
+                    }
                     doc.paragraphs.push(Paragraph { style, runs: Vec::new() });
                 }
                 _ => {}
@@ -1602,8 +1731,23 @@ fn read_parts(path: &str) -> Result<(Document, Vec<String>), String> {
                             }
                             p.runs = runs;
                         }
+                        if let Some(t) = table.as_mut() {
+                            p.style.table_cell = cell_of(&Some(*t));
+                            t.4 = true;
+                        }
                         doc.paragraphs.push(p);
                     }
+                }
+                "table:table-cell" => {
+                    if let Some(t) = table.filter(|t| t.3 == table_depth && !t.4) {
+                        doc.paragraphs.push(Paragraph { style: ParaStyle { table_cell: cell_of(&Some(t)), ..Default::default() }, runs: Vec::new() });
+                    }
+                }
+                "table:table" if table_depth > 0 => {
+                    if table.is_some_and(|t| t.3 == table_depth) {
+                        table = None;
+                    }
+                    table_depth -= 1;
                 }
                 "text:table-of-content" => in_toc = false,
                 "text:index-title" => in_index_title = false,
@@ -1835,6 +1979,31 @@ mod tests {
         let first: Vec<&str> = rt.paragraphs[0].runs.iter().map(|r| if r.style.image.is_some() { "[pic]" } else { r.text.as_str() }).collect();
         assert_eq!(first, ["before ", "[pic]", " after"], "the picture stays where it is in the line");
         assert!(opaque.is_empty(), "a picture we read is not an opaque part: {:?}", opaque.part_names().collect::<Vec<_>>());
+    }
+
+    /// Tables cross as tables (#1296): every cell in its grid position, an
+    /// empty cell included, a cell of two paragraphs, run styling inside a
+    /// cell, the text around the table, and a second table straight after.
+    #[test]
+    fn tables_round_trip_cell_by_cell() {
+        let cell = |table, row, col, text: &str| Paragraph {
+            style: ParaStyle { table_cell: Some(crate::model::TableCell { table, row, col }), ..Default::default() },
+            runs: if text.is_empty() { Vec::new() } else { vec![Run::plain(text)] },
+        };
+        let mut bold = cell(0, 1, 2, "");
+        bold.runs = vec![Run { text: "bold total".into(), style: RunStyle { bold: true, ..Default::default() } }];
+        let mut d = Document::from_plain_text("before");
+        d.paragraphs.extend([
+            cell(0, 0, 0, "a1"), cell(0, 0, 1, "b1"), cell(0, 0, 2, "c1"),
+            cell(0, 1, 0, "a2 first"), cell(0, 1, 0, "a2 second"), cell(0, 1, 1, ""), bold,
+            cell(1, 0, 0, "second table"), cell(1, 0, 1, "x"),
+        ]);
+        d.paragraphs.push(Paragraph { style: ParaStyle::default(), runs: vec![Run::plain("after")] });
+        let rt = round_trip(&d);
+        let shape = |doc: &Document| -> Vec<(Option<(u32, u32, u32)>, String, bool)> {
+            doc.paragraphs.iter().map(|p| (p.style.table_cell.map(|c| (c.table, c.row, c.col)), p.text(), p.runs.iter().any(|r| r.style.bold))).collect()
+        };
+        assert_eq!(shape(&rt), shape(&d));
     }
 
     /// An image whose file has gone is written as its alt text, as docx does.
