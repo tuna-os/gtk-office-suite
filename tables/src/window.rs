@@ -62,6 +62,10 @@ pub struct TablesWindow {
     sheet_model: gtk4::StringList,
     sheet_switcher: gtk4::DropDown,
     current_path: Rc<RefCell<Option<std::path::PathBuf>>>,
+    /// Rebuilds the accessible cells, name box and status from the
+    /// selection; an open runs it so a screen reader sees the new file's
+    /// cells before anything is clicked (#1283).
+    refresh_sel: Rc<dyn Fn()>,
     /// This window's own snapshot slot. A field rather than only a
     /// constructor local because recovery has to write to it before it
     /// clears the orphan it recovered from — see `recover_from_snapshot`.
@@ -122,10 +126,13 @@ impl TablesWindow {
         if std::env::var_os("GTK_OFFICE_TEST_MODE").is_some() {
             let ctl = controller.clone();
             let snap_area = drawing_area.clone();
+            let (sh, sv) = (h_adj.clone(), v_adj.clone());
             let act = gtk4::gio::SimpleAction::new("test-snapshot", None);
             act.connect_activate(move |_, _| {
                 let Ok(path) = std::env::var("GTK_OFFICE_SNAPSHOT_PATH") else { return };
                 let mut snap = tables_core::snapshot::snapshot(&ctl.borrow(), 0..100, 0..26);
+                let view = (f64::from(snap_area.width()), f64::from(snap_area.height()));
+                snap.cell_rects = tables_core::snapshot::cell_rects(&ctl.borrow().state.borrow().sheet(), (sh.value(), sv.value()), view);
                 // In the window's *surface* coordinates, which is what
                 // input arrives in: the root widget starts inside the CSD
                 // resize border, which a window that isn't maximized has
@@ -2153,6 +2160,7 @@ impl TablesWindow {
             sheet_model,
             sheet_switcher,
             current_path,
+            refresh_sel,
         }
     }
 
@@ -2257,6 +2265,7 @@ impl TablesWindow {
         self.controller.borrow_mut().mark_clean();
         let settings = gtk4::gio::Settings::new("org.tunaos.tables");
         suite_common::push_recent_file(&settings, path);
+        (self.refresh_sel)();
         self.drawing_area.queue_draw();
         Ok(())
     }
