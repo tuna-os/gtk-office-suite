@@ -84,3 +84,13 @@ fn whole_markdown_fixtures_round_trip() {
         assert_eq!(doc1, doc2, "{name} does not round-trip idempotently");
     }
 }
+
+/// The corpus size the docs quote next to the baseline (README.md,
+/// ROADMAP.md), recorded so `tests/test_roadmap_figures.py` can check those
+/// figures without running this corpus. Adding or removing a case means
+/// updating `tests/corpus/roundtrip-total.txt` as well as the baseline.
+#[test]
+fn the_recorded_total_is_the_corpus_size() {
+    let recorded: usize = include_str!("corpus/roundtrip-total.txt").trim().parse().expect("total int");
+    assert_eq!(corpus().len(), recorded, "the CommonMark spec examples changed size: update tests/corpus/roundtrip-total.txt");
+}

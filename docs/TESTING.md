@@ -163,15 +163,16 @@ shipped behind a green badge. Honest red is the product; see PR #86.
 
 The bar for through-LibreOffice coverage (I4): **every green Tier-1/2
 PARITY row that persists data has at least one oracle assertion per
-format direction it claims** — numerically 25+ Letters, 20+ Tables,
-20+ Decks (~65–70 tests). Each test writes our file, has LibreOffice
-read/rewrite it, and re-reads the result through our own readers,
-asserting the *attribute*, not just the text.
+format direction it claims** — numerically at least 25 Letters, 20 Tables
+and 20 Decks tests in each crate's `tests/soffice_oracle.rs`, floors
+`tests/test_roadmap_figures.py` holds the files to. Each test writes our
+file, has LibreOffice read/rewrite it, and re-reads the result through our
+own readers, asserting the *attribute*, not just the text.
 
 Rules of engagement:
 - New oracle tests are written red-first; a wave that comes back all
   green earns another probe into an uncovered row.
-- Above ~70 hand-written tests, breadth comes from the LO-authored
+- Past those floors, breadth comes from the LO-authored
   corpora (`lo_parity.rs`), which are ratcheted and cover many features
   per file at lower CI cost.
 

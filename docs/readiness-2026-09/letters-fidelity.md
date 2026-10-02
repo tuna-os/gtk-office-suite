@@ -77,8 +77,8 @@ A per-tab session owns the complete Document, review state, imported-package con
       - **Comments**: wired. GUI: `LettersCommentsSmoke` (add, reply, resolve, undo; stays on its word across Unicode
         typing). Format: `comments_survive_lo_passes`.
       - **Tracked changes**: wired. GUI: `LettersTrackChangesSmoke.test_tracked_edits_are_reviewed`. Format:
-        `tracked_changes_survive_lo_passes`. Documented limits: paragraph breaks and formatting changes aren't tracked,
-        and the Draft editor is read-only while tracking.
+        `tracked_changes_survive_lo_passes`. Documented limits: paragraph breaks and formatting changes aren't tracked.
+        (The Draft editor, read-only while tracking, was retired in #1228.)
       - **Table of contents**: wired. GUI: `LettersTableOfContentsSmoke` (insert, update, undo). Format:
         `a_table_of_contents_survives_lo_passes`.
       - **Smart chips**: wired. GUI: `LettersSmartChipsSmoke`. Format: `smart_chips_survive_lo_passes`.
