@@ -239,12 +239,17 @@ mod tests {
                 r.set(r.get() + 1);
                 super::slide_thumbnail(&s, &m, i)
             }));
+            // With seven samples the p95 is the slowest, so a first call that
+            // loads fonts and fills caches would be the measurement (a CI run's
+            // slowest canvas frame was 167 ms against a ~1 ms median). One
+            // unmeasured call first: the budget is for the frames after it.
             let measure = |name: &str, budget: Duration, f: &mut dyn FnMut()| {
+                f();
                 let mut samples: Vec<Duration> = (0..7).map(|_| { let t = Instant::now(); f(); t.elapsed() }).collect();
                 samples.sort_unstable();
                 let (p50, p95) = (samples[3], samples[6]);
-                eprintln!("{name}: p50={p50:?} p95={p95:?} budget={budget:?}");
-                assert!(p95 <= budget, "{name}: p95 {p95:?} over {budget:?}");
+                eprintln!("{name}: p50={p50:?} p95={p95:?} budget={budget:?} samples={samples:?}");
+                assert!(p95 <= budget, "{name}: p95 {p95:?} over {budget:?}; samples={samples:?}");
             };
             measure("300-slide strip rebuild", Duration::from_millis(1_000), &mut || {
                 super::rebuild_slide_list(&list, &slides, &masters, 0);
