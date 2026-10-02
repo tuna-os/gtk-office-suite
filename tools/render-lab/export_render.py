@@ -19,7 +19,6 @@ import os
 import subprocess
 import sys
 import tempfile
-import time
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import capture
@@ -60,10 +59,7 @@ def export_one(app, doc, dest, env):
     # draws is the one the screenshots judge.
     capture.seed_settings(env["HOME"], extra=2 * capture.SOLID_CSD_BORDER)
     w, h = capture.window(app)
-    xvfb = capture.start(
-        ["Xvfb", ":71", "-screen", "0", f"{w + 100}x{h + 100}x24", "-nolisten", "tcp"], env, subprocess.DEVNULL
-    )
-    time.sleep(1)
+    xvfb = capture.start_xvfb(":71", f"{w + 100}x{h + 100}", env)
     e = dict(env, DISPLAY=":71", GDK_BACKEND="x11", GSK_RENDERER="cairo")
     pages = None
     with open(os.path.join(dest, "export.log"), "w") as log:
