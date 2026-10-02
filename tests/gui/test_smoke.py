@@ -87,15 +87,16 @@ class LettersFormattingSmoke(BaseGUITestCase):
         # Toolbar buttons are action-bound push buttons named by tooltip.
         bold = self.app.child(name="Bold (Ctrl+B)", roleName="push button")
         bold.do_action(0)
-        time.sleep(0.3)
+        time.sleep(0.3)  # pacing: no state to wait on before the next input
         # Formatting fidelity is proven by the model tests; here we assert
         # the interaction chain (action fires, typing lands) stays alive.
         rawinput.typeText("bolded")
-        time.sleep(0.8)
-        editor = self.app.child(roleName="text")
-        self.assertEqual(editor.text, "plain bolded")
-        self.assertIsNotNone(self.app.child(name="2 words", roleName="label"))
-        self.assertIsNone(self.process.poll(), "letters crashed during formatting")
+        def _settled():
+            editor = self.app.child(roleName="text")
+            self.assertEqual(editor.text, "plain bolded")
+            self.assertIsNotNone(self.app.child(name="2 words", roleName="label"))
+            self.assertIsNone(self.process.poll(), "letters crashed during formatting")
+        self.eventually(_settled)
 
 
 class LettersPaletteSmoke(BaseGUITestCase):
@@ -113,17 +114,17 @@ class LettersPaletteSmoke(BaseGUITestCase):
         # actions exist and must therefore be labeled.
         self.new_letters_document()
         rawinput.keyCombo("<Control>k")
-        time.sleep(1.0)
-
-        labels = {c.name for c in self.app.findChildren(
-            lambda c: c.roleName == "label")}
-        self.assertIn("Bold", labels, "palette missing formatting action")
-        entry = self.app.child(name="Command Palette")
-        self.assertIsNotNone(entry, "palette dialog not shown")
-        unlabeled = sorted(l for l in labels if l.startswith("unlabeled:"))
-        self.assertEqual(unlabeled, [],
-                         "actions without registry labels: %s" % unlabeled)
-        self.assertIsNone(self.process.poll(), "letters crashed opening palette")
+        def _settled():
+            labels = {c.name for c in self.app.findChildren(
+                lambda c: c.roleName == "label")}
+            self.assertIn("Bold", labels, "palette missing formatting action")
+            entry = self.app.child(name="Command Palette")
+            self.assertIsNotNone(entry, "palette dialog not shown")
+            unlabeled = sorted(l for l in labels if l.startswith("unlabeled:"))
+            self.assertEqual(unlabeled, [],
+                             "actions without registry labels: %s" % unlabeled)
+            self.assertIsNone(self.process.poll(), "letters crashed opening palette")
+        self.eventually(_settled)
 
 
 class LettersSelectionUXSmoke(BaseGUITestCase):
@@ -137,21 +138,23 @@ class LettersSelectionUXSmoke(BaseGUITestCase):
 
         self.new_letters_document()
         rawinput.typeText("style readout test")
-        time.sleep(0.5)
+        time.sleep(0.5)  # pacing: no state to wait on before the next input
         # Select all → the floating format popover should appear.
         rawinput.keyCombo("<Control>a")
-        time.sleep(1.0)
-        bold_btn = self.app.child(name="Bold", roleName="push button")
-        self.assertIsNotNone(bold_btn, "selection popover did not appear")
+        def _settled():
+            bold_btn = self.app.child(name="Bold", roleName="push button")
+            self.assertIsNotNone(bold_btn, "selection popover did not appear")
+        self.eventually(_settled)
         # Apply Heading 2 via its action; the status readout must follow.
         subprocess.run(["gapplication", "action",
                         "org.tunaos.letters", "style-h2"])
-        time.sleep(1.0)
-        labels = {c.name for c in self.app.findChildren(
-            lambda c: c.roleName == "label")}
-        self.assertTrue(any("Heading 2" in l for l in labels),
-                        f"no Heading 2 readout; labels: {sorted(labels)}")
-        self.assertIsNone(self.process.poll(), "letters crashed during selection UX")
+        def _settled():
+            labels = {c.name for c in self.app.findChildren(
+                lambda c: c.roleName == "label")}
+            self.assertTrue(any("Heading 2" in l for l in labels),
+                            f"no Heading 2 readout; labels: {sorted(labels)}")
+            self.assertIsNone(self.process.poll(), "letters crashed during selection UX")
+        self.eventually(_settled)
 
 
 class LettersFileRoundTripSmoke(BaseGUITestCase):
@@ -177,9 +180,9 @@ class LettersFileRoundTripSmoke(BaseGUITestCase):
         # editor self-focuses on map (see window.rs); jump to end and type
         rawinput.keyCombo("<Control>End")
         rawinput.typeText(" edited")
-        time.sleep(0.5)
+        time.sleep(0.5)  # pacing: no state to wait on before the next input
         rawinput.keyCombo("<Control>s")
-        time.sleep(1.5)
+        time.sleep(1.5)  # pacing: no state to wait on before the next input
         with open(self._doc) as f:
             saved = f.read()
         self.assertIn("hello world edited", saved, f"saved file: {saved!r}")
@@ -203,20 +206,20 @@ class LettersCloseGuardSmoke(BaseGUITestCase):
 
         self.new_letters_document()
         rawinput.typeText("unsaved letters content")
-        time.sleep(0.5)
+        time.sleep(0.5)  # pacing: no state to wait on before the next input
 
     def test_cancel_keeps_window_open_then_discard_closes(self):
         self._type_into_new_document()
 
         self.app.child(name="Close", roleName="push button").do_action(0)
-        time.sleep(0.8)
+        time.sleep(0.8)  # pacing: no state to wait on before the next input
         self.app.child(name="Cancel", roleName="push button").do_action(0)
-        time.sleep(0.5)
+        time.sleep(0.5)  # settling: gives a wrong outcome its chance before the check that it didn't happen
         self.assertIsNone(self.process.poll(), "Cancel must not close the window")
         self.assertIsNotNone(self.app.child(roleName="frame"), "window should still be open")
 
         self.app.child(name="Close", roleName="push button").do_action(0)
-        time.sleep(0.8)
+        time.sleep(0.8)  # pacing: no state to wait on before the next input
         self.app.child(name="Discard All", roleName="push button").do_action(0)
         self.assertIsNotNone(self.wait_for_process_exit(), "Discard must close the window")
 
@@ -227,13 +230,13 @@ class LettersCloseGuardSmoke(BaseGUITestCase):
         out_path = os.path.join(self._dir, "close-guard-save.md")
 
         self.app.child(name="Close", roleName="push button").do_action(0)
-        time.sleep(0.8)
+        time.sleep(0.8)  # pacing: no state to wait on before the next input
         self.app.child(name="Save All", roleName="push button").do_action(0)
-        time.sleep(1.0)
+        time.sleep(1.0)  # pacing: no state to wait on before the next input
 
         name_entry = tree.root.findChild(lambda n: n.name == "Name:" and n.roleName == "text")
         name_entry.text = out_path
-        time.sleep(0.3)
+        time.sleep(0.3)  # pacing: no state to wait on before the next input
         confirm = tree.root.findChild(lambda n: n.name == "Save" and n.roleName == "push button")
         confirm.do_action(0)
 
@@ -353,7 +356,7 @@ class LettersSaveFailureSmoke(BaseGUITestCase):
             description="the Save As name entry",
         )
         entry.text = path
-        time.sleep(0.3)
+        time.sleep(0.3)  # pacing: no state to wait on before the next input
         tree.root.findChild(lambda n: n.name == "Save" and n.roleName == "push button").do_action(0)
 
     def test_failed_save_as_keeps_identity_edits_and_checkpoint(self):
@@ -724,16 +727,22 @@ class TablesKeyboardOnlySmoke(KeyboardOnlyMixin, BaseGUITestCase):
         cells = self.trigger_snapshot("org.tunaos.tables")["sheet"]["cells"]
         return next((c["value"] for c in cells if (c["row"], c["col"]) == (row, col)), None)
 
+    def _name_box_focused(self):
+        import pyatspi
+        return self.app.findChild(lambda n: n.name == "Cell reference" and n.getState().contains(pyatspi.STATE_FOCUSED),
+                                  retry=False, requireResult=False)
+
     def test_type_undo_and_save_with_keys_alone(self):
         from dogtail import rawinput
         self.wait_until(lambda: self._cell(0, 0), lambda v: v == "start", description="book.xlsx to open")
         self._activate_window()
-        for ref, value in (("B1", "13"), ("B2", "29")):
+        for ref, value, row in (("B1", "13", 0), ("B2", "29", 1)):
             rawinput.keyCombo("<Control>g")
-            time.sleep(0.3)
+            self.wait_until(lambda: self._name_box_focused(), bool, description="Ctrl+G to focus the name box")
             rawinput.typeText(ref)
             rawinput.keyCombo("Return")
-            time.sleep(0.3)
+            self.wait_until(lambda: self.trigger_snapshot("org.tunaos.tables")["sheet"]["selection"][:2],
+                            lambda s, row=row: s == [row, 1], description=f"the jump to {ref}")
             rawinput.typeText(value)
             rawinput.keyCombo("Return")
         self.wait_until(lambda: self._cell(1, 1), lambda v: v == "29", description="29 typed into B2")
@@ -763,7 +772,9 @@ class DecksKeyboardOnlySmoke(KeyboardOnlyMixin, BaseGUITestCase):
         rawinput.keyCombo("<Control>k")
         self.wait_for_node(name="Command Palette")
         rawinput.typeText(command)
-        time.sleep(0.5)
+        # The palette filters its list on idle and exposes no state that
+        # says the filter has run; Return picks the first row.
+        time.sleep(0.5)  # pacing: let the filter run
         rawinput.keyCombo("Return")
 
     def test_insert_undo_redo_and_save_with_keys_alone(self):
@@ -827,7 +838,7 @@ class UnattendedAutosaveMixin:
         from dogtail import rawinput
 
         subprocess.run(["gapplication", "action", f"org.tunaos.{self.app_name}", "new-document"])
-        time.sleep(2.0)
+        time.sleep(2.0)  # pacing: no state to wait on before the next input
         self._dirty_the_document(rawinput)
         self.assertEqual(self._snapshot_files(), [],
                          "precondition: nothing should be snapshotted yet")
@@ -839,7 +850,7 @@ class UnattendedAutosaveMixin:
         while time.monotonic() < deadline:
             if self._snapshot_files():
                 break
-            time.sleep(1.0)
+            time.sleep(1.0)  # pacing: no state to wait on before the next input
 
         self.assertEqual(
             len(self._snapshot_files()), 1,
@@ -849,7 +860,7 @@ class UnattendedAutosaveMixin:
 
     def _dirty_the_document(self, rawinput):
         rawinput.typeText("work nobody saved")
-        time.sleep(1.0)
+        time.sleep(1.0)  # pacing: no state to wait on before the next input
 
 
 class LettersUnattendedAutosaveSmoke(UnattendedAutosaveMixin, BaseGUITestCase):
@@ -863,7 +874,7 @@ class TablesUnattendedAutosaveSmoke(UnattendedAutosaveMixin, BaseGUITestCase):
         # A cell edit has to be committed before the workbook counts as dirty.
         rawinput.typeText("=6*7")
         rawinput.keyCombo("Return")
-        time.sleep(0.5)
+        time.sleep(0.5)  # pacing: no state to wait on before the next input
 
 
 class DecksUnattendedAutosaveSmoke(UnattendedAutosaveMixin, BaseGUITestCase):
@@ -876,7 +887,7 @@ class DecksUnattendedAutosaveSmoke(UnattendedAutosaveMixin, BaseGUITestCase):
         import subprocess
 
         subprocess.run(["gapplication", "action", "org.tunaos.decks", "add-shape"])
-        time.sleep(1.0)
+        time.sleep(1.0)  # pacing: no state to wait on before the next input
 
 
 class LettersAutosaveSmoke(BaseGUITestCase):
@@ -908,60 +919,61 @@ class LettersAutosaveSmoke(BaseGUITestCase):
         # (like every other multi-tab test in this file) goes through the
         # action directly rather than a UI element that's since gone hidden.
         subprocess.run(["gapplication", "action", aid, "new-document"])
-        time.sleep(2.0)
+        time.sleep(2.0)  # pacing: no state to wait on before the next input
         rawinput.typeText("first tab content")
-        time.sleep(1.0)
+        time.sleep(1.0)  # pacing: no state to wait on before the next input
 
         subprocess.run(["gapplication", "action", aid, "new-document"])
-        time.sleep(2.0)
+        time.sleep(2.0)  # pacing: no state to wait on before the next input
         rawinput.typeText("second tab content")
-        time.sleep(1.0)
+        time.sleep(1.0)  # pacing: no state to wait on before the next input
 
         subprocess.run(["gapplication", "action", "org.tunaos.letters", "autosave-now"])
-        time.sleep(0.5)
-        self.assertEqual(len(self._snapshot_files()), 2,
-                          "both dirty tabs should have snapshotted")
+        def _settled():
+            self.assertEqual(len(self._snapshot_files()), 2,
+                              "both dirty tabs should have snapshotted")
+        self.eventually(_settled)
         recovered_from = set(self._snapshot_files())
 
         # Simulate a crash: kill the process directly, bypassing the close
         # guard, so the snapshots are never cleared by a clean exit.
         self.relaunch_app(crash=True)
-        time.sleep(2.0)
-
-        frame = self.app.child(roleName="frame")
-        self.assertIn("Recovered", frame.name, f"window did not announce recovery: {frame.name!r}")
-        # The assertion below used to read `self._snapshot_files() == []`:
-        # after recovery, nothing on disk. That was a proxy for the thing
-        # actually required — the orphan is not offered a second time — and
-        # it stopped being a safe proxy once recovery began writing the
-        # recovered content to the new window's own slot before clearing the
-        # orphan. Zero files also describes unprotected work, which is what
-        # that spelling was quietly asserting: the old code left the
-        # recovered document with no snapshot until the next timer tick.
-        # So the intent is asserted directly instead, and more strictly: the
-        # recovered orphan is gone, and the recovered work is itself covered.
-        # Waited for rather than sampled after a fixed sleep, because the
-        # `== []` version sampled 1.5s after relaunch and lost that race
-        # under the load of a full batch run — it failed twice in one batch
-        # and passed three consecutive focused runs. A post-condition that
-        # needs a sleep to hold is a post-condition to wait for.
-        present = self.wait_until(
-            lambda: set(self._snapshot_files()),
-            lambda files: not (files & recovered_from),
-            description="both recovered orphans must be cleared so they aren't offered again",
-        )
-        self.assertEqual(
-            len(present), 2,
-            "the recovered tabs must itself be protected by a snapshot; "
-            f"found {sorted(present)}",
-        )
+        def _settled():
+            frame = self.app.child(roleName="frame")
+            self.assertIn("Recovered", frame.name, f"window did not announce recovery: {frame.name!r}")
+            # The assertion below used to read `self._snapshot_files() == []`:
+            # after recovery, nothing on disk. That was a proxy for the thing
+            # actually required — the orphan is not offered a second time — and
+            # it stopped being a safe proxy once recovery began writing the
+            # recovered content to the new window's own slot before clearing the
+            # orphan. Zero files also describes unprotected work, which is what
+            # that spelling was quietly asserting: the old code left the
+            # recovered document with no snapshot until the next timer tick.
+            # So the intent is asserted directly instead, and more strictly: the
+            # recovered orphan is gone, and the recovered work is itself covered.
+            # Waited for rather than sampled after a fixed sleep, because the
+            # `== []` version sampled 1.5s after relaunch and lost that race
+            # under the load of a full batch run — it failed twice in one batch
+            # and passed three consecutive focused runs. A post-condition that
+            # needs a sleep to hold is a post-condition to wait for.
+            present = self.wait_until(
+                lambda: set(self._snapshot_files()),
+                lambda files: not (files & recovered_from),
+                description="both recovered orphans must be cleared so they aren't offered again",
+            )
+            self.assertEqual(
+                len(present), 2,
+                "the recovered tabs must itself be protected by a snapshot; "
+                f"found {sorted(present)}",
+            )
+        self.eventually(_settled)
 
         seen = set()
         for _ in range(2):
             editor = self.app.child(roleName="text")
             seen.add(editor.text.strip())
             rawinput.keyCombo("<Control>Tab")
-            time.sleep(0.5)
+            time.sleep(0.5)  # pacing: no state to wait on before the next input
         self.assertEqual(seen, {"first tab content", "second tab content"},
                           f"recovered tab contents: {seen!r}")
 
@@ -1003,11 +1015,11 @@ class LettersPreferenceBindingSmoke(BaseGUITestCase):
         self.assertTrue(self._toolbar_visible(), "toolbar should be visible by default")
 
         self._gsettings("set", "org.tunaos.letters", "show-toolbar", "false")
-        time.sleep(0.5)
+        time.sleep(0.5)  # settling: gives a wrong outcome its chance before the check that it didn't happen
         self.assertFalse(self._toolbar_visible(), "toolbar did not hide live when show-toolbar was set false")
 
         self.relaunch_app()
-        time.sleep(1.5)
+        time.sleep(1.5)  # pacing: no state to wait on before the next input
         self.new_letters_document()
         self.assertFalse(self._toolbar_visible(),
                           "show-toolbar=false did not persist across relaunch")
@@ -1030,15 +1042,16 @@ class TablesSmoke(BaseGUITestCase):
 
         # Tables starts on an empty-state page; the grid maps on new-document.
         subprocess.run(["gapplication", "action", "org.tunaos.tables", "new-document"])
-        time.sleep(1.5)
+        time.sleep(1.5)  # pacing: no state to wait on before the next input
         # new-document focuses the formula entry; type straight into it.
         rawinput.typeText("=2+3")
         rawinput.keyCombo("Return")
-        time.sleep(0.8)
-        grid = self.app.child(name="Spreadsheet grid")
-        self.assertIn("5", grid.description,
-                      f"grid description: {grid.description!r}")
-        self.assertIn("A1", grid.description)
+        def _settled():
+            grid = self.app.child(name="Spreadsheet grid")
+            self.assertIn("5", grid.description,
+                          f"grid description: {grid.description!r}")
+            self.assertIn("A1", grid.description)
+        self.eventually(_settled)
 
 
 class TablesMultiSheetSmoke(BaseGUITestCase):
@@ -1058,13 +1071,13 @@ class TablesMultiSheetSmoke(BaseGUITestCase):
         import subprocess
 
         subprocess.run(["gapplication", "action", "org.tunaos.tables", "new-document"])
-        time.sleep(1.5)
+        time.sleep(1.5)  # pacing: no state to wait on before the next input
         rawinput.typeText("=1+1")
         rawinput.keyCombo("Return")
-        time.sleep(0.5)
+        time.sleep(0.5)  # pacing: no state to wait on before the next input
 
         self.app.child(name="Add sheet", roleName="push button").do_action(0)
-        time.sleep(0.8)
+        time.sleep(0.8)  # pacing: no state to wait on before the next input
         # GtkDropDown's accessible name mirrors the selected item's label
         # ("Sheet2" once added), not a fixed string, so match by role.
         switcher = self.app.child(roleName="combo box")
@@ -1128,20 +1141,21 @@ class TablesMultiSheetSmoke(BaseGUITestCase):
         aid = "org.tunaos.tables"
         snapshot_path = self._snapshot_path
         subprocess.run(["gapplication", "action", aid, "new-document"])
-        time.sleep(1.5)
+        time.sleep(1.5)  # pacing: no state to wait on before the next input
 
         def sheet_names():
             subprocess.run(["gapplication", "action", aid, "test-snapshot"])
-            time.sleep(0.5)
+            time.sleep(0.5)  # pacing: no state to wait on before the next input
             with open(snapshot_path) as handle:
                 return json.load(handle)["sheet_names"]
 
         self.assertEqual(len(sheet_names()), 1, "expected one sheet to start")
         subprocess.run(["gapplication", "action", aid, "add-sheet"])
-        time.sleep(0.8)
-        self.assertEqual(len(sheet_names()), 2, "add-sheet action did not add a sheet")
+        def _settled():
+            self.assertEqual(len(sheet_names()), 2, "add-sheet action did not add a sheet")
+        self.eventually(_settled)
         subprocess.run(["gapplication", "action", aid, "move-sheet-left"])
-        time.sleep(0.8)
+        time.sleep(0.8)  # settling: gives a wrong outcome its chance before the check that it didn't happen
         self.assertIsNone(self.process.poll(), "tables crashed running a sheet action")
 
 
@@ -1160,23 +1174,23 @@ class TablesCloseGuardSmoke(BaseGUITestCase):
         from dogtail import rawinput
 
         subprocess.run(["gapplication", "action", "org.tunaos.tables", "new-document"])
-        time.sleep(1.5)
+        time.sleep(1.5)  # pacing: no state to wait on before the next input
         rawinput.typeText("=1+1")
         rawinput.keyCombo("Return")
-        time.sleep(0.5)
+        time.sleep(0.5)  # pacing: no state to wait on before the next input
 
     def test_cancel_keeps_window_open_then_discard_closes(self):
         self._edit_a1()
 
         self.app.child(name="Close", roleName="push button").do_action(0)
-        time.sleep(0.8)
+        time.sleep(0.8)  # pacing: no state to wait on before the next input
         self.app.child(name="Cancel", roleName="push button").do_action(0)
-        time.sleep(0.5)
+        time.sleep(0.5)  # settling: gives a wrong outcome its chance before the check that it didn't happen
         self.assertIsNone(self.process.poll(), "Cancel must not close the window")
         self.assertIsNotNone(self.app.child(roleName="frame"), "window should still be open")
 
         self.app.child(name="Close", roleName="push button").do_action(0)
-        time.sleep(0.8)
+        time.sleep(0.8)  # pacing: no state to wait on before the next input
         self.app.child(name="Discard", roleName="push button").do_action(0)
         self.assertIsNotNone(self.wait_for_process_exit(), "Discard must close the window")
 
@@ -1187,13 +1201,13 @@ class TablesCloseGuardSmoke(BaseGUITestCase):
         out_path = os.path.join(self._dir, "close-guard-save.xlsx")
 
         self.app.child(name="Close", roleName="push button").do_action(0)
-        time.sleep(0.8)
+        time.sleep(0.8)  # pacing: no state to wait on before the next input
         self.app.child(name="Save", roleName="push button").do_action(0)
-        time.sleep(1.0)
+        time.sleep(1.0)  # pacing: no state to wait on before the next input
 
         name_entry = tree.root.findChild(lambda n: n.name == "Name:" and n.roleName == "text")
         name_entry.text = out_path
-        time.sleep(0.3)
+        time.sleep(0.3)  # pacing: no state to wait on before the next input
         confirm = tree.root.findChild(lambda n: n.name == "Save" and n.roleName == "push button")
         confirm.do_action(0)
 
@@ -1237,18 +1251,18 @@ class LettersAutosaveFailureSmoke(BaseGUITestCase):
         aid = "org.tunaos.letters"
         for text in ("first tab content", "second tab content"):
             subprocess.run(["gapplication", "action", aid, "new-document"])
-            time.sleep(2.0)
+            time.sleep(2.0)  # pacing: no state to wait on before the next input
             rawinput.typeText(text)
-            time.sleep(1.0)
+            time.sleep(1.0)  # pacing: no state to wait on before the next input
 
         subprocess.run(["gapplication", "action", aid, "autosave-now"])
-        time.sleep(1.0)
-
-        labels = [n.name for n in self.app.findChildren(lambda x: x.roleName in ("label", "static"))]
-        self.assertTrue(
-            any("not being protected" in (name or "") for name in labels),
-            f"the per-tab sweep failed silently; labels on screen: {labels[:12]}",
-        )
+        def _settled():
+            labels = [n.name for n in self.app.findChildren(lambda x: x.roleName in ("label", "static"))]
+            self.assertTrue(
+                any("not being protected" in (name or "") for name in labels),
+                f"the per-tab sweep failed silently; labels on screen: {labels[:12]}",
+            )
+        self.eventually(_settled)
 
 
 class TablesRecoveryIsItselfProtectedSmoke(BaseGUITestCase):
@@ -1284,36 +1298,40 @@ class TablesRecoveryIsItselfProtectedSmoke(BaseGUITestCase):
         from dogtail import rawinput
 
         subprocess.run(["gapplication", "action", "org.tunaos.tables", "new-document"])
-        time.sleep(1.5)
+        time.sleep(1.5)  # pacing: no state to wait on before the next input
         rawinput.typeText("=6*7")
         rawinput.keyCombo("Return")
-        time.sleep(0.5)
+        time.sleep(0.5)  # pacing: no state to wait on before the next input
         subprocess.run(["gapplication", "action", "org.tunaos.tables", "autosave-now"])
-        time.sleep(0.5)
-        self.assertEqual(len(self._snapshot_files()), 1, "precondition: one snapshot to recover")
+        def _settled():
+            self.assertEqual(len(self._snapshot_files()), 1, "precondition: one snapshot to recover")
+        self.eventually(_settled)
 
         # First crash and relaunch: this is where recovery runs.
         self.relaunch_app(crash=True)
-        time.sleep(2.0)
-        frame = self.app.child(roleName="frame")
-        self.assertIn("Recovered", frame.name, f"first relaunch did not recover: {frame.name!r}")
-        self.assertEqual(
-            len(self._snapshot_files()), 1,
-            "after recovery the work must be covered by a snapshot again — this is "
-            "the assertion that fails when recovery clears the orphan and waits "
-            f"for a timer tick; found {self._snapshot_files()}",
-        )
+        def _settled():
+            frame = self.app.child(roleName="frame")
+            self.assertIn("Recovered", frame.name, f"first relaunch did not recover: {frame.name!r}")
+            self.assertEqual(
+                len(self._snapshot_files()), 1,
+                "after recovery the work must be covered by a snapshot again — this is "
+                "the assertion that fails when recovery clears the orphan and waits "
+                f"for a timer tick; found {self._snapshot_files()}",
+            )
+            return frame
+        frame = self.eventually(_settled)
 
         # Second crash, with no autosave in between: nothing but the write
         # recovery itself performed can be protecting the document now.
         self.relaunch_app(crash=True)
-        time.sleep(2.0)
-        frame = self.app.child(roleName="frame")
-        self.assertIn(
-            "Recovered", frame.name,
-            "work that survived one crash was lost to the next: "
-            f"window title after the second relaunch was {frame.name!r}",
-        )
+        def _settled():
+            frame = self.app.child(roleName="frame")
+            self.assertIn(
+                "Recovered", frame.name,
+                "work that survived one crash was lost to the next: "
+                f"window title after the second relaunch was {frame.name!r}",
+            )
+        self.eventually(_settled)
 
 
 class DecksRecoveryIsItselfProtectedSmoke(BaseGUITestCase):
@@ -1337,29 +1355,32 @@ class DecksRecoveryIsItselfProtectedSmoke(BaseGUITestCase):
 
         aid = "org.tunaos.decks"
         subprocess.run(["gapplication", "action", aid, "new-document"])
-        time.sleep(1.5)
+        time.sleep(1.5)  # pacing: no state to wait on before the next input
         subprocess.run(["gapplication", "action", aid, "add-shape"])
-        time.sleep(1.0)
+        time.sleep(1.0)  # pacing: no state to wait on before the next input
         subprocess.run(["gapplication", "action", aid, "autosave-now"])
-        time.sleep(0.5)
-        self.assertEqual(len(self._snapshot_files()), 1, "precondition: one snapshot to recover")
+        def _settled():
+            self.assertEqual(len(self._snapshot_files()), 1, "precondition: one snapshot to recover")
+        self.eventually(_settled)
 
         self.relaunch_app(crash=True)
-        time.sleep(2.0)
-        self.assertIn("Recovered", self.app.child(roleName="frame").name,
-                      "first relaunch did not recover")
-        self.assertEqual(
-            len(self._snapshot_files()), 1,
-            "after recovery the deck must be covered by a snapshot again; "
-            f"found {self._snapshot_files()}",
-        )
+        def _settled():
+            self.assertIn("Recovered", self.app.child(roleName="frame").name,
+                          "first relaunch did not recover")
+            self.assertEqual(
+                len(self._snapshot_files()), 1,
+                "after recovery the deck must be covered by a snapshot again; "
+                f"found {self._snapshot_files()}",
+            )
+        self.eventually(_settled)
 
         self.relaunch_app(crash=True)
-        time.sleep(2.0)
-        frame = self.app.child(roleName="frame")
-        self.assertIn("Recovered", frame.name,
-                      "a deck that survived one crash was lost to the next: "
-                      f"title was {frame.name!r}")
+        def _settled():
+            frame = self.app.child(roleName="frame")
+            self.assertIn("Recovered", frame.name,
+                          "a deck that survived one crash was lost to the next: "
+                          f"title was {frame.name!r}")
+        self.eventually(_settled)
 
 
 class LettersRecoveryIsItselfProtectedSmoke(BaseGUITestCase):
@@ -1389,29 +1410,32 @@ class LettersRecoveryIsItselfProtectedSmoke(BaseGUITestCase):
 
         aid = "org.tunaos.letters"
         subprocess.run(["gapplication", "action", aid, "new-document"])
-        time.sleep(2.0)
+        time.sleep(2.0)  # pacing: no state to wait on before the next input
         rawinput.typeText("work that survived one crash")
-        time.sleep(1.0)
+        time.sleep(1.0)  # pacing: no state to wait on before the next input
         subprocess.run(["gapplication", "action", aid, "autosave-now"])
-        time.sleep(0.5)
-        self.assertEqual(len(self._snapshot_files()), 1, "precondition: one snapshot to recover")
+        def _settled():
+            self.assertEqual(len(self._snapshot_files()), 1, "precondition: one snapshot to recover")
+        self.eventually(_settled)
 
         self.relaunch_app(crash=True)
-        time.sleep(2.5)
-        self.assertIn("Recovered", self.app.child(roleName="frame").name,
-                      "first relaunch did not recover")
-        self.assertEqual(
-            len(self._snapshot_files()), 1,
-            "after recovery the tab must be covered by a snapshot again; "
-            f"found {self._snapshot_files()}",
-        )
+        def _settled():
+            self.assertIn("Recovered", self.app.child(roleName="frame").name,
+                          "first relaunch did not recover")
+            self.assertEqual(
+                len(self._snapshot_files()), 1,
+                "after recovery the tab must be covered by a snapshot again; "
+                f"found {self._snapshot_files()}",
+            )
+        self.eventually(_settled)
 
         self.relaunch_app(crash=True)
-        time.sleep(2.5)
-        frame = self.app.child(roleName="frame")
-        self.assertIn("Recovered", frame.name,
-                      "a document that survived one crash was lost to the next: "
-                      f"title was {frame.name!r}")
+        def _settled():
+            frame = self.app.child(roleName="frame")
+            self.assertIn("Recovered", frame.name,
+                          "a document that survived one crash was lost to the next: "
+                          f"title was {frame.name!r}")
+        self.eventually(_settled)
 
 
 class LiveOwnerMixin:
@@ -1458,7 +1482,7 @@ class LiveOwnerMixin:
     def _dirty_the_document(self, rawinput):
         """Type into the document. Overridden where typing is not enough."""
         rawinput.typeText("owned by a live window")
-        time.sleep(0.5)
+        time.sleep(0.5)  # pacing: no state to wait on before the next input
 
     def test_a_snapshot_owned_by_a_live_window_is_not_recovered(self):
         import fcntl
@@ -1467,14 +1491,16 @@ class LiveOwnerMixin:
 
         aid = f"org.tunaos.{self.app_name}"
         subprocess.run(["gapplication", "action", aid, "new-document"])
-        time.sleep(1.5)
+        time.sleep(1.5)  # pacing: no state to wait on before the next input
         self._dirty_the_document(rawinput)
         subprocess.run(["gapplication", "action", aid, "autosave-now"])
-        time.sleep(0.8)
-        self.assertEqual(len(self._snapshots()), 1, "precondition: a snapshot to recover")
-        locks = self._lock_files()
-        self.assertEqual(len(locks), 1,
-                          f"the live window should have claimed its slot; found {locks}")
+        def _settled():
+            self.assertEqual(len(self._snapshots()), 1, "precondition: a snapshot to recover")
+            locks = self._lock_files()
+            self.assertEqual(len(locks), 1,
+                              f"the live window should have claimed its slot; found {locks}")
+            return locks
+        locks = self.eventually(_settled)
         lock_path = os.path.join(self._snapshot_dir(), locks[0])
 
         # Kill without relaunching. `relaunch_app(crash=True)` would start
@@ -1489,15 +1515,14 @@ class LiveOwnerMixin:
         # rather than a pid written into a file.
         self.process.kill()
         self.process.wait(timeout=5)
-        time.sleep(0.5)
-
+        time.sleep(0.5)  # settling: gives a wrong outcome its chance before the check that it didn't happen
         self.assertTrue(os.path.exists(lock_path), f"{lock_path} should survive a crash")
         holder = open(lock_path, "r+b")
         self.addCleanup(holder.close)
         fcntl.flock(holder.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
 
         self.relaunch_app(crash=True)
-        time.sleep(2.0)
+        time.sleep(2.0)  # settling: gives a wrong outcome its chance before the check that it didn't happen
         frame = self.app.child(roleName="frame")
         self.assertNotIn(
             "Recovered", frame.name,
@@ -1511,12 +1536,13 @@ class LiveOwnerMixin:
         # assertion above about ownership rather than about timing.
         fcntl.flock(holder.fileno(), fcntl.LOCK_UN)
         self.relaunch_app(crash=True)
-        time.sleep(2.0)
-        frame = self.app.child(roleName="frame")
-        self.assertIn(
-            "Recovered", frame.name,
-            f"releasing the claim should make the work recoverable again: {frame.name!r}",
-        )
+        def _settled():
+            frame = self.app.child(roleName="frame")
+            self.assertIn(
+                "Recovered", frame.name,
+                f"releasing the claim should make the work recoverable again: {frame.name!r}",
+            )
+        self.eventually(_settled)
 
 
 class TablesLiveOwnerSmoke(LiveOwnerMixin, BaseGUITestCase):
@@ -1526,7 +1552,7 @@ class TablesLiveOwnerSmoke(LiveOwnerMixin, BaseGUITestCase):
         # A cell edit has to be committed before the workbook counts as dirty.
         rawinput.typeText("=6*7")
         rawinput.keyCombo("Return")
-        time.sleep(0.5)
+        time.sleep(0.5)  # pacing: no state to wait on before the next input
 
 
 class DecksLiveOwnerSmoke(LiveOwnerMixin, BaseGUITestCase):
@@ -1538,7 +1564,7 @@ class DecksLiveOwnerSmoke(LiveOwnerMixin, BaseGUITestCase):
         import subprocess
 
         subprocess.run(["gapplication", "action", "org.tunaos.decks", "add-shape"])
-        time.sleep(1.0)
+        time.sleep(1.0)  # pacing: no state to wait on before the next input
 
 
 class LettersLiveOwnerSmoke(LiveOwnerMixin, BaseGUITestCase):
@@ -1584,7 +1610,7 @@ class SavedDocumentMixin:
         wrong on its first outing.
         """
         rawinput.typeText(f"draft {nth} content")
-        time.sleep(0.5)
+        time.sleep(0.5)  # pacing: no state to wait on before the next input
 
     def _save_a_real_document(self):
         import subprocess
@@ -1593,16 +1619,16 @@ class SavedDocumentMixin:
 
         out_path = os.path.join(self._dir, f"{self.doc_stem}{self.doc_suffix}")
         subprocess.run(["gapplication", "action", f"org.tunaos.{self.app_name}", "new-document"])
-        time.sleep(1.5)
+        time.sleep(1.5)  # pacing: no state to wait on before the next input
         self._edit_the_document(rawinput, 1)
 
         self.app.child(name="Close", roleName="push button").do_action(0)
-        time.sleep(0.8)
+        time.sleep(0.8)  # pacing: no state to wait on before the next input
         self.app.child(name=self.save_button_label, roleName="push button").do_action(0)
-        time.sleep(1.0)
+        time.sleep(1.0)  # pacing: no state to wait on before the next input
         name_entry = tree.root.findChild(lambda n: n.name == "Name:" and n.roleName == "text")
         name_entry.text = out_path
-        time.sleep(0.3)
+        time.sleep(0.3)  # pacing: no state to wait on before the next input
         tree.root.findChild(lambda n: n.name == "Save" and n.roleName == "push button").do_action(0)
         self.assertIsNotNone(self.wait_for_process_exit(), "the save did not complete")
         self.assertTrue(os.path.exists(out_path), "no document was written")
@@ -1616,11 +1642,12 @@ class SavedDocumentMixin:
         from dogtail import rawinput
 
         self.relaunch_app(launch_args=[out_path])
-        time.sleep(2.0)
+        time.sleep(2.0)  # pacing: no state to wait on before the next input
         self._edit_the_document(rawinput, 2)
         subprocess.run(["gapplication", "action", f"org.tunaos.{self.app_name}", "autosave-now"])
-        time.sleep(0.8)
-        self.assertEqual(len(self._snapshot_files()), 1, "precondition: a snapshot exists")
+        def _settled():
+            self.assertEqual(len(self._snapshot_files()), 1, "precondition: a snapshot exists")
+        self.eventually(_settled)
 
 
 class RenamedOriginalMixin(SavedDocumentMixin):
@@ -1691,7 +1718,7 @@ class TablesSavedDocumentMixin(SavedDocumentMixin):
         # differ from the first or the workbook is not dirty.
         rawinput.typeText("=6*7" if nth == 1 else "=1+1")
         rawinput.keyCombo("Return")
-        time.sleep(0.5)
+        time.sleep(0.5)  # pacing: no state to wait on before the next input
 
 
 class TablesRenamedOriginalSmoke(TablesSavedDocumentMixin, RenamedOriginalMixin, BaseGUITestCase):
@@ -1719,7 +1746,7 @@ class DecksRenamedOriginalSmoke(RenamedOriginalMixin, BaseGUITestCase):
         import subprocess
 
         subprocess.run(["gapplication", "action", "org.tunaos.decks", "add-shape"])
-        time.sleep(1.0)
+        time.sleep(1.0)  # pacing: no state to wait on before the next input
 
     def _assert_the_offer_names_the_work(self, frame_name):
         self.assertIn(
@@ -1857,7 +1884,7 @@ class TablesStaleSnapshotSmoke(TablesSavedDocumentMixin, BaseGUITestCase):
         os.utime(out_path, (saved_later, saved_later))
 
         self.relaunch_app(crash=True)
-        time.sleep(2.0)
+        time.sleep(2.0)  # settling: gives a wrong outcome its chance before the check that it didn't happen
         frame = self.app.child(roleName="frame")
         self.assertNotIn(
             "Recovered", frame.name,
@@ -1888,65 +1915,67 @@ class TablesAutosaveSmoke(BaseGUITestCase):
         from dogtail import rawinput
 
         subprocess.run(["gapplication", "action", "org.tunaos.tables", "new-document"])
-        time.sleep(1.5)
+        time.sleep(1.5)  # pacing: no state to wait on before the next input
         rawinput.typeText("=6*7")
         rawinput.keyCombo("Return")
-        time.sleep(0.5)
+        time.sleep(0.5)  # pacing: no state to wait on before the next input
 
     def test_autosave_now_writes_a_snapshot_only_while_dirty(self):
         import subprocess
 
         subprocess.run(["gapplication", "action", "org.tunaos.tables", "autosave-now"])
-        time.sleep(0.5)
+        time.sleep(0.5)  # settling: gives a wrong outcome its chance before the check that it didn't happen
         self.assertEqual(self._snapshot_files(), [], "a clean, untouched workbook must not snapshot")
 
         self._edit_a1()
         subprocess.run(["gapplication", "action", "org.tunaos.tables", "autosave-now"])
-        time.sleep(0.5)
-        self.assertEqual(len(self._snapshot_files()), 1, "dirty workbook should have snapshotted")
+        def _settled():
+            self.assertEqual(len(self._snapshot_files()), 1, "dirty workbook should have snapshotted")
+        self.eventually(_settled)
 
     def test_crash_then_relaunch_recovers_and_clears_the_snapshot(self):
         import subprocess
 
         self._edit_a1()
         subprocess.run(["gapplication", "action", "org.tunaos.tables", "autosave-now"])
-        time.sleep(0.5)
-        self.assertEqual(len(self._snapshot_files()), 1, "autosave-now must have written a snapshot")
+        def _settled():
+            self.assertEqual(len(self._snapshot_files()), 1, "autosave-now must have written a snapshot")
+        self.eventually(_settled)
         recovered_from = set(self._snapshot_files())
 
         # Simulate a crash: kill the process directly, bypassing the close
         # guard entirely, so the snapshot is never cleared by a clean exit,
         # then relaunch against the same state dir and expect recovery.
         self.relaunch_app(crash=True)
-        time.sleep(1.5)
-
-        frame = self.app.child(roleName="frame")
-        self.assertIn("Recovered", frame.name, f"window did not announce recovery: {frame.name!r}")
-        # The assertion below used to read `self._snapshot_files() == []`:
-        # after recovery, nothing on disk. That was a proxy for the thing
-        # actually required — the orphan is not offered a second time — and
-        # it stopped being a safe proxy once recovery began writing the
-        # recovered content to the new window's own slot before clearing the
-        # orphan. Zero files also describes unprotected work, which is what
-        # that spelling was quietly asserting: the old code left the
-        # recovered document with no snapshot until the next timer tick.
-        # So the intent is asserted directly instead, and more strictly: the
-        # recovered orphan is gone, and the recovered work is itself covered.
-        # Waited for rather than sampled after a fixed sleep, because the
-        # `== []` version sampled 1.5s after relaunch and lost that race
-        # under the load of a full batch run — it failed twice in one batch
-        # and passed three consecutive focused runs. A post-condition that
-        # needs a sleep to hold is a post-condition to wait for.
-        present = self.wait_until(
-            lambda: set(self._snapshot_files()),
-            lambda files: not (files & recovered_from),
-            description="the recovered orphan must be cleared so it isn't offered again",
-        )
-        self.assertEqual(
-            len(present), 1,
-            "the recovered workbook must itself be protected by a snapshot; "
-            f"found {sorted(present)}",
-        )
+        def _settled():
+            frame = self.app.child(roleName="frame")
+            self.assertIn("Recovered", frame.name, f"window did not announce recovery: {frame.name!r}")
+            # The assertion below used to read `self._snapshot_files() == []`:
+            # after recovery, nothing on disk. That was a proxy for the thing
+            # actually required — the orphan is not offered a second time — and
+            # it stopped being a safe proxy once recovery began writing the
+            # recovered content to the new window's own slot before clearing the
+            # orphan. Zero files also describes unprotected work, which is what
+            # that spelling was quietly asserting: the old code left the
+            # recovered document with no snapshot until the next timer tick.
+            # So the intent is asserted directly instead, and more strictly: the
+            # recovered orphan is gone, and the recovered work is itself covered.
+            # Waited for rather than sampled after a fixed sleep, because the
+            # `== []` version sampled 1.5s after relaunch and lost that race
+            # under the load of a full batch run — it failed twice in one batch
+            # and passed three consecutive focused runs. A post-condition that
+            # needs a sleep to hold is a post-condition to wait for.
+            present = self.wait_until(
+                lambda: set(self._snapshot_files()),
+                lambda files: not (files & recovered_from),
+                description="the recovered orphan must be cleared so it isn't offered again",
+            )
+            self.assertEqual(
+                len(present), 1,
+                "the recovered workbook must itself be protected by a snapshot; "
+                f"found {sorted(present)}",
+            )
+        self.eventually(_settled)
 
 
 class TablesUnclearableSnapshotSmoke(TablesSavedDocumentMixin, BaseGUITestCase):
@@ -1991,14 +2020,14 @@ class TablesUnclearableSnapshotSmoke(TablesSavedDocumentMixin, BaseGUITestCase):
 
         # The workbook already has a path, so Ctrl+S writes it and clears.
         rawinput.keyCombo("<Control>s")
-        time.sleep(2.0)
-
-        self.assertTrue(os.path.isdir(blocked), "the clear should not have removed it")
-        _out, err = self.app_output()
-        self.assertIn(
-            "could not clear the crash snapshot", err or "",
-            f"the failed clear left no trace; the app's stderr was: {(err or '')[-800:]!r}",
-        )
+        def _settled():
+            self.assertTrue(os.path.isdir(blocked), "the clear should not have removed it")
+            _out, err = self.app_output()
+            self.assertIn(
+                "could not clear the crash snapshot", err or "",
+                f"the failed clear left no trace; the app's stderr was: {(err or '')[-800:]!r}",
+            )
+        self.eventually(_settled)
 
 
 class TablesAutosaveFailureSmoke(BaseGUITestCase):
@@ -2025,10 +2054,10 @@ class TablesAutosaveFailureSmoke(BaseGUITestCase):
         from dogtail import rawinput
 
         subprocess.run(["gapplication", "action", "org.tunaos.tables", "new-document"])
-        time.sleep(1.5)
+        time.sleep(1.5)  # pacing: no state to wait on before the next input
         rawinput.typeText("=6*7")
         rawinput.keyCombo("Return")
-        time.sleep(0.5)
+        time.sleep(0.5)  # pacing: no state to wait on before the next input
 
     def test_an_autosave_that_cannot_write_says_so(self):
         """Autosave used to fail in silence.
@@ -2049,16 +2078,16 @@ class TablesAutosaveFailureSmoke(BaseGUITestCase):
 
         self._edit_a1()
         subprocess.run(["gapplication", "action", "org.tunaos.tables", "autosave-now"])
-        time.sleep(0.8)
-
-        toast = self._toast_about_autosave()
-        self.assertIsNotNone(
-            toast,
-            "autosave could not write and the window said nothing; "
-            f"labels on screen: {[n.name for n in self.app.findChildren(lambda x: x.roleName == 'label')][:12]}",
-        )
-        self.assertEqual(self._snapshot_files(), [],
-                         "precondition: the write must really have failed")
+        def _settled():
+            toast = self._toast_about_autosave()
+            self.assertIsNotNone(
+                toast,
+                "autosave could not write and the window said nothing; "
+                f"labels on screen: {[n.name for n in self.app.findChildren(lambda x: x.roleName == 'label')][:12]}",
+            )
+            self.assertEqual(self._snapshot_files(), [],
+                             "precondition: the write must really have failed")
+        self.eventually(_settled)
 
     def _toast_about_autosave(self):
         """The toast, found by what it says rather than by widget path."""
@@ -2165,10 +2194,10 @@ class TablesLegacySnapshotUpgradeSmoke(LegacySnapshotUpgradeMixin, BaseGUITestCa
             "the recovered window should name the original document",
         )
         rawinput.keyCombo("<Control>g")
-        time.sleep(0.5)
+        time.sleep(0.5)  # pacing: no state to wait on before the next input
         rawinput.typeText("A1")
         rawinput.keyCombo("Return")
-        time.sleep(0.5)
+        time.sleep(0.5)  # pacing: no state to wait on before the next input
         rawinput.keyCombo("Escape")
         rawinput.keyCombo("Right")
         rawinput.keyCombo("Left")
@@ -2375,17 +2404,17 @@ class TablesNotesSmoke(BaseGUITestCase):
         import subprocess
         import zipfile
 
-        time.sleep(1.0)
+        time.sleep(1.0)  # pacing: no state to wait on before the next input
         rawinput.keyCombo("<Control>g")
-        time.sleep(0.4)
+        time.sleep(0.4)  # pacing: no state to wait on before the next input
         rawinput.typeText("A1")
         rawinput.keyCombo("Return")
-        time.sleep(0.4)
+        time.sleep(0.4)  # pacing: no state to wait on before the next input
 
         subprocess.run(["gapplication", "action", "org.tunaos.tables", "edit-note"])
         self.wait_for_node(name="Note", roleName="text")
         rawinput.typeText("Call Ann")
-        time.sleep(0.3)
+        time.sleep(0.3)  # pacing: no state to wait on before the next input
         rawinput.keyCombo("Escape")
 
         self.wait_until(
@@ -2433,20 +2462,20 @@ class TablesValidationListSmoke(BaseGUITestCase):
         from dogtail import rawinput
         import zipfile
 
-        time.sleep(1.0)
+        time.sleep(1.0)  # pacing: no state to wait on before the next input
         rawinput.keyCombo("<Control>g")
-        time.sleep(0.4)
+        time.sleep(0.4)  # pacing: no state to wait on before the next input
         rawinput.typeText("B1")
         rawinput.keyCombo("Return")
-        time.sleep(0.5)
+        time.sleep(0.5)  # pacing: no state to wait on before the next input
         # The jump leaves focus in the formula entry; Escape hands it to
         # the grid, which Alt+Down is for.
         rawinput.keyCombo("Escape")
-        time.sleep(0.4)
+        time.sleep(0.4)  # pacing: no state to wait on before the next input
 
         def open_list():
             rawinput.keyCombo("<Alt>Down")
-            time.sleep(0.4)
+            time.sleep(0.4)  # pacing: no state to wait on before the next input
             return [c for c in self.app.findChildren(
                 lambda c: c.roleName == "push button" and c.name == "Green")]
         green = self.wait_until(open_list, lambda found: bool(found), interval=0.6,
@@ -2494,39 +2523,40 @@ class TablesUndoSaveReopenSmoke(BaseGUITestCase):
         import subprocess
         import zipfile
 
-        time.sleep(1.0)
+        time.sleep(1.0)  # pacing: no state to wait on before the next input
         # Ctrl+G is not synchronous at every window size: below the narrow
         # breakpoint it opens the Go to Cell dialog (#516) instead of
         # focusing the name box, and typing before the dialog is up goes
         # nowhere. Wait for whichever one took focus.
         rawinput.keyCombo("<Control>g")
-        time.sleep(0.5)
+        time.sleep(0.5)  # pacing: no state to wait on before the next input
         rawinput.typeText("A1")
         rawinput.keyCombo("Return")
-        time.sleep(0.5)
+        time.sleep(0.5)  # pacing: no state to wait on before the next input
         rawinput.typeText("=2+3")
         rawinput.keyCombo("Return")
         rawinput.keyCombo("<Control>z")
         rawinput.keyCombo("<Control><Shift>z")
         rawinput.keyCombo("<Control>s")
-        time.sleep(1.2)
+        time.sleep(1.2)  # pacing: no state to wait on before the next input
         with zipfile.ZipFile(self._doc) as book:
             sheet_xml = book.read("xl/worksheets/sheet1.xml").decode()
         self.assertIn("<f>2+3</f>", sheet_xml)
 
         self.relaunch_app(launch_args=[self._doc])
-        time.sleep(1.2)
+        time.sleep(1.2)  # pacing: no state to wait on before the next input
         rawinput.keyCombo("<Control>g")
-        time.sleep(0.5)
+        time.sleep(0.5)  # pacing: no state to wait on before the next input
         rawinput.typeText("A1")
         rawinput.keyCombo("Return")
-        time.sleep(0.5)
+        time.sleep(0.5)  # pacing: no state to wait on before the next input
         rawinput.keyCombo("Escape")
         rawinput.keyCombo("Right")
         rawinput.keyCombo("Left")
-        time.sleep(0.5)
-        grid = self.app.child(name="Spreadsheet grid")
-        self.assertIn("5", grid.description, f"reopened grid: {grid.description!r}")
+        def _settled():
+            grid = self.app.child(name="Spreadsheet grid")
+            self.assertIn("5", grid.description, f"reopened grid: {grid.description!r}")
+        self.eventually(_settled)
 
 
 class TablesNameBoxSmoke(BaseGUITestCase):
@@ -2539,33 +2569,34 @@ class TablesNameBoxSmoke(BaseGUITestCase):
         import subprocess
 
         subprocess.run(["gapplication", "action", "org.tunaos.tables", "new-document"])
-        time.sleep(1.5)
+        time.sleep(1.5)  # pacing: no state to wait on before the next input
         # Ctrl+G (Go to Cell) focuses the name box with text selected.
         rawinput.keyCombo("<Control>g")
-        time.sleep(0.3)
+        time.sleep(0.3)  # pacing: no state to wait on before the next input
         rawinput.typeText("C5")
         rawinput.keyCombo("Return")
-        time.sleep(0.5)
+        time.sleep(0.5)  # pacing: no state to wait on before the next input
         # The jump hands focus to the fx entry; type a value there.
         rawinput.typeText("42")
         rawinput.keyCombo("Return")
-        time.sleep(0.8)
-        grid = self.app.child(name="Spreadsheet grid")
-        self.assertIn("C5", grid.description,
-                      f"grid description: {grid.description!r}")
-        self.assertIn("42", grid.description)
-        self.assertIsNone(self.process.poll(), "tables crashed during name-box jump")
+        def _settled():
+            grid = self.app.child(name="Spreadsheet grid")
+            self.assertIn("C5", grid.description,
+                          f"grid description: {grid.description!r}")
+            self.assertIn("42", grid.description)
+            self.assertIsNone(self.process.poll(), "tables crashed during name-box jump")
+        self.eventually(_settled)
 
     def _put(self, ref, value):
         from dogtail import rawinput
         rawinput.keyCombo("<Control>g")
-        time.sleep(0.2)
+        time.sleep(0.2)  # pacing: no state to wait on before the next input
         rawinput.typeText(ref)
         rawinput.keyCombo("Return")
-        time.sleep(0.3)
+        time.sleep(0.3)  # pacing: no state to wait on before the next input
         rawinput.typeText(value)
         rawinput.keyCombo("Return")
-        time.sleep(0.3)
+        time.sleep(0.3)  # pacing: no state to wait on before the next input
 
     def test_keyboard_range_selection_updates_stats(self):
         """Shift+arrows extend the selection; the status area shows live
@@ -2574,7 +2605,7 @@ class TablesNameBoxSmoke(BaseGUITestCase):
         import subprocess
 
         subprocess.run(["gapplication", "action", "org.tunaos.tables", "new-document"])
-        time.sleep(1.5)
+        time.sleep(1.5)  # pacing: no state to wait on before the next input
         self._put("A1", "10")
         self._put("A2", "20")
         self._put("A3", "30")
@@ -2582,17 +2613,16 @@ class TablesNameBoxSmoke(BaseGUITestCase):
         # so keyboard selection works straight away.
         rawinput.keyCombo("<Shift>Up")
         rawinput.keyCombo("<Shift>Up")
-        time.sleep(0.8)
-        # GtkLabel's AT-SPI name follows its text; find the stats readout
-        # by content.
-        labels = [c.name for c in self.app.findChildren(
-            lambda c: c.roleName == "label")]
-        stats = [l for l in labels if "Sum" in l]
-        self.assertTrue(stats, f"no stats label found; labels: {labels}")
-        self.assertIn("Sum 60", stats[0])
-        self.assertIn("Count 3", stats[0])
-        self.assertIn("A1:A3", stats[0])
-        self.assertIsNone(self.process.poll(), "tables crashed during keyboard selection")
+        def _settled():
+            labels = [c.name for c in self.app.findChildren(
+                lambda c: c.roleName == "label")]
+            stats = [l for l in labels if "Sum" in l]
+            self.assertTrue(stats, f"no stats label found; labels: {labels}")
+            self.assertIn("Sum 60", stats[0])
+            self.assertIn("Count 3", stats[0])
+            self.assertIn("A1:A3", stats[0])
+            self.assertIsNone(self.process.poll(), "tables crashed during keyboard selection")
+        self.eventually(_settled)
 
 
 class TablesCellEntryMixin:
@@ -2765,7 +2795,7 @@ class TablesOpenGuardSmoke(TablesCellEntryMixin, BaseGUITestCase):
         self._hand_over(self._second)
         self.wait_for_node(name="Discard unsaved changes?")
         self._button("Cancel").do_action(0)
-        time.sleep(1.0)
+        time.sleep(1.0)  # settling: gives a wrong outcome its chance before the check that it didn't happen
         self.assertIn("first.csv", self._title(), "Cancel replaced the workbook anyway")
         cells = self.trigger_snapshot("org.tunaos.tables")["sheet"]["cells"]
         b2 = next((c["value"] for c in cells if (c["row"], c["col"]) == (1, 1)), None)
@@ -2981,7 +3011,7 @@ class TablesColumnMenuSmoke(TablesCellEntryMixin, BaseGUITestCase):
             if self._button("20", "check box").focused:
                 break
             rawinput.keyCombo("Tab")
-            time.sleep(0.2)
+            time.sleep(0.2)  # pacing: no state to wait on before the next input
         self.assertTrue(self._button("20", "check box").focused, "Tab never reached the 20 check box")
         rawinput.keyCombo("space")
         import pyatspi
@@ -3122,7 +3152,7 @@ class TablesFormatCodeSmoke(TablesFormatInspectorSmoke):
         self.wait_until(
             lambda: [n for n in self.app.findChildren(lambda c: c.name == "Format Code" and c.showing)],
             bool, description="the inspector's Format Code row")
-        time.sleep(0.5)
+        time.sleep(0.5)  # pacing: no state to wait on before the next input
         rawinput.keyCombo("<Control>a")
         rawinput.typeText('0.0 "kg"')
         rawinput.keyCombo("Return")
@@ -3311,50 +3341,51 @@ class TablesClipboardSmoke(BaseGUITestCase):
         import subprocess
 
         subprocess.run(["gapplication", "action", "org.tunaos.tables", "new-document"])
-        time.sleep(1.5)
+        time.sleep(1.5)  # pacing: no state to wait on before the next input
 
         def put(ref, value):
             rawinput.keyCombo("<Control>g")
-            time.sleep(0.2)
+            time.sleep(0.2)  # pacing: no state to wait on before the next input
             rawinput.typeText(ref)
             rawinput.keyCombo("Return")
-            time.sleep(0.3)
+            time.sleep(0.3)  # pacing: no state to wait on before the next input
             rawinput.typeText(value)
             rawinput.keyCombo("Return")
-            time.sleep(0.3)
+            time.sleep(0.3)  # pacing: no state to wait on before the next input
 
         put("A1", "2")
         put("B1", "3")
         put("C1", "=A1+B1")
         # Select C1 (grid has focus after the commit) and copy.
         rawinput.keyCombo("<Control>g")
-        time.sleep(0.2)
+        time.sleep(0.2)  # pacing: no state to wait on before the next input
         rawinput.typeText("C1")
         rawinput.keyCombo("Return")
-        time.sleep(0.3)
+        time.sleep(0.3)  # pacing: no state to wait on before the next input
         rawinput.keyCombo("Escape")
-        time.sleep(0.3)
+        time.sleep(0.3)  # pacing: no state to wait on before the next input
         rawinput.keyCombo("<Control>c")
-        time.sleep(0.5)
+        time.sleep(0.5)  # pacing: no state to wait on before the next input
         # Jump to E1 and paste; the formula re-evaluates there.
         rawinput.keyCombo("<Control>g")
-        time.sleep(0.2)
+        time.sleep(0.2)  # pacing: no state to wait on before the next input
         rawinput.typeText("E1")
         rawinput.keyCombo("Return")
-        time.sleep(0.3)
+        time.sleep(0.3)  # pacing: no state to wait on before the next input
         rawinput.keyCombo("Escape")
-        time.sleep(0.3)
+        time.sleep(0.3)  # pacing: no state to wait on before the next input
         rawinput.keyCombo("<Control>v")
-        time.sleep(1.0)
+        time.sleep(1.0)  # pacing: no state to wait on before the next input
         # Navigate away and back so the a11y description reflects E1.
         rawinput.keyCombo("Right")
         rawinput.keyCombo("Left")
-        time.sleep(0.5)
-        grid = self.app.child(name="Spreadsheet grid")
-        self.assertIn("E1", grid.description, f"desc: {grid.description!r}")
-        self.assertIn("5", grid.description,
-                      f"pasted formula did not evaluate: {grid.description!r}")
-        self.assertIsNone(self.process.poll(), "tables crashed during clipboard round trip")
+        def _settled():
+            grid = self.app.child(name="Spreadsheet grid")
+            self.assertIn("E1", grid.description, f"desc: {grid.description!r}")
+            self.assertIn("5", grid.description,
+                          f"pasted formula did not evaluate: {grid.description!r}")
+            self.assertIsNone(self.process.poll(), "tables crashed during clipboard round trip")
+        self.eventually(_settled)
 
 
 class LettersClipboardSmoke(BaseGUITestCase):
@@ -3368,19 +3399,20 @@ class LettersClipboardSmoke(BaseGUITestCase):
 
         self.new_letters_document()
         rawinput.typeText("alpha beta")
-        time.sleep(0.5)
+        time.sleep(0.5)  # pacing: no state to wait on before the next input
         rawinput.keyCombo("<Control>a")
-        time.sleep(0.3)
+        time.sleep(0.3)  # pacing: no state to wait on before the next input
         rawinput.keyCombo("<Control>c")
-        time.sleep(0.5)
+        time.sleep(0.5)  # pacing: no state to wait on before the next input
         rawinput.keyCombo("<Control>End")
-        time.sleep(0.3)
+        time.sleep(0.3)  # pacing: no state to wait on before the next input
         rawinput.keyCombo("<Control>v")
-        time.sleep(1.0)
-        editor = self.app.child(roleName="text")
-        self.assertEqual(editor.text, "alpha betaalpha beta",
-                         f"editor text: {editor.text!r}")
-        self.assertIsNone(self.process.poll(), "letters crashed during clipboard round trip")
+        def _settled():
+            editor = self.app.child(roleName="text")
+            self.assertEqual(editor.text, "alpha betaalpha beta",
+                             f"editor text: {editor.text!r}")
+            self.assertIsNone(self.process.poll(), "letters crashed during clipboard round trip")
+        self.eventually(_settled)
 
 
 class CrossAppClipboardSmoke(BaseGUITestCase):
@@ -3409,52 +3441,52 @@ class CrossAppClipboardSmoke(BaseGUITestCase):
     def _put_cell(self, ref, value):
         from dogtail import rawinput
         rawinput.keyCombo("<Control>g")
-        time.sleep(0.2)
+        time.sleep(0.2)  # pacing: no state to wait on before the next input
         rawinput.typeText(ref)
         rawinput.keyCombo("Return")
-        time.sleep(0.3)
+        time.sleep(0.3)  # pacing: no state to wait on before the next input
         rawinput.typeText(value)
         rawinput.keyCombo("Return")
-        time.sleep(0.3)
+        time.sleep(0.3)  # pacing: no state to wait on before the next input
 
     def _select_cell(self, ref):
         from dogtail import rawinput
         rawinput.keyCombo("<Control>g")
-        time.sleep(0.2)
+        time.sleep(0.2)  # pacing: no state to wait on before the next input
         rawinput.typeText(ref)
         rawinput.keyCombo("Return")
-        time.sleep(0.3)
+        time.sleep(0.3)  # pacing: no state to wait on before the next input
         rawinput.keyCombo("Escape")
-        time.sleep(0.3)
+        time.sleep(0.3)  # pacing: no state to wait on before the next input
 
     def test_a_grid_copied_in_tables_pastes_into_letters(self):
         from dogtail import rawinput
         import subprocess
 
         subprocess.run(["gapplication", "action", "org.tunaos.tables", "new-document"])
-        time.sleep(1.5)
+        time.sleep(1.5)  # pacing: no state to wait on before the next input
         self._put_cell("A1", "alpha")
         self._put_cell("B1", "beta")
         self._select_cell("A1")
         rawinput.keyCombo("<Control>c")
-        time.sleep(0.8)
+        time.sleep(0.8)  # pacing: no state to wait on before the next input
 
         letters = self.launch_second_app("letters")
         self.focus_app(letters)
-        time.sleep(0.5)
+        time.sleep(0.5)  # pacing: no state to wait on before the next input
         self.new_letters_document(letters.app)
         rawinput.keyCombo("<Control>v")
-        time.sleep(1.5)
-
-        editor = letters.app.child(roleName="text")
-        self.assertIn(
-            "alpha", editor.text or "",
-            f"a cell copied in Tables did not arrive in Letters: {editor.text!r}",
-        )
-        # Both processes, not just the receiver: a transfer that crashes
-        # the selection owner is as much a failure as one that loses data,
-        # and the assertion above would not notice.
-        self.assert_still_running(letters)
+        def _settled():
+            editor = letters.app.child(roleName="text")
+            self.assertIn(
+                "alpha", editor.text or "",
+                f"a cell copied in Tables did not arrive in Letters: {editor.text!r}",
+            )
+            # Both processes, not just the receiver: a transfer that crashes
+            # the selection owner is as much a failure as one that loses data,
+            # and the assertion above would not notice.
+            self.assert_still_running(letters)
+        self.eventually(_settled)
 
     def test_text_copied_in_letters_pastes_into_tables(self):
         from dogtail import rawinput
@@ -3462,31 +3494,31 @@ class CrossAppClipboardSmoke(BaseGUITestCase):
 
         letters = self.launch_second_app("letters")
         self.focus_app(letters)
-        time.sleep(0.5)
+        time.sleep(0.5)  # pacing: no state to wait on before the next input
         self.new_letters_document(letters.app)
         rawinput.typeText("gamma")
-        time.sleep(0.5)
+        time.sleep(0.5)  # pacing: no state to wait on before the next input
         rawinput.keyCombo("<Control>a")
-        time.sleep(0.3)
+        time.sleep(0.3)  # pacing: no state to wait on before the next input
         rawinput.keyCombo("<Control>c")
-        time.sleep(0.8)
+        time.sleep(0.8)  # pacing: no state to wait on before the next input
 
         self.focus_app()
         subprocess.run(["gapplication", "action", "org.tunaos.tables", "new-document"])
-        time.sleep(1.5)
+        time.sleep(1.5)  # pacing: no state to wait on before the next input
         self._select_cell("A1")
         rawinput.keyCombo("<Control>v")
-        time.sleep(1.5)
+        time.sleep(1.5)  # pacing: no state to wait on before the next input
         rawinput.keyCombo("Right")
         rawinput.keyCombo("Left")
-        time.sleep(0.5)
-
-        grid = self.app.child(name="Spreadsheet grid")
-        self.assertIn(
-            "gamma", grid.description or "",
-            f"text copied in Letters did not arrive in Tables: {grid.description!r}",
-        )
-        self.assert_still_running(letters)
+        def _settled():
+            grid = self.app.child(name="Spreadsheet grid")
+            self.assertIn(
+                "gamma", grid.description or "",
+                f"text copied in Letters did not arrive in Tables: {grid.description!r}",
+            )
+            self.assert_still_running(letters)
+        self.eventually(_settled)
 
     def test_the_clipboard_survives_the_copying_app_being_closed(self):
         """X11 hands the selection to the owning *process*: close it and
@@ -3502,24 +3534,24 @@ class CrossAppClipboardSmoke(BaseGUITestCase):
         import subprocess
 
         subprocess.run(["gapplication", "action", "org.tunaos.tables", "new-document"])
-        time.sleep(1.5)
+        time.sleep(1.5)  # pacing: no state to wait on before the next input
         self._put_cell("A1", "orphaned")
         self._select_cell("A1")
         rawinput.keyCombo("<Control>c")
-        time.sleep(0.8)
+        time.sleep(0.8)  # pacing: no state to wait on before the next input
 
         letters = self.launch_second_app("letters")
         self.focus_app(letters)
-        time.sleep(0.5)
+        time.sleep(0.5)  # pacing: no state to wait on before the next input
         self.new_letters_document(letters.app)
 
         # Now close the owner and paste into the survivor.
         self.process.terminate()
         self.process.wait(timeout=5)
-        time.sleep(1.0)
+        time.sleep(1.0)  # pacing: no state to wait on before the next input
         self.focus_app(letters)
         rawinput.keyCombo("<Control>v")
-        time.sleep(1.5)
+        time.sleep(1.5)  # settling: gives a wrong outcome its chance before the check that it didn't happen
 
         text = letters.app.child(roleName="text").text or ""
         self.assertIsNone(
@@ -3550,16 +3582,16 @@ class TablesA11yCellsSmoke(BaseGUITestCase):
         import subprocess
 
         subprocess.run(["gapplication", "action", "org.tunaos.tables", "new-document"])
-        time.sleep(1.5)
+        time.sleep(1.5)  # pacing: no state to wait on before the next input
         for ref, value in [("A1", "10"), ("B2", "20")]:
             rawinput.keyCombo("<Control>g")
-            time.sleep(0.2)
+            time.sleep(0.2)  # pacing: no state to wait on before the next input
             rawinput.typeText(ref)
             rawinput.keyCombo("Return")
-            time.sleep(0.3)
+            time.sleep(0.3)  # pacing: no state to wait on before the next input
             rawinput.typeText(value)
             rawinput.keyCombo("Return")
-            time.sleep(0.3)
+            time.sleep(0.3)  # pacing: no state to wait on before the next input
         cell = self.app.child(name="A1: 10", roleName="table cell")
         self.assertIsNotNone(cell)
         cell2 = self.app.child(name="B2: 20", roleName="table cell")
@@ -3581,15 +3613,16 @@ class DecksA11yObjectsSmoke(BaseGUITestCase):
 
         aid = "org.tunaos.decks"
         subprocess.run(["gapplication", "action", aid, "new-document"])
-        time.sleep(1.5)
+        time.sleep(1.5)  # pacing: no state to wait on before the next input
         subprocess.run(["gapplication", "action", aid, "add-text-box"])
         subprocess.run(["gapplication", "action", aid, "add-shape"])
-        time.sleep(1.5)
-        box = self.app.child(name="Text box: Text", roleName="list item")
-        self.assertIsNotNone(box)
-        rect = self.app.child(name="Rectangle", roleName="list item")
-        self.assertIsNotNone(rect)
-        self.assertIsNone(self.process.poll(), "decks crashed exposing objects")
+        def _settled():
+            box = self.app.child(name="Text box: Text", roleName="list item")
+            self.assertIsNotNone(box)
+            rect = self.app.child(name="Rectangle", roleName="list item")
+            self.assertIsNotNone(rect)
+            self.assertIsNone(self.process.poll(), "decks crashed exposing objects")
+        self.eventually(_settled)
 
 
 class TablesFormatCellsSmoke(BaseGUITestCase):
@@ -3604,33 +3637,36 @@ class TablesFormatCellsSmoke(BaseGUITestCase):
 
         aid = "org.tunaos.tables"
         subprocess.run(["gapplication", "action", aid, "new-document"])
-        time.sleep(1.5)
+        time.sleep(1.5)  # pacing: no state to wait on before the next input
         rawinput.keyCombo("<Control>g")
-        time.sleep(0.2)
+        time.sleep(0.2)  # pacing: no state to wait on before the next input
         rawinput.typeText("A1")
         rawinput.keyCombo("Return")
-        time.sleep(0.3)
+        time.sleep(0.3)  # pacing: no state to wait on before the next input
         rawinput.typeText("1234.5")
         rawinput.keyCombo("Return")
-        time.sleep(0.5)
+        time.sleep(0.5)  # pacing: no state to wait on before the next input
         # Cycle to Number(2): the a11y cell should read the formatted value.
         subprocess.run(["gapplication", "action", aid, "cycle-number-format"])
-        time.sleep(0.3)
+        time.sleep(0.3)  # pacing: no state to wait on before the next input
         # Nudge the selection so the refresh runs.
         rawinput.keyCombo("Right")
         rawinput.keyCombo("Left")
-        time.sleep(0.8)
-        cells = [c.name for c in self.app.findChildren(
-            lambda c: c.roleName == "table cell")]
-        formatted = [n for n in cells if "1,234.50" in n or "1234.50" in n]
-        self.assertTrue(formatted, f"no formatted cell value: {cells}")
+        def _settled():
+            cells = [c.name for c in self.app.findChildren(
+                lambda c: c.roleName == "table cell")]
+            formatted = [n for n in cells if "1,234.50" in n or "1234.50" in n]
+            self.assertTrue(formatted, f"no formatted cell value: {cells}")
+        self.eventually(_settled)
         # The Format Cells sheet opens from the action registry.
         subprocess.run(["gapplication", "action", aid, "format-cells"])
-        time.sleep(1.0)
-        apply_btn = self.app.child(name="Apply", roleName="push button")
-        self.assertIsNotNone(apply_btn)
+        def _settled():
+            apply_btn = self.app.child(name="Apply", roleName="push button")
+            self.assertIsNotNone(apply_btn)
+            return apply_btn
+        apply_btn = self.eventually(_settled)
         apply_btn.do_action(0)
-        time.sleep(0.5)
+        time.sleep(0.5)  # settling: gives a wrong outcome its chance before the check that it didn't happen
         self.assertIsNone(self.process.poll(), "tables crashed in format cells")
 
 
@@ -3651,18 +3687,18 @@ class TablesSnapshotSmoke(BaseGUITestCase):
         self.gapplication_action(aid, "new-document")
         self.wait_for_node(name="Spreadsheet grid")
         rawinput.keyCombo("<Control>g")
-        time.sleep(0.2)
+        time.sleep(0.2)  # pacing: no state to wait on before the next input
         rawinput.typeText("A1")
         rawinput.keyCombo("Return")
-        time.sleep(0.3)
+        time.sleep(0.3)  # pacing: no state to wait on before the next input
         rawinput.typeText("42")
         rawinput.keyCombo("Return")
-        time.sleep(0.3)
+        time.sleep(0.3)  # pacing: no state to wait on before the next input
         rawinput.keyCombo("<Control>g")
-        time.sleep(0.2)
+        time.sleep(0.2)  # pacing: no state to wait on before the next input
         rawinput.typeText("A2")
         rawinput.keyCombo("Return")
-        time.sleep(0.3)
+        time.sleep(0.3)  # pacing: no state to wait on before the next input
         rawinput.typeText("=A1*2")
         rawinput.keyCombo("Return")
         self.wait_for_condition(
@@ -3737,31 +3773,32 @@ class TablesFillHandleSmoke(TablesCanvasCoordsMixin, BaseGUITestCase):
 
         aid = "org.tunaos.tables"
         subprocess.run(["gapplication", "action", aid, "new-document"])
-        time.sleep(1.0)
+        time.sleep(1.0)  # pacing: no state to wait on before the next input
         rawinput.keyCombo("<Control>g")
-        time.sleep(0.2)
+        time.sleep(0.2)  # pacing: no state to wait on before the next input
         rawinput.typeText("A1")
         rawinput.keyCombo("Return")
-        time.sleep(0.3)
+        time.sleep(0.3)  # pacing: no state to wait on before the next input
         rawinput.typeText("7")
         rawinput.keyCombo("Return")
-        time.sleep(0.3)
+        time.sleep(0.3)  # pacing: no state to wait on before the next input
         # Re-select A1 (Enter above moved the active cell to A2).
         rawinput.keyCombo("<Control>g")
-        time.sleep(0.2)
+        time.sleep(0.2)  # pacing: no state to wait on before the next input
         rawinput.typeText("A1")
         rawinput.keyCombo("Return")
-        time.sleep(0.3)
+        time.sleep(0.3)  # pacing: no state to wait on before the next input
 
         origin = self.canvas_origin()
         hx, hy = self._cell_bottom_right(origin, 0, 0)
         _, target_y = self._cell_bottom_right(origin, 3, 0)
         self.drag(hx, hy, hx, target_y)
-        time.sleep(0.5)
+        time.sleep(0.5)  # pacing: no state to wait on before the next input
 
         subprocess.run(["gapplication", "action", aid, "test-snapshot"])
-        time.sleep(0.5)
-        self.assertTrue(os.path.exists(self._snapshot_path), "snapshot file was not written")
+        def _settled():
+            self.assertTrue(os.path.exists(self._snapshot_path), "snapshot file was not written")
+        self.eventually(_settled)
         with open(self._snapshot_path) as f:
             snap = json.load(f)
         cells = {(c["row"], c["col"]): c["value"] for c in snap["sheet"]["cells"]}
@@ -3790,35 +3827,35 @@ class TablesAutofillSeriesSmoke(TablesCanvasCoordsMixin, BaseGUITestCase):
 
         aid = "org.tunaos.tables"
         subprocess.run(["gapplication", "action", aid, "new-document"])
-        time.sleep(1.0)
+        time.sleep(1.0)  # pacing: no state to wait on before the next input
         for cell, text in (("A1", "Mon"), ("B1", "Item 1"), ("C1", "10"), ("C2", "20")):
             rawinput.keyCombo("<Control>g")
-            time.sleep(0.3)
+            time.sleep(0.3)  # pacing: no state to wait on before the next input
             rawinput.typeText(cell)
             rawinput.keyCombo("Return")
-            time.sleep(0.3)
+            time.sleep(0.3)  # pacing: no state to wait on before the next input
             rawinput.typeText(text)
             rawinput.keyCombo("Return")
-            time.sleep(0.3)
+            time.sleep(0.3)  # pacing: no state to wait on before the next input
         origin = self.canvas_origin()
 
         def fill_down(block, handle_row, handle_col, to_row):
             rawinput.keyCombo("<Control>g")
-            time.sleep(0.3)
+            time.sleep(0.3)  # pacing: no state to wait on before the next input
             rawinput.typeText(block)
             rawinput.keyCombo("Return")
-            time.sleep(0.4)
+            time.sleep(0.4)  # pacing: no state to wait on before the next input
             hx = origin[0] + self.ROW_HEADER_WIDTH + (handle_col + 1) * self.COL_WIDTH
             hy = origin[1] + self.COL_HEADER_HEIGHT + (handle_row + 1) * self.ROW_HEIGHT
             target_y = origin[1] + self.COL_HEADER_HEIGHT + (to_row + 1) * self.ROW_HEIGHT
             self.drag(hx, hy, hx, target_y)
-            time.sleep(0.5)
+            time.sleep(0.5)  # pacing: no state to wait on before the next input
 
         fill_down("A1:B1", 0, 1, 3)   # Mon, Item 1 down to row 4
         fill_down("C1:C2", 1, 2, 3)   # 10, 20 down to row 4
 
         subprocess.run(["gapplication", "action", aid, "test-snapshot"])
-        time.sleep(0.5)
+        time.sleep(0.5)  # pacing: no state to wait on before the next input
         with open(self._snapshot_path) as f:
             snap = json.load(f)
         cells = {(c["row"], c["col"]): c["value"] for c in snap["sheet"]["cells"]}
@@ -3854,32 +3891,32 @@ class TablesFormulaReferenceHighlightSmoke(BaseGUITestCase):
 
         aid = "org.tunaos.tables"
         subprocess.run(["gapplication", "action", aid, "new-document"])
-        time.sleep(1.5)
+        time.sleep(1.5)  # pacing: no state to wait on before the next input
 
         for row, value in enumerate(["10", "20"]):
             rawinput.keyCombo("<Control>g")
-            time.sleep(0.2)
+            time.sleep(0.2)  # pacing: no state to wait on before the next input
             rawinput.typeText(f"A{row + 1}")
             rawinput.keyCombo("Return")
-            time.sleep(0.3)
+            time.sleep(0.3)  # pacing: no state to wait on before the next input
             rawinput.typeText(value)
             rawinput.keyCombo("Return")
-            time.sleep(0.3)
+            time.sleep(0.3)  # pacing: no state to wait on before the next input
 
         rawinput.keyCombo("<Control>g")
-        time.sleep(0.2)
+        time.sleep(0.2)  # pacing: no state to wait on before the next input
         rawinput.typeText("C1")
         rawinput.keyCombo("Return")
-        time.sleep(0.3)
+        time.sleep(0.3)  # pacing: no state to wait on before the next input
         # typeText sends this character by character via xdotool, so
         # connect_changed fires once per character, including on
         # incomplete/invalid intermediate states like "=A1+".
         rawinput.typeText("=A1+A2")
         rawinput.keyCombo("Return")
-        time.sleep(0.5)
+        time.sleep(0.5)  # pacing: no state to wait on before the next input
 
         subprocess.run(["gapplication", "action", aid, "test-snapshot"])
-        time.sleep(0.5)
+        time.sleep(0.5)  # pacing: no state to wait on before the next input
         with open(self._snapshot_path) as f:
             snap = json.load(f)
         cells = {(c["row"], c["col"]): c["value"] for c in snap["sheet"]["cells"]}
@@ -3911,7 +3948,7 @@ class TablesSortIndicatorSmoke(TablesCanvasCoordsMixin, BaseGUITestCase):
         import subprocess
 
         subprocess.run(["gapplication", "action", "org.tunaos.tables", "test-snapshot"])
-        time.sleep(0.5)
+        time.sleep(0.5)  # pacing: no state to wait on before the next input
         with open(self._snapshot_path) as f:
             return json.load(f)["sheet"]["sorted_col"]
 
@@ -3921,15 +3958,15 @@ class TablesSortIndicatorSmoke(TablesCanvasCoordsMixin, BaseGUITestCase):
 
         aid = "org.tunaos.tables"
         subprocess.run(["gapplication", "action", aid, "new-document"])
-        time.sleep(1.5)
+        time.sleep(1.5)  # pacing: no state to wait on before the next input
         rawinput.keyCombo("<Control>g")
-        time.sleep(0.2)
+        time.sleep(0.2)  # pacing: no state to wait on before the next input
         rawinput.typeText("A1")
         rawinput.keyCombo("Return")
-        time.sleep(0.3)
+        time.sleep(0.3)  # pacing: no state to wait on before the next input
         rawinput.typeText("b")
         rawinput.keyCombo("Return")
-        time.sleep(0.5)
+        time.sleep(0.5)  # pacing: no state to wait on before the next input
 
         # xdotool's `mousemove --sync` appears to hang waiting for a
         # motion event that never fires when the target pixel is the
@@ -3944,17 +3981,19 @@ class TablesSortIndicatorSmoke(TablesCanvasCoordsMixin, BaseGUITestCase):
         corner_x, corner_y = origin[0] + self.ROW_HEADER_WIDTH / 2, origin[1] + self.COL_HEADER_HEIGHT / 2
 
         rawinput.click(int(x), int(y))
-        time.sleep(0.5)
-        self.assertEqual(self._sorted_col(), {"col": 0, "ascending": True})
+        def _settled():
+            self.assertEqual(self._sorted_col(), {"col": 0, "ascending": True})
+        self.eventually(_settled)
 
         rawinput.click(int(corner_x), int(corner_y))
         rawinput.click(int(x), int(y))
-        time.sleep(0.5)
-        self.assertEqual(self._sorted_col(), {"col": 0, "ascending": False})
+        def _settled():
+            self.assertEqual(self._sorted_col(), {"col": 0, "ascending": False})
+        self.eventually(_settled)
 
         rawinput.click(int(corner_x), int(corner_y))
         rawinput.click(int(x), int(y))
-        time.sleep(0.5)
+        time.sleep(0.5)  # settling: gives a wrong outcome its chance before the check that it didn't happen
         self.assertIsNone(self._sorted_col())
         self.assertIsNone(self.process.poll(), "tables crashed cycling sort")
 
@@ -4059,60 +4098,61 @@ class TablesNamedRangeSmoke(BaseGUITestCase):
 
         aid = "org.tunaos.tables"
         subprocess.run(["gapplication", "action", aid, "new-document"])
-        time.sleep(1.5)
+        time.sleep(1.5)  # pacing: no state to wait on before the next input
 
         for row, value in enumerate(["10", "20", "30"]):
             rawinput.keyCombo("<Control>g")
-            time.sleep(0.2)
+            time.sleep(0.2)  # pacing: no state to wait on before the next input
             rawinput.typeText(f"A{row + 1}")
             rawinput.keyCombo("Return")
-            time.sleep(0.3)
+            time.sleep(0.3)  # pacing: no state to wait on before the next input
             rawinput.typeText(value)
             rawinput.keyCombo("Return")
-            time.sleep(0.3)
+            time.sleep(0.3)  # pacing: no state to wait on before the next input
 
         rawinput.keyCombo("<Control>g")
-        time.sleep(0.2)
+        time.sleep(0.2)  # pacing: no state to wait on before the next input
         rawinput.typeText("A1")
         rawinput.keyCombo("Return")
-        time.sleep(0.3)
+        time.sleep(0.3)  # pacing: no state to wait on before the next input
         # A name-box jump hands focus to fx (so the user can type a new
         # value straight away, per test_name_box_jump_and_edit) — Escape
         # returns focus to the grid so Shift+Down actually extends the
         # grid selection instead of doing nothing inside fx.
         rawinput.keyCombo("Escape")
-        time.sleep(0.3)
+        time.sleep(0.3)  # pacing: no state to wait on before the next input
         rawinput.keyCombo("<Shift>Down")
         rawinput.keyCombo("<Shift>Down")
-        time.sleep(0.5)
+        time.sleep(0.5)  # pacing: no state to wait on before the next input
 
         subprocess.run(["gapplication", "action", aid, "define-name"])
-        time.sleep(0.8)
+        time.sleep(0.8)  # pacing: no state to wait on before the next input
         name_entry = tree.root.findChild(lambda n: n.name == "Name" and n.roleName == "text")
         name_entry.text = "MyRange"
-        time.sleep(0.2)
+        time.sleep(0.2)  # pacing: no state to wait on before the next input
         confirm = tree.root.findChild(lambda n: n.name == "Define" and n.roleName == "push button")
         confirm.do_action(0)
-        time.sleep(0.5)
+        time.sleep(0.5)  # pacing: no state to wait on before the next input
 
         # Collapse back to a single cell (still within the existing
         # extent — no far jump, see class docstring) so the jump below
         # actually proves the name box re-extends the selection rather
         # than trivially matching an unchanged one.
         rawinput.keyCombo("<Control>g")
-        time.sleep(0.2)
+        time.sleep(0.2)  # pacing: no state to wait on before the next input
         rawinput.typeText("A1")
         rawinput.keyCombo("Return")
-        time.sleep(0.5)
+        time.sleep(0.5)  # pacing: no state to wait on before the next input
         rawinput.keyCombo("<Control>g")
-        time.sleep(0.2)
+        time.sleep(0.2)  # pacing: no state to wait on before the next input
         rawinput.typeText("MyRange")
         rawinput.keyCombo("Return")
-        time.sleep(0.5)
+        time.sleep(0.5)  # pacing: no state to wait on before the next input
 
         subprocess.run(["gapplication", "action", aid, "test-snapshot"])
-        time.sleep(0.5)
-        self.assertTrue(os.path.exists(self._snapshot_path), "snapshot file was not written")
+        def _settled():
+            self.assertTrue(os.path.exists(self._snapshot_path), "snapshot file was not written")
+        self.eventually(_settled)
         with open(self._snapshot_path) as f:
             snap = json.load(f)
         self.assertEqual(tuple(snap["sheet"]["selection"]), (0, 0, 2, 0), f"snapshot: {snap}")
@@ -4131,22 +4171,22 @@ class TablesNamedRangeSmoke(BaseGUITestCase):
 
         aid = "org.tunaos.tables"
         subprocess.run(["gapplication", "action", aid, "new-document"])
-        time.sleep(1.5)
+        time.sleep(1.5)  # pacing: no state to wait on before the next input
         rawinput.keyCombo("<Control>g")
-        time.sleep(0.2)
+        time.sleep(0.2)  # pacing: no state to wait on before the next input
         rawinput.typeText("Z9")
         rawinput.keyCombo("Return")
-        time.sleep(0.5)
+        time.sleep(0.5)  # pacing: no state to wait on before the next input
         rawinput.keyCombo("<Control>g")
-        time.sleep(0.2)
+        time.sleep(0.2)  # pacing: no state to wait on before the next input
         rawinput.typeText("A1")
         rawinput.keyCombo("Return")
-        time.sleep(0.3)
+        time.sleep(0.3)  # pacing: no state to wait on before the next input
         rawinput.keyCombo("<Shift>Down")
         rawinput.keyCombo("<Shift>Down")
-        time.sleep(0.5)
+        time.sleep(0.5)  # pacing: no state to wait on before the next input
         subprocess.run(["gapplication", "action", aid, "test-snapshot"])
-        time.sleep(0.5)
+        time.sleep(0.5)  # settling: gives a wrong outcome its chance before the check that it didn't happen
         self.assertIsNone(
             self.process.poll(),
             "tables died after a far jump and back — #137/#507 regression",
@@ -4616,7 +4656,7 @@ class DecksSpeakerNotesSmoke(BaseGUITestCase):
         pane = self.wait_until(lambda: self.app.findChild(lambda n: n.name == "Speaker notes", retry=False, requireResult=False),
                                lambda n: n is not None and n.showing, description="the notes pane under the slide")
         self.gapplication_action(aid, "focus-notes")
-        time.sleep(0.5)
+        time.sleep(0.5)  # pacing: no state to wait on before the next input
         rawinput.typeText("remember the demo")
         self.wait_until(lambda: self._notes(aid), lambda n: n == "remember the demo", interval=0.5,
                         description="the typed notes on the slide")
@@ -4830,7 +4870,7 @@ class DecksExportSmoke(BaseGUITestCase):
         name = self.wait_until(lambda: tree.root.findChild(lambda n: n.name == "Name:" and n.roleName == "text", retry=False, requireResult=False),
                                lambda n: n is not None, description=f"the {action} save dialog")
         name.text = path
-        time.sleep(0.3)
+        time.sleep(0.3)  # pacing: no state to wait on before the next input
         tree.root.findChild(lambda n: n.name == "Save" and n.roleName == "push button").do_action(0)
         return self.wait_until(lambda: os.path.exists(path) and os.path.getsize(path) > 0, bool, interval=0.25,
                                description=f"{os.path.basename(path)} to be written")
@@ -4877,7 +4917,7 @@ class DecksExportSmoke(BaseGUITestCase):
         name = self.wait_until(lambda: tree.root.findChild(lambda n: n.name == "Name:" and n.roleName == "text", retry=False, requireResult=False),
                                lambda n: n is not None, description="the export save dialog")
         name.text = "/proc/talk.pdf"
-        time.sleep(0.3)
+        time.sleep(0.3)  # pacing: no state to wait on before the next input
         tree.root.findChild(lambda n: n.name == "Save" and n.roleName == "push button").do_action(0)
         self.wait_for_node(name="Export Failed")
         self.assertFalse(os.path.exists("/proc/talk.pdf"))
@@ -4938,7 +4978,7 @@ class DecksInsertBarSmoke(BaseGUITestCase):
         from dogtail import rawinput
 
         # The popover focuses its search entry on opening: typing searches.
-        time.sleep(0.5)
+        time.sleep(0.5)  # pacing: no state to wait on before the next input
         rawinput.typeText("tri")
         self.wait_until(lambda: [n.name for n in self.app.findChildren(
                             lambda n: n.roleName == "push button" and n.name in ("Triangle", "Rectangle") and n.showing)],
@@ -5059,7 +5099,7 @@ class DecksChartSmoke(BaseGUITestCase):
             # land after the first save.
             def saved():
                 self.gapplication_action(aid, "save")
-                time.sleep(0.2)
+                time.sleep(0.2)  # pacing: no state to wait on before the next input
                 return saved_chart()
             self.wait_until(saved, check, interval=0.5, description=description)
 
@@ -5094,9 +5134,9 @@ class DecksSelectionSmoke(BaseGUITestCase):
 
         aid = "org.tunaos.decks"
         subprocess.run(["gapplication", "action", aid, "new-document"])
-        time.sleep(1.5)
+        time.sleep(1.5)  # pacing: no state to wait on before the next input
         subprocess.run(["gapplication", "action", aid, "add-shape"])
-        time.sleep(1.0)
+        time.sleep(1.0)  # pacing: no state to wait on before the next input
         # The first inserted shape is a rectangle at slide (200,200,200x150) in the 960x540 slide
         # coordinate space. The canvas fits that into whatever it's
         # actually sized to (slide_geometry() in canvas.rs) — compute the
@@ -5122,11 +5162,12 @@ class DecksSelectionSmoke(BaseGUITestCase):
         click_x = cx + ox + 300.0 * scale  # rect center: (200+100, 200+75)
         click_y = cy + oy + 275.0 * scale
         rawinput.click(int(click_x), int(click_y))
-        time.sleep(1.0)
-        canvas = self.app.child(name="Slide canvas")
-        self.assertIn("selected", canvas.description,
-                      f"canvas description: {canvas.description!r}")
-        self.assertIsNone(self.process.poll(), "decks crashed during selection")
+        def _settled():
+            canvas = self.app.child(name="Slide canvas")
+            self.assertIn("selected", canvas.description,
+                          f"canvas description: {canvas.description!r}")
+            self.assertIsNone(self.process.poll(), "decks crashed during selection")
+        self.eventually(_settled)
 
 
 class DecksCanvasDragSmoke(BaseGUITestCase):
@@ -5175,9 +5216,9 @@ class DecksCanvasDragSmoke(BaseGUITestCase):
     def test_dragging_an_object_moves_it_in_the_model(self):
         aid = "org.tunaos.decks"
         self.gapplication_action(aid, "new-document")
-        time.sleep(1.5)
+        time.sleep(1.5)  # pacing: no state to wait on before the next input
         self.gapplication_action(aid, "add-shape")
-        time.sleep(1.0)
+        time.sleep(1.0)  # settling: gives a wrong outcome its chance before the check that it didn't happen
 
         before = self.trigger_snapshot(aid)["slides"][0]["objects"][0]
         self.assertEqual(before["kind"], "Shape", f"unexpected object: {before}")
@@ -5188,34 +5229,34 @@ class DecksCanvasDragSmoke(BaseGUITestCase):
         start_x, start_y = to_window(300.0, 275.0)
         end_x, end_y = to_window(400.0, 335.0)
         self.drag(start_x, start_y, end_x, end_y)
-        time.sleep(1.0)
+        def _settled():
+            after = self.trigger_snapshot(aid)["slides"][0]["objects"][0]
+            dx = after["x"] - before["x"]
+            dy = after["y"] - before["y"]
 
-        after = self.trigger_snapshot(aid)["slides"][0]["objects"][0]
-        dx = after["x"] - before["x"]
-        dy = after["y"] - before["y"]
-
-        # Direction and proportion, not absolute distance. Converting a
-        # requested slide-space delta into pointer pixels needs the canvas
-        # scale, and the only handle on that from here is the AT-SPI size —
-        # which is the very thing #132 says is unreliable for nested
-        # widgets. Asking for (100,60) in slide units and measuring exactly
-        # (200,120) says the reconstructed scale is out by 2x; identical
-        # numbers came back from an unmodified build, so it is the test's
-        # arithmetic (or the AT-SPI geometry behind it) rather than the
-        # gesture code. Pinning the magnitude here would bake that factor
-        # in as if it were intended, so this asserts what the journey is
-        # actually for: the drag reaches the model, along the axis dragged.
-        # (The 2x was real: the drag moved the object live and the undo
-        # command then applied the same move again on release. Fixed with
-        # the smart guides in canvas_input.rs; the magnitude is still not
-        # asserted here for the AT-SPI reason above.)
-        self.assertGreater(dx, 0, f"drag did not move the object right: {before} -> {after}")
-        self.assertGreater(dy, 0, f"drag did not move the object down: {before} -> {after}")
-        self.assertAlmostEqual(
-            dx / dy, 100.0 / 60.0, delta=0.4,
-            msg=f"movement is not proportional to the drag: {before} -> {after}",
-        )
-        self.assertIsNone(self.process.poll(), "decks crashed during the drag")
+            # Direction and proportion, not absolute distance. Converting a
+            # requested slide-space delta into pointer pixels needs the canvas
+            # scale, and the only handle on that from here is the AT-SPI size —
+            # which is the very thing #132 says is unreliable for nested
+            # widgets. Asking for (100,60) in slide units and measuring exactly
+            # (200,120) says the reconstructed scale is out by 2x; identical
+            # numbers came back from an unmodified build, so it is the test's
+            # arithmetic (or the AT-SPI geometry behind it) rather than the
+            # gesture code. Pinning the magnitude here would bake that factor
+            # in as if it were intended, so this asserts what the journey is
+            # actually for: the drag reaches the model, along the axis dragged.
+            # (The 2x was real: the drag moved the object live and the undo
+            # command then applied the same move again on release. Fixed with
+            # the smart guides in canvas_input.rs; the magnitude is still not
+            # asserted here for the AT-SPI reason above.)
+            self.assertGreater(dx, 0, f"drag did not move the object right: {before} -> {after}")
+            self.assertGreater(dy, 0, f"drag did not move the object down: {before} -> {after}")
+            self.assertAlmostEqual(
+                dx / dy, 100.0 / 60.0, delta=0.4,
+                msg=f"movement is not proportional to the drag: {before} -> {after}",
+            )
+            self.assertIsNone(self.process.poll(), "decks crashed during the drag")
+        self.eventually(_settled)
 
 
 class DecksCloseGuardSmoke(BaseGUITestCase):
@@ -5233,22 +5274,22 @@ class DecksCloseGuardSmoke(BaseGUITestCase):
 
         aid = "org.tunaos.decks"
         subprocess.run(["gapplication", "action", aid, "new-document"])
-        time.sleep(1.5)
+        time.sleep(1.5)  # pacing: no state to wait on before the next input
         subprocess.run(["gapplication", "action", aid, "add-shape"])
-        time.sleep(1.0)
+        time.sleep(1.0)  # pacing: no state to wait on before the next input
 
     def test_cancel_keeps_window_open_then_discard_closes(self):
         self._add_shape()
 
         self.app.child(name="Close", roleName="push button").do_action(0)
-        time.sleep(0.8)
+        time.sleep(0.8)  # pacing: no state to wait on before the next input
         self.app.child(name="Cancel", roleName="push button").do_action(0)
-        time.sleep(0.5)
+        time.sleep(0.5)  # settling: gives a wrong outcome its chance before the check that it didn't happen
         self.assertIsNone(self.process.poll(), "Cancel must not close the window")
         self.assertIsNotNone(self.app.child(roleName="frame"), "window should still be open")
 
         self.app.child(name="Close", roleName="push button").do_action(0)
-        time.sleep(0.8)
+        time.sleep(0.8)  # pacing: no state to wait on before the next input
         self.app.child(name="Discard", roleName="push button").do_action(0)
         self.assertIsNotNone(self.wait_for_process_exit(), "Discard must close the window")
 
@@ -5259,13 +5300,13 @@ class DecksCloseGuardSmoke(BaseGUITestCase):
         out_path = os.path.join(self._dir, "close-guard-save.pptx")
 
         self.app.child(name="Close", roleName="push button").do_action(0)
-        time.sleep(0.8)
+        time.sleep(0.8)  # pacing: no state to wait on before the next input
         self.app.child(name="Save", roleName="push button").do_action(0)
-        time.sleep(1.0)
+        time.sleep(1.0)  # pacing: no state to wait on before the next input
 
         name_entry = tree.root.findChild(lambda n: n.name == "Name:" and n.roleName == "text")
         name_entry.text = out_path
-        time.sleep(0.3)
+        time.sleep(0.3)  # pacing: no state to wait on before the next input
         confirm = tree.root.findChild(lambda n: n.name == "Save" and n.roleName == "push button")
         confirm.do_action(0)
 
@@ -5298,7 +5339,7 @@ class DecksReplaceGuardSmoke(BaseGUITestCase):
         from dogtail import tree
         aid = "org.tunaos.decks"
         self.gapplication_action(aid, "new-document")
-        time.sleep(1.0)
+        time.sleep(1.0)  # pacing: no state to wait on before the next input
         self.gapplication_action(aid, "add-shape")
         self.wait_until(self._objects, lambda n: n == 1, description="the shape to be added")
 
@@ -5311,7 +5352,7 @@ class DecksReplaceGuardSmoke(BaseGUITestCase):
         self.gapplication_action(aid, "new-document")
         self.wait_for_node(name="Discard unsaved changes?")
         button("Cancel").do_action(0)
-        time.sleep(1.0)
+        time.sleep(1.0)  # settling: gives a wrong outcome its chance before the check that it didn't happen
         self.assertEqual(self._objects(), 1, "Cancel replaced the deck anyway")
 
         self.gapplication_action(aid, "new-document")
@@ -5342,51 +5383,52 @@ class DecksAutosaveSmoke(BaseGUITestCase):
 
         aid = "org.tunaos.decks"
         subprocess.run(["gapplication", "action", aid, "new-document"])
-        time.sleep(1.5)
+        time.sleep(1.5)  # pacing: no state to wait on before the next input
         subprocess.run(["gapplication", "action", aid, "add-shape"])
-        time.sleep(1.0)
+        time.sleep(1.0)  # pacing: no state to wait on before the next input
 
     def test_crash_then_relaunch_recovers_and_clears_the_snapshot(self):
         import subprocess
 
         self._add_shape()
         subprocess.run(["gapplication", "action", "org.tunaos.decks", "autosave-now"])
-        time.sleep(0.5)
-        self.assertEqual(len(self._snapshot_files()), 1, "autosave-now must have written a snapshot")
+        def _settled():
+            self.assertEqual(len(self._snapshot_files()), 1, "autosave-now must have written a snapshot")
+        self.eventually(_settled)
         recovered_from = set(self._snapshot_files())
 
         # Simulate a crash: kill the process directly, bypassing the close
         # guard, so the snapshot is never cleared by a clean exit.
         self.relaunch_app(crash=True)
-        time.sleep(1.5)
-
-        frame = self.app.child(roleName="frame")
-        self.assertIn("Recovered", frame.name, f"window did not announce recovery: {frame.name!r}")
-        # The assertion below used to read `self._snapshot_files() == []`:
-        # after recovery, nothing on disk. That was a proxy for the thing
-        # actually required — the orphan is not offered a second time — and
-        # it stopped being a safe proxy once recovery began writing the
-        # recovered content to the new window's own slot before clearing the
-        # orphan. Zero files also describes unprotected work, which is what
-        # that spelling was quietly asserting: the old code left the
-        # recovered document with no snapshot until the next timer tick.
-        # So the intent is asserted directly instead, and more strictly: the
-        # recovered orphan is gone, and the recovered work is itself covered.
-        # Waited for rather than sampled after a fixed sleep, because the
-        # `== []` version sampled 1.5s after relaunch and lost that race
-        # under the load of a full batch run — it failed twice in one batch
-        # and passed three consecutive focused runs. A post-condition that
-        # needs a sleep to hold is a post-condition to wait for.
-        present = self.wait_until(
-            lambda: set(self._snapshot_files()),
-            lambda files: not (files & recovered_from),
-            description="the recovered orphan must be cleared so it isn't offered again",
-        )
-        self.assertEqual(
-            len(present), 1,
-            "the recovered deck must itself be protected by a snapshot; "
-            f"found {sorted(present)}",
-        )
+        def _settled():
+            frame = self.app.child(roleName="frame")
+            self.assertIn("Recovered", frame.name, f"window did not announce recovery: {frame.name!r}")
+            # The assertion below used to read `self._snapshot_files() == []`:
+            # after recovery, nothing on disk. That was a proxy for the thing
+            # actually required — the orphan is not offered a second time — and
+            # it stopped being a safe proxy once recovery began writing the
+            # recovered content to the new window's own slot before clearing the
+            # orphan. Zero files also describes unprotected work, which is what
+            # that spelling was quietly asserting: the old code left the
+            # recovered document with no snapshot until the next timer tick.
+            # So the intent is asserted directly instead, and more strictly: the
+            # recovered orphan is gone, and the recovered work is itself covered.
+            # Waited for rather than sampled after a fixed sleep, because the
+            # `== []` version sampled 1.5s after relaunch and lost that race
+            # under the load of a full batch run — it failed twice in one batch
+            # and passed three consecutive focused runs. A post-condition that
+            # needs a sleep to hold is a post-condition to wait for.
+            present = self.wait_until(
+                lambda: set(self._snapshot_files()),
+                lambda files: not (files & recovered_from),
+                description="the recovered orphan must be cleared so it isn't offered again",
+            )
+            self.assertEqual(
+                len(present), 1,
+                "the recovered deck must itself be protected by a snapshot; "
+                f"found {sorted(present)}",
+            )
+        self.eventually(_settled)
 
 
 class DecksSmoke(BaseGUITestCase):
@@ -5401,13 +5443,13 @@ class DecksSmoke(BaseGUITestCase):
         # the AT-SPI tree) once a deck exists.
         import subprocess
         subprocess.run(["gapplication", "action", "org.tunaos.decks", "new-document"])
-        time.sleep(1.5)
+        time.sleep(1.5)  # pacing: no state to wait on before the next input
         canvas = self.app.child(name="Slide canvas")
         deadline = time.monotonic() + 5
         while time.monotonic() < deadline:
             if "slide 1 of" in canvas.description:
                 break
-            time.sleep(0.3)
+            time.sleep(0.3)  # pacing: no state to wait on before the next input
         self.assertIn("slide 1 of", canvas.description,
                       f"canvas description: {canvas.description!r}")
 
@@ -5628,7 +5670,7 @@ class LettersPendingFormatSmoke(BaseGUITestCase):
         self.wait_for_node(roleName="text")
         rawinput.typeText("plain ")
         self.app.child(name="Bold (Ctrl+B)", roleName="push button").do_action(0)
-        time.sleep(0.3)
+        time.sleep(0.3)  # pacing: no state to wait on before the next input
         rawinput.typeText("bold")
         self.wait_for_condition(
             lambda: self._runs() == [("plain ", False), ("bold", True)] or None,
@@ -5671,7 +5713,7 @@ class LettersStylesAndOutlineSmoke(BaseGUITestCase):
         # opens on the current style, Normal).
         for name in ("Normal", "Title", "Subtitle", "Heading 1", "Heading 6", "Quote", "Code"):
             self.wait_for_node(name=name, roleName="list item")
-        time.sleep(0.5)
+        time.sleep(0.5)  # pacing: no state to wait on before the next input
         # Normal, Title, Subtitle, Heading 1, Heading 2.
         for _ in range(4):
             rawinput.keyCombo("Down")
@@ -5759,11 +5801,11 @@ class LettersDistractionFreeSmoke(BaseGUITestCase):
         rawinput.absoluteMotion(600, 500)
         # Off by default: typing leaves the bars alone.
         rawinput.typeText("calm")
-        time.sleep(1.5)
+        time.sleep(1.5)  # settling: gives a wrong outcome its chance before the check that it didn't happen
         self.assertFalse(self._toolbar_hidden(), "the bars stay while distraction-free typing is off")
 
         self.gapplication_action("org.tunaos.letters", "distraction-free")
-        time.sleep(0.5)
+        time.sleep(0.5)  # pacing: no state to wait on before the next input
         rawinput.typeText(" words")
         self.wait_for_condition(lambda: self._toolbar_hidden() or None, description="the bars sliding away while typing")
         rawinput.absoluteMotion(700, 560)
@@ -5796,7 +5838,7 @@ class LettersSmartChipsSmoke(BaseGUITestCase):
         self.wait_for_node(name="Smart chip")
         self.wait_for_node(name="Smart chip suggestions", roleName="list")
         rawinput.typeText("tom")
-        time.sleep(0.5)
+        time.sleep(0.5)  # pacing: no state to wait on before the next input
         rawinput.keyCombo("Return")
         chip = self.wait_for_condition(
             lambda: next((r for r in self._runs() if r["style"].get("chip")), None),
@@ -6147,15 +6189,15 @@ class SuitePlatformIntegrationSmoke(BaseGUITestCase):
 
         # Help dialog action
         subprocess.run(["gapplication", "action", "org.tunaos.letters", "help"])
-        time.sleep(1.0)
+        time.sleep(1.0)  # pacing: no state to wait on before the next input
 
         # Shortcuts dialog action
         subprocess.run(["gapplication", "action", "org.tunaos.letters", "show-shortcuts"])
-        time.sleep(1.0)
+        time.sleep(1.0)  # pacing: no state to wait on before the next input
 
         # Clear recent files action
         subprocess.run(["gapplication", "action", "org.tunaos.letters", "clear-recent-files"])
-        time.sleep(0.5)
+        time.sleep(0.5)  # settling: gives a wrong outcome its chance before the check that it didn't happen
 
         self.assertIsNone(self.process.poll(), "letters crashed during platform integration actions")
 
@@ -6194,7 +6236,7 @@ class LettersSaveFormatSmoke(BaseGUITestCase):
             description="the Save As name entry",
         )
         name_entry.text = out_path
-        time.sleep(0.3)
+        time.sleep(0.3)  # pacing: no state to wait on before the next input
         tree.root.findChild(
             lambda n: n.name == "Save" and n.roleName == "push button"
         ).do_action(0)
@@ -6276,12 +6318,12 @@ class LettersLossWarningCancelSmoke(BaseGUITestCase):
         rawinput.typeText("more")
         rawinput.keyCombo("<Control>a")
         self.app.child(name="Bold (Ctrl+B)", roleName="push button").do_action(0)
-        time.sleep(0.5)
+        time.sleep(0.5)  # pacing: no state to wait on before the next input
 
         self.gapplication_action("org.tunaos.letters", "save-file")
         self.wait_for_node(name="Save as Plain Text?")
         self.wait_for_node(name="Cancel", roleName="push button").do_action(0)
-        time.sleep(1.0)
+        time.sleep(1.0)  # pacing: no state to wait on before the next input
 
         with open(self._doc, "rb") as f:
             self.assertEqual(f.read(), self.ORIGINAL, "Cancel wrote the file anyway")
@@ -6378,23 +6420,23 @@ class TablesChartTypesSmoke(BaseGUITestCase):
         import subprocess
         import zipfile
 
-        time.sleep(1.0)
+        time.sleep(1.0)  # pacing: no state to wait on before the next input
         for cell, text in (("A2", "2.5"), ("A3", "4"), ("B1", "3"), ("B2", "7"), ("B3", "5")):
             rawinput.keyCombo("<Control>g")
-            time.sleep(0.3)
+            time.sleep(0.3)  # pacing: no state to wait on before the next input
             rawinput.typeText(cell)
             rawinput.keyCombo("Return")
-            time.sleep(0.3)
+            time.sleep(0.3)  # pacing: no state to wait on before the next input
             rawinput.typeText(text)
             rawinput.keyCombo("Return")
-            time.sleep(0.3)
+            time.sleep(0.3)  # pacing: no state to wait on before the next input
         rawinput.keyCombo("<Control>g")
-        time.sleep(0.3)
+        time.sleep(0.3)  # pacing: no state to wait on before the next input
         rawinput.typeText("B1")
         rawinput.keyCombo("Return")
-        time.sleep(0.4)
+        time.sleep(0.4)  # pacing: no state to wait on before the next input
         rawinput.keyCombo("Escape")
-        time.sleep(0.3)
+        time.sleep(0.3)  # pacing: no state to wait on before the next input
 
         subprocess.run(["gapplication", "action", "org.tunaos.tables", "insert-chart"])
         insert = self.wait_until(
@@ -6406,9 +6448,9 @@ class TablesChartTypesSmoke(BaseGUITestCase):
         )[0]
         # The kinds are toggle buttons, each in the tree by name.
         self.app.child(name="XY (Scatter)", roleName="toggle button").do_action(0)
-        time.sleep(0.3)
+        time.sleep(0.3)  # pacing: no state to wait on before the next input
         insert.do_action(0)
-        time.sleep(1.0)
+        time.sleep(1.0)  # pacing: no state to wait on before the next input
         rawinput.keyCombo("<Control>s")
 
         def saved_chart():
@@ -6445,35 +6487,35 @@ class TablesChartDialogSmoke(BaseGUITestCase):
 
         aid = "org.tunaos.tables"
         subprocess.run(["gapplication", "action", aid, "new-document"])
-        time.sleep(1.5)
+        time.sleep(1.5)  # pacing: no state to wait on before the next input
 
         # Labels in column A, numbers in column B: the dialog charts the
         # selected column against column A.
         for cell, text in (("A1", "North"), ("A2", "South"), ("A3", "East")):
             rawinput.keyCombo("<Control>g")
-            time.sleep(0.2)
+            time.sleep(0.2)  # pacing: no state to wait on before the next input
             rawinput.typeText(cell)
             rawinput.keyCombo("Return")
-            time.sleep(0.3)
+            time.sleep(0.3)  # pacing: no state to wait on before the next input
             rawinput.typeText(text)
             rawinput.keyCombo("Return")
-            time.sleep(0.3)
+            time.sleep(0.3)  # pacing: no state to wait on before the next input
         for cell, text in (("B1", "12"), ("B2", "34"), ("B3", "56")):
             rawinput.keyCombo("<Control>g")
-            time.sleep(0.2)
+            time.sleep(0.2)  # pacing: no state to wait on before the next input
             rawinput.typeText(cell)
             rawinput.keyCombo("Return")
-            time.sleep(0.3)
+            time.sleep(0.3)  # pacing: no state to wait on before the next input
             rawinput.typeText(text)
             rawinput.keyCombo("Return")
-            time.sleep(0.3)
+            time.sleep(0.3)  # pacing: no state to wait on before the next input
         rawinput.keyCombo("<Control>g")
-        time.sleep(0.2)
+        time.sleep(0.2)  # pacing: no state to wait on before the next input
         rawinput.typeText("B2")
         rawinput.keyCombo("Return")
-        time.sleep(0.4)
+        time.sleep(0.4)  # pacing: no state to wait on before the next input
         rawinput.keyCombo("Escape")
-        time.sleep(0.3)
+        time.sleep(0.3)  # pacing: no state to wait on before the next input
 
         subprocess.run(["gapplication", "action", aid, "insert-chart"])
 
@@ -6492,7 +6534,7 @@ class TablesChartDialogSmoke(BaseGUITestCase):
         self.assertTrue(types, "chart dialog has no type chooser")
 
         insert.do_action(0)
-        time.sleep(1.0)
+        time.sleep(1.0)  # settling: gives a wrong outcome its chance before the check that it didn't happen
         self.assertIsNone(self.process.poll(), "tables crashed inserting a chart")
         # Inserting closes the dialog, which is how the action reports that
         # it wrote a chart onto the sheet.
