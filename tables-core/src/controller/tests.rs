@@ -737,6 +737,42 @@
     }
 
     #[test]
+    fn sort_keeps_frozen_header_rows_in_place() {
+        // A frozen top row is the header (#1277): sorting either way moves
+        // only the rows under it, and one undo restores the order.
+        let mut controller = WorkbookController::new(4, 1).unwrap();
+        for (row, value) in ["Name", "banana", "apple", "cherry"].into_iter().enumerate() {
+            controller.edit_cell(row, 0, value);
+        }
+        controller.mutate_sheet("Freeze Panes", |sheet| sheet.frozen_rows = 1);
+        let column = |c: &WorkbookController| (0..4).map(|r| c.state.borrow().sheet().cell(r, 0).to_string()).collect::<Vec<_>>();
+        controller.sort_column(0, crate::sheet::SortDirection::Ascending);
+        assert_eq!(column(&controller), ["Name", "apple", "banana", "cherry"]);
+        controller.sort_column(0, crate::sheet::SortDirection::Descending);
+        assert_eq!(column(&controller), ["Name", "cherry", "banana", "apple"]);
+        controller.undo();
+        controller.undo();
+        assert_eq!(column(&controller), ["Name", "banana", "apple", "cherry"]);
+    }
+
+    #[test]
+    fn protection_refuses_locked_cells_and_reports_it() {
+        let mut controller = WorkbookController::new(2, 2).unwrap();
+        controller.edit_cell(0, 0, "x");
+        assert!(!controller.refuses_edit(0, 0));
+        controller.set_sheet_protection(true, None);
+        assert!(controller.sheet_is_protected() && controller.refuses_edit(0, 0));
+        controller.edit_cell(0, 0, "y");
+        assert_eq!(controller.state.borrow().sheet().cell(0, 0), "x");
+        controller.set_cell_locked(1, 1, false);
+        assert!(!controller.refuses_edit(1, 1), "an unlocked cell stays editable");
+        assert!(!controller.refuses_edit(99, 99), "out of range is not a refusal");
+        controller.set_sheet_protection(false, None);
+        controller.edit_cell(0, 0, "y");
+        assert_eq!(controller.state.borrow().sheet().cell(0, 0), "y");
+    }
+
+    #[test]
     fn sort_descending_reorders_a_text_column() {
         let mut controller = WorkbookController::new(3, 1).unwrap();
         for (row, value) in ["banana", "apple", "cherry"].into_iter().enumerate() {
