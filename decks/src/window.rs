@@ -844,12 +844,18 @@ impl DecksWindow {
             let sl = slide_list.clone();
             let ss = slides.clone();
             let cs_ref = current_slide.clone();
+            let so = selected_object.clone();
             let masters = masters.clone();
             let refresh = refresh_hud.clone();
             let act = gio::SimpleAction::new(name, None);
             act.connect_activate(move |_, _| {
                 let changed = if is_undo { controller.undo() } else { controller.redo() };
                 if changed {
+                    // An undone insert can take the current slide or the
+                    // selected object away with it.
+                    let (slide, object) = controller.repair_selection(cs_ref.get(), so.get());
+                    cs_ref.set(slide);
+                    so.set(object);
                     cs.queue_draw();
                     let snapshot = ss.borrow().clone();
                     rebuild_slide_list(&sl, &snapshot, &masters.borrow(), cs_ref.get());
