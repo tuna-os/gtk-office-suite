@@ -36,7 +36,7 @@ named; the reasoning is under the row so a reader can disagree with it.
     rather than an extension of PARITY.md's. That was deliberate — the two
     answer different questions, and the Status note above says so — but the
     row as written asked for an extension, so it is not ticked.
-- [~] Report model, persistence, controller/bridge, GUI, interoperability, accessibility/visual and performance separately.
+- [x] Report model, persistence, controller/bridge, GUI, interoperability, accessibility/visual and performance separately.
   - Holds: `LAYERS = ("model", "format", "bridge", "gui", "a11y", "performance")`,
     required per capability and reported per layer; evidence for a layer a
     capability does not require is rejected.
@@ -44,8 +44,11 @@ named; the reasoning is under the row so a reader can disagree with it.
     landed under `format` or `model` and a green format layer could hide an
     unproven save transaction. **Now it is** (#1207): `persistence` is in
     `LAYERS`, and `suite.save.atomic-replace` is the first capability to cite
-    it. Still open: moving the existing save-durability evidence out of
-    `format`/`model`, which is why the row stays `[~]`.
+    it. Checked when this row was ticked, no save-durability evidence was
+    left under `format` or `model`, and a structure check keeps it that way:
+    a test from the `atomic_save`, `autosave` or `save_transaction` modules
+    cited under either is rejected as belonging to `persistence`
+    (`StructureTests.test_save_durability_evidence_must_be_filed_under_persistence`).
 - [x] No marker, closed issue, skipped test, missing oracle, or --no-run report may count as observed success.
   - C4 in `validate_capabilities.py`, with mutation tests for a skipped
     result, a failed result and a test that never ran. Evidence must be a
@@ -55,7 +58,7 @@ named; the reasoning is under the row so a reader can disagree with it.
   - Duplicate classes and duplicate methods within a class are rejected; a
     renamed or deleted test is rejected; a test no lane collects is rejected.
     This found the duplicate `TablesNamedRangeSmoke` (#507) on its first run.
-- [~] Every waiver names an issue, reason, scope and review date; release-critical skipped tests fail the release gate.
+- [x] Every waiver names an issue, reason, scope and review date; release-critical skipped tests fail the release gate.
   - Holds: `check_waivers` requires issue, reason, scope and review date,
     rejects an expired review date, a missing field, a `deferred` capability
     with no waiver, and a waiver for a capability that is not in the ledger.
@@ -68,8 +71,14 @@ named; the reasoning is under the row so a reader can disagree with it.
     `release-critical-tests` job, which runs the workspace at the release
     revision; `publish-flatpak.yml` calls that workflow before it
     publishes. Mutation tests: `tests/test_validate_capabilities.py::ReleaseCritical`.
-    The journeys' half of a release-critical claim is checked by the GUI
-    lane, not yet by the release job, which is why the row stays `[~]`.
+    The journeys' half now runs there too: `release-critical-tests` builds
+    the apps, runs the GUI tests the release-critical capabilities cite,
+    and adds their pytest JUnit to the same check
+    (`collect_test_inventory.py --pytest-junit`, which names them in the
+    ledger's path form and speaks only for the tests it ran, so a few
+    journeys cannot vouch for the whole file). A failed, skipped or missing
+    journey refuses the release like a Rust test does; checked by running
+    `LettersSaveFailureSmoke` with its report then marked failed.
 - [x] Reconcile README, ROADMAP.md, docs/ROADMAP.md, TESTING.md and the historical implementation plans with the new tracker.
   - #1285. ROADMAP.md's status columns are gone: an item's state is its
     issue's, and progress is this ledger's. The figures left in README,

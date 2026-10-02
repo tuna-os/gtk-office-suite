@@ -46,6 +46,7 @@ Usage:
 import argparse
 import ast
 import json
+import re
 import sys
 from datetime import date
 from pathlib import Path
@@ -59,6 +60,11 @@ STATUSES = {"verified", "implemented-unverified", "failing", "deferred"}
 # checkpoints): kept apart from `format` so a green round trip cannot stand
 # in for an unproven save (#1207).
 LAYERS = ("model", "format", "persistence", "bridge", "gui", "a11y", "performance")
+# Tests of the save transaction itself — the atomic replace, the autosave
+# snapshot and its recovery. Filed under `model` or `format` they would let a
+# green round trip stand in for an unproven save, which is why `persistence`
+# exists (#1207); the check keeps them there.
+SAVE_DURABILITY_RE = re.compile(r"::(atomic_save|autosave|save_transaction)s?::")
 # Outcomes that may support a claim. Everything else — skipped, ignored,
 # filtered out, not run — may not (C4).
 PASSING = {"passed", "ok"}
@@ -104,6 +110,13 @@ def check_structure(ledger: dict) -> list:
             if any(not str(t).strip() for t in tests):
                 errors.append(f"{fid}: {layer} has an empty test id")
         for layer, tests in evidence.items():
+            if layer in ("model", "format"):
+                for test in tests:
+                    if SAVE_DURABILITY_RE.search(str(test)):
+                        errors.append(
+                            f"{fid}: {test} is save-durability evidence and belongs to "
+                            f"`persistence`, not `{layer}`"
+                        )
             if layer not in requires:
                 errors.append(f"{fid}: evidence for {layer!r} which it does not require")
             if len(set(tests)) != len(tests):

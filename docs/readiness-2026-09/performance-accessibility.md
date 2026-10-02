@@ -94,7 +94,16 @@ Architecture: benchmark core open/edit/recalculate/save separately from GTK inpu
       builds them. Limits: the harness's window manager (matchbox) sizes every window to the screen and undoes an
       external resize, so "resize" is the view's widget resizing, not the window's. Tables and Decks have no zoom. Letters can't report
       per-character bounds until the suite builds against GTK 4.16 (AccessibleText extents).
-- [ ] Reactivate the closed #137 navigation crash reproduction only after live verification; include inspector/object selection and screen-reader traversal.
+- [x] Reactivate the closed #137 navigation crash reproduction only after live verification; include inspector/object selection and screen-reader traversal.
+      #137 crashed Tables when any walk of its accessible tree followed a far jump and a jump back; its regression
+      journey (`TablesNamedRangeSmoke.test_jump_far_and_back_to_a_range_no_longer_crashes`) made only a D-Bus call
+      afterwards, never the walk a screen reader makes. `traverse_like_a_screen_reader` visits every accessible under
+      the app depth first and reads what Orca reads at each: name, role, states, extents and text. It runs twice, since
+      #137 needed the tree touched again after the shrink. `TablesScreenReaderTraversalSmoke` does #137's sequence live
+      (a far edit at Z9, back to A1:A3) with the Format inspector open over the selection, and the walk must reach the
+      grid's cells (327 nodes, 100 of them cells). `DecksScreenReaderTraversalSmoke` walks with an inserted shape
+      selected and its inspector open, and must reach the canvas's objects. `LettersScreenReaderTraversalSmoke` walks an
+      edited document. The app dying during a walk fails the journey.
 - [ ] Complete the manual Orca checklist for release; record environment and deviations rather than treating an automated role check as full usability.
 
 Completion is measured behavior and reproducible artifacts, not a new benchmark strategy document. VLM visual review stays advisory.
