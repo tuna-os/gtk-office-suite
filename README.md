@@ -116,7 +116,7 @@ Four corpora are ratcheted in CI. The pass count may climb but never fall:
 
 | Corpus | Score | What it checks |
 |---|---|---|
-| CommonMark 0.31.2 | 651 / 652 | Every spec example round-trips idempotently through Letters' model |
+| CommonMark 0.31.2 | 652 / 652 | Every spec example round-trips idempotently through Letters' model |
 | LibreOffice ↔ Letters | 109 / 109 | Documents survive a real LibreOffice Writer pass |
 | LibreOffice ↔ Decks | 9 / 9 | Decks survive a real LibreOffice Impress pass |
 | OpenFormula | 107 / 107 | Formula evaluation against the ODF spec's own cases |

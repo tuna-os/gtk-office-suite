@@ -6,7 +6,7 @@ Date: 2026-09-24 · Status: **active. Phase 2 exited 2026-10-01 (#1198); Phase 3
 
 The apps do not work as WYSIWYG editors. Most of what the document models
 hold is never drawn, and nothing in CI would notice. Every existing
-compatibility number (CommonMark 651/652, LibreOffice ↔ Letters 109/109, …)
+compatibility number (CommonMark 652/652, LibreOffice ↔ Letters 109/109, …)
 measures **file content**. None of them measures **what the user sees**.
 A feature could be marked ✅ in PARITY.md while being invisible on screen,
 and many are.
