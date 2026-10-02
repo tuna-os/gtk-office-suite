@@ -18,6 +18,7 @@ mod canvas_area;
 mod canvas_input;
 mod canvas_keys;
 mod sidebar;
+mod slide_actions;
 mod toolbar;
 mod transition;
 mod markdown;

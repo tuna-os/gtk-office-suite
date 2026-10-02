@@ -378,8 +378,18 @@ impl DecksWindow {
             .icon_name("go-up-symbolic").tooltip_text("Move up").build();
         let down_btn = gtk::Button::builder()
             .icon_name("go-down-symbolic").tooltip_text("Move down").build();
+        let dup_btn = gtk::Button::builder()
+            .icon_name("edit-copy-symbolic").tooltip_text("Duplicate slide").build();
+        // slide_actions.rs does the work, so the shortcuts and the palette
+        // reach the same commands.
+        up_btn.set_action_name(Some("app.move-slide-up"));
+        down_btn.set_action_name(Some("app.move-slide-down"));
+        dup_btn.set_action_name(Some("app.duplicate-slide"));
+        for (btn, name) in [(&up_btn, "Move slide up"), (&down_btn, "Move slide down"), (&dup_btn, "Duplicate slide")] {
+            btn.update_property(&[gtk::accessible::Property::Label(name)]);
+        }
 
-        for btn in [&add_btn, &del_btn, &up_btn, &down_btn] {
+        for btn in [&add_btn, &del_btn, &dup_btn, &up_btn, &down_btn] {
             btn.add_css_class("flat");
             btn.set_has_frame(true);
             btn.set_size_request(36, 36);
@@ -387,6 +397,7 @@ impl DecksWindow {
 
         sidebar_controls.append(&add_btn);
         sidebar_controls.append(&del_btn);
+        sidebar_controls.append(&dup_btn);
         sidebar_controls.append(&up_btn);
         sidebar_controls.append(&down_btn);
 
@@ -621,23 +632,22 @@ impl DecksWindow {
         suite_win.add_top_bar(&toolbar);
         // Export as PDF, handouts and PNG, and their menu section (export_ui.rs).
         crate::export_ui::register(app, &suite_win.window, &suite_win.header_bar, &controller, &current_slide);
+        let handles = crate::canvas_keys::EditorHandles {
+            window: &suite_win.window,
+            canvas: &canvas,
+            slide_list: &slide_list,
+            slides: &slides,
+            masters: &masters,
+            current_slide: &current_slide,
+            selected_object: &selected_object,
+            controller: &controller,
+            refresh_hud: &refresh_hud,
+            transition: &transition,
+        };
         // Edit Master and its banner (master_view.rs).
-        crate::master_view::register(
-            app,
-            |banner| suite_win.add_top_bar(banner),
-            crate::canvas_keys::EditorHandles {
-                window: &suite_win.window,
-                canvas: &canvas,
-                slide_list: &slide_list,
-                slides: &slides,
-                masters: &masters,
-                current_slide: &current_slide,
-                selected_object: &selected_object,
-                controller: &controller,
-                refresh_hud: &refresh_hud,
-                transition: &transition,
-            },
-        );
+        crate::master_view::register(app, |banner| suite_win.add_top_bar(banner), handles);
+        // Duplicate and move slides (slide_actions.rs).
+        crate::slide_actions::register(app, handles);
         // Narrow breakpoint: hide the editing toolbar entirely —
         // only the header bar, canvas, and pill survive.
         suite_win.narrow_breakpoint.add_setter(&toolbar, "visible", Some(&f));
@@ -787,40 +797,6 @@ impl DecksWindow {
             del_btn.connect_clicked(move |_| {
                 let idx = cs_ref.get();
                 if let Some(new_idx) = controller.delete_slide(idx) {
-                    cs_ref.set(new_idx);
-                    rebuild_slide_list(&sl, &ss.borrow().clone(), &masters.borrow(), new_idx);
-                    cs.queue_draw();
-                }
-            });
-        }
-
-        // Move up/down
-        {
-            let sl = slide_list.clone();
-            let ss = slides.clone();
-            let cs = canvas.clone();
-            let cs_ref = current_slide.clone();
-            let controller = controller.clone();
-            let masters = masters.clone();
-            up_btn.connect_clicked(move |_| {
-                let idx = cs_ref.get();
-                if let Some(new_idx) = controller.move_slide_up(idx) {
-                    cs_ref.set(new_idx);
-                    rebuild_slide_list(&sl, &ss.borrow().clone(), &masters.borrow(), new_idx);
-                    cs.queue_draw();
-                }
-            });
-        }
-        {
-            let sl = slide_list.clone();
-            let ss = slides.clone();
-            let cs = canvas.clone();
-            let cs_ref = current_slide.clone();
-            let controller = controller.clone();
-            let masters = masters.clone();
-            down_btn.connect_clicked(move |_| {
-                let idx = cs_ref.get();
-                if let Some(new_idx) = controller.move_slide_down(idx) {
                     cs_ref.set(new_idx);
                     rebuild_slide_list(&sl, &ss.borrow().clone(), &masters.borrow(), new_idx);
                     cs.queue_draw();

@@ -500,6 +500,139 @@ class LettersMultiTabSaveFailureSmoke(BaseGUITestCase):
             self.assertEqual(stream.read(), "alpha original")
 
 
+class FailedSaveKeepsWorkMixin:
+    """A save that fails keeps the work, in Tables and Decks as in Letters
+    (LettersSaveFailureSmoke, #436): the edit stays in the document, the
+    recovery checkpoint is untouched, the original file is unchanged, and
+    the close guard still asks. recovery.md row 2, "keep dirty state on a
+    failed commit". The destination is made unavailable by renaming its
+    folder away, which holds even when the journey runs as root."""
+
+    def _prepare(self, name, data_by_part):
+        import zipfile
+        self._dir = self.temp_dir(prefix=f"{self.app_name}-save-failure-")
+        self._source = os.path.join(self._dir, "source")
+        os.mkdir(self._source)
+        self._path = os.path.join(self._source, name)
+        with zipfile.ZipFile(self._path, "w") as z:
+            for part, data in data_by_part:
+                z.writestr(part, data, compress_type=zipfile.ZIP_STORED if part == "mimetype" else zipfile.ZIP_DEFLATED)
+        with open(self._path, "rb") as f:
+            self._original = f.read()
+        self.launch_args = [self._path]
+        self._state = self.isolate_autosave_state()
+        self.isolate_snapshot(prefix=f"{self.app_name}-save-failure-snap-")
+
+    def _checkpoint(self):
+        from pathlib import Path
+        self.gapplication_action(self.AID, "autosave-now")
+        self.wait_for_condition(lambda: list(Path(self._state).rglob("*.snapshot")), description="a recovery checkpoint")
+        return {p: p.read_bytes() for p in Path(self._state).rglob("*.snapshot*")}
+
+    def _fail_a_save_and_keep_the_work(self, edited):
+        checkpoint = self._checkpoint()
+        backup = os.path.join(self._dir, "backup")
+        os.rename(self._source, backup)
+        self.gapplication_action(self.AID, "save-file")
+        self.wait_for_node(name=self.ERROR)
+        self.assertIsNone(self.process.poll())
+        self.assertTrue(edited(), "the failed save lost the edit")
+        for path, content in checkpoint.items():
+            self.assertEqual(path.read_bytes(), content, f"the recovery checkpoint changed: {path}")
+        with open(os.path.join(backup, os.path.basename(self._path)), "rb") as f:
+            self.assertEqual(f.read(), self._original, "the original file changed")
+        self.wait_for_node(name="OK", roleName="push button").do_action(0)
+        self.wait_for_node(name="Close", roleName="push button").do_action(0)
+        self.wait_for_node(name="Discard", roleName="push button")
+        self.assertIsNone(self.process.poll(), "a failed save cleared the close guard")
+
+
+class TablesSaveFailureSmoke(FailedSaveKeepsWorkMixin, BaseGUITestCase):
+    app_name = "tables"
+    AID = "org.tunaos.tables"
+    ERROR = "Error saving file"
+
+    def setUp(self):
+        ns = 'xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"'
+        rel = "http://schemas.openxmlformats.org/officeDocument/2006/relationships"
+        self._prepare("book.xlsx", [
+            ("[Content_Types].xml",
+             '<?xml version="1.0" encoding="UTF-8"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">'
+             '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>'
+             '<Default Extension="xml" ContentType="application/xml"/>'
+             '<Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>'
+             '<Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>'
+             '</Types>'),
+            ("_rels/.rels",
+             f'<?xml version="1.0" encoding="UTF-8"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
+             f'<Relationship Id="rId1" Type="{rel}/officeDocument" Target="xl/workbook.xml"/></Relationships>'),
+            ("xl/workbook.xml",
+             f'<?xml version="1.0" encoding="UTF-8"?><workbook {ns} xmlns:r="{rel}"><sheets>'
+             '<sheet name="Sheet1" sheetId="1" r:id="rId1"/></sheets></workbook>'),
+            ("xl/_rels/workbook.xml.rels",
+             f'<?xml version="1.0" encoding="UTF-8"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
+             f'<Relationship Id="rId1" Type="{rel}/worksheet" Target="worksheets/sheet1.xml"/></Relationships>'),
+            ("xl/worksheets/sheet1.xml",
+             f'<?xml version="1.0" encoding="UTF-8"?><worksheet {ns}><sheetData>'
+             '<row r="1"><c r="A1" t="inlineStr"><is><t>kept</t></is></c></row></sheetData></worksheet>'),
+        ])
+        super().setUp()
+
+    def _b1(self):
+        cells = self.trigger_snapshot(self.AID)["sheet"]["cells"]
+        return next((c["value"] for c in cells if (c["row"], c["col"]) == (0, 1)), None)
+
+    def test_a_failed_save_keeps_the_edit_the_checkpoint_and_the_close_guard(self):
+        from dogtail import rawinput
+        self.wait_until(lambda: self.trigger_snapshot(self.AID)["sheet"]["cells"], bool, description="book.xlsx to open")
+        rawinput.keyCombo("<Control>g")
+        self.wait_until(lambda: self._focused("Cell reference"), bool, description="the name box")
+        rawinput.typeText("B1")
+        rawinput.keyCombo("Return")
+        rawinput.typeText("42")
+        rawinput.keyCombo("Return")
+        self.wait_until(self._b1, lambda v: v == "42", description="42 typed into B1")
+        self._fail_a_save_and_keep_the_work(lambda: self._b1() == "42")
+
+    def _focused(self, label):
+        import pyatspi
+        return self.app.findChild(lambda n: n.name == label and n.getState().contains(pyatspi.STATE_FOCUSED),
+                                  retry=False, requireResult=False)
+
+
+class DecksSaveFailureSmoke(FailedSaveKeepsWorkMixin, BaseGUITestCase):
+    app_name = "decks"
+    AID = "org.tunaos.decks"
+    ERROR = "Error saving presentation"
+
+    def setUp(self):
+        self._prepare("deck.odp", [
+            ("mimetype", "application/vnd.oasis.opendocument.presentation"),
+            ("content.xml",
+             '<?xml version="1.0" encoding="UTF-8"?>'
+             '<office:document-content xmlns:office="urn:oasis:names:tc:opendocument:xmlns:office:1.0" '
+             'xmlns:draw="urn:oasis:names:tc:opendocument:xmlns:drawing:1.0" office:version="1.3">'
+             '<office:body><office:presentation><draw:page draw:name="One"/></office:presentation></office:body>'
+             '</office:document-content>'),
+            ("META-INF/manifest.xml",
+             '<?xml version="1.0" encoding="UTF-8"?>'
+             '<manifest:manifest xmlns:manifest="urn:oasis:names:tc:opendocument:xmlns:manifest:1.0" manifest:version="1.3">'
+             '<manifest:file-entry manifest:full-path="/" manifest:media-type="application/vnd.oasis.opendocument.presentation"/>'
+             '<manifest:file-entry manifest:full-path="content.xml" manifest:media-type="text/xml"/>'
+             '</manifest:manifest>'),
+        ])
+        super().setUp()
+
+    def _kinds(self):
+        return [o["kind"] for s in self.trigger_snapshot(self.AID)["slides"] for o in s["objects"]]
+
+    def test_a_failed_save_keeps_the_edit_the_checkpoint_and_the_close_guard(self):
+        self.wait_until(self._kinds, lambda k: k == [], description="deck.odp to open")
+        self.gapplication_action(self.AID, "add-shape")
+        self.wait_until(self._kinds, lambda k: k == ["Shape"], description="a shape added")
+        self._fail_a_save_and_keep_the_work(lambda: self._kinds() == ["Shape"])
+
+
 class UnattendedAutosaveMixin:
     """An app must snapshot on its own, with nobody pressing anything.
 
@@ -6087,3 +6220,49 @@ class TablesChartDialogSmoke(BaseGUITestCase):
             timeout=10.0,
             description="the chart dialog to close after inserting",
         )
+
+
+class DecksSlideOrderSmoke(BaseGUITestCase):
+    """Duplicate and reorder slides (PARITY.md, Decks Tier 2): the sidebar's
+    Duplicate button copies the current slide, objects and all, right
+    after it; Ctrl+Shift+Page Up moves the current slide up; each is one
+    undo step. Asserted on the snapshot's slide order and objects."""
+
+    app_name = "decks"
+
+    def setUp(self):
+        self._snapshot_path = self.isolate_snapshot(prefix="decks-slide-order-")
+        super().setUp()
+
+    def _slides(self):
+        snap = self.trigger_snapshot("org.tunaos.decks")
+        return [[o["kind"] for o in s["objects"]] for s in snap["slides"]]
+
+    def _wait_slides(self, want, what):
+        return self.wait_until(self._slides, lambda s: s == want, description=what)
+
+    def test_duplicate_then_move_up_and_undo(self):
+        from dogtail import rawinput
+
+        aid = "org.tunaos.decks"
+        self.gapplication_action(aid, "new-document")
+        self.gapplication_action(aid, "add-shape")
+        self._wait_slides([["Shape"]], "a shape on the first slide")
+
+        self.wait_for_node(name="Duplicate slide", roleName="push button").do_action(0)
+        self._wait_slides([["Shape"], ["Shape"]], "the copy after it, with the shape")
+
+        # The copy is selected: what is added now goes on it.
+        self.gapplication_action(aid, "add-text-box")
+        self._wait_slides([["Shape"], ["Shape", "TextBox"]], "a text box on the copy")
+
+        self._activate_window()
+        rawinput.keyCombo("<Control><Shift>Page_Up")
+        self._wait_slides([["Shape", "TextBox"], ["Shape"]], "Ctrl+Shift+Page Up to move the copy first")
+
+        self.gapplication_action(aid, "undo")
+        self._wait_slides([["Shape"], ["Shape", "TextBox"]], "one undo to put it back")
+        self.gapplication_action(aid, "undo")
+        self.gapplication_action(aid, "undo")
+        self._wait_slides([["Shape"]], "two more to remove the text box and the copy")
+        self.assertIsNone(self.process.poll(), "decks crashed reordering slides")
