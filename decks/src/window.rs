@@ -537,13 +537,18 @@ impl DecksWindow {
                     }
                     let existing_path = path_state.borrow().clone();
                     if let Some(path) = existing_path {
+                        // Through the loss question, as Save is (#1273):
+                        // the close guard's Save wrote straight over a file
+                        // whose content the format can't keep.
                         let deck = m.deck();
-                        match save_deck(&path, &deck) {
+                        let w = win.clone();
+                        let target = path.clone();
+                        crate::loss_ui::save_after_asking(&win, Some(&target), &target, move || match save_deck(&path, &deck) {
                             Ok(()) => {
                                 dirty.set(false);
                                 slot.clear_or_report();
                                 force_close.set(true);
-                                win.close();
+                                w.close();
                             }
                             Err(e) => {
                                 let err = adw::AlertDialog::builder()
@@ -551,9 +556,9 @@ impl DecksWindow {
                                     .body(&e)
                                     .build();
                                 err.add_response("ok", &suite_common::i18n("OK"));
-                                err.present(Some(&win));
+                                err.present(Some(&w));
                             }
-                        }
+                        });
                         return;
                     }
                     // Never saved: prompt for a destination, then close only
@@ -577,13 +582,18 @@ impl DecksWindow {
                             if let Some(path) = local_path(&file, true, &win2) {
                                 let path_str = path.to_string_lossy().to_string();
                                 let deck = m.deck();
-                                match save_deck(&path_str, &deck) {
+                                let target = path_str.clone();
+                                let w = win2.clone();
+                                // A deck never saved has no source to lose
+                                // content from; the question still decides,
+                                // as Save As's does.
+                                crate::loss_ui::save_after_asking(&win2, None, &target, move || match save_deck(&path_str, &deck) {
                                     Ok(()) => {
                                         *path_state.borrow_mut() = Some(path_str);
                                         dirty.set(false);
                                         slot.clear_or_report();
                                         force_close.set(true);
-                                        win2.close();
+                                        w.close();
                                     }
                                     Err(e) => {
                                         let err = adw::AlertDialog::builder()
@@ -591,9 +601,9 @@ impl DecksWindow {
                                             .body(&e)
                                             .build();
                                         err.add_response("ok", &suite_common::i18n("OK"));
-                                        err.present(Some(&win2));
+                                        err.present(Some(&w));
                                     }
-                                }
+                                });
                             }
                         }
                     });

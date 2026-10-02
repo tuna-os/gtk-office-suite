@@ -4,7 +4,15 @@ September audit at `e7e4df6`. Use this issue as the execution owner; related #31
 
 Architecture: readers return complete semantic document state plus source-package context and a structured compatibility report. The document session retains all three. A save planner computes target-format loss, blocks MustPreserve failures, requires explicit confirmation for admitted loss, and preserves opaque parts only when relationships/content types remain valid. A writer cannot bypass that decision.
 
-- [ ] Trace each GUI Open/Save/Save As/recovery/export path to the compatibility boundary.
+- [x] Trace each GUI Open/Save/Save As/recovery/export path to the compatibility boundary.
+      [`docs/SAVE-PATHS.md`](../SAVE-PATHS.md) (#1273) lists every call, in all three apps, to the functions that read
+      or write a document. For each it gives the path that reaches it, how it treats the format's losses (asks, a
+      recovery snapshot, an export, or a read whose losses the save asks about) and the test behind it.
+      `tests/test_save_paths.py` fails on a call the page doesn't list, and on a row marked `asks` whose call isn't
+      inside the loss question's save closure. The trace found **the Decks close guard's Save writing around the
+      question**; it asks now (`DecksUnsupportedContentSmoke.test_the_close_guards_save_asks_too`). It also found that the
+      Open dialog and drag-and-drop have no journey in any app, and that a drop replaces a document with unsaved
+      changes (#1316).
 - [ ] Define exact readable/writable formats per app; prohibit overwriting CSV/ODS with XLSX bytes (#439).
 - [x] Version fixtures with author/version, format, expected semantics, feature IDs and permitted losses.
       Each fixture set has a `fixtures.json` beside its files (#1275): per file, the authoring app and version, the
