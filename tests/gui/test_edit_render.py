@@ -43,7 +43,7 @@ def save_as(test, aid, path):
                                     retry=False, requireResult=False),
         bool, description="the Save As name entry")
     entry.text = path
-    time.sleep(0.3)
+    time.sleep(0.3)  # pacing: no state to wait on before the next input
     test.wait_until(
         lambda: tree.root.findChild(lambda n: n.name == "Save" and n.roleName == "push button" and n.showing,
                                     retry=False, requireResult=False),
@@ -92,11 +92,11 @@ class LettersEditRenderJourney(BaseGUITestCase):
         rawinput.typeText(PARAGRAPH + " ")
         settled([(PARAGRAPH + " ", [], None)], "the paragraph typed")
         bold()
-        time.sleep(0.5)
+        time.sleep(0.5)  # pacing: no state to wait on before the next input
         rawinput.typeText("Bold words.")
         settled([(PARAGRAPH + " Bold words.", ["Bold words."], None)], "the bold words typed bold")
         bold()
-        time.sleep(0.5)
+        time.sleep(0.5)  # pacing: no state to wait on before the next input
         rawinput.keyCombo("Return")
         rawinput.typeText("A bulleted item")
         settled([(PARAGRAPH + " Bold words.", ["Bold words."], None), ("A bulleted item", [], None)],
@@ -158,7 +158,7 @@ class TablesEditRenderJourney(TablesCellEntryMixin, BaseGUITestCase):
             rawinput.keyCombo("Escape")
             self.wait_until(lambda: not self._focused("Formula input"), bool, description="Escape to the grid")
             self.app.child(name="Bold", roleName="toggle button").do_action(0)
-            time.sleep(0.3)
+            time.sleep(0.3)  # pacing: no state to wait on before the next input
 
         path = out_path(self, "tables", "xlsx")
         parts = save_as(self, aid, path)
