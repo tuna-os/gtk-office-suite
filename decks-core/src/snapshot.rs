@@ -24,6 +24,11 @@ pub struct ObjectSnapshot {
     /// where the canvas draws the object.
     pub w: f64,
     pub h: f64,
+    /// Everything the model holds for the object (runs, style, geometry,
+    /// rotation, crop), a picture by a hash of its bytes rather than the
+    /// temporary file it was unpacked to: what a save and reopen must
+    /// keep (decks-readiness row 11).
+    pub detail: String,
 }
 
 pub struct SlideSnapshot {
@@ -40,44 +45,55 @@ pub struct DeckSnapshot {
     pub slide_count: usize,
     /// Each master's name and how many decorations it has.
     pub masters: Vec<(String, usize)>,
+    /// Each master's decorations, as [`ObjectSnapshot::detail`].
+    pub master_details: Vec<Vec<String>>,
     /// The master being edited, while the master view is open.
     pub editing_master: Option<usize>,
     pub slides: Vec<SlideSnapshot>,
-    /// The slide on screen and its selected object: window state, so the
-    /// window fills them in (the controller doesn't know them).
-    pub current_slide: Option<usize>,
-    pub selected_object: Option<usize>,
+    /// The window's current slide and selected object, which the window
+    /// (not the controller) holds and fills in.
+    pub selection: Option<(usize, Option<usize>)>,
+}
+
+/// `obj` in full, its picture (if any) named by a hash of the bytes.
+pub fn detail(obj: &SlideObject) -> String {
+    let mut obj = obj.clone();
+    if let SlideObject::Image { path, .. } = &mut obj {
+        use std::hash::{Hash, Hasher};
+        let mut h = std::collections::hash_map::DefaultHasher::new();
+        match std::fs::read(&*path) {
+            Ok(bytes) => {
+                bytes.hash(&mut h);
+                *path = format!("picture:{:016x}:{}", h.finish(), bytes.len());
+            }
+            Err(_) => *path = format!("picture:missing:{path}"),
+        }
+    }
+    format!("{obj:?}")
 }
 
 fn object_snapshot(index: usize, obj: &SlideObject) -> ObjectSnapshot {
-    let (w, h) = obj.size();
-    match obj {
-        SlideObject::TextBox { text, x, y, .. } => {
-            ObjectSnapshot { index, kind: "TextBox", text: Some(text.clone()), x: *x, y: *y, w, h }
-        }
-        SlideObject::Rect { x, y, .. } => {
-            ObjectSnapshot { index, kind: "Rect", text: None, x: *x, y: *y, w, h }
-        }
-        SlideObject::Circle { x, y, .. } => {
-            ObjectSnapshot { index, kind: "Circle", text: None, x: *x, y: *y, w, h }
-        }
-        SlideObject::Shape { x, y, .. } => {
-            ObjectSnapshot { index, kind: "Shape", text: None, x: *x, y: *y, w, h }
-        }
-        SlideObject::Table { x, y, .. } => {
-            ObjectSnapshot { index, kind: "Table", text: None, x: *x, y: *y, w, h }
-        }
-        SlideObject::Chart { x, y, chart, .. } => {
-            ObjectSnapshot { index, kind: "Chart", text: Some(chart.describe()), x: *x, y: *y, w, h }
-        }
+    let (kind, text) = match obj {
+        SlideObject::TextBox { text, .. } => ("TextBox", Some(text.clone())),
+        SlideObject::Rect { .. } => ("Rect", None),
+        SlideObject::Circle { .. } => ("Circle", None),
+        SlideObject::Shape { .. } => ("Shape", None),
+        SlideObject::Table { .. } => ("Table", None),
+        SlideObject::Chart { chart, .. } => ("Chart", Some(chart.describe())),
         // A picture states its crop, as a chart states its data: the crop
         // cut from each side, left, top, right, bottom.
-        SlideObject::Image { x, y, crop, .. } => {
-            let text = (!crop.is_none())
-                .then(|| format!("crop {:.3} {:.3} {:.3} {:.3}", crop.left, crop.top, crop.right, crop.bottom));
-            ObjectSnapshot { index, kind: "Image", text, x: *x, y: *y, w, h }
-        }
-    }
+        SlideObject::Image { crop, .. } => (
+            "Image",
+            (!crop.is_none()).then(|| format!("crop {:.3} {:.3} {:.3} {:.3}", crop.left, crop.top, crop.right, crop.bottom)),
+        ),
+    };
+    // Circle's x/y are its centre; the snapshot has always reported them so.
+    let (x, y) = match obj {
+        SlideObject::Circle { x, y, .. } => (*x, *y),
+        o => (o.x(), o.y()),
+    };
+    let (w, h) = obj.size();
+    ObjectSnapshot { index, kind, text, x, y, w, h, detail: detail(obj) }
 }
 
 pub fn snapshot(controller: &DecksController) -> DeckSnapshot {
@@ -109,7 +125,8 @@ pub fn snapshot(controller: &DecksController) -> DeckSnapshot {
         })
         .collect();
     let masters = masters_ref.iter().map(|m| (m.name.clone(), m.shapes.len())).collect();
-    DeckSnapshot { slide_count, masters, editing_master: controller.editing_master(), slides: snapshots, current_slide: None, selected_object: None }
+    let master_details = masters_ref.iter().map(|m| m.shapes.iter().map(detail).collect()).collect();
+    DeckSnapshot { slide_count, masters, master_details, editing_master: controller.editing_master(), slides: snapshots, selection: None }
 }
 
 fn escape_json(s: &str) -> String {
@@ -150,7 +167,7 @@ impl DeckSnapshot {
                     .iter()
                     .map(|o| {
                         format!(
-                            "{{\"index\":{},\"kind\":{},\"text\":{},\"x\":{},\"y\":{},\"w\":{},\"h\":{}}}",
+                            "{{\"index\":{},\"kind\":{},\"text\":{},\"x\":{},\"y\":{},\"w\":{},\"h\":{},\"detail\":{}}}",
                             o.index,
                             json_str(o.kind),
                             json_opt_str(&o.text),
@@ -158,6 +175,7 @@ impl DeckSnapshot {
                             o.y,
                             o.w,
                             o.h,
+                            json_str(&o.detail),
                         )
                     })
                     .collect::<Vec<_>>()
@@ -176,17 +194,21 @@ impl DeckSnapshot {
         let masters = self
             .masters
             .iter()
-            .map(|(name, shapes)| format!("{{\"name\":{},\"shapes\":{shapes}}}", json_str(name)))
+            .zip(self.master_details.iter().chain(std::iter::repeat(&Vec::new())))
+            .map(|((name, shapes), details)| {
+                let details = details.iter().map(|d| json_str(d)).collect::<Vec<_>>().join(",");
+                format!("{{\"name\":{},\"shapes\":{shapes},\"details\":[{details}]}}", json_str(name))
+            })
             .collect::<Vec<_>>()
             .join(",");
-        let opt = |v: Option<usize>| v.map_or("null".to_string(), |i| i.to_string());
+        let editing = self.editing_master.map_or("null".to_string(), |i| i.to_string());
+        let (current, selected) = match self.selection {
+            Some((c, s)) => (c.to_string(), s.map_or("null".to_string(), |s| s.to_string())),
+            None => ("null".to_string(), "null".to_string()),
+        };
         format!(
-            "{{\"slide_count\":{},\"masters\":[{masters}],\"editing_master\":{},\"current_slide\":{},\"selected_object\":{},\"slides\":[{}]}}",
-            self.slide_count,
-            opt(self.editing_master),
-            opt(self.current_slide),
-            opt(self.selected_object),
-            slides
+            "{{\"slide_count\":{},\"masters\":[{masters}],\"editing_master\":{editing},\"current_slide\":{current},\"selected\":{selected},\"selected_object\":{selected},\"slides\":[{}]}}",
+            self.slide_count, slides
         )
     }
 }

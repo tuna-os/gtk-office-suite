@@ -81,14 +81,12 @@ impl DecksWindow {
         // GTK_OFFICE_TEST_MODE is set — see tables/src/window.rs for the
         // identical pattern and rationale.
         if std::env::var_os("GTK_OFFICE_TEST_MODE").is_some() {
-            let ctl = controller.clone();
-            let (cs, so) = (current_slide.clone(), selected_object.clone());
+            let (ctl, cs, so) = (controller.clone(), current_slide.clone(), selected_object.clone());
             let act = gio::SimpleAction::new("test-snapshot", None);
             act.connect_activate(move |_, _| {
                 let Ok(path) = std::env::var("GTK_OFFICE_SNAPSHOT_PATH") else { return };
                 let mut snap = decks_core::snapshot::snapshot(&ctl);
-                snap.current_slide = Some(cs.get());
-                snap.selected_object = so.get();
+                snap.selection = Some((cs.get(), so.get()));
                 let _ = std::fs::write(path, snap.to_json());
             });
             app.add_action(&act);
@@ -998,7 +996,7 @@ impl DecksWindow {
                 let cs_ref = cs_ref.clone();
                 let controller = controller.clone();
                 let _refresh = refresh.clone();
-                dlg.open(Some(&w), None::<&gio::Cancellable>,
+                crate::file_pick::open(&dlg, &w,
                     move |result: Result<gio::File, glib::Error>| {
                         if let Ok(file) = result {
                             if let Ok(path) = suite_common::locations::open_location(&file).map_err(|e| eprintln!("{e}")) {
@@ -1241,7 +1239,7 @@ impl DecksWindow {
                 let masters = masters.clone();
                 let dirty = dirty.clone();
 
-                dlg.open(Some(&w), None::<&gio::Cancellable>,
+                crate::file_pick::open(&dlg, &w,
                     move |result: Result<gio::File, glib::Error>| {
                         if let Ok(file) = result {
                             if let Some(path) = local_path(&file, false, &w2) {
