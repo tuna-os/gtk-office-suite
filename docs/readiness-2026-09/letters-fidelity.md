@@ -21,8 +21,10 @@ A per-tab session owns the complete Document, review state, imported-package con
       - block quotes were lost from docx to odt;
       - the odt reader guessed a Writer list's kind from its style name.
 
-      `heading_styles_and_picture_size_survive_writer_rewriting_a_docx` covers the two docx-only fields. Three gaps are
-      tracked: odt images (#1292), odt tables (#1296), and odt heading styles and nested revisions (#1297).
+      `heading_styles_and_picture_size_survive_writer_rewriting_a_docx` covers the two docx-only fields. Odt images
+      (#1292) now cross both ways (`pictures_in_our_odt_survive_writer_rewriting_it`,
+      `we_read_a_picture_writer_places_in_an_odt`). Two gaps are tracked: odt tables (#1296), and odt heading styles
+      and nested revisions (#1297).
 - [x] Preserve fields across unrelated edits and structured commands; distinguish user text from rendered list markers.
       `unrelated_edits_and_commands_leave_every_other_field_alone` (`letters/src/live/tests.rs`, #1278) loads a document
       with every model field set into a live editing session. It then runs 60 seeded sequences of typing (multi-byte
@@ -36,6 +38,12 @@ A per-tab session owns the complete Document, review state, imported-package con
       - an empty last paragraph's style (a heading, a page break) lost on capture, and so on save;
       - a cell's own leading and trailing spaces trimmed away;
       - table ids compared by value rather than by grouping.
+
+      Deleting the empty line between two tables no longer runs them together (#1299): a row followed by a delimiter
+      row starts the next table, and the property test's deletes now reach the lines next to a table. Doing so found that
+      the live model could give two tables one id: a local re-read numbered its region from its position, and an
+      inserted table (numbered past the highest) left later ones out of order. Tables are now renumbered in document
+      order after every local re-read.
 - [x] Apply model operations and undo through one live session; keep review anchors correct across Unicode edits.
       `review_anchors_hold_across_unicode_edits_and_one_history_undoes_them` (`letters/src/live/tests.rs`, #1279) runs
       40 seeded interleavings of typing (a combining accent, a non-BMP emoji with a skin-tone modifier, CJK, Enter),
@@ -57,7 +65,21 @@ A per-tab session owns the complete Document, review state, imported-package con
       lays out a document whose breaks depend on run sizes and spacing, with multi-byte text before every break. The
       PDF it writes, read back with poppler, has the same page count, and each page holds exactly the text between
       its breaks.
-- [ ] Wire admitted review/TOC/bidi workflows or report them as unavailable until GUI and format tests pass.
+- [x] Wire admitted review/TOC/bidi workflows or report them as unavailable until GUI and format tests pass.
+      Inventory (#1281), workflow by workflow, as `docs/LETTERS-REVIEW-WORKFLOWS.md` admits them. A format test means
+      our file crossing LibreOffice and back, in docx and in odt (`letters-core/tests/soffice_oracle.rs`).
+      - **Comments**: wired. GUI: `LettersCommentsSmoke` (add, reply, resolve, undo; stays on its word across Unicode
+        typing). Format: `comments_survive_lo_passes`.
+      - **Tracked changes**: wired. GUI: `LettersTrackChangesSmoke.test_tracked_edits_are_reviewed`. Format:
+        `tracked_changes_survive_lo_passes`. Documented limits: paragraph breaks and formatting changes aren't tracked,
+        and the Draft editor is read-only while tracking.
+      - **Table of contents**: wired. GUI: `LettersTableOfContentsSmoke` (insert, update, undo). Format:
+        `a_table_of_contents_survives_lo_passes`.
+      - **Smart chips**: wired. GUI: `LettersSmartChipsSmoke`. Format: `smart_chips_survive_lo_passes`.
+      - **Paragraph direction (bidi)**: unavailable, and now said so in the workflows document. No control sets a
+        direction, no writer stores one, and the screen detects it per paragraph. What is promised, right-to-left
+        text kept exactly, is tested: `right_to_left_text_survives_a_conversion_between_the_two_formats`. There is no
+        entry point to hide.
 - [~] Reconcile duplicate ADR numbers and the conflicting old/new advanced-feature scope without silently expanding scope.
       **The numbers are reconciled** (#1205). 0004 and 0006 were each two ADRs. The Decks workflows ADR keeps 0004,
       since code and readiness documents cite it as "ADR 0004", and so does the adaptive editor shell's 0006, which

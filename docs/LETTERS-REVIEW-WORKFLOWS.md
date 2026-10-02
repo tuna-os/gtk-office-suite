@@ -95,10 +95,26 @@ entries in `Contents N` styles. Either way Word or LibreOffice can update it,
 and a table of contents either of them wrote (Word's inside its content
 control) opens as entries.
 
-Paragraph base direction comes from the first strong RTL/LTR character with a
-caller-selected fallback for neutral text. The same value must drive caret
-movement, selection, alignment, list markers, save/reopen, and print. The
-direction helper intentionally does not classify numbers or punctuation.
+### Paragraph direction (bidi): not available yet
+
+Right-to-left text is kept: Hebrew, Arabic and mixed lines save and reopen
+exactly, in logical order, and cross LibreOffice in both formats
+(`right_to_left_text_survives_a_conversion_between_the_two_formats`). On
+screen, Pango and GTK pick each paragraph's direction from its first strong
+character.
+
+A paragraph's direction is not a Letters feature yet, so it is listed as
+unavailable rather than half-wired (#1281):
+- no control sets a paragraph's direction;
+- no writer stores one (DOCX `w:bidi`, ODT `style:writing-mode`), so a
+  file's own direction is not kept;
+- caret movement, selection and alignment follow GTK's per-paragraph
+  detection, not a model value.
+
+`letters_core::base_direction` (the first strong character, with a fallback
+for neutral text) is the helper the feature will use. Promoting it needs a
+model field, both writers and readers, a control, a GUI journey, and an
+oracle test in each direction.
 
 ## DOCX/ODT loss budget
 
@@ -107,12 +123,11 @@ direction helper intentionally does not classify numbers or punctuation.
 | Comments | `RunStyle::comments` marks and `Document::comments` (`letters_core::comments`) | mapped: DOCX comments part with `w:commentRangeStart`/`End` and references, replies and resolved in `commentsExtended`; ODT `office:annotation` ranges with `loext:parent-name` and `loext:resolved`; LibreOffice oracle in both directions. LibreOffice 24.2 writes no reply parent to .docx for a document it read from .odt, so there a reply opens as a comment of its own on the same text | Kept through save and reopen; Markdown, HTML and text warn and save the text |
 | Tracked insert/delete | `RunStyle::revision` marks (`letters_core::track`) | mapped: DOCX `w:ins`/`w:del` (nested for a deleted insertion), ODT change regions; LibreOffice oracle in both directions | Kept through save and reopen; Markdown, HTML and text warn and save the text |
 | TOC | `ParaStyle::toc` entries (`letters_core::toc`) | mapped: DOCX TOC field, ODT `text:table-of-content`; LibreOffice oracle in both directions | Kept through save and reopen, updatable by Word and LibreOffice; Markdown, HTML and text warn and save the text |
-| Bidi paragraph direction | shared base-direction helper | warn if a format cannot encode it | Keep text and direction evidence; never infer from alignment alone |
+| Bidi paragraph direction | none yet (`letters_core::base_direction` is the helper it will use) | unavailable: no direction is written or read; the text crosses LibreOffice both ways (`right_to_left_text_survives_a_conversion_between_the_two_formats`) | Keep the text exactly; listed as unavailable until it has a model field, writers, a control and tests (#1281) |
 
-Until the corresponding DOCX/ODT parts are implemented, a native save with
-pending review state must emit the existing structured compatibility warning
-and retain uninterpreted package members through the opaque pass-through path.
-Fixtures authored by LibreOffice must cover each row in both directions and
-assert semantic outcomes, not ZIP-byte equality. The fixture manifest and
-loss-budget validator in `interop/` are the release gate for promoting a row
-from “warn” to “must preserve”.
+Each mapped row is proved by a GUI journey and by LibreOffice oracle tests in
+both formats (`letters-core/tests/soffice_oracle.rs`). Those tests assert
+semantic outcomes, not ZIP-byte equality. The inventory, workflow by workflow,
+is the review/TOC/bidi row of `docs/readiness-2026-09/letters-fidelity.md`.
+A save to Markdown, HTML or plain text, which can't carry review state, asks
+first (the compatibility report and its save question, #1206).

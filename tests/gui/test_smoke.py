@@ -709,6 +709,11 @@ class TablesSaveFailureSmoke(FailedSaveKeepsWorkMixin, BaseGUITestCase):
         self.wait_until(lambda: self._focused("Cell reference"), bool, description="the name box")
         rawinput.typeText("B1")
         rawinput.keyCombo("Return")
+        # The jump hands focus to the formula entry. At narrow widths Ctrl+G
+        # opens a Go to Cell dialog instead of the hidden name box, and focus
+        # lands only once the dialog has closed: typing straight on lost the
+        # 42 in the GUI stress campaign's 400px configs (#1192).
+        self.wait_until(lambda: self._focused("Formula input"), bool, description="the jump to B1")
         rawinput.typeText("42")
         rawinput.keyCombo("Return")
         self.wait_until(self._b1, lambda v: v == "42", description="42 typed into B1")
@@ -3109,6 +3114,21 @@ class TablesTwoSheetJourneySmoke(TablesCellEntryMixin, BaseGUITestCase):
         self.wait_until(lambda: self._showing("push button", name), bool,
                         description=f"the {name} button").do_action(0)
 
+    def _sheet_command(self, button, command):
+        """Use the sheet bar's `button`, or, below the narrow breakpoint
+        that hides it, the same `command` from the command palette: the
+        bar hides only controls whose action stays reachable there
+        (window.rs, #520), and this checks that it does (#1192)."""
+        from dogtail import rawinput
+        if self._showing("push button", button):
+            self._press(button)
+            return
+        rawinput.keyCombo("<Control>k")
+        self.wait_for_node(name="Command Palette")
+        rawinput.typeText(command)
+        time.sleep(0.5)  # pacing: the palette filters on idle and exposes no state that says it has
+        rawinput.keyCombo("Return")
+
     def _switch_to(self, name):
         """Pick `name` in the sheet switcher, as a user does: open it, step
         towards the sheet, Return. The popup list is not in the AT-SPI tree
@@ -3152,7 +3172,7 @@ class TablesTwoSheetJourneySmoke(TablesCellEntryMixin, BaseGUITestCase):
 
         # Rename Sheet2 through its dialog; the formula on it stays live.
         rawinput.keyCombo("Escape")
-        self._press("Rename sheet")
+        self._sheet_command("Rename sheet", "Rename Sheet")
         entry = self.wait_until(lambda: self._showing("text", ""), bool, description="the rename field")
         entry.text = "Totals"
         self._press("Rename")
@@ -3161,7 +3181,7 @@ class TablesTwoSheetJourneySmoke(TablesCellEntryMixin, BaseGUITestCase):
         # Move it first, then delete it and undo the delete.
         subprocess.run(["gapplication", "action", aid, "move-sheet-left"])
         self._wait_state((["Totals", "Sheet1"], 0, ("10", "Sheet1!A1*2")), "Totals moved first")
-        self._press("Delete sheet")
+        self._sheet_command("Delete sheet", "Delete Sheet")
         self._press("Delete")
         self._wait_state((["Sheet1"], 0, ("5", None)), "Totals deleted, Sheet1 shown with its own value")
         subprocess.run(["gapplication", "action", aid, "undo"])

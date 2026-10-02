@@ -1360,6 +1360,37 @@ fn heading_styles_and_picture_size_survive_writer_rewriting_a_docx() {
     assert!(w.abs_diff(extent.0) < 20_000 && h.abs_diff(extent.1) < 20_000, "size came back as {w} x {h} EMU");
 }
 
+/// Right-to-left text through Writer in both formats (#1281). Paragraph
+/// direction is not a Letters feature yet (docs/LETTERS-REVIEW-WORKFLOWS.md
+/// lists it as unavailable): no control sets it and neither writer writes
+/// one, and the screen detects it per paragraph. What is promised is the
+/// text: Hebrew, Arabic and mixed lines come back exactly, in logical order,
+/// after Writer converts our odt to docx and our docx to odt.
+#[test]
+fn right_to_left_text_survives_a_conversion_between_the_two_formats() {
+    let Some(bin) = require_or_skip() else { return };
+    let lines = ["שלום עולם", "مرحبا بالعالم", "Mixed: שלום and مرحبا 123"];
+    let d = Document::from_plain_text(&lines.join("\n"));
+    let texts = |doc: &Document| doc.paragraphs.iter().map(|p| p.text()).filter(|t| !t.is_empty()).collect::<Vec<_>>();
+    let dir = tempfile::tempdir().unwrap();
+
+    let a = dir.path().join("a");
+    std::fs::create_dir_all(&a).unwrap();
+    let op = a.join("x.odt");
+    letters_core::odt::write(&d, op.to_str().unwrap()).expect("write odt");
+    let _ = soffice_convert(bin, &op, "docx:MS Word 2007 XML").ok();
+    let rt = docx::read(a.join("x.docx").to_str().unwrap()).expect("read Writer's docx");
+    assert_eq!(texts(&rt), lines, "odt -> Writer -> docx");
+
+    let b = dir.path().join("b");
+    std::fs::create_dir_all(&b).unwrap();
+    let dp = b.join("y.docx");
+    docx::write(&d, &dp).expect("write docx");
+    let _ = soffice_convert(bin, &dp, "odt").ok();
+    let rt = letters_core::odt::read(b.join("y.odt").to_str().unwrap()).expect("read Writer's odt");
+    assert_eq!(texts(&rt), lines, "docx -> Writer -> odt");
+}
+
 // ── Interop evidence gaps (docs/INTEROP-EVIDENCE.md, #1276) ───────────
 
 /// Hyperlinks in our docx, through Writer, into the odt it writes.
@@ -1434,4 +1465,110 @@ fn we_read_a_picture_writer_places_in_a_docx() {
     assert!(text.contains("before the picture") && text.contains("after the picture"), "{text:?}");
     let pictures = rt.paragraphs.iter().flat_map(|p| p.runs.iter()).filter(|r| r.style.image.is_some()).count();
     assert_eq!(pictures, 1, "the picture Writer placed was not read: {:?}", rt.paragraphs);
+}
+
+/// Pictures in our odt, through Writer, back into our reader (#1292).
+///
+/// Writer rewrites the odt (into a directory of its own: it will not
+/// convert a file onto itself), so the frames we read back are Writer's.
+/// The picture keeps its bytes, its place between the words around it,
+/// its size and its alt text.
+#[test]
+fn pictures_in_our_odt_survive_writer_rewriting_it() {
+    let Some(bin) = require_or_skip() else { return };
+    let dir = tempfile::tempdir().unwrap();
+    // A valid 3x2 PNG (Writer re-encodes what it can't parse).
+    let png: &[u8] = &[
+        0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00, 0x00, 0x00, 0x0d, 0x49, 0x48, 0x44, 0x52,
+        0x00, 0x00, 0x00, 0x03, 0x00, 0x00, 0x00, 0x02, 0x08, 0x02, 0x00, 0x00, 0x00, 0x12, 0x16, 0xf1,
+        0x4d, 0x00, 0x00, 0x00, 0x15, 0x49, 0x44, 0x41, 0x54, 0x78, 0x9c, 0x63, 0x3c, 0x21, 0x27, 0xc7,
+        0xc0, 0xc0, 0xc0, 0xc0, 0xc0, 0xc0, 0xc4, 0x00, 0x03, 0x00, 0x13, 0x2e, 0x01, 0x08, 0x6a, 0xc0,
+        0x65, 0x61, 0x00, 0x00, 0x00, 0x00, 0x49, 0x45, 0x4e, 0x44, 0xae, 0x42, 0x60, 0x82,
+    ];
+    let png_path = dir.path().join("dot.png");
+    std::fs::write(&png_path, png).unwrap();
+    let extent = (1_828_800, 914_400); // 2 x 1 inches
+    let mut d = Document::from_plain_text("");
+    d.paragraphs = vec![Paragraph {
+        style: ParaStyle::default(),
+        runs: vec![
+            Run::plain("before "),
+            Run {
+                text: "a dot".into(),
+                style: RunStyle { image: Some(png_path.to_string_lossy().into()), image_extent_emu: Some(extent), ..Default::default() },
+            },
+            Run::plain(" after"),
+        ],
+    }];
+    let src = dir.path().join("in").join("p.odt");
+    std::fs::create_dir_all(src.parent().unwrap()).unwrap();
+    letters_core::odt::write(&d, &src).expect("write odt");
+    let out_dir = dir.path().join("out");
+    std::fs::create_dir(&out_dir).unwrap();
+    let st = std::process::Command::new(bin)
+        .arg("--headless")
+        .arg(format!("-env:UserInstallation=file://{}", dir.path().join("lo").display()))
+        .args(["--convert-to", "odt", "--outdir"])
+        .arg(&out_dir)
+        .arg(&src)
+        .output()
+        .expect("soffice");
+    assert!(st.status.success());
+    let rewritten = out_dir.join("p.odt");
+    assert_ne!(std::fs::read(&rewritten).unwrap(), std::fs::read(&src).unwrap(), "Writer did not rewrite the odt");
+    let rt = letters_core::odt::read(rewritten.to_str().unwrap()).expect("read Writer's odt");
+    let runs: Vec<&Run> = rt.paragraphs.iter().flat_map(|p| &p.runs).collect();
+    let pics: Vec<&&Run> = runs.iter().filter(|r| r.style.image.is_some()).collect();
+    assert_eq!(pics.len(), 1, "the picture did not come back: {:?}", rt.paragraphs);
+    let pic = pics[0];
+    assert_eq!(std::fs::read(pic.style.image.as_ref().unwrap()).unwrap(), png, "the picture's bytes");
+    let (w, h) = pic.style.image_extent_emu.expect("a size");
+    // Writer stores lengths in hundredths of a millimetre: within 0.01mm.
+    assert!(w.abs_diff(extent.0) <= 360 && h.abs_diff(extent.1) <= 360, "size {:?}, wrote {extent:?}", (w, h));
+    assert_eq!(pic.text, "a dot", "alt text");
+    let text: String = rt.paragraphs.iter().map(|p| p.text()).collect::<Vec<_>>().join("\n");
+    assert!(text.contains("before") && text.contains("after"), "{text:?}");
+    let para = rt.paragraphs.iter().find(|p| p.runs.iter().any(|r| r.style.image.is_some())).unwrap();
+    let at = para.runs.iter().position(|r| r.style.image.is_some()).unwrap();
+    assert!(para.runs[..at].iter().any(|r| r.text.contains("before")) && para.runs[at + 1..].iter().any(|r| r.text.contains("after")),
+        "the picture moved out of its line: {:?}", para.runs);
+}
+
+/// A picture Writer itself places, read from the odt Writer writes (#1292).
+///
+/// The source is a flat ODT, which Writer converts to a packaged odt, so
+/// the frame, the Pictures/ member and the manifest are all Writer's.
+#[test]
+fn we_read_a_picture_writer_places_in_an_odt() {
+    let Some(bin) = require_or_skip() else { return };
+    let dir = tempfile::tempdir().unwrap();
+    let src = dir.path().join("pic.fodt");
+    std::fs::write(&src, r#"<?xml version="1.0" encoding="UTF-8"?>
+<office:document xmlns:office="urn:oasis:names:tc:opendocument:xmlns:office:1.0"
+  xmlns:text="urn:oasis:names:tc:opendocument:xmlns:text:1.0"
+  xmlns:draw="urn:oasis:names:tc:opendocument:xmlns:drawing:1.0"
+  xmlns:svg="urn:oasis:names:tc:opendocument:xmlns:svg-compatible:1.0"
+  xmlns:xlink="http://www.w3.org/1999/xlink"
+  office:version="1.3" office:mimetype="application/vnd.oasis.opendocument.text">
+ <office:body><office:text>
+  <text:p>before the picture</text:p>
+  <text:p><draw:frame draw:name="dot" text:anchor-type="as-char" svg:width="2cm" svg:height="1cm"><draw:image><office:binary-data>iVBORw0KGgoAAAANSUhEUgAAAAIAAAACCAIAAAD91JpzAAAAFUlEQVR4nGL6z8DA8B+I/zMwMAAAAP//AwArEQT5AAAAAElFTkSuQmCC</office:binary-data></draw:image><svg:title>a red dot</svg:title></draw:frame></text:p>
+  <text:p>after the picture</text:p>
+ </office:text></office:body>
+</office:document>
+"#).unwrap();
+    let _ = soffice_convert(bin, &src, "odt").ok();
+    let op = dir.path().join("pic.odt");
+    assert!(op.exists(), "soffice did not convert the flat odt");
+    let zip = zip::ZipArchive::new(std::fs::File::open(&op).unwrap()).unwrap();
+    assert!(zip.file_names().any(|n| n.starts_with("Pictures/")), "Writer stored no picture");
+    let rt = letters_core::odt::read(op.to_str().unwrap()).expect("read Writer's odt");
+    let text = norm(&rt.to_plain_text());
+    assert!(text.contains("before the picture") && text.contains("after the picture"), "{text:?}");
+    let pics: Vec<&Run> = rt.paragraphs.iter().flat_map(|p| &p.runs).filter(|r| r.style.image.is_some()).collect();
+    assert_eq!(pics.len(), 1, "the picture Writer placed was not read: {:?}", rt.paragraphs);
+    assert!(std::fs::read(pics[0].style.image.as_ref().unwrap()).unwrap().starts_with(b"\x89PNG"), "not the picture's bytes");
+    let (w, h) = pics[0].style.image_extent_emu.expect("a size");
+    assert!(w.abs_diff(720_000) <= 360 && h.abs_diff(360_000) <= 360, "2cm x 1cm read as {:?} EMU", (w, h));
+    assert_eq!(pics[0].text, "a red dot", "alt text");
 }
