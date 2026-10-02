@@ -161,9 +161,8 @@ class VisualMatrixMixin:
     def test_dialog(self):
         import subprocess
         self.wait_until(self._opened, bool, description=f"{self.DOC} to open")
-        windows = len(self.app.children)
         subprocess.run(["gapplication", "action", self.AID, "shortcuts"], check=True)
-        self.wait_until(lambda: len(self.app.children), lambda n: n > windows, description="the shortcuts window")
+        self.wait_for_node(name="Keyboard Shortcuts")
         self._settle()
         self._capture("dialog")
 
