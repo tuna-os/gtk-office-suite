@@ -814,30 +814,44 @@ pub fn make_header_bar() -> adw::HeaderBar {
 pub fn show_shortcuts_dialog(
     shortcuts: &[(&str, &[(&str, &str)])],
 ) {
-    let win = gtk::ShortcutsWindow::builder()
-        .modal(true)
-        .build();
+    let groups = shortcuts
+        .iter()
+        .map(|(title, items)| (title.to_string(), items.iter().map(|(t, a)| (t.to_string(), a.to_string())).collect()))
+        .collect::<Vec<_>>();
+    present_shortcuts(&groups);
+}
 
-    let section = gtk::ShortcutsSection::builder()
-        .section_name("main")
-        .visible(true)
-        .build();
-
-    for (group_title, items) in shortcuts {
-        let group = gtk::ShortcutsGroup::builder().title(*group_title).build();
-        for (title, accel) in *items {
-            group.add_shortcut(
-                &gtk::ShortcutsShortcut::builder()
-                    .title(*title)
-                    .accelerator(*accel)
-                    .build(),
-            );
+/// The shortcuts list as an adaptive dialog over the active window: a
+/// row per shortcut, its name and its keys. GtkShortcutsWindow, which
+/// this replaces, has a fixed natural width, so on a 400 px screen it
+/// overflowed and cut its key labels off (#1307); an AdwDialog becomes a
+/// full-width sheet there and its rows wrap.
+fn present_shortcuts(groups: &[(String, Vec<(String, String)>)]) {
+    let page = adw::PreferencesPage::new();
+    for (title, items) in groups {
+        let group = adw::PreferencesGroup::builder().title(title.as_str()).build();
+        for (name, accel) in items {
+            let row = adw::ActionRow::builder().title(name.as_str()).title_lines(2).build();
+            let keys = gtk::ShortcutLabel::new(accel);
+            keys.set_valign(gtk::Align::Center);
+            row.add_suffix(&keys);
+            group.add(&row);
         }
-        section.add_group(&group);
+        page.add(&group);
     }
-
-    win.add_section(&section);
-    win.set_visible(true);
+    let view = adw::ToolbarView::new();
+    view.add_top_bar(&adw::HeaderBar::new());
+    view.set_content(Some(&page));
+    let dialog = adw::Dialog::builder()
+        .title(i18n("Keyboard Shortcuts"))
+        .content_width(520)
+        .content_height(600)
+        .child(&view)
+        .build();
+    let parent = gio::Application::default()
+        .and_downcast::<gtk::Application>()
+        .and_then(|app| app.active_window());
+    dialog.present(parent.as_ref());
 }
 
 // ---------------------------------------------------------------------------
@@ -1011,28 +1025,14 @@ pub fn show_command_palette(app: &adw::Application) {
 /// Registering labels (which the palette needs anyway) is all an app has
 /// to do for Ctrl+? to work.
 pub fn show_shortcuts_from_registry(app: &adw::Application) {
-    let win = gtk::ShortcutsWindow::builder().modal(true).build();
-    let section = gtk::ShortcutsSection::builder()
-        .section_name("main")
-        .visible(true)
-        .build();
-    let group = gtk::ShortcutsGroup::builder().title("Actions").build();
-
-    for entry in actions::labeled_actions() {
-        let accels = app.accels_for_action(&entry.name);
-        if let Some(accel) = accels.first() {
-            group.add_shortcut(
-                &gtk::ShortcutsShortcut::builder()
-                    .title(entry.label.as_str())
-                    .accelerator(accel.as_str())
-                    .build(),
-            );
-        }
-    }
-
-    section.add_group(&group);
-    win.add_section(&section);
-    win.set_visible(true);
+    let items = actions::labeled_actions()
+        .into_iter()
+        .filter_map(|entry| {
+            let accel = app.accels_for_action(&entry.name).first()?.to_string();
+            Some((entry.label.to_string(), accel))
+        })
+        .collect::<Vec<_>>();
+    present_shortcuts(&[(i18n("Actions"), items)]);
 }
 
 /// Helper to build a simple preferences dialog.
