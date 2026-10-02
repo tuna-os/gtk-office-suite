@@ -20,8 +20,8 @@ Architecture: readers return complete semantic document state plus source-packag
       columns: ours → LibreOffice, and LibreOffice → ours (LibreOffice's bytes, never a same-format re-save of ours). Every
       cell cites a test, and `tests/test_interop_evidence.py` checks each one exists. The empty cells got new oracle
       tests: our docx's links into Writer's odt, a picture Writer places read from its docx, cell styles from Calc's
-      own xlsx, and text and run styling read from Impress's pptx. Letters' odt has no image support at all (#1292),
-      the one `n/a` that is a gap. The Calc xlsx test records an upstream loss: LibreOffice 24.2 exports a themed
+      own xlsx, and text and run styling read from Impress's pptx. Letters' odt had no image support at all; it now
+      writes and reads pictures (#1292), so no cell is a gap. The Calc xlsx test records an upstream loss: LibreOffice 24.2 exports a themed
       workbook's font colour as `theme="1"` and reads it back black.
 - [ ] Verify opaque relationships/content types after unrelated edits; refuse unsafe partial pass-through.
 - [~] GUI cancel on a loss warning preserves original bytes and dirty state. **Letters is done** (#1206): every save
