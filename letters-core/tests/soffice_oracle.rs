@@ -1221,6 +1221,145 @@ fn smart_chips_survive_lo_passes() {
     }
 }
 
+/// The paragraph and run attributes no other oracle test crossed the format
+/// boundary with (docs/LETTERS-FIELD-MAP.md, #1205): each set on its own
+/// paragraph, carried odt -> Writer -> docx and docx -> Writer -> odt, and
+/// read back by our reader of the other format. A failure lists every
+/// attribute lost in that direction, not just the first.
+#[test]
+fn paragraph_and_run_attributes_survive_a_conversion_between_the_two_formats() {
+    let Some(bin) = require_or_skip() else { return };
+    let run = |text: &str, style: RunStyle| Run { text: text.into(), style };
+    let para = |text: &str, style: ParaStyle, run_style: RunStyle| Paragraph { style, runs: vec![run(text, run_style)] };
+    let mut d = Document::from_plain_text("");
+    d.paragraphs = vec![
+        para("italic words", ParaStyle::default(), RunStyle { italic: true, ..Default::default() }),
+        para("underlined words", ParaStyle::default(), RunStyle { underline: true, ..Default::default() }),
+        para("struck words", ParaStyle::default(), RunStyle { strikethrough: true, ..Default::default() }),
+        para("a second-level heading", ParaStyle { heading: Some(2), ..Default::default() }, RunStyle::default()),
+        para("centred text", ParaStyle { alignment: Alignment::Center, ..Default::default() }, RunStyle::default()),
+        para("right-aligned text", ParaStyle { alignment: Alignment::Right, ..Default::default() }, RunStyle::default()),
+        para("justified text", ParaStyle { alignment: Alignment::Justify, ..Default::default() }, RunStyle::default()),
+        para("kept with the next", ParaStyle { keep_with_next: true, ..Default::default() }, RunStyle::default()),
+        para("first-line indented", ParaStyle { first_line_indent_pt: 18.0, ..Default::default() }, RunStyle::default()),
+        para("right indented", ParaStyle { right_indent_pt: 36.0, ..Default::default() }, RunStyle::default()),
+        para("numbered from five", ParaStyle { list: ListKind::Numbered, list_start: Some(5), ..Default::default() }, RunStyle::default()),
+        para("nested bullet", ParaStyle { list: ListKind::Bullet, list_level: 1, ..Default::default() }, RunStyle::default()),
+        para("let x = 1;", ParaStyle { code_block: Some(String::new()), ..Default::default() }, RunStyle::default()),
+        para("a quoted passage", ParaStyle { block_quote: true, ..Default::default() }, RunStyle::default()),
+        para("The Title", ParaStyle { named_style: Some("Title".into()), ..Default::default() }, RunStyle::default()),
+        para("inline_code()", ParaStyle::default(), RunStyle { code: true, ..Default::default() }),
+    ];
+    let check = |rt: &Document, what: &str| {
+        let mut lost: Vec<String> = Vec::new();
+        let p = |t: &str| para_with_text(rt, t);
+        let any_run = |t: &str, f: &dyn Fn(&RunStyle) -> bool| p(t).runs.iter().any(|r| !r.text.trim().is_empty() && f(&r.style));
+        if !any_run("italic words", &|s| s.italic) { lost.push("italic".into()) }
+        if !any_run("underlined words", &|s| s.underline) { lost.push("underline".into()) }
+        if !any_run("struck words", &|s| s.strikethrough) { lost.push("strikethrough".into()) }
+        if p("a second-level heading").style.heading != Some(2) { lost.push(format!("heading: {:?}", p("a second-level heading").style.heading)) }
+        for (t, a) in [("centred text", Alignment::Center), ("right-aligned text", Alignment::Right), ("justified text", Alignment::Justify)] {
+            if p(t).style.alignment != a { lost.push(format!("alignment {a:?}: {:?}", p(t).style.alignment)) }
+        }
+        if !p("kept with the next").style.keep_with_next { lost.push("keep_with_next".into()) }
+        let s = &p("first-line indented").style;
+        if (s.first_line_indent_pt - 18.0).abs() > 1.0 { lost.push(format!("first_line_indent_pt: {}", s.first_line_indent_pt)) }
+        let s = &p("right indented").style;
+        if (s.right_indent_pt - 36.0).abs() > 1.0 { lost.push(format!("right_indent_pt: {}", s.right_indent_pt)) }
+        let s = &p("numbered from five").style;
+        if s.list != ListKind::Numbered || s.list_start.unwrap_or(1) != 5 { lost.push(format!("list_start: {:?} {:?}", s.list, s.list_start)) }
+        let s = &p("nested bullet").style;
+        if s.list != ListKind::Bullet || s.list_level != 1 { lost.push(format!("list_level: {:?} {}", s.list, s.list_level)) }
+        if p("let x = 1;").style.code_block.is_none() { lost.push("code_block".into()) }
+        if !p("a quoted passage").style.block_quote { lost.push(format!("block_quote: {:?}", p("a quoted passage").style)) }
+        if p("The Title").style.named_style.as_deref() != Some("Title") { lost.push(format!("named_style: {:?}", p("The Title").style.named_style)) }
+        if !any_run("inline_code()", &|s| s.code) { lost.push("code (run)".into()) }
+        assert!(lost.is_empty(), "{what} lost: {lost:#?}");
+    };
+    let dir = tempfile::tempdir().unwrap();
+
+    let a = dir.path().join("a");
+    std::fs::create_dir_all(&a).unwrap();
+    let op = a.join("x.odt");
+    letters_core::odt::write(&d, op.to_str().unwrap()).expect("write odt");
+    let _ = soffice_convert(bin, &op, "docx:MS Word 2007 XML").ok();
+    let dp = a.join("x.docx");
+    assert!(dp.exists(), "soffice did not convert the odt");
+    let from_odt = docx::read(dp.to_str().unwrap()).expect("read converted docx");
+
+    let b = dir.path().join("b");
+    std::fs::create_dir_all(&b).unwrap();
+    let dp2 = b.join("y.docx");
+    docx::write(&d, &dp2).expect("write docx");
+    let _ = soffice_convert(bin, &dp2, "odt").ok();
+    let op2 = b.join("y.odt");
+    assert!(op2.exists(), "soffice did not convert the docx");
+    let from_docx = letters_core::odt::read(op2.to_str().unwrap()).expect("read converted odt");
+
+    let first = std::panic::catch_unwind(|| check(&from_odt, "odt -> Writer -> docx"));
+    check(&from_docx, "docx -> Writer -> odt");
+    if let Err(e) = first {
+        std::panic::resume_unwind(e);
+    }
+}
+
+/// The document's heading look and a picture's displayed size through a
+/// docx Writer itself rewrites (docs/LETTERS-FIELD-MAP.md, #1205). Both
+/// live in docx only: the heading look in styles.xml's Heading styles,
+/// the size in the drawing's extent. Writer re-derives both when it saves.
+#[test]
+fn heading_styles_and_picture_size_survive_writer_rewriting_a_docx() {
+    let Some(bin) = require_or_skip() else { return };
+    let dir = tempfile::tempdir().unwrap();
+    let png_path = dir.path().join("dot.png");
+    let png: &[u8] = &[
+        0x89, b'P', b'N', b'G', 0x0d, 0x0a, 0x1a, 0x0a,
+        0, 0, 0, 13, b'I', b'H', b'D', b'R', 0, 0, 0, 2, 0, 0, 0, 2, 8, 2, 0, 0, 0,
+        0xfd, 0xd4, 0x9a, 0x73,
+        0, 0, 0, 21, b'I', b'D', b'A', b'T', 0x78, 0x9c, 0x62, 0xfa, 0xcf, 0xc0, 0xc0,
+        0xf0, 0x1f, 0x88, 0xff, 0x33, 0x30, 0x30, 0x00, 0x00, 0x00, 0xff, 0xff,
+        0x03, 0x00, 0x2b, 0x11, 0x04, 0xf9,
+        0, 0, 0, 0, b'I', b'E', b'N', b'D', 0xae, 0x42, 0x60, 0x82,
+    ];
+    std::fs::write(&png_path, png).unwrap();
+    let mut d = Document::from_plain_text("A heading\nbody");
+    d.paragraphs[0].style.heading = Some(1);
+    d.heading_styles = vec![RunStyle { color: Some("c00000".into()), font_size_hp: Some(40), bold: true, ..Default::default() }];
+    let extent = (1_828_800, 914_400); // 2 x 1 inches
+    d.paragraphs.push(Paragraph {
+        style: ParaStyle::default(),
+        runs: vec![Run {
+            text: "a picture".into(),
+            style: RunStyle { image: Some(png_path.to_string_lossy().into()), image_extent_emu: Some(extent), ..Default::default() },
+        }],
+    });
+    let src = dir.path().join("in").join("h.docx");
+    std::fs::create_dir_all(src.parent().unwrap()).unwrap();
+    docx::write(&d, &src).expect("write docx");
+    // Into a directory of its own: Writer will not convert a file onto
+    // itself, so reading the input's name back would read our own bytes.
+    let out_dir = dir.path().join("out");
+    std::fs::create_dir(&out_dir).unwrap();
+    let st = std::process::Command::new(bin)
+        .arg("--headless")
+        .arg(format!("-env:UserInstallation=file://{}", dir.path().join("p").display()))
+        .args(["--convert-to", "docx:MS Word 2007 XML", "--outdir"])
+        .arg(&out_dir)
+        .arg(&src)
+        .output()
+        .expect("soffice");
+    assert!(st.status.success());
+    let rewritten = out_dir.join("h.docx");
+    assert_ne!(std::fs::read(&rewritten).unwrap(), std::fs::read(&src).unwrap(), "Writer did not rewrite the docx");
+    let rt = docx::read(rewritten.to_str().unwrap()).expect("read Writer's docx");
+    let h1 = rt.heading_styles.first().cloned().unwrap_or_default();
+    assert_eq!(h1.color.as_deref().map(str::to_lowercase).as_deref(), Some("c00000"), "heading colour: {:?}", rt.heading_styles);
+    assert_eq!(h1.font_size_hp, Some(40), "heading size: {:?}", rt.heading_styles);
+    let pic = rt.paragraphs.iter().flat_map(|p| &p.runs).find(|r| r.style.image.is_some()).expect("the picture");
+    let (w, h) = pic.style.image_extent_emu.expect("the picture's size");
+    assert!(w.abs_diff(extent.0) < 20_000 && h.abs_diff(extent.1) < 20_000, "size came back as {w} x {h} EMU");
+}
+
 // ── Interop evidence gaps (docs/INTEROP-EVIDENCE.md, #1276) ───────────
 
 /// Hyperlinks in our docx, through Writer, into the odt it writes.
