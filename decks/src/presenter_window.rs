@@ -12,10 +12,10 @@
 
 use adw::prelude::*;
 use decks_core::engine::Deck;
-use decks_core::presenter::{format_elapsed, show_layout, show_position, PresenterState};
-use gtk4::{self as gtk, gdk, glib};
+use decks_core::presenter::{format_elapsed, layout_after_monitor_change, show_layout_on, show_position, PresenterState, ShowLayout, DISPLAY_LOST};
+use gtk4::{self as gtk, gdk, gio, glib};
 use libadwaita as adw;
-use std::cell::RefCell;
+use std::cell::{Cell, RefCell};
 use std::rc::Rc;
 use std::time::Instant;
 
@@ -36,7 +36,13 @@ struct Show {
     build: RefCell<Option<(usize, Instant)>>,
     /// Filled in once the windows exist (they refer back to the show).
     audience: RefCell<Option<(gtk::Window, gtk::DrawingArea)>>,
+    /// The audience window's status line, shown when the show moves.
+    audience_status: RefCell<Option<gtk::Revealer>>,
     presenter: RefCell<Option<Presenter>>,
+    /// Which monitor shows what, as it stands now.
+    layout: Cell<ShowLayout>,
+    /// The display's monitor list and the show's handler on it.
+    monitor_watch: RefCell<Option<(gio::ListModel, glib::SignalHandlerId)>>,
 }
 
 /// The presenter display's live parts.
@@ -47,6 +53,8 @@ struct Presenter {
     counter: gtk::Label,
     clock: gtk::Label,
     notes: gtk::Label,
+    /// "The external display was disconnected…", revealed when it is.
+    banner: adw::Banner,
 }
 
 fn monitor(n: usize) -> Option<gdk::Monitor> {
@@ -56,6 +64,17 @@ fn monitor(n: usize) -> Option<gdk::Monitor> {
 
 fn monitor_count() -> usize {
     gdk::Display::default().map_or(1, |d| d.monitors().n_items() as usize)
+}
+
+/// The monitors a show is laid out for. The test display has one; under
+/// GTK_OFFICE_TEST_MODE, GTK_OFFICE_TEST_MONITORS lays a show out as if it
+/// had more, so a journey can start a two-monitor show and then lose the
+/// second (`app.test-monitors-changed`).
+fn monitors_for_layout() -> usize {
+    std::env::var_os("GTK_OFFICE_TEST_MODE")
+        .and(std::env::var("GTK_OFFICE_TEST_MONITORS").ok())
+        .and_then(|n| n.parse().ok())
+        .unwrap_or_else(monitor_count)
 }
 
 impl Show {
@@ -179,7 +198,45 @@ impl Show {
 
     /// Close both windows. Taking them out of the show also breaks the
     /// cycle show → window → close handler → show, so the show is freed.
+    /// The display now has `monitors` monitors. A window whose monitor went
+    /// away comes back to the primary one, and both windows say so (ADR
+    /// 0004: "return to primary and show a visible status").
+    fn monitors_changed(&self, monitors: usize) {
+        let Some(after) = layout_after_monitor_change(self.layout.get(), monitors) else { return };
+        let moved_audience = after.audience != self.layout.get().audience;
+        self.layout.set(after);
+        if moved_audience {
+            if let Some((window, area)) = self.audience.borrow().as_ref() {
+                match after.audience.and_then(monitor) {
+                    Some(mon) => window.fullscreen_on_monitor(&mon),
+                    None => window.fullscreen(),
+                }
+                describe_display(area, after.audience);
+            }
+        }
+        // Hidden, not only unrevealed, until needed: an unrevealed status
+        // still reads as showing to assistive technology.
+        if let Some(status) = self.audience_status.borrow().as_ref() {
+            status.set_visible(true);
+            status.set_reveal_child(true);
+            let status = status.downgrade();
+            glib::timeout_add_seconds_local_once(6, move || {
+                if let Some(s) = status.upgrade() {
+                    s.set_reveal_child(false);
+                    s.set_visible(false);
+                }
+            });
+        }
+        if let Some(p) = self.presenter.borrow().as_ref() {
+            p.banner.set_visible(true);
+            p.banner.set_revealed(true);
+        }
+    }
+
     fn end(&self) {
+        if let Some((monitors, handler)) = self.monitor_watch.borrow_mut().take() {
+            monitors.disconnect(handler);
+        }
         let audience = self.audience.borrow_mut().take();
         let presenter = self.presenter.borrow_mut().take();
         if let Some((w, _)) = audience {
@@ -247,8 +304,17 @@ fn slide_area(show: &Rc<Show>, offset: usize, label: &str) -> gtk::DrawingArea {
     area
 }
 
-fn build_audience(app: &adw::Application, show: &Rc<Show>) -> (gtk::Window, gtk::DrawingArea) {
-    let area = gtk::DrawingArea::new();
+/// Which display the slides are on, for assistive technology: "On display 2".
+fn describe_display(area: &gtk::DrawingArea, monitor: Option<usize>) {
+    if let Some(m) = monitor {
+        area.update_property(&[gtk::accessible::Property::Description(&format!("On display {}", m + 1))]);
+    }
+}
+
+fn build_audience(app: &adw::Application, show: &Rc<Show>) -> (gtk::Window, gtk::DrawingArea, gtk::Revealer) {
+    // An image to assistive technology: a plain drawing area isn't exposed
+    // at all, so its name and display ("On display 2") would be lost.
+    let area = gtk::DrawingArea::builder().accessible_role(gtk::AccessibleRole::Img).build();
     area.set_hexpand(true);
     area.set_vexpand(true);
     area.update_property(&[gtk::accessible::Property::Label("Slide show")]);
@@ -261,7 +327,23 @@ fn build_audience(app: &adw::Application, show: &Rc<Show>) -> (gtk::Window, gtk:
         let objects = show.audience_objects();
         draw_slide_objects(cr, w as f64, h as f64, &show.deck.slides, show.index(), &show.deck.masters, Chrome::Show, &objects);
     });
-    let window = gtk::Window::builder().application(app).title("Slide Show").decorated(false).child(&area).build();
+    // A status line over the slides, for when the show has to move.
+    let status = gtk::Label::new(Some(DISPLAY_LOST));
+    status.set_wrap(true);
+    status.add_css_class("osd");
+    status.add_css_class("toolbar");
+    let revealer = gtk::Revealer::builder()
+        .child(&status)
+        .transition_type(gtk::RevealerTransitionType::Crossfade)
+        .halign(gtk::Align::Center)
+        .valign(gtk::Align::Start)
+        .margin_top(24)
+        .visible(false)
+        .build();
+    let overlay = gtk::Overlay::new();
+    overlay.set_child(Some(&area));
+    overlay.add_overlay(&revealer);
+    let window = gtk::Window::builder().application(app).title("Slide Show").decorated(false).child(&overlay).build();
     // Clicking the slide advances, as in every presentation app.
     let click = gtk::GestureClick::new();
     let weak = Rc::downgrade(show);
@@ -271,7 +353,7 @@ fn build_audience(app: &adw::Application, show: &Rc<Show>) -> (gtk::Window, gtk:
         }
     });
     area.add_controller(click);
-    (window, area)
+    (window, area, revealer)
 }
 
 fn build_presenter(app: &adw::Application, show: &Rc<Show>) -> Presenter {
@@ -334,8 +416,16 @@ fn build_presenter(app: &adw::Application, show: &Rc<Show>) -> Presenter {
     let end = gtk::Button::with_label("End Show");
     header.pack_end(&end);
 
+    let banner = adw::Banner::new(DISPLAY_LOST);
+    banner.set_button_label(Some("Dismiss"));
+    banner.set_visible(false);
+    banner.connect_button_clicked(|b| {
+        b.set_revealed(false);
+        b.set_visible(false);
+    });
     let view = adw::ToolbarView::new();
     view.add_top_bar(&header);
+    view.add_top_bar(&banner);
     view.set_content(Some(&body));
 
     let window = adw::Window::builder()
@@ -366,7 +456,7 @@ fn build_presenter(app: &adw::Application, show: &Rc<Show>) -> Presenter {
             show.end();
         }
     });
-    Presenter { window, current, next, counter, clock, notes }
+    Presenter { window, current, next, counter, clock, notes, banner }
 }
 
 /// Start a show of `deck` from slide `start`. `rehearse` opens the
@@ -375,7 +465,9 @@ pub fn start(app: &adw::Application, deck: Deck, start: usize, rehearse: bool) {
     if deck.slides.is_empty() {
         return;
     }
-    let layout = show_layout(monitor_count(), rehearse);
+    // Preferences ▸ Presentation Display: -1 is automatic.
+    let chosen = usize::try_from(gio::Settings::new("org.tunaos.decks").int("presentation-display")).ok();
+    let layout = show_layout_on(monitors_for_layout(), rehearse, chosen);
     let mut state = PresenterState::new();
     state.go_to(start.min(deck.slides.len() - 1), &deck);
     state.start_at(Instant::now());
@@ -385,10 +477,14 @@ pub fn start(app: &adw::Application, deck: Deck, start: usize, rehearse: bool) {
         transition: Rc::new(RefCell::new(TransitionState::new())),
         build: RefCell::new(None),
         audience: RefCell::new(None),
+        audience_status: RefCell::new(None),
         presenter: RefCell::new(None),
+        layout: Cell::new(layout),
+        monitor_watch: RefCell::new(None),
     });
     if let Some(m) = layout.audience {
-        let (window, area) = build_audience(app, &show);
+        let (window, area, status) = build_audience(app, &show);
+        *show.audience_status.borrow_mut() = Some(status);
         add_keys(&window, &show);
         // Closing either window ends the show; the handler's strong
         // reference is what keeps the show alive until then.
@@ -401,6 +497,7 @@ pub fn start(app: &adw::Application, deck: Deck, start: usize, rehearse: bool) {
             Some(mon) => window.fullscreen_on_monitor(&mon),
             None => window.fullscreen(),
         }
+        describe_display(&area, Some(m));
         window.present();
         *show.audience.borrow_mut() = Some((window, area));
     }
@@ -423,6 +520,29 @@ pub fn start(app: &adw::Application, deck: Deck, start: usize, rehearse: bool) {
             let alive = weak.upgrade().is_some_and(|s| s.tick());
             if alive { glib::ControlFlow::Continue } else { glib::ControlFlow::Break }
         });
+    }
+    // A projector unplugged mid-show.
+    if let Some(display) = gdk::Display::default() {
+        let monitors = display.monitors();
+        let weak = Rc::downgrade(&show);
+        let handler = monitors.connect_items_changed(move |list, _, _, _| {
+            if let Some(show) = weak.upgrade() {
+                show.monitors_changed(list.n_items() as usize);
+            }
+        });
+        *show.monitor_watch.borrow_mut() = Some((monitors, handler));
+    }
+    if std::env::var_os("GTK_OFFICE_TEST_MODE").is_some() {
+        // The test display can't unplug a monitor: this tells the show the
+        // monitors changed, and it counts the real ones.
+        let act = gio::SimpleAction::new("test-monitors-changed", None);
+        let weak = Rc::downgrade(&show);
+        act.connect_activate(move |_, _| {
+            if let Some(show) = weak.upgrade() {
+                show.monitors_changed(monitor_count());
+            }
+        });
+        app.add_action(&act);
     }
     show.refresh();
 }
