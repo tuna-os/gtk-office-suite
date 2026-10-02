@@ -158,13 +158,13 @@ mod imp {
             // Only pages that intersect the visible area are drawn, except in
             // a render-lab capture, which paints pages outside the viewport.
             let visible = if suite_common::render_dump::active() { None } else { obj.visible_band() };
-            for index in 0..typeset.tree().pages.len() {
-                let (x, y, w, h) = obj.page_rect(index);
-                if let Some((top, bottom)) = visible {
-                    if y + h < top || y > bottom {
-                        continue;
-                    }
-                }
+            let stack = obj.page_stack();
+            let pages = match visible {
+                Some((top, bottom)) => stack.visible(top, bottom),
+                None => 0..stack.len(),
+            };
+            for index in pages {
+                let (x, y, w, h) = obj.page_rect_in(&stack, index);
                 // A cairo node at (0, 0) moved by a transform node: GTK's
                 // Broadway renderer draws a cairo node's content from (0, 0)
                 // whatever its bounds (see PageContainer::snapshot).
@@ -422,15 +422,9 @@ impl PageView {
     /// The page under widget point (`x`, `y`), and the point in that page's
     /// points. A point between pages belongs to the nearer one.
     fn page_point(&self, x: f64, y: f64) -> Option<(usize, f64, f64)> {
-        let n = self.page_count();
-        let page = (0..n).min_by(|&a, &b| {
-            let d = |i: usize| {
-                let (_, py, _, ph) = self.page_rect(i);
-                if y < py { py - y } else if y > py + ph { y - py - ph } else { 0.0 }
-            };
-            d(a).partial_cmp(&d(b)).unwrap_or(std::cmp::Ordering::Equal)
-        })?;
-        let (px, py, _, _) = self.page_rect(page);
+        let stack = self.page_stack();
+        let page = stack.nearest(y)?;
+        let (px, py, _, _) = self.page_rect_in(&stack, page);
         let s = self.scale();
         Some((page, (x - px) / s, (y - py) / s))
     }
@@ -560,33 +554,39 @@ impl PageView {
         PX_PER_PT * self.imp().zoom.get() / 100.0
     }
 
-    /// Page sizes in pixels.
-    fn page_sizes(&self) -> Vec<(f64, f64)> {
+    /// The pages in pixels, stacked top to bottom with their gaps: one
+    /// pass over the pages, then lookups (#1282).
+    fn page_stack(&self) -> letters_core::layout::PageStack {
         let s = self.scale();
-        self.imp()
-            .typeset
-            .borrow()
-            .as_ref()
-            .map(|t| t.tree().pages.iter().map(|p| (p.width_pt * s, p.height_pt * s)).collect())
-            .unwrap_or_default()
+        self.imp().typeset.borrow().as_ref().map(|t| t.tree().page_stack(s, GAP_PX)).unwrap_or_default()
     }
 
     /// Width and height the pages need, with gaps.
+    fn content_size_of(stack: &letters_core::layout::PageStack) -> (f64, f64) {
+        let w = (0..stack.len()).map(|i| stack.size(i).0).fold(0.0, f64::max) + 2.0 * GAP_PX;
+        (w, stack.height())
+    }
+
     fn content_size(&self) -> (f64, f64) {
-        let sizes = self.page_sizes();
-        let w = sizes.iter().map(|s| s.0).fold(0.0, f64::max) + 2.0 * GAP_PX;
-        let h = sizes.iter().map(|s| s.1 + GAP_PX).sum::<f64>() + GAP_PX;
-        (w, h)
+        Self::content_size_of(&self.page_stack())
     }
 
     /// Rectangle (x, y, w, h) of page `index` in this widget's coordinates:
     /// pages stacked top to bottom, each centred horizontally.
     pub fn page_rect(&self, index: usize) -> (f64, f64, f64, f64) {
-        let sizes = self.page_sizes();
-        let width = f64::from(self.width()).max(self.content_size().0);
-        let y = GAP_PX + sizes.iter().take(index).map(|s| s.1 + GAP_PX).sum::<f64>();
-        let (w, h) = sizes.get(index).copied().unwrap_or((0.0, 0.0));
-        (((width - w) / 2.0).floor(), y.floor(), w, h)
+        self.page_rect_in(&self.page_stack(), index)
+    }
+
+    /// Every page's [`Self::page_rect`], from one stack.
+    pub fn page_rects(&self) -> Vec<(f64, f64, f64, f64)> {
+        let stack = self.page_stack();
+        (0..stack.len()).map(|i| self.page_rect_in(&stack, i)).collect()
+    }
+
+    fn page_rect_in(&self, stack: &letters_core::layout::PageStack, index: usize) -> (f64, f64, f64, f64) {
+        let width = f64::from(self.width()).max(Self::content_size_of(stack).0);
+        let (w, h) = stack.size(index);
+        (((width - w) / 2.0).floor(), stack.top(index).floor(), w, h)
     }
 
     /// The vertical band of this widget visible through its scrolled

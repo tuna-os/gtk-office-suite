@@ -36,8 +36,6 @@ A per-tab session owns the complete Document, review state, imported-package con
       - an empty last paragraph's style (a heading, a page break) lost on capture, and so on save;
       - a cell's own leading and trailing spaces trimmed away;
       - table ids compared by value rather than by grouping.
-
-      Deleting the empty line between two tables still runs them together (#1299).
 - [ ] Apply model operations and undo through one live session; keep review anchors correct across Unicode edits.
 - [ ] Drive editor pagination and print/export from styled paragraph/run metrics; remove byte/character-offset ambiguity.
 - [ ] Wire admitted review/TOC/bidi workflows or report them as unavailable until GUI and format tests pass.
