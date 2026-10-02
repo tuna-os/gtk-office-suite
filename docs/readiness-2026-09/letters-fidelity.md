@@ -26,7 +26,11 @@ A per-tab session owns the complete Document, review state, imported-package con
       `we_read_a_picture_writer_places_in_an_odt`). Odt tables (#1296) cross too
       (`tables_in_our_odt_survive_writer_rewriting_it`, `we_read_the_table_writer_writes_into_an_odt`); the second
       found that our docx writer opened every table cell with a blank line, hidden by our reader skipping empty cell
-      paragraphs. One gap is tracked: odt heading styles and nested revisions (#1297).
+      paragraphs. The heading look now crosses odt too
+      (`heading_looks_survive_writer_in_odt`), and `tracked_changes_survive_lo_passes` compares a deletion of a pending
+      insertion in all four directions (#1297). It and `comments_survive_lo_passes` had converted each same-format file
+      onto itself, which Writer won't do, so those passes read our own file back; they now convert into a directory of
+      their own. No gap is left in the map.
 - [x] Preserve fields across unrelated edits and structured commands; distinguish user text from rendered list markers.
       `unrelated_edits_and_commands_leave_every_other_field_alone` (`letters/src/live/tests.rs`, #1278) loads a document
       with every model field set into a live editing session. It then runs 60 seeded sequences of typing (multi-byte
