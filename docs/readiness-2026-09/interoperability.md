@@ -126,7 +126,11 @@ Architecture: readers return complete semantic document state plus source-packag
       256 (`zip_guard::check_xml_depth`, a scan that cannot recurse) and reads on a thread with 64 MiB of stack.
       **A Markdown paragraph of nested brackets took O(n²) to open**, four seconds for 40 KB, because runs were merged
       with `Vec::remove` in a loop; `model::merge_adjacent_runs` merges in one pass, in the docx reader and the model
-      too. A fourth finding is not a crash and is tracked: docx tables nested in a cell lose their text (#1419).
+      too. A fourth finding was not a crash: **docx tables nested in a cell lost their text** (#1419). The reader
+      walked a cell's paragraphs and skipped its nested tables; it now reads a nested table's text into its outer
+      cell, as the ODT reader does, and since the model has no nesting a save asks before it flattens one
+      (`loss::content_a_save_drops` reports "Tables inside table cells", for docx and odt).
+      `soffice_oracle.rs::a_nested_table_lo_wrote_keeps_its_text` reads the issue's LibreOffice-written file.
 - [x] Treat missing oracle as failure in required interop/release lanes (REQUIRE_SOFFICE=1), never as observed compatibility.
       `tests/test_oracle_lanes.py` (PR lane) finds every test target that starts `soffice` from the sources and checks
       that each one panics instead of skipping when `REQUIRE_SOFFICE` is set, that every workflow step running one sets
