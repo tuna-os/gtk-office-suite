@@ -200,6 +200,9 @@ pub(crate) fn register(h: EditorHandles) {
             // Ctrl+Z: undo
             if mods.contains(gtk::gdk::ModifierType::CONTROL_MASK) && keyval == gtk::gdk::Key::z {
                 if controller.undo() {
+                    let (slide, object) = controller.repair_selection(cs_ref.get(), so.get());
+                    cs_ref.set(slide);
+                    so.set(object);
                     cs.queue_draw();
                     // Snapshot instead of holding ss.borrow() across the
                     // call -- rebuild_slide_list()'s select_row() fires
@@ -212,6 +215,9 @@ pub(crate) fn register(h: EditorHandles) {
             // Ctrl+Shift+Z: redo
             if mods.contains(gtk::gdk::ModifierType::CONTROL_MASK | gtk::gdk::ModifierType::SHIFT_MASK) && keyval == gtk::gdk::Key::z {
                 if controller.redo() {
+                    let (slide, object) = controller.repair_selection(cs_ref.get(), so.get());
+                    cs_ref.set(slide);
+                    so.set(object);
                     cs.queue_draw();
                     let slides = ss.borrow().clone();
                     rebuild_slide_list(&sl, &slides, &m.borrow(), cs_ref.get());
