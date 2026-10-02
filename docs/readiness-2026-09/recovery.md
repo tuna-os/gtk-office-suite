@@ -50,8 +50,11 @@ AutosaveSlot used to store bytes and metadata in separate atomic writes. Each wr
       launch.** Tables and Decks hold one workbook or deck per window, so
       with two valid orphans they reopen the newest and leave the rest on
       disk for the next launch rather than discarding them. Presenting
-      several at once needs the multiple-window/multiple-document work in the
-      last row below; Letters already does it per tab.
+      several at once needs a window per document, tracked as #1422; Letters
+      already does it per tab. Meanwhile the rest are no longer silent: the
+      recovered window says how many more are waiting
+      (`autosave::more_to_recover_message`; `TablesMoreToRecoverSmoke`,
+      `DecksMoreToRecoverSmoke` crash two documents and require the notice).
 - [x] Preserve imported non-buffer metadata and model state; no recovery format silently strips supported content. **Tables is done and was badly wrong.** Its snapshot is an xlsx package from `save_sheets_to_xlsx_bytes`, read back by the same `load_workbook` a plain Open uses — and that reader parsed no column widths, no row heights, no frozen panes and no merged ranges. All four were written correctly and silently dropped on the way back in, so the loss was never specific to recovery: any save-then-reopen lost them too, and recovered work inherited that.
       The gap survived because the tests that covered it were about the
       wrong program. `soffice_oracle.rs` has
