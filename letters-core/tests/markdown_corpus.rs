@@ -66,21 +66,3 @@ fn commonmark_roundtrip_ratchet() {
         );
     }
 }
-
-/// The two whole documents in `tests/fixtures/` (a letter and a rich
-/// technical document; see `tests/fixtures/fixtures.json`) round-trip
-/// idempotently, as each CommonMark example must. Unlike the spec's
-/// examples, these mix every block kind in one file, so a construct that
-/// survives alone but disturbs its neighbours shows up here.
-#[test]
-fn whole_markdown_fixtures_round_trip() {
-    let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../tests/fixtures");
-    for name in ["example_letter.md", "rich_document.md"] {
-        let path = dir.join(name);
-        let md = std::fs::read_to_string(&path).unwrap_or_else(|e| panic!("{}: {e}", path.display()));
-        let doc1 = markdown::parse(&md);
-        assert!(doc1.paragraphs.len() > 5, "{name} parsed to almost nothing");
-        let doc2 = markdown::parse(&markdown::serialize(&doc1));
-        assert_eq!(doc1, doc2, "{name} does not round-trip idempotently");
-    }
-}

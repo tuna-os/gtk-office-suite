@@ -6,15 +6,7 @@ Architecture: readers return complete semantic document state plus source-packag
 
 - [ ] Trace each GUI Open/Save/Save As/recovery/export path to the compatibility boundary.
 - [ ] Define exact readable/writable formats per app; prohibit overwriting CSV/ODS with XLSX bytes (#439).
-- [x] Version fixtures with author/version, format, expected semantics, feature IDs and permitted losses.
-      Each fixture set has a `fixtures.json` beside its files (#1275): per file, the authoring app and version, the
-      format, the feature IDs it proves, the semantics the round trip checks, the losses it is permitted (each naming
-      its issue, e.g. CommonMark example 150 → #1290) and the tests that use it. Feature IDs are PARITY.md's own
-      names: `<app>/<slug of the feature row>` or a render fixture PARITY.md cites, so the interop evidence table
-      (#1276) can use the same IDs. `conformance/validate_fixtures.py` fails on a set with no manifest, a file with no
-      entry or an entry with no file, a missing field, an unknown feature ID, a loss with no issue, or a `used_by` test
-      that never names the fixture; `tests/test_fixture_manifests.py` runs it in the Python checks lane. Writing it
-      found `tests/fixtures/*.md` unused by any test; `whole_markdown_fixtures_round_trip` now uses them.
+- [ ] Version fixtures with author/version, format, expected semantics, feature IDs and permitted losses.
 - [ ] Test supported text/styles/images/links/notes/geometry/formulas/sheet order in both directions through LibreOffice.
 - [ ] Verify opaque relationships/content types after unrelated edits; refuse unsafe partial pass-through.
 - [~] GUI cancel on a loss warning preserves original bytes and dirty state. **Letters is done** (#1206): every save

@@ -5810,6 +5810,58 @@ class LettersCommentsSmoke(BaseGUITestCase):
         self.assertIsNone(self.process.poll(), "letters crashed commenting")
 
 
+    def test_a_comment_stays_on_its_word_across_unicode_typed_before_it_and_undo(self):
+        """#1279: anchors are character ranges. Text with multi-byte
+        characters (an accent, an emoji, CJK) typed before the commented
+        word moves the comment by characters, and undoing the typing puts
+        everything back with the comment on the same word."""
+        from dogtail import rawinput
+
+        self.wait_for_node(name="New Document", roleName="push button").do_action(0)
+        page = self.wait_for_node(name="Print Layout", roleName="text")
+        rawinput.typeText("Keep this word")
+        self._wait_state(([("Keep this word", [])], []), "the typed text")
+        rawinput.keyCombo("<Shift><Control>Left")
+        self.wait_for_condition(lambda: page.queryText().getNSelections() > 0 or None, description="the last word selected")
+        self.gapplication_action("org.tunaos.letters", "add-comment")
+        self.wait_for_node(name="Comment text", roleName="text")
+        rawinput.typeText("Why this word?")
+        rawinput.keyCombo("Return")
+        thread = ("Why this word?", None, False)
+        commented = ([("Keep this ", []), ("word", [1])], [thread])
+        self._wait_state(commented, "the comment on the selected word")
+
+        # Back to the page, to the start of the text, and type before the
+        # word.
+        # Entering the comment hands the keyboard back to the page (GTK 4
+        # does not take a focus request over AT-SPI); Escape closes the
+        # comment field if it is still open.
+        if not page.focused:
+            rawinput.keyCombo("Escape")
+        self.wait_for_condition(lambda: page.focused or None, description="the page to take focus")
+        rawinput.keyCombo("<Control>Home")
+        # Characters with no key go in through the page's input method, as
+        # a user enters them: Ctrl+Shift+U, the code point, then space.
+        for ch in "é👍中 ":
+            if ch.isascii():
+                rawinput.typeText(ch)
+            else:
+                rawinput.keyCombo("<Control><Shift>u")
+                rawinput.typeText(f"{ord(ch):x}")
+                rawinput.keyCombo("space")
+        self._wait_state(([("é👍中 Keep this ", []), ("word", [1])], [thread]), "the comment still on 'word' after typing before it")
+
+        # Undo the typing (one step or several), then the comment is
+        # exactly where it started.
+        for _ in range(6):
+            if self._state() == commented:
+                break
+            self.gapplication_action("org.tunaos.letters", "undo")
+            self.wait_for_condition(lambda: self._state() is not None or None, description="the undo")
+        self._wait_state(commented, "undo to restore the text with the comment on 'word'")
+        self.assertIsNone(self.process.poll(), "letters crashed")
+
+
 class LettersTableOfContentsSmoke(BaseGUITestCase):
     """A table of contents (letters_core::toc): inserted from the headings
     with their page numbers, and updated when a heading is added; each is
