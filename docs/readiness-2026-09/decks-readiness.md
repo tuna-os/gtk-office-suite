@@ -39,20 +39,6 @@ One DecksController owns slide/object/master state, stable identities, selection
     slides and as a banner on the presenter display.
     `DecksPresenterDisplayLostSmoke` lays a show out for two monitors
     (test mode only), reports the one real monitor, and sees the banner,
-<<<<<<< HEAD
-    Dismiss, and the slides back "On display 1". Explicit display
-    selection: Preferences ▸ Presentation Display (Automatic or a display
-    by name, the `presentation-display` key); `show_layout_on` gives the
-    chosen display the slides and the presenter display another, and a
-    choice that isn't connected is automatic.
-    `DecksPresentationDisplayChoiceSmoke` plants the setting and finds the
-    slides "On display 1" (the slide area's accessible description, also
-    what tells a screen reader where the show is).
-- [ ] PDF/print uses the same slide size/order/master content; export failure is visible and leaves the source document untouched.
-=======
-    Dismiss, and the show going on. Still open: the ADR's "explicit
-    external display selection" (the show picks the second monitor
-    itself).
 - [x] PDF/print uses the same slide size/order/master content; export failure is visible and leaves the source document untouched.
     Size: `a_4_3_deck_exports_on_its_own_page` and
     `a_pdf_has_a_page_per_slide_with_its_text` (poppler reads the page
@@ -64,7 +50,6 @@ One DecksController owns slide/object/master state, stable identities, selection
     and `DecksExportSmoke.test_a_failed_export_is_shown_and_leaves_the_deck_alone`
     exports into `/proc`, sees "Export Failed", and finds the deck and
     its file unchanged.
->>>>>>> claude/vigilant-volta-7wsgyi-presenter-fallback
 - [ ] Missing media and unsupported animation/comment content is preserved or blocked/warned by #374 before save.
 
 Exit: deterministic GUI snapshots plus reopened-file semantics for authoring; display fallback test and exported-PDF evidence for presentation. A documentation checklist alone cannot close this issue. Depends on #354, #374 and the shared P0 persistence work.
