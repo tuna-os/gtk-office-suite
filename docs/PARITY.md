@@ -13,13 +13,16 @@ Tier 3 items each need an explicit decision to enter scope.
 | I1 | Model unit tests | `*-core` crates, `cargo test` | logic, invariants, edge cases |
 | I2 | Round-trip ratchets | corpus harnesses (CommonMark, DOCX/XLSX/PPTX fixtures) | format fidelity, regressions |
 | I3 | LO-authored parity corpus | `lo_parity.rs` (soffice writes, we read) | reading real-world files |
-| I4 | soffice oracle | `soffice_oracle.rs` per core crate — 65 tests (Letters 25, Tables 20, Decks 20 — the coverage target in TESTING.md): we write → LO reads/rewrites → we re-read, asserting attributes not just text | writing real-world files |
+| I4 | soffice oracle | `soffice_oracle.rs` per core crate, each above the floor TESTING.md sets and `tests/test_roadmap_figures.py` checks: we write → LO reads/rewrites → we re-read, asserting attributes not just text | writing real-world files |
 | I5 | Buffer/bridge round-trips | Xvfb `cargo test -p <app> bridge` | model ⇄ widget translation |
-| I6 | AT-SPI smoke tests | `tests/gui/test_smoke.py` (17) — incl. per-cell/per-object virtual a11y nodes | app-level behavior, input |
+| I6 | AT-SPI smoke tests | `tests/gui/test_smoke.py` — incl. per-cell/per-object virtual a11y nodes | app-level behavior, input |
 | I7 | VLM visual audit | scheduled, non-gating | rendering/HIG regressions |
 
 Rule of thumb: every feature needs I1; anything that persists needs I2–I4;
-anything interactive needs I5 or I6. Cross-app clipboard: fragment matrix I1 + per-app GDK glue I6 (copy/paste round trips in Letters and Tables).
+anything interactive needs I5 or I6. A format feature goes green only with all
+of model (I1), a live journey (I6) and an independent reader (I3 or I4):
+`conformance/validate_parity.py` (E6) fails a pull request that promotes one
+with less. Rows that were green before the rule are not re-judged by it. Cross-app clipboard: fragment matrix I1 + per-app GDK glue I6 (copy/paste round trips in Letters and Tables).
 
 **The Render column** says whether the feature *looks* right, next to the
 file-level claim in Status. ✅ names render-lab fixtures that are green in
