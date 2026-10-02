@@ -289,6 +289,97 @@ pub struct RenderTree {
     pub pages: Vec<Page>,
 }
 
+/// Where each page sits when the pages are stacked top to bottom with a
+/// gap before each and after the last (the Print Layout view), at a scale
+/// in pixels per point (#1282).
+///
+/// The tops are prefix sums, so finding the pages in a band, or the page
+/// nearest a point, is a binary search: the view once re-summed every page
+/// above each page it placed, which cost a 500-page document a quarter of a
+/// million additions per frame and per pointer motion.
+#[derive(Clone, Debug, Default)]
+pub struct PageStack {
+    /// `tops[i]`: the top of page `i`.
+    tops: Vec<f64>,
+    sizes: Vec<(f64, f64)>,
+    gap: f64,
+}
+
+impl PageStack {
+    pub fn new(sizes: Vec<(f64, f64)>, gap: f64) -> Self {
+        let mut tops = Vec::with_capacity(sizes.len());
+        let mut at = gap;
+        for &(_, h) in &sizes {
+            tops.push(at);
+            at += h + gap;
+        }
+        PageStack { tops, sizes, gap }
+    }
+
+    pub fn len(&self) -> usize {
+        self.sizes.len()
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.sizes.is_empty()
+    }
+
+    /// Top of page `index` (the end of the stack past the last page).
+    pub fn top(&self, index: usize) -> f64 {
+        self.tops.get(index).copied().unwrap_or_else(|| self.height())
+    }
+
+    /// Width and height of page `index`, or zero past the last.
+    pub fn size(&self, index: usize) -> (f64, f64) {
+        self.sizes.get(index).copied().unwrap_or((0.0, 0.0))
+    }
+
+    /// The whole stack's height, gaps included.
+    pub fn height(&self) -> f64 {
+        self.tops.last().map_or(self.gap, |&t| t + self.sizes.last().map_or(0.0, |s| s.1) + self.gap)
+    }
+
+    /// The pages any part of which is in `top..=bottom`, as placed by a
+    /// view that floors each page's top to a whole pixel.
+    pub fn visible(&self, top: f64, bottom: f64) -> std::ops::Range<usize> {
+        let first = self.first(|i| self.bottom(i) >= top);
+        let end = self.first(|i| self.tops[i].floor() > bottom);
+        first..end.max(first)
+    }
+
+    /// Bottom edge of page `i` as placed (its top floored).
+    fn bottom(&self, i: usize) -> f64 {
+        self.tops[i].floor() + self.sizes[i].1
+    }
+
+    /// The first page for which `past` holds, `past` being false for every
+    /// page before some point and true from it on; `len()` if none.
+    fn first(&self, past: impl Fn(usize) -> bool) -> usize {
+        let (mut lo, mut hi) = (0, self.len());
+        while lo < hi {
+            let mid = lo + (hi - lo) / 2;
+            if past(mid) { hi = mid } else { lo = mid + 1 }
+        }
+        lo
+    }
+
+    /// The page nearest widget `y` (a point between pages belongs to the
+    /// nearer one, ties to the earlier), or `None` with no pages.
+    pub fn nearest(&self, y: f64) -> Option<usize> {
+        if self.is_empty() {
+            return None;
+        }
+        let distance = |i: usize| {
+            let (top, h) = (self.tops[i].floor(), self.sizes[i].1);
+            if y < top { top - y } else if y > top + h { y - top - h } else { 0.0 }
+        };
+        // The first page whose bottom reaches y; y is in it, in the gap
+        // above it, or past the last page.
+        let i = self.first(|i| self.bottom(i) >= y).min(self.len() - 1);
+        if i > 0 && distance(i - 1) <= distance(i) { Some(i - 1) } else { Some(i) }
+    }
+}
+
 impl RenderTree {
     /// Where each page starts, as a character offset in `doc`'s text
     /// (paragraphs joined by one newline, `Document::paragraph_offset`):
@@ -306,6 +397,11 @@ impl RenderTree {
             out.push(first.unwrap_or(previous).max(previous));
         }
         out
+    }
+
+    /// The pages stacked at `scale` px per point with `gap` px between.
+    pub fn page_stack(&self, scale: f64, gap: f64) -> PageStack {
+        PageStack::new(self.pages.iter().map(|p| (p.width_pt * scale, p.height_pt * scale)).collect(), gap)
     }
 
     /// The page holding the first line of paragraph `para`, if any.
