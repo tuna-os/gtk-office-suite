@@ -349,4 +349,67 @@ mod tests {
         let info = tool("pdfinfo", &[handouts.to_str().unwrap()]).unwrap();
         assert!(info.contains("(A4)") && info.contains("Pages:           1"), "{info}");
     }
+
+    /// The master's decorations are on every exported page, behind each
+    /// slide's own content, as the editor draws them: a green band the
+    /// slides themselves don't have, counted on each page poppler draws.
+    #[test]
+    fn every_pdf_page_carries_the_masters_decorations() {
+        let mut d = deck(3);
+        d.masters[0].shapes = vec![SlideObject::Shape {
+            kind: decks_core::engine::shape::ShapeKind::Rect,
+            x: 0.0,
+            y: 480.0,
+            w: 960.0,
+            h: 60.0,
+            rotation: 0.0,
+            style: decks_core::engine::shape::ShapeStyle {
+                fill: Some(decks_core::engine::shape::Color(0x26, 0xA2, 0x69)),
+                gradient: None,
+                stroke: None,
+            },
+        }];
+        let dir = tempfile::tempdir().unwrap();
+        let pdf = dir.path().join("deck.pdf");
+        export_pdf(&d, &pdf, None).unwrap();
+        let p = pdf.to_str().unwrap();
+        for k in 1..=3 {
+            let page = k.to_string();
+            let prefix = dir.path().join(format!("page{k}"));
+            let Some(_) = tool("pdftoppm", &["-png", "-r", "96", "-f", &page, "-l", &page, "-singlefile", p, prefix.to_str().unwrap()]) else { return };
+            let s = cairo::ImageSurface::create_from_png(&mut std::fs::File::open(prefix.with_extension("png")).unwrap()).unwrap();
+            let (w, h, stride) = (s.width() as usize, s.height() as usize, s.stride() as usize);
+            let data = s.take_data().unwrap();
+            // BGRA: the band's green, and only in the band's rows.
+            let green = |x: usize, y: usize| {
+                let px = &data[y * stride + x * 4..][..4];
+                px[1] > 140 && px[2] < 70 && px[0] > 80 && px[0] < 130
+            };
+            let band = (480..540).flat_map(|y| (0..w).map(move |x| (x, y))).filter(|&(x, y)| green(x, y)).count();
+            assert!(band >= 960 * 58, "page {k}: the master's band has {band} of {} pixels", 960 * 60);
+            let above = (0..470).flat_map(|y| (0..w).map(move |x| (x, y))).filter(|&(x, y)| green(x, y)).count();
+            assert_eq!(above, 0, "page {k}: green above the band");
+            assert_eq!((w, h), (960, 540));
+        }
+    }
+
+    /// An export that can't be written is an error the window shows
+    /// ("Export Failed"), and leaves no file behind; the deck it was given
+    /// is borrowed, so the document itself can't change.
+    #[test]
+    fn an_export_that_cannot_be_written_is_an_error_and_writes_nothing() {
+        let dir = tempfile::tempdir().unwrap();
+        let d = deck(2);
+        let before = format!("{:?}", d.slides);
+        for per_page in [None, Some(4)] {
+            let pdf = dir.path().join("gone").join("deck.pdf");
+            assert!(export_pdf(&d, &pdf, per_page).is_err(), "{per_page:?}: a PDF into a folder that isn't there");
+            assert!(!pdf.exists());
+        }
+        let png = dir.path().join("gone").join("slide.png");
+        assert!(export_png(&d, 0, 960, &png).is_err());
+        assert!(!png.exists());
+        assert!(export_png(&d, 9, 960, &dir.path().join("slide.png")).is_err(), "no such slide");
+        assert_eq!(format!("{:?}", d.slides), before);
+    }
 }

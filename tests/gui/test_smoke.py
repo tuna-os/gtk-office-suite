@@ -4692,6 +4692,7 @@ class DecksExportSmoke(BaseGUITestCase):
 
     def setUp(self):
         self._dir = self.temp_dir(prefix="decks-export-")
+        self.isolate_snapshot(prefix="decks-export-snap-")
         self._doc = os.path.join(self._dir, "talk.pptx")
         with open(self._doc, "wb") as f:
             f.write(minimal_pptx_bytes("exported text"))
@@ -4737,6 +4738,31 @@ class DecksExportSmoke(BaseGUITestCase):
         img = Image.open(png)
         self.assertEqual(img.size, (1920, 1080))
         self.assertIsNone(self.process.poll(), "decks crashed exporting")
+
+    def test_a_failed_export_is_shown_and_leaves_the_deck_alone(self):
+        # decks-readiness.md, "export failure is visible and leaves the
+        # source document untouched". /proc takes no new files, even as
+        # root, so the PDF can't be written there.
+        import hashlib
+        self.wait_until(lambda: self.app.child(name="Slide canvas"), lambda c: c is not None, description="the deck to open")
+        with open(self._doc, "rb") as f:
+            before = hashlib.sha256(f.read()).hexdigest()
+        slides = self.trigger_snapshot("org.tunaos.decks")["slides"]
+        import subprocess
+        from dogtail import tree
+        subprocess.run(["gapplication", "action", "org.tunaos.decks", "export-pdf"], check=True, timeout=5)
+        name = self.wait_until(lambda: tree.root.findChild(lambda n: n.name == "Name:" and n.roleName == "text", retry=False, requireResult=False),
+                               lambda n: n is not None, description="the export save dialog")
+        name.text = "/proc/talk.pdf"
+        time.sleep(0.3)
+        tree.root.findChild(lambda n: n.name == "Save" and n.roleName == "push button").do_action(0)
+        self.wait_for_node(name="Export Failed")
+        self.assertFalse(os.path.exists("/proc/talk.pdf"))
+        self.wait_for_node(name="OK", roleName="push button").do_action(0)
+        self.assertIsNone(self.process.poll(), "decks crashed on a failed export")
+        self.assertEqual(self.trigger_snapshot("org.tunaos.decks")["slides"], slides, "the deck changed")
+        with open(self._doc, "rb") as f:
+            self.assertEqual(hashlib.sha256(f.read()).hexdigest(), before, "the source file changed")
 
 
 def decks_insert_button(test, match, description):
