@@ -42,6 +42,8 @@ pub struct SheetSnapshot {
     /// Currently-sorted column and direction (#113's "visible criteria"),
     /// or `None` if unsorted. `true` = ascending.
     pub sorted_col: Option<(usize, bool)>,
+    /// Whether the sheet is protected (#1277).
+    pub protected: bool,
 }
 
 pub struct WorkbookSnapshot {
@@ -96,6 +98,7 @@ pub fn snapshot(
         .sheet()
         .sorted_col
         .map(|(c, dir)| (c, dir == crate::sheet::SortDirection::Ascending));
+    let protected = state.sheet().protection.protected;
     drop(state);
 
     let sheet = SheetSnapshot {
@@ -105,6 +108,7 @@ pub fn snapshot(
         hidden_cols,
         selection,
         sorted_col,
+        protected,
     };
 
     WorkbookSnapshot { active_sheet_index, sheet_names, sheet, grid_origin: None }
@@ -184,7 +188,7 @@ impl WorkbookSnapshot {
             None => "null".to_string(),
         };
         format!(
-            "{{\"active_sheet_index\":{},\"sheet_names\":[{}],\"grid_origin\":{},\"sheet\":{{\"name\":{},\"cells\":[{}],\"hidden_rows\":[{}],\"hidden_cols\":[{}],\"selection\":[{},{},{},{}],\"sorted_col\":{}}}}}",
+            "{{\"active_sheet_index\":{},\"sheet_names\":[{}],\"grid_origin\":{},\"sheet\":{{\"name\":{},\"cells\":[{}],\"hidden_rows\":[{}],\"hidden_cols\":[{}],\"selection\":[{},{},{},{}],\"sorted_col\":{},\"protected\":{}}}}}",
             self.active_sheet_index,
             sheet_names,
             grid_origin,
@@ -194,6 +198,7 @@ impl WorkbookSnapshot {
             hidden_cols,
             sr0, sc0, sr1, sc1,
             sorted_col,
+            self.sheet.protected,
         )
     }
 }

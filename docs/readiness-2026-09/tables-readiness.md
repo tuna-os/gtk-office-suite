@@ -29,9 +29,24 @@ WorkbookController remains the sole mutation gateway. Stable sheet identities bi
       have both sheets in the new order under the new names, the formula with its cached value, and no formula on
       Sheet1. The file is then reopened in a fresh `tables two-sheets.xlsx` process and both sheets are walked
       through the switcher again, each showing its own content.
-- [ ] Exercise row/column edits, fill, sort/filter, named ranges and protection through actual GUI actions plus controller
+- [x] Exercise row/column edits, fill, sort/filter, named ranges and protection through actual GUI actions plus controller
       invariants. (Named ranges and the name box now also pass at 400px width: `Ctrl+G` opens a Go to Cell dialog when the
       narrow breakpoint hides the name box — #516, found by the display matrix.)
+      Writing the missing journeys (#1277) found three of these unreachable from the app. The controller had row and
+      column insert/delete, frozen rows and sheet protection, but no action or menu item reached them, and an edit to
+      a protected cell was dropped without a word. `tables/src/sheet_actions.rs` adds them to the toolbar's extended
+      section (the More menu when narrow): insert rows/columns at the selection, delete the selected ones, freeze the
+      rows above the selection, and protect the sheet. A refused edit or structural change now says "This sheet is
+      protected". Sort now leaves frozen rows in place, the header rule Sheets uses, so a header row is no longer
+      sorted in among the data (`sort_keeps_frozen_header_rows_in_place`). `TablesSheetStructureSmoke` drives each
+      through the snapshot:
+      - insert and delete of rows and columns: formulas are rewritten, recalculate after an edit (no stale value), and
+        undo restores the sheet exactly;
+      - an ascending then descending sort under a frozen header, undone;
+      - a protected sheet refuses an edit with the message, and unprotect allows it.
+
+      Fill, filter and named ranges already had journeys (`TablesFillHandleSmoke`, `TablesAutofillSeriesSmoke`,
+      `TablesFilterSmoke`, `TablesColumnMenuSmoke`, `TablesNamedRangeSmoke`).
 - [x] Resolve the Unicode XLSX property regression tracked in #377/#371/#358/#324 using minimized fixtures; do not weaken the generator just to turn CI green.
       Resolved by #450 and ticked here on re-verification (#1204). It was neither flaky nor about Unicode: the loader
       read a calamine `Range` at relative coordinates where `get_value` takes absolute ones, so any sheet whose content

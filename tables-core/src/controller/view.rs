@@ -251,8 +251,13 @@ impl WorkbookController {
         // found the 3 values sorted correctly among themselves but
         // shoved to rows 97-99 by the 97 blank rows sorting ahead of
         // them.
-        let mut order: Vec<usize> = (0..before_sheet.rows).collect();
-        order.sort_by(|&left, &right| {
+        // Frozen rows are the header (Sheets' rule): they stay where they
+        // are and only the rows below them are sorted. Without this a
+        // header row sorted in among the data, as "Name" does among names.
+        let header = before_sheet.frozen_rows.min(before_sheet.rows);
+        let mut order: Vec<usize> = (0..header).collect();
+        let mut body: Vec<usize> = (header..before_sheet.rows).collect();
+        body.sort_by(|&left, &right| {
             let left_text = &before_sheet.data[left][col];
             let right_text = &before_sheet.data[right][col];
             let left_blank = left_text.trim().is_empty();
@@ -274,6 +279,7 @@ impl WorkbookController {
                 }
             }
         });
+        order.extend(body);
         drop(state);
 
         // The sort as ops: every row's inputs in one SetCells (references
