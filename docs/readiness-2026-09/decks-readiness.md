@@ -27,10 +27,16 @@ One DecksController owns slide/object/master state, stable identities, selection
     ellipse, triangle, diamond) now go through Impress in both formats:
     `shape_kind_fill_outline_and_rotation_survive_impress_in_both_formats`
     in `decks-core/tests/soffice_oracle.rs`. Gradients and theme
-    decorations already had their own oracle tests. Picture crop:
-    `a_picture_crop_survives_impress_both_ways` (pptx `a:srcRect` and ODF
-    `fo:clip`, through Impress in both directions).
-- [ ] Presenter current/next/notes/timer and external-display disconnect fallback meet the admitted ADR.
+- [x] Presenter current/next/notes/timer and external-display disconnect fallback meet the admitted ADR.
+    Current, next, notes and the running clock: `DecksPresenterDisplaySmoke`.
+    Disconnect fallback, ADR 0004's "return to primary and show a visible
+    status": `decks_core::presenter::layout_after_monitor_change` moves a
+    window whose monitor went away back to the primary one; the show
+    watches GDK's monitor list, puts the audience window back fullscreen
+    there, and shows "The external display was disconnected…" over the
+    slides and as a banner on the presenter display.
+    `DecksPresenterDisplayLostSmoke` lays a show out for two monitors
+    (test mode only), reports the one real monitor, and sees the banner,
 - [x] PDF/print uses the same slide size/order/master content; export failure is visible and leaves the source document untouched.
     Size: `a_4_3_deck_exports_on_its_own_page` and
     `a_pdf_has_a_page_per_slide_with_its_text` (poppler reads the page
@@ -42,7 +48,18 @@ One DecksController owns slide/object/master state, stable identities, selection
     and `DecksExportSmoke.test_a_failed_export_is_shown_and_leaves_the_deck_alone`
     exports into `/proc`, sees "Export Failed", and finds the deck and
     its file unchanged.
-- [ ] Missing media and unsupported animation/comment content is preserved or blocked/warned by #374 before save.
+- [x] Missing media and unsupported animation/comment content is preserved or blocked/warned by #374 before save.
+    Warned. `decks_core::loss::content_a_save_drops` reads the file a save
+    would replace or copy from and lists what the writers can't carry:
+    comments, audio and video, embedded OLE objects, SmartArt, emphasis
+    and motion-path animations, and pictures the file names but doesn't
+    contain (unit tests for both formats in `decks-core/src/loss.rs`).
+    Save and Save As ask first (`decks/src/loss_ui.rs`, "Save Without This
+    Content?"); Cancel writes nothing. On the 70 real pptx files of the
+    render-lab corpus it flags 9: six with SmartArt, two with OLE objects,
+    one with motion paths, and no false comment from PowerPoint's authors
+    list. GUI: `DecksUnsupportedContentSmoke` (Cancel keeps the file's
+    bytes, Save Anyway drops the comment, the next save doesn't ask).
 
 Exit: deterministic GUI snapshots plus reopened-file semantics for authoring; display fallback test and exported-PDF evidence for presentation. A documentation checklist alone cannot close this issue. Depends on #354, #374 and the shared P0 persistence work.
 
