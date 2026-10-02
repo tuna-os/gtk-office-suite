@@ -500,6 +500,64 @@ class LettersMultiTabSaveFailureSmoke(BaseGUITestCase):
             self.assertEqual(stream.read(), "alpha original")
 
 
+def xlsx_parts(cells):
+    """A minimal xlsx, as (part, data) pairs: one sheet, `cells` an
+    {"A1": "text"} map of inline strings. Enough for Tables to open; built
+    here because the GUI image has no spreadsheet library."""
+    ns = 'xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"'
+    rel = "http://schemas.openxmlformats.org/officeDocument/2006/relationships"
+    rows = "".join(
+        f'<row r="{ref[1:]}"><c r="{ref}" t="inlineStr"><is><t>{text}</t></is></c></row>' for ref, text in cells.items()
+    )
+    return [
+        ("[Content_Types].xml",
+         '<?xml version="1.0" encoding="UTF-8"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">'
+         '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>'
+         '<Default Extension="xml" ContentType="application/xml"/>'
+         '<Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>'
+         '<Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>'
+         '</Types>'),
+        ("_rels/.rels",
+         f'<?xml version="1.0" encoding="UTF-8"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
+         f'<Relationship Id="rId1" Type="{rel}/officeDocument" Target="xl/workbook.xml"/></Relationships>'),
+        ("xl/workbook.xml",
+         f'<?xml version="1.0" encoding="UTF-8"?><workbook {ns} xmlns:r="{rel}"><sheets>'
+         '<sheet name="Sheet1" sheetId="1" r:id="rId1"/></sheets></workbook>'),
+        ("xl/_rels/workbook.xml.rels",
+         f'<?xml version="1.0" encoding="UTF-8"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
+         f'<Relationship Id="rId1" Type="{rel}/worksheet" Target="worksheets/sheet1.xml"/></Relationships>'),
+        ("xl/worksheets/sheet1.xml",
+         f'<?xml version="1.0" encoding="UTF-8"?><worksheet {ns}><sheetData>{rows}</sheetData></worksheet>'),
+    ]
+
+
+def odp_parts():
+    """A minimal odp with one empty slide, as (part, data) pairs."""
+    return [
+        ("mimetype", "application/vnd.oasis.opendocument.presentation"),
+        ("content.xml",
+         '<?xml version="1.0" encoding="UTF-8"?>'
+         '<office:document-content xmlns:office="urn:oasis:names:tc:opendocument:xmlns:office:1.0" '
+         'xmlns:draw="urn:oasis:names:tc:opendocument:xmlns:drawing:1.0" office:version="1.3">'
+         '<office:body><office:presentation><draw:page draw:name="One"/></office:presentation></office:body>'
+         '</office:document-content>'),
+        ("META-INF/manifest.xml",
+         '<?xml version="1.0" encoding="UTF-8"?>'
+         '<manifest:manifest xmlns:manifest="urn:oasis:names:tc:opendocument:xmlns:manifest:1.0" manifest:version="1.3">'
+         '<manifest:file-entry manifest:full-path="/" manifest:media-type="application/vnd.oasis.opendocument.presentation"/>'
+         '<manifest:file-entry manifest:full-path="content.xml" manifest:media-type="text/xml"/>'
+         '</manifest:manifest>'),
+    ]
+
+
+def write_package(path, parts):
+    """Write (part, data) pairs as a zip package, `mimetype` stored first."""
+    import zipfile
+    with zipfile.ZipFile(path, "w") as z:
+        for part, data in parts:
+            z.writestr(part, data, compress_type=zipfile.ZIP_STORED if part == "mimetype" else zipfile.ZIP_DEFLATED)
+
+
 class FailedSaveKeepsWorkMixin:
     """A save that fails keeps the work, in Tables and Decks as in Letters
     (LettersSaveFailureSmoke, #436): the edit stays in the document, the
@@ -509,14 +567,11 @@ class FailedSaveKeepsWorkMixin:
     folder away, which holds even when the journey runs as root."""
 
     def _prepare(self, name, data_by_part):
-        import zipfile
         self._dir = self.temp_dir(prefix=f"{self.app_name}-save-failure-")
         self._source = os.path.join(self._dir, "source")
         os.mkdir(self._source)
         self._path = os.path.join(self._source, name)
-        with zipfile.ZipFile(self._path, "w") as z:
-            for part, data in data_by_part:
-                z.writestr(part, data, compress_type=zipfile.ZIP_STORED if part == "mimetype" else zipfile.ZIP_DEFLATED)
+        write_package(self._path, data_by_part)
         with open(self._path, "rb") as f:
             self._original = f.read()
         self.launch_args = [self._path]
@@ -553,29 +608,7 @@ class TablesSaveFailureSmoke(FailedSaveKeepsWorkMixin, BaseGUITestCase):
     ERROR = "Error saving file"
 
     def setUp(self):
-        ns = 'xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"'
-        rel = "http://schemas.openxmlformats.org/officeDocument/2006/relationships"
-        self._prepare("book.xlsx", [
-            ("[Content_Types].xml",
-             '<?xml version="1.0" encoding="UTF-8"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">'
-             '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>'
-             '<Default Extension="xml" ContentType="application/xml"/>'
-             '<Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>'
-             '<Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>'
-             '</Types>'),
-            ("_rels/.rels",
-             f'<?xml version="1.0" encoding="UTF-8"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
-             f'<Relationship Id="rId1" Type="{rel}/officeDocument" Target="xl/workbook.xml"/></Relationships>'),
-            ("xl/workbook.xml",
-             f'<?xml version="1.0" encoding="UTF-8"?><workbook {ns} xmlns:r="{rel}"><sheets>'
-             '<sheet name="Sheet1" sheetId="1" r:id="rId1"/></sheets></workbook>'),
-            ("xl/_rels/workbook.xml.rels",
-             f'<?xml version="1.0" encoding="UTF-8"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
-             f'<Relationship Id="rId1" Type="{rel}/worksheet" Target="worksheets/sheet1.xml"/></Relationships>'),
-            ("xl/worksheets/sheet1.xml",
-             f'<?xml version="1.0" encoding="UTF-8"?><worksheet {ns}><sheetData>'
-             '<row r="1"><c r="A1" t="inlineStr"><is><t>kept</t></is></c></row></sheetData></worksheet>'),
-        ])
+        self._prepare("book.xlsx", xlsx_parts({"A1": "kept"}))
         super().setUp()
 
     def _b1(self):
@@ -606,21 +639,7 @@ class DecksSaveFailureSmoke(FailedSaveKeepsWorkMixin, BaseGUITestCase):
     ERROR = "Error saving presentation"
 
     def setUp(self):
-        self._prepare("deck.odp", [
-            ("mimetype", "application/vnd.oasis.opendocument.presentation"),
-            ("content.xml",
-             '<?xml version="1.0" encoding="UTF-8"?>'
-             '<office:document-content xmlns:office="urn:oasis:names:tc:opendocument:xmlns:office:1.0" '
-             'xmlns:draw="urn:oasis:names:tc:opendocument:xmlns:drawing:1.0" office:version="1.3">'
-             '<office:body><office:presentation><draw:page draw:name="One"/></office:presentation></office:body>'
-             '</office:document-content>'),
-            ("META-INF/manifest.xml",
-             '<?xml version="1.0" encoding="UTF-8"?>'
-             '<manifest:manifest xmlns:manifest="urn:oasis:names:tc:opendocument:xmlns:manifest:1.0" manifest:version="1.3">'
-             '<manifest:file-entry manifest:full-path="/" manifest:media-type="application/vnd.oasis.opendocument.presentation"/>'
-             '<manifest:file-entry manifest:full-path="content.xml" manifest:media-type="text/xml"/>'
-             '</manifest:manifest>'),
-        ])
+        self._prepare("deck.odp", odp_parts())
         super().setUp()
 
     def _kinds(self):
@@ -631,6 +650,135 @@ class DecksSaveFailureSmoke(FailedSaveKeepsWorkMixin, BaseGUITestCase):
         self.gapplication_action(self.AID, "add-shape")
         self.wait_until(self._kinds, lambda k: k == ["Shape"], description="a shape added")
         self._fail_a_save_and_keep_the_work(lambda: self._kinds() == ["Shape"])
+
+
+class KeyboardOnlyMixin:
+    """performance-accessibility.md, "keyboard-only edit/save/undo" (#1208):
+    each app edited, undone and saved with keys alone, no pointer and no
+    D-Bus action, from a document opened at launch; asserted on the
+    model (the snapshot) and on the saved file."""
+
+    def _open(self, name, write):
+        self._dir = self.temp_dir(prefix=f"{self.app_name}-keyboard-only-")
+        self._path = os.path.join(self._dir, name)
+        write(self._path)
+        self.launch_args = [self._path]
+        self.isolate_autosave_state()
+        self.isolate_snapshot(prefix=f"{self.app_name}-keyboard-only-snap-")
+
+    def _saved(self, part, needle):
+        import zipfile
+
+        def has():
+            try:
+                with zipfile.ZipFile(self._path) as z:
+                    return needle in z.read(part).decode()
+            except (OSError, KeyError, zipfile.BadZipFile):
+                return False
+        self.wait_until(has, bool, description=f"Ctrl+S to write {needle!r} into {part}")
+
+
+class LettersKeyboardOnlySmoke(KeyboardOnlyMixin, BaseGUITestCase):
+    app_name = "letters"
+
+    def setUp(self):
+        def write(path):
+            with open(path, "w", encoding="utf-8") as f:
+                f.write("Opening line\n")
+        self._open("note.md", write)
+        super().setUp()
+
+    def _text(self):
+        snap = self.trigger_snapshot("org.tunaos.letters")
+        return "\n".join("".join(r["text"] for r in p["runs"]) for p in snap["paragraphs"])
+
+    def test_type_undo_and_save_with_keys_alone(self):
+        from dogtail import rawinput
+        self.wait_until(self._text, lambda t: "Opening line" in t, description="note.md to open")
+        self._activate_window()
+        rawinput.keyCombo("<Control>End")
+        rawinput.typeText(" discarded")
+        self.wait_until(self._text, lambda t: "discarded" in t, description="the typed word")
+        rawinput.keyCombo("<Control>z")
+        self.wait_until(self._text, lambda t: "discarded" not in t, description="Ctrl+Z to take it back")
+        rawinput.typeText(" kept")
+        self.wait_until(self._text, lambda t: "kept" in t, description="the word to keep")
+        rawinput.keyCombo("<Control>s")
+
+        def saved():
+            with open(self._path, encoding="utf-8") as f:
+                text = f.read()
+            return "kept" in text and "discarded" not in text
+        self.wait_until(saved, bool, description="Ctrl+S to write the kept word and not the undone one")
+        self.assertIsNone(self.process.poll())
+
+
+class TablesKeyboardOnlySmoke(KeyboardOnlyMixin, BaseGUITestCase):
+    app_name = "tables"
+
+    def setUp(self):
+        self._open("book.xlsx", lambda path: write_package(path, xlsx_parts({"A1": "start"})))
+        super().setUp()
+
+    def _cell(self, row, col):
+        cells = self.trigger_snapshot("org.tunaos.tables")["sheet"]["cells"]
+        return next((c["value"] for c in cells if (c["row"], c["col"]) == (row, col)), None)
+
+    def test_type_undo_and_save_with_keys_alone(self):
+        from dogtail import rawinput
+        self.wait_until(lambda: self._cell(0, 0), lambda v: v == "start", description="book.xlsx to open")
+        self._activate_window()
+        for ref, value in (("B1", "13"), ("B2", "29")):
+            rawinput.keyCombo("<Control>g")
+            time.sleep(0.3)
+            rawinput.typeText(ref)
+            rawinput.keyCombo("Return")
+            time.sleep(0.3)
+            rawinput.typeText(value)
+            rawinput.keyCombo("Return")
+        self.wait_until(lambda: self._cell(1, 1), lambda v: v == "29", description="29 typed into B2")
+        rawinput.keyCombo("Escape")
+        rawinput.keyCombo("<Control>z")
+        self.wait_until(lambda: self._cell(1, 1), lambda v: not v, description="Ctrl+Z to empty B2 again")
+        self.assertEqual(self._cell(0, 1), "13", "one undo, one edit")
+        rawinput.keyCombo("<Control>s")
+        self._saved("xl/worksheets/sheet1.xml", "13")
+        import zipfile
+        with zipfile.ZipFile(self._path) as z:
+            self.assertNotIn("29", z.read("xl/worksheets/sheet1.xml").decode(), "the undone edit was saved")
+
+
+class DecksKeyboardOnlySmoke(KeyboardOnlyMixin, BaseGUITestCase):
+    app_name = "decks"
+
+    def setUp(self):
+        self._open("deck.odp", lambda path: write_package(path, odp_parts()))
+        super().setUp()
+
+    def _kinds(self):
+        return [o["kind"] for s in self.trigger_snapshot("org.tunaos.decks")["slides"] for o in s["objects"]]
+
+    def _palette(self, command):
+        from dogtail import rawinput
+        rawinput.keyCombo("<Control>k")
+        self.wait_for_node(name="Command Palette")
+        rawinput.typeText(command)
+        time.sleep(0.5)
+        rawinput.keyCombo("Return")
+
+    def test_insert_undo_redo_and_save_with_keys_alone(self):
+        from dogtail import rawinput
+        self.wait_until(self._kinds, lambda k: k == [], description="deck.odp to open")
+        self._activate_window()
+        self._palette("Add Shape")
+        self.wait_until(self._kinds, lambda k: k == ["Shape"], description="the palette's Add Shape")
+        rawinput.keyCombo("<Control>z")
+        self.wait_until(self._kinds, lambda k: k == [], description="Ctrl+Z to remove it")
+        rawinput.keyCombo("<Control><Shift>z")
+        self.wait_until(self._kinds, lambda k: k == ["Shape"], description="Ctrl+Shift+Z to bring it back")
+        rawinput.keyCombo("<Control>s")
+        self._saved("content.xml", "<draw:rect")
+        self.assertIsNone(self.process.poll())
 
 
 class UnattendedAutosaveMixin:
