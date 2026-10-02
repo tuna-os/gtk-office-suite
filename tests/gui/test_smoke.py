@@ -4515,6 +4515,82 @@ class DecksPresenterDisplaySmoke(BaseGUITestCase):
         self.assertIsNone(self.process.poll(), "decks crashed running a show")
 
 
+class DecksPresentationDisplayChoiceSmoke(DecksPresenterDisplaySmoke):
+    """Preferences ▸ Presentation Display (ADR 0004, "explicit external
+    display selection"): with display 1 chosen, a two-monitor show puts the
+    slides on display 1 and the presenter display on the other. The
+    setting is planted in an isolated keyfile backend; the layout is read
+    from the slide area's accessible description."""
+
+    def setUp(self):
+        cfg = self.isolate_gsettings(prefix="decks-display-choice-")
+        os.makedirs(os.path.join(cfg, "glib-2.0", "settings"), exist_ok=True)
+        with open(os.path.join(cfg, "glib-2.0", "settings", "keyfile"), "w") as f:
+            f.write("[org/tunaos/decks]\npresentation-display=0\n")
+        self.launch_env = {**getattr(self, "launch_env", {}), "GTK_OFFICE_TEST_MODE": "1", "GTK_OFFICE_TEST_MONITORS": "2"}
+        super().setUp()
+
+    def test_the_chosen_display_gets_the_slides(self):
+        import subprocess
+        aid = "org.tunaos.decks"
+        self.wait_until(lambda: self.app.child(name="Slide canvas").description,
+                        lambda d: "of 2" in d, interval=0.5, description="the two-slide deck to open")
+        subprocess.run(["gapplication", "action", aid, "present"], check=True, timeout=5)
+        self.wait_until(self._texts, lambda t: "Slide 1 of 2" in t, interval=0.5,
+                        description="the presenter display, beside the audience window")
+        self.assertEqual(self.app.child(name="Slide show").description, "On display 1")
+        self.app.child(name="End Show", roleName="push button").do_action(0)
+        self.assertIsNone(self.process.poll(), "decks crashed presenting on a chosen display")
+
+
+class DecksPresenterDisplayLostSmoke(DecksPresenterDisplaySmoke):
+    """ADR 0004, "Presenter display": "If external display disappears,
+    return to primary and show a visible status". The show is laid out as
+    if there were two monitors (GTK_OFFICE_TEST_MONITORS, test mode only):
+    the audience window and the presenter display both open. Then the
+    display reports its one real monitor (`test-monitors-changed`, what
+    GDK's monitor list does when a projector is unplugged): the presenter
+    display shows the status, Dismiss hides it, and the show goes on."""
+
+    LOST = "The external display was disconnected. The show continues on this screen."
+
+    def setUp(self):
+        self.launch_env = {**getattr(self, "launch_env", {}), "GTK_OFFICE_TEST_MODE": "1", "GTK_OFFICE_TEST_MONITORS": "2"}
+        super().setUp()
+
+    def _slides_on(self):
+        return self.app.child(name="Slide show").description
+
+    def _showing(self, name):
+        import pyatspi
+        nodes = self.app.findChildren(lambda n: n.name == name)
+        return any(n.getState().contains(pyatspi.STATE_SHOWING) for n in nodes)
+
+    def test_losing_the_external_display_shows_a_status_and_the_show_goes_on(self):
+        import subprocess
+        aid = "org.tunaos.decks"
+        self.wait_until(lambda: self.app.child(name="Slide canvas").description,
+                        lambda d: "of 2" in d, interval=0.5, description="the two-slide deck to open")
+        subprocess.run(["gapplication", "action", aid, "present"], check=True, timeout=5)
+        self.wait_until(self._texts, lambda t: "Slide 1 of 2" in t, interval=0.5,
+                        description="the presenter display, beside the audience window")
+        frames = [n.name for n in self.app.findChildren(lambda n: n.roleName == "frame")]
+        self.assertIn("Slide Show", frames)
+        self.assertEqual(self._slides_on(), "On display 2", "automatic: the slides on the second display")
+        self.assertFalse(self._showing(self.LOST), "the status before anything was unplugged")
+
+        subprocess.run(["gapplication", "action", aid, "test-monitors-changed"], check=True, timeout=5)
+        self.wait_until(lambda: self._showing(self.LOST), bool, interval=0.5,
+                        description="the presenter display to say the external display went away")
+        self.assertEqual(self._slides_on(), "On display 1", "the slides back on the primary display")
+        self.app.child(name="Dismiss", roleName="push button").do_action(0)
+        self.wait_until(lambda: self._showing(self.LOST), lambda s: not s, interval=0.5, description="Dismiss to hide it")
+        self.app.child(name="Next Slide", roleName="push button").do_action(0)
+        self.wait_until(self._texts, lambda t: "Slide 2 of 2" in t, interval=0.5, description="the show to go on")
+        self.app.child(name="End Show", roleName="push button").do_action(0)
+        self.assertIsNone(self.process.poll(), "decks crashed losing a display")
+
+
 class DecksShowBuildsSmoke(BaseGUITestCase):
     """A show plays a slide's builds, one per click, before moving on
     (DESIGN-UI.md, "Object builds"). The deck is an odp whose first slide
