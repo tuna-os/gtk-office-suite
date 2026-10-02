@@ -216,7 +216,37 @@ pub fn capture_with_starts(buf: &gtk::TextBuffer) -> (Document, Vec<usize>) {
     capture_tables(&mut paragraphs, &mut starts, 1);
     let mut doc = Document { paragraphs, ..Document::new() };
     read_sidecars(buf, &mut doc);
+    if let (Some(style), Some(last)) = (trailing_style(buf), doc.paragraphs.last_mut()) {
+        if last.runs.is_empty() && last.style == letters_core::ParaStyle::default() {
+            last.style = style;
+        }
+    }
     (doc, starts)
+}
+
+/// Buffer data key holding the style of an empty last paragraph.
+const TRAILING_KEY: &str = "letters-trailing-style";
+
+/// Keep the style of `doc`'s last paragraph beside the buffer when that
+/// paragraph is empty (#1278). An empty paragraph's tags cover its
+/// terminating newline, but the last paragraph has none: GTK cannot tag
+/// an empty range, so a heading, page break or spacing set on an empty
+/// last line was gone from the next capture, which is what a save writes.
+/// Render and every live-model change set it; capture reads it back.
+pub(crate) fn set_trailing_style(buf: &gtk::TextBuffer, doc: &Document) {
+    let style = doc
+        .paragraphs
+        .last()
+        .filter(|p| p.runs.iter().all(|r| r.text.is_empty() && r.style == RunStyle::default()))
+        .filter(|p| p.style.table_cell.is_none() && p.style != letters_core::ParaStyle::default())
+        .map(|p| p.style.clone());
+    // SAFETY: stored and read back as the same type, under this key only.
+    unsafe { buf.set_data(TRAILING_KEY, style) };
+}
+
+fn trailing_style(buf: &gtk::TextBuffer) -> Option<letters_core::ParaStyle> {
+    // SAFETY: only ever set by set_trailing_style, with this type.
+    unsafe { buf.data::<Option<letters_core::ParaStyle>>(TRAILING_KEY).and_then(|p| p.as_ref().clone()) }
 }
 
 /// The paragraphs of whole buffer lines from offset `from` (a line start)
@@ -1016,6 +1046,7 @@ pub(crate) fn render_lines(paragraphs: &[Paragraph]) -> Vec<std::borrow::Cow<'_,
 /// Replace the buffer's content with a rendered Document.
 pub fn render_to_buffer(doc: &Document, buf: &gtk::TextBuffer) {
     set_buffer_sidecars(doc, buf);
+    set_trailing_style(buf, doc);
     buf.set_text("");
     let mut insert = buf.start_iter();
     let lines = render_lines(&doc.paragraphs);
