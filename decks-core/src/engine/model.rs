@@ -234,6 +234,18 @@ impl SlideObject {
             SlideObject::Circle { y, r, .. } => *y - *r,
         }
     }
+    /// Width and height of the bounding box `x()`/`y()` place.
+    pub fn size(&self) -> (f64, f64) {
+        match self {
+            SlideObject::TextBox { w, h, .. }
+            | SlideObject::Rect { w, h, .. }
+            | SlideObject::Shape { w, h, .. }
+            | SlideObject::Table { w, h, .. }
+            | SlideObject::Chart { w, h, .. }
+            | SlideObject::Image { w, h, .. } => (*w, *h),
+            SlideObject::Circle { r, .. } => (*r * 2.0, *r * 2.0),
+        }
+    }
     pub fn rotation(&self) -> f64 {
         match self {
             SlideObject::TextBox { rotation, .. }
