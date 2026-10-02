@@ -588,9 +588,20 @@ impl LettersWindow {
                 let Ok(path) = std::env::var("GTK_OFFICE_SNAPSHOT_PATH") else { return };
                 let Some(buf) = active_buffer(&tv) else { return };
                 let doc = crate::bridge::capture_from_buffer(&buf);
-                if let Ok(json) = serde_json::to_string(&doc) {
-                    let _ = std::fs::write(path, json);
+                let Ok(mut json) = serde_json::to_value(&doc) else { return };
+                // The view: zoom, the laid-out pages' sizes in points and
+                // the scroll, which say where the page view is (#1283).
+                let pv = tv.selected_page().and_then(|p| find_page_container(&p.child())).and_then(|pc| pc.page_view());
+                if let (Some(pv), Some(obj)) = (pv, json.as_object_mut()) {
+                    let pages: Vec<_> = (0..pv.page_count()).filter_map(|i| pv.page_size_pt(i)).map(|(w, h)| [w, h]).collect();
+                    let scroll = pv
+                        .parent()
+                        .and_then(|p| p.downcast::<gtk::Viewport>().ok())
+                        .and_then(|vp| vp.vadjustment())
+                        .map_or(0.0, |a| a.value());
+                    obj.insert("view".into(), serde_json::json!({"zoom": pv.zoom(), "pages": pages, "scroll_y": scroll}));
                 }
+                let _ = std::fs::write(path, json.to_string());
             });
             app.add_action(&act);
 

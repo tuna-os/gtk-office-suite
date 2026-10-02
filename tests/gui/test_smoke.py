@@ -69,6 +69,90 @@ class LettersSnapshotSmoke(BaseGUITestCase):
         self.assertIsNone(self.process.poll(), "letters crashed writing a snapshot")
 
 
+class LettersAccessibleGeometrySmoke(BaseGUITestCase):
+    """The page view's accessible node follows zoom and scrolling (#1283).
+    Letters shows a document as one text box (Print Layout's page view,
+    read through GtkAccessibleText) rather than as virtual children, so
+    after each step this checks that node: its name, role and states, its
+    text against the document, and its bounds against the pages: the
+    pages stacked with 24px gaps at 96/72 px per point times the zoom
+    (letters/src/page_view.rs), offset by the scroll. The expectation is
+    computed here from the snapshot's page sizes in points, zoom and
+    scroll. Bounds are read relative to the page view's viewport (#132).
+    Per-character bounds need GTK 4.16's AccessibleText extents; the
+    suite builds against 4.14."""
+
+    app_name = "letters"
+    AID = "org.tunaos.letters"
+    LINES = [f"Paragraph {i} of the long document." for i in range(1, 121)]
+
+    def setUp(self):
+        d = self.temp_dir(prefix="letters-a11y-geometry-")
+        path = os.path.join(d, "long.txt")
+        with open(path, "w") as f:
+            f.write("\n".join(self.LINES) + "\n")
+        self.launch_args = [path]
+        self.isolate_autosave_state()
+        self.isolate_snapshot(prefix="letters-a11y-geometry-snap-")
+        super().setUp()
+
+    def _view(self):
+        return self.app.child(name="Print Layout", roleName="text")
+
+    def _mismatches(self):
+        import math
+        import pyatspi
+        view = self.trigger_snapshot(self.AID).get("view")
+        if not view or not view["pages"]:
+            return ["no pages laid out"]
+        node = self._view()
+        problems = []
+        states = node.getState()
+        for state in (pyatspi.STATE_FOCUSED, pyatspi.STATE_EDITABLE, pyatspi.STATE_MULTI_LINE):
+            if not states.contains(state):
+                problems.append(f"page view is not {pyatspi.stateToString(state)}")
+        text = node.queryText()
+        content = text.getText(0, text.characterCount)
+        if content.rstrip("\n") != "\n".join(self.LINES):
+            problems.append(f"page view text {content[:60]!r}... is not the document")
+        scale = 96.0 / 72.0 * view["zoom"] / 100.0
+        width = max(w for w, _ in view["pages"]) * scale + 48.0
+        height = sum(h * scale + 24.0 for _, h in view["pages"]) + 24.0
+        e = node.queryComponent().getExtents(2)  # relative to the viewport
+        port = node.parent.queryComponent().getExtents(2)
+        want_w = max(port.width, math.ceil(width))
+        if abs(e.width - want_w) > 1 or abs(e.height - math.ceil(height)) > 1:
+            problems.append(f"page view is {e.width}x{e.height}, the pages need {want_w}x{math.ceil(height)}")
+        if abs(e.y + view["scroll_y"]) > 1:
+            problems.append(f"page view at y={e.y}, scrolled by {view['scroll_y']}")
+        return problems
+
+    def _check(self, what):
+        self.wait_until(self._mismatches, lambda p: p == [], interval=0.3, timeout=15.0,
+                        description=f"the page view's node to match the pages {what}")
+
+    def _zoom(self, percent):
+        slider = self.app.child(roleName="slider")
+        slider.queryValue().currentValue = float(percent)
+        self.wait_until(lambda: self.trigger_snapshot(self.AID)["view"]["zoom"], lambda z: z == percent,
+                        description=f"zoom {percent}%")
+
+    def test_page_view_follows_zoom_and_scroll(self):
+        from dogtail import rawinput
+        self.wait_until(lambda: len(self.trigger_snapshot(self.AID).get("view", {}).get("pages", [])), lambda n: n >= 3,
+                        description="the long document to lay out on several pages")
+        self._check("at first")
+        self._zoom(150)
+        self._check("at 150%")
+        rawinput.keyCombo("<Control>End")
+        self.wait_until(lambda: self.trigger_snapshot(self.AID)["view"]["scroll_y"], lambda y: y > 0,
+                        description="the view to scroll to the end")
+        self._check("scrolled to the end at 150%")
+        self._zoom(60)
+        self._check("at 60%")
+        self.assertIsNone(self.process.poll(), "letters crashed")
+
+
 class LettersFormattingSmoke(BaseGUITestCase):
     app_name = "letters"
 
@@ -2074,7 +2158,19 @@ class TablesUnclearableSnapshotSmoke(TablesSavedDocumentMixin, BaseGUITestCase):
         os.mkdir(blocked)
 
         # The workbook already has a path, so Ctrl+S writes it and clears.
+        before = os.stat(out_path).st_mtime_ns
         rawinput.keyCombo("<Control>s")
+        # `app_output` stops the app to read its stderr, so it can only be
+        # asked once the save has finished: asked any earlier, it killed the
+        # app between writing the file and clearing the snapshot, and every
+        # later poll got the same cached stderr with no report in it. The
+        # file changing says the save handler is running; an accessibility
+        # query is answered on the same main loop, so its answer comes only
+        # after that handler, clear included, has returned.
+        def _written():
+            self.assertNotEqual(os.stat(out_path).st_mtime_ns, before, "Ctrl+S has not written the file")
+        self.eventually(_written)
+        self.app.child(roleName="frame")
         def _settled():
             self.assertTrue(os.path.isdir(blocked), "the clear should not have removed it")
             _out, err = self.app_output()
@@ -3761,6 +3857,108 @@ class TablesA11yCellsSmoke(BaseGUITestCase):
         self.assertIsNone(self.process.poll(), "tables crashed exposing cells")
 
 
+class TablesAccessibleGeometrySmoke(BaseGUITestCase):
+    """Each visible cell's accessible node matches the model and the view
+    after a scroll and after the grid is resized (#1283). For every visible cell the
+    node exists with the cell's name ("C7: 37") and role, only the
+    active cell is selected, and its bounds are where the view draws the
+    cell, to the pixel. The expectation is the snapshot's `cell_rects`,
+    computed by tables-core from the current scroll and widget size.
+    Bounds are read relative to the grid (#132: AT-SPI misplaces widgets
+    nested in boxes, so window coordinates can't be compared). Tables
+    has no zoom."""
+
+    app_name = "tables"
+    AID = "org.tunaos.tables"
+    ROWS, COLS = 60, 12
+
+    def setUp(self):
+        d = self.temp_dir(prefix="tables-a11y-geometry-")
+        path = os.path.join(d, "grid.csv")
+        with open(path, "w") as f:
+            for r in range(self.ROWS):
+                f.write(",".join(str(r * self.COLS + c) for c in range(self.COLS)) + "\n")
+        self.launch_args = [path]
+        self.isolate_autosave_state()
+        self.isolate_snapshot(prefix="tables-a11y-geometry-snap-")
+        super().setUp()
+
+    @staticmethod
+    def _label(row, col):
+        return f"{chr(ord('A') + col)}{row + 1}"
+
+    def _mismatches(self):
+        import pyatspi
+        snap = self.trigger_snapshot(self.AID)
+        expected = {(r, c): (x, y, w, h) for r, c, x, y, w, h in snap["cell_rects"] if r < self.ROWS and c < self.COLS}
+        sel = snap["sheet"]["selection"]
+        first = self.app.findChild(lambda n: n.roleName == "table cell", retry=False, requireResult=False)
+        grid = first.parent if first is not None else self.app.child(name="Spreadsheet grid")
+        nodes = {}
+        for n in grid.children:
+            if n.roleName != "table cell":
+                continue
+            ref = (n.name or "").split(":")[0].split(",")[0]
+            nodes[ref] = n
+        problems = [] if nodes else [f"no cell nodes; grid children: {[(n.name, n.roleName) for n in grid.children[:5]]}"]
+        if not expected:
+            return ["no visible cells in the snapshot"]
+        for (r, c), rect in expected.items():
+            ref = self._label(r, c)
+            node = nodes.get(ref)
+            if node is None:
+                problems.append(f"{ref}: no accessible node")
+                continue
+            if node.name != f"{ref}: {r * self.COLS + c}":
+                problems.append(f"{ref}: named {node.name!r}")
+            e = node.queryComponent().getExtents(2)  # relative to the grid
+            got = (e.x, e.y, e.width, e.height)
+            if any(abs(a - b) > 1 for a, b in zip(got, rect)):
+                problems.append(f"{ref}: bounds {got}, drawn at {rect}")
+            selected = node.getState().contains(pyatspi.STATE_SELECTED)
+            if selected != (r == sel[0] and c == sel[1]):
+                problems.append(f"{ref}: selected={selected}")
+        return problems[:8]
+
+    def _check(self, what):
+        self.wait_until(self._mismatches, lambda p: p == [], interval=0.3, timeout=15.0,
+                        description=f"every visible cell's node to match the view {what}")
+
+    def _name_box_focused(self):
+        import pyatspi
+        return self.app.findChild(lambda n: n.name == "Cell reference" and n.getState().contains(pyatspi.STATE_FOCUSED),
+                                  retry=False, requireResult=False)
+
+    def _resize(self):
+        """Toggle the Format panel, which takes its width from the view.
+        (The window itself can't be resized here: the harness's window
+        manager, matchbox, sizes every window to the screen and undoes an
+        external resize.)"""
+        grid = self.app.child(name="Spreadsheet grid")
+        size = lambda: (grid.queryComponent().getExtents(2).width, grid.queryComponent().getExtents(2).height)
+        before = size()
+        self.app.child(name="Format", roleName="toggle button").do_action(0)
+        self.wait_until(size, lambda s: s != before, description=f"the grid to resize from {before}")
+
+    def test_cell_nodes_follow_scroll_and_resize(self):
+        from dogtail import rawinput
+        self.wait_until(lambda: self.trigger_snapshot(self.AID)["cell_rects"], bool, description="the grid to be laid out")
+        self._check("at first")
+        # A far jump scrolls the view right and down.
+        rawinput.keyCombo("<Control>g")
+        self.wait_until(self._name_box_focused, bool, description="the name box")
+        rawinput.typeText("J50")
+        rawinput.keyCombo("Return")
+        self.wait_until(lambda: self.trigger_snapshot(self.AID)["sheet"]["selection"][:2], lambda s: s == [49, 9],
+                        description="the jump to J50")
+        self._check("after scrolling to J50")
+        self._resize()
+        self._check("after the Format panel narrows the grid")
+        self._resize()
+        self._check("after the grid widens again")
+        self.assertIsNone(self.process.poll(), "tables crashed")
+
+
 class DecksA11yObjectsSmoke(BaseGUITestCase):
     """Virtual a11y children: slide objects are AT-SPI nodes."""
 
@@ -3781,6 +3979,91 @@ class DecksA11yObjectsSmoke(BaseGUITestCase):
             self.assertIsNotNone(rect)
             self.assertIsNone(self.process.poll(), "decks crashed exposing objects")
         self.eventually(_settled)
+
+
+class DecksAccessibleGeometrySmoke(BaseGUITestCase):
+    """Each slide object's accessible node follows the canvas through
+    resizes of the canvas (#1283): its name, role and selected state match the
+    model, and its bounds are where the canvas draws it, to the pixel.
+    The expectation is computed here from the snapshot's object boxes and
+    the canvas's size, with the canvas's own fit rule (the 960x540 slide
+    scaled to 92% of the largest fit, centred; decks/src/canvas.rs
+    `slide_geometry`). Bounds are read relative to the canvas (#132).
+    Decks has no zoom and the canvas does not scroll: the slide always
+    fits the window."""
+
+    app_name = "decks"
+    AID = "org.tunaos.decks"
+
+    def setUp(self):
+        self.isolate_autosave_state()
+        self.isolate_snapshot(prefix="decks-a11y-geometry-snap-")
+        super().setUp()
+
+    @staticmethod
+    def _name(obj):
+        if obj["kind"] == "TextBox":
+            text = (obj["text"] or "").replace("\n", " ")
+            return f"Text box: {text}" if text.strip() else "Text box, empty"
+        return {"Rect": "Rectangle", "Shape": "Rectangle"}.get(obj["kind"], obj["kind"])
+
+    def _canvas(self):
+        return self.app.child(name="Slide canvas")
+
+    def _mismatches(self):
+        import pyatspi
+        snap = self.trigger_snapshot(self.AID)
+        objects = snap["slides"][snap["current_slide"]]["objects"]
+        canvas = self._canvas()
+        size = canvas.queryComponent().getExtents(2)
+        scale = min(size.width / 960.0, size.height / 540.0) * 0.92
+        ox, oy = (size.width - 960.0 * scale) / 2.0, (size.height - 540.0 * scale) / 2.0
+        nodes = [n for n in canvas.children if n.roleName == "list item"]
+        if len(nodes) != len(objects):
+            return [f"{len(nodes)} nodes for {len(objects)} objects"]
+        problems = []
+        for node, obj in zip(nodes, objects):
+            want = (int(ox + obj["x"] * scale), int(oy + obj["y"] * scale), int(obj["w"] * scale), int(obj["h"] * scale))
+            e = node.queryComponent().getExtents(2)  # relative to the canvas
+            got = (e.x, e.y, e.width, e.height)
+            if any(abs(a - b) > 1 for a, b in zip(got, want)):
+                problems.append(f"object {obj['index']}: bounds {got}, drawn at {want}")
+            if node.name != self._name(obj):
+                problems.append(f"object {obj['index']}: named {node.name!r}")
+            selected = node.getState().contains(pyatspi.STATE_SELECTED)
+            if selected != (obj["index"] == snap["selected_object"]):
+                problems.append(f"object {obj['index']}: selected={selected}")
+        return problems
+
+    def _check(self, what):
+        self.wait_until(self._mismatches, lambda p: p == [], interval=0.3, timeout=15.0,
+                        description=f"every object's node to match the canvas {what}")
+
+    def _resize(self):
+        """Toggle the Format panel, which takes its width from the view.
+        (The window itself can't be resized here: the harness's window
+        manager, matchbox, sizes every window to the screen and undoes an
+        external resize.)"""
+        grid = self._canvas()
+        size = lambda: (grid.queryComponent().getExtents(2).width, grid.queryComponent().getExtents(2).height)
+        before = size()
+        self.app.child(name="Format", roleName="toggle button").do_action(0)
+        self.wait_until(size, lambda s: s != before, description=f"the canvas to resize from {before}")
+
+    def test_object_nodes_follow_resizes(self):
+        import subprocess
+        subprocess.run(["gapplication", "action", self.AID, "new-document"])
+        self.wait_until(lambda: self.trigger_snapshot(self.AID)["slide_count"], bool, description="a new deck")
+        subprocess.run(["gapplication", "action", self.AID, "add-text-box"])
+        subprocess.run(["gapplication", "action", self.AID, "add-shape"])
+        self.wait_until(lambda: len(self.trigger_snapshot(self.AID)["slides"][0]["objects"]), lambda n: n >= 2,
+                        description="a text box and a shape")
+        self._check("at first")
+        self._resize()
+        self._check("after the Format panel narrows the canvas")
+        self._resize()
+        self._check("after the canvas widens again")
+        self.assertIsNone(self.process.poll(), "decks crashed")
 
 
 class TablesFormatCellsSmoke(BaseGUITestCase):
