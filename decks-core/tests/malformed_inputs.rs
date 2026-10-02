@@ -374,3 +374,138 @@ fn seed_campaign() {
     );
     println!("{count} seeds × 2 mutation modes from seed {from}: no panics");
 }
+
+// ── unbounded nesting, out of process ─────────────────────────────────
+// A stack overflow aborts the process instead of unwinding, so the bounded
+// cases above stop at 10,000 levels. Here the readers run in a child
+// process — this test binary again, with `DEEP_NESTING_CHILD` set — on
+// 100,000 levels, and the parent fails when the child dies (an overflow) or
+// overruns its budget (super-linear work) (#1206). `DEEP_NESTING_DEPTH`
+// raises the depth.
+
+const DEEP_NESTING_CHILD: &str = "DEEP_NESTING_CHILD";
+
+fn depth() -> usize {
+    std::env::var("DEEP_NESTING_DEPTH").ok().and_then(|v| v.parse().ok()).unwrap_or(100_000)
+}
+
+fn nested(open: &str, close: &str, inner: &str, depth: usize) -> String {
+    let mut xml = String::from(
+        "<office:document-content xmlns:office=\"o\" xmlns:draw=\"d\" xmlns:text=\"t\">\
+         <office:body><office:presentation><draw:page draw:name=\"1\">",
+    );
+    xml.push_str(&open.repeat(depth));
+    xml.push_str(inner);
+    xml.push_str(&close.repeat(depth));
+    xml.push_str("</draw:page></office:presentation></office:body></office:document-content>");
+    xml
+}
+
+/// A pptx Decks wrote, its first slide replaced by `slide`.
+fn pptx_with_slide(slide: &str) -> Vec<u8> {
+    use std::io::Read;
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("deep.pptx");
+    decks_core::write_deck(path.to_str().unwrap(), &decks_core::Deck::new()).unwrap();
+    let mut source = zip::ZipArchive::new(std::fs::File::open(&path).unwrap()).unwrap();
+    let mut buffer = Vec::new();
+    {
+        let mut writer = zip::ZipWriter::new(Cursor::new(&mut buffer));
+        for i in 0..source.len() {
+            let mut entry = source.by_index(i).unwrap();
+            let name = entry.name().to_string();
+            let mut bytes = Vec::new();
+            entry.read_to_end(&mut bytes).unwrap();
+            if name == "ppt/slides/slide1.xml" {
+                bytes = slide.as_bytes().to_vec();
+            }
+            writer.start_file(name, SimpleFileOptions::default()).unwrap();
+            writer.write_all(&bytes).unwrap();
+        }
+        writer.finish().unwrap();
+    }
+    buffer
+}
+
+/// Runs only as the child `deep_nesting_neither_overflows_nor_crawls` starts.
+#[test]
+#[ignore = "the child process of deep_nesting_neither_overflows_nor_crawls"]
+fn deep_nesting_child() {
+    if std::env::var_os(DEEP_NESTING_CHILD).is_none() {
+        return;
+    }
+    let depth = depth();
+    for (name, xml) in [
+        ("spans", nested("<draw:frame><draw:text-box><text:p>", "</text:p></draw:text-box></draw:frame>", "", 1)
+            .replace("<text:p></text:p>", &format!("<text:p>{}x{}</text:p>", "<text:span>".repeat(depth), "</text:span>".repeat(depth)))),
+        ("frames", nested("<draw:frame>", "</draw:frame>", "", depth)),
+        ("groups", nested("<draw:g>", "</draw:g>", "<draw:rect/>", depth)),
+        ("lists", nested("<draw:frame><draw:text-box>", "</draw:text-box></draw:frame>", "", 1)
+            .replace("<draw:text-box></draw:text-box>", &format!("<draw:text-box>{}<text:p>x</text:p>{}</draw:text-box>",
+                "<text:list><text:list-item>".repeat(depth), "</text:list-item></text:list>".repeat(depth)))),
+    ] {
+        eprintln!("reading odp {name}");
+        let _ = read_without_unwinding(&package(&xml));
+    }
+    let group = "<p:grpSp><p:nvGrpSpPr><p:cNvPr id=\"9\" name=\"g\"/><p:cNvGrpSpPr/><p:nvPr/></p:nvGrpSpPr><p:grpSpPr/>";
+    let slide = format!(
+        "<p:sld xmlns:a=\"http://schemas.openxmlformats.org/drawingml/2006/main\" \
+         xmlns:p=\"http://schemas.openxmlformats.org/presentationml/2006/main\"><p:cSld><p:spTree>{}{}</p:spTree></p:cSld></p:sld>",
+        group.repeat(depth),
+        "</p:grpSp>".repeat(depth)
+    );
+    eprintln!("reading pptx groups");
+    let bytes = pptx_with_slide(&slide);
+    let mut file = tempfile::Builder::new().suffix(".pptx").tempfile().unwrap();
+    file.write_all(&bytes).unwrap();
+    file.flush().unwrap();
+    let path = file.path().to_str().unwrap().to_string();
+    let _ = catch_unwind(AssertUnwindSafe(|| decks_core::read_deck(&path)));
+    eprintln!("deep nesting: all read");
+}
+
+#[test]
+fn deep_nesting_neither_overflows_nor_crawls() {
+    run_deep_nesting_child(std::time::Duration::from_secs(120));
+}
+
+/// Start `deep_nesting_child` in a process of its own and fail on its death
+/// or on its overrunning `budget`, naming the input it had reached.
+fn run_deep_nesting_child(budget: std::time::Duration) {
+    use std::io::Read;
+    let mut child = std::process::Command::new(std::env::current_exe().unwrap())
+        .args(["deep_nesting_child", "--exact", "--ignored", "--nocapture", "--test-threads=1"])
+        .env(DEEP_NESTING_CHILD, "1")
+        .env_remove("RUST_MIN_STACK")
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::piped())
+        .spawn()
+        .expect("start the child");
+    let mut stderr = child.stderr.take().unwrap();
+    let reader = std::thread::spawn(move || {
+        let mut text = String::new();
+        let _ = stderr.read_to_string(&mut text);
+        text
+    });
+    let started = std::time::Instant::now();
+    let status = loop {
+        if let Some(status) = child.try_wait().unwrap() {
+            break Some(status);
+        }
+        if started.elapsed() > budget {
+            let _ = child.kill();
+            let _ = child.wait();
+            break None;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(100));
+    };
+    let text = reader.join().unwrap();
+    let reached = text.lines().rfind(|l| l.starts_with("reading ")).unwrap_or("(nothing)");
+    match status {
+        None => panic!("deep nesting took over {budget:?}; it was {reached}"),
+        Some(status) => {
+            assert!(status.success(), "a reader died on deep nesting ({status}) {reached}");
+            assert!(text.contains("deep nesting: all read"), "the child stopped early:\n{text}");
+        }
+    }
+}
