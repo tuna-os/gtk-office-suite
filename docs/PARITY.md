@@ -42,8 +42,8 @@ are not all green, and any fixture name the baseline does not have.
 | Headings 1–6 | ✅ | I1, I2, I3, I5 | ✅ letters/headings |
 | Paragraph alignment | ✅ | I1–I5 | ✅ letters/alignment |
 | Bullet/numbered lists (flat) | ✅ | I1–I3 + I5: markers render as the buffer representation and capture back to ListKind (bridge round-trip green) | ✅ letters/bullet-list, letters/numbered-list, letters/nested-list |
-| Hyperlinks | ✅ | I2, I5 (dynamic link:<url> tags) | 🟡 file-only |
-| Code blocks | ✅ | I1, I2 (CommonMark fenced 24/29), I3 | 🟡 file-only |
+| Hyperlinks | ✅ | I2, I5 (dynamic link:<url> tags) | ✅ letters/hyperlink |
+| Code blocks | ✅ | I1, I2 (CommonMark fenced 24/29), I3 | ✅ letters/code-block |
 | Markdown save/load with formatting | ✅ | I2 CommonMark ratchet **630/652 — target met** (raw HTML preserved verbatim; remaining 22 are escape/entity/autolink edge cases) | — |
 | DOCX save/load | ✅ | I2, I3, I4 | — |
 | Undo/redo | ✅ (buffer-level) | **move to model ops + I1**; I6 journey: tests/gui/test_letters.py (undo/redo typed text) | — |
@@ -58,13 +58,13 @@ are not all green, and any fixture name the baseline does not have.
 | Feature | Status | Proven by | Render |
 |---|---|---|---|
 | Tables in documents (cell-tagged model) | ✅ | I1+I2 round-trip, I3 structural (table-2x2 asserts coordinates). Interleaved position + UI editing remain | 🟠 letters/table (accepted metric artifact) |
-| Named paragraph styles (Title, Subtitle, Quote) | ✅ | I1+I2 round-trip | 🟡 file-only |
+| Named paragraph styles (Title, Subtitle, Quote) | ✅ | I1+I2 round-trip | ✅ letters/named-styles, letters/block-quote |
 | Font size / color per run | ✅ | I1 + I3 scenarios | ✅ letters/font-sizes, letters/text-color |
 | Superscript / subscript | ✅ | I1 + I3 (incl. LO w:position encoding) | ✅ letters/super-subscript |
 | Headers & footers with fields ({page}) | ✅ | I2 round-trip (Document.header/footer) | ✅ letters/header-footer, letters/page-numbers |
-| Page setup |  | breaks ✅ I2 round-trip; size/margins ✅ I2 (PageGeometry in docx sectPr + odt page-layout) + I3 oracle: geometry survives LO odt→docx pass | ✅ letters/page-break, letters/page-margins, letters/landscape |
+| Page setup | ✅ | breaks I2 round-trip; size/margins I2 docx_page_geometry_round_trips (letters-core/tests/docx.rs) and odt page_geometry_survives (PageGeometry in docx sectPr + odt page-layout) + I4 page_geometry_survives_lo_conversion (letters-core/tests/soffice_oracle.rs) | ✅ letters/page-break, letters/page-margins, letters/landscape |
 | Font family round-trip | ✅ | I2 (RunStyle.font_family; docx rFonts + odt fo:font-family) | ✅ letters/font-families |
-| Block quotes | ✅ | I1 + I3 (BlockQuotation style) + markdown quote round-trip | 🟡 file-only |
+| Block quotes | ✅ | I1 + I3 (BlockQuotation style) + markdown quote round-trip | ✅ letters/block-quote |
 | Line spacing round-trip | ✅ | I2 both formats (odt fo:line-height %, docx w:spacing auto rule via rdocx line_spacing_multiple) + I3 oracle through LO in both | ✅ letters/line-spacing |
 | ODT read/write | ✅ | I2 10-test round-trip (paras, h1–6, b/i/u/s, highlight, size, color, links, alignment, lists, page breaks, header/footer) + I3 oracle 7 tests: LO opens ours, we open LO's, bold survives LO odt→docx pass | — |
 
