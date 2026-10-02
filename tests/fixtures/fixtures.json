@@ -1,0 +1,28 @@
+{
+  "schema": 1,
+  "about": "Whole Markdown documents for Letters' Markdown reader and writer.",
+  "fixtures": {
+    "example_letter.md": {
+      "author": {"app": "hand-written", "version": null},
+      "format": "markdown",
+      "features": ["letters/markdown-save-load-with-formatting"],
+      "semantics": [
+        "meeting notes mixing headings, bold labels and numbered lists parse to more than five paragraphs",
+        "parse, serialize, parse yields the same Document"
+      ],
+      "permitted_losses": [],
+      "used_by": ["letters-core/tests/markdown_corpus.rs"]
+    },
+    "rich_document.md": {
+      "author": {"app": "hand-written", "version": null},
+      "format": "markdown",
+      "features": ["letters/markdown-save-load-with-formatting", "letters/code-blocks"],
+      "semantics": [
+        "a technical document mixing every block kind parses to more than five paragraphs",
+        "parse, serialize, parse yields the same Document"
+      ],
+      "permitted_losses": [],
+      "used_by": ["letters-core/tests/markdown_corpus.rs"]
+    }
+  }
+}
