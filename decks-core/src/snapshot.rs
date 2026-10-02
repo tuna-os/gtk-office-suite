@@ -20,6 +20,10 @@ pub struct ObjectSnapshot {
     pub text: Option<String>,
     pub x: f64,
     pub y: f64,
+    /// The bounding box's size (`SlideObject::size`), so a test can say
+    /// where the canvas draws the object.
+    pub w: f64,
+    pub h: f64,
 }
 
 pub struct SlideSnapshot {
@@ -39,34 +43,39 @@ pub struct DeckSnapshot {
     /// The master being edited, while the master view is open.
     pub editing_master: Option<usize>,
     pub slides: Vec<SlideSnapshot>,
+    /// The slide on screen and its selected object: window state, so the
+    /// window fills them in (the controller doesn't know them).
+    pub current_slide: Option<usize>,
+    pub selected_object: Option<usize>,
 }
 
 fn object_snapshot(index: usize, obj: &SlideObject) -> ObjectSnapshot {
+    let (w, h) = obj.size();
     match obj {
         SlideObject::TextBox { text, x, y, .. } => {
-            ObjectSnapshot { index, kind: "TextBox", text: Some(text.clone()), x: *x, y: *y }
+            ObjectSnapshot { index, kind: "TextBox", text: Some(text.clone()), x: *x, y: *y, w, h }
         }
         SlideObject::Rect { x, y, .. } => {
-            ObjectSnapshot { index, kind: "Rect", text: None, x: *x, y: *y }
+            ObjectSnapshot { index, kind: "Rect", text: None, x: *x, y: *y, w, h }
         }
         SlideObject::Circle { x, y, .. } => {
-            ObjectSnapshot { index, kind: "Circle", text: None, x: *x, y: *y }
+            ObjectSnapshot { index, kind: "Circle", text: None, x: *x, y: *y, w, h }
         }
         SlideObject::Shape { x, y, .. } => {
-            ObjectSnapshot { index, kind: "Shape", text: None, x: *x, y: *y }
+            ObjectSnapshot { index, kind: "Shape", text: None, x: *x, y: *y, w, h }
         }
         SlideObject::Table { x, y, .. } => {
-            ObjectSnapshot { index, kind: "Table", text: None, x: *x, y: *y }
+            ObjectSnapshot { index, kind: "Table", text: None, x: *x, y: *y, w, h }
         }
         SlideObject::Chart { x, y, chart, .. } => {
-            ObjectSnapshot { index, kind: "Chart", text: Some(chart.describe()), x: *x, y: *y }
+            ObjectSnapshot { index, kind: "Chart", text: Some(chart.describe()), x: *x, y: *y, w, h }
         }
         // A picture states its crop, as a chart states its data: the crop
         // cut from each side, left, top, right, bottom.
         SlideObject::Image { x, y, crop, .. } => {
             let text = (!crop.is_none())
                 .then(|| format!("crop {:.3} {:.3} {:.3} {:.3}", crop.left, crop.top, crop.right, crop.bottom));
-            ObjectSnapshot { index, kind: "Image", text, x: *x, y: *y }
+            ObjectSnapshot { index, kind: "Image", text, x: *x, y: *y, w, h }
         }
     }
 }
@@ -100,7 +109,7 @@ pub fn snapshot(controller: &DecksController) -> DeckSnapshot {
         })
         .collect();
     let masters = masters_ref.iter().map(|m| (m.name.clone(), m.shapes.len())).collect();
-    DeckSnapshot { slide_count, masters, editing_master: controller.editing_master(), slides: snapshots }
+    DeckSnapshot { slide_count, masters, editing_master: controller.editing_master(), slides: snapshots, current_slide: None, selected_object: None }
 }
 
 fn escape_json(s: &str) -> String {
@@ -141,12 +150,14 @@ impl DeckSnapshot {
                     .iter()
                     .map(|o| {
                         format!(
-                            "{{\"index\":{},\"kind\":{},\"text\":{},\"x\":{},\"y\":{}}}",
+                            "{{\"index\":{},\"kind\":{},\"text\":{},\"x\":{},\"y\":{},\"w\":{},\"h\":{}}}",
                             o.index,
                             json_str(o.kind),
                             json_opt_str(&o.text),
                             o.x,
                             o.y,
+                            o.w,
+                            o.h,
                         )
                     })
                     .collect::<Vec<_>>()
@@ -168,10 +179,14 @@ impl DeckSnapshot {
             .map(|(name, shapes)| format!("{{\"name\":{},\"shapes\":{shapes}}}", json_str(name)))
             .collect::<Vec<_>>()
             .join(",");
-        let editing = self.editing_master.map_or("null".to_string(), |i| i.to_string());
+        let opt = |v: Option<usize>| v.map_or("null".to_string(), |i| i.to_string());
         format!(
-            "{{\"slide_count\":{},\"masters\":[{masters}],\"editing_master\":{editing},\"slides\":[{}]}}",
-            self.slide_count, slides
+            "{{\"slide_count\":{},\"masters\":[{masters}],\"editing_master\":{},\"current_slide\":{},\"selected_object\":{},\"slides\":[{}]}}",
+            self.slide_count,
+            opt(self.editing_master),
+            opt(self.current_slide),
+            opt(self.selected_object),
+            slides
         )
     }
 }

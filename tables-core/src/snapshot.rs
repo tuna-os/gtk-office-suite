@@ -60,6 +60,26 @@ pub struct WorkbookSnapshot {
     /// (e.g. the 44sp touch targets in #118) — reporting it here keeps those
     /// tests pinned to the real layout instead.
     pub grid_origin: Option<(i32, i32)>,
+    /// Where each visible cell is in the grid widget, `(row, col, x, y,
+    /// w, h)`, at the view's scroll and size (#1283): what the cells'
+    /// accessible bounds must say. Filled by the app, which owns the
+    /// scroll; empty otherwise.
+    pub cell_rects: Vec<(usize, usize, i32, i32, i32, i32)>,
+}
+
+/// The visible cells of `sheet` in a grid view `view` = (width, height)
+/// px scrolled to `scroll`, with their widget-local rectangles, rounded as
+/// the accessible bounds are (`tables/src/grid_area.rs`).
+pub fn cell_rects(sheet: &crate::sheet::SheetModel, scroll: (f64, f64), view: (f64, f64)) -> Vec<(usize, usize, i32, i32, i32, i32)> {
+    let rows = crate::sheet::visible_rows(scroll.1, view.1, sheet);
+    let cols = crate::sheet::visible_cols(scroll.0, view.0, sheet);
+    let mut out = Vec::with_capacity(rows.len() * cols.len());
+    for &(r, y) in &rows {
+        for &(c, x) in &cols {
+            out.push((r, c, x.round() as i32, y.round() as i32, sheet.col_width(c).round() as i32, sheet.row_height(r).round() as i32));
+        }
+    }
+    out
 }
 
 /// Snapshot the active sheet's cells within `rows` x `cols`, skipping
@@ -107,7 +127,7 @@ pub fn snapshot(
         sorted_col,
     };
 
-    WorkbookSnapshot { active_sheet_index, sheet_names, sheet, grid_origin: None }
+    WorkbookSnapshot { active_sheet_index, sheet_names, sheet, grid_origin: None, cell_rects: Vec::new() }
 }
 
 fn escape_json(s: &str) -> String {
@@ -184,7 +204,7 @@ impl WorkbookSnapshot {
             None => "null".to_string(),
         };
         format!(
-            "{{\"active_sheet_index\":{},\"sheet_names\":[{}],\"grid_origin\":{},\"sheet\":{{\"name\":{},\"cells\":[{}],\"hidden_rows\":[{}],\"hidden_cols\":[{}],\"selection\":[{},{},{},{}],\"sorted_col\":{}}}}}",
+            "{{\"active_sheet_index\":{},\"sheet_names\":[{}],\"grid_origin\":{},\"sheet\":{{\"name\":{},\"cells\":[{}],\"hidden_rows\":[{}],\"hidden_cols\":[{}],\"selection\":[{},{},{},{}],\"sorted_col\":{}}},\"cell_rects\":[{}]}}",
             self.active_sheet_index,
             sheet_names,
             grid_origin,
@@ -194,6 +214,11 @@ impl WorkbookSnapshot {
             hidden_cols,
             sr0, sc0, sr1, sc1,
             sorted_col,
+            self.cell_rects
+                .iter()
+                .map(|(r, c, x, y, w, h)| format!("[{r},{c},{x},{y},{w},{h}]"))
+                .collect::<Vec<_>>()
+                .join(","),
         )
     }
 }
