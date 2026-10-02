@@ -144,17 +144,26 @@ impl SuiteApp {
         });
         app.add_action(&act_shortcuts);
 
+        // The choice is the app's `dark-mode` setting: saved when toggled,
+        // restored at startup (#1305). It used to be neither, so the style
+        // lasted only until the app was restarted.
         let act_dark = gio::SimpleAction::new("toggle-dark-mode", None);
+        let id = app_id.to_string();
         act_dark.connect_activate(move |_, _| {
             let sm = adw::StyleManager::default();
-            let is_dark = sm.is_dark();
-            sm.set_color_scheme(if is_dark {
-                adw::ColorScheme::ForceLight
-            } else {
-                adw::ColorScheme::ForceDark
-            });
+            let dark = !sm.is_dark();
+            sm.set_color_scheme(if dark { adw::ColorScheme::ForceDark } else { adw::ColorScheme::ForceLight });
+            if let Some(settings) = app_settings(&id) {
+                let _ = settings.set_boolean("dark-mode", dark);
+            }
         });
         app.add_action(&act_dark);
+        let id = app_id.to_string();
+        app.connect_startup(move |_| {
+            if app_settings(&id).is_some_and(|s| s.boolean("dark-mode")) {
+                adw::StyleManager::default().set_color_scheme(adw::ColorScheme::ForceDark);
+            }
+        });
 
         let act_palette = gio::SimpleAction::new("command-palette", None);
         let app_weak = app.downgrade();
@@ -257,16 +266,14 @@ impl SuiteApp {
         gio::Settings::new(&schema_id)
     }
 
-    /// Restore dark mode from GSettings on startup.
-    /// Must be called after GTK initialization (e.g. in connect_activate).
-    pub fn restore_dark_mode(&self) {
-        let settings = self.settings();
-        let dark = settings.boolean("dark-mode");
-        let sm = adw::StyleManager::default();
-        if dark {
-            sm.set_color_scheme(adw::ColorScheme::ForceDark);
-        }
-    }
+}
+
+/// The app's settings, if its schema (with a `dark-mode` key) is
+/// installed; a build run without its schema keeps the default style
+/// rather than aborting.
+fn app_settings(app_id: &str) -> Option<gio::Settings> {
+    let schema = gio::SettingsSchemaSource::default()?.lookup(app_id, true)?;
+    schema.has_key("dark-mode").then(|| gio::Settings::new(app_id))
 }
 
 /// Show a contextual help dialog explaining formats, interoperability, crash recovery, and shortcuts.
