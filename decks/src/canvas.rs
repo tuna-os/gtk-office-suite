@@ -800,17 +800,17 @@ pub fn draw_object(
             cr.arc(cx, cy, radius, 0.0, 2.0 * std::f64::consts::PI);
             cr.fill().unwrap();
         }
-        SlideObject::Image { path, .. } => {
+        SlideObject::Image { path, crop, .. } => {
             if let Some(img_surf) = load_image(path) {
-                let iw = img_surf.width() as f64;
-                let ih = img_surf.height() as f64;
-                let scale = (sw / iw).min(sh / ih);
-                let dx = sx + (sw - iw * scale) / 2.0;
-                let dy = sy + (sh - ih * scale) / 2.0;
+                // What PowerPoint and Impress draw: the part of the source
+                // the crop leaves, stretched to the picture's box.
+                let (cx, cy, cw, ch) = crop.source_rect(img_surf.width() as f64, img_surf.height() as f64);
                 cr.save().unwrap();
-                cr.translate(dx, dy);
-                cr.scale(scale, scale);
-                cr.set_source_surface(&img_surf, 0.0, 0.0).unwrap();
+                cr.rectangle(sx, sy, sw, sh);
+                cr.clip();
+                cr.translate(sx, sy);
+                cr.scale(sw / cw, sh / ch);
+                cr.set_source_surface(&img_surf, -cx, -cy).unwrap();
                 cr.paint().unwrap();
                 cr.restore().unwrap();
             } else {

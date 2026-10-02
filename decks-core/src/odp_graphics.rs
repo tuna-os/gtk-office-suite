@@ -109,6 +109,8 @@ struct Props {
     stroke: Option<String>,
     stroke_color: Option<Color>,
     stroke_width_pt: Option<f64>,
+    /// `fo:clip`, as written: a picture's crop.
+    clip: Option<String>,
 }
 
 impl Props {
@@ -172,6 +174,9 @@ impl GraphicDefs {
                         if let Some(w) = attr(&e, "svg:stroke-width").and_then(|v| crate::odp::parse_length_pt(&v)) {
                             p.stroke_width_pt = Some(w);
                         }
+                        if let Some(v) = attr(&e, "fo:clip") {
+                            p.clip = Some(v);
+                        }
                     }
                     "draw:gradient" => {
                         let (Some(name), Some(start), Some(end)) = (
@@ -195,6 +200,22 @@ impl GraphicDefs {
                 _ => {}
             }
         }
+    }
+
+    /// The crop of a picture in a frame of style `name`, as fractions of a
+    /// source of `natural` size (points): `fo:clip="rect(top, right,
+    /// bottom, left)"` states lengths against that size.
+    pub(crate) fn crop(&self, name: &str, natural: (f64, f64)) -> Option<crate::engine::Crop> {
+        let raw = self.styles.get(name)?.clip.as_deref()?;
+        let inner = raw.trim().strip_prefix("rect(")?.strip_suffix(')')?;
+        let v: Vec<f64> = inner
+            .split([',', ' '])
+            .filter(|s| !s.is_empty())
+            .map(|s| if s == "auto" { Some(0.0) } else { crate::odp::parse_length_pt(s) })
+            .collect::<Option<_>>()?;
+        let [t, r, b, l] = v[..] else { return None };
+        let (w, h) = natural;
+        (w > 0.0 && h > 0.0).then(|| crate::engine::Crop { left: l / w, top: t / h, right: r / w, bottom: b / h })
     }
 
     /// The paint of graphic style `name`, its outline scaled by `k` (model

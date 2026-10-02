@@ -440,6 +440,8 @@ pub(crate) struct GraphicStyles {
     gradients: Vec<crate::engine::shape::LinearGradient>,
     /// Text boxes' paragraph, list and frame styles, under the same prefix.
     text: crate::odp_text::TextStyles,
+    /// Pictures' crops, as `fo:clip` values (named `<prefix>c<n>`).
+    clips: Vec<String>,
 }
 
 impl GraphicStyles {
@@ -449,7 +451,20 @@ impl GraphicStyles {
             styles: Vec::new(),
             gradients: crate::odp_graphics::deck_gradients(deck),
             text: crate::odp_text::TextStyles::new(prefix),
+            clips: Vec::new(),
         }
+    }
+
+    /// The style of a picture frame cropped by `clip` (`fo:clip`).
+    fn clip_name(&mut self, clip: String) -> String {
+        let i = match self.clips.iter().position(|c| *c == clip) {
+            Some(i) => i,
+            None => {
+                self.clips.push(clip);
+                self.clips.len() - 1
+            }
+        };
+        format!("{}c{}", self.prefix, i + 1)
     }
 
     fn name_of(&mut self, style: &crate::engine::shape::ShapeStyle) -> String {
@@ -488,6 +503,19 @@ impl GraphicStyles {
                 )
             })
             .collect::<String>()
+            + &self
+                .clips
+                .iter()
+                .enumerate()
+                .map(|(i, clip)| {
+                    format!(
+                        "<style:style style:name=\"{}c{}\" style:family=\"graphic\">\
+                         <style:graphic-properties draw:fill=\"none\" draw:stroke=\"none\" fo:clip=\"{clip}\"/></style:style>",
+                        self.prefix,
+                        i + 1
+                    )
+                })
+                .collect::<String>()
             + &text
     }
 }
@@ -645,7 +673,7 @@ fn shapes_xml(
                         bytes: chart::odf_chart_styles_xml().into_bytes(),
                     });
                 }
-                SlideObject::Image { path, x, y, w, h, rotation } => {
+                SlideObject::Image { path, x, y, w, h, rotation, crop } => {
                     // Named by position in the package rather than after
                     // the source file: two decks can hold pictures called
                     // the same thing, and a name taken from the model is a
@@ -654,8 +682,21 @@ fn shapes_xml(
                     let zip_path = format!("Pictures/image{}.{ext}", media.len() + 1);
                     let bytes = std::fs::read(path)
                         .map_err(|e| format!("Cannot open image {path}: {e}"))?;
+                    // A crop is lengths against the picture's natural size
+                    // (96 dpi): `rect(top, right, bottom, left)`.
+                    let clip = (!crop.is_none())
+                        .then(|| crate::image_px::pixel_size(&bytes))
+                        .flatten()
+                        .map(|(pw, ph)| {
+                            let (nw, nh) = (f64::from(pw) * 0.75, f64::from(ph) * 0.75);
+                            graphics.clip_name(format!(
+                                "rect({}pt, {}pt, {}pt, {}pt)",
+                                snap(crop.top * nh), snap(crop.right * nw), snap(crop.bottom * nh), snap(crop.left * nw)
+                            ))
+                        });
+                    let style = clip.map(|c| format!(" draw:style-name=\"{c}\"")).unwrap_or_default();
                     pages.push_str(&format!(
-                        "<draw:frame {}>\
+                        "<draw:frame{style} {}>\
                          <draw:image xlink:href=\"{zip_path}\" xlink:type=\"simple\" \
                          xlink:show=\"embed\" xlink:actuate=\"onLoad\"/></draw:frame>",
                         geometry(*x, *y, *w, *h, *rotation)
@@ -1520,7 +1561,12 @@ fn parse_pages(
                         if let Some(path) =
                             attr(e, "xlink:href").and_then(|href| resolve_image(&href))
                         {
-                            s2.objects.push(SlideObject::Image { path, x, y, w, h, rotation });
+                            let crop = frame_style
+                                .as_deref()
+                                .zip(crate::image_px::natural_size_pt(&path))
+                                .and_then(|(name, natural)| graphics.crop(name, natural))
+                                .unwrap_or_default();
+                            s2.objects.push(SlideObject::Image { path, x, y, w, h, rotation, crop });
                         }
                     }
                 }
@@ -1620,7 +1666,12 @@ fn parse_pages(
                         if let Some(path) =
                             attr(e, "xlink:href").and_then(|href| resolve_image(&href))
                         {
-                            s2.objects.push(SlideObject::Image { path, x, y, w, h, rotation });
+                            let crop = frame_style
+                                .as_deref()
+                                .zip(crate::image_px::natural_size_pt(&path))
+                                .and_then(|(name, natural)| graphics.crop(name, natural))
+                                .unwrap_or_default();
+                            s2.objects.push(SlideObject::Image { path, x, y, w, h, rotation, crop });
                         }
                     }
                 }
@@ -2249,7 +2300,7 @@ mod tests {
                     y: 20.0,
                     w: 30.0,
                     h: 40.0,
-                    rotation: 0.0,
+                    rotation: 0.0, crop: Default::default()
                 }],
                 notes: String::new(),
                 master_idx: Some(0),
@@ -2335,7 +2386,7 @@ mod tests {
             y: 60.0,
             w: 30.0,
             h: 40.0,
-            rotation: 0.0,
+            rotation: 0.0, crop: Default::default()
         });
         let bytes = write_bytes(&deck).unwrap();
         let zip = zip::ZipArchive::new(std::io::Cursor::new(bytes)).unwrap();

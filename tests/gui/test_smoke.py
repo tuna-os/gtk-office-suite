@@ -4679,6 +4679,7 @@ class DecksExportSmoke(BaseGUITestCase):
 
     def setUp(self):
         self._dir = self.temp_dir(prefix="decks-export-")
+        self.isolate_snapshot(prefix="decks-export-snap-")
         self._doc = os.path.join(self._dir, "talk.pptx")
         with open(self._doc, "wb") as f:
             f.write(minimal_pptx_bytes("exported text"))
@@ -4724,6 +4725,31 @@ class DecksExportSmoke(BaseGUITestCase):
         img = Image.open(png)
         self.assertEqual(img.size, (1920, 1080))
         self.assertIsNone(self.process.poll(), "decks crashed exporting")
+
+    def test_a_failed_export_is_shown_and_leaves_the_deck_alone(self):
+        # decks-readiness.md, "export failure is visible and leaves the
+        # source document untouched". /proc takes no new files, even as
+        # root, so the PDF can't be written there.
+        import hashlib
+        self.wait_until(lambda: self.app.child(name="Slide canvas"), lambda c: c is not None, description="the deck to open")
+        with open(self._doc, "rb") as f:
+            before = hashlib.sha256(f.read()).hexdigest()
+        slides = self.trigger_snapshot("org.tunaos.decks")["slides"]
+        import subprocess
+        from dogtail import tree
+        subprocess.run(["gapplication", "action", "org.tunaos.decks", "export-pdf"], check=True, timeout=5)
+        name = self.wait_until(lambda: tree.root.findChild(lambda n: n.name == "Name:" and n.roleName == "text", retry=False, requireResult=False),
+                               lambda n: n is not None, description="the export save dialog")
+        name.text = "/proc/talk.pdf"
+        time.sleep(0.3)
+        tree.root.findChild(lambda n: n.name == "Save" and n.roleName == "push button").do_action(0)
+        self.wait_for_node(name="Export Failed")
+        self.assertFalse(os.path.exists("/proc/talk.pdf"))
+        self.wait_for_node(name="OK", roleName="push button").do_action(0)
+        self.assertIsNone(self.process.poll(), "decks crashed on a failed export")
+        self.assertEqual(self.trigger_snapshot("org.tunaos.decks")["slides"], slides, "the deck changed")
+        with open(self._doc, "rb") as f:
+            self.assertEqual(hashlib.sha256(f.read()).hexdigest(), before, "the source file changed")
 
 
 def decks_insert_button(test, match, description):
@@ -6342,6 +6368,94 @@ class TablesChartDialogSmoke(BaseGUITestCase):
             timeout=10.0,
             description="the chart dialog to close after inserting",
         )
+
+
+class DecksPictureCropSmoke(BaseGUITestCase):
+    """A picture's crop (PARITY.md, Decks Tier 2 "Image fit/crop"): Tab
+    selects the picture from the keyboard, the inspector's Crop to Fill
+    trims a 2:1 picture in a square box by a quarter each side, Show All
+    takes it off, undo puts it back, and Ctrl+S writes it to the odp as
+    `fo:clip`. Asserted on the snapshot's crop and the saved file."""
+
+    app_name = "decks"
+
+    def setUp(self):
+        import io
+        import zipfile
+        from PIL import Image
+        self._dir = self.temp_dir(prefix="decks-crop-")
+        self._snapshot_path = self.isolate_snapshot(prefix="decks-crop-snap-")
+        self.isolate_autosave_state()
+        png = io.BytesIO()
+        Image.new("RGB", (200, 100), (200, 40, 40)).save(png, "PNG")
+        content = (
+            '<?xml version="1.0" encoding="UTF-8"?>'
+            '<office:document-content xmlns:office="urn:oasis:names:tc:opendocument:xmlns:office:1.0" '
+            'xmlns:draw="urn:oasis:names:tc:opendocument:xmlns:drawing:1.0" '
+            'xmlns:svg="urn:oasis:names:tc:opendocument:xmlns:svg-compatible:1.0" '
+            'xmlns:xlink="http://www.w3.org/1999/xlink" office:version="1.3">'
+            '<office:body><office:presentation><draw:page draw:name="One">'
+            '<draw:frame svg:x="5cm" svg:y="3cm" svg:width="8cm" svg:height="8cm">'
+            '<draw:image xlink:href="Pictures/red.png" xlink:type="simple" xlink:show="embed" xlink:actuate="onLoad"/>'
+            '</draw:frame></draw:page></office:presentation></office:body></office:document-content>'
+        )
+        manifest = (
+            '<?xml version="1.0" encoding="UTF-8"?>'
+            '<manifest:manifest xmlns:manifest="urn:oasis:names:tc:opendocument:xmlns:manifest:1.0" manifest:version="1.3">'
+            '<manifest:file-entry manifest:full-path="/" manifest:media-type="application/vnd.oasis.opendocument.presentation"/>'
+            '<manifest:file-entry manifest:full-path="content.xml" manifest:media-type="text/xml"/>'
+            '<manifest:file-entry manifest:full-path="Pictures/red.png" manifest:media-type="image/png"/>'
+            '</manifest:manifest>'
+        )
+        self._odp = os.path.join(self._dir, "crop.odp")
+        with zipfile.ZipFile(self._odp, "w") as z:
+            z.writestr("mimetype", "application/vnd.oasis.opendocument.presentation", compress_type=zipfile.ZIP_STORED)
+            z.writestr("content.xml", content)
+            z.writestr("META-INF/manifest.xml", manifest)
+            z.writestr("Pictures/red.png", png.getvalue())
+        self.launch_args = [self._odp]
+        super().setUp()
+
+    def _crop(self):
+        snap = self.trigger_snapshot("org.tunaos.decks")
+        pics = [o for s in snap["slides"] for o in s["objects"] if o["kind"] == "Image"]
+        return pics[0]["text"] if pics else "no picture"
+
+    def _button(self, name):
+        return self.wait_until(lambda: self.app.child(name=name, roleName="push button"),
+                               lambda b: b is not None and b.showing, description=f"the {name} button")
+
+    def test_crop_to_fill_show_all_undo_and_save(self):
+        from dogtail import rawinput
+        import pyatspi
+        import zipfile
+
+        aid = "org.tunaos.decks"
+        self.wait_until(self._crop, lambda c: c is None, description="the picture, uncropped")
+        self._activate_window()
+        self.gapplication_action(aid, "focus-slide")
+        rawinput.keyCombo("Tab")
+
+        toggle = self.app.child(name="Format", roleName="toggle button")
+        if not toggle.getState().contains(pyatspi.STATE_PRESSED):
+            toggle.do_action(0)
+        self.wait_until(lambda: self.app.child(name="Arrange"), lambda t: t is not None,
+                        description="the inspector, for the picture Tab selected").do_action(0)
+
+        self._button("Crop to Fill").do_action(0)
+        self.wait_until(self._crop, lambda c: c == "crop 0.250 0.000 0.250 0.000",
+                        description="a quarter cut from each side of the 2:1 picture")
+        self._button("Show All").do_action(0)
+        self.wait_until(self._crop, lambda c: c is None, description="Show All to take the crop off")
+        self.gapplication_action(aid, "undo")
+        self.wait_until(self._crop, lambda c: c == "crop 0.250 0.000 0.250 0.000", description="undo to put it back")
+
+        self.gapplication_action(aid, "save")
+        def saved_clip():
+            with zipfile.ZipFile(self._odp) as z:
+                return "fo:clip=" in z.read("content.xml").decode()
+        self.wait_until(saved_clip, bool, description="Ctrl+S to write the crop as fo:clip")
+        self.assertIsNone(self.process.poll(), "decks crashed cropping a picture")
 
 
 class DecksSlideOrderSmoke(BaseGUITestCase):
