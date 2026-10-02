@@ -299,7 +299,7 @@ fn content_xml(doc: &Document) -> String {
         ));
     }
     // Paragraph automatic styles: one per used (alignment, break) combo.
-    let mut para_autos: Vec<(String, String)> = Vec::new();
+    let mut para_autos: Vec<(String, String, Option<u8>)> = Vec::new();
     let mut para_style_idx: Vec<Option<usize>> = Vec::new();
     for p in &doc.paragraphs {
         let props = para_style_props(&p.style);
@@ -309,22 +309,25 @@ fn content_xml(doc: &Document) -> String {
             continue;
         }
         // Keyed on the whole element: two paragraphs share a style only
-        // when their attributes *and* their tab stops match.
-        let elem = (props, kids);
+        // when their attributes *and* their tab stops match. A heading's
+        // inherits its level's look (#1297).
+        let parent = p.style.heading.filter(|_| p.style.named_style.is_none() && p.style.toc.is_none());
+        let elem = (props, kids, parent);
         let pos = para_autos.iter().position(|x| *x == elem).unwrap_or_else(|| {
             para_autos.push(elem.clone());
             para_autos.len() - 1
         });
         para_style_idx.push(Some(pos));
     }
-    for (i, (props, kids)) in para_autos.iter().enumerate() {
+    for (i, (props, kids, parent)) in para_autos.iter().enumerate() {
         let body = if kids.is_empty() {
             format!("<style:paragraph-properties{props}/>")
         } else {
             format!("<style:paragraph-properties{props}>{kids}</style:paragraph-properties>")
         };
+        let parent = parent.map(|n| format!(" style:parent-style-name=\"Heading_20_{n}\"")).unwrap_or_default();
         auto.push_str(&format!(
-            "<style:style style:name=\"P{}\" style:family=\"paragraph\">{}</style:style>",
+            "<style:style style:name=\"P{}\" style:family=\"paragraph\"{parent}>{}</style:style>",
             i + 1,
             body
         ));
@@ -464,9 +467,10 @@ fn content_xml(doc: &Document) -> String {
         } else if p.style.code_block.is_some() && p.style.heading.is_none() {
             " text:style-name=\"Preformatted_20_Text\"".to_string()
         } else {
-            match para_style_idx[pi] {
-                Some(i) => format!(" text:style-name=\"P{}\"", i + 1),
-                None => String::new(),
+            match (para_style_idx[pi], p.style.heading) {
+                (Some(i), _) => format!(" text:style-name=\"P{}\"", i + 1),
+                (None, Some(n)) => format!(" text:style-name=\"Heading_20_{n}\""),
+                (None, None) => String::new(),
             }
         };
 
@@ -785,8 +789,33 @@ fn styles_xml(doc: &Document) -> String {
          </style:page-layout></office:automatic-styles>{hf}\
          </office:document-styles>",
         contents = CODE_STYLES.to_string()
+            + &heading_styles(doc)
             + &if doc.paragraphs.iter().any(|p| p.style.toc.is_some()) { contents_styles(doc) } else { String::new() }
     )
+}
+
+/// `Heading_20_1`..`6`, the styles headings name (#1297): the document's
+/// own heading look if it has one, else Letters' (bold, scaled from the
+/// body size), as the docx writer does. The odt used to carry no heading
+/// look at all.
+fn heading_styles(doc: &Document) -> String {
+    let base_hp = doc.base_font.size_hp.unwrap_or((crate::layout::LayoutOptions::default().font_size_pt * 2.0) as u16);
+    (1u8..=6)
+        .map(|n| {
+            let look = doc.heading_styles.get(usize::from(n) - 1).cloned().unwrap_or_else(|| RunStyle {
+                bold: true,
+                font_size_hp: Some((f64::from(base_hp) * crate::layout::heading_scale(n)).round() as u16),
+                ..Default::default()
+            });
+            let look = RunStyle { font_size_hp: look.font_size_hp.or(Some(base_hp)), ..look };
+            format!(
+                "<style:style style:name=\"Heading_20_{n}\" style:display-name=\"Heading {n}\" style:family=\"paragraph\" \
+                 style:default-outline-level=\"{n}\" style:class=\"text\"><style:paragraph-properties fo:keep-with-next=\"always\"/>\
+                 <style:text-properties{}/></style:style>",
+                run_style_props(&look)
+            )
+        })
+        .collect()
 }
 
 /// Writer's code block and inline code styles, which code paragraphs and
@@ -878,6 +907,9 @@ struct AutoStyles {
     para_parent: std::collections::HashMap<String, String>,
     /// Automatic text style → its parent, as for paragraphs.
     text_parent: std::collections::HashMap<String, String>,
+    /// A paragraph style's own text properties: in styles.xml, how each
+    /// `Heading_20_N` looks (#1297).
+    para_text: std::collections::HashMap<String, RunStyle>,
 }
 
 /// Paragraph-level values read off one automatic style. Lengths are points.
@@ -930,7 +962,7 @@ fn list_style_kinds(xml: &str) -> std::collections::HashMap<String, Vec<ListKind
 }
 
 fn parse_auto_styles(xml: &str) -> AutoStyles {
-    let mut out = AutoStyles { text: Default::default(), para: Default::default(), para_parent: Default::default(), text_parent: Default::default() };
+    let mut out = AutoStyles { text: Default::default(), para: Default::default(), para_parent: Default::default(), text_parent: Default::default(), para_text: Default::default() };
     let mut reader = Reader::from_str(xml);
     let mut cur_name: Option<String> = None;
     let mut cur_family = String::new();
@@ -950,7 +982,7 @@ fn parse_auto_styles(xml: &str) -> AutoStyles {
                         }
                     }
                     "style:text-properties" => {
-                        if let (Some(name), "text") = (cur_name.clone(), cur_family.as_str()) {
+                        if let Some(name) = cur_name.clone().filter(|_| cur_family == "text" || cur_family == "paragraph") {
                             let mut st = RunStyle::default();
                             if attr_val(&e, "fo:font-weight").as_deref() == Some("bold") {
                                 st.bold = true;
@@ -1012,7 +1044,16 @@ fn parse_auto_styles(xml: &str) -> AutoStyles {
                                     st.vert_align = Some(VertAlign::Subscript);
                                 }
                             }
-                            out.text.insert(name, st);
+                            // Writer names a paragraph style's face by its
+                            // font declaration.
+                            if cur_family == "paragraph" {
+                                if let Some(fname) = attr_val(&e, "style:font-name").filter(|_| !st.code && st.font_family.is_none()) {
+                                    st.font_family = Some(fname);
+                                }
+                                out.para_text.insert(name, st);
+                            } else {
+                                out.text.insert(name, st);
+                            }
                         }
                     }
                     "style:paragraph-properties" => {
@@ -1148,6 +1189,43 @@ struct FrameReading {
     depth: usize,
 }
 
+/// How headings 1-6 look, from styles.xml's `Heading_20_N` (#1297), each
+/// with what it inherits from its parent styles; empty when the file
+/// defines none, as the docx reader does.
+fn read_heading_styles(styles: &str) -> Vec<RunStyle> {
+    let defs = parse_auto_styles(styles);
+    let look = |n: u8| -> Option<RunStyle> {
+        let mut chain = Vec::new();
+        let mut name = format!("Heading_20_{n}");
+        while chain.len() < 8 {
+            let own = defs.para_text.get(&name);
+            let parent = defs.para_parent.get(&name).cloned();
+            if own.is_none() && parent.is_none() {
+                break;
+            }
+            chain.push(own.cloned().unwrap_or_default());
+            match parent {
+                Some(p) => name = p,
+                None => break,
+            }
+        }
+        (!chain.is_empty()).then(|| {
+            chain.into_iter().rev().fold(RunStyle::default(), |base, own| RunStyle {
+                bold: base.bold || own.bold,
+                italic: base.italic || own.italic,
+                font_size_hp: own.font_size_hp.or(base.font_size_hp),
+                color: own.color.or(base.color),
+                font_family: own.font_family.or(base.font_family),
+                ..Default::default()
+            })
+        })
+    };
+    if !(1..=6).any(|n| defs.para_text.contains_key(&format!("Heading_20_{n}"))) {
+        return Vec::new();
+    }
+    (1..=6).map(|n| look(n).unwrap_or_default()).collect()
+}
+
 /// The document, and the package members its pictures were read from
 /// (which are therefore not opaque, #1292).
 fn read_parts(path: &str) -> Result<(Document, Vec<String>), String> {
@@ -1167,7 +1245,7 @@ fn read_parts(path: &str) -> Result<(Document, Vec<String>), String> {
     let mut list_styles = list_style_kinds(&styles);
     list_styles.extend(list_style_kinds(&content));
 
-    let mut doc = Document { paragraphs: Vec::new(), footnotes: Vec::new(), header: None, footer: None, page: None, base_font: Default::default(), heading_styles: Vec::new(), comments: Vec::new() };
+    let mut doc = Document { paragraphs: Vec::new(), footnotes: Vec::new(), header: None, footer: None, page: None, base_font: Default::default(), heading_styles: read_heading_styles(&styles), comments: Vec::new() };
     let mut reader = Reader::from_str(&content);
     let mut in_body = false;
     let mut para: Option<Paragraph> = None;
@@ -2005,6 +2083,20 @@ mod tests {
             doc.paragraphs.iter().map(|p| (p.style.table_cell.map(|c| (c.table, c.row, c.col)), p.text(), p.runs.iter().any(|r| r.style.bold))).collect()
         };
         assert_eq!(shape(&rt), shape(&d));
+    }
+
+    /// How headings look crosses an odt save (#1297): it used to be lost,
+    /// so every heading reopened in Letters' default look.
+    #[test]
+    fn heading_looks_round_trip() {
+        let mut d = Document::from_plain_text("Title\nbody");
+        d.paragraphs[0].style.heading = Some(1);
+        d.heading_styles = (1..=6)
+            .map(|n| RunStyle { bold: n == 1, italic: n == 2, color: Some("c00000".into()), font_size_hp: Some(48 - 4 * n), font_family: Some("DejaVu Serif".into()), ..Default::default() })
+            .collect();
+        let rt = round_trip(&d);
+        assert_eq!(rt.heading_styles, d.heading_styles);
+        assert_eq!(rt.paragraphs[0].style.heading, Some(1));
     }
 
     /// An image whose file has gone is written as its alt text, as docx does.
