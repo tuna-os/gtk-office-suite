@@ -78,6 +78,7 @@ jobs:
             tests/test_adr_numbers.py \
             tests/test_readme_status.py \
             tests/test_sync_issues.py \
+            tests/test_visual_matrix.py \
             tests/test_save_paths.py \
             tests/test_letters_field_map.py \
             tests/test_decks_action_inventory.py \
@@ -145,6 +146,7 @@ jobs:
             tests/test_adr_numbers.py \
             tests/test_readme_status.py \
             tests/test_sync_issues.py \
+            tests/test_visual_matrix.py \
             tests/test_save_paths.py \
             tests/test_letters_field_map.py \
             tests/test_decks_action_inventory.py \
