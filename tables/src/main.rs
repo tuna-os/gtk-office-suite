@@ -12,6 +12,7 @@ mod validation_list;
 mod sheet_bar;
 mod persistence;
 mod window_dialogs;
+mod loss_ui;
 mod preferences;
 pub mod grid_render;
 pub mod grid_area;
