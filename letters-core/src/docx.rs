@@ -34,23 +34,39 @@ struct RawPara {
 /// already shared between the two spellings (`w:firstLine`, `w:hanging`),
 /// as is `w:jc`'s `start`/`end`, which rdocx does map.
 ///
-/// The vector is positional: one entry per body-level `w:p`, in document
-/// order, so the caller can pair it with `doc.paragraphs()`. Paragraphs
-/// inside `w:tbl` are skipped because rdocx exposes those separately;
-/// a strict indent inside a table cell stays unread.
+/// Both vectors are positional, in document order. `body` has one entry
+/// per body-level `w:p`, so the caller can pair it with
+/// `doc.paragraphs()`. `cells` has one per `w:p` directly inside a
+/// top-level table's cells, in the order rdocx's tables → rows → cells →
+/// paragraphs walk visits them (#1204). Paragraphs in a table nested inside
+/// a cell belong to neither and are skipped.
 ///
-/// Returns the pairs in twips. Any failure to open or scan the part
-/// yields an empty vector, which the caller treats as "nothing to add".
-fn raw_paragraph_props(path: &str) -> Vec<RawPara> {
-    fn scan(path: &str) -> Result<Vec<RawPara>, Box<dyn std::error::Error>> {
+/// Returns the values in twips. Any failure to open or scan the part
+/// yields empty vectors, which the caller treats as "nothing to add".
+#[derive(Default)]
+struct RawParas {
+    body: Vec<RawPara>,
+    cells: Vec<RawPara>,
+}
+
+fn raw_paragraph_props(path: &str) -> RawParas {
+    fn scan(path: &str) -> Result<RawParas, Box<dyn std::error::Error>> {
         let mut zip = zip::ZipArchive::new(std::fs::File::open(path)?)?;
         let mut xml = String::new();
         std::io::Read::read_to_string(&mut zip.by_name("word/document.xml")?, &mut xml)?;
 
         let mut reader = quick_xml::Reader::from_str(&xml);
         reader.config_mut().trim_text(true);
-        let mut out: Vec<RawPara> = Vec::new();
+        let mut out = RawParas::default();
         let mut table_depth = 0usize;
+        // The paragraph list the current depth feeds, if any.
+        fn at(out: &mut RawParas, depth: usize) -> Option<&mut Vec<RawPara>> {
+            match depth {
+                0 => Some(&mut out.body),
+                1 => Some(&mut out.cells),
+                _ => None,
+            }
+        }
         // `w:tab` means two different things: a stop inside `w:tabs`, and
         // a tab character inside a run. Only the former has a position,
         // so the flag is what keeps a tabbed line from inventing stops.
@@ -61,7 +77,11 @@ fn raw_paragraph_props(path: &str) -> Vec<RawPara> {
                 quick_xml::events::Event::Start(e) => match e.name().as_ref() {
                     "w:tbl" => table_depth += 1,
                     "w:tabs" => in_tabs = true,
-                    "w:p" if table_depth == 0 => out.push(RawPara::default()),
+                    "w:p" => {
+                        if let Some(list) = at(&mut out, table_depth) {
+                            list.push(RawPara::default());
+                        }
+                    }
                     _ => {}
                 },
                 quick_xml::events::Event::End(e) => match e.name().as_ref() {
@@ -71,9 +91,13 @@ fn raw_paragraph_props(path: &str) -> Vec<RawPara> {
                 },
                 quick_xml::events::Event::Empty(e) => match e.name().as_ref() {
                     // A `w:p` with nothing in it is still a paragraph.
-                    "w:p" if table_depth == 0 => out.push(RawPara::default()),
-                    "w:tab" if in_tabs && table_depth == 0 => {
-                        let Some(last) = out.last_mut() else { continue };
+                    "w:p" => {
+                        if let Some(list) = at(&mut out, table_depth) {
+                            list.push(RawPara::default());
+                        }
+                    }
+                    "w:tab" if in_tabs => {
+                        let Some(last) = at(&mut out, table_depth).and_then(|l| l.last_mut()) else { continue };
                         let mut pos = None;
                         let mut val = None;
                         for a in e.attributes().with_checks(false).flatten() {
@@ -98,13 +122,13 @@ fn raw_paragraph_props(path: &str) -> Vec<RawPara> {
                             last.tab_twips.push(v);
                         }
                     }
-                    "w:contextualSpacing" if table_depth == 0 => {
-                        if let Some(last) = out.last_mut() {
+                    "w:contextualSpacing" => {
+                        if let Some(last) = at(&mut out, table_depth).and_then(|l| l.last_mut()) {
                             last.contextual = on_off(&e);
                         }
                     }
-                    "w:ind" if table_depth == 0 => {
-                        let Some(last) = out.last_mut() else { continue };
+                    "w:ind" => {
+                        let Some(last) = at(&mut out, table_depth).and_then(|l| l.last_mut()) else { continue };
                         for a in e.attributes().with_checks(false).flatten() {
                             let v = || {
                                 a.value.trim().parse::<f64>().ok()
@@ -124,6 +148,19 @@ fn raw_paragraph_props(path: &str) -> Vec<RawPara> {
         Ok(out)
     }
     scan(path).unwrap_or_default()
+}
+
+/// Lay the scanned properties over what rdocx read. Transitional wins
+/// where both are present: it is what rdocx read, and a file carrying
+/// both is already self-contradictory.
+fn apply_strict_indents(style: &mut ParaStyle, raw: &RawPara) {
+    if style.left_indent_pt == 0.0 {
+        if let Some(tw) = raw.start_twips { style.left_indent_pt = tw / 20.0; }
+    }
+    if style.right_indent_pt == 0.0 {
+        if let Some(tw) = raw.end_twips { style.right_indent_pt = tw / 20.0; }
+    }
+    style.tab_stops_pt = raw.tab_twips.iter().map(|tw| tw / 20.0).collect();
 }
 
 /// An OOXML on/off element's value: present means on, unless `w:val`
@@ -330,7 +367,7 @@ fn read_opened(path: &str, doc: rdocx::Document) -> Result<Document, String> {
     // otherwise the two disagree about what a paragraph is and pairing
     // them would misattribute a property to its neighbour.
     let body = doc.paragraphs();
-    let raw = raw_paragraph_props(path);
+    let RawParas { body: raw, cells: raw_cells } = raw_paragraph_props(path);
     let raw = (raw.len() == body.len()).then_some(raw);
 
     let mut paragraphs = Vec::new();
@@ -385,18 +422,8 @@ fn read_opened(path: &str, doc: rdocx::Document) -> Result<Document, String> {
         let direct_contextual = raw.as_ref().and_then(|s| s.get(i)).is_some_and(|r| r.contextual);
         let is_contextual = direct_contextual || style_id.as_deref().is_some_and(|id| contextual_ids.contains(id));
         contextual.push((style_id, is_contextual));
-        if let Some(RawPara { start_twips, end_twips, tab_twips, .. }) =
-            raw.as_ref().and_then(|s| s.get(i))
-        {
-            // Transitional wins where both are present: it is what rdocx
-            // read, and a file carrying both is already self-contradictory.
-            if para.style.left_indent_pt == 0.0 {
-                if let Some(tw) = start_twips { para.style.left_indent_pt = tw / 20.0; }
-            }
-            if para.style.right_indent_pt == 0.0 {
-                if let Some(tw) = end_twips { para.style.right_indent_pt = tw / 20.0; }
-            }
-            para.style.tab_stops_pt = tab_twips.iter().map(|tw| tw / 20.0).collect();
+        if let Some(r) = raw.as_ref().and_then(|s| s.get(i)) {
+            apply_strict_indents(&mut para.style, r);
         }
         list_indent_from_declared(&doc, p, &mut para.style);
         paragraphs.push(para);
@@ -427,6 +454,18 @@ fn read_opened(path: &str, doc: rdocx::Document) -> Result<Document, String> {
             paragraphs.pop();
         }
     }
+    // The cell half of the scan, trusted on the same terms as the body
+    // half: only when it counted exactly the paragraphs rdocx walks here.
+    let mut cell_paragraphs = 0usize;
+    for table in &tables {
+        for row in (0..table.row_count()).filter_map(|ri| table.row(ri)) {
+            for ci in 0..row.cell_count() {
+                cell_paragraphs += row.cell(ci).map_or(0, |c| c.paragraphs().count());
+            }
+        }
+    }
+    let raw_cells = (raw_cells.len() == cell_paragraphs).then_some(raw_cells);
+    let mut cell_index = 0usize;
     for (ti, table) in tables.iter().enumerate() {
         for ri in 0..table.row_count() {
             let Some(row) = table.row(ri) else { continue };
@@ -434,8 +473,13 @@ fn read_opened(path: &str, doc: rdocx::Document) -> Result<Document, String> {
                 let Some(cell) = row.cell(ci) else { continue };
                 let mut wrote_any = false;
                 for cp in cell.paragraphs() {
+                    let raw_cell = raw_cells.as_ref().and_then(|s| s.get(cell_index));
+                    cell_index += 1;
                     if cp.text().is_empty() { continue; }
                     let mut para = map_paragraph(&doc, &cp);
+                    if let Some(r) = raw_cell {
+                        apply_strict_indents(&mut para.style, r);
+                    }
                     para.style.table_cell = Some(crate::model::TableCell {
                         table: ti as u32, row: ri as u32, col: ci as u32,
                     });
@@ -589,6 +633,20 @@ pub fn write(doc: &Document, path: impl AsRef<std::path::Path>) -> Result<(), St
                 if let Some(mut cell) = tbl.cell(tc.row as usize, tc.col as usize) {
                     filled.insert((tc.row, tc.col));
                     let mut cp = cell.add_paragraph("");
+                    // A cell paragraph's indents and alignment, which the
+                    // reader maps the same way it maps a body paragraph's.
+                    if p.style.left_indent_pt != 0.0 {
+                        cp = cp.indent_left(rdocx::Length::pt(p.style.left_indent_pt));
+                    }
+                    if p.style.right_indent_pt != 0.0 {
+                        cp = cp.indent_right(rdocx::Length::pt(p.style.right_indent_pt));
+                    }
+                    cp = match p.style.alignment {
+                        Alignment::Center => cp.alignment(rdocx::Alignment::Center),
+                        Alignment::Right => cp.alignment(rdocx::Alignment::Right),
+                        Alignment::Justify => cp.alignment(rdocx::Alignment::Justify),
+                        _ => cp,
+                    };
                     // A cell's comments open and close inside it.
                     let mut in_cell: Vec<u32> = Vec::new();
                     for run in p.runs.iter().map(Some).chain([None]) {
