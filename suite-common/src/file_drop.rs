@@ -4,10 +4,10 @@
 use gtk4::{self as gtk, gio, glib, prelude::*};
 
 /// Open the files dropped on `widget` the way a file manager's open does:
-/// through `GApplication::open`, the path each app guards (#1316). A
-/// window that holds one document asks before a drop replaces unsaved
-/// work, and Letters opens a new tab, because the drop and the file
-/// manager now take the same path. Remote locations are staged by that
+/// through `GApplication::open`, the path each app guards (#1316). Tables
+/// and Decks open the file in a window of its own (#1422) and Letters in a
+/// new tab, so a drop never replaces unsaved work, because the drop and the
+/// file manager take the same path. Remote locations are staged by that
 /// handler too (RFC-0003).
 ///
 /// `claim` sees each dropped file first and returns true for one the
