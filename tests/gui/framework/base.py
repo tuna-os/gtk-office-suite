@@ -525,6 +525,27 @@ class BaseGUITestCase(unittest.TestCase):
         self.fail(f"Timed out after {timeout}s waiting for {description}; "
                   f"last observed: {last!r}")
 
+    def eventually(self, check, timeout=10.0, interval=0.05, description=None):
+        """Run `check()` until it stops raising, and return what it returns.
+
+        For the shape a fixed wait used to guard, `time.sleep(n)` then a
+        few reads and assertions: those lines become `check`, and each
+        retry re-reads the app. Like `wait_until`, a timeout reports what
+        was last seen: here the last assertion message (or error), which
+        names the value that never arrived (#1271)."""
+        deadline = time.monotonic() + timeout
+        while True:
+            try:
+                return check()
+            except Exception as exc:  # assertion or a transient AT-SPI error
+                last = exc
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                break
+            time.sleep(min(interval, remaining))
+        what = f" for {description}" if description else ""
+        raise AssertionError(f"Not settled after {timeout}s{what}: {type(last).__name__}: {last}") from last
+
     def wait_for_node(self, **criteria):
         """Wait until an AT-SPI child matching criteria is exposed."""
         return self.wait_for_condition(
