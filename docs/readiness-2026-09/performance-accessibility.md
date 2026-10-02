@@ -29,15 +29,30 @@ Architecture: benchmark core open/edit/recalculate/save separately from GTK inpu
       **Writing it found opening an xlsx quadratic in its cells**: every loader recalculated the whole workbook after
       each cell it set, so a 512×128 sheet did not open in twenty minutes. Loaders, paste and PDF export now recalculate
       once (`TablesEngine::put_cell_text`); it opens in 0.8 s, and `performance_budgets.rs` now times that open.
-- [~] Test virtualized viewport work scales with visible data, not maximum row/column coordinates.
+- [x] Test virtualized viewport work scales with visible data, not maximum row/column coordinates.
       Tables (#1208): the grid renderer called `row_on_screen` and `row_y` for every row from the first, and each
       re-summed every row above it, so a frame was quadratic in the sheet's rows (and columns); the divider hit-tests
       and the accessibility spans did the same. `sheet::visible_rows` / `visible_cols` now place what shows in one pass,
       and the renderer draws only those. `visible_lists_and_spans_match_the_per_index_geometry` holds them to the old
       per-index geometry across hidden, frozen, resized and scrolled sheets; `a_frame_at_the_bottom_of_a_tall_sheet`
       (performance_budgets.rs) requires a 100,000-row frame to draw only a screenful, within 300 ms p95 (38 ms p50 in a
-      debug build). Still open: that one pass is linear in the rows rather than independent of them (prefix sums
-      would remove it), and Letters' and Decks' viewports are unmeasured.
+      debug build). The rest is closed by #1282:
+      - **Tables**: row and column offsets are prefix sums. They are cached on the sheet and rebuilt when a size or
+        hidden set changes; those fields are `Tracked`, so every write, including the dozens that go straight to the
+        public field, marks the cache stale. `row_y`/`col_x` are a lookup, and hit-testing and `visible_rows` are a
+        binary search. The 100,000-row frame went from 42 ms to 15 µs p50.
+        `a_frame_costs_the_same_at_the_top_and_the_bottom_of_a_million_rows` requires the top and bottom of a
+        million-row sheet to agree (both ~15 µs p50). `prefix_geometry_matches_summing_and_follows_direct_writes` holds
+        the cache to the summing definition across direct writes, inserts, deletes and clones.
+      - **Letters**: the Print Layout view tested every page each frame and, for each, re-summed the heights of the
+        pages above it, as did the click and drag hit-test: quadratic in the pages. `layout::PageStack` keeps the page
+        tops as prefix sums and finds the visible pages and the nearest page by binary search
+        (`page_stack_lookups_match_testing_every_page`). `a_frame_of_a_500_page_document_draws_only_the_visible_pages`
+        draws a 515-page document's frame at its first and last page in ~2 ms p50 each, 250 ms p95 budget.
+      - **Decks**: the slide strip rendered every slide's thumbnail on each rebuild. Rows now start as placeholders,
+        and a row's thumbnail is drawn from the live deck when it comes within a screen of the viewport.
+        `a_300_slide_strip_renders_thumbnails_only_in_view_and_the_canvas_one_slide` requires a 300-slide rebuild to
+        render none (15 ms p50) and the canvas to draw its one slide within 100 ms p95 (1 ms p50).
 - [ ] Fixed-font visual matrix: widths 400/800/1280, light/dark/high contrast, scale 1/2, editor/selection/dialog/error; retain expected/actual/diff plus snapshot.
 - [~] Keyboard-only edit/save/undo and AT-SPI names/roles/states/bounds match the model after scroll/resize/zoom.
       **Keyboard-only edit, undo and save is done for all three apps** (#1208): `LettersKeyboardOnlySmoke`,
