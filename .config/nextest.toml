@@ -43,3 +43,20 @@ test-group = 'letters-widgets'
 [[profile.ci.overrides]]
 filter = 'binary_id(=letters::bin/letters)'
 test-group = 'letters-widgets'
+
+# A performance budget measured while the rest of the workspace runs
+# beside it measures the runner, not the code. A CI run failed the Letters
+# small-docx save budget with samples from 52 ms to 1.04 s for the same
+# save, a 20x spread no code path explains; the budgets assume the
+# machine is theirs. `threads-required = "num-cpus"` gives each timing test
+# every test thread, so nextest runs it with nothing else alongside.
+# These are the tests that assert on elapsed time: the three
+# `performance_budgets` binaries, Decks' 300-slide strip and canvas
+# frame, and Letters' keystroke relayout.
+[[profile.default.overrides]]
+filter = 'binary(=performance_budgets) | test(=sidebar::tests::a_300_slide_strip_renders_thumbnails_only_in_view_and_the_canvas_one_slide) | test(=live::tests::a_keystroke_on_200_paragraphs_relays_out_within_budget)'
+threads-required = "num-cpus"
+
+[[profile.ci.overrides]]
+filter = 'binary(=performance_budgets) | test(=sidebar::tests::a_300_slide_strip_renders_thumbnails_only_in_view_and_the_canvas_one_slide) | test(=live::tests::a_keystroke_on_200_paragraphs_relays_out_within_budget)'
+threads-required = "num-cpus"
