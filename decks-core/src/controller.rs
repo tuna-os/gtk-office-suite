@@ -182,6 +182,17 @@ impl DecksController {
         Some(new_selected)
     }
 
+    /// Put a copy of the slide at `index` (its objects, notes, transition,
+    /// builds, master and layout) right after it, as one undo step, and
+    /// return the copy's index. `None` in the master view or past the end.
+    pub fn duplicate_slide(&self, index: usize) -> Option<usize> {
+        if self.master_edit.borrow().is_some() {
+            return None;
+        }
+        let copy = self.slides.borrow().get(index)?.clone();
+        Some(self.add_slide(index + 1, copy))
+    }
+
     /// Move the slide at `index` one place up (earlier). Returns its new
     /// index, or `None` if it was already first.
     pub fn move_slide_up(&self, index: usize) -> Option<usize> {
@@ -716,6 +727,28 @@ mod tests {
         let c = DecksController::new(vec![slide("Only")], vec![]);
         assert_eq!(c.delete_slide(0), None);
         assert_eq!(c.slide_count(), 1);
+    }
+
+    #[test]
+    fn duplicating_a_slide_copies_it_after_itself_as_one_undo_step() {
+        let mut first = slide("One");
+        first.notes = "say this".into();
+        first.objects.push(rect(5.0, 6.0));
+        let c = DecksController::new(vec![first.clone(), slide("Two")], vec![]);
+        assert_eq!(c.duplicate_slide(0), Some(1));
+        {
+            let s = c.slides.borrow();
+            assert_eq!(s.len(), 3);
+            assert_eq!((&s[1].title, &s[1].notes), (&first.title, &first.notes));
+            assert_eq!(format!("{:?}", s[1].objects), format!("{:?}", first.objects), "the same objects");
+            assert_eq!(s[2].title, "Two", "the slide after it moves down");
+            assert_ne!(s[1].ids.slide, s[0].ids.slide, "the copy is a slide of its own");
+            assert!(s[1].ids.objects.iter().all(|id| !s[0].ids.objects.contains(id)), "with objects of its own");
+        }
+        assert_eq!(c.duplicate_slide(9), None);
+        assert!(c.undo());
+        let s = c.slides.borrow();
+        assert_eq!(s.iter().map(|s| s.title.as_str()).collect::<Vec<_>>(), ["One", "Two"], "one undo removes the copy");
     }
 
     #[test]

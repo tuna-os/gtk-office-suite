@@ -131,7 +131,7 @@ roadmap-dependent), external file references (decision: likely never),
 | Styled text inside text boxes (runs, not plain) | ✅ | I3 LO-authored styled-runs (decks-core/tests/lo_parity.rs) + I4 soffice oracle bold_run_survives_impress_rewrite; model+pptx (shared Run/RunStyle) | ✅ decks/text-styles, decks/bullets |
 | Master slides applied on render | ✅ | I1 placeholder-skip parser + I4 (Impress-authored pptx maps slides→masters); master background inherited on canvas | ✅ decks/background, decks/title-layout |
 | ODP read/write | ✅ | decks-core/src/odp.rs: I2 round-trips (text, runs, geometry, notes, background) + 7 I4 oracle tests (Impress rewrite both ways; reads Impress custom-shape output) | — |
-| Slide reorder / duplicate |  | I1 + I6 | — |
+| Slide reorder / duplicate | ✅ | I1 decks-core/src/controller.rs (duplicate, move up/down, each one undo step) + I6 tests/gui/test_smoke.py::DecksSlideOrderSmoke (Duplicate button, Ctrl+Shift+Page Up, undo) | — |
 | Image fit/crop modes |  | I1 geometry | 🟡 file-only |
 
 ### Tier 3 — Advanced
