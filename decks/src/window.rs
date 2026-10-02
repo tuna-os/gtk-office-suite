@@ -433,56 +433,34 @@ impl DecksWindow {
         suite_common::bind_window_geometry(&suite_win.window, &settings);
 
         // ── File Drag and Drop Support ────────────────────────────────────
+        // A dropped picture goes on the current slide. Any other file opens
+        // the way one from the file manager does, through
+        // GApplication::open, which asks before replacing unsaved work
+        // (#1316). It used to replace the deck without asking.
         {
-            let win_weak = suite_win.window.downgrade();
             let ctl = controller.clone();
             let cs_ref = current_slide.clone();
             let cs = canvas.clone();
             let refresh = refresh_hud.clone();
-            let sl = slide_list.clone();
-            let stk = content_stack.clone();
-            let ed_split = editor_split.clone();
-            let fp = file_path.clone();
-            suite_common::attach_file_drop_target(&suite_win.window, move |paths| {
-                for path in paths {
-                    let path_str = path.to_string_lossy().to_string();
-                    let ext = path.extension().and_then(|e| e.to_str()).unwrap_or("").to_lowercase();
-                    if ext == "pptx" || ext == "odp" || ext == "deck" {
-                        if let Ok(deck) = read_deck(&path_str) {
-                            *ctl.slides.borrow_mut() = deck.slides;
-                            *ctl.masters.borrow_mut() = deck.masters;
-                            cs_ref.set(0);
-                            *fp.borrow_mut() = Some(path_str.clone());
-                            if stk.child_by_name("editor").is_none() {
-                                stk.add_titled(&ed_split, Some("editor"), "Editor");
-                            }
-                            stk.set_visible_child_name("editor");
-                            rebuild_slide_list(&sl, &ctl.slides.borrow().clone(), &ctl.masters.borrow(), 0);
-                            if let Some(name) = path.file_name() {
-                                if let Some(w) = win_weak.upgrade() {
-                                    w.set_title(Some(&format!("{} — Decks", name.to_string_lossy())));
-                                }
-                            }
-                            let settings = gio::Settings::new("org.tunaos.decks");
-                            suite_common::push_recent_file(&settings, &path_str);
-                            cs.queue_draw();
-                            refresh();
-                        }
-                    } else if ext == "png" || ext == "jpg" || ext == "jpeg" || ext == "svg" {
-                        let idx = cs_ref.get();
-                        let obj = SlideObject::Image {
-                            path: path_str,
-                            x: 150.0,
-                            y: 100.0,
-                            w: 300.0,
-                            h: 200.0,
-                            rotation: 0.0, crop: Default::default()
-                        };
-                        ctl.add_object(idx, obj);
-                        cs.queue_draw();
-                        refresh();
-                    }
+            suite_common::open_files_on_drop(&suite_win.window, app, move |file| {
+                let Some(path) = file.path() else { return false };
+                let ext = path.extension().and_then(|e| e.to_str()).unwrap_or("").to_lowercase();
+                if !matches!(ext.as_str(), "png" | "jpg" | "jpeg" | "svg") {
+                    return false;
                 }
+                let obj = SlideObject::Image {
+                    path: path.to_string_lossy().into_owned(),
+                    x: 150.0,
+                    y: 100.0,
+                    w: 300.0,
+                    h: 200.0,
+                    rotation: 0.0,
+                    crop: Default::default(),
+                };
+                ctl.add_object(cs_ref.get(), obj);
+                cs.queue_draw();
+                refresh();
+                true
             });
         }
 
