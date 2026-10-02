@@ -7986,7 +7986,7 @@ class OpenPathsMixin:
         self._win_id = found[-1]
         try:
             rawinput.keyCombo("<Control>l")
-            self.wait_until(
+            entry = self.wait_until(
                 lambda: dialog.findChild(lambda n: n.roleName == "text" and n.showing, retry=False, requireResult=False),
                 bool, description="the dialog's location entry")
             # A component at a time, each after its folder has had time to
@@ -7995,12 +7995,47 @@ class OpenPathsMixin:
                 subprocess.run(["xdotool", "windowactivate", "--sync", self._win_id], capture_output=True, timeout=5)
                 subprocess.run(["xdotool", "type", "--delay", "60", "/" + part], capture_output=True, timeout=60)
                 time.sleep(0.8)  # pacing: the folder listing the completion reads
+            self._repair_location(entry, path)
             rawinput.keyCombo("Return")
             self.wait_until(
                 lambda: tree.root.findChild(lambda n: n.name == "Pick a File" and n.showing, retry=False, requireResult=False),
                 lambda d: d is None, description="the dialog to close")
         finally:
             self._win_id = self._primary_win_id
+
+    def _repair_location(self, entry, path):
+        """Make the location entry read exactly `path` before it is opened.
+
+        Rare is not never. On a loaded CI runner a completion of `/tmp/le`
+        landed after the rest of the component had been typed and left its
+        suffix behind the cursor (`/tmp/letters-open-paths-juf2wmhvtters-open-paths-`).
+        Every later component went in front of it, the dialog was handed a
+        file that doesn't exist, and the retry met the same race. So the
+        entry is read back over AT-SPI and corrected until it says what was
+        meant: a completion trailing the path is deleted, anything else is
+        typed again."""
+        import subprocess
+        from dogtail import rawinput
+
+        def read():
+            # Up to an explicit length: GTK 4 answers the usual "to the
+            # end" (-1), which dogtail's `.text` asks for, with nothing.
+            text = entry.queryText()
+            return text.getText(0, text.characterCount)
+
+        for _attempt in range(5):
+            text = read()
+            if text == path:
+                return
+            if text.startswith(path):
+                rawinput.keyCombo("End")
+                for _ in range(len(text) - len(path)):
+                    rawinput.keyCombo("BackSpace")
+            else:
+                rawinput.keyCombo("<Control>a")
+                subprocess.run(["xdotool", "type", "--delay", "60", path], capture_output=True, timeout=60)
+            time.sleep(0.8)  # pacing: a completion the correction itself prompts
+        self.assertEqual(read(), path, "the Open dialog's location entry never read the path typed into it")
 
     def _title(self):
         return self.app.child(roleName="frame").name
