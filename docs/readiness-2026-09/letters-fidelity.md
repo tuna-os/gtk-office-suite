@@ -142,10 +142,8 @@ one direction; footnotes and the page break were losses in a single
 direction. A document lost all four on save either way, which is why
 they were listed here rather than in a backlog nobody reads.
 
-One thing measured and still unread: a strict-OOXML indent inside a
-table cell. rdocx exposes table paragraphs separately from the body
-stream, and the positional scan that reads the strict indents and tab
-stops walks the body only, skipping `w:tbl` subtrees.
+A strict-OOXML indent inside a table cell, once measured and unread, is
+now read too (#1204): see below.
 
 ### Strict-OOXML indents (`w:ind w:start`), found by a CI-only failure
 
@@ -175,9 +173,15 @@ count agrees with rdocx's. Two guards: a unit test that re-spells our own
 output and needs no LibreOffice, and the oracle test, which now names
 both filters instead of accepting whichever one the local build prefers.
 
-Not covered: a strict indent inside a table cell. rdocx exposes table
-paragraphs separately from the body stream, and this scan walks the body
-only, skipping `w:tbl` subtrees.
+Table cells (#1204). rdocx exposes table paragraphs separately from the
+body stream, so the scan keeps a second positional list for paragraphs
+directly inside a top-level table's cells, in the order rdocx walks
+tables → rows → cells → paragraphs, and trusts it on the same terms: only
+when it counts exactly as many paragraphs as rdocx does. Paragraphs of a
+table nested in a cell belong to neither list. Writing the guard found the
+writer's half of the gap: a cell paragraph's indents and alignment were
+never written at all, so they were lost on any docx save. Both directions
+are covered by `strict_ooxml_indents_inside_table_cells_are_read`.
 
 ### Footnotes now cross the boundary both ways
 
