@@ -23,6 +23,11 @@ WorkbookController remains the sole mutation gateway. Stable sheet identities bi
       conditional formats** were attached by the GUI after `load_workbook` returned, so recovery tests and corpus tooling
       opened xlsx files without them. Declared lost, with the reason: a filter's hide reopens as a manual hide (xlsx keeps
       no filter state here), and charts and rules on a sheet after the first (their readers resolve the first worksheet).
+      Content outside the budget is no longer dropped silently (#1272): `tables_core::io::loss` reads the model and the
+      file the workbook came from (macros, pictures, pivots, threaded comments, slicers, external links, connections,
+      OLE, sparklines, and validation rules xlsx has no form for), and every save path — Ctrl+S, Save As and the close
+      guard's Save — asks "Save Without This Content?" first. Cancel writes nothing. `TablesLossQuestionSmoke` drives
+      it: a workbook with a macro project, edited, Ctrl+S, Cancel leaves its bytes; Save Anyway writes the edit.
 - [x] Two-sheet journey: edit/formula → rename/reorder/delete/undo → switch → save → reopen; no cross-sheet overwrite or retargeted history.
       `TablesTwoSheetJourneySmoke` (#1204): a value on Sheet1, a formula on Sheet2 reading it, rename through the
       dialog, move first, delete and undo, switch to Sheet1 through the sheet switcher, Save As; the saved xlsx must

@@ -10,9 +10,7 @@
         "each of the 652 examples round-trips idempotently through the Document model",
         "the pass count never drops below roundtrip-baseline.txt"
       ],
-      "permitted_losses": [
-        {"what": "example 150 (an HTML block indented by one space) re-serializes as escaped text", "issue": 1290}
-      ],
+      "permitted_losses": [],
       "used_by": ["letters-core/tests/markdown_corpus.rs"]
     }
   },

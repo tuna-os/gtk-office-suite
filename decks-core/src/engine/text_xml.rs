@@ -83,7 +83,10 @@ impl RunProps {
             italic: self.i.unwrap_or(false),
             underline: self.u.unwrap_or(false),
             strikethrough: self.strike.unwrap_or(false),
-            font_size_hp: self.sz.map(|s| (s / 50) as u16),
+            // Hundredths of a point to half-points, rounded: dividing
+            // whole numbers dropped up to half a point, so a 19.84 pt run
+            // (our 18 pt on an 11-inch page) read back as 19.5 pt.
+            font_size_hp: self.sz.map(|s| (s as f64 / 50.0).round() as u16),
             color: self.color.clone(),
             font_family: self.latin.clone(),
             ..RunStyle::default()
@@ -426,6 +429,19 @@ fn resolve_sp_text(sp: &Node, theme: &Theme, inh: &Inherited, scale: SlideScale)
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_run_size_rounds_to_the_nearest_half_point() {
+        let t = Theme::default();
+        let size = |sz: &str| {
+            let root = parse_tree(&format!(r#"<a:rPr sz="{sz}"/>"#));
+            RunProps::of(&root.children[0], &t).style().font_size_hp
+        };
+        assert_eq!(size("1984"), Some(40), "19.84 pt is 20 pt to the half point, not 19.5");
+        assert_eq!(size("1800"), Some(36));
+        assert_eq!(size("1824"), Some(36), "18.24 pt");
+        assert_eq!(size("1826"), Some(37), "18.26 pt");
+    }
 
     /// The python-pptx default template's master, trimmed to what matters.
     const MASTER: &str = r#"<p:sldMaster xmlns:a="a" xmlns:p="p"><p:cSld><p:spTree>
