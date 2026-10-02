@@ -4900,6 +4900,137 @@ class TablesNamedRangeSmoke(BaseGUITestCase):
         )
 
 
+def traverse_like_a_screen_reader(test, limit=50_000):
+    """Visit every accessible under the app depth first, reading what a
+    screen reader reads at each: name, role, states, on-screen extents and
+    text. Returns the (role, name) pairs visited.
+
+    #137 crashed Tables when *any* walk of its tree followed a far jump and
+    back, and the journeys that guarded it (`test_jump_far_and_back_to_a_
+    range_no_longer_crashes`) only made a D-Bus call afterwards, never the
+    walk Orca makes. A node that vanishes mid-walk is skipped, as a screen
+    reader would; the app dying is what fails.
+    """
+    import pyatspi
+    visited = []
+    stack = [test.app]
+    while stack and len(visited) < limit:
+        node = stack.pop()
+        try:
+            role, name = node.roleName, node.name
+            node.getState()
+            try:
+                node.queryComponent().getExtents(pyatspi.DESKTOP_COORDS)
+            except NotImplementedError:
+                pass
+            try:
+                text = node.queryText()
+                text.getText(0, text.characterCount)
+            except NotImplementedError:
+                pass
+            children = list(node.children)
+        except Exception:  # noqa: BLE001 — a node that went away mid-walk
+            continue
+        visited.append((role, name))
+        stack.extend(reversed(children))
+    test.assertIsNone(test.process.poll(), f"{test.app_name} died during a screen-reader walk of its tree")
+    return visited
+
+
+class TablesScreenReaderTraversalSmoke(TablesCellEntryMixin, BaseGUITestCase):
+    """#137's sequence, live, then the walk a screen reader makes
+    (performance-accessibility.md, #1208): a far jump grows the grid's
+    virtual cells, a jump back to a small selection hides most of them, the
+    Format inspector opens over the selection, and every node is read."""
+
+    app_name = "tables"
+
+    def _go(self, ref):
+        from dogtail import rawinput
+        rawinput.keyCombo("<Control>g")
+        self.wait_until(lambda: self._focused("Cell reference"), bool,
+                        description="the name box to take focus")
+        rawinput.typeText(ref)
+        rawinput.keyCombo("Return")
+        self.wait_until(lambda: self._focused("Formula input"), bool,
+                        description=f"the jump to {ref} to hand focus back to fx")
+        rawinput.keyCombo("Escape")
+        self.wait_until(lambda: not self._focused("Formula input"), bool,
+                        description="Escape to leave the formula entry")
+
+    def test_a_far_jump_and_back_then_a_full_walk(self):
+        import subprocess
+        from dogtail import rawinput
+
+        subprocess.run(["gapplication", "action", "org.tunaos.tables", "new-document"])
+        self._wait_for_a_new_document()
+        self._put("A1", "10")
+        self._put("Z9", "far")
+        self._go("A1")
+        rawinput.keyCombo("<Shift>Down")
+        rawinput.keyCombo("<Shift>Down")
+        from dogtail import tree
+        self.wait_until(
+            lambda: tree.root.findChild(lambda n: (n.name or "").startswith("A1:A3") and n.showing,
+                                        retry=False, requireResult=False),
+            bool, description="the status bar to show the selection A1:A3 back near the origin")
+        self.app.child(name="Format", roleName="toggle button").do_action(0)
+        self.wait_until(lambda: self.app.child(name="Bold", roleName="toggle button").showing, bool,
+                        description="the Format inspector over the selection")
+
+        visited = traverse_like_a_screen_reader(self)
+        cells = [name for role, name in visited if role == "table cell"]
+        self.assertIn("A1: 10", cells, "the walk never reached the grid's cells")
+        # A second walk: #137 needed the tree touched again after the shrink.
+        traverse_like_a_screen_reader(self)
+
+
+class DecksScreenReaderTraversalSmoke(BaseGUITestCase):
+    """Object selection and the inspector, then the walk a screen reader
+    makes (#1208): an inserted shape is selected, the Format inspector shows
+    it, and every node — the canvas's objects among them — is read."""
+
+    app_name = "decks"
+
+    def test_a_selected_object_and_its_inspector_then_a_full_walk(self):
+        import pyatspi
+        aid = "org.tunaos.decks"
+        self.gapplication_action(aid, "new-document")
+        self.gapplication_action(aid, "add-text-box")
+        self.gapplication_action(aid, "add-shape")
+        toggle = self.wait_until(lambda: self.app.child(name="Format", roleName="toggle button"), bool,
+                                 description="the Format toggle")
+        if not toggle.getState().contains(pyatspi.STATE_PRESSED):
+            toggle.do_action(0)
+        self.wait_until(lambda: self.app.child(name="Arrange"), bool,
+                        description="the inspector showing the selected shape")
+
+        visited = traverse_like_a_screen_reader(self)
+        objects = [name for role, name in visited if role == "list item" and name]
+        self.assertTrue(any("Rectangle" in n or "Shape" in n for n in objects),
+                        f"the walk never reached the canvas's objects: {objects[:10]}")
+        traverse_like_a_screen_reader(self)
+
+
+class LettersScreenReaderTraversalSmoke(BaseGUITestCase):
+    """The walk a screen reader makes over a document with text in it (#1208)."""
+
+    app_name = "letters"
+
+    def test_a_full_walk_of_an_edited_document(self):
+        from dogtail import rawinput
+        self.gapplication_action("org.tunaos.letters", "new-document")
+        self.wait_for_node(roleName="text")
+        rawinput.typeText("A paragraph to read.")
+        rawinput.keyCombo("Return")
+        rawinput.typeText("And another.")
+        self.wait_until(lambda: self.app.child(roleName="text").text, lambda t: "another" in t,
+                        description="the typed text in the editor")
+        visited = traverse_like_a_screen_reader(self)
+        self.assertTrue(any(role == "text" for role, _ in visited), "the walk never reached the editor")
+        traverse_like_a_screen_reader(self)
+
+
 class DecksSnapshotSmoke(BaseGUITestCase):
     """State-snapshot interface (#104), same mechanism as
     TablesSnapshotSmoke: adding objects is visible in the normalized
