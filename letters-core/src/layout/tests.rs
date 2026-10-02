@@ -494,3 +494,30 @@ fn title_subtitle_and_quotes_have_their_own_looks() {
     assert_eq!(xs[0], xs[4]);
     assert_eq!(paragraph_look(&d.paragraphs[4].style), Look::Body);
 }
+
+/// The page stack's lookups (#1282) against the definitions they replace:
+/// a page's top re-summed from the start, the visible pages found by
+/// testing every page, and the nearest page by the minimum distance.
+#[test]
+fn page_stack_lookups_match_testing_every_page() {
+    let sizes: Vec<(f64, f64)> = (0..40).map(|i| (816.0, if i % 7 == 3 { 1056.0 } else { 816.0 + (i % 5) as f64 * 13.7 })).collect();
+    let gap = 24.0;
+    let stack = PageStack::new(sizes.clone(), gap);
+    let top = |i: usize| (gap + sizes.iter().take(i).map(|s| s.1 + gap).sum::<f64>()).floor();
+    for i in 0..sizes.len() {
+        assert_eq!(stack.top(i).floor(), top(i), "page {i}");
+    }
+    assert_eq!(stack.height(), gap + sizes.iter().map(|s| s.1 + gap).sum::<f64>());
+    let mut y = -50.0;
+    while y < stack.height() + 50.0 {
+        let (band_top, band_bottom) = (y, y + 700.0);
+        let expected: Vec<usize> = (0..sizes.len()).filter(|&i| !(top(i) + sizes[i].1 < band_top || top(i) > band_bottom)).collect();
+        assert_eq!(stack.visible(band_top, band_bottom).collect::<Vec<_>>(), expected, "band at {y}");
+        let d = |i: usize| if y < top(i) { top(i) - y } else if y > top(i) + sizes[i].1 { y - top(i) - sizes[i].1 } else { 0.0 };
+        let nearest = (0..sizes.len()).min_by(|&a, &b| d(a).partial_cmp(&d(b)).unwrap());
+        assert_eq!(stack.nearest(y), nearest, "nearest to {y}");
+        y += 7.3;
+    }
+    assert_eq!(PageStack::new(Vec::new(), gap).nearest(10.0), None);
+    assert!(PageStack::new(Vec::new(), gap).visible(0.0, 100.0).is_empty());
+}
