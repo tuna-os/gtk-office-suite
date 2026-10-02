@@ -263,9 +263,28 @@ fn connect_selection_popover(
     widget.connect_destroy(move |_| pop3.unparent());
 }
 
+/// The body font Preferences names (the `font` key, a Pango font
+/// description such as "Liberation Serif 12"), for a new document; `None`
+/// when the key is empty or names no family.
+pub(crate) fn preferred_base_font(font: &str) -> Option<letters_core::model::BaseFont> {
+    let desc = gtk4::pango::FontDescription::from_string(font.trim());
+    let family = desc.family().map(|f| f.to_string()).filter(|f| !f.is_empty())?;
+    let size_hp = (desc.size() > 0)
+        .then(|| (f64::from(desc.size()) / f64::from(gtk4::pango::SCALE) * 2.0).round() as u16)
+        .filter(|hp| *hp > 0);
+    Some(letters_core::model::BaseFont { family: Some(family), size_hp })
+}
+
 pub(crate) fn make_doc_widget(settings: Option<&gio::Settings>) -> (PageContainer, gtk::TextBuffer) {
     let buffer = gtk::TextBuffer::new(None);
     register_formatting_tags(&buffer);
+    // A new document's body font is the one Preferences names (#1428); it
+    // is the document's own, so the page shows it and every save writes it.
+    // An opened file replaces it with its own as it loads. The key used to
+    // style only the Draft editor, which is no longer shown.
+    if let Some(base) = settings.and_then(|s| preferred_base_font(&s.string("font"))) {
+        crate::bridge::set_base_font(&buffer, base);
+    }
     // The tab's document: the live model is the source of truth, the
     // buffer what formatting actions edit, and its history the tab's undo
     // (live.rs).
@@ -381,6 +400,16 @@ pub(crate) fn make_doc_widget(settings: Option<&gio::Settings>) -> (PageContaine
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn the_font_preference_names_a_family_and_maybe_a_size() {
+        let base = |font: &str| preferred_base_font(font).map(|b| (b.family, b.size_hp));
+        assert_eq!(base("Liberation Serif 12"), Some((Some("Liberation Serif".into()), Some(24))));
+        assert_eq!(base("Cantarell"), Some((Some("Cantarell".into()), None)));
+        assert_eq!(base("DejaVu Sans 10.5"), Some((Some("DejaVu Sans".into()), Some(21))));
+        assert_eq!(base(""), None, "an empty key leaves the document's default");
+        assert_eq!(base("   "), None);
+    }
     use crate::page_container::PageContainer;
 
     // ── crash-recovery doc ids (pure, no GTK) ─────────────────────────

@@ -7459,6 +7459,38 @@ class _SettingsIsolationProbe:
         self.assertEqual(self._read(), "false", "the change did not take")
 
 
+class LettersFontPreferenceSmoke(BaseGUITestCase):
+    """Preferences → Font family is a new document's body font (#1428).
+
+    The key used to style only the Draft editor, which is no longer shown,
+    so it changed nothing. Now it is the document's own base font: the page
+    lays out with it and a save writes it.
+    """
+
+    app_name = "letters"
+
+    def setUp(self):
+        import subprocess
+        self.isolate_gsettings(prefix="letters-font-pref-")
+        self._snapshot_path = self.isolate_snapshot(prefix="letters-font-pref-snap-")
+        env = os.environ.copy()
+        env.update(self.launch_env)
+        subprocess.run(["gsettings", "set", "org.tunaos.letters", "font", "DejaVu Serif 14"], env=env, check=True)
+        super().setUp()
+
+    def test_a_new_document_uses_the_preferred_font(self):
+        from dogtail import rawinput
+
+        self.wait_for_node(name="New Document", roleName="push button").do_action(0)
+        self.wait_for_node(name="Print Layout", roleName="text")
+        rawinput.typeText("hello")
+        snapshot = self.wait_until(
+            lambda: self.trigger_snapshot("org.tunaos.letters"),
+            lambda s: "".join(r["text"] for p in s["paragraphs"] for r in p["runs"]) == "hello",
+            description="the typed text in the document")
+        self.assertEqual(snapshot["base_font"], {"family": "DejaVu Serif", "size_hp": 28})
+
+
 class LettersSettingsIsolationSmoke(_SettingsIsolationProbe, BaseGUITestCase):
     """First half: start from the default, then change it."""
 

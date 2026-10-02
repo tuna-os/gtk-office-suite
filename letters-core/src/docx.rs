@@ -498,19 +498,40 @@ fn read_opened(path: &str, doc: rdocx::Document) -> Result<Document, String> {
             for ci in 0..row.cell_count() {
                 let Some(cell) = row.cell(ci) else { continue };
                 let mut wrote_any = false;
-                for cp in cell.paragraphs() {
-                    let raw_cell = raw_cells.as_ref().and_then(|s| s.get(cell_index));
-                    cell_index += 1;
-                    if cp.text().is_empty() { continue; }
-                    let mut para = map_paragraph(&doc, &cp);
-                    if let Some(r) = raw_cell {
-                        apply_strict_indents(&mut para.style, r);
-                    }
+                let mut keep = |para: Paragraph| {
+                    let mut para = para;
                     para.style.table_cell = Some(crate::model::TableCell {
                         table: ti as u32, row: ri as u32, col: ci as u32,
                     });
                     paragraphs.push(para);
                     wrote_any = true;
+                };
+                for item in cell.items() {
+                    match item {
+                        rdocx::CellItemRef::Paragraph(cp) => {
+                            let raw_cell = raw_cells.as_ref().and_then(|s| s.get(cell_index));
+                            cell_index += 1;
+                            if cp.text().is_empty() { continue; }
+                            let mut para = map_paragraph(&doc, &cp);
+                            if let Some(r) = raw_cell {
+                                apply_strict_indents(&mut para.style, r);
+                            }
+                            keep(para);
+                        }
+                        // A table nested in a cell belongs to its outer
+                        // cell, as in the ODT reader: the model has no
+                        // nesting, and dropping it lost its text (#1419).
+                        // The save asks before it flattens one
+                        // (`loss::content_a_save_drops`).
+                        rdocx::CellItemRef::Table(nested) => {
+                            for_each_nested_paragraph(&nested, &mut |cp| {
+                                if !cp.text().is_empty() {
+                                    keep(map_paragraph(&doc, cp));
+                                }
+                            });
+                        }
+                        _ => {}
+                    }
                 }
                 // Empty cells still occupy a grid position.
                 if !wrote_any {
@@ -1256,6 +1277,24 @@ fn builtin_list_style_level(name: &str) -> Option<u32> {
     rest.parse::<u32>().ok().filter(|n| (2..=9).contains(n)).map(|n| n - 1)
 }
 
+/// Every paragraph of `table`, its own nested tables' included, in
+/// document order.
+fn for_each_nested_paragraph(table: &rdocx::TableRef<'_>, f: &mut dyn FnMut(&rdocx::ParagraphRef<'_>)) {
+    for ri in 0..table.row_count() {
+        let Some(row) = table.row(ri) else { continue };
+        for ci in 0..row.cell_count() {
+            let Some(cell) = row.cell(ci) else { continue };
+            for item in cell.items() {
+                match item {
+                    rdocx::CellItemRef::Paragraph(p) => f(&p),
+                    rdocx::CellItemRef::Table(t) => for_each_nested_paragraph(&t, f),
+                    _ => {}
+                }
+            }
+        }
+    }
+}
+
 fn map_paragraph(doc: &rdocx::Document, p: &rdocx::ParagraphRef<'_>) -> Paragraph {
     let heading = p.style_id().and_then(style_id_to_heading);
     // LO uses "Quotations"; Word uses "Quote"/"IntenseQuote".
@@ -1691,39 +1730,81 @@ mod tests {
     /// the read moved to its own. Deeper, up to [`super::MAX_XML_DEPTH`],
     /// is refused by rdocx rather than crashing, and one level past it is
     /// refused unread (#1206).
+    /// A docx Letters wrote, with `body` in place of its `w:body`'s content.
+    fn docx_with_body(dir: &std::path::Path, body: &str, name: &str) -> std::path::PathBuf {
+        use std::io::{Read, Write};
+        let base = dir.join("base.docx");
+        if !base.exists() {
+            super::write(&Document::from_plain_text("x"), &base).unwrap();
+        }
+        let xml = format!(
+            "<w:document xmlns:w=\"http://schemas.openxmlformats.org/wordprocessingml/2006/main\"><w:body>{body}</w:body></w:document>"
+        );
+        let mut source = zip::ZipArchive::new(std::fs::File::open(&base).unwrap()).unwrap();
+        let path = dir.join(name);
+        let mut writer = zip::ZipWriter::new(std::fs::File::create(&path).unwrap());
+        for i in 0..source.len() {
+            let mut entry = source.by_index(i).unwrap();
+            let entry_name = entry.name().to_string();
+            let mut bytes = Vec::new();
+            entry.read_to_end(&mut bytes).unwrap();
+            if entry_name == "word/document.xml" {
+                bytes = xml.clone().into_bytes();
+            }
+            writer.start_file(entry_name, zip::write::SimpleFileOptions::default()).unwrap();
+            writer.write_all(&bytes).unwrap();
+        }
+        writer.finish().unwrap();
+        path
+    }
+
+    fn para(text: &str) -> String {
+        format!("<w:p><w:r><w:t>{text}</w:t></w:r></w:p>")
+    }
+
+    /// A table nested in a cell keeps its text, in its outer cell, in
+    /// document order (#1419): its two cells used to be dropped.
+    #[test]
+    fn a_nested_tables_text_is_read_into_its_outer_cell() {
+        let dir = tempfile::tempdir().unwrap();
+        let body = format!(
+            "{}<w:tbl><w:tr><w:tc>{}<w:tbl><w:tr><w:tc>{}</w:tc><w:tc>{}</w:tc></w:tr></w:tbl>{}</w:tc><w:tc>{}</w:tc></w:tr></w:tbl>{}",
+            para("before"), para("outer A"), para("inner one"), para("inner two"), para("outer A, after"), para("outer B"), para("after")
+        );
+        let path = docx_with_body(dir.path(), &body, "nested.docx");
+        let doc = super::read(path.to_str().unwrap()).unwrap();
+        let cell = |row, col| -> Vec<String> {
+            doc.paragraphs
+                .iter()
+                .filter(|p| p.style.table_cell.is_some_and(|c| (c.table, c.row, c.col) == (0, row, col)))
+                .map(|p| p.text())
+                .collect()
+        };
+        assert_eq!(cell(0, 0), ["outer A", "inner one", "inner two", "outer A, after"]);
+        assert_eq!(cell(0, 1), ["outer B"]);
+    }
+
+    /// 31 nested tables, inside rdocx's own cap of 32, read on whichever
+    /// thread asks: on a 2 MiB test thread they overflowed the stack before
+    /// the read moved to its own. Deeper, up to [`super::MAX_XML_DEPTH`],
+    /// is refused by rdocx rather than crashing, and one level past it is
+    /// refused unread (#1206).
     #[test]
     fn nesting_is_read_up_to_the_limit_and_refused_past_it() {
-        use std::io::{Read, Write};
         let dir = tempfile::tempdir().unwrap();
-        let base = dir.path().join("base.docx");
-        super::write(&Document::from_plain_text("x"), &base).unwrap();
         let with_tables = |levels: usize, name: &str| {
             let body = format!(
-                "<w:document xmlns:w=\"http://schemas.openxmlformats.org/wordprocessingml/2006/main\"><w:body>{}<w:p><w:r><w:t>x</w:t></w:r></w:p>{}</w:body></w:document>",
+                "{}<w:p><w:r><w:t>x</w:t></w:r></w:p>{}",
                 "<w:tbl><w:tr><w:tc>".repeat(levels),
                 "</w:tc></w:tr></w:tbl>".repeat(levels)
             );
-            let mut source = zip::ZipArchive::new(std::fs::File::open(&base).unwrap()).unwrap();
-            let path = dir.path().join(name);
-            let mut writer = zip::ZipWriter::new(std::fs::File::create(&path).unwrap());
-            for i in 0..source.len() {
-                let mut entry = source.by_index(i).unwrap();
-                let entry_name = entry.name().to_string();
-                let mut bytes = Vec::new();
-                entry.read_to_end(&mut bytes).unwrap();
-                if entry_name == "word/document.xml" {
-                    bytes = body.clone().into_bytes();
-                }
-                writer.start_file(entry_name, zip::write::SimpleFileOptions::default()).unwrap();
-                writer.write_all(&bytes).unwrap();
-            }
-            writer.finish().unwrap();
-            path
+            docx_with_body(dir.path(), &body, name)
         };
         let nested = with_tables(31, "nested.docx");
-        // What survives of the inner tables is #1419's; here, that reading
-        // them returns at all.
-        super::read(nested.to_str().unwrap()).expect("31 nested tables read");
+        let doc = super::read(nested.to_str().unwrap()).expect("31 nested tables read");
+        // The innermost cell's text, in the outermost cell (#1419).
+        let texts: Vec<String> = doc.paragraphs.iter().filter(|p| p.style.table_cell.is_some()).map(|p| p.text()).collect();
+        assert_eq!(texts, ["x"]);
 
         // Three elements a level, between <w:document><w:body> and the
         // innermost cell's <w:p><w:r><w:t>.

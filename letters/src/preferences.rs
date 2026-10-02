@@ -71,7 +71,7 @@ impl LettersPreferences {
         }
         editor_group.add(&font_row);
         let font_note = adw::ActionRow::builder()
-            .subtitle("Applies to documents opened or created after this change")
+            .subtitle("The body font of new documents, such as “Liberation Serif 12”")
             .build();
         font_note.add_css_class("dim-label");
         editor_group.add(&font_note);
