@@ -197,6 +197,56 @@ def letters(img):
     save(x, "text-color", "Words in red, green and blue")
 
     x = doc()
+    p = x.add_paragraph("Read the ")
+    # A real w:hyperlink, in Word's Hyperlink character look: blue,
+    # underlined.
+    from docx.opc.constants import RELATIONSHIP_TYPE as RT
+    from docx.oxml import OxmlElement
+    from docx.oxml.ns import qn
+    rid = x.part.relate_to("https://example.org/guide", RT.HYPERLINK, is_external=True)
+    link = OxmlElement("w:hyperlink")
+    link.set(qn("r:id"), rid)
+    run = OxmlElement("w:r")
+    rpr = OxmlElement("w:rPr")
+    color = OxmlElement("w:color")
+    color.set(qn("w:val"), "0563C1")
+    underline = OxmlElement("w:u")
+    underline.set(qn("w:val"), "single")
+    rpr.append(color)
+    rpr.append(underline)
+    run.append(rpr)
+    text = OxmlElement("w:t")
+    text.text = "project guide"
+    run.append(text)
+    link.append(run)
+    p._p.append(link)
+    p.add_run(" before you start.")
+    save(x, "hyperlink", "One sentence whose words 'project guide' are a blue, underlined link")
+
+    x = doc()
+    from docx.enum.style import WD_STYLE_TYPE
+    pre = x.styles.add_style("HTML Preformatted", WD_STYLE_TYPE.PARAGRAPH)
+    pre.font.name, pre.font.size = "Liberation Mono", Pt(10)
+    pre.paragraph_format.space_after = Pt(0)
+    x.add_paragraph("A code block follows.")
+    for line in ("fn main() {", '    println!("hello");', "}"):
+        x.add_paragraph(line, style=pre)
+    x.add_paragraph("And prose again.")
+    save(x, "code-block", "Three lines of code in a 10pt monospace font between two prose lines")
+
+    x = doc()
+    x.add_paragraph("Quarterly Report", style="Title")
+    x.add_paragraph("Third quarter, 2026", style="Subtitle")
+    x.add_paragraph(LOREM)
+    save(x, "named-styles", "A large Title, a smaller Subtitle under it, then body text")
+
+    x = doc()
+    x.add_paragraph(LOREM)
+    x.add_paragraph("Simplicity is prerequisite for reliability.", style="Quote")
+    x.add_paragraph(LOREM)
+    save(x, "block-quote", "Body text, an italic indented quotation, body text")
+
+    x = doc()
     x.add_heading("Heading 1", level=1)
     x.add_heading("Heading 2", level=2)
     x.add_heading("Heading 3", level=3)
