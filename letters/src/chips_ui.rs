@@ -348,8 +348,8 @@ fn replace(buf: &gtk::TextBuffer, range: (usize, usize), run: Run) {
 /// Show the card of the chip at buffer range `range` on `view`, pointing
 /// at `rect`: a calendar for a date, the address and Open otherwise.
 pub fn show_card(view: &gtk::Widget, buf: &gtk::TextBuffer, rect: &gtk::gdk::Rectangle, chip: Chip, label: &str, range: (usize, usize)) {
-    let pop = gtk::Popover::new();
-    pop.set_parent(view);
+    // Reused, not unparented on close: see suite_common::popover (#1192).
+    let pop = suite_common::popover::reused(view, "chip-card");
     pop.set_pointing_to(Some(rect));
     let column = gtk::Box::new(gtk::Orientation::Vertical, 8);
     column.set_margin_top(6);
@@ -396,10 +396,6 @@ pub fn show_card(view: &gtk::Widget, buf: &gtk::TextBuffer, rect: &gtk::gdk::Rec
         }
     }
     pop.set_child(Some(&column));
-    pop.connect_closed(|p| {
-        let p = p.clone();
-        glib::idle_add_local_once(move || p.unparent());
-    });
     pop.popup();
 }
 
