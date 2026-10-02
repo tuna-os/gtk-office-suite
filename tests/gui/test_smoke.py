@@ -4942,6 +4942,166 @@ class DecksLayoutsSmoke(BaseGUITestCase):
         self.assertIsNone(self.process.poll(), "decks crashed applying a layout")
 
 
+def rich_odp_parts(png):
+    """A two-slide odp holding what a Decks journey must keep through a save
+    (decks-readiness row 11): styled runs, a filled and outlined rotated
+    shape, an embedded picture, speaker notes, slide order and a master
+    page with a decoration. Built by hand: the GUI image has no
+    presentation library."""
+    ns = (
+        'xmlns:office="urn:oasis:names:tc:opendocument:xmlns:office:1.0" '
+        'xmlns:style="urn:oasis:names:tc:opendocument:xmlns:style:1.0" '
+        'xmlns:text="urn:oasis:names:tc:opendocument:xmlns:text:1.0" '
+        'xmlns:draw="urn:oasis:names:tc:opendocument:xmlns:drawing:1.0" '
+        'xmlns:fo="urn:oasis:names:tc:opendocument:xmlns:xsl-fo-compatible:1.0" '
+        'xmlns:svg="urn:oasis:names:tc:opendocument:xmlns:svg-compatible:1.0" '
+        'xmlns:xlink="http://www.w3.org/1999/xlink" '
+        'xmlns:presentation="urn:oasis:names:tc:opendocument:xmlns:presentation:1.0" office:version="1.3"'
+    )
+    def notes(t):
+        return ('<presentation:notes><draw:frame presentation:class="notes" svg:x="1cm" svg:y="1cm" svg:width="10cm" svg:height="5cm">'
+                f'<draw:text-box><text:p>{t}</text:p></draw:text-box></draw:frame></presentation:notes>')
+    styles = (
+        f'<?xml version="1.0" encoding="UTF-8"?><office:document-styles {ns}>'
+        '<office:styles/>'
+        '<office:automatic-styles>'
+        '<style:page-layout style:name="PM1"><style:page-layout-properties fo:page-width="28cm" fo:page-height="15.75cm"/></style:page-layout>'
+        '<style:style style:name="Mdeco" style:family="graphic"><style:graphic-properties draw:fill="solid" draw:fill-color="#1c71d8" draw:stroke="none"/></style:style>'
+        '</office:automatic-styles>'
+        '<office:master-styles><style:master-page style:name="Brand" style:page-layout-name="PM1">'
+        '<draw:rect draw:style-name="Mdeco" svg:x="0cm" svg:y="14.75cm" svg:width="28cm" svg:height="1cm"/>'
+        '</style:master-page></office:master-styles></office:document-styles>'
+    )
+    content = (
+        f'<?xml version="1.0" encoding="UTF-8"?><office:document-content {ns}>'
+        '<office:automatic-styles>'
+        '<style:style style:name="T1" style:family="text"><style:text-properties fo:font-weight="bold" fo:color="#c01c28"/></style:style>'
+        '<style:style style:name="T2" style:family="text"><style:text-properties fo:font-style="italic" fo:font-size="28pt"/></style:style>'
+        '<style:style style:name="G1" style:family="graphic"><style:graphic-properties draw:fill="solid" draw:fill-color="#26a269" draw:stroke="solid" svg:stroke-color="#613583" svg:stroke-width="0.1cm"/></style:style>'
+        '</office:automatic-styles>'
+        '<office:body><office:presentation>'
+        '<draw:page draw:name="Opening" draw:master-page-name="Brand">'
+        '<draw:frame svg:x="2cm" svg:y="2cm" svg:width="20cm" svg:height="3cm"><draw:text-box>'
+        '<text:p><text:span text:style-name="T1">Bold red</text:span> and <text:span text:style-name="T2">big italic</text:span></text:p>'
+        '</draw:text-box></draw:frame>'
+        '<draw:rect draw:style-name="G1" svg:width="6cm" svg:height="4cm" draw:transform="rotate (-0.5235987755982988) translate (4cm 8cm)"/>'
+        f'{notes("Start with the question")}'
+        '</draw:page>'
+        '<draw:page draw:name="Evidence" draw:master-page-name="Brand">'
+        '<draw:frame svg:x="14cm" svg:y="4cm" svg:width="8cm" svg:height="4cm">'
+        '<draw:image xlink:href="Pictures/chart.png" xlink:type="simple" xlink:show="embed" xlink:actuate="onLoad"/></draw:frame>'
+        f'{notes("Then show the data")}'
+        '</draw:page>'
+        '</office:presentation></office:body></office:document-content>'
+    )
+    manifest = (
+        '<?xml version="1.0" encoding="UTF-8"?>'
+        '<manifest:manifest xmlns:manifest="urn:oasis:names:tc:opendocument:xmlns:manifest:1.0" manifest:version="1.3">'
+        '<manifest:file-entry manifest:full-path="/" manifest:media-type="application/vnd.oasis.opendocument.presentation"/>'
+        '<manifest:file-entry manifest:full-path="content.xml" manifest:media-type="text/xml"/>'
+        '<manifest:file-entry manifest:full-path="styles.xml" manifest:media-type="text/xml"/>'
+        '<manifest:file-entry manifest:full-path="Pictures/chart.png" manifest:media-type="image/png"/>'
+        '</manifest:manifest>'
+    )
+    return [
+        ("mimetype", "application/vnd.oasis.opendocument.presentation"),
+        ("content.xml", content),
+        ("styles.xml", styles),
+        ("META-INF/manifest.xml", manifest),
+        ("Pictures/chart.png", png),
+    ]
+
+
+class DecksFormatJourneySmoke(BaseGUITestCase):
+    """decks-readiness row 11: a pptx and an odp journey keep what Decks
+    supports. A hand-built odp (rich_odp_parts) holds styled runs, a filled,
+    outlined and rotated shape, an embedded picture, speaker notes, two
+    slides in order and a master with a decoration. Decks opens it, a shape
+    is added, Save As writes a pptx; reopened, every object, note, slide
+    and master decoration is what was saved (the snapshot's `detail`: the
+    model in full, a picture by a hash of its bytes). Then Save As odp from
+    the pptx, reopened, the same again."""
+
+    app_name = "decks"
+    AID = "org.tunaos.decks"
+
+    def setUp(self):
+        import io
+        from PIL import Image
+        self._dir = self.temp_dir(prefix="decks-journey-")
+        self.isolate_snapshot(prefix="decks-journey-snap-")
+        self.isolate_autosave_state()
+        png = io.BytesIO()
+        Image.new("RGB", (160, 80), (30, 120, 200)).save(png, "PNG")
+        self._odp = os.path.join(self._dir, "talk.odp")
+        import zipfile
+        with zipfile.ZipFile(self._odp, "w") as z:
+            for part, data in rich_odp_parts(png.getvalue()):
+                z.writestr(part, data, compress_type=zipfile.ZIP_STORED if part == "mimetype" else zipfile.ZIP_DEFLATED)
+        self.launch_args = [self._odp]
+        super().setUp()
+
+    @staticmethod
+    def _normal(detail):
+        """A detail with lengths to the nearest unit (EMU, points and
+        hundredths of a millimetre don't map onto each other exactly) and a
+        run with no size of its own at the 18 pt it is drawn at."""
+        import re
+        detail = detail.replace("font_size_hp: None", "font_size_hp: Some(36)")
+        return re.sub(r"-?\d+\.\d+", lambda m: str(round(float(m.group()))), detail)
+
+    def _deck(self):
+        snap = self.trigger_snapshot(self.AID)
+        return {
+            "slides": [
+                (s["title"], s["notes"], [self._normal(o["detail"]) for o in s["objects"]]) for s in snap["slides"]
+            ],
+            "masters": [[self._normal(d) for d in m["details"]] for m in snap["masters"]],
+        }
+
+    def _save_as(self, path):
+        import subprocess
+        from dogtail import tree
+        subprocess.run(["gapplication", "action", self.AID, "save-file-as"], check=True, timeout=5)
+        name = self.wait_until(lambda: tree.root.findChild(lambda n: n.name == "Name:" and n.roleName == "text", retry=False, requireResult=False),
+                               lambda n: n is not None, description="the Save As dialog")
+        name.text = path
+        time.sleep(0.3)  # pacing: no state to wait on before the next input
+        tree.root.findChild(lambda n: n.name == "Save" and n.roleName == "push button").do_action(0)
+        self.wait_until(lambda: os.path.exists(path) and os.path.getsize(path) > 0, bool, interval=0.25,
+                        description=f"{os.path.basename(path)} to be written")
+
+    def _reopened(self, path, want):
+        self.relaunch_app(launch_args=[path])
+        got = self.wait_until(self._deck, lambda d: len(d["slides"]) == len(want["slides"]), interval=0.5,
+                              description=f"{os.path.basename(path)} to reopen")
+        for i, (w, g) in enumerate(zip(want["slides"], got["slides"])):
+            self.assertEqual(g[0], w[0], f"slide {i + 1}'s name")
+            self.assertEqual(g[1], w[1], f"slide {i + 1}'s notes")
+            self.assertEqual(len(g[2]), len(w[2]), f"slide {i + 1}'s objects: {g[2]}")
+            for j, (wo, go) in enumerate(zip(w[2], g[2])):
+                self.assertEqual(go, wo, f"slide {i + 1} object {j + 1} through {os.path.basename(path)}")
+        self.assertEqual(got["masters"][0], want["masters"][0], "the master's decorations")
+        return got
+
+    def test_a_rich_deck_survives_save_as_pptx_and_odp(self):
+        start = self.wait_until(self._deck, lambda d: len(d["slides"]) == 2, interval=0.5, description="the deck to open")
+        kinds = [d.split(" ")[0] for _, _, objs in start["slides"] for d in objs]
+        self.assertEqual(kinds, ["TextBox", "Shape", "Image"], start)
+        self.assertTrue(start["masters"][0], "the master's decoration")
+
+        self.gapplication_action(self.AID, "add-shape")
+        edited = self.wait_until(self._deck, lambda d: len(d["slides"][0][2]) == 3, interval=0.5, description="the added shape")
+
+        pptx = os.path.join(self._dir, "talk.pptx")
+        self._save_as(pptx)
+        self._reopened(pptx, edited)
+
+        odp = os.path.join(self._dir, "again.odp")
+        self._save_as(odp)
+        self._reopened(odp, edited)
+        self.assertIsNone(self.process.poll(), "decks crashed on the journey")
+
 class DecksUnsupportedContentSmoke(BaseGUITestCase):
     """Content Decks can't keep is warned about before a save drops it
     (decks-readiness.md, "unsupported animation/comment content is ...
@@ -4980,7 +5140,7 @@ class DecksUnsupportedContentSmoke(BaseGUITestCase):
         self.gapplication_action(aid, "save-file")
         self.wait_for_node(name="Save Without This Content?")
         self.wait_for_node(name="Cancel", roleName="push button").do_action(0)
-        time.sleep(1.0)
+        time.sleep(1.0)  # settling: a Cancel that wrote would have by now
         self.assertEqual(self._bytes(), self._original, "Cancel wrote the file")
 
         self.gapplication_action(aid, "save-file")
@@ -4992,7 +5152,7 @@ class DecksUnsupportedContentSmoke(BaseGUITestCase):
             self.assertIn(b"kept", b"".join(z.read(n) for n in names if n.startswith("ppt/slides/slide")))
 
         before = os.stat(self._doc).st_mtime_ns
-        time.sleep(0.05)
+        time.sleep(0.05)  # pacing: the next save gets a later mtime
         self.gapplication_action(aid, "save-file")
         self.wait_until(lambda: os.stat(self._doc).st_mtime_ns, lambda m: m != before,
                         description="a save of the file Decks wrote, without asking")
@@ -5328,26 +5488,9 @@ class DecksSelectionSmoke(BaseGUITestCase):
         self.eventually(_settled)
 
 
-class DecksCanvasDragSmoke(BaseGUITestCase):
-    """Dragging an object on the canvas moves it in the model.
-
-    The move, resize and rotate gestures had no journey at all.
-    `DecksSelectionSmoke` clicks to select and stops there, and the
-    harness's own `drag()` helper was unused by any Decks test. That gap
-    only became visible when `canvas_input.rs` was split out of
-    `window.rs`: "all ten Decks journeys pass" turned out to say nothing
-    about most of the 203 lines that moved, since only the click-to-select
-    path was ever exercised.
-
-    So this asserts the model, not the canvas description: a drag that
-    selects but fails to move would still satisfy a description check.
-    """
-
-    app_name = "decks"
-
-    def setUp(self):
-        self._snapshot_path = self.isolate_snapshot(prefix="decks-drag-")
-        super().setUp()
+class DecksCanvasGeometry:
+    """Slide coordinates to window ones, for journeys that click or drag on
+    the Decks canvas."""
 
     def _slide_to_window(self):
         """Map slide (960x540) coordinates to window-local ones.
@@ -5370,6 +5513,28 @@ class DecksCanvasDragSmoke(BaseGUITestCase):
         ox = (cw - 960.0 * scale) / 2.0
         oy = (ch - 540.0 * scale) / 2.0
         return lambda sx, sy: (cx + ox + sx * scale, cy + oy + sy * scale)
+
+
+class DecksCanvasDragSmoke(DecksCanvasGeometry, BaseGUITestCase):
+    """Dragging an object on the canvas moves it in the model.
+
+    The move, resize and rotate gestures had no journey at all.
+    `DecksSelectionSmoke` clicks to select and stops there, and the
+    harness's own `drag()` helper was unused by any Decks test. That gap
+    only became visible when `canvas_input.rs` was split out of
+    `window.rs`: "all ten Decks journeys pass" turned out to say nothing
+    about most of the 203 lines that moved, since only the click-to-select
+    path was ever exercised.
+
+    So this asserts the model, not the canvas description: a drag that
+    selects but fails to move would still satisfy a description check.
+    """
+
+    app_name = "decks"
+
+    def setUp(self):
+        self._snapshot_path = self.isolate_snapshot(prefix="decks-drag-")
+        super().setUp()
 
     def test_dragging_an_object_moves_it_in_the_model(self):
         aid = "org.tunaos.decks"
@@ -5415,6 +5580,120 @@ class DecksCanvasDragSmoke(BaseGUITestCase):
             )
             self.assertIsNone(self.process.poll(), "decks crashed during the drag")
         self.eventually(_settled)
+
+
+class DecksAdvertisedActionsSmoke(DecksCanvasGeometry, BaseGUITestCase):
+    """decks-readiness row 9: the advertised actions that had no journey,
+    each asserted on the model (the snapshot's object detail), not on the
+    widgets: No Fill and Bold in the Format inspector (one undo step each),
+    Delete on a selected object (a click gives the canvas the keyboard),
+    Add Image and Open from the file their dialog chooses (the dialog
+    itself is GTK's; decks/src/file_pick.rs). The inventory of every action and its proof is
+    docs/DECKS-ACTIONS.md."""
+
+    AID = "org.tunaos.decks"
+
+    app_name = "decks"
+
+    def _objects(self):
+        return self.trigger_snapshot(self.AID)["slides"][0]["objects"]
+
+    def _wait_objects(self, pred, what):
+        return self.wait_until(self._objects, pred, interval=0.5, description=what)
+
+    def _inspector_tab(self, name):
+        import pyatspi
+        toggle = self.app.child(name="Format", roleName="toggle button")
+        if not toggle.getState().contains(pyatspi.STATE_PRESSED):
+            toggle.do_action(0)
+        self.wait_until(lambda: self.app.child(name=name), lambda t: t is not None,
+                        description=f"the inspector's {name} tab").do_action(0)
+
+    def _button(self, name, role="push button"):
+        return self.wait_until(lambda: self.app.child(name=name, roleName=role),
+                               lambda b: b is not None and b.showing, description=f"the {name} control")
+
+    def test_no_fill_bold_and_delete_change_the_model(self):
+        from dogtail import rawinput
+        self.gapplication_action(self.AID, "new-document")
+        self.gapplication_action(self.AID, "add-shape")
+        self._wait_objects(lambda o: len(o) == 1 and "fill: Some(" in o[0]["detail"], "a filled shape")
+
+        self._inspector_tab("Style")
+        self._button("No Fill").do_action(0)
+        self._wait_objects(lambda o: "fill: None" in o[0]["detail"], "No Fill to take the fill off")
+        self.gapplication_action(self.AID, "undo")
+        self._wait_objects(lambda o: "fill: Some(" in o[0]["detail"], "one undo to put it back")
+
+        self.gapplication_action(self.AID, "add-text-box")
+        self._wait_objects(lambda o: [x["kind"] for x in o] == ["Shape", "TextBox"], "a text box, selected")
+        self._inspector_tab("Text")
+        self._button("Bold", "toggle button").do_action(0)
+        self._wait_objects(lambda o: "bold: true" in o[1]["detail"], "Bold on the text box's runs")
+        self.gapplication_action(self.AID, "undo")
+        self._wait_objects(lambda o: "bold: true" not in o[1]["detail"], "one undo to take it off")
+
+        # Select the shape by clicking it (the first shape is 200x150 at
+        # 200,200), which also gives the canvas the keyboard, then Delete.
+        to_window = self._slide_to_window()
+        x, y = to_window(300.0, 275.0)
+        self._activate_window()
+        rawinput.click(int(x), int(y))
+        self.wait_until(lambda: self.trigger_snapshot(self.AID)["selected"], lambda s: s == 0,
+                        description="the click to select the shape")
+        rawinput.keyCombo("Delete")
+        self._wait_objects(lambda o: [x["kind"] for x in o] == ["TextBox"], "Delete to remove the selected shape")
+        self.gapplication_action(self.AID, "undo")
+        self._wait_objects(lambda o: [x["kind"] for x in o] == ["Shape", "TextBox"], "undo to bring it back")
+        self.assertIsNone(self.process.poll(), "decks crashed")
+
+    def _pick(self, path):
+        """What the next open dialog chooses (decks/src/file_pick.rs: test
+        mode only; GTK's own dialog can't be driven reliably here)."""
+        with open(self._pick_file, "w") as f:
+            f.write(path)
+
+    def setUp(self):
+        self.isolate_snapshot(prefix="decks-actions-")
+        self._pick_file = os.path.join(self.temp_dir(prefix="decks-pick-"), "pick")
+        self.launch_env = {**getattr(self, "launch_env", {}), "GTK_OFFICE_TEST_MODE": "1", "GTK_OFFICE_TEST_PICK": self._pick_file}
+        super().setUp()
+
+    def test_add_image_and_open_use_the_chosen_file(self):
+        import io
+        import zipfile
+        from PIL import Image
+        d = self.temp_dir(prefix="decks-actions-")
+        png = os.path.join(d, "dot.png")
+        Image.new("RGB", (40, 20), (200, 40, 40)).save(png, "PNG")
+        self.gapplication_action(self.AID, "new-document")
+        self._wait_objects(lambda o: o == [], "an empty slide")
+        self._pick(png)
+        self.gapplication_action(self.AID, "add-image")
+        self._wait_objects(lambda o: len(o) == 1 and o[0]["kind"] == "Image" and "picture:missing" not in o[0]["detail"],
+                           "the picture on the slide, its bytes readable")
+
+        odp = os.path.join(d, "other.odp")
+        buf = io.BytesIO()
+        with zipfile.ZipFile(buf, "w") as z:
+            z.writestr("mimetype", "application/vnd.oasis.opendocument.presentation", compress_type=zipfile.ZIP_STORED)
+            z.writestr("content.xml",
+                       '<?xml version="1.0" encoding="UTF-8"?><office:document-content '
+                       'xmlns:office="urn:oasis:names:tc:opendocument:xmlns:office:1.0" '
+                       'xmlns:draw="urn:oasis:names:tc:opendocument:xmlns:drawing:1.0" office:version="1.3">'
+                       '<office:body><office:presentation><draw:page draw:name="Elsewhere"/><draw:page draw:name="Second"/>'
+                       '</office:presentation></office:body></office:document-content>')
+        with open(odp, "wb") as f:
+            f.write(buf.getvalue())
+        self.gapplication_action(self.AID, "open-file")
+        # The deck has unsaved changes: Open asks first.
+        discard = self.wait_until(lambda: self.app.child(name="Discard", roleName="push button"),
+                                  lambda b: b is not None, description="the unsaved-changes question")
+        self._pick(odp)
+        discard.do_action(0)
+        self.wait_until(lambda: (self.trigger_snapshot(self.AID)["slide_count"], self.app.child(roleName="frame").name),
+                        lambda t: t[0] == 2 and "other.odp" in t[1], interval=0.5, description="the chosen file to open")
+        self.assertIsNone(self.process.poll(), "decks crashed")
 
 
 class DecksCloseGuardSmoke(BaseGUITestCase):
@@ -6704,6 +6983,44 @@ class TablesChartDialogSmoke(BaseGUITestCase):
             timeout=10.0,
             description="the chart dialog to close after inserting",
         )
+
+
+class DecksUndoSelectionSmoke(BaseGUITestCase):
+    """decks-readiness row 10, the window half: undo repairs the selection
+    (DecksController::repair_selection). A shape is added to a duplicated
+    slide and selected; one undo takes the shape away and the selection
+    with it; another takes the duplicate away and the current slide moves
+    back onto one that exists. Asserted on the snapshot's current_slide
+    and selected, which the window fills in."""
+
+    app_name = "decks"
+    AID = "org.tunaos.decks"
+
+    def setUp(self):
+        self.isolate_snapshot(prefix="decks-undo-selection-")
+        super().setUp()
+
+    def _state(self):
+        snap = self.trigger_snapshot(self.AID)
+        return (snap["slide_count"], snap["current_slide"], snap["selected"])
+
+    def _wait(self, want, what):
+        return self.wait_until(self._state, lambda s: s == want, description=what)
+
+    def test_undo_takes_the_selection_with_what_it_removes(self):
+        self.gapplication_action(self.AID, "new-document")
+        self._wait((1, 0, None), "a new one-slide deck")
+        self.gapplication_action(self.AID, "duplicate-slide")
+        self._wait((2, 1, None), "the copy, current")
+        self.gapplication_action(self.AID, "add-shape")
+        self._wait((2, 1, 0), "a shape on the copy, selected")
+        self.gapplication_action(self.AID, "undo")
+        self._wait((2, 1, None), "undo to take the shape and its selection away")
+        self.gapplication_action(self.AID, "undo")
+        self._wait((1, 0, None), "undo to take the copy away and come back to the slide that is left")
+        self.gapplication_action(self.AID, "redo")
+        self._wait((2, 0, None), "redo to bring the copy back; the current slide stays put")
+        self.assertIsNone(self.process.poll(), "decks crashed undoing")
 
 
 class DecksPictureCropSmoke(BaseGUITestCase):
