@@ -23,7 +23,21 @@ A per-tab session owns the complete Document, review state, imported-package con
 
       `heading_styles_and_picture_size_survive_writer_rewriting_a_docx` covers the two docx-only fields. Three gaps are
       tracked: odt images (#1292), odt tables (#1296), and odt heading styles and nested revisions (#1297).
-- [ ] Preserve fields across unrelated edits and structured commands; distinguish user text from rendered list markers.
+- [x] Preserve fields across unrelated edits and structured commands; distinguish user text from rendered list markers.
+      `unrelated_edits_and_commands_leave_every_other_field_alone` (`letters/src/live/tests.rs`, #1278) loads a document
+      with every model field set into a live editing session. It then runs 60 seeded sequences of typing (multi-byte
+      text and Enter included), deletes, structured commands (list on and off, indent, outdent, restart numbering, page
+      break, insert table) and undo and redo in its last paragraph, and captures the buffer whole. Every other
+      paragraph and every document-level field (footnotes, header, footer, page, base font, heading look, comments)
+      must come back unchanged. No paragraph's text may hold a list marker, a footnote's `[n]` or a table's pipes. The
+      model must equal the capture. It found five bugs, all fixed:
+      - a list or page break toggled in a table cell, which the cell's text can't show;
+      - two tables inserted with nothing between them, which read back as one;
+      - an empty last paragraph's style (a heading, a page break) lost on capture, and so on save;
+      - a cell's own leading and trailing spaces trimmed away;
+      - table ids compared by value rather than by grouping.
+
+      Deleting the empty line between two tables still runs them together (#1299).
 - [ ] Apply model operations and undo through one live session; keep review anchors correct across Unicode edits.
 - [ ] Drive editor pagination and print/export from styled paragraph/run metrics; remove byte/character-offset ambiguity.
 - [ ] Wire admitted review/TOC/bidi workflows or report them as unavailable until GUI and format tests pass.

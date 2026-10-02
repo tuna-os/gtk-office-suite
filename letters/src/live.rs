@@ -304,6 +304,7 @@ impl LiveModel {
     /// re-rendered; a change to a table or an inline object re-renders the
     /// whole buffer. The caret goes to the end of the change.
     fn project(&mut self, buf: &gtk::TextBuffer, old: &Document) {
+        crate::bridge::set_trailing_style(buf, &self.doc);
         // Comments live beside the text: keep the buffer's copy current.
         let comments_changed = old.comments != self.doc.comments;
         if comments_changed {

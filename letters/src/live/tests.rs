@@ -10,11 +10,27 @@ fn tab(doc: &Document) -> (gtk::TextBuffer, Rc<RefCell<LiveModel>>) {
     (buf, live)
 }
 
-/// The model must be exactly what a whole-buffer capture gives.
+/// Table ids renumbered by order of appearance. An id only groups a
+/// table's cells: a capture numbers tables as it meets them, while the
+/// model keeps the id a table was made with, so after a table is inserted
+/// and undone the two can name the same tables differently.
+fn tables_in_order(mut doc: Document) -> Document {
+    let mut seen: Vec<u32> = Vec::new();
+    for p in &mut doc.paragraphs {
+        if let Some(cell) = p.style.table_cell.as_mut() {
+            let n = seen.iter().position(|&t| t == cell.table).unwrap_or_else(|| { seen.push(cell.table); seen.len() - 1 });
+            cell.table = n as u32;
+        }
+    }
+    doc
+}
+
+/// The model must be exactly what a whole-buffer capture gives (table ids
+/// aside, see `tables_in_order`).
 fn check(buf: &gtk::TextBuffer, live: &Rc<RefCell<LiveModel>>, what: &str) {
     let (doc, starts) = live.borrow_mut().snapshot(buf);
     let (want, want_starts) = crate::bridge::capture_with_starts(buf);
-    assert_eq!(doc, want, "after {what}");
+    assert_eq!(tables_in_order(doc), tables_in_order(want), "after {what}");
     assert_eq!(starts, want_starts, "starts after {what}");
 }
 
@@ -396,5 +412,172 @@ fn markdown_shortcuts_work_in_both_views() {
         check(&buf, &live, "a Print Layout shortcut");
         let doc = live.borrow_mut().snapshot(&buf).0;
         assert!(doc.paragraphs[0].runs.iter().any(|r| r.text == "it" && r.style.italic), "{:?}", doc.paragraphs[0].runs);
+    });
+}
+
+/// A document with every field the model has set, for
+/// `unrelated_edits_and_commands_leave_every_other_field_alone`. Its last
+/// paragraph is the one the edits work in; every other paragraph, and
+/// every document-level field, has to come back exactly as it went in.
+fn every_field() -> Document {
+    use letters_core::model::{BaseFont, PageGeometry, VertAlign};
+    use letters_core::{Alignment, Comment, ListKind, ParaStyle, Paragraph, Run, RunStyle};
+    let run = |text: &str, style: RunStyle| Run { text: text.into(), style };
+    let para = |style: ParaStyle, runs: Vec<Run>| Paragraph { style, runs };
+    let mut d = Document::from_plain_text("");
+    d.paragraphs = vec![
+        para(ParaStyle { heading: Some(1), ..Default::default() }, vec![run("A heading", RunStyle::default())]),
+        para(ParaStyle { alignment: Alignment::Justify, line_spacing: 1.5, space_before_pt: 6.0, space_after_pt: 12.0,
+            left_indent_pt: 18.0, right_indent_pt: 9.0, first_line_indent_pt: 12.0, tab_stops_pt: vec![72.0, 144.0],
+            keep_with_next: true, ..Default::default() }, vec![
+            run("bold ", RunStyle { bold: true, ..Default::default() }),
+            run("italic ", RunStyle { italic: true, underline: true, ..Default::default() }),
+            run("struck ", RunStyle { strikethrough: true, highlight: true, ..Default::default() }),
+            run("linked", RunStyle { link: Some("https://gnome.org/".into()), ..Default::default() }),
+            run(" red serif ", RunStyle { color: Some("c00000".into()), font_family: Some("Liberation Serif".into()), font_size_hp: Some(28), ..Default::default() }),
+            run("x", RunStyle { vert_align: Some(VertAlign::Superscript), ..Default::default() }),
+            run(" code", RunStyle { code: true, ..Default::default() }),
+            run(" commented", RunStyle { comments: vec![1], ..Default::default() }),
+            run("", RunStyle { footnote: Some(0), ..Default::default() }),
+        ]),
+        para(ParaStyle { list: ListKind::Bullet, ..Default::default() }, vec![run("a bullet", RunStyle::default())]),
+        para(ParaStyle { list: ListKind::Bullet, list_level: 1, ..Default::default() }, vec![run("a nested bullet", RunStyle::default())]),
+        para(ParaStyle { list: ListKind::Numbered, list_start: Some(3), ..Default::default() }, vec![run("third", RunStyle::default())]),
+        para(ParaStyle { list: ListKind::Numbered, ..Default::default() }, vec![run("fourth", RunStyle::default())]),
+        para(ParaStyle { code_block: Some("rust".into()), ..Default::default() }, vec![run("let x = 1;", RunStyle::default())]),
+        para(ParaStyle { block_quote: true, ..Default::default() }, vec![run("a quotation", RunStyle::default())]),
+        para(ParaStyle { named_style: Some("Subtitle".into()), ..Default::default() }, vec![run("a subtitle", RunStyle::default())]),
+        para(ParaStyle { page_break_before: true, ..Default::default() }, vec![run("after a page break", RunStyle::default())]),
+        para(ParaStyle::default(), vec![run("before the table", RunStyle::default())]),
+        para(ParaStyle::default(), vec![run("EDIT ZONE", RunStyle::default())]),
+    ];
+    d.insert_table_at(11, 2, 2);
+    d.footnotes = vec!["The footnote.".into()];
+    d.header = Some("The header".into());
+    d.footer = Some("Page {page}".into());
+    d.page = Some(PageGeometry { width_pt: 612.0, height_pt: 792.0, margin_top_pt: 36.0, margin_bottom_pt: 54.0,
+        margin_left_pt: 90.0, margin_right_pt: 45.0, columns: 2, column_gap_pt: 18.0 });
+    d.base_font = BaseFont { family: Some("Liberation Sans".into()), size_hp: Some(22) };
+    d.heading_styles = vec![RunStyle { color: Some("1a5fb4".into()), bold: true, ..Default::default() }];
+    d.comments = vec![
+        Comment { id: 1, author: "Ann".into(), date: "2026-10-01T09:00:00Z".into(), text: "Check this".into(), resolved: false, parent: None },
+        Comment { id: 2, author: "Bo".into(), date: "2026-10-01T10:00:00Z".into(), text: "Done".into(), resolved: false, parent: Some(1) },
+    ];
+    d
+}
+
+/// Fields survive unrelated edits and structured commands (#1278).
+///
+/// Random sequences of typing, Enter, deleting, the structured commands
+/// (list on and off, indent, outdent, restart numbering, page break,
+/// insert table) and undo and redo, all in the document's last paragraph.
+/// After each sequence the buffer is captured whole: every other
+/// paragraph is exactly as it was loaded, every document-level field
+/// (footnotes, header, footer, page, base font, heading look, comments) is
+/// unchanged, and no paragraph's text holds a rendered list marker, a
+/// footnote's "[n]" or a table's pipes, which are presentation and must
+/// never come back as the user's text.
+#[test]
+fn unrelated_edits_and_commands_leave_every_other_field_alone() {
+    gtk_test(|| {
+        let original = every_field();
+        let zone = original.paragraphs.iter().position(|p| p.text() == "EDIT ZONE").unwrap();
+        let seeds = [0x2545_f491_4f6c_dd1du64, 0x9e37_79b9_7f4a_7c15, 0xdead_beef_cafe_f00d, 7, 12345, 99]
+            .into_iter()
+            .chain((1..=54).map(|i| 0x51_7cc1_b727_220a_u64.wrapping_mul(i)));
+        for seed in seeds {
+            let (buf, live) = tab(&original);
+            let loaded = crate::bridge::capture_from_buffer(&buf);
+            assert_eq!(loaded.paragraphs, original.paragraphs, "the document does not load as itself");
+            let zone_start = at(&buf, "EDIT ZONE");
+            let mut state = seed;
+            let mut next = |n: u64| {
+                state ^= state << 13;
+                state ^= state >> 7;
+                state ^= state << 17;
+                state % n.max(1)
+            };
+            let mut ops: Vec<String> = Vec::new();
+            for _ in 0..60 {
+                let end = buf.char_count();
+                let in_zone = |r: u64| zone_start + r as i32;
+                let span = (end - zone_start).max(0) as u64;
+                match next(10) {
+                    0..=2 => {
+                        let t = ["a", "bc", " ", "é✨", "\n", "中文"][next(6) as usize];
+                        buf.place_cursor(&buf.iter_at_offset(in_zone(next(span + 1))));
+                        crate::page_edit::type_text(&buf, t);
+                        ops.push(format!("type {t:?}"));
+                    }
+                    3 => {
+                        // Text, not a table: deleting a table line's pipes
+                        // or the breaks between its rows takes the table
+                        // apart, which leaves its pieces as the user's own
+                        // text.
+                        let a = in_zone(next(span + 1));
+                        let b = (a + 1 + next(4) as i32).min(end);
+                        let (mut s, mut e) = (buf.iter_at_offset(a), buf.iter_at_offset(b));
+                        // From the line before the range to the line after
+                        // it: removing the empty line between two tables
+                        // runs them together (#1299).
+                        let near_table = (s.line() - 1..=e.line() + 1).any(|l| {
+                            let Some(l0) = buf.iter_at_line(l) else { return false };
+                            let mut l1 = l0;
+                            if !l1.ends_line() {
+                                l1.forward_to_line_end();
+                            }
+                            buf.text(&l0, &l1, false).contains('|')
+                        });
+                        if near_table {
+                            continue;
+                        }
+                        buf.delete(&mut s, &mut e);
+                        ops.push(format!("delete {a}..{b}"));
+                    }
+                    4..=6 => {
+                        buf.place_cursor(&buf.iter_at_offset(in_zone(next(span + 1))));
+                        let which = next(7);
+                        crate::bridge::apply_structured_edit(&buf, |e| {
+                            match which {
+                                0 => { e.toggle_list_at_cursor(letters_core::ListKind::Bullet); }
+                                1 => { e.toggle_list_at_cursor(letters_core::ListKind::Numbered); }
+                                2 => { e.indent_list_at_cursor(); }
+                                3 => { e.outdent_list_at_cursor(); }
+                                4 => { e.restart_numbering_at_cursor(); }
+                                5 => { e.toggle_page_break_at_cursor(); }
+                                _ => { e.insert_table(2, 2); }
+                            }
+                        });
+                        ops.push(format!("command {which}"));
+                    }
+                    7 | 8 => {
+                        crate::live::undo(&buf, false);
+                        ops.push("undo".into());
+                    }
+                    _ => {
+                        crate::live::undo(&buf, true);
+                        ops.push("redo".into());
+                    }
+                }
+            }
+            let got = crate::bridge::capture_from_buffer(&buf);
+            let what = format!("seed {seed:#x} after {ops:?}");
+            assert_eq!(got.paragraphs[..zone], original.paragraphs[..zone], "a paragraph outside the edits changed: {what}");
+            assert_eq!(got.footnotes, original.footnotes, "footnotes: {what}");
+            assert_eq!((&got.header, &got.footer), (&original.header, &original.footer), "header/footer: {what}");
+            assert_eq!(got.page, original.page, "page: {what}");
+            assert_eq!(got.base_font, original.base_font, "base font: {what}");
+            assert_eq!(got.heading_styles, original.heading_styles, "heading look: {what}");
+            assert_eq!(got.comments, original.comments, "comments: {what}");
+            for p in &got.paragraphs {
+                let text = p.text();
+                let marker = text.starts_with("•\t") || text.starts_with("◦\t")
+                    || text.split_once(".\t").is_some_and(|(n, _)| !n.is_empty() && n.chars().all(|c| c.is_ascii_digit()));
+                assert!(!marker, "a list marker came back as text: {text:?}, {what}");
+                assert!(!text.contains("[1]"), "a footnote marker came back as text: {text:?}, {what}");
+                assert!(p.style.table_cell.is_some() || !text.trim_start().starts_with('|'), "table pipes came back as text: {text:?}, {what}");
+            }
+            check(&buf, &live, &what);
+        }
     });
 }
