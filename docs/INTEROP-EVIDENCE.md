@@ -30,7 +30,7 @@ instead of skipping them.
 | Styles | docx | `letters-core/tests/soffice_oracle.rs::indents_and_spacing_survive_a_conversion_between_the_two_formats` | `letters-core/tests/soffice_oracle.rs::odt_styles_survive_lo_conversion_to_docx` |
 | Styles | odt | `letters-core/tests/soffice_oracle.rs::odt_styles_survive_lo_conversion_to_docx` | `letters-core/tests/soffice_oracle.rs::indents_and_spacing_survive_a_conversion_between_the_two_formats` |
 | Images | docx | `letters-core/tests/soffice_oracle.rs::inline_image_survives_lo_docx_pass` | `letters-core/tests/soffice_oracle.rs::we_read_a_picture_writer_places_in_a_docx` |
-| Images | odt | n/a: the odt writer and reader have no image support (#1292) | n/a: the odt writer and reader have no image support (#1292) |
+| Images | odt | `letters-core/tests/soffice_oracle.rs::pictures_in_our_odt_survive_writer_rewriting_it` | `letters-core/tests/soffice_oracle.rs::we_read_a_picture_writer_places_in_an_odt` |
 | Links | docx | `letters-core/tests/soffice_oracle.rs::hyperlinks_in_our_docx_reach_writers_odt` | `letters-core/tests/soffice_oracle.rs::hyperlink_survives_lo_pass` |
 | Links | odt | `letters-core/tests/soffice_oracle.rs::hyperlink_survives_lo_pass` | `letters-core/tests/soffice_oracle.rs::hyperlinks_in_our_docx_reach_writers_odt` |
 | Notes | docx | `letters-core/tests/soffice_oracle.rs::footnotes_survive_a_conversion_between_the_two_formats` | `letters-core/tests/soffice_oracle.rs::footnotes_survive_a_conversion_between_the_two_formats` |

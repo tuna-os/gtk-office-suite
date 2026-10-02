@@ -18,8 +18,10 @@ const MIMETYPE: &str = "application/vnd.oasis.opendocument.text";
 /// Read an ODT with a structured report and package parts that can be copied
 /// through an unrelated edit.
 pub fn read_with_report(path: &str) -> Result<(Document, suite_common_core::interop::CompatibilityReport, suite_common_core::interop::OpaquePackage), String> {
-    let document = read(path)?;
-    let opaque = suite_common_core::interop::OpaquePackage::capture(path, &["mimetype", "META-INF/manifest.xml", "content.xml", "styles.xml", "settings.xml"])?;
+    let (document, pictures) = read_parts(path)?;
+    let mut recognized = vec!["mimetype", "META-INF/manifest.xml", "content.xml", "styles.xml", "settings.xml"];
+    recognized.extend(pictures.iter().map(String::as_str));
+    let opaque = suite_common_core::interop::OpaquePackage::capture(path, &recognized)?;
     let mut report = suite_common_core::interop::CompatibilityReport::new("odt");
     for name in opaque.part_names() {
         report.record(suite_common_core::interop::UnsupportedFeature::new("uninterpreted-package-part", "Uninterpreted package part", name, suite_common_core::interop::FeatureDisposition::OpaquePassThrough, "will be copied through on an opaque save"));
@@ -164,8 +166,75 @@ fn para_style_children(st: &ParaStyle) -> String {
     out
 }
 
+/// An image run's picture as the package stores it (#1292): its member
+/// name under `Pictures/`, named by a hash of its bytes so a picture used
+/// twice is stored once, its bytes and its media type. None when the
+/// source can't be read; the run is then written as its alt text, as the
+/// docx writer does.
+fn picture(src: &str) -> Option<(String, Vec<u8>, &'static str)> {
+    use std::hash::{Hash, Hasher};
+    let bytes = std::fs::read(src).ok()?;
+    let ext = std::path::Path::new(src)
+        .extension()
+        .and_then(|e| e.to_str())
+        .map(|e| e.to_ascii_lowercase())
+        .unwrap_or_else(|| "png".into());
+    let mime = match ext.as_str() {
+        "png" => "image/png",
+        "jpg" | "jpeg" => "image/jpeg",
+        "gif" => "image/gif",
+        "svg" => "image/svg+xml",
+        "bmp" => "image/bmp",
+        "webp" => "image/webp",
+        "tif" | "tiff" => "image/tiff",
+        _ => "application/octet-stream",
+    };
+    let mut h = std::collections::hash_map::DefaultHasher::new();
+    bytes.hash(&mut h);
+    Some((format!("Pictures/{:016x}.{ext}", h.finish()), bytes, mime))
+}
+
+/// EMU per inch (OOXML's unit, which the model keeps image sizes in).
+const EMU_PER_INCH: f64 = 914_400.0;
+
+/// The size an image run is drawn at, in EMU: the size it was shown at,
+/// else a PNG's own pixels at 96 dpi, else 4in x 3in (the docx writer's
+/// fallback).
+fn picture_extent(run: &Run, bytes: &[u8]) -> (u64, u64) {
+    if let Some(e) = run.style.image_extent_emu {
+        return e;
+    }
+    if bytes.len() >= 24 && bytes.starts_with(b"\x89PNG\r\n\x1a\n") {
+        let px = |at: usize| u32::from_be_bytes([bytes[at], bytes[at + 1], bytes[at + 2], bytes[at + 3]]) as u64;
+        let (w, h) = (px(16), px(20));
+        if w > 0 && h > 0 {
+            return (w * 9525, h * 9525);
+        }
+    }
+    (4 * 914_400, 3 * 914_400)
+}
+
+/// An ODF length ("2.5cm", "1in", "72pt", "10mm", "6pc", "96px") in EMU.
+fn length_emu(s: &str) -> Option<u64> {
+    let s = s.trim();
+    let split = s.find(|c: char| c.is_ascii_alphabetic())?;
+    let (n, unit) = s.split_at(split);
+    let n: f64 = n.trim().parse().ok()?;
+    let inches = match unit {
+        "in" => n,
+        "cm" => n / 2.54,
+        "mm" => n / 25.4,
+        "pt" => n / 72.0,
+        "pc" => n / 6.0,
+        "px" => n / 96.0,
+        _ => return None,
+    };
+    (inches > 0.0).then(|| (inches * EMU_PER_INCH).round() as u64)
+}
+
 fn content_xml(doc: &Document) -> String {
     let run_styles = collect_run_styles(doc);
+    let mut pictures_written = 0usize;
 
     let mut auto = String::new();
     for (i, st) in run_styles.iter().enumerate() {
@@ -323,6 +392,27 @@ fn content_xml(doc: &Document) -> String {
             for (id, start) in crate::docx_comments::transition(&mut open, &wanted(r)) {
                 inner.push_str(&annotate(id, start));
             }
+            // A picture is a frame anchored as a character, so it stays
+            // where it is in the line; its bytes are in Pictures/ (#1292).
+            if let Some(src) = &r.style.image {
+                match picture(src) {
+                    Some((name, bytes, _)) => {
+                        pictures_written += 1;
+                        let (w, h) = picture_extent(r, &bytes);
+                        let title = if r.text.trim().is_empty() { String::new() } else { format!("<svg:title>{}</svg:title>", esc(&r.text)) };
+                        inner.push_str(&format!(
+                            "<draw:frame draw:name=\"Picture {pictures_written}\" text:anchor-type=\"as-char\" \
+                             svg:width=\"{:.6}in\" svg:height=\"{:.6}in\">\
+                             <draw:image xlink:href=\"{name}\" xlink:type=\"simple\" xlink:show=\"embed\" xlink:actuate=\"onLoad\"/>\
+                             {title}</draw:frame>",
+                            w as f64 / EMU_PER_INCH,
+                            h as f64 / EMU_PER_INCH,
+                        ));
+                    }
+                    None => inner.push_str(&esc(&r.text)),
+                }
+                continue;
+            }
             // A footnote reference is an element, not text: ODF puts the
             // note's whole body inline at the reference point, and the
             // consumer renders the citation and the note area itself. The
@@ -413,6 +503,7 @@ fn content_xml(doc: &Document) -> String {
          xmlns:style=\"urn:oasis:names:tc:opendocument:xmlns:style:1.0\" \
          xmlns:fo=\"urn:oasis:names:tc:opendocument:xmlns:xsl-fo-compatible:1.0\" \
          xmlns:xlink=\"http://www.w3.org/1999/xlink\" \
+         xmlns:draw=\"urn:oasis:names:tc:opendocument:xmlns:drawing:1.0\" \
          xmlns:svg=\"urn:oasis:names:tc:opendocument:xmlns:svg-compatible:1.0\" \
          xmlns:loext=\"urn:org:documentfoundation:names:experimental:office:xmlns:loext:1.0\" \
          xmlns:dc=\"http://purl.org/dc/elements/1.1/\" \
@@ -639,8 +730,23 @@ pub fn write(doc: &Document, path: impl AsRef<std::path::Path>) -> Result<(), St
     .map_err(|e| e.to_string())?;
     z.write_all(MIMETYPE.as_bytes()).map_err(|e| e.to_string())?;
     let opt = zip::write::SimpleFileOptions::default();
+    // Every readable picture once, in the order the document uses them.
+    let mut pictures: Vec<(String, Vec<u8>, &'static str)> = Vec::new();
+    for src in doc.paragraphs.iter().flat_map(|p| &p.runs).filter_map(|r| r.style.image.as_deref()) {
+        if let Some(pic) = picture(src).filter(|pic| !pictures.iter().any(|seen| seen.0 == pic.0)) {
+            pictures.push(pic);
+        }
+    }
+    let entries: String = pictures
+        .iter()
+        .map(|(name, _, mime)| format!("<manifest:file-entry manifest:full-path=\"{name}\" manifest:media-type=\"{mime}\"/>"))
+        .collect();
     z.start_file("META-INF/manifest.xml", opt).map_err(|e| e.to_string())?;
-    z.write_all(MANIFEST.as_bytes()).map_err(|e| e.to_string())?;
+    z.write_all(MANIFEST.replace("</manifest:manifest>", &format!("{entries}</manifest:manifest>")).as_bytes()).map_err(|e| e.to_string())?;
+    for (name, bytes, _) in &pictures {
+        z.start_file(name.as_str(), opt).map_err(|e| e.to_string())?;
+        z.write_all(bytes).map_err(|e| e.to_string())?;
+    }
     z.start_file("content.xml", opt).map_err(|e| e.to_string())?;
     z.write_all(content_xml(doc).as_bytes()).map_err(|e| e.to_string())?;
     z.start_file("styles.xml", opt).map_err(|e| e.to_string())?;
@@ -937,6 +1043,24 @@ fn parse_section_columns(xml: &str) -> Option<(u8, Option<f64>)> {
 
 /// Read an .odt into the model.
 pub fn read(path: &str) -> Result<Document, String> {
+    read_parts(path).map(|(doc, _)| doc)
+}
+
+/// A picture frame being read: its size, its image's package member, its
+/// alt text so far, whether that text is being read, and the depth of the
+/// frame element (frames nest: a captioned picture is a text box frame
+/// holding a picture frame).
+struct FrameReading {
+    extent: Option<(u64, u64)>,
+    href: Option<String>,
+    alt: String,
+    in_alt: bool,
+    depth: usize,
+}
+
+/// The document, and the package members its pictures were read from
+/// (which are therefore not opaque, #1292).
+fn read_parts(path: &str) -> Result<(Document, Vec<String>), String> {
     let file = std::fs::File::open(path).map_err(|e| e.to_string())?;
     let mut zip = zip::ZipArchive::new(file).map_err(|e| e.to_string())?;
     // An ODT arrives from a download or an attachment; its parts are read
@@ -1028,6 +1152,9 @@ pub fn read(path: &str) -> Result<Document, String> {
     let mut comments: Vec<(crate::model::Comment, Option<String>)> = Vec::new();
     type Reading = (crate::model::Comment, Option<String>, Option<&'static str>, usize);
     let mut annotation: Option<Reading> = None;
+    let mut frame: Option<FrameReading> = None;
+    let mut frame_depth = 0usize;
+    let mut consumed: Vec<String> = Vec::new();
 
     loop {
         let event = reader.read_event();
@@ -1199,6 +1326,29 @@ pub fn read(path: &str) -> Result<Document, String> {
             }
             Ok(Event::Start(e)) => match e.name().as_ref() {
                 "office:text" => in_body = true,
+                "draw:frame" => {
+                    frame_depth += 1;
+                    if frame.is_none() && para.is_some() && note.is_none() {
+                        let size = |a: &str| attr_val(&e, a).as_deref().and_then(length_emu);
+                        frame = Some(FrameReading {
+                            extent: size("svg:width").zip(size("svg:height")),
+                            href: None,
+                            alt: String::new(),
+                            in_alt: false,
+                            depth: frame_depth,
+                        });
+                    }
+                }
+                "svg:title" | "svg:desc" => {
+                    if let Some(f) = frame.as_mut().filter(|f| f.alt.is_empty()) {
+                        f.in_alt = true;
+                    }
+                }
+                "draw:image" => {
+                    if let Some(f) = frame.as_mut().filter(|f| f.href.is_none()) {
+                        f.href = attr_val(&e, "xlink:href");
+                    }
+                }
                 "text:note" if para.is_some() => {
                     // The reference run is empty on purpose: it marks the
                     // position, and the text lives in `Document::footnotes`.
@@ -1338,6 +1488,11 @@ pub fn read(path: &str) -> Result<Document, String> {
                 _ => {}
             },
             Ok(Event::Empty(e)) => match e.name().as_ref() {
+                "draw:image" => {
+                    if let Some(f) = frame.as_mut().filter(|f| f.href.is_none()) {
+                        f.href = attr_val(&e, "xlink:href");
+                    }
+                }
                 "text:s" if chip.is_some() => {
                     let n = attr_val(&e, "text:c").and_then(|v| v.parse::<usize>().ok()).unwrap_or(1);
                     if let Some(c) = chip.as_mut() { c.1.push_str(&" ".repeat(n)); }
@@ -1358,6 +1513,11 @@ pub fn read(path: &str) -> Result<Document, String> {
                 }
                 _ => {}
             },
+            Ok(Event::Text(t)) if frame.as_ref().is_some_and(|f| f.in_alt) => {
+                if let Some(f) = frame.as_mut() {
+                    f.alt.push_str(&unescape_text(&t));
+                }
+            }
             Ok(Event::Text(t)) => {
                 if let Some(n) = note.as_mut() {
                     if !in_citation {
@@ -1384,6 +1544,36 @@ pub fn read(path: &str) -> Result<Document, String> {
                 }
             }
             Ok(Event::End(e)) => match e.name().as_ref() {
+                "svg:title" | "svg:desc" => {
+                    if let Some(f) = frame.as_mut() {
+                        f.in_alt = false;
+                    }
+                }
+                "draw:frame" => {
+                    if frame.as_ref().is_some_and(|f| f.depth == frame_depth) {
+                        let f = frame.take().expect("the frame just checked");
+                        // A picture whose bytes are in the package: kept in
+                        // the media cache, like a docx's (#455), so the
+                        // model's path stays readable.
+                        let href = f.href.filter(|h| !h.contains("://"));
+                        let path = href.as_deref().and_then(|h| {
+                            let bytes = zip.part_to_bytes(h.trim_start_matches("./"), &mut budget).ok()?;
+                            suite_common_core::media_cache::persist(&bytes).ok()
+                        });
+                        if let (Some(path), Some(p)) = (path, para.as_mut()) {
+                            consumed.push(href.expect("read from it").trim_start_matches("./").to_string());
+                            p.runs.push(Run {
+                                text: f.alt.trim().to_string(),
+                                style: RunStyle {
+                                    image: Some(path.to_string_lossy().into_owned()),
+                                    image_extent_emu: f.extent,
+                                    ..Default::default()
+                                },
+                            });
+                        }
+                    }
+                    frame_depth = frame_depth.saturating_sub(1);
+                }
                 "text:note-citation" => in_citation = false,
                 "text:note" => {
                     if let Some(text) = note.take() {
@@ -1563,7 +1753,7 @@ pub fn read(path: &str) -> Result<Document, String> {
         }
     }
 
-    Ok(doc)
+    Ok((doc, consumed))
 }
 
 fn push_text(
@@ -1599,6 +1789,69 @@ fn push_text(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// A 3x2 red PNG.
+    const PNG: [u8; 78] = [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00, 0x00, 0x00, 0x0d, 0x49, 0x48, 0x44, 0x52, 0x00, 0x00, 0x00, 0x03, 0x00, 0x00, 0x00, 0x02, 0x08, 0x02, 0x00, 0x00, 0x00, 0x12, 0x16, 0xf1, 0x4d, 0x00, 0x00, 0x00, 0x15, 0x49, 0x44, 0x41, 0x54, 0x78, 0x9c, 0x63, 0x3c, 0x21, 0x27, 0xc7, 0xc0, 0xc0, 0xc0, 0xc0, 0xc0, 0xc0, 0xc4, 0x00, 0x03, 0x00, 0x13, 0x2e, 0x01, 0x08, 0x6a, 0xc0, 0x65, 0x61, 0x00, 0x00, 0x00, 0x00, 0x49, 0x45, 0x4e, 0x44, 0xae, 0x42, 0x60, 0x82];
+
+    /// Pictures are written as frames with their bytes in Pictures/ and
+    /// read back in place, with their size and alt text (#1292). They used
+    /// to be dropped on every save.
+    #[test]
+    fn pictures_round_trip_in_place_with_size_and_alt_text() {
+        let dir = tempfile::tempdir().unwrap();
+        let src = dir.path().join("red.png");
+        std::fs::write(&src, PNG).unwrap();
+        let image = |extent| Run {
+            text: "A red square".into(),
+            style: RunStyle { image: Some(src.to_string_lossy().into_owned()), image_extent_emu: extent, ..Default::default() },
+        };
+        let mut d = Document::from_plain_text("");
+        d.paragraphs = vec![
+            Paragraph { style: ParaStyle::default(), runs: vec![Run::plain("before "), image(Some((914_400, 457_200))), Run::plain(" after")] },
+            // No size: the PNG's own 3x2 pixels at 96 dpi.
+            Paragraph { style: ParaStyle::default(), runs: vec![image(None)] },
+            // The same picture again is stored once.
+            Paragraph { style: ParaStyle::default(), runs: vec![image(Some((914_400, 457_200)))] },
+        ];
+        let out = dir.path().join("pics.odt");
+        write(&d, &out).unwrap();
+
+        let mut zip = zip::ZipArchive::new(std::fs::File::open(&out).unwrap()).unwrap();
+        let members: Vec<String> = zip.file_names().filter(|n| n.starts_with("Pictures/")).map(str::to_string).collect();
+        assert_eq!(members.len(), 1, "one picture used three times is stored once: {members:?}");
+        let mut manifest = String::new();
+        std::io::Read::read_to_string(&mut zip.by_name("META-INF/manifest.xml").unwrap(), &mut manifest).unwrap();
+        assert!(manifest.contains(&format!("manifest:full-path=\"{}\" manifest:media-type=\"image/png\"", members[0])), "{manifest}");
+
+        let (rt, _, opaque) = read_with_report(out.to_str().unwrap()).unwrap();
+        let pics: Vec<&Run> = rt.paragraphs.iter().flat_map(|p| &p.runs).filter(|r| r.style.image.is_some()).collect();
+        assert_eq!(pics.len(), 3);
+        for r in &pics {
+            assert_eq!(std::fs::read(r.style.image.as_ref().unwrap()).unwrap(), PNG, "the picture's bytes");
+            assert_eq!(r.text, "A red square", "alt text");
+        }
+        assert_eq!(pics[0].style.image_extent_emu, Some((914_400, 457_200)));
+        assert_eq!(pics[1].style.image_extent_emu, Some((3 * 9525, 2 * 9525)));
+        let first: Vec<&str> = rt.paragraphs[0].runs.iter().map(|r| if r.style.image.is_some() { "[pic]" } else { r.text.as_str() }).collect();
+        assert_eq!(first, ["before ", "[pic]", " after"], "the picture stays where it is in the line");
+        assert!(opaque.is_empty(), "a picture we read is not an opaque part: {:?}", opaque.part_names().collect::<Vec<_>>());
+    }
+
+    /// An image whose file has gone is written as its alt text, as docx does.
+    #[test]
+    fn an_unreadable_picture_is_written_as_its_alt_text() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut d = Document::from_plain_text("");
+        d.paragraphs = vec![Paragraph {
+            style: ParaStyle::default(),
+            runs: vec![Run { text: "missing chart".into(), style: RunStyle { image: Some("/nonexistent/x.png".into()), ..Default::default() } }],
+        }];
+        let out = dir.path().join("gone.odt");
+        write(&d, &out).unwrap();
+        let rt = read(out.to_str().unwrap()).unwrap();
+        assert_eq!(rt.paragraphs[0].text(), "missing chart");
+        assert!(rt.paragraphs[0].runs.iter().all(|r| r.style.image.is_none()));
+    }
 
     fn round_trip(doc: &Document) -> Document {
         let dir = tempfile::tempdir().unwrap();
