@@ -367,8 +367,6 @@ impl DecksWindow {
         slide_list.set_selection_mode(gtk::SelectionMode::Single);
         slide_list.set_activate_on_single_click(false); // we handle selection manually
 
-        // Populate initial slide list
-        rebuild_slide_list(&slide_list, &slides.borrow(), &masters.borrow(), 0);
 
         let sidebar_controls = gtk::Box::new(gtk::Orientation::Horizontal, 4);
         sidebar_controls.set_margin_start(6);
@@ -410,6 +408,12 @@ impl DecksWindow {
         let sidebar_scroll = gtk::ScrolledWindow::new();
         sidebar_scroll.set_child(Some(&slide_list));
         sidebar_scroll.set_vexpand(true);
+        // Thumbnails only for the rows in view, drawn from the live deck.
+        let (s, m) = (slides.clone(), masters.clone());
+        crate::sidebar::set_thumbnail_source(&slide_list, &sidebar_scroll, std::rc::Rc::new(move |i| {
+            crate::sidebar::slide_thumbnail(&s.borrow(), &m.borrow(), i)
+        }));
+        rebuild_slide_list(&slide_list, &slides.borrow(), &masters.borrow(), 0);
 
         let sidebar_box = gtk::Box::new(gtk::Orientation::Vertical, 0);
         sidebar_box.append(&sidebar_scroll);
