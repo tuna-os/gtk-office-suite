@@ -9,7 +9,7 @@ Architecture: readers return complete semantic document state plus source-packag
 - [x] Version fixtures with author/version, format, expected semantics, feature IDs and permitted losses.
       Each fixture set has a `fixtures.json` beside its files (#1275): per file, the authoring app and version, the
       format, the feature IDs it proves, the semantics the round trip checks, the losses it is permitted (each naming
-      its issue, e.g. CommonMark example 150 → #1290) and the tests that use it. Feature IDs are PARITY.md's own
+      its issue; CommonMark example 150 was one until #1290 fixed it) and the tests that use it. Feature IDs are PARITY.md's own
       names: `<app>/<slug of the feature row>` or a render fixture PARITY.md cites, so the interop evidence table
       (#1276) can use the same IDs. `conformance/validate_fixtures.py` fails on a set with no manifest, a file with no
       entry or an entry with no file, a missing field, an unknown feature ID, a loss with no issue, or a `used_by` test
