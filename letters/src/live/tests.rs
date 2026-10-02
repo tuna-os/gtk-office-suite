@@ -581,3 +581,101 @@ fn unrelated_edits_and_commands_leave_every_other_field_alone() {
         }
     });
 }
+
+/// One live session for typing and structured commands, and review
+/// anchors that stay on their text across Unicode edits (#1279).
+///
+/// Random interleavings of typing (combining marks, a non-BMP emoji with
+/// a skin-tone modifier, CJK), Enter, the structured commands, and undo
+/// and redo, everywhere except inside the two anchored words. After every
+/// step the comment still covers exactly its word, the tracked insertion
+/// exactly its own, and the model is what the buffer reads as. Undoing
+/// everything then restores the loaded document: typing and commands
+/// share one history, so one undo stack reaches both.
+#[test]
+fn review_anchors_hold_across_unicode_edits_and_one_history_undoes_them() {
+    gtk_test(|| {
+        use letters_core::{Comment, Paragraph, ParaStyle, Revision, RevisionKind, Run, RunStyle};
+        let mut original = Document::from_plain_text("");
+        original.paragraphs = vec![
+            Paragraph { style: ParaStyle::default(), runs: vec![
+                Run::plain("Before the "),
+                Run { text: "COMMENTED".into(), style: RunStyle { comments: vec![1], ..Default::default() } },
+                Run::plain(" word and the "),
+                Run { text: "INSERTED".into(), style: RunStyle {
+                    revision: Some(Revision { kind: RevisionKind::Insert, author: "Ann".into(), date: "2026-10-01T09:00:00Z".into(), under: None }),
+                    ..Default::default() } },
+                Run::plain(" word."),
+            ] },
+            Paragraph { style: ParaStyle::default(), runs: vec![Run::plain("A second paragraph to work in.")] },
+        ];
+        original.comments = vec![Comment { id: 1, author: "Ann".into(), date: "2026-10-01T09:00:00Z".into(), text: "Look".into(), resolved: false, parent: None }];
+        let covered = |doc: &Document, f: &dyn Fn(&RunStyle) -> bool| -> String {
+            doc.paragraphs.iter().flat_map(|p| &p.runs).filter(|r| f(&r.style)).map(|r| r.text.as_str()).collect()
+        };
+        let seeds = [0x2545_f491_4f6c_dd1du64, 0x9e37_79b9_7f4a_7c15, 0xdead_beef_cafe_f00d, 7, 12345, 99, 4242, 0xabcdef]
+            .into_iter()
+            .chain((1..=32).map(|i| 0x6c07_8965_u64.wrapping_mul(i * 2654435761)));
+        for seed in seeds {
+            let (buf, live) = tab(&original);
+            let mut state = seed;
+            let mut next = |n: u64| {
+                state ^= state << 13;
+                state ^= state >> 7;
+                state ^= state << 17;
+                state % n.max(1)
+            };
+            let mut ops: Vec<String> = Vec::new();
+            for step in 0..60 {
+                // Anywhere but inside (or at the edges of) the anchored words.
+                let t = text(&buf);
+                let words: Vec<(i32, i32)> = ["COMMENTED", "INSERTED"].iter().filter_map(|w| {
+                    let b = t.find(w)?;
+                    let s = t[..b].chars().count() as i32;
+                    Some((s, s + w.chars().count() as i32))
+                }).collect();
+                let len = buf.char_count();
+                let place = loop {
+                    let o = next(len as u64 + 1) as i32;
+                    if words.iter().all(|&(s, e)| o < s || o > e) {
+                        break o;
+                    }
+                };
+                match next(10) {
+                    0..=3 => {
+                        let typed = ["e\u{301}", "👍🏽", "中文", "a", " ", "ñ", "\n"][next(7) as usize];
+                        buf.place_cursor(&buf.iter_at_offset(place));
+                        crate::page_edit::type_text(&buf, typed);
+                        ops.push(format!("type {typed:?}"));
+                    }
+                    4 | 5 => {
+                        buf.place_cursor(&buf.iter_at_offset(place));
+                        let which = next(4);
+                        crate::bridge::apply_structured_edit(&buf, |e| match which {
+                            0 => { e.toggle_list_at_cursor(letters_core::ListKind::Bullet); }
+                            1 => { e.toggle_list_at_cursor(letters_core::ListKind::Numbered); }
+                            2 => { e.toggle_page_break_at_cursor(); }
+                            _ => { e.indent_list_at_cursor(); }
+                        });
+                        ops.push(format!("command {which}"));
+                    }
+                    6..=8 => { undo(&buf, false); ops.push("undo".into()); }
+                    _ => { undo(&buf, true); ops.push("redo".into()); }
+                }
+                let (doc, _) = live.borrow_mut().snapshot(&buf);
+                let what = format!("seed {seed:#x} step {step} after {ops:?}");
+                assert_eq!(covered(&doc, &|s| s.comments.contains(&1)), "COMMENTED", "the comment moved: {what}");
+                assert_eq!(covered(&doc, &|s| s.revision.is_some()), "INSERTED", "the tracked insertion moved: {what}");
+                check(&buf, &live, &what);
+            }
+            let mut undos = 0;
+            while live.borrow().can_undo() && undos < 500 {
+                undo(&buf, false);
+                undos += 1;
+            }
+            let (back, _) = live.borrow_mut().snapshot(&buf);
+            assert_eq!(back.paragraphs, original.paragraphs, "seed {seed:#x}: undoing everything did not restore the document after {ops:?}");
+            check(&buf, &live, &format!("seed {seed:#x} after undoing everything"));
+        }
+    });
+}
