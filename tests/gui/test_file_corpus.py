@@ -114,7 +114,7 @@ class FileCorpusJourney(BaseGUITestCase):
         elif self.app_name == "tables":
             # The name-box focus change is asynchronous after the initial
             # snapshot; give GTK one frame before sending the reference.
-            time.sleep(0.3)
+            time.sleep(0.3)  # pacing: no state to wait on before the next input
             rawinput.keyCombo("<Control>g")
             rawinput.typeText("A10")
             rawinput.keyCombo("Return")
