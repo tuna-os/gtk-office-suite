@@ -1597,7 +1597,7 @@ impl TablesWindow {
                         let (s2, ctl, slot, force_close, win2, target) =
                             (s.clone(), ctl.clone(), slot.clone(), force_close.clone(), win.clone(), path_str.clone());
                         crate::loss_ui::save_after_asking(&win, Some(&path_str), &path_str, &s.borrow(), move || {
-                        match save_engine_to_xlsx(&target, &s2.borrow()) {
+                        match save_engine_to_xlsx(&target, Some(&target), &s2.borrow()) {
                             Ok(()) => {
                                 ctl.borrow_mut().mark_clean();
                                 slot.clear_or_report();
@@ -1637,7 +1637,7 @@ impl TablesWindow {
                                     path_state.clone(), win2.clone(), path_str.clone(),
                                 );
                                 crate::loss_ui::save_after_asking(&win2, None, &path_str, &s.borrow(), move || {
-                                match save_engine_to_xlsx(&target, &s2.borrow()) {
+                                match save_engine_to_xlsx(&target, None, &s2.borrow()) {
                                     Ok(()) => {
                                         *path_state.borrow_mut() = Some(path);
                                         ctl.borrow_mut().mark_clean();
@@ -1813,9 +1813,10 @@ impl TablesWindow {
                                 let source = path_state.borrow().as_ref().map(|p| p.to_string_lossy().into_owned());
                                 let (s, ctl, slot, path_state, w3) = (s.clone(), ctl.clone(), slot.clone(), path_state.clone(), w2.clone());
                                 let target = path_str.clone();
+                                let source_for_carry = source.clone();
                                 crate::loss_ui::save_after_asking(&w2, source.as_deref(), &path_str, &s.clone().borrow(), move || {
                                 let ss = s.borrow();
-                                match save_engine_to_xlsx(&target, &ss) {
+                                match save_engine_to_xlsx(&target, source_for_carry.as_deref(), &ss) {
                                     Ok(()) => {
                                         let settings = gtk4::gio::Settings::new("org.tunaos.tables");
                                         suite_common::push_recent_file(&settings, &path.to_string_lossy());
@@ -1883,7 +1884,7 @@ impl TablesWindow {
                 // holds (#1272); cancelling writes nothing.
                 let (s2, ctl, slot, w2, target) = (s.clone(), ctl.clone(), slot.clone(), w.clone(), path_str.clone());
                 crate::loss_ui::save_after_asking(&w, Some(&path_str), &path_str, &s.borrow(), move || {
-                match save_engine_to_xlsx(&target, &s2.borrow()) {
+                match save_engine_to_xlsx(&target, Some(&target), &s2.borrow()) {
                     Ok(()) => {
                         let settings = gtk4::gio::Settings::new("org.tunaos.tables");
                         suite_common::push_recent_file(&settings, &target);

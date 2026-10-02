@@ -7675,3 +7675,253 @@ class DecksSlideOrderSmoke(BaseGUITestCase):
         self.gapplication_action(aid, "undo")
         self._wait_slides([["Shape"]], "two more to remove the text box and the copy")
         self.assertIsNone(self.process.poll(), "decks crashed reordering slides")
+
+
+def minimal_docx_bytes(text):
+    """The smallest docx package Letters will open, one paragraph of
+    `text`. Built here, like `minimal_pptx_bytes`, because the fuzz seed
+    corpus the suite's writers generate is not committed."""
+    import io
+    import zipfile
+
+    parts = {
+        "[Content_Types].xml": (
+            '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+            '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">'
+            '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>'
+            '<Default Extension="xml" ContentType="application/xml"/>'
+            '<Override PartName="/word/document.xml" '
+            'ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>'
+            '</Types>'),
+        "_rels/.rels": (
+            '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+            '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
+            '<Relationship Id="rId1" '
+            'Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" '
+            'Target="word/document.xml"/></Relationships>'),
+        "word/document.xml": (
+            '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+            '<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">'
+            f'<w:body><w:p><w:r><w:t>{text}</w:t></w:r></w:p></w:body></w:document>'),
+    }
+    buffer = io.BytesIO()
+    with zipfile.ZipFile(buffer, "w", zipfile.ZIP_DEFLATED) as doc:
+        for name, content in parts.items():
+            doc.writestr(name, content)
+    return buffer.getvalue()
+
+
+def with_opaque_parts(package_bytes):
+    """`package_bytes` (an OOXML package) plus parts no app models: a
+    custom XML data part with its properties part and their relationship,
+    and a package thumbnail related from `_rels/.rels` (#1274). The
+    content types go into `[Content_Types].xml` as Office writes them."""
+    import io
+    import zipfile
+
+    source = zipfile.ZipFile(io.BytesIO(package_bytes))
+    parts = {n: source.read(n) for n in source.namelist() if not n.endswith("/")}
+    types = parts["[Content_Types].xml"].decode()
+    types = types.replace("</Types>", (
+        '<Default Extension="jpeg" ContentType="image/jpeg"/>'
+        '<Override PartName="/customXml/itemProps1.xml" '
+        'ContentType="application/vnd.openxmlformats-officedocument.customXmlProperties+xml"/>'
+        "</Types>"))
+    rels = parts["_rels/.rels"].decode()
+    rels = rels.replace("</Relationships>", (
+        '<Relationship Id="rIdThumb" '
+        'Type="http://schemas.openxmlformats.org/package/2006/relationships/metadata/thumbnail" '
+        'Target="docProps/thumbnail.jpeg"/></Relationships>'))
+    parts["[Content_Types].xml"] = types.encode()
+    parts["_rels/.rels"] = rels.encode()
+    parts["docProps/thumbnail.jpeg"] = b"\xff\xd8\xff\xe0 a thumbnail, only its bytes matter \xff\xd9"
+    parts["customXml/item1.xml"] = b'<?xml version="1.0"?><project><code>GTK-1274</code></project>'
+    parts["customXml/itemProps1.xml"] = (
+        b'<?xml version="1.0"?><ds:datastoreItem ds:itemID="{6A1F0B2C-1274-4C1E-9F00-000000001274}" '
+        b'xmlns:ds="http://schemas.openxmlformats.org/officeDocument/2006/customXml"/>')
+    parts["customXml/_rels/item1.xml.rels"] = (
+        b'<?xml version="1.0"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
+        b'<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/customXmlProps" '
+        b'Target="itemProps1.xml"/></Relationships>')
+    out = io.BytesIO()
+    with zipfile.ZipFile(out, "w", zipfile.ZIP_DEFLATED) as z:
+        for name, body in parts.items():
+            z.writestr(name, body)
+    return out.getvalue()
+
+
+def ooxml_package_problems(path):
+    """Where an OOXML package's parts, content types and relationships
+    disagree: a part with no content type, an Override for a missing part,
+    or an internal relationship whose target is missing. Empty when
+    consistent. The same checks as `suite_common::carry::problems`."""
+    import posixpath
+    import re
+    import zipfile
+
+    with zipfile.ZipFile(path) as z:
+        names = {n for n in z.namelist() if not n.endswith("/")}
+        types = z.read("[Content_Types].xml").decode()
+        rels = {n: z.read(n).decode() for n in names if n.endswith(".rels")}
+    defaults = {m.group(1).lower() for m in re.finditer(r'<Default [^>]*Extension="([^"]+)"', types)}
+    overrides = {m.group(1).lstrip("/").lower() for m in re.finditer(r'<Override [^>]*PartName="([^"]+)"', types)}
+    found = []
+    for name in sorted(names - {"[Content_Types].xml"}):
+        ext = name.rsplit(".", 1)[-1].lower() if "." in name else ""
+        if name.lower() not in overrides and ext not in defaults:
+            found.append(f"{name} has no content type")
+    for part in sorted(overrides - {n.lower() for n in names}):
+        found.append(f"an Override names /{part}, which isn't in the package")
+    for rels_name, xml in sorted(rels.items()):
+        # `word/_rels/document.xml.rels` relates from `word/`.
+        base = posixpath.dirname(posixpath.dirname(rels_name))
+        for rel in re.findall(r"<Relationship [^>]*>", xml):
+            if 'TargetMode="External"' in rel:
+                continue
+            target = re.search(r'Target="([^"]+)"', rel).group(1)
+            resolved = target.lstrip("/") if target.startswith("/") else posixpath.normpath(posixpath.join(base, target))
+            if resolved not in names:
+                found.append(f"{rels_name} points at {resolved}, which isn't in the package")
+    return found
+
+
+class OpaquePartsSurviveMixin:
+    """A package holding parts the app doesn't model, a custom XML data
+    part and a thumbnail, is opened, edited and saved with Ctrl+S
+    (#1274). The edit is written; the parts are still there, byte for
+    byte; and the saved package's parts, content types and relationships
+    agree. Each app writes its document from its model, so before #1274
+    every save dropped them."""
+
+    corpus = None  # a callable returning the package's bytes
+    file_name = None
+
+    def setUp(self):
+        self._dir = self.temp_dir(prefix=f"{self.app_name}-opaque-")
+        self.isolate_autosave_state()
+        self.isolate_snapshot(prefix=f"{self.app_name}-opaque-snap-")
+        source = self.corpus()
+        self._doc = os.path.join(self._dir, self.file_name)
+        with open(self._doc, "wb") as f:
+            f.write(with_opaque_parts(source))
+        with open(self._doc, "rb") as f:
+            self._original = f.read()
+        self.launch_args = [self._doc]
+        super().setUp()
+
+    def _read(self, name):
+        import io
+        import zipfile
+        with zipfile.ZipFile(io.BytesIO(self._original)) as z:
+            return z.read(name)
+
+    def _assert_parts_survived(self, edited):
+        """Wait for the save to write `edited` into some part, then check
+        the carried parts and the package's consistency."""
+        import zipfile
+
+        def written():
+            try:
+                with open(self._doc, "rb") as f:
+                    if f.read() == self._original:
+                        return False
+                with zipfile.ZipFile(self._doc) as z:
+                    return any(edited.encode() in z.read(n) for n in z.namelist() if n.endswith(".xml"))
+            except (OSError, zipfile.BadZipFile, KeyError):
+                return False
+        self.wait_until(written, bool, interval=0.25, description=f"the save to write {edited!r}")
+        with zipfile.ZipFile(self._doc) as z:
+            for name in ("customXml/item1.xml", "customXml/itemProps1.xml",
+                         "customXml/_rels/item1.xml.rels", "docProps/thumbnail.jpeg"):
+                self.assertIn(name, z.namelist(), f"the save dropped {name}")
+                self.assertEqual(z.read(name), self._read(name), f"the save changed {name}")
+            self.assertIn("docProps/thumbnail.jpeg", z.read("_rels/.rels").decode(),
+                          "the thumbnail's package relationship")
+        self.assertEqual(ooxml_package_problems(self._doc), [])
+        self.assertIsNone(self.process.poll(), f"{self.app_name} crashed saving")
+
+
+class LettersOpaquePartsSmoke(OpaquePartsSurviveMixin, BaseGUITestCase):
+    app_name = "letters"
+    corpus = staticmethod(lambda: minimal_docx_bytes("plain words"))
+    file_name = "plain.docx"
+
+    def test_custom_xml_and_a_thumbnail_survive_an_edit_and_save(self):
+        from dogtail import rawinput
+        self.wait_until(lambda: self.app.child(roleName="text").text, bool, description="plain.docx to open")
+        rawinput.keyCombo("<Control>End")
+        rawinput.typeText(" opaqueedit")
+        self.wait_until(lambda: self.app.child(roleName="text").text, lambda t: "opaqueedit" in t,
+                        description="the typed text in the editor")
+        rawinput.keyCombo("<Control>s")
+        self._assert_parts_survived("opaqueedit")
+
+
+class TablesOpaquePartsSmoke(OpaquePartsSurviveMixin, TablesCellEntryMixin, BaseGUITestCase):
+    app_name = "tables"
+    corpus = staticmethod(lambda: minimal_xlsx_bytes(7))
+    file_name = "parts.xlsx"
+
+    def test_custom_xml_and_a_thumbnail_survive_an_edit_and_save(self):
+        from dogtail import rawinput
+        self.wait_until(self._grid, lambda text: "cell A1" in text, description="parts.xlsx to open")
+        self._put("B2", "1274")
+        rawinput.keyCombo("<Control>s")
+        self._assert_parts_survived("1274")
+
+
+class DecksOpaquePartsSmoke(OpaquePartsSurviveMixin, BaseGUITestCase):
+    app_name = "decks"
+    corpus = staticmethod(lambda: minimal_pptx_bytes("opaque deck"))
+    file_name = "parts.pptx"
+
+    def test_custom_xml_and_a_thumbnail_survive_an_edit_and_save(self):
+        aid = "org.tunaos.decks"
+        self.wait_until(lambda: self.app.child(name="Slide canvas"), lambda c: c is not None,
+                        description="the deck to open")
+        self.gapplication_action(aid, "add-text-box")
+        self.gapplication_action(aid, "save-file")
+        # The added text box is the edit: a second text box in the slide.
+        self._assert_parts_survived("TextBox 2")
+
+
+class LettersUnreadContentSmoke(OpaquePartsSurviveMixin, BaseGUITestCase):
+    """What a docx holds that Letters never reads and can't carry, here a
+    macro project, is asked about before a save leaves it out (#1274), as
+    Decks and Tables ask. Cancel leaves the file's bytes alone; Save
+    Anyway writes the edit without the macro, and the safe parts are still
+    carried."""
+
+    app_name = "letters"
+    file_name = "macros.docx"
+
+    @staticmethod
+    def corpus():
+        import io
+        import zipfile
+        buf = io.BytesIO(minimal_docx_bytes("plain words"))
+        with zipfile.ZipFile(buf, "a") as z:
+            z.writestr("word/vbaProject.bin", "not a real macro project, only its presence matters")
+        return buf.getvalue()
+
+    def test_a_save_that_drops_a_macro_asks_first(self):
+        import zipfile
+        from dogtail import rawinput
+        self.wait_until(lambda: self.app.child(roleName="text").text, bool, description="macros.docx to open")
+        rawinput.keyCombo("<Control>End")
+        rawinput.typeText(" macroedit")
+        self.wait_until(lambda: self.app.child(roleName="text").text, lambda t: "macroedit" in t,
+                        description="the typed text in the editor")
+        rawinput.keyCombo("<Control>s")
+        self.wait_for_node(name="Save Without This Content?")
+        self.wait_for_node(name="Cancel", roleName="push button").do_action(0)
+        self.wait_until(lambda: self.app.findChild(lambda n: n.name == "Save Anyway" and n.showing, retry=False, requireResult=False),
+                        lambda n: n is None, description="the question to close")
+        with open(self._doc, "rb") as f:
+            self.assertEqual(f.read(), self._original, "Cancel wrote the file anyway")
+
+        rawinput.keyCombo("<Control>s")
+        self.wait_for_node(name="Save Anyway", roleName="push button").do_action(0)
+        self._assert_parts_survived("macroedit")
+        with zipfile.ZipFile(self._doc) as z:
+            self.assertNotIn("word/vbaProject.bin", z.namelist(), "Save Anyway kept the macro it said it would drop")

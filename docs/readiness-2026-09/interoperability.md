@@ -31,7 +31,16 @@ Architecture: readers return complete semantic document state plus source-packag
       own xlsx, and text and run styling read from Impress's pptx. Letters' odt had no image support at all; it now
       writes and reads pictures (#1292), so no cell is a gap. The Calc xlsx test records an upstream loss: LibreOffice 24.2 exports a themed
       workbook's font colour as `theme="1"` and reads it back black.
-- [ ] Verify opaque relationships/content types after unrelated edits; refuse unsafe partial pass-through.
+- [x] Verify opaque relationships/content types after unrelated edits; refuse unsafe partial pass-through.
+      [`docs/OPAQUE-PARTS.md`](../OPAQUE-PARTS.md) (#1274) decides, for each kind of part an app doesn't model, whether a
+      save carries it or asks about it. Custom XML, thumbnails, custom properties and ODF settings are carried by
+      `suite_common::carry` through every save in all three apps. They go in with their content types, relationships or
+      manifest entries, and the file is replaced once. Macros, embedded objects, SmartArt and charts are referenced from
+      content the apps rewrite, so they go into the loss question instead; Letters gained that scan (`letters_core::loss`).
+      Journeys: `tests/gui/test_smoke.py::LettersOpaquePartsSmoke`, `TablesOpaquePartsSmoke` and `DecksOpaquePartsSmoke`
+      (open → edit → Ctrl+S, then the parts are byte-identical and `ooxml_package_problems` is empty), and
+      `LettersUnreadContentSmoke`. Building the journeys found that adding the parts after the writer replaced the file
+      left a moment when the file on disk had the edit without them; the save now writes once.
 - [~] GUI cancel on a loss warning preserves original bytes and dirty state. **Letters is done** (#1206): every save
       (Ctrl+S, Save As, the close guard's Save All) builds the target format's `CompatibilityReport` from the
       document *before* writing and, when the format would drop something the document has, asks "Save as <format>?"
