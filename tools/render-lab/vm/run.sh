@@ -99,6 +99,8 @@ cat "$OUT/installed.json"
 if [ -n "$PRIOR" ] && ls "$PRIOR"/*.flatpak >/dev/null 2>&1; then
     "${SSH[@]}" 'mkdir -p ~/lab/prior'
     "${SCP[@]}" "$PRIOR"/*.flatpak lab@127.0.0.1:lab/prior/
+    prior_tag="$(cat "$PRIOR/prior-tag.txt" 2>/dev/null || echo prior)"
+    candidate="${GITHUB_SHA:0:8}"
     "${SCP[@]}" "$HERE/upgrade.sh" lab@127.0.0.1:lab/upgrade.sh
     : > "$OUT/upgrade.json"
     # Each app's edit: an action that changes the document without a dialog,
@@ -108,7 +110,7 @@ if [ -n "$PRIOR" ] && ls "$PRIOR"/*.flatpak >/dev/null 2>&1; then
         file="$(python3 -c 'import json, sys
 print(next((f["file"] for f in json.load(open(sys.argv[1])) if f["app"] == sys.argv[2] and f["file"].endswith("." + sys.argv[3])), ""))' "$FIX/manifest.json" "$app" "$ext")"
         [ -n "$file" ] || { echo "upgrade: no .$ext fixture for $app" >&2; continue; }
-        "${SSH[@]}" "bash ~/lab/upgrade.sh $app \$HOME/lab/prior/$app.flatpak \$HOME/lab/bundles/$app.flatpak \$HOME/lab/fixtures/$file $action" >>"$OUT/upgrade.json" \
+        "${SSH[@]}" "bash ~/lab/upgrade.sh $app \$HOME/lab/prior/$app.flatpak \$HOME/lab/bundles/$app.flatpak \$HOME/lab/fixtures/$file $action $prior_tag ${candidate:-candidate}" >>"$OUT/upgrade.json" \
             || echo "upgrade: $app check did not finish" >&2
         qmp "$PWD/screen.ppm" >/dev/null
         python3 -c 'import sys; from PIL import Image; Image.open(sys.argv[1]).save(sys.argv[2])' screen.ppm "$OUT/upgrade-$app.png"

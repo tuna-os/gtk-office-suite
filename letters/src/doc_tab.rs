@@ -22,10 +22,9 @@ use crate::insert::insert_fragment;
 // ── Crash-recovery snapshots ─────────────────────────────────────────────
 // One AutosaveSlot per tab (not per window, unlike Tables/Decks): each tab
 // is its own document, so each needs its own doc_id and its own slot.
-static NEXT_DOC_ID: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+// Unique across launches, not only within one (see new_doc_id).
 fn next_doc_id() -> String {
-    let n = NEXT_DOC_ID.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-    format!("{}-{n}", std::process::id())
+    suite_common::autosave::new_doc_id()
 }
 
 pub(crate) fn autosave_state_dir() -> std::path::PathBuf {
@@ -434,20 +433,6 @@ mod tests {
         assert_ne!(a, b);
         assert_ne!(b, c);
         assert_ne!(a, c);
-    }
-
-    #[test]
-    fn next_doc_id_has_pid_prefix_and_incrementing_counter() {
-        let prefix = format!("{}-", std::process::id());
-        let a = next_doc_id();
-        let b = next_doc_id();
-        assert!(a.starts_with(&prefix), "unexpected id {a}");
-        assert!(b.starts_with(&prefix), "unexpected id {b}");
-        let n_a: u64 = a.rsplit('-').next().unwrap().parse().unwrap();
-        let n_b: u64 = b.rsplit('-').next().unwrap().parse().unwrap();
-        // Increasing, not necessarily by one: `next_doc_id_is_unique` runs
-        // in parallel and takes ids from the same counter (this raced).
-        assert!(n_b > n_a, "{n_a} then {n_b}");
     }
 
     #[test]

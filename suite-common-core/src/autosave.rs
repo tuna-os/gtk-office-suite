@@ -630,6 +630,46 @@ pub fn find_orphaned_snapshots(state_dir: &Path) -> Vec<String> {
     found.into_iter().map(|(_written, doc_id)| doc_id).collect()
 }
 
+/// A new document's snapshot id: unique across launches, not just within
+/// one.
+///
+/// The three apps made it `<pid>-<n>`, unique for the life of a process.
+/// Under Flatpak every launch runs in a fresh pid namespace, so the app is
+/// pid 2 every time and the first document of every launch was `2-0`. A
+/// launch after a crash then gave its own first window the crashed
+/// document's id: Tables and Decks claimed the orphan's lock, so recovery
+/// saw "a live window holds this" and skipped it, and the window's first
+/// autosave overwrote the unsaved work. Letters recovered the work into a
+/// tab whose slot was the orphan's, then cleared "the orphan" and with it
+/// the snapshot it had just written. The Tier C upgrade check found it
+/// (#1209). A token drawn once per launch keeps every launch's ids apart.
+pub fn new_doc_id() -> String {
+    use std::sync::atomic::{AtomicU64, Ordering};
+    static NEXT: AtomicU64 = AtomicU64::new(0);
+    static LAUNCH: std::sync::OnceLock<String> = std::sync::OnceLock::new();
+    let launch = LAUNCH.get_or_init(launch_token);
+    doc_id(std::process::id(), launch, NEXT.fetch_add(1, Ordering::Relaxed))
+}
+
+fn doc_id(pid: u32, launch: &str, n: u64) -> String {
+    format!("{pid}-{launch}-{n}")
+}
+
+/// Eight random bytes, as hex; the clock and the pid if the system has no
+/// randomness to give, which still differ between two launches.
+fn launch_token() -> String {
+    let mut bytes = [0u8; 8];
+    let random = fs::File::open("/dev/urandom").and_then(|mut f| {
+        use std::io::Read;
+        f.read_exact(&mut bytes)
+    });
+    if random.is_err() {
+        let now = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_nanos()).unwrap_or(0);
+        bytes = ((now as u64) ^ (u64::from(std::process::id()) << 32)).to_le_bytes();
+    }
+    bytes.iter().map(|b| format!("{b:02x}")).collect()
+}
+
 /// The directory `app` keeps its autosave snapshots in:
 /// `$XDG_STATE_HOME/<app>`, else `$HOME/.local/state/<app>`, else
 /// `.local/state/<app>` under the account's home directory from the
@@ -685,6 +725,42 @@ pub fn recovery_scratch_path(state_dir: &Path, ext: &str) -> PathBuf {
 
 #[cfg(test)]
 mod tests {
+
+    /// Two launches with the same pid (every Flatpak launch is pid 2 in its
+    /// namespace) give their first documents different ids, so a launch
+    /// after a crash never takes the crashed document's slot for its own.
+    #[test]
+    fn launches_sharing_a_pid_give_their_documents_different_ids() {
+        let (first, second) = (launch_token(), launch_token());
+        assert_ne!(first, second);
+        assert_ne!(doc_id(2, &first, 0), doc_id(2, &second, 0));
+    }
+
+    /// The pid-only ids (`2-0` on every Flatpak launch) let a new window's
+    /// slot be the orphan it should recover: claiming it made the orphan
+    /// "live", and recovery skipped it. With launch-unique ids the orphan is
+    /// still offered while the new window holds its own slot.
+    #[test]
+    fn an_orphan_is_still_offered_while_the_next_launch_holds_its_own_slot() {
+        let dir = tempfile::tempdir().unwrap();
+        let meta = SnapshotMeta { original_path: None, kind: "xlsx".into() };
+        let crashed = AutosaveSlot::new(dir.path(), doc_id(2, &launch_token(), 0));
+        crashed.write(b"unsaved work", &meta).unwrap();
+        let next = AutosaveSlot::new(dir.path(), doc_id(2, &launch_token(), 0));
+        let _owner = next.claim().expect("the new window claims its own slot");
+        assert_eq!(find_orphaned_snapshots(dir.path()), vec![crashed.doc_id.clone()]);
+        // What the old ids did: the next launch's slot *was* the orphan.
+        let same = AutosaveSlot::new(dir.path(), crashed.doc_id.clone());
+        let _taken = same.claim().unwrap();
+        assert!(find_orphaned_snapshots(dir.path()).is_empty(), "a claimed orphan is not offered");
+    }
+
+    #[test]
+    fn new_doc_ids_are_unique_within_a_launch() {
+        let ids: std::collections::HashSet<String> = (0..100).map(|_| new_doc_id()).collect();
+        assert_eq!(ids.len(), 100);
+    }
+
 
     /// The failure branch is the one worth pinning: when the replacement
     /// snapshot cannot be written, the caller must be told to keep the

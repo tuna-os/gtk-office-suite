@@ -469,6 +469,9 @@ jobs:
           tag="$(git tag --list 'v*' --sort=-v:refname | head -1)"
           echo "tag=$tag" >> "$GITHUB_OUTPUT"
           git checkout -q "$tag"
+          # The release's own metainfo can name an older version (v2.1.0's
+          # latest <release> was 1.1.0), so the report names the tag.
+          echo "$tag" > prior-tag.txt
           echo "Prior release: $tag"
       - uses: flatpak/flatpak-github-actions/flatpak-builder@79327416609af08178ad73b352877e51450790b3 # v6
         with:
@@ -479,7 +482,9 @@ jobs:
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: prior-bundle-${{ matrix.app }}
-          path: ${{ matrix.app }}.flatpak
+          path: |
+            ${{ matrix.app }}.flatpak
+            prior-tag.txt
           retention-days: 3
 
   vm:

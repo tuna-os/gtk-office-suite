@@ -2,7 +2,7 @@
 # Upgrading from the prior release (#1209), inside the Tier C guest's GNOME
 # session, after run.sh's other checks:
 #
-#   upgrade.sh <app> <prior.flatpak> <candidate.flatpak> <document> <action>
+#   upgrade.sh <app> <prior.flatpak> <candidate.flatpak> <document> <action> [<prior-name> <candidate-name>]
 #   upgrade.sh --close <app>
 #
 # Installs the prior release on a clean slate and uses it the way a user
@@ -24,6 +24,7 @@ if [ "${1:-}" = --close ]; then
     exit 0
 fi
 app="$1"; prior="$2"; candidate="$3"; doc="$4"; action="$5"
+prior_name="${6:-}"; candidate_name="${7:-}"
 id="org.tunaos.$app"
 state="$HOME/.var/app/$id/.local/state/$app"
 gs() { flatpak run --command=gsettings "$id" "$@" 2>/dev/null; }
@@ -48,7 +49,7 @@ metas() { (cd "$state" 2>/dev/null && ls -1 -- *.snapshot.meta 2>/dev/null) | so
 flatpak kill "$id" 2>/dev/null || true
 flatpak uninstall --user -y --noninteractive --delete-data "$id" >/dev/null 2>&1 || true
 flatpak install --user -y --noninteractive "$prior" >/dev/null 2>&1
-prior_version="$(flatpak info --user "$id" 2>/dev/null | sed -n 's/^ *Version: //p')"
+prior_version="${prior_name:-$(flatpak info --user "$id" 2>/dev/null | sed -n 's/^ *Version: //p')}"
 
 gs set "$id" dark-mode true
 gs set "$id" window-width 1111
@@ -70,7 +71,7 @@ sleep 2
 # The candidate over it. A bundle has no remote to update from, so a user
 # installs the new bundle in its place; that keeps ~/.var/app.
 flatpak install --user -y --noninteractive --reinstall "$candidate" >/dev/null 2>&1
-candidate_version="$(flatpak info --user "$id" 2>/dev/null | sed -n 's/^ *Version: //p')"
+candidate_version="${candidate_name:-$(flatpak info --user "$id" 2>/dev/null | sed -n 's/^ *Version: //p')}"
 
 # Read before the candidate runs: closing a window writes its size.
 dark="$(gs get "$id" dark-mode)"
