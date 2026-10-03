@@ -74,7 +74,7 @@ it. **Done** returns to the slides.
 
 ## Themes
 
-*New from Template: a theme chooser, each theme previewed.*
+*New From Template: a theme chooser, each theme previewed.*
 
 ![The theme chooser](img/decks-templates.png)
 

@@ -4,7 +4,7 @@
 
 use gtk4::{self as gtk, gio, glib, prelude::*};
 use libadwaita as adw;
-use adw::prelude::{AlertDialogExt, AlertDialogExtManual, AdwDialogExt};
+use adw::prelude::AlertDialogExtManual;
 
 use crate::dialogs::{active_buffer, make_find_replace_widget, show_header_footer_dialog};
 use crate::doc_tab::{
@@ -120,7 +120,7 @@ impl LettersWindow {
             ("app.print", &suite_common::i18n("Print…")),
             ("app.print-preview", &suite_common::i18n("Print Preview")),
             ("app.export-pdf", &suite_common::i18n("Export as PDF…")),
-            ("app.export-pdf-typst", &suite_common::i18n("Export as PDF with Typst…")),
+            ("app.export-pdf-typst", &suite_common::i18n("Export as PDF With Typst…")),
             ("app.edit-headers", &suite_common::i18n("Edit Headers and Footers…")),
             ("app.style-p", &suite_common::i18n("Paragraph Style: Normal")),
             ("app.style-h1", &suite_common::i18n("Paragraph Style: Heading 1")),
@@ -292,13 +292,7 @@ impl LettersWindow {
                 let tv2 = tv.clone();
                 let st2 = st.clone();
                 let child = page.child().clone();
-                let body = format!("{}\nThis document has not been saved.", title);
-                let dialog = adw::AlertDialog::new(Some("Save document?"), Some(body.as_str()));
-                dialog.add_responses(&[("cancel", "_Cancel"), ("discard", "_Discard"), ("save", "_Save")]);
-                dialog.set_close_response("cancel");
-                dialog.set_default_response(Some("save"));
-                dialog.set_response_appearance("save", adw::ResponseAppearance::Suggested);
-                dialog.set_response_appearance("discard", adw::ResponseAppearance::Destructive);
+                let dialog = suite_common::dialogs::save_changes_question(&[title]);
                 dialog.choose(None::<&gtk::Window>, None::<&gio::Cancellable>,
                     move |response: glib::GString| {
                         match response.as_str() {
@@ -351,16 +345,7 @@ impl LettersWindow {
                     if p.needs_attention() { dirty.push(p.title().to_string()); }
                 }
                 if dirty.is_empty() { return glib::Propagation::Proceed; }
-                let body = format!(
-                    "The following documents have unsaved changes:\n• {}\nChoose Save All to keep your changes, or Discard All to close without saving.",
-                    dirty.join("\n• ")
-                );
-                let dialog = adw::AlertDialog::new(Some("Unsaved changes"), Some(body.as_str()));
-                dialog.add_responses(&[("cancel", "_Cancel"), ("discard", "_Discard All"), ("save", "_Save All")]);
-                dialog.set_close_response("cancel");
-                dialog.set_default_response(Some("save"));
-                dialog.set_response_appearance("save", adw::ResponseAppearance::Suggested);
-                dialog.set_response_appearance("discard", adw::ResponseAppearance::Destructive);
+                let dialog = suite_common::dialogs::save_changes_question(&dirty);
                 let win_weak = win.downgrade();
                 let force_close_clone = force_close.clone();
                 let tv_clone = tv.clone();
@@ -505,7 +490,7 @@ impl LettersWindow {
                             .and_then(|()| suite_common::locations::commit_save(&path))
                     });
                     if let Err(e) = written {
-                        suite_common::show_error_dialog(Some(&w2), &suite_common::i18n("Could not export PDF"), &e);
+                        suite_common::show_error_dialog(Some(&w2), &suite_common::i18n("Could Not Export PDF"), &e);
                     }
                 });
             });
@@ -700,34 +685,22 @@ impl LettersWindow {
             let a = gtk::gio::SimpleAction::new("insert-footnote", None);
             a.connect_activate(move |_, _| {
                 let Some(buf) = active_buffer(&tv) else { return };
-                let entry = gtk::Entry::builder()
-                    .placeholder_text("Footnote text")
-                    .activates_default(true)
-                    .build();
-                entry.update_property(&[gtk::accessible::Property::Label(&suite_common::i18n("Footnote text"))]);
-                let dlg = adw::AlertDialog::builder()
-                    .heading(suite_common::i18n("Insert Footnote"))
-                    .build();
-                dlg.set_extra_child(Some(&entry));
-                dlg.add_response("cancel", &suite_common::i18n("Cancel"));
-                dlg.add_response("insert", &suite_common::i18n("Insert"));
-                dlg.set_response_appearance("insert", adw::ResponseAppearance::Suggested);
-                dlg.set_default_response(Some("insert"));
-                let buf2 = buf.clone();
-                let field = entry.clone();
+                let prompt = suite_common::dialogs::prompt(
+                    &suite_common::i18n("Insert Footnote"),
+                    None,
+                    &suite_common::i18n("Footnote text"),
+                    "",
+                    &suite_common::i18n("_Insert"),
+                );
+                prompt.entry.set_placeholder_text(Some(&suite_common::i18n("Footnote text")));
                 let tv2 = tv.clone();
-                dlg.connect_response(None, move |d, resp| {
-                    let text = entry.text().to_string();
-                    if resp == "insert" && !text.is_empty() {
-                        crate::insert::insert_footnote(&buf2, &text);
-                        crate::live::sync_actions(&buf2);
+                prompt.present(Some(&w), move |text| {
+                    if let Some(text) = text.filter(|t| !t.is_empty()) {
+                        crate::insert::insert_footnote(&buf, &text);
+                        crate::live::sync_actions(&buf);
                     }
-                    d.close();
                     crate::dialogs::focus_active_view(&tv2);
                 });
-                dlg.present(Some(&w));
-                // Typing goes into the note, not onto the dialog's buttons.
-                dlg.set_focus(Some(&field));
             });
             app.add_action(&a);
             app.set_accels_for_action("app.insert-footnote", &["<Primary><Alt>f"]);

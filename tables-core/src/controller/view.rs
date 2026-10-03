@@ -30,37 +30,36 @@ impl WorkbookController {
         });
     }
 
+    /// The reference a name for `sel` stands for, on the active sheet.
+    fn name_formula(&self, sel: (usize, usize, usize, usize)) -> String {
+        let (top, left, bottom, right) = sel;
+        let sheet_name = self.state.borrow().sheet().name.clone();
+        if top == bottom && left == right {
+            format!("{}!${}${}", sheet_name, col_label(left), top + 1)
+        } else {
+            format!("{}!${}${}:${}${}", sheet_name, col_label(left), top + 1, col_label(right), bottom + 1)
+        }
+    }
+
+    /// Why `name` can't name `sel`, if it can't (not a valid identifier,
+    /// or already taken); nothing changes. Define Name offers its action
+    /// only while this is `Ok`.
+    pub fn check_name(&self, name: &str, sel: (usize, usize, usize, usize)) -> Result<(), String> {
+        let formula = self.name_formula(sel);
+        // is_valid_defined_name takes &mut self (it's read-only in effect,
+        // but the upstream signature requires it).
+        self.state.borrow_mut().engine.model.is_valid_defined_name(name, None, &formula).map(|_| ())
+    }
+
     pub fn define_name(
         &mut self,
         name: &str,
         sel: (usize, usize, usize, usize),
     ) -> Result<(), String> {
-        let (top, left, bottom, right) = sel;
-        let state = self.state.borrow();
-        let sheet_name = state.sheet().name.clone();
-        let formula = if top == bottom && left == right {
-            format!("{}!${}${}", sheet_name, col_label(left), top + 1)
-        } else {
-            format!(
-                "{}!${}${}:${}${}",
-                sheet_name,
-                col_label(left),
-                top + 1,
-                col_label(right),
-                bottom + 1
-            )
-        };
-        drop(state);
         // Validate before creating an undo entry — an invalid name/formula
-        // must never reach the undo stack. is_valid_defined_name takes
-        // &mut self (it's read-only in effect, but the upstream signature
-        // requires it), so this needs its own borrow_mut, separate from
-        // and after the read-only borrow above.
-        self.state
-            .borrow_mut()
-            .engine
-            .model
-            .is_valid_defined_name(name, None, &formula)?;
+        // must never reach the undo stack.
+        self.check_name(name, sel)?;
+        let formula = self.name_formula(sel);
         self.apply_ops("Define Name", vec![Op::DefineName { name: name.to_string(), formula: Some(formula) }]);
         Ok(())
     }

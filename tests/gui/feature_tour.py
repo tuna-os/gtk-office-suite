@@ -157,7 +157,7 @@ def _(_=None):
 def _(_=None):
     app = letters()
     keys("<Control>Home")
-    app.press("Paragraph style", "toggle button", settle=1.5)
+    app.press("Paragraph Style", "toggle button", settle=1.5)
     shot("letters-styles")
     app.close()
 
@@ -425,7 +425,7 @@ def _(_=None):
 def _(_=None):
     app = decks()
     go_to_slide(app, 2)
-    app.press("Add slide", settle=1.0)
+    app.press("Add Slide", settle=1.0)
     app.press("Insert Chart", "toggle button", settle=1.0)
     app.press("Pie", settle=1.5)
     app.press("Format", "toggle button", settle=1.5)
@@ -455,7 +455,7 @@ def _(_=None):
     app.close()
 
 
-@stop("decks", "decks-templates", "New from Template: a theme chooser, each theme previewed")
+@stop("decks", "decks-templates", "New From Template: a theme chooser, each theme previewed")
 def _(_=None):
     app = decks()
     app.action("new-from-template", settle=2.0)

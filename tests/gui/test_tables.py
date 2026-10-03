@@ -118,7 +118,7 @@ class TablesTest(VisionGUITestCase):
 
     def test_add_sheet_creates_sheet2_tab(self):
         self._new()
-        self._click("Add sheet", "push button")
+        self._click("Add Sheet", "push button")
         time.sleep(0.5)  # pacing: no state to wait on before the next input
         self.take_screenshot("addsheet")
         self.assertVision([
@@ -128,7 +128,7 @@ class TablesTest(VisionGUITestCase):
     def test_add_multiple_sheets_shows_all_tabs(self):
         self._new()
         for _ in range(2):
-            self._click("Add sheet", "push button")
+            self._click("Add Sheet", "push button")
             time.sleep(0.3)  # pacing: no state to wait on before the next input
         self.take_screenshot("threesheets")
         self.assertVision([
@@ -137,7 +137,7 @@ class TablesTest(VisionGUITestCase):
 
     def test_sheet_switcher_dropdown_lists_sheets(self):
         self._new()
-        self._click("Add sheet", "push button")
+        self._click("Add Sheet", "push button")
         time.sleep(0.3)  # pacing: no state to wait on before the next input
         self.take_screenshot("switcher")
         self.assertVision([
@@ -276,7 +276,7 @@ class TablesTest(VisionGUITestCase):
         fx.typeText("=SUM(A1:A3)")
         fx.keyCombo("Return")
         time.sleep(0.4)  # pacing: no state to wait on before the next input
-        self._click("Add sheet", "push button")
+        self._click("Add Sheet", "push button")
         time.sleep(0.3)  # pacing: no state to wait on before the next input
         self.take_screenshot("final")
         self.assertVision([

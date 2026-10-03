@@ -61,8 +61,6 @@ pub fn with_paper(page: Page, index: usize, landscape: bool) -> Page {
 /// chosen page when Apply is pressed. Cancel, Escape or closing changes
 /// nothing.
 pub fn show(parent: &impl IsA<gtk::Widget>, current: Page, apply: impl Fn(Page) + 'static) {
-    let dialog = adw::Dialog::builder().title(i18n("Page Setup")).content_width(400).build();
-
     let (paper, landscape) = paper_of(&current);
     let papers = gtk::StringList::new(&PAPERS.map(|p| p.0));
     let paper_row = adw::ComboRow::builder().title(i18n("Paper size")).model(&papers).selected(paper as u32).build();
@@ -93,32 +91,13 @@ pub fn show(parent: &impl IsA<gtk::Widget>, current: Page, apply: impl Fn(Page) 
         margins.add(row);
     }
 
-    let body = gtk::Box::new(gtk::Orientation::Vertical, 24);
-    body.set_margin_top(12);
-    body.set_margin_bottom(24);
-    body.set_margin_start(24);
-    body.set_margin_end(24);
-    body.append(&size);
-    body.append(&margins);
+    let crate::dialogs::ActionDialog { dialog, action: apply_button } = crate::dialogs::action_dialog(
+        &i18n("Page Setup"),
+        &i18n("_Apply"),
+        400,
+        &crate::dialogs::form_body(&[size.upcast_ref(), margins.upcast_ref()]),
+    );
 
-    let cancel = gtk::Button::with_mnemonic(&i18n("_Cancel"));
-    let apply_button = gtk::Button::with_mnemonic(&i18n("_Apply"));
-    apply_button.add_css_class("suggested-action");
-    let header = adw::HeaderBar::builder().show_end_title_buttons(false).show_start_title_buttons(false).build();
-    header.pack_start(&cancel);
-    header.pack_end(&apply_button);
-    let view = adw::ToolbarView::new();
-    view.add_top_bar(&header);
-    view.set_content(Some(&body));
-    dialog.set_child(Some(&view));
-    dialog.set_default_widget(Some(&apply_button));
-
-    {
-        let d = dialog.clone();
-        cancel.connect_clicked(move |_| {
-            d.close();
-        });
-    }
     {
         let d = dialog.clone();
         apply_button.connect_clicked(move |_| {

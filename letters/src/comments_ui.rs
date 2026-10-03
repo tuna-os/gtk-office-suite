@@ -73,26 +73,23 @@ fn ask(tv: &adw::TabView) {
         return;
     };
     let quoted: String = buf.text(&buf.iter_at_offset(a as i32), &buf.iter_at_offset(b as i32), false).chars().take(80).collect();
-    let dialog = adw::AlertDialog::new(Some(&suite_common::i18n("Add Comment")), Some(&format!("“{}”", quoted.trim())));
-    let entry = gtk::Entry::builder().placeholder_text(suite_common::i18n("Comment")).activates_default(true).build();
-    entry.update_property(&[gtk::accessible::Property::Label(&suite_common::i18n("Comment text"))]);
-    dialog.set_extra_child(Some(&entry));
-    dialog.add_responses(&[("cancel", &suite_common::i18n("_Cancel")), ("comment", &suite_common::i18n("_Comment"))]);
-    dialog.set_default_response(Some("comment"));
-    dialog.set_response_appearance("comment", adw::ResponseAppearance::Suggested);
-    let parent = tv.root().and_downcast::<gtk::Window>();
+    let prompt = suite_common::dialogs::prompt(
+        &suite_common::i18n("Add Comment"),
+        Some(&format!("“{}”", quoted.trim())),
+        &suite_common::i18n("Comment text"),
+        "",
+        &suite_common::i18n("_Comment"),
+    );
+    prompt.entry.set_placeholder_text(Some(&suite_common::i18n("Comment")));
+    let parent = tv.root();
     let tv = tv.clone();
-    let field = entry.clone();
-    dialog.clone().choose(parent.as_ref(), None::<&gtk::gio::Cancellable>, move |response| {
-        let text = entry.text().trim().to_string();
-        if response.as_str() == "comment" && !text.is_empty() {
+    prompt.present(parent.as_ref(), move |text| {
+        if let Some(text) = text.map(|t| t.trim().to_string()).filter(|t| !t.is_empty()) {
             add(&buf, a, b, &text);
             crate::live::sync_actions(&buf);
         }
         crate::dialogs::focus_active_view(&tv);
     });
-    // Type straight into it.
-    dialog.set_focus(Some(&field));
 }
 
 /// The thread whose text holds the caret, if any.

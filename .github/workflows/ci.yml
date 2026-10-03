@@ -97,6 +97,7 @@ jobs:
             tests/test_render_lab_rules.py \
             tests/test_render_lab_locate.py \
             tests/test_installed_check.py \
+            tests/test_gui_guidelines.py \
             tests/test_export_parity.py \
             tests/test_feature_docs.py \
             tests/test_keep_changed_screenshots.py \
@@ -167,6 +168,7 @@ jobs:
             tests/test_render_lab_rules.py \
             tests/test_render_lab_locate.py \
             tests/test_installed_check.py \
+            tests/test_gui_guidelines.py \
             tests/test_export_parity.py \
             tests/test_feature_docs.py \
             tests/test_keep_changed_screenshots.py \

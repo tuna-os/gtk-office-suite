@@ -157,7 +157,7 @@ fn main() {
                 Ok(path) => win.open_path(&path.to_string_lossy()),
                 Err(e) => suite_common::show_error_dialog(
                     Some(&win.window),
-                    &suite_common::i18n("Could not open file"),
+                    &suite_common::i18n("Could Not Open File"),
                     &e,
                 ),
             }

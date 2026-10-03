@@ -1,4 +1,4 @@
-//! template_chooser.rs — New from Template: the built-in themes, each
+//! template_chooser.rs — New From Template: the built-in themes, each
 //! previewed by the canvas's own renderer.
 //! SPDX-License-Identifier: GPL-3.0-or-later
 //!
@@ -73,27 +73,8 @@ pub fn present(parent: &impl IsA<gtk::Widget>, choose: impl Fn(usize) + 'static)
         .child(&grid)
         .build();
 
-    let cancel = gtk::Button::with_mnemonic("_Cancel");
-    let create = gtk::Button::with_label("Create");
-    create.add_css_class("suggested-action");
-    let header = adw::HeaderBar::new();
-    header.set_show_start_title_buttons(false);
-    header.set_show_end_title_buttons(false);
-    header.pack_start(&cancel);
-    header.pack_end(&create);
-    let view = adw::ToolbarView::new();
-    view.add_top_bar(&header);
-    view.set_content(Some(&scrolled));
-
-    let dialog = adw::Dialog::builder().title("Choose a Theme").content_width(800).child(&view).build();
-    // Enter creates, as in any dialog with a suggested action.
-    dialog.set_default_widget(Some(&create));
-    {
-        let dialog = dialog.clone();
-        cancel.connect_clicked(move |_| {
-            dialog.close();
-        });
-    }
+    let suite_common::dialogs::ActionDialog { dialog, action: create } =
+        suite_common::dialogs::action_dialog(&suite_common::i18n("Choose a Theme"), &suite_common::i18n("_Create"), 800, &scrolled);
     let tiles = Rc::new(tiles);
     {
         let dialog = dialog.clone();

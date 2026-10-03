@@ -78,7 +78,7 @@ pub fn export_pdf(win: &adw::ApplicationWindow, container: &PageContainer, buf: 
         let written = suite_common::locations::save_location(&file)
             .and_then(|path| typeset.write_pdf(&path).and_then(|()| suite_common::locations::commit_save(&path)));
         if let Err(e) = written {
-            suite_common::show_error_dialog(Some(&w), &suite_common::i18n("Could not export PDF"), &e);
+            suite_common::show_error_dialog(Some(&w), &suite_common::i18n("Could Not Export PDF"), &e);
         }
     });
 }
@@ -122,9 +122,9 @@ pub fn preview(win: &adw::ApplicationWindow, container: &PageContainer, buf: &gt
     toolbar.set_margin_start(8);
     toolbar.set_margin_end(8);
     let prev = gtk::Button::from_icon_name("go-previous-symbolic");
-    prev.set_tooltip_text(Some("Previous page"));
+    prev.set_tooltip_text(Some("Previous Page"));
     let next = gtk::Button::from_icon_name("go-next-symbolic");
-    next.set_tooltip_text(Some("Next page"));
+    next.set_tooltip_text(Some("Next Page"));
     for (button, step) in [(&prev, -1isize), (&next, 1)] {
         let (cur, l, d) = (current.clone(), label.clone(), drawing.clone());
         button.connect_clicked(move |_| {

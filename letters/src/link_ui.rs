@@ -62,29 +62,24 @@ fn ask(tv: &adw::TabView) {
             (caret, caret)
         });
     let existing = if to > from { link_at(&buf, from, to) } else { None };
-    let dialog = adw::AlertDialog::new(Some(&suite_common::i18n("Insert Link")), None);
-    let entry = gtk::Entry::builder()
-        .placeholder_text("https://")
-        .text(existing.as_deref().unwrap_or(""))
-        .activates_default(true)
-        .build();
-    entry.update_property(&[gtk::accessible::Property::Label(&suite_common::i18n("Link address"))]);
-    dialog.set_extra_child(Some(&entry));
-    dialog.add_responses(&[("cancel", &suite_common::i18n("_Cancel")), ("link", &suite_common::i18n("_Link"))]);
-    dialog.set_default_response(Some("link"));
-    dialog.set_response_appearance("link", adw::ResponseAppearance::Suggested);
-    let parent = tv.root().and_downcast::<gtk::Window>();
+    let prompt = suite_common::dialogs::prompt(
+        &suite_common::i18n("Insert Link"),
+        None,
+        &suite_common::i18n("Link address"),
+        existing.as_deref().unwrap_or(""),
+        &suite_common::i18n("_Link"),
+    );
+    prompt.entry.set_placeholder_text(Some("https://"));
+    let parent = tv.root();
     let tv = tv.clone();
-    let field = entry.clone();
-    dialog.clone().choose(parent.as_ref(), None::<&gtk::gio::Cancellable>, move |response| {
-        if response.as_str() == "link" {
-            let url = entry.text().trim().to_string();
-            set_link(&buf, from, to, Some(url.as_str()).filter(|u| !u.is_empty()));
+    prompt.present(parent.as_ref(), move |url| {
+        if let Some(url) = url {
+            let url = url.trim();
+            set_link(&buf, from, to, Some(url).filter(|u| !u.is_empty()));
             crate::live::sync_actions(&buf);
         }
         crate::dialogs::focus_active_view(&tv);
     });
-    dialog.set_focus(Some(&field));
 }
 
 /// Register `app.insertlink`.

@@ -97,7 +97,7 @@ without a test that fails first.
   API, Writer-oracle proven, Insert Footnote action (Ctrl+Alt+F).
   Comments/track changes remain out (ADR 0003 §2).
 - ✅ **Charts in xlsx**: real chart parts (bar/line/pie) written and
-  read back, Calc-oracle proven; Insert into Sheet in the dialog.
+  read back, Calc-oracle proven; Insert in the Insert Chart dialog.
 - ✅ **Conditional formatting**: cell-value rules persisted + rendered
   + dialog, Calc-oracle proven. Pivots/array formulas out (§4).
 - ✅ **Master slides**: pptx slideLayout/slideMaster read (placeholders
