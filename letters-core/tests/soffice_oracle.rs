@@ -1738,3 +1738,36 @@ fn a_nested_table_lo_wrote_keeps_its_text() {
     let ids: Vec<String> = report.destructive_features().iter().map(|f| f.id.clone()).collect();
     assert!(ids.contains(&"nested-tables".to_string()), "{ids:?}");
 }
+
+/// Table column widths through LibreOffice, both ways: our docx → Writer
+/// converts it to odt → our odt reader sees the widths, and our odt →
+/// Writer converts it to docx → our docx reader sees them. A narrow
+/// number column beside a wide one is how agendas and forms are laid out;
+/// without widths every table came out in equal columns.
+#[test]
+fn table_column_widths_survive_writer_both_ways() {
+    let Some(bin) = require_or_skip() else { return };
+    let mut d = Document::from_plain_text("after the table");
+    let table = d.insert_table_at(0, 2, 2);
+    for p in d.paragraphs.iter_mut().filter(|p| p.style.table_cell.is_some()) {
+        p.runs = vec![Run::plain("cell")];
+    }
+    let want = [36.0, 400.0];
+    d.table_columns.insert(table, want.to_vec());
+    let close = |got: &Document, how: &str| {
+        let widths: Vec<&Vec<f64>> = got.table_columns.values().collect();
+        assert_eq!(widths.len(), 1, "{how}: {:?}", got.table_columns);
+        assert!(widths[0].iter().zip(want).all(|(a, b)| (a - b).abs() < 1.0), "{how}: {widths:?}");
+    };
+
+    let dir = tempfile::tempdir().unwrap();
+    let docx_path = dir.path().join("widths.docx");
+    docx::write(&d, &docx_path).expect("write docx");
+    let _ = soffice_convert(bin, &docx_path, "odt").ok();
+    let odt_path = dir.path().join("widths.odt");
+    assert!(odt_path.exists(), "soffice did not convert docx to odt");
+    close(&letters_core::odt::read(odt_path.to_str().unwrap()).expect("read converted odt"), "docx → Writer → odt");
+
+    let Some(rt) = through_lo_to_docx(&d, "widths") else { return };
+    close(&rt, "odt → Writer → docx");
+}
