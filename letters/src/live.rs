@@ -304,10 +304,15 @@ impl LiveModel {
         if comments_changed {
             crate::bridge::set_comments(buf, &self.doc.comments);
         }
+        // So do the header, footer and footnotes.
+        let notes_changed = (&old.header, &old.footer, &old.footnotes) != (&self.doc.header, &self.doc.footer, &self.doc.footnotes);
+        if notes_changed {
+            crate::bridge::set_header_footer_footnotes(buf, &self.doc);
+        }
         let (pa, pb) = (&old.paragraphs, &self.doc.paragraphs);
         let head = pa.iter().zip(pb).take_while(|(x, y)| x == y).count();
         if head == pa.len() && head == pb.len() {
-            if comments_changed {
+            if comments_changed || notes_changed {
                 // No text changed, but the document did: the views follow
                 // the buffer's "changed".
                 buf.set_modified(true);
@@ -422,9 +427,10 @@ impl LiveModel {
         !ops.is_empty() && self.apply_ops(buf, &ops, false)
     }
 
-    /// Apply the comment ops `f` makes from the current document, as one
-    /// undo step (`letters_core::comments`). `false` if there were none.
-    pub fn edit_comments(&mut self, buf: &gtk::TextBuffer, f: impl FnOnce(&Document) -> Vec<Op>) -> bool {
+    /// Apply the ops `f` makes from the current document (comment ops from
+    /// `letters_core::comments`, a header or footnotes), as one undo step.
+    /// `false` if there were none.
+    pub fn edit_with(&mut self, buf: &gtk::TextBuffer, f: impl FnOnce(&Document) -> Vec<Op>) -> bool {
         self.resolve(buf);
         crate::bridge::read_sidecars(buf, &mut self.doc);
         let ops = f(&self.doc);

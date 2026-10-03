@@ -80,10 +80,10 @@ pub fn focus_active_view(tv: &adw::TabView) {
 
 /// Show the header and footer configuration dialog.
 ///
-/// Takes the tab's buffer as well as its PageContainer: the container renders
-/// the header on screen and in print, but only the buffer carries it into a
-/// save. Writing to the container alone — as this dialog used to — meant the
-/// user's header was visible, printable, and never written to the file (#438).
+/// The header and footer are the document's: the page view, print and
+/// every save draw them from the tab's model. Writing them only to the
+/// container, as this dialog once did, meant a header that was shown and
+/// never written to the file (#438).
 pub fn show_header_footer_dialog(pc: &PageContainer, buf: &gtk::TextBuffer) {
     let dialog = adw::AlertDialog::new(
         Some(&i18n("Headers and Footers")),
@@ -96,16 +96,14 @@ pub fn show_header_footer_dialog(pc: &PageContainer, buf: &gtk::TextBuffer) {
     content.set_margin_start(12);
     content.set_margin_end(12);
 
-    // Seed from the buffer, which is the copy that persists; fall back to the
-    // container for a document whose header was set before this session.
-    let (buf_header, buf_footer) = crate::bridge::buffer_header_footer(buf);
+    let (header, footer) = header_footer_of(buf);
     let hdr_entry = gtk::Entry::builder()
         .placeholder_text(i18n("Header text"))
-        .text(buf_header.unwrap_or_else(|| pc.header_text().to_string()))
+        .text(header)
         .build();
     let ftr_entry = gtk::Entry::builder()
         .placeholder_text(i18n("Footer text"))
-        .text(buf_footer.unwrap_or_else(|| pc.footer_text().to_string()))
+        .text(footer)
         .build();
 
     content.append(&gtk::Label::new(Some(&i18n("Header"))));
@@ -119,18 +117,43 @@ pub fn show_header_footer_dialog(pc: &PageContainer, buf: &gtk::TextBuffer) {
     dialog.set_response_appearance("apply", adw::ResponseAppearance::Suggested);
 
     let parent = pc.root().and_downcast::<adw::ApplicationWindow>();
-    let pc = pc.clone();
     let buf = buf.clone();
     dialog.choose(parent.as_ref(), None::<&gtk::gio::Cancellable>, move |response| {
         if response.as_str() == "apply" {
-            let (header, footer) = (hdr_entry.text(), ftr_entry.text());
-            pc.set_header_text(&header);
-            pc.set_footer_text(&footer);
-            // The container shows it; the buffer is what gets saved.
-            crate::bridge::set_buffer_header_footer(&buf, &header, &footer);
-            buf.set_modified(true);
+            apply_header_footer(&buf, &hdr_entry.text(), &ftr_entry.text());
         }
     });
+}
+
+/// The document's header and footer, empty when it has none: what the
+/// dialog offers to edit.
+fn header_footer_of(buf: &gtk::TextBuffer) -> (String, String) {
+    let (header, footer) = crate::bridge::buffer_header_footer(buf);
+    (header.unwrap_or_default(), footer.unwrap_or_default())
+}
+
+/// Set the document's header and footer, as the dialog's Apply does: one
+/// model edit, which Undo takes back.
+///
+/// Empty text means "no header", not an empty one: the ODT and DOCX writers
+/// both emit a header block for `Some("")`, which would put an empty header
+/// into every saved file.
+pub(crate) fn apply_header_footer(buf: &gtk::TextBuffer, header: &str, footer: &str) {
+    let Some(live) = crate::live::of(buf) else {
+        crate::bridge::set_buffer_header_footer(buf, header, footer);
+        buf.set_modified(true);
+        return;
+    };
+    let present = |text: &str| (!text.is_empty()).then(|| text.to_string());
+    let (header, footer) = (present(header), present(footer));
+    live.borrow_mut().edit_with(buf, |doc| {
+        if (&doc.header, &doc.footer) == (&header, &footer) {
+            Vec::new()
+        } else {
+            vec![letters_core::edit::Op::SetHeaderFooter { header, footer }]
+        }
+    });
+    crate::live::sync_actions(buf);
 }
 
 /// Show a dialog for inserting a custom dimension table.
@@ -457,5 +480,41 @@ pub fn scroll_to_cursor(tv: &adw::TabView) {
     let Some(page) = tv.selected_page() else { return };
     if let Some(view) = crate::page_container::find(&page.child()).and_then(|pc| pc.page_view()) {
         crate::page_edit::scroll_to_caret(&view);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use suite_common::gtk_test::run as gtk_test;
+
+    /// Applying a header and footer is one model edit that Undo takes back.
+    /// It used to go only onto the buffer, outside the model's history:
+    /// Undo then took back the typing before it and left the header.
+    #[test]
+    fn a_header_and_footer_are_one_undoable_model_edit() {
+        gtk_test(|| {
+            let (_pc, buf) = crate::doc_tab::make_doc_widget(None);
+            let live = crate::live::of(&buf).unwrap();
+            let mut it = buf.end_iter();
+            buf.begin_user_action();
+            buf.insert(&mut it, "typed");
+            buf.end_user_action();
+
+            apply_header_footer(&buf, "Report", "Page {page}");
+            let d = live.borrow_mut().document(&buf).clone();
+            assert_eq!((d.header.as_deref(), d.footer.as_deref()), (Some("Report"), Some("Page {page}")));
+
+            crate::live::undo(&buf, false);
+            let d = live.borrow_mut().document(&buf).clone();
+            assert_eq!((d.header, d.footer), (None, None), "Undo left the header in place");
+            assert_eq!(d.paragraphs[0].text(), "typed", "Undo took back the typing instead");
+            assert_eq!(header_footer_of(&buf), (String::new(), String::new()), "the dialog would offer the undone header");
+
+            crate::live::undo(&buf, true);
+            let d = live.borrow_mut().document(&buf).clone();
+            assert_eq!(d.header.as_deref(), Some("Report"));
+            assert_eq!(header_footer_of(&buf).0, "Report");
+        });
     }
 }

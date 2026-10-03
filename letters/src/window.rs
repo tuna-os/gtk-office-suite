@@ -697,6 +697,7 @@ impl LettersWindow {
                     .placeholder_text("Footnote text")
                     .activates_default(true)
                     .build();
+                entry.update_property(&[gtk::accessible::Property::Label(&suite_common::i18n("Footnote text"))]);
                 let dlg = adw::AlertDialog::builder()
                     .heading(suite_common::i18n("Insert Footnote"))
                     .build();
@@ -706,30 +707,20 @@ impl LettersWindow {
                 dlg.set_response_appearance("insert", adw::ResponseAppearance::Suggested);
                 dlg.set_default_response(Some("insert"));
                 let buf2 = buf.clone();
+                let field = entry.clone();
+                let tv2 = tv.clone();
                 dlg.connect_response(None, move |d, resp| {
-                    if resp != "insert" {
-                        return;
-                    }
                     let text = entry.text().to_string();
-                    if text.is_empty() {
-                        return;
+                    if resp == "insert" && !text.is_empty() {
+                        crate::insert::insert_footnote(&buf2, &text);
+                        crate::live::sync_actions(&buf2);
                     }
-                    let mut notes: Vec<String> = unsafe {
-                        buf2.data::<Vec<String>>(crate::bridge::FOOTNOTES_KEY)
-                            .map(|p| p.as_ref().clone())
-                            .unwrap_or_default()
-                    };
-                    notes.push(text);
-                    let idx = notes.len() - 1;
-                    unsafe { buf2.set_data(crate::bridge::FOOTNOTES_KEY, notes) };
-                    let mut pos = buf2
-                        .selection_bounds()
-                        .map(|(_, e)| e)
-                        .unwrap_or_else(|| buf2.iter_at_mark(&buf2.get_insert()));
-                    crate::bridge::insert_footnote_marker(&buf2, &mut pos, idx);
                     d.close();
+                    crate::dialogs::focus_active_view(&tv2);
                 });
                 dlg.present(Some(&w));
+                // Typing goes into the note, not onto the dialog's buttons.
+                dlg.set_focus(Some(&field));
             });
             app.add_action(&a);
             app.set_accels_for_action("app.insert-footnote", &["<Primary><Alt>f"]);

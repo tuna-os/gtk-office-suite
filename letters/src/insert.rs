@@ -138,6 +138,30 @@ pub(crate) fn insert_image(buf: &gtk::TextBuffer, path: &std::path::Path) -> boo
     replace_selection(buf, vec![Paragraph { style: Default::default(), runs: vec![run] }])
 }
 
+/// Add a footnote with `text` and its reference mark after the selection
+/// (or at the caret), as one model edit: one undo takes out both. The note
+/// used to go onto the buffer beside the model's history, so Undo took out
+/// the mark and left the note, which was then saved with nothing citing it.
+pub(crate) fn insert_footnote(buf: &gtk::TextBuffer, text: &str) -> bool {
+    let Some(live) = crate::live::of(buf) else { return false };
+    let (_, end) = selection(buf);
+    let mut m = live.borrow_mut();
+    let at = m.sequence_offset(buf, end);
+    let mut notes = m.document(buf).footnotes.clone();
+    notes.push(text.to_string());
+    let mut mark = Run::plain("");
+    mark.style.footnote = Some(notes.len() - 1);
+    let ops = [Op::SetFootnotes { notes }, Op::Insert { at, content: vec![Paragraph { style: Default::default(), runs: vec![mark] }] }];
+    if !m.apply_user_ops(buf, &ops, false) {
+        return false;
+    }
+    if let Some(off) = m.buffer_offset(buf, at + 1) {
+        drop(m);
+        buf.place_cursor(&buf.iter_at_offset(off as i32));
+    }
+    true
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -156,6 +180,10 @@ mod tests {
         let live = crate::live::of(buf).unwrap();
         let m = live.borrow();
         (m.local_reads, m.full_reads)
+    }
+
+    fn text(buf: &gtk::TextBuffer) -> String {
+        buf.text(&buf.start_iter(), &buf.end_iter(), false).to_string()
     }
 
     fn doc(buf: &gtk::TextBuffer) -> letters_core::Document {
@@ -245,4 +273,36 @@ mod tests {
             assert_eq!(doc(&buf).paragraphs[0].text(), "ab");
         });
     }
+
+    /// Insert Footnote adds the note and its mark as one model edit, and
+    /// one undo takes both out: the note used to stay behind in the
+    /// document's footnotes with nothing pointing at it, and was saved.
+    #[test]
+    fn a_footnote_and_its_mark_are_one_model_edit() {
+        gtk_test(|| {
+            let buf = live_buffer("cited here");
+            buf.place_cursor(&buf.iter_at_offset(5));
+            let before = reads(&buf);
+
+            insert_footnote(&buf, "A source.");
+            let d = doc(&buf);
+            assert_eq!(d.footnotes, vec!["A source.".to_string()]);
+            let runs = &d.paragraphs[0].runs;
+            assert_eq!(runs.iter().filter(|r| r.style.footnote.is_some()).count(), 1, "one reference mark: {runs:?}");
+            assert_eq!((runs[0].text.as_str(), runs[1].style.footnote, runs[2].text.as_str()), ("cited", Some(0), " here"), "{runs:?}");
+            assert_eq!(text(&buf), "cited[1] here", "the page shows the mark");
+            assert_eq!(buf.iter_at_mark(&buf.get_insert()).offset(), 8, "the caret is after the mark");
+            assert_eq!(reads(&buf), before, "the model read the buffer back instead of taking an op");
+
+            crate::live::undo(&buf, false);
+            let d = doc(&buf);
+            assert_eq!(text(&buf), "cited here");
+            assert!(d.footnotes.is_empty(), "the note outlived its mark: {:?}", d.footnotes);
+            assert_eq!(crate::bridge::capture_from_buffer(&buf).footnotes, d.footnotes, "the buffer's copy follows the model");
+
+            crate::live::undo(&buf, true);
+            assert_eq!(doc(&buf).footnotes, vec!["A source.".to_string()]);
+        });
+    }
+
 }

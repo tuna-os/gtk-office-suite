@@ -175,6 +175,12 @@ pub enum Op {
     /// remove it with `None`. Its anchor is marks on the text
     /// (`MarkKey::Comment`), set by `Mark` ops of their own.
     SetComment { id: u32, comment: Option<crate::model::Comment> },
+    /// Set the document's header and footer (`None`: it has none).
+    SetHeaderFooter { header: Option<String>, footer: Option<String> },
+    /// Replace the document's footnote texts. A footnote's reference is a
+    /// run marked with its index (`RunStyle::footnote`), inserted by an op
+    /// of its own.
+    SetFootnotes { notes: Vec<String> },
 }
 
 /// Why an op could not be applied. The document is unchanged.
@@ -325,6 +331,11 @@ pub fn apply(doc: &mut Document, op: &Op) -> Result<Vec<Op>, EditError> {
             Ok(vec![Op::SetParagraphs { para, remove: insert.len(), insert: removed }])
         }
         Op::SetComment { id, comment } => Ok(vec![Op::SetComment { id: *id, comment: set_comment(doc, *id, comment.clone()) }]),
+        Op::SetHeaderFooter { header, footer } => Ok(vec![Op::SetHeaderFooter {
+            header: std::mem::replace(&mut doc.header, header.clone()),
+            footer: std::mem::replace(&mut doc.footer, footer.clone()),
+        }]),
+        Op::SetFootnotes { notes } => Ok(vec![Op::SetFootnotes { notes: std::mem::replace(&mut doc.footnotes, notes.clone()) }]),
         Op::SetParaStyle { at, style } => {
             let (pi, _) = locate(doc, *at).ok_or(EditError::OutOfRange)?;
             let para = &mut doc.paragraphs[pi];

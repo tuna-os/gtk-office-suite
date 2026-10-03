@@ -43,7 +43,7 @@ pub fn add(buf: &gtk::TextBuffer, a: usize, b: usize, text: &str) -> Option<u32>
     let mut live = live.borrow_mut();
     let (sa, sb) = (live.sequence_offset(buf, a), live.sequence_offset(buf, b));
     let mut id = None;
-    live.edit_comments(buf, |doc| {
+    live.edit_with(buf, |doc| {
         let (ops, new) = comments::add(doc, sa, sb, &crate::review_ui::author(), &letters_core::track::now(), text).unwrap_or_default();
         id = (!ops.is_empty()).then_some(new);
         ops
@@ -57,7 +57,7 @@ pub fn add(buf: &gtk::TextBuffer, a: usize, b: usize, text: &str) -> Option<u32>
 /// Apply `f`'s comment ops to `buf`'s model.
 fn edit(buf: &gtk::TextBuffer, f: impl FnOnce(&letters_core::Document) -> Vec<letters_core::edit::Op>) {
     if let Some(live) = crate::live::of(buf) {
-        live.borrow_mut().edit_comments(buf, f);
+        live.borrow_mut().edit_with(buf, f);
     }
     crate::live::sync_actions(buf);
 }
