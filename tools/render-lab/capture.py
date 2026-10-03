@@ -119,8 +119,14 @@ def locate(template_path, screen_path, size=None, hint=None):
 
     def gray(p, k, centre=True):
         g = Image.open(p).convert("L")
-        if size and p == template_path:
+        if size and p == template_path and (abs(g.width - size[0]) > 1 or abs(g.height - size[1]) > 1):
             # Match at on-screen size (a no-op when the template is S-1).
+            # geom.json's size is fractional (A4 is 1122.5 px tall) and the
+            # template was rendered at whole pixels (1123): within a pixel
+            # it is already on-screen size. Resizing it anyway resampled
+            # every glyph, and on a page dense with text that alone came to
+            # 4.8 grey levels, over MAX_LOCATE_DIFF: twenty real documents
+            # lost Tier B to it (#1200).
             g = g.resize((round(size[0]), round(size[1])))
         g = g.resize((max(1, g.width // k), max(1, g.height // k)))
         a = np.asarray(g, dtype=np.float64)
