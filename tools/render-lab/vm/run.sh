@@ -84,6 +84,7 @@ print(next((f["file"] for f in json.load(open(sys.argv[1])) if f["app"] == sys.a
         || echo "installed: $app check did not finish" >&2
     qmp "$PWD/screen.ppm" >/dev/null
     python3 -c 'import sys; from PIL import Image; Image.open(sys.argv[1]).save(sys.argv[2])' screen.ppm "$OUT/installed-$app.png"
+    "${SSH[@]}" "bash ~/lab/installed.sh --close $app" || true
     "${SCP[@]}" "lab@127.0.0.1:lab/installed/$app-open.log" "$OUT/installed-$app.log" 2>/dev/null || true
 done
 cat "$OUT/installed.json"

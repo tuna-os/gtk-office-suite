@@ -3,6 +3,7 @@
 # the Tier C guest's GNOME session, after run.sh installed the bundles.
 #
 #   installed.sh <app> <ext> <mime> <document> <out-dir>
+#   installed.sh --close <app>
 #
 # Copies <document> into ~/Documents, opens it with `gio open` (the file
 # manager's path: MIME default, desktop entry, Flatpak's file forwarding
@@ -11,6 +12,11 @@
 # host but not write it (--filesystem=host:ro), so the save only lands
 # through the portal.
 set -u
+if [ "${1:-}" = --close ]; then
+    flatpak kill "org.tunaos.$2" 2>/dev/null || true
+    flatpak override --user --reset "org.tunaos.$2"
+    exit 0
+fi
 app="$1"; ext="$2"; mime="$3"; src="$4"; out="$5"
 id="org.tunaos.$app"
 export XDG_RUNTIME_DIR="/run/user/$(id -u)" WAYLAND_DISPLAY=wayland-0
@@ -57,11 +63,14 @@ leftovers="$(ls -A ~/Documents | grep -c '^\.office-save-' || true)"
 recent="$(flatpak run --command=gsettings "$id" get "$id" recent-files 2>/dev/null || true)"
 in_recent=false
 case "$recent" in *"installed-$app.$ext"*) in_recent=true ;; esac
+# Where the app was given the document (the portal path, if forwarded).
+echo "recent-files: $recent" >>"$out/$app-open.log"
 running=false
 flatpak ps --columns=application 2>/dev/null | grep -qx "$id" && running=true
 
-flatpak kill "$id" 2>/dev/null || true
-flatpak override --user --reset "$id"
+# The app stays open: run.sh screenshots what it shows (a failed save's
+# message is a dialog, not a log line), then closes it with `installed.sh
+# --close <app>`.
 
 python3 - "$app" "$default" "$registered" "$opened" "$saved" "$valid" "$leftovers" "$in_recent" "$running" <<'PY'
 import json, sys
