@@ -37,8 +37,24 @@ WINDOW = (1100, 1700)
 WINDOWS = {"decks": (1760, 1100)}
 
 
-def window(app):
-    return WINDOWS.get(app, WINDOW)
+# The least space the page view leaves beside a page, each side, in Letters.
+PAGE_GUTTER = 24
+
+
+def window(app, dest=None):
+    """The browser viewport (and so the maximized window) for `app`. A
+    Letters page wider than the window, landscape A4 in the portrait window,
+    runs off its right edge and no part of the screenshot can match it
+    (two real-corpus documents lost Tier B to it, #1200): the window is
+    widened to the widest page Tier A drew. A page that fits keeps the
+    window it had."""
+    w, h = WINDOWS.get(app, WINDOW)
+    if app == "letters" and dest:
+        from PIL import Image
+
+        widest = max((Image.open(p).width for p in glob.glob(os.path.join(dest, "A-*.png"))), default=0)
+        w = max(w, widest + 2 * PAGE_GUTTER)
+    return w, h
 TIMEOUT = 60
 # View preferences that must match how LibreOffice prints the reference.
 # Tables fixtures print without gridlines (fixtures.py says why), so the
@@ -266,7 +282,7 @@ def tier_b(app, doc, dest, env, browser):
         # Connect the browser *before* the app starts: until a client is
         # attached, broadwayd reports a 1024x768 screen and GTK clamps the
         # window to it, so the page would be cut off at the bottom.
-        w, h = window(app)
+        w, h = window(app, dest)
         page = browser.new_page(viewport={"width": w, "height": h})
         try:
             page.goto(f"http://127.0.0.1:{port}/")
