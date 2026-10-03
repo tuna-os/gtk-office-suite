@@ -497,6 +497,14 @@ jobs:
             python3 tools/render-lab/compare.py render-lab-out/fixtures render-lab-out --baseline tools/render-lab/baseline.json
           cat render-lab-out/summary.md >> "$GITHUB_STEP_SUMMARY"
 
+      # The installed Flatpak used the way a desktop uses it (#1209): opened
+      # from the file manager, saved through the document portal.
+      - name: Installed Flatpak checks
+        if: always()
+        run: |
+          set -o pipefail
+          python3 tools/render-lab/installed_check.py render-lab-out/installed.json | tee -a "$GITHUB_STEP_SUMMARY"
+
       - name: Upload VM report
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
@@ -507,5 +515,6 @@ jobs:
             render-lab-out/summary.*
             render-lab-out/*/*/*.png
             render-lab-out/*/*/*.log
+            render-lab-out/installed*
             vm-work/*.log
           retention-days: 14

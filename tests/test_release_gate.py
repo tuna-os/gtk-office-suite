@@ -295,3 +295,16 @@ def test_the_ceilings_are_actually_read():
     paths = ceiling_paths()
     assert "tables/src/window.rs" in paths, paths
     assert len(paths) >= 4, paths
+
+
+def test_the_built_flatpaks_grant_what_flathub_grants():
+    # CI, the Tier C VM and the TunaOS repository ship flatpak/*.json; the
+    # sandbox they test must be the one Flathub users get. flatpak/ granted
+    # --filesystem=host:ro where Flathub grants xdg-documents read-write,
+    # and with host:ro a document opened from the file manager reached the
+    # app as a read-only path that no Save could write (#1209).
+    root = Path(__file__).resolve().parent.parent
+    for app in ("letters", "tables", "decks"):
+        built = json.loads((root / "flatpak" / f"org.tunaos.{app}.json").read_text())["finish-args"]
+        flathub = json.loads((root / "flathub" / f"org.tunaos.{app}.json").read_text())["finish-args"]
+        assert sorted(built) == sorted(flathub), f"{app}: {sorted(set(built) ^ set(flathub))}"
