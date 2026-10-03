@@ -32,6 +32,17 @@ dump="$out/$app"
 rm -f "$dump"/*
 
 handlers="$(gio mime "$mime" 2>&1)"
+# What the desktop sees, for when it doesn't see the app: the exported
+# entry, the MIME index beside it, and the tools that keep that index.
+{
+    echo "== gio mime $mime"; printf '%s\n' "$handlers"
+    echo "== XDG_DATA_DIRS=$XDG_DATA_DIRS"
+    apps="$HOME/.local/share/flatpak/exports/share/applications"
+    echo "== $apps"; ls -la "$apps" 2>&1
+    echo "== $id.desktop"; grep -E '^(Exec|TryExec|MimeType)=' "$apps/$id.desktop" 2>&1
+    echo "== mimeinfo.cache"; grep -F "$mime" "$apps/mimeinfo.cache" 2>&1
+    echo "== packages"; rpm -q glib2 flatpak desktop-file-utils shared-mime-info 2>&1
+} >"$out/$app-mime.log" 2>&1
 default="$(printf '%s\n' "$handlers" | sed -n '1s/^Default application for .*: //p')"
 registered=false
 printf '%s\n' "$handlers" | grep -q "$id.desktop" && registered=true

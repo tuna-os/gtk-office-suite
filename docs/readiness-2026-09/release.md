@@ -7,7 +7,16 @@ Depends on #436–#441, #354, #1217 (recovery), #1206 (interoperability), #313/#
 - [ ] Select a candidate commit and require all capability evidence to identify that exact commit and packaged dependency lock.
 - [ ] All P0 data-loss paths fixed; all admitted daily-driver journeys pass. Deferred features have explicit recorded scope and honest UI/docs.
 - [ ] Build/install/launch each Flatpak; test file-manager MIME activation, open/save portals, recent files, drag/drop and sandbox file access.
-- [ ] Test prior-release upgrade with settings, open documents and interrupted recovery checkpoints.
+- [x] Test prior-release upgrade with settings, open documents and interrupted recovery checkpoints.
+      Tier C ends with it (`tools/render-lab/vm/upgrade.sh`, judged by `upgrade_check.py`, #1209). The newest
+      release is built from its tag, installed on a clean slate, and used: two settings changed, a document opened
+      and edited, autosave's checkpoint written, and the app killed mid-edit. The candidate is then installed over
+      it. The settings must survive, and the candidate's first launch must take the checkpoint back.
+      **Its first run found data loss in every shipped Flatpak**: snapshot ids were `<pid>-<n>`, and every Flatpak
+      launch is pid 2. So the launch after a crash gave its own window the crashed document's id. Tables and Decks
+      skipped the orphan as "live" and then overwrote it, and Letters recovered it and then deleted the copy. Ids are
+      now unique per launch (`autosave::new_doc_id`). Run 37134693472: v2.1.0 → `111f962d` passes in all three
+      apps, and Tables shows `values.xlsx (Recovered)` with the hidden row from before the crash.
 - [x] Validate icons/schemas/desktop metadata/translations and diagnose GTK criticals/crashes.
       Metadata: `release-gate.yml`'s `contract` job runs `scripts/release_gate.py` (icon, manifest, desktop file, schema
       and metainfo present and consistent per app) and then `desktop-file-validate`, `glib-compile-schemas --strict`,

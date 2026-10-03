@@ -7,14 +7,17 @@
 set -euo pipefail
 HERE="$(cd "$(dirname "$0")" && pwd)"
 WORK="${1:?workdir}"
-IMAGE=Fedora-Cloud-Base-Generic-42-1.1.x86_64.qcow2
+# The newest Fedora release. It ships GNOME 50, the release the apps'
+# Flatpak runtime is built from.
+RELEASE=44
+IMAGE=Fedora-Cloud-Base-Generic-44-1.7.x86_64.qcow2
 # download.fedoraproject.org redirects to a random mirror, and mirrors drop
 # a release once it reaches end of life: every nightly Tier C run failed
 # here on a mirror's 404 (#1199). The archive keeps every release for good,
 # so it is the fallback; FEDORA_URL still overrides both.
 FEDORA_URLS=(
-    "${FEDORA_URL:-https://download.fedoraproject.org/pub/fedora/linux/releases/42/Cloud/x86_64/images/$IMAGE}"
-    "https://archives.fedoraproject.org/pub/archive/fedora/linux/releases/42/Cloud/x86_64/images/$IMAGE"
+    "${FEDORA_URL:-https://download.fedoraproject.org/pub/fedora/linux/releases/$RELEASE/Cloud/x86_64/images/$IMAGE}"
+    "https://archives.fedoraproject.org/pub/archive/fedora/linux/releases/$RELEASE/Cloud/x86_64/images/$IMAGE"
 )
 mkdir -p "$WORK"; cd "$WORK"
 

@@ -103,13 +103,12 @@ pub(crate) fn autosave_bytes(state: &AppState) -> Result<Vec<u8>, String> {
 }
 
 // ── Crash-recovery snapshots ─────────────────────────────────────────────
-// One doc_id per open window, unique for the life of the process — it does
-// not need to survive a restart, since recovery finds snapshots by scanning
-// the state dir rather than by recomputing a prior id (see autosave.rs).
-static NEXT_DOC_ID: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+// One doc_id per open window. It never needs to be recomputed after a
+// restart (recovery scans the state dir for whatever is there), but it
+// must differ from every earlier launch's (see autosave::new_doc_id).
+// Unique across launches, not only within one (see new_doc_id).
 pub(crate) fn next_doc_id() -> String {
-    let n = NEXT_DOC_ID.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-    format!("{}-{n}", std::process::id())
+    suite_common::autosave::new_doc_id()
 }
 
 pub(crate) fn autosave_state_dir() -> std::path::PathBuf {
