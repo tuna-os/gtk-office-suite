@@ -7215,6 +7215,40 @@ class LettersFootnoteUndoSmoke(BaseGUITestCase):
         self.assertIsNone(self.process.poll(), "letters crashed inserting a footnote")
 
 
+class LettersPageSetupSmoke(BaseGUITestCase):
+    """Page Setup sets the open document's page, and Undo takes it back
+    (#1202 stage 4).
+
+    It used to write only the application's settings: a document with a
+    page of its own (any .docx or .odt) ignored it, and no save wrote what
+    was chosen.
+    """
+
+    app_name = "letters"
+
+    def setUp(self):
+        self._snapshot_path = self.isolate_snapshot(prefix="letters-page-setup-")
+        super().setUp()
+
+    def _page(self):
+        return self.trigger_snapshot("org.tunaos.letters").get("page")
+
+    def test_apply_sets_the_documents_page_and_undo_takes_it_back(self):
+        from dogtail import rawinput
+
+        aid = "org.tunaos.letters"
+        self.new_letters_document()
+        rawinput.typeText("text")
+        self.wait_until(self._page, lambda p: p is None, description="a new document with no page of its own")
+        self.gapplication_action(aid, "page-setup")
+        self.wait_for_node(name="Apply", roleName="push button").do_action(0)
+        page = self.wait_until(self._page, lambda p: p is not None, description="Apply gave the document its page")
+        self.assertGreater(page["width_pt"], 0)
+        self.gapplication_action(aid, "undo")
+        self.wait_until(self._page, lambda p: p is None, description="Undo took the page back")
+        self.assertIsNone(self.process.poll(), "letters crashed in Page Setup")
+
+
 class LettersStylesAndOutlineSmoke(BaseGUITestCase):
     """Paragraph styles are picked from previews, and the outline follows
     the headings (DESIGN-UI "Styles first"; Docs' outline sidebar).

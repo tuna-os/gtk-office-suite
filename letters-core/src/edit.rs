@@ -181,6 +181,9 @@ pub enum Op {
     /// run marked with its index (`RunStyle::footnote`), inserted by an op
     /// of its own.
     SetFootnotes { notes: Vec<String> },
+    /// Set the document's page size, margins and columns (`None`: the
+    /// application's default page).
+    SetPage { page: Option<crate::model::PageGeometry> },
 }
 
 /// Why an op could not be applied. The document is unchanged.
@@ -336,6 +339,7 @@ pub fn apply(doc: &mut Document, op: &Op) -> Result<Vec<Op>, EditError> {
             footer: std::mem::replace(&mut doc.footer, footer.clone()),
         }]),
         Op::SetFootnotes { notes } => Ok(vec![Op::SetFootnotes { notes: std::mem::replace(&mut doc.footnotes, notes.clone()) }]),
+        Op::SetPage { page } => Ok(vec![Op::SetPage { page: std::mem::replace(&mut doc.page, *page) }]),
         Op::SetParaStyle { at, style } => {
             let (pi, _) = locate(doc, *at).ok_or(EditError::OutOfRange)?;
             let para = &mut doc.paragraphs[pi];

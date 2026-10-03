@@ -304,10 +304,10 @@ impl LiveModel {
         if comments_changed {
             crate::bridge::set_comments(buf, &self.doc.comments);
         }
-        // So do the header, footer and footnotes.
-        let notes_changed = (&old.header, &old.footer, &old.footnotes) != (&self.doc.header, &self.doc.footer, &self.doc.footnotes);
+        // So do the header, footer, footnotes and page setup.
+        let notes_changed = (&old.header, &old.footer, &old.footnotes, &old.page) != (&self.doc.header, &self.doc.footer, &self.doc.footnotes, &self.doc.page);
         if notes_changed {
-            crate::bridge::set_header_footer_footnotes(buf, &self.doc);
+            crate::bridge::set_page_furniture(buf, &self.doc);
         }
         let (pa, pb) = (&old.paragraphs, &self.doc.paragraphs);
         let head = pa.iter().zip(pb).take_while(|(x, y)| x == y).count();
