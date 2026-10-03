@@ -8862,3 +8862,56 @@ class DecksOpenPathsSmoke(OpenPathsMixin, BaseGUITestCase):
         self._open_through_dialog(self._other)
         self.wait_until(self._title, lambda t: "other.pptx" in t, description="Open… to open other.pptx")
         self.assertIsNone(self.process.poll(), "decks crashed opening through the dialog")
+
+
+def _documented_shortcuts(app_title):
+    """(action, keys) rows docs/ACCESSIBILITY.md lists for `app_title`: its
+    "Every app" table plus its own."""
+    path = os.path.join(os.path.dirname(__file__), "..", "..", "docs", "ACCESSIBILITY.md")
+    rows, section = set(), None
+    for line in open(path, encoding="utf-8"):
+        if line.startswith("### "):
+            section = line[4:].strip()
+        elif section in ("Every app", app_title) and line.startswith("| ") and not line.startswith("| Action"):
+            cells = [c.strip() for c in line.strip().strip("|").split("|")]
+            if len(cells) == 2:
+                rows.add((cells[0], cells[1]))
+    return rows
+
+
+class _AccessibilityDocShortcuts:
+    """docs/ACCESSIBILITY.md's shortcut tables are the app's own Keyboard
+    Shortcuts list (#1322): the list is opened over AT-SPI and every row,
+    action and keys, must be in the doc, and every documented row in the
+    list. A shortcut added, removed or rebound without the doc fails here."""
+
+    app_id = None
+    app_title = None
+
+    def test_the_documented_shortcuts_are_the_apps(self):
+        self.gapplication_action(self.app_id, "shortcuts")
+        first = self.wait_until(
+            lambda: next((n for n in self.app.findChildren(
+                lambda n: n.roleName == "list item" and n.name == "Keyboard Shortcuts" and n.showing)), None),
+            bool, description="the Keyboard Shortcuts list")
+        shown = set()
+        for item in first.parent.children:
+            keys = [d.name for d in item.findChildren(lambda n: n.roleName == "panel" and n.name)]
+            if keys:
+                shown.add((item.name, keys[-1].replace(" + ", "+")))
+        documented = _documented_shortcuts(self.app_title)
+        self.assertTrue(shown, "the list showed no shortcuts")
+        self.assertEqual(sorted(shown - documented), [], "in the app's list but not in docs/ACCESSIBILITY.md")
+        self.assertEqual(sorted(documented - shown), [], "in docs/ACCESSIBILITY.md but not in the app's list")
+
+
+class LettersAccessibilityDocShortcutsSmoke(_AccessibilityDocShortcuts, BaseGUITestCase):
+    app_name, app_id, app_title = "letters", "org.tunaos.letters", "Letters"
+
+
+class TablesAccessibilityDocShortcutsSmoke(_AccessibilityDocShortcuts, BaseGUITestCase):
+    app_name, app_id, app_title = "tables", "org.tunaos.tables", "Tables"
+
+
+class DecksAccessibilityDocShortcutsSmoke(_AccessibilityDocShortcuts, BaseGUITestCase):
+    app_name, app_id, app_title = "decks", "org.tunaos.decks", "Decks"
