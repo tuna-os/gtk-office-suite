@@ -85,7 +85,7 @@
   },
   "decks/real-2026-01-15-presentation-pmc-vanguard-organizatio": {
     "A": "amber",
-    "B": "amber"
+    "B": "green"
   },
   "decks/real-cnsc-collaborative-roundtable-on-regulatory-effi": {
     "A": "amber",
@@ -121,7 +121,7 @@
   },
   "letters/real-affordable-housing-supply-data-dictionary": {
     "A": "amber",
-    "B": "missing"
+    "B": "amber"
   },
   "letters/real-annex-a-annual-report-form": {
     "A": "amber",
@@ -145,11 +145,11 @@
   },
   "letters/real-declaration-of-vessel-operation": {
     "A": "amber",
-    "B": "red"
+    "B": "amber"
   },
   "letters/real-directions-relating-to-an-account-form-bp15": {
     "A": "amber",
-    "B": "missing"
+    "B": "amber"
   },
   "letters/real-explanatory-note": {
     "A": "red",
@@ -157,7 +157,7 @@
   },
   "letters/real-explanatory-note-2": {
     "A": "red",
-    "B": "missing"
+    "B": "amber"
   },
   "letters/real-expression-of-interest-form": {
     "A": "red",
@@ -165,7 +165,7 @@
   },
   "letters/real-notes-on-the-completion-of-form-w1-excise-wareho": {
     "A": "red",
-    "B": "missing"
+    "B": "amber"
   },
   "letters/real-opt-out-form-accessible-version": {
     "A": "amber",
@@ -184,12 +184,12 @@
     "B": "amber"
   },
   "letters/real-provisional-agenda-for-the-sixth-trade-specialis": {
-    "A": "amber",
-    "B": "amber"
+    "A": "green",
+    "B": "green"
   },
   "letters/real-questionnaire": {
     "A": "red",
-    "B": "missing"
+    "B": "amber"
   },
   "letters/real-questionnaire-2": {
     "A": "red",
@@ -197,7 +197,7 @@
   },
   "letters/real-road-safety-open-data-severity-adjustment-guidan": {
     "A": "amber",
-    "B": "missing"
+    "B": "amber"
   },
   "letters/real-salary-template": {
     "A": "amber",
@@ -205,18 +205,18 @@
   },
   "letters/real-sma-positive-result-call-checklist": {
     "A": "amber",
-    "B": "missing"
+    "B": "amber"
   },
   "letters/real-sma-post-telephone-call-email-template": {
     "A": "green",
-    "B": "missing"
+    "B": "amber"
   },
   "letters/real-social-housing-sales-data-dictionary": {
     "A": "amber",
-    "B": "missing"
+    "B": "amber"
   },
   "letters/real-statistical-release-october-to-december-2020": {
-    "A": "red",
+    "A": "amber",
     "B": "amber"
   },
   "letters/real-terms-of-reference": {
@@ -225,7 +225,7 @@
   },
   "letters/real-tier-2-3-notification-of-dealing-with-a-non-uk-t": {
     "A": "red",
-    "B": "missing"
+    "B": "amber"
   },
   "letters/real-transparency-information-about-outside-appointme": {
     "A": "amber",
@@ -237,11 +237,11 @@
   },
   "letters/real-wga-2025-26-cg-02-template-for-notification-of-t": {
     "A": "red",
-    "B": "missing"
+    "B": "amber"
   },
   "tables/real-2020-deep-sea-stock": {
     "A": "red",
-    "B": "missing"
+    "B": "red"
   },
   "tables/real-air-safety-course-application-form-dhasc-fsc-fla": {
     "A": "red",
@@ -277,7 +277,7 @@
   },
   "tables/real-ewco-claim-form": {
     "A": "amber",
-    "B": "missing"
+    "B": "amber"
   },
   "tables/real-exceptional-learning-support-final-cost-form-for": {
     "A": "amber",
@@ -289,7 +289,7 @@
   },
   "tables/real-hampshire-public-review-additional-postcodes": {
     "A": "amber",
-    "B": "missing"
+    "B": "amber"
   },
   "tables/real-hmt-annual-report-and-accounts-core-tables-2025": {
     "A": "amber",
@@ -305,15 +305,15 @@
   },
   "tables/real-june-2026-forecast-evaluation-report-economic-mo": {
     "A": "amber",
-    "B": "missing"
+    "B": "amber"
   },
   "tables/real-menb-young-adults-coverage-data-by-icb-commissio": {
     "A": "amber",
     "B": "amber"
   },
   "tables/real-mining-remediation-authority-annual-report-and-a": {
-    "A": "missing",
-    "B": "missing"
+    "A": "amber",
+    "B": "amber"
   },
   "tables/real-nbs-chis-kpi-submission-template": {
     "A": "amber",
@@ -321,7 +321,7 @@
   },
   "tables/real-norfolk-public-review-annex-c-additional-postcod": {
     "A": "red",
-    "B": "missing"
+    "B": "red"
   },
   "tables/real-otsi-annual-review-2025-2026-tables": {
     "A": "amber",
@@ -333,11 +333,11 @@
   },
   "tables/real-record-of-non-lethal-actions-template": {
     "A": "amber",
-    "B": "missing"
+    "B": "amber"
   },
   "tables/real-safeguarding-children-affected-by-a-parent-s-alc": {
     "A": "amber",
-    "B": "missing"
+    "B": "amber"
   },
   "tables/real-schedule-of-musts-2026": {
     "A": "amber",
@@ -357,6 +357,6 @@
   },
   "tables/real-ukhsa-government-procurement-card-gpc-transactio": {
     "A": "amber",
-    "B": "missing"
+    "B": "amber"
   }
 }
