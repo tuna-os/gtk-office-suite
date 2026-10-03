@@ -13,6 +13,11 @@ packages:
   - gnome-shell
   - gnome-session-wayland-session
   - flatpak
+  # Keeps the MIME index (mimeinfo.cache) Flatpak's install trigger writes
+  # beside its exported desktop files. Every GNOME desktop has it; Fedora
+  # 44's packages no longer pull it in, and without the index GLib 2.88
+  # found no app for a .docx, so "open with" failed in all three.
+  - desktop-file-utils
   - mesa-dri-drivers
   # Named one by one: "liberation-fonts" is no binary package in Fedora 44,
   # and one unknown name fails the whole install.
