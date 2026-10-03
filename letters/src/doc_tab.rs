@@ -15,7 +15,7 @@ use libadwaita as adw;
 use std::cell::RefCell;
 use std::rc::Rc;
 
-use crate::actions::{connect_list_continuation, connect_markdown_macros, register_formatting_tags};
+use crate::actions::{connect_markdown_macros, register_formatting_tags};
 use crate::page_container::PageContainer;
 use crate::window::insert_fragment;
 
@@ -130,13 +130,8 @@ pub(crate) fn layout_options(container: &PageContainer) -> letters_core::layout:
     }
 }
 
-/// Lay the tab's document out again for its Print Layout view. Does
-/// nothing while the tab shows the Draft editor: layout is only paid for
-/// when someone looks at the pages.
+/// Lay the tab's document out again for its page view.
 pub(crate) fn refresh_print_layout(container: &PageContainer, buf: &gtk::TextBuffer) {
-    if !container.is_print_layout() {
-        return;
-    }
     let Some(view) = container.page_view() else { return };
     let (typeset, starts) = typeset_with_starts(container, buf);
     view.set_typeset(typeset, starts);
@@ -160,26 +155,10 @@ fn typeset_with_starts(container: &PageContainer, buf: &gtk::TextBuffer) -> (let
     (typeset, starts)
 }
 
-/// Switch a tab between Print Layout and Draft.
-pub(crate) fn set_print_layout(container: &PageContainer, buf: &gtk::TextBuffer, on: bool) {
-    container.set_print_layout(on);
-    refresh_print_layout(container, buf);
-    // Typing goes to whichever view is showing.
-    let focus: Option<gtk::Widget> = if on {
-        container.page_view().map(|v| v.upcast())
-    } else {
-        crate::dialogs::get_textview(container).map(|t| t.upcast())
-    };
-    if let Some(w) = focus {
-        glib::idle_add_local_once(move || { w.grab_focus(); });
-    }
-}
-
 /// Cross-app clipboard (DESIGN-UI) on `widget`, which edits `buf`: Ctrl+C
 /// offers the suite fragment (styled runs) alongside HTML and plain text;
 /// Ctrl+V prefers it. Capture phase so it supersedes the widget's own
-/// plain-text handling only when suite content is involved. Both the
-/// Draft editor and the Print Layout view have it.
+/// plain-text handling only when suite content is involved.
 pub(crate) fn connect_suite_clipboard(widget: &gtk::Widget, buf: &gtk::TextBuffer) {
     {
         let buf = buf.clone();
@@ -228,7 +207,7 @@ pub(crate) fn connect_suite_clipboard(widget: &gtk::Widget, buf: &gtk::TextBuffe
     }
 }
 
-/// Selection format popover on `widget` (the Draft editor or the page
+/// Selection format popover on `widget` (the page
 /// view): context reveals capability (DESIGN-UI §1). Shown while `buf` has
 /// a selection *and* `widget` is the view showing it, pointing at the
 /// selection's start (`locate`: buffer offset to a rectangle in `widget`).
@@ -307,43 +286,17 @@ pub(crate) fn make_doc_widget(settings: Option<&gio::Settings>) -> (PageContaine
         crate::bridge::set_base_font(&buffer, base);
     }
     // The tab's document: the live model is the source of truth, the
-    // buffer its Draft view, and its history the tab's undo (live.rs).
+    // buffer what formatting actions edit, and its history the tab's undo
+    // (live.rs).
     let live = crate::live::LiveModel::attach(&buffer);
-    let editor = gtk::TextView::with_buffer(&buffer);
-    connect_list_continuation(&editor, &buffer);
     connect_markdown_macros(&buffer);
-    editor.set_wrap_mode(gtk::WrapMode::Word);
-    editor.set_left_margin(24); editor.set_right_margin(24);
-    editor.set_top_margin(16); editor.set_bottom_margin(16);
-    editor.set_vexpand(true); editor.set_hexpand(true);
-    // Focus the editor whenever its tab becomes visible; otherwise keystrokes
-    // fall through to the window and the find SearchBar captures them.
-    editor.connect_map(|ed| {
-        let ed = ed.clone();
-        glib::idle_add_local_once(move || { ed.grab_focus(); });
-    });
-    // Transparent background so PageContainer's white page shows through (no black block in dark mode)
+    // Transparent scrolled windows, so PageContainer's backdrop shows
+    // around the pages.
     let css_provider = gtk::CssProvider::new();
-    let font_css = settings
-        .map(|s| s.string("font"))
-        .filter(|f| !f.is_empty())
-        .map(|f| gtk4::pango::FontDescription::from_string(&f))
-        .filter(|desc| desc.size() > 0)
-        .map(|desc| {
-            let family = desc.family().map(|f| f.to_string()).unwrap_or_else(|| "sans-serif".into());
-            let size_pt = desc.size() as f64 / gtk4::pango::SCALE as f64;
-            format!("textview, textview text {{ font-family: \"{family}\"; font-size: {size_pt}pt; }}")
-        })
-        .unwrap_or_default();
-    // The page is always white regardless of app theme (see above), so
-    // the text color must be pinned dark too — otherwise dark mode's
-    // light theme-default text color renders white-on-white and the
-    // whole document becomes invisible while still fully editable.
-    css_provider.load_from_string(&format!(
-        "textview, textview text, scrolledwindow {{ background: transparent; }} \
-         textview text {{ color: rgba(0, 0, 0, 0.85); }} {font_css}"
-    ));
-    gtk::style_context_add_provider_for_display(&editor.display(), &css_provider, gtk::STYLE_PROVIDER_PRIORITY_APPLICATION + 1);
+    css_provider.load_from_string("scrolledwindow { background: transparent; }");
+    if let Some(display) = gtk4::gdk::Display::default() {
+        gtk::style_context_add_provider_for_display(&display, &css_provider, gtk::STYLE_PROVIDER_PRIORITY_APPLICATION + 1);
+    }
     // Spell-check via zspell (hunspell-compatible, pure Rust).
     // Applies red wavy underline to misspelled words, re-checks on edits.
     let spell_enabled = settings.map(|s| s.boolean("spell-check-enabled")).unwrap_or(true);
@@ -363,51 +316,16 @@ pub(crate) fn make_doc_widget(settings: Option<&gio::Settings>) -> (PageContaine
             buffer.apply_tag(&tag, &start, &end);
         }
     }
-    // Drag-and-drop for images from file manager
-    {
-        let buf = buffer.clone();
-        let drop = gtk::DropTarget::new(gio::File::static_type(), gtk4::gdk::DragAction::COPY);
-        drop.connect_drop(move |_target, value, _x, _y| {
-            if let Ok(file) = value.get::<gio::File>() {
-                if let Ok(path) = suite_common::locations::open_location(&file).map_err(|e| eprintln!("{e}")) {
-                    let name = path.file_name()
-                        .and_then(|n| n.to_str()).unwrap_or("image");
-                    let path_str = path.to_string_lossy();
-                    let md = format!("![{}]({})", name, path_str);
-                    let ins = buf.selection_bounds()
-                        .map(|(i,_)| i).unwrap_or_else(|| buf.start_iter());
-                    let mut pos = ins;
-                    buf.insert(&mut pos, &md);
-                }
-            }
-            true
-        });
-        editor.add_controller(drop);
-    }
-    connect_suite_clipboard(editor.upcast_ref(), &buffer);
+    crate::review_ui::apply_to(&buffer, crate::review_ui::tracking());
 
-    {
-        let ed = editor.clone();
-        let locate = move |start: usize| {
-            let loc = ed.iter_location(&ed.buffer().iter_at_offset(start as i32));
-            let (x, y) = ed.buffer_to_window_coords(gtk::TextWindowType::Widget, loc.x(), loc.y());
-            Some(gtk4::gdk::Rectangle::new(x, y, 1, loc.height()))
-        };
-        connect_selection_popover(editor.upcast_ref(), &buffer, locate.clone());
-        crate::chips_ui::attach(editor.upcast_ref(), &buffer, locate, true);
-        crate::review_ui::apply_to(&buffer, Some(&editor), crate::review_ui::tracking());
-    }
-
-    let scroll = gtk::ScrolledWindow::new();
-    scroll.set_child(Some(&editor));
-    scroll.set_vexpand(true); scroll.set_hexpand(true);
-    // Transparent background so PageContainer's white page shows through
-    gtk::style_context_add_provider_for_display(&scroll.display(), &css_provider, gtk::STYLE_PROVIDER_PRIORITY_APPLICATION + 1);
+    // Print Layout is the one editing surface (ADR 0010, #1202): the page
+    // view edits the buffer, and the container holds it for the code that
+    // only has the tab's widget.
     let container = PageContainer::new();
     if let Some(s) = settings {
         container.load_from_settings(s);
     }
-    scroll.set_parent(&container);
+    container.set_buffer(&buffer);
     let page_view = container.attach_page_view();
     crate::page_edit::make_editable(&page_view, &buffer);
     {
@@ -416,10 +334,10 @@ pub(crate) fn make_doc_widget(settings: Option<&gio::Settings>) -> (PageContaine
             pv.caret_rect(start).map(|(x, y, h)| gtk4::gdk::Rectangle::new(x as i32, y as i32, 1, h.ceil() as i32))
         };
         connect_selection_popover(page_view.upcast_ref(), &buffer, locate.clone());
-        crate::chips_ui::attach(page_view.upcast_ref(), &buffer, locate, false);
+        crate::chips_ui::attach(page_view.upcast_ref(), &buffer, locate);
     }
-    // Like the Draft editor: focus the page view whenever it is shown, or
-    // keystrokes fall through to the window's search bar.
+    // Focus the page view whenever it is shown, or keystrokes fall through
+    // to the window's search bar.
     page_view.connect_map(|v| {
         let v = v.clone();
         glib::idle_add_local_once(move || { v.grab_focus(); });
@@ -427,15 +345,15 @@ pub(crate) fn make_doc_widget(settings: Option<&gio::Settings>) -> (PageContaine
     connect_suite_clipboard(page_view.upcast_ref(), &buffer);
     container.set_zoom(container.zoom_level());
     container.set_vexpand(true); container.set_hexpand(true);
-    // Print Layout is the one editing surface (ADR 0010, #1202): the
-    // pageless Draft view and its toggle are retired. The GtkTextView stays
-    // only as the buffer's host and is never shown.
-    set_print_layout(&container, &buffer, true);
-    // Zoom via Ctrl+Scroll
+    refresh_print_layout(&container, &buffer);
+    // Zoom via Ctrl+Scroll. In the capture phase, because the scrolled
+    // window inside would otherwise take the scroll first. It used to be on
+    // the Draft editor, and after that view was retired nothing reached it.
     {
         let pc = container.clone();
         let s = settings.cloned();
         let scroll_ctrl = gtk::EventControllerScroll::new(gtk::EventControllerScrollFlags::VERTICAL);
+        scroll_ctrl.set_propagation_phase(gtk::PropagationPhase::Capture);
         scroll_ctrl.connect_scroll(move |ctrl, _dx, dy| {
             // Check if Ctrl is held
             let state = ctrl.current_event_state();
@@ -449,14 +367,12 @@ pub(crate) fn make_doc_widget(settings: Option<&gio::Settings>) -> (PageContaine
             if let Some(ref s) = s { let _ = s.set_double("zoom-level", new_zoom); }
             glib::Propagation::Stop
         });
-        editor.add_controller(scroll_ctrl);
+        container.add_controller(scroll_ctrl);
     }
-    // Pagination: the page layout engine decides the page count for both
-    // views. The Draft view used to count pages with a separate pass over
-    // unstyled plain text, so headings, spacing and breaks never moved a
-    // page boundary. Print Layout is being edited, so it lays out again as
-    // soon as the main loop is idle (edits in one event coalesce); Draft
-    // only needs the page count, after a pause in typing.
+    // Lay the pages out again as soon as the main loop is idle after an
+    // edit (edits in one event coalesce). The page view keeps its typeset
+    // and re-shapes only the paragraphs the edit changed (ADR 0010 stage
+    // 3c).
     {
         let pc = container.clone();
         let timer = std::rc::Rc::new(std::cell::RefCell::new(None::<glib::SourceId>));
@@ -464,18 +380,13 @@ pub(crate) fn make_doc_widget(settings: Option<&gio::Settings>) -> (PageContaine
         buffer.connect_changed(move |_| {
             if let Some(id) = timer.borrow_mut().take() { id.remove(); }
             let (buf, pc, t2, live) = (b2.clone(), pc.clone(), timer.clone(), live.clone());
-            let delay = if pc.is_print_layout() { 0 } else { 500 };
-            let id = glib::timeout_add_local(std::time::Duration::from_millis(delay), move || {
-                // Print Layout keeps its typeset and re-shapes only the
-                // paragraphs the edit changed (ADR 0010 stage 3c). The
-                // pageless Draft view needs no layout at all.
-                match pc.page_view().filter(|v| pc.is_print_layout() && v.page_count() > 0) {
+            let id = glib::idle_add_local(move || {
+                match pc.page_view().filter(|v| v.page_count() > 0) {
                     Some(view) => {
                         let (doc, starts) = live.borrow_mut().snapshot(&buf);
                         view.update_document(doc, layout_options(&pc), starts);
                     }
-                    None if pc.is_print_layout() => refresh_print_layout(&pc, &buf),
-                    None => {}
+                    None => refresh_print_layout(&pc, &buf),
                 }
                 t2.borrow_mut().take();
                 glib::ControlFlow::Break

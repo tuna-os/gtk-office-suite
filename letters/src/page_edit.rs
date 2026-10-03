@@ -9,11 +9,10 @@
 // Undo, formatting actions, find and save all keep working unchanged,
 // because they act on the same buffer.
 //
-// Enter continues and ends lists as in Draft (`bridge::enter_in_list`);
-// Markdown shortcuts act on the buffer, so they work here too; the suite
-// clipboard format is connected by doc_tab; screen readers read the view
-// through GtkAccessibleText (page_view.rs). The Draft view stays the
-// fallback until the live model (ADR 0010 stage 3c).
+// Enter continues and ends lists (`bridge::enter_in_list`); Markdown
+// shortcuts act on the buffer, so they work here too; the suite clipboard
+// format is connected by doc_tab; screen readers read the view through
+// GtkAccessibleText (page_view.rs).
 
 use gtk4::{self as gtk, gdk, glib, prelude::*};
 
@@ -185,7 +184,7 @@ fn insert_text(buf: &gtk::TextBuffer, text: &str) {
         // Now, not on the next idle: a Ctrl+Z that arrives first would
         // find Undo still disabled and be dropped.
         crate::live::sync_actions(buf);
-        // Markdown shortcuts, as in Draft: "**bold**" and a space.
+        // Markdown shortcuts: "**bold**" and a space.
         if text == " " {
             let at = buf.iter_at_mark(&buf.get_insert());
             let mut before = at;

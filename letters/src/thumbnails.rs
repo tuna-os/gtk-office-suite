@@ -8,8 +8,8 @@
 // (`PageView::draw_page_at`), so it shows exactly the laid-out page. They
 // follow the page view's `laid-out` signal, mark the page holding the
 // caret, and activating one scrolls Print Layout to that page. Nothing is
-// drawn while the view is hidden. The pageless Draft view has no pages, so
-// the view says so there.
+// drawn while the view is hidden, and with no document open the view says
+// so.
 
 use gtk4::{self as gtk, glib, prelude::*};
 use libadwaita as adw;
@@ -22,10 +22,9 @@ use crate::page_view::PageView;
 /// Thumbnail width in pixels.
 const WIDTH: i32 = 128;
 
-/// The active tab's page view, if it is showing its pages.
+/// The active tab's page view.
 fn active_pages(tv: &adw::TabView) -> Option<PageView> {
-    let pc = tv.selected_page()?.child().downcast::<PageContainer>().ok()?;
-    pc.is_print_layout().then(|| pc.page_view()).flatten()
+    tv.selected_page()?.child().downcast::<PageContainer>().ok()?.page_view()
 }
 
 fn thumbnail(tv: &adw::TabView, index: usize) -> gtk::ListBoxRow {
@@ -72,15 +71,15 @@ pub fn build(tv: &adw::TabView) -> gtk::Widget {
     list.add_css_class("navigation-sidebar");
     list.update_property(&[gtk::accessible::Property::Label("Pages")]);
     let scroll = gtk::ScrolledWindow::builder().child(&list).vexpand(true).hscrollbar_policy(gtk::PolicyType::Never).build();
-    let draft = adw::StatusPage::builder()
-        .title("No Pages in Draft")
-        .description("Pages are shown in Print Layout.")
+    let empty = adw::StatusPage::builder()
+        .title("No Document")
+        .description("Open a document to see its pages.")
         .icon_name("x-office-document-symbolic")
         .build();
-    draft.add_css_class("compact");
+    empty.add_css_class("compact");
     let stack = gtk::Stack::new();
     stack.add_named(&scroll, Some("pages"));
-    stack.add_named(&draft, Some("draft"));
+    stack.add_named(&empty, Some("empty"));
 
     let count = Rc::new(std::cell::Cell::new(0usize));
     let refresh: Rc<dyn Fn()> = {
@@ -90,7 +89,7 @@ pub fn build(tv: &adw::TabView) -> gtk::Widget {
                 return;
             }
             let Some(view) = active_pages(&tv) else {
-                stack.set_visible_child_name("draft");
+                stack.set_visible_child_name("empty");
                 return;
             };
             stack.set_visible_child_name("pages");

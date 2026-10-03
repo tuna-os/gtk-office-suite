@@ -6,7 +6,7 @@ use gtk4::{self as gtk, gio, glib, prelude::*};
 use libadwaita as adw;
 use adw::prelude::{AlertDialogExt, AlertDialogExtManual, AdwDialogExt};
 
-use crate::dialogs::{active_buffer, get_textview, make_find_replace_widget, show_header_footer_dialog};
+use crate::dialogs::{active_buffer, make_find_replace_widget, show_header_footer_dialog};
 use crate::doc_tab::{
     apply_page_setup_from_buffer, autosave_state_dir, make_doc_widget, report_open_failure,
     tab_data_get, tab_data_set, TabData,
@@ -598,7 +598,7 @@ impl LettersWindow {
 
             // Render lab Tier A (docs/RENDER-PARITY-ROADMAP.md): each page
             // rectangle exactly as GTK painted it — PageContainer's paper
-            // plus the TextView on top — through the real GSK pipeline.
+            // with the page view's page on it — through the real GSK pipeline.
             // Pages outside the visible viewport are captured as whatever
             // is drawn there, which today is the honest answer.
             let tv = tab_view.clone();
@@ -1110,7 +1110,7 @@ fn autosave_all_tabs(tv: &adw::TabView, notices: &suite_common::autosave_notice:
             continue;
         }
         let child = page.child();
-        let (Some(td), Some(buf)) = (tab_data_get(&child), get_textview(&child).map(|tv| tv.buffer())) else {
+        let (Some(td), Some(buf)) = (tab_data_get(&child), crate::page_container::buffer_of(&child)) else {
             continue;
         };
         let doc = crate::bridge::capture_from_buffer(&buf);
@@ -1274,17 +1274,7 @@ fn make_tab_menu() -> gio::Menu {
 
 /// The PageContainer inside a tab's widget tree (render lab only).
 fn find_page_container(widget: &gtk::Widget) -> Option<crate::page_container::PageContainer> {
-    if let Ok(pc) = widget.clone().downcast::<crate::page_container::PageContainer>() {
-        return Some(pc);
-    }
-    let mut child = widget.first_child();
-    while let Some(c) = child {
-        if let Some(pc) = find_page_container(&c) {
-            return Some(pc);
-        }
-        child = c.next_sibling();
-    }
-    None
+    crate::page_container::find(widget)
 }
 
 /// The page container a tab shows. It is the tab's child itself

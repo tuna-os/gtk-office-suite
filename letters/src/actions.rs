@@ -388,26 +388,6 @@ pub fn register_structured_actions(tv: &adw::TabView, app: &adw::Application) {
     app.set_accels_for_action("app.list-outdent", &["<Primary>bracketleft"]);
 }
 
-/// Connect list auto-continuation on Enter for a TextView.
-///
-/// Capture phase, so it runs before the TextView inserts its own newline.
-/// The continuation itself is `bridge::enter_in_list`, which the Print
-/// Layout view uses too. This used to insert "• " at the start of the
-/// *following* line and never a newline, and ignored the item's level.
-pub fn connect_list_continuation(editor: &gtk::TextView, buf: &gtk::TextBuffer) {
-    let buf = buf.clone();
-    let ctrl = gtk::EventControllerKey::new();
-    ctrl.set_propagation_phase(gtk::PropagationPhase::Capture);
-    ctrl.connect_key_pressed(move |_, key, _code, state| {
-        let plain = !state.intersects(gtk::gdk::ModifierType::CONTROL_MASK | gtk::gdk::ModifierType::SHIFT_MASK);
-        if plain && (key == gtk::gdk::Key::Return || key == gtk::gdk::Key::KP_Enter) && crate::bridge::enter_in_list(&buf) {
-            return glib::Propagation::Stop;
-        }
-        glib::Propagation::Proceed
-    });
-    editor.add_controller(ctrl);
-}
-
 /// Connect Markdown inline macro expansion on space / punctuation.
 pub fn connect_markdown_macros(buf: &gtk::TextBuffer) {
     let buf_c = buf.clone();
@@ -428,8 +408,8 @@ pub fn connect_markdown_macros(buf: &gtk::TextBuffer) {
 }
 
 /// Expand a Markdown inline macro ("**bold**", "_it_", …) that ends at
-/// `pos`: Draft runs it as a space or newline is typed, Print Layout after
-/// typing one.
+/// `pos`: typing into the buffer runs it as a space or newline is typed,
+/// the page view after typing one.
 pub fn markdown_macro_at(b: &gtk::TextBuffer, pos: &gtk::TextIter) {
     {
         let offset = pos.offset();

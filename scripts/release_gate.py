@@ -88,7 +88,7 @@ def main() -> int:
 
     # Architecture boundary check: track oversized modules with explicit ceilings
     module_ceilings = {
-        "letters/src/window.rs": 1350,
+        "letters/src/window.rs": 1300,
         "tables/src/window.rs": 2300,
         "decks/src/window.rs": 1800,
         "suite-common/src/lib.rs": 1250,

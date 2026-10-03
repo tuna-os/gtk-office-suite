@@ -5,8 +5,7 @@
 // - `app.track-changes` (Ctrl+Alt+T), a toggle: while on, every edit made
 //   on the page is recorded as a tracked change by the user (an insertion
 //   underlined, a deletion struck through, in the author's colour). The
-//   status bar says so. The Draft editor is read-only meanwhile: its edits
-//   go straight into the buffer, not through the model's tracked ops.
+//   status bar says so.
 // - Accept or reject the change at the caret (or every change touching the
 //   selection), every change at once, or go to the next change.
 // - The sidebar's Changes view lists them, each with Accept and Reject.
@@ -37,15 +36,10 @@ pub fn author() -> String {
     }
 }
 
-/// Make `buf`'s model record tracked changes (or not), and its Draft
-/// `editor` read-only while it does.
-pub fn apply_to(buf: &gtk::TextBuffer, editor: Option<&gtk::TextView>, on: bool) {
+/// Make `buf`'s model record tracked changes (or not).
+pub fn apply_to(buf: &gtk::TextBuffer, on: bool) {
     if let Some(live) = crate::live::of(buf) {
         live.borrow_mut().tracking = on.then(author);
-    }
-    if let Some(editor) = editor {
-        editor.set_editable(!on);
-        editor.set_tooltip_text(on.then_some("Tracking changes: edit in Print Layout"));
     }
 }
 
@@ -75,8 +69,8 @@ pub fn register_actions(app: &adw::Application, tv: &adw::TabView, status_bar: &
             indicator.set_visible(on);
             for i in 0..tv.n_pages() {
                 let child = tv.nth_page(i).child();
-                if let Some(editor) = crate::dialogs::get_textview(&child) {
-                    apply_to(&editor.buffer(), Some(&editor), on);
+                if let Some(buf) = crate::page_container::buffer_of(&child) {
+                    apply_to(&buf, on);
                 }
             }
         });
@@ -257,13 +251,13 @@ mod tests {
     }
 
     /// Typing and deleting on the page while tracking are recorded as
-    /// changes the Draft view shows and reads back; accepting and rejecting
+    /// changes the buffer shows and reads back; accepting and rejecting
     /// are single undo steps.
     #[test]
     fn tracked_page_edits_are_marks_both_views_agree_on() {
         gtk_test(|| {
             let buf = tab("one two three");
-            apply_to(&buf, None, true);
+            apply_to(&buf, true);
             buf.place_cursor(&buf.iter_at_offset(3));
             crate::page_edit::type_text(&buf, " and a half");
             let live = crate::live::of(&buf).unwrap();
@@ -281,7 +275,7 @@ mod tests {
                     (letters_core::RevisionKind::Delete, "two ".to_string(), 15)
                 ]
             );
-            // Draft reads the same document back (tags carry the revisions).
+            // The buffer reads the same document back (tags carry the revisions).
             let doc = live.borrow_mut().document(&buf).clone();
             assert_eq!(crate::bridge::capture_with_starts(&buf).0, doc);
             // Accept the deletion at its offset; reject everything else.

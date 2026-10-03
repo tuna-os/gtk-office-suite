@@ -342,7 +342,7 @@ mod tests {
         buf
     }
 
-    /// A comment is a tag in the Draft view and a thread in the model, both
+    /// A comment is a tag in the buffer and a thread in the model, both
     /// read back the same; replying, resolving and deleting are one undo
     /// step each, and survive a whole-buffer re-read.
     #[test]
@@ -354,7 +354,7 @@ mod tests {
             let threads = live.borrow_mut().comment_threads(&buf);
             assert_eq!(threads.len(), 1);
             assert_eq!((threads[0].0.anchor.as_ref().unwrap().text.as_str(), threads[0].1), ("two", Some((4, 7))));
-            // Typing inside the comment is in it; the Draft view agrees.
+            // Typing inside the comment is in it; the buffer agrees.
             buf.insert(&mut buf.iter_at_offset(5), "w");
             let doc = live.borrow_mut().document(&buf).clone();
             assert_eq!(crate::bridge::capture_with_starts(&buf).0, doc);

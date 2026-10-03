@@ -119,10 +119,17 @@ the Letters part concretely.
       - **3e (#1202, stage 1 done 2026-10-01):** Draft is retired. Print
         Layout is the only editing surface; the `print-layout` toggle, its
         toolbar button, palette entry and GSettings key are removed. The
-        `GtkTextView` stays only as the host of the `GtkTextBuffer` the
-        live model is attached to, and is never shown or focused. Stage 2
-        gives the buffer a host of its own and deletes the Draft sheet's
-        drawing and allocation branches.
+        `GtkTextView` stayed only as the host of the `GtkTextBuffer` the
+        live model is attached to, never shown or focused.
+        **Stage 2 (done 2026-10-02):** the `GtkTextView` is gone. The
+        buffer belongs to the tab's `PageContainer`, which hands it to the
+        code that has only the tab's widget (`page_container::buffer_of`),
+        and the Draft sheet's drawing and allocation branches are deleted.
+        Handlers that were only ever on the hidden view went with it; one
+        that mattered, Ctrl+scroll zoom, now sits on the container. What
+        remains of #1202 is the buffer itself: formatting actions, find,
+        spelling and comments still edit it, and the bridge turns those
+        edits into model ops.
 
 ## Design constraints from the CRDT spike
 
