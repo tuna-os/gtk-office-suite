@@ -19,24 +19,42 @@ def row(app, **over):
     return json.dumps(r)
 
 
+def portal(app, **over):
+    """The app's file chooser round, a line of its own."""
+    r = {"app": app, "portal_saved": True, "portal_valid": True, "portal_opened": True}
+    r.update(over)
+    return json.dumps(r)
+
+
+def both(app, **over):
+    """Both of an app's lines; `over` lands on whichever line has the key."""
+    gio = {k: v for k, v in over.items() if not k.startswith("portal_")}
+    chooser = {k: v for k, v in over.items() if k.startswith("portal_")}
+    return [row(app, **gio), portal(app, **chooser)]
+
+
+def lines(*per_app):
+    return [line for app in per_app for line in app]
+
+
 def test_every_app_passing_every_check_passes():
-    md, failures = ic.judge([row(a) for a in ic.APPS])
+    md, failures = ic.judge(lines(*(both(a) for a in ic.APPS)))
     assert failures == []
     assert "❌" not in md
 
 
 def test_a_save_that_did_not_land_fails_and_says_why():
-    _, failures = ic.judge([row("letters", saved=False), row("tables"), row("decks")])
+    _, failures = ic.judge(lines(both("letters", saved=False), both("tables"), both("decks")))
     assert failures == ["letters: Save did not replace the document through the portal"]
 
 
 def test_a_leftover_temporary_fails():
-    _, failures = ic.judge([row("letters"), row("tables", save_leftovers=1), row("decks")])
+    _, failures = ic.judge(lines(both("letters"), both("tables", save_leftovers=1), both("decks")))
     assert failures == ["tables: the save left a temporary file beside the document"]
 
 
 def test_an_app_that_never_reported_fails():
-    md, failures = ic.judge([row("letters"), row("tables")])
+    md, failures = ic.judge(lines(both("letters"), both("tables")))
     assert failures == ["decks: the check did not finish"]
     assert "—" in md
 
@@ -54,3 +72,16 @@ def test_a_missing_results_file_fails_every_app(tmp_path, capsys):
     assert ic.main(["x", str(tmp_path / "installed.json")]) == 1
     out = capsys.readouterr().out
     assert all(f"{app}: the check did not finish" in out for app in ic.APPS)
+
+
+def test_a_file_chooser_save_that_did_not_land_fails_and_says_why():
+    _, failures = ic.judge(lines(both("letters"), both("tables"), both("decks", portal_saved=False, portal_valid=False)))
+    assert failures == [
+        "decks: Save As through the file chooser portal did not write the named file",
+        "decks: the document saved through the file chooser is not a valid archive",
+    ]
+
+
+def test_an_app_without_its_file_chooser_round_fails():
+    _, failures = ic.judge(lines(both("letters"), both("tables"), [row("decks")]))
+    assert "decks: Open through the file chooser portal did not open the document" in failures

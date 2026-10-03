@@ -11,16 +11,46 @@
 # prints one JSON line of what happened. The sandbox can see only
 # ~/Documents (--filesystem=xdg-documents), so a document in ~/Downloads
 # reaches the app, and its save lands, only through the portal.
+#   installed.sh --action <app> <action>
+#   installed.sh --portal <app> <ext>
+#
+# Then the file chooser (run.sh drives it): `--action <app> save-as` and
+# `--action <app> open` put up the portal's Save and Open dialogs, which
+# run.sh answers on the guest's keyboard with a path in ~/Downloads, and
+# `--portal` prints one JSON line of what happened: the document saved
+# where it was asked to, valid, and the one opened in the app's recent
+# files.
 set -u
+export XDG_RUNTIME_DIR="/run/user/$(id -u)" WAYLAND_DISPLAY=wayland-0
+export DBUS_SESSION_BUS_ADDRESS="unix:path=$XDG_RUNTIME_DIR/bus"
 if [ "${1:-}" = --close ]; then
     flatpak kill "org.tunaos.$2" 2>/dev/null || true
     flatpak override --user --reset "org.tunaos.$2"
     exit 0
 fi
+if [ "${1:-}" = --action ]; then
+    gapplication action "org.tunaos.$2" "$3"
+    exit 0
+fi
+if [ "${1:-}" = --portal ]; then
+    app="$2"; ext="$3"; id="org.tunaos.$app"
+    saved_doc="$HOME/Downloads/portal-saved-$app.$ext"
+    saved=false
+    for _ in $(seq 20); do [ -s "$saved_doc" ] && { saved=true; break; }; sleep 1; done
+    valid="$(python3 -c 'import os, sys, zipfile
+p = sys.argv[1]
+print(str(os.path.exists(p) and zipfile.is_zipfile(p) and zipfile.ZipFile(p).testzip() is None).lower())' "$saved_doc")"
+    recent="$(flatpak run --command=gsettings "$id" get "$id" recent-files 2>/dev/null || true)"
+    opened=false
+    case "$recent" in *"portal-open-$app.$ext"*) opened=true ;; esac
+    python3 -c 'import json, sys
+app, saved, valid, opened = sys.argv[1:]
+print(json.dumps({"app": app, "portal_saved": saved == "true", "portal_valid": valid == "true", "portal_opened": opened == "true"}))' \
+        "$app" "$saved" "$valid" "$opened"
+    exit 0
+fi
 app="$1"; ext="$2"; mime="$3"; src="$4"; out="$5"
 id="org.tunaos.$app"
-export XDG_RUNTIME_DIR="/run/user/$(id -u)" WAYLAND_DISPLAY=wayland-0
-export DBUS_SESSION_BUS_ADDRESS="unix:path=$XDG_RUNTIME_DIR/bus"
 # A non-login ssh shell lacks Flatpak's exports, where the desktop entries
 # and their MIME associations are.
 export XDG_DATA_DIRS="$HOME/.local/share/flatpak/exports/share:/var/lib/flatpak/exports/share:/usr/local/share:/usr/share"
