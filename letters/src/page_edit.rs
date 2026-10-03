@@ -609,6 +609,37 @@ mod tests {
         });
     }
 
+    /// Alignment is the caret's paragraph, or every paragraph the selection
+    /// touches, and nothing else: it used to reach into the paragraph
+    /// before, and to ignore the caret altogether (#1202 stage 3).
+    #[test]
+    fn alignment_is_the_caret_or_selection_paragraphs_as_a_model_op() {
+        gtk_test(|| {
+            let (_view, buf) = editable("one\ntwo\nthree");
+            let live = crate::live::LiveModel::attach(&buf);
+            let align = |buf: &gtk::TextBuffer| -> Vec<letters_core::Alignment> {
+                let live = crate::live::of(buf).unwrap();
+                let mut m = live.borrow_mut();
+                m.document(buf).paragraphs.iter().map(|p| p.style.alignment).collect()
+            };
+            use letters_core::Alignment::{Center, Left, Right};
+            let before = { let m = live.borrow(); (m.local_reads, m.full_reads) };
+
+            buf.place_cursor(&buf.iter_at_offset(5)); // in "two"
+            crate::actions::align_in(&buf, "align-center");
+            assert_eq!(align(&buf), [Left, Center, Left]);
+            assert_eq!(buf.iter_at_mark(&buf.get_insert()).offset(), 5, "the caret stays put");
+            assert_eq!({ let m = live.borrow(); (m.local_reads, m.full_reads) }, before, "read back from the buffer");
+
+            buf.select_range(&buf.iter_at_offset(1), &buf.iter_at_offset(6)); // "one" into "two"
+            crate::actions::align_in(&buf, "align-right");
+            assert_eq!(align(&buf), [Right, Right, Left]);
+
+            crate::live::undo(&buf, false);
+            assert_eq!(align(&buf), [Left, Center, Left], "one undo step");
+        });
+    }
+
     /// Bold with nothing selected, then typing, types bold (as in every word
     /// processor); a second press takes it back; a moved caret drops it.
     #[test]

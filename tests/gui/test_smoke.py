@@ -6907,6 +6907,40 @@ class LettersPendingFormatSmoke(BaseGUITestCase):
         self.assertIsNone(self.process.poll(), "letters crashed while formatting")
 
 
+class LettersAlignmentSmoke(BaseGUITestCase):
+    """Align Center centres the caret's paragraph and no other (#1202).
+
+    The action used to tag buffer lines from the line before its anchor, and
+    took the document's start as the anchor when nothing was selected: the
+    caret's paragraph stayed put while the first one moved. It is a model op
+    now; the snapshot is the document model.
+    """
+
+    app_name = "letters"
+
+    def setUp(self):
+        self._snapshot_path = self.isolate_snapshot(prefix="letters-align-")
+        super().setUp()
+
+    def _alignments(self):
+        s = self.trigger_snapshot("org.tunaos.letters")
+        return [p.get("style", {}).get("alignment", "Left") for p in s["paragraphs"]]
+
+    def test_align_center_centres_the_caret_paragraph_only(self):
+        from dogtail import rawinput
+
+        self.wait_for_node(name="New Document", roleName="push button").do_action(0)
+        self.wait_for_node(roleName="text")
+        rawinput.typeText("first")
+        rawinput.keyCombo("Return")
+        rawinput.typeText("second")
+        self.wait_until(self._alignments, lambda a: len(a) == 2, description="two paragraphs")
+        self.gapplication_action("org.tunaos.letters", "align-center")
+        self.wait_until(self._alignments, lambda a: a == ["Left", "Center"],
+                        description="the second paragraph, where the caret is, centred")
+        self.assertIsNone(self.process.poll(), "letters crashed while aligning")
+
+
 class LettersStylesAndOutlineSmoke(BaseGUITestCase):
     """Paragraph styles are picked from previews, and the outline follows
     the headings (DESIGN-UI "Styles first"; Docs' outline sidebar).

@@ -146,6 +146,33 @@ pub(crate) fn toggle_tag_in(buf: &gtk::TextBuffer, tag_name: &str) {
     }
 }
 
+/// Align the paragraphs the selection touches, or the caret's paragraph,
+/// as a model op (#1202 stage 3). It used to tag buffer lines from the line
+/// *before* the anchor, so a neighbouring paragraph was aligned too, and
+/// with nothing selected the anchor was the document's start rather than
+/// the caret.
+pub(crate) fn align_in(buf: &gtk::TextBuffer, name: &str) {
+    let alignment = match name {
+        "align-left" => letters_core::Alignment::Left,
+        "align-center" => letters_core::Alignment::Center,
+        "align-right" => letters_core::Alignment::Right,
+        "align-justify" => letters_core::Alignment::Justify,
+        _ => return,
+    };
+    let Some(live) = crate::live::of(buf) else { return };
+    let (start, end) = buf.selection_bounds().unwrap_or_else(|| {
+        let caret = buf.iter_at_mark(&buf.get_insert());
+        (caret, caret)
+    });
+    let (from, to) = (start.offset().max(0), end.offset().max(0));
+    let restyled = live.borrow_mut().restyle(buf, from as usize, to as usize, |style| letters_core::ParaStyle { alignment, ..style.clone() });
+    // A paragraph style moves no text: put the caret or selection back
+    // where the projection found it.
+    if restyled {
+        buf.select_range(&buf.iter_at_offset(from), &buf.iter_at_offset(to));
+    }
+}
+
 /// The model mark a toggle name sets, if it is one of the toggles.
 fn mark_key(name: &str) -> Option<letters_core::edit::MarkKey> {
     use letters_core::edit::MarkKey;
@@ -279,22 +306,7 @@ pub fn register_formatting_actions(tv: &adw::TabView, app: &adw::Application) {
         let name = *name;
         a.connect_activate(move |_, _| {
             if let Some(buf) = active_buffer(&tv) {
-                let bounds = buf.selection_bounds();
-                let (anchor, _) = bounds.unwrap_or_else(|| (buf.start_iter(), buf.start_iter()));
-                let mut line_start = anchor;
-                line_start.backward_line();
-                let mut line_end = anchor;
-                line_end.forward_line();
-                for an in &["align-left", "align-center", "align-right", "align-justify"] {
-                    if let Some(at) = buf.tag_table().lookup(an) {
-                        buf.remove_tag(&at, &line_start, &line_end);
-                    }
-                }
-                if name != "align-left" {
-                    if let Some(tag) = buf.tag_table().lookup(name) {
-                        buf.apply_tag(&tag, &line_start, &line_end);
-                    }
-                }
+                align_in(&buf, name);
             }
         });
         app.add_action(&a);
