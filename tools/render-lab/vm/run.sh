@@ -61,11 +61,25 @@ PY
 # screenshot. Marking it shown stops it opening; Return takes the Skip
 # button, focused by default, if it already has. Both before any app
 # runs, so the key can't reach one.
+#
+# The same goes for the screen: on Fedora 44 GNOME blanked the virtual
+# monitor after five idle minutes, and 42 of 57 screenshots were "Display
+# output is not active". The settings the image sets at build time didn't
+# hold, so they are set in the live session, where gsd-power reads them.
+# And the session starts in the Activities overview, which showed every
+# app shrunk inside it: it is closed before any app opens.
 "${SSH[@]}" 'export DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/$(id -u)/bus;
-    gsettings set org.gnome.shell welcome-dialog-last-shown-version "'"'"'999'"'"'" || true'
+    gsettings set org.gnome.shell welcome-dialog-last-shown-version "'"'"'999'"'"'" || true
+    gsettings set org.gnome.desktop.session idle-delay 0 || true
+    gsettings set org.gnome.desktop.screensaver lock-enabled false || true
+    gsettings set org.gnome.settings-daemon.plugins.power idle-dim false || true
+    gsettings set org.gnome.settings-daemon.plugins.power sleep-inactive-ac-type nothing || true'
 sleep 10
 qmp_key ret >/dev/null
 sleep 2
+"${SSH[@]}" 'export DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/$(id -u)/bus;
+    gdbus call --session --dest org.gnome.Shell --object-path /org/gnome/Shell \
+        --method org.freedesktop.DBus.Properties.Set org.gnome.Shell OverviewActive "<false>" >/dev/null 2>&1 || true'
 
 "${SSH[@]}" 'mkdir -p ~/lab/bundles ~/lab/fixtures ~/lab/out'
 "${SCP[@]}" "$BUNDLES"/*.flatpak lab@127.0.0.1:lab/bundles/
