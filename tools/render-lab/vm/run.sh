@@ -66,3 +66,23 @@ while read -r app feature file; do
     "${SCP[@]}" "lab@127.0.0.1:$remote_out/app.log" "$dest/C.log" 2>/dev/null || true
     echo "vm  $app/$feature: $(ls "$dest"/C-[0-9]*.png 2>/dev/null | wc -l) page(s)"
 done
+
+# The installed Flatpak used the way a desktop uses it (#1209): open a
+# document from "the file manager" (gio open) and save it through the
+# document portal. installed.json is what installed_check.py judges.
+"${SCP[@]}" "$(dirname "$(realpath "$0")")/installed.sh" lab@127.0.0.1:lab/installed.sh
+: > "$OUT/installed.json"
+for spec in "letters docx application/vnd.openxmlformats-officedocument.wordprocessingml.document" \
+            "tables xlsx application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" \
+            "decks pptx application/vnd.openxmlformats-officedocument.presentationml.presentation"; do
+    read -r app ext mime <<<"$spec"
+    file="$(python3 -c 'import json, sys
+print(next((f["file"] for f in json.load(open(sys.argv[1])) if f["app"] == sys.argv[2] and f["file"].endswith("." + sys.argv[3])), ""))' "$FIX/manifest.json" "$app" "$ext")"
+    [ -n "$file" ] || { echo "installed: no .$ext fixture for $app" >&2; continue; }
+    "${SSH[@]}" "bash ~/lab/installed.sh $app $ext $mime \$HOME/lab/fixtures/$file \$HOME/lab/installed" >>"$OUT/installed.json" \
+        || echo "installed: $app check did not finish" >&2
+    qmp "$PWD/screen.ppm" >/dev/null
+    python3 -c 'import sys; from PIL import Image; Image.open(sys.argv[1]).save(sys.argv[2])' screen.ppm "$OUT/installed-$app.png"
+    "${SCP[@]}" "lab@127.0.0.1:lab/installed/$app-open.log" "$OUT/installed-$app.log" 2>/dev/null || true
+done
+cat "$OUT/installed.json"
