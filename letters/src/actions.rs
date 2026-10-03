@@ -497,23 +497,65 @@ fn extract_md_pattern<'a>(before: &'a str, open: &str, close: &str) -> Option<&'
     Some(inner)
 }
 
-/// Replace the "**inner**" ending at `at` with `inner`, tagged. (This
+/// Replace the "**inner**" ending at `at` with `inner`, formatted. (This
 /// used to take the pattern's end from the selection, which with no
 /// selection is the buffer start: the shortcuts never fired.)
+///
+/// On a tab's document it is one model edit (#1202 stage 3): the text
+/// keeps the formatting it was typed with and gains `tag_name`'s, and the
+/// caret stays where typing left it rather than where the edit ended.
 fn apply_md_pattern(buf: &gtk::TextBuffer, at: &gtk::TextIter, delimiter: &str, inner: &str, tag_name: &str) {
     let del_len = delimiter.chars().count() * 2 + inner.chars().count();
     let mut end = *at;
     let mut start = end;
     start.backward_chars(del_len as i32);
-    if start < end {
-        buf.begin_user_action();
-        buf.delete(&mut start, &mut end);
-        let from = start.offset();
-        // `insert` moves the iter to the end of what it inserted.
-        buf.insert(&mut start, inner);
-        if let Some(tag) = buf.tag_table().lookup(tag_name) {
-            buf.apply_tag(&tag, &buf.iter_at_offset(from), &start);
-        }
-        buf.end_user_action();
+    if start >= end {
+        return;
     }
+    if let Some(live) = crate::live::of(buf) {
+        use letters_core::edit::Op;
+        let (from, to) = (start.offset().max(0) as usize, end.offset().max(0) as usize);
+        let caret = buf.iter_at_mark(&buf.get_insert()).offset().max(0) as usize;
+        let mut m = live.borrow_mut();
+        let (s, e) = (m.sequence_offset(buf, from), m.sequence_offset(buf, to));
+        let mut style = letters_core::edit::slice(m.document(buf), s, e)
+            .and_then(|paras| paras.into_iter().flat_map(|p| p.runs).find(|r| !r.text.is_empty()))
+            .map(|r| r.style)
+            .unwrap_or_default();
+        match tag_name {
+            "code" => style.code = true,
+            name => {
+                if let Some(flag) = style_flag(&mut style, name) {
+                    *flag = true;
+                }
+            }
+        }
+        let ops = [
+            Op::Delete { at: s, len: e - s },
+            Op::Insert {
+                at: s,
+                content: vec![letters_core::Paragraph {
+                    style: Default::default(),
+                    runs: vec![letters_core::model::Run { text: inner.to_string(), style }],
+                }],
+            },
+        ];
+        let applied = m.apply_user_ops(buf, &ops, false);
+        drop(m);
+        if applied {
+            let removed = del_len - inner.chars().count();
+            let caret = if caret >= to { caret - removed } else { caret.min(from) };
+            buf.place_cursor(&buf.iter_at_offset(caret as i32));
+        }
+        return;
+    }
+    buf.begin_user_action();
+    buf.delete(&mut start, &mut end);
+    let from = start.offset();
+    // `insert` moves the iter to the end of what it inserted.
+    buf.insert(&mut start, inner);
+    if let Some(tag) = buf.tag_table().lookup(tag_name) {
+        buf.apply_tag(&tag, &buf.iter_at_offset(from), &start);
+    }
+    buf.end_user_action();
 }

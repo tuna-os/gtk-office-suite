@@ -6941,6 +6941,47 @@ class LettersAlignmentSmoke(BaseGUITestCase):
         self.assertIsNone(self.process.poll(), "letters crashed while aligning")
 
 
+class LettersMarkdownShortcutSmoke(BaseGUITestCase):
+    """"**hi**" and a space makes "hi" bold, keeping the formatting it was
+    typed with (#1202 stage 3).
+
+    The shortcut used to delete and insert in the buffer, and the inserted
+    text took no formatting: italic "**hi**" came back bold but no longer
+    italic. It is one model edit now.
+    """
+
+    app_name = "letters"
+
+    def setUp(self):
+        self._snapshot_path = self.isolate_snapshot(prefix="letters-markdown-")
+        super().setUp()
+
+    def _runs(self):
+        s = self.trigger_snapshot("org.tunaos.letters")
+        return [(r["text"], bool(r.get("style", {}).get("bold")), bool(r.get("style", {}).get("italic")))
+                for p in s["paragraphs"] for r in p["runs"]]
+
+    def test_bold_shortcut_keeps_italic(self):
+        from dogtail import rawinput
+
+        aid = "org.tunaos.letters"
+        self.wait_for_node(name="New Document", roleName="push button").do_action(0)
+        self.wait_for_node(roleName="text")
+        rawinput.typeText("x ")
+        # The text first: an action can overtake typing still on its way in.
+        self.wait_until(self._runs, lambda r: r == [("x ", False, False)], description="the typed text")
+        self.gapplication_action(aid, "italic")
+        rawinput.typeText("**hi**")
+        self.wait_until(self._runs, lambda r: r == [("x ", False, False), ("**hi**", False, True)],
+                        description="an italic '**hi**'")
+        self.gapplication_action(aid, "italic")
+        rawinput.typeText(" y")
+        self.wait_until(self._runs,
+                        lambda r: r == [("x ", False, False), ("hi", True, True), (" y", False, False)],
+                        description="'hi' bold and still italic, typing carrying on after the space")
+        self.assertIsNone(self.process.poll(), "letters crashed expanding the shortcut")
+
+
 class LettersStylesAndOutlineSmoke(BaseGUITestCase):
     """Paragraph styles are picked from previews, and the outline follows
     the headings (DESIGN-UI "Styles first"; Docs' outline sidebar).
