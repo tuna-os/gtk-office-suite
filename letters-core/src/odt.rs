@@ -408,8 +408,35 @@ fn content_xml(doc: &Document) -> String {
                     let group = doc.paragraphs[pi..].iter().map_while(|q| q.style.table_cell.filter(|qc| qc.table == c.table));
                     let (rows, cols) = group.fold((0, 0), |(r, k), qc| (r.max(qc.row + 1), k.max(qc.col + 1)));
                     tables_written += 1;
+                    // The file's column widths, as column styles, when the
+                    // table still has as many columns as it was read with.
+                    // A table style with their sum as its width: without
+                    // one, Writer stretches the table to the text width and
+                    // scales every column with it.
+                    let mut table_style = String::new();
+                    let columns = match doc.table_columns.get(&c.table).filter(|w| w.len() == cols as usize) {
+                        Some(widths) => {
+                            let total: f64 = widths.iter().sum();
+                            auto.push_str(&format!(
+                                "<style:style style:name=\"Table{tables_written}\" style:family=\"table\"><style:table-properties style:width=\"{total:.2}pt\" table:align=\"left\"/></style:style>"
+                            ));
+                            table_style = format!(" table:style-name=\"Table{tables_written}\"");
+                            widths
+                            .iter()
+                            .enumerate()
+                            .map(|(k, w)| {
+                                let name = format!("Table{tables_written}.C{k}");
+                                auto.push_str(&format!(
+                                    "<style:style style:name=\"{name}\" style:family=\"table-column\"><style:table-column-properties style:column-width=\"{w:.2}pt\"/></style:style>"
+                                ));
+                                format!("<table:table-column table:style-name=\"{name}\"/>")
+                            })
+                            .collect::<String>()
+                        }
+                        None => format!("<table:table-column table:number-columns-repeated=\"{cols}\"/>"),
+                    };
                     body.push_str(&format!(
-                        "<table:table table:name=\"Table{tables_written}\"><table:table-column table:number-columns-repeated=\"{cols}\"/><table:table-row>{}",
+                        "<table:table table:name=\"Table{tables_written}\"{table_style}>{columns}<table:table-row>{}",
                         OpenTable::CELL
                     ));
                     table = Some(OpenTable { id: c.table, rows, cols, row: 0, col: 0, filled: false });
@@ -910,6 +937,8 @@ struct AutoStyles {
     /// A paragraph style's own text properties: in styles.xml, how each
     /// `Heading_20_N` looks (#1297).
     para_text: std::collections::HashMap<String, RunStyle>,
+    /// A table-column style's width, in points.
+    column: std::collections::HashMap<String, f64>,
 }
 
 /// Paragraph-level values read off one automatic style. Lengths are points.
@@ -962,7 +991,7 @@ fn list_style_kinds(xml: &str) -> std::collections::HashMap<String, Vec<ListKind
 }
 
 fn parse_auto_styles(xml: &str) -> AutoStyles {
-    let mut out = AutoStyles { text: Default::default(), para: Default::default(), para_parent: Default::default(), text_parent: Default::default(), para_text: Default::default() };
+    let mut out = AutoStyles { text: Default::default(), para: Default::default(), para_parent: Default::default(), text_parent: Default::default(), para_text: Default::default(), column: Default::default() };
     let mut reader = Reader::from_str(xml);
     let mut cur_name: Option<String> = None;
     let mut cur_family = String::new();
@@ -979,6 +1008,11 @@ fn parse_auto_styles(xml: &str) -> AutoStyles {
                                 "text" => { out.text_parent.insert(n, parent); }
                                 _ => {}
                             }
+                        }
+                    }
+                    "style:table-column-properties" => {
+                        if let (Some(name), Some(w)) = (cur_name.clone(), attr_val(&e, "style:column-width").and_then(|v| parse_length_pt(&v))) {
+                            out.column.insert(name, w);
                         }
                     }
                     "style:text-properties" => {
@@ -1245,7 +1279,7 @@ fn read_parts(path: &str) -> Result<(Document, Vec<String>), String> {
     let mut list_styles = list_style_kinds(&styles);
     list_styles.extend(list_style_kinds(&content));
 
-    let mut doc = Document { paragraphs: Vec::new(), footnotes: Vec::new(), header: None, footer: None, page: None, base_font: Default::default(), heading_styles: read_heading_styles(&styles), comments: Vec::new() };
+    let mut doc = Document { paragraphs: Vec::new(), footnotes: Vec::new(), header: None, footer: None, page: None, base_font: Default::default(), heading_styles: read_heading_styles(&styles), comments: Vec::new(), table_columns: Default::default() };
     let mut reader = Reader::from_str(&content);
     let mut in_body = false;
     let mut para: Option<Paragraph> = None;
@@ -1329,6 +1363,8 @@ fn read_parts(path: &str) -> Result<(Document, Vec<String>), String> {
     let mut table: Option<(u32, i64, i64, usize, bool)> = None;
     let mut table_depth = 0usize;
     let mut tables_read = 0u32;
+    // Each outermost table's column widths; None once a column has none.
+    let mut column_widths: std::collections::BTreeMap<u32, Option<Vec<f64>>> = Default::default();
     let cell_of = |t: &Option<(u32, i64, i64, usize, bool)>| {
         t.map(|(id, r, c, _, _)| crate::model::TableCell { table: id, row: r.max(0) as u32, col: c.max(0) as u32 })
     };
@@ -1685,6 +1721,19 @@ fn read_parts(path: &str) -> Result<(Document, Vec<String>), String> {
                 _ => {}
             },
             Ok(Event::Empty(e)) => match e.name().as_ref() {
+                // A column of the outermost table: its width, repeated.
+                "table:table-column" => {
+                    if let Some(t) = table.as_ref().filter(|t| t.3 == table_depth) {
+                        let width = attr_val(&e, "table:style-name").and_then(|n| auto.column.get(&n).copied());
+                        let repeat = attr_val(&e, "table:number-columns-repeated").and_then(|n| n.parse::<usize>().ok()).unwrap_or(1).min(1024);
+                        let cols = column_widths.entry(t.0).or_insert_with(|| Some(Vec::new()));
+                        match (cols.as_mut(), width) {
+                            (Some(c), Some(w)) => c.extend(std::iter::repeat_n(w, repeat)),
+                            // One column without a width: the table has none.
+                            _ => *cols = None,
+                        }
+                    }
+                }
                 // A cell with no paragraph still holds its grid position.
                 "table:table-cell" | "table:covered-table-cell" => {
                     if let Some(t) = table.as_mut().filter(|t| t.3 == table_depth) {
@@ -1962,6 +2011,7 @@ fn read_parts(path: &str) -> Result<(Document, Vec<String>), String> {
     }
 
     doc.ensure_non_empty();
+    doc.table_columns = column_widths.into_iter().filter_map(|(t, w)| Some((t, w.filter(|w| !w.is_empty())?))).collect();
     // A column count LibreOffice recorded on a section instead of on the
     // page layout. Only consulted when the page layout said nothing, so
     // an explicit page-wide count still wins.
@@ -2120,6 +2170,24 @@ mod tests {
         let path = dir.path().join("t.odt");
         write(doc, path.to_str().unwrap()).expect("write odt");
         read(path.to_str().unwrap()).expect("read odt")
+    }
+
+    /// A table's column widths survive a save and reopen (and an ODT's
+    /// own `table:table-column` widths, repeated columns included, are
+    /// read), so a narrow number column stays narrow.
+    #[test]
+    fn table_column_widths_survive() {
+        let mut d = Document::from_plain_text("after");
+        let table = d.insert_table_at(0, 1, 3);
+        d.table_columns.insert(table, vec![36.0, 200.0, 150.0]);
+        let rt = round_trip(&d);
+        let widths: Vec<Vec<f64>> = rt.table_columns.values().cloned().collect();
+        assert_eq!(widths.len(), 1, "{:?}", rt.table_columns);
+        assert!(widths[0].iter().zip([36.0, 200.0, 150.0]).all(|(a, b)| (a - b).abs() < 0.01), "{widths:?}");
+        // Without widths, none are made up.
+        let mut d = Document::from_plain_text("after");
+        d.insert_table_at(0, 1, 2);
+        assert!(round_trip(&d).table_columns.is_empty());
     }
 
     /// Smart chips reopen as chips: a date is a fixed `text:date`, a link

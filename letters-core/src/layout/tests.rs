@@ -202,6 +202,38 @@ fn a_table_is_a_grid_of_cells_with_rows_as_tall_as_their_tallest_cell() {
     assert_eq!(after, Some(72.0 + tall + LINE + CELL_RULE_PT), "below both rows");
 }
 
+/// A table is drawn with the file's column widths: a narrow number column
+/// beside a wide text one, as Word and LibreOffice draw an agenda. Widths
+/// wider than the column box are scaled to fit, and a table whose column
+/// count changed since it was read falls back to equal columns.
+#[test]
+fn a_table_takes_the_files_column_widths() {
+    let cells_x_w = |d: &Document| -> Vec<(f64, f64)> {
+        lay(d).pages[0]
+            .items
+            .iter()
+            .filter_map(|i| match i {
+                Item::Cell { row: 0, x_pt, width_pt, .. } => Some((*x_pt, *width_pt)),
+                _ => None,
+            })
+            .collect()
+    };
+    let mut d = doc_of(1, "after");
+    let table = d.insert_table_at(0, 1, 2);
+    d.table_columns.insert(table, vec![36.0, 400.0]);
+    let x0 = 72.0 - CELL_PADDING_PT;
+    assert_eq!(cells_x_w(&d), [(x0, 36.0), (x0 + 36.0, 400.0)]);
+
+    let box_w = 595.3 - 144.0;
+    d.table_columns.insert(table, vec![box_w, box_w]);
+    let got = cells_x_w(&d);
+    assert!((got[0].1 - box_w / 2.0).abs() < 1e-9 && (got[1].0 - (x0 + box_w / 2.0)).abs() < 1e-9, "scaled to fit: {got:?}");
+
+    d.table_columns.insert(table, vec![36.0, 200.0, 100.0]);
+    let got = cells_x_w(&d);
+    assert!(got.iter().all(|(_, w)| (w - box_w / 2.0).abs() < 1e-9), "three widths for two columns: equal columns, {got:?}");
+}
+
 #[test]
 fn headers_and_footers_repeat_with_page_numbers() {
     let mut d = doc_of(60, "x");
