@@ -7,24 +7,18 @@
 // `letters_core::edit` op on it, and its `History` (the ops' inverses) is
 // the tab's undo and redo; Save, the page view and copy read the model.
 //
-// Edits reach it two ways:
-// - Model first: the Print Layout view turns typing and deleting into ops
-//   (`apply_user_ops`), applies them to the model, and the buffer is updated
-//   from the model (`project`).
-// - Buffer first: formatting actions and anything else that edits the
-//   GtkTextBuffer. Each change is turned into ops at once:
-//   the buffer lines it touched are read back (`bridge::capture_span`) and
-//   diffed against the model's paragraphs (`edit::diff`). Typing, Enter,
-//   Backspace across a paragraph break, formatting, list markers — all
-//   local, a line or two re-read, never the whole buffer.
-// A table edit re-reads its whole table block and an inline image is
-// followed like typed text; structured commands (tables, lists, page
-// breaks) and paragraph styles (the style picker) run on the model. Only a
-// whole-buffer rewrite (opening a document) re-reads the whole buffer.
+// The GtkTextBuffer beside it is a projection: the model writes it
+// (`project`), and never reads it (#1202 stage 4). An opened document goes
+// into the model as it was read from the file, and the buffer offset where
+// each paragraph's text starts comes from rendering it
+// (`bridge::render_document_paragraphs`). Reading the document back out of
+// the buffer — which it used to do on every open — changed what was
+// opened: the buffer cannot hold a table cell's spacing or alignment, a
+// line break inside a paragraph, or a cell of two paragraphs, and text that
+// read as a list marker became a list.
 //
-// The guard is an equivalence test: after every kind of edit, including
-// thousands of seeded random ones, the model equals a fresh
-// `capture_from_buffer` (below).
+// Nothing else edits the buffer. An edit that does is counted
+// (`foreign_edits`), and the tests hold that count at zero.
 
 use gtk4::{self as gtk, gio, glib, prelude::*};
 use letters_core::edit::{self, History, Op};
@@ -32,8 +26,8 @@ use letters_core::{Document, Paragraph};
 use std::cell::RefCell;
 use std::rc::Rc;
 
-/// Tags that are not document content (capture ignores them), so applying
-/// or removing them leaves the model as it is.
+/// Tags that are not document content: find and spelling highlights,
+/// which only change how text looks.
 const PRESENTATION_TAGS: [&str; 4] = ["spelling-error", "search-match", "search-current", "tab-stops"];
 
 const KEY: &str = "letters-live-model";
@@ -43,19 +37,12 @@ pub struct LiveModel {
     doc: Document,
     /// Buffer offset where each paragraph's text starts.
     starts: Vec<usize>,
-    /// The model must be re-read from the whole buffer before use.
-    stale: bool,
-    /// The model has never been read (history starts after the first read).
-    fresh: bool,
-    /// The buffer is being changed from the model: don't follow it.
+    /// The buffer is being changed from the model.
     projecting: bool,
-    /// A pending delete: its range and newline count, stashed before GTK
-    /// deletes so the change can be resolved after.
-    pending_delete: Option<(usize, usize, usize)>,
     history: History,
-    /// Changes followed with a local read, and whole-buffer reads.
-    pub local_reads: usize,
-    pub full_reads: usize,
+    /// Edits made to the buffer by anything but the model. Each is a bug:
+    /// the document does not have it.
+    pub foreign_edits: usize,
     /// Track changes: the author edits are recorded as, or None when
     /// edits apply directly (`letters_core::track`).
     pub tracking: Option<String>,
@@ -67,230 +54,74 @@ pub fn of(buf: &gtk::TextBuffer) -> Option<Rc<RefCell<LiveModel>>> {
 }
 
 impl LiveModel {
-    /// Give `buf` a live model. Its undo replaces the buffer's own.
-    pub fn attach(buf: &gtk::TextBuffer) -> Rc<RefCell<LiveModel>> {
-        let model = Rc::new(RefCell::new(LiveModel { stale: true, fresh: true, ..Default::default() }));
+    /// Give `buf` a live model holding `doc`, and show it. Its undo
+    /// replaces the buffer's own.
+    pub fn attach(buf: &gtk::TextBuffer, doc: Document) -> Rc<RefCell<LiveModel>> {
+        let model = Rc::new(RefCell::new(LiveModel::default()));
         unsafe { buf.set_data(KEY, model.clone()) };
         buf.set_enable_undo(false);
-        {
-            // After GTK inserted, so the text's tags are known.
-            let m = Rc::downgrade(&model);
-            buf.connect_closure(
-                "insert-text",
-                true,
-                glib::closure_local!(move |b: gtk::TextBuffer, end: gtk::TextIter, text: &str, _len: i32| {
-                    let Some(m) = m.upgrade() else { return };
-                    let Ok(mut m) = m.try_borrow_mut() else { return };
-                    let n = text.chars().count();
-                    let from = (end.offset().max(0) as usize).saturating_sub(n);
-                    let breaks = text.matches('\n').count();
-                    m.changed(&b, from, from, n, breaks as isize, word_typing(text));
-                }),
-            );
-        }
-        {
-            let m = Rc::downgrade(&model);
-            buf.connect_delete_range(move |b, s, e| {
-                let Some(m) = m.upgrade() else { return };
-                let Ok(mut m) = m.try_borrow_mut() else { return };
-                let breaks = b.text(s, e, true).matches('\n').count();
-                m.pending_delete = Some((s.offset().max(0) as usize, e.offset().max(0) as usize, breaks));
-            });
-        }
-        {
-            let m = Rc::downgrade(&model);
-            buf.connect_closure(
-                "delete-range",
-                true,
-                glib::closure_local!(move |b: gtk::TextBuffer, _s: gtk::TextIter, _e: gtk::TextIter| {
-                    let Some(m) = m.upgrade() else { return };
-                    let Ok(mut m) = m.try_borrow_mut() else { return };
-                    if let Some((from, to, breaks)) = m.pending_delete.take() {
-                        m.changed(&b, from, to, 0, -(breaks as isize), false);
-                    }
-                }),
-            );
-        }
-            // Formatting: after GTK applied or removed the tag.
-        for signal in ["apply-tag", "remove-tag"] {
-            let m = Rc::downgrade(&model);
-            buf.connect_closure(
-                signal,
-                true,
-                glib::closure_local!(move |b: gtk::TextBuffer, tag: gtk::TextTag, s: gtk::TextIter, e: gtk::TextIter| {
-                    if tag.name().is_some_and(|n| PRESENTATION_TAGS.contains(&n.as_str())) {
-                        return;
-                    }
-                    let Some(m) = m.upgrade() else { return };
-                    let Ok(mut m) = m.try_borrow_mut() else { return };
-                    let (s, e) = (s.offset().max(0) as usize, e.offset().max(0) as usize);
-                    m.changed(&b, s, e, e - s, 0, false);
-                }),
-            );
-        }
-        let stale_on = |model: &Rc<RefCell<LiveModel>>| {
+        let foreign = |model: &Rc<RefCell<LiveModel>>| {
             let m = Rc::downgrade(model);
             move || {
-                if let Some(m) = m.upgrade() {
-                    if let Ok(mut m) = m.try_borrow_mut() {
-                        if !m.projecting {
-                            m.stale = true;
-                        }
+                if let Some(Ok(mut m)) = m.upgrade().as_ref().map(|m| m.try_borrow_mut()) {
+                    if !m.projecting {
+                        m.foreign_edits += 1;
                     }
                 }
             }
         };
         {
-            // An inline image is one object char: follow it like text.
-            let m = Rc::downgrade(&model);
+            let f = foreign(&model);
+            buf.connect_insert_text(move |_, _, _| f());
+        }
+        {
+            let f = foreign(&model);
+            buf.connect_delete_range(move |_, _, _| f());
+        }
+        for signal in ["apply-tag", "remove-tag"] {
+            let f = foreign(&model);
             buf.connect_closure(
-                "insert-paintable",
-                true,
-                glib::closure_local!(move |b: gtk::TextBuffer, end: gtk::TextIter, _p: gtk::gdk::Paintable| {
-                    let Some(m) = m.upgrade() else { return };
-                    let Ok(mut m) = m.try_borrow_mut() else { return };
-                    let from = (end.offset().max(0) as usize).saturating_sub(1);
-                    m.changed(&b, from, from, 1, 0, false);
+                signal,
+                false,
+                glib::closure_local!(move |_b: gtk::TextBuffer, tag: gtk::TextTag, _s: gtk::TextIter, _e: gtk::TextIter| {
+                    if !tag.name().is_some_and(|n| PRESENTATION_TAGS.contains(&n.as_str())) {
+                        f();
+                    }
                 }),
             );
         }
         {
-            let f = stale_on(&model);
+            let f = foreign(&model);
+            buf.connect_insert_paintable(move |_, _, _| f());
+        }
+        {
+            let f = foreign(&model);
             buf.connect_insert_child_anchor(move |_, _, _| f());
         }
         {
-            let m = Rc::downgrade(&model);
-            buf.connect_begin_user_action(move |_| {
-                if let Some(Ok(mut m)) = m.upgrade().as_ref().map(|m| m.try_borrow_mut()) {
-                    m.history.begin();
-                }
-            });
-        }
-        {
-            let m = Rc::downgrade(&model);
-            buf.connect_end_user_action(move |b| {
-                if let Some(Ok(mut m)) = m.upgrade().as_ref().map(|m| m.try_borrow_mut()) {
-                    // Resolve a pending whole-buffer read inside the action,
-                    // so its ops are this action's undo step.
-                    m.resolve(b);
-                    m.history.end();
-                }
-                sync_actions(b);
-            });
-        }
-        {
-            // A change outside a user action (a formatting command, the
-            // page view's model-first edits) is a step of its own.
+            // A change (the model's own) enables Undo and Redo to match.
             buf.connect_changed(|b| {
                 let b = b.clone();
                 glib::idle_add_local_once(move || sync_actions(&b));
             });
         }
-        // The (usually empty) buffer is the starting document.
-        model.borrow_mut().resolve(buf);
+        model.borrow_mut().show(buf, doc);
         model
     }
 
-    /// The buffer changed at `from..old_to` (pre-edit offsets); the new text
-    /// there is `new_len` chars, and paragraph breaks changed by `breaks`.
-    fn changed(&mut self, buf: &gtk::TextBuffer, from: usize, old_to: usize, new_len: usize, breaks: isize, typing: bool) {
-        if self.projecting || self.stale {
-            return;
-        }
-        if !self.follow_locally(buf, from, old_to, new_len, breaks, typing) {
-            self.stale = true;
-        }
-    }
-
-    /// Follow a change by re-reading only the lines it touched, widened to
-    /// whole tables (and any line that could join one). `false` when that
-    /// cannot be exact: then the whole buffer is read.
-    fn follow_locally(&mut self, buf: &gtk::TextBuffer, from: usize, old_to: usize, new_len: usize, breaks: isize, typing: bool) -> bool {
-        if self.starts.len() != self.doc.paragraphs.len() {
-            return false;
-        }
-        let (p0, _) = crate::bridge::paragraph_offset(&self.doc, &self.starts, from);
-        let (p1, _) = crate::bridge::paragraph_offset(&self.doc, &self.starts, old_to);
-        let (s, e) = widen(&self.doc.paragraphs, p0, p1.max(p0));
-        // The region's first line is unchanged by the edit: it starts at
-        // or before `from`.
-        let first_line = buf.iter_at_offset(self.starts[s].min(from) as i32).line();
-        let old_lines = line_count(&self.doc.paragraphs[s..=e]) as isize;
-        let last_line = first_line as isize + old_lines - 1 + breaks;
-        if last_line < first_line as isize || last_line >= buf.line_count() as isize {
-            return false;
-        }
-        let Some(start) = buf.iter_at_line(first_line) else { return false };
-        let Some(mut end) = buf.iter_at_line(last_line as i32) else { return false };
-        if !end.ends_line() {
-            end.forward_to_line_end();
-        }
-        let (mut paras, mut starts) = crate::bridge::capture_span(buf, start.offset(), end.offset());
-        let first_id = tables_before(&self.doc.paragraphs, s) + 1;
-        crate::bridge::capture_tables(&mut paras, &mut starts, first_id);
-        let mut next = self.doc.clone();
-        next.paragraphs.splice(s..=e, paras.iter().cloned());
-        // Tables are numbered in document order, as a whole-buffer read
-        // numbers them. Shifting the ones after the region by the count it
-        // gained or lost assumed the model was already in that order, and
-        // an inserted table is not (it takes the highest id): a re-read
-        // region then gave a table an id a later one still had (#1299).
-        renumber_tables(&mut next.paragraphs);
-        let ops = edit::diff(&self.doc, &next);
-        let Ok(inverse) = edit::apply_all(&mut self.doc, &ops) else { return false };
-        if self.doc.paragraphs != next.paragraphs {
-            return false;
-        }
-        let delta = new_len as isize - (old_to - from) as isize;
-        let tail: Vec<usize> = self.starts[e + 1..].iter().map(|x| (*x as isize + delta) as usize).collect();
-        self.starts.truncate(s);
-        self.starts.extend(starts);
-        self.starts.extend(tail);
-        self.history.set_merge(typing);
-        self.history.record(inverse);
-        self.local_reads += 1;
-        true
-    }
-
-    /// Bring the model up to date with a whole-buffer read if it is stale.
-    fn resolve(&mut self, buf: &gtk::TextBuffer) {
-        if !self.stale || self.projecting {
-            return;
-        }
-        let (doc, starts) = crate::bridge::capture_with_starts(buf);
-        if self.fresh {
-            self.doc = doc;
-            self.fresh = false;
-        } else {
-            let ops = edit::diff(&self.doc, &doc);
-            match edit::apply_all(&mut self.doc, &ops) {
-                Ok(inverse) => self.history.record(inverse),
-                Err(_) => {
-                    self.doc = doc;
-                    self.history.clear();
-                }
-            }
-            crate::bridge::read_sidecars(buf, &mut self.doc);
-        }
-        self.starts = starts;
-        self.stale = false;
-        self.full_reads += 1;
+    /// Make `doc` the model's document, with no history, and render it
+    /// into the buffer.
+    fn show(&mut self, buf: &gtk::TextBuffer, doc: Document) {
+        self.history.clear();
+        self.projecting = true;
+        self.starts = crate::bridge::render_to_buffer(&doc, buf);
+        self.projecting = false;
+        self.doc = doc;
     }
 
     /// The current document and its paragraphs' buffer starts.
-    pub fn snapshot(&mut self, buf: &gtk::TextBuffer) -> (Document, Vec<usize>) {
-        self.resolve(buf);
-        // Header, footer, page setup and footnotes live beside the text
-        // and change without a buffer edit.
-        crate::bridge::read_sidecars(buf, &mut self.doc);
+    pub fn snapshot(&self) -> (Document, Vec<usize>) {
         (self.doc.clone(), self.starts.clone())
-    }
-
-    /// Forget the model's history and re-read it (a document was opened).
-    pub fn reset(&mut self) {
-        self.history.clear();
-        self.stale = true;
-        self.fresh = true;
     }
 
     /// Update the buffer to the model, after the model
@@ -349,33 +180,32 @@ impl LiveModel {
         let caret_para = head.min(pb.len() - 1);
         self.projecting = true;
         if self.starts.len() != pa.len() || ea <= h || eb <= h {
-            crate::bridge::render_to_buffer(&self.doc, buf);
-            self.starts = crate::bridge::capture_with_starts(buf).1;
+            self.starts = crate::bridge::render_to_buffer(&self.doc, buf);
         } else {
-            let first_line = buf.iter_at_offset(self.starts[h] as i32).line();
-            let old_lines = line_count(&pa[h..ea]) as i32;
-            let (Some(mut s), Some(mut e)) = (buf.iter_at_line(first_line), buf.iter_at_line(first_line + old_lines - 1)) else {
-                self.projecting = false;
-                return;
+            // The old paragraphs' text: from the start of the line the
+            // first one starts on (before any list marker) to the newline
+            // before the line the first unchanged one starts on. Offsets,
+            // not line counts: a paragraph's text may hold a line break.
+            let line_start = |off: usize| {
+                let mut it = buf.iter_at_offset(off as i32);
+                it.set_line_offset(0);
+                it
             };
-            if !e.ends_line() {
-                e.forward_to_line_end();
-            }
-            let old_len = e.offset() - s.offset();
+            let mut s = line_start(self.starts[h]);
+            let mut e = match self.starts.get(ea) {
+                Some(&next) => {
+                    let mut it = line_start(next);
+                    it.backward_char();
+                    it
+                }
+                None => buf.end_iter(),
+            };
+            let before = buf.char_count();
+            let from = s.offset();
             buf.delete(&mut s, &mut e);
-            let lines = crate::bridge::render_lines(&pb[h..eb]);
-            let ordinals = letters_core::lists::ordinals(lines.iter().map(|p| &p.style));
-            let lines: Vec<&Paragraph> = lines.iter().map(|p| p.as_ref()).collect();
-            let mut at = buf.iter_at_line(first_line).unwrap_or_else(|| buf.end_iter());
-            let from = at.offset();
-            crate::bridge::render_paragraphs(buf, &mut at, &lines, &ordinals);
-            let mut end = buf.iter_at_line(first_line + lines.len() as i32 - 1).unwrap_or_else(|| buf.end_iter());
-            if !end.ends_line() {
-                end.forward_to_line_end();
-            }
-            let (mut paras, mut starts) = crate::bridge::capture_span(buf, from, end.offset());
-            crate::bridge::capture_tables(&mut paras, &mut starts, tables_before(pb, h) + 1);
-            let delta = (end.offset() - from) as isize - old_len as isize;
+            let mut at = buf.iter_at_offset(from);
+            let starts = crate::bridge::render_document_paragraphs(buf, &mut at, &pb[h..eb]);
+            let delta = buf.char_count() as isize - before as isize;
             let rest: Vec<usize> = self.starts[ea..].iter().map(|x| (*x as isize + delta) as usize).collect();
             self.starts.truncate(h);
             self.starts.extend(starts);
@@ -403,7 +233,6 @@ impl LiveModel {
     /// Apply `ops` made by the user (the page view) to the model as one undo
     /// step, then show them in the buffer. `false` if they don't apply.
     pub fn apply_user_ops(&mut self, buf: &gtk::TextBuffer, ops: &[Op], typing: bool) -> bool {
-        self.resolve(buf);
         // While tracking, a text edit is recorded as a tracked change (an
         // insertion marked, a deletion marked rather than removed); an edit
         // that is not a text edit (a table's structure) applies as it is.
@@ -414,15 +243,13 @@ impl LiveModel {
     /// Accept (`accept`) or reject the tracked changes touching buffer
     /// offsets `from..to` (whole changes), as one undo step.
     pub fn resolve_changes(&mut self, buf: &gtk::TextBuffer, from: usize, to: usize, accept: bool) -> bool {
-        self.resolve(buf);
-        let (a, b) = (self.sequence_offset(buf, from), self.sequence_offset(buf, to));
+        let (a, b) = (self.sequence_offset(from), self.sequence_offset(to));
         let ops = letters_core::track::resolve(&self.doc, a, b, accept);
         !ops.is_empty() && self.apply_ops(buf, &ops, false)
     }
 
     /// Accept or reject every tracked change, as one undo step.
     pub fn resolve_all_changes(&mut self, buf: &gtk::TextBuffer, accept: bool) -> bool {
-        self.resolve(buf);
         let ops = letters_core::track::resolve_all(&self.doc, accept);
         !ops.is_empty() && self.apply_ops(buf, &ops, false)
     }
@@ -431,17 +258,13 @@ impl LiveModel {
     /// `letters_core::comments`, a header or footnotes), as one undo step.
     /// `false` if there were none.
     pub fn edit_with(&mut self, buf: &gtk::TextBuffer, f: impl FnOnce(&Document) -> Vec<Op>) -> bool {
-        self.resolve(buf);
-        crate::bridge::read_sidecars(buf, &mut self.doc);
         let ops = f(&self.doc);
         !ops.is_empty() && self.apply_ops(buf, &ops, false)
     }
 
     /// The comment threads (`letters_core::comments::threads`), each with
     /// its text's buffer range (None when the text was deleted).
-    pub fn comment_threads(&mut self, buf: &gtk::TextBuffer) -> Vec<(letters_core::comments::Thread, Option<(usize, usize)>)> {
-        self.resolve(buf);
-        crate::bridge::read_sidecars(buf, &mut self.doc);
+    pub fn comment_threads(&mut self) -> Vec<(letters_core::comments::Thread, Option<(usize, usize)>)> {
         let at = |doc: &Document, starts: &[usize], seq: usize| {
             let (p, off) = edit::locate(doc, seq)?;
             Some(crate::bridge::buffer_offset(&doc.paragraphs[p], *starts.get(p)?, off))
@@ -456,8 +279,7 @@ impl LiveModel {
     }
 
     /// The tracked changes, each with the buffer offset where it starts.
-    pub fn changes(&mut self, buf: &gtk::TextBuffer) -> Vec<(letters_core::track::Change, usize)> {
-        self.resolve(buf);
+    pub fn changes(&mut self) -> Vec<(letters_core::track::Change, usize)> {
         letters_core::track::changes(&self.doc)
             .into_iter()
             .filter_map(|c| {
@@ -482,23 +304,19 @@ impl LiveModel {
     }
 
     /// Sequence offset of buffer offset `off`.
-    pub fn sequence_offset(&mut self, buf: &gtk::TextBuffer, off: usize) -> usize {
-        self.resolve(buf);
+    pub fn sequence_offset(&mut self, off: usize) -> usize {
         let (para, offset) = crate::bridge::paragraph_offset(&self.doc, &self.starts, off);
         edit::paragraph_start(&self.doc, para) + offset
     }
 
     /// Buffer offset of sequence offset `at` (the inverse of
     /// `sequence_offset`).
-    pub fn buffer_offset(&mut self, buf: &gtk::TextBuffer, at: usize) -> Option<usize> {
-        self.resolve(buf);
+    pub fn buffer_offset(&mut self, at: usize) -> Option<usize> {
         let (para, offset) = edit::locate(&self.doc, at)?;
         Some(crate::bridge::buffer_offset(&self.doc.paragraphs[para], *self.starts.get(para)?, offset))
     }
 
-    pub fn document(&mut self, buf: &gtk::TextBuffer) -> &Document {
-        self.resolve(buf);
-        crate::bridge::read_sidecars(buf, &mut self.doc);
+    pub fn document(&self) -> &Document {
         &self.doc
     }
 
@@ -511,8 +329,7 @@ impl LiveModel {
     }
 
     /// The style of the paragraph at buffer offset `off`.
-    pub fn paragraph_style_at(&mut self, buf: &gtk::TextBuffer, off: usize) -> Option<letters_core::ParaStyle> {
-        self.resolve(buf);
+    pub fn paragraph_style_at(&mut self, off: usize) -> Option<letters_core::ParaStyle> {
         let (para, _) = crate::bridge::paragraph_offset(&self.doc, &self.starts, off);
         self.doc.paragraphs.get(para).map(|p| p.style.clone())
     }
@@ -520,7 +337,6 @@ impl LiveModel {
     /// Restyle the paragraphs from buffer offset `from` to `to` with `f`,
     /// as one undo step of `SetParaStyle` ops.
     pub fn restyle(&mut self, buf: &gtk::TextBuffer, from: usize, to: usize, f: impl Fn(&letters_core::ParaStyle) -> letters_core::ParaStyle) -> bool {
-        self.resolve(buf);
         let first = crate::bridge::paragraph_offset(&self.doc, &self.starts, from).0;
         let last = crate::bridge::paragraph_offset(&self.doc, &self.starts, to).0;
         let ops: Vec<Op> = (first..=last.min(self.doc.paragraphs.len().saturating_sub(1)))
@@ -535,8 +351,7 @@ impl LiveModel {
 
     /// The document's headings (and Title/Subtitle) in order: level, text
     /// and the buffer offset where each starts.
-    pub fn outline(&mut self, buf: &gtk::TextBuffer) -> Vec<(u8, String, usize)> {
-        self.resolve(buf);
+    pub fn outline(&mut self) -> Vec<(u8, String, usize)> {
         letters_core::review::table_of_contents(&self.doc)
             .into_iter()
             .filter_map(|e| Some((e.level, e.title, *self.starts.get(e.paragraph)?)))
@@ -545,7 +360,6 @@ impl LiveModel {
 
     /// Undo (or redo) the last step: on the model, then in the buffer.
     pub fn undo(&mut self, buf: &gtk::TextBuffer, redo: bool) -> bool {
-        self.resolve(buf);
         let old = self.doc.clone();
         let done = if redo { self.history.redo(&mut self.doc) } else { self.history.undo(&mut self.doc) };
         if done.is_some() {
@@ -555,25 +369,15 @@ impl LiveModel {
     }
 }
 
-/// Whether paragraph `p` is or could become part of a table on screen: a
-/// table cell, or prose whose line reads as a pipe row.
-fn table_like(p: &Paragraph) -> bool {
-    p.style.table_cell.is_some() || letters_core::table_text::parse_row(&p.text()).is_some()
-}
-
-/// Paragraphs `p0..=p1` widened to whole tables and to every adjacent line
-/// that could join a table. A table is found by reading neighbouring lines
-/// (`bridge::capture_tables`), so this is the smallest span whose re-read
-/// gives the same paragraphs as a whole-buffer read: at its edges are
-/// lines that are no part of any table.
+/// Paragraphs `p0..=p1` widened to whole tables: a table is rendered as
+/// a grid of rows, so it is re-rendered whole.
 fn widen(paras: &[Paragraph], p0: usize, p1: usize) -> (usize, usize) {
     let (mut s, mut e) = (p0.min(paras.len() - 1), p1.min(paras.len() - 1));
-    // Every adjacent table-like line: a whole table, and a row-looking
-    // neighbour that typing a delimiter or a pipe can turn into one.
-    while s > 0 && table_like(&paras[s - 1]) {
+    let table = |i: usize| paras[i].style.table_cell.map(|c| c.table);
+    while s > 0 && table(s).is_some() && table(s - 1) == table(s) {
         s -= 1;
     }
-    while e + 1 < paras.len() && table_like(&paras[e + 1]) {
+    while e + 1 < paras.len() && table(e).is_some() && table(e + 1) == table(e) {
         e += 1;
     }
     (s, e)
@@ -592,73 +396,10 @@ fn widen_for_render(paras: &[Paragraph], p0: usize, p1: usize) -> (usize, usize)
     (s, e)
 }
 
-/// Number the tables in `paras` 1, 2, … in document order. A table is a
-/// run of cells with one id: a cell after prose, or after another table's
-/// cell, starts the next, so two tables never merge however they were
-/// numbered before.
-fn renumber_tables(paras: &mut [Paragraph]) {
-    let (mut n, mut prev) = (0u32, None);
-    for p in paras {
-        let id = p.style.table_cell.map(|c| c.table);
-        if let Some(c) = &mut p.style.table_cell {
-            if prev != Some(c.table) {
-                n += 1;
-            }
-            c.table = n;
-        }
-        prev = id;
-    }
-}
-
-/// The distinct tables among `paras`, in order.
-fn table_ids(paras: &[Paragraph]) -> Vec<u32> {
-    let mut ids: Vec<u32> = Vec::new();
-    for c in paras.iter().filter_map(|p| p.style.table_cell) {
-        if !ids.contains(&c.table) {
-            ids.push(c.table);
-        }
-    }
-    ids
-}
-
-/// How many tables come before paragraph `para`.
-fn tables_before(paras: &[Paragraph], para: usize) -> u32 {
-    table_ids(&paras[..para.min(paras.len())]).len() as u32
-}
-
-/// Editor lines `paras` (whole tables) take: one per paragraph, and a table
-/// one per row plus its delimiter line.
-fn line_count(paras: &[Paragraph]) -> usize {
-    let prose = paras.iter().filter(|p| p.style.table_cell.is_none()).count();
-    let tables: usize = table_ids(paras)
-        .into_iter()
-        .map(|t| {
-            let rows = paras.iter().filter_map(|p| p.style.table_cell).filter(|c| c.table == t).map(|c| c.row).max().unwrap_or(0);
-            rows as usize + 2
-        })
-        .sum();
-    prose + tables
-}
-
-/// Whether inserted `text` continues a typed word (undo merges those).
-fn word_typing(text: &str) -> bool {
-    text.chars().count() == 1 && !text.chars().any(char::is_whitespace)
-}
-
-/// Whether `buf`'s live model is in the middle of a change (writing into
-/// the buffer itself): buffer handlers must not add edits of their own.
-pub fn is_busy(buf: &gtk::TextBuffer) -> bool {
-    of(buf).is_some_and(|m| m.try_borrow_mut().map_or(true, |m| m.projecting))
-}
-
-/// Undo on `buf`'s live model, or the buffer's own undo without one.
+/// Undo (or redo) on `buf`'s live model.
 pub fn undo(buf: &gtk::TextBuffer, redo: bool) {
-    match of(buf) {
-        Some(m) => {
-            m.borrow_mut().undo(buf, redo);
-        }
-        None if redo => buf.redo(),
-        None => buf.undo(),
+    if let Some(m) = of(buf) {
+        m.borrow_mut().undo(buf, redo);
     }
     sync_actions(buf);
 }
@@ -671,7 +412,7 @@ pub fn sync_actions(buf: &gtk::TextBuffer) {
             Ok(m) => (m.can_undo(), m.can_redo()),
             Err(_) => return,
         },
-        None => (buf.can_undo(), buf.can_redo()),
+        None => (false, false),
     };
     let Some(app) = gio::Application::default() else { return };
     for (name, on) in [("undo", can_undo), ("redo", can_redo)] {
@@ -681,47 +422,14 @@ pub fn sync_actions(buf: &gtk::TextBuffer) {
     }
 }
 
-/// Run `f`, which rewrites the whole buffer (a structured edit), as one
-/// change: it is read once afterwards, as one undo step.
-pub fn rewrite(buf: &gtk::TextBuffer, f: impl FnOnce()) {
-    let model = of(buf);
-    if let Some(m) = &model {
-        let mut m = m.borrow_mut();
-        m.resolve(buf);
-        m.projecting = true;
-    }
-    f();
-    if let Some(m) = &model {
-        let mut m = m.borrow_mut();
-        m.projecting = false;
-        m.stale = true;
-        m.resolve(buf);
-    }
-}
-
-/// Run `f`, which draws a newly opened document into `buf`, then start the
-/// model's history there. The model does not follow the drawing edit by
-/// edit (a 300-paragraph document would be read back thousands of times):
-/// it is read once, afterwards.
-pub fn load(buf: &gtk::TextBuffer, f: impl FnOnce()) {
+/// Show `doc`, a newly opened (or recovered) document, in `buf`'s tab:
+/// it becomes the model's document as it is, and its history starts
+/// there, so undo does not un-open it.
+pub fn load(buf: &gtk::TextBuffer, doc: &Document) {
     if let Some(m) = of(buf) {
-        m.borrow_mut().projecting = true;
+        m.borrow_mut().show(buf, doc.clone());
     }
-    f();
-    if let Some(m) = of(buf) {
-        m.borrow_mut().projecting = false;
-    }
-    reset(buf);
-}
-
-/// A document was loaded into `buf`: start its history there.
-pub fn reset(buf: &gtk::TextBuffer) {
-    if let Some(m) = of(buf) {
-        let mut m = m.borrow_mut();
-        m.reset();
-        // Read it now, so the first edit is an undo step of its own.
-        m.resolve(buf);
-    }
+    sync_actions(buf);
 }
 
 #[cfg(test)]
