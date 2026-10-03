@@ -25,7 +25,8 @@
   },
   "decks/image-crop": {
     "A": "green",
-    "B": "green"
+    "B": "green",
+    "C": "green"
   },
   "decks/rotation": {
     "A": "green",
@@ -59,7 +60,8 @@
   },
   "letters/block-quote": {
     "A": "green",
-    "B": "green"
+    "B": "green",
+    "C": "green"
   },
   "letters/bullet-list": {
     "A": "green",
@@ -73,7 +75,8 @@
   },
   "letters/code-block": {
     "A": "green",
-    "B": "green"
+    "B": "green",
+    "C": "green"
   },
   "letters/columns": {
     "A": "green",
@@ -121,7 +124,8 @@
   },
   "letters/hyperlink": {
     "A": "green",
-    "B": "green"
+    "B": "green",
+    "C": "green"
   },
   "letters/image": {
     "A": "green",
@@ -145,7 +149,8 @@
   },
   "letters/named-styles": {
     "A": "green",
-    "B": "green"
+    "B": "green",
+    "C": "green"
   },
   "letters/nested-list": {
     "A": "green",
