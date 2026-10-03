@@ -1,0 +1,63 @@
+name: Overview videos
+
+# The GNOME-styled overview videos of Letters, Tables and Decks, and the
+# suite trailer (tests/gui/overview_video.py). They are recorded from the
+# running apps, driven by the feature tour, so rebuilding them is how they
+# stay current: weekly, on demand, and for every release, whose page gets
+# them as assets.
+
+on:
+  schedule:
+    - cron: '23 6 * * 1'   # Mondays, after the week's changes
+  release:
+    types: [published]
+  workflow_dispatch:
+
+concurrency:
+  group: overview-videos-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  record:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    permissions:
+      contents: write   # upload to the release that triggered the run
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - name: Install GTK4 + libadwaita and the recording tools
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq libgtk-4-dev libadwaita-1-dev \
+            xvfb x11-utils dbus at-spi2-core python3-dogtail python3-pil xcompmgr \
+            ffmpeg librsvg2-bin fontconfig
+          python3 -m pip install --break-system-packages mss
+
+      - uses: dtolnay/rust-toolchain@89b12181fb390509a0842a86cc55eeb8eb928c1d # stable
+        with:
+          toolchain: stable
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2
+
+      - name: Build app binaries
+        run: cargo build --bin letters --bin tables --bin decks
+
+      - name: Record the overview videos
+        run: tests/gui/overview_video.sh videos
+
+      - name: Upload the videos
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: overview-videos
+          path: videos/*.mp4
+          retention-days: 90
+
+      - name: Attach them to the release
+        if: github.event_name == 'release'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ github.event.release.tag_name }}
+        run: gh release upload "$TAG" videos/*.mp4 --clobber

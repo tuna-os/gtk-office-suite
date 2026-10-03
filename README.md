@@ -267,6 +267,7 @@ from the deprecated Python applications, see the
 | [docs/CONTRIBUTING.md](docs/CONTRIBUTING.md) | Conventions, workflow, pitfalls |
 | [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) | Environment setup |
 | [docs/GNOME-GUIDELINES.md](docs/GNOME-GUIDELINES.md) | HIG compliance rules and widget patterns |
+| [docs/OVERVIEW-VIDEOS.md](docs/OVERVIEW-VIDEOS.md) | The GNOME-styled overview videos: how they are recorded and kept current |
 | [docs/USER-TROUBLESHOOTING.md](docs/USER-TROUBLESHOOTING.md) | Common setup, build, test and runtime problems |
 | [docs/ACCESSIBILITY.md](docs/ACCESSIBILITY.md) | Keyboard shortcuts, keyboard-only use, and screen-reader support |
 | [docs/PARITY.md](docs/PARITY.md) | Feature-by-feature compatibility truth table |
