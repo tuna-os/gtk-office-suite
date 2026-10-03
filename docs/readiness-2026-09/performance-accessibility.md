@@ -76,6 +76,13 @@ Architecture: benchmark core open/edit/recalculate/save separately from GTK inpu
         first green run linked. Its expected images were recorded on a developer container with the same Ubuntu
         24.04 packages as the GUI image; if the image draws a cell differently, a dispatch with `update=true`
         records that environment's expectations as an artifact.
+        **The first CI run** (dispatched 2026-10-02, run 37077761727) matched 172 of 216 cells and found two causes,
+        neither a rendering difference between machines. The GUI image installs with `--no-install-recommends`, so it
+        had no icon theme and every toolbar icon drew as the missing-image placeholder; it now installs
+        `adwaita-icon-theme`, which the Flatpak's GNOME runtime ships. And Letters' "Could not open" message had
+        changed since the images were recorded (the docx reader now reports the zip error itself, not wrapped in
+        "OPC package error"), so its 18 error cells are re-recorded; a local run of the whole matrix on main
+        matched every other cell. The row stays open until a run on the rebuilt image is green.
 - [x] Keyboard-only edit/save/undo and AT-SPI names/roles/states/bounds match the model after scroll/resize/zoom.
       **Keyboard-only edit, undo and save is done for all three apps** (#1208): `LettersKeyboardOnlySmoke`,
       `TablesKeyboardOnlySmoke` and `DecksKeyboardOnlySmoke` (`KeyboardOnlyMixin` in `tests/gui/test_smoke.py`) open
