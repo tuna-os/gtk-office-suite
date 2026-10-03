@@ -7029,6 +7029,41 @@ class LettersReplaceAllSmoke(BaseGUITestCase):
         self.assertIsNone(self.process.poll(), "letters crashed while replacing")
 
 
+class LettersLineSpacingSmoke(BaseGUITestCase):
+    """Cycle Line Spacing changes the caret's paragraph and no other
+    (#1202 stage 3).
+
+    It used to tag buffer lines from the line before the caret, so the
+    paragraph above changed too. It is a model op on the caret's paragraph
+    now.
+    """
+
+    app_name = "letters"
+
+    def setUp(self):
+        self._snapshot_path = self.isolate_snapshot(prefix="letters-spacing-")
+        super().setUp()
+
+    def _paras(self):
+        s = self.trigger_snapshot("org.tunaos.letters")
+        return [("".join(r["text"] for r in p["runs"]), p.get("style", {}).get("line_spacing")) for p in s["paragraphs"]]
+
+    def test_cycle_line_spacing_changes_only_the_caret_paragraph(self):
+        from dogtail import rawinput
+
+        aid = "org.tunaos.letters"
+        self.new_letters_document()
+        rawinput.typeText("one")
+        rawinput.keyCombo("Return")
+        rawinput.typeText("two")
+        # The text first: an action can overtake typing still on its way in.
+        self.wait_until(self._paras, lambda p: [t for t, _ in p] == ["one", "two"], description="two paragraphs")
+        self.gapplication_action(aid, "cycle-line-spacing")
+        self.wait_until(self._paras, lambda p: [round(s, 2) for _, s in p] == [1.0, 1.15],
+                        description="'two' at 1.15, 'one' untouched")
+        self.assertIsNone(self.process.poll(), "letters crashed changing line spacing")
+
+
 class LettersInsertLinkSmoke(BaseGUITestCase):
     """Insert Link asks for an address and links the selection to it
     (#1202 stage 3).

@@ -344,6 +344,15 @@ impl Ruler {
         self.queue_draw();
     }
 
+    /// The tab stops in points from the left margin, in order, as a
+    /// paragraph's `tab_stops_pt` holds them.
+    pub fn tab_stops_pt(&self) -> Vec<f64> {
+        let imp = self.imp();
+        let mut tabs: Vec<f64> = imp.tab_stops.borrow().iter().map(|t| t.position_pt - imp.margin_left.get()).collect();
+        tabs.sort_by(f64::total_cmp);
+        tabs
+    }
+
     /// Get current tab stops as a PangoTabArray for GtkTextTag.
     pub fn get_tab_array(&self) -> Option<gtk4::pango::TabArray> {
         let imp = self.imp();
