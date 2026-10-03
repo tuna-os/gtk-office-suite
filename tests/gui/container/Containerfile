@@ -36,11 +36,14 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
       # Deterministic text rendering. Cantarell is the GNOME UI font the
       # apps expect; without it screenshots differ from the real product.
       fonts-cantarell fonts-dejavu-core fonts-liberation2 fonts-noto-core \
-      # The toolbar's symbolic icons. GTK only recommends the theme, so
-      # --no-install-recommends left it out and every icon drew as the
-      # missing-image placeholder, unlike the GNOME runtime the Flatpak
-      # ships on (the visual matrix's first CI run, #1208).
-      adwaita-icon-theme \
+      # The toolbar's symbolic icons, and the SVG loader that draws them.
+      # GTK only recommends both, so --no-install-recommends left them out
+      # and the icons drew as missing-image placeholders, unlike the GNOME
+      # runtime the Flatpak ships on (the visual matrix's CI runs, #1208).
+      # The theme alone was not enough: Adwaita's symbolic icons are SVG,
+      # and without librsvg's gdk-pixbuf loader only the few GTK compiles
+      # in drew.
+      adwaita-icon-theme librsvg2-common \
       # AT-SPI driving and image handling. dogtail must come from apt:
       # this harness targets 0.9.11's API, not pip dogtail 2.x.
       python3 python3-pip python3-dogtail python3-pytest python3-pil \
