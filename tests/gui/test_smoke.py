@@ -6941,13 +6941,6 @@ class LettersAlignmentSmoke(BaseGUITestCase):
         self.assertIsNone(self.process.poll(), "letters crashed while aligning")
 
 
-class LettersInsertLinkSmoke(BaseGUITestCase):
-    """Insert Link asks for an address and links the selection to it
-    (#1202 stage 3).
-
-    It used to replace the selection with the Markdown text
-    "[gnome](gnome)" and never asked for a URL. The link is a model mark
-    now: the text stays as it was and gains the link.
 class LettersReplaceAllSmoke(BaseGUITestCase):
     """Replace All keeps each match's formatting and undoes in one step
     (#1202 stage 3).
@@ -6959,29 +6952,11 @@ class LettersReplaceAllSmoke(BaseGUITestCase):
     app_name = "letters"
 
     def setUp(self):
-        self._snapshot_path = self.isolate_snapshot(prefix="letters-link-")
         self._snapshot_path = self.isolate_snapshot(prefix="letters-replace-")
         super().setUp()
 
     def _runs(self):
         s = self.trigger_snapshot("org.tunaos.letters")
-        return [(r["text"], r.get("style", {}).get("link")) for p in s["paragraphs"] for r in p["runs"]]
-
-    def test_insert_link_links_the_selection(self):
-        from dogtail import rawinput
-
-        aid = "org.tunaos.letters"
-        self.new_letters_document()
-        rawinput.typeText("see gnome")
-        self.wait_until(self._runs, lambda r: r == [("see gnome", None)], description="the typed text")
-        rawinput.keyCombo("<Shift><Control>Left")
-        self.gapplication_action(aid, "insertlink")
-        self.wait_for_node(name="Link address", roleName="text")
-        rawinput.typeText("https://gnome.org")
-        rawinput.keyCombo("Return")
-        self.wait_until(self._runs, lambda r: r == [("see ", None), ("gnome", "https://gnome.org")],
-                        description="'gnome' linked, its text unchanged")
-        self.assertIsNone(self.process.poll(), "letters crashed inserting a link")
         return [(r["text"], bool(r.get("style", {}).get("bold"))) for p in s["paragraphs"] for r in p["runs"]]
 
     def test_replace_all_keeps_bold_and_undoes_once(self):
@@ -7014,6 +6989,42 @@ class LettersReplaceAllSmoke(BaseGUITestCase):
         self.wait_until(self._runs, lambda r: r == [("one fish two ", False), ("fish", True)],
                         description="one undo puts both back")
         self.assertIsNone(self.process.poll(), "letters crashed while replacing")
+
+
+class LettersInsertLinkSmoke(BaseGUITestCase):
+    """Insert Link asks for an address and links the selection to it
+    (#1202 stage 3).
+
+    It used to replace the selection with the Markdown text
+    "[gnome](gnome)" and never asked for a URL. The link is a model mark
+    now: the text stays as it was and gains the link.
+    """
+
+    app_name = "letters"
+
+    def setUp(self):
+        self._snapshot_path = self.isolate_snapshot(prefix="letters-link-")
+        super().setUp()
+
+    def _runs(self):
+        s = self.trigger_snapshot("org.tunaos.letters")
+        return [(r["text"], r.get("style", {}).get("link")) for p in s["paragraphs"] for r in p["runs"]]
+
+    def test_insert_link_links_the_selection(self):
+        from dogtail import rawinput
+
+        aid = "org.tunaos.letters"
+        self.new_letters_document()
+        rawinput.typeText("see gnome")
+        self.wait_until(self._runs, lambda r: r == [("see gnome", None)], description="the typed text")
+        rawinput.keyCombo("<Shift><Control>Left")
+        self.gapplication_action(aid, "insertlink")
+        self.wait_for_node(name="Link address", roleName="text")
+        rawinput.typeText("https://gnome.org")
+        rawinput.keyCombo("Return")
+        self.wait_until(self._runs, lambda r: r == [("see ", None), ("gnome", "https://gnome.org")],
+                        description="'gnome' linked, its text unchanged")
+        self.assertIsNone(self.process.poll(), "letters crashed inserting a link")
 
 
 class LettersStylesAndOutlineSmoke(BaseGUITestCase):
