@@ -926,6 +926,9 @@ struct AutoParaStyle {
     first_line_indent_pt: f64,
     /// Positions of `style:tab-stops` children, in document order.
     tab_stops_pt: Vec<f64>,
+    /// Whether the style itself sets its space before, space after and
+    /// line height; what it leaves unset comes from its parent style.
+    sets: [bool; 3],
 }
 
 /// Each `text:list-style` in `xml`: whether each of its levels is numbered,
@@ -1093,6 +1096,11 @@ fn parse_auto_styles(xml: &str) -> AutoStyles {
                                 // Filled from the `style:tab-stop`
                                 // children that follow this element.
                                 tab_stops_pt: Vec::new(),
+                                sets: [
+                                    attr_val(&e, "fo:margin-top").is_some() || attr_val(&e, "fo:space-before").is_some(),
+                                    attr_val(&e, "fo:margin-bottom").is_some() || attr_val(&e, "fo:space-after").is_some(),
+                                    attr_val(&e, "fo:line-height").is_some(),
+                                ],
                             });
                         }
                     }
@@ -1192,6 +1200,82 @@ struct FrameReading {
 /// How headings 1-6 look, from styles.xml's `Heading_20_N` (#1297), each
 /// with what it inherits from its parent styles; empty when the file
 /// defines none, as the docx reader does.
+/// The document's body font: the default paragraph style's font and size,
+/// with the "Standard" (Default Paragraph Style) style's own over them, as
+/// Writer resolves them. A font is named by its font-face declaration.
+/// Without it, a Calibri document drew in the application's serif face.
+fn read_base_font(styles: &str) -> crate::model::BaseFont {
+    let mut faces: std::collections::HashMap<String, String> = Default::default();
+    // (font name, size in points) from the default style, then Standard.
+    let mut found: [(Option<String>, Option<f64>); 2] = Default::default();
+    let mut slot: Option<usize> = None;
+    let mut reader = Reader::from_str(styles);
+    loop {
+        match reader.read_event() {
+            Ok(Event::Start(e)) | Ok(Event::Empty(e)) => match e.name().as_ref() {
+                "style:font-face" => {
+                    if let (Some(n), Some(f)) = (attr_val(&e, "style:name"), attr_val(&e, "svg:font-family")) {
+                        faces.insert(n, f.trim_matches(|c| c == '\'' || c == '"').to_string());
+                    }
+                }
+                "style:default-style" => {
+                    slot = (attr_val(&e, "style:family").as_deref() == Some("paragraph")).then_some(0);
+                }
+                "style:style" => {
+                    let standard = attr_val(&e, "style:name").as_deref() == Some("Standard")
+                        && attr_val(&e, "style:family").as_deref() == Some("paragraph");
+                    slot = standard.then_some(1);
+                }
+                "style:text-properties" => {
+                    if let Some(i) = slot {
+                        if let Some(n) = attr_val(&e, "style:font-name") {
+                            found[i].0 = Some(n);
+                        }
+                        if let Some(pt) = attr_val(&e, "fo:font-size").and_then(|v| parse_length_pt(&v)) {
+                            found[i].1 = Some(pt);
+                        }
+                    }
+                }
+                _ => {}
+            },
+            Ok(Event::End(e)) if matches!(e.name().as_ref(), "style:default-style" | "style:style") => slot = None,
+            Ok(Event::Eof) | Err(_) => break,
+            _ => {}
+        }
+    }
+    let name = found[1].0.clone().or_else(|| found[0].0.clone());
+    let size = found[1].1.or(found[0].1);
+    crate::model::BaseFont {
+        family: name.map(|n| faces.get(&n).cloned().unwrap_or(n)),
+        size_hp: size.map(|pt| (pt * 2.0).round() as u16).filter(|hp| *hp > 0),
+    }
+}
+
+/// The space before, space after and line height paragraph style `name`
+/// has: its own where it sets them, else the nearest style up its parent
+/// chain (automatic styles in `auto`, named ones in `named`) that does.
+/// None where no style in the chain sets one.
+fn inherited_spacing(name: &str, auto: &AutoStyles, named: &AutoStyles) -> (Option<f64>, Option<f64>, Option<f32>) {
+    let (mut before, mut after, mut line) = (None, None, None);
+    let mut cur = Some(name.to_string());
+    for _ in 0..16 {
+        let Some(n) = cur else { break };
+        if let Some(st) = auto.para.get(&n).or_else(|| named.para.get(&n)) {
+            if st.sets[0] && before.is_none() {
+                before = Some(st.space_before_pt);
+            }
+            if st.sets[1] && after.is_none() {
+                after = Some(st.space_after_pt);
+            }
+            if st.sets[2] && line.is_none() {
+                line = Some(st.line_spacing);
+            }
+        }
+        cur = auto.para_parent.get(&n).or_else(|| named.para_parent.get(&n)).cloned();
+    }
+    (before, after, line)
+}
+
 fn read_heading_styles(styles: &str) -> Vec<RunStyle> {
     let defs = parse_auto_styles(styles);
     let look = |n: u8| -> Option<RunStyle> {
@@ -1245,12 +1329,16 @@ fn read_parts(path: &str) -> Result<(Document, Vec<String>), String> {
     let mut list_styles = list_style_kinds(&styles);
     list_styles.extend(list_style_kinds(&content));
 
-    let mut doc = Document { paragraphs: Vec::new(), footnotes: Vec::new(), header: None, footer: None, page: None, base_font: Default::default(), heading_styles: read_heading_styles(&styles), comments: Vec::new() };
+    // styles.xml's named styles, the parents of content.xml's automatic ones.
+    let named = parse_auto_styles(&styles);
+    let mut doc = Document { paragraphs: Vec::new(), footnotes: Vec::new(), header: None, footer: None, page: None, base_font: read_base_font(&styles), heading_styles: read_heading_styles(&styles), comments: Vec::new() };
     let mut reader = Reader::from_str(&content);
     let mut in_body = false;
     let mut para: Option<Paragraph> = None;
     // Span/link style stack: (style, depth marker)
     let mut span_stack: Vec<RunStyle> = Vec::new();
+    // Body paragraphs open, each with its text base on `span_stack`.
+    let mut paragraph_bases = 0usize;
     let mut link_stack: Vec<String> = Vec::new();
     let mut list_kind = ListKind::None;
     let mut list_level: u8 = 0;
@@ -1588,6 +1676,20 @@ fn read_parts(path: &str) -> Result<(Document, Vec<String>), String> {
                             style.first_line_indent_pt = auto_para.first_line_indent_pt;
                             style.tab_stops_pt = auto_para.tab_stops_pt.clone();
                         }
+                        // What the paragraph's own style leaves unset, its
+                        // parent named style decides: Writer's "Standard" is
+                        // where most documents keep their space after and
+                        // line height.
+                        let (before, after, line) = inherited_spacing(&name, &auto, &named);
+                        if let Some(v) = before {
+                            style.space_before_pt = v;
+                        }
+                        if let Some(v) = after {
+                            style.space_after_pt = v;
+                        }
+                        if let Some(v) = line {
+                            style.line_spacing = v;
+                        }
                         // Direct built-in name, or an automatic style
                         // inheriting from one (LO's rewrite pattern).
                         let base = auto
@@ -1618,10 +1720,17 @@ fn read_parts(path: &str) -> Result<(Document, Vec<String>), String> {
                         style.tab_stops_pt.clear();
                     }
                     para = Some(Paragraph { style, runs: Vec::new() });
+                    // The paragraph style's own text properties are how
+                    // its text looks where no span says otherwise: a title
+                    // written straight into a bold, 12pt paragraph.
+                    let text_base = attr_val(&e, "text:style-name").and_then(|n| auto.para_text.get(&n).cloned()).unwrap_or_default();
+                    span_stack.push(text_base);
+                    paragraph_bases += 1;
                 }
                 "text:span" => {
                     let name = attr_val(&e, "text:style-name");
-                    let mut st = name.as_ref().and_then(|n| auto.text.get(n).cloned()).unwrap_or_default();
+                    let own = name.as_ref().and_then(|n| auto.text.get(n).cloned()).unwrap_or_default();
+                    let mut st = inherit(span_stack.last(), own);
                     // Inline code is Writer's "Source Text", named or as
                     // the parent of an automatic style (#1205).
                     if let Some(n) = &name {
@@ -1792,6 +1901,10 @@ fn read_parts(path: &str) -> Result<(Document, Vec<String>), String> {
                 // carries the reference.
                 "text:p" if note.is_some() => {}
                 "text:p" | "text:h" => {
+                    if paragraph_bases > 0 {
+                        paragraph_bases -= 1;
+                        span_stack.pop();
+                    }
                     if let Some(mut p) = para.take() {
                         // An entry's link goes to its heading, not a page.
                         if p.style.toc.is_some() {
@@ -1976,6 +2089,24 @@ fn read_parts(path: &str) -> Result<(Document, Vec<String>), String> {
     }
 
     Ok((doc, consumed))
+}
+
+/// A span's text style over the text style around it: what the span
+/// does not set, it takes from its paragraph (or outer span).
+fn inherit(outer: Option<&RunStyle>, own: RunStyle) -> RunStyle {
+    let Some(outer) = outer else { return own };
+    RunStyle {
+        bold: own.bold || outer.bold,
+        italic: own.italic || outer.italic,
+        underline: own.underline || outer.underline,
+        strikethrough: own.strikethrough || outer.strikethrough,
+        highlight: own.highlight || outer.highlight,
+        font_family: own.font_family.or_else(|| outer.font_family.clone()),
+        font_size_hp: own.font_size_hp.or(outer.font_size_hp),
+        color: own.color.or_else(|| outer.color.clone()),
+        vert_align: own.vert_align.or(outer.vert_align),
+        ..own
+    }
 }
 
 fn push_text(
@@ -2166,6 +2297,58 @@ mod tests {
         let rt = round_trip(&d);
         assert_eq!(crate::comments::threads(&rt), crate::comments::threads(&d));
         assert_eq!(rt.paragraphs, d.paragraphs);
+    }
+
+    /// An .odt made of these `content.xml` and `styles.xml`, read.
+    fn read_package(content: &str, styles: &str) -> Document {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("t.odt");
+        let mut out = zip::ZipWriter::new(std::fs::File::create(&path).unwrap());
+        for (name, data) in [("mimetype", "application/vnd.oasis.opendocument.text"), ("content.xml", content), ("styles.xml", styles)] {
+            out.start_file(name, zip::write::SimpleFileOptions::default()).unwrap();
+            out.write_all(data.as_bytes()).unwrap();
+        }
+        out.finish().unwrap();
+        read(path.to_str().unwrap()).unwrap()
+    }
+
+    /// How Writer resolves a paragraph's look, as LibreOffice's own files
+    /// rely on it: text written straight into a paragraph takes the
+    /// paragraph style's text properties (a title in a bold 12pt
+    /// paragraph style is bold 12pt), a span adds its own over them, a
+    /// paragraph's space after and line height come from its parent
+    /// "Standard" style when its own style leaves them unset, and the body
+    /// font is the default style's, named by its font face. All four were
+    /// lost: a Calibri agenda opened in the serif fallback with a plain
+    /// title and tight table rows.
+    #[test]
+    fn paragraph_and_default_styles_are_inherited() {
+        let content = "<office:document-content><office:automatic-styles>\
+            <style:style style:name=\"P1\" style:parent-style-name=\"Standard\" style:family=\"paragraph\">\
+              <style:paragraph-properties fo:text-align=\"center\" fo:margin-bottom=\"0in\"/>\
+              <style:text-properties fo:font-weight=\"bold\" fo:font-size=\"12pt\"/></style:style>\
+            <style:style style:name=\"P2\" style:parent-style-name=\"Standard\" style:family=\"paragraph\">\
+              <style:paragraph-properties fo:text-align=\"center\"/></style:style>\
+            <style:style style:name=\"T1\" style:family=\"text\"><style:text-properties fo:font-style=\"italic\"/></style:style>\
+            </office:automatic-styles><office:body><office:text>\
+            <text:p text:style-name=\"P1\">Title <text:span text:style-name=\"T1\">and more</text:span></text:p>\
+            <text:p text:style-name=\"P2\">body</text:p>\
+            </office:text></office:body></office:document-content>";
+        let styles = "<office:document-styles><office:font-face-decls>\
+            <style:font-face style:name=\"Calibri\" svg:font-family=\"Calibri\"/></office:font-face-decls><office:styles>\
+            <style:default-style style:family=\"paragraph\"><style:text-properties style:font-name=\"Calibri\" fo:font-size=\"11pt\"/></style:default-style>\
+            <style:style style:name=\"Standard\" style:family=\"paragraph\"><style:paragraph-properties fo:margin-bottom=\"0.1111in\" fo:line-height=\"103%\"/></style:style>\
+            </office:styles></office:document-styles>";
+        let d = read_package(content, styles);
+        assert_eq!((d.base_font.family.as_deref(), d.base_font.size_hp), (Some("Calibri"), Some(22)));
+        let title = &d.paragraphs[0];
+        let runs: Vec<(&str, bool, bool, Option<u16>)> = title.runs.iter().map(|r| (r.text.as_str(), r.style.bold, r.style.italic, r.style.font_size_hp)).collect();
+        assert_eq!(runs, [("Title ", true, false, Some(24)), ("and more", true, true, Some(24))]);
+        assert_eq!(title.style.space_after_pt, 0.0, "its own style's zero wins over Standard's");
+        let body = &d.paragraphs[1];
+        assert!((body.style.space_after_pt - 8.0).abs() < 0.01, "Standard's space after: {}", body.style.space_after_pt);
+        assert!((body.style.line_spacing - 1.03).abs() < 1e-4, "Standard's line height: {}", body.style.line_spacing);
+        assert!(!body.runs[0].style.bold, "a paragraph style's text properties stay in its paragraph");
     }
 
     /// A standard ODF date field from another application opens as a date
