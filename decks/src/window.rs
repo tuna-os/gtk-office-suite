@@ -389,7 +389,7 @@ impl DecksWindow {
         up_btn.set_action_name(Some("app.move-slide-up"));
         down_btn.set_action_name(Some("app.move-slide-down"));
         dup_btn.set_action_name(Some("app.duplicate-slide"));
-        for (btn, name) in [(&up_btn, "Move slide up"), (&down_btn, "Move slide down"), (&dup_btn, "Duplicate slide")] {
+        for (btn, name) in [(&up_btn, "Move Slide Up"), (&down_btn, "Move Slide Down"), (&dup_btn, "Duplicate Slide")] {
             btn.update_property(&[gtk::accessible::Property::Label(name)]);
         }
 

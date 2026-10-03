@@ -565,7 +565,7 @@ class LettersMultiTabSaveFailureSmoke(BaseGUITestCase):
 
         os.rename(self._first_dir, self._first_dir + "-gone")
         self.wait_for_node(name="Close", roleName="push button").do_action(0)
-        self.wait_for_node(name="Save", roleName="push button").do_action(0)
+        self.wait_for_node(name="Save All", roleName="push button").do_action(0)
         self.wait_for_node(name="Could Not Save File")
         self.assertIsNone(self.process.poll(), "a failed Save All closed the window")
 
@@ -3099,7 +3099,7 @@ class TablesHandOverMixin:
         self.assertTrue(any("first.csv" in n for n in frames), f"the unsaved workbook was replaced: {frames!r}")
         from dogtail import tree
         self.assertIsNone(
-            tree.root.findChild(lambda n: n.name == "Discard unsaved changes?" and n.showing,
+            tree.root.findChild(lambda n: n.name == "Discard Unsaved Changes?" and n.showing,
                                 retry=False, requireResult=False),
             "nothing is being replaced, so nothing should be asked")
         self.assertIsNone(self.process.poll(), "tables crashed opening the file")
@@ -5414,7 +5414,7 @@ class DecksPresenterDisplaySmoke(BaseGUITestCase):
                         interval=0.5, description="the presenter display on slide 1 with its notes")
         self.assertTrue(any(re.fullmatch(r"\d+:\d\d", t or "") for t in self._texts()),
                         f"no clock among {self._texts()}")
-        self.app.child(name="Next Slide", roleName="push button").do_action(0)
+        presenter_button(self, "Next Slide").do_action(0)
         self.wait_until(self._texts, lambda t: "Slide 2 of 2" in t and "Then show the answer" in t,
                         interval=0.5, description="Next Slide to move the counter and notes on")
         self.app.child(name="End Show", roleName="push button").do_action(0)
@@ -5498,7 +5498,7 @@ class DecksPresenterDisplayLostSmoke(DecksPresenterDisplaySmoke):
         self.assertEqual(self._slides_on(), "On display 1", "the slides back on the primary display")
         self.app.child(name="Dismiss", roleName="push button").do_action(0)
         self.wait_until(lambda: self._showing(self.LOST), lambda s: not s, interval=0.5, description="Dismiss to hide it")
-        self.app.child(name="Next Slide", roleName="push button").do_action(0)
+        presenter_button(self, "Next Slide").do_action(0)
         self.wait_until(self._texts, lambda t: "Slide 2 of 2" in t, interval=0.5, description="the show to go on")
         self.app.child(name="End Show", roleName="push button").do_action(0)
         self.assertIsNone(self.process.poll(), "decks crashed losing a display")
@@ -5558,7 +5558,7 @@ class DecksShowBuildsSmoke(BaseGUITestCase):
         return [n.name for n in self.app.findChildren(lambda n: n.roleName == "label")]
 
     def _next(self):
-        self.app.child(name="Next Slide", roleName="push button").do_action(0)
+        presenter_button(self, "Next Slide").do_action(0)
 
     def test_clicks_play_the_builds_then_move_on(self):
         import subprocess
@@ -6138,6 +6138,19 @@ class DecksExportSmoke(BaseGUITestCase):
             self.assertEqual(hashlib.sha256(f.read()).hexdigest(), before, "the source file changed")
 
 
+def presenter_button(test, name):
+    """The presenter display's button `name`. The editing window has
+    buttons of the same names (Next Slide), so the search is limited to
+    the window holding End Show."""
+    def find():
+        for window in test.app.children:
+            if window.findChild(lambda n: n.name == "End Show", retry=False, requireResult=False):
+                return window.findChild(lambda n: n.name == name and n.roleName == "push button",
+                                        retry=False, requireResult=False)
+        return None
+    return test.wait_until(find, lambda b: b is not None, description=f"the presenter's {name} button")
+
+
 def decks_insert_button(test, match, description):
     """The Insert button `match` picks, as a user reaches it: in the header
     bar, or, in a narrow window, in the Insert menu the header bar folds the
@@ -6681,7 +6694,7 @@ class DecksReplaceGuardSmoke(BaseGUITestCase):
                 bool, description=f"the {name} button")
 
         self.gapplication_action(aid, "new-document")
-        self.wait_for_node(name="Discard unsaved changes?")
+        self.wait_for_node(name="Discard Unsaved Changes?")
         button("Cancel").do_action(0)
         time.sleep(1.0)  # settling: gives a wrong outcome its chance before the check that it didn't happen
         self.assertEqual(self._objects(), 1, "Cancel replaced the deck anyway")
@@ -8969,7 +8982,7 @@ class DecksOpenPathsSmoke(OpenPathsMixin, BaseGUITestCase):
             description="other.pptx in a window of its own")
         self.assertTrue(any("mine.pptx" in n for n in frames), f"the unsaved deck was replaced: {frames!r}")
         from dogtail import tree
-        self.assertIsNone(tree.root.findChild(lambda n: n.name == "Discard unsaved changes?" and n.showing,
+        self.assertIsNone(tree.root.findChild(lambda n: n.name == "Discard Unsaved Changes?" and n.showing,
                                               retry=False, requireResult=False),
                           "nothing is being replaced, so nothing should be asked")
         self.assertIsNone(self.process.poll(), "decks crashed opening a dropped deck")
@@ -8979,7 +8992,7 @@ class DecksOpenPathsSmoke(OpenPathsMixin, BaseGUITestCase):
         self._drop(self._picture)
         self.wait_until(self._objects, lambda n: n == 2, description="the picture on the slide")
         from dogtail import tree
-        self.assertIsNone(tree.root.findChild(lambda n: n.name == "Discard unsaved changes?", retry=False, requireResult=False),
+        self.assertIsNone(tree.root.findChild(lambda n: n.name == "Discard Unsaved Changes?", retry=False, requireResult=False),
                           "a picture isn't a document: nothing to ask")
         self.assertIn("mine.pptx", self._title())
 

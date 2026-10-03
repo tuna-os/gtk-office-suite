@@ -899,7 +899,7 @@ impl TablesWindow {
             .tooltip_text("Add Sheet")
             .build();
         add_btn.set_css_classes(&["flat", "circular"]);
-        add_btn.update_property(&[gtk4::accessible::Property::Label("Add sheet")]);
+        add_btn.update_property(&[gtk4::accessible::Property::Label("Add Sheet")]);
         sheet_bar.append(&add_btn);
 
         let rename_sheet_btn = gtk4::Button::builder()
@@ -907,7 +907,7 @@ impl TablesWindow {
             .tooltip_text("Rename Sheet")
             .build();
         rename_sheet_btn.set_css_classes(&["flat", "circular"]);
-        rename_sheet_btn.update_property(&[gtk4::accessible::Property::Label("Rename sheet")]);
+        rename_sheet_btn.update_property(&[gtk4::accessible::Property::Label("Rename Sheet")]);
         sheet_bar.append(&rename_sheet_btn);
 
         let move_sheet_left_btn = gtk4::Button::builder()
@@ -933,7 +933,7 @@ impl TablesWindow {
             .tooltip_text("Delete Sheet")
             .build();
         delete_sheet_btn.set_css_classes(&["flat", "circular"]);
-        delete_sheet_btn.update_property(&[gtk4::accessible::Property::Label("Delete sheet")]);
+        delete_sheet_btn.update_property(&[gtk4::accessible::Property::Label("Delete Sheet")]);
         sheet_bar.append(&delete_sheet_btn);
         // Selection statistics live at the right end of the sheet bar,
         // Calc-style (one bottom bar, tabs left / stats right).
