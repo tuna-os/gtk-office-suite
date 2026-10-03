@@ -385,6 +385,16 @@ fn handle_key(view: &PageView, buf: &gtk::TextBuffer, key: gdk::Key, state: gdk:
             match key {
                 gdk::Key::c => buf.copy_clipboard(&clipboard),
                 gdk::Key::x => buf.cut_clipboard(&clipboard, true),
+                // Another application's text: typed in as a model edit.
+                _ if crate::live::of(buf).is_some() => {
+                    let buf = buf.clone();
+                    clipboard.read_text_async(None::<&gtk::gio::Cancellable>, move |text| {
+                        if let Ok(Some(text)) = text {
+                            crate::insert::paste_text(&buf, &text);
+                            crate::live::sync_actions(&buf);
+                        }
+                    });
+                }
                 _ => buf.paste_clipboard(&clipboard, None, true),
             }
             true

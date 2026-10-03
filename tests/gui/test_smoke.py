@@ -3907,6 +3907,43 @@ class LettersPasteOverSelectionSmoke(BaseGUITestCase):
         self.assertIsNone(self.process.poll(), "letters crashed while pasting")
 
 
+class LettersCutPasteSmoke(BaseGUITestCase):
+    """Ctrl+X puts the suite fragment on the clipboard and deletes the
+    selection as one model edit; Ctrl+V brings it back with its
+    formatting (#1202 stage 3)."""
+
+    app_name = "letters"
+
+    def setUp(self):
+        self._snapshot_path = self.isolate_snapshot(prefix="letters-cut-")
+        super().setUp()
+
+    def _runs(self):
+        s = self.trigger_snapshot("org.tunaos.letters")
+        return [(r["text"], bool(r.get("style", {}).get("bold"))) for p in s["paragraphs"] for r in p["runs"]]
+
+    def test_cut_then_paste_keeps_bold(self):
+        from dogtail import rawinput
+
+        aid = "org.tunaos.letters"
+        self.new_letters_document()
+        rawinput.typeText("a ")
+        self.wait_until(self._runs, lambda r: r == [("a ", False)], description="the typed text")
+        self.gapplication_action(aid, "bold")
+        rawinput.typeText("bold")
+        self.wait_until(self._runs, lambda r: r == [("a ", False), ("bold", True)], description="a bold word")
+        rawinput.keyCombo("<Shift><Control>Left")
+        rawinput.keyCombo("<Control>x")
+        self.wait_until(self._runs, lambda r: r == [("a ", False)], description="the word cut")
+        rawinput.keyCombo("<Control>v")
+        self.wait_until(self._runs, lambda r: r == [("a ", False), ("bold", True)], description="the word pasted back, bold")
+        self.gapplication_action(aid, "undo")
+        self.wait_until(self._runs, lambda r: r == [("a ", False)], description="one undo takes the paste out")
+        self.gapplication_action(aid, "undo")
+        self.wait_until(self._runs, lambda r: r == [("a ", False), ("bold", True)], description="one more puts the cut word back")
+        self.assertIsNone(self.process.poll(), "letters crashed cutting and pasting")
+
+
 class CrossAppClipboardSmoke(BaseGUITestCase):
     """Two live applications, one X11 selection (#442).
 
