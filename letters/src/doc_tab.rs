@@ -17,7 +17,7 @@ use std::rc::Rc;
 
 use crate::actions::{connect_markdown_macros, register_formatting_tags};
 use crate::page_container::PageContainer;
-use crate::window::insert_fragment;
+use crate::insert::insert_fragment;
 
 // ── Crash-recovery snapshots ─────────────────────────────────────────────
 // One AutosaveSlot per tab (not per window, unlike Tables/Decks): each tab

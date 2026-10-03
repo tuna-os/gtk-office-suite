@@ -3869,6 +3869,44 @@ class LettersClipboardSmoke(BaseGUITestCase):
         self.eventually(_settled)
 
 
+class LettersPasteOverSelectionSmoke(BaseGUITestCase):
+    """Ctrl+V of a suite fragment replaces the selection and undoes in one
+    step (#1202 stage 3).
+
+    The fragment used to be typed into the buffer at the caret and the
+    selection stayed: pasting over "beta" gave "alpha alpha betabeta". It
+    is one model edit now.
+    """
+
+    app_name = "letters"
+
+    def setUp(self):
+        self._snapshot_path = self.isolate_snapshot(prefix="letters-paste-")
+        super().setUp()
+
+    def _text(self):
+        s = self.trigger_snapshot("org.tunaos.letters")
+        return "\n".join("".join(r["text"] for r in p["runs"]) for p in s["paragraphs"])
+
+    def test_paste_replaces_the_selection(self):
+        from dogtail import rawinput
+
+        aid = "org.tunaos.letters"
+        self.new_letters_document()
+        rawinput.typeText("alpha beta")
+        self.wait_until(self._text, lambda t: t == "alpha beta", description="the typed text")
+        rawinput.keyCombo("<Control>a")
+        rawinput.keyCombo("<Control>c")
+        time.sleep(0.5)  # pacing: the clipboard owner has no state to wait on
+        rawinput.keyCombo("<Control>End")
+        rawinput.keyCombo("<Shift><Control>Left")
+        rawinput.keyCombo("<Control>v")
+        self.wait_until(self._text, lambda t: t == "alpha alpha beta", description="'beta' replaced by the paste")
+        self.gapplication_action(aid, "undo")
+        self.wait_until(self._text, lambda t: t == "alpha beta", description="one undo takes the paste out")
+        self.assertIsNone(self.process.poll(), "letters crashed while pasting")
+
+
 class CrossAppClipboardSmoke(BaseGUITestCase):
     """Two live applications, one X11 selection (#442).
 
