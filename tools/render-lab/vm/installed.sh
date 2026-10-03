@@ -5,12 +5,12 @@
 #   installed.sh <app> <ext> <mime> <document> <out-dir>
 #   installed.sh --close <app>
 #
-# Copies <document> into ~/Documents, opens it with `gio open` (the file
+# Copies <document> into ~/Downloads, opens it with `gio open` (the file
 # manager's path: MIME default, desktop entry, Flatpak's file forwarding
 # through the document portal), saves it with the app's own Save, and
-# prints one JSON line of what happened. The app's sandbox can read the
-# host but not write it (--filesystem=host:ro), so the save only lands
-# through the portal.
+# prints one JSON line of what happened. The sandbox can see only
+# ~/Documents (--filesystem=xdg-documents), so a document in ~/Downloads
+# reaches the app, and its save lands, only through the portal.
 set -u
 if [ "${1:-}" = --close ]; then
     flatpak kill "org.tunaos.$2" 2>/dev/null || true
@@ -25,8 +25,8 @@ export DBUS_SESSION_BUS_ADDRESS="unix:path=$XDG_RUNTIME_DIR/bus"
 # and their MIME associations are.
 export XDG_DATA_DIRS="$HOME/.local/share/flatpak/exports/share:/var/lib/flatpak/exports/share:/usr/local/share:/usr/share"
 
-mkdir -p ~/Documents "$out/$app"
-doc="$HOME/Documents/installed-$app.$ext"
+mkdir -p ~/Downloads "$out/$app"
+doc="$HOME/Downloads/installed-$app.$ext"
 cp "$src" "$doc"
 dump="$out/$app"
 rm -f "$dump"/*
@@ -40,6 +40,11 @@ printf '%s\n' "$handlers" | grep -q "$id.desktop" && registered=true
 # the portal, as it is for a user.
 flatpak override --user --env=GTK_OFFICE_TEST_MODE=1 --env=GTK_OFFICE_RENDER_DUMP="$dump" \
     --env=GTK_OFFICE_RENDER_HOLD=1 --filesystem="$out" "$id"
+
+# Out of the overview, so the screenshot shows the app (and any message
+# it puts up) rather than the shell.
+gdbus call --session --dest org.gnome.Shell --object-path /org/gnome/Shell \
+    --method org.freedesktop.DBus.Properties.Set org.gnome.Shell OverviewActive '<false>' >/dev/null 2>&1 || true
 
 before="$(stat -c '%i %Y %s' "$doc")"
 setsid gio open "$doc" </dev/null >"$out/$app-open.log" 2>&1 &
@@ -59,7 +64,7 @@ fi
 valid="$(python3 -c 'import sys, zipfile
 p = sys.argv[1]
 print(str(zipfile.is_zipfile(p) and zipfile.ZipFile(p).testzip() is None).lower())' "$doc")"
-leftovers="$(ls -A ~/Documents | grep -c '^\.office-save-' || true)"
+leftovers="$(ls -A ~/Downloads | grep -c '^\.office-save-' || true)"
 recent="$(flatpak run --command=gsettings "$id" get "$id" recent-files 2>/dev/null || true)"
 in_recent=false
 case "$recent" in *"installed-$app.$ext"*) in_recent=true ;; esac
