@@ -33,8 +33,9 @@ import feature_tour as ft  # noqa: E402
 REPO = ft.REPO
 W, H, FPS = 1920, 1080, 30
 FADE = 0.5            # crossfade between segments, seconds
-LEAD = 5.0            # the most of a feature's lead-up a segment shows
-HOLD = 2.5            # how long a finished feature stays on screen
+LEAD = 2.5            # the most of a feature's lead-up a segment shows
+HOLD = 3.5            # how long a finished feature stays on screen
+SETTLE = 1.2          # a new window's first paint, never shown
 MIN_SEGMENT = 4.3     # the shortest segment, seconds
 PUSH = 0.035          # how far a segment's window slowly pushes in
 
@@ -226,7 +227,7 @@ def tour(app, stops, rec):
         marks["shot"] = (now, box)
         # A feature that came up quickly is held longer, so no segment is
         # over before it can be read.
-        time.sleep(max(HOLD, MIN_SEGMENT - (now - marks.get("ready", now))))
+        time.sleep(max(HOLD, SETTLE + MIN_SEGMENT - (now - marks.get("ready", now))))
 
     ft.App.__init__, ft.shot = init, shot
     segments = []
@@ -246,8 +247,8 @@ def tour(app, stops, rec):
             if "shot" not in marks or not marks["shot"][1]:
                 continue
             t_shot, box = marks["shot"]
-            start = max(marks.get("ready", t_shot - LEAD), t_shot - LEAD) - rec.t0
-            end = max(t_shot + HOLD, marks.get("ready", t_shot) + MIN_SEGMENT) - 0.3 - rec.t0
+            start = max(marks.get("ready", t_shot - LEAD) + SETTLE, t_shot - LEAD) - rec.t0
+            end = max(t_shot + HOLD, marks.get("ready", t_shot) + SETTLE + MIN_SEGMENT) - 0.3 - rec.t0
             segments.append((name, caption, max(0.0, start), end, box))
     finally:
         ft.App.__init__ = original_init
@@ -365,14 +366,28 @@ def suite_clip(seconds, out, work):
     return animated_card(bg, layers, seconds, out)
 
 
+def duration(path):
+    out = subprocess.run(["ffprobe", "-v", "error", "-show_entries", "format=duration", "-of", "csv=p=0", path],
+                         capture_output=True, text=True).stdout
+    return float(out)
+
+
 def join(clips, out):
-    """Clips joined with crossfades, faded in from and out to black."""
-    inputs, filt, last, offset = [], [], "[0:v]", 0.0
-    for c, _ in clips:
+    """Clips joined with crossfades, faded in from and out to black. The
+    crossfades are placed by each clip's measured length: an encode can
+    come out a few frames from the length asked of it."""
+    clips = [(c, duration(c)) for c, _ in clips]
+    inputs, filt, offset = [], [], 0.0
+    for i, (c, _) in enumerate(clips):
         inputs += ["-i", c]
+        # xfade needs its inputs on one time base and frame rate; the cards
+        # and the segments come from different encodes, and without this
+        # the chain ended after its second clip.
+        filt.append(f"[{i}:v]settb=AVTB,fps={FPS},format=yuv420p,setpts=PTS-STARTPTS[n{i}]")
+    last = "[n0]"
     for i in range(1, len(clips)):
         offset += clips[i - 1][1] - FADE
-        filt.append(f"{last}[{i}:v]xfade=transition=fade:duration={FADE}:offset={offset:.2f}[x{i}]")
+        filt.append(f"{last}[n{i}]xfade=transition=fade:duration={FADE}:offset={offset:.2f}[x{i}]")
         last = f"[x{i}]"
     total = sum(d for _, d in clips) - FADE * (len(clips) - 1)
     filt.append(f"{last}fade=t=in:d=0.6,fade=t=out:st={total - 0.8:.2f}:d=0.8,format=yuv420p[v]")

@@ -40,4 +40,10 @@ mkdir -p "$CFG/data/fonts"; cp "$FONTS"/AdwaitaSans-*.ttf "$CFG/data/fonts/"; fc
 export OUT REPO PYTHON_BIN
 dbus-run-session -- bash -c 'gsettings set org.gnome.desktop.interface toolkit-accessibility true
     gsettings set org.gnome.desktop.interface font-name "Adwaita Sans 11"
+    # Larger windows than the tour'"'"'s screenshots use, so a page fits
+    # across with room around it at 1080p.
+    for app in letters tables decks; do
+        gsettings set org.tunaos.$app window-width 1440
+        gsettings set org.tunaos.$app window-height 900
+    done
     exec "$PYTHON_BIN" "$REPO/tests/gui/overview_video.py" "$OUT" '"$*"
