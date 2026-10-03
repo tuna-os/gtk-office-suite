@@ -575,6 +575,71 @@ mod tests {
         m.document(buf).paragraphs[0].runs.iter().map(|r| (r.text.clone(), r.style.bold)).collect()
     }
 
+    /// Bold over a selection is a model op (#1202 stage 3): the model gets
+    /// it without reading the buffer back, it undoes in one step, and the
+    /// selection is still there to press Italic on next.
+    #[test]
+    fn formatting_a_selection_is_a_model_op_that_keeps_the_selection() {
+        gtk_test(|| {
+            let (_view, buf) = editable("plain text");
+            let live = crate::live::LiveModel::attach(&buf);
+            let _ = live.borrow_mut().document(&buf);
+            let reads = |l: &std::rc::Rc<std::cell::RefCell<crate::live::LiveModel>>| {
+                let m = l.borrow();
+                (m.local_reads, m.full_reads)
+            };
+            let before = reads(&live);
+
+            buf.select_range(&buf.iter_at_offset(0), &buf.iter_at_offset(5));
+            crate::actions::toggle_tag_in(&buf, "bold");
+            assert_eq!(bold_runs(&buf), vec![("plain".into(), true), (" text".into(), false)]);
+            assert_eq!(reads(&live), before, "the model read the buffer back instead of taking an op");
+            let (a, b) = buf.selection_bounds().expect("the selection is kept");
+            assert_eq!((a.offset(), b.offset()), (0, 5));
+
+            // The first selected character decides: bold already, so off.
+            buf.select_range(&buf.iter_at_offset(2), &buf.iter_at_offset(8));
+            crate::actions::toggle_tag_in(&buf, "bold");
+            assert_eq!(bold_runs(&buf), vec![("pl".into(), true), ("plain text"[2..].into(), false)]);
+
+            crate::live::undo(&buf, false);
+            assert_eq!(bold_runs(&buf), vec![("plain".into(), true), (" text".into(), false)]);
+            crate::live::undo(&buf, false);
+            assert_eq!(bold_runs(&buf), vec![("plain text".into(), false)]);
+        });
+    }
+
+    /// Alignment is the caret's paragraph, or every paragraph the selection
+    /// touches, and nothing else: it used to reach into the paragraph
+    /// before, and to ignore the caret altogether (#1202 stage 3).
+    #[test]
+    fn alignment_is_the_caret_or_selection_paragraphs_as_a_model_op() {
+        gtk_test(|| {
+            let (_view, buf) = editable("one\ntwo\nthree");
+            let live = crate::live::LiveModel::attach(&buf);
+            let align = |buf: &gtk::TextBuffer| -> Vec<letters_core::Alignment> {
+                let live = crate::live::of(buf).unwrap();
+                let mut m = live.borrow_mut();
+                m.document(buf).paragraphs.iter().map(|p| p.style.alignment).collect()
+            };
+            use letters_core::Alignment::{Center, Left, Right};
+            let before = { let m = live.borrow(); (m.local_reads, m.full_reads) };
+
+            buf.place_cursor(&buf.iter_at_offset(5)); // in "two"
+            crate::actions::align_in(&buf, "align-center");
+            assert_eq!(align(&buf), [Left, Center, Left]);
+            assert_eq!(buf.iter_at_mark(&buf.get_insert()).offset(), 5, "the caret stays put");
+            assert_eq!({ let m = live.borrow(); (m.local_reads, m.full_reads) }, before, "read back from the buffer");
+
+            buf.select_range(&buf.iter_at_offset(1), &buf.iter_at_offset(6)); // "one" into "two"
+            crate::actions::align_in(&buf, "align-right");
+            assert_eq!(align(&buf), [Right, Right, Left]);
+
+            crate::live::undo(&buf, false);
+            assert_eq!(align(&buf), [Left, Center, Left], "one undo step");
+        });
+    }
+
     /// Bold with nothing selected, then typing, types bold (as in every word
     /// processor); a second press takes it back; a moved caret drops it.
     #[test]
