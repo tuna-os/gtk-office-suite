@@ -35,6 +35,13 @@ AdwApplicationWindow
 - The **formatting toolbar** is a box with the `toolbar` style class, which gives
   it the standard padding above, below and between buttons. Bold, Italic and
   Underline come first in every app.
+- **Toolbar buttons are icons, never labels**, in all three apps. Each has a
+  tooltip naming what it does ("Insert Table"), which is also its accessible
+  name. Where Adwaita has no clear icon, the suite draws one (§5) rather than
+  adding a label. Words belong in menus: the narrow window's overflow menus
+  list the same commands with their names. A picker whose current value is the
+  point shows that value as its label ("Normal" in Letters' style picker, the
+  sheet name in Tables' switcher), with a dropdown arrow.
 - **Tabs** (Letters only) are an `AdwTabBar` under the header bar, never the
   header bar's title widget. With one document open, the header bar shows its
   name and the tab bar hides itself.

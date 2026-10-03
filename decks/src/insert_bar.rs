@@ -1,8 +1,8 @@
-//! insert_bar.rs — the Insert buttons in the header bar.
+//! insert_bar.rs — the Insert buttons in the toolbar.
 //! SPDX-License-Identifier: GPL-3.0-or-later
 //!
 //! docs/DESIGN-UI.md, "Insert buttons, not menus" (iWork's Text · Shape ·
-//! Table · Media row): labelled, flat header-bar buttons, and a Shape
+//! Table · Media row): icon buttons in the toolbar, and a Shape
 //! popover that is a searchable library of shapes, each drawn by the
 //! canvas's own shape code. What each button inserts is decks_core::insert;
 //! the buttons only fire the app actions (add-text-box, insert-shape,
@@ -21,6 +21,15 @@ fn labelled(icon: &str, label: &str, tooltip: &str) -> adw::ButtonContent {
     let content = adw::ButtonContent::builder().icon_name(icon).label(label).use_underline(true).build();
     content.set_tooltip_text(Some(tooltip));
     content
+}
+
+/// A toolbar button: an icon, named by its tooltip, like every other
+/// toolbar button in the suite (docs/GNOME-GUIDELINES.md §1). The Insert
+/// buttons were the suite's only labelled toolbar buttons.
+fn icon_button(icon: &str, tooltip: &str, action: &str) -> gtk::Button {
+    let b = gtk::Button::builder().icon_name(icon).tooltip_text(tooltip).action_name(action).build();
+    b.update_property(&[gtk::accessible::Property::Label(tooltip)]);
+    b
 }
 
 fn button(icon: &str, label: &str, tooltip: &str, action: &str) -> gtk::Button {
@@ -118,7 +127,7 @@ fn shape_menu() -> gtk::MenuButton {
     let (body, search) = shape_library_view(std::rc::Rc::new(move || p.popdown()));
     popover.set_child(Some(&body));
     popover.connect_show(move |_| focus_search(&search));
-    let menu = gtk::MenuButton::builder().child(&labelled("office-shapes-symbolic", "_Shape", "Insert Shape")).popover(&popover).build();
+    let menu = gtk::MenuButton::builder().icon_name("office-shapes-symbolic").popover(&popover).build();
     menu.add_css_class("flat");
     menu.set_tooltip_text(Some("Insert Shape"));
     menu.update_property(&[gtk::accessible::Property::Label("Insert Shape")]);
@@ -174,7 +183,7 @@ fn chart_menu() -> gtk::MenuButton {
     let popover = gtk::Popover::new();
     let p = popover.clone();
     popover.set_child(Some(&chart_kinds_view(std::rc::Rc::new(move || p.popdown()), 3)));
-    let menu = gtk::MenuButton::builder().child(&labelled("office-chart-symbolic", "C_hart", "Insert Chart")).popover(&popover).build();
+    let menu = gtk::MenuButton::builder().icon_name("office-chart-symbolic").popover(&popover).build();
     menu.add_css_class("flat");
     menu.set_tooltip_text(Some("Insert Chart"));
     menu.update_property(&[gtk::accessible::Property::Label("Insert Chart")]);
@@ -199,11 +208,11 @@ pub fn build(toolbar: &gtk::Box, narrow: &adw::Breakpoint) {
     let present = toolbar.last_child();
     toolbar.append(&gtk::Separator::new(gtk::Orientation::Vertical));
     let bar = gtk::Box::new(gtk::Orientation::Horizontal, 0);
-    bar.append(&button("insert-text-symbolic", "_Text", "Insert Text Box", "app.add-text-box"));
+    bar.append(&icon_button("insert-text-symbolic", "Insert Text Box", "app.add-text-box"));
     bar.append(&shape_menu());
-    bar.append(&button("office-table-symbolic", "T_able", "Insert Table", "app.insert-table"));
+    bar.append(&icon_button("office-table-symbolic", "Insert Table", "app.insert-table"));
     bar.append(&chart_menu());
-    bar.append(&button("insert-image-symbolic", "_Image", "Insert Image", "app.add-image"));
+    bar.append(&icon_button("insert-image-symbolic", "Insert Image", "app.add-image"));
     toolbar.append(&bar);
 
     let compact = compact_menu();

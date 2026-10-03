@@ -94,7 +94,7 @@ only with its render-lab fixture green or improving.
     exactly those fields, each through an undoable command.
 - **Insert buttons, not menus (iWork's Table · Chart · Text · Shape ·
   Media toolbar)**
-  - Here: a short row of labelled icon buttons in the header bar, and a
+  - Here: a short row of icon buttons in the toolbar, and a
     `GtkPopover` shape and media library with a search entry.
   - Needs: nothing new for text, table and image. Shapes need the Decks
     shape model.

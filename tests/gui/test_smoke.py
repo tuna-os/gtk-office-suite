@@ -6197,8 +6197,10 @@ class DecksInsertBarSmoke(BaseGUITestCase):
         self.app.findChild(lambda n: n.roleName == "push button" and n.name == "Triangle" and n.showing).do_action(0)
         self.wait_until(self._objects, lambda o: "Triangle" in o, interval=0.25,
                         description="a triangle on the slide")
-        table = decks_insert_button(self, lambda n: n.roleName == "push button" and n.name == "Table"
-                                    and n.description == "Insert Table", "the Table button")
+        # An icon in the toolbar, named by its tooltip; a labelled item in
+        # the narrow window's Insert menu.
+        table = decks_insert_button(self, lambda n: n.roleName == "push button"
+                                    and "Insert Table" in (n.name, n.description), "the Table button")
         table.do_action(0)
         self.wait_until(self._objects, lambda o: "Table, 3 rows by 3 columns" in o, interval=0.25,
                         description="a 3x3 table on the slide")
