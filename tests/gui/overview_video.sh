@@ -13,13 +13,16 @@ OUT="$(realpath -m "$1")"; shift
 REPO="$(cd "$(dirname "$0")/../.." && pwd)"
 PYTHON_BIN="${GUI_TEST_PYTHON:-python3}"
 
-if ! fc-list | grep -qi "Adwaita Sans"; then
-    fonts="$HOME/.local/share/fonts"; mkdir -p "$fonts"
-    tmp="$(mktemp -d)"
+# Adwaita Sans, GNOME's typeface since GNOME 48, for the apps and the cards.
+# It goes into the private data directory below as well: fontconfig looks
+# in $XDG_DATA_HOME/fonts, and that directory replaces ~/.local/share.
+FONTS="${ADWAITA_FONTS_DIR:-$HOME/.cache/gtk-office-suite/adwaita-fonts}"
+if ! ls "$FONTS"/AdwaitaSans-*.ttf >/dev/null 2>&1; then
+    mkdir -p "$FONTS"; tmp="$(mktemp -d)"
     curl -fsSL https://download.gnome.org/sources/adwaita-fonts/51/adwaita-fonts-51.0.tar.xz | tar xJ -C "$tmp"
-    find "$tmp" -name 'AdwaitaSans-*.ttf' -exec cp {} "$fonts/" \;
-    fc-cache -f >/dev/null
+    find "$tmp" -name 'AdwaitaSans-*.ttf' -exec cp {} "$FONTS/" \;
 fi
+export ADWAITA_FONTS_DIR="$FONTS"
 
 SCHEMA_DIR="$(mktemp -d)"; cp "$REPO"/flatpak/*.gschema.xml "$SCHEMA_DIR/"; glib-compile-schemas "$SCHEMA_DIR"
 export GSETTINGS_SCHEMA_DIR="$SCHEMA_DIR" GDK_BACKEND=x11 GTK_A11Y=atspi GDK_SCALE=2
@@ -33,6 +36,7 @@ export DISPLAY=:95; sleep 1
 xcompmgr >/dev/null 2>&1 & CP=$!
 trap 'kill $CP $XP 2>/dev/null || true' EXIT
 CFG="$(mktemp -d)"; export XDG_CONFIG_HOME="$CFG" XDG_DATA_HOME="$CFG/data" XDG_STATE_HOME="$CFG/state" GSETTINGS_BACKEND=keyfile
+mkdir -p "$CFG/data/fonts"; cp "$FONTS"/AdwaitaSans-*.ttf "$CFG/data/fonts/"; fc-cache -f "$CFG/data/fonts" >/dev/null
 export OUT REPO PYTHON_BIN
 dbus-run-session -- bash -c 'gsettings set org.gnome.desktop.interface toolkit-accessibility true
     gsettings set org.gnome.desktop.interface font-name "Adwaita Sans 11"

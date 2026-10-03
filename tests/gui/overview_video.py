@@ -35,6 +35,8 @@ W, H, FPS = 1920, 1080, 30
 FADE = 0.5            # crossfade between segments, seconds
 LEAD = 5.0            # the most of a feature's lead-up a segment shows
 HOLD = 2.5            # how long a finished feature stays on screen
+MIN_SEGMENT = 4.3     # the shortest segment, seconds
+PUSH = 0.035          # how far a segment's window slowly pushes in
 
 APPS = {
     # name, accent (light, dark): GNOME's palette (blue, green, orange).
@@ -52,7 +54,11 @@ TRAILER = {
 # ── Type and art ─────────────────────────────────────────────────────
 
 def font_path():
-    """Adwaita Sans, else Cantarell, else whatever sans fontconfig has."""
+    """Adwaita Sans (from overview_video.sh's copy, else fontconfig), else
+    Cantarell, else whatever sans fontconfig has."""
+    fetched = os.path.join(os.environ.get("ADWAITA_FONTS_DIR", ""), "AdwaitaSans-Regular.ttf")
+    if os.path.exists(fetched):
+        return fetched
     for family in ("Adwaita Sans", "Cantarell", "Sans"):
         out = subprocess.run(["fc-match", "-f", "%{file}", family], capture_output=True, text=True).stdout
         if out and (family == "Sans" or family.split()[0].lower() in os.path.basename(out).lower()):
@@ -114,35 +120,6 @@ def summary(app):
     text = open(f"{REPO}/flatpak/org.tunaos.{app}.metainfo.xml").read()
     m = re.search(r"<summary>([^<]+)</summary>", text)
     return m.group(1).strip() if m else ""
-
-
-def text_centre(draw, y, text, f, fill):
-    w = draw.textlength(text, font=f)
-    draw.text(((W - w) / 2, y), text, font=f, fill=fill)
-
-
-def title_card(app, path):
-    from PIL import ImageDraw
-    name, (light, dark) = APPS[app]
-    img = gradient(light, dark)
-    img.alpha_composite(icon(app, 300), ((W - 300) // 2, 230))
-    d = ImageDraw.Draw(img)
-    text_centre(d, 580, name, font(120, 800), (255, 255, 255, 255))
-    text_centre(d, 735, summary(app), font(46, 500), (255, 255, 255, 225))
-    img.convert("RGB").save(path)
-
-
-def suite_card(path, heading, subheading):
-    from PIL import ImageDraw
-    img = gradient("#3d3846", "#241f31")
-    for i, app in enumerate(APPS):
-        img.alpha_composite(icon(app, 200), (W // 2 - 340 + i * 240 - 100 + 100, 250))
-    d = ImageDraw.Draw(img)
-    text_centre(d, 520, heading, font(96, 800), (255, 255, 255, 255))
-    text_centre(d, 655, subheading, font(44, 500), (255, 255, 255, 220))
-    text_centre(d, 780, "Letters · Tables · Decks  —  built with GTK 4 and libadwaita", font(36, 400), (255, 255, 255, 170))
-    text_centre(d, 840, "github.com/tuna-os/gtk-office-suite  ·  Pre-alpha", font(32, 400), (255, 255, 255, 140))
-    img.convert("RGB").save(path)
 
 
 def caption_pill(text, path):
@@ -245,8 +222,11 @@ def tour(app, stops, rec):
         img = Image.frombytes("RGB", raw.size, raw.rgb)
         root = Image.new("RGB", img.size, img.getpixel((img.width - 1, img.height - 1)))
         box = ImageChops.difference(img, root).convert("L").point(lambda v: 255 if v > 8 else 0).getbbox()
-        marks["shot"] = (time.monotonic(), box)
-        time.sleep(HOLD)
+        now = time.monotonic()
+        marks["shot"] = (now, box)
+        # A feature that came up quickly is held longer, so no segment is
+        # over before it can be read.
+        time.sleep(max(HOLD, MIN_SEGMENT - (now - marks.get("ready", now))))
 
     ft.App.__init__, ft.shot = init, shot
     segments = []
@@ -267,7 +247,8 @@ def tour(app, stops, rec):
                 continue
             t_shot, box = marks["shot"]
             start = max(marks.get("ready", t_shot - LEAD), t_shot - LEAD) - rec.t0
-            segments.append((name, caption, max(0.0, start), t_shot + HOLD - 0.3 - rec.t0, box))
+            end = max(t_shot + HOLD, marks.get("ready", t_shot) + MIN_SEGMENT) - 0.3 - rec.t0
+            segments.append((name, caption, max(0.0, start), end, box))
     finally:
         ft.App.__init__ = original_init
     return segments
@@ -293,14 +274,19 @@ def render_segment(app, raw, seg, out, work):
     bw, bh = caption_pill(caption, cap)
     badge(app, bdg)
     dur = end - start
+    frames = max(1, int(dur * FPS))
+    # The window and its backdrop push in slowly (a zoompan of the
+    # composite); the badge and the caption stay still over it, and the
+    # caption rises into place as it fades in.
     filt = (
         f"[0:v]crop={cw}:{ch}:{x0}:{y0},scale={sw}:{sh}:flags=lanczos,format=rgba[win];"
         f"[2:v]format=gray[m];[win][m]alphamerge[wr];"
         f"[1:v][3:v]overlay={wx - pad}:{wy - pad}[b1];"
-        f"[b1][wr]overlay={wx}:{wy}[b2];"
+        f"[b1][wr]overlay={wx}:{wy}:shortest=1,"
+        f"zoompan=z='1+{PUSH}*on/{frames}':d=1:x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':s={W}x{H}:fps={FPS}[b2];"
         f"[b2][5:v]overlay=48:36[b3];"
-        f"[4:v]format=rgba,fade=t=in:st=0.3:d=0.4:alpha=1[c];"
-        f"[b3][c]overlay=(W-{bw})/2:{H - bh - 48}:format=auto,format=yuv420p[v]"
+        f"[4:v]format=rgba,fade=t=in:st=0.3:d=0.45:alpha=1[c];"
+        f"[b3][c]overlay=x=(W-{bw})/2:y='{H - bh - 48}+24*max(0\\,1-(t-0.3)/0.45)':eval=frame:format=auto,format=yuv420p[v]"
     )
     subprocess.run(
         ["ffmpeg", "-loglevel", "error", "-y", "-ss", f"{start:.2f}", "-t", f"{dur:.2f}", "-i", raw,
@@ -311,13 +297,72 @@ def render_segment(app, raw, seg, out, work):
     return dur
 
 
-def still(png, seconds, out, zoom=True):
-    """A card as a clip, with a slow push-in."""
-    z = "zoompan=z='min(zoom+0.0006,1.04)':d=1:x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':s=1920x1080:fps=30," if zoom else ""
-    subprocess.run(["ffmpeg", "-loglevel", "error", "-y", "-loop", "1", "-i", png, "-t", f"{seconds}",
-                    "-vf", f"scale=2112:1188,{z}format=yuv420p", "-r", str(FPS),
+def animated_card(background, layers, seconds, out):
+    """A card whose layers arrive one after another. Each layer is
+    (png, cx, cy, start, grow): a transparent image centred on (cx, cy)
+    that fades in at `start`, rising 30 px into place, or, with `grow`,
+    growing from 80% to full size. The whole card pushes in slowly."""
+    inputs = ["-loop", "1", "-t", f"{seconds}", "-i", background]
+    filt, last = [], "[0:v]"
+    for i, (png, cx, cy, start, grow) in enumerate(layers, 1):
+        inputs += ["-loop", "1", "-t", f"{seconds}", "-i", png]
+        ease = f"min(1\\,max(0\\,(t-{start})/0.7))"
+        size = f",scale=w='iw*(0.8+0.2*{ease})':h=-1:eval=frame" if grow else ""
+        rise = "" if grow else f"+30*(1-{ease})"
+        filt.append(f"[{i}:v]format=rgba{size},fade=t=in:st={start}:d=0.6:alpha=1[l{i}]")
+        filt.append(f"{last}[l{i}]overlay=x='{cx}-w/2':y='{cy}-h/2{rise}':eval=frame[o{i}]")
+        last = f"[o{i}]"
+    filt.append(f"{last}zoompan=z='min(zoom+0.0004\\,1.03)':d=1:x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)'"
+                f":s={W}x{H}:fps={FPS},format=yuv420p[v]")
+    subprocess.run(["ffmpeg", "-loglevel", "error", "-y", *inputs, "-filter_complex", ";".join(filt),
+                    "-map", "[v]", "-t", f"{seconds}", "-r", str(FPS),
                     "-c:v", "libx264", "-preset", "medium", "-crf", "18", out], check=True)
     return seconds
+
+
+def text_png(text, f, fill, path):
+    """`text` alone on a transparent image just large enough for it."""
+    from PIL import Image, ImageDraw
+    l, t, r, b = ImageDraw.Draw(Image.new("RGBA", (1, 1))).textbbox((0, 0), text, font=f)
+    img = Image.new("RGBA", (r - l + 8, b - t + 8), (0, 0, 0, 0))
+    ImageDraw.Draw(img).text((4 - l, 4 - t), text, font=f, fill=fill)
+    img.save(path)
+    return path
+
+
+def title_clip(app, seconds, out, work):
+    """The app's card, animated: icon, then name, then summary."""
+    name, (light, dark) = APPS[app]
+    bg = f"{work}/{app}-card-bg.png"
+    gradient(light, dark).convert("RGB").save(bg)
+    ic = f"{work}/{app}-card-icon.png"
+    icon(app, 300).save(ic)
+    layers = [
+        (ic, W // 2, 380, 0.15, True),
+        (text_png(name, font(120, 800), (255, 255, 255, 255), f"{work}/{app}-card-name.png"), W // 2, 645, 0.55, False),
+        (text_png(summary(app), font(46, 500), (255, 255, 255, 225), f"{work}/{app}-card-sum.png"), W // 2, 765, 0.85, False),
+    ]
+    return animated_card(bg, layers, seconds, out)
+
+
+def suite_clip(seconds, out, work):
+    """The suite's card: the three icons in turn, then the words."""
+    bg = f"{work}/suite-card-bg.png"
+    gradient("#3d3846", "#241f31").convert("RGB").save(bg)
+    layers = []
+    for i, app in enumerate(APPS):
+        ic = f"{work}/{app}-suite-icon.png"
+        icon(app, 200).save(ic)
+        layers.append((ic, W // 2 + (i - 1) * 240, 340, 0.1 + 0.2 * i, True))
+    lines = [
+        ("GTK Office Suite", font(96, 800), 255, 565, 0.75),
+        ("A word processor, a spreadsheet and a presentation app for GNOME", font(44, 500), 220, 680, 1.0),
+        ("Letters · Tables · Decks  —  built with GTK 4 and libadwaita", font(36, 400), 170, 790, 1.25),
+        ("github.com/tuna-os/gtk-office-suite  ·  Pre-alpha", font(32, 400), 140, 850, 1.45),
+    ]
+    for j, (text, f, alpha, cy, start) in enumerate(lines):
+        layers.append((text_png(text, f, (255, 255, 255, alpha), f"{work}/suite-line{j}.png"), W // 2, cy, start, False))
+    return animated_card(bg, layers, seconds, out)
 
 
 def join(clips, out):
@@ -345,11 +390,14 @@ def main():
     os.makedirs(out, exist_ok=True)
     work = tempfile.mkdtemp(prefix="overview-")
     ft.OUT = work
+    outro = (f"{work}/outro.mp4", suite_clip(4.5, f"{work}/outro.mp4", work))
     rendered = {}
     for app in APPS:
         if app not in wanted and "suite" not in wanted:
             continue
         stops = [s for s in ft.STOPS if s[0] == app]
+        if app not in wanted:
+            stops = [s for s in stops if s[1] in TRAILER[app]]
         raw = f"{work}/{app}-raw.mkv"
         rec = Recorder(raw)
         try:
@@ -361,23 +409,17 @@ def main():
             clip = f"{work}/{seg[0]}.mp4"
             clips.append((clip, render_segment(app, raw, seg, clip, work)))
         rendered[app] = {seg[0]: c for seg, c in zip(segments, clips)}
+        title = (f"{work}/{app}-title.mp4", title_clip(app, 3.5, f"{work}/{app}-title.mp4", work))
+        rendered[app]["title"] = title
         if app in wanted:
-            card = f"{work}/{app}-title.png"
-            title_card(app, card)
-            outro = f"{work}/outro.png"
-            suite_card(outro, "GTK Office Suite", "A word processor, a spreadsheet and a presentation app for GNOME")
-            join([(f"{work}/{app}-title.mp4", still(card, 3.5, f"{work}/{app}-title.mp4")), *clips,
-                  (f"{work}/{app}-outro.mp4", still(outro, 4.0, f"{work}/{app}-outro.mp4"))],
-                 f"{out}/{app}.mp4")
+            join([title, *clips, outro], f"{out}/{app}.mp4")
     if "suite" in wanted:
-        intro = f"{work}/suite-intro.png"
-        suite_card(intro, "GTK Office Suite", "A word processor, a spreadsheet and a presentation app for GNOME")
-        clips = [(f"{work}/suite-intro.mp4", still(intro, 4.0, f"{work}/suite-intro.mp4"))]
+        clips = [outro]
         for app, names in TRAILER.items():
-            card = f"{work}/{app}-title.png"
-            title_card(app, card)
-            clips.append((f"{work}/{app}-t2.mp4", still(card, 2.5, f"{work}/{app}-t2.mp4")))
+            short = (f"{work}/{app}-t2.mp4", title_clip(app, 2.6, f"{work}/{app}-t2.mp4", work))
+            clips.append(short)
             clips += [rendered[app][n] for n in names if n in rendered.get(app, {})]
+        clips.append(outro)
         join(clips, f"{out}/gtk-office-suite.mp4")
 
 
