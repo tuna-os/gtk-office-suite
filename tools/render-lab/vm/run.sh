@@ -2,7 +2,10 @@
 # Tier C: open every fixture in the *shipped* Flatpak inside a real GNOME
 # Wayland session and capture what reached the screen.
 #
-#   tools/render-lab/vm/run.sh <workdir> <bundles-dir> <fixtures-dir> <out-dir>
+#   tools/render-lab/vm/run.sh <workdir> <bundles-dir> <fixtures-dir> <out-dir> [<prior-bundles-dir>]
+#
+# With a prior-bundles directory (the last release's bundles), it ends by
+# upgrading from that release to these bundles (vm/upgrade.sh, #1209).
 #
 # Per fixture it stores:
 #   C-<n>.png       the app's own render dump, produced inside the Flatpak
@@ -15,6 +18,7 @@ set -euo pipefail
 # first Tier C run to boot the guest failed on `scp: stat local
 # "bundles/*.flatpak"` (#1199).
 WORK="$1"; BUNDLES="$(realpath "$2")"; FIX="$(realpath "$3")"; OUT="$(realpath "$4")"
+PRIOR="${5:+$(realpath "$5")}"
 HERE="$(dirname "$(realpath "$0")")"
 cd "$WORK"
 # -n: ssh must not read stdin. The fixture loop below is a `while read`
@@ -88,3 +92,30 @@ print(next((f["file"] for f in json.load(open(sys.argv[1])) if f["app"] == sys.a
     "${SCP[@]}" "lab@127.0.0.1:lab/installed/$app-open.log" "$OUT/installed-$app.log" 2>/dev/null || true
 done
 cat "$OUT/installed.json"
+
+# Upgrading from the prior release (#1209), last: it starts each app from
+# a clean slate and leaves it in dark style, which no check above expects.
+# upgrade.json is what upgrade_check.py judges.
+if [ -n "$PRIOR" ] && ls "$PRIOR"/*.flatpak >/dev/null 2>&1; then
+    "${SSH[@]}" 'mkdir -p ~/lab/prior'
+    "${SCP[@]}" "$PRIOR"/*.flatpak lab@127.0.0.1:lab/prior/
+    "${SCP[@]}" "$HERE/upgrade.sh" lab@127.0.0.1:lab/upgrade.sh
+    : > "$OUT/upgrade.json"
+    # Each app's edit: an action that changes the document without a dialog,
+    # present in the prior release.
+    for spec in "letters docx bullet-list" "tables xlsx hide-selected-rows" "decks pptx add-text-box"; do
+        read -r app ext action <<<"$spec"
+        file="$(python3 -c 'import json, sys
+print(next((f["file"] for f in json.load(open(sys.argv[1])) if f["app"] == sys.argv[2] and f["file"].endswith("." + sys.argv[3])), ""))' "$FIX/manifest.json" "$app" "$ext")"
+        [ -n "$file" ] || { echo "upgrade: no .$ext fixture for $app" >&2; continue; }
+        "${SSH[@]}" "bash ~/lab/upgrade.sh $app \$HOME/lab/prior/$app.flatpak \$HOME/lab/bundles/$app.flatpak \$HOME/lab/fixtures/$file $action" >>"$OUT/upgrade.json" \
+            || echo "upgrade: $app check did not finish" >&2
+        qmp "$PWD/screen.ppm" >/dev/null
+        python3 -c 'import sys; from PIL import Image; Image.open(sys.argv[1]).save(sys.argv[2])' screen.ppm "$OUT/upgrade-$app.png"
+        "${SSH[@]}" "bash ~/lab/upgrade.sh --close $app" || true
+        for phase in prior candidate; do
+            "${SCP[@]}" "lab@127.0.0.1:/tmp/upgrade-$app-$phase.log" "$OUT/upgrade-$app-$phase.log" 2>/dev/null || true
+        done
+    done
+    cat "$OUT/upgrade.json"
+fi

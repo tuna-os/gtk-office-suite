@@ -444,9 +444,50 @@ jobs:
           path: ${{ matrix.app }}.flatpak
           retention-days: 3
 
+  # The last release's bundles, built from its tag, for the upgrade check
+  # (#1209): a user upgrading keeps their settings and recovery checkpoints.
+  # Releases carry no bundles of their own to download, so they are built
+  # here; the cache is keyed on the tag, so a release is built once.
+  flatpak-prior:
+    name: Prior-release bundle (${{ matrix.app }})
+    if: github.event_name == 'schedule' || inputs.vm
+    runs-on: ubuntu-24.04
+    container:
+      image: ghcr.io/flathub-infra/flatpak-github-actions:gnome-50@sha256:1de59efef01a946d9f28f1ec3458bf6f61dcee3507d7fecdd473f8134da4ec77
+      options: --privileged
+    strategy:
+      matrix:
+        app: [letters, tables, decks]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          fetch-depth: 0
+      - id: tag
+        name: The last release's tag
+        run: |
+          git config --global --add safe.directory "$GITHUB_WORKSPACE"
+          tag="$(git tag --list 'v*' --sort=-v:refname | head -1)"
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          git checkout -q "$tag"
+          echo "Prior release: $tag"
+      - uses: flatpak/flatpak-github-actions/flatpak-builder@79327416609af08178ad73b352877e51450790b3 # v6
+        with:
+          bundle: ${{ matrix.app }}.flatpak
+          manifest-path: flatpak/org.tunaos.${{ matrix.app }}.json
+          cache-key: render-lab-flatpak-prior-${{ matrix.app }}-${{ steps.tag.outputs.tag }}
+          upload-artifact: false
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: prior-bundle-${{ matrix.app }}
+          path: ${{ matrix.app }}.flatpak
+          retention-days: 3
+
   vm:
     name: Tier C (Flatpak in a GNOME VM)
-    needs: flatpak
+    needs: [flatpak, flatpak-prior]
+    # A prior release that fails to build leaves the upgrade check
+    # unreported (and failing), not the rest of Tier C unrun.
+    if: ${{ !cancelled() && needs.flatpak.result == 'success' }}
     runs-on: ubuntu-24.04
     timeout-minutes: 120
     # Not gating yet: Tier C has not had a green run. Remove this line once
@@ -466,6 +507,15 @@ jobs:
         with:
           pattern: bundle-*
           path: bundles
+          merge-multiple: true
+
+      # Not fatal when missing: the upgrade check then reports every app
+      # unchecked, and the rest of Tier C still runs.
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        continue-on-error: true
+        with:
+          pattern: prior-bundle-*
+          path: prior-bundles
           merge-multiple: true
 
       - name: Cache prepared guest image
@@ -489,7 +539,7 @@ jobs:
           sudo chown -R "$(id -u):$(id -g)" render-lab-out
 
       - name: Capture in the VM
-        run: tools/render-lab/vm/run.sh vm-work bundles render-lab-out/fixtures render-lab-out
+        run: tools/render-lab/vm/run.sh vm-work bundles render-lab-out/fixtures render-lab-out prior-bundles
 
       - name: Compare
         run: |
@@ -505,6 +555,14 @@ jobs:
           set -o pipefail
           python3 tools/render-lab/installed_check.py render-lab-out/installed.json | tee -a "$GITHUB_STEP_SUMMARY"
 
+      # Upgrading from the last release (#1209): its settings and an
+      # interrupted recovery checkpoint carried over to the candidate.
+      - name: Upgrade checks
+        if: always()
+        run: |
+          set -o pipefail
+          python3 tools/render-lab/upgrade_check.py render-lab-out/upgrade.json | tee -a "$GITHUB_STEP_SUMMARY"
+
       - name: Upload VM report
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
@@ -516,5 +574,6 @@ jobs:
             render-lab-out/*/*/*.png
             render-lab-out/*/*/*.log
             render-lab-out/installed*
+            render-lab-out/upgrade*
             vm-work/*.log
           retention-days: 14
