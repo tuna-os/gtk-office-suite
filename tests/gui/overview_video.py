@@ -181,8 +181,11 @@ def window_frame(w, h, mask_path, shadow_path, radius=14):
 # ── Recording ────────────────────────────────────────────────────────
 
 class Recorder:
-    """ffmpeg grabbing the whole X display, with the clock of its first
-    frame, so tour events can be placed on the recording."""
+    """ffmpeg grabbing the whole X display. x11grab stamps each frame with
+    the wall clock and -copyts keeps those stamps, so the recording's start
+    time is the moment of its first frame: tour events, timed on the same
+    clock, are placed on it exactly. (Waiting for the file to have data
+    is no measure: the encoder lags capture by seconds at this size.)"""
 
     def __init__(self, path):
         self.path = path
@@ -191,17 +194,22 @@ class Recorder:
         self.size = (int(m.group(1)), int(m.group(2)))
         self.proc = subprocess.Popen(
             ["ffmpeg", "-loglevel", "error", "-y", "-f", "x11grab", "-framerate", str(FPS),
-             "-video_size", f"{self.size[0]}x{self.size[1]}", "-i", os.environ["DISPLAY"],
+             "-video_size", f"{self.size[0]}x{self.size[1]}", "-i", os.environ["DISPLAY"], "-copyts",
              "-c:v", "libx264", "-preset", "ultrafast", "-crf", "14", "-pix_fmt", "yuv420p", path],
             stdin=subprocess.PIPE)
-        # The first frame's moment: the file has data once ffmpeg is grabbing.
-        end = time.monotonic() + 10
-        while time.monotonic() < end and (not os.path.exists(path) or os.path.getsize(path) < 1024):
-            time.sleep(0.05)
-        self.t0 = time.monotonic() - 0.2
+        self.t0 = None
+        time.sleep(1)
 
     def stop(self):
-        self.proc.communicate(b"q", timeout=60)
+        self.proc.communicate(b"q", timeout=120)
+        out = subprocess.run(["ffprobe", "-v", "error", "-show_entries", "format=start_time", "-of", "csv=p=0",
+                              self.path], capture_output=True, text=True).stdout
+        self.t0 = float(out)
+
+    def place(self, segments):
+        """Segments timed on the wall clock, as times into the recording."""
+        return [(name, caption, max(0.0, start - self.t0), end - self.t0, box)
+                for name, caption, start, end, box in segments]
 
 
 def wait_for_paint(timeout=15.0):
@@ -221,8 +229,8 @@ def wait_for_paint(timeout=15.0):
 
 def tour(app, stops, rec):
     """Run `app`'s stops, returning one segment per feature that reached
-    the screen: (name, caption, start, end, crop box), times relative to
-    the recording."""
+    the screen: (name, caption, start, end, crop box), times on the wall
+    clock (Recorder.place puts them on the recording)."""
     marks = {}
     original_init = ft.App.__init__
 
@@ -232,7 +240,7 @@ def tour(app, stops, rec):
         # compositor) until GTK's first frame lands, which at 2x can take
         # a few seconds. The window counts as ready once it has content.
         wait_for_paint()
-        marks["ready"] = time.monotonic()
+        marks["ready"] = time.time()
 
     def shot(name):
         import mss
@@ -242,7 +250,7 @@ def tour(app, stops, rec):
         img = Image.frombytes("RGB", raw.size, raw.rgb)
         root = Image.new("RGB", img.size, img.getpixel((img.width - 1, img.height - 1)))
         box = ImageChops.difference(img, root).convert("L").point(lambda v: 255 if v > 8 else 0).getbbox()
-        now = time.monotonic()
+        now = time.time()
         marks["shot"] = (now, box)
         # A feature that came up quickly is held longer, so no segment is
         # over before it can be read.
@@ -266,9 +274,9 @@ def tour(app, stops, rec):
             if "shot" not in marks or not marks["shot"][1]:
                 continue
             t_shot, box = marks["shot"]
-            start = max(marks.get("ready", t_shot - LEAD) + SETTLE, t_shot - LEAD) - rec.t0
-            end = max(t_shot + HOLD, marks.get("ready", t_shot) + SETTLE + MIN_SEGMENT) - 0.3 - rec.t0
-            segments.append((name, caption, max(0.0, start), end, box))
+            start = max(marks.get("ready", t_shot - LEAD) + SETTLE, t_shot - LEAD)
+            end = max(t_shot + HOLD, marks.get("ready", t_shot) + SETTLE + MIN_SEGMENT) - 0.3
+            segments.append((name, caption, start, end, box))
     finally:
         ft.App.__init__ = original_init
     return segments
@@ -439,7 +447,7 @@ def main():
         finally:
             rec.stop()
         clips = []
-        for seg in segments:
+        for seg in rec.place(segments):
             clip = f"{work}/{seg[0]}.mp4"
             clips.append((clip, render_segment(app, raw, seg, clip, work)))
         rendered[app] = {seg[0]: c for seg, c in zip(segments, clips)}
