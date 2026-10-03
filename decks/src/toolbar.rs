@@ -19,10 +19,10 @@ pub fn find_toolbar_child(toolbar: &gtk::Box, icon: &str) -> Option<gtk::Button>
 
 /// Build the Decks editing toolbar with formatting and present buttons.
 pub fn build_decks_toolbar() -> gtk::Box {
+    // libadwaita's toolbar style pads the bar on every side; with only
+    // side margins its buttons sat flush against the header bar.
     let toolbar = gtk::Box::new(gtk::Orientation::Horizontal, 6);
-    toolbar.set_margin_start(6);
-    toolbar.set_margin_end(6);
-    toolbar.set_halign(gtk::Align::Start);
+    toolbar.add_css_class("toolbar");
 
     let bold = gtk::ToggleButton::builder()
         .icon_name("format-text-bold-symbolic").tooltip_text("Bold").build();

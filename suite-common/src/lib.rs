@@ -23,6 +23,8 @@ pub mod file_drop;
 pub use file_drop::open_files_on_drop;
 pub mod popover;
 pub mod window_actions;
+pub mod icons;
+pub mod page_setup;
 pub use suite_common_core::{actions, palette, format, undo, events, string_pool, units, props, style, search, print, atomic_save, autosave, interop, carry, recent, templates, session};
 
 pub use file_dialogs::FileDialogHelper;
@@ -87,6 +89,13 @@ impl SuiteApp {
             .flags(gio::ApplicationFlags::HANDLES_OPEN)
             .build();
 
+        // The suite's own icons, before any window asks for one.
+        app.connect_startup(|_| {
+            if let Some(display) = gtk::gdk::Display::default() {
+                icons::install(&display);
+            }
+        });
+
         // ---- Register actions (using closure captures) ----
         let act_new = gio::SimpleAction::new("new", None);
         let app_weak = app.downgrade();
@@ -134,8 +143,11 @@ impl SuiteApp {
         app.add_action(&act_prefs);
 
         let act_about = gio::SimpleAction::new("about", None);
+        let app_weak = app.downgrade();
         act_about.connect_activate(move |_, _| {
-            show_about_dialog();
+            if let Some(app) = app_weak.upgrade() {
+                show_about_dialog(&app);
+            }
         });
         app.add_action(&act_about);
 
@@ -424,17 +436,57 @@ pub fn clear_recent_files(settings: &gio::Settings) {
     let _ = settings.set_strv("recent-files", empty.as_slice());
 }
 
-/// Show a generic about dialog (apps override with their own metadata).
-fn show_about_dialog() {
+/// Each app's AppStream metainfo, the one source of its name, summary,
+/// developer and release history: the About dialog shows what the software
+/// centre shows.
+const METAINFO: [(&str, &str); 3] = [
+    ("org.tunaos.letters", include_str!("../../flatpak/org.tunaos.letters.metainfo.xml")),
+    ("org.tunaos.tables", include_str!("../../flatpak/org.tunaos.tables.metainfo.xml")),
+    ("org.tunaos.decks", include_str!("../../flatpak/org.tunaos.decks.metainfo.xml")),
+];
+
+/// What the About dialog of `app_id` shows.
+#[derive(Debug, PartialEq)]
+pub(crate) struct AboutInfo {
+    pub name: String,
+    pub summary: String,
+    pub developer: String,
+    pub version: String,
+}
+
+/// The About details of `app_id`, from its metainfo: its own name and its
+/// latest release. It used to show the suite's name and a hard-coded
+/// "0.1.0" in every app, with no app icon.
+pub(crate) fn about_info(app_id: &str) -> Option<AboutInfo> {
+    let xml = METAINFO.iter().find(|(id, _)| *id == app_id)?.1;
+    let between = |open: &str, close: &str| -> Option<String> {
+        let start = xml.find(open)? + open.len();
+        let end = start + xml[start..].find(close)?;
+        Some(xml[start..end].trim().to_string())
+    };
+    Some(AboutInfo {
+        name: between("<name>", "</name>")?,
+        summary: between("<summary>", "</summary>")?,
+        developer: between("<developer_name>", "</developer_name>")?,
+        version: between("<release version=\"", "\"")?,
+    })
+}
+
+/// Show the About dialog of the app, over its active window.
+fn show_about_dialog(app: &adw::Application) {
+    let id = app.application_id().map(|s| s.to_string()).unwrap_or_default();
     let about = adw::AboutDialog::new();
-    about.set_application_name(&i18n("Hanthor Office"));
-    about.set_version("0.1.0");
-    about.set_developer_name(&i18n("Hanthor Contributors"));
+    if let Some(info) = about_info(&id) {
+        about.set_application_name(&info.name);
+        about.set_version(&info.version);
+        about.set_developer_name(&info.developer);
+        about.set_comments(&info.summary);
+    }
+    about.set_application_icon(&id);
     about.set_license_type(gtk::License::Gpl30);
-    about.set_comments(&i18n("A GNOME-native office suite written in Rust."));
     about.set_website("https://github.com/tuna-os/gtk-office-suite");
     about.set_issue_url("https://github.com/tuna-os/gtk-office-suite/issues");
-    about.present(gtk::Window::NONE);
+    about.present(app.active_window().as_ref());
 }
 
 // ---------------------------------------------------------------------------
@@ -517,9 +569,11 @@ fn menu_label(action: &str, tooltip: &str) -> String {
 impl SuiteToolbar {
     /// Build a responsive toolbar from action-named items.
     pub fn new(primary: Vec<ToolbarItem>, extended: Vec<ToolbarItem>) -> Self {
+        // libadwaita's toolbar style pads the bar on every side and flattens
+        // its buttons. Without it the buttons sat flush against the header
+        // bar above and the page below, with only side margins.
         let container = gtk::Box::new(gtk::Orientation::Horizontal, 6);
-        container.set_margin_start(6);
-        container.set_margin_end(6);
+        container.add_css_class("toolbar");
 
         if primary.is_empty() && extended.is_empty() {
             container.set_visible(false);
@@ -636,7 +690,7 @@ impl SuiteWindow {
             .build();
 
         // ---- Header bar ----
-        let header_bar = make_header_bar();
+        let header_bar = make_header_bar(title);
 
         // ---- Toolbar ----
         let toolbar = SuiteToolbar::new(primary_toolbar, extended_toolbar);
@@ -739,8 +793,9 @@ pub fn bind_window_geometry(window: &adw::ApplicationWindow, settings: &gio::Set
 /// Build a standard GNOME header bar:
 ///   [start] New Document button
 ///   [center] Window title (implicit via AdwApplicationWindow)
-///   [end]   Style toggle, Menu button (Preferences, Keyboard Shortcuts, About)
-pub fn make_header_bar() -> adw::HeaderBar {
+///   [end]   the primary menu (document commands, Preferences, Keyboard
+///           Shortcuts, Help, About <app>)
+pub fn make_header_bar(app_name: &str) -> adw::HeaderBar {
     // ---- Start: New Document ----
     let new_btn = gtk::Button::builder()
         .icon_name("document-new-symbolic")
@@ -761,22 +816,25 @@ pub fn make_header_bar() -> adw::HeaderBar {
     file_section.append(Some(&i18n("Page set_up\u{2026}")), Some("app.page-setup"));
     file_section.append(Some(&i18n("Print pre_view\u{2026}")), Some("app.print-preview"));
     file_section.append(Some(&i18n("_Print\u{2026}")), Some("app.print"));
-    menu.append_section(Some(&i18n("File")), &file_section);
+    // GNOME primary menus group items in unlabelled sections.
+    menu.append_section(None, &file_section);
 
     let edit_section = gio::Menu::new();
     edit_section.append(Some(&i18n("_Preferences")), Some("app.preferences"));
-    menu.append_section(Some(&i18n("Edit")), &edit_section);
+    menu.append_section(None, &edit_section);
 
     let help_section = gio::Menu::new();
     help_section.append(Some(&i18n("_Help")), Some("app.help"));
     help_section.append(Some(&i18n("_Keyboard shortcuts")), Some("app.shortcuts"));
-    help_section.append(Some(&i18n("_About")), Some("app.about"));
-    menu.append_section(Some(&i18n("Help")), &help_section);
+    help_section.append(Some(&i18n("_About %s").replace("%s", app_name)), Some("app.about"));
+    menu.append_section(None, &help_section);
 
+    // Primary: F10 opens it, as in every GNOME app.
     let menu_btn = gtk::MenuButton::builder()
         .icon_name("open-menu-symbolic")
         .menu_model(&menu)
-        .tooltip_text(i18n("Menu"))
+        .tooltip_text(i18n("Main Menu"))
+        .primary(true)
         .build();
 
     let hb = adw::HeaderBar::new();

@@ -58,3 +58,29 @@ pub fn confirm_discarding(parent: &adw::ApplicationWindow, dirty: bool, kind: &s
         }
     });
 }
+
+/// Give `dialog` the libadwaita form layout: a header bar with its title,
+/// Cancel at the start and `action` (the dialog's one action, such as
+/// "Apply") at the end, above `content`.
+///
+/// Tables' form dialogs set a bare grid as their whole child: no header
+/// bar, so no title on screen and no Cancel, only a full-width button at
+/// the bottom of the form.
+pub fn form_dialog(dialog: &adw::Dialog, content: &impl IsA<gtk::Widget>, action: &gtk::Button) {
+    action.add_css_class("suggested-action");
+    let cancel = gtk::Button::with_mnemonic(&i18n("_Cancel"));
+    {
+        let d = dialog.clone();
+        cancel.connect_clicked(move |_| {
+            d.close();
+        });
+    }
+    let header = adw::HeaderBar::builder().show_start_title_buttons(false).show_end_title_buttons(false).build();
+    header.pack_start(&cancel);
+    header.pack_end(action);
+    let view = adw::ToolbarView::new();
+    view.add_top_bar(&header);
+    view.set_content(Some(content));
+    dialog.set_child(Some(&view));
+    dialog.set_default_widget(Some(action));
+}

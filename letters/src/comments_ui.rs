@@ -236,7 +236,7 @@ pub fn comments_view(tv: &adw::TabView) -> gtk::Widget {
     let none = adw::StatusPage::builder()
         .title("No Comments")
         .description("Select some text and add a comment (Ctrl+Alt+M).")
-        .icon_name("chat-bubble-text-symbolic")
+        .icon_name("office-comment-symbolic")
         .build();
     none.add_css_class("compact");
     let stack = gtk::Stack::new();

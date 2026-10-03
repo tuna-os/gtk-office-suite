@@ -115,8 +115,11 @@ pub fn build(tv: &adw::TabView) -> gtk::MenuButton {
     let label = gtk::Label::new(Some("Normal"));
     label.set_width_chars(9);
     label.set_xalign(0.0);
+    // The arrow says it opens a list: with a label child GTK hides it, and
+    // the picker read as a plain "Normal" button.
     let button = gtk::MenuButton::builder()
         .child(&label)
+        .always_show_arrow(true)
         .tooltip_text(suite_common::i18n("Paragraph style"))
         .build();
     button.update_property(&[gtk::accessible::Property::Label(&suite_common::i18n("Paragraph style"))]);

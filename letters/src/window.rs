@@ -143,7 +143,7 @@ impl LettersWindow {
 
         let extended_toolbar: Vec<suite_common::ToolbarItem> = vec![
             ("format-text-strikethrough-symbolic", "Strikethrough", "app.strikethrough"),
-            ("color-select-symbolic", "Highlight", "app.highlight"),
+            ("office-highlight-symbolic", "Highlight", "app.highlight"),
             ("view-list-bullet-symbolic", "Bullet list (Ctrl+Shift+8)", "app.bullet-list"),
             ("view-list-ordered-symbolic", "Numbered list (Ctrl+Shift+7)", "app.numbered-list"),
             ("format-justify-left-symbolic", "Align left (Ctrl+L)", "app.align-left"),
@@ -151,8 +151,8 @@ impl LettersWindow {
             ("format-justify-right-symbolic", "Align right (Ctrl+R)", "app.align-right"),
             ("format-justify-fill-symbolic", "Justify (Ctrl+J)", "app.align-justify"),
             ("insert-link-symbolic", "Insert link (Ctrl+Shift+K)", "app.insertlink"),
-            ("view-continuous-symbolic", "Line spacing", "app.cycle-line-spacing"),
-            ("view-dual-symbolic", "Column layout", "app.cycle-columns"),
+            ("office-line-spacing-symbolic", "Line spacing", "app.cycle-line-spacing"),
+            ("office-columns-symbolic", "Column layout", "app.cycle-columns"),
         ];
 
         let suite_win = suite_common::SuiteWindow::new(app, "Letters", primary_toolbar, extended_toolbar);
@@ -164,9 +164,14 @@ impl LettersWindow {
                 tb.set_visible(s.boolean("show-toolbar"));
             });
         }
-        // HIG: tab bar lives inside the header bar, not as a separate
-        // stacked bar (fixes #73).
-        suite_win.header_bar.set_title_widget(Some(&tab_bar));
+        // The header bar shows the document's title, as Tables and Decks
+        // do; the tab bar sits under it and appears once a second document
+        // is open (GNOME Text Editor's layout). It used to be the header
+        // bar's title widget, and a tab bar with one tab hides itself, so
+        // a lone document's name was shown nowhere.
+        suite_win.toolbar_view.remove(&suite_win.toolbar.container);
+        suite_win.add_top_bar(&tab_bar);
+        suite_win.add_top_bar(&suite_win.toolbar.container);
         // Content is set below, after wrapping toast_overlay in the find/replace
         // gtk::Overlay — setting it here would give toast_overlay a parent and
         // make the later Overlay::set_child fail, orphaning the whole editor UI.
@@ -424,19 +429,25 @@ impl LettersWindow {
                 let current = crate::live::of(&buf)
                     .and_then(|m| m.borrow_mut().document(&buf).page)
                     .unwrap_or_else(|| crate::doc_tab::layout_options(&pc).page);
-                let dialog = gtk::PageSetupUnixDialog::new(Some("Page Setup"), Some(&w));
-                dialog.set_page_setup(&crate::dialogs::page_setup_of(&current));
-                // GtkPageSetupUnixDialog predates GTK4's FileDialog-style async
-                // dialogs and has no non-deprecated replacement for its
-                // response signal; `.present()` below is the real 4.10 fix.
-                #[allow(deprecated)]
-                dialog.connect_response(move |dlg, response| {
-                    if response == gtk::ResponseType::Ok {
-                        crate::dialogs::apply_page_geometry(&buf, crate::dialogs::geometry_of(&dlg.page_setup()));
-                    }
-                    dlg.close();
+                let page = suite_common::page_setup::Page {
+                    width_pt: current.width_pt,
+                    height_pt: current.height_pt,
+                    margin_top_pt: current.margin_top_pt,
+                    margin_bottom_pt: current.margin_bottom_pt,
+                    margin_left_pt: current.margin_left_pt,
+                    margin_right_pt: current.margin_right_pt,
+                };
+                suite_common::page_setup::show(&w, page, move |p| {
+                    crate::dialogs::apply_page_geometry(&buf, letters_core::model::PageGeometry {
+                        width_pt: p.width_pt,
+                        height_pt: p.height_pt,
+                        margin_top_pt: p.margin_top_pt,
+                        margin_bottom_pt: p.margin_bottom_pt,
+                        margin_left_pt: p.margin_left_pt,
+                        margin_right_pt: p.margin_right_pt,
+                        ..Default::default()
+                    });
                 });
-                dialog.present();
             });
             app.add_action(&a);
             app.set_accels_for_action("app.page-setup", &["<Primary><Shift>l"]);

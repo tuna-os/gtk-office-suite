@@ -277,7 +277,7 @@ pub fn build(
     let stack = adw::ViewStack::new();
     let style_tab = stack.add_titled_with_icon(&style_page, Some("style"), "Style", "applications-graphics-symbolic");
     let text_tab = stack.add_titled_with_icon(&text_page, Some("text"), "Text", "format-text-rich-symbolic");
-    let chart_tab = stack.add_titled_with_icon(&chart.page, Some("chart"), "Chart", "x-office-spreadsheet-symbolic");
+    let chart_tab = stack.add_titled_with_icon(&chart.page, Some("chart"), "Chart", "office-chart-symbolic");
     stack.add_titled_with_icon(&arrange_page, Some("arrange"), "Arrange", "object-select-symbolic");
     stack.add_titled_with_icon(&animate_page, Some("animate"), "Animate", "media-playback-start-symbolic");
     let switcher = adw::ViewSwitcher::builder().stack(&stack).policy(adw::ViewSwitcherPolicy::Wide).build();

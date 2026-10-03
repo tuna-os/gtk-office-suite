@@ -60,28 +60,29 @@ pub(crate) fn show_format_cells_dialog(
     grid.set_margin_end(12);
     grid.set_margin_top(12);
     grid.set_margin_bottom(12);
-    let mut row = 0;
-    for (label, widget) in [
+    for (row, (label, widget)) in [
         (&suite_common::i18n("Format"), dropdown.clone().upcast::<gtk4::Widget>()),
         (&suite_common::i18n("Decimals"), decimals.clone().upcast()),
         (&suite_common::i18n("Symbol"), symbol.clone().upcast()),
-    ] {
+    ]
+    .into_iter()
+    .zip(0..)
+    .map(|(item, row)| (row, item))
+    {
         let l = gtk4::Label::new(Some(label));
         l.add_css_class("dim-label");
         l.set_halign(gtk4::Align::Start);
         grid.attach(&l, 0, row, 1, 1);
         grid.attach(&widget, 1, row, 1, 1);
-        row += 1;
     }
     let apply = gtk4::Button::with_label("Apply");
     apply.add_css_class("suggested-action");
-    grid.attach(&apply, 1, row, 1, 1);
 
     let dialog = adw::Dialog::builder()
         .title("Format Cells")
         .content_width(320)
         .build();
-    dialog.set_child(Some(&grid));
+    suite_common::dialogs::form_dialog(&dialog, &grid, &apply);
 
     {
         let ctl = controller.clone();
@@ -163,7 +164,6 @@ pub(crate) fn show_conditional_format_dialog(
 
     let apply = gtk::Button::with_label(&suite_common::i18n("Apply to Selection"));
     apply.add_css_class("suggested-action");
-    grid.attach(&apply, 1, 4, 1, 1);
 
     {
         let ctl = controller.clone();
@@ -204,7 +204,7 @@ pub(crate) fn show_conditional_format_dialog(
         });
     }
 
-    dialog.set_child(Some(&grid));
+    suite_common::dialogs::form_dialog(&dialog, &grid, &apply);
     dialog.present(parent);
 }
 
@@ -247,7 +247,6 @@ pub(crate) fn show_define_name_dialog(
 
     let apply = gtk::Button::with_label(&suite_common::i18n("Define"));
     apply.add_css_class("suggested-action");
-    grid.attach(&apply, 1, 2, 1, 1);
 
     {
         let ctl = controller.clone();
@@ -263,95 +262,66 @@ pub(crate) fn show_define_name_dialog(
         });
     }
 
-    dialog.set_child(Some(&grid));
+    suite_common::dialogs::form_dialog(&dialog, &grid, &apply);
     dialog.present(parent);
 }
 
-/// Page setup for PDF export (#113): paper size, orientation, and a
-/// single uniform margin (real apps allow per-side margins; this keeps
-/// the dialog to one control per concern for a first slice).
+/// Page setup for PDF export (#113): the suite's Page Setup dialog, the one
+/// Letters uses, with a margin for each side. It used to be a bare grid in
+/// a dialog with no title and no Cancel, and one margin for all four sides.
 pub(crate) fn show_page_setup_dialog(
     controller: &Rc<RefCell<WorkbookController>>,
     parent: Option<&adw::ApplicationWindow>,
 ) {
-    use suite_common::print::{Orientation, PageSetup, PageSize};
-
+    let Some(parent) = parent else { return };
     let current = controller.borrow().state.borrow().sheet().page_setup.clone();
+    let ctl = controller.clone();
+    suite_common::page_setup::show(parent, page_of(&current), move |page| {
+        ctl.borrow_mut().set_page_setup(setup_of(&page, current.scale));
+    });
+}
 
-    let dialog = adw::Dialog::builder()
-        .title(suite_common::i18n("Page Setup"))
-        .content_width(320)
-        .build();
+const PT_PER_MM: f64 = 72.0 / 25.4;
 
-    let grid = gtk4::Grid::new();
-    grid.set_row_spacing(8);
-    grid.set_column_spacing(12);
-    grid.set_margin_top(12);
-    grid.set_margin_bottom(12);
-    grid.set_margin_start(12);
-    grid.set_margin_end(12);
-    let lbl = |t: &str| {
-        let l = gtk::Label::new(Some(t));
-        l.set_halign(gtk::Align::Start);
-        l
-    };
-
-    let size_names = ["A4", "A3", "Letter", "Legal"];
-    let size_combo = gtk::DropDown::from_strings(&size_names);
-    let size_index = match current.size {
-        PageSize::A4 => 0,
-        PageSize::A3 => 1,
-        PageSize::Letter => 2,
-        PageSize::Legal => 3,
-        PageSize::Custom { .. } => 0,
-    };
-    size_combo.set_selected(size_index);
-
-    let orientation_combo = gtk::DropDown::from_strings(&["Portrait", "Landscape"]);
-    orientation_combo.set_selected(if current.orientation == Orientation::Landscape { 1 } else { 0 });
-
-    let margin_entry = gtk::Entry::builder().text(current.margin_top_mm.to_string()).build();
-    margin_entry.update_property(&[gtk4::accessible::Property::Label("Margin (mm)")]);
-
-    grid.attach(&lbl("Paper size"), 0, 0, 1, 1);
-    grid.attach(&size_combo, 1, 0, 1, 1);
-    grid.attach(&lbl("Orientation"), 0, 1, 1, 1);
-    grid.attach(&orientation_combo, 1, 1, 1, 1);
-    grid.attach(&lbl("Margin (mm)"), 0, 2, 1, 1);
-    grid.attach(&margin_entry, 1, 2, 1, 1);
-
-    let apply = gtk::Button::with_label(&suite_common::i18n("Apply"));
-    apply.add_css_class("suggested-action");
-    grid.attach(&apply, 1, 3, 1, 1);
-
-    {
-        let ctl = controller.clone();
-        let dlg = dialog.clone();
-        apply.connect_clicked(move |_| {
-            let size = match size_combo.selected() {
-                1 => PageSize::A3,
-                2 => PageSize::Letter,
-                3 => PageSize::Legal,
-                _ => PageSize::A4,
-            };
-            let orientation =
-                if orientation_combo.selected() == 1 { Orientation::Landscape } else { Orientation::Portrait };
-            let margin = margin_entry.text().trim().parse::<f64>().unwrap_or(25.4).max(0.0);
-            ctl.borrow_mut().set_page_setup(PageSetup {
-                size,
-                orientation,
-                margin_top_mm: margin,
-                margin_bottom_mm: margin,
-                margin_left_mm: margin,
-                margin_right_mm: margin,
-                scale: 1.0,
-            });
-            dlg.close();
-        });
+/// A sheet's page setup as the dialog's page, in points.
+fn page_of(setup: &suite_common::print::PageSetup) -> suite_common::page_setup::Page {
+    use suite_common::print::Orientation;
+    let (w, h) = setup.size.dimensions_mm();
+    let (w, h) = if setup.orientation == Orientation::Landscape { (h, w) } else { (w, h) };
+    suite_common::page_setup::Page {
+        width_pt: w * PT_PER_MM,
+        height_pt: h * PT_PER_MM,
+        margin_top_pt: setup.margin_top_mm * PT_PER_MM,
+        margin_bottom_pt: setup.margin_bottom_mm * PT_PER_MM,
+        margin_left_pt: setup.margin_left_mm * PT_PER_MM,
+        margin_right_pt: setup.margin_right_mm * PT_PER_MM,
     }
+}
 
-    dialog.set_child(Some(&grid));
-    dialog.present(parent);
+/// The dialog's page as a sheet's page setup: a named size when it is one,
+/// turned for its orientation.
+fn setup_of(page: &suite_common::page_setup::Page, scale: f64) -> suite_common::print::PageSetup {
+    use suite_common::print::{Orientation, PageSetup, PageSize};
+    let landscape = page.width_pt > page.height_pt;
+    let (short, long) = if landscape { (page.height_pt, page.width_pt) } else { (page.width_pt, page.height_pt) };
+    let (short, long) = (short / PT_PER_MM, long / PT_PER_MM);
+    let size = [PageSize::A4, PageSize::A3, PageSize::Letter, PageSize::Legal]
+        .into_iter()
+        .find(|s| {
+            let (w, h) = s.dimensions_mm();
+            (w - short).abs() < 1.0 && (h - long).abs() < 1.0
+        })
+        .unwrap_or(PageSize::Custom { width_mm: (short * 10.0).round() / 10.0, height_mm: (long * 10.0).round() / 10.0 });
+    let mm = |pt: f64| (pt / PT_PER_MM * 10.0).round() / 10.0;
+    PageSetup {
+        size,
+        orientation: if landscape { Orientation::Landscape } else { Orientation::Portrait },
+        margin_top_mm: mm(page.margin_top_pt),
+        margin_bottom_mm: mm(page.margin_bottom_pt),
+        margin_left_mm: mm(page.margin_left_pt),
+        margin_right_mm: mm(page.margin_right_pt),
+        scale,
+    }
 }
 
 /// Filter rows by a substring match against the currently selected
@@ -391,7 +361,6 @@ pub(crate) fn show_filter_dialog(
 
     let apply = gtk::Button::with_label(&suite_common::i18n("Filter"));
     apply.add_css_class("suggested-action");
-    grid.attach(&apply, 1, 1, 1, 1);
 
     {
         let ctl = controller.clone();
@@ -406,6 +375,25 @@ pub(crate) fn show_filter_dialog(
         });
     }
 
-    dialog.set_child(Some(&grid));
+    suite_common::dialogs::form_dialog(&dialog, &grid, &apply);
     dialog.present(parent);
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use suite_common::print::{Orientation, PageSetup, PageSize};
+
+    /// A sheet's page setup goes through the shared dialog's page and back
+    /// unchanged: named sizes stay named, landscape stays landscape, and
+    /// each side keeps its own margin.
+    #[test]
+    fn a_page_setup_round_trips_through_the_dialogs_page() {
+        for (size, orientation) in [(PageSize::A4, Orientation::Portrait), (PageSize::Letter, Orientation::Landscape), (PageSize::Legal, Orientation::Portrait)] {
+            let setup = PageSetup { size, orientation, margin_top_mm: 20.0, margin_bottom_mm: 15.0, margin_left_mm: 10.0, margin_right_mm: 12.5, scale: 0.9 };
+            assert_eq!(setup_of(&page_of(&setup), 0.9), setup);
+        }
+        let a5 = suite_common::page_setup::Page { width_pt: 419.53, height_pt: 595.28, margin_top_pt: 72.0, margin_bottom_pt: 72.0, margin_left_pt: 72.0, margin_right_pt: 72.0 };
+        assert!(matches!(setup_of(&a5, 1.0).size, PageSize::Custom { .. }), "a size with no name is kept as a custom one");
+    }
 }
