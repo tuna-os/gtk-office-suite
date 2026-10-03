@@ -307,20 +307,22 @@ fn history_undoes_and_redoes_whole_user_actions() {
     assert!(!h.can_redo());
 }
 
-/// A header, footer and footnote list are set by ops whose inverses put
+/// A header, footer, footnote list and page setup are set by ops whose inverses put
 /// back exactly what was there, so they undo like any other edit.
 #[test]
-fn header_footer_and_footnotes_are_ops_that_undo() {
+fn header_footer_footnotes_and_page_are_ops_that_undo() {
     let mut d = Document::from_plain_text("body");
     d.footnotes = vec!["old".into()];
     let before = d.clone();
     let ops = [
         Op::SetHeaderFooter { header: Some("Report".into()), footer: None },
         Op::SetFootnotes { notes: vec!["old".into(), "new".into()] },
+        Op::SetPage { page: Some(crate::model::PageGeometry { width_pt: 612.0, height_pt: 792.0, ..Default::default() }) },
     ];
     let inverse = apply_all(&mut d, &ops).unwrap();
     assert_eq!((d.header.as_deref(), d.footer.as_deref()), (Some("Report"), None));
     assert_eq!(d.footnotes, vec!["old".to_string(), "new".to_string()]);
+    assert_eq!(d.page.map(|p| (p.width_pt, p.height_pt)), Some((612.0, 792.0)));
     assert_eq!(d.paragraphs, before.paragraphs, "the text is untouched");
     apply_all(&mut d, &inverse).unwrap();
     assert_eq!(d, before);

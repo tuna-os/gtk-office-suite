@@ -723,13 +723,14 @@ pub fn set_buffer_header_footer(buf: &gtk::TextBuffer, header: &str, footer: &st
     }
 }
 
-/// Keep `doc`'s header, footer and footnotes beside `buf`'s text (the live
-/// model's ops change them without a buffer edit).
-pub fn set_header_footer_footnotes(buf: &gtk::TextBuffer, doc: &Document) {
+/// Keep `doc`'s header, footer, footnotes and page setup beside `buf`'s
+/// text (the live model's ops change them without a buffer edit).
+pub fn set_page_furniture(buf: &gtk::TextBuffer, doc: &Document) {
     unsafe {
         buf.set_data(HEADER_KEY, doc.header.clone());
         buf.set_data(FOOTER_KEY, doc.footer.clone());
         buf.set_data(FOOTNOTES_KEY, doc.footnotes.clone());
+        buf.set_data(PAGE_KEY, doc.page);
     }
 }
 
