@@ -575,6 +575,39 @@ mod tests {
         m.document(buf).paragraphs[0].runs.iter().map(|r| (r.text.clone(), r.style.bold)).collect()
     }
 
+    /// Replace All is one model edit (#1202 stage 3): every match goes,
+    /// each replacement keeps the style of what it replaced, one undo puts
+    /// them all back, and the model never reads the buffer back.
+    #[test]
+    fn replace_all_is_one_model_edit_that_keeps_each_matchs_style() {
+        gtk_test(|| {
+            let (_view, buf) = editable("one fish two fish");
+            let live = crate::live::LiveModel::attach(&buf);
+            buf.select_range(&buf.iter_at_offset(13), &buf.iter_at_offset(17)); // the second "fish"
+            crate::actions::toggle_tag_in(&buf, "bold");
+            let before = { let m = live.borrow(); (m.local_reads, m.full_reads) };
+
+            assert!(crate::dialogs::replace_ranges(&buf, &[(4, 8), (13, 17)], "cat"));
+            assert_eq!(
+                bold_runs(&buf),
+                vec![("one cat two ".into(), false), ("cat".into(), true)],
+                "every match replaced, the bold one bold",
+            );
+            assert_eq!({ let m = live.borrow(); (m.local_reads, m.full_reads) }, before, "read back from the buffer");
+
+            crate::live::undo(&buf, false);
+            assert_eq!(
+                bold_runs(&buf),
+                vec![("one fish two ".into(), false), ("fish".into(), true)],
+                "one undo step puts every match back",
+            );
+
+            // An empty replacement deletes.
+            assert!(crate::dialogs::replace_ranges(&buf, &[(3, 8)], ""));
+            assert_eq!(bold_runs(&buf), vec![("one two ".into(), false), ("fish".into(), true)]);
+        });
+    }
+
     /// Bold over a selection is a model op (#1202 stage 3): the model gets
     /// it without reading the buffer back, it undoes in one step, and the
     /// selection is still there to press Italic on next.
