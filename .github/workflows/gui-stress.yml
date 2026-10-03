@@ -160,23 +160,6 @@ jobs:
             --repeat "$REPEAT" --matrix "$MATRIX" \
             --output "$GITHUB_WORKSPACE/campaign" "$@"
 
-      # The display matrix, nightly (#520): every journey once at each
-      # window width (400, 800, 1280 px), in dark style and at scale 2.
-      # A journey that only passes at the default size is a layout bug
-      # the campaign above can't see. (A dispatch with matrix=display runs
-      # the matrix in the campaign step instead.)
-      - name: Run the display matrix
-        if: always() && github.event_name == 'schedule'
-        env:
-          GUI_TEST_CORE_MAX_MB: '4096'
-          SEED: ${{ github.event.inputs.seed }}
-        run: |
-          set --
-          [ -n "$SEED" ] && set -- "$@" --seed "$SEED"
-          python3 tests/gui/stress.py \
-            --repeat 1 --matrix display \
-            --output "$GITHUB_WORKSPACE/campaign-display" "$@"
-
       # Each retained core becomes a backtrace beside it, printed here too,
       # and the core itself is removed: it is only readable against this
       # exact build, and it would dwarf the rest of the evidence. The core
@@ -184,7 +167,7 @@ jobs:
       - name: Backtraces of crashed apps
         if: always()
         run: |
-          find campaign campaign-display -name 'core.*' ! -name '*.txt' -type f 2>/dev/null | while read -r core; do
+          find campaign -name 'core.*' ! -name '*.txt' -type f 2>/dev/null | while read -r core; do
             exe="target/debug/$(basename "$core" | cut -d. -f2)"
             echo "::group::$core ($exe)"
             gdb -batch -ex 'thread apply all bt' "$exe" "$core" 2>&1 | tee "$core.backtrace.txt"
@@ -201,9 +184,7 @@ jobs:
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: gui-stress-campaign
-          path: |
-            campaign
-            campaign-display
+          path: campaign
           retention-days: 30
           if-no-files-found: warn
 
@@ -214,6 +195,78 @@ jobs:
           [ -f "$manifest" ] || { echo "No manifest: the campaign did not start."; exit 0; }
           {
             echo '### GUI stress campaign'
+            echo
+            echo '```json'
+            python3 -c "import json,sys;print(json.dumps(json.load(open(sys.argv[1])).get('summary', {}), indent=2))" "$manifest"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  # The display matrix, nightly (#520): every journey once at each window
+  # width (400, 800, 1280 px), in dark style and at scale 2. A journey that
+  # only passes at the default size is a layout bug the campaign can't see.
+  #
+  # A job of its own, beside the campaign rather than after it: the
+  # campaign takes about three hours and the matrix about two more, and as
+  # one job they ran past its 300-minute limit. The cancellation also
+  # skipped the upload, so the night that showed the campaign green left
+  # no evidence of it (#1192). (A dispatch with matrix=display runs the
+  # matrix in the campaign job instead.)
+  display-matrix:
+    if: github.event_name == 'schedule'
+    needs: image
+    runs-on: ubuntu-24.04
+    timeout-minutes: 300
+    container:
+      image: ${{ needs.image.outputs.ref }}
+      options: --shm-size=1g --privileged
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2
+
+      - name: Build app binaries
+        run: cargo build --bin letters --bin tables --bin decks
+
+      - name: Route core dumps to files
+        run: |
+          echo 'core.%e.%p' > /proc/sys/kernel/core_pattern
+          apt-get update -qq && apt-get install -y -qq --no-install-recommends gdb >/dev/null
+
+      - name: Run the display matrix
+        env:
+          GUI_TEST_CORE_MAX_MB: '4096'
+        run: |
+          python3 tests/gui/stress.py \
+            --repeat 1 --matrix display \
+            --output "$GITHUB_WORKSPACE/campaign-display"
+
+      - name: Backtraces of crashed apps
+        if: always()
+        run: |
+          find campaign-display -name 'core.*' ! -name '*.txt' -type f 2>/dev/null | while read -r core; do
+            exe="target/debug/$(basename "$core" | cut -d. -f2)"
+            echo "::group::$core ($exe)"
+            gdb -batch -ex 'thread apply all bt' "$exe" "$core" 2>&1 | tee "$core.backtrace.txt"
+            echo "::endgroup::"
+            rm -f "$core"
+          done
+
+      - name: Upload display-matrix evidence
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: gui-stress-display
+          path: campaign-display
+          retention-days: 30
+          if-no-files-found: warn
+
+      - name: Summary
+        if: always()
+        run: |
+          manifest="$GITHUB_WORKSPACE/campaign-display/manifest.json"
+          [ -f "$manifest" ] || { echo "No manifest: the matrix did not start."; exit 0; }
+          {
+            echo '### GUI stress display matrix'
             echo
             echo '```json'
             python3 -c "import json,sys;print(json.dumps(json.load(open(sys.argv[1])).get('summary', {}), indent=2))" "$manifest"
