@@ -63,6 +63,9 @@ xvfb-run -a cargo test --workspace         # or: cargo test -p tables-core
 tests/gui/run_gui_tests.sh test_smoke.py   # GUI smoke journeys (needs Xvfb and AT-SPI)
 ```
 
+If a build or test step fails in a way that looks like your setup, see
+[docs/USER-TROUBLESHOOTING.md](docs/USER-TROUBLESHOOTING.md).
+
 CI also runs clippy with warnings denied, so run it before you push:
 
 ```bash

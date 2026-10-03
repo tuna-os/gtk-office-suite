@@ -7,6 +7,9 @@ see [TESTING.md](TESTING.md); for module layout see
 
 ## Setup
 
+If something below doesn't work, [USER-TROUBLESHOOTING.md](USER-TROUBLESHOOTING.md)
+covers the common setup and build failures.
+
 Requirements: Rust stable ≥ 1.80 (edition 2021, lockfile v4), GTK4 ≥ 4.14
 and libadwaita ≥ 1.5 dev headers.
 

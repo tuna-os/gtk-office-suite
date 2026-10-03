@@ -69,6 +69,8 @@ Then launch them from your application menu, or:
 flatpak run org.tunaos.letters
 ```
 
+Something not working? See [docs/USER-TROUBLESHOOTING.md](docs/USER-TROUBLESHOOTING.md).
+
 Flathub submission is prepared but **not yet submitted** — the remaining
 steps need a human and are written down in
 [flathub/README.md](flathub/README.md).
@@ -265,6 +267,8 @@ from the deprecated Python applications, see the
 | [docs/CONTRIBUTING.md](docs/CONTRIBUTING.md) | Conventions, workflow, pitfalls |
 | [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) | Environment setup |
 | [docs/GNOME-GUIDELINES.md](docs/GNOME-GUIDELINES.md) | HIG compliance rules and widget patterns |
+| [docs/USER-TROUBLESHOOTING.md](docs/USER-TROUBLESHOOTING.md) | Common setup, build, test and runtime problems |
+| [docs/ACCESSIBILITY.md](docs/ACCESSIBILITY.md) | Keyboard shortcuts, keyboard-only use, and screen-reader support |
 | [docs/PARITY.md](docs/PARITY.md) | Feature-by-feature compatibility truth table |
 | [docs/TESTING.md](docs/TESTING.md) | Test strategy ([docs/TEST-PLAN.md](docs/TEST-PLAN.md) is the v1.0 plan, kept as history) |
 | [docs/GUI-TESTING-SPEC.md](docs/GUI-TESTING-SPEC.md) | The AT-SPI journey harness |

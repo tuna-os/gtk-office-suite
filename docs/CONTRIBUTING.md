@@ -134,6 +134,11 @@ cargo test -p suite-common --lib
 - `format.rs` — formatting logic (pure Rust, testable anywhere)
 - `undo.rs` — command apply/undo (pure Rust)
 - Window-level tests require GTK runtime — implement as integration tests
+- Accessibility: a new action needs a registry label, and a new or changed
+  shortcut needs a row in [ACCESSIBILITY.md](ACCESSIBILITY.md), which the
+  `*AccessibilityDocShortcutsSmoke` journeys check against each app. The
+  [manual Orca checklist](MANUAL-SCREEN-READER-CHECKLIST.md) covers what
+  automated checks can't.
 
 ### 7. Before Committing
 
