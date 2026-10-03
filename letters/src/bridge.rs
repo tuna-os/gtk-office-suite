@@ -723,6 +723,16 @@ pub fn set_buffer_header_footer(buf: &gtk::TextBuffer, header: &str, footer: &st
     }
 }
 
+/// Keep `doc`'s header, footer and footnotes beside `buf`'s text (the live
+/// model's ops change them without a buffer edit).
+pub fn set_header_footer_footnotes(buf: &gtk::TextBuffer, doc: &Document) {
+    unsafe {
+        buf.set_data(HEADER_KEY, doc.header.clone());
+        buf.set_data(FOOTER_KEY, doc.footer.clone());
+        buf.set_data(FOOTNOTES_KEY, doc.footnotes.clone());
+    }
+}
+
 /// Attach the document state that the text buffer cannot represent.
 ///
 /// Called by `render_to_buffer`, and by anything else that replaces a

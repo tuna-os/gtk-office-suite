@@ -7178,6 +7178,43 @@ class LettersInsertLinkSmoke(BaseGUITestCase):
         self.assertIsNone(self.process.poll(), "letters crashed inserting a link")
 
 
+class LettersFootnoteUndoSmoke(BaseGUITestCase):
+    """Insert Footnote is one model edit: one Undo takes out the note and
+    its mark (#1202 stage 4).
+
+    The note used to be written onto the editor's buffer outside the
+    model's history, so Undo removed the mark and left the note, which the
+    next save wrote with nothing citing it.
+    """
+
+    app_name = "letters"
+
+    def setUp(self):
+        self._snapshot_path = self.isolate_snapshot(prefix="letters-footnote-")
+        super().setUp()
+
+    def _state(self):
+        s = self.trigger_snapshot("org.tunaos.letters")
+        marks = [r["style"].get("footnote") for p in s["paragraphs"] for r in p["runs"] if r.get("style", {}).get("footnote") is not None]
+        return s.get("footnotes", []), marks
+
+    def test_one_undo_takes_out_the_note_and_its_mark(self):
+        from dogtail import rawinput
+
+        aid = "org.tunaos.letters"
+        self.new_letters_document()
+        rawinput.typeText("cited")
+        self.wait_until(self._state, lambda st: st == ([], []), description="the typed text, no notes")
+        self.gapplication_action(aid, "insert-footnote")
+        self.wait_for_node(name="Insert Footnote")
+        rawinput.typeText("A source.")
+        rawinput.keyCombo("Return")
+        self.wait_until(self._state, lambda st: st == (["A source."], [0]), description="the note and its mark")
+        self.gapplication_action(aid, "undo")
+        self.wait_until(self._state, lambda st: st == ([], []), description="Undo took out the note and its mark")
+        self.assertIsNone(self.process.poll(), "letters crashed inserting a footnote")
+
+
 class LettersStylesAndOutlineSmoke(BaseGUITestCase):
     """Paragraph styles are picked from previews, and the outline follows
     the headings (DESIGN-UI "Styles first"; Docs' outline sidebar).
