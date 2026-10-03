@@ -2,8 +2,8 @@
 //! the actions, their save dialogs, and their place in the primary menu.
 //! SPDX-License-Identifier: GPL-3.0-or-later
 //!
-//! Keynote's File ▸ Export To and Google Slides' Download: an "Export"
-//! section in the primary menu. Handouts offer 2, 4 or 6 slides to a page
+//! Keynote's File ▸ Export To and Google Slides' Download: a section of
+//! export commands in the primary menu. Handouts offer 2, 4 or 6 slides to a page
 //! as a submenu (the action's parameter). What is drawn is export.rs; the
 //! deck exported is the one Save would write (`DecksController::deck`).
 
@@ -14,24 +14,6 @@ use std::cell::Cell;
 use std::rc::Rc;
 
 use decks_core::DecksController;
-
-/// The primary menu the suite's header bar opens (its "open-menu"
-/// button), to add the Export section to.
-fn primary_menu(widget: &gtk::Widget) -> Option<gio::Menu> {
-    if let Some(b) = widget.downcast_ref::<gtk::MenuButton>() {
-        if b.icon_name().as_deref() == Some("open-menu-symbolic") {
-            return b.menu_model().and_then(|m| m.downcast::<gio::Menu>().ok());
-        }
-    }
-    let mut child = widget.first_child();
-    while let Some(c) = child {
-        if let Some(m) = primary_menu(&c) {
-            return Some(m);
-        }
-        child = c.next_sibling();
-    }
-    None
-}
 
 fn menu_section() -> gio::Menu {
     let section = gio::Menu::new();
@@ -78,9 +60,9 @@ fn stem(ctl: &DecksController) -> String {
 }
 
 pub(crate) fn register(app: &adw::Application, window: &adw::ApplicationWindow, header: &adw::HeaderBar, ctl: &Rc<DecksController>, current_slide: &Rc<Cell<usize>>) {
-    if let Some(menu) = primary_menu(header.upcast_ref()) {
-        // After File, before Edit and Help.
-        menu.insert_section(1, Some("Export"), &menu_section());
+    if let Some(menu) = suite_common::menus::primary_menu(header.upcast_ref()) {
+        // After File, before Edit and Help, unlabelled like the others.
+        menu.insert_section(1, None, &menu_section());
     }
     {
         let (ctl, win) = (ctl.clone(), window.clone());

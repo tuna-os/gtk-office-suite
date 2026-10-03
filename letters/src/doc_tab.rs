@@ -241,7 +241,7 @@ fn connect_selection_popover(
         ("format-text-underline-symbolic", "Underline", "app.underline"),
         ("format-text-strikethrough-symbolic", "Strikethrough", "app.strikethrough"),
         ("color-select-symbolic", "Highlight", "app.highlight"),
-        ("insert-link-symbolic", "Insert link", "app.insertlink"),
+        ("insert-link-symbolic", "Insert Link", "app.insertlink"),
     ] {
         let b = gtk::Button::from_icon_name(icon);
         b.add_css_class("flat");

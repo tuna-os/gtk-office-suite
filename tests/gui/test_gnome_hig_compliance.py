@@ -185,7 +185,7 @@ class TablesHIGAudit(VisionGUITestCase):
         self.take_screenshot("hig_tables_toolbar")
         self.assertVision([
             "The toolbar shows symbolic ICONS (not text labels like 'preferences-other' or 'strikethrough')",
-            "Toggle Number Format, Toggle Cell Border, Merge Cells, Chart, and Export PDF are icon buttons",
+            "Number Format, Cell Border, Merge Cells, Filter by Column and Insert Chart are icon buttons",
         ], screenshot_path=self.last_screenshot)
 
     def test_headerbar_no_ambiguous_icons(self):

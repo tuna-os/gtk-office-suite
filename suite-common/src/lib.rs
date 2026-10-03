@@ -26,6 +26,7 @@ pub mod window_actions;
 pub mod icons;
 pub mod about;
 pub mod page_setup;
+pub mod menus;
 pub use suite_common_core::{actions, palette, format, undo, events, string_pool, units, props, style, search, print, atomic_save, autosave, interop, carry, recent, templates, session};
 
 pub use file_dialogs::FileDialogHelper;
@@ -791,18 +792,6 @@ pub fn make_header_bar(app_name: &str) -> adw::HeaderBar {
 // ---------------------------------------------------------------------------
 // Keyboard Shortcuts Dialog
 // ---------------------------------------------------------------------------
-
-/// Build and show a keyboard shortcuts dialog.
-/// `shortcuts` — list of (group_title, [(shortcut_title, accelerator), ...]).
-pub fn show_shortcuts_dialog(
-    shortcuts: &[(&str, &[(&str, &str)])],
-) {
-    let groups = shortcuts
-        .iter()
-        .map(|(title, items)| (title.to_string(), items.iter().map(|(t, a)| (t.to_string(), a.to_string())).collect()))
-        .collect::<Vec<_>>();
-    present_shortcuts(&groups);
-}
 
 /// The shortcuts list as an adaptive dialog over the active window: a
 /// row per shortcut, its name and its keys. GtkShortcutsWindow, which
