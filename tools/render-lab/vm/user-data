@@ -14,7 +14,11 @@ packages:
   - gnome-session-wayland-session
   - flatpak
   - mesa-dri-drivers
-  - liberation-fonts
+  # Named one by one: "liberation-fonts" is no binary package in Fedora 44,
+  # and one unknown name fails the whole install.
+  - liberation-sans-fonts
+  - liberation-serif-fonts
+  - liberation-mono-fonts
   - google-carlito-fonts
 write_files:
   - path: /etc/gdm/custom.conf
@@ -30,5 +34,6 @@ runcmd:
   # No screen lock, no idle blank, no welcome tour in the captures.
   - sudo -u lab dbus-run-session gsettings set org.gnome.desktop.session idle-delay 0 || true
   - sudo -u lab dbus-run-session gsettings set org.gnome.desktop.screensaver lock-enabled false || true
+  - sudo -u lab dbus-run-session gsettings set org.gnome.shell welcome-dialog-last-shown-version "'999'" || true
   - touch /var/lib/render-lab-ready
   - poweroff
