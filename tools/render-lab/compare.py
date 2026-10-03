@@ -464,6 +464,29 @@ def ocr_crop_text(grey):
     return ""
 
 
+# A row or column of a rescue crop inked along this much of its length is a
+# rule (a cell border, a frame), not part of a glyph: a word's strokes span
+# its x-height or cap height, which the crop's padding keeps well under it.
+# Ink is anything off-white: grid lines are drawn light (217 on 255).
+RESCUE_RULE_SPAN = 0.9
+RESCUE_RULE_INK = 245
+
+
+def blank_rules(grey):
+    """`grey`, a rescue crop, with its rules (rows and columns inked along
+    RESCUE_RULE_SPAN of the crop) painted white. A grid line beside a lone
+    digit stops tesseract's single-word mode reading the digit at all
+    (tables/chart-pie in Tier C, #1199), and a rule is never the text being
+    rescued. erase_rules can't do this: a crop is shorter than RULE_MIN, and
+    a light grid line is not ink by its measure."""
+    arr = np.asarray(grey).copy()
+    ink = arr < RESCUE_RULE_INK
+    rows, cols = ink.mean(axis=1) >= RESCUE_RULE_SPAN, ink.mean(axis=0) >= RESCUE_RULE_SPAN
+    arr[rows, :] = 255
+    arr[:, cols] = 255
+    return Image.fromarray(arr)
+
+
 def rescue_unread(ref_grey, ours_grey, box):
     """The magnified crop of `box` (in either image's pixels) reads as the
     same non-empty word on both sides, or None. The box comes from the
@@ -477,10 +500,10 @@ def rescue_unread(ref_grey, ours_grey, box):
         min(ref_grey.width, int(l + w + RESCUE_PAD)),
         min(ref_grey.height, int(t + h + RESCUE_PAD)),
     )
-    ref_text = ocr_crop_text(ref_grey.crop(area))
+    ref_text = ocr_crop_text(blank_rules(ref_grey.crop(area)))
     if not ref_text:
         return None
-    ours_text = ocr_crop_text(ours_grey.crop(area))
+    ours_text = ocr_crop_text(blank_rules(ours_grey.crop(area)))
     return ref_text if ours_text == ref_text else None
 
 

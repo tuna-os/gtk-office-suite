@@ -245,7 +245,7 @@
   "tables/chart-pie": {
     "A": "green",
     "B": "green",
-    "C": "amber"
+    "C": "green"
   },
   "tables/chart-scatter": {
     "A": "green",
