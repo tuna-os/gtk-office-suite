@@ -943,7 +943,7 @@ impl TablesWindow {
         sheet_bar.append(&move_sheet_right_btn);
 
         let delete_sheet_btn = gtk4::Button::builder()
-            .icon_name("edit-delete-symbolic")
+            .icon_name("user-trash-symbolic")
             .tooltip_text("Delete sheet")
             .build();
         delete_sheet_btn.set_css_classes(&["flat", "circular"]);
@@ -1443,16 +1443,16 @@ impl TablesWindow {
         ]);
 
         let extended_toolbar: Vec<suite_common::ToolbarItem> = vec![
-            ("preferences-other-symbolic", "Toggle number format", "app.cycle-number-format"),
-            ("format-text-strikethrough-symbolic", "Toggle cell border", "app.cycle-cell-border"),
-            ("insert-object-symbolic", "Merge cells", "app.merge-cells"),
-            ("insert-object-symbolic", "Chart", "app.insert-chart"),
-            ("funnel-symbolic", "Filter by column", "app.filter-by-column"),
-            ("tag-symbolic", "Define name", "app.define-name"),
+            ("office-number-format-symbolic", "Toggle number format", "app.cycle-number-format"),
+            ("office-border-symbolic", "Toggle cell border", "app.cycle-cell-border"),
+            ("office-merge-cells-symbolic", "Merge cells", "app.merge-cells"),
+            ("office-chart-symbolic", "Chart", "app.insert-chart"),
+            ("office-filter-symbolic", "Filter by column", "app.filter-by-column"),
+            ("office-name-symbolic", "Define name", "app.define-name"),
             ("view-paged-symbolic", "Set print area", "app.set-print-area"),
-            ("view-conceal-symbolic", "Hide selected rows", "app.hide-selected-rows"),
-            ("view-conceal-symbolic", "Hide selected columns", "app.hide-selected-cols"),
-            ("printer-symbolic", "Page setup", "app.page-setup"),
+            ("office-row-hide-symbolic", "Hide selected rows", "app.hide-selected-rows"),
+            ("office-column-hide-symbolic", "Hide selected columns", "app.hide-selected-cols"),
+            ("document-page-setup-symbolic", "Page setup", "app.page-setup"),
             ("document-send-symbolic", "Export PDF", "app.export-pdf"),
         ];
 

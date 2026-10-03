@@ -118,7 +118,7 @@ fn shape_menu() -> gtk::MenuButton {
     let (body, search) = shape_library_view(std::rc::Rc::new(move || p.popdown()));
     popover.set_child(Some(&body));
     popover.connect_show(move |_| focus_search(&search));
-    let menu = gtk::MenuButton::builder().child(&labelled("insert-object-symbolic", "_Shape", "Insert Shape")).popover(&popover).build();
+    let menu = gtk::MenuButton::builder().child(&labelled("office-shapes-symbolic", "_Shape", "Insert Shape")).popover(&popover).build();
     menu.add_css_class("flat");
     menu.set_tooltip_text(Some("Insert Shape"));
     menu.update_property(&[gtk::accessible::Property::Label("Insert Shape")]);
@@ -174,7 +174,7 @@ fn chart_menu() -> gtk::MenuButton {
     let popover = gtk::Popover::new();
     let p = popover.clone();
     popover.set_child(Some(&chart_kinds_view(std::rc::Rc::new(move || p.popdown()), 3)));
-    let menu = gtk::MenuButton::builder().child(&labelled("insert-object-symbolic", "C_hart", "Insert Chart")).popover(&popover).build();
+    let menu = gtk::MenuButton::builder().child(&labelled("office-chart-symbolic", "C_hart", "Insert Chart")).popover(&popover).build();
     menu.add_css_class("flat");
     menu.set_tooltip_text(Some("Insert Chart"));
     menu.update_property(&[gtk::accessible::Property::Label("Insert Chart")]);
@@ -193,7 +193,7 @@ pub fn build(header: &adw::HeaderBar, narrow: &adw::Breakpoint) {
     let bar = gtk::Box::new(gtk::Orientation::Horizontal, 0);
     bar.append(&button("insert-text-symbolic", "_Text", "Insert Text Box", "app.add-text-box"));
     bar.append(&shape_menu());
-    bar.append(&button("x-office-spreadsheet-symbolic", "T_able", "Insert Table", "app.insert-table"));
+    bar.append(&button("office-table-symbolic", "T_able", "Insert Table", "app.insert-table"));
     bar.append(&chart_menu());
     bar.append(&button("insert-image-symbolic", "_Image", "Insert Image", "app.add-image"));
     header.pack_start(&bar);
@@ -225,8 +225,8 @@ fn compact_menu() -> gtk::MenuButton {
         b.connect_clicked(move |_| done());
         b
     };
-    let picker = |label, tooltip, page: &'static str| {
-        let b = gtk::Button::builder().child(&labelled("insert-object-symbolic", label, tooltip)).build();
+    let picker = |icon, label, tooltip, page: &'static str| {
+        let b = gtk::Button::builder().child(&labelled(icon, label, tooltip)).build();
         b.add_css_class("flat");
         // Named by its label and described by its tooltip, like `button`.
         b.set_tooltip_text(Some(tooltip));
@@ -248,9 +248,9 @@ fn compact_menu() -> gtk::MenuButton {
     };
     let list = gtk::Box::new(gtk::Orientation::Vertical, 0);
     list.append(&insert("insert-text-symbolic", "_Text", "Insert Text Box", "app.add-text-box"));
-    list.append(&picker("_Shape", "Insert Shape", "shapes"));
-    list.append(&insert("x-office-spreadsheet-symbolic", "T_able", "Insert Table", "app.insert-table"));
-    list.append(&picker("C_hart", "Insert Chart", "charts"));
+    list.append(&picker("office-shapes-symbolic", "_Shape", "Insert Shape", "shapes"));
+    list.append(&insert("office-table-symbolic", "T_able", "Insert Table", "app.insert-table"));
+    list.append(&picker("office-chart-symbolic", "C_hart", "Insert Chart", "charts"));
     list.append(&insert("insert-image-symbolic", "_Image", "Insert Image", "app.add-image"));
     stack.add_named(&list, Some("main"));
     // The chart grid scrolls within a bounded height. Placed bare in the

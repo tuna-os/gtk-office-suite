@@ -23,10 +23,10 @@ type Ctl = Rc<RefCell<WorkbookController>>;
 /// The toolbar entries for the actions installed by [`install`].
 pub(crate) fn toolbar_items() -> Vec<suite_common::ToolbarItem> {
     vec![
-        ("list-add-symbolic", "Insert rows above", "app.insert-rows"),
-        ("list-add-symbolic", "Insert columns left", "app.insert-cols"),
-        ("list-remove-symbolic", "Delete selected rows", "app.delete-rows"),
-        ("list-remove-symbolic", "Delete selected columns", "app.delete-cols"),
+        ("office-row-insert-symbolic", "Insert rows above", "app.insert-rows"),
+        ("office-column-insert-symbolic", "Insert columns left", "app.insert-cols"),
+        ("office-row-delete-symbolic", "Delete selected rows", "app.delete-rows"),
+        ("office-column-delete-symbolic", "Delete selected columns", "app.delete-cols"),
         ("view-pin-symbolic", "Freeze rows above the selection", "app.toggle-freeze-rows"),
         ("changes-prevent-symbolic", "Protect sheet", "app.toggle-sheet-protection"),
     ]

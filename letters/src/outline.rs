@@ -67,8 +67,10 @@ pub fn build(
     views.add_titled_with_icon(&stack, Some("outline"), "Outline", "view-list-symbolic");
     views.add_titled_with_icon(&crate::thumbnails::build(tv), Some("pages"), "Pages", "view-paged-symbolic");
     views.add_titled_with_icon(&crate::review_ui::changes_view(tv), Some("changes"), "Changes", "document-edit-symbolic");
-    views.add_titled_with_icon(&crate::comments_ui::comments_view(tv), Some("comments"), "Comments", "chat-bubble-text-symbolic");
-    let switcher = adw::ViewSwitcher::builder().stack(&views).policy(adw::ViewSwitcherPolicy::Wide).build();
+    views.add_titled_with_icon(&crate::comments_ui::comments_view(tv), Some("comments"), "Comments", "office-comment-symbolic");
+    // Narrow: each label under its icon. Side by side, four of them never
+    // fitted the sidebar and every label was cut to "…".
+    let switcher = adw::ViewSwitcher::builder().stack(&views).policy(adw::ViewSwitcherPolicy::Narrow).build();
     let sidebar = adw::ToolbarView::new();
     let title = adw::HeaderBar::builder()
         .title_widget(&switcher)
@@ -81,8 +83,8 @@ pub fn build(
     let split = adw::OverlaySplitView::builder()
         .sidebar_position(gtk::PackType::Start)
         .show_sidebar(false)
-        .min_sidebar_width(200.0)
-        .max_sidebar_width(300.0)
+        .min_sidebar_width(260.0)
+        .max_sidebar_width(320.0)
         .content(content)
         .sidebar(&sidebar)
         .build();

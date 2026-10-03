@@ -90,25 +90,16 @@ pub fn show_header_footer_dialog(pc: &PageContainer, buf: &gtk::TextBuffer) {
         Some(&i18n("Use {page} for automatic page numbering.")),
     );
 
-    let content = gtk::Box::new(gtk::Orientation::Vertical, 12);
-    content.set_margin_top(12);
-    content.set_margin_bottom(12);
-    content.set_margin_start(12);
-    content.set_margin_end(12);
-
+    // A boxed list of entry rows, the libadwaita form: each field is
+    // named in its own row rather than by a centred label above a bare
+    // entry.
     let (header, footer) = header_footer_of(buf);
-    let hdr_entry = gtk::Entry::builder()
-        .placeholder_text(i18n("Header text"))
-        .text(header)
-        .build();
-    let ftr_entry = gtk::Entry::builder()
-        .placeholder_text(i18n("Footer text"))
-        .text(footer)
-        .build();
-
-    content.append(&gtk::Label::new(Some(&i18n("Header"))));
+    let hdr_entry = adw::EntryRow::builder().title(i18n("Header")).text(header).build();
+    let ftr_entry = adw::EntryRow::builder().title(i18n("Footer")).text(footer).build();
+    let content = gtk::ListBox::new();
+    content.add_css_class("boxed-list");
+    content.set_selection_mode(gtk::SelectionMode::None);
     content.append(&hdr_entry);
-    content.append(&gtk::Label::new(Some(&i18n("Footer"))));
     content.append(&ftr_entry);
     dialog.set_extra_child(Some(&content));
 
@@ -177,35 +168,6 @@ pub(crate) fn apply_page_geometry(buf: &gtk::TextBuffer, page: letters_core::mod
     });
     crate::live::sync_actions(buf);
     applied
-}
-
-/// `page` as a GtkPageSetup, for the Page Setup dialog to start from. A
-/// page wider than it is tall is landscape paper turned.
-pub(crate) fn page_setup_of(page: &letters_core::model::PageGeometry) -> gtk::PageSetup {
-    let ps = gtk::PageSetup::new();
-    let landscape = page.width_pt > page.height_pt;
-    let (w, h) = if landscape { (page.height_pt, page.width_pt) } else { (page.width_pt, page.height_pt) };
-    ps.set_paper_size_and_default_margins(&gtk::PaperSize::new_custom("custom", "Custom", w, h, gtk::Unit::Points));
-    ps.set_orientation(if landscape { gtk::PageOrientation::Landscape } else { gtk::PageOrientation::Portrait });
-    ps.set_top_margin(page.margin_top_pt, gtk::Unit::Points);
-    ps.set_bottom_margin(page.margin_bottom_pt, gtk::Unit::Points);
-    ps.set_left_margin(page.margin_left_pt, gtk::Unit::Points);
-    ps.set_right_margin(page.margin_right_pt, gtk::Unit::Points);
-    ps
-}
-
-/// The page the dialog's `ps` describes, turned for its orientation (the
-/// paper size alone is always portrait, so landscape used to be lost).
-pub(crate) fn geometry_of(ps: &gtk::PageSetup) -> letters_core::model::PageGeometry {
-    letters_core::model::PageGeometry {
-        width_pt: ps.paper_width(gtk::Unit::Points),
-        height_pt: ps.paper_height(gtk::Unit::Points),
-        margin_top_pt: ps.top_margin(gtk::Unit::Points),
-        margin_bottom_pt: ps.bottom_margin(gtk::Unit::Points),
-        margin_left_pt: ps.left_margin(gtk::Unit::Points),
-        margin_right_pt: ps.right_margin(gtk::Unit::Points),
-        ..Default::default()
-    }
 }
 
 /// Show a dialog for inserting a custom dimension table.
@@ -597,21 +559,4 @@ mod tests {
             assert!(!apply_page_geometry(&buf, letters_core::model::PageGeometry { columns: 2, ..Default::default() }), "the same page is no edit");
         });
     }
-
-
-    /// A landscape page goes into the dialog turned and comes back the
-    /// same; reading only the paper size used to lose the orientation.
-    #[test]
-    fn a_landscape_page_round_trips_through_the_page_setup_dialog() {
-        gtk_test(|| {
-            let page = letters_core::model::PageGeometry { width_pt: 792.0, height_pt: 612.0, margin_top_pt: 30.0, margin_left_pt: 40.0, ..Default::default() };
-            let ps = page_setup_of(&page);
-            assert_eq!(ps.orientation(), gtk::PageOrientation::Landscape);
-            let back = geometry_of(&ps);
-            let close = |a: f64, b: f64| (a - b).abs() < 0.01;
-            assert!(close(back.width_pt, 792.0) && close(back.height_pt, 612.0), "{back:?}");
-            assert!(close(back.margin_top_pt, 30.0) && close(back.margin_left_pt, 40.0), "{back:?}");
-        });
-    }
-
 }

@@ -90,7 +90,7 @@ class LettersHIGAudit(VisionGUITestCase):
 
     def _open_menu(self):
         try:
-            btn = self.app.child(name="Menu", roleName="toggle button")
+            btn = self.app.child(name="Main Menu", roleName="toggle button")
             btn.do_action(0)
             time.sleep(0.4)  # pacing: no state to wait on before the next input
         except:

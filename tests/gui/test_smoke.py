@@ -7249,6 +7249,33 @@ class LettersPageSetupSmoke(BaseGUITestCase):
         self.assertIsNone(self.process.poll(), "letters crashed in Page Setup")
 
 
+class _ButtonsAreNamed:
+    """Every visible button says what it does: a name, or a tooltip (which
+    GTK gives a screen reader as the button's description). An icon-only
+    button with neither is a picture nobody can be told about."""
+
+    def test_every_visible_button_is_named_or_described(self):
+        self.wait_for_node(roleName="frame")
+        roles = ("push button", "toggle button", "menu button")
+        buttons = self.app.findChildren(lambda n: n.roleName in roles and n.showing, recursive=True)
+        self.assertTrue(buttons, "no buttons found")
+        unnamed = [b for b in buttons if not (b.name or "").strip() and not (b.description or "").strip()]
+        self.assertEqual([(b.roleName, b.parent.roleName if b.parent else None) for b in unnamed], [],
+                         "buttons with neither a name nor a tooltip")
+
+
+class LettersButtonsNamedSmoke(_ButtonsAreNamed, BaseGUITestCase):
+    app_name = "letters"
+
+
+class TablesButtonsNamedSmoke(_ButtonsAreNamed, BaseGUITestCase):
+    app_name = "tables"
+
+
+class DecksButtonsNamedSmoke(_ButtonsAreNamed, BaseGUITestCase):
+    app_name = "decks"
+
+
 class LettersStylesAndOutlineSmoke(BaseGUITestCase):
     """Paragraph styles are picked from previews, and the outline follows
     the headings (DESIGN-UI "Styles first"; Docs' outline sidebar).

@@ -58,31 +58,30 @@ impl LettersPreferences {
         general.add(&doc_group);
 
         let editor_group = suite_common::make_preferences_group("Editor", "Text editing preferences");
-        let font_row = adw::EntryRow::builder()
-            .title("Font family")
-            .text(settings.string("font").as_str())
-            .build();
+        // A font picker, not free text: the font chooser lists only fonts
+        // that exist, and the help text is the row's own subtitle rather
+        // than a second, empty-looking row.
+        let font_button = gtk4::FontDialogButton::new(Some(gtk4::FontDialog::new()));
+        font_button.set_font_desc(&gtk4::pango::FontDescription::from_string(settings.string("font").as_str()));
+        font_button.set_valign(gtk4::Align::Center);
         {
             let s = settings.clone();
-            font_row.connect_changed(move |row| {
-                s.set_string("font", &row.text())
-                    .unwrap_or_else(|e| eprintln!("GSettings write failed: {}", e));
+            font_button.connect_font_desc_notify(move |b| {
+                if let Some(desc) = b.font_desc() {
+                    s.set_string("font", &desc.to_string())
+                        .unwrap_or_else(|e| eprintln!("GSettings write failed: {}", e));
+                }
             });
         }
+        let font_row = adw::ActionRow::builder()
+            .title("Body font")
+            .subtitle("The font of new documents")
+            .build();
+        font_row.add_suffix(&font_button);
+        font_row.set_activatable_widget(Some(&font_button));
         editor_group.add(&font_row);
-        let font_note = adw::ActionRow::builder()
-            .subtitle("The body font of new documents, such as “Liberation Serif 12”")
-            .build();
-        font_note.add_css_class("dim-label");
-        editor_group.add(&font_note);
-
-        let margin_row = adw::SpinRow::builder()
-            .title("Editor margin")
-            .subtitle("Not yet implemented — coming soon")
-            .adjustment(&gtk4::Adjustment::new(16.0, 0.0, 50.0, 1.0, 5.0, 0.0))
-            .sensitive(false)
-            .build();
-        editor_group.add(&margin_row);
+        // An "Editor margin" row stood here, disabled and labelled "Not yet
+        // implemented": a setting that does nothing is not shown.
         general.add(&editor_group);
 
         prefs.add(&general);

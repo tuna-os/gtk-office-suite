@@ -288,7 +288,7 @@ class LettersTest(VisionGUITestCase):
             pass
 
     def test_menu_button_shows_file_edit_help(self):
-        self._click("Menu", "toggle button")
+        self._click("Main Menu", "toggle button")
         time.sleep(0.4)  # pacing: no state to wait on before the next input
         self.take_screenshot("menu")
         self.assertVision([
