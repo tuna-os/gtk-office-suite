@@ -18,6 +18,10 @@ packages:
   # 44's packages no longer pull it in, and without the index GLib 2.88
   # found no app for a .docx, so "open with" failed in all three.
   - desktop-file-utils
+  # The file chooser a sandboxed app's Open and Save As put up: Flatpak
+  # brings the portal, but not the GNOME backend that draws its dialogs,
+  # which every GNOME desktop has. Without it neither dialog appears.
+  - xdg-desktop-portal-gnome
   - mesa-dri-drivers
   # Named one by one: "liberation-fonts" is no binary package in Fedora 44,
   # and one unknown name fails the whole install.

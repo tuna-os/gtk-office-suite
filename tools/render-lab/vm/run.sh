@@ -143,7 +143,8 @@ print(next((f["file"] for f in json.load(open(sys.argv[1])) if f["app"] == sys.a
     # document from there. Each dialog is screenshotted with the path typed.
     "${SSH[@]}" "cp \$HOME/lab/fixtures/$file \$HOME/Downloads/portal-open-$app.$ext; rm -f \$HOME/Downloads/portal-saved-$app.$ext
         bash ~/lab/installed.sh --action $app save-as" || true
-    sleep 5
+    # The portal's dialog process starts on first use.
+    sleep 10
     qmp_type "$GUEST_HOME/Downloads/portal-saved-$app.$ext"
     sleep 1
     qmp "$PWD/screen.ppm" >/dev/null
@@ -151,7 +152,7 @@ print(next((f["file"] for f in json.load(open(sys.argv[1])) if f["app"] == sys.a
     qmp_key ret >/dev/null
     sleep 5
     "${SSH[@]}" "bash ~/lab/installed.sh --action $app open" || true
-    sleep 5
+    sleep 8
     qmp_type "$GUEST_HOME/Downloads/portal-open-$app.$ext"
     sleep 1
     qmp "$PWD/screen.ppm" >/dev/null
