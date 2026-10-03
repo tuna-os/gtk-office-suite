@@ -212,3 +212,27 @@ pub fn form_body(groups: &[&gtk::Widget]) -> gtk::Box {
     }
     body
 }
+
+/// A form's fields as rows of a boxed list, each named by its row's title
+/// with the field at the row's end: the libadwaita form, for fields that
+/// are not themselves rows (a drop-down, a spin button, a colour button).
+/// Returns the list inside a padded box, to which a dialog can append
+/// more (an error label).
+pub fn form_rows(rows: &[(&str, &gtk::Widget)]) -> gtk::Box {
+    let list = gtk::ListBox::new();
+    list.add_css_class("boxed-list");
+    list.set_selection_mode(gtk::SelectionMode::None);
+    for (title, field) in rows {
+        let row = adw::ActionRow::builder().title(*title).build();
+        field.set_valign(gtk::Align::Center);
+        row.add_suffix(*field);
+        list.append(&row);
+    }
+    let body = gtk::Box::new(gtk::Orientation::Vertical, 12);
+    body.set_margin_top(12);
+    body.set_margin_bottom(24);
+    body.set_margin_start(24);
+    body.set_margin_end(24);
+    body.append(&list);
+    body
+}
