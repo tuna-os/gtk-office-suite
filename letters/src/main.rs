@@ -22,6 +22,7 @@ mod focus_mode;
 mod chips_ui;
 mod review_ui;
 mod comments_ui;
+mod link_ui;
 mod toc_ui;
 
 fn main() {

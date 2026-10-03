@@ -726,30 +726,7 @@ impl LettersWindow {
         }
 
         // Insert Link
-        {
-            let tv = tab_view.clone();
-            let a = gtk::gio::SimpleAction::new("insertlink", None);
-            a.connect_activate(move |_, _| {
-                if let Some(buf) = active_buffer(&tv) {
-                    let sel = buf.selection_bounds();
-                    let selected_text = sel.as_ref()
-                        .map(|(s,e)| buf.text(s, e, false).to_string())
-                        .unwrap_or_default();
-                    let placeholder = if selected_text.is_empty() { "url" } else { &selected_text };
-                    let md = format!("[{}]({})", selected_text, placeholder);
-                    if let Some((start, end)) = sel {
-                        buf.delete(&mut start.clone(), &mut end.clone());
-                    }
-                    let ins = buf.selection_bounds()
-                        .map(|(i,_)| i).unwrap_or_else(|| buf.start_iter());
-                    let mut pos = ins;
-                    buf.insert(&mut pos, &md);
-                }
-            });
-            app.add_action(&a);
-            // Ctrl+K belongs to the command palette (DESIGN-UI.md).
-            app.set_accels_for_action("app.insertlink", &["<Primary><Shift>k"]);
-        }
+        crate::link_ui::register_actions(app, &tab_view);
 
         // Insert Footnote: prompt for the note text, append it to the
         // buffer's footnote list, drop a superscript marker at the cursor.
