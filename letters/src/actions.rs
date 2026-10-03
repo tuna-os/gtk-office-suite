@@ -104,18 +104,59 @@ pub fn toggle_tag(tv: &adw::TabView, tag_name: &str) {
 
 /// Toggle `tag_name` over the selection, or, with nothing selected, for
 /// the text typed next at the caret: Bold, then type, types bold.
+///
+/// On a tab's document the toggle is a model op (`Op::Mark`), one undo step
+/// that the buffer then shows, rather than a tag applied to the buffer and
+/// read back (#1202 stage 3). The first selected character decides: bold
+/// already, the selection loses bold; otherwise it gains it.
 pub(crate) fn toggle_tag_in(buf: &gtk::TextBuffer, tag_name: &str) {
-    let Some(tag) = buf.tag_table().lookup(tag_name) else { return };
     let Some((start, end)) = buf.selection_bounds() else {
         toggle_pending(buf, tag_name);
         return;
     };
+    let (from, to) = (start.offset().max(0), end.offset().max(0));
+    if let (Some(live), Some(key)) = (crate::live::of(buf), mark_key(tag_name)) {
+        let mut m = live.borrow_mut();
+        let (s, e) = (m.sequence_offset(buf, from as usize), m.sequence_offset(buf, to as usize));
+        let first = letters_core::edit::slice(m.document(buf), s, e)
+            .and_then(|paras| paras.into_iter().flat_map(|p| p.runs).find(|r| !r.text.is_empty()));
+        let has = first.is_some_and(|r| {
+            let mut style = r.style;
+            style_flag(&mut style, tag_name).is_some_and(|f| *f)
+        });
+        let mut value = letters_core::RunStyle::default();
+        if let Some(flag) = style_flag(&mut value, tag_name) {
+            *flag = !has;
+        }
+        let applied = m.apply_user_ops(buf, &[letters_core::edit::Op::Mark { start: s, end: e, key, value }], false);
+        drop(m);
+        // Marks move no text, so the selection's offsets still hold; the
+        // model's projection put the caret at the change's end.
+        if applied {
+            buf.select_range(&buf.iter_at_offset(from), &buf.iter_at_offset(to));
+        }
+        return;
+    }
+    let Some(tag) = buf.tag_table().lookup(tag_name) else { return };
     let has = start.tags().iter().any(|t| t.name().as_deref() == Some(tag_name));
     if has {
         buf.remove_tag(&tag, &start, &end);
     } else {
         buf.apply_tag(&tag, &start, &end);
     }
+}
+
+/// The model mark a toggle name sets, if it is one of the toggles.
+fn mark_key(name: &str) -> Option<letters_core::edit::MarkKey> {
+    use letters_core::edit::MarkKey;
+    Some(match name {
+        "bold" => MarkKey::Bold,
+        "italic" => MarkKey::Italic,
+        "underline" => MarkKey::Underline,
+        "strikethrough" => MarkKey::Strikethrough,
+        "highlight" => MarkKey::Highlight,
+        _ => return None,
+    })
 }
 
 /// Character formatting chosen with nothing selected, waiting for the next

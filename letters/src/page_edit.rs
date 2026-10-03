@@ -575,6 +575,40 @@ mod tests {
         m.document(buf).paragraphs[0].runs.iter().map(|r| (r.text.clone(), r.style.bold)).collect()
     }
 
+    /// Bold over a selection is a model op (#1202 stage 3): the model gets
+    /// it without reading the buffer back, it undoes in one step, and the
+    /// selection is still there to press Italic on next.
+    #[test]
+    fn formatting_a_selection_is_a_model_op_that_keeps_the_selection() {
+        gtk_test(|| {
+            let (_view, buf) = editable("plain text");
+            let live = crate::live::LiveModel::attach(&buf);
+            let _ = live.borrow_mut().document(&buf);
+            let reads = |l: &std::rc::Rc<std::cell::RefCell<crate::live::LiveModel>>| {
+                let m = l.borrow();
+                (m.local_reads, m.full_reads)
+            };
+            let before = reads(&live);
+
+            buf.select_range(&buf.iter_at_offset(0), &buf.iter_at_offset(5));
+            crate::actions::toggle_tag_in(&buf, "bold");
+            assert_eq!(bold_runs(&buf), vec![("plain".into(), true), (" text".into(), false)]);
+            assert_eq!(reads(&live), before, "the model read the buffer back instead of taking an op");
+            let (a, b) = buf.selection_bounds().expect("the selection is kept");
+            assert_eq!((a.offset(), b.offset()), (0, 5));
+
+            // The first selected character decides: bold already, so off.
+            buf.select_range(&buf.iter_at_offset(2), &buf.iter_at_offset(8));
+            crate::actions::toggle_tag_in(&buf, "bold");
+            assert_eq!(bold_runs(&buf), vec![("pl".into(), true), ("plain text"[2..].into(), false)]);
+
+            crate::live::undo(&buf, false);
+            assert_eq!(bold_runs(&buf), vec![("plain".into(), true), (" text".into(), false)]);
+            crate::live::undo(&buf, false);
+            assert_eq!(bold_runs(&buf), vec![("plain text".into(), false)]);
+        });
+    }
+
     /// Bold with nothing selected, then typing, types bold (as in every word
     /// processor); a second press takes it back; a moved caret drops it.
     #[test]
