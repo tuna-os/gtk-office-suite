@@ -50,10 +50,17 @@ def check_app(app: str) -> list[Path]:
     desktop = configparser.ConfigParser(interpolation=None, strict=False)
     desktop.read_string(flatpak_text)
     entry = desktop["Desktop Entry"]
-    if entry.get("exec") != app or entry.get("icon") != app_id:
+    exec_args = (entry.get("exec") or "").split()
+    if exec_args[:1] != [app] or entry.get("icon") != app_id:
         fail(f"{app}: desktop Exec/Icon mismatch")
     if not entry.get("mimetype"):
         fail(f"{app}: desktop entry has no MIME associations")
+    # An entry that claims document types must take the files it is opened
+    # with: without a field code GLib launches it with none, and Flatpak
+    # adds --file-forwarding only for one, so opening a document from the
+    # file manager showed an empty window.
+    if exec_args[1:] != ["%U"]:
+        fail(f"{app}: desktop Exec must take the files it opens (`{app} %U`)")
 
     schema = ET.parse(schema_path).getroot()
     schemas = [node for node in schema if node.tag == "schema"]
