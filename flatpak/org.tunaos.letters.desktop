@@ -1,7 +1,7 @@
 [Desktop Entry]
 Name=Letters
 Comment=Word processor — TunaOS office suite
-Exec=letters
+Exec=letters %U
 Icon=org.tunaos.letters
 Terminal=false
 Type=Application

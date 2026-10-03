@@ -48,7 +48,7 @@ def _make_app_dir(root, app, cargo=True):
         })
     (d / f"{app_id}.json").write_text(json.dumps(manifest))
 
-    desktop = f"[Desktop Entry]\nExec={app}\nIcon={app_id}\nMimeType=text/plain;\n"
+    desktop = f"[Desktop Entry]\nExec={app} %U\nIcon={app_id}\nMimeType=text/plain;\n"
     (d / f"{app_id}.desktop").write_text(desktop)
 
     schema = ('<schemalist><schema id="%s" path="/org/tunaos/%s/">'
@@ -134,11 +134,30 @@ def test_check_app_desktop_exec_mismatch(tmp_path, monkeypatch):
         rg.check_app("letters")
 
 
+def test_check_app_desktop_exec_takes_no_files(tmp_path, monkeypatch):
+    # An entry that claims document types must take the files it is opened
+    # with: without a field code GLib launches it with none, so opening a
+    # document from the file manager showed an empty window.
+    _install(monkeypatch, tmp_path)
+    _make_app_dir(tmp_path, "letters")
+    desktop_path = tmp_path / "flatpak" / "org.tunaos.letters.desktop"
+    desktop_path.write_text("[Desktop Entry]\nExec=letters\nIcon=org.tunaos.letters\nMimeType=text/plain;\n")
+    with pytest.raises(AssertionError, match="%U"):
+        rg.check_app("letters")
+
+
+def test_the_shipped_desktop_entries_take_the_files_they_open():
+    for app in ("letters", "tables", "decks"):
+        path = Path(__file__).resolve().parent.parent / "flatpak" / f"org.tunaos.{app}.desktop"
+        exec_line = next(line for line in path.read_text().splitlines() if line.startswith("Exec="))
+        assert exec_line == f"Exec={app} %U", f"{path.name}: {exec_line}"
+
+
 def test_check_app_desktop_no_mime(tmp_path, monkeypatch):
     _install(monkeypatch, tmp_path)
     _make_app_dir(tmp_path, "letters")
     desktop_path = tmp_path / "flatpak" / "org.tunaos.letters.desktop"
-    desktop_path.write_text("[Desktop Entry]\nExec=letters\nIcon=org.tunaos.letters\n")
+    desktop_path.write_text("[Desktop Entry]\nExec=letters %U\nIcon=org.tunaos.letters\n")
     with pytest.raises(AssertionError, match="MIME"):
         rg.check_app("letters")
 

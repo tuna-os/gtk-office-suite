@@ -1,7 +1,7 @@
 [Desktop Entry]
 Name=Tables
 Comment=Spreadsheet — TunaOS office suite
-Exec=tables
+Exec=tables %U
 Icon=org.tunaos.tables
 Terminal=false
 Type=Application
