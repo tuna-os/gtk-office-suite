@@ -6948,6 +6948,12 @@ class LettersLineSpacingSmoke(BaseGUITestCase):
     It used to tag buffer lines from the line before the caret, so the
     paragraph above changed too. It is a model op on the caret's paragraph
     now.
+class LettersReplaceAllSmoke(BaseGUITestCase):
+    """Replace All keeps each match's formatting and undoes in one step
+    (#1202 stage 3).
+
+    It used to delete and insert in the buffer, and the inserted text took
+    no formatting: a bold match came back plain. It is one model edit now.
     """
 
     app_name = "letters"
@@ -6974,6 +6980,43 @@ class LettersLineSpacingSmoke(BaseGUITestCase):
         self.wait_until(self._paras, lambda p: [round(s, 2) for _, s in p] == [1.0, 1.15],
                         description="'two' at 1.15, 'one' untouched")
         self.assertIsNone(self.process.poll(), "letters crashed changing line spacing")
+        self._snapshot_path = self.isolate_snapshot(prefix="letters-replace-")
+        super().setUp()
+
+    def _runs(self):
+        s = self.trigger_snapshot("org.tunaos.letters")
+        return [(r["text"], bool(r.get("style", {}).get("bold"))) for p in s["paragraphs"] for r in p["runs"]]
+
+    def test_replace_all_keeps_bold_and_undoes_once(self):
+        from dogtail import rawinput, tree
+
+        aid = "org.tunaos.letters"
+        self.wait_for_node(name="New Document", roleName="push button").do_action(0)
+        self.wait_for_node(roleName="text")
+        rawinput.typeText("one fish two ")
+        # The text first: an action can overtake typing still on its way in.
+        self.wait_until(self._runs, lambda r: r == [("one fish two ", False)], description="the typed text")
+        self.gapplication_action(aid, "bold")
+        rawinput.typeText("fish")
+        self.wait_until(self._runs, lambda r: r == [("one fish two ", False), ("fish", True)],
+                        description="a plain and a bold 'fish'")
+
+        self.gapplication_action(aid, "find")
+        rawinput.typeText("fish")
+        self.wait_for_node(name="Toggle Replace", roleName="toggle button").do_action(0)
+        replace = self.wait_until(
+            lambda: next((n for n in self.app.findChildren(lambda n: n.roleName == "text" and n.showing)
+                          if n.name != "Print Layout" and n.text == ""), None),
+            bool, description="the Replace entry")
+        replace.text = "cat"
+        self.wait_for_node(name="Replace All", roleName="push button").do_action(0)
+        self.wait_until(self._runs, lambda r: r == [("one cat two ", False), ("cat", True)],
+                        description="both replaced, the bold one still bold")
+
+        self.gapplication_action(aid, "undo")
+        self.wait_until(self._runs, lambda r: r == [("one fish two ", False), ("fish", True)],
+                        description="one undo puts both back")
+        self.assertIsNone(self.process.poll(), "letters crashed while replacing")
 
 
 class LettersStylesAndOutlineSmoke(BaseGUITestCase):
