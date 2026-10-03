@@ -15,6 +15,7 @@ set -euo pipefail
 # first Tier C run to boot the guest failed on `scp: stat local
 # "bundles/*.flatpak"` (#1199).
 WORK="$1"; BUNDLES="$(realpath "$2")"; FIX="$(realpath "$3")"; OUT="$(realpath "$4")"
+HERE="$(dirname "$(realpath "$0")")"
 cd "$WORK"
 # -n: ssh must not read stdin. The fixture loop below is a `while read`
 # fed by a pipe, and the first ssh inside it swallowed the rest of the
@@ -70,7 +71,7 @@ done
 # The installed Flatpak used the way a desktop uses it (#1209): open a
 # document from "the file manager" (gio open) and save it through the
 # document portal. installed.json is what installed_check.py judges.
-"${SCP[@]}" "$(dirname "$(realpath "$0")")/installed.sh" lab@127.0.0.1:lab/installed.sh
+"${SCP[@]}" "$HERE/installed.sh" lab@127.0.0.1:lab/installed.sh
 : > "$OUT/installed.json"
 for spec in "letters docx application/vnd.openxmlformats-officedocument.wordprocessingml.document" \
             "tables xlsx application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" \

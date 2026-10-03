@@ -62,8 +62,13 @@ def judge(lines: list) -> tuple:
 
 
 def main(argv: list) -> int:
-    with open(argv[1]) as f:
-        md, failures = judge(f.readlines())
+    try:
+        with open(argv[1]) as f:
+            lines = f.readlines()
+    except FileNotFoundError:
+        # The VM step died before any check ran: every app is unreported.
+        lines = []
+    md, failures = judge(lines)
     print(md)
     return 1 if failures else 0
 

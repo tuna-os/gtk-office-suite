@@ -501,7 +501,9 @@ jobs:
       # from the file manager, saved through the document portal.
       - name: Installed Flatpak checks
         if: always()
-        run: python3 tools/render-lab/installed_check.py render-lab-out/installed.json | tee -a "$GITHUB_STEP_SUMMARY"
+        run: |
+          set -o pipefail
+          python3 tools/render-lab/installed_check.py render-lab-out/installed.json | tee -a "$GITHUB_STEP_SUMMARY"
 
       - name: Upload VM report
         if: always()

@@ -46,3 +46,11 @@ def test_main_exits_nonzero_on_a_failure(tmp_path, capsys):
     p.write_text("\n".join([row("letters", opened=False), row("tables"), row("decks")]) + "\n")
     assert ic.main(["x", str(p)]) == 1
     assert "did not open the document" in capsys.readouterr().out
+
+
+def test_a_missing_results_file_fails_every_app(tmp_path, capsys):
+    # The VM step can die before writing anything; that is a failure of
+    # every check, not a crash that a pipe into the job summary hides.
+    assert ic.main(["x", str(tmp_path / "installed.json")]) == 1
+    out = capsys.readouterr().out
+    assert all(f"{app}: the check did not finish" in out for app in ic.APPS)
