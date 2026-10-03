@@ -62,10 +62,29 @@ Each finding below is marked **fixed** (by the PR that adds this report) or
 | D2 | Shape, Chart and Table had the wrong icons (S5). | fixed |
 | D3 | The text toolbar (bold, italic, underline) had no toolbar padding (S1). | fixed |
 
+## Consistency across the apps
+
+The first pass fixed each dialog where it stood. It left the same kind of
+dialog built differently in each app, and that difference was easy to see.
+Letters asked for its header and footer in an alert. Tables used header-bar
+dialogs for forms. The chart dialog had its button below the preview, and
+the template picker had no buttons at all. Prompts focused their field or
+didn't, and had mnemonics or didn't. The save question was "Save
+document?" in Letters and "Save changes?" in the other two.
+
+[GNOME-GUIDELINES.md](../GNOME-GUIDELINES.md) now sets out the suite's
+rules. Each kind of dialog (alert, prompt, action dialog, viewer) has one
+builder in `suite_common::dialogs`, and every dialog in the three apps
+uses it. The same pass put headings, buttons, menu items, command names
+and tooltips into the HIG's header capitalization. It also gave every
+button a mnemonic, and worded each kind of failure the same way in all
+three apps. `tests/test_gui_guidelines.py` reads the sources and fails on
+anything that goes around the builders or the writing rules.
+
 ## What was already right
 
 - Alert dialogs (Insert Link, Insert Footnote, Rename Sheet, Can't Delete Sheet, save questions) use `AdwAlertDialog`, with the suggested action on the right.
 - Preferences use `AdwPreferencesDialog`, with search.
 - New from Template (Letters, Tables) and Choose a Theme (Decks) are libadwaita dialogs with header-bar actions.
 - Keyboard Shortcuts, the command palette, toasts, the find bar and Decks' master-editing banner use the platform widgets.
-- Dark style follows the system and the app's own toggle.
+- Dark style follows the 
