@@ -189,17 +189,28 @@ fn chart_menu() -> gtk::MenuButton {
 /// slide, instead of shrinking it. In the menu, Shape and Chart open their
 /// pickers as pages with a back button, as a popover menu's submenus do;
 /// a menu button inside a popover does not open its own reliably.
-pub fn build(header: &adw::HeaderBar, narrow: &adw::Breakpoint) {
+///
+/// They sit in the toolbar, after the text formatting buttons. In the
+/// header bar, five labelled buttons pushed the document's title off
+/// centre and left the toolbar row below nearly empty
+/// (docs/design/hig-audit-2026-10.md D1).
+pub fn build(toolbar: &gtk::Box, narrow: &adw::Breakpoint) {
+    // Present stays the toolbar's last button.
+    let present = toolbar.last_child();
+    toolbar.append(&gtk::Separator::new(gtk::Orientation::Vertical));
     let bar = gtk::Box::new(gtk::Orientation::Horizontal, 0);
     bar.append(&button("insert-text-symbolic", "_Text", "Insert Text Box", "app.add-text-box"));
     bar.append(&shape_menu());
     bar.append(&button("office-table-symbolic", "T_able", "Insert Table", "app.insert-table"));
     bar.append(&chart_menu());
     bar.append(&button("insert-image-symbolic", "_Image", "Insert Image", "app.add-image"));
-    header.pack_start(&bar);
+    toolbar.append(&bar);
 
     let compact = compact_menu();
-    header.pack_start(&compact);
+    toolbar.append(&compact);
+    if let Some(present) = present {
+        toolbar.reorder_child_after(&present, toolbar.last_child().as_ref());
+    }
     narrow.add_setter(&bar, "visible", Some(&false.to_value()));
     narrow.add_setter(&compact, "visible", Some(&true.to_value()));
 }

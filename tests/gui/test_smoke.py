@@ -3364,6 +3364,11 @@ class TablesTwoSheetJourneySmoke(TablesCellEntryMixin, BaseGUITestCase):
         self._sheet_command("Delete sheet", "Delete Sheet")
         self._press("Delete")
         self._wait_state((["Sheet1"], 0, ("5", None)), "Totals deleted, Sheet1 shown with its own value")
+        # The last sheet can't be deleted, so Delete Sheet is disabled rather
+        # than offered and then refused (docs/design/hig-audit-2026-10.md T6).
+        last = self._showing("push button", "Delete sheet")
+        if last:
+            self.wait_until(lambda: last.sensitive, lambda on: not on, description="Delete Sheet disabled on the last sheet")
         subprocess.run(["gapplication", "action", aid, "undo"])
         self._wait_state((["Totals", "Sheet1"], 0, ("10", "Sheet1!A1*2")),
                          "the undo to bring Totals back first, formula and all")
@@ -3583,6 +3588,26 @@ class TablesFormatInspectorSmoke(TablesCellEntryMixin, BaseGUITestCase):
                         description="the inspector to show A1 as bold again")
         self.assertIsNone(self.process.poll(), "tables crashed in the format inspector")
 
+    def test_ctrl_b_toggles_bold_on_the_selection(self):
+        """Ctrl+B bolds the selection and Ctrl+B again unbolds it. Tables
+        had no Bold action, so the shortcut did nothing (HIG audit T4)."""
+        import subprocess
+        from dogtail import rawinput
+
+        subprocess.run(["gapplication", "action", "org.tunaos.tables", "new-document"])
+        self._wait_for_a_new_document()
+        self._put("A1", "x")
+        self.app.child(name="Format", roleName="toggle button").do_action(0)
+        self.wait_until(lambda: self.app.child(name="Bold", roleName="toggle button").showing, bool,
+                        description="the inspector to open")
+        self._go("A1")
+        self.assertFalse(self._pressed("Bold"), "A1 starts plain")
+        rawinput.keyCombo("<Control>b")
+        self.wait_until(lambda: self._pressed("Bold"), bool, description="Ctrl+B to bold A1")
+        rawinput.keyCombo("<Control>b")
+        self.wait_until(lambda: not self._pressed("Bold"), bool, description="Ctrl+B again to unbold A1")
+        self.assertIsNone(self.process.poll(), "tables crashed toggling bold")
+
 
 class TablesFormatCodeSmoke(TablesFormatInspectorSmoke):
     """The number-format editor: in the Format inspector's Number group, a
@@ -3590,6 +3615,9 @@ class TablesFormatCodeSmoke(TablesFormatInspectorSmoke):
     and the cell shows (and says) the value as the code draws it."""
 
     def test_bold_applies_to_the_selection_and_follows_it(self):
+        self.skipTest("the parent's journey; this class runs its own")
+
+    def test_ctrl_b_toggles_bold_on_the_selection(self):
         self.skipTest("the parent's journey; this class runs its own")
 
     def test_a_custom_code_formats_the_cell(self):
