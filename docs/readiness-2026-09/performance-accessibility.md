@@ -82,7 +82,11 @@ Architecture: benchmark core open/edit/recalculate/save separately from GTK inpu
         `adwaita-icon-theme`, which the Flatpak's GNOME runtime ships. And Letters' "Could not open" message had
         changed since the images were recorded (the docx reader now reports the zip error itself, not wrapped in
         "OPC package error"), so its 18 error cells are re-recorded; a local run of the whole matrix on main
-        matched every other cell. The row stays open until a run on the rebuilt image is green.
+        matched every other cell. The second CI run, on the image with the theme (run 37083296370), still drew
+        the same icons as placeholders: Adwaita's symbolic icons are SVG, and the image had no gdk-pixbuf SVG loader
+        either (`librsvg2-common`, also only recommended). Hiding that loader locally reproduces CI's numbers to the
+        hundredth of a percent (`decks-error` at 400 px, 2.0700%); the image now installs it. The row stays open
+        until a run on the rebuilt image is green.
 - [x] Keyboard-only edit/save/undo and AT-SPI names/roles/states/bounds match the model after scroll/resize/zoom.
       **Keyboard-only edit, undo and save is done for all three apps** (#1208): `LettersKeyboardOnlySmoke`,
       `TablesKeyboardOnlySmoke` and `DecksKeyboardOnlySmoke` (`KeyboardOnlyMixin` in `tests/gui/test_smoke.py`) open
