@@ -93,6 +93,9 @@ fn source_drops(path: &str, report: &mut CompatibilityReport) {
         if content.contains("<draw:object-ole") {
             record(report, OLE, "content.xml", "embedded objects aren't kept");
         }
+        if content.contains("<table:table-source") {
+            record(report, LINKS, "content.xml", "Calc's hidden copies of linked workbooks aren't kept");
+        }
         return;
     }
     let any = |prefix: &str| names.iter().any(|n| n.starts_with(prefix));
@@ -246,6 +249,20 @@ mod tests {
         ]);
         let r = content_a_save_drops(Some(path.to_str().unwrap()), &[sheet()]);
         assert_eq!(ids(&r), ["embedded-objects", "macros", "pictures", "pivot-tables"]);
+    }
+
+    /// Calc's hidden caches of linked workbooks aren't loaded (load.rs
+    /// `is_link_cache`), so a save says it drops them.
+    #[test]
+    fn an_ods_lists_its_links_to_other_workbooks() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("linked.ods");
+        package(&path, &[
+            ("mimetype", "application/vnd.oasis.opendocument.spreadsheet"),
+            ("content.xml", "<office:document-content><table:table table:name=\"'file:///C:/b.xlsm'#S\"><table:table-source xlink:href=\"file:///C:/b.xlsm\"/></table:table></office:document-content>"),
+        ]);
+        let r = content_a_save_drops(Some(path.to_str().unwrap()), &[sheet()]);
+        assert_eq!(ids(&r), ["external-links"]);
     }
 
     #[test]
