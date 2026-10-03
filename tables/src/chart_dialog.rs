@@ -15,7 +15,7 @@ use std::rc::Rc;
 
 use gtk4::{self as gtk, prelude::*};
 use libadwaita as adw;
-use adw::prelude::AdwDialogExt;
+use adw::prelude::*;
 
 use tables_core::controller::{WorkbookController, WorkbookState};
 
@@ -44,12 +44,6 @@ pub fn opener(
             }
         }
         if data.is_empty() { return; }
-
-        let dialog = adw::Dialog::builder()
-            .title(suite_common::i18n("Chart"))
-            .content_width(600)
-            .content_height(480)
-            .build();
 
         let chart_type = Rc::new(Cell::new(tables_core::sheet::ChartKind::Bar));
         let data_rc = Rc::new(data);
@@ -96,17 +90,23 @@ pub fn opener(
             type_combo.append(&button);
         }
 
-        let header = gtk::Box::new(gtk::Orientation::Horizontal, 6);
-        header.set_margin_start(12); header.set_margin_end(12); header.set_margin_top(6);
-        header.append(&gtk::Label::new(Some("Type:")));
-        header.append(&type_combo);
-
-        // Insert persists the chart on the sheet (saved into xlsx).
-        let insert_btn = gtk::Button::with_label(&suite_common::i18n("Insert into Sheet"));
-        insert_btn.add_css_class("suggested-action");
-        insert_btn.set_halign(gtk::Align::End);
-        insert_btn.set_margin_end(12);
-        insert_btn.set_margin_bottom(12);
+        // The type as a row, the chart drawn below it as a card.
+        type_combo.set_valign(gtk::Align::Center);
+        let type_row = adw::ActionRow::builder().title(suite_common::i18n("Type")).build();
+        type_row.add_suffix(&type_combo);
+        let group = adw::PreferencesGroup::new();
+        group.add(&type_row);
+        preview.set_size_request(-1, 280);
+        let card = gtk::Frame::new(None);
+        card.add_css_class("card");
+        card.set_child(Some(&preview));
+        // Insert puts the chart on the sheet (saved into xlsx).
+        let suite_common::dialogs::ActionDialog { dialog, action: insert_btn } = suite_common::dialogs::action_dialog(
+            &suite_common::i18n("Insert Chart"),
+            &suite_common::i18n("_Insert"),
+            600,
+            &suite_common::dialogs::form_body(&[group.upcast_ref(), card.upcast_ref()]),
+        );
         {
             let ctl = controller.clone();
             let ct = chart_type.clone();
@@ -150,11 +150,6 @@ pub fn opener(
             });
         }
 
-        let box_content = gtk::Box::new(gtk::Orientation::Vertical, 6);
-        box_content.append(&header);
-        box_content.append(&preview);
-        box_content.append(&insert_btn);
-        dialog.set_child(Some(&box_content));
         let pw = parent.borrow().clone();
         dialog.present(pw.as_ref());
     })

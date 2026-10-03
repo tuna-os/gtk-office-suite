@@ -57,7 +57,7 @@ rows; **Clear Filter** shows them again. Each change is one undo step.
 
 **Insert Chart…** charts the active cell's column, using column A as the
 labels. It previews the chart as Column, Line, Area, Pie or XY (Scatter)
-before **Insert into Sheet**.
+before **Insert**.
 
 ## Conditional formatting
 

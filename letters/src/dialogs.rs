@@ -85,35 +85,29 @@ pub fn focus_active_view(tv: &adw::TabView) {
 /// container, as this dialog once did, meant a header that was shown and
 /// never written to the file (#438).
 pub fn show_header_footer_dialog(pc: &PageContainer, buf: &gtk::TextBuffer) {
-    let dialog = adw::AlertDialog::new(
-        Some(&i18n("Headers and Footers")),
-        Some(&i18n("Use {page} for automatic page numbering.")),
-    );
-
-    // A boxed list of entry rows, the libadwaita form: each field is
-    // named in its own row rather than by a centred label above a bare
-    // entry.
+    // An action dialog of entry rows, like Page Setup and Tables' forms.
+    // It used to be an alert holding a boxed list, which looked like
+    // nothing else in the suite.
     let (header, footer) = header_footer_of(buf);
     let hdr_entry = adw::EntryRow::builder().title(i18n("Header")).text(header).build();
     let ftr_entry = adw::EntryRow::builder().title(i18n("Footer")).text(footer).build();
-    let content = gtk::ListBox::new();
-    content.add_css_class("boxed-list");
-    content.set_selection_mode(gtk::SelectionMode::None);
-    content.append(&hdr_entry);
-    content.append(&ftr_entry);
-    dialog.set_extra_child(Some(&content));
-
-    dialog.add_responses(&[("cancel", &i18n("_Cancel")), ("apply", &i18n("_Apply"))]);
-    dialog.set_default_response(Some("apply"));
-    dialog.set_response_appearance("apply", adw::ResponseAppearance::Suggested);
-
-    let parent = pc.root().and_downcast::<adw::ApplicationWindow>();
-    let buf = buf.clone();
-    dialog.choose(parent.as_ref(), None::<&gtk::gio::Cancellable>, move |response| {
-        if response.as_str() == "apply" {
+    let group = adw::PreferencesGroup::builder().description(i18n("Type {page} where the page number goes.")).build();
+    group.add(&hdr_entry);
+    group.add(&ftr_entry);
+    let suite_common::dialogs::ActionDialog { dialog, action } = suite_common::dialogs::action_dialog(
+        &i18n("Headers and Footers"),
+        &i18n("_Apply"),
+        400,
+        &suite_common::dialogs::form_body(&[group.upcast_ref()]),
+    );
+    {
+        let (buf, d) = (buf.clone(), dialog.clone());
+        action.connect_clicked(move |_| {
             apply_header_footer(&buf, &hdr_entry.text(), &ftr_entry.text());
-        }
-    });
+            d.close();
+        });
+    }
+    dialog.present(pc.root().as_ref());
 }
 
 /// The document's header and footer, empty when it has none: what the
@@ -170,54 +164,6 @@ pub(crate) fn apply_page_geometry(buf: &gtk::TextBuffer, page: letters_core::mod
     applied
 }
 
-/// Show a dialog for inserting a custom dimension table.
-#[allow(dead_code)]
-pub fn show_insert_table_dialog(tv: &adw::TabView) {
-    let dialog = adw::AlertDialog::new(
-        Some(&i18n("Insert Table")),
-        Some(&i18n("Specify rows and columns for the new table.")),
-    );
-
-    let content = gtk::Box::new(gtk::Orientation::Vertical, 12);
-    content.set_margin_top(12);
-    content.set_margin_bottom(12);
-    content.set_margin_start(12);
-    content.set_margin_end(12);
-
-    let rows_spin = gtk::SpinButton::with_range(1.0, 50.0, 1.0);
-    rows_spin.set_value(3.0);
-    let cols_spin = gtk::SpinButton::with_range(1.0, 20.0, 1.0);
-    cols_spin.set_value(3.0);
-
-    let grid = gtk::Grid::new();
-    grid.set_row_spacing(8);
-    grid.set_column_spacing(12);
-    grid.attach(&gtk::Label::new(Some(&i18n("Rows:"))), 0, 0, 1, 1);
-    grid.attach(&rows_spin, 1, 0, 1, 1);
-    grid.attach(&gtk::Label::new(Some(&i18n("Columns:"))), 0, 1, 1, 1);
-    grid.attach(&cols_spin, 1, 1, 1, 1);
-    content.append(&grid);
-
-    dialog.set_extra_child(Some(&content));
-    dialog.add_responses(&[("cancel", &i18n("_Cancel")), ("insert", &i18n("_Insert"))]);
-    dialog.set_default_response(Some("insert"));
-    dialog.set_response_appearance("insert", adw::ResponseAppearance::Suggested);
-
-    let tv = tv.clone();
-    let parent = tv.root().and_downcast::<adw::ApplicationWindow>();
-    dialog.choose(parent.as_ref(), None::<&gtk::gio::Cancellable>, move |response| {
-        if response.as_str() == "insert" {
-            let rows = rows_spin.value() as u32;
-            let cols = cols_spin.value() as u32;
-            if let Some(buf) = active_buffer(&tv) {
-                crate::bridge::apply_structured_edit(&buf, |editor| {
-                    editor.insert_table(rows, cols);
-                });
-            }
-        }
-    });
-}
-
 /// Create and wire the search bar and find/replace controls for Letters.
 pub fn make_find_replace_widget(tv: &adw::TabView) -> (gtk::SearchBar, gtk::SearchEntry) {
     let search_bar = gtk::SearchBar::new();
@@ -231,11 +177,11 @@ pub fn make_find_replace_widget(tv: &adw::TabView) -> (gtk::SearchBar, gtk::Sear
     match_label.add_css_class("dim-label");
 
     let prev_btn = gtk::Button::from_icon_name("go-up-symbolic");
-    prev_btn.set_tooltip_text(Some(&i18n("Previous match (Shift+Enter)")));
+    prev_btn.set_tooltip_text(Some(&i18n("Previous Match (Shift+Enter)")));
     prev_btn.add_css_class("flat");
 
     let next_btn = gtk::Button::from_icon_name("go-down-symbolic");
-    next_btn.set_tooltip_text(Some(&i18n("Next match (Enter)")));
+    next_btn.set_tooltip_text(Some(&i18n("Next Match (Enter)")));
     next_btn.add_css_class("flat");
 
     let replace_entry = gtk::Entry::builder()

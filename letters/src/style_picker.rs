@@ -120,9 +120,9 @@ pub fn build(tv: &adw::TabView) -> gtk::MenuButton {
     let button = gtk::MenuButton::builder()
         .child(&label)
         .always_show_arrow(true)
-        .tooltip_text(suite_common::i18n("Paragraph style"))
+        .tooltip_text(suite_common::i18n("Paragraph Style"))
         .build();
-    button.update_property(&[gtk::accessible::Property::Label(&suite_common::i18n("Paragraph style"))]);
+    button.update_property(&[gtk::accessible::Property::Label(&suite_common::i18n("Paragraph Style"))]);
 
     // The active document's look: its body font and heading styles.
     let opts = Rc::new(std::cell::RefCell::new(LayoutOptions::default()));

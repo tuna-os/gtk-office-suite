@@ -8,7 +8,7 @@
 //! the Insert buttons, the inspector and undo all work on it unchanged. A
 //! banner says what is being edited and holds Done, which puts the slides
 //! back and records the master edit as one undo step. Starting another
-//! deck waits for Done: New, New from Template and Open are off meanwhile.
+//! deck waits for Done: New, New From Template and Open are off meanwhile.
 
 use adw::prelude::*;
 use gtk4::{self as gtk, gio};

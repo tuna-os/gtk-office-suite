@@ -102,7 +102,7 @@ are not all green, and any fixture name the baseline does not have.
 | Feature | Status | Proven by | Render |
 |---|---|---|---|
 | Formulas surviving save | ✅ | I2+I4: written as formulas with cached results; Calc evaluates ours | — |
-| Charts persisted (bar/line/pie) | ✅ | I2 round-trip (write + own reader) + I4 (survives Calc rewrite); Insert into Sheet dialog | 🟢 tables/chart, tables/chart-line, tables/chart-area, tables/chart-scatter, tables/chart-pie (green in every tier, the shipped Flatpak included) |
+| Charts persisted (bar/line/pie) | ✅ | I2 round-trip (write + own reader) + I4 (survives Calc rewrite); Insert Chart dialog | 🟢 tables/chart, tables/chart-line, tables/chart-area, tables/chart-scatter, tables/chart-pie (green in every tier, the shipped Flatpak included) |
 | Conditional formatting (cell-value rules) | ✅ | I1 rule matching + I2 round-trip + I4 (survives Calc rewrite); rendered on canvas, dialog | ✅ tables/conditional |
 | Freeze panes / autofill / named ranges | ✅ | I1 each (tables-core/src/fill.rs series and tiling, tables-core/src/sheet.rs frozen panes); I2 defined_names_round_trip_through_xlsx; I4 frozen_panes_survive_calc_rewrite (tables-core/tests/soffice_oracle.rs); I6 TablesFillHandleSmoke, TablesAutofillSeriesSmoke, TablesNamedRangeSmoke | ✅ tables/frozen |
 | Cross-sheet references | ✅ | I1 cross_sheet_formula_recalculates, rename and reorder keep them live (tables-core/src/engine.rs, tables-core/src/controller/tests.rs); I2 xlsx round-trip; I4 a_cross_sheet_formula_survives_calc_both_ways ('My rates'!A1 through Calc's ods and xlsx, still live; tables-core/tests/soffice_oracle.rs); I6 TablesTwoSheetJourneySmoke | — |

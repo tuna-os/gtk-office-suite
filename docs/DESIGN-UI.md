@@ -109,7 +109,7 @@ only with its render-lab fixture green or improving.
   - Here: an `AdwNavigationView` start page with a `GtkGridView` of real
     rendered thumbnails. The thumbnails come from the same renderer as the
     canvas (Phase 1), cached on disk, never hand-drawn.
-  - ✅ Decks (2026-09-25): New from Template opens an `AdwDialog` of five
+  - ✅ Decks (2026-09-25): New From Template opens an `AdwDialog` of five
     built-in themes (`decks_core::templates`: real decks, each a master
     with background, font and decorations plus a title and a bulleted
     slide), each tile the theme's title slide drawn by the canvas's

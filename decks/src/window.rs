@@ -245,12 +245,12 @@ impl DecksWindow {
         pill.set_valign(gtk::Align::End);
         pill.set_margin_bottom(12);
         let prev_btn = gtk::Button::from_icon_name("go-previous-symbolic");
-        prev_btn.set_tooltip_text(Some(&suite_common::i18n("Previous slide")));
+        prev_btn.set_tooltip_text(Some(&suite_common::i18n("Previous Slide")));
         let present_btn = gtk::Button::from_icon_name("media-playback-start-symbolic");
         present_btn.set_tooltip_text(Some(&suite_common::i18n("Present (F5)")));
         present_btn.set_action_name(Some("app.present"));
         let next_btn = gtk::Button::from_icon_name("go-next-symbolic");
-        next_btn.set_tooltip_text(Some(&suite_common::i18n("Next slide")));
+        next_btn.set_tooltip_text(Some(&suite_common::i18n("Next Slide")));
         pill.append(&prev_btn);
         pill.append(&present_btn);
         pill.append(&next_btn);
@@ -375,15 +375,15 @@ impl DecksWindow {
         sidebar_controls.set_margin_bottom(6);
 
         let add_btn = gtk::Button::builder()
-            .icon_name("list-add-symbolic").tooltip_text("Add slide").build();
+            .icon_name("list-add-symbolic").tooltip_text("Add Slide").build();
         let del_btn = gtk::Button::builder()
-            .icon_name("list-remove-symbolic").tooltip_text("Delete slide").build();
+            .icon_name("list-remove-symbolic").tooltip_text("Delete Slide").build();
         let up_btn = gtk::Button::builder()
-            .icon_name("go-up-symbolic").tooltip_text("Move up").build();
+            .icon_name("go-up-symbolic").tooltip_text("Move Slide Up").build();
         let down_btn = gtk::Button::builder()
-            .icon_name("go-down-symbolic").tooltip_text("Move down").build();
+            .icon_name("go-down-symbolic").tooltip_text("Move Slide Down").build();
         let dup_btn = gtk::Button::builder()
-            .icon_name("edit-copy-symbolic").tooltip_text("Duplicate slide").build();
+            .icon_name("edit-copy-symbolic").tooltip_text("Duplicate Slide").build();
         // slide_actions.rs does the work, so the shortcuts and the palette
         // reach the same commands.
         up_btn.set_action_name(Some("app.move-slide-up"));
@@ -482,19 +482,7 @@ impl DecksWindow {
                 if !dirty.get() {
                     return glib::Propagation::Proceed;
                 }
-                let dialog = adw::AlertDialog::builder()
-                    .heading("Save changes?")
-                    .body("This presentation has unsaved changes. If you close without saving, they will be lost.")
-                    .build();
-                dialog.add_responses(&[
-                    ("cancel", "_Cancel"),
-                    ("discard", "_Discard"),
-                    ("save", "_Save"),
-                ]);
-                dialog.set_close_response("cancel");
-                dialog.set_default_response(Some("save"));
-                dialog.set_response_appearance("discard", adw::ResponseAppearance::Destructive);
-                dialog.set_response_appearance("save", adw::ResponseAppearance::Suggested);
+                let dialog = suite_common::dialogs::save_changes_question(&[suite_common::dialogs::document_name(win)]);
 
                 let win_weak = win.downgrade();
                 let force_close = force_close.clone();
@@ -530,10 +518,10 @@ impl DecksWindow {
                             }
                             Err(e) => {
                                 let err = adw::AlertDialog::builder()
-                                    .heading(suite_common::i18n("Error saving file"))
+                                    .heading(suite_common::i18n("Could Not Save File"))
                                     .body(&e)
                                     .build();
-                                err.add_response("ok", &suite_common::i18n("OK"));
+                                err.add_response("ok", &suite_common::i18n("_OK"));
                                 err.present(Some(&w));
                             }
                         });
@@ -575,10 +563,10 @@ impl DecksWindow {
                                     }
                                     Err(e) => {
                                         let err = adw::AlertDialog::builder()
-                                            .heading(suite_common::i18n("Error saving file"))
+                                            .heading(suite_common::i18n("Could Not Save File"))
                                             .body(&e)
                                             .build();
-                                        err.add_response("ok", &suite_common::i18n("OK"));
+                                        err.add_response("ok", &suite_common::i18n("_OK"));
                                         err.present(Some(&w));
                                     }
                                 });
@@ -1143,7 +1131,7 @@ impl DecksWindow {
             app.add_action(&act);
         }
 
-        // New from Template (template_chooser.rs), in place of the suite's
+        // New From Template (template_chooser.rs), in place of the suite's
         // generic template dialog: the chosen theme's deck and master.
         {
             let (cs, sl, ss, ms) = (content_stack.clone(), slide_list.clone(), slides.clone(), masters.clone());
@@ -1247,10 +1235,10 @@ impl DecksWindow {
                                     }
                                     Err(e) => {
                                         let err = adw::AlertDialog::builder()
-                                            .heading(suite_common::i18n("Error opening presentation"))
+                                            .heading(suite_common::i18n("Could Not Open File"))
                                             .body(&e)
                                             .build();
-                                        err.add_response("ok", &suite_common::i18n("OK"));
+                                        err.add_response("ok", &suite_common::i18n("_OK"));
                                         err.set_default_response(Some("ok"));
                                         err.present(Some(&w2));
                                     }
@@ -1290,10 +1278,10 @@ impl DecksWindow {
                         }
                         Err(e) => {
                             let err = adw::AlertDialog::builder()
-                                .heading(suite_common::i18n("Error saving presentation"))
+                                .heading(suite_common::i18n("Could Not Save File"))
                                 .body(&e)
                                 .build();
-                            err.add_response("ok", &suite_common::i18n("OK"));
+                            err.add_response("ok", &suite_common::i18n("_OK"));
                             err.set_default_response(Some("ok"));
                             err.present(Some(&w_clone));
                         }
@@ -1347,10 +1335,10 @@ impl DecksWindow {
                                     }
                                     Err(e) => {
                                         let err = adw::AlertDialog::builder()
-                                            .heading(suite_common::i18n("Error saving presentation"))
+                                            .heading(suite_common::i18n("Could Not Save File"))
                                             .body(&e)
                                             .build();
-                                        err.add_response("ok", &suite_common::i18n("OK"));
+                                        err.add_response("ok", &suite_common::i18n("_OK"));
                                         err.set_default_response(Some("ok"));
                                         err.present(Some(&w2));
                                     }
@@ -1550,7 +1538,7 @@ fn local_path(file: &gio::File, for_save: bool, parent: &adw::ApplicationWindow)
     };
     staged
         .map_err(|e| {
-            let heading = if for_save { "Error saving presentation" } else { "Error opening presentation" };
+            let heading = if for_save { "Could Not Save File" } else { "Could Not Open File" };
             suite_common::show_error_dialog(Some(parent), &suite_common::i18n(heading), &e);
         })
         .ok()

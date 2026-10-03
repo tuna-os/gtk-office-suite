@@ -135,7 +135,7 @@ fn main() {
                     .unwrap_or_else(|| path_str.clone());
                 suite_common::show_error_dialog(
                     Some(&win.window),
-                    &suite_common::i18n("Could not open file"),
+                    &suite_common::i18n("Could Not Open File"),
                     &format!("{name}\n\n{e}"),
                 );
             }

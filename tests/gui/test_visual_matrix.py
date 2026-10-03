@@ -172,7 +172,7 @@ class VisualMatrixMixin:
         self._capture("error")
 
     def _open_error(self):
-        return self.app.findChild(lambda n: (n.name or "").startswith("Could not open"), retry=False, requireResult=False)
+        return self.app.findChild(lambda n: (n.name or "").lower().startswith("could not open"), retry=False, requireResult=False)
 
 
 class LettersVisualMatrix(VisualMatrixMixin, BaseGUITestCase):

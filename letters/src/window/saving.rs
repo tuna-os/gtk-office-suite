@@ -101,7 +101,7 @@ fn save_asking_about_loss(
         let page = page.clone();
         move |outcome: SaveOutcome, complete: Box<dyn FnOnce(SaveOutcome)>| {
             if let SaveOutcome::Failed(ref error) = outcome {
-                show_message(&page, "Could not save document", error);
+                show_message(&page, "Could Not Save File", error);
             }
             complete(outcome);
         }
@@ -183,7 +183,7 @@ pub(super) fn save_with_prompt(
     if !force_save_as {
         let Some(td) = tab_data_get(&page.child()) else {
             let error = suite_common::i18n("Document session is unavailable.");
-            show_message(page, "Could not save document", &error);
+            show_message(page, "Could Not Save File", &error);
             complete(SaveOutcome::Failed(error));
             return;
         };
@@ -243,7 +243,7 @@ pub(super) fn save_with_prompt(
             Err(error) => SaveOutcome::Failed(error.to_string()),
         };
         if let SaveOutcome::Failed(ref error) = outcome {
-            show_message(&page, "Could not save document", error);
+            show_message(&page, "Could Not Save File", error);
         }
         complete(outcome);
     });

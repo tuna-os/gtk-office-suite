@@ -144,7 +144,7 @@ fn main() {
             let path = match suite_common::locations::open_location(file) {
                 Ok(path) => path,
                 Err(e) => {
-                    suite_common::show_error_dialog(Some(&win.window), &suite_common::i18n("Could not open file"), &e);
+                    suite_common::show_error_dialog(Some(&win.window), &suite_common::i18n("Could Not Open File"), &e);
                     continue;
                 }
             };
@@ -158,7 +158,7 @@ fn main() {
                     .unwrap_or_else(|| path_str.clone());
                 suite_common::show_error_dialog(
                     Some(&win.window),
-                    &suite_common::i18n("Could not open file"),
+                    &suite_common::i18n("Could Not Open File"),
                     &format!("{name}\n\n{e}"),
                 );
             }

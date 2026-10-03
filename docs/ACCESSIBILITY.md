@@ -34,7 +34,7 @@ In every app, **Ctrl+Shift+Z** redoes as well as Ctrl+Y.
 |---|---|
 | Command Palette | Ctrl+K |
 | New Document | Ctrl+N |
-| New from Template… | Shift+Ctrl+N |
+| New From Template… | Shift+Ctrl+N |
 | Open… | Ctrl+O |
 | Save | Ctrl+S |
 | Save As… | Shift+Ctrl+S |

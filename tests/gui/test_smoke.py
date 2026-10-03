@@ -304,7 +304,7 @@ class LettersCloseGuardSmoke(BaseGUITestCase):
 
         self.app.child(name="Close", roleName="push button").do_action(0)
         time.sleep(0.8)  # pacing: no state to wait on before the next input
-        self.app.child(name="Discard All", roleName="push button").do_action(0)
+        self.app.child(name="Discard", roleName="push button").do_action(0)
         self.assertIsNotNone(self.wait_for_process_exit(), "Discard must close the window")
 
     def test_save_in_close_guard_prompts_save_as_writes_and_closes(self):
@@ -315,7 +315,7 @@ class LettersCloseGuardSmoke(BaseGUITestCase):
 
         self.app.child(name="Close", roleName="push button").do_action(0)
         time.sleep(0.8)  # pacing: no state to wait on before the next input
-        self.app.child(name="Save All", roleName="push button").do_action(0)
+        self.app.child(name="Save", roleName="push button").do_action(0)
         time.sleep(1.0)  # pacing: no state to wait on before the next input
 
         name_entry = tree.root.findChild(lambda n: n.name == "Name:" and n.roleName == "text")
@@ -384,7 +384,7 @@ class LettersSaveFailureSmoke(BaseGUITestCase):
         os.rename(self._source, self._backup)
 
     def _assert_error_preserves_work(self):
-        self.wait_for_node(name="Could not save document")
+        self.wait_for_node(name="Could Not Save File")
         self.assertIsNone(self.process.poll())
         self.assertEqual(self.trigger_snapshot("org.tunaos.letters"), self._edited)
         for path, content in self._checkpoint.items():
@@ -399,14 +399,14 @@ class LettersSaveFailureSmoke(BaseGUITestCase):
         self._assert_error_preserves_work()
         self.wait_for_node(name="OK", roleName="push button").do_action(0)
         self.wait_for_node(name="Close", roleName="push button").do_action(0)
-        self.wait_for_node(name="Save All", roleName="push button")
+        self.wait_for_node(name="Save", roleName="push button")
         self.assertIsNone(self.process.poll(), "failed save incorrectly cleared the close guard")
 
     def test_save_all_failure_keeps_window_and_checkpoint(self):
         self._edit_and_checkpoint()
         self._make_destination_unavailable()
         self.wait_for_node(name="Close", roleName="push button").do_action(0)
-        self.wait_for_node(name="Save All", roleName="push button").do_action(0)
+        self.wait_for_node(name="Save", roleName="push button").do_action(0)
         self._assert_error_preserves_work()
 
     def test_save_as_cancel_keeps_original_identity_and_unsaved_work(self):
@@ -455,7 +455,7 @@ class LettersSaveFailureSmoke(BaseGUITestCase):
         self._edit_and_checkpoint()
         refused = os.path.join(self._dir, "report.rtf")
         self._save_as(refused)
-        self.wait_for_node(name="Could not save document")
+        self.wait_for_node(name="Could Not Save File")
         self.assertIsNone(self.process.poll())
         self.assertEqual(self.trigger_snapshot("org.tunaos.letters"), self._edited)
         for path, content in self._checkpoint.items():
@@ -565,8 +565,8 @@ class LettersMultiTabSaveFailureSmoke(BaseGUITestCase):
 
         os.rename(self._first_dir, self._first_dir + "-gone")
         self.wait_for_node(name="Close", roleName="push button").do_action(0)
-        self.wait_for_node(name="Save All", roleName="push button").do_action(0)
-        self.wait_for_node(name="Could not save document")
+        self.wait_for_node(name="Save", roleName="push button").do_action(0)
+        self.wait_for_node(name="Could Not Save File")
         self.assertIsNone(self.process.poll(), "a failed Save All closed the window")
 
         # The failed tab is still open, and its checkpoint is untouched.
@@ -692,7 +692,7 @@ class FailedSaveKeepsWorkMixin:
 class TablesSaveFailureSmoke(FailedSaveKeepsWorkMixin, BaseGUITestCase):
     app_name = "tables"
     AID = "org.tunaos.tables"
-    ERROR = "Error saving file"
+    ERROR = "Could Not Save File"
 
     def setUp(self):
         self._prepare("book.xlsx", xlsx_parts({"A1": "kept"}))
@@ -728,7 +728,7 @@ class TablesSaveFailureSmoke(FailedSaveKeepsWorkMixin, BaseGUITestCase):
 class DecksSaveFailureSmoke(FailedSaveKeepsWorkMixin, BaseGUITestCase):
     app_name = "decks"
     AID = "org.tunaos.decks"
-    ERROR = "Error saving presentation"
+    ERROR = "Could Not Save File"
 
     def setUp(self):
         self._prepare("deck.odp", odp_parts())
@@ -1220,7 +1220,7 @@ class TablesMultiSheetSmoke(BaseGUITestCase):
         rawinput.keyCombo("Return")
         time.sleep(0.5)  # pacing: no state to wait on before the next input
 
-        self.app.child(name="Add sheet", roleName="push button").do_action(0)
+        self.app.child(name="Add Sheet", roleName="push button").do_action(0)
         time.sleep(0.8)  # pacing: no state to wait on before the next input
         # GtkDropDown's accessible name mirrors the selected item's label
         # ("Sheet2" once added), not a fixed string, so match by role.
@@ -1734,8 +1734,8 @@ class SavedDocumentMixin:
 
     doc_suffix = ".xlsx"
     doc_stem = "quarterly"
-    # Letters' close guard is multi-tab, so its buttons are "Save All" and
-    # "Discard All" where the single-document apps say "Save".
+    # The close question says "Save" for one document in every app, and
+    # "Save All" only when several are unsaved (dialogs.save_changes_question).
     save_button_label = "Save"
 
     def _snapshot_files(self):
@@ -1944,7 +1944,6 @@ class TablesKilledMidSaveSmoke(TablesSavedDocumentMixin, KilledMidSaveMixin, Bas
 class LettersKilledMidSaveSmoke(KilledMidSaveMixin, BaseGUITestCase):
     app_name = "letters"
     doc_suffix = ".md"
-    save_button_label = "Save All"
 
 
 class EveryCrashedDocumentComesBackMixin:
@@ -2020,7 +2019,6 @@ class TablesRenamedOriginalSmoke(TablesSavedDocumentMixin, RenamedOriginalMixin,
 class LettersRenamedOriginalSmoke(RenamedOriginalMixin, BaseGUITestCase):
     app_name = "letters"
     doc_suffix = ".md"
-    save_button_label = "Save All"
 
 
 class DecksRenamedOriginalSmoke(RenamedOriginalMixin, BaseGUITestCase):
@@ -3352,8 +3350,8 @@ class TablesTwoSheetJourneySmoke(TablesCellEntryMixin, BaseGUITestCase):
 
         # Rename Sheet2 through its dialog; the formula on it stays live.
         rawinput.keyCombo("Escape")
-        self._sheet_command("Rename sheet", "Rename Sheet")
-        entry = self.wait_until(lambda: self._showing("text", ""), bool, description="the rename field")
+        self._sheet_command("Rename Sheet", "Rename Sheet")
+        entry = self.wait_until(lambda: self._showing("text", "Sheet name"), bool, description="the rename field")
         entry.text = "Totals"
         self._press("Rename")
         self._wait_state((["Sheet1", "Totals"], 1, ("10", "Sheet1!A1*2")), "Sheet2 renamed to Totals")
@@ -3361,12 +3359,12 @@ class TablesTwoSheetJourneySmoke(TablesCellEntryMixin, BaseGUITestCase):
         # Move it first, then delete it and undo the delete.
         subprocess.run(["gapplication", "action", aid, "move-sheet-left"])
         self._wait_state((["Totals", "Sheet1"], 0, ("10", "Sheet1!A1*2")), "Totals moved first")
-        self._sheet_command("Delete sheet", "Delete Sheet")
+        self._sheet_command("Delete Sheet", "Delete Sheet")
         self._press("Delete")
         self._wait_state((["Sheet1"], 0, ("5", None)), "Totals deleted, Sheet1 shown with its own value")
         # The last sheet can't be deleted, so Delete Sheet is disabled rather
         # than offered and then refused (docs/design/hig-audit-2026-10.md T6).
-        last = self._showing("push button", "Delete sheet")
+        last = self._showing("push button", "Delete Sheet")
         if last:
             self.wait_until(lambda: last.sensitive, lambda on: not on, description="Delete Sheet disabled on the last sheet")
         subprocess.run(["gapplication", "action", aid, "undo"])
@@ -5595,7 +5593,7 @@ class DecksShowBuildsSmoke(BaseGUITestCase):
 
 
 class DecksTemplateChooserSmoke(BaseGUITestCase):
-    """New from Template (DESIGN-UI.md, "Templates that look finished"):
+    """New From Template (DESIGN-UI.md, "Templates that look finished"):
     the chooser lists the built-in themes, and choosing Ocean then Create
     opens that theme's deck, whose first slide the canvas's renderer draws
     on the theme's blue background. Asserted on the state snapshot and on
@@ -6650,7 +6648,7 @@ class DecksCloseGuardSmoke(BaseGUITestCase):
 class DecksReplaceGuardSmoke(BaseGUITestCase):
     """New over a deck with unsaved changes asks first (data loss, #1190 P0).
 
-    Decks holds one deck per window, and New, New from Template, Open and a
+    Decks holds one deck per window, and New, New From Template, Open and a
     file from the file manager all replaced it without a word. Cancel keeps
     the deck and its edit; Discard replaces it.
     """
@@ -7333,7 +7331,7 @@ class LettersStylesAndOutlineSmoke(BaseGUITestCase):
         rawinput.typeText("body")
         rawinput.keyCombo("Up")
 
-        self.wait_for_node(name="Paragraph style", roleName="toggle button").do_action(0)
+        self.wait_for_node(name="Paragraph Style", roleName="toggle button").do_action(0)
         # Every style is a named row; pick one from the keyboard (the list
         # opens on the current style, Normal).
         for name in ("Normal", "Title", "Subtitle", "Heading 1", "Heading 6", "Quote", "Code"):
@@ -8010,7 +8008,7 @@ class LettersSaveFormatSmoke(BaseGUITestCase):
         # extension Letters cannot write must now say so and leave the disk
         # alone, instead of putting Markdown under that name.
         out_path = self._save_as("report.rtf")
-        self.wait_for_node(name="Could not save document")
+        self.wait_for_node(name="Could Not Save File")
         self.assertFalse(
             os.path.exists(out_path), "a format with no writer was written anyway"
         )
@@ -8058,7 +8056,7 @@ class LettersLossWarningCancelSmoke(BaseGUITestCase):
 
         # Still unsaved: closing asks about the edit instead of closing.
         self.app.child(name="Close", roleName="push button").do_action(0)
-        self.wait_for_node(name="Discard All", roleName="push button").do_action(0)
+        self.wait_for_node(name="Discard", roleName="push button").do_action(0)
         self.assertIsNotNone(self.wait_for_process_exit(), "Discard must close the window")
         with open(self._doc, "rb") as f:
             self.assertEqual(f.read(), self.ORIGINAL, "Discard wrote the file")
@@ -8168,7 +8166,7 @@ class TablesChartTypesSmoke(BaseGUITestCase):
         subprocess.run(["gapplication", "action", "org.tunaos.tables", "insert-chart"])
         insert = self.wait_until(
             lambda: [c for c in self.app.findChildren(
-                lambda c: c.roleName == "push button" and "Insert into Sheet" in (c.name or ""))],
+                lambda c: c.roleName == "push button" and c.name == "Insert")],
             lambda found: bool(found),
             timeout=10.0,
             description="the chart dialog's Insert button",
@@ -8249,7 +8247,7 @@ class TablesChartDialogSmoke(BaseGUITestCase):
         insert = self.wait_until(
             lambda: [c for c in self.app.findChildren(
                 lambda c: c.roleName == "push button"
-                and "Insert into Sheet" in (c.name or ""))],
+                and c.name == "Insert")],
             lambda found: bool(found),
             timeout=10.0,
             description="the chart dialog's Insert button",
@@ -8268,7 +8266,7 @@ class TablesChartDialogSmoke(BaseGUITestCase):
         self.wait_until(
             lambda: [c for c in self.app.findChildren(
                 lambda c: c.roleName == "push button"
-                and "Insert into Sheet" in (c.name or ""))],
+                and c.name == "Insert")],
             lambda found: not found,
             timeout=10.0,
             description="the chart dialog to close after inserting",
@@ -8428,7 +8426,7 @@ class DecksSlideOrderSmoke(BaseGUITestCase):
         self.gapplication_action(aid, "add-shape")
         self._wait_slides([["Shape"]], "a shape on the first slide")
 
-        self.wait_for_node(name="Duplicate slide", roleName="push button").do_action(0)
+        self.wait_for_node(name="Duplicate Slide", roleName="push button").do_action(0)
         self._wait_slides([["Shape"], ["Shape"]], "the copy after it, with the shape")
 
         # The copy is selected: what is added now goes on it.

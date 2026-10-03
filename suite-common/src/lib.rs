@@ -254,7 +254,7 @@ impl SuiteApp {
         actions::register_labels(&[
             ("app.command-palette", "Command Palette"),
             ("app.new", "New Document"),
-            ("app.new-from-template", "New from Template…"),
+            ("app.new-from-template", "New From Template…"),
             ("app.open", "Open…"),
             ("app.save", "Save"),
             ("app.save-as", "Save As…"),
@@ -328,11 +328,6 @@ where
     F: Fn(&'static str, &'static str) + 'static,
 {
     let templates = suite_common_core::templates::templates_for_app(app_name);
-    let dialog = adw::Dialog::builder()
-        .title(i18n("New from Template"))
-        .content_width(520)
-        .content_height(400)
-        .build();
 
     let list = gtk::ListBox::new();
     list.set_selection_mode(gtk::SelectionMode::Single);
@@ -377,25 +372,33 @@ where
         list.append(&row);
     }
 
-    let on_select = std::rc::Rc::new(on_select);
-    let dlg = dialog.clone();
-    let on_sel = on_select.clone();
-    list.connect_row_activated(move |_, row| {
+    // Create makes the selected template; activating a row (a double
+    // click, Enter) makes that one.
+    let dialogs::ActionDialog { dialog, action: create } = dialogs::action_dialog(&i18n("New From Template"), &i18n("_Create"), 520, &scroll);
+    dialog.set_content_height(400);
+    list.select_row(list.row_at_index(0).as_ref());
+    let make = std::rc::Rc::new(move |row: &gtk::ListBoxRow| {
         let idx = unsafe { row.data::<usize>("template-idx").map(|p| *p.as_ref()) };
-        if let Some(idx) = idx {
-            if let Some(tmpl) = templates.get(idx) {
-                dlg.close();
-                on_sel(tmpl.name, tmpl.content);
-            }
+        if let Some(tmpl) = idx.and_then(|idx| templates.get(idx)) {
+            on_select(tmpl.name, tmpl.content);
         }
     });
-
-    let main_box = gtk::Box::new(gtk::Orientation::Vertical, 6);
-    let header = adw::HeaderBar::new();
-    main_box.append(&header);
-    main_box.append(&scroll);
-    dialog.set_child(Some(&main_box));
-
+    {
+        let (dlg, make) = (dialog.clone(), make.clone());
+        list.connect_row_activated(move |_, row| {
+            dlg.close();
+            make(row);
+        });
+    }
+    {
+        let (dlg, list) = (dialog.clone(), list.clone());
+        create.connect_clicked(move |_| {
+            if let Some(row) = list.selected_row() {
+                dlg.close();
+                make(&row);
+            }
+        });
+    }
     dialog.present(parent.map(|w| w.upcast_ref::<gtk::Widget>()));
 }
 
@@ -747,12 +750,12 @@ pub fn make_header_bar(app_name: &str) -> adw::HeaderBar {
 
     let file_section = gio::Menu::new();
     file_section.append(Some(&i18n("_New")), Some("app.new"));
-    file_section.append(Some(&i18n("New from _template\u{2026}")), Some("app.new-from-template"));
+    file_section.append(Some(&i18n("New From _Template\u{2026}")), Some("app.new-from-template"));
     file_section.append(Some(&i18n("_Open\u{2026}")), Some("app.open"));
     file_section.append(Some(&i18n("_Save")), Some("app.save"));
-    file_section.append(Some(&i18n("Save _as\u{2026}")), Some("app.save-as"));
-    file_section.append(Some(&i18n("Page set_up\u{2026}")), Some("app.page-setup"));
-    file_section.append(Some(&i18n("Print pre_view\u{2026}")), Some("app.print-preview"));
+    file_section.append(Some(&i18n("Save _As\u{2026}")), Some("app.save-as"));
+    file_section.append(Some(&i18n("Page Set_up\u{2026}")), Some("app.page-setup"));
+    file_section.append(Some(&i18n("Print Pre_view\u{2026}")), Some("app.print-preview"));
     file_section.append(Some(&i18n("_Print\u{2026}")), Some("app.print"));
     // GNOME primary menus group items in unlabelled sections.
     menu.append_section(None, &file_section);
@@ -763,7 +766,7 @@ pub fn make_header_bar(app_name: &str) -> adw::HeaderBar {
 
     let help_section = gio::Menu::new();
     help_section.append(Some(&i18n("_Help")), Some("app.help"));
-    help_section.append(Some(&i18n("_Keyboard shortcuts")), Some("app.shortcuts"));
+    help_section.append(Some(&i18n("_Keyboard Shortcuts")), Some("app.shortcuts"));
     help_section.append(Some(&i18n("_About %s").replace("%s", app_name)), Some("app.about"));
     menu.append_section(None, &help_section);
 
@@ -819,15 +822,7 @@ fn present_shortcuts(groups: &[(String, Vec<(String, String)>)]) {
         }
         page.add(&group);
     }
-    let view = adw::ToolbarView::new();
-    view.add_top_bar(&adw::HeaderBar::new());
-    view.set_content(Some(&page));
-    let dialog = adw::Dialog::builder()
-        .title(i18n("Keyboard Shortcuts"))
-        .content_width(520)
-        .content_height(600)
-        .child(&view)
-        .build();
+    let dialog = dialogs::viewer_dialog(&i18n("Keyboard Shortcuts"), 520, 600, &page);
     let parent = gio::Application::default()
         .and_downcast::<gtk::Application>()
         .and_then(|app| app.active_window());

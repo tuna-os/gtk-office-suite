@@ -22,9 +22,12 @@ pub(crate) fn show_format_cells_dialog(
     refresh: &Rc<dyn Fn()>,
     parent: Option<adw::ApplicationWindow>,
 ) {
-    let kinds = ["General", "Number", "Currency", "Percent", "Date", "Scientific"];
-    let dropdown = gtk4::DropDown::from_strings(&kinds);
-    dropdown.update_property(&[gtk4::accessible::Property::Label("Format kind")]);
+    let kinds = ["General", "Number", "Currency", "Percent", "Date", "Scientific"].map(suite_common::i18n);
+    let kinds: Vec<&str> = kinds.iter().map(String::as_str).collect();
+    let format = adw::ComboRow::builder()
+        .title(suite_common::i18n("Format"))
+        .model(&gtk::StringList::new(&kinds))
+        .build();
     // Preselect from the active cell's current format.
     {
         let state = controller.borrow().state.clone();
@@ -37,46 +40,50 @@ pub(crate) fn show_format_cells_dialog(
             NumberFormatKind::Percent(_) => 3,
             NumberFormatKind::Date(_) | NumberFormatKind::DateTime(_) => 4,
             NumberFormatKind::Scientific(_) => 5,
-            // No dropdown entry of its own yet; "Number" is the nearest.
+            // No entry of its own yet; "Number" is the nearest.
             NumberFormatKind::Fraction(_) => 1,
             // A code of its own: the inspector's Number group edits it.
             NumberFormatKind::Custom(_) => 0,
         };
-        dropdown.set_selected(idx);
+        format.set_selected(idx);
     }
 
-    let decimals = gtk4::SpinButton::with_range(0.0, 6.0, 1.0);
-    decimals.set_value(2.0);
-    decimals.update_property(&[gtk4::accessible::Property::Label("Decimal places")]);
-    let symbol = gtk4::Entry::new();
-    symbol.set_text("$");
-    symbol.set_max_width_chars(4);
-    symbol.update_property(&[gtk4::accessible::Property::Label("Currency symbol")]);
-
-    let grid = suite_common::dialogs::form_rows(&[
-        (&suite_common::i18n("Format"), dropdown.upcast_ref()),
-        (&suite_common::i18n("Decimals"), decimals.upcast_ref()),
-        (&suite_common::i18n("Symbol"), symbol.upcast_ref()),
-    ]);
-    let apply = gtk4::Button::with_label("Apply");
-    apply.add_css_class("suggested-action");
-
-    let dialog = adw::Dialog::builder()
-        .title("Format Cells")
-        .content_width(320)
+    let decimals = adw::SpinRow::builder()
+        .title(suite_common::i18n("Decimal Places"))
+        .adjustment(&gtk::Adjustment::new(2.0, 0.0, 6.0, 1.0, 1.0, 0.0))
         .build();
-    suite_common::dialogs::form_dialog(&dialog, &grid, &apply);
+    let symbol = adw::EntryRow::builder().title(suite_common::i18n("Currency Symbol")).text("$").build();
+    // Each field only where the chosen format uses it.
+    let follow = {
+        let (decimals, symbol) = (decimals.clone(), symbol.clone());
+        move |kind: u32| {
+            decimals.set_sensitive(matches!(kind, 1 | 2 | 3 | 5));
+            symbol.set_sensitive(kind == 2);
+        }
+    };
+    follow(format.selected());
+    format.connect_selected_notify(move |row| follow(row.selected()));
+
+    let group = adw::PreferencesGroup::new();
+    group.add(&format);
+    group.add(&decimals);
+    group.add(&symbol);
+    let suite_common::dialogs::ActionDialog { dialog, action: apply } = suite_common::dialogs::action_dialog(
+        &suite_common::i18n("Format Cells"),
+        &suite_common::i18n("_Apply"),
+        360,
+        &suite_common::dialogs::form_body(&[group.upcast_ref()]),
+    );
 
     {
         let ctl = controller.clone();
         let da = da.clone();
         let refresh = refresh.clone();
         let dialog = dialog.clone();
-        let dropdown = dropdown.clone();
         apply.connect_clicked(move |_| {
             let dp = decimals.value() as u8;
             let sym = symbol.text().to_string();
-            let kind = match dropdown.selected() {
+            let kind = match format.selected() {
                 1 => NumberFormatKind::Number(dp),
                 2 => NumberFormatKind::Currency(sym, dp),
                 3 => NumberFormatKind::Percent(dp),
@@ -108,31 +115,38 @@ pub(crate) fn show_conditional_format_dialog(
     parent: Option<&adw::ApplicationWindow>,
 ) {
     use tables_core::sheet::{CondOp, CondRule};
-    let dialog = adw::Dialog::builder()
-        .title(suite_common::i18n("Conditional Formatting"))
-        .content_width(440)
+    let conditions = ["Greater Than", "Less Than", "Equal To", "Between"].map(suite_common::i18n);
+    let conditions: Vec<&str> = conditions.iter().map(String::as_str).collect();
+    let op_combo = adw::ComboRow::builder()
+        .title(suite_common::i18n("Condition"))
+        .model(&gtk::StringList::new(&conditions))
         .build();
-
-    let op_combo = gtk::DropDown::from_strings(&["Greater than", "Less than", "Equal to", "Between"]);
-    let value_entry = gtk::Entry::builder().placeholder_text("Value").build();
-    let value2_entry = gtk::Entry::builder().placeholder_text("Upper bound").build();
+    let value_entry = adw::EntryRow::builder().title(suite_common::i18n("Value")).build();
+    let value2_entry = adw::EntryRow::builder().title(suite_common::i18n("Upper Bound")).build();
     value2_entry.set_sensitive(false);
     {
         let v2 = value2_entry.clone();
-        op_combo.connect_selected_notify(move |dd| v2.set_sensitive(dd.selected() == 3));
+        op_combo.connect_selected_notify(move |row| v2.set_sensitive(row.selected() == 3));
     }
     let color_btn = gtk::ColorDialogButton::new(Some(gtk::ColorDialog::new()));
     color_btn.set_rgba(&gtk4::gdk::RGBA::new(1.0, 0.75, 0.75, 1.0));
+    color_btn.set_valign(gtk::Align::Center);
+    // No row type holds a colour: an action row with the button at its end.
+    let fill = adw::ActionRow::builder().title(suite_common::i18n("Fill Color")).build();
+    fill.add_suffix(&color_btn);
+    fill.set_activatable_widget(Some(&color_btn));
 
-    let grid = suite_common::dialogs::form_rows(&[
-        ("Condition", op_combo.upcast_ref()),
-        ("Value", value_entry.upcast_ref()),
-        ("And", value2_entry.upcast_ref()),
-        ("Fill", color_btn.upcast_ref()),
-    ]);
-
-    let apply = gtk::Button::with_label(&suite_common::i18n("Apply"));
-    apply.add_css_class("suggested-action");
+    let group = adw::PreferencesGroup::new();
+    group.add(&op_combo);
+    group.add(&value_entry);
+    group.add(&value2_entry);
+    group.add(&fill);
+    let suite_common::dialogs::ActionDialog { dialog, action: apply } = suite_common::dialogs::action_dialog(
+        &suite_common::i18n("Conditional Formatting"),
+        &suite_common::i18n("_Apply"),
+        440,
+        &suite_common::dialogs::form_body(&[group.upcast_ref()]),
+    );
 
     {
         let ctl = controller.clone();
@@ -173,7 +187,6 @@ pub(crate) fn show_conditional_format_dialog(
         });
     }
 
-    suite_common::dialogs::form_dialog(&dialog, &grid, &apply);
     dialog.present(parent);
 }
 
@@ -187,39 +200,52 @@ pub(crate) fn show_define_name_dialog(
     parent: Option<&adw::ApplicationWindow>,
 ) {
     let sel = controller.borrow().state.borrow().sheet().selection_rect();
-
-    let dialog = adw::Dialog::builder()
-        .title(suite_common::i18n("Define Name"))
-        .content_width(320)
-        .build();
-
-    let name_entry = gtk::Entry::builder().placeholder_text("e.g. TaxRate").build();
-    name_entry.update_property(&[gtk4::accessible::Property::Label("Name")]);
-    let error_label = gtk::Label::new(None);
-    error_label.add_css_class("error");
-    error_label.set_halign(gtk::Align::Start);
-    let grid = suite_common::dialogs::form_rows(&[("Name", name_entry.upcast_ref())]);
-    grid.append(&error_label);
-
-    let apply = gtk::Button::with_label(&suite_common::i18n("Define"));
-    apply.add_css_class("suggested-action");
-
+    let prompt = suite_common::dialogs::prompt(
+        &suite_common::i18n("Define Name"),
+        Some(&suite_common::i18n("Name the selected cells, to use the name in formulas and the name box.")),
+        &suite_common::i18n("Name"),
+        "",
+        &suite_common::i18n("_Define"),
+    );
+    prompt.entry.set_placeholder_text(Some(&suite_common::i18n("For example, TaxRate")));
+    // Define is offered only for a valid name, and the dialog says why a
+    // name isn't: an alert closes on any response, so a refused name
+    // can't be reported after the fact.
     {
-        let ctl = controller.clone();
-        let dlg = dialog.clone();
-        let name_entry = name_entry.clone();
-        let error_label = error_label.clone();
-        apply.connect_clicked(move |_| {
-            let name = name_entry.text().to_string();
-            match ctl.borrow_mut().define_name(&name, sel) {
-                Ok(()) => { dlg.close(); }
-                Err(e) => error_label.set_text(&e),
+        let (dialog, ctl) = (prompt.dialog.clone(), controller.clone());
+        let body = dialog.body();
+        let check = move |entry: &gtk::Entry| {
+            let text = entry.text();
+            let problem = if text.is_empty() {
+                None
+            } else {
+                ctl.borrow().check_name(&text, sel).err().map(|e| {
+                    if e.contains("exist") {
+                        suite_common::i18n("A name “%s” already exists.").replace("%s", &text)
+                    } else {
+                        suite_common::i18n("A name starts with a letter or an underscore, and has no spaces.")
+                    }
+                })
+            };
+            dialog.set_response_enabled(suite_common::dialogs::PROMPT_ACTION, !text.is_empty() && problem.is_none());
+            dialog.set_body(problem.as_deref().unwrap_or(&body));
+            if problem.is_some() {
+                entry.add_css_class("error");
+            } else {
+                entry.remove_css_class("error");
             }
-        });
+        };
+        check(&prompt.entry);
+        prompt.entry.connect_changed(check);
     }
-
-    suite_common::dialogs::form_dialog(&dialog, &grid, &apply);
-    dialog.present(parent);
+    let ctl = controller.clone();
+    prompt.present(parent, move |name| {
+        if let Some(name) = name {
+            if let Err(e) = ctl.borrow_mut().define_name(&name, sel) {
+                gtk::glib::g_warning!("tables", "define name: {e}");
+            }
+        }
+    });
 }
 
 /// Page setup for PDF export (#113): the suite's Page Setup dialog, the one
@@ -290,36 +316,20 @@ pub(crate) fn show_filter_dialog(
 ) {
     let col = controller.borrow().state.borrow().sheet().selected_col;
     let col_label = tables_core::sheet::col_label(col);
-
-    let dialog = adw::Dialog::builder()
-        .title(suite_common::i18n("Filter by Column"))
-        .content_width(400)
-        .build();
-
-    let value_entry = gtk::Entry::builder()
-        .placeholder_text("Value contains…")
-        .build();
-    value_entry.update_property(&[gtk4::accessible::Property::Label("Filter value")]);
-    let grid = suite_common::dialogs::form_rows(&[(&format!("Column {col_label}"), value_entry.upcast_ref())]);
-
-    let apply = gtk::Button::with_label(&suite_common::i18n("Filter"));
-    apply.add_css_class("suggested-action");
-
-    {
-        let ctl = controller.clone();
-        let da = da.clone();
-        let dlg = dialog.clone();
-        let value_entry = value_entry.clone();
-        apply.connect_clicked(move |_| {
-            let needle = value_entry.text().to_string();
+    let prompt = suite_common::dialogs::prompt(
+        &suite_common::i18n("Filter by Column"),
+        Some(&suite_common::i18n("Show only the rows whose value in column %s contains:").replace("%s", &col_label)),
+        &suite_common::i18n("Filter value"),
+        "",
+        &suite_common::i18n("_Filter"),
+    );
+    let (ctl, da) = (controller.clone(), da.clone());
+    prompt.present(parent, move |needle| {
+        if let Some(needle) = needle {
             ctl.borrow_mut().filter_by_value(col, &needle);
             da.queue_draw();
-            dlg.close();
-        });
-    }
-
-    suite_common::dialogs::form_dialog(&dialog, &grid, &apply);
-    dialog.present(parent);
+        }
+    });
 }
 
 #[cfg(test)]

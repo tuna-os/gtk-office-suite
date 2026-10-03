@@ -78,7 +78,7 @@ pub(crate) fn open_failure_message(path: &str, error: &str) -> String {
 pub(crate) fn report_open_failure(parent: Option<&adw::ApplicationWindow>, path: &str, error: &str) {
     suite_common::show_error_dialog(
         parent,
-        &suite_common::i18n("Could not open document"),
+        &suite_common::i18n("Could Not Open File"),
         &open_failure_message(path, error),
     );
 }
@@ -616,7 +616,7 @@ mod tests {
     /// them, so pin it here rather than discovering a rename in a GUI run.
     #[test]
     fn open_failure_heading_matches_the_corpus_journey_phrases() {
-        let heading = suite_common::i18n("Could not open document").to_lowercase();
+        let heading = suite_common::i18n("Could Not Open File").to_lowercase();
         let accepted = [
             "could not", "cannot open", "failed to",
             "unable to", "unsupported", "invalid file", "error opening",

@@ -260,7 +260,7 @@ impl TablesWindow {
         name_box.set_width_chars(7);
         name_box.set_max_width_chars(7);
         name_box.set_text("A1");
-        name_box.set_tooltip_text(Some(&suite_common::i18n("Cell reference — type one to jump")));
+        name_box.set_tooltip_text(Some(&suite_common::i18n("Cell Reference or Name")));
         name_box.update_property(&[gtk4::accessible::Property::Label("Cell reference")]);
 
         let fx_label = gtk4::Label::new(Some(" fx"));
@@ -418,33 +418,19 @@ impl TablesWindow {
                     nb.select_region(0, -1);
                     return;
                 }
-                let entry = gtk4::Entry::builder()
-                    .text(nb.text())
-                    .activates_default(true)
-                    .build();
-                entry.update_property(&[gtk4::accessible::Property::Label("Cell reference")]);
-                let dlg = adw::AlertDialog::builder()
-                    .heading(suite_common::i18n("Go to Cell"))
-                    .body(suite_common::i18n("Type a cell reference or a defined name."))
-                    .build();
-                dlg.set_extra_child(Some(&entry));
-                dlg.add_response("cancel", &suite_common::i18n("Cancel"));
-                dlg.add_response("go", &suite_common::i18n("Go"));
-                dlg.set_response_appearance("go", adw::ResponseAppearance::Suggested);
-                dlg.set_default_response(Some("go"));
-                dlg.set_close_response("cancel");
-                // Focus the entry, not the default button: a dialog that
-                // opens with the buttons focused looks ready to type into
-                // and is not — the keystrokes go nowhere and Enter jumps
-                // to whatever the entry was prefilled with.
-                dlg.set_focus(Some(&entry));
+                let prompt = suite_common::dialogs::prompt(
+                    &suite_common::i18n("Go to Cell"),
+                    Some(&suite_common::i18n("Type a cell reference or a defined name.")),
+                    &suite_common::i18n("Cell reference"),
+                    &nb.text(),
+                    &suite_common::i18n("_Go"),
+                );
                 let jump = jump.clone();
-                dlg.connect_response(None, move |_, resp| {
-                    if resp == "go" {
-                        jump(&entry.text());
+                prompt.present(root.root().as_ref(), move |reference| {
+                    if let Some(reference) = reference {
+                        jump(&reference);
                     }
                 });
-                dlg.present(root.root().as_ref());
             });
             app.add_action(&act);
             app.set_accels_for_action("app.goto-cell", &["<Primary>g"]);
@@ -903,14 +889,14 @@ impl TablesWindow {
         let sheet_model = gtk4::StringList::new(&["Sheet1"]);
         let sheet_switcher = gtk4::DropDown::builder()
             .model(&sheet_model)
-            .tooltip_text("Switch sheet")
+            .tooltip_text("Switch Sheet")
             .build();
         sheet_bar.append(&sheet_switcher);
         sheet_switcher.update_property(&[gtk4::accessible::Property::Label("Sheet switcher")]);
 
         let add_btn = gtk4::Button::builder()
             .icon_name("list-add-symbolic")
-            .tooltip_text("Add sheet")
+            .tooltip_text("Add Sheet")
             .build();
         add_btn.set_css_classes(&["flat", "circular"]);
         add_btn.update_property(&[gtk4::accessible::Property::Label("Add sheet")]);
@@ -918,7 +904,7 @@ impl TablesWindow {
 
         let rename_sheet_btn = gtk4::Button::builder()
             .icon_name("document-edit-symbolic")
-            .tooltip_text("Rename sheet")
+            .tooltip_text("Rename Sheet")
             .build();
         rename_sheet_btn.set_css_classes(&["flat", "circular"]);
         rename_sheet_btn.update_property(&[gtk4::accessible::Property::Label("Rename sheet")]);
@@ -926,7 +912,7 @@ impl TablesWindow {
 
         let move_sheet_left_btn = gtk4::Button::builder()
             .icon_name("go-previous-symbolic")
-            .tooltip_text("Move sheet left")
+            .tooltip_text("Move Sheet Left")
             .build();
         move_sheet_left_btn.set_css_classes(&["flat", "circular"]);
         move_sheet_left_btn
@@ -935,7 +921,7 @@ impl TablesWindow {
 
         let move_sheet_right_btn = gtk4::Button::builder()
             .icon_name("go-next-symbolic")
-            .tooltip_text("Move sheet right")
+            .tooltip_text("Move Sheet Right")
             .build();
         move_sheet_right_btn.set_css_classes(&["flat", "circular"]);
         move_sheet_right_btn
@@ -944,7 +930,7 @@ impl TablesWindow {
 
         let delete_sheet_btn = gtk4::Button::builder()
             .icon_name("user-trash-symbolic")
-            .tooltip_text("Delete sheet")
+            .tooltip_text("Delete Sheet")
             .build();
         delete_sheet_btn.set_css_classes(&["flat", "circular"]);
         delete_sheet_btn.update_property(&[gtk4::accessible::Property::Label("Delete sheet")]);
@@ -1004,24 +990,16 @@ impl TablesWindow {
                 let current_name = state.borrow().sheets[idx].borrow().name.clone();
                 drop(controller);
 
-                let entry = gtk4::Entry::builder()
-                    .text(&current_name)
-                    .activates_default(true)
-                    .build();
-                let dlg = adw::AlertDialog::builder()
-                    .heading(suite_common::i18n("Rename Sheet"))
-                    .build();
-                dlg.set_extra_child(Some(&entry));
-                dlg.add_response("cancel", &suite_common::i18n("Cancel"));
-                dlg.add_response("rename", &suite_common::i18n("Rename"));
-                dlg.set_response_appearance("rename", adw::ResponseAppearance::Suggested);
-                dlg.set_default_response(Some("rename"));
+                let prompt = suite_common::dialogs::prompt(
+                    &suite_common::i18n("Rename Sheet"),
+                    None,
+                    &suite_common::i18n("Sheet name"),
+                    &current_name,
+                    &suite_common::i18n("_Rename"),
+                );
                 let (sm, sd, ctl) = (sm.clone(), sd.clone(), ctl.clone());
-                dlg.connect_response(None, move |_, resp| {
-                    if resp != "rename" {
-                        return;
-                    }
-                    let name = entry.text().to_string();
+                prompt.present(w.as_ref(), move |name| {
+                    let Some(name) = name else { return };
                     if name.is_empty() || name == current_name {
                         return;
                     }
@@ -1030,7 +1008,6 @@ impl TablesWindow {
                         follow(&sm, &sd, &state);
                     }
                 });
-                dlg.present(w.as_ref());
             });
         }
 
@@ -1090,7 +1067,7 @@ impl TablesWindow {
                         .heading(suite_common::i18n("Can't Delete Sheet"))
                         .body(suite_common::i18n("A workbook needs at least one sheet."))
                         .build();
-                    err.add_response("ok", &suite_common::i18n("OK"));
+                    err.add_response("ok", &suite_common::i18n("_OK"));
                     err.present(w.as_ref());
                     return;
                 }
@@ -1099,8 +1076,8 @@ impl TablesWindow {
                     .heading(suite_common::i18n("Delete Sheet?"))
                     .body(format!("“{name}” and everything on it will be deleted. Undo brings it back."))
                     .build();
-                dlg.add_response("cancel", &suite_common::i18n("Cancel"));
-                dlg.add_response("delete", &suite_common::i18n("Delete"));
+                dlg.add_response("cancel", &suite_common::i18n("_Cancel"));
+                dlg.add_response("delete", &suite_common::i18n("_Delete"));
                 dlg.set_response_appearance("delete", adw::ResponseAppearance::Destructive);
                 dlg.set_default_response(Some("cancel"));
                 let (sm, sd, da, ctl) = (sm.clone(), sd.clone(), da.clone(), ctl.clone());
@@ -1235,7 +1212,7 @@ impl TablesWindow {
                                         .heading(suite_common::i18n("Export Failed"))
                                         .body(&err_msg)
                                         .build();
-                                    alert.add_response("ok", &suite_common::i18n("OK"));
+                                    alert.add_response("ok", &suite_common::i18n("_OK"));
                                     alert.present(parent_win.as_ref());
                                 } else {
                                     println!("PDF exported successfully to {}", path_str);
@@ -1541,19 +1518,7 @@ impl TablesWindow {
                 if !ctl.borrow().is_dirty() {
                     return gtk4::glib::Propagation::Proceed;
                 }
-                let dialog = adw::AlertDialog::builder()
-                    .heading("Save changes?")
-                    .body("This workbook has unsaved changes. If you close without saving, they will be lost.")
-                    .build();
-                dialog.add_responses(&[
-                    ("cancel", "_Cancel"),
-                    ("discard", "_Discard"),
-                    ("save", "_Save"),
-                ]);
-                dialog.set_close_response("cancel");
-                dialog.set_default_response(Some("save"));
-                dialog.set_response_appearance("discard", adw::ResponseAppearance::Destructive);
-                dialog.set_response_appearance("save", adw::ResponseAppearance::Suggested);
+                let dialog = suite_common::dialogs::save_changes_question(&[suite_common::dialogs::document_name(win)]);
 
                 let win_weak = win.downgrade();
                 let force_close = force_close.clone();
@@ -1587,10 +1552,10 @@ impl TablesWindow {
                             }
                             Err(e) => {
                                 let err = adw::AlertDialog::builder()
-                                    .heading(suite_common::i18n("Error saving file"))
+                                    .heading(suite_common::i18n("Could Not Save File"))
                                     .body(&e)
                                     .build();
-                                err.add_response("ok", &suite_common::i18n("OK"));
+                                err.add_response("ok", &suite_common::i18n("_OK"));
                                 err.present(Some(&win2));
                             }
                         }
@@ -1628,10 +1593,10 @@ impl TablesWindow {
                                     }
                                     Err(e) => {
                                         let err = adw::AlertDialog::builder()
-                                            .heading(suite_common::i18n("Error saving file"))
+                                            .heading(suite_common::i18n("Could Not Save File"))
                                             .body(&e)
                                             .build();
-                                        err.add_response("ok", &suite_common::i18n("OK"));
+                                        err.add_response("ok", &suite_common::i18n("_OK"));
                                         err.present(Some(&win3));
                                     }
                                 }
@@ -1732,10 +1697,10 @@ impl TablesWindow {
                                     }
                                     Err(e) => {
                                         let err = adw::AlertDialog::builder()
-                                            .heading(suite_common::i18n("Error opening file"))
+                                            .heading(suite_common::i18n("Could Not Open File"))
                                             .body(&e)
                                             .build();
-                                        err.add_response("ok", &suite_common::i18n("OK"));
+                                        err.add_response("ok", &suite_common::i18n("_OK"));
                                         err.set_default_response(Some("ok"));
                                         err.present(Some(&w2));
                                     }
@@ -1802,10 +1767,10 @@ impl TablesWindow {
                                     }
                                     Err(e) => {
                                         let err = adw::AlertDialog::builder()
-                                            .heading(suite_common::i18n("Error saving file"))
+                                            .heading(suite_common::i18n("Could Not Save File"))
                                             .body(&e)
                                             .build();
-                                        err.add_response("ok", &suite_common::i18n("OK"));
+                                        err.add_response("ok", &suite_common::i18n("_OK"));
                                         err.set_default_response(Some("ok"));
                                         err.present(Some(&w3));
                                     }
@@ -1837,11 +1802,11 @@ impl TablesWindow {
                 let path_str = path.to_string_lossy().to_string();
                 if !tables_core::io::is_writable_format(&path_str) {
                     let prompt = adw::AlertDialog::builder()
-                        .heading(suite_common::i18n("Cannot save in this format"))
+                        .heading(suite_common::i18n("Cannot Save in This Format"))
                         .body(unsupported_save_format_message(&path_str))
                         .build();
-                    prompt.add_response("cancel", &suite_common::i18n("Cancel"));
-                    prompt.add_response("save-as", &suite_common::i18n("Save As…"));
+                    prompt.add_response("cancel", &suite_common::i18n("_Cancel"));
+                    prompt.add_response("save-as", &suite_common::i18n("_Save As…"));
                     prompt.set_response_appearance(
                         "save-as", adw::ResponseAppearance::Suggested);
                     prompt.set_default_response(Some("save-as"));
@@ -1868,10 +1833,10 @@ impl TablesWindow {
                     }
                     Err(e) => {
                         let err = adw::AlertDialog::builder()
-                            .heading(suite_common::i18n("Error saving file"))
+                            .heading(suite_common::i18n("Could Not Save File"))
                             .body(&e)
                             .build();
-                        err.add_response("ok", &suite_common::i18n("OK"));
+                        err.add_response("ok", &suite_common::i18n("_OK"));
                         err.set_default_response(Some("ok"));
                         err.present(Some(&w2));
                     }
