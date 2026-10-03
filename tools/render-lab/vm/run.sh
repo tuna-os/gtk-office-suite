@@ -143,8 +143,9 @@ print(next((f["file"] for f in json.load(open(sys.argv[1])) if f["app"] == sys.a
     # document from there. Each dialog is screenshotted with the path typed.
     "${SSH[@]}" "cp \$HOME/lab/fixtures/$file \$HOME/Downloads/portal-open-$app.$ext; rm -f \$HOME/Downloads/portal-saved-$app.$ext
         bash ~/lab/installed.sh --action $app save-as" || true
-    # The portal's dialog process starts on first use.
-    sleep 10
+    # The portal's dialog process starts on first use (the action step
+    # already waited 4s).
+    sleep 6
     qmp_type "$GUEST_HOME/Downloads/portal-saved-$app.$ext"
     sleep 1
     qmp "$PWD/screen.ppm" >/dev/null
@@ -152,7 +153,7 @@ print(next((f["file"] for f in json.load(open(sys.argv[1])) if f["app"] == sys.a
     qmp_key ret >/dev/null
     sleep 5
     "${SSH[@]}" "bash ~/lab/installed.sh --action $app open" || true
-    sleep 8
+    sleep 4
     qmp_type "$GUEST_HOME/Downloads/portal-open-$app.$ext"
     sleep 1
     qmp "$PWD/screen.ppm" >/dev/null
@@ -164,6 +165,7 @@ print(next((f["file"] for f in json.load(open(sys.argv[1])) if f["app"] == sys.a
     "${SSH[@]}" "bash ~/lab/installed.sh --close $app" || true
     "${SCP[@]}" "lab@127.0.0.1:lab/installed/$app-open.log" "$OUT/installed-$app.log" 2>/dev/null || true
     "${SCP[@]}" "lab@127.0.0.1:lab/installed/$app-mime.log" "$OUT/installed-$app-mime.log" 2>/dev/null || true
+    "${SCP[@]}" "lab@127.0.0.1:lab/installed/$app-portal.log" "$OUT/installed-$app-portal.log" 2>/dev/null || true
 done
 cat "$OUT/installed.json"
 

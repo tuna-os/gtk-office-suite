@@ -29,7 +29,18 @@ if [ "${1:-}" = --close ]; then
     exit 0
 fi
 if [ "${1:-}" = --action ]; then
-    gapplication action "org.tunaos.$2" "$3"
+    # What the file chooser needs, for when no dialog appears: the
+    # portal's GNOME backend, the portal services on the session bus, and
+    # what the portal said.
+    diag="$HOME/lab/installed/$2-portal.log"
+    {
+        echo "== gapplication action org.tunaos.$2 $3"
+        gapplication action "org.tunaos.$2" "$3" 2>&1; echo "exit $?"
+        sleep 4
+        echo "== packages"; rpm -q xdg-desktop-portal xdg-desktop-portal-gnome xdg-desktop-portal-gtk 2>&1
+        echo "== session bus"; busctl --user list 2>/dev/null | grep -i -E "portal|tunaos"
+        echo "== journal"; journalctl --user -n 80 --no-pager 2>&1 | grep -i -E "portal|filechooser|tunaos" | tail -40
+    } >>"$diag" 2>&1
     exit 0
 fi
 if [ "${1:-}" = --portal ]; then
