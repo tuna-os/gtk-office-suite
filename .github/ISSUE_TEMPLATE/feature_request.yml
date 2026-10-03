@@ -1,0 +1,41 @@
+name: Feature request
+description: Suggest something Letters, Tables or Decks should do
+title: '[feature] '
+labels: ['enhancement']
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Before filing, check [PARITY.md](https://github.com/tuna-os/gtk-office-suite/blob/main/docs/PARITY.md)
+        and the [roadmap](https://github.com/tuna-os/gtk-office-suite/blob/main/ROADMAP.md):
+        the feature may already be tracked.
+  - type: dropdown
+    id: app
+    attributes:
+      label: App
+      options:
+        - Letters
+        - Tables
+        - Decks
+        - The whole suite
+    validations:
+      required: true
+  - type: textarea
+    id: need
+    attributes:
+      label: What you're trying to do
+      description: The task or document you're working on, and where the apps get in the way.
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: What you'd like to happen
+      description: How it would work for you. Mention how another office suite does it if that helps.
+    validations:
+      required: true
+  - type: textarea
+    id: files
+    attributes:
+      label: Files and formats
+      description: If it's about a file format (docx, xlsx, pptx, odt, ods, odp), which feature of the file, and an example if you can share one.

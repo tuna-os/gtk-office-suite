@@ -51,5 +51,5 @@ This runbook details operational troubleshooting and diagnostic triage procedure
 ## Escalation Protocol
 
 If rendering or export regressions persist across builds:
-1. File an incident report using `.github/ISSUE_TEMPLATE/incident_report.md`.
+1. File an incident report using `.github/ISSUE_TEMPLATE/incident_report.yml`.
 2. Attach `journalctl --user` output and sandbox environment info (`flatpak info org.tunaos.letters`).

@@ -95,5 +95,8 @@ growing it.
 4. Make sure the tests and clippy pass, then open the pull request against
    `main`. Every CI check has to be green before a merge.
 
+To report a security vulnerability, don't open a public issue: follow
+[SECURITY.md](SECURITY.md).
+
 GTK Office Suite is licensed under GPL-3.0-or-later (see [LICENSE](LICENSE)).
 By contributing, you agree that your contributions are licensed the same way.
