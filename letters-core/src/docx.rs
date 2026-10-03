@@ -410,7 +410,7 @@ fn read_opened(path: &str, doc: rdocx::Document) -> Result<Document, String> {
         if p.style_id() == Some("HorizontalLine") && p.text().is_empty() {
             continue;
         }
-        let mut para = map_paragraph(&doc, p);
+        let mut para = map_paragraph(&doc, p, None);
         // A run-level break after this paragraph's text belongs to the
         // paragraph that follows, which is where LibreOffice puts the
         // break it converts from an ODF `fo:break-before`. The trailing
@@ -512,7 +512,7 @@ fn read_opened(path: &str, doc: rdocx::Document) -> Result<Document, String> {
                             let raw_cell = raw_cells.as_ref().and_then(|s| s.get(cell_index));
                             cell_index += 1;
                             if cp.text().is_empty() { continue; }
-                            let mut para = map_paragraph(&doc, &cp);
+                            let mut para = map_paragraph(&doc, &cp, table.style_id());
                             if let Some(r) = raw_cell {
                                 apply_strict_indents(&mut para.style, r);
                             }
@@ -526,7 +526,7 @@ fn read_opened(path: &str, doc: rdocx::Document) -> Result<Document, String> {
                         rdocx::CellItemRef::Table(nested) => {
                             for_each_nested_paragraph(&nested, &mut |cp| {
                                 if !cp.text().is_empty() {
-                                    keep(map_paragraph(&doc, cp));
+                                    keep(map_paragraph(&doc, cp, table.style_id()));
                                 }
                             });
                         }
@@ -1295,7 +1295,8 @@ fn for_each_nested_paragraph(table: &rdocx::TableRef<'_>, f: &mut dyn FnMut(&rdo
     }
 }
 
-fn map_paragraph(doc: &rdocx::Document, p: &rdocx::ParagraphRef<'_>) -> Paragraph {
+/// `table_style` is the style of the table a cell paragraph is in.
+fn map_paragraph(doc: &rdocx::Document, p: &rdocx::ParagraphRef<'_>, table_style: Option<&str>) -> Paragraph {
     let heading = p.style_id().and_then(style_id_to_heading);
     // LO uses "Quotations"; Word uses "Quote"/"IntenseQuote".
     let block_quote = matches!(p.style_id(), Some("Quote") | Some("Quotations") | Some("IntenseQuote") | Some("BlockQuote") | Some("BlockQuotation"));
@@ -1305,7 +1306,10 @@ fn map_paragraph(doc: &rdocx::Document, p: &rdocx::ParagraphRef<'_>) -> Paragrap
     // What the paragraph's style chain (docDefaults, basedOn, its style)
     // says, for everything the paragraph does not set itself. Numbering
     // indents are left out: the model's list level carries them.
-    let styled = doc.resolve_paragraph_properties(p.style_id());
+    let mut styled = doc.resolve_paragraph_properties(p.style_id());
+    if let Some(ts) = table_style {
+        under_table_style(doc, &mut styled, ts);
+    }
     let alignment = match p.alignment() {
         Some(rdocx::Alignment::Center) => Alignment::Center,
         Some(rdocx::Alignment::Right) => Alignment::Right,
@@ -1502,6 +1506,36 @@ fn map_paragraph(doc: &rdocx::Document, p: &rdocx::ParagraphRef<'_>) -> Paragrap
 
 fn twips_pt(t: rdocx_oxml::Twips) -> f64 {
     f64::from(t.0) / 20.0
+}
+
+/// A cell paragraph's properties with its table's style beneath its own
+/// paragraph style: Word applies the document defaults, then the table
+/// style, then the paragraph style. Word's "Table Grid" sets no space
+/// after and single lines; read without it, every cell of such a table
+/// took the document's default 8pt after and 1.08 lines, and the table
+/// drew a third taller than in Word or LibreOffice.
+///
+/// What the paragraph's style chain sets is what differs from the
+/// defaults alone (a style naming the default's own value draws the
+/// same either way, unless the table style differs; Word documents'
+/// Normal style rarely sets spacing).
+fn under_table_style(doc: &rdocx::Document, styled: &mut rdocx_oxml::properties::CT_PPr, table_style: &str) {
+    // No style has an empty id: the defaults alone.
+    let defaults = doc.resolve_paragraph_properties(Some(""));
+    let table = doc.resolve_paragraph_properties(Some(table_style));
+    if styled.space_before == defaults.space_before {
+        styled.space_before = table.space_before;
+    }
+    if styled.space_after == defaults.space_after {
+        styled.space_after = table.space_after;
+    }
+    if (styled.line_spacing, &styled.line_rule) == (defaults.line_spacing, &defaults.line_rule) {
+        styled.line_spacing = table.line_spacing;
+        styled.line_rule = table.line_rule.clone();
+    }
+    if styled.jc == defaults.jc {
+        styled.jc = table.jc;
+    }
 }
 
 /// A style's "auto" line spacing as a multiple of single (240 = 1.0).
