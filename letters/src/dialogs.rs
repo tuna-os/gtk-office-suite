@@ -346,12 +346,7 @@ pub fn make_find_replace_widget(tv: &adw::TabView) -> (gtk::SearchBar, gtk::Sear
                     let (so, eo) = st.matches[st.current_idx];
                     drop(st);
                     let rep = re.text().to_string();
-                    let mut ms = buf.iter_at_offset(so);
-                    let mut me = buf.iter_at_offset(eo);
-                    buf.begin_user_action();
-                    buf.delete(&mut ms, &mut me);
-                    buf.insert(&mut ms, &rep);
-                    buf.end_user_action();
+                    replace_ranges(&buf, &[(so.max(0) as usize, eo.max(0) as usize)], &rep);
                     // Re-trigger search
                     se.emit_by_name::<()>("search-changed", &[]);
                 }
@@ -369,24 +364,59 @@ pub fn make_find_replace_widget(tv: &adw::TabView) -> (gtk::SearchBar, gtk::Sear
             let rep = re.text().to_string();
             if query.is_empty() { return; }
             if let Some(buf) = active_buffer(&tv) {
-                buf.begin_user_action();
+                let mut ranges = Vec::new();
                 let mut cur = buf.start_iter();
-                while let Some((mut ms, mut me)) = cur.forward_search(
+                while let Some((ms, me)) = cur.forward_search(
                     &query,
                     gtk::TextSearchFlags::CASE_INSENSITIVE,
                     None,
                 ) {
-                    buf.delete(&mut ms, &mut me);
-                    buf.insert(&mut ms, &rep);
-                    cur = ms;
+                    ranges.push((ms.offset().max(0) as usize, me.offset().max(0) as usize));
+                    cur = me;
                 }
-                buf.end_user_action();
+                replace_ranges(&buf, &ranges, &rep);
                 se.emit_by_name::<()>("search-changed", &[]);
             }
         });
     }
 
     (search_bar, search_entry)
+}
+
+/// Replace each buffer range in `ranges` (in order, not overlapping) with
+/// `replacement`, as one model edit (#1202 stage 3): one undo step, and,
+/// while tracking changes, recorded like typing. Each replacement takes
+/// the style of the text it replaces. They are applied from the last to
+/// the first, so every range's offsets still hold when it is reached.
+pub(crate) fn replace_ranges(buf: &gtk::TextBuffer, ranges: &[(usize, usize)], replacement: &str) -> bool {
+    use letters_core::edit::Op;
+    if ranges.is_empty() {
+        return false;
+    }
+    let Some(live) = crate::live::of(buf) else { return false };
+    let mut m = live.borrow_mut();
+    let mut ops = Vec::new();
+    for &(from, to) in ranges.iter().rev() {
+        let (s, e) = (m.sequence_offset(buf, from), m.sequence_offset(buf, to));
+        if e <= s {
+            continue;
+        }
+        let style = letters_core::edit::slice(m.document(buf), s, e)
+            .and_then(|paras| paras.into_iter().flat_map(|p| p.runs).find(|r| !r.text.is_empty()))
+            .map(|r| r.style)
+            .unwrap_or_default();
+        ops.push(Op::Delete { at: s, len: e - s });
+        if !replacement.is_empty() {
+            ops.push(Op::Insert {
+                at: s,
+                content: vec![letters_core::Paragraph {
+                    style: Default::default(),
+                    runs: vec![letters_core::model::Run { text: replacement.to_string(), style }],
+                }],
+            });
+        }
+    }
+    !ops.is_empty() && m.apply_user_ops(buf, &ops, false)
 }
 
 pub fn navigate_match(tv: &adw::TabView, state: &RefCell<FindState>, ml: &gtk::Label, direction: i32) {
