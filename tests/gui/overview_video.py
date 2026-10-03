@@ -35,7 +35,7 @@ W, H, FPS = 1920, 1080, 30
 FADE = 0.5            # crossfade between segments, seconds
 LEAD = 2.5            # the most of a feature's lead-up a segment shows
 HOLD = 3.5            # how long a finished feature stays on screen
-SETTLE = 1.2          # a new window's first paint, never shown
+SETTLE = 0.4          # after a new window's first paint, before a segment starts
 MIN_SEGMENT = 4.3     # the shortest segment, seconds
 PUSH = 0.035          # how far a segment's window slowly pushes in
 
@@ -204,6 +204,21 @@ class Recorder:
         self.proc.communicate(b"q", timeout=60)
 
 
+def wait_for_paint(timeout=15.0):
+    import mss
+    from PIL import Image, ImageChops, ImageStat
+    end = time.monotonic() + timeout
+    with mss.MSS() as sct:
+        while time.monotonic() < end:
+            raw = sct.grab(sct.monitors[1])
+            img = Image.frombytes("RGB", raw.size, raw.rgb)
+            root = Image.new("RGB", img.size, img.getpixel((img.width - 1, img.height - 1)))
+            box = ImageChops.difference(img, root).convert("L").point(lambda v: 255 if v > 8 else 0).getbbox()
+            if box and ImageStat.Stat(img.crop(box).convert("L")).stddev[0] > 12:
+                return
+            time.sleep(0.15)
+
+
 def tour(app, stops, rec):
     """Run `app`'s stops, returning one segment per feature that reached
     the screen: (name, caption, start, end, crop box), times relative to
@@ -213,6 +228,10 @@ def tour(app, stops, rec):
 
     def init(self, *a, **k):
         original_init(self, *a, **k)
+        # A mapped window is one flat colour (black, or grey under the
+        # compositor) until GTK's first frame lands, which at 2x can take
+        # a few seconds. The window counts as ready once it has content.
+        wait_for_paint()
         marks["ready"] = time.monotonic()
 
     def shot(name):
