@@ -144,15 +144,15 @@ impl LettersWindow {
         let extended_toolbar: Vec<suite_common::ToolbarItem> = vec![
             ("format-text-strikethrough-symbolic", "Strikethrough", "app.strikethrough"),
             ("office-highlight-symbolic", "Highlight", "app.highlight"),
-            ("view-list-bullet-symbolic", "Bullet list (Ctrl+Shift+8)", "app.bullet-list"),
-            ("view-list-ordered-symbolic", "Numbered list (Ctrl+Shift+7)", "app.numbered-list"),
-            ("format-justify-left-symbolic", "Align left (Ctrl+L)", "app.align-left"),
-            ("format-justify-center-symbolic", "Align center (Ctrl+E)", "app.align-center"),
-            ("format-justify-right-symbolic", "Align right (Ctrl+R)", "app.align-right"),
+            ("view-list-bullet-symbolic", "Bullet List (Ctrl+Shift+8)", "app.bullet-list"),
+            ("view-list-ordered-symbolic", "Numbered List (Ctrl+Shift+7)", "app.numbered-list"),
+            ("format-justify-left-symbolic", "Align Left (Ctrl+L)", "app.align-left"),
+            ("format-justify-center-symbolic", "Align Center (Ctrl+E)", "app.align-center"),
+            ("format-justify-right-symbolic", "Align Right (Ctrl+R)", "app.align-right"),
             ("format-justify-fill-symbolic", "Justify (Ctrl+J)", "app.align-justify"),
-            ("insert-link-symbolic", "Insert link (Ctrl+Shift+K)", "app.insertlink"),
-            ("office-line-spacing-symbolic", "Line spacing", "app.cycle-line-spacing"),
-            ("office-columns-symbolic", "Column layout", "app.cycle-columns"),
+            ("insert-link-symbolic", "Insert Link (Ctrl+Shift+K)", "app.insertlink"),
+            ("office-line-spacing-symbolic", "Line Spacing", "app.cycle-line-spacing"),
+            ("office-columns-symbolic", "Column Layout", "app.cycle-columns"),
         ];
 
         let suite_win = suite_common::SuiteWindow::new(app, "Letters", primary_toolbar, extended_toolbar);

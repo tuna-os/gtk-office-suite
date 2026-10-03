@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Tables GUI tests — every test exercises a feature and verifies the result."""
 
+import subprocess
 import time
 from framework import VisionGUITestCase
 
@@ -189,7 +190,7 @@ class TablesTest(VisionGUITestCase):
         fx.typeText("50")
         fx.keyCombo("Return")
         time.sleep(0.3)  # pacing: no state to wait on before the next input
-        self._click("Chart", "push button")
+        self._click("Insert Chart", "push button")
         time.sleep(0.5)  # pacing: no state to wait on before the next input
         self.take_screenshot("chart")
         self.assertVision([
@@ -237,9 +238,10 @@ class TablesTest(VisionGUITestCase):
             "The two adjacent cells (A1 and B1) appear merged into a single wider cell",
         ], screenshot_path=self.last_screenshot)
 
-    def test_export_pdf_button_triggers_save_dialog(self):
+    def test_export_pdf_triggers_save_dialog(self):
         self._new()
-        self._click("Export PDF", "push button")
+        # Export as PDF… is in the main menu now, not on the toolbar.
+        subprocess.run(["gapplication", "action", "org.tunaos.tables", "export-pdf"], check=False)
         time.sleep(0.5)  # pacing: no state to wait on before the next input
         self.take_screenshot("export")
         self.assertVision([

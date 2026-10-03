@@ -5,9 +5,9 @@
 // The controller has had `insert_lines`/`delete_lines` and sheet
 // protection for a long time, each an undo step, but nothing in the app
 // reached them: no menu item, no action. And an edit to a locked cell on a
-// protected sheet was dropped without a word. These are the actions, on
-// the toolbar's extended section (the "More" menu when narrow), and the
-// message a refused edit gets. Freezing rows is here too: frozen rows are
+// protected sheet was dropped without a word. These are the actions, in
+// the cells' context menu and the main menu, and the message a refused
+// edit gets. Freezing rows is here too: frozen rows are
 // the header a sort leaves in place, and the file formats already carried
 // them, but the app could not set them.
 
@@ -30,15 +30,42 @@ pub(crate) fn primary_toolbar() -> Vec<suite_common::ToolbarItem> {
     ]
 }
 
-pub(crate) fn toolbar_items() -> Vec<suite_common::ToolbarItem> {
-    vec![
-        ("office-row-insert-symbolic", "Insert rows above", "app.insert-rows"),
-        ("office-column-insert-symbolic", "Insert columns left", "app.insert-cols"),
-        ("office-row-delete-symbolic", "Delete selected rows", "app.delete-rows"),
-        ("office-column-delete-symbolic", "Delete selected columns", "app.delete-cols"),
-        ("view-pin-symbolic", "Freeze rows above the selection", "app.toggle-freeze-rows"),
-        ("changes-prevent-symbolic", "Protect sheet", "app.toggle-sheet-protection"),
-    ]
+/// The cells' context menu: the selection's rows and columns, then its
+/// note and formatting.
+pub(crate) fn context_menu() -> gio::Menu {
+    use suite_common::{i18n, menus::section};
+    let menu = gio::Menu::new();
+    menu.append_section(None, &section(&[
+        (&i18n("Insert Rows Above"), "app.insert-rows"),
+        (&i18n("Insert Columns Left"), "app.insert-cols"),
+        (&i18n("Delete Rows"), "app.delete-rows"),
+        (&i18n("Delete Columns"), "app.delete-cols"),
+    ]));
+    menu.append_section(None, &section(&[
+        (&i18n("Hide Rows"), "app.hide-selected-rows"),
+        (&i18n("Hide Columns"), "app.hide-selected-cols"),
+        (&i18n("Unhide All Rows"), "app.unhide-all-rows"),
+        (&i18n("Unhide All Columns"), "app.unhide-all-cols"),
+    ]));
+    menu.append_section(None, &section(&[
+        (&i18n("Edit Note…"), "app.edit-note"),
+        (&i18n("Define Name…"), "app.define-name"),
+        (&i18n("Conditional Formatting…"), "app.conditional-format"),
+        (&i18n("Format Cells…"), "app.format-cells"),
+    ]));
+    menu
+}
+
+/// The workbook's commands in the main menu, after Save and Print: the
+/// export, the print area, and the sheet's frozen rows and protection.
+pub(crate) fn main_menu_section() -> gio::Menu {
+    use suite_common::{i18n, menus::section};
+    section(&[
+        (&i18n("Export as _PDF…"), "app.export-pdf"),
+        (&i18n("Set Print _Area"), "app.set-print-area"),
+        (&i18n("_Freeze Rows"), "app.toggle-freeze-rows"),
+        (&i18n("Pro_tect Sheet"), "app.toggle-sheet-protection"),
+    ])
 }
 
 fn toast(toasts: &adw::ToastOverlay, text: &str) {

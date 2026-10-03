@@ -120,9 +120,13 @@ Without a screenshot of their own:
 
 - **Fill handle**: drag the square at the selection's corner to repeat a
   value or continue a series.
-- **Merge cells**, **cell borders**, **hide/unhide rows and columns**.
+- **Merge cells** and **cell borders** on the toolbar.
+- **Right-click on the cells** (or Shift+F10): insert, delete and hide
+  rows and columns, edit a note, define a name, conditional formatting and
+  Format Cells.
 - **Data validation lists**: a cell with a list offers it on Alt+Down.
-- **Page setup**, **print areas**, **Export as PDF**.
+- **In the main menu**: Page Setup, Export as PDF, Set Print Area, Freeze
+  Rows and Protect Sheet.
 - **Opening without overwriting**: CSV, TSV, ODS and XLS open, but Ctrl+S
   never writes over them. Tables says it cannot save in that format and
   offers Save As with the same name as `.xlsx`.
@@ -136,8 +140,6 @@ here rather than hidden:
 
 - **Long numbers show `###`** (column D) where LibreOffice would round the
   value to fit the column.
-- **Two toolbar buttons have no icon** (the fifth and sixth show the
-  broken-image placeholder).
 - **Insert Chart charts only the active cell's column**, and does nothing
   at all, with no message, when that column has no numbers. It also
   includes a totals row as if it were data (the "Total" bar).

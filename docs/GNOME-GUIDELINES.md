@@ -215,6 +215,12 @@ From the HIG's [writing style](https://developer.gnome.org/hig/guidelines/writin
   the same action, so they stay in step and are disabled together. A command
   that can't run is disabled rather than offered and then refused. Delete Sheet
   is disabled on the last sheet.
+- The toolbar holds what is used while working on the content. Commands on the
+  selection's rows, columns or objects go in its **context menu**, which a
+  right-click, a long press, Shift+F10 or the Menu key opens
+  (`suite_common::menus::attach_context_menu`). Commands on the whole document
+  (export, print area, protection) go in the **main menu**, in an unlabelled
+  section after Save and Print (`suite_common::menus::primary_menu`).
 - Menu items use header capitalization. They are grouped in unlabelled
   sections, end in "…" when they open a dialog, and show their shortcut.
 - Every command is in the command palette (Ctrl+K), and every shortcut is in

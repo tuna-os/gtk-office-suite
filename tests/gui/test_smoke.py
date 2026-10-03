@@ -4857,6 +4857,26 @@ class TablesSheetStructureSmoke(TablesCellEntryMixin, BaseGUITestCase):
         # The snapshot reports a formula without its "=".
         self._wait_cells(lambda c: (c.get((row, col)) or ("", None))[1] == formula.lstrip("="), f"{ref} to hold {formula}")
 
+    def test_the_cells_context_menu_inserts_a_row(self):
+        """The cells' context menu (Shift+F10, as a right-click opens it)
+        holds the commands on the selection's rows and columns, which left
+        the toolbar for it (docs/GNOME-GUIDELINES.md §6). It used to open
+        Format Cells and nothing else."""
+        from dogtail import rawinput
+        self._put("A1", "head")
+        self._select("A1")
+        # A jump leaves the keyboard in fx; Escape gives it back to the grid.
+        rawinput.keyCombo("Escape")
+        rawinput.keyCombo("<Shift>F10")
+        # GTK 4.14 gives a popover menu's items no accessible names, so the
+        # menu is checked by its twelve items and used as the keyboard does:
+        # it opens on its first item, Insert Rows Above, and Return runs it.
+        self.wait_until(
+            lambda: len(self.app.findChildren(lambda n: n.roleName == "menu item" and n.showing)),
+            lambda n: n == 12, description="the cells' context menu and its twelve commands")
+        rawinput.keyCombo("Return")
+        self._wait_cells(lambda c: c.get((1, 0), ("",))[0] == "head", "Insert Rows Above to move A1 down a row")
+
     def test_inserting_and_deleting_lines_rewrites_formulas_and_undo_restores(self):
         self._put("A1", "head")
         self._put("A2", "1")
@@ -9027,8 +9047,9 @@ class _AccessibilityDocShortcuts:
     app_id = None
     app_title = None
 
-    def test_the_documented_shortcuts_are_the_apps(self):
-        self.gapplication_action(self.app_id, "shortcuts")
+    def _shown(self, action):
+        """The (name, keys) rows of the shortcuts list `action` opens."""
+        self.gapplication_action(self.app_id, action)
         first = self.wait_until(
             lambda: next((n for n in self.app.findChildren(
                 lambda n: n.roleName == "list item" and n.name == "Keyboard Shortcuts" and n.showing)), None),
@@ -9038,10 +9059,21 @@ class _AccessibilityDocShortcuts:
             keys = [d.name for d in item.findChildren(lambda n: n.roleName == "panel" and n.name)]
             if keys:
                 shown.add((item.name, keys[-1].replace(" + ", "+")))
+        return shown
+
+    def test_the_documented_shortcuts_are_the_apps(self):
+        shown = self._shown("shortcuts")
         documented = _documented_shortcuts(self.app_title)
         self.assertTrue(shown, "the list showed no shortcuts")
         self.assertEqual(sorted(shown - documented), [], "in the app's list but not in docs/ACCESSIBILITY.md")
         self.assertEqual(sorted(documented - shown), [], "in docs/ACCESSIBILITY.md but not in the app's list")
+
+    def test_ctrl_question_opens_the_same_list(self):
+        """Ctrl+? (app.show-shortcuts) and the main menu's Keyboard
+        Shortcuts (app.shortcuts) open one list. Ctrl+? used to open a
+        hand-written list of each app's own, which had drifted from it."""
+        self.assertEqual(sorted(self._shown("show-shortcuts")), sorted(_documented_shortcuts(self.app_title)),
+                         "Ctrl+?'s list is not the documented one the main menu opens")
 
 
 class LettersAccessibilityDocShortcutsSmoke(_AccessibilityDocShortcuts, BaseGUITestCase):

@@ -99,7 +99,10 @@ def button_labels(text):
 
 
 def menu_items(text):
-    return strings(r"(?:\.append|MenuItem::new)\(\s*Some\(\s*" + LIT, text)
+    out = strings(r"(?:\.append|MenuItem::new)\(\s*Some\(\s*" + LIT, text)
+    # (label, "app.action") pairs, as menus::section takes them.
+    out += strings(r"\(\s*" + LIT + r"\s*,\s*\"app\.", text)
+    return out
 
 
 def command_labels(text):
@@ -111,7 +114,10 @@ def command_labels(text):
 
 
 def tooltips(text):
-    return strings(r"tooltip_text\(\s*(?:Some\(\s*)?" + LIT, text)
+    out = strings(r"tooltip_text\(\s*(?:Some\(\s*)?" + LIT, text)
+    # Toolbar items: (icon, tooltip, action).
+    out += strings(r"\(\s*\"[\w-]+-symbolic\"\s*,\s*" + LIT + r"\s*,\s*\"app\.", text)
+    return out
 
 
 class HeaderCapitalizationTest(unittest.TestCase):
@@ -194,6 +200,9 @@ class DialogWordsTest(unittest.TestCase):
             self.assertIn(expected, all_buttons)
         all_menus = [m for _, text in sources() for m in menu_items(text)]
         self.assertIn("_Preferences", all_menus)
+        self.assertIn("Insert Rows Above", all_menus)
+        all_tooltips = [t for _, text in sources() for t in tooltips(text)]
+        self.assertIn("Merge Cells", all_tooltips)
         all_commands = [c for _, text in sources() for c in command_labels(text)]
         self.assertGreater(len(all_commands), 100)
 

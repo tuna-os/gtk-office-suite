@@ -49,23 +49,15 @@ fn main() {
         }
         std::ops::ControlFlow::Continue(())
     });
-    let shortcuts: &[(&str, &[(&str, &str)])] = &[
-        ("Editing", &[
-            ("Undo", "<Control>z"),
-            ("Redo", "<Control><Shift>z"),
-            ("Clear cell", "Delete"),
-            ("Commit cell edit", "Enter"),
-        ]),
-        ("File", &[
-            ("Save", "<Control>s"),
-            ("Open", "<Control>o"),
-            ("New spreadsheet", "<Control>n"),
-        ]),
-    ];
+    // Ctrl+? opens the same list as the main menu's Keyboard Shortcuts:
+    // the action registry's, which docs/ACCESSIBILITY.md is checked
+    // against. A hand-written list here had drifted from it.
     let act_shortcuts = gtk4::gio::SimpleAction::new("show-shortcuts", None);
-    let s = shortcuts;
+    let app = suite.app.downgrade();
     act_shortcuts.connect_activate(move |_, _| {
-        suite_common::show_shortcuts_dialog(s);
+        if let Some(app) = app.upgrade() {
+            suite_common::show_shortcuts_from_registry(&app);
+        }
     });
     suite.app.add_action(&act_shortcuts);
     suite.app.set_accels_for_action("app.show-shortcuts", &["<Primary>question"]);
