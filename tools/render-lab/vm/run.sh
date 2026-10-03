@@ -39,11 +39,8 @@ for _ in $(seq 120); do "${SSH[@]}" true 2>/dev/null && break; sleep 5; done
 # Wait for the autologin session's Wayland socket.
 "${SSH[@]}" 'for i in $(seq 60); do ls /run/user/$(id -u)/wayland-0 >/dev/null 2>&1 && exit 0; sleep 2; done; exit 1'
 
-"${SSH[@]}" 'mkdir -p ~/lab/bundles ~/lab/fixtures ~/lab/out'
-"${SCP[@]}" "$BUNDLES"/*.flatpak lab@127.0.0.1:lab/bundles/
-"${SCP[@]}" -r "$FIX"/. lab@127.0.0.1:lab/fixtures/
-"${SSH[@]}" 'for b in ~/lab/bundles/*.flatpak; do flatpak install --user -y --noninteractive "$b"; done'
-
+# QMP: `qmp <file>` screenshots the virtual monitor into <file>;
+# `qmp_key <key>` presses a key on the guest's keyboard.
 qmp() { python3 - "$1" <<'PY'
 import json, socket, sys
 s = socket.socket(socket.AF_UNIX); s.connect("qmp.sock"); f = s.makefile("rw")
@@ -51,6 +48,30 @@ f.readline(); f.write(json.dumps({"execute": "qmp_capabilities"}) + "\n"); f.flu
 f.write(json.dumps({"execute": "screendump", "arguments": {"filename": sys.argv[1]}}) + "\n"); f.flush(); print(f.readline().strip())
 PY
 }
+qmp_key() { python3 - "$1" <<'PY'
+import json, socket, sys
+s = socket.socket(socket.AF_UNIX); s.connect("qmp.sock"); f = s.makefile("rw")
+f.readline(); f.write(json.dumps({"execute": "qmp_capabilities"}) + "\n"); f.flush(); f.readline()
+f.write(json.dumps({"execute": "send-key", "arguments": {"keys": [{"type": "qcode", "data": sys.argv[1]}]}}) + "\n"); f.flush(); print(f.readline().strip())
+PY
+}
+
+# GNOME's welcome tour ("Welcome to Fedora Linux") opens over the first
+# session of each GNOME version and stayed in front of every app in every
+# screenshot. Marking it shown stops it opening; Return takes the Skip
+# button, focused by default, if it already has. Both before any app
+# runs, so the key can't reach one.
+"${SSH[@]}" 'export DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/$(id -u)/bus;
+    gsettings set org.gnome.shell welcome-dialog-last-shown-version "'"'"'999'"'"'" || true'
+sleep 10
+qmp_key ret >/dev/null
+sleep 2
+
+"${SSH[@]}" 'mkdir -p ~/lab/bundles ~/lab/fixtures ~/lab/out'
+"${SCP[@]}" "$BUNDLES"/*.flatpak lab@127.0.0.1:lab/bundles/
+"${SCP[@]}" -r "$FIX"/. lab@127.0.0.1:lab/fixtures/
+"${SSH[@]}" 'for b in ~/lab/bundles/*.flatpak; do flatpak install --user -y --noninteractive "$b"; done'
+
 
 python3 -c 'import json,sys; [print(f["app"], f["feature"], f["file"]) for f in json.load(open(sys.argv[1]))]' "$FIX/manifest.json" |
 while read -r app feature file; do
