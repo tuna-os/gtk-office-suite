@@ -385,6 +385,16 @@ fn handle_key(view: &PageView, buf: &gtk::TextBuffer, key: gdk::Key, state: gdk:
             match key {
                 gdk::Key::c => buf.copy_clipboard(&clipboard),
                 gdk::Key::x => buf.cut_clipboard(&clipboard, true),
+                // Another application's text: typed in as a model edit.
+                _ if crate::live::of(buf).is_some() => {
+                    let buf = buf.clone();
+                    clipboard.read_text_async(None::<&gtk::gio::Cancellable>, move |text| {
+                        if let Ok(Some(text)) = text {
+                            crate::insert::paste_text(&buf, &text);
+                            crate::live::sync_actions(&buf);
+                        }
+                    });
+                }
                 _ => buf.paste_clipboard(&clipboard, None, true),
             }
             true
@@ -673,6 +683,38 @@ mod tests {
             assert_eq!(styles(&buf).iter().map(|s| s.0).collect::<Vec<_>>(), vec![1.15, 1.15, 1.15]);
             crate::live::undo(&buf, false);
             assert_eq!(styles(&buf).iter().map(|s| s.0).collect::<Vec<_>>(), vec![1.0, 1.5, 1.0]);
+        });
+    }
+
+    /// A Markdown shortcut ("**hi**" then a space) is one model edit
+    /// (#1202 stage 3): no buffer read-back, the formatting the text already
+    /// had is kept, the caret stays after the typed space, and one undo
+    /// brings the asterisks back.
+    #[test]
+    fn a_markdown_shortcut_is_one_model_edit_that_keeps_formatting_and_caret() {
+        gtk_test(|| {
+            let (_view, buf) = editable("x **hi** y");
+            let live = crate::live::LiveModel::attach(&buf);
+            buf.select_range(&buf.iter_at_offset(2), &buf.iter_at_offset(8));
+            crate::actions::toggle_tag_in(&buf, "italic");
+            buf.place_cursor(&buf.iter_at_offset(9));
+            let before = { let m = live.borrow(); (m.local_reads, m.full_reads) };
+
+            crate::actions::markdown_macro_at(&buf, &buf.iter_at_offset(8));
+            let runs = |buf: &gtk::TextBuffer| -> Vec<(String, bool, bool)> {
+                let m = crate::live::of(buf).unwrap();
+                let mut m = m.borrow_mut();
+                m.document(buf).paragraphs[0].runs.iter().map(|r| (r.text.clone(), r.style.bold, r.style.italic)).collect()
+            };
+            assert_eq!(
+                runs(&buf),
+                vec![("x ".into(), false, false), ("hi".into(), true, true), (" y".into(), false, false)]
+            );
+            assert_eq!({ let m = live.borrow(); (m.local_reads, m.full_reads) }, before, "the model read the buffer back instead of taking an op");
+            assert_eq!(buf.iter_at_mark(&buf.get_insert()).offset(), 5, "the caret is after the typed space");
+
+            crate::live::undo(&buf, false);
+            assert_eq!(runs(&buf), vec![("x ".into(), false, false), ("**hi**".into(), false, true), (" y".into(), false, false)]);
         });
     }
 

@@ -155,6 +155,16 @@ fn typeset_with_starts(container: &PageContainer, buf: &gtk::TextBuffer) -> (let
     (typeset, starts)
 }
 
+/// Put the selection on `widget`'s clipboard as the suite fragment, with
+/// HTML and plain text beside it. False with nothing selected.
+pub(crate) fn copy_selection(widget: &gtk::Widget, buf: &gtk::TextBuffer) -> bool {
+    let Some((start, end)) = buf.selection_bounds() else { return false };
+    let frag = crate::bridge::selection_fragment(buf, start.offset() as usize, end.offset() as usize);
+    let provider = suite_common::clipboard::provider(letters_core::fragment::MIME, &frag.to_json(), &frag.to_html(), &frag.to_plain());
+    let _ = widget.clipboard().set_content(Some(&provider));
+    true
+}
+
 /// Cross-app clipboard (DESIGN-UI) on `widget`, which edits `buf`: Ctrl+C
 /// offers the suite fragment (styled runs) alongside HTML and plain text;
 /// Ctrl+V prefers it. Capture phase so it supersedes the widget's own
@@ -168,15 +178,17 @@ pub(crate) fn connect_suite_clipboard(widget: &gtk::Widget, buf: &gtk::TextBuffe
         key.connect_key_pressed(move |_, keyval, _code, mods| {
             let ctrl = mods.contains(gtk4::gdk::ModifierType::CONTROL_MASK);
             if ctrl && keyval == gtk4::gdk::Key::c {
-                if let Some((start, end)) = buf.selection_bounds() {
-                    let frag = crate::bridge::selection_fragment(&buf, start.offset() as usize, end.offset() as usize);
-                    let provider = suite_common::clipboard::provider(
-                        letters_core::fragment::MIME,
-                        &frag.to_json(),
-                        &frag.to_html(),
-                        &frag.to_plain(),
-                    );
-                    let _ = ed.clipboard().set_content(Some(&provider));
+                if copy_selection(&ed, &buf) {
+                    return gtk4::glib::Propagation::Stop;
+                }
+                return gtk4::glib::Propagation::Proceed;
+            }
+            // Cut is a copy, then a model edit deleting the selection: the
+            // fragment keeps its formatting, and one undo puts it back.
+            if ctrl && keyval == gtk4::gdk::Key::x && crate::live::of(&buf).is_some() {
+                if copy_selection(&ed, &buf) {
+                    crate::insert::delete_selection(&buf);
+                    crate::live::sync_actions(&buf);
                     return gtk4::glib::Propagation::Stop;
                 }
                 return gtk4::glib::Propagation::Proceed;

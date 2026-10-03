@@ -17,18 +17,15 @@ use letters_core::Paragraph;
 /// when the buffer has no live model or the model refused the edit.
 fn replace_selection(buf: &gtk::TextBuffer, content: Vec<Paragraph>) -> bool {
     let Some(live) = crate::live::of(buf) else { return false };
-    let (from, to) = buf
-        .selection_bounds()
-        .map(|(a, b)| (a.offset(), b.offset()))
-        .unwrap_or_else(|| {
-            let caret = buf.iter_at_mark(&buf.get_insert()).offset();
-            (caret, caret)
-        });
+    let (from, to) = selection(buf);
     let mut m = live.borrow_mut();
-    let (s, e) = (m.sequence_offset(buf, from.max(0) as usize), m.sequence_offset(buf, to.max(0) as usize));
+    let (s, e) = (m.sequence_offset(buf, from), m.sequence_offset(buf, to));
     let mut ops = Vec::new();
     if e > s {
         ops.push(Op::Delete { at: s, len: e - s });
+    }
+    if content.is_empty() {
+        return !ops.is_empty() && m.apply_user_ops(buf, &ops, false);
     }
     // Where the inserted content ends: the caret goes there, after all of
     // it, not after its first paragraph as the projection would put it.
@@ -42,6 +39,53 @@ fn replace_selection(buf: &gtk::TextBuffer, content: Vec<Paragraph>) -> bool {
         buf.place_cursor(&buf.iter_at_offset(off as i32));
     }
     true
+}
+
+/// Delete the selection as a model edit (Cut).
+pub(crate) fn delete_selection(buf: &gtk::TextBuffer) -> bool {
+    replace_selection(buf, Vec::new())
+}
+
+/// Paste plain text from another application at the caret, replacing the
+/// selection: typed text, in the caret's typing style, each line a
+/// paragraph styled like the one it splits. The caret ends after it.
+pub(crate) fn paste_text(buf: &gtk::TextBuffer, text: &str) -> bool {
+    let text = text.replace("\r\n", "\n").replace('\r', "\n");
+    let Some(live) = crate::live::of(buf) else { return false };
+    let (from, to) = selection(buf);
+    let mut m = live.borrow_mut();
+    let (s, e) = (m.sequence_offset(buf, from), m.sequence_offset(buf, to));
+    let mut scratch = m.document(buf).clone();
+    let mut ops = Vec::new();
+    if e > s {
+        let del = Op::Delete { at: s, len: e - s };
+        if letters_core::edit::apply(&mut scratch, &del).is_err() {
+            return false;
+        }
+        ops.push(del);
+    }
+    if !text.is_empty() {
+        let Some(typed) = letters_core::edit::typing(&scratch, s, &text) else { return false };
+        ops.push(typed);
+    }
+    if ops.is_empty() || !m.apply_user_ops(buf, &ops, false) {
+        return false;
+    }
+    if let Some(off) = m.buffer_offset(buf, s + text.chars().count()) {
+        drop(m);
+        buf.place_cursor(&buf.iter_at_offset(off as i32));
+    }
+    true
+}
+
+/// The selection's buffer offsets in order, or the caret's twice.
+fn selection(buf: &gtk::TextBuffer) -> (usize, usize) {
+    buf.selection_bounds()
+        .map(|(a, b)| (a.offset().max(0) as usize, b.offset().max(0) as usize))
+        .unwrap_or_else(|| {
+            let caret = buf.iter_at_mark(&buf.get_insert()).offset().max(0) as usize;
+            (caret, caret)
+        })
 }
 
 /// Insert a suite fragment at the cursor, replacing the selection: styled
@@ -144,6 +188,41 @@ mod tests {
 
             crate::live::undo(&buf, false);
             assert_eq!(doc(&buf).paragraphs.iter().map(|p| p.text()).collect::<Vec<_>>(), vec!["keep this out".to_string()]);
+        });
+    }
+
+    /// Another application's text pastes over the selection in the caret's
+    /// typing style, a line per paragraph, as one model edit with the
+    /// caret after it. Cut's delete is one model edit too.
+    #[test]
+    fn plain_text_pastes_as_typing_and_cut_deletes_as_one_model_edit() {
+        gtk_test(|| {
+            let buf = live_buffer("ab xx cd");
+            buf.select_range(&buf.iter_at_offset(0), &buf.iter_at_offset(2));
+            crate::actions::toggle_tag_in(&buf, "bold");
+            let before = reads(&buf);
+
+            buf.select_range(&buf.iter_at_offset(3), &buf.iter_at_offset(5));
+            assert!(paste_text(&buf, "one\r\ntwo"));
+            let d = doc(&buf);
+            assert_eq!(d.paragraphs.iter().map(|p| p.text()).collect::<Vec<_>>(), vec!["ab one".to_string(), "two cd".to_string()]);
+            assert_eq!(reads(&buf), before, "the model read the buffer back instead of taking an op");
+            assert_eq!(buf.iter_at_mark(&buf.get_insert()).offset(), 10, "the caret is after the pasted text");
+
+            // At the end of bold text, a paste is bold, as typing would be.
+            buf.place_cursor(&buf.iter_at_offset(2));
+            assert!(paste_text(&buf, "Z"));
+            assert!(doc(&buf).paragraphs[0].runs.iter().any(|r| r.text == "abZ" && r.style.bold), "{:?}", doc(&buf).paragraphs[0].runs);
+
+            buf.select_range(&buf.iter_at_offset(0), &buf.iter_at_offset(4));
+            assert!(delete_selection(&buf));
+            assert_eq!(doc(&buf).paragraphs[0].text(), "one");
+            assert_eq!(reads(&buf), before);
+            crate::live::undo(&buf, false);
+            assert_eq!(doc(&buf).paragraphs[0].text(), "abZ one");
+            crate::live::undo(&buf, false);
+            crate::live::undo(&buf, false);
+            assert_eq!(doc(&buf).paragraphs.iter().map(|p| p.text()).collect::<Vec<_>>(), vec!["ab xx cd".to_string()]);
         });
     }
 
