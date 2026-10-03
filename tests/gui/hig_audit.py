@@ -37,6 +37,7 @@ APPS = {
 # Actions that end the app, write files, or need a parameter the audit
 # can't supply. Everything else is opened.
 SKIP = re.compile(r"^(quit|close.*|save.*|test-.*|undo|redo|.*autosave.*|clear-recent-files|open-recent.*)$")
+ONLY_ACTIONS = set(os.environ.get("HIG_ACTIONS", "").split())
 
 
 def actions(app_id):
@@ -96,7 +97,7 @@ def main():
             print(f"{app}: main menu: {e}", file=sys.stderr)
         a.close()
         print(f"{app}: {len(names)} actions: {' '.join(names)}")
-        for name in ([] if os.environ.get("HIG_LIST_ONLY") else names):
+        for name in ([] if os.environ.get("HIG_LIST_ONLY") else [n for n in names if not ONLY_ACTIONS or n in ONLY_ACTIONS]):
             a = launch()
             before = screen()
             a.action(name, settle=2.0)

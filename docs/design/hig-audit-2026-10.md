@@ -51,7 +51,7 @@ Each finding below is marked **fixed** (by the PR that adds this report) or
 | T2 | Page Setup was one of those dialogs, with a single margin for all four sides. It is now the shared Page Setup dialog (L2), with a margin per side. | fixed |
 | T3 | The sheet bar's Delete Sheet button used a circled cross (`edit-delete`), which reads as "close". It is now the trash icon. | fixed |
 | T4 | Tables had no Bold, Italic or Underline at all: no toolbar buttons, and Ctrl+B, Ctrl+I and Ctrl+U did nothing. They are now actions with those shortcuts, first on the toolbar, and a GUI journey checks Ctrl+B. The toolbar still carries rare commands (Define Name, Set Print Area, Page Setup, Export PDF, two Hide buttons) that could move to menus. | fixed: text styling; open: slimming |
-| T5 | The form dialogs (T1) still lay out labels and fields in a grid rather than as preference rows. | open |
+| T5 | The form dialogs (T1) laid out labels and fields in a bare grid. They now use a boxed list of rows (`suite_common::dialogs::form_rows`), each field at the end of a row named by its title, and are wide enough for their titles. | fixed |
 | T6 | Delete Sheet on the only sheet opened an alert saying it couldn't be done. The button and action are now disabled when one sheet is left. | fixed |
 
 ## Decks
