@@ -336,15 +336,10 @@ impl TablesWindow {
             app.add_action(&act);
             suite_common::actions::register_labels(&[("app.format-cells", &suite_common::i18n("Format Cells…"))]);
         }
-        {
-            let app2 = app.clone();
-            let right = gtk4::GestureClick::new();
-            right.set_button(3);
-            right.connect_pressed(move |_, _, _, _| {
-                app2.activate_action("format-cells", None);
-            });
-            drawing_area.add_controller(right);
-        }
+        // Right-click on the cells: the commands on the selection's rows
+        // and columns, then its formatting. It used to open Format Cells
+        // and nothing else.
+        suite_common::menus::attach_context_menu(&drawing_area, &crate::sheet_actions::context_menu(), |_, _| {});
         crate::column_menu::attach(&controller, &drawing_area, &h_adj, &refresh_sel);
         crate::notes::attach(app.upcast_ref(), &controller, &drawing_area, &h_adj, &v_adj, &refresh_sel);
         crate::validation_list::attach(&controller, &drawing_area, &h_adj, &v_adj, &refresh_sel);
@@ -1432,22 +1427,24 @@ impl TablesWindow {
             ("app.delete-sheet", &suite_common::i18n("Delete Sheet…")),
         ]);
 
+        // The toolbar holds what is used while formatting and analysing,
+        // as icons. Commands on rows and columns are in the cells' context
+        // menu, and commands on the whole document in the main menu
+        // (docs/GNOME-GUIDELINES.md §1, §6); the toolbar carried twenty
+        // buttons, Page Setup and Export PDF among them.
         let extended_toolbar: Vec<suite_common::ToolbarItem> = vec![
-            ("office-number-format-symbolic", "Toggle number format", "app.cycle-number-format"),
-            ("office-border-symbolic", "Toggle cell border", "app.cycle-cell-border"),
-            ("office-merge-cells-symbolic", "Merge cells", "app.merge-cells"),
-            ("office-chart-symbolic", "Chart", "app.insert-chart"),
-            ("office-filter-symbolic", "Filter by column", "app.filter-by-column"),
-            ("office-name-symbolic", "Define name", "app.define-name"),
-            ("view-paged-symbolic", "Set print area", "app.set-print-area"),
-            ("office-row-hide-symbolic", "Hide selected rows", "app.hide-selected-rows"),
-            ("office-column-hide-symbolic", "Hide selected columns", "app.hide-selected-cols"),
-            ("document-page-setup-symbolic", "Page setup", "app.page-setup"),
-            ("document-send-symbolic", "Export PDF", "app.export-pdf"),
+            ("office-number-format-symbolic", "Number Format", "app.cycle-number-format"),
+            ("office-border-symbolic", "Cell Border", "app.cycle-cell-border"),
+            ("office-merge-cells-symbolic", "Merge Cells", "app.merge-cells"),
+            ("office-filter-symbolic", "Filter by Column", "app.filter-by-column"),
+            ("office-chart-symbolic", "Insert Chart", "app.insert-chart"),
         ];
 
-        let extended_toolbar = [extended_toolbar, crate::sheet_actions::toolbar_items()].concat();
         let suite_win = suite_common::SuiteWindow::new(app, "Tables", crate::sheet_actions::primary_toolbar(), extended_toolbar);
+        if let Some(menu) = suite_common::menus::primary_menu(suite_win.header_bar.upcast_ref()) {
+            // After Save and Print, before Preferences.
+            menu.insert_section(1, None, &crate::sheet_actions::main_menu_section());
+        }
         crate::sheet_actions::install(app, &controller, &drawing_area, &toast_overlay, refresh_sel.clone());
         suite_common::bind_window_geometry(&suite_win.window, &settings);
         *win_ref.borrow_mut() = Some(suite_win.window.clone());

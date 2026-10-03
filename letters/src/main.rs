@@ -73,49 +73,15 @@ fn main() {
     });
     suite.app.add_action(&act_prefs);
 
-    // Wire the keyboard shortcuts action
+    // Ctrl+? opens the same list as the main menu's Keyboard Shortcuts:
+    // the action registry's, which docs/ACCESSIBILITY.md is checked
+    // against. A hand-written list here had drifted from it.
     let act_shortcuts = gtk4::gio::SimpleAction::new("show-shortcuts", None);
+    let app = suite.app.downgrade();
     act_shortcuts.connect_activate(move |_, _| {
-        suite_common::show_shortcuts_dialog(
-            &[
-                ("General", &[
-                    ("New document", "<Primary>n"),
-                    ("Open file", "<Primary>o"),
-                    ("Save", "<Primary>s"),
-                    ("Save as", "<Primary><Shift>s"),
-                    ("Print", "<Primary>p"),
-                    ("Export PDF", "<Primary><Shift>e"),
-                    ("Preferences", "<Primary>comma"),
-                    ("Keyboard shortcuts", "<Primary>question"),
-                    ("Quit", "<Primary>q"),
-                ]),
-                ("Formatting", &[
-                    ("Bold", "<Primary>b"),
-                    ("Italic", "<Primary>i"),
-                    ("Underline", "<Primary>u"),
-                    ("Strikethrough", "<Primary><Shift>s"),
-                    ("Highlight", "<Primary><Shift>h"),
-                ]),
-                ("Alignment", &[
-                    ("Align left", "<Primary>l"),
-                    ("Align center", "<Primary>e"),
-                    ("Align right", "<Primary>r"),
-                    ("Justify", "<Primary>j"),
-                ]),
-                ("Font", &[
-                    ("Increase font size", "<Primary><Shift>greater"),
-                    ("Decrease font size", "<Primary><Shift>less"),
-                ]),
-                ("Document", &[
-                    ("New tab", "<Primary>t"),
-                    ("Close tab", "<Primary>w"),
-                    ("Find", "<Primary>f"),
-                    ("Find and replace", "<Primary>h"),
-                    ("Undo", "<Primary>z"),
-                    ("Redo", "<Primary>y"),
-                ]),
-            ],
-        );
+        if let Some(app) = app.upgrade() {
+            suite_common::show_shortcuts_from_registry(&app);
+        }
     });
     suite.app.add_action(&act_shortcuts);
     suite.app.set_accels_for_action("app.show-shortcuts", &["<Primary>question"]);
