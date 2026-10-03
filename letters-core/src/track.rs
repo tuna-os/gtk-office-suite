@@ -110,7 +110,7 @@ pub fn tracked(doc: &Document, ops: &[Op], author: &str, date: &str) -> Option<V
                     .unwrap_or_else(|| deletion.clone());
                 deletion_ops(&scratch, *at, at + len, &rev)
             }
-            Op::Mark { .. } | Op::SetParaStyle { .. } | Op::SetComment { .. } | Op::SetHeaderFooter { .. } | Op::SetFootnotes { .. } => vec![op.clone()],
+            Op::Mark { .. } | Op::SetParaStyle { .. } | Op::SetComment { .. } | Op::SetHeaderFooter { .. } | Op::SetFootnotes { .. } | Op::SetPage { .. } => vec![op.clone()],
             Op::SetParagraphs { .. } => return None,
         };
         for c in &converted {

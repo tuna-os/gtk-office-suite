@@ -156,6 +156,58 @@ pub(crate) fn apply_header_footer(buf: &gtk::TextBuffer, header: &str, footer: &
     crate::live::sync_actions(buf);
 }
 
+/// Set the document's page size, margins and orientation from Page Setup:
+/// one model edit, which Undo takes back. The columns and column gap are
+/// the document's own and are kept.
+///
+/// Page Setup used to write only the application's settings, which the
+/// page view uses for a document with no page of its own. On a document
+/// that has one (any .docx or .odt) it changed nothing, and no document
+/// ever saved what was chosen.
+pub(crate) fn apply_page_geometry(buf: &gtk::TextBuffer, page: letters_core::model::PageGeometry) -> bool {
+    let Some(live) = crate::live::of(buf) else { return false };
+    let applied = live.borrow_mut().edit_with(buf, |doc| {
+        let base = doc.page.unwrap_or_default();
+        let page = letters_core::model::PageGeometry { columns: base.columns, column_gap_pt: base.column_gap_pt, ..page };
+        if doc.page == Some(page) {
+            Vec::new()
+        } else {
+            vec![letters_core::edit::Op::SetPage { page: Some(page) }]
+        }
+    });
+    crate::live::sync_actions(buf);
+    applied
+}
+
+/// `page` as a GtkPageSetup, for the Page Setup dialog to start from. A
+/// page wider than it is tall is landscape paper turned.
+pub(crate) fn page_setup_of(page: &letters_core::model::PageGeometry) -> gtk::PageSetup {
+    let ps = gtk::PageSetup::new();
+    let landscape = page.width_pt > page.height_pt;
+    let (w, h) = if landscape { (page.height_pt, page.width_pt) } else { (page.width_pt, page.height_pt) };
+    ps.set_paper_size_and_default_margins(&gtk::PaperSize::new_custom("custom", "Custom", w, h, gtk::Unit::Points));
+    ps.set_orientation(if landscape { gtk::PageOrientation::Landscape } else { gtk::PageOrientation::Portrait });
+    ps.set_top_margin(page.margin_top_pt, gtk::Unit::Points);
+    ps.set_bottom_margin(page.margin_bottom_pt, gtk::Unit::Points);
+    ps.set_left_margin(page.margin_left_pt, gtk::Unit::Points);
+    ps.set_right_margin(page.margin_right_pt, gtk::Unit::Points);
+    ps
+}
+
+/// The page the dialog's `ps` describes, turned for its orientation (the
+/// paper size alone is always portrait, so landscape used to be lost).
+pub(crate) fn geometry_of(ps: &gtk::PageSetup) -> letters_core::model::PageGeometry {
+    letters_core::model::PageGeometry {
+        width_pt: ps.paper_width(gtk::Unit::Points),
+        height_pt: ps.paper_height(gtk::Unit::Points),
+        margin_top_pt: ps.top_margin(gtk::Unit::Points),
+        margin_bottom_pt: ps.bottom_margin(gtk::Unit::Points),
+        margin_left_pt: ps.left_margin(gtk::Unit::Points),
+        margin_right_pt: ps.right_margin(gtk::Unit::Points),
+        ..Default::default()
+    }
+}
+
 /// Show a dialog for inserting a custom dimension table.
 #[allow(dead_code)]
 pub fn show_insert_table_dialog(tv: &adw::TabView) {
@@ -517,4 +569,49 @@ mod tests {
             assert_eq!(header_footer_of(&buf).0, "Report");
         });
     }
+
+    /// Page Setup sets the open document's page, which the page view lays
+    /// out and a save writes; one Undo puts the old page back. It used to
+    /// change only the application's settings, so a document with a page
+    /// of its own ignored it and none saved it.
+    #[test]
+    fn page_setup_is_the_documents_page_and_undoes() {
+        gtk_test(|| {
+            let (pc, buf) = crate::doc_tab::make_doc_widget(None);
+            let live = crate::live::of(&buf).unwrap();
+            let mut doc = letters_core::Document::from_plain_text("body");
+            doc.page = Some(letters_core::model::PageGeometry { columns: 2, ..Default::default() });
+            crate::live::load(&buf, || crate::bridge::load_document(&doc, &buf));
+            let letter = letters_core::model::PageGeometry { width_pt: 792.0, height_pt: 612.0, margin_left_pt: 36.0, ..Default::default() };
+
+            assert!(apply_page_geometry(&buf, letter));
+            let page = live.borrow_mut().document(&buf).page.expect("the document has a page");
+            assert_eq!((page.width_pt, page.height_pt, page.margin_left_pt), (792.0, 612.0, 36.0));
+            assert_eq!(page.columns, 2, "the document's columns are kept");
+            assert_eq!(crate::bridge::capture_from_buffer(&buf).page, Some(page), "a save writes it");
+            let typeset = crate::doc_tab::typeset_for(&pc, &buf);
+            assert_eq!(typeset.tree().pages[0].width_pt, 792.0, "the page view lays it out");
+
+            crate::live::undo(&buf, false);
+            assert_eq!(live.borrow_mut().document(&buf).page, doc.page, "Undo put the old page back");
+            assert!(!apply_page_geometry(&buf, letters_core::model::PageGeometry { columns: 2, ..Default::default() }), "the same page is no edit");
+        });
+    }
+
+
+    /// A landscape page goes into the dialog turned and comes back the
+    /// same; reading only the paper size used to lose the orientation.
+    #[test]
+    fn a_landscape_page_round_trips_through_the_page_setup_dialog() {
+        gtk_test(|| {
+            let page = letters_core::model::PageGeometry { width_pt: 792.0, height_pt: 612.0, margin_top_pt: 30.0, margin_left_pt: 40.0, ..Default::default() };
+            let ps = page_setup_of(&page);
+            assert_eq!(ps.orientation(), gtk::PageOrientation::Landscape);
+            let back = geometry_of(&ps);
+            let close = |a: f64, b: f64| (a - b).abs() < 0.01;
+            assert!(close(back.width_pt, 792.0) && close(back.height_pt, 612.0), "{back:?}");
+            assert!(close(back.margin_top_pt, 30.0) && close(back.margin_left_pt, 40.0), "{back:?}");
+        });
+    }
+
 }

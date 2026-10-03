@@ -412,31 +412,27 @@ impl LettersWindow {
         app.set_accels_for_action("app.find", &["<Primary>f"]);
 
         // ── Page Setup action ─────────────────────────────────────
+        // Page Setup edits the open document's page (an undoable model
+        // edit), which its page view, print and every save use.
         {
             let w = win.clone();
-            let s = settings.clone();
             let tv = tab_view.clone();
             let a = gtk::gio::SimpleAction::new("page-setup", None);
             a.connect_activate(move |_, _| {
+                let Some(buf) = active_buffer(&tv) else { return };
+                let Some(pc) = tv.selected_page().as_ref().and_then(page_container) else { return };
+                let current = crate::live::of(&buf)
+                    .and_then(|m| m.borrow_mut().document(&buf).page)
+                    .unwrap_or_else(|| crate::doc_tab::layout_options(&pc).page);
                 let dialog = gtk::PageSetupUnixDialog::new(Some("Page Setup"), Some(&w));
-                // Load current page setup from GSettings
-                if let Some(ps) = load_page_setup_from_settings(&s) {
-                    dialog.set_page_setup(&ps);
-                }
-                let s2 = s.clone();
-                let tv2 = tv.clone();
+                dialog.set_page_setup(&crate::dialogs::page_setup_of(&current));
                 // GtkPageSetupUnixDialog predates GTK4's FileDialog-style async
                 // dialogs and has no non-deprecated replacement for its
                 // response signal; `.present()` below is the real 4.10 fix.
                 #[allow(deprecated)]
-                dialog.connect_response(move |dlg, _response| {
-                    let ps = dlg.page_setup();
-                    save_page_setup_to_settings(&s2, &ps);
-                    for i in 0..tv2.n_pages() {
-                        let page = tv2.nth_page(i);
-                        if let Some(pc) = page_container(&page) {
-                            pc.reload_settings(&s2);
-                        }
+                dialog.connect_response(move |dlg, response| {
+                    if response == gtk::ResponseType::Ok {
+                        crate::dialogs::apply_page_geometry(&buf, crate::dialogs::geometry_of(&dlg.page_setup()));
                     }
                     dlg.close();
                 });
@@ -1050,37 +1046,6 @@ fn autosave_all_tabs(tv: &adw::TabView, notices: &suite_common::autosave_notice:
 }
 
 // ── Page setup helpers ────────────────────────────────────────────────
-
-fn load_page_setup_from_settings(settings: &gio::Settings) -> Option<gtk::PageSetup> {
-    let ps = gtk::PageSetup::new();
-    let pw = settings.double("page-width-pt");
-    let ph = settings.double("page-height-pt");
-    let mt = settings.double("page-margin-top");
-    let mb = settings.double("page-margin-bottom");
-    let ml = settings.double("page-margin-left");
-    let mr = settings.double("page-margin-right");
-    if pw > 0.0 && ph > 0.0 {
-        let paper_size = gtk::PaperSize::new_custom("custom", "Custom", pw, ph, gtk::Unit::Points);
-        ps.set_paper_size_and_default_margins(&paper_size);
-        ps.set_top_margin(mt, gtk::Unit::Points);
-        ps.set_bottom_margin(mb, gtk::Unit::Points);
-        ps.set_left_margin(ml, gtk::Unit::Points);
-        ps.set_right_margin(mr, gtk::Unit::Points);
-        Some(ps)
-    } else {
-        None
-    }
-}
-
-fn save_page_setup_to_settings(settings: &gio::Settings, ps: &gtk::PageSetup) {
-    let paper = ps.paper_size();
-    let _ = settings.set_double("page-width-pt", paper.width(gtk::Unit::Points));
-    let _ = settings.set_double("page-height-pt", paper.height(gtk::Unit::Points));
-    let _ = settings.set_double("page-margin-top", ps.top_margin(gtk::Unit::Points));
-    let _ = settings.set_double("page-margin-bottom", ps.bottom_margin(gtk::Unit::Points));
-    let _ = settings.set_double("page-margin-left", ps.left_margin(gtk::Unit::Points));
-    let _ = settings.set_double("page-margin-right", ps.right_margin(gtk::Unit::Points));
-}
 
 fn update_word_count(buf: &gtk::TextBuffer, wc: &gtk4::Label) {
     let text = buf.text(&buf.start_iter(), &buf.end_iter(), false);
