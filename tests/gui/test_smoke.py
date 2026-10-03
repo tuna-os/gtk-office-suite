@@ -3869,6 +3869,44 @@ class LettersClipboardSmoke(BaseGUITestCase):
         self.eventually(_settled)
 
 
+class LettersPasteOverSelectionSmoke(BaseGUITestCase):
+    """Ctrl+V of a suite fragment replaces the selection and undoes in one
+    step (#1202 stage 3).
+
+    The fragment used to be typed into the buffer at the caret and the
+    selection stayed: pasting over "beta" gave "alpha alpha betabeta". It
+    is one model edit now.
+    """
+
+    app_name = "letters"
+
+    def setUp(self):
+        self._snapshot_path = self.isolate_snapshot(prefix="letters-paste-")
+        super().setUp()
+
+    def _text(self):
+        s = self.trigger_snapshot("org.tunaos.letters")
+        return "\n".join("".join(r["text"] for r in p["runs"]) for p in s["paragraphs"])
+
+    def test_paste_replaces_the_selection(self):
+        from dogtail import rawinput
+
+        aid = "org.tunaos.letters"
+        self.new_letters_document()
+        rawinput.typeText("alpha beta")
+        self.wait_until(self._text, lambda t: t == "alpha beta", description="the typed text")
+        rawinput.keyCombo("<Control>a")
+        rawinput.keyCombo("<Control>c")
+        time.sleep(0.5)  # pacing: the clipboard owner has no state to wait on
+        rawinput.keyCombo("<Control>End")
+        rawinput.keyCombo("<Shift><Control>Left")
+        rawinput.keyCombo("<Control>v")
+        self.wait_until(self._text, lambda t: t == "alpha alpha beta", description="'beta' replaced by the paste")
+        self.gapplication_action(aid, "undo")
+        self.wait_until(self._text, lambda t: t == "alpha beta", description="one undo takes the paste out")
+        self.assertIsNone(self.process.poll(), "letters crashed while pasting")
+
+
 class CrossAppClipboardSmoke(BaseGUITestCase):
     """Two live applications, one X11 selection (#442).
 
@@ -6989,6 +7027,41 @@ class LettersReplaceAllSmoke(BaseGUITestCase):
         self.wait_until(self._runs, lambda r: r == [("one fish two ", False), ("fish", True)],
                         description="one undo puts both back")
         self.assertIsNone(self.process.poll(), "letters crashed while replacing")
+
+
+class LettersLineSpacingSmoke(BaseGUITestCase):
+    """Cycle Line Spacing changes the caret's paragraph and no other
+    (#1202 stage 3).
+
+    It used to tag buffer lines from the line before the caret, so the
+    paragraph above changed too. It is a model op on the caret's paragraph
+    now.
+    """
+
+    app_name = "letters"
+
+    def setUp(self):
+        self._snapshot_path = self.isolate_snapshot(prefix="letters-spacing-")
+        super().setUp()
+
+    def _paras(self):
+        s = self.trigger_snapshot("org.tunaos.letters")
+        return [("".join(r["text"] for r in p["runs"]), p.get("style", {}).get("line_spacing")) for p in s["paragraphs"]]
+
+    def test_cycle_line_spacing_changes_only_the_caret_paragraph(self):
+        from dogtail import rawinput
+
+        aid = "org.tunaos.letters"
+        self.new_letters_document()
+        rawinput.typeText("one")
+        rawinput.keyCombo("Return")
+        rawinput.typeText("two")
+        # The text first: an action can overtake typing still on its way in.
+        self.wait_until(self._paras, lambda p: [t for t, _ in p] == ["one", "two"], description="two paragraphs")
+        self.gapplication_action(aid, "cycle-line-spacing")
+        self.wait_until(self._paras, lambda p: [round(s, 2) for _, s in p] == [1.0, 1.15],
+                        description="'two' at 1.15, 'one' untouched")
+        self.assertIsNone(self.process.poll(), "letters crashed changing line spacing")
 
 
 class LettersMarkdownShortcutSmoke(BaseGUITestCase):

@@ -642,6 +642,40 @@ mod tests {
         });
     }
 
+    /// Line spacing and tab stops are the caret's paragraph, or the
+    /// selection's, as model ops (#1202 stage 3). Both were buffer tags
+    /// from the line before the caret, and the ruler's tab stops a tag the
+    /// model never read.
+    #[test]
+    fn line_spacing_and_tab_stops_are_the_caret_paragraph_as_model_ops() {
+        gtk_test(|| {
+            let (_view, buf) = editable("one\ntwo\nthree");
+            let live = crate::live::LiveModel::attach(&buf);
+            let styles = |buf: &gtk::TextBuffer| -> Vec<(f32, Vec<f64>)> {
+                let live = crate::live::of(buf).unwrap();
+                let mut m = live.borrow_mut();
+                m.document(buf).paragraphs.iter().map(|p| (p.style.line_spacing, p.style.tab_stops_pt.clone())).collect()
+            };
+            let before = { let m = live.borrow(); (m.local_reads, m.full_reads) };
+
+            // The caret at the end of "two".
+            buf.place_cursor(&buf.iter_at_offset(7));
+            assert_eq!(crate::actions::cycle_line_spacing_in(&buf), Some(1.15));
+            assert_eq!(crate::actions::cycle_line_spacing_in(&buf), Some(1.5));
+            assert!(crate::actions::set_tab_stops_in(&buf, &[36.0, 72.0]));
+            assert_eq!(styles(&buf), vec![(1.0, vec![]), (1.5, vec![36.0, 72.0]), (1.0, vec![])]);
+            assert_eq!({ let m = live.borrow(); (m.local_reads, m.full_reads) }, before, "the model read the buffer back instead of taking an op");
+            assert_eq!(buf.iter_at_mark(&buf.get_insert()).offset(), 7, "the caret stays put");
+
+            // A selection: every paragraph it touches, from the first one's.
+            buf.select_range(&buf.iter_at_offset(1), &buf.iter_at_offset(9));
+            assert_eq!(crate::actions::cycle_line_spacing_in(&buf), Some(1.15));
+            assert_eq!(styles(&buf).iter().map(|s| s.0).collect::<Vec<_>>(), vec![1.15, 1.15, 1.15]);
+            crate::live::undo(&buf, false);
+            assert_eq!(styles(&buf).iter().map(|s| s.0).collect::<Vec<_>>(), vec![1.0, 1.5, 1.0]);
+        });
+    }
+
     /// A Markdown shortcut ("**hi**" then a space) is one model edit
     /// (#1202 stage 3): no buffer read-back, the formatting the text already
     /// had is kept, the caret stays after the typed space, and one undo

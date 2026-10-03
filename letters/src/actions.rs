@@ -173,6 +173,49 @@ pub(crate) fn align_in(buf: &gtk::TextBuffer, name: &str) {
     }
 }
 
+/// The selection's buffer offsets, or the caret's twice.
+fn caret_or_selection(buf: &gtk::TextBuffer) -> (usize, usize) {
+    let (start, end) = buf.selection_bounds().unwrap_or_else(|| {
+        let caret = buf.iter_at_mark(&buf.get_insert());
+        (caret, caret)
+    });
+    (start.offset().max(0) as usize, end.offset().max(0) as usize)
+}
+
+/// Restyle the caret's or the selection's paragraphs with `f` as one model
+/// op, putting the caret or selection back where it was.
+fn restyle_here(buf: &gtk::TextBuffer, f: impl Fn(&letters_core::ParaStyle) -> letters_core::ParaStyle) -> bool {
+    let Some(live) = crate::live::of(buf) else { return false };
+    let (from, to) = caret_or_selection(buf);
+    let restyled = live.borrow_mut().restyle(buf, from, to, f);
+    if restyled {
+        buf.select_range(&buf.iter_at_offset(from as i32), &buf.iter_at_offset(to as i32));
+    }
+    restyled
+}
+
+/// The line spacings Cycle Line Spacing steps through.
+const LINE_SPACINGS: [f32; 4] = [1.0, 1.15, 1.5, 2.0];
+
+/// Give the caret's or selection's paragraphs the line spacing after the
+/// first one's, as a model op (#1202 stage 3), and return it. It used to
+/// tag buffer lines from the line before the caret, so a neighbouring
+/// paragraph changed too, and the model never saw the spacing: it was not
+/// saved.
+pub(crate) fn cycle_line_spacing_in(buf: &gtk::TextBuffer) -> Option<f32> {
+    let live = crate::live::of(buf)?;
+    let current = live.borrow_mut().paragraph_style_at(buf, caret_or_selection(buf).0)?.line_spacing;
+    let next = *LINE_SPACINGS.iter().find(|s| **s > current + 0.01).unwrap_or(&LINE_SPACINGS[0]);
+    restyle_here(buf, |style| letters_core::ParaStyle { line_spacing: next, ..style.clone() }).then_some(next)
+}
+
+/// Set the caret's or selection's paragraphs' tab stops (points from the
+/// paragraph's left edge) as a model op. The ruler used to put them on a
+/// buffer tag the model never read, so they were not saved.
+pub(crate) fn set_tab_stops_in(buf: &gtk::TextBuffer, tabs: &[f64]) -> bool {
+    restyle_here(buf, |style| letters_core::ParaStyle { tab_stops_pt: tabs.to_vec(), ..style.clone() })
+}
+
 /// The model mark a toggle name sets, if it is one of the toggles.
 fn mark_key(name: &str) -> Option<letters_core::edit::MarkKey> {
     use letters_core::edit::MarkKey;

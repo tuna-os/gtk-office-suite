@@ -482,6 +482,14 @@ impl LiveModel {
         edit::paragraph_start(&self.doc, para) + offset
     }
 
+    /// Buffer offset of sequence offset `at` (the inverse of
+    /// `sequence_offset`).
+    pub fn buffer_offset(&mut self, buf: &gtk::TextBuffer, at: usize) -> Option<usize> {
+        self.resolve(buf);
+        let (para, offset) = edit::locate(&self.doc, at)?;
+        Some(crate::bridge::buffer_offset(&self.doc.paragraphs[para], *self.starts.get(para)?, offset))
+    }
+
     pub fn document(&mut self, buf: &gtk::TextBuffer) -> &Document {
         self.resolve(buf);
         crate::bridge::read_sidecars(buf, &mut self.doc);

@@ -179,32 +179,22 @@ impl LettersWindow {
             let s = settings.clone();
             let rw = ruler_widget.downgrade();
             let tv = tab_view.clone();
+            // The ruler also reports margin drags: only a change to its tab
+            // stops restyles the caret's paragraphs.
+            // Compared on the page, since a stop's distance from the margin
+            // changes with the margin.
+            let on_page = |r: &crate::ruler::Ruler| r.tab_stops_pt().iter().map(|t| t + r.margin_left()).collect::<Vec<f64>>();
+            let last_tabs = std::cell::RefCell::new(on_page(&ruler_widget));
             ruler_widget.connect_changed(move || {
                 if let Some(r) = rw.upgrade() {
                     let _ = s.set_double("page-margin-left", r.margin_left());
                     let _ = s.set_double("page-margin-right", r.margin_right());
-                    // Apply tab stops to active buffer
-                    if let Some(tab_array) = r.get_tab_array() {
+                    let tabs = on_page(&r);
+                    if *last_tabs.borrow() != tabs {
                         if let Some(buf) = active_buffer(&tv) {
-                            let cursor = buf.cursor_position();
-                            let mut start = buf.iter_at_offset(cursor);
-                            start.backward_line();
-                            let mut end = buf.iter_at_offset(cursor);
-                            if !end.ends_line() { end.forward_to_line_end(); }
-                            if let Some(tag) = buf.tag_table().lookup("tab-stops") {
-                                buf.remove_tag(&tag, &start, &end);
-                            }
-                            // Create/update tab-stops tag
-                            let tag = if let Some(t) = buf.tag_table().lookup("tab-stops") {
-                                t
-                            } else {
-                                let t = gtk::TextTag::builder().name("tab-stops").build();
-                                buf.tag_table().add(&t);
-                                t
-                            };
-                            tag.set_tabs(Some(&tab_array));
-                            buf.apply_tag(&tag, &start, &end);
+                            crate::actions::set_tab_stops_in(&buf, &r.tab_stops_pt());
                         }
+                        *last_tabs.borrow_mut() = tabs;
                     }
                 }
             });
@@ -520,35 +510,9 @@ impl LettersWindow {
             let tv = tab_view.clone();
             let a = gtk::gio::SimpleAction::new("cycle-line-spacing", None);
             a.connect_activate(move |_, _| {
-                if let Some(buf) = active_buffer(&tv) {
-                    let (start, end) = buf.selection_bounds().unwrap_or_else(|| {
-                        let s = buf.cursor_position();
-                        let mut ls = buf.iter_at_offset(s); ls.backward_line();
-                        let mut le = buf.iter_at_offset(s);
-                        if !le.ends_line() { le.forward_to_line_end(); }
-                        (ls, le)
-                    });
-                    let spacing_tags = ["line-spacing-1.0", "line-spacing-1.15", "line-spacing-1.5", "line-spacing-2.0"];
-                    let mut current = 0usize;
-                    for (i, t) in spacing_tags.iter().enumerate() {
-                        if let Some(tag) = buf.tag_table().lookup(t) {
-                            if start.has_tag(&tag) { current = i; break; }
-                        }
-                    }
-                    let next = (current + 1) % spacing_tags.len();
-                    buf.begin_user_action();
-                    for t in spacing_tags {
-                        if let Some(tag) = buf.tag_table().lookup(t) { buf.remove_tag(&tag, &start, &end); }
-                    }
-                    if let Some(tag) = buf.tag_table().lookup(spacing_tags[next]) {
-                        buf.apply_tag(&tag, &start, &end);
-                        // Persist line spacing to GSettings
-                        let spacing_map = [("line-spacing-1.0", 1.0), ("line-spacing-1.15", 1.15), ("line-spacing-1.5", 1.5), ("line-spacing-2.0", 2.0)];
-                        let val = spacing_map.iter().find(|(n,_)| *n == spacing_tags[next]).map(|(_,v)| *v).unwrap_or(1.15);
-                        let s = gtk4::gio::Settings::new("org.tunaos.letters");
-                        let _ = s.set_double("line-spacing", val);
-                    }
-                    buf.end_user_action();
+                if let Some(spacing) = active_buffer(&tv).and_then(|buf| crate::actions::cycle_line_spacing_in(&buf)) {
+                    let s = gtk4::gio::Settings::new("org.tunaos.letters");
+                    let _ = s.set_double("line-spacing", f64::from(spacing));
                 }
             });
             app.add_action(&a);
@@ -708,14 +672,7 @@ impl LettersWindow {
                         if let Ok(file) = result {
                             if let Ok(path) = suite_common::locations::open_location(&file).map_err(|e| eprintln!("{e}")) {
                                 if let Some(buf) = active_buffer(&tv) {
-                                    let path_str = path.to_string_lossy();
-                                    let name = path.file_name()
-                                        .and_then(|n| n.to_str()).unwrap_or("image");
-                                    let md = format!("![{}]({})", name, path_str);
-                                    let ins = buf.selection_bounds()
-                                        .map(|(i,_)| i).unwrap_or_else(|| buf.start_iter());
-                                    let mut pos = ins;
-                                    buf.insert(&mut pos, &md);
+                                    crate::insert::insert_image(&buf, &path);
                                 }
                             }
                         }
@@ -1155,36 +1112,6 @@ fn save_page_setup_to_settings(settings: &gio::Settings, ps: &gtk::PageSetup) {
     let _ = settings.set_double("page-margin-bottom", ps.bottom_margin(gtk::Unit::Points));
     let _ = settings.set_double("page-margin-left", ps.left_margin(gtk::Unit::Points));
     let _ = settings.set_double("page-margin-right", ps.right_margin(gtk::Unit::Points));
-}
-
-/// Insert a suite fragment at the cursor: styled runs map onto the
-/// editor's named tags; grids land as tab-separated lines (a real
-/// cell-tagged table paste needs the buffer table support tracked in
-/// PARITY's bridge gaps).
-pub(crate) fn insert_fragment(buf: &gtk::TextBuffer, frag: &letters_core::fragment::Fragment) {
-    use letters_core::fragment::Fragment;
-    match frag {
-        Fragment::Text(paras) => {
-            for (i, p) in paras.iter().enumerate() {
-                if i > 0 {
-                    buf.insert_at_cursor("\n");
-                }
-                for run in &p.runs {
-                    let tags = crate::bridge::run_tags(buf, &run.style);
-                    let tags: Vec<&str> = tags.iter().map(String::as_str).collect();
-                    let mut iter = buf.iter_at_mark(&buf.get_insert());
-                    if tags.is_empty() {
-                        buf.insert(&mut iter, &run.text);
-                    } else {
-                        buf.insert_with_tags_by_name(&mut iter, &run.text, &tags);
-                    }
-                }
-            }
-        }
-        Fragment::Grid(_) => {
-            buf.insert_at_cursor(&frag.to_plain());
-        }
-    }
 }
 
 fn update_word_count(buf: &gtk::TextBuffer, wc: &gtk4::Label) {
