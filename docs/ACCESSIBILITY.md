@@ -81,6 +81,9 @@ by a space becomes bold, and `_word_` becomes italic.
 
 | Action | Shortcut |
 |---|---|
+| Bold | Ctrl+B |
+| Italic | Ctrl+I |
+| Underline | Ctrl+U |
 | Edit Note… | Shift+F2 |
 | Go to Cell… | Ctrl+G |
 | Number Format… | Shift+Ctrl+F |

@@ -36,7 +36,7 @@ pub fn build_decks_toolbar() -> gtk::Box {
     }
 
 
-    // Inserting is the header bar's Insert buttons (insert_bar.rs).
+    // The Insert buttons go between these and Present (insert_bar.rs).
 
     let present = gtk::Button::builder()
         .icon_name("view-fullscreen-symbolic").tooltip_text("Present (F5)").build();

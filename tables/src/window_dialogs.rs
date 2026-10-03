@@ -53,28 +53,11 @@ pub(crate) fn show_format_cells_dialog(
     symbol.set_max_width_chars(4);
     symbol.update_property(&[gtk4::accessible::Property::Label("Currency symbol")]);
 
-    let grid = gtk4::Grid::new();
-    grid.set_row_spacing(6);
-    grid.set_column_spacing(12);
-    grid.set_margin_start(12);
-    grid.set_margin_end(12);
-    grid.set_margin_top(12);
-    grid.set_margin_bottom(12);
-    for (row, (label, widget)) in [
-        (&suite_common::i18n("Format"), dropdown.clone().upcast::<gtk4::Widget>()),
-        (&suite_common::i18n("Decimals"), decimals.clone().upcast()),
-        (&suite_common::i18n("Symbol"), symbol.clone().upcast()),
-    ]
-    .into_iter()
-    .zip(0..)
-    .map(|(item, row)| (row, item))
-    {
-        let l = gtk4::Label::new(Some(label));
-        l.add_css_class("dim-label");
-        l.set_halign(gtk4::Align::Start);
-        grid.attach(&l, 0, row, 1, 1);
-        grid.attach(&widget, 1, row, 1, 1);
-    }
+    let grid = suite_common::dialogs::form_rows(&[
+        (&suite_common::i18n("Format"), dropdown.upcast_ref()),
+        (&suite_common::i18n("Decimals"), decimals.upcast_ref()),
+        (&suite_common::i18n("Symbol"), symbol.upcast_ref()),
+    ]);
     let apply = gtk4::Button::with_label("Apply");
     apply.add_css_class("suggested-action");
 
@@ -127,7 +110,7 @@ pub(crate) fn show_conditional_format_dialog(
     use tables_core::sheet::{CondOp, CondRule};
     let dialog = adw::Dialog::builder()
         .title(suite_common::i18n("Conditional Formatting"))
-        .content_width(360)
+        .content_width(440)
         .build();
 
     let op_combo = gtk::DropDown::from_strings(&["Greater than", "Less than", "Equal to", "Between"]);
@@ -141,28 +124,14 @@ pub(crate) fn show_conditional_format_dialog(
     let color_btn = gtk::ColorDialogButton::new(Some(gtk::ColorDialog::new()));
     color_btn.set_rgba(&gtk4::gdk::RGBA::new(1.0, 0.75, 0.75, 1.0));
 
-    let grid = gtk4::Grid::new();
-    grid.set_row_spacing(8);
-    grid.set_column_spacing(12);
-    grid.set_margin_top(12);
-    grid.set_margin_bottom(12);
-    grid.set_margin_start(12);
-    grid.set_margin_end(12);
-    let lbl = |t: &str| {
-        let l = gtk::Label::new(Some(t));
-        l.set_halign(gtk::Align::Start);
-        l
-    };
-    grid.attach(&lbl("Condition"), 0, 0, 1, 1);
-    grid.attach(&op_combo, 1, 0, 1, 1);
-    grid.attach(&lbl("Value"), 0, 1, 1, 1);
-    grid.attach(&value_entry, 1, 1, 1, 1);
-    grid.attach(&lbl("And"), 0, 2, 1, 1);
-    grid.attach(&value2_entry, 1, 2, 1, 1);
-    grid.attach(&lbl("Fill"), 0, 3, 1, 1);
-    grid.attach(&color_btn, 1, 3, 1, 1);
+    let grid = suite_common::dialogs::form_rows(&[
+        ("Condition", op_combo.upcast_ref()),
+        ("Value", value_entry.upcast_ref()),
+        ("And", value2_entry.upcast_ref()),
+        ("Fill", color_btn.upcast_ref()),
+    ]);
 
-    let apply = gtk::Button::with_label(&suite_common::i18n("Apply to Selection"));
+    let apply = gtk::Button::with_label(&suite_common::i18n("Apply"));
     apply.add_css_class("suggested-action");
 
     {
@@ -224,26 +193,13 @@ pub(crate) fn show_define_name_dialog(
         .content_width(320)
         .build();
 
-    let grid = gtk4::Grid::new();
-    grid.set_row_spacing(8);
-    grid.set_column_spacing(12);
-    grid.set_margin_top(12);
-    grid.set_margin_bottom(12);
-    grid.set_margin_start(12);
-    grid.set_margin_end(12);
-    let lbl = |t: &str| {
-        let l = gtk::Label::new(Some(t));
-        l.set_halign(gtk::Align::Start);
-        l
-    };
     let name_entry = gtk::Entry::builder().placeholder_text("e.g. TaxRate").build();
     name_entry.update_property(&[gtk4::accessible::Property::Label("Name")]);
     let error_label = gtk::Label::new(None);
     error_label.add_css_class("error");
     error_label.set_halign(gtk::Align::Start);
-    grid.attach(&lbl("Name"), 0, 0, 1, 1);
-    grid.attach(&name_entry, 1, 0, 1, 1);
-    grid.attach(&error_label, 0, 1, 2, 1);
+    let grid = suite_common::dialogs::form_rows(&[("Name", name_entry.upcast_ref())]);
+    grid.append(&error_label);
 
     let apply = gtk::Button::with_label(&suite_common::i18n("Define"));
     apply.add_css_class("suggested-action");
@@ -337,27 +293,14 @@ pub(crate) fn show_filter_dialog(
 
     let dialog = adw::Dialog::builder()
         .title(suite_common::i18n("Filter by Column"))
-        .content_width(320)
+        .content_width(400)
         .build();
 
-    let grid = gtk4::Grid::new();
-    grid.set_row_spacing(8);
-    grid.set_column_spacing(12);
-    grid.set_margin_top(12);
-    grid.set_margin_bottom(12);
-    grid.set_margin_start(12);
-    grid.set_margin_end(12);
-    let lbl = |t: &str| {
-        let l = gtk::Label::new(Some(t));
-        l.set_halign(gtk::Align::Start);
-        l
-    };
     let value_entry = gtk::Entry::builder()
         .placeholder_text("Value contains…")
         .build();
     value_entry.update_property(&[gtk4::accessible::Property::Label("Filter value")]);
-    grid.attach(&lbl(&format!("Column {col_label}")), 0, 0, 1, 1);
-    grid.attach(&value_entry, 1, 0, 1, 1);
+    let grid = suite_common::dialogs::form_rows(&[(&format!("Column {col_label}"), value_entry.upcast_ref())]);
 
     let apply = gtk::Button::with_label(&suite_common::i18n("Filter"));
     apply.add_css_class("suggested-action");

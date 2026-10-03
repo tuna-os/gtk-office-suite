@@ -293,44 +293,33 @@ fn app_settings(app_id: &str) -> Option<gio::Settings> {
     schema.has_key("dark-mode").then(|| gio::Settings::new(app_id))
 }
 
-/// Show a contextual help dialog explaining formats, interoperability, crash recovery, and shortcuts.
+/// The user documentation: feature guides, troubleshooting, accessibility.
+pub const HELP_URL: &str = "https://github.com/tuna-os/gtk-office-suite/tree/main/docs/features";
+
+/// Show Help: where the user documentation is, with a button that opens it,
+/// and the two things worth knowing before reading it.
+///
+/// It was "Help & System Diagnostics", three paragraphs in a dialog that
+/// led nowhere and claimed "lossless round-tripping", which the apps don't
+/// do: content a format can't hold is reported when you save.
 pub fn show_help_dialog(parent: Option<&adw::ApplicationWindow>) {
     let dialog = adw::AlertDialog::new(
-        Some(&i18n("Help & System Diagnostics")),
-        Some(&i18n("Overview of supported formats, crash recovery, and shortcuts.")),
+        Some(&i18n("Help")),
+        Some(&i18n(
+            "The user guide covers each app's features, the formats it reads and writes, troubleshooting and keyboard use.\n\n\
+             Press Ctrl+K to find any command, and Ctrl+? for every keyboard shortcut.",
+        )),
     );
-
-    let content = gtk::Box::new(gtk::Orientation::Vertical, 12);
-    content.set_margin_start(16);
-    content.set_margin_end(16);
-    content.set_margin_top(12);
-    content.set_margin_bottom(12);
-
-    // A group's title is Pango markup: an unescaped "&" made GTK reject
-    // the title and draw the group without one (Gtk-WARNING, found by the
-    // GUI lane's diagnostics check, #1209).
-    let formats_group = adw::PreferencesGroup::builder()
-        .title(glib::markup_escape_text(&i18n("Supported Formats & Interoperability")).as_str())
-        .description(i18n("Native OpenDocument (.odt, .ods, .odp) and Microsoft Office (.docx, .xlsx, .pptx) with lossless round-tripping and Markdown/plain-text import/export."))
-        .build();
-    content.append(&formats_group);
-
-    let recovery_group = adw::PreferencesGroup::builder()
-        .title(glib::markup_escape_text(&i18n("Crash Recovery & Autosave")).as_str())
-        .description(i18n("Documents are safely captured to atomic recovery slots in XDG state directory. If the app terminates unexpectedly, the next session will offer automatic restoration."))
-        .build();
-    content.append(&recovery_group);
-
-    let shortcuts_group = adw::PreferencesGroup::builder()
-        .title(glib::markup_escape_text(&i18n("Keyboard Shortcuts & Command Palette")).as_str())
-        .description(i18n("Press Ctrl+K anytime to open the searchable Command Palette, or Ctrl+? for the complete Keyboard Shortcuts table."))
-        .build();
-    content.append(&shortcuts_group);
-
-    dialog.set_extra_child(Some(&content));
-    dialog.add_response("close", &i18n("_Close"));
-    dialog.set_default_response(Some("close"));
-    dialog.present(parent.map(|w| w.upcast_ref::<gtk::Widget>()));
+    dialog.add_responses(&[("close", &i18n("_Close")), ("open", &i18n("_Open Online Help"))]);
+    dialog.set_response_appearance("open", adw::ResponseAppearance::Suggested);
+    dialog.set_default_response(Some("open"));
+    dialog.set_close_response("close");
+    let window = parent.cloned();
+    dialog.choose(parent.map(|w| w.upcast_ref::<gtk::Widget>()), None::<&gio::Cancellable>, move |response| {
+        if response == "open" {
+            gtk::UriLauncher::new(HELP_URL).launch(window.as_ref(), None::<&gio::Cancellable>, |_| {});
+        }
+    });
 }
 
 /// Show a template picker dialog for creating new documents from predefined templates.

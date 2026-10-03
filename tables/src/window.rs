@@ -975,6 +975,19 @@ impl TablesWindow {
                 act.connect_activate(move |_, _| btn.emit_clicked());
                 app.add_action(&act);
             }
+            // A workbook keeps at least one sheet: with one left, Delete
+            // Sheet is disabled rather than offered and then refused.
+            let delete_action = app.lookup_action("delete-sheet").and_downcast::<gtk4::gio::SimpleAction>();
+            let btn = delete_sheet_btn.clone();
+            let sync = move |model: &gtk4::StringList| {
+                let more = model.n_items() > 1;
+                btn.set_sensitive(more);
+                if let Some(a) = &delete_action {
+                    a.set_enabled(more);
+                }
+            };
+            sync(&sheet_model);
+            sheet_model.connect_items_changed(move |model, _, _, _| sync(model));
         }
 
         // Rename sheet
@@ -1457,7 +1470,7 @@ impl TablesWindow {
         ];
 
         let extended_toolbar = [extended_toolbar, crate::sheet_actions::toolbar_items()].concat();
-        let suite_win = suite_common::SuiteWindow::new(app, "Tables", vec![], extended_toolbar);
+        let suite_win = suite_common::SuiteWindow::new(app, "Tables", crate::sheet_actions::primary_toolbar(), extended_toolbar);
         crate::sheet_actions::install(app, &controller, &drawing_area, &toast_overlay, refresh_sel.clone());
         suite_common::bind_window_geometry(&suite_win.window, &settings);
         *win_ref.borrow_mut() = Some(suite_win.window.clone());
@@ -1478,6 +1491,9 @@ impl TablesWindow {
             act.connect_activate(move |_, _| edit());
             app.add_action(&act);
             app.set_accels_for_action("app.edit-number-format", &["<Primary><Shift>f"]);
+            for (action, accel) in [("app.bold", "<Primary>b"), ("app.italic", "<Primary>i"), ("app.underline", "<Primary>u")] {
+                app.set_accels_for_action(action, &[accel]);
+            }
             suite_common::actions::register_labels(&[("app.edit-number-format", &suite_common::i18n("Number Format…"))]);
         }
         toast_overlay.set_child(Some(&inspector.split));

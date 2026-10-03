@@ -21,6 +21,15 @@ use tables_core::controller::{Axis, WorkbookController};
 type Ctl = Rc<RefCell<WorkbookController>>;
 
 /// The toolbar entries for the actions installed by [`install`].
+/// The toolbar's text styling, always shown.
+pub(crate) fn primary_toolbar() -> Vec<suite_common::ToolbarItem> {
+    vec![
+        ("format-text-bold-symbolic", "Bold (Ctrl+B)", "app.bold"),
+        ("format-text-italic-symbolic", "Italic (Ctrl+I)", "app.italic"),
+        ("format-text-underline-symbolic", "Underline (Ctrl+U)", "app.underline"),
+    ]
+}
+
 pub(crate) fn toolbar_items() -> Vec<suite_common::ToolbarItem> {
     vec![
         ("office-row-insert-symbolic", "Insert rows above", "app.insert-rows"),
@@ -52,6 +61,32 @@ pub(crate) fn refuse_locked(ctl: &Ctl, toasts: &adw::ToastOverlay, row: usize, c
 }
 
 pub(crate) fn install(app: &impl IsA<gio::ActionMap>, ctl: &Ctl, grid: &gtk::DrawingArea, toasts: &adw::ToastOverlay, refresh: Rc<dyn Fn()>) {
+    // Bold, Italic and Underline toggle on the selection, from the active
+    // cell's style, as in every other spreadsheet. Tables had no such
+    // actions: Ctrl+B did nothing, and the toolbar had no text styling.
+    type Flag = fn(&mut tables_core::style::CellStyle) -> &mut bool;
+    let flags: [(&str, &'static str, Flag); 3] = [
+        ("bold", "Bold", |s| &mut s.bold),
+        ("italic", "Italic", |s| &mut s.italic),
+        ("underline", "Underline", |s| &mut s.underline),
+    ];
+    for (name, description, field) in flags {
+        let (ctl, grid, toasts, refresh) = (ctl.clone(), grid.clone(), toasts.clone(), refresh.clone());
+        let act = gio::SimpleAction::new(name, None);
+        act.connect_activate(move |_, _| {
+            if ctl.borrow().sheet_is_protected() {
+                toast(&toasts, PROTECTED);
+                return;
+            }
+            let (mut style, _) = ctl.borrow().active_style();
+            let on = !*field(&mut style);
+            ctl.borrow_mut().format_selection(description, move |s| *field(s) = on);
+            grid.queue_draw();
+            refresh();
+        });
+        app.add_action(&act);
+        suite_common::actions::register_labels(&[(&format!("app.{name}"), &suite_common::i18n(description))]);
+    }
     // (name, axis, insert?) — inserts go before the selection's first line,
     // as many lines as the selection spans; deletes remove the spanned lines.
     for (name, axis, insert) in [

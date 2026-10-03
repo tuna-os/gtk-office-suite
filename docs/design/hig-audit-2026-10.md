@@ -28,7 +28,7 @@ Each finding below is marked **fixed** (by the PR that adds this report) or
 | S5 | Icons with the wrong metaphor. Adwaita has no highlighter, line-spacing, columns, chart, shape, table, border, merge, number-format or row and column icons, so the nearest icon was used: a lightbulb (`insert-object`) for Shape, Chart and Merge Cells; strikethrough for cell borders; the same `+` and `−` for rows and columns; an eyedropper for Highlight. The suite now ships 18 symbolic icons of its own (`suite-common/icons`, `office-*-symbolic`), which GTK recolours like theme icons. | fixed |
 | S6 | An icon name the theme lacks (`chat-bubble-text-symbolic`, for the comments sidebar) was drawn as a broken image, and `funnel` and `tag` (Tables) are not in Adwaita 46. A test now checks every icon name in the apps' code against the theme and the suite's own icons. | fixed |
 | S7 | Tooltips: every visible button in all three apps has a name or a tooltip. A GUI journey now holds them to that (`*ButtonsNamedSmoke`). | already true; now tested |
-| S8 | Help opens a "Help & System Diagnostics" dialog with paragraphs of text, not help pages. | open |
+| S8 | Help opened a "Help & System Diagnostics" dialog with paragraphs of text and no way to reach the help pages. It also claimed "lossless round-tripping", which the apps don't do. Help now explains briefly where the user guide is and opens it with Open Online Help. | fixed |
 
 ## Letters
 
@@ -41,7 +41,7 @@ Each finding below is marked **fixed** (by the PR that adds this report) or
 | L5 | Preferences listed "Editor margin — Not yet implemented — coming soon" as a disabled row. The body font was a free-text entry, followed by a second row holding only its help text. The font is now a font chooser row, and the unimplemented setting is gone. | fixed |
 | L6 | Headers and Footers laid out its form as centred labels above bare entries. It now uses a boxed list of entry rows. | fixed |
 | L7 | The paragraph style picker ("Normal") had no dropdown arrow and read as a plain button. | fixed |
-| L8 | The status bar repeats the paragraph style the toolbar already shows ("Normal 100%"). GNOME document apps usually keep zoom in the main menu. | open |
+| L8 | The status bar's style readout looks like a repeat of the toolbar's style picker, but it also shows character formatting ("Heading 2 · Bold"), which the picker doesn't. | kept |
 
 ## Tables
 
@@ -50,15 +50,15 @@ Each finding below is marked **fixed** (by the PR that adds this report) or
 | T1 | Format Cells, Conditional Formatting, Define Name and Filter by Column were dialogs whose only content was a bare grid. They had no header bar, so no title on screen and no Cancel, only a full-width action button at the bottom. All four now have a header bar with Cancel and the action. | fixed |
 | T2 | Page Setup was one of those dialogs, with a single margin for all four sides. It is now the shared Page Setup dialog (L2), with a margin per side. | fixed |
 | T3 | The sheet bar's Delete Sheet button used a circled cross (`edit-delete`), which reads as "close". It is now the trash icon. | fixed |
-| T4 | The toolbar has 17 buttons, including rare commands (Define Name, Set Print Area, Page Setup, Export PDF, two Hide buttons), but no bold, italic or underline. | open |
-| T5 | The form dialogs (T1) still lay out labels and fields in a grid rather than as preference rows. | open |
-| T6 | Delete Sheet on the only sheet opens an alert that says it can't be done. The action should be disabled instead. | open |
+| T4 | Tables had no Bold, Italic or Underline at all: no toolbar buttons, and Ctrl+B, Ctrl+I and Ctrl+U did nothing. They are now actions with those shortcuts, first on the toolbar, and a GUI journey checks Ctrl+B. The toolbar still carries rare commands (Define Name, Set Print Area, Page Setup, Export PDF, two Hide buttons) that could move to menus. | fixed: text styling; open: slimming |
+| T5 | The form dialogs (T1) laid out labels and fields in a bare grid. They now use a boxed list of rows (`suite_common::dialogs::form_rows`), each field at the end of a row named by its title, and are wide enough for their titles. | fixed |
+| T6 | Delete Sheet on the only sheet opened an alert saying it couldn't be done. The button and action are now disabled when one sheet is left. | fixed |
 
 ## Decks
 
 | # | Finding | Status |
 |---|---|---|
-| D1 | The labelled Insert buttons (Text, Shape, Table, Chart, Image) fill the header bar's start and push the document title off centre. | open |
+| D1 | The labelled Insert buttons (Text, Shape, Table, Chart, Image) filled the start of the header bar and pushed the document title off centre. They are now in the toolbar row, after the text formatting buttons. | fixed |
 | D2 | Shape, Chart and Table had the wrong icons (S5). | fixed |
 | D3 | The text toolbar (bold, italic, underline) had no toolbar padding (S1). | fixed |
 
