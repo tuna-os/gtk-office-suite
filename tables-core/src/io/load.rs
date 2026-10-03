@@ -465,11 +465,28 @@ fn build_named_workbook_with_formulas(source: Vec<(String, calamine::Range<Data>
     Ok((engine, sheets))
 }
 
+/// Whether `sheet` is Calc's cached copy of another workbook's sheet, kept
+/// for an external link: hidden, and named for the link,
+/// `'file:///…/book.xlsm'#Sheet1`. It isn't one of this workbook's sheets.
+/// Calc neither shows nor prints it, and its name can't name a sheet here
+/// (a `/` and `:`, and often past 31 characters): opening a workbook with
+/// one used to fail outright, "Invalid name for a sheet", on a gov.uk annual
+/// report with 17 sheets and 86 of these (#1200). A save drops them, and
+/// says so (loss.rs).
+fn is_link_cache(sheet: &calamine::Sheet) -> bool {
+    sheet.visible != calamine::SheetVisible::Visible && sheet.name.starts_with('\'') && sheet.name.contains("'#")
+}
+
 /// Load every ODS sheet while retaining the names supplied by the producer.
 pub fn load_ods_workbook(path: &str) -> Result<(TablesEngine, Vec<SheetModel>), String> {
     let mut book: calamine::Ods<_> = open_workbook(path)
         .map_err(|e| format!("Cannot open file: {e}"))?;
-    let names = book.sheet_names().to_vec();
+    let names: Vec<String> = book
+        .sheets_metadata()
+        .iter()
+        .filter(|sheet| !is_link_cache(sheet))
+        .map(|sheet| sheet.name.clone())
+        .collect();
     let mut source = Vec::with_capacity(names.len());
     for name in names {
         let range = book.worksheet_range(&name)
@@ -671,6 +688,46 @@ mod tests {
             path.display()
         );
         path
+    }
+
+    /// A minimal .ods with a visible sheet and, after it, Calc's hidden
+    /// cache of a linked workbook's sheet.
+    fn ods_with_link_cache(dir: &std::path::Path) -> std::path::PathBuf {
+        use std::io::Write;
+        let path = dir.join("linked.ods");
+        let content = r#"<?xml version="1.0" encoding="UTF-8"?>
+<office:document-content xmlns:office="urn:oasis:names:tc:opendocument:xmlns:office:1.0" xmlns:style="urn:oasis:names:tc:opendocument:xmlns:style:1.0" xmlns:table="urn:oasis:names:tc:opendocument:xmlns:table:1.0" xmlns:text="urn:oasis:names:tc:opendocument:xmlns:text:1.0" xmlns:xlink="http://www.w3.org/1999/xlink" office:version="1.3">
+<office:automatic-styles>
+<style:style style:name="ta1" style:family="table"><style:table-properties table:display="true"/></style:style>
+<style:style style:name="ta6" style:family="table"><style:table-properties table:display="false"/></style:style>
+</office:automatic-styles>
+<office:body><office:spreadsheet>
+<table:table table:name="Accounts" table:style-name="ta1"><table:table-row><table:table-cell office:value-type="string"><text:p>Total</text:p></table:table-cell><table:table-cell office:value-type="float" office:value="42"><text:p>42</text:p></table:table-cell></table:table-row></table:table>
+<table:table table:name="&apos;file:///C:/Users/me/Forecast%20model.xlsm&apos;#Budget" table:style-name="ta6"><table:table-source xlink:href="file:///C:/Users/me/Forecast%20model.xlsm" table:table-name="Budget" table:mode="copy-results-only"/><table:table-row><table:table-cell office:value-type="float" office:value="7"><text:p>7</text:p></table:table-cell></table:table-row></table:table>
+</office:spreadsheet></office:body></office:document-content>"#;
+        let mut zip = zip::ZipWriter::new(std::fs::File::create(&path).unwrap());
+        let stored = zip::write::SimpleFileOptions::default().compression_method(zip::CompressionMethod::Stored);
+        zip.start_file("mimetype", stored).unwrap();
+        zip.write_all(b"application/vnd.oasis.opendocument.spreadsheet").unwrap();
+        zip.start_file("META-INF/manifest.xml", stored).unwrap();
+        zip.write_all(br#"<?xml version="1.0" encoding="UTF-8"?><manifest:manifest xmlns:manifest="urn:oasis:names:tc:opendocument:xmlns:manifest:1.0" manifest:version="1.3"><manifest:file-entry manifest:full-path="/" manifest:media-type="application/vnd.oasis.opendocument.spreadsheet"/><manifest:file-entry manifest:full-path="content.xml" manifest:media-type="text/xml"/></manifest:manifest>"#).unwrap();
+        zip.start_file("content.xml", stored).unwrap();
+        zip.write_all(content.as_bytes()).unwrap();
+        zip.finish().unwrap();
+        path
+    }
+
+    /// Calc's hidden caches of linked workbooks aren't this workbook's
+    /// sheets: it opens with its own, where it used to fail on the cache's
+    /// name (#1200).
+    #[test]
+    fn an_ods_with_link_caches_opens_with_its_own_sheets() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = ods_with_link_cache(dir.path());
+        let (engine, sheets) = load_ods_workbook(path.to_str().unwrap()).expect("the workbook opens");
+        let names: Vec<&str> = sheets.iter().map(|s| s.name.as_str()).collect();
+        assert_eq!(names, ["Accounts"]);
+        assert_eq!(engine.cell(0, 1), "42");
     }
 
     #[test]
