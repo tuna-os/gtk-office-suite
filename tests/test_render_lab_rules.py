@@ -55,6 +55,38 @@ class EraseRulesTest(unittest.TestCase):
 
 
 @unittest.skipIf(np is None, "numpy and Pillow are the render lab's")
+class BlankRulesTest(unittest.TestCase):
+    """A rescue crop loses the rules that cross it and keeps its glyph
+    (#1199: a light cell border beside a lone "3" left tesseract reading
+    nothing at all)."""
+
+    def setUp(self):
+        import compare
+
+        self.compare = compare
+        self.g = np.full((18, 15), 255, dtype=np.uint8)
+        self.g[6:14, 6:11] = 40  # a digit's strokes, 8 of 18 rows
+
+    def blanked(self):
+        return np.asarray(self.compare.blank_rules(Image.fromarray(self.g)))
+
+    def test_a_light_full_height_border_goes(self):
+        self.g[1:18, 13] = 217  # a grid line, 17 of 18 rows
+        out = self.blanked()
+        self.assertTrue((out[:, 13] == 255).all())
+        self.assertTrue((out[6:14, 6:11] == 40).all(), "the glyph stays")
+
+    def test_a_full_width_underline_goes(self):
+        self.g[16, :] = 120
+        self.assertTrue((self.blanked()[16] == 255).all())
+
+    def test_a_glyph_stroke_is_not_a_rule(self):
+        self.g[3:16, 8] = 0  # a tall stroke, 13 of 18 rows
+        out = self.blanked()
+        self.assertTrue((out[3:16, 8] == 0).all())
+
+
+@unittest.skipIf(np is None, "numpy and Pillow are the render lab's")
 class UnionWordsTest(unittest.TestCase):
     """union_words (tools/render-lab/compare.py): a second OCR scale may
     only add reads, never take them."""
