@@ -359,7 +359,7 @@ fn scenarios() -> Vec<Scenario> {
         "a\nb\nc\nd"));
     v.push(text_only("table-two-tables",
         "<table><tr><td>first</td></tr></table><p>mid</p><table><tr><td>second</td></tr></table>",
-        "mid\nfirst\nsecond")); // flattening appends tables after body text
+        "first\nmid\nsecond")); // the tables stay where the document has them
     v.push(text_only("list-eight-items",
         format!("<ul>{}</ul>", (1..=8).map(|i| format!("<li>i{i}</li>")).collect::<String>()),
         (1..=8).map(|i| format!("i{i}")).collect::<Vec<_>>().join("\n")));

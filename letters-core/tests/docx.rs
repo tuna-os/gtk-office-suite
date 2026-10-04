@@ -1264,3 +1264,43 @@ fn a_run_coloured_auto_has_no_colour_of_its_own() {
     });
     assert_eq!(rt.paragraphs[0].runs[0].style.color, None, "{:?}", rt.paragraphs[0].runs);
 }
+
+/// A table stays where the document has it, between the paragraphs around
+/// it, and the paragraph OOXML needs after a table that meets another or
+/// ends the document comes and goes with the save: a round trip neither
+/// adds nor loses an empty line (the reader once put every table at the
+/// end, which moved a form's tables pages away from their labels).
+#[test]
+fn tables_keep_their_place() {
+    fn text(s: &str) -> Paragraph {
+        Paragraph { style: ParaStyle::default(), runs: vec![Run { text: s.into(), style: RunStyle::default() }] }
+    }
+    fn cell(table: u32, s: &str) -> Paragraph {
+        let mut p = if s.is_empty() { Paragraph { style: ParaStyle::default(), runs: vec![] } } else { text(s) };
+        p.style.table_cell = Some(TableCell { table, row: 0, col: 0 });
+        p
+    }
+    let empty = || Paragraph { style: ParaStyle::default(), runs: vec![] };
+    let shape = |d: &Document| -> Vec<String> {
+        d.paragraphs.iter().map(|p| match p.style.table_cell {
+            Some(tc) => format!("T{}:{}", tc.table, p.text()),
+            None => p.text(),
+        }).collect()
+    };
+    let cases: Vec<Vec<Paragraph>> = vec![
+        vec![text("before"), cell(0, "a"), text("after")],
+        vec![cell(0, "a"), text("after")],
+        vec![text("before"), cell(0, "a")],
+        vec![cell(0, "a"), cell(1, "b")],
+        vec![cell(0, "a"), empty(), cell(1, "b")],
+        vec![text("x"), cell(0, "a"), empty(), text("y")],
+        vec![cell(0, "a"), empty(), empty()],
+        vec![text("before"), cell(0, "a"), text("mid"), cell(1, "b"), text("after")],
+    ];
+    for paragraphs in cases {
+        let doc = Document { paragraphs, ..Document::new() };
+        let once = round_trip(&doc);
+        assert_eq!(shape(&once), shape(&doc));
+        assert_eq!(shape(&round_trip(&once)), shape(&doc));
+    }
+}
