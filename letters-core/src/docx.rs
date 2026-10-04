@@ -558,6 +558,8 @@ fn read_opened(path: &str, doc: rdocx::Document) -> Result<Document, String> {
     // Footnote texts land in the document list; docx ids remap to
     // zero-based indexes on the referencing runs (see map_paragraph).
     let footnotes: Vec<String> = doc.footnotes().into_iter().map(|(_, t)| t).collect();
+    // Table ids are the tables' order, as the cells above are tagged.
+    let table_columns = tables.iter().enumerate().filter_map(|(ti, t)| Some((ti as u32, column_widths(t)?))).collect();
 
     Ok(Document {
         paragraphs,
@@ -568,7 +570,16 @@ fn read_opened(path: &str, doc: rdocx::Document) -> Result<Document, String> {
         base_font: read_base_font(&doc),
         heading_styles: read_heading_styles(&doc),
         comments: Vec::new(),
+        table_columns,
     })
+}
+
+/// A table's column widths in points: its first row's cell widths, when
+/// every cell gives one in absolute units.
+fn column_widths(table: &rdocx::TableRef<'_>) -> Option<Vec<f64>> {
+    let row = table.row(0)?;
+    let widths: Option<Vec<f64>> = (0..row.cell_count()).map(|c| row.cell(c)?.width().map(|w| w.to_pt())).collect();
+    widths.filter(|w| !w.is_empty() && w.iter().all(|x| *x > 0.0))
 }
 
 /// Read a DOCX and retain package members this reader does not interpret.
@@ -674,6 +685,13 @@ pub fn write(doc: &Document, path: impl AsRef<std::path::Path>) -> Result<(), St
             let rows = group.iter().filter_map(|p| p.style.table_cell.map(|t| t.row)).max().unwrap_or(0) as usize + 1;
             let cols = group.iter().filter_map(|p| p.style.table_cell.map(|t| t.col)).max().unwrap_or(0) as usize + 1;
             let mut tbl = out.add_table(rows, cols);
+            // The file's column widths, when the table still has as many
+            // columns as it was read with; rdocx's own are equal.
+            if let Some(widths) = doc.table_columns.get(&tc0.table).filter(|w| w.len() == cols) {
+                for (c, w) in widths.iter().enumerate() {
+                    tbl.set_column_width(c, rdocx::Length::pt(*w));
+                }
+            }
             let mut filled = std::collections::HashSet::new();
             for p in group {
                 let tc = p.style.table_cell.expect("grouped by table_cell");

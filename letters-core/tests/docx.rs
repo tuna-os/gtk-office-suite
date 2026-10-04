@@ -1264,3 +1264,17 @@ fn a_run_coloured_auto_has_no_colour_of_its_own() {
     });
     assert_eq!(rt.paragraphs[0].runs[0].style.color, None, "{:?}", rt.paragraphs[0].runs);
 }
+
+
+/// A table's column widths survive a save and reopen, so a narrow number
+/// column stays narrow; a table without any gets none made up.
+#[test]
+fn table_column_widths_survive() {
+    let mut d = Document::from_plain_text("after");
+    let table = d.insert_table_at(0, 1, 2);
+    d.table_columns.insert(table, vec![36.0, 400.0]);
+    let rt = round_trip(&d);
+    let widths: Vec<Vec<f64>> = rt.table_columns.values().cloned().collect();
+    assert_eq!(widths.len(), 1, "{:?}", rt.table_columns);
+    assert!(widths[0].iter().zip([36.0, 400.0]).all(|(a, b)| (a - b).abs() < 0.1), "{widths:?}");
+}
