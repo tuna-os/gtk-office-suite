@@ -47,6 +47,8 @@ struct RawPara {
 struct RawParas {
     body: Vec<RawPara>,
     cells: Vec<RawPara>,
+    /// Per body-level table, in order: how many body paragraphs precede it.
+    tables_at: Vec<usize>,
 }
 
 fn raw_paragraph_props(path: &str) -> RawParas {
@@ -75,7 +77,12 @@ fn raw_paragraph_props(path: &str) -> RawParas {
             match reader.read_event()? {
                 quick_xml::events::Event::Eof => break,
                 quick_xml::events::Event::Start(e) => match e.name().as_ref() {
-                    "w:tbl" => table_depth += 1,
+                    "w:tbl" => {
+                        if table_depth == 0 {
+                            out.tables_at.push(out.body.len());
+                        }
+                        table_depth += 1;
+                    }
                     "w:tabs" => in_tabs = true,
                     "w:p" => {
                         if let Some(list) = at(&mut out, table_depth) {
@@ -393,8 +400,30 @@ fn read_opened(path: &str, doc: rdocx::Document) -> Result<Document, String> {
     // otherwise the two disagree about what a paragraph is and pairing
     // them would misattribute a property to its neighbour.
     let body = doc.paragraphs();
-    let RawParas { body: raw, cells: raw_cells } = raw_paragraph_props(path);
+    let RawParas { body: raw, cells: raw_cells, tables_at } = raw_paragraph_props(path);
     let raw = (raw.len() == body.len()).then_some(raw);
+    let tables = doc.tables();
+    // Where each table sits: the number of body paragraphs before it.
+    // rdocx gives tables apart from the paragraphs; its body items give
+    // their order, but not how many paragraphs a content control holds,
+    // which the XML scan counts. When neither can be trusted, the tables
+    // go after the body, as they always did.
+    let tables_at: Option<Vec<usize>> = if raw.is_some() && tables_at.len() == tables.len() {
+        Some(tables_at)
+    } else {
+        let mut seen = 0usize;
+        let mut at = Vec::new();
+        let mut known = true;
+        for item in doc.body_items() {
+            match item {
+                rdocx::BodyItemRef::Paragraph(_) => seen += 1,
+                rdocx::BodyItemRef::Table(_) => at.push(seen),
+                rdocx::BodyItemRef::ContentControl(_) => known = false,
+                rdocx::BodyItemRef::UnsupportedXml(_) => {}
+            }
+        }
+        (known && seen == body.len() && at.len() == tables.len()).then_some(at)
+    };
 
     let mut paragraphs = Vec::new();
     // Per kept body paragraph: its style id and whether it has contextual
@@ -404,13 +433,17 @@ fn read_opened(path: &str, doc: rdocx::Document) -> Result<Document, String> {
     // Set when a paragraph ends with a run-level page break, and consumed
     // by the next paragraph this loop keeps.
     let mut carried_break = false;
+    // Per body paragraph: how many paragraphs were kept before it, which
+    // is where a table that precedes it goes.
+    let mut kept_before = Vec::with_capacity(body.len() + 1);
     for (i, p) in body.iter().enumerate() {
+        kept_before.push(paragraphs.len());
         let mut pending_break = false;
         // Decorative rules (LibreOffice's HorizontalLine style) carry no text.
         if p.style_id() == Some("HorizontalLine") && p.text().is_empty() {
             continue;
         }
-        let mut para = map_paragraph(&doc, p);
+        let mut para = map_paragraph(&doc, p, None);
         // A run-level break after this paragraph's text belongs to the
         // paragraph that follows, which is where LibreOffice puts the
         // break it converts from an ODF `fo:break-before`. The trailing
@@ -468,18 +501,14 @@ fn read_opened(path: &str, doc: rdocx::Document) -> Result<Document, String> {
         }
     }
 
+    kept_before.push(paragraphs.len());
+
     // Table cells become paragraphs tagged with (table, row, col) — the
     // document stays flat (offset invariants intact) and the grid is fully
-    // recoverable. Position limitation: rdocx exposes tables separately
-    // from the paragraph stream, so tables append after body paragraphs.
-    let tables = doc.tables();
-    if !tables.is_empty() {
-        // OOXML mandates an (empty) paragraph after each table; with the
-        // tables appended at the end it is pure noise — drop it.
-        while paragraphs.last().map(|p: &Paragraph| p.runs.is_empty()).unwrap_or(false) {
-            paragraphs.pop();
-        }
-    }
+    // recoverable. Each table's paragraphs are gathered on their own and
+    // put where the table sits, after the contextual pass above, which
+    // counts body paragraphs only.
+    let mut table_paragraphs: Vec<Vec<Paragraph>> = Vec::with_capacity(tables.len());
     // The cell half of the scan, trusted on the same terms as the body
     // half: only when it counted exactly the paragraphs rdocx walks here.
     let mut cell_paragraphs = 0usize;
@@ -493,6 +522,7 @@ fn read_opened(path: &str, doc: rdocx::Document) -> Result<Document, String> {
     let raw_cells = (raw_cells.len() == cell_paragraphs).then_some(raw_cells);
     let mut cell_index = 0usize;
     for (ti, table) in tables.iter().enumerate() {
+        let mut paragraphs: Vec<Paragraph> = Vec::new();
         for ri in 0..table.row_count() {
             let Some(row) = table.row(ri) else { continue };
             for ci in 0..row.cell_count() {
@@ -512,7 +542,7 @@ fn read_opened(path: &str, doc: rdocx::Document) -> Result<Document, String> {
                             let raw_cell = raw_cells.as_ref().and_then(|s| s.get(cell_index));
                             cell_index += 1;
                             if cp.text().is_empty() { continue; }
-                            let mut para = map_paragraph(&doc, &cp);
+                            let mut para = map_paragraph(&doc, &cp, table.style_id());
                             if let Some(r) = raw_cell {
                                 apply_strict_indents(&mut para.style, r);
                             }
@@ -526,7 +556,7 @@ fn read_opened(path: &str, doc: rdocx::Document) -> Result<Document, String> {
                         rdocx::CellItemRef::Table(nested) => {
                             for_each_nested_paragraph(&nested, &mut |cp| {
                                 if !cp.text().is_empty() {
-                                    keep(map_paragraph(&doc, cp));
+                                    keep(map_paragraph(&doc, cp, table.style_id()));
                                 }
                             });
                         }
@@ -547,7 +577,15 @@ fn read_opened(path: &str, doc: rdocx::Document) -> Result<Document, String> {
                 }
             }
         }
+        table_paragraphs.push(paragraphs);
     }
+    // In reverse, so each insertion leaves the earlier positions valid;
+    // tables at one position keep their order.
+    for (ti, cells) in table_paragraphs.into_iter().enumerate().rev() {
+        let at = tables_at.as_ref().map_or(paragraphs.len(), |t| kept_before[t[ti].min(body.len())]);
+        paragraphs.splice(at..at, cells);
+    }
+    drop_table_separators(&mut paragraphs);
 
     if paragraphs.is_empty() {
         let mut d = Document::new();
@@ -558,6 +596,8 @@ fn read_opened(path: &str, doc: rdocx::Document) -> Result<Document, String> {
     // Footnote texts land in the document list; docx ids remap to
     // zero-based indexes on the referencing runs (see map_paragraph).
     let footnotes: Vec<String> = doc.footnotes().into_iter().map(|(_, t)| t).collect();
+    // Table ids are the tables' order, as the cells above are tagged.
+    let table_columns = tables.iter().enumerate().filter_map(|(ti, t)| Some((ti as u32, column_widths(t)?))).collect();
 
     Ok(Document {
         paragraphs,
@@ -568,7 +608,40 @@ fn read_opened(path: &str, doc: rdocx::Document) -> Result<Document, String> {
         base_font: read_base_font(&doc),
         heading_styles: read_heading_styles(&doc),
         comments: Vec::new(),
+        table_columns,
     })
+}
+
+/// A table's column widths in points: its first row's cell widths, when
+/// every cell gives one in absolute units.
+fn column_widths(table: &rdocx::TableRef<'_>) -> Option<Vec<f64>> {
+    let row = table.row(0)?;
+    let widths: Option<Vec<f64>> = (0..row.cell_count()).map(|c| row.cell(c)?.width().map(|w| w.to_pt())).collect();
+    widths.filter(|w| !w.is_empty() && w.iter().all(|x| *x > 0.0))
+}
+
+/// OOXML needs a paragraph after a table that ends the document or a cell,
+/// and between two tables (Word merges adjacent ones). Those carry nothing,
+/// so a table followed only by empty paragraphs, up to the next table or
+/// the end, loses the first of them. The writer adds one in exactly that
+/// case (`needs_separator`), so a save and reopen keeps the document.
+fn drop_table_separators(paragraphs: &mut Vec<Paragraph>) {
+    let table_of = |p: &Paragraph| p.style.table_cell.map(|t| t.table);
+    let mut k = 0;
+    while k < paragraphs.len() {
+        let last_cell = table_of(&paragraphs[k]).is_some()
+            && paragraphs.get(k + 1).map(table_of) != Some(table_of(&paragraphs[k]));
+        if last_cell && needs_separator(&paragraphs[k + 1..]) && k + 1 < paragraphs.len() {
+            paragraphs.remove(k + 1);
+        }
+        k += 1;
+    }
+}
+
+/// Whether the paragraphs after a table, up to the next table or the end,
+/// are all empty: the case where a separator paragraph follows the table.
+fn needs_separator(after: &[Paragraph]) -> bool {
+    after.iter().take_while(|p| p.style.table_cell.is_none()).all(|p| p.runs.is_empty())
 }
 
 /// Read a DOCX and retain package members this reader does not interpret.
@@ -674,6 +747,13 @@ pub fn write(doc: &Document, path: impl AsRef<std::path::Path>) -> Result<(), St
             let rows = group.iter().filter_map(|p| p.style.table_cell.map(|t| t.row)).max().unwrap_or(0) as usize + 1;
             let cols = group.iter().filter_map(|p| p.style.table_cell.map(|t| t.col)).max().unwrap_or(0) as usize + 1;
             let mut tbl = out.add_table(rows, cols);
+            // The file's column widths, when the table still has as many
+            // columns as it was read with; rdocx's own are equal.
+            if let Some(widths) = doc.table_columns.get(&tc0.table).filter(|w| w.len() == cols) {
+                for (c, w) in widths.iter().enumerate() {
+                    tbl.set_column_width(c, rdocx::Length::pt(*w));
+                }
+            }
             let mut filled = std::collections::HashSet::new();
             for p in group {
                 let tc = p.style.table_cell.expect("grouped by table_cell");
@@ -719,8 +799,12 @@ pub fn write(doc: &Document, path: impl AsRef<std::path::Path>) -> Result<(), St
                 }
             }
             // OOXML requires a paragraph in every cell, which a cell left
-            // empty keeps from its creation, and one after a table.
-            out.add_paragraph("");
+            // empty keeps from its creation, and one after a table that
+            // ends the document or meets another; the reader drops it
+            // again (`drop_table_separators`).
+            if needs_separator(&paras[i..]) {
+                out.add_paragraph("");
+            }
             continue;
         }
         let para = &paras[i];
@@ -1295,7 +1379,8 @@ fn for_each_nested_paragraph(table: &rdocx::TableRef<'_>, f: &mut dyn FnMut(&rdo
     }
 }
 
-fn map_paragraph(doc: &rdocx::Document, p: &rdocx::ParagraphRef<'_>) -> Paragraph {
+/// `table_style` is the style of the table a cell paragraph is in.
+fn map_paragraph(doc: &rdocx::Document, p: &rdocx::ParagraphRef<'_>, table_style: Option<&str>) -> Paragraph {
     let heading = p.style_id().and_then(style_id_to_heading);
     // LO uses "Quotations"; Word uses "Quote"/"IntenseQuote".
     let block_quote = matches!(p.style_id(), Some("Quote") | Some("Quotations") | Some("IntenseQuote") | Some("BlockQuote") | Some("BlockQuotation"));
@@ -1305,7 +1390,10 @@ fn map_paragraph(doc: &rdocx::Document, p: &rdocx::ParagraphRef<'_>) -> Paragrap
     // What the paragraph's style chain (docDefaults, basedOn, its style)
     // says, for everything the paragraph does not set itself. Numbering
     // indents are left out: the model's list level carries them.
-    let styled = doc.resolve_paragraph_properties(p.style_id());
+    let mut styled = doc.resolve_paragraph_properties(p.style_id());
+    if let Some(ts) = table_style {
+        under_table_style(doc, &mut styled, ts);
+    }
     let alignment = match p.alignment() {
         Some(rdocx::Alignment::Center) => Alignment::Center,
         Some(rdocx::Alignment::Right) => Alignment::Right,
@@ -1502,6 +1590,36 @@ fn map_paragraph(doc: &rdocx::Document, p: &rdocx::ParagraphRef<'_>) -> Paragrap
 
 fn twips_pt(t: rdocx_oxml::Twips) -> f64 {
     f64::from(t.0) / 20.0
+}
+
+/// A cell paragraph's properties with its table's style beneath its own
+/// paragraph style: Word applies the document defaults, then the table
+/// style, then the paragraph style. Word's "Table Grid" sets no space
+/// after and single lines; read without it, every cell of such a table
+/// took the document's default 8pt after and 1.08 lines, and the table
+/// drew a third taller than in Word or LibreOffice.
+///
+/// What the paragraph's style chain sets is what differs from the
+/// defaults alone (a style naming the default's own value draws the
+/// same either way, unless the table style differs; Word documents'
+/// Normal style rarely sets spacing).
+fn under_table_style(doc: &rdocx::Document, styled: &mut rdocx_oxml::properties::CT_PPr, table_style: &str) {
+    // No style has an empty id: the defaults alone.
+    let defaults = doc.resolve_paragraph_properties(Some(""));
+    let table = doc.resolve_paragraph_properties(Some(table_style));
+    if styled.space_before == defaults.space_before {
+        styled.space_before = table.space_before;
+    }
+    if styled.space_after == defaults.space_after {
+        styled.space_after = table.space_after;
+    }
+    if (styled.line_spacing, &styled.line_rule) == (defaults.line_spacing, &defaults.line_rule) {
+        styled.line_spacing = table.line_spacing;
+        styled.line_rule = table.line_rule.clone();
+    }
+    if styled.jc == defaults.jc {
+        styled.jc = table.jc;
+    }
 }
 
 /// A style's "auto" line spacing as a multiple of single (240 = 1.0).

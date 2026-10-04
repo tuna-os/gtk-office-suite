@@ -142,7 +142,7 @@ pub fn build(
             let Some(buf) = crate::dialogs::active_buffer(&tv) else { return };
             let Some(live) = crate::live::of(&buf) else { return };
             if changed {
-                let now = live.borrow_mut().outline(&buf);
+                let now = live.borrow_mut().outline();
                 let same = |a: &Entries, b: &Entries| a.iter().map(|e| (e.0, &e.1)).eq(b.iter().map(|e| (e.0, &e.1)));
                 if !same(&now, &entries.borrow()) {
                     while let Some(r) = list.first_child() {
@@ -202,17 +202,17 @@ mod tests {
         gtk_test(|| {
             let buf = gtk::TextBuffer::new(None);
             crate::actions::register_formatting_tags(&buf);
-            let live = crate::live::LiveModel::attach(&buf);
+            let live = crate::live::LiveModel::attach(&buf, letters_core::Document::default());
             let mut doc = letters_core::Document::from_plain_text("Intro\nbody\nDetails\nmore");
             doc.paragraphs[0].style.heading = Some(1);
             crate::bridge::load_document(&doc, &buf);
-            let outline = |buf: &gtk::TextBuffer| live.borrow_mut().outline(buf);
-            assert_eq!(outline(&buf), [(1, "Intro".to_string(), 0)]);
+            let outline = || live.borrow_mut().outline();
+            assert_eq!(outline(), [(1, "Intro".to_string(), 0)]);
             // A heading made with the style picker appears, at its buffer offset.
             let details = 11;
             buf.place_cursor(&buf.iter_at_offset(details + 2));
             assert!(crate::style_picker::apply(&buf, "Heading 2"));
-            assert_eq!(outline(&buf), [(1, "Intro".to_string(), 0), (2, "Details".to_string(), details as usize)]);
+            assert_eq!(outline(), [(1, "Intro".to_string(), 0), (2, "Details".to_string(), details as usize)]);
         });
     }
 }

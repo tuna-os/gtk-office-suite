@@ -22,8 +22,8 @@ use std::ops::Range;
 use crate::model::Run;
 
 /// What surrounds cell text in a rendered row: `"| "`, `" | "`, `" |"`.
-const OPEN: &str = "| ";
-const SEP: &str = " | ";
+pub const OPEN: &str = "| ";
+pub const SEP: &str = " | ";
 const CLOSE: &str = " |";
 const DELIMITER_CELL: &str = "---";
 

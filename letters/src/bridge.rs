@@ -1,17 +1,23 @@
-// bridge.rs — GtkTextBuffer ⇄ letters_core::Document.
+// bridge.rs — letters_core::Document → GtkTextBuffer.
 // SPDX-License-Identifier: GPL-3.0-or-later
 //
 // The buffer is a *view*: letters-core owns document semantics and all file
-// I/O. This module is the only place buffer tags are translated to/from
-// model styles. Tag names map 1:1 to RunStyle fields / heading levels
-// (see register_formatting_tags in window.rs).
+// I/O, and the tab's live model (live.rs) its document. This module renders
+// the model into the buffer and maps between the two's offsets. Tag names
+// map 1:1 to RunStyle fields / heading levels (see register_formatting_tags
+// in actions.rs).
+//
+// Nothing reads the document back out of the buffer any more (#1202): the
+// capture half below is test-only, kept to check that rendering is
+// faithful, and goes with the buffer.
 //
 // Links use dynamic "link:<url>" tags; alignment uses the align-* tags;
 // list kinds translate to/from the editor's "•" / "N." markers (letters_core::lists).
 
 use gtk4::{self as gtk, prelude::*};
-use letters_core::model::{Document, PageGeometry, Paragraph, Run, RunStyle};
+use letters_core::model::{Document, Paragraph, Run, RunStyle};
 
+#[cfg(test)]
 const RUN_TAGS: [&str; 8] = ["bold", "italic", "underline", "strikethrough", "highlight", "code", "superscript", "subscript"];
 
 /// The formatting tags a run with `style` is drawn with. The one mapping
@@ -97,6 +103,7 @@ fn tint_comment(tag: &gtk::TextTag, on: bool) {
 }
 
 /// The comments on the char at `iter`.
+#[cfg(test)]
 fn comments_at(iter: &gtk::TextIter) -> Vec<u32> {
     let mut ids: Vec<u32> = iter.tags().into_iter().filter_map(|t| t.name()?.strip_prefix(COMMENT_TAG_PREFIX)?.parse().ok()).collect();
     ids.sort_unstable();
@@ -119,6 +126,7 @@ fn revision_tag(buf: &gtk::TextBuffer, rev: &letters_core::Revision) -> String {
 }
 
 /// The tracked change on the char at `iter`, if any.
+#[cfg(test)]
 fn revision_at(iter: &gtk::TextIter) -> Option<letters_core::Revision> {
     iter.tags().into_iter().find_map(|t| {
         let name = t.name()?;
@@ -143,6 +151,7 @@ const REVISION_TAG_PREFIX: &str = "rev:";
 const COMMENT_TAG_PREFIX: &str = "comment:";
 
 /// Read a per-value tag back into `style`. Inverse of `run_tags`.
+#[cfg(test)]
 fn apply_dynamic_tag(name: &str, style: &mut RunStyle) {
     if let Some(url) = name.strip_prefix(LINK_TAG_PREFIX) {
         style.link = Some(url.to_string());
@@ -185,6 +194,7 @@ fn line_spacing_tag_name(spacing: f32) -> Option<&'static str> {
 /// Inverse of [`line_spacing_tag_name`] — covers "line-spacing-1.0" too
 /// (captured back as 1.0, same as no tag) since the live-editing action
 /// applies it explicitly for the default case.
+#[cfg(test)]
 fn line_spacing_from_tag_name(name: &str) -> Option<f32> {
     match name {
         "line-spacing-1.0" => Some(1.0),
@@ -196,6 +206,7 @@ fn line_spacing_from_tag_name(name: &str) -> Option<f32> {
 }
 
 /// Rebuild a Document from the buffer's text and tags.
+#[cfg(test)]
 pub fn capture_from_buffer(buf: &gtk::TextBuffer) -> Document {
     capture_with_starts(buf).0
 }
@@ -204,6 +215,7 @@ pub fn capture_from_buffer(buf: &gtk::TextBuffer) -> Document {
 /// in the buffer (a char offset, after any list marker or table pipe).
 /// With `buffer_offset`/`paragraph_offset` it maps a place in the document
 /// to a buffer offset and back: how the page view edits the buffer.
+#[cfg(test)]
 pub fn capture_with_starts(buf: &gtk::TextBuffer) -> (Document, Vec<usize>) {
     let (mut paragraphs, mut starts) = capture_span(buf, 0, buf.char_count().max(0));
     // Footnotes, header, footer and page geometry are document state that has
@@ -244,6 +256,7 @@ pub(crate) fn set_trailing_style(buf: &gtk::TextBuffer, doc: &Document) {
     unsafe { buf.set_data(TRAILING_KEY, style) };
 }
 
+#[cfg(test)]
 fn trailing_style(buf: &gtk::TextBuffer) -> Option<letters_core::ParaStyle> {
     // SAFETY: only ever set by set_trailing_style, with this type.
     unsafe { buf.data::<Option<letters_core::ParaStyle>>(TRAILING_KEY).and_then(|p| p.as_ref().clone()) }
@@ -253,6 +266,7 @@ fn trailing_style(buf: &gtk::TextBuffer) -> Option<letters_core::ParaStyle> {
 /// to `to` (a line end), and where each one's text starts, without folding
 /// table rows into cells: `capture_with_starts` does that for the whole
 /// buffer, and the live model uses this for the lines an edit touched.
+#[cfg(test)]
 pub(crate) fn capture_span(buf: &gtk::TextBuffer, from: i32, to: i32) -> (Vec<Paragraph>, Vec<usize>) {
     let table = buf.tag_table();
     let run_tags: Vec<(usize, gtk::TextTag)> = RUN_TAGS
@@ -492,10 +506,8 @@ fn run_lengths(run: &Run) -> (usize, usize) {
 /// used to pass buffer offsets as document offsets, so a selection after a
 /// list or a table came out shifted by those characters.
 pub fn selection_fragment(buf: &gtk::TextBuffer, start: usize, end: usize) -> letters_core::fragment::Fragment {
-    let (doc, starts) = match crate::live::of(buf) {
-        Some(m) => m.borrow_mut().snapshot(buf),
-        None => capture_with_starts(buf),
-    };
+    let Some(m) = crate::live::of(buf) else { return letters_core::fragment::Fragment::Text(Vec::new()) };
+    let (doc, starts) = m.borrow_mut().snapshot();
     let seq = |off: usize| {
         let (para, offset) = paragraph_offset(&doc, &starts, off);
         letters_core::edit::paragraph_start(&doc, para) + offset
@@ -557,6 +569,7 @@ pub fn paragraph_offset(doc: &Document, starts: &[usize], off: usize) -> (usize,
 /// into the editor used to reach DOCX as text and vanish as a table.
 /// `first_id` is the id the first table found gets (tables are numbered in
 /// document order; the live model folds a span that starts after others).
+#[cfg(test)]
 pub(crate) fn capture_tables(paragraphs: &mut Vec<Paragraph>, starts: &mut Vec<usize>, first_id: u32) {
     use letters_core::table_text;
 
@@ -649,6 +662,7 @@ pub const COMMENTS_KEY: &str = "letters-comments";
 
 /// Copy the document state that lives beside the buffer's text (footnotes,
 /// header, footer, page geometry, base font) from `buf` into `doc`.
+#[cfg(test)]
 pub(crate) fn read_sidecars(buf: &gtk::TextBuffer, doc: &mut Document) {
     doc.footnotes = unsafe { buf.data::<Vec<String>>(FOOTNOTES_KEY).map(|p| p.as_ref().clone()).unwrap_or_default() };
     doc.header = header_sidecar(buf);
@@ -674,53 +688,29 @@ pub fn set_comments(buf: &gtk::TextBuffer, comments: &[letters_core::Comment]) {
     }
 }
 
+#[cfg(test)]
 fn header_sidecar(buf: &gtk::TextBuffer) -> Option<String> {
     unsafe { buf.data::<Option<String>>(HEADER_KEY).and_then(|p| p.as_ref().clone()) }
 }
 
+#[cfg(test)]
 fn footer_sidecar(buf: &gtk::TextBuffer) -> Option<String> {
     unsafe { buf.data::<Option<String>>(FOOTER_KEY).and_then(|p| p.as_ref().clone()) }
 }
 
+#[cfg(test)]
 fn heading_styles_sidecar(buf: &gtk::TextBuffer) -> Vec<RunStyle> {
     unsafe { buf.data::<Vec<RunStyle>>(HEADING_STYLES_KEY).map(|p| p.as_ref().clone()).unwrap_or_default() }
 }
 
-/// Set the body font of the document in `buf`, beside its text.
-pub fn set_base_font(buf: &gtk::TextBuffer, base: letters_core::model::BaseFont) {
-    unsafe { buf.set_data(BASE_FONT_KEY, base) };
-}
-
+#[cfg(test)]
 fn base_font_sidecar(buf: &gtk::TextBuffer) -> letters_core::model::BaseFont {
     unsafe { buf.data::<letters_core::model::BaseFont>(BASE_FONT_KEY).map(|p| p.as_ref().clone()).unwrap_or_default() }
 }
 
-fn page_sidecar(buf: &gtk::TextBuffer) -> Option<PageGeometry> {
-    unsafe { buf.data::<Option<PageGeometry>>(PAGE_KEY).and_then(|p| *p.as_ref()) }
-}
-
-/// Read the page geometry currently attached to `buf`, if it has one.
-pub fn buffer_page_geometry(buf: &gtk::TextBuffer) -> Option<PageGeometry> {
-    page_sidecar(buf)
-}
-
-/// Read the header/footer currently attached to `buf`.
-pub fn buffer_header_footer(buf: &gtk::TextBuffer) -> (Option<String>, Option<String>) {
-    (header_sidecar(buf), footer_sidecar(buf))
-}
-
-/// Update just the header/footer, leaving the rest of the buffer's document
-/// state alone.
-///
-/// Empty text means "no header", not an empty one: the ODT and DOCX writers
-/// both emit a header block for `Some("")`, so treating a cleared entry as
-/// `Some("")` would put an empty header into every saved file.
-pub fn set_buffer_header_footer(buf: &gtk::TextBuffer, header: &str, footer: &str) {
-    let present = |text: &str| (!text.is_empty()).then(|| text.to_string());
-    unsafe {
-        buf.set_data(HEADER_KEY, present(header));
-        buf.set_data(FOOTER_KEY, present(footer));
-    }
+#[cfg(test)]
+fn page_sidecar(buf: &gtk::TextBuffer) -> Option<letters_core::model::PageGeometry> {
+    unsafe { buf.data::<Option<letters_core::model::PageGeometry>>(PAGE_KEY).and_then(|p| *p.as_ref()) }
 }
 
 /// Keep `doc`'s header, footer, footnotes and page setup beside `buf`'s
@@ -804,6 +794,7 @@ fn para_tag_name(style: &letters_core::ParaStyle) -> Option<String> {
 }
 
 /// Read a `para:` tag back into `style`. Inverse of `para_tag_name`.
+#[cfg(test)]
 fn apply_para_tag_name(name: &str, style: &mut letters_core::ParaStyle) {
     let Some(mut rest) = name.strip_prefix(PARA_TAG_PREFIX) else { return };
     while !rest.is_empty() {
@@ -914,6 +905,7 @@ pub(crate) fn list_level_tag(buf: &gtk::TextBuffer, level: u8) -> String {
 /// A list marker at the start of an editor line: its kind, the number of
 /// leading spaces, the marker's own length in chars (marker and separator),
 /// and a numbered item's number.
+#[cfg(test)]
 fn list_marker_prefix(text: &str) -> Option<(letters_core::ListKind, usize, usize, u32)> {
     let indent = text.len() - text.trim_start_matches(' ').len();
     let body = &text[indent..];
@@ -934,68 +926,7 @@ fn list_marker_prefix(text: &str) -> Option<(letters_core::ListKind, usize, usiz
     }
 }
 
-/// Enter at the caret inside a list item: continue the list with the next
-/// marker (at the same level), or, on an empty item, end the list by
-/// removing that item's marker. `false` when the caret is not in a list
-/// item, so Enter does what it always does. Shared by both views.
-pub(crate) fn enter_in_list(buf: &gtk::TextBuffer) -> bool {
-    let cursor = buf.iter_at_mark(&buf.get_insert());
-    let mut line_start = cursor;
-    line_start.set_line_offset(0);
-    let mut line_end = cursor;
-    if !line_end.ends_line() {
-        line_end.forward_to_line_end();
-    }
-    let line = buf.text(&line_start, &line_end, false).to_string();
-    let Some((kind, indent, marker, number)) = list_marker_prefix(&line) else { return false };
-    // The caret inside the marker itself is not "in the item".
-    if (cursor.line_offset() as usize) < indent + marker {
-        return false;
-    }
-    let level_tag = line_start
-        .tags()
-        .into_iter()
-        .find(|t| t.name().is_some_and(|n| list_level_from_tag_name(&n).is_some()));
-    let body_empty = line.chars().skip(indent + marker).all(char::is_whitespace);
-    buf.begin_user_action();
-    if body_empty {
-        let mut s = line_start;
-        let mut e = line_start;
-        e.forward_chars((indent + marker) as i32);
-        buf.delete(&mut s, &mut e);
-        if let Some(tag) = &level_tag {
-            let mut end = buf.iter_at_mark(&buf.get_insert());
-            if !end.ends_line() {
-                end.forward_to_line_end();
-            }
-            let mut start = end;
-            start.set_line_offset(0);
-            buf.remove_tag(tag, &start, &end);
-        }
-    } else {
-        buf.delete_selection(true, true);
-        let next = match kind {
-            letters_core::ListKind::Numbered => format!("{}.\t", number + 1),
-            _ => format!("{}\t", letters_core::lists::BULLET),
-        };
-        // An untagged (typed) item keeps its indent as spaces.
-        let prefix = if level_tag.is_some() { next } else { format!("{}{next}", " ".repeat(indent)) };
-        let mut at = buf.iter_at_mark(&buf.get_insert());
-        buf.insert(&mut at, &format!("\n{prefix}"));
-        if let Some(tag) = &level_tag {
-            let mut start = buf.iter_at_mark(&buf.get_insert());
-            start.set_line_offset(0);
-            let mut end = start;
-            if !end.ends_line() {
-                end.forward_to_line_end();
-            }
-            buf.apply_tag(tag, &start, &end);
-        }
-    }
-    buf.end_user_action();
-    true
-}
-
+#[cfg(test)]
 fn capture_list_marker(para: &mut Paragraph, tag_level: Option<u8>) -> usize {
     let text = para.text();
     let Some((kind, indent, marker_chars, _)) = list_marker_prefix(&text) else { return 0 };
@@ -1020,20 +951,28 @@ fn capture_list_marker(para: &mut Paragraph, tag_level: Option<u8>) -> usize {
     stripped
 }
 
-/// Flatten a document's paragraphs into the lines the editor shows.
+/// Flatten a document's paragraphs into the lines the editor shows, and
+/// say where each paragraph's text lands: its line, and how many chars
+/// into that line's text (after any list marker) it starts.
 ///
 /// Everything is one line per paragraph, except a table: its cells are
 /// paragraphs in the model but a *grid* on screen, so each row's cells
 /// collapse into one pipe line and a delimiter line follows the header.
-/// `capture_tables` reverses exactly this.
-pub(crate) fn render_lines(paragraphs: &[Paragraph]) -> Vec<std::borrow::Cow<'_, Paragraph>> {
+/// A cell holding several paragraphs shows them side by side in its
+/// column, a space apart. Rows are the cells' own row numbers; chunking
+/// the cells by the column count used to put a second paragraph of a cell
+/// into the next column, and every cell after it one column on.
+pub(crate) fn render_lines(paragraphs: &[Paragraph]) -> (Vec<std::borrow::Cow<'_, Paragraph>>, Vec<(usize, usize)>) {
     use letters_core::table_text;
     use std::borrow::Cow;
 
+    let buffer_len = |runs: &[Run]| runs.iter().map(|r| run_lengths(r).1).sum::<usize>();
     let mut lines: Vec<Cow<Paragraph>> = Vec::with_capacity(paragraphs.len());
+    let mut placed = Vec::with_capacity(paragraphs.len());
     let mut i = 0;
     while i < paragraphs.len() {
         let Some(cell) = paragraphs[i].style.table_cell else {
+            placed.push((lines.len(), 0));
             lines.push(Cow::Borrowed(&paragraphs[i]));
             i += 1;
             continue;
@@ -1043,40 +982,71 @@ pub(crate) fn render_lines(paragraphs: &[Paragraph]) -> Vec<std::borrow::Cow<'_,
             .iter()
             .position(|p| p.style.table_cell.is_none_or(|c| c.table != table))
             .map_or(paragraphs.len(), |n| i + n);
-        let cells = &paragraphs[i..end];
-        let cols = cells.iter().filter_map(|p| p.style.table_cell).map(|c| c.col).max().unwrap_or(0) + 1;
-
-        // Cells arrive in row-major order (the model keeps them that way);
-        // chunking by the column count is what turns them back into rows.
-        for (row, chunk) in cells.chunks(cols as usize).enumerate() {
-            let row_cells: Vec<Vec<letters_core::Run>> = chunk.iter().map(|p| p.runs.clone()).collect();
-            lines.push(Cow::Owned(Paragraph {
-                style: letters_core::ParaStyle::default(),
-                runs: table_text::layout_row_runs(&row_cells),
-            }));
-            if row == 0 {
+        let mut first_row = true;
+        let mut r = i;
+        while r < end {
+            let row = paragraphs[r].style.table_cell.map(|c| c.row);
+            let row_end = paragraphs[r..end].iter().position(|p| p.style.table_cell.map(|c| c.row) != row).map_or(end, |n| r + n);
+            // The row's cells, each the runs of its paragraphs, and where
+            // each paragraph starts in the row's text.
+            let mut cells: Vec<Vec<Run>> = Vec::new();
+            let mut at = table_text::OPEN.chars().count();
+            let mut col = None;
+            for p in &paragraphs[r..row_end] {
+                let c = p.style.table_cell.map(|c| c.col);
+                if c == col {
+                    let cell = cells.last_mut().expect("a cell before its second paragraph");
+                    cell.push(Run::plain(" "));
+                    at += 1;
+                    placed.push((lines.len(), at));
+                    cell.extend(p.runs.iter().cloned());
+                } else {
+                    if !cells.is_empty() {
+                        at += table_text::SEP.chars().count();
+                    }
+                    placed.push((lines.len(), at));
+                    cells.push(p.runs.clone());
+                    col = c;
+                }
+                at += buffer_len(&p.runs);
+            }
+            lines.push(Cow::Owned(Paragraph { style: letters_core::ParaStyle::default(), runs: table_text::layout_row_runs(&cells) }));
+            if first_row {
                 lines.push(Cow::Owned(Paragraph {
                     style: letters_core::ParaStyle::default(),
-                    runs: vec![letters_core::Run::plain(table_text::delimiter_line(cols as usize))],
+                    runs: vec![letters_core::Run::plain(table_text::delimiter_line(cells.len()))],
                 }));
+                first_row = false;
             }
+            r = row_end;
         }
         i = end;
     }
-    lines
+    (lines, placed)
 }
 
-/// Replace the buffer's content with a rendered Document.
-pub fn render_to_buffer(doc: &Document, buf: &gtk::TextBuffer) {
+/// Replace the buffer's content with a rendered Document, returning the
+/// buffer offset where each of its paragraphs' text starts.
+pub fn render_to_buffer(doc: &Document, buf: &gtk::TextBuffer) -> Vec<usize> {
     set_buffer_sidecars(doc, buf);
     set_trailing_style(buf, doc);
     buf.set_text("");
     let mut insert = buf.start_iter();
-    let lines = render_lines(&doc.paragraphs);
+    let starts = render_document_paragraphs(buf, &mut insert, &doc.paragraphs);
+    buf.set_modified(false);
+    starts
+}
+
+/// Render model paragraphs `paras` (whole tables, whole lists) at
+/// `insert` and return the buffer offset where each one's text starts.
+/// The offsets come from the rendering itself: the buffer is never read
+/// back to learn what it holds (#1202).
+pub(crate) fn render_document_paragraphs(buf: &gtk::TextBuffer, insert: &mut gtk::TextIter, paras: &[Paragraph]) -> Vec<usize> {
+    let (lines, placed) = render_lines(paras);
     let ordinals = letters_core::lists::ordinals(lines.iter().map(|p| &p.style));
     let lines: Vec<&Paragraph> = lines.iter().map(|p| p.as_ref()).collect();
-    render_paragraphs(buf, &mut insert, &lines, &ordinals);
-    buf.set_modified(false);
+    let line_starts = render_paragraphs(buf, insert, &lines, &ordinals);
+    placed.into_iter().map(|(line, at)| line_starts[line] + at).collect()
 }
 
 /// Insert `paras` (not table cells: `render_lines` makes those pipe rows)
@@ -1084,8 +1054,9 @@ pub fn render_to_buffer(doc: &Document, buf: &gtk::TextBuffer) {
 /// markers (`ordinals` gives each numbered item's number), run tags and
 /// paragraph tags. `render_to_buffer` renders a whole document with it; the
 /// live model re-renders just the paragraphs an undo changed.
-pub(crate) fn render_paragraphs(buf: &gtk::TextBuffer, insert: &mut gtk::TextIter, paras: &[&Paragraph], ordinals: &[u32]) {
+fn render_paragraphs(buf: &gtk::TextBuffer, insert: &mut gtk::TextIter, paras: &[&Paragraph], ordinals: &[u32]) -> Vec<usize> {
     let mut insert = *insert;
+    let mut text_starts = Vec::with_capacity(paras.len());
     // Paragraph tags are applied after all the text (see below).
     let mut tagged: Vec<(i32, i32, Vec<String>)> = Vec::new();
     for (i, para) in paras.iter().copied().enumerate() {
@@ -1096,6 +1067,7 @@ pub(crate) fn render_paragraphs(buf: &gtk::TextBuffer, insert: &mut gtk::TextIte
         if let Some(marker) = letters_core::lists::marker(para.style.list, ordinals[i]) {
             buf.insert(&mut insert, &format!("{marker}\t"));
         }
+        text_starts.push(insert.offset().max(0) as usize);
         for run in &para.runs {
             if let Some(src) = &run.style.image {
                 match gtk4::gdk::Texture::from_filename(src) {
@@ -1204,7 +1176,20 @@ pub(crate) fn render_paragraphs(buf: &gtk::TextBuffer, insert: &mut gtk::TextIte
         for name in names {
             buf.apply_tag_by_name(name, &s, &e);
         }
+        // The newline after a partial render's last line is the next
+        // line's separator, not this paragraph's: it keeps the tags of the
+        // empty paragraph the line was before an edit filled it, which a
+        // rendering from scratch would not put there.
+        if k + 1 == tagged.len() && end > *start && e.char() == '\n' {
+            let next = buf.iter_at_offset(end + 1);
+            for tag in e.tags() {
+                if tag.name().is_some_and(|n| is_paragraph_tag(&n)) {
+                    buf.remove_tag(&tag, &e, &next);
+                }
+            }
+        }
     }
+    text_starts
 }
 
 /// Whether `name` is one of the tags that carry a paragraph's style
@@ -1221,7 +1206,11 @@ fn is_paragraph_tag(name: &str) -> bool {
 /// Show a freshly opened (or recovered) document in `buf`: its live
 /// model's history starts here, so undo does not un-open it.
 pub fn load_document(doc: &Document, buf: &gtk::TextBuffer) {
-    crate::live::load(buf, || render_to_buffer(doc, buf));
+    if crate::live::of(buf).is_some() {
+        crate::live::load(buf, doc);
+    } else {
+        crate::live::LiveModel::attach(buf, doc.clone());
+    }
 }
 
 /// Read any supported file through letters-core into the buffer.
@@ -1249,13 +1238,9 @@ pub fn save_buffer_to_file(
     letters_core::save::write(&document_of(buf), path)
 }
 
-/// The document `buf` shows: its live model, or a read of a buffer without
-/// one.
+/// The document `buf`'s tab holds: its live model's.
 pub fn document_of(buf: &gtk::TextBuffer) -> letters_core::Document {
-    match crate::live::of(buf) {
-        Some(m) => m.borrow_mut().document(buf).clone(),
-        None => capture_from_buffer(buf),
-    }
+    crate::live::of(buf).map(|m| m.borrow().document().clone()).unwrap_or_default()
 }
 
 /// Prefix of a smart chip's tag: "chip:ID:date:2026-09-25". Every chip
@@ -1331,7 +1316,7 @@ fn structured_edit_on_model<F>(buf: &gtk::TextBuffer, m: &std::rc::Rc<std::cell:
 where
     F: FnOnce(&mut letters_core::structured::StructuredEditor),
 {
-    let (doc, starts) = m.borrow_mut().snapshot(buf);
+    let (doc, starts) = m.borrow_mut().snapshot();
     let mut editor = letters_core::structured::StructuredEditor::new(doc.clone());
     editor.set_cursor(model_offset(&doc, &starts, buf.iter_at_mark(&buf.get_insert()).offset().max(0) as usize));
     if let Some((start, end)) = buf.selection_bounds() {
@@ -1348,7 +1333,7 @@ where
     let mut m = m.borrow_mut();
     if m.apply_user_ops(buf, &ops, false) {
         // The caret where the command left it (the new table's first cell).
-        let (doc, starts) = m.snapshot(buf);
+        let (doc, starts) = m.snapshot();
         let off = buffer_offset_of_model(&doc, &starts, editor.cursor());
         buf.place_cursor(&buf.iter_at_offset(off as i32));
     }
@@ -1360,37 +1345,11 @@ pub fn apply_structured_edit<F>(buf: &gtk::TextBuffer, edit: F)
 where
     F: FnOnce(&mut letters_core::structured::StructuredEditor),
 {
-    // With a live model the command runs on the model: its change becomes
-    // ops (`edit::diff`) and only the changed paragraphs are re-rendered —
-    // inserting a table row no longer rewrites and re-reads the document.
+    // The command runs on the model: its change becomes ops
+    // (`edit::diff`) and only the changed paragraphs are re-rendered.
     if let Some(m) = crate::live::of(buf) {
         structured_edit_on_model(buf, &m, edit);
-        return;
     }
-    let doc = capture_from_buffer(buf);
-    let mut editor = letters_core::structured::StructuredEditor::new(doc);
-    // The caret, not the selection start: `unwrap_or(0)` for an unselected
-    // buffer — which is what this used to do — told every structured
-    // command that the cursor was at the very start of the document, so
-    // "Insert Table" put its table before the first character no matter
-    // where the user was typing.
-    let cursor_offset = buf.iter_at_mark(&buf.get_insert()).offset().max(0) as usize;
-    editor.set_cursor(cursor_offset);
-    if let Some((start, end)) = buf.selection_bounds() {
-        editor.select(start.offset().max(0) as usize, end.offset().max(0) as usize);
-    }
-    edit(&mut editor);
-    // One undoable change to the live model; and a changed document, which
-    // re-rendering (it marks the buffer saved) used to hide from the close
-    // guard.
-    crate::live::rewrite(buf, || render_to_buffer(editor.document(), buf));
-    buf.set_modified(true);
-
-    // Re-rendering replaces the buffer's contents, which drops the caret at
-    // the start. Put it back where the edit left it so typing continues in
-    // the new table's first cell rather than at the top of the document.
-    let restored = (editor.cursor() as i32).min(buf.char_count());
-    buf.place_cursor(&buf.iter_at_offset(restored));
 }
 
 #[cfg(test)]
@@ -1629,7 +1588,7 @@ mod tests {
                 style: letters_core::ParaStyle { list: letters_core::ListKind::Bullet, ..Default::default() },
                 runs: vec![Run::plain("apples")],
             });
-            render_to_buffer(&d, &buf);
+            load_document(&d, &buf);
             let text = buf.text(&buf.start_iter(), &buf.end_iter(), false).to_string();
             let find = |needle: &str| {
                 let b = text.find(needle).unwrap();
@@ -1714,7 +1673,8 @@ mod tests {
     }
 
     /// Enter in a list item continues the list at the same level with the
-    /// next number; Enter on an empty item ends the list.
+    /// next number; Enter on an empty item ends the list. Enter is a model
+    /// edit (a paragraph split), which the buffer then shows.
     #[test]
     fn enter_continues_and_ends_a_list() {
         use letters_core::ListKind;
@@ -1726,27 +1686,23 @@ mod tests {
                 p.style.list = ListKind::Numbered;
                 p.style.list_level = 1;
             }
-            render_to_buffer(&d, &buf);
+            load_document(&d, &buf);
             buf.place_cursor(&buf.end_iter());
-            assert!(enter_in_list(&buf));
-            buf.insert_at_cursor("three");
-            let doc = capture_from_buffer(&buf);
+            crate::page_edit::type_text(&buf, "\n");
+            crate::page_edit::type_text(&buf, "three");
+            let doc = document_of(&buf);
             let items: Vec<(ListKind, u8, String)> =
                 doc.paragraphs.iter().map(|p| (p.style.list, p.style.list_level, p.text())).collect();
             assert_eq!(items[2], (ListKind::Numbered, 1, "three".to_string()));
             assert_eq!(buf.text(&buf.start_iter(), &buf.end_iter(), false), "1.\tone\n2.\ttwo\n3.\tthree");
 
             // Enter twice: the second, on the new empty item, ends the list.
-            assert!(enter_in_list(&buf));
-            assert!(enter_in_list(&buf));
-            let doc = capture_from_buffer(&buf);
+            crate::page_edit::type_text(&buf, "\n");
+            crate::page_edit::type_text(&buf, "\n");
+            let doc = document_of(&buf);
             let last = doc.paragraphs.last().unwrap();
             assert_eq!((last.style.list, last.text().as_str()), (ListKind::None, ""));
-
-            // Outside a list, Enter is not ours.
-            buf.place_cursor(&buf.end_iter());
-            buf.insert_at_cursor("plain");
-            assert!(!enter_in_list(&buf));
+            assert_eq!(crate::live::of(&buf).unwrap().borrow().foreign_edits, 0);
         });
     }
 
@@ -1919,14 +1875,14 @@ mod tests {
         gtk_test(|| {
             let buf = gtk::TextBuffer::new(None);
             crate::actions::register_formatting_tags(&buf);
-            buf.set_text("intro paragraph");
+            load_document(&Document::from_plain_text("intro paragraph"), &buf);
             buf.place_cursor(&buf.end_iter());
 
             apply_structured_edit(&buf, |editor| {
                 editor.insert_table(2, 2);
             });
 
-            let doc = capture_from_buffer(&buf);
+            let doc = document_of(&buf);
             let tables: std::collections::BTreeSet<u32> = doc.paragraphs.iter()
                 .filter_map(|p| p.style.table_cell.map(|c| c.table)).collect();
             assert_eq!(tables.len(), 1, "exactly one table: {doc:?}");
@@ -1966,7 +1922,7 @@ mod tests {
         gtk_test(|| {
             let buf = gtk::TextBuffer::new(None);
             crate::actions::register_formatting_tags(&buf);
-            render_to_buffer(&Document::from_plain_text("first\nsecond"), &buf);
+            load_document(&Document::from_plain_text("first\nsecond"), &buf);
             let second = buf.iter_at_line(1).expect("second line");
             buf.place_cursor(&second);
 
@@ -1988,7 +1944,7 @@ mod tests {
         gtk_test(|| {
             let buf = gtk::TextBuffer::new(None);
             crate::actions::register_formatting_tags(&buf);
-            render_to_buffer(&Document::from_plain_text("intro\nchapter two"), &buf);
+            load_document(&Document::from_plain_text("intro\nchapter two"), &buf);
             buf.place_cursor(&buf.iter_at_line(1).expect("second line"));
 
             apply_structured_edit(&buf, |editor| {
@@ -2252,44 +2208,39 @@ single");
         });
     }
 
-    /// The header/footer dialog writes through this helper. An empty entry
-    /// means "no header": `Some("")` would make both writers emit an empty
-    /// header block into every saved file.
+    /// The header/footer dialog's Apply. An empty entry means "no header":
+    /// `Some("")` would make both writers emit an empty header block into
+    /// every saved file.
     #[test]
     fn setting_an_empty_header_clears_it_rather_than_storing_a_blank() {
         gtk_test(|| {
             let buf = gtk::TextBuffer::new(None);
             let mut doc = Document::from_plain_text("body");
             doc.header = Some("Existing".into());
-            render_to_buffer(&doc, &buf);
+            load_document(&doc, &buf);
 
-            set_buffer_header_footer(&buf, "", "");
-            let captured = capture_from_buffer(&buf);
-            assert_eq!(captured.header, None, "a cleared entry must remove the header");
-            assert_eq!(captured.footer, None);
+            crate::dialogs::apply_header_footer(&buf, "", "");
+            let saved = document_of(&buf);
+            assert_eq!(saved.header, None, "a cleared entry must remove the header");
+            assert_eq!(saved.footer, None);
         });
     }
 
     /// Editing the header without touching the text must persist, and must
     /// leave the page geometry alone.
     #[test]
-    fn dialog_edits_reach_the_captured_document() {
+    fn dialog_edits_reach_the_saved_document() {
         gtk_test(|| {
             let buf = gtk::TextBuffer::new(None);
             let mut doc = Document::from_plain_text("body");
             doc.page = Some(geometry());
-            render_to_buffer(&doc, &buf);
+            load_document(&doc, &buf);
 
-            set_buffer_header_footer(&buf, "New header", "New footer");
-            let captured = capture_from_buffer(&buf);
-            assert_eq!(captured.header.as_deref(), Some("New header"));
-            assert_eq!(captured.footer.as_deref(), Some("New footer"));
-            assert_eq!(captured.page, Some(geometry()), "geometry must be untouched");
-            assert_eq!(
-                buffer_header_footer(&buf),
-                (Some("New header".into()), Some("New footer".into())),
-                "the dialog reads back what it wrote"
-            );
+            crate::dialogs::apply_header_footer(&buf, "New header", "New footer");
+            let saved = document_of(&buf);
+            assert_eq!(saved.header.as_deref(), Some("New header"));
+            assert_eq!(saved.footer.as_deref(), Some("New footer"));
+            assert_eq!(saved.page, Some(geometry()), "geometry must be untouched");
         });
     }
 

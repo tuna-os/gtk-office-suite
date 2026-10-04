@@ -115,34 +115,25 @@ pub(crate) fn toggle_tag_in(buf: &gtk::TextBuffer, tag_name: &str) {
         return;
     };
     let (from, to) = (start.offset().max(0), end.offset().max(0));
-    if let (Some(live), Some(key)) = (crate::live::of(buf), mark_key(tag_name)) {
-        let mut m = live.borrow_mut();
-        let (s, e) = (m.sequence_offset(buf, from as usize), m.sequence_offset(buf, to as usize));
-        let first = letters_core::edit::slice(m.document(buf), s, e)
-            .and_then(|paras| paras.into_iter().flat_map(|p| p.runs).find(|r| !r.text.is_empty()));
-        let has = first.is_some_and(|r| {
-            let mut style = r.style;
-            style_flag(&mut style, tag_name).is_some_and(|f| *f)
-        });
-        let mut value = letters_core::RunStyle::default();
-        if let Some(flag) = style_flag(&mut value, tag_name) {
-            *flag = !has;
-        }
-        let applied = m.apply_user_ops(buf, &[letters_core::edit::Op::Mark { start: s, end: e, key, value }], false);
-        drop(m);
-        // Marks move no text, so the selection's offsets still hold; the
-        // model's projection put the caret at the change's end.
-        if applied {
-            buf.select_range(&buf.iter_at_offset(from), &buf.iter_at_offset(to));
-        }
-        return;
+    let (Some(live), Some(key)) = (crate::live::of(buf), mark_key(tag_name)) else { return };
+    let mut m = live.borrow_mut();
+    let (s, e) = (m.sequence_offset(from as usize), m.sequence_offset(to as usize));
+    let first = letters_core::edit::slice(m.document(), s, e)
+        .and_then(|paras| paras.into_iter().flat_map(|p| p.runs).find(|r| !r.text.is_empty()));
+    let has = first.is_some_and(|r| {
+        let mut style = r.style;
+        style_flag(&mut style, tag_name).is_some_and(|f| *f)
+    });
+    let mut value = letters_core::RunStyle::default();
+    if let Some(flag) = style_flag(&mut value, tag_name) {
+        *flag = !has;
     }
-    let Some(tag) = buf.tag_table().lookup(tag_name) else { return };
-    let has = start.tags().iter().any(|t| t.name().as_deref() == Some(tag_name));
-    if has {
-        buf.remove_tag(&tag, &start, &end);
-    } else {
-        buf.apply_tag(&tag, &start, &end);
+    let applied = m.apply_user_ops(buf, &[letters_core::edit::Op::Mark { start: s, end: e, key, value }], false);
+    drop(m);
+    // Marks move no text, so the selection's offsets still hold; the
+    // model's projection put the caret at the change's end.
+    if applied {
+        buf.select_range(&buf.iter_at_offset(from), &buf.iter_at_offset(to));
     }
 }
 
@@ -204,7 +195,7 @@ const LINE_SPACINGS: [f32; 4] = [1.0, 1.15, 1.5, 2.0];
 /// saved.
 pub(crate) fn cycle_line_spacing_in(buf: &gtk::TextBuffer) -> Option<f32> {
     let live = crate::live::of(buf)?;
-    let current = live.borrow_mut().paragraph_style_at(buf, caret_or_selection(buf).0)?.line_spacing;
+    let current = live.borrow_mut().paragraph_style_at(caret_or_selection(buf).0)?.line_spacing;
     let next = *LINE_SPACINGS.iter().find(|s| **s > current + 0.01).unwrap_or(&LINE_SPACINGS[0]);
     restyle_here(buf, |style| letters_core::ParaStyle { line_spacing: next, ..style.clone() }).then_some(next)
 }
@@ -262,13 +253,11 @@ fn toggle_pending(buf: &gtk::TextBuffer, name: &str) {
     } else {
         // The opposite of what typing here would get: what the model's
         // typing rule gives at the caret.
-        let mut typed = match crate::live::of(buf) {
-            Some(m) => {
-                let mut m = m.borrow_mut();
-                let seq = m.sequence_offset(buf, at.max(0) as usize);
-                letters_core::edit::typing_style(m.document(buf), seq)
-            }
-            None => letters_core::RunStyle::default(),
+        let Some(m) = crate::live::of(buf) else { return };
+        let mut typed = {
+            let mut m = m.borrow_mut();
+            let seq = m.sequence_offset(at.max(0) as usize);
+            letters_core::edit::typing_style(m.document(), seq)
         };
         let Some(current) = style_flag(&mut typed, name) else { return };
         pending.marks.push((name.to_string(), !*current));
@@ -484,25 +473,6 @@ pub fn register_structured_actions(tv: &adw::TabView, app: &adw::Application) {
     app.set_accels_for_action("app.list-outdent", &["<Primary>bracketleft"]);
 }
 
-/// Connect Markdown inline macro expansion on space / punctuation.
-pub fn connect_markdown_macros(buf: &gtk::TextBuffer) {
-    let buf_c = buf.clone();
-    buf.connect_insert_text(move |b, pos, text| {
-        if text != " " && text != "\n" { return; }
-        // Not while the live model is writing into the buffer (Print
-        // Layout's edits, undo): that text is the model's, not typed here.
-        if crate::live::is_busy(b) { return; }
-        // After the insertion completes: a handler that edits the buffer
-        // while GTK is still inserting invalidates the insert position.
-        let (b, at) = (b.clone(), pos.offset());
-        glib::idle_add_local_once(move || {
-            let end = b.iter_at_offset(at);
-            markdown_macro_at(&b, &end);
-        });
-    });
-    let _ = buf_c;
-}
-
 /// Expand a Markdown inline macro ("**bold**", "_it_", …) that ends at
 /// `pos`: typing into the buffer runs it as a space or newline is typed,
 /// the page view after typing one.
@@ -549,56 +519,45 @@ fn extract_md_pattern<'a>(before: &'a str, open: &str, close: &str) -> Option<&'
 /// caret stays where typing left it rather than where the edit ended.
 fn apply_md_pattern(buf: &gtk::TextBuffer, at: &gtk::TextIter, delimiter: &str, inner: &str, tag_name: &str) {
     let del_len = delimiter.chars().count() * 2 + inner.chars().count();
-    let mut end = *at;
+    let end = *at;
     let mut start = end;
     start.backward_chars(del_len as i32);
     if start >= end {
         return;
     }
-    if let Some(live) = crate::live::of(buf) {
-        use letters_core::edit::Op;
-        let (from, to) = (start.offset().max(0) as usize, end.offset().max(0) as usize);
-        let caret = buf.iter_at_mark(&buf.get_insert()).offset().max(0) as usize;
-        let mut m = live.borrow_mut();
-        let (s, e) = (m.sequence_offset(buf, from), m.sequence_offset(buf, to));
-        let mut style = letters_core::edit::slice(m.document(buf), s, e)
-            .and_then(|paras| paras.into_iter().flat_map(|p| p.runs).find(|r| !r.text.is_empty()))
-            .map(|r| r.style)
-            .unwrap_or_default();
-        match tag_name {
-            "code" => style.code = true,
-            name => {
-                if let Some(flag) = style_flag(&mut style, name) {
-                    *flag = true;
-                }
+    let Some(live) = crate::live::of(buf) else { return };
+    use letters_core::edit::Op;
+    let (from, to) = (start.offset().max(0) as usize, end.offset().max(0) as usize);
+    let caret = buf.iter_at_mark(&buf.get_insert()).offset().max(0) as usize;
+    let mut m = live.borrow_mut();
+    let (s, e) = (m.sequence_offset(from), m.sequence_offset(to));
+    let mut style = letters_core::edit::slice(m.document(), s, e)
+        .and_then(|paras| paras.into_iter().flat_map(|p| p.runs).find(|r| !r.text.is_empty()))
+        .map(|r| r.style)
+        .unwrap_or_default();
+    match tag_name {
+        "code" => style.code = true,
+        name => {
+            if let Some(flag) = style_flag(&mut style, name) {
+                *flag = true;
             }
         }
-        let ops = [
-            Op::Delete { at: s, len: e - s },
-            Op::Insert {
-                at: s,
-                content: vec![letters_core::Paragraph {
-                    style: Default::default(),
-                    runs: vec![letters_core::model::Run { text: inner.to_string(), style }],
-                }],
-            },
-        ];
-        let applied = m.apply_user_ops(buf, &ops, false);
-        drop(m);
-        if applied {
-            let removed = del_len - inner.chars().count();
-            let caret = if caret >= to { caret - removed } else { caret.min(from) };
-            buf.place_cursor(&buf.iter_at_offset(caret as i32));
-        }
-        return;
     }
-    buf.begin_user_action();
-    buf.delete(&mut start, &mut end);
-    let from = start.offset();
-    // `insert` moves the iter to the end of what it inserted.
-    buf.insert(&mut start, inner);
-    if let Some(tag) = buf.tag_table().lookup(tag_name) {
-        buf.apply_tag(&tag, &buf.iter_at_offset(from), &start);
+    let ops = [
+        Op::Delete { at: s, len: e - s },
+        Op::Insert {
+            at: s,
+            content: vec![letters_core::Paragraph {
+                style: Default::default(),
+                runs: vec![letters_core::model::Run { text: inner.to_string(), style }],
+            }],
+        },
+    ];
+    let applied = m.apply_user_ops(buf, &ops, false);
+    drop(m);
+    if applied {
+        let removed = del_len - inner.chars().count();
+        let caret = if caret >= to { caret - removed } else { caret.min(from) };
+        buf.place_cursor(&buf.iter_at_offset(caret as i32));
     }
-    buf.end_user_action();
 }

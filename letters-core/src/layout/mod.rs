@@ -850,9 +850,10 @@ fn emit_line(flow: &mut Flow, idx: usize, para: &Paragraph, text: &[char], k: us
 /// A shaped paragraph of a table cell: its index, lines and height.
 type CellParagraph = (usize, Shaped, f64);
 
-/// Lay out the table made of cell paragraphs `range`: equal-width columns
-/// across the column box, rows as tall as their tallest cell, and a row
-/// never split across pages.
+/// Lay out the table made of cell paragraphs `range`: the file's column
+/// widths (scaled down to the column box if they are wider), or equal
+/// columns across it without them; rows as tall as their tallest cell,
+/// and a row never split across pages.
 fn layout_table(flow: &mut Flow, doc: &Document, range: std::ops::Range<usize>, shaper: &mut dyn Shaper) {
     let cells: Vec<(usize, crate::model::TableCell)> =
         range.clone().filter_map(|i| doc.paragraphs[i].style.table_cell.map(|c| (i, c))).collect();
@@ -860,8 +861,9 @@ fn layout_table(flow: &mut Flow, doc: &Document, range: std::ops::Range<usize>, 
     let cols = cells.iter().map(|(_, c)| c.col).max().unwrap_or(0) + 1;
     let rows = cells.iter().map(|(_, c)| c.row).max().unwrap_or(0) + 1;
     let table_w = flow.column_width();
-    let col_w = table_w / f64::from(cols);
-    let inner_w = (col_w - 2.0 * CELL_PADDING_PT).max(1.0);
+    let widths = column_widths(doc.table_columns.get(&first.table), cols as usize, table_w);
+    let col_x: Vec<f64> = widths.iter().scan(0.0, |x, w| { let at = *x; *x += w; Some(at) }).collect();
+    let inner_w = |col: u32| (widths[col as usize] - 2.0 * CELL_PADDING_PT).max(1.0);
     let opts = flow.opts.clone();
     flow.y += std::mem::take(&mut flow.pending_after);
 
@@ -874,7 +876,7 @@ fn layout_table(flow: &mut Flow, doc: &Document, range: std::ops::Range<usize>, 
             let mut paras = Vec::new();
             for &(i, _) in cells.iter().filter(|(_, c)| c.row == row && c.col == col) {
                 let p = &doc.paragraphs[i];
-                let s = shape_paragraph(p, inner_w, &opts, shaper);
+                let s = shape_paragraph(p, inner_w(col), &opts, shaper);
                 let ph: f64 = s.lines.iter().map(|l| l.natural_height() * spacing(p)).sum::<f64>()
                     + p.style.space_before_pt.max(0.0)
                     + p.style.space_after_pt.max(0.0);
@@ -893,8 +895,8 @@ fn layout_table(flow: &mut Flow, doc: &Document, range: std::ops::Range<usize>, 
             // The table hangs one cell padding into the left margin, so
             // cell text lines up with the body text (Word's and
             // LibreOffice's default table indent).
-            let cx = x0 - CELL_PADDING_PT + f64::from(col) * col_w;
-            flow.push(Item::Cell { table: first.table, row, col, x_pt: cx, y_pt: top, width_pt: col_w, height_pt: row_h });
+            let cx = x0 - CELL_PADDING_PT + col_x[col as usize];
+            flow.push(Item::Cell { table: first.table, row, col, x_pt: cx, y_pt: top, width_pt: widths[col as usize], height_pt: row_h });
             let mut y = top;
             for (i, s, _) in paras {
                 let p = &doc.paragraphs[i];
@@ -909,6 +911,20 @@ fn layout_table(flow: &mut Flow, doc: &Document, range: std::ops::Range<usize>, 
             }
         }
         flow.y = top + row_h;
+    }
+}
+
+/// A table's `cols` column widths: the file's, scaled down to `table_w` if
+/// they add up to more, or equal columns across `table_w` without them (or
+/// when the table has gained or lost a column since).
+fn column_widths(file: Option<&Vec<f64>>, cols: usize, table_w: f64) -> Vec<f64> {
+    match file.filter(|w| w.len() == cols && w.iter().all(|x| x.is_finite() && *x > 0.0)) {
+        Some(w) => {
+            let total: f64 = w.iter().sum();
+            let scale = if total > table_w { table_w / total } else { 1.0 };
+            w.iter().map(|x| x * scale).collect()
+        }
+        None => vec![table_w / cols as f64; cols],
     }
 }
 
