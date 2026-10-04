@@ -80,7 +80,7 @@ jobs:
       - uses: dtolnay/rust-toolchain@89b12181fb390509a0842a86cc55eeb8eb928c1d # stable
         with:
           toolchain: stable
-      - uses: taiki-e/install-action@badb8c3638e0b773c6c17a6025c2306a8f1c4303 # nextest
+      - uses: taiki-e/install-action@fda1432fb14a2fcc0435aaa25723e43657cd0cc4 # nextest
         with:
           tool: nextest
       - name: Run the workspace tests at the release revision
