@@ -23,6 +23,7 @@ Building this map found five fields that didn't cross, all fixed with it:
 | `Document.base_font` | base-font sidecar on the buffer | `letters-core/tests/soffice_oracle.rs::a_new_document_keeps_its_font_through_lo` | `letters-core/tests/soffice_oracle.rs::a_new_document_keeps_its_font_through_lo` |
 | `Document.heading_styles` | heading-styles sidecar on the buffer | `letters-core/tests/soffice_oracle.rs::heading_styles_and_picture_size_survive_writer_rewriting_a_docx` | `letters-core/tests/soffice_oracle.rs::heading_looks_survive_writer_in_odt` |
 | `Document.comments` | comments sidecar; anchors are `comment:ID` tags | `letters-core/tests/soffice_oracle.rs::comments_survive_lo_passes` | `letters-core/tests/soffice_oracle.rs::comments_survive_lo_passes` |
+| `Document.table_columns` | none: the model only; the page view lays tables out from it | `letters-core/tests/soffice_oracle.rs::table_column_widths_survive_writer_both_ways` | `letters-core/tests/soffice_oracle.rs::table_column_widths_survive_writer_both_ways` |
 | `Paragraph.style` | the paragraph tags below | n/a: a container; its fields have their own rows | n/a: a container; its fields have their own rows |
 | `Paragraph.runs` | the paragraph's text and run tags | n/a: a container; its fields have their own rows | n/a: a container; its fields have their own rows |
 | `Run.text` | buffer text | `letters-core/tests/soffice_oracle.rs::oracle_reads_plain_paragraphs` | `letters-core/tests/soffice_oracle.rs::odt_oracle_reads_plain_paragraphs` |
