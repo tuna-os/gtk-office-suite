@@ -171,7 +171,7 @@ jobs:
       # A record job that died before uploading (build failure, container
       # pull failure) still gets a block saying so — silence would read
       # as "not run yet".
-      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
         continue-on-error: true
         with:
           name: feature-verification
