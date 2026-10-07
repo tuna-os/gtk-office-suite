@@ -162,9 +162,12 @@ impl SuiteApp {
         });
         app.add_action(&act_shortcuts);
 
-        // The choice is the app's `dark-mode` setting: saved when toggled,
+        // The choice is the app's `style` setting: saved when toggled,
         // restored at startup (#1305). It used to be neither, so the style
-        // lasted only until the app was restarted.
+        // lasted only until the app was restarted. Light is a choice too:
+        // the old boolean `dark-mode` saved it as "not dark", which at the
+        // next start meant "follow the system", so on a dark system the
+        // window came back dark.
         let act_dark = gio::SimpleAction::new("toggle-dark-mode", None);
         let id = app_id.to_string();
         act_dark.connect_activate(move |_, _| {
@@ -172,14 +175,15 @@ impl SuiteApp {
             let dark = !sm.is_dark();
             sm.set_color_scheme(if dark { adw::ColorScheme::ForceDark } else { adw::ColorScheme::ForceLight });
             if let Some(settings) = app_settings(&id) {
+                let _ = settings.set_string("style", if dark { "dark" } else { "light" });
                 let _ = settings.set_boolean("dark-mode", dark);
             }
         });
         app.add_action(&act_dark);
         let id = app_id.to_string();
         app.connect_startup(move |_| {
-            if app_settings(&id).is_some_and(|s| s.boolean("dark-mode")) {
-                adw::StyleManager::default().set_color_scheme(adw::ColorScheme::ForceDark);
+            if let Some(scheme) = app_settings(&id).and_then(|s| saved_scheme(&s.string("style"), s.boolean("dark-mode"))) {
+                adw::StyleManager::default().set_color_scheme(scheme);
             }
         });
 
@@ -286,12 +290,23 @@ impl SuiteApp {
 
 }
 
-/// The app's settings, if its schema (with a `dark-mode` key) is
-/// installed; a build run without its schema keeps the default style
+/// The app's settings, if its schema (with `style` and `dark-mode` keys)
+/// is installed; a build run without its schema keeps the default style
 /// rather than aborting.
 fn app_settings(app_id: &str) -> Option<gio::Settings> {
     let schema = gio::SettingsSchemaSource::default()?.lookup(app_id, true)?;
-    schema.has_key("dark-mode").then(|| gio::Settings::new(app_id))
+    (schema.has_key("style") && schema.has_key("dark-mode")).then(|| gio::Settings::new(app_id))
+}
+
+/// The colour scheme a saved style asks for at startup, or None to follow
+/// the system. `dark_mode` is the setting older versions saved instead,
+/// honoured while `style` is still "default".
+fn saved_scheme(style: &str, dark_mode: bool) -> Option<adw::ColorScheme> {
+    match style {
+        "dark" => Some(adw::ColorScheme::ForceDark),
+        "light" => Some(adw::ColorScheme::ForceLight),
+        _ => dark_mode.then_some(adw::ColorScheme::ForceDark),
+    }
 }
 
 /// The user documentation: feature guides, troubleshooting, accessibility.
@@ -1123,6 +1138,17 @@ impl SuiteTabView {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// A saved light style is kept on a dark system instead of reading as
+    /// "follow the system"; an older install's `dark-mode` still opens dark.
+    #[test]
+    fn a_saved_style_is_the_scheme_the_app_opens_in() {
+        assert_eq!(saved_scheme("light", false), Some(adw::ColorScheme::ForceLight));
+        assert_eq!(saved_scheme("light", true), Some(adw::ColorScheme::ForceLight));
+        assert_eq!(saved_scheme("dark", false), Some(adw::ColorScheme::ForceDark));
+        assert_eq!(saved_scheme("default", true), Some(adw::ColorScheme::ForceDark));
+        assert_eq!(saved_scheme("default", false), None);
+    }
 
     #[test]
     fn test_empty_state_created() {
