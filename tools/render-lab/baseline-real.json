@@ -128,8 +128,8 @@
     "B": "amber"
   },
   "letters/real-audit-and-risk-assurance-committee-minutes-24-ja": {
-    "A": "red",
-    "B": "red"
+    "A": "amber",
+    "B": "amber"
   },
   "letters/real-consultation-questions-downloadable-alternative": {
     "A": "amber",
@@ -137,7 +137,7 @@
   },
   "letters/real-crime-supervisor-declaration-form": {
     "A": "amber",
-    "B": "red"
+    "B": "amber"
   },
   "letters/real-dcms-business-appointment-rules-between-october": {
     "A": "amber",
@@ -192,7 +192,7 @@
     "B": "amber"
   },
   "letters/real-questionnaire-2": {
-    "A": "red",
+    "A": "amber",
     "B": "amber"
   },
   "letters/real-road-safety-open-data-severity-adjustment-guidan": {
@@ -224,7 +224,7 @@
     "B": "amber"
   },
   "letters/real-tier-2-3-notification-of-dealing-with-a-non-uk-t": {
-    "A": "red",
+    "A": "amber",
     "B": "amber"
   },
   "letters/real-transparency-information-about-outside-appointme": {
@@ -236,7 +236,7 @@
     "B": "amber"
   },
   "letters/real-wga-2025-26-cg-02-template-for-notification-of-t": {
-    "A": "red",
+    "A": "amber",
     "B": "amber"
   },
   "tables/real-2020-deep-sea-stock": {
