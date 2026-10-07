@@ -22,6 +22,10 @@ packages:
   # brings the portal, but not the GNOME backend that draws its dialogs,
   # which every GNOME desktop has. Without it neither dialog appears.
   - xdg-desktop-portal-gnome
+  # Which since GNOME 47 hands the file chooser itself to Files: without
+  # Nautilus the backend logged "Delegated FileChooser call failed: The
+  # name is not activatable" and still no dialog appeared.
+  - nautilus
   - mesa-dri-drivers
   # Named one by one: "liberation-fonts" is no binary package in Fedora 44,
   # and one unknown name fails the whole install.
