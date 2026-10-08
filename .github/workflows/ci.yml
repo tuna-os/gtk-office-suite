@@ -343,6 +343,8 @@ jobs:
         env:
           PARTITION: ${{ matrix.partition }}
         run: |
+          # nextest extracts the archive into a directory that must exist.
+          mkdir -p extracted
           scripts/with-display.sh cargo nextest run --archive-file nextest-archive.tar.zst \
             --workspace-remap . --extract-to extracted --profile ci --partition "hash:$PARTITION/8"
 
