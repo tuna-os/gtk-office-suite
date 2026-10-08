@@ -132,9 +132,19 @@ pub fn parse_data_styles(xml: &str) -> HashMap<String, NumberFormat> {
                             .filter(|p| p.0 == "number:text")
                             .map(|p| p.2.trim())
                             .find(|t| !t.is_empty() && t.chars().all(|c| "$€£¥₹".contains(c)));
+                        // A number groups its thousands only when the
+                        // style says so (`number:grouping`); `Number`
+                        // always does, so one without is its own code.
+                        // 2574.5 in a one-decimal style drew as "2,574.5"
+                        // where Calc draws "2574.5" (render-real
+                        // `2020-deep-sea-stock`).
                         part("number:number").map(|a| match symbol {
                             Some(sym) => NumberFormatKind::Currency(sym.to_string(), decimals(a)),
-                            None => NumberFormatKind::Number(decimals(a)),
+                            None if attr(a, "number:grouping") == Some("true") => NumberFormatKind::Number(decimals(a)),
+                            None => match decimals(a) {
+                                0 => NumberFormatKind::Custom("0".into()),
+                                d => NumberFormatKind::Custom(format!("0.{}", "0".repeat(d as usize))),
+                            },
                         })
                     }
                 }
@@ -177,6 +187,7 @@ mod tests {
       <number:number-style style:name="N122"><number:fraction number:min-integer-digits="0" number:min-numerator-digits="1" number:min-denominator-digits="1"/></number:number-style>
       <number:number-style style:name="N153"><number:text>$</number:text><number:number number:decimal-places="2" number:min-decimal-places="2" number:min-integer-digits="1" number:grouping="true"/></number:number-style>
       <number:number-style style:name="N4"><number:number number:decimal-places="2" number:min-integer-digits="1" number:grouping="true"/></number:number-style>
+      <number:number-style style:name="N36"><number:number number:decimal-places="1" number:min-integer-digits="1"/></number:number-style>
       <number:date-style style:name="N50"><number:month/><number:text>/</number:text><number:day/><number:text>/</number:text><number:year/><number:text> </number:text><number:hours number:style="long"/><number:text>:</number:text><number:minutes number:style="long"/></number:date-style>
     </office:automatic-styles>"#;
 
@@ -188,6 +199,10 @@ mod tests {
         assert_eq!(s["N121"].kind, NumberFormatKind::Date("%Y-%m-%d".into()));
         assert_eq!(s["N122"].kind, NumberFormatKind::Fraction(1));
         assert_eq!(s["N4"].kind, NumberFormatKind::Number(2));
+        // No grouping in the style, none on the page: 2574.5, not 2,574.5.
+        assert_eq!(s["N36"].kind, NumberFormatKind::Custom("0.0".into()));
+        assert_eq!(s["N36"].format("2574.5"), "2574.5");
+        assert_eq!(s["N4"].format("2574.5"), "2,574.50");
         assert_eq!(s["N50"].kind, NumberFormatKind::DateTime("%-m/%-d/%y %H:%M".into()));
         assert_eq!(s["N153"].kind, NumberFormatKind::Currency("$".into(), 2), "a quoted symbol is still a currency");
     }

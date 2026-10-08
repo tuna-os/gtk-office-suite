@@ -458,6 +458,16 @@ pub fn image_size_pt(run: &Run, max_width_pt: f64) -> (f64, f64) {
     }
 }
 
+/// The room an image run takes in its line: its size, or none for a
+/// floating image, which is drawn where its anchor puts it.
+pub fn inline_size_pt(run: &Run, max_width_pt: f64) -> (f64, f64) {
+    if run.style.image_anchor.is_some() {
+        (0.0, 0.0)
+    } else {
+        image_size_pt(run, max_width_pt)
+    }
+}
+
 /// Pixel size from a PNG file's IHDR chunk.
 fn png_size_px(path: &str) -> Option<(u32, u32)> {
     use std::io::Read;
@@ -794,7 +804,7 @@ fn place_paragraph(flow: &mut Flow, idx: usize, para: &Paragraph, shaped: &Shape
             let baseline = top + lb.ascent_pt;
             let x0 = flow.column_x();
             if k == 0 && st.list != ListKind::None {
-                if let Some(text) = lists::marker(st.list, ordinal) {
+                if let Some(text) = lists::marker_for(st, ordinal) {
                     flow.push(Item::Marker { para: idx, text, x_pt: x0 + shaped.marker_x, baseline_pt: baseline });
                 }
             }
@@ -820,6 +830,11 @@ fn place_paragraph(flow: &mut Flow, idx: usize, para: &Paragraph, shaped: &Shape
 #[allow(clippy::too_many_arguments)]
 fn emit_line(flow: &mut Flow, idx: usize, para: &Paragraph, text: &[char], k: usize, lb: &LineBox, box_x: f64, box_w: f64, top: f64, height: f64) {
     let baseline = top + lb.ascent_pt;
+    // A paragraph's floating images are placed from its first line's top:
+    // those behind the text before the line, the rest after it.
+    if k == 0 {
+        place_floating(flow, idx, para, top, true);
+    }
     flow.push(Item::Line {
         source: Source::Paragraph(idx),
         line: k,
@@ -844,8 +859,50 @@ fn emit_line(flow: &mut Flow, idx: usize, para: &Paragraph, text: &[char], k: us
             continue;
         }
         let Some(src) = run.style.image.clone() else { continue };
+        if run.style.image_anchor.is_some() {
+            continue;
+        }
         let (w, h) = image_size_pt(run, box_w);
         flow.push(Item::Image { para: idx, src, x_pt: box_x + x, y_pt: baseline - h, width_pt: w, height_pt: h });
+    }
+    if k == 0 {
+        place_floating(flow, idx, para, top, false);
+    }
+}
+
+/// Place paragraph `idx`'s floating images (those `behind` the text, or
+/// the others) on the current page: each axis offset from, or aligned in,
+/// its frame (the page, the page inside its margins, or the paragraph's
+/// column and first line's `top`).
+fn place_floating(flow: &mut Flow, idx: usize, para: &Paragraph, top: f64, behind: bool) {
+    use crate::model::{AnchorAlign, AnchorFrame};
+    let g = flow.geometry;
+    for run in &para.runs {
+        let (Some(src), Some(anchor)) = (&run.style.image, run.style.image_anchor) else { continue };
+        if anchor.behind != behind {
+            continue;
+        }
+        let (w, h) = image_size_pt(run, g.width_pt);
+        let (left, width) = match anchor.h_from {
+            AnchorFrame::Page => (0.0, g.width_pt),
+            AnchorFrame::Margin => (g.margin_left_pt, flow.content_width()),
+            AnchorFrame::Text => (flow.column_x(), flow.column_width()),
+        };
+        let (upper, height) = match anchor.v_from {
+            AnchorFrame::Page => (0.0, g.height_pt),
+            AnchorFrame::Margin => (flow.top(), flow.foot() - flow.top()),
+            AnchorFrame::Text => (top, 0.0),
+        };
+        let place = |start: f64, room: f64, size: f64, offset: i64, align: Option<AnchorAlign>| match align {
+            Some(AnchorAlign::Start) => start,
+            Some(AnchorAlign::Center) => start + (room - size) / 2.0,
+            Some(AnchorAlign::End) => start + room - size,
+            None => start + offset as f64 / EMU_PER_PT,
+        };
+        let x = place(left, width, w, anchor.x_emu, anchor.h_align);
+        // Kept on the page: Word moves a picture that would hang off it.
+        let y = place(upper, height, h, anchor.y_emu, anchor.v_align).clamp(0.0, (g.height_pt - h).max(0.0));
+        flow.push(Item::Image { para: idx, src: src.clone(), x_pt: x, y_pt: y, width_pt: w, height_pt: h });
     }
 }
 
@@ -1360,7 +1417,7 @@ impl Shaper for MonoShaper {
             .flat_map(|r| -> Vec<(char, f64, f64)> {
                 let s = Self::size(req, Some(r));
                 if r.style.image.is_some() {
-                    let (w, h) = image_size_pt(r, req.width_pt);
+                    let (w, h) = inline_size_pt(r, req.width_pt);
                     vec![(OBJECT, w, h)]
                 } else if let Some(n) = r.style.footnote {
                     let digits = (n + 1).to_string().len() as f64;
