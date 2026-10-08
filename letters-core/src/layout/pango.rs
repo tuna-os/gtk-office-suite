@@ -144,7 +144,7 @@ impl PangoShaper {
                     let (_, logical) = label.extents();
                     pango::Rectangle::new(0, 0, logical.width(), 0)
                 } else {
-                    let (w, h) = if run.style.image.is_some() { super::image_size_pt(run, req.width_pt) } else { (0.0, 0.0) };
+                    let (w, h) = if run.style.image.is_some() { super::inline_size_pt(run, req.width_pt) } else { (0.0, 0.0) };
                     pango::Rectangle::new(0, -to_units(h), to_units(w), to_units(h))
                 };
                 let mut a: pango::Attribute = pango::AttrShape::new(&rect, &rect).into();

@@ -388,13 +388,16 @@ pub(crate) fn capture_span(buf: &gtk::TextBuffer, from: i32, to: i32) -> (Vec<Pa
             let extent: Option<(u64, u64)> = unsafe {
                 paintable.data::<Option<(u64, u64)>>("letters-image-extent").and_then(|p| *p.as_ref())
             };
+            let anchor: Option<letters_core::model::ImageAnchor> = unsafe {
+                paintable.data::<Option<letters_core::model::ImageAnchor>>("letters-image-anchor").and_then(|p| *p.as_ref())
+            };
             if let Some(src) = src {
                 if let Some(r) = current_run.take() {
                     current.runs.push(r);
                 }
                 current.runs.push(Run {
                     text: alt,
-                    style: RunStyle { image: Some(src), image_extent_emu: extent, revision: revision_at(&iter), comments: comments_at(&iter), ..Default::default() },
+                    style: RunStyle { image: Some(src), image_extent_emu: extent, image_anchor: anchor, revision: revision_at(&iter), comments: comments_at(&iter), ..Default::default() },
                 });
                 iter.forward_char();
                 continue;
@@ -1076,6 +1079,7 @@ fn render_paragraphs(buf: &gtk::TextBuffer, insert: &mut gtk::TextIter, paras: &
                             texture.set_data("letters-image-src", src.clone());
                             texture.set_data("letters-image-alt", run.text.clone());
                             texture.set_data("letters-image-extent", run.style.image_extent_emu);
+                            texture.set_data("letters-image-anchor", run.style.image_anchor);
                         }
                         let start = insert.offset();
                         buf.insert_paintable(&mut insert, &texture);
@@ -2052,13 +2056,19 @@ single");
         let mut d = Document::from_plain_text("see: ");
         d.paragraphs[0].runs.push(Run {
             text: "a dot".into(),
-            style: RunStyle { image: Some(img.to_string_lossy().into_owned()), ..Default::default() },
+            style: RunStyle {
+                image: Some(img.to_string_lossy().into_owned()),
+                // A floating image keeps its placement through the buffer.
+                image_anchor: Some(letters_core::model::ImageAnchor { y_emu: -12_700, ..Default::default() }),
+                ..Default::default()
+            },
         });
         let rt = round_trip(&buf, &d);
         let ir = rt.paragraphs[0].runs.iter().find(|r| r.style.image.is_some())
             .expect("image run lost through buffer");
         assert_eq!(ir.text, "a dot", "alt text lost");
         assert!(ir.style.image.as_deref().unwrap().ends_with("dot.png"));
+        assert_eq!(ir.style.image_anchor.map(|a| a.y_emu), Some(-12_700), "anchor lost");
 
         // lists: model kinds render as visible markers and capture back
         let buf = fresh();

@@ -214,6 +214,71 @@ fn picture_extent(run: &Run, bytes: &[u8]) -> (u64, u64) {
     (4 * 914_400, 3 * 914_400)
 }
 
+/// The automatic graphic style `name` placing a floating picture: each
+/// axis aligned in, or offset from (`svg:x`/`svg:y` on the frame), the
+/// page, the page inside its margins, or the paragraph; over the text or
+/// behind it, never wrapping it.
+fn floating_style(name: &str, a: &crate::model::ImageAnchor) -> String {
+    use crate::model::{AnchorAlign, AnchorFrame};
+    let rel = |f: AnchorFrame| match f {
+        AnchorFrame::Page => "page",
+        AnchorFrame::Margin => "page-content",
+        AnchorFrame::Text => "paragraph",
+    };
+    let pos = |align: Option<AnchorAlign>, names: [&'static str; 4]| match align {
+        None => names[0],
+        Some(AnchorAlign::Start) => names[1],
+        Some(AnchorAlign::Center) => names[2],
+        Some(AnchorAlign::End) => names[3],
+    };
+    format!(
+        "<style:style style:name=\"{name}\" style:family=\"graphic\"><style:graphic-properties style:wrap=\"run-through\" \
+         style:run-through=\"{}\" style:horizontal-pos=\"{}\" style:horizontal-rel=\"{}\" style:vertical-pos=\"{}\" \
+         style:vertical-rel=\"{}\"/></style:style>",
+        if a.behind { "background" } else { "foreground" },
+        pos(a.h_align, ["from-left", "left", "center", "right"]),
+        rel(a.h_from),
+        pos(a.v_align, ["from-top", "top", "middle", "bottom"]),
+        rel(a.v_from),
+    )
+}
+
+/// A graphic style's placement of a floating frame (its offsets are the
+/// frame's own `svg:x`/`svg:y`).
+fn graphic_placement(e: &quick_xml::events::BytesStart<'_>) -> crate::model::ImageAnchor {
+    use crate::model::{AnchorAlign, AnchorFrame};
+    let frame = |a: &str| match attr_val(e, a).as_deref() {
+        Some("page") => AnchorFrame::Page,
+        Some("page-content") => AnchorFrame::Margin,
+        _ => AnchorFrame::Text,
+    };
+    let align = |a: &str| match attr_val(e, a).as_deref() {
+        Some("left" | "top" | "inside") => Some(AnchorAlign::Start),
+        Some("center" | "middle") => Some(AnchorAlign::Center),
+        Some("right" | "bottom" | "outside") => Some(AnchorAlign::End),
+        _ => None,
+    };
+    crate::model::ImageAnchor {
+        h_from: frame("style:horizontal-rel"),
+        h_align: align("style:horizontal-pos"),
+        v_from: frame("style:vertical-rel"),
+        v_align: align("style:vertical-pos"),
+        behind: attr_val(e, "style:run-through").as_deref() == Some("background"),
+        ..Default::default()
+    }
+}
+
+/// A signed ODF length (a frame's `svg:x`, which may be negative) in EMU.
+fn offset_emu(s: &str) -> Option<i64> {
+    let s = s.trim();
+    let (sign, magnitude) = s.strip_prefix('-').map_or((1, s), |m| (-1, m));
+    let split = magnitude.find(|c: char| c.is_ascii_alphabetic())?;
+    if magnitude[..split].trim().parse::<f64>().ok()? == 0.0 {
+        return Some(0);
+    }
+    Some(sign * length_emu(magnitude)? as i64)
+}
+
 /// An ODF length ("2.5cm", "1in", "72pt", "10mm", "6pc", "96px") in EMU.
 fn length_emu(s: &str) -> Option<u64> {
     let s = s.trim();
@@ -581,8 +646,22 @@ fn content_xml(doc: &Document) -> String {
                         pictures_written += 1;
                         let (w, h) = picture_extent(r, &bytes);
                         let title = if r.text.trim().is_empty() { String::new() } else { format!("<svg:title>{}</svg:title>", esc(&r.text)) };
+                        // A floating picture is anchored to its paragraph
+                        // and placed by a graphic style of its own.
+                        let anchoring = match r.style.image_anchor {
+                            Some(a) => {
+                                let name = format!("fr{pictures_written}");
+                                auto.push_str(&floating_style(&name, &a));
+                                format!(
+                                    "draw:style-name=\"{name}\" text:anchor-type=\"paragraph\" svg:x=\"{:.6}in\" svg:y=\"{:.6}in\"",
+                                    a.x_emu as f64 / EMU_PER_INCH,
+                                    a.y_emu as f64 / EMU_PER_INCH,
+                                )
+                            }
+                            None => "text:anchor-type=\"as-char\"".to_string(),
+                        };
                         inner.push_str(&format!(
-                            "<draw:frame draw:name=\"Picture {pictures_written}\" text:anchor-type=\"as-char\" \
+                            "<draw:frame draw:name=\"Picture {pictures_written}\" {anchoring} \
                              svg:width=\"{:.6}in\" svg:height=\"{:.6}in\">\
                              <draw:image xlink:href=\"{name}\" xlink:type=\"simple\" xlink:show=\"embed\" xlink:actuate=\"onLoad\"/>\
                              {title}</draw:frame>",
@@ -1007,6 +1086,8 @@ struct AutoStyles {
     row: std::collections::HashMap<String, crate::model::RowHeight>,
     /// A table-cell style's background colour, six hex digits.
     cell_fill: std::collections::HashMap<String, String>,
+    /// A graphic style's placement of a floating frame.
+    graphic: std::collections::HashMap<String, crate::model::ImageAnchor>,
 }
 
 /// Paragraph-level values read off one automatic style. Lengths are points.
@@ -1076,7 +1157,7 @@ fn list_style_kinds(xml: &str) -> std::collections::HashMap<String, Vec<ListKind
 }
 
 fn parse_auto_styles(xml: &str) -> AutoStyles {
-    let mut out = AutoStyles { text: Default::default(), para: Default::default(), para_parent: Default::default(), text_parent: Default::default(), para_text: Default::default(), column: Default::default(), row: Default::default(), cell_fill: Default::default() };
+    let mut out = AutoStyles { text: Default::default(), para: Default::default(), para_parent: Default::default(), text_parent: Default::default(), para_text: Default::default(), column: Default::default(), row: Default::default(), cell_fill: Default::default(), graphic: Default::default() };
     let mut reader = Reader::from_str(xml);
     let mut cur_name: Option<String> = None;
     let mut cur_family = String::new();
@@ -1098,6 +1179,11 @@ fn parse_auto_styles(xml: &str) -> AutoStyles {
                     "style:table-column-properties" => {
                         if let (Some(name), Some(w)) = (cur_name.clone(), attr_val(&e, "style:column-width").and_then(|v| parse_length_pt(&v))) {
                             out.column.insert(name, w);
+                        }
+                    }
+                    "style:graphic-properties" if cur_family == "graphic" => {
+                        if let Some(name) = cur_name.clone() {
+                            out.graphic.insert(name, graphic_placement(&e));
                         }
                     }
                     "style:table-cell-properties" => {
@@ -1389,6 +1475,8 @@ pub fn read(path: &str) -> Result<Document, String> {
 /// holding a picture frame).
 struct FrameReading {
     extent: Option<(u64, u64)>,
+    /// Where a frame not anchored as a character floats.
+    anchor: Option<crate::model::ImageAnchor>,
     href: Option<String>,
     alt: String,
     in_alt: bool,
@@ -1870,7 +1958,17 @@ fn read_parts(path: &str) -> Result<(Document, Vec<String>), String> {
                     frame_depth += 1;
                     if frame.is_none() && para.is_some() && note.is_none() {
                         let size = |a: &str| attr_val(&e, a).as_deref().and_then(length_emu);
+                        let floating = attr_val(&e, "text:anchor-type").is_some_and(|t| matches!(t.as_str(), "paragraph" | "char" | "page"));
+                        let anchor = floating.then(|| {
+                            let offset = |a: &str| attr_val(&e, a).as_deref().and_then(offset_emu).unwrap_or(0);
+                            crate::model::ImageAnchor {
+                                x_emu: offset("svg:x"),
+                                y_emu: offset("svg:y"),
+                                ..attr_val(&e, "draw:style-name").and_then(|n| auto.graphic.get(&n).copied()).unwrap_or_default()
+                            }
+                        });
                         frame = Some(FrameReading {
+                            anchor,
                             extent: size("svg:width").zip(size("svg:height")),
                             href: None,
                             alt: String::new(),
@@ -2157,6 +2255,7 @@ fn read_parts(path: &str) -> Result<(Document, Vec<String>), String> {
                                 style: RunStyle {
                                     image: Some(path.to_string_lossy().into_owned()),
                                     image_extent_emu: f.extent,
+                                    image_anchor: f.anchor,
                                     ..Default::default()
                                 },
                             });
@@ -2505,6 +2604,38 @@ mod tests {
         let first: Vec<&str> = rt.paragraphs[0].runs.iter().map(|r| if r.style.image.is_some() { "[pic]" } else { r.text.as_str() }).collect();
         assert_eq!(first, ["before ", "[pic]", " after"], "the picture stays where it is in the line");
         assert!(opaque.is_empty(), "a picture we read is not an opaque part: {:?}", opaque.part_names().collect::<Vec<_>>());
+    }
+
+    /// A floating picture is a frame anchored to its paragraph, placed by
+    /// a graphic style of its own, and reads back placed the same.
+    #[test]
+    fn a_floating_picture_round_trips_its_placement() {
+        use crate::model::{AnchorAlign, AnchorFrame, ImageAnchor};
+        let dir = tempfile::tempdir().unwrap();
+        let src = dir.path().join("red.png");
+        std::fs::write(&src, PNG).unwrap();
+        let placements = [
+            ImageAnchor { h_from: AnchorFrame::Margin, h_align: Some(AnchorAlign::End), v_from: AnchorFrame::Text, y_emu: -660_400, ..Default::default() },
+            ImageAnchor { h_from: AnchorFrame::Page, x_emu: 914_400, v_from: AnchorFrame::Page, v_align: Some(AnchorAlign::Center), behind: true, ..Default::default() },
+        ];
+        let mut d = Document::from_plain_text("");
+        d.paragraphs = placements
+            .iter()
+            .map(|a| Paragraph {
+                style: ParaStyle::default(),
+                runs: vec![Run::plain("text "), Run {
+                    text: "logo".into(),
+                    style: RunStyle { image: Some(src.to_string_lossy().into_owned()), image_extent_emu: Some((914_400, 457_200)), image_anchor: Some(*a), ..Default::default() },
+                }],
+            })
+            .collect();
+        let out = dir.path().join("float.odt");
+        write(&d, &out).unwrap();
+        let rt = read(out.to_str().unwrap()).unwrap();
+        let read: Vec<Option<ImageAnchor>> = rt.paragraphs.iter().flat_map(|p| &p.runs).filter(|r| r.style.image.is_some()).map(|r| r.style.image_anchor).collect();
+        assert_eq!(read, placements.map(Some));
+        assert_eq!(offset_emu("-1.5cm"), Some(-540_000));
+        assert_eq!(offset_emu("0in"), Some(0));
     }
 
     /// Tables cross as tables (#1296): every cell in its grid position, an

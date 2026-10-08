@@ -392,6 +392,7 @@ fn with_part(package: &[u8], name: &str, f: impl Fn(&str) -> String) -> Result<V
 fn read_opened(path: &str, doc: rdocx::Document) -> Result<Document, String> {
     THEME.with(|t| *t.borrow_mut() = theme_fonts(path));
     RESTARTED.with(|r| r.borrow_mut().clear());
+    ANCHORS.with(|a| *a.borrow_mut() = anchor_placements(path));
     STYLE_FONTS.with(|s| *s.borrow_mut() = style_fonts(path));
 
     // Paragraph properties rdocx cannot hand back: strict-spelled indents
@@ -811,6 +812,9 @@ pub fn write(doc: &Document, path: impl AsRef<std::path::Path>) -> Result<(), St
     let mut out = rdocx::Document::new();
     // Smart chips, written as sentinels and made content controls below.
     let mut chips: Vec<(crate::chips::Chip, String)> = Vec::new();
+    // Floating pictures, written inline and anchored afterwards: their
+    // image relationship, alt text and placement.
+    let mut floating: Vec<(String, String, crate::model::ImageAnchor)> = Vec::new();
     // Tracked changes, written as bracketed text and made w:ins/w:del below.
     let mut revisions: Vec<crate::model::Revision> = Vec::new();
     let paras = &doc.paragraphs;
@@ -1094,6 +1098,16 @@ pub fn write(doc: &Document, path: impl AsRef<std::path::Path>) -> Result<(), St
                             Some((w, h)) => (rdocx::Length::emu(w as i64), rdocx::Length::emu(h as i64)),
                             None => (rdocx::Length::inches(4.0), rdocx::Length::inches(3.0)),
                         };
+                        // A floating picture stays in its paragraph, where
+                        // its anchor is: written inline there, and made a
+                        // `wp:anchor` once the part is written (docx_anchors).
+                        if let Some(anchor) = run.style.image_anchor {
+                            let rel = out.embed_image(&bytes, &name);
+                            let mut p = out.last_paragraph_mut().expect("paragraph");
+                            p.add_run("").add_picture(&rel, w, h);
+                            floating.push((rel, run.text.clone(), anchor));
+                            continue;
+                        }
                         let mut pic = out.add_picture(&bytes, &name, w, h);
                         pic = pic.style("Figure");
                         let _ = pic;
@@ -1190,12 +1204,13 @@ pub fn write(doc: &Document, path: impl AsRef<std::path::Path>) -> Result<(), St
     let bytes = with_letters_styles(&bytes, &doc.base_font, &doc.heading_styles)
         .map_err(|e| format!("Cannot save {}: {}", path.as_ref().display(), e))?;
     let tabbed = paras.iter().flat_map(|p| &p.runs).any(|r| r.text.contains('\t'));
-    let bytes = if chips.is_empty() && revisions.is_empty() && doc.comments.is_empty() && !has_toc && !tabbed && !has_covered {
+    let bytes = if chips.is_empty() && revisions.is_empty() && doc.comments.is_empty() && !has_toc && !tabbed && !has_covered && floating.is_empty() {
         bytes
     } else {
         with_part(&bytes, "word/document.xml", |xml| {
             let xml = if tabbed { tabs_as_elements(xml) } else { xml.to_string() };
             let xml = if has_covered { without_covered_cells(&xml) } else { xml };
+            let xml = if floating.is_empty() { xml } else { crate::docx_anchors::float(&xml, &floating) };
             let xml = crate::docx_revisions::wrap(&crate::docx_chips::wrap(&xml, &chips), &revisions);
             let xml = crate::docx_comments::wrap(&xml, &doc.comments);
             if has_toc { crate::docx_toc::wrap(&xml) } else { xml }
@@ -1599,8 +1614,18 @@ fn map_paragraph(doc: &rdocx::Document, p: &rdocx::ParagraphRef<'_>, table_style
     for (idx, r) in p.runs().enumerate() {
         // Inline images: extract bytes to a cache file so the model's
         // image path is always locally readable.
-        if let Some((rel_id, alt)) = r.inline_image() {
-            if let Some(bytes) = doc.image_data(rel_id) {
+        // A picture, inline or floating: a floating one is placed where
+        // its anchor says (`docx_anchors`), the next placement of its image.
+        let picture = r.items().into_iter().find_map(|item| match item {
+            rdocx::RunItemRef::Drawing(d) if d.relationship_kind() == Some(rdocx::DrawingRelationshipKind::Embedded) => {
+                let extent = d.width().zip(d.height()).map(|(w, h)| (w.to_emu().max(0) as u64, h.to_emu().max(0) as u64));
+                Some((d.relationship_id()?.to_string(), d.description().map(str::to_string), extent, d.is_anchor()))
+            }
+            rdocx::RunItemRef::UnsupportedXml(raw) => std::str::from_utf8(raw).ok().and_then(crate::docx_anchors::raw_picture),
+            _ => None,
+        });
+        if let Some((rel_id, alt, extent, anchored)) = picture {
+            if let Some(bytes) = doc.image_data(&rel_id) {
                 // gh-268: the previous code wrote to a predictable
                 // /tmp/letters-images/<content-hash>.png via fs::write, which
                 // follows a pre-created symlink — a local user could point the
@@ -1615,17 +1640,16 @@ fn map_paragraph(doc: &rdocx::Document, p: &rdocx::ParagraphRef<'_>, table_style
                 };
                 // The displayed size is the drawing's extent, not the
                 // image's pixels: a 200px picture placed 2in wide is 2in.
-                let extent = r.items().into_iter().find_map(|item| match item {
-                    rdocx::RunItemRef::Drawing(d) => d.width().zip(d.height()),
-                    _ => None,
-                });
+                let image_anchor = anchored
+                    .then(|| ANCHORS.with(|a| a.borrow_mut().get_mut(&rel_id).and_then(|q| q.pop_front())))
+                    .flatten();
                 runs.push(Run {
-                    text: alt.unwrap_or("").to_string(),
+                    text: alt.unwrap_or_default(),
                     style: RunStyle {
                         image: Some(path.to_string_lossy().into_owned()),
                         image_extent_emu: extent
-                            .map(|(w, h)| (w.to_emu().max(0) as u64, h.to_emu().max(0) as u64))
                             .filter(|(w, h)| *w > 0 && *h > 0),
+                        image_anchor,
                         ..Default::default()
                     },
                 });
@@ -1689,6 +1713,7 @@ fn map_paragraph(doc: &rdocx::Document, p: &rdocx::ParagraphRef<'_>, table_style
                 link: link_for(idx),
                 image: None,
                 image_extent_emu: None,
+                image_anchor: None,
                 footnote: None,
                 html: false,
                 chip: None,
@@ -1922,6 +1947,22 @@ fn style_fonts(path: &str) -> StyleFonts {
         Ok(out)
     }
     scan(path).unwrap_or_default()
+}
+
+/// Where the document's floating pictures sit (`docx_anchors`).
+fn anchor_placements(path: &str) -> crate::docx_anchors::Placements {
+    std::fs::File::open(path)
+        .ok()
+        .and_then(|f| zip::ZipArchive::new(f).ok())
+        .and_then(|mut zip| part_text(&mut zip, "word/document.xml"))
+        .map(|xml| crate::docx_anchors::placements(&xml))
+        .unwrap_or_default()
+}
+
+thread_local! {
+    /// The floating pictures' placements not yet given to an image run of
+    /// the document being read, per image relationship, in document order.
+    static ANCHORS: std::cell::RefCell<crate::docx_anchors::Placements> = Default::default();
 }
 
 thread_local! {

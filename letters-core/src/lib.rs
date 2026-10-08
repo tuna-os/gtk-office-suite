@@ -6,6 +6,7 @@
 pub mod chips;
 pub mod comments;
 pub mod docx;
+mod docx_anchors;
 mod docx_chips;
 mod docx_comments;
 mod docx_toc;
