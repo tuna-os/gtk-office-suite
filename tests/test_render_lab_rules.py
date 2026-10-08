@@ -177,33 +177,57 @@ class OpeningSheetPageTest(unittest.TestCase):
     first. The opening sheet is scored against the printed page that shows
     it, not against page 1 (#1512)."""
 
-    def score(self, app, words_by_page):
+    # Our opening sheet's words, and each printed page's.
+    OURS = ["total", "2024", "2025", "north", "south"]
+    PAGES = {1: ["cover", "contents"], 2: ["notes", "2024"], 3: ["total", "2024", "2025", "north", "east"]}
+
+    def score(self, app, words_by_page, pages=None):
         import tempfile
+        from collections import Counter
         from unittest import mock
 
         import compare
 
+        pages = pages if pages is not None else self.PAGES
         d = tempfile.mkdtemp()
         for n in words_by_page:
             open(os.path.join(d, f"lo-{n}.png"), "w").close()
         open(os.path.join(d, "A-1.png"), "w").close()
+        scored = []
 
         def page(app, lo, ours, ref_words):
             n = compare.page_no(lo)
+            scored.append(n)
             return {"ink": 1.0, "words": words_by_page[n], "lost_lines": 0, "disp_pt": 0.0, "colors": 1.0, "ssim": 0.9, "ref_words": 10}
+
+        def bag(path):
+            name = os.path.basename(path)
+            return Counter(self.OURS if name.startswith("A-") else pages[compare.page_no(path)])
 
         # `align` hands back the paths: `ref.size` is all score_fixture
         # asks of a picture.
         with mock.patch.object(compare, "align", lambda app, lo, ours: (_Sized(lo), ours, 1.0)), mock.patch.object(
             compare, "ocr_words", lambda ref, tables: []
-        ), mock.patch.object(compare, "compare_page", page):
-            return compare.score_fixture(app, d, "A", {})
+        ), mock.patch.object(compare, "compare_page", page), mock.patch.object(compare, "page_bag", bag):
+            m = compare.score_fixture(app, d, "A", {})
+        m["scored"] = scored
+        return m
 
     def test_the_sheet_is_scored_against_the_page_that_shows_it(self):
         m = self.score("tables", {1: 0.1, 2: 0.2, 3: 0.95})
         self.assertEqual(m["lo_page"], 3)
         self.assertAlmostEqual(m["words"], 0.95)
         self.assertEqual(m["verdict"], "green")
+
+    def test_only_the_chosen_page_is_scored_in_full(self):
+        # Scoring every candidate in full ran the Tables job past its
+        # 90-minute timeout; the pick is a quick read per page.
+        m = self.score("tables", {1: 0.1, 2: 0.2, 3: 0.95})
+        self.assertEqual(m["scored"], [3])
+
+    def test_a_tie_or_no_shared_words_keeps_the_first_page(self):
+        m = self.score("tables", {1: 0.1, 2: 0.2, 3: 0.95}, pages={1: ["a"], 2: ["b"], 3: ["c"]})
+        self.assertEqual(m["lo_page"], 1)
 
     def test_a_document_is_still_scored_page_by_page(self):
         m = self.score("letters", {1: 0.1, 2: 0.2, 3: 0.95})

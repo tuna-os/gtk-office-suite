@@ -50,6 +50,7 @@ import re
 import shutil
 import subprocess
 import sys
+from collections import Counter
 
 import numpy as np
 from PIL import Image, ImageOps
@@ -633,6 +634,27 @@ def mean(vals):
     return float(np.mean(vals)) if vals else None
 
 
+def page_bag(path):
+    """A page's words as a multiset, from one quick OCR pass: enough to tell
+    which page shows a sheet, not to score it (None without tesseract)."""
+    if not shutil.which("tesseract"):
+        return None
+    return Counter(text for text, *_ in ocr_pass(load(path).convert("L"), 2, "6"))
+
+
+def pick_sheet_page(lo_pages, ours_path):
+    """The printed page, among `lo_pages`, that shares the most words with
+    our opening sheet; the first on a tie or without OCR. Picking costs one
+    quick read per page: scoring every candidate in full (two OCR scales and
+    a closer look at each unmatched word) ran the Tables job past its
+    timeout."""
+    ours = page_bag(ours_path)
+    if not ours:
+        return lo_pages[0]
+    shared = [sum((ours & (page_bag(lo) or Counter())).values()) for lo in lo_pages]
+    return lo_pages[shared.index(max(shared))]
+
+
 def score_fixture(app, d, tier, ref_words_cache):
     lo_pages = sorted(glob.glob(os.path.join(d, "lo-[0-9]*.png")), key=page_no)
     ours_pages = sorted(glob.glob(os.path.join(d, f"{tier}-[0-9]*.png")), key=page_no)
@@ -654,18 +676,9 @@ def score_fixture(app, d, tier, ref_words_cache):
         # (#1512). Score the opening sheet against the printed page that
         # shows it: the one, among the first pages, that shares the most
         # words with it (then the most structure).
-        best = None
-        for lo in lo_pages[:SHEET_CANDIDATES]:
-            ref, ours, scale = align(app, lo, ours_pages[0])
-            key = (lo, ref.size)
-            if key not in ref_words_cache:
-                ref_words_cache[key] = ocr_words(ref, True)
-            got = dict(compare_page(app, ref, ours, ref_words_cache[key]), scale=scale)
-            rank = (got.get("words") or 0.0, got.get("ssim") or 0.0)
-            if best is None or rank > best[0]:
-                best = (rank, lo, got)
-        lo_page = page_no(best[1])
-        lo_pages = [best[1]]
+        best = pick_sheet_page(lo_pages[:SHEET_CANDIDATES], ours_pages[0])
+        lo_page = page_no(best)
+        lo_pages = [best]
     if partial:
         lo_pages = lo_pages[: len(ours_pages)]
     per_page = []
