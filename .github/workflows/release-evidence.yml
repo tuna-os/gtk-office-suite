@@ -1,0 +1,135 @@
+name: Release evidence
+
+# The evidence release.md asks every release to publish (#1209): the
+# machine-readable capability matrix, JUnit, independent-reader results,
+# visual and accessibility evidence and performance measurements, all
+# produced at the released revision and attached to its release page as
+# one archive with a manifest (tools/release/evidence.py) naming the
+# revision and every file's SHA-256.
+#
+# It runs when a release is published, like the overview videos, and on
+# demand for a tag, which builds the bundle as an artifact and attaches it
+# to that tag's release only when asked.
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Release tag to gather evidence for'
+        required: true
+      attach:
+        description: 'Attach the bundle to that tag''s release (otherwise an artifact only)'
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+jobs:
+  # The capability ledger checked against the revision, and its JUnit.
+  tests:
+    uses: ./.github/workflows/release-revision.yml
+    with:
+      revision: ${{ github.event.release.tag_name || inputs.tag }}
+
+  # Every app in four states, light/dark/high contrast, scales 1 and 2.
+  visual:
+    uses: ./.github/workflows/visual-matrix.yml
+    permissions:
+      contents: read
+      packages: write   # the matrix's container image, as when it runs nightly
+
+  # The independent readers, the scorecard drawn from them and the
+  # performance budgets, at the revision.
+  readers:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ github.event.release.tag_name || inputs.tag }}
+      - name: Install GTK4 + libadwaita, LibreOffice and poppler
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq libgtk-4-dev libadwaita-1-dev libreoffice-writer \
+            libreoffice-calc libreoffice-impress poppler-utils
+      - uses: dtolnay/rust-toolchain@89b12181fb390509a0842a86cc55eeb8eb928c1d # stable
+        with:
+          toolchain: stable
+      - uses: taiki-e/install-action@bb0282cdd6e41599bc8dfa5fc712ebe9e27cfd8c # nextest
+        with:
+          tool: nextest
+      - name: LibreOffice round trips and the LibreOffice-authored corpus
+        env:
+          REQUIRE_SOFFICE: "1"
+        run: |
+          cargo nextest run --profile ci --no-fail-fast \
+            -p letters-core -p tables-core -p decks-core \
+            -E 'binary(soffice_oracle) | binary(lo_parity)'
+          mkdir -p evidence/independent-readers
+          cp target/nextest/ci/junit.xml evidence/independent-readers/junit.xml
+      - name: Conformance scorecard
+        if: always()
+        env:
+          REQUIRE_SOFFICE: "1"
+        run: |
+          python3 conformance/scorecard.py
+          mkdir -p evidence/capabilities
+          cp conformance/capabilities.json conformance/scorecard-latest.md evidence/capabilities/
+      - name: Performance budgets
+        if: always()
+        run: |
+          mkdir -p evidence/performance
+          for crate in letters-core tables-core decks-core; do
+            cargo test --release -p "$crate" --test performance_budgets -- --nocapture \
+              2>&1 | tee "evidence/performance/$crate.txt"
+          done
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        if: always()
+        with:
+          name: release-readers-evidence
+          path: evidence
+          retention-days: 90
+
+  publish:
+    needs: [tests, visual, readers]
+    if: always()
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write   # attach the bundle to the release
+    env:
+      TAG: ${{ github.event.release.tag_name || inputs.tag }}
+    steps:
+      # This workflow's own commit, for evidence.py, with the tags, for the
+      # revision the bundle names.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          fetch-depth: 0
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
+        with:
+          path: artifacts
+      - name: Assemble the bundle
+        run: |
+          mkdir -p gathered/junit gathered/visual
+          cp -r artifacts/release-readers-evidence/. gathered/
+          cp -r artifacts/release-critical-evidence/. gathered/junit/ 2>/dev/null || true
+          cp -r artifacts/visual-matrix/. gathered/visual/ 2>/dev/null || true
+          python3 tools/release/evidence.py "$(git rev-list -n 1 "$TAG")" "$TAG" gathered "evidence-$TAG" \
+            | tee -a "$GITHUB_STEP_SUMMARY"
+          tar czf "evidence-$TAG.tar.gz" "evidence-$TAG"
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: release-evidence
+          path: evidence-${{ env.TAG }}.tar.gz
+          retention-days: 90
+      - name: Attach it to the release
+        if: github.event_name == 'release' || inputs.attach
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release upload "$TAG" "evidence-$TAG.tar.gz" --clobber
+          else
+            echo "No release for $TAG: the bundle is the release-evidence artifact only." >> "$GITHUB_STEP_SUMMARY"
+          fi
