@@ -941,6 +941,10 @@ impl LettersWindow {
                             connect_word_count(&buf, &wc);
                             connect_style_readout(&buf, &sl);
                             tv.set_selected_page(&page);
+                            // Opened from the dialog is opened all the same:
+                            // only the command line's and file manager's
+                            // opens (open_path) reached the recent files.
+                            suite_common::push_recent_file(&s, &path_str);
                         }
                     },
                 );
