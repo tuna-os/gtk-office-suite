@@ -2,7 +2,7 @@
 // line, so an A4 page with 1in margins holds 75 chars × 46 lines.
 
 use super::*;
-use crate::model::{Alignment, ParaStyle, TableCell};
+use crate::model::{Alignment, ParaStyle, RowHeight, TableCell};
 
 const LINE: f64 = 15.0;
 const LINES_PER_PAGE: usize = 46;
@@ -232,6 +232,34 @@ fn a_table_takes_the_files_column_widths() {
     d.table_columns.insert(table, vec![36.0, 200.0, 100.0]);
     let got = cells_x_w(&d);
     assert!(got.iter().all(|(_, w)| (w - box_w / 2.0).abs() < 1e-9), "three widths for two columns: equal columns, {got:?}");
+}
+
+/// A row with a height from the file is at least that tall (Word's
+/// `atLeast`), or exactly that tall (`exact`) whatever it holds; rows
+/// without one size to their content.
+#[test]
+fn a_table_row_takes_the_files_height() {
+    let heights = |d: &Document| -> Vec<f64> {
+        lay(d).pages[0]
+            .items
+            .iter()
+            .filter_map(|i| match i { Item::Cell { col: 0, height_pt, .. } => Some(*height_pt), _ => None })
+            .collect()
+    };
+    let mut d = doc_of(1, "after");
+    let table = d.insert_table_at(0, 3, 1);
+    let one_line = LINE + CELL_RULE_PT;
+    d.table_rows.insert(table, vec![Some(RowHeight { pt: 40.0, exact: false }), None, Some(RowHeight { pt: 5.0, exact: true })]);
+    assert_eq!(heights(&d), [40.0, one_line, 5.0]);
+    // A minimum below the content's height leaves the row its content's.
+    d.table_rows.insert(table, vec![Some(RowHeight { pt: 5.0, exact: false })]);
+    assert_eq!(heights(&d), [one_line; 3]);
+    // Inserting and deleting rows moves the heights with their rows.
+    d.table_rows.insert(table, vec![Some(RowHeight { pt: 40.0, exact: false }), None, Some(RowHeight { pt: 30.0, exact: false })]);
+    assert!(d.insert_table_rows(table, 1, 1));
+    assert_eq!(heights(&d), [40.0, one_line, one_line, 30.0]);
+    assert!(d.delete_table_rows(table, 0, 1));
+    assert_eq!(heights(&d), [one_line, one_line, 30.0]);
 }
 
 #[test]

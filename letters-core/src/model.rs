@@ -346,6 +346,20 @@ pub struct Document {
     /// has changed since, is drawn with equal columns.
     #[serde(default, skip_serializing_if = "std::collections::BTreeMap::is_empty")]
     pub table_columns: std::collections::BTreeMap<u32, Vec<f64>>,
+    /// Each table's row heights, by table id and then row (`None` for a
+    /// row that sizes to its content), as the file gave them.
+    #[serde(default, skip_serializing_if = "std::collections::BTreeMap::is_empty")]
+    pub table_rows: std::collections::BTreeMap<u32, Vec<Option<RowHeight>>>,
+}
+
+/// A table row's height from the file: at least `pt` (Word's `atLeast`,
+/// LibreOffice's minimum row height), or exactly `pt` (`exact`, a fixed
+/// row height) with taller content clipped.
+#[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
+pub struct RowHeight {
+    pub pt: f64,
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub exact: bool,
 }
 
 /// A document's body font: a docx's docDefaults and Normal style, an ODT's
@@ -424,6 +438,7 @@ impl Document {
             heading_styles: Vec::new(),
             comments: Vec::new(),
             table_columns: Default::default(),
+            table_rows: Default::default(),
         }
     }
 
@@ -691,6 +706,7 @@ impl Document {
         let table = self.next_table_id();
         // A new table has no file widths, even under the id of a deleted one.
         self.table_columns.remove(&table);
+        self.table_rows.remove(&table);
         if rows == 0 || cols == 0 {
             return table;
         }
@@ -753,6 +769,10 @@ impl Document {
             runs: Vec::new(),
         }));
         self.paragraphs.extend(new_cells);
+        if let Some(heights) = self.table_rows.get_mut(&table) {
+            let at = (at as usize).min(heights.len());
+            heights.splice(at..at, std::iter::repeat_n(None, count as usize));
+        }
         self.reflow_table(table);
         true
     }
@@ -784,6 +804,10 @@ impl Document {
             if cell.row >= end { cell.row -= count; p.style.table_cell = Some(cell); }
             true
         });
+        if let Some(heights) = self.table_rows.get_mut(&table) {
+            let len = heights.len();
+            heights.drain((at as usize).min(len)..(end as usize).min(len));
+        }
         // A document that was nothing but this table is now empty, and an
         // empty document has nowhere to put the caret.
         self.ensure_non_empty();

@@ -886,6 +886,12 @@ fn layout_table(flow: &mut Flow, doc: &Document, range: std::ops::Range<usize>, 
             row_h = row_h.max(h + CELL_RULE_PT);
             row_cells.push((col, paras));
         }
+        // The file's row height: a minimum, or the height itself (taller
+        // content then runs past the row, as Word clips it).
+        match doc.table_rows.get(&first.table).and_then(|r| r.get(row as usize).copied().flatten()) {
+            Some(h) if h.pt.is_finite() && h.pt > 0.0 => row_h = if h.exact { h.pt } else { row_h.max(h.pt) },
+            _ => {}
+        }
         if flow.y + row_h > flow.bottom() && !flow.column_is_empty() {
             flow.next_column();
         }

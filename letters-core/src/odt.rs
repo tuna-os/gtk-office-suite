@@ -241,10 +241,17 @@ struct OpenTable {
     col: u32,
     /// Whether the current cell has a paragraph yet (ODF wants one).
     filled: bool,
+    /// Each row's style attribute (empty for a row without a height).
+    row_styles: Vec<String>,
 }
 
 impl OpenTable {
     const CELL: &'static str = "<table:table-cell office:value-type=\"string\">";
+
+    fn open_row(&self, body: &mut String) {
+        let style = self.row_styles.get(self.row as usize).map_or("", String::as_str);
+        body.push_str(&format!("<table:table-row{style}>"));
+    }
 
     fn close_cell(&mut self, body: &mut String) {
         if !self.filled {
@@ -267,7 +274,7 @@ impl OpenTable {
                 if self.row == self.rows {
                     return;
                 }
-                body.push_str("<table:table-row>");
+                self.open_row(body);
             }
             body.push_str(Self::CELL);
             self.filled = false;
@@ -435,11 +442,27 @@ fn content_xml(doc: &Document) -> String {
                         }
                         None => format!("<table:table-column table:number-columns-repeated=\"{cols}\"/>"),
                     };
-                    body.push_str(&format!(
-                        "<table:table table:name=\"Table{tables_written}\"{table_style}>{columns}<table:table-row>{}",
-                        OpenTable::CELL
-                    ));
-                    table = Some(OpenTable { id: c.table, rows, cols, row: 0, col: 0, filled: false });
+                    // The file's row heights, as row styles: a minimum
+                    // height, or a fixed one.
+                    let row_styles: Vec<String> = (0..rows as usize)
+                        .map(|r| match doc.table_rows.get(&c.table).and_then(|h| h.get(r).copied().flatten()) {
+                            Some(h) => {
+                                let name = format!("Table{tables_written}.R{r}");
+                                let prop = if h.exact { "style:row-height" } else { "style:min-row-height" };
+                                auto.push_str(&format!(
+                                    "<style:style style:name=\"{name}\" style:family=\"table-row\"><style:table-row-properties {prop}=\"{:.2}pt\"/></style:style>",
+                                    h.pt
+                                ));
+                                format!(" table:style-name=\"{name}\"")
+                            }
+                            None => String::new(),
+                        })
+                        .collect();
+                    body.push_str(&format!("<table:table table:name=\"Table{tables_written}\"{table_style}>{columns}"));
+                    let t = OpenTable { id: c.table, rows, cols, row: 0, col: 0, filled: false, row_styles };
+                    t.open_row(&mut body);
+                    body.push_str(OpenTable::CELL);
+                    table = Some(t);
                 }
                 if let Some(t) = table.as_mut() {
                     t.move_to(&mut body, c.row, c.col);
@@ -939,6 +962,8 @@ struct AutoStyles {
     para_text: std::collections::HashMap<String, RunStyle>,
     /// A table-column style's width, in points.
     column: std::collections::HashMap<String, f64>,
+    /// A table-row style's height.
+    row: std::collections::HashMap<String, crate::model::RowHeight>,
 }
 
 /// Paragraph-level values read off one automatic style. Lengths are points.
@@ -994,7 +1019,7 @@ fn list_style_kinds(xml: &str) -> std::collections::HashMap<String, Vec<ListKind
 }
 
 fn parse_auto_styles(xml: &str) -> AutoStyles {
-    let mut out = AutoStyles { text: Default::default(), para: Default::default(), para_parent: Default::default(), text_parent: Default::default(), para_text: Default::default(), column: Default::default() };
+    let mut out = AutoStyles { text: Default::default(), para: Default::default(), para_parent: Default::default(), text_parent: Default::default(), para_text: Default::default(), column: Default::default(), row: Default::default() };
     let mut reader = Reader::from_str(xml);
     let mut cur_name: Option<String> = None;
     let mut cur_family = String::new();
@@ -1016,6 +1041,20 @@ fn parse_auto_styles(xml: &str) -> AutoStyles {
                     "style:table-column-properties" => {
                         if let (Some(name), Some(w)) = (cur_name.clone(), attr_val(&e, "style:column-width").and_then(|v| parse_length_pt(&v))) {
                             out.column.insert(name, w);
+                        }
+                    }
+                    // A minimum row height, or a fixed one (a height
+                    // LibreOffice marks optimal is only a minimum).
+                    "style:table-row-properties" => {
+                        let len = |a: &str| attr_val(&e, a).and_then(|v| parse_length_pt(&v)).filter(|h| *h > 0.0);
+                        let optimal = attr_val(&e, "style:use-optimal-row-height").as_deref() == Some("true");
+                        let height = match (len("style:min-row-height"), len("style:row-height")) {
+                            (Some(pt), _) => Some(crate::model::RowHeight { pt, exact: false }),
+                            (None, Some(pt)) => Some(crate::model::RowHeight { pt, exact: !optimal }),
+                            (None, None) => None,
+                        };
+                        if let (Some(name), Some(h)) = (cur_name.clone(), height) {
+                            out.row.insert(name, h);
                         }
                     }
                     "style:text-properties" => {
@@ -1365,7 +1404,7 @@ fn read_parts(path: &str) -> Result<(Document, Vec<String>), String> {
 
     // styles.xml's named styles, the parents of content.xml's automatic ones.
     let named = parse_auto_styles(&styles);
-    let mut doc = Document { paragraphs: Vec::new(), footnotes: Vec::new(), header: None, footer: None, page: None, base_font: read_base_font(&styles), heading_styles: read_heading_styles(&styles), comments: Vec::new(), table_columns: Default::default() };
+    let mut doc = Document { paragraphs: Vec::new(), footnotes: Vec::new(), header: None, footer: None, page: None, base_font: read_base_font(&styles), heading_styles: read_heading_styles(&styles), comments: Vec::new(), table_columns: Default::default(), table_rows: Default::default() };
     let mut reader = Reader::from_str(&content);
     let mut in_body = false;
     let mut para: Option<Paragraph> = None;
@@ -1453,6 +1492,7 @@ fn read_parts(path: &str) -> Result<(Document, Vec<String>), String> {
     let mut tables_read = 0u32;
     // Each outermost table's column widths; None once a column has none.
     let mut column_widths: std::collections::BTreeMap<u32, Option<Vec<f64>>> = Default::default();
+    let mut row_heights: std::collections::BTreeMap<u32, Vec<Option<crate::model::RowHeight>>> = Default::default();
     let cell_of = |t: &Option<(u32, i64, i64, usize, bool)>| {
         t.map(|(id, r, c, _, _)| crate::model::TableCell { table: id, row: r.max(0) as u32, col: c.max(0) as u32 })
     };
@@ -1639,6 +1679,11 @@ fn read_parts(path: &str) -> Result<(Document, Vec<String>), String> {
                     if let Some(t) = table.as_mut().filter(|t| t.3 == table_depth) {
                         t.1 += 1;
                         t.2 = -1;
+                        if let Some(h) = attr_val(&e, "table:style-name").and_then(|n| auto.row.get(&n).copied()) {
+                            let heights = row_heights.entry(t.0).or_default();
+                            heights.resize(t.1 as usize, None);
+                            heights.push(Some(h));
+                        }
                     }
                 }
                 "table:table-cell" | "table:covered-table-cell" => {
@@ -2125,6 +2170,7 @@ fn read_parts(path: &str) -> Result<(Document, Vec<String>), String> {
 
     doc.ensure_non_empty();
     doc.table_columns = column_widths.into_iter().filter_map(|(t, w)| Some((t, w.filter(|w| !w.is_empty())?))).collect();
+    doc.table_rows = row_heights;
     // A column count LibreOffice recorded on a section instead of on the
     // page layout. Only consulted when the page layout said nothing, so
     // an explicit page-wide count still wins.
@@ -2319,6 +2365,23 @@ mod tests {
         let mut d = Document::from_plain_text("after");
         d.insert_table_at(0, 1, 2);
         assert!(round_trip(&d).table_columns.is_empty());
+    }
+
+    /// A table's row heights survive a save and reopen, a minimum as a
+    /// minimum and a fixed height as fixed; rows without one stay without.
+    #[test]
+    fn table_row_heights_survive() {
+        use crate::model::RowHeight;
+        let mut d = Document::from_plain_text("after");
+        let table = d.insert_table_at(0, 3, 2);
+        let want = vec![Some(RowHeight { pt: 40.0, exact: false }), None, Some(RowHeight { pt: 18.5, exact: true })];
+        d.table_rows.insert(table, want.clone());
+        let rt = round_trip(&d);
+        let got: Vec<_> = rt.table_rows.values().cloned().collect();
+        assert_eq!(got, [want], "{:?}", rt.table_rows);
+        let mut d = Document::from_plain_text("after");
+        d.insert_table_at(0, 2, 2);
+        assert!(round_trip(&d).table_rows.is_empty());
     }
 
     /// Smart chips reopen as chips: a date is a fixed `text:date`, a link

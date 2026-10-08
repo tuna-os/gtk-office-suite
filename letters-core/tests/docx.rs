@@ -1315,6 +1315,23 @@ fn table_column_widths_survive() {
     assert!(widths[0].iter().zip([36.0, 400.0]).all(|(a, b)| (a - b).abs() < 0.1), "{widths:?}");
 }
 
+/// A table's row heights survive a save and reopen (`w:trHeight`), a
+/// minimum as `atLeast` and a fixed height as `exact`.
+#[test]
+fn table_row_heights_survive() {
+    use letters_core::RowHeight;
+    let mut d = Document::from_plain_text("after");
+    let table = d.insert_table_at(0, 3, 2);
+    let want = vec![Some(RowHeight { pt: 40.0, exact: false }), None, Some(RowHeight { pt: 18.5, exact: true })];
+    d.table_rows.insert(table, want.clone());
+    let rt = round_trip(&d);
+    let got: Vec<_> = rt.table_rows.values().cloned().collect();
+    assert_eq!(got, [want], "{:?}", rt.table_rows);
+    let mut d = Document::from_plain_text("after");
+    d.insert_table_at(0, 2, 2);
+    assert!(round_trip(&d).table_rows.is_empty());
+}
+
 /// A table stays where the document has it, between the paragraphs around
 /// it, and the paragraph OOXML needs after a table that meets another or
 /// ends the document comes and goes with the save: a round trip neither
