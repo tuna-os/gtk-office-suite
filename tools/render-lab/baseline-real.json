@@ -244,8 +244,8 @@
     "B": "red"
   },
   "tables/real-air-safety-course-application-form-dhasc-fsc-fla": {
-    "A": "amber",
-    "B": "amber"
+    "A": "red",
+    "B": "red"
   },
   "tables/real-all-reservoir-panel-engineers-contact-list": {
     "A": "red",
