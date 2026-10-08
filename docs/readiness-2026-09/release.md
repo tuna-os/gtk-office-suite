@@ -6,7 +6,14 @@ Depends on #436–#441, #354, #1217 (recovery), #1206 (interoperability), #313/#
 
 - [ ] Select a candidate commit and require all capability evidence to identify that exact commit and packaged dependency lock.
 - [ ] All P0 data-loss paths fixed; all admitted daily-driver journeys pass. Deferred features have explicit recorded scope and honest UI/docs.
-- [ ] Build/install/launch each Flatpak; test file-manager MIME activation, open/save portals, recent files, drag/drop and sandbox file access.
+- [x] Build/install/launch each Flatpak; test file-manager MIME activation, open/save portals, recent files, drag/drop and sandbox file access.
+      Tier C (`render-parity.yml` with `vm`, #1209) installs each app's Flatpak bundle into a clean GNOME VM and checks
+      it there (`tools/render-lab/vm/installed.sh`, judged by `tools/render-lab/installed_check.py`):
+      it is the default handler for its MIME types and opens a document through `xdg-open` (#1454); it saves to a
+      `~/Documents` file through the sandbox, the file reopens valid and nothing is left behind (#1455); the file is
+      in recent files (#1486); Save As and Open go through the GNOME file chooser portal (#1487); and a file dragged
+      from Nautilus onto the window opens (#1489). Run 37740903001 on `47041899`: every check true for Letters,
+      Tables and Decks.
 - [x] Test prior-release upgrade with settings, open documents and interrupted recovery checkpoints.
       Tier C ends with it (`tools/render-lab/vm/upgrade.sh`, judged by `upgrade_check.py`, #1209). The newest
       release is built from its tag, installed on a clean slate, and used: two settings changed, a document opened
