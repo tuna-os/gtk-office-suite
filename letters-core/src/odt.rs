@@ -1703,6 +1703,35 @@ fn inherited_spacing(name: &str, auto: &AutoStyles, named: &AutoStyles) -> (Opti
     (before, after, line)
 }
 
+/// How a paragraph style's text looks: its own text properties, then what
+/// it leaves unset from the named styles it is based on, as Writer draws a
+/// form's "Coloured Box Headline" (bold, 14pt, based on Normal). The base
+/// paragraph style (Standard, Word's Normal, or one based on nothing) is
+/// the document's base font (`read_base_font`), not its runs'.
+fn para_text_style(name: &str, auto: &AutoStyles, named: &AutoStyles) -> RunStyle {
+    let mut cur = auto.para_parent.get(name).or_else(|| named.para_parent.get(name)).cloned();
+    let base = cur.is_none() || matches!(name, "Standard" | "Normal");
+    let own = auto.para_text.get(name).or_else(|| named.para_text.get(name).filter(|_| !base));
+    let mut style = own.cloned().unwrap_or_default();
+    let mut depth = 0;
+    while let Some(n) = cur {
+        let parent = auto.para_parent.get(&n).or_else(|| named.para_parent.get(&n)).cloned();
+        if depth >= 8 || parent.is_none() || matches!(n.as_str(), "Standard" | "Normal") {
+            break;
+        }
+        if let Some(own) = auto.para_text.get(&n).or_else(|| named.para_text.get(&n)) {
+            style.bold |= own.bold;
+            style.italic |= own.italic;
+            style.font_size_hp = style.font_size_hp.or(own.font_size_hp);
+            style.color = style.color.clone().or_else(|| own.color.clone());
+            style.font_family = style.font_family.clone().or_else(|| own.font_family.clone());
+        }
+        cur = parent;
+        depth += 1;
+    }
+    style
+}
+
 fn read_heading_styles(styles: &str) -> Vec<RunStyle> {
     let defs = parse_auto_styles(styles);
     let names = heading_style_names(styles);
@@ -2235,7 +2264,14 @@ fn read_parts(path: &str) -> Result<(Document, Vec<String>), String> {
                     // The paragraph style's own text properties are how
                     // its text looks where no span says otherwise: a title
                     // written straight into a bold, 12pt paragraph.
-                    let text_base = attr_val(&e, "text:style-name").and_then(|n| auto.para_text.get(&n).cloned()).unwrap_or_default();
+                    let text_base = match attr_val(&e, "text:style-name") {
+                        // A heading looks as its level's style says
+                        // (`heading_styles`); only its own automatic
+                        // style's text properties are its runs'.
+                        Some(n) if para.as_ref().is_some_and(|p| p.style.heading.is_some()) => auto.para_text.get(&n).cloned().unwrap_or_default(),
+                        Some(n) => para_text_style(&n, &auto, &named),
+                        None => RunStyle::default(),
+                    };
                     span_stack.push(text_base);
                     paragraph_bases += 1;
                 }
@@ -3490,6 +3526,32 @@ mod tests {
         assert_eq!((named.color.as_deref(), named.bold), (Some("114f75"), true), "the named style and its parent");
         let auto = run("Deadline");
         assert_eq!((auto.color.as_deref(), auto.bold, auto.italic), (Some("114f75"), true, true), "an automatic style over it");
+    }
+
+    /// A paragraph named after a style in styles.xml takes its text
+    /// properties and the ones its parents set: the form's "Coloured Box
+    /// Headline" is bold and 14pt. Normal, the base, is the document's base
+    /// font, not its runs'; a heading keeps its level's look.
+    #[test]
+    fn a_named_paragraph_style_styles_its_text() {
+        let styles = "<office:document-styles><office:styles>\
+             <style:style style:name=\"Normal\" style:family=\"paragraph\"><style:text-properties fo:font-size=\"10pt\" fo:color=\"#222222\"/></style:style>\
+             <style:style style:name=\"Box\" style:family=\"paragraph\" style:parent-style-name=\"Normal\"><style:text-properties fo:color=\"#114F75\"/></style:style>\
+             <style:style style:name=\"BoxHeadline\" style:family=\"paragraph\" style:parent-style-name=\"Box\"><style:text-properties fo:font-weight=\"bold\" fo:font-size=\"14pt\"/></style:style>\
+             <style:style style:name=\"H\" style:family=\"paragraph\" style:parent-style-name=\"Box\"><style:text-properties fo:font-weight=\"bold\"/></style:style>\
+             </office:styles></office:document-styles>";
+        let content = "<office:document-content><office:body><office:text>\
+             <text:p text:style-name=\"BoxHeadline\">Important</text:p>\
+             <text:p text:style-name=\"Normal\">Body</text:p>\
+             <text:h text:style-name=\"H\" text:outline-level=\"2\">Heading</text:h>\
+             </office:text></office:body></office:document-content>";
+        let d = read_package(content, styles);
+        let first = |i: usize| d.paragraphs[i].runs[0].style.clone();
+        let head = first(0);
+        assert_eq!((head.bold, head.font_size_hp, head.color.as_deref()), (true, Some(28), Some("114f75")), "its own and its parent's");
+        let body = first(1);
+        assert_eq!((body.bold, body.font_size_hp, body.color.as_deref()), (false, None, None), "the base style is the base font");
+        assert_eq!(first(2).color, None, "a heading looks as its level says");
     }
 
     #[test]
