@@ -62,18 +62,31 @@ def fetch(entry, dest, cache):
     return True
 
 
+def shard(entries, spec):
+    """The entries shard "K/N" takes: every Nth from the Kth, in corpus
+    order. The ratchet judges only the documents in a run's manifest, so
+    N shards together judge the whole corpus, each document once."""
+    index, _, count = spec.partition("/")
+    index, count = int(index), int(count)
+    if not 0 <= index < count:
+        raise SystemExit(f"--shard {spec}: want K/N with 0 <= K < N")
+    return entries[index::count]
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("fixtures")
     ap.add_argument("--app")
     ap.add_argument("--cache", help="directory of fetched documents, named by sha256")
+    ap.add_argument("--shard", help="K/N: only every Nth document from the Kth, so N CI jobs share an app's corpus")
     args = ap.parse_args()
 
     corpus = json.load(open(CORPUS))
+    corpus = [e for e in corpus if not args.app or e["app"] == args.app]
+    if args.shard:
+        corpus = shard(corpus, args.shard)
     manifest, failures = [], 0
     for entry in corpus:
-        if args.app and entry["app"] != args.app:
-            continue
         dest = os.path.join(args.fixtures, entry["file"])
         try:
             ok = fetch(entry, dest, args.cache)

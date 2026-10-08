@@ -669,6 +669,7 @@ class BaseGUITestCase(unittest.TestCase):
 
     def tearDown(self):
         failed = getattr(self, "_test_failed", None) is not False
+        self._capture_final_screenshot(failed)
         if failed:
             self._capture_failure_artifacts()
         self._finish_recording(failed)
@@ -682,6 +683,25 @@ class BaseGUITestCase(unittest.TestCase):
             except subprocess.TimeoutExpired:
                 self.process.kill()
             self._check_gtk_diagnostics()
+
+    def _capture_final_screenshot(self, failed: bool):
+        """With `$GUI_TEST_SCREENSHOT_DIR` set, keep the screen as the
+        journey left it, passed or failed: `<dir>/<test id>.png`, the id
+        being the module, class and method. CI uploads the directory, so
+        two runs' screens can be pulled and compared journey by journey
+        without re-running either. Never a verdict: a capture that fails
+        is reported and the journey's outcome stands.
+        """
+        directory = os.environ.get("GUI_TEST_SCREENSHOT_DIR")
+        if not directory or not os.environ.get("DISPLAY"):
+            return
+        try:
+            os.makedirs(directory, exist_ok=True)
+            name = self.id().replace("/", "_") + (".failed" if failed else "") + ".png"
+            with mss.mss() as sct:
+                sct.shot(output=os.path.join(directory, name))
+        except Exception as e:  # evidence, not a verdict
+            print(f"Warning: final screenshot not captured: {e}")
 
     def _check_gtk_diagnostics(self):
         """Fail the journey on a GLib/GTK CRITICAL its app logged (#1209).

@@ -22,6 +22,31 @@ On failure, the base class retains the screenshot, AT-SPI tree, application
 log, input trace, and snapshot (when configured) under
 `tests/gui/failure_artifacts/`.
 
+## Shards and screenshots
+
+CI splits the journeys across sixteen jobs (`smoke (K/16)` in
+`.github/workflows/gui-tests.yml`). Any run can do the same:
+
+```sh
+GUI_TEST_SHARD=3/16 tests/gui/run_gui_tests.sh test_smoke.py test_edit_render.py
+```
+
+The unit is the test class, balanced by journey count
+(`framework/sharding.py`); a class that must follow another names it with
+`shard_with`.
+
+With `GUI_TEST_SCREENSHOT_DIR` set, every journey leaves a screenshot of how it
+ended, passed or failed, named by its test id (`.failed.png` for a failure).
+CI uploads each shard's as `gui-screenshots-K` and merges them into one
+`gui-screenshots` artifact per run. To see what changed between two runs:
+
+```sh
+GITHUB_TOKEN=... scripts/compare_gui_screenshots.py RUN_BEFORE RUN_AFTER
+```
+
+writes `gui-screenshot-diff/report.html`, the most changed journeys first.
+Either side may also be a local directory of screenshots.
+
 ## Repeated campaigns
 
 `stress.py` answers a different question from the smoke gate. The gate runs

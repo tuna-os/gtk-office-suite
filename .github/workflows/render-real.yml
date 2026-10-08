@@ -17,8 +17,21 @@ on:
   schedule:
     - cron: '50 3 * * *'
   workflow_dispatch:
+  # Also on a PR that changes what reads, lays out or draws a document,
+  # which is what this measures: the corpus is split across enough jobs
+  # (below) that a run takes minutes, not an hour and a half.
   pull_request:
     paths:
+      - letters-core/**
+      - tables-core/**
+      - decks-core/**
+      - suite-common-core/**
+      - suite-export/**
+      - letters/**
+      - tables/**
+      - decks/**
+      - Cargo.lock
+      - tools/render-lab/**
       - tools/render-lab/real_corpus/**
       - tools/render-lab/fetch_real_corpus.py
       - tools/render-lab/baseline-real.json
@@ -33,17 +46,21 @@ permissions:
   contents: read
 
 jobs:
+  # Each app's corpus in six shares (run.sh --shard), eighteen jobs in
+  # all; `summary` puts their verdicts back together. Each shard judges
+  # its own documents against the baseline, so a regression or an
+  # unlocked improvement still fails the job that measured it.
   lab:
-    name: Real documents (${{ matrix.app }})
+    name: Real documents (${{ matrix.app }} ${{ matrix.shard }}/6)
     runs-on: ubuntu-24.04
-    timeout-minutes: 90
+    timeout-minutes: 60
     permissions:
       contents: read
-      issues: write
     strategy:
       fail-fast: false
       matrix:
         app: [letters, tables, decks]
+        shard: [0, 1, 2, 3, 4, 5]
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
@@ -83,29 +100,19 @@ jobs:
         env:
           CONTAINER_ENGINE: docker
           RENDER_LAB_CORPUS: real
-        run: tools/render-lab/run.sh --app ${{ matrix.app }}
+          APP: ${{ matrix.app }}
+          SHARD: ${{ matrix.shard }}
+        run: tools/render-lab/run.sh --app "$APP" --shard "$SHARD/6"
 
       - name: Job summary
         if: always()
         run: cat render-lab-out/summary.md >> "$GITHUB_STEP_SUMMARY" || true
 
-      # One `render-real` issue per document that is not green, closed
-      # when it turns green; only from main, and only from a run whose
-      # ratchet passed, so a regression is a failed run, not an issue.
-      - name: Sync render-real issues
-        if: always() && github.ref == 'refs/heads/main' && github.event_name != 'pull_request' && steps.run.outcome == 'success' && hashFiles('render-lab-out/summary.json') != ''
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: >
-          python3 tools/render-lab/sync_issues.py render-lab-out/summary.json --mode real
-          --repo "${GITHUB_REPOSITORY}"
-          --run-url "${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
-
       - name: Upload report
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
-          name: render-real-${{ matrix.app }}
+          name: render-real-${{ matrix.app }}-${{ matrix.shard }}
           path: |
             render-lab-out/report.html
             render-lab-out/summary.json
@@ -115,3 +122,59 @@ jobs:
             render-lab-out/${{ matrix.app }}/*/*.png
             render-lab-out/${{ matrix.app }}/*/*.log
           retention-days: 14
+
+  # The shards' verdicts in one place: `render-real-summary` holds the
+  # merged summary.json and summary.md for each app and for the whole
+  # corpus, and the run's summary page shows them. The issues are synced
+  # from here, once, from the whole corpus.
+  summary:
+    runs-on: ubuntu-24.04
+    needs: lab
+    if: always()
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
+        with:
+          pattern: render-real-*
+          path: shards
+
+      - name: Merge the shards' summaries
+        run: |
+          for app in letters tables decks; do
+            python3 tools/render-lab/merge_summaries.py "render-real-summary/$app" \
+              $(for k in 0 1 2 3 4 5; do echo "shards/render-real-$app-$k/summary.json"; done)
+          done
+          python3 tools/render-lab/merge_summaries.py render-real-summary \
+            $(for app in letters tables decks; do for k in 0 1 2 3 4 5; do echo "shards/render-real-$app-$k/summary.json"; done; done)
+          cat render-real-summary/summary.md >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload the merged summary
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: render-real-summary
+          path: render-real-summary
+          retention-days: 14
+
+      # One `render-real` issue per document that is not green, closed
+      # when it turns green; only from main, and only from a run whose
+      # ratchet passed, so a regression is a failed run, not an issue.
+      - name: Sync render-real issues
+        if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request' && needs.lab.result == 'success'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: >
+          python3 tools/render-lab/sync_issues.py render-real-summary/summary.json --mode real
+          --repo "${GITHUB_REPOSITORY}"
+          --run-url "${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+
+
+      - name: Every shard passed
+        env:
+          RESULT: ${{ needs.lab.result }}
+        run: |
+          echo "render-real shards: $RESULT"
+          [ "$RESULT" = "success" ]

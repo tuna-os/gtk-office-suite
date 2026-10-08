@@ -73,6 +73,9 @@ jobs:
             tests/test_open_corpus.py \
             tests/test_gui_harness.py \
             tests/test_journey_selection.py \
+            tests/test_gui_sharding.py \
+            tests/test_render_lab_shards.py \
+            tests/test_compare_gui_screenshots.py \
             tests/test_oracle_triggers.py \
             tests/test_gtk_diagnostics.py \
             tests/test_adr_numbers.py \
@@ -149,6 +152,9 @@ jobs:
             tests/test_open_corpus.py \
             tests/test_gui_harness.py \
             tests/test_journey_selection.py \
+            tests/test_gui_sharding.py \
+            tests/test_render_lab_shards.py \
+            tests/test_compare_gui_screenshots.py \
             tests/test_oracle_triggers.py \
             tests/test_gtk_diagnostics.py \
             tests/test_adr_numbers.py \
@@ -225,9 +231,87 @@ jobs:
         with:
           command: check advisories
 
-  # Unit tests + clippy on Ubuntu 24.04 (has GTK 4.14 + libadwaita 1.5)
-  test:
+  # Unit tests + clippy on Ubuntu 24.04 (has GTK 4.14 + libadwaita 1.5),
+  # in parallel: the tests are built once into a nextest archive, which
+  # eight `nextest` partitions run, while `lint` and `doc-and-features`
+  # run beside them. `test` (the required check) gathers their results
+  # and checks the capability ledger against every test that ran.
+  build-tests:
     runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - name: Install GTK4 + libadwaita dev libraries
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq libgtk-4-dev libadwaita-1-dev
+
+      - name: Install Rust stable
+        uses: dtolnay/rust-toolchain@89b12181fb390509a0842a86cc55eeb8eb928c1d # stable
+        with:
+          toolchain: stable
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2
+
+      - name: Install cargo-nextest
+        uses: taiki-e/install-action@bb0282cdd6e41599bc8dfa5fc712ebe9e27cfd8c # nextest
+        with:
+          tool: nextest
+
+      # Line tables only: a failing test's backtrace keeps its files and
+      # lines, and the archive every partition downloads stays small.
+      - name: Build the test archive
+        env:
+          CARGO_PROFILE_DEV_DEBUG: line-tables-only
+          CARGO_PROFILE_TEST_DEBUG: line-tables-only
+        run: cargo nextest archive --workspace --profile ci --archive-file nextest-archive.tar.zst
+
+      # Listing runs every test binary, which needs GTK's libraries: this
+      # job has them, the summary job (which reads the list) does not.
+      # `--run-ignored all` is load-bearing: see "Collect skip reasons".
+      - name: List the archive's tests, ignored ones included
+        run: |
+          cargo nextest list --archive-file nextest-archive.tar.zst --workspace-remap . \
+            --run-ignored all --message-format json > nextest-list.json
+
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: nextest-archive
+          path: |
+            nextest-archive.tar.zst
+            nextest-list.json
+          retention-days: 1
+          if-no-files-found: error
+
+  lint:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - name: Install GTK4 + libadwaita dev libraries
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq libgtk-4-dev libadwaita-1-dev
+
+      - name: Install Rust stable
+        uses: dtolnay/rust-toolchain@89b12181fb390509a0842a86cc55eeb8eb928c1d # stable
+        with:
+          toolchain: stable
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2
+
+      - name: cargo check
+        run: cargo check --workspace
+
+      - name: cargo clippy (deny warnings, all crates)
+        run: cargo clippy --workspace --all-targets -- -D warnings
+
+  nextest:
+    name: nextest (${{ matrix.partition }}/8)
+    runs-on: ubuntu-24.04
+    needs: build-tests
+    strategy:
+      fail-fast: false
+      matrix:
+        partition: [1, 2, 3, 4, 5, 6, 7, 8]
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
@@ -236,8 +320,8 @@ jobs:
       # this job used to run the whole workspace with none: all 36 GTK
       # widget tests in Letters skipped on every pull request while the
       # harness reported "0 ignored", so neither the log nor the ledger
-      # gate below could see it (#241).
-      - name: Install GTK4 + libadwaita dev libraries and Xvfb
+      # gate could see it (#241).
+      - name: Install GTK4 + libadwaita and Xvfb
         run: |
           sudo apt-get update -qq
           sudo apt-get install -y -qq libgtk-4-dev libadwaita-1-dev xvfb poppler-utils
@@ -252,11 +336,9 @@ jobs:
         with:
           tool: nextest
 
-      - name: cargo check
-        run: cargo check --workspace
-
-      - name: cargo clippy (deny warnings, all crates)
-        run: cargo clippy --workspace --all-targets -- -D warnings
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
+        with:
+          name: nextest-archive
 
       # scripts/with-display.sh rather than `xvfb-run -a`: that starts the
       # server and execs immediately, so gtk::init could run before the
@@ -264,13 +346,56 @@ jobs:
       # widget-test panic rather than as the display problem it was. The
       # wrapper waits for Xvfb's -displayfd handshake first.
       #
-      # nextest doesn't run doctests (a known limitation) — cargo test
-      # --doc covers those separately. #108: JUnit output published as
-      # an artifact even on failure, so a failing run's per-test detail
-      # survives past the job's own log retention.
-      - name: cargo nextest run
-        run: scripts/with-display.sh cargo nextest run --workspace --profile ci
+      # #108: JUnit output published as an artifact even on failure, so a
+      # failing run's per-test detail survives past the job's own log
+      # retention; `test` below reads every partition's.
+      - name: cargo nextest run (partition ${{ matrix.partition }} of 8)
+        env:
+          PARTITION: ${{ matrix.partition }}
+        run: |
+          # nextest extracts the archive into a directory that must exist.
+          mkdir -p extracted
+          scripts/with-display.sh cargo nextest run --archive-file nextest-archive.tar.zst \
+            --workspace-remap . --extract-to extracted --profile ci --partition "hash:$PARTITION/8"
 
+      - name: Collect the partition's JUnit report
+        if: always()
+        env:
+          PARTITION: ${{ matrix.partition }}
+        run: |
+          mkdir -p junit
+          # The workspace's target directory, where a run from an archive
+          # still writes its report (measured with nextest 0.9.144).
+          report=$(find target extracted -path '*/nextest/ci/junit.xml' 2>/dev/null | head -1)
+          if [ -n "$report" ]; then cp "$report" "junit/junit-$PARTITION.xml"; fi
+
+      - name: Upload the partition's JUnit report
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: junit-partition-${{ matrix.partition }}
+          path: junit
+          retention-days: 14
+          if-no-files-found: ignore
+
+  doc-and-features:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - name: Install GTK4 + libadwaita dev libraries and Xvfb
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq libgtk-4-dev libadwaita-1-dev xvfb poppler-utils
+
+      - name: Install Rust stable
+        uses: dtolnay/rust-toolchain@89b12181fb390509a0842a86cc55eeb8eb928c1d # stable
+        with:
+          toolchain: stable
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2
+
+      # nextest doesn't run doctests (a known limitation) — cargo test
+      # --doc covers those separately.
       - name: cargo test --doc
         run: scripts/with-display.sh cargo test --doc --workspace
 
@@ -289,30 +414,63 @@ jobs:
           cargo clippy -p decks-core --features collab --all-targets -- -D warnings
           cargo test -p decks-core --features collab --lib collab
 
+  # The required check: every part above passed, and the capability
+  # ledger's claims name tests this run collected, none skipped or failed.
+  test:
+    runs-on: ubuntu-24.04
+    needs: [build-tests, lint, nextest, doc-and-features]
+    if: always()
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - name: Install Rust stable
+        uses: dtolnay/rust-toolchain@89b12181fb390509a0842a86cc55eeb8eb928c1d # stable
+        with:
+          toolchain: stable
+
+      - name: Install cargo-nextest
+        uses: taiki-e/install-action@bb0282cdd6e41599bc8dfa5fc712ebe9e27cfd8c # nextest
+        with:
+          tool: nextest
+
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
+        continue-on-error: true
+        with:
+          name: nextest-archive
+
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
+        with:
+          pattern: junit-partition-*
+          path: junit
+          merge-multiple: true
+
       # C3/C4 for the Rust layers: the ledger's claims must name tests
       # this run actually collected, and none of them may have been
-      # skipped or failed. The JUnit report nextest already writes says
-      # both, so this costs a second and uses the results of the run that
-      # just happened rather than a re-derivation. The report names the
-      # crates it covers, so it checks the Rust ids and stays quiet about
-      # the journeys, which the GUI lane checks.
+      # skipped or failed. The partitions' JUnit reports together say
+      # both. They name the crates they cover, so this checks the Rust ids
+      # and stays quiet about the journeys, which the GUI lane checks.
       - name: Capability ledger vs. the tests that ran
         run: |
-          python3 conformance/collect_test_inventory.py \
-            --junit "=target/nextest/ci/junit.xml" \
+          reports=(junit/junit-*.xml)
+          if [ "${#reports[@]}" -ne 8 ] || [ ! -f "${reports[0]}" ]; then
+            echo "Expected 8 partition reports, found: ${reports[*]}"
+            exit 1
+          fi
+          args=()
+          for r in "${reports[@]}"; do args+=(--junit "=$r"); done
+          python3 conformance/collect_test_inventory.py "${args[@]}" \
             --out rust-inventory.json --results-out rust-results.json
           python3 conformance/validate_capabilities.py \
             --lanes conformance/lanes.json --lane test \
             --collected rust-inventory.json --results rust-results.json \
             --release-critical
 
-      # The JUnit report above cannot answer "what sat out this run?".
-      # nextest omits `#[ignore]` tests from it entirely — not as
-      # <skipped>, but as no <testcase> at all — so the report reads
-      # `tests="848" skipped="0"` on a workspace with seven ignored
-      # tests. The lister is what reports them, which is why this step
-      # re-lists rather than reusing the report. The build is warm from
-      # the run above, so listing costs seconds.
+      # The JUnit reports cannot answer "what sat out this run?".
+      # nextest omits `#[ignore]` tests from them entirely — not as
+      # <skipped>, but as no <testcase> at all — so a report reads
+      # `skipped="0"` on a workspace with seven ignored tests. The lister
+      # is what reports them, which is why this step reads the listing
+      # build-tests made of the same archive the partitions ran.
       #
       # `--run-ignored all` is load-bearing: without it the listing omits
       # them too and the collector would have nothing to check. It
@@ -320,21 +478,10 @@ jobs:
       - name: Collect skip reasons
         if: always()
         run: |
-          cargo nextest list --workspace --run-ignored all \
-            --message-format json > nextest-list.json
-          # Runtime skips come from the JUnit report, which only exists
-          # if the run above got as far as executing tests. Saying so
-          # beats passing a path that is not there: a collector that
-          # shrugged off a missing report would be the same silent hole
-          # this step exists to close.
           args=(--nextest-list nextest-list.json --out skip-reasons.json)
-          if [ -f target/nextest/ci/junit.xml ]; then
-            args+=(--junit target/nextest/ci/junit.xml)
-          else
-            echo "No JUnit report: the run did not reach the tests, so"
-            echo "runtime skips are absent from this report. Ignored"
-            echo "tests below come from the listing and are still checked."
-          fi
+          for r in junit/junit-*.xml; do
+            [ -f "$r" ] && args+=(--junit "$r")
+          done
           python3 conformance/collect_skip_reasons.py "${args[@]}"
 
       - name: Upload JUnit test results and the skip report
@@ -343,9 +490,16 @@ jobs:
         with:
           name: junit-results
           path: |
-            target/nextest/ci/junit.xml
+            junit
             skip-reasons.json
           retention-days: 14
+
+      - name: Every part passed
+        env:
+          RESULTS: ${{ needs.build-tests.result }} ${{ needs.lint.result }} ${{ needs.nextest.result }} ${{ needs.doc-and-features.result }}
+        run: |
+          echo "build-tests lint nextest doc-and-features: $RESULTS"
+          for r in $RESULTS; do [ "$r" = success ] || exit 1; done
 
   # LibreOffice interop oracle and coverage moved to nightly.yml (#108):
   # installing LibreOffice + running the full oracle/parity corpus on
