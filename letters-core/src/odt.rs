@@ -1312,9 +1312,10 @@ fn inherited_spacing(name: &str, auto: &AutoStyles, named: &AutoStyles) -> (Opti
 
 fn read_heading_styles(styles: &str) -> Vec<RunStyle> {
     let defs = parse_auto_styles(styles);
+    let names = heading_style_names(styles);
     let look = |n: u8| -> Option<RunStyle> {
         let mut chain = Vec::new();
-        let mut name = format!("Heading_20_{n}");
+        let mut name = names[usize::from(n) - 1].clone();
         while chain.len() < 8 {
             let own = defs.para_text.get(&name);
             let parent = defs.para_parent.get(&name).cloned();
@@ -1338,10 +1339,35 @@ fn read_heading_styles(styles: &str) -> Vec<RunStyle> {
             })
         })
     };
-    if !(1..=6).any(|n| defs.para_text.contains_key(&format!("Heading_20_{n}"))) {
+    if !names.iter().any(|n| defs.para_text.contains_key(n)) {
         return Vec::new();
     }
     (1..=6).map(|n| look(n).unwrap_or_default()).collect()
+}
+
+/// Each heading level's paragraph style: Writer's own `Heading_20_N`, else
+/// the paragraph style declaring that outline level
+/// (`style:default-outline-level`), as a Word conversion names them
+/// ("Heading2", "Heading 2").
+fn heading_style_names(styles: &str) -> [String; 6] {
+    let mut by_level: [Option<String>; 6] = Default::default();
+    let mut reader = Reader::from_str(styles);
+    loop {
+        match reader.read_event() {
+            Ok(Event::Start(e)) | Ok(Event::Empty(e)) if e.name().as_ref() == "style:style" => {
+                let level = attr_val(&e, "style:default-outline-level").and_then(|l| l.parse::<usize>().ok()).filter(|l| (1..=6).contains(l));
+                if let (Some(l), Some(name), Some("paragraph")) = (level, attr_val(&e, "style:name"), attr_val(&e, "style:family").as_deref()) {
+                    by_level[l - 1].get_or_insert(name);
+                }
+            }
+            Ok(Event::Eof) | Err(_) => break,
+            _ => {}
+        }
+    }
+    std::array::from_fn(|i| {
+        let own = format!("Heading_20_{}", i + 1);
+        if styles.contains(&format!("style:name=\"{own}\"")) { own } else { by_level[i].clone().unwrap_or(own) }
+    })
 }
 
 /// The document, and the package members its pictures were read from
@@ -2696,6 +2722,29 @@ mod tests {
         let rt = round_trip(&d);
         assert_eq!(rt.header.as_deref(), Some("Report — {page} of {total}"));
         assert_eq!(rt.footer.as_deref(), Some("Confidential"));
+    }
+
+    /// A Word conversion's heading styles are named "Heading2", not
+    /// Writer's `Heading_20_2`, and say their level with
+    /// `style:default-outline-level`; their look (Arial, bold, blue) is
+    /// the headings' as it is in LibreOffice, not the bold serif fallback.
+    #[test]
+    fn heading_styles_are_found_by_outline_level() {
+        let styles = "<office:document-styles><office:styles>\
+            <style:style style:name=\"Normal\" style:family=\"paragraph\"/>\
+            <style:style style:name=\"Heading2\" style:display-name=\"Heading 2\" style:family=\"paragraph\" \
+              style:parent-style-name=\"Normal\" style:default-outline-level=\"2\">\
+              <style:text-properties style:font-name=\"Arial\" fo:font-weight=\"bold\" fo:color=\"#2E74B5\" fo:font-size=\"18pt\"/></style:style>\
+            </office:styles></office:document-styles>";
+        let content = "<office:document-content><office:body><office:text>\
+            <text:h text:style-name=\"Heading2\" text:outline-level=\"2\">Summary</text:h>\
+            </office:text></office:body></office:document-content>";
+        let d = read_package(content, styles);
+        let h2 = &d.heading_styles[1];
+        assert!(h2.bold, "{h2:?}");
+        assert_eq!(h2.color.as_deref().map(|c| c.trim_start_matches('#').to_uppercase()), Some("2E74B5".into()), "{h2:?}");
+        assert_eq!(h2.font_size_hp, Some(36), "{h2:?}");
+        assert_eq!(h2.font_family.as_deref(), Some("Arial"), "{h2:?}");
     }
 
     #[test]
