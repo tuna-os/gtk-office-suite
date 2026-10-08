@@ -1808,6 +1808,54 @@ fn table_row_heights_survive_writer_both_ways() {
     close(&rt, "odt → Writer → docx");
 }
 
+/// A numbered item's label through LibreOffice, both ways: "(1)", "1.a",
+/// a roman "IV." after a change of label within the list, and Word's
+/// "2.1" with no number in it. Each item shows what it showed before.
+#[test]
+fn list_labels_survive_writer_both_ways() {
+    let Some(bin) = require_or_skip() else { return };
+    let label = |prefix: &str, format, suffix: &str| Some(ListLabel { prefix: prefix.into(), format, suffix: suffix.into() });
+    let mut d = Document::from_plain_text("one\nsub\ntwo\nthree\nfour\nbetween\nliteral");
+    for (k, level, l) in [
+        (0, 0, label("(", NumberFormat::Decimal, ")")),
+        (1, 1, label("1.", NumberFormat::LowerLetter, "")),
+        (2, 0, label("(", NumberFormat::Decimal, ")")),
+        (3, 0, None),
+        (4, 0, label("", NumberFormat::UpperRoman, ".")),
+        (6, 0, label("2.1", NumberFormat::None, "")),
+    ] {
+        d.paragraphs[k].style.list = ListKind::Numbered;
+        d.paragraphs[k].style.list_level = level;
+        d.paragraphs[k].style.list_label = l;
+    }
+    let markers = |d: &Document| {
+        let ordinals = letters_core::lists::ordinals(d.paragraphs.iter().map(|p| &p.style));
+        d.paragraphs
+            .iter()
+            .zip(ordinals)
+            .filter(|(p, _)| !p.text().is_empty())
+            .map(|(p, n)| (p.text(), letters_core::lists::marker_for(&p.style, n).unwrap_or_default()))
+            .collect::<Vec<_>>()
+    };
+    let want = markers(&d);
+    assert_eq!(
+        want.iter().map(|(_, m)| m.as_str()).collect::<Vec<_>>(),
+        ["(1)", "1.a", "(2)", "3.", "IV.", "", "2.1"]
+    );
+
+    let dir = tempfile::tempdir().unwrap();
+    let docx_path = dir.path().join("labels.docx");
+    docx::write(&d, &docx_path).expect("write docx");
+    let _ = soffice_convert(bin, &docx_path, "odt").ok();
+    let odt_path = dir.path().join("labels.odt");
+    assert!(odt_path.exists(), "soffice did not convert docx to odt");
+    let got = letters_core::odt::read(odt_path.to_str().unwrap()).expect("read converted odt");
+    assert_eq!(markers(&got), want, "docx → Writer → odt");
+
+    let Some(rt) = through_lo_to_docx(&d, "labels") else { return };
+    assert_eq!(markers(&rt), want, "odt → Writer → docx");
+}
+
 /// Shaded table cells through LibreOffice, both ways: a form's grey
 /// header cells keep their colour.
 #[test]
@@ -1834,5 +1882,60 @@ fn table_cell_fills_survive_writer_both_ways() {
     close(&letters_core::odt::read(odt_path.to_str().unwrap()).expect("read converted odt"), "docx → Writer → odt");
 
     let Some(rt) = through_lo_to_docx(&d, "fills") else { return };
+    close(&rt, "odt → Writer → docx");
+}
+
+/// A floating picture keeps its placement through Writer both ways: our
+/// docx converted to odt, and our odt converted to docx. The Ofsted logo
+/// of the audit-committee minutes (right-aligned in the margins, raised
+/// above its paragraph) and a picture behind the text, an inch in from the
+/// page's edge and centred down it.
+#[test]
+fn floating_pictures_keep_their_placement_through_writer_both_ways() {
+    use letters_core::model::{AnchorAlign, AnchorFrame, ImageAnchor};
+    let Some(bin) = require_or_skip() else { return };
+    let dir = tempfile::tempdir().unwrap();
+    let png: &[u8] = &[
+        0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00, 0x00, 0x00, 0x0d, 0x49, 0x48, 0x44, 0x52,
+        0x00, 0x00, 0x00, 0x03, 0x00, 0x00, 0x00, 0x02, 0x08, 0x02, 0x00, 0x00, 0x00, 0x12, 0x16, 0xf1,
+        0x4d, 0x00, 0x00, 0x00, 0x15, 0x49, 0x44, 0x41, 0x54, 0x78, 0x9c, 0x63, 0x3c, 0x21, 0x27, 0xc7,
+        0xc0, 0xc0, 0xc0, 0xc0, 0xc0, 0xc0, 0xc4, 0x00, 0x03, 0x00, 0x13, 0x2e, 0x01, 0x08, 0x6a, 0xc0,
+        0x65, 0x61, 0x00, 0x00, 0x00, 0x00, 0x49, 0x45, 0x4e, 0x44, 0xae, 0x42, 0x60, 0x82,
+    ];
+    let png_path = dir.path().join("logo.png");
+    std::fs::write(&png_path, png).unwrap();
+    let want = [
+        ImageAnchor { h_from: AnchorFrame::Margin, h_align: Some(AnchorAlign::End), v_from: AnchorFrame::Text, y_emu: -660_400, ..Default::default() },
+        ImageAnchor { h_from: AnchorFrame::Page, x_emu: 914_400, v_from: AnchorFrame::Page, v_align: Some(AnchorAlign::Center), behind: true, ..Default::default() },
+    ];
+    let mut d = Document::from_plain_text("");
+    d.paragraphs = want
+        .iter()
+        .map(|a| Paragraph {
+            style: ParaStyle::default(),
+            runs: vec![Run::plain("Minutes "), Run {
+                text: "logo".into(),
+                style: RunStyle { image: Some(png_path.to_string_lossy().into()), image_extent_emu: Some((914_400, 457_200)), image_anchor: Some(*a), ..Default::default() },
+            }],
+        })
+        .collect();
+    let close = |got: &Document, how: &str| {
+        let read: Vec<ImageAnchor> = got.paragraphs.iter().flat_map(|p| &p.runs).filter_map(|r| r.style.image_anchor).collect();
+        assert_eq!(read.len(), want.len(), "{how}: {:?}", got.paragraphs);
+        for (r, w) in read.iter().zip(&want) {
+            // Writer stores lengths in hundredths of a millimetre.
+            assert!(r.x_emu.abs_diff(w.x_emu) <= 360 && r.y_emu.abs_diff(w.y_emu) <= 360, "{how}: {r:?} for {w:?}");
+            assert_eq!(ImageAnchor { x_emu: w.x_emu, y_emu: w.y_emu, ..*r }, *w, "{how}");
+        }
+    };
+
+    let docx_path = dir.path().join("float.docx");
+    docx::write(&d, &docx_path).expect("write docx");
+    let _ = soffice_convert(bin, &docx_path, "odt").ok();
+    let odt_path = dir.path().join("float.odt");
+    assert!(odt_path.exists(), "soffice did not convert docx to odt");
+    close(&letters_core::odt::read(odt_path.to_str().unwrap()).expect("read converted odt"), "docx → Writer → odt");
+
+    let Some(rt) = through_lo_to_docx(&d, "float") else { return };
     close(&rt, "odt → Writer → docx");
 }
