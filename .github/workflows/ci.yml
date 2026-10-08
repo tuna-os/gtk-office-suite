@@ -98,6 +98,7 @@ jobs:
             tests/test_render_lab_locate.py \
             tests/test_installed_check.py \
             tests/test_release_evidence.py \
+            tests/test_flathub_manifests.py \
             tests/test_overview_video.py \
             tests/test_upgrade_check.py \
             tests/test_gui_guidelines.py \
@@ -172,6 +173,7 @@ jobs:
             tests/test_render_lab_locate.py \
             tests/test_installed_check.py \
             tests/test_release_evidence.py \
+            tests/test_flathub_manifests.py \
             tests/test_overview_video.py \
             tests/test_upgrade_check.py \
             tests/test_gui_guidelines.py \

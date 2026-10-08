@@ -5,7 +5,8 @@
 
 Each line of installed.json is one app opened from "the file manager"
 (gio open) and saved through the document portal, or the same app's file
-chooser round: Save As and Open through the portal's dialogs. Lines for
+chooser round: Save As and Open through the portal's dialogs, or a
+document dragged onto it from Files. Lines for
 one app are merged. Prints a Markdown table for the job summary and exits
 1 unless every app passed every check.
 """
@@ -27,6 +28,7 @@ CHECKS = (
     ("portal_saved", "Save As through the file chooser portal did not write the named file"),
     ("portal_valid", "the document saved through the file chooser is not a valid archive"),
     ("portal_opened", "Open through the file chooser portal did not open the document"),
+    ("dropped", "a document dragged from Files onto the app did not open"),
 )
 
 

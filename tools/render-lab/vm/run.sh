@@ -30,6 +30,7 @@ SCP=(scp -i id_lab -P 2222 -o StrictHostKeyChecking=no -o UserKnownHostsFile=/de
 qemu-system-x86_64 -enable-kvm -cpu host -smp 4 -m 6G \
     -drive file=guest.qcow2,if=virtio,snapshot=on \
     -device virtio-vga,xres=1600,yres=1400 -display none \
+    -device qemu-xhci -device usb-tablet \
     -nic user,model=virtio,hostfwd=tcp::2222-:22 \
     -qmp unix:qmp.sock,server,nowait -serial file:run-serial.log &
 QEMU=$!
@@ -55,6 +56,49 @@ s = socket.socket(socket.AF_UNIX); s.connect("qmp.sock"); f = s.makefile("rw")
 f.readline(); f.write(json.dumps({"execute": "qmp_capabilities"}) + "\n"); f.flush(); f.readline()
 keys = [{"type": "qcode", "data": k} for k in sys.argv[1].split("+")]
 f.write(json.dumps({"execute": "send-key", "arguments": {"keys": keys}}) + "\n"); f.flush(); print(f.readline().strip())
+PY
+}
+# `qmp_drag <x1> <y1> <x2> <y2>` drags with the left button, in screen
+# pixels, through the USB tablet (an absolute pointer).
+qmp_drag() { python3 - "$@" <<'PY'
+import json, socket, sys, time
+x1, y1, x2, y2 = (int(v) for v in sys.argv[1:5])
+W, H = 1600, 1400
+s = socket.socket(socket.AF_UNIX); s.connect("qmp.sock"); f = s.makefile("rw")
+f.readline(); f.write(json.dumps({"execute": "qmp_capabilities"}) + "\n"); f.flush(); f.readline()
+def send(events):
+    f.write(json.dumps({"execute": "input-send-event", "arguments": {"events": events}}) + "\n"); f.flush(); f.readline()
+def move(x, y):
+    send([{"type": "abs", "data": {"axis": "x", "value": int(x * 32767 / (W - 1))}},
+          {"type": "abs", "data": {"axis": "y", "value": int(y * 32767 / (H - 1))}}])
+def button(down):
+    send([{"type": "btn", "data": {"down": down, "button": "left"}}])
+move(x1, y1); time.sleep(0.4)
+button(True); time.sleep(0.4)
+# In steps, as a hand moves: one jump never starts a drag.
+for i in range(1, 31):
+    move(x1 + (x2 - x1) * i / 30, y1 + (y2 - y1) * i / 30); time.sleep(0.05)
+time.sleep(0.8)
+button(False)
+PY
+}
+# `find_icon <screen.ppm>` prints the centre of the one item in the Files
+# window tiled on the left: the non-white pixels in its white content area.
+find_icon() { python3 - "$1" <<'PY'
+import sys
+from PIL import Image
+im = Image.open(sys.argv[1]).convert("RGB")
+px = im.load()
+# Where the content area starts: the first long white run across the
+# middle of the left half (the sidebar before it is grey).
+y = 700
+x0 = next(x for x in range(0, 700) if all(min(px[x + d, y]) >= 250 for d in range(80)))
+pts = [(x, y) for y in range(150, 1300, 2) for x in range(x0 + 4, 790, 2) if min(px[x, y]) < 200]
+if not pts:
+    sys.exit("no item found in the Files window")
+top = min(y for _, y in pts)
+icon = [(x, y) for x, y in pts if y < top + 90]
+print(sum(x for x, _ in icon) // len(icon), sum(y for _, y in icon) // len(icon))
 PY
 }
 # `qmp_type <text>` types a path on the guest's keyboard (letters, digits
@@ -181,6 +225,28 @@ print(next((f["file"] for f in json.load(open(sys.argv[1])) if f["app"] == sys.a
     python3 -c 'import sys; from PIL import Image; Image.open(sys.argv[1]).save(sys.argv[2])' screen.ppm "$OUT/installed-$app-opened.png"
     "${SSH[@]}" "bash ~/lab/installed.sh --portal $app $ext" >>"$OUT/installed.json" \
         || echo "installed: $app file chooser check did not finish" >&2
+    # Drag and drop from Files, as a user would: Files on a folder holding
+    # one document, tiled to the left half (it covers the app's left
+    # side), and the document dragged onto the app's right side.
+    "${SSH[@]}" "rm -rf \$HOME/Drop; mkdir -p \$HOME/Drop; cp \$HOME/lab/fixtures/$file \$HOME/Drop/portal-drop-$app.$ext
+        bash ~/lab/installed.sh --files \$HOME/Drop" || true
+    sleep 5
+    qmp_key meta_l+left >/dev/null
+    sleep 2
+    qmp "$PWD/screen.ppm" >/dev/null
+    python3 -c 'import sys; from PIL import Image; Image.open(sys.argv[1]).save(sys.argv[2])' screen.ppm "$OUT/installed-$app-drag.png"
+    if icon="$(find_icon screen.ppm)"; then
+        read -r ix iy <<<"$icon"
+        qmp_drag "$ix" "$iy" 1100 800
+        sleep 4
+        qmp "$PWD/screen.ppm" >/dev/null
+        python3 -c 'import sys; from PIL import Image; Image.open(sys.argv[1]).save(sys.argv[2])' screen.ppm "$OUT/installed-$app-dropped.png"
+    else
+        echo "installed: $app drag source not found on screen" >&2
+    fi
+    "${SSH[@]}" "bash ~/lab/installed.sh --dropped $app $ext" >>"$OUT/installed.json" \
+        || echo "installed: $app drop check did not finish" >&2
+    "${SSH[@]}" "bash ~/lab/installed.sh --files -q" || true
     "${SSH[@]}" "bash ~/lab/installed.sh --close $app" || true
     "${SCP[@]}" "lab@127.0.0.1:lab/installed/$app-open.log" "$OUT/installed-$app.log" 2>/dev/null || true
     "${SCP[@]}" "lab@127.0.0.1:lab/installed/$app-mime.log" "$OUT/installed-$app-mime.log" 2>/dev/null || true
