@@ -236,7 +236,15 @@ impl PangoShaper {
         }
         layout.set_text(&text);
         layout.set_attributes(Some(&attrs));
-        layout.set_width(to_units(req.width_pt.max(1.0)));
+        // A negative first-line indent is a hanging one: the first line
+        // starts left of the text box (Word's w:hanging). Pango reads a
+        // negative indent differently, leaving the first line in place and
+        // indenting the others, so the layout is widened by the hang and
+        // line_boxes shifts every line back by it. Without that, a
+        // paragraph indented 72pt with a 72pt hang drew its first line at
+        // 72pt and the rest at 144pt instead of at 0pt and 72pt.
+        let hang = hang_pt(req);
+        layout.set_width(to_units(req.width_pt.max(1.0) + hang));
         layout.set_wrap(pango::WrapMode::WordChar);
         layout.set_indent(to_units(req.first_line_indent_pt));
         layout.set_alignment(match req.alignment {
@@ -270,7 +278,15 @@ fn parse_hex(hex: &str) -> Option<(u16, u16, u16)> {
 }
 
 /// Lines of a layout as `LineBox`es, with char (not byte) offsets.
-fn line_boxes(layout: &pango::Layout) -> Vec<LineBox> {
+/// How far a paragraph's first line hangs left of its text box (a
+/// negative first-line indent), in points.
+fn hang_pt(req: &ShapeRequest<'_>) -> f64 {
+    (-req.first_line_indent_pt).max(0.0)
+}
+
+/// The lines of `layout`, placed relative to the text box: `hang` is what
+/// `layout` widened it by for a hanging first line (`hang_pt`).
+fn line_boxes(layout: &pango::Layout, hang: f64) -> Vec<LineBox> {
     let text = layout.text();
     let char_at = |byte: i32| text[..(byte.max(0) as usize).min(text.len())].chars().count();
     // Inline objects: (char index, byte index).
@@ -292,11 +308,11 @@ fn line_boxes(layout: &pango::Layout) -> Vec<LineBox> {
                 objects: objects
                     .iter()
                     .filter(|(ci, _)| (cs..ce).contains(ci))
-                    .map(|&(ci, bi)| (ci, to_pt(layout.index_to_pos(bi).x())))
+                    .map(|&(ci, bi)| (ci, to_pt(layout.index_to_pos(bi).x()) - hang))
                     .collect(),
                 start: cs,
                 end: ce,
-                x_pt: to_pt(logical.x()),
+                x_pt: to_pt(logical.x()) - hang,
                 width_pt: to_pt(logical.width()),
                 ascent_pt: to_pt(baseline - logical.y()),
                 descent_pt: to_pt(logical.y() + logical.height() - baseline),
@@ -313,7 +329,7 @@ impl Shaper for PangoShaper {
     fn shape(&mut self, req: &ShapeRequest<'_>) -> Vec<LineBox> {
         let layout = self.layout(req);
         self.layouts.insert(request_key(req), layout.clone());
-        let mut lines = line_boxes(&layout);
+        let mut lines = line_boxes(&layout, hang_pt(req));
         // A line is as tall as the font's ascent, descent *and* line gap,
         // as LibreOffice and Word space lines (Liberation Serif 12pt:
         // 13.8pt); Pango's logical extents leave the gap out.
@@ -973,6 +989,27 @@ mod tests {
         }
         assert_eq!(marks[0].y_pt, marks[1].y_pt, "both on the first line");
         assert!(marks[1].x_pt > marks[0].x_pt, "side by side");
+    }
+
+    /// A hanging indent (Word's `w:ind w:left="1440" w:hanging="1440"`)
+    /// starts the first line at the margin and the wrapped lines at the
+    /// left indent, as with the fallback shaper. Pango reads a negative
+    /// indent as "indent the other lines", and drew the first line at 72pt
+    /// and the rest at 144pt.
+    #[test]
+    fn a_hanging_indent_starts_the_first_line_left_of_the_others() {
+        let opts = LayoutOptions::default();
+        let mut d = doc(1, "Question 1: Do you agree with the proposal to introduce a three-month time limit for applications for permission to appeal by interested persons who are not the recipient?");
+        d.paragraphs[0].style.left_indent_pt = 72.0;
+        d.paragraphs[0].style.first_line_indent_pt = -72.0;
+        let t = layout(&d, &opts, &mut PangoShaper::new());
+        let xs: Vec<f64> = t.pages[0].lines().map(|l| match l { Item::Line { x_pt, .. } => *x_pt, _ => unreachable!() }).collect();
+        assert!(xs.len() >= 2, "the paragraph wraps: {xs:?}");
+        let margin = t.pages[0].lines().next().map(|l| match l { Item::Line { box_x_pt, .. } => *box_x_pt - 72.0, _ => 0.0 }).unwrap();
+        assert!((xs[0] - margin).abs() < 0.5, "first line at the margin {margin}: {xs:?}");
+        for x in &xs[1..] {
+            assert!((x - (margin + 72.0)).abs() < 0.5, "wrapped lines at the 72pt indent: {xs:?}");
+        }
     }
 
     #[test]
