@@ -1808,6 +1808,47 @@ fn table_row_heights_survive_writer_both_ways() {
     close(&rt, "odt → Writer → docx");
 }
 
+/// Merged cells through LibreOffice, both ways: a heading across the
+/// table and a cell down two rows keep their spans, and the text stays in
+/// its cell.
+#[test]
+fn merged_cells_survive_writer_both_ways() {
+    let Some(bin) = require_or_skip() else { return };
+    let mut d = Document::from_plain_text("after the table");
+    let table = d.insert_table_at(0, 3, 3);
+    for p in d.paragraphs.iter_mut() {
+        let Some(c) = p.style.table_cell else { continue };
+        if ((c.row, c.col) == (0, 0) || c.row > 0) && (c.row, c.col) != (2, 0) {
+            p.runs = vec![Run::plain(format!("r{}c{}", c.row, c.col))];
+        }
+    }
+    let spans = vec![
+        letters_core::CellSpan { row: 0, col: 0, rows: 1, cols: 3 },
+        letters_core::CellSpan { row: 1, col: 0, rows: 2, cols: 1 },
+    ];
+    d.table_spans.insert(table, spans.clone());
+    let texts = |d: &Document| -> Vec<(u32, u32, String)> {
+        d.paragraphs.iter().filter_map(|p| p.style.table_cell.map(|c| (c.row, c.col, p.text()))).filter(|(_, _, t)| !t.is_empty()).collect()
+    };
+    let close = |got: &Document, how: &str| {
+        let mut got_spans: Vec<_> = got.table_spans.values().flatten().copied().collect();
+        got_spans.sort_by_key(|s| (s.row, s.col));
+        assert_eq!(got_spans, spans, "{how}");
+        assert_eq!(texts(got), texts(&d), "{how}");
+    };
+
+    let dir = tempfile::tempdir().unwrap();
+    let docx_path = dir.path().join("merged.docx");
+    docx::write(&d, &docx_path).expect("write docx");
+    let _ = soffice_convert(bin, &docx_path, "odt").ok();
+    let odt_path = dir.path().join("merged.odt");
+    assert!(odt_path.exists(), "soffice did not convert docx to odt");
+    close(&letters_core::odt::read(odt_path.to_str().unwrap()).expect("read converted odt"), "docx → Writer → odt");
+
+    let Some(rt) = through_lo_to_docx(&d, "merged") else { return };
+    close(&rt, "odt → Writer → docx");
+}
+
 /// A numbered item's label through LibreOffice, both ways: "(1)", "1.a",
 /// a roman "IV." after a change of label within the list, and Word's
 /// "2.1" with no number in it. Each item shows what it showed before.
@@ -1937,5 +1978,80 @@ fn floating_pictures_keep_their_placement_through_writer_both_ways() {
     close(&letters_core::odt::read(odt_path.to_str().unwrap()).expect("read converted odt"), "docx → Writer → odt");
 
     let Some(rt) = through_lo_to_docx(&d, "float") else { return };
+    close(&rt, "odt → Writer → docx");
+}
+
+/// A letterhead's logo and a footer's picture survive Writer both ways:
+/// our docx converted to odt, and our odt converted to docx. Each keeps its
+/// place (the header or the footer), its bytes, its size and its alt text.
+#[test]
+fn header_and_footer_pictures_survive_writer_both_ways() {
+    let Some(bin) = require_or_skip() else { return };
+    let dir = tempfile::tempdir().unwrap();
+    let png: &[u8] = &[
+        0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00, 0x00, 0x00, 0x0d, 0x49, 0x48, 0x44, 0x52,
+        0x00, 0x00, 0x00, 0x03, 0x00, 0x00, 0x00, 0x02, 0x08, 0x02, 0x00, 0x00, 0x00, 0x12, 0x16, 0xf1,
+        0x4d, 0x00, 0x00, 0x00, 0x15, 0x49, 0x44, 0x41, 0x54, 0x78, 0x9c, 0x63, 0x3c, 0x21, 0x27, 0xc7,
+        0xc0, 0xc0, 0xc0, 0xc0, 0xc0, 0xc0, 0xc4, 0x00, 0x03, 0x00, 0x13, 0x2e, 0x01, 0x08, 0x6a, 0xc0,
+        0x65, 0x61, 0x00, 0x00, 0x00, 0x00, 0x49, 0x45, 0x4e, 0x44, 0xae, 0x42, 0x60, 0x82,
+    ];
+    let png_path = dir.path().join("logo.png");
+    std::fs::write(&png_path, png).unwrap();
+    let picture = |alt: &str| Run {
+        text: alt.into(),
+        style: RunStyle { image: Some(png_path.to_string_lossy().into()), image_extent_emu: Some((1_304_925, 542_925)), ..Default::default() },
+    };
+    let mut d = Document::from_plain_text("body text");
+    d.header = Some("Office of Financial Sanctions".into());
+    d.header_pictures = vec![picture("HM Treasury")];
+    d.footer = Some("October 2025".into());
+    d.footer_pictures = vec![picture("seal")];
+    let close = |got: &Document, how: &str| {
+        for (pics, alt) in [(&got.header_pictures, "HM Treasury"), (&got.footer_pictures, "seal")] {
+            assert_eq!(pics.len(), 1, "{how}: {alt}: header {:?} footer {:?}", got.header_pictures, got.footer_pictures);
+            let p = &pics[0];
+            assert_eq!(p.text, alt, "{how}: alt text");
+            let (w, h) = p.style.image_extent_emu.expect("a size");
+            // Writer keeps lengths in hundredths of a millimetre.
+            assert!(w.abs_diff(1_304_925) <= 360 && h.abs_diff(542_925) <= 360, "{how}: {alt} {:?}", (w, h));
+            assert!(std::fs::read(p.style.image.as_ref().unwrap()).unwrap().starts_with(b"\x89PNG"), "{how}: {alt}'s bytes");
+        }
+        assert!(got.header.as_deref().is_some_and(|h| h.contains("Office of Financial Sanctions")), "{how}: {:?}", got.header);
+        assert!(got.paragraphs.iter().all(|p| p.runs.iter().all(|r| r.style.image.is_none())), "{how}: a picture moved into the body");
+    };
+
+    let docx_path = dir.path().join("hf.docx");
+    docx::write(&d, &docx_path).expect("write docx");
+    let _ = soffice_convert(bin, &docx_path, "odt").ok();
+    let odt_path = dir.path().join("hf.odt");
+    assert!(odt_path.exists(), "soffice did not convert docx to odt");
+    close(&letters_core::odt::read(odt_path.to_str().unwrap()).expect("read converted odt"), "docx → Writer → odt");
+
+    let Some(rt) = through_lo_to_docx(&d, "hf") else { return };
+    close(&rt, "odt → Writer → docx");
+}
+
+/// A header at the right and a footer centred survive Writer both ways:
+/// our docx converted to odt, and our odt converted to docx.
+#[test]
+fn header_and_footer_alignment_survive_writer_both_ways() {
+    let Some(bin) = require_or_skip() else { return };
+    let mut d = Document::from_plain_text("body text");
+    d.header = Some("FINANCE BILL".into());
+    d.header_alignment = Alignment::Right;
+    d.footer = Some("OFFICIAL".into());
+    d.footer_alignment = Alignment::Center;
+    let close = |got: &Document, how: &str| {
+        assert_eq!((got.header.as_deref(), got.header_alignment), (Some("FINANCE BILL"), Alignment::Right), "{how}");
+        assert_eq!((got.footer.as_deref(), got.footer_alignment), (Some("OFFICIAL"), Alignment::Center), "{how}");
+    };
+    let dir = tempfile::tempdir().unwrap();
+    let docx_path = dir.path().join("align.docx");
+    docx::write(&d, &docx_path).expect("write docx");
+    let _ = soffice_convert(bin, &docx_path, "odt").ok();
+    let odt_path = dir.path().join("align.odt");
+    assert!(odt_path.exists(), "soffice did not convert docx to odt");
+    close(&letters_core::odt::read(odt_path.to_str().unwrap()).expect("read converted odt"), "docx → Writer → odt");
+    let Some(rt) = through_lo_to_docx(&d, "align") else { return };
     close(&rt, "odt → Writer → docx");
 }

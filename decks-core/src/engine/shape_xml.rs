@@ -346,6 +346,7 @@ pub(super) fn first_color(node: &Node, theme: &Theme, placeholder: Option<Color>
 }
 
 /// A resolved fill.
+#[derive(Clone)]
 enum Fill {
     None,
     Solid(Color),
@@ -410,7 +411,7 @@ pub(crate) struct SpStyle {
     pub round_adj: Option<f64>,
 }
 
-fn resolve_sp(sp: &Node, theme: &Theme, scale: f64) -> SpStyle {
+fn resolve_sp(sp: &Node, theme: &Theme, scale: f64, group_fill: Option<&Fill>) -> SpStyle {
     let sppr = sp.child("p:spPr");
     let style = sp.child("p:style");
     let reference = |name: &str| -> Option<(usize, Option<Color>)> {
@@ -420,7 +421,11 @@ fn resolve_sp(sp: &Node, theme: &Theme, scale: f64) -> SpStyle {
     };
 
     // Fill: the shape's own, else its fillRef into the format scheme.
-    let own_fill = sppr.and_then(|p| fill_among(p, theme, None));
+    let own_fill = match sppr {
+        // `a:grpFill`: the fill of the group the shape is in.
+        Some(p) if p.child("a:grpFill").is_some() => group_fill.cloned(),
+        _ => sppr.and_then(|p| fill_among(p, theme, None)),
+    };
     let fill = own_fill.or_else(|| {
         let (idx, color) = reference("a:fillRef")?;
         let entry = match idx {
@@ -527,12 +532,19 @@ pub(crate) fn frame_tables(xml: &str, theme: &Theme) -> Vec<FrameTable> {
                 .map(|tr| {
                     row_heights.push(tr.attr("h").and_then(|v| v.parse::<f64>().ok()).unwrap_or(0.0));
                     tr.children_named("a:tc")
-                        .map(|tc| TableCell {
-                            runs: tc.child("a:txBody").map(runs_of).unwrap_or_default(),
-                            fill: tc
-                                .child("a:tcPr")
-                                .and_then(|p| p.child("a:solidFill"))
-                                .and_then(|f| first_color(f, theme, None)),
+                        .map(|tc| {
+                            let span = |k: &str| tc.attr(k).and_then(|v| v.parse::<u32>().ok()).unwrap_or(1).clamp(1, 1000);
+                            let set = |k: &str| matches!(tc.attr(k), Some("1" | "true"));
+                            TableCell {
+                                runs: tc.child("a:txBody").map(runs_of).unwrap_or_default(),
+                                fill: tc
+                                    .child("a:tcPr")
+                                    .and_then(|p| p.child("a:solidFill"))
+                                    .and_then(|f| first_color(f, theme, None)),
+                                col_span: span("gridSpan"),
+                                row_span: span("rowSpan"),
+                                covered: set("hMerge") || set("vMerge"),
+                            }
                         })
                         .collect()
                 })
@@ -607,9 +619,29 @@ pub(crate) fn frame_charts(xml: &str) -> Vec<FrameChart> {
 /// document order. `scale` converts EMU to model units (for line widths).
 pub(crate) fn sp_styles(xml: &str, theme: &Theme, scale: f64) -> Vec<SpStyle> {
     let root = parse_tree(xml);
-    let mut shapes = Vec::new();
-    root.find_all("p:sp", &mut shapes);
-    shapes.into_iter().map(|sp| resolve_sp(sp, theme, scale)).collect()
+    // Every p:sp in document order, as `find_all` finds them, each with the
+    // fill of the group it is in: a shape filled `a:grpFill` takes it.
+    let mut out = Vec::new();
+    let mut stack: Vec<(std::slice::Iter<'_, Node>, Option<Fill>)> = vec![(root.children.iter(), None)];
+    while let Some((level, group_fill)) = stack.last_mut() {
+        let group_fill = group_fill.clone();
+        match level.next() {
+            None => {
+                stack.pop();
+            }
+            Some(c) if c.name == "p:sp" => out.push(resolve_sp(c, theme, scale, group_fill.as_ref())),
+            Some(c) => {
+                // A group's own fill, or the one around it, for its shapes.
+                let fill = if c.name == "p:grpSp" {
+                    c.child("p:grpSpPr").and_then(|p| fill_among(p, theme, None)).or(group_fill)
+                } else {
+                    group_fill
+                };
+                stack.push((c.children.iter(), fill));
+            }
+        }
+    }
+    out
 }
 
 #[cfg(test)]

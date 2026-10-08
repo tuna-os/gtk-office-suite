@@ -1471,6 +1471,7 @@ fn paragraph_styles_survive_a_snapshot() {
         insets: Some(Insets { left: 9.6, top: 4.8, right: 9.6, bottom: 4.8 }),
         autofit: Some(decks_core::engine::Autofit { font_scale: 0.625, line_reduction: 0.2 }),
         placeholder: None,
+        frame: None,
     };
     let deck = deck_of(vec![slide_of(
         vec![SlideObject::TextBox {

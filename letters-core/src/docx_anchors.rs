@@ -45,6 +45,50 @@ pub fn raw_picture(raw: &str) -> Option<RawPicture> {
     Some((embed, alt, extent, anchored))
 }
 
+/// A picture in a part's markup: its image relationship, alt text,
+/// displayed size in EMU, and its placement when it floats.
+pub struct PartPicture {
+    pub embed: String,
+    pub alt: String,
+    pub extent: Option<(u64, u64)>,
+    pub anchor: Option<ImageAnchor>,
+}
+
+/// The pictures of a header or footer part, in order: each `w:drawing`
+/// holding an image (a text box, which holds none, is not one).
+pub fn pictures_in(part_xml: &str) -> Vec<PartPicture> {
+    let mut out = Vec::new();
+    let mut rest = part_xml;
+    while let Some(at) = rest.find("<w:drawing>") {
+        let Some(len) = rest[at..].find("</w:drawing>") else { break };
+        let drawing = &rest[at..at + len];
+        rest = &rest[at + len..];
+        let Some((embed, alt, extent, anchored)) = raw_picture(drawing) else { continue };
+        out.push(PartPicture { embed, alt: alt.unwrap_or_default(), extent, anchor: anchored.then(|| placement(drawing)) });
+    }
+    out
+}
+
+/// The target of relationship `id` in a part's relationships, resolved
+/// against the part's folder (`word/`): `media/image1.png` is
+/// `word/media/image1.png`.
+pub fn relationship_target(rels_xml: &str, id: &str) -> Option<String> {
+    let mut rest = rels_xml;
+    while let Some(at) = rest.find("<Relationship ") {
+        let tag = &rest[at..at + rest[at..].find('>')? + 1];
+        rest = &rest[at + tag.len()..];
+        if attr(tag, "<Relationship", "Id") != Some(id) {
+            continue;
+        }
+        let target = attr(tag, "<Relationship", "Target")?;
+        return Some(match target.strip_prefix('/') {
+            Some(abs) => abs.to_string(),
+            None => format!("word/{target}"),
+        });
+    }
+    None
+}
+
 /// One `wp:anchor` element's placement.
 fn placement(anchor: &str) -> ImageAnchor {
     let (h_from, x_emu, h_align) = axis(anchor, "wp:positionH");
@@ -100,11 +144,12 @@ fn text_of<'a>(xml: &'a str, element: &str) -> Option<&'a str> {
 /// `document_xml` with each picture in `floating` (its image relationship,
 /// alt text and placement) turned from the inline drawing the writer made
 /// into a `wp:anchor` placed as the model says, in front of or behind the
-/// text and without wrapping it. Each gets a `wp:docPr` id of its own.
-pub fn float(document_xml: &str, floating: &[(String, String, ImageAnchor)]) -> String {
+/// text and without wrapping it. Each gets a `wp:docPr` id of its own,
+/// counting up from `first_id`.
+pub fn float(document_xml: &str, floating: &[(String, String, ImageAnchor)], first_id: u32) -> String {
     let mut out = String::with_capacity(document_xml.len() + floating.len() * 300);
     let mut rest = document_xml;
-    let mut next_id = 9000;
+    let mut next_id = first_id - 1;
     while let Some(at) = rest.find("<wp:inline") {
         let Some(len) = rest[at..].find("</wp:inline>") else { break };
         let inline = &rest[at..at + len];
@@ -138,6 +183,69 @@ pub fn float(document_xml: &str, floating: &[(String, String, ImageAnchor)]) -> 
     }
     out.push_str(rest);
     out
+}
+
+/// A header or footer part (`w:hdr` or `w:ftr`) holding `pictures` and
+/// then `text`, a paragraph a line, each aligned as `alignment` says (left,
+/// Word's default, unsaid): the pictures go in the first line's
+/// paragraph, where the reader finds them. Returns the part and its images
+/// as (relationship id, bytes, file name); a picture whose file cannot be
+/// read is left out.
+pub fn header_footer_part(is_header: bool, text: &str, pictures: &[crate::model::Run], alignment: crate::model::Alignment) -> (String, Vec<(String, Vec<u8>, String)>) {
+    let mut images = Vec::new();
+    let mut floating = Vec::new();
+    let mut drawings = String::new();
+    for run in pictures {
+        let Some(src) = run.style.image.as_deref() else { continue };
+        let Ok(bytes) = std::fs::read(src) else { continue };
+        let rel = format!("rIdLettersPic{}", images.len() + 1);
+        let n = 9800 + images.len();
+        let (w, h) = run.style.image_extent_emu.unwrap_or((914_400, 914_400));
+        drawings.push_str(&format!(
+            "<w:r><w:drawing><wp:inline distT=\"0\" distB=\"0\" distL=\"0\" distR=\"0\"><wp:extent cx=\"{w}\" cy=\"{h}\"/>\
+             <wp:docPr id=\"{n}\" name=\"Picture {n}\" descr=\"{alt}\"/><wp:cNvGraphicFramePr/>\
+             <a:graphic><a:graphicData uri=\"http://schemas.openxmlformats.org/drawingml/2006/picture\"><pic:pic>\
+             <pic:nvPicPr><pic:cNvPr id=\"0\" name=\"Picture {n}\"/><pic:cNvPicPr/></pic:nvPicPr>\
+             <pic:blipFill><a:blip r:embed=\"{rel}\"/><a:stretch><a:fillRect/></a:stretch></pic:blipFill>\
+             <pic:spPr><a:xfrm><a:off x=\"0\" y=\"0\"/><a:ext cx=\"{w}\" cy=\"{h}\"/></a:xfrm><a:prstGeom prst=\"rect\"><a:avLst/></a:prstGeom></pic:spPr>\
+             </pic:pic></a:graphicData></a:graphic></wp:inline></w:drawing></w:r>",
+            alt = xml_attr(&run.text),
+        ));
+        if let Some(anchor) = run.style.image_anchor {
+            floating.push((rel.clone(), run.text.clone(), anchor));
+        }
+        let name = std::path::Path::new(src).file_name().map_or_else(|| "image.png".to_string(), |n| n.to_string_lossy().into_owned());
+        images.push((rel, bytes, name));
+    }
+    let mut body = String::new();
+    let jc = match alignment {
+        crate::model::Alignment::Left => String::new(),
+        crate::model::Alignment::Center => "<w:pPr><w:jc w:val=\"center\"/></w:pPr>".to_string(),
+        crate::model::Alignment::Right => "<w:pPr><w:jc w:val=\"right\"/></w:pPr>".to_string(),
+        crate::model::Alignment::Justify => "<w:pPr><w:jc w:val=\"both\"/></w:pPr>".to_string(),
+    };
+    for (k, line) in text.split('\n').enumerate() {
+        body.push_str("<w:p>");
+        body.push_str(&jc);
+        if k == 0 {
+            body.push_str(&drawings);
+        }
+        if !line.is_empty() {
+            body.push_str(&format!("<w:r><w:t xml:space=\"preserve\">{}</w:t></w:r>", xml_attr(line)));
+        }
+        body.push_str("</w:p>");
+    }
+    let tag = if is_header { "w:hdr" } else { "w:ftr" };
+    let xml = format!(
+        "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>\
+         <{tag} xmlns:w=\"http://schemas.openxmlformats.org/wordprocessingml/2006/main\" \
+         xmlns:r=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships\" \
+         xmlns:wp=\"http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing\" \
+         xmlns:a=\"http://schemas.openxmlformats.org/drawingml/2006/main\" \
+         xmlns:pic=\"http://schemas.openxmlformats.org/drawingml/2006/picture\">{body}</{tag}>"
+    );
+    let xml = if floating.is_empty() { xml } else { float(&xml, &floating, if is_header { 9700 } else { 9750 }) };
+    (xml, images)
 }
 
 /// A frame's `relativeFrom`, `text` naming the anchoring paragraph's.
@@ -199,6 +307,20 @@ mod tests {
         assert_eq!(found.len(), 1, "a shape without a picture is not a placement");
     }
 
+    /// The tier 2/3 notification's header: the OFSI logo in line, and an
+    /// "OFFICIAL" text box, which is no picture.
+    #[test]
+    fn a_parts_pictures_and_their_relationships() {
+        let header = r#"<w:hdr><w:p><w:r><w:drawing><wp:inline><wp:extent cx="1304925" cy="542925"/><wp:docPr id="20" name="Picture 20" descr="Office of Financial Sanctions Implementation"/><a:graphic><a:blip r:embed="rId1"/></a:graphic></wp:inline></w:drawing></w:r></w:p>
+            <w:p><w:r><mc:AlternateContent><mc:Choice Requires="wps"><w:drawing><wp:anchor><wp:extent cx="1" cy="1"/><wps:txbx><w:txbxContent><w:p><w:r><w:t>OFFICIAL</w:t></w:r></w:p></w:txbxContent></wps:txbx></wp:anchor></w:drawing></mc:Choice><mc:Fallback><w:pict/></mc:Fallback></mc:AlternateContent></w:r></w:p></w:hdr>"#;
+        let pics = pictures_in(header);
+        assert_eq!(pics.len(), 1);
+        assert_eq!((pics[0].embed.as_str(), pics[0].alt.as_str(), pics[0].extent, pics[0].anchor), ("rId1", "Office of Financial Sanctions Implementation", Some((1_304_925, 542_925)), None));
+        let rels = r#"<Relationships><Relationship Id="rId2" Type="x" Target="media/image9.png"/><Relationship Id="rId1" Type="x" Target="media/image1.png"/></Relationships>"#;
+        assert_eq!(relationship_target(rels, "rId1").as_deref(), Some("word/media/image1.png"));
+        assert_eq!(relationship_target(rels, "rId3"), None);
+    }
+
     /// LibreOffice's floating picture, kept raw by rdocx, is still found.
     #[test]
     fn a_picture_in_alternate_content_is_read_from_its_markup() {
@@ -213,7 +335,7 @@ mod tests {
     fn a_floating_picture_is_written_as_an_anchor() {
         let xml = r#"<w:p><w:r><w:drawing><wp:inline><wp:extent cx="100" cy="50"/><wp:docPr id="1" name="Picture 1"/><a:graphic><a:blip r:embed="rId9"/></a:graphic></wp:inline></w:drawing></w:r><w:r><w:drawing><wp:inline><wp:extent cx="1" cy="1"/><wp:docPr id="1" name="x"/><a:graphic><a:blip r:embed="rId4"/></a:graphic></wp:inline></w:drawing></w:r></w:p>"#;
         let anchor = ImageAnchor { h_from: AnchorFrame::Margin, h_align: Some(AnchorAlign::End), v_from: AnchorFrame::Text, y_emu: -660_400, ..Default::default() };
-        let out = float(xml, &[("rId9".into(), "Ofsted \"logo\"".into(), anchor)]);
+        let out = float(xml, &[("rId9".into(), "Ofsted \"logo\"".into(), anchor)], 9001);
         assert!(out.contains(r#"<wp:positionH relativeFrom="margin"><wp:align>right</wp:align></wp:positionH>"#), "{out}");
         assert!(out.contains(r#"<wp:extent cx="100" cy="50"/><wp:wrapNone/><wp:docPr id="9001" name="Picture 9001" descr="Ofsted &quot;logo&quot;"/>"#), "{out}");
         assert_eq!(out.matches("<wp:inline").count(), 1, "the other picture stays inline: {out}");

@@ -12,17 +12,34 @@
 use super::shape::{Color, ColorModulation};
 use letters_core::model::Run;
 
-/// One cell: its styled text and, when the file says so, its own fill.
+/// One cell: its styled text and, when the file says so, its own fill. A
+/// merged cell spans more than one column or row (`a:tc gridSpan`,
+/// `rowSpan`); each cell it covers is still in the grid, marked `covered`
+/// (`hMerge`, `vMerge`), as DrawingML keeps them.
 #[derive(Clone, Debug, Default, PartialEq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct TableCell {
     pub runs: Vec<Run>,
     pub fill: Option<Color>,
+    /// Columns the cell spans; 0 and 1 are one.
+    #[cfg_attr(feature = "serde", serde(default))]
+    pub col_span: u32,
+    /// Rows the cell spans; 0 and 1 are one.
+    #[cfg_attr(feature = "serde", serde(default))]
+    pub row_span: u32,
+    /// Covered by a merged cell before it.
+    #[cfg_attr(feature = "serde", serde(default))]
+    pub covered: bool,
 }
 
 impl TableCell {
     pub fn text(&self) -> String {
         self.runs.iter().map(|r| r.text.as_str()).collect()
+    }
+
+    /// The columns and rows the cell spans, each at least one.
+    pub fn span(&self) -> (usize, usize) {
+        (self.col_span.max(1) as usize, self.row_span.max(1) as usize)
     }
 }
 
@@ -51,6 +68,28 @@ pub struct TableData {
 }
 
 impl TableData {
+    /// For each grid position, the cell drawn there: the merged cell that
+    /// covers it, or its own. Indexed `[row][col]`.
+    pub fn owners(&self) -> Vec<Vec<(usize, usize)>> {
+        let rows = self.rows.len();
+        let cols = self.rows.iter().map(Vec::len).max().unwrap_or(0);
+        let mut owner: Vec<Vec<(usize, usize)>> = (0..rows).map(|r| (0..cols).map(|c| (r, c)).collect()).collect();
+        for (r, row) in self.rows.iter().enumerate() {
+            for (c, cell) in row.iter().enumerate() {
+                if cell.covered || owner[r][c] != (r, c) {
+                    continue;
+                }
+                let (cs, rs) = cell.span();
+                for row in owner.iter_mut().skip(r).take(rs) {
+                    for at in row.iter_mut().skip(c).take(cs) {
+                        *at = (r, c);
+                    }
+                }
+            }
+        }
+        owner
+    }
+
     /// `cell_margins`, defaulted.
     pub fn margins(&self) -> (f64, f64) {
         self.cell_margins.unwrap_or((9.6, 4.8))
