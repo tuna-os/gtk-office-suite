@@ -1690,6 +1690,9 @@ impl TablesWindow {
                                         // The workbook on screen is now the
                                         // file just read: nothing to save.
                                         ctl.borrow_mut().mark_clean();
+                                        // Recent, as an open from the command
+                                        // line or file manager is (open_path).
+                                        suite_common::push_recent_file(&gio::Settings::new("org.tunaos.tables"), &path_str);
                                         da.queue_draw();
                                     }
                                     Err(e) => {

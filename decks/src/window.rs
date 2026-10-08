@@ -1216,6 +1216,9 @@ impl DecksWindow {
                                         *masters.borrow_mut() = deck.masters;
                                         cs_ref.set(0);
                                         so.set(None);
+                                        // Recent, as an open from the command
+                                        // line or file manager is (open_path).
+                                        suite_common::push_recent_file(&gio::Settings::new("org.tunaos.decks"), &path_str);
                                         *path_ref.borrow_mut() = Some(path_str);
                                         dirty.set(false);
                                         if cs.child_by_name("editor").is_none() {

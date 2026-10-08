@@ -8826,10 +8826,21 @@ class OpenPathsMixin:
                 lambda: "opened" if name in self._title() else self._error_ok(),
                 bool, description=f"{name} to open, or an error")
             if outcome == "opened":
+                # Opened is opened however it came: the dialog's open
+                # reaches the recent files as the command line's does. It
+                # did not in any of the three apps, which the installed
+                # Flatpak's portal check found (#1209).
+                self.wait_until(self._recent_files, lambda r: path in r,
+                                description=f"{name} in the recent files")
                 return
             outcome.do_action(0)
             self.wait_until(self._error_ok, lambda b: b is None, description="the error to close")
         self.fail(f"the Open dialog never opened {path}")
+
+    def _recent_files(self):
+        import subprocess
+        return subprocess.run(["gsettings", "get", self.aid, "recent-files"], capture_output=True, text=True,
+                              timeout=5, env={**os.environ, **self.launch_env}).stdout
 
     def _error_ok(self):
         from dogtail import tree
