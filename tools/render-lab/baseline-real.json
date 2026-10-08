@@ -152,11 +152,11 @@
     "B": "amber"
   },
   "letters/real-explanatory-note": {
-    "A": "red",
+    "A": "amber",
     "B": "amber"
   },
   "letters/real-explanatory-note-2": {
-    "A": "red",
+    "A": "amber",
     "B": "amber"
   },
   "letters/real-expression-of-interest-form": {
@@ -232,7 +232,7 @@
     "B": "amber"
   },
   "letters/real-uk-nsc-open-call-request-form": {
-    "A": "red",
+    "A": "amber",
     "B": "amber"
   },
   "letters/real-wga-2025-26-cg-02-template-for-notification-of-t": {
