@@ -6,7 +6,7 @@
 // flattened (see read()). Fidelity is measured by tests/docx.rs and the
 // LO-authored corpus in tests/lo_parity.rs.
 
-use crate::model::{Alignment, Document, ListKind, PageGeometry, Paragraph, ParaStyle, Run, RunStyle};
+use crate::model::{Alignment, Document, ListKind, ListLabel, NumberFormat, PageGeometry, Paragraph, ParaStyle, Run, RunStyle};
 use rdocx_oxml::shared::ST_Jc;
 
 /// The body-paragraph properties rdocx does not hand back, in twips.
@@ -392,6 +392,7 @@ fn with_part(package: &[u8], name: &str, f: impl Fn(&str) -> String) -> Result<V
 fn read_opened(path: &str, doc: rdocx::Document) -> Result<Document, String> {
     THEME.with(|t| *t.borrow_mut() = theme_fonts(path));
     RESTARTED.with(|r| r.borrow_mut().clear());
+    ANCHORS.with(|a| *a.borrow_mut() = anchor_placements(path));
     STYLE_FONTS.with(|s| *s.borrow_mut() = style_fonts(path));
 
     // Paragraph properties rdocx cannot hand back: strict-spelled indents
@@ -436,8 +437,17 @@ fn read_opened(path: &str, doc: rdocx::Document) -> Result<Document, String> {
     // Per body paragraph: how many paragraphs were kept before it, which
     // is where a table that precedes it goes.
     let mut kept_before = Vec::with_capacity(body.len() + 1);
+    // Per kept paragraph: the number Word gives it, when it is a numbered
+    // list item (`WordCounter`), for the pass after the tables go in.
+    let mut word_numbers: Vec<Option<u32>> = Vec::new();
+    let mut counter = WordCounter::default();
     for (i, p) in body.iter().enumerate() {
         kept_before.push(paragraphs.len());
+        // The paragraph the writer puts after a table that meets another
+        // or ends the document is OOXML's, not the document's.
+        if p.style_id() == Some(SEPARATOR_STYLE) && p.text().is_empty() {
+            continue;
+        }
         let mut pending_break = false;
         // Decorative rules (LibreOffice's HorizontalLine style) carry no text.
         if p.style_id() == Some("HorizontalLine") && p.text().is_empty() {
@@ -485,6 +495,7 @@ fn read_opened(path: &str, doc: rdocx::Document) -> Result<Document, String> {
             apply_strict_indents(&mut para.style, r);
         }
         list_indent_from_declared(&doc, p, &mut para.style);
+        word_numbers.push(counter.number(&doc, p, &mut para.style));
         paragraphs.push(para);
         carried_break = pending_break;
     }
@@ -541,7 +552,8 @@ fn read_opened(path: &str, doc: rdocx::Document) -> Result<Document, String> {
                         rdocx::CellItemRef::Paragraph(cp) => {
                             let raw_cell = raw_cells.as_ref().and_then(|s| s.get(cell_index));
                             cell_index += 1;
-                            if cp.text().is_empty() { continue; }
+                            // An empty paragraph is a line of the cell:
+                            // a form's answer box is a cell of them.
                             let mut para = map_paragraph(&doc, &cp, table.style_id());
                             if let Some(r) = raw_cell {
                                 apply_strict_indents(&mut para.style, r);
@@ -583,9 +595,10 @@ fn read_opened(path: &str, doc: rdocx::Document) -> Result<Document, String> {
     // tables at one position keep their order.
     for (ti, cells) in table_paragraphs.into_iter().enumerate().rev() {
         let at = tables_at.as_ref().map_or(paragraphs.len(), |t| kept_before[t[ti].min(body.len())]);
+        word_numbers.splice(at..at, std::iter::repeat_n(None, cells.len()));
         paragraphs.splice(at..at, cells);
     }
-    drop_table_separators(&mut paragraphs);
+    number_as_word_does(&mut paragraphs, &word_numbers);
 
     if paragraphs.is_empty() {
         let mut d = Document::new();
@@ -599,6 +612,7 @@ fn read_opened(path: &str, doc: rdocx::Document) -> Result<Document, String> {
     // Table ids are the tables' order, as the cells above are tagged.
     let table_columns = tables.iter().enumerate().filter_map(|(ti, t)| Some((ti as u32, column_widths(t)?))).collect();
     let table_rows = tables.iter().enumerate().filter_map(|(ti, t)| Some((ti as u32, row_heights(t)?))).collect();
+    let table_fills = tables.iter().enumerate().filter_map(|(ti, t)| Some((ti as u32, cell_fills(t)?))).collect();
 
     Ok(Document {
         paragraphs,
@@ -611,7 +625,25 @@ fn read_opened(path: &str, doc: rdocx::Document) -> Result<Document, String> {
         comments: Vec::new(),
         table_columns,
         table_rows,
+        table_fills,
     })
+}
+
+/// A table's shaded cells (`w:shd w:fill`), when any cell is; "auto" is
+/// no fill.
+fn cell_fills(table: &rdocx::TableRef<'_>) -> Option<Vec<crate::model::CellFill>> {
+    let mut fills = Vec::new();
+    for ri in 0..table.row_count() {
+        let Some(row) = table.row(ri) else { continue };
+        for ci in 0..row.cell_count() {
+            let Some(fill) = row.cell(ci).and_then(|c| c.shading_fill().map(str::to_string)) else { continue };
+            let color = fill.trim_start_matches('#').to_uppercase();
+            if color.len() == 6 && color.chars().all(|c| c.is_ascii_hexdigit()) {
+                fills.push(crate::model::CellFill { row: ri as u32, col: ci as u32, color });
+            }
+        }
+    }
+    (!fills.is_empty()).then_some(fills)
 }
 
 /// A table's row heights, when any row gives one (`w:trHeight`).
@@ -634,28 +666,17 @@ fn column_widths(table: &rdocx::TableRef<'_>) -> Option<Vec<f64>> {
     widths.filter(|w| !w.is_empty() && w.iter().all(|x| *x > 0.0))
 }
 
-/// OOXML needs a paragraph after a table that ends the document or a cell,
-/// and between two tables (Word merges adjacent ones). Those carry nothing,
-/// so a table followed only by empty paragraphs, up to the next table or
-/// the end, loses the first of them. The writer adds one in exactly that
-/// case (`needs_separator`), so a save and reopen keeps the document.
-fn drop_table_separators(paragraphs: &mut Vec<Paragraph>) {
-    let table_of = |p: &Paragraph| p.style.table_cell.map(|t| t.table);
-    let mut k = 0;
-    while k < paragraphs.len() {
-        let last_cell = table_of(&paragraphs[k]).is_some()
-            && paragraphs.get(k + 1).map(table_of) != Some(table_of(&paragraphs[k]));
-        if last_cell && needs_separator(&paragraphs[k + 1..]) && k + 1 < paragraphs.len() {
-            paragraphs.remove(k + 1);
-        }
-        k += 1;
-    }
-}
+/// The style of the paragraph OOXML needs after a table that ends the
+/// document or meets another, which the model does not have: the writer
+/// adds it, 1pt high so Word draws the tables as Letters does, and the
+/// reader drops it. An empty paragraph the document has after a table is
+/// a line of the document, and both keep it.
+const SEPARATOR_STYLE: &str = "LettersTableSeparator";
 
-/// Whether the paragraphs after a table, up to the next table or the end,
-/// are all empty: the case where a separator paragraph follows the table.
+/// Whether a table followed by `after` needs the separator: nothing
+/// follows it, or another table does.
 fn needs_separator(after: &[Paragraph]) -> bool {
-    after.iter().take_while(|p| p.style.table_cell.is_none()).all(|p| p.runs.is_empty())
+    after.first().is_none_or(|p| p.style.table_cell.is_some())
 }
 
 /// Read a DOCX and retain package members this reader does not interpret.
@@ -726,6 +747,9 @@ pub fn write(doc: &Document, path: impl AsRef<std::path::Path>) -> Result<(), St
     let mut out = rdocx::Document::new();
     // Smart chips, written as sentinels and made content controls below.
     let mut chips: Vec<(crate::chips::Chip, String)> = Vec::new();
+    // Floating pictures, written inline and anchored afterwards: their
+    // image relationship, alt text and placement.
+    let mut floating: Vec<(String, String, crate::model::ImageAnchor)> = Vec::new();
     // Tracked changes, written as bracketed text and made w:ins/w:del below.
     let mut revisions: Vec<crate::model::Revision> = Vec::new();
     let paras = &doc.paragraphs;
@@ -747,6 +771,9 @@ pub fn write(doc: &Document, path: impl AsRef<std::path::Path>) -> Result<(), St
     let mut has_toc = false;
     // The numIds of the bullet and numbered list definitions, once made.
     let mut list_ids: [Option<u32>; 2] = [None, None];
+    // What each numbered item shows, and what Word would show it as.
+    let ordinals = crate::lists::ordinals(paras.iter().map(|p| &p.style));
+    let mut word = WordNumbers::default();
     let mut i = 0;
     while i < paras.len() {
         // Consecutive paragraphs sharing a table id become one rdocx table.
@@ -766,6 +793,11 @@ pub fn write(doc: &Document, path: impl AsRef<std::path::Path>) -> Result<(), St
             if let Some(widths) = doc.table_columns.get(&tc0.table).filter(|w| w.len() == cols) {
                 for (c, w) in widths.iter().enumerate() {
                     tbl.set_column_width(c, rdocx::Length::pt(*w));
+                }
+            }
+            for fill in doc.table_fills.get(&tc0.table).into_iter().flatten() {
+                if let Some(mut cell) = tbl.cell(fill.row as usize, fill.col as usize) {
+                    cell.set_shading(&fill.color);
                 }
             }
             if let Some(heights) = doc.table_rows.get(&tc0.table) {
@@ -825,9 +857,13 @@ pub fn write(doc: &Document, path: impl AsRef<std::path::Path>) -> Result<(), St
             // OOXML requires a paragraph in every cell, which a cell left
             // empty keeps from its creation, and one after a table that
             // ends the document or meets another; the reader drops it
-            // again (`drop_table_separators`).
+            // again (`SEPARATOR_STYLE`).
             if needs_separator(&paras[i..]) {
-                out.add_paragraph("");
+                out.add_paragraph("")
+                    .style(SEPARATOR_STYLE)
+                    .space_before(rdocx::Length::pt(0.0))
+                    .space_after(rdocx::Length::pt(0.0))
+                    .line_spacing(1.0);
             }
             continue;
         }
@@ -843,15 +879,29 @@ pub fn write(doc: &Document, path: impl AsRef<std::path::Path>) -> Result<(), St
             // are plain paragraphs on that numId, which is the XML the
             // builder would have written anyway.
             (ListKind::Bullet | ListKind::Numbered, Some(num_id)) => out.add_paragraph("").numbering(num_id, level),
-            (kind, None) => {
-                let _ = if kind == ListKind::Bullet {
-                    out.add_bullet_list_item("", level)
-                } else {
-                    out.add_numbered_list_item("", level)
-                };
-                list_ids[usize::from(kind == ListKind::Numbered)] =
-                    out.paragraphs().last().and_then(|p| p.numbering()).map(|(num_id, _)| num_id);
+            (ListKind::Bullet, None) => {
+                let _ = out.add_bullet_list_item("", level);
+                list_ids[0] = out.paragraphs().last().and_then(|p| p.numbering()).map(|(num_id, _)| num_id);
                 out.last_paragraph_mut().expect("the list item just added")
+            }
+            // Every level "N.", as Letters draws a numbered item with no
+            // label of its own: rdocx's own definition letters the second
+            // level and numbers the third in roman, which Word and
+            // LibreOffice showed and the reader read back as labels.
+            (ListKind::Numbered, None) => {
+                let levels = vec![rdocx::ListLevel::decimal(); 9];
+                let id = out.add_numbering_definition(&levels).and_then(|d| out.add_numbering_instance(d, &[]));
+                match id {
+                    Ok(id) => {
+                        list_ids[1] = Some(id);
+                        out.add_paragraph("").numbering(id, level)
+                    }
+                    Err(_) => {
+                        let _ = out.add_numbered_list_item("", level);
+                        list_ids[1] = out.paragraphs().last().and_then(|p| p.numbering()).map(|(num_id, _)| num_id);
+                        out.last_paragraph_mut().expect("the list item just added")
+                    }
+                }
             }
         };
         if let Some(level) = para.style.heading {
@@ -931,19 +981,41 @@ pub fn write(doc: &Document, path: impl AsRef<std::path::Path>) -> Result<(), St
             Alignment::Justify => p.alignment(rdocx::Alignment::Justify),
         };
         let _ = p; // release the builder borrow before append_hyperlink
-        // A numbered item that restarts the count (#1205): its own instance
-        // of the numbered list's definition, with a start override at its
-        // level, which the items after it continue. Without it a list
-        // restarted at 5 counted on from the previous one.
-        if let (ListKind::Numbered, Some(start), Some(num_id)) = (para.style.list, para.style.list_start, list_ids[1]) {
-            let definition = out.numbering_instance(num_id).map(|n| n.definition_id);
-            let override_ = rdocx::NumberingLevelOverride {
-                level, start: Some(start), replacement: None, paragraph_style_link: None, has_unmodeled_properties: false,
-            };
-            if let Some(Ok(id)) = definition.map(|d| out.add_numbering_instance(d, &[override_])) {
-                out.last_paragraph_mut().expect("the list item").set_numbering(id, level);
-                list_ids[1] = Some(id);
+        // A numbered item Word would number otherwise: a restart (#1205),
+        // or the first item of a list after a paragraph that ended the one
+        // before, which Word would count on from it. It gets its own
+        // instance of the numbered list's definition, with a start
+        // override at its level, which the items after it continue.
+        if let (ListKind::Numbered, Some(mut num_id)) = (para.style.list, list_ids[1]) {
+            // So does an item labelled otherwise than its level of the
+            // instance: the new instance's override replaces the level, and
+            // keeps the labels the instance gave its other levels.
+            let number = ordinals[i - 1];
+            let label = &para.style.list_label;
+            if word.next(num_id, level) != number || word.label(num_id, level) != label.as_ref() {
+                let definition = out.numbering_instance(num_id).map(|n| n.definition_id);
+                let mut labels = word.labels.get(&num_id).cloned().unwrap_or_default();
+                labels[level.min(8) as usize] = label.clone();
+                let overrides: Vec<rdocx::NumberingLevelOverride> = (0..9u32)
+                    .filter(|&l| l == level || labels[l as usize].is_some())
+                    .map(|l| rdocx::NumberingLevelOverride {
+                        level: l,
+                        start: (l == level).then_some(number),
+                        replacement: (labels[l as usize].is_some() || word.label(num_id, l).is_some())
+                            .then(|| word_level(labels[l as usize].as_ref(), l, (l == level).then_some(number))),
+                        paragraph_style_link: None,
+                        has_unmodeled_properties: false,
+                    })
+                    .collect();
+                if let Some(Ok(id)) = definition.map(|d| out.add_numbering_instance(d, &overrides)) {
+                    out.last_paragraph_mut().expect("the list item").set_numbering(id, level);
+                    list_ids[1] = Some(id);
+                    word.restart(id, level, number);
+                    word.labels.insert(id, labels);
+                    num_id = id;
+                }
             }
+            word.count(num_id, level, number);
         }
         // A table of contents is Word's TOC field around its entries.
         let toc_edge = |k: usize| paras.get(k).is_none_or(|q| q.style.toc.is_none());
@@ -976,6 +1048,16 @@ pub fn write(doc: &Document, path: impl AsRef<std::path::Path>) -> Result<(), St
                             Some((w, h)) => (rdocx::Length::emu(w as i64), rdocx::Length::emu(h as i64)),
                             None => (rdocx::Length::inches(4.0), rdocx::Length::inches(3.0)),
                         };
+                        // A floating picture stays in its paragraph, where
+                        // its anchor is: written inline there, and made a
+                        // `wp:anchor` once the part is written (docx_anchors).
+                        if let Some(anchor) = run.style.image_anchor {
+                            let rel = out.embed_image(&bytes, &name);
+                            let mut p = out.last_paragraph_mut().expect("paragraph");
+                            p.add_run("").add_picture(&rel, w, h);
+                            floating.push((rel, run.text.clone(), anchor));
+                            continue;
+                        }
                         let mut pic = out.add_picture(&bytes, &name, w, h);
                         pic = pic.style("Figure");
                         let _ = pic;
@@ -1072,11 +1154,12 @@ pub fn write(doc: &Document, path: impl AsRef<std::path::Path>) -> Result<(), St
     let bytes = with_letters_styles(&bytes, &doc.base_font, &doc.heading_styles)
         .map_err(|e| format!("Cannot save {}: {}", path.as_ref().display(), e))?;
     let tabbed = paras.iter().flat_map(|p| &p.runs).any(|r| r.text.contains('\t'));
-    let bytes = if chips.is_empty() && revisions.is_empty() && doc.comments.is_empty() && !has_toc && !tabbed {
+    let bytes = if chips.is_empty() && revisions.is_empty() && doc.comments.is_empty() && !has_toc && !tabbed && floating.is_empty() {
         bytes
     } else {
         with_part(&bytes, "word/document.xml", |xml| {
             let xml = if tabbed { tabs_as_elements(xml) } else { xml.to_string() };
+            let xml = if floating.is_empty() { xml } else { crate::docx_anchors::float(&xml, &floating) };
             let xml = crate::docx_revisions::wrap(&crate::docx_chips::wrap(&xml, &chips), &revisions);
             let xml = crate::docx_comments::wrap(&xml, &doc.comments);
             if has_toc { crate::docx_toc::wrap(&xml) } else { xml }
@@ -1316,6 +1399,200 @@ fn run_page_break(p: &rdocx::ParagraphRef<'_>) -> RunPageBreak {
     RunPageBreak { leading, trailing: break_after_text }
 }
 
+/// A numbering level labelled `label` ("N." for `None`), Word's level
+/// text: the prefix, the level's own placeholder, the suffix.
+fn word_level(label: Option<&ListLabel>, level: u32, start: Option<u32>) -> rdocx::ListLevel {
+    let plain = ListLabel { suffix: ".".into(), ..Default::default() };
+    let label = label.unwrap_or(&plain);
+    let format = match label.format {
+        NumberFormat::Decimal => rdocx::ListNumberFormat::Decimal,
+        NumberFormat::LowerLetter => rdocx::ListNumberFormat::LowerLetter,
+        NumberFormat::UpperLetter => rdocx::ListNumberFormat::UpperLetter,
+        NumberFormat::LowerRoman => rdocx::ListNumberFormat::LowerRoman,
+        NumberFormat::UpperRoman => rdocx::ListNumberFormat::UpperRoman,
+        NumberFormat::None => rdocx::ListNumberFormat::None,
+    };
+    // A "%" of the label's own would read as a placeholder.
+    let literal = |t: &str| t.replace('%', "");
+    let own = if label.format == NumberFormat::None { String::new() } else { format!("%{}", level + 1) };
+    let level = rdocx::ListLevel::new(format).level_text(format!("{}{own}{}", literal(&label.prefix), literal(&label.suffix)));
+    match start {
+        Some(n) => level.start(n),
+        None => level,
+    }
+}
+
+/// The numbers Word will give the numbered items written so far: per list
+/// instance and level, the last number shown and where a level starts.
+#[derive(Default)]
+struct WordNumbers {
+    counts: std::collections::HashMap<u32, [Option<u32>; 9]>,
+    starts: std::collections::HashMap<(u32, u32), u32>,
+    /// The levels an instance labels otherwise than "N." (`word_level`).
+    labels: std::collections::HashMap<u32, [Option<ListLabel>; 9]>,
+}
+
+impl WordNumbers {
+    fn label(&self, num_id: u32, level: u32) -> Option<&ListLabel> {
+        self.labels.get(&num_id)?[level.min(8) as usize].as_ref()
+    }
+
+    /// The number Word gives the next item at `level` of `num_id`.
+    fn next(&self, num_id: u32, level: u32) -> u32 {
+        let last = self.counts.get(&num_id).and_then(|c| c[level.min(8) as usize]);
+        last.map_or_else(|| self.starts.get(&(num_id, level)).copied().unwrap_or(1), |n| n + 1)
+    }
+
+    fn restart(&mut self, num_id: u32, level: u32, start: u32) {
+        self.starts.insert((num_id, level), start);
+    }
+
+    /// Count an item numbered `n` at `level`, which restarts the levels
+    /// below it.
+    fn count(&mut self, num_id: u32, level: u32, n: u32) {
+        let counts = self.counts.entry(num_id).or_default();
+        let at = level.min(8) as usize;
+        counts[at] = Some(n);
+        counts[at + 1..].iter_mut().for_each(|c| *c = None);
+    }
+}
+
+/// The numbers Word gives numbered list items, in body order.
+///
+/// Word keeps one count per list instance (`numId`) and level. A paragraph
+/// that is not in the list does not end it: the minutes that number
+/// "1.1", then a paragraph of discussion, then "1.2" are one list, which
+/// this model's own count (`lists::ordinals`) would restart at every plain
+/// paragraph. An item restarts the levels below its own, and a level's
+/// first item starts at the level's `w:start`, or at the instance's
+/// restart (`list_start`, read from its `w:startOverride`).
+#[derive(Default)]
+struct WordCounter {
+    counts: std::collections::HashMap<u32, [Option<u32>; 9]>,
+}
+
+impl WordCounter {
+    /// Count the item `p`, styled `style`, and give it its label
+    /// (`list_label`); Word's number for it, when it is a numbered item.
+    fn number(&mut self, doc: &rdocx::Document, p: &rdocx::ParagraphRef<'_>, style: &mut ParaStyle) -> Option<u32> {
+        if style.list != ListKind::Numbered {
+            return None;
+        }
+        let (num_id, level) = paragraph_numbering(doc, p)?;
+        let at = usize::from(style.list_level);
+        let counts = self.counts.entry(num_id).or_default();
+        counts[at + 1..].iter_mut().for_each(|c| *c = None);
+        let first = |l: u32| numbering_level(doc, num_id, l).map_or(1, |l| l.0);
+        let n = style.list_start.unwrap_or_else(|| counts[at].map_or_else(|| first(level), |c| c + 1));
+        counts[at] = Some(n);
+        // The levels above this one, as Word shows them in "%1.%2": the
+        // number each is at, or its first number before any item.
+        let shown = |k: u32| counts.get(k as usize).copied().flatten().unwrap_or_else(|| first(k));
+        let format = |k: u32| numbering_level(doc, num_id, k).map_or(NumberFormat::Decimal, |l| l.1);
+        let text = numbering_level(doc, num_id, level).and_then(|l| l.2);
+        style.list_label = text.and_then(|t| word_label(&t, level, format(level), |k| (shown(k), format(k))));
+        Some(n)
+    }
+}
+
+/// Level `level` of list instance `num_id`: its first number, format and
+/// level text. The instance's own replacement of the level (a
+/// `w:lvlOverride` holding a `w:lvl`) wins over its definition's.
+fn numbering_level(doc: &rdocx::Document, num_id: u32, level: u32) -> Option<(u32, NumberFormat, Option<String>)> {
+    let replaced = doc.numbering_instance(num_id).and_then(|n| {
+        n.level_overrides.into_iter().find(|o| o.level == level).and_then(|o| o.replacement)
+    });
+    if let Some(l) = replaced {
+        let format = match l.format {
+            rdocx::ListNumberFormat::LowerLetter => NumberFormat::LowerLetter,
+            rdocx::ListNumberFormat::UpperLetter => NumberFormat::UpperLetter,
+            rdocx::ListNumberFormat::LowerRoman => NumberFormat::LowerRoman,
+            rdocx::ListNumberFormat::UpperRoman => NumberFormat::UpperRoman,
+            rdocx::ListNumberFormat::None => NumberFormat::None,
+            _ => NumberFormat::Decimal,
+        };
+        return Some((l.start.unwrap_or(1), format, l.level_text_value().map(str::to_string)));
+    }
+    let l = doc.numbering_level(num_id, level)?;
+    Some((l.start, number_format(l.format_name), l.level_text.map(str::to_string)))
+}
+
+/// A numbering format name (`w:numFmt`) as this model draws it; the many
+/// it has no digits for are drawn as decimals, LibreOffice's fallback.
+fn number_format(name: &str) -> NumberFormat {
+    match name {
+        "lowerLetter" => NumberFormat::LowerLetter,
+        "upperLetter" => NumberFormat::UpperLetter,
+        "lowerRoman" => NumberFormat::LowerRoman,
+        "upperRoman" => NumberFormat::UpperRoman,
+        "none" => NumberFormat::None,
+        _ => NumberFormat::Decimal,
+    }
+}
+
+/// The label of an item at `level` whose level text (`w:lvlText`) is
+/// `text`: the text before the item's own placeholder is its prefix and
+/// the text after its suffix, each with the placeholders of the levels
+/// above as `above` gives them (`%1` is level 0). With no placeholder of
+/// its own, as "2.1", the text is all prefix and no number shows. `None`
+/// for "N.", the label every numbered item has without one.
+fn word_label(text: &str, level: u32, format: NumberFormat, above: impl Fn(u32) -> (u32, NumberFormat)) -> Option<ListLabel> {
+    let own = format!("%{}", level + 1);
+    let fill = |part: &str| {
+        let mut out = String::new();
+        let mut chars = part.chars().peekable();
+        while let Some(c) = chars.next() {
+            match (c, chars.peek().and_then(|d| d.to_digit(10))) {
+                ('%', Some(d @ 1..=9)) => {
+                    chars.next();
+                    let (n, f) = above(d - 1);
+                    out.push_str(&crate::lists::format_number(f, n));
+                }
+                _ => out.push(c),
+            }
+        }
+        out
+    };
+    let label = match text.find(&own) {
+        Some(at) => ListLabel { prefix: fill(&text[..at]), format, suffix: fill(&text[at + own.len()..]) },
+        None => ListLabel { prefix: fill(text), format: NumberFormat::None, suffix: String::new() },
+    };
+    (label != ListLabel { prefix: String::new(), format: NumberFormat::Decimal, suffix: ".".into() }).then_some(label)
+}
+
+/// Give each numbered item Word's number (`WordCounter`) where this
+/// model's count would show another, by restarting the count there. Where
+/// the two agree nothing changes, so a save writes the list as it was.
+fn number_as_word_does(paragraphs: &mut [Paragraph], word_numbers: &[Option<u32>]) {
+    // A restart this model's count makes anyway is no restart: the first
+    // item of a list, which a save gives its own instance starting at 1.
+    for k in 0..paragraphs.len() {
+        let Some(start) = paragraphs[k].style.list_start else { continue };
+        paragraphs[k].style.list_start = None;
+        if crate::lists::ordinals(paragraphs[..=k].iter().map(|p| &p.style))[k] != start {
+            paragraphs[k].style.list_start = Some(start);
+        }
+    }
+    loop {
+        let ours = crate::lists::ordinals(paragraphs.iter().map(|p| &p.style));
+        let differs = word_numbers.iter().zip(&ours).position(|(w, o)| w.is_some_and(|w| w != *o));
+        let Some(k) = differs else { return };
+        paragraphs[k].style.list_start = word_numbers[k];
+    }
+}
+
+/// Whether a run reads as highlighted: a named Word highlight other than
+/// "none", or a shading fill that shows. Forms pasted from the web shade
+/// whole paragraphs white (`w:shd w:fill="FFFFFF"`) on a white page; read
+/// as a highlight, that text drew yellow where Word and LibreOffice draw
+/// nothing.
+fn run_is_highlighted(r: &rdocx::RunRef<'_>) -> bool {
+    if let Some(name) = r.highlight_color() {
+        return name != "none";
+    }
+    r.shading_fill().is_some_and(|fill| !fill.eq_ignore_ascii_case("auto") && !fill.eq_ignore_ascii_case("FFFFFF"))
+}
+
 /// A paragraph's list numbering as `(num_id, level)`, wherever it is set.
 ///
 /// Word's built-in list styles ("List Bullet", "List Number 2", …) carry
@@ -1441,7 +1718,9 @@ fn map_paragraph(doc: &rdocx::Document, p: &rdocx::ParagraphRef<'_>, table_style
     let keep_with_next = p.keep_with_next_value().or(styled.keep_next).unwrap_or(false);
     let numbering = paragraph_numbering(doc, p);
     let (list, list_level) = match numbering {
-        Some((num_id, level)) => (match doc.numbering_is_bullet(num_id) {
+        // The item's own level says bullet or number: a numbered list's
+        // second level is often bulleted, and the reverse.
+        Some((num_id, level)) => (match doc.numbering_level(num_id, level).map(|l| l.format_name == "bullet").or_else(|| doc.numbering_is_bullet(num_id)) {
             Some(false) => ListKind::Numbered,
             // Unknown num_id defaults to bullet — the safer visual guess.
             _ => ListKind::Bullet,
@@ -1468,8 +1747,18 @@ fn map_paragraph(doc: &rdocx::Document, p: &rdocx::ParagraphRef<'_>, table_style
     for (idx, r) in p.runs().enumerate() {
         // Inline images: extract bytes to a cache file so the model's
         // image path is always locally readable.
-        if let Some((rel_id, alt)) = r.inline_image() {
-            if let Some(bytes) = doc.image_data(rel_id) {
+        // A picture, inline or floating: a floating one is placed where
+        // its anchor says (`docx_anchors`), the next placement of its image.
+        let picture = r.items().into_iter().find_map(|item| match item {
+            rdocx::RunItemRef::Drawing(d) if d.relationship_kind() == Some(rdocx::DrawingRelationshipKind::Embedded) => {
+                let extent = d.width().zip(d.height()).map(|(w, h)| (w.to_emu().max(0) as u64, h.to_emu().max(0) as u64));
+                Some((d.relationship_id()?.to_string(), d.description().map(str::to_string), extent, d.is_anchor()))
+            }
+            rdocx::RunItemRef::UnsupportedXml(raw) => std::str::from_utf8(raw).ok().and_then(crate::docx_anchors::raw_picture),
+            _ => None,
+        });
+        if let Some((rel_id, alt, extent, anchored)) = picture {
+            if let Some(bytes) = doc.image_data(&rel_id) {
                 // gh-268: the previous code wrote to a predictable
                 // /tmp/letters-images/<content-hash>.png via fs::write, which
                 // follows a pre-created symlink — a local user could point the
@@ -1484,17 +1773,16 @@ fn map_paragraph(doc: &rdocx::Document, p: &rdocx::ParagraphRef<'_>, table_style
                 };
                 // The displayed size is the drawing's extent, not the
                 // image's pixels: a 200px picture placed 2in wide is 2in.
-                let extent = r.items().into_iter().find_map(|item| match item {
-                    rdocx::RunItemRef::Drawing(d) => d.width().zip(d.height()),
-                    _ => None,
-                });
+                let image_anchor = anchored
+                    .then(|| ANCHORS.with(|a| a.borrow_mut().get_mut(&rel_id).and_then(|q| q.pop_front())))
+                    .flatten();
                 runs.push(Run {
-                    text: alt.unwrap_or("").to_string(),
+                    text: alt.unwrap_or_default(),
                     style: RunStyle {
                         image: Some(path.to_string_lossy().into_owned()),
                         image_extent_emu: extent
-                            .map(|(w, h)| (w.to_emu().max(0) as u64, h.to_emu().max(0) as u64))
                             .filter(|(w, h)| *w > 0 && *h > 0),
+                        image_anchor,
                         ..Default::default()
                     },
                 });
@@ -1520,7 +1808,11 @@ fn map_paragraph(doc: &rdocx::Document, p: &rdocx::ParagraphRef<'_>, table_style
             // file's heading style is not copied onto every run.
             rdocx_oxml::properties::CT_RPr::default()
         } else {
-            doc.effective_run_properties(p, &r)
+            // The styles' properties, not rdocx's effective ones: those
+            // also merge in the paragraph mark's (`w:pPr/w:rPr`), which
+            // formats the pilcrow alone. A form whose marks were bold drew
+            // every paragraph bold where Word and LibreOffice draw it plain.
+            doc.resolve_run_properties(p.style_id(), r.style_id())
         };
         let family = r.font_name().map(|f| f.to_string()).or_else(|| {
             heading.is_none().then(|| style_family(p.style_id())).flatten().filter(|f| Some(f) != base.family.as_ref())
@@ -1545,15 +1837,16 @@ fn map_paragraph(doc: &rdocx::Document, p: &rdocx::ParagraphRef<'_>, table_style
         runs.push(Run {
             text,
             style: RunStyle {
-                bold: r.is_bold() || eff.bold == Some(true),
-                italic: r.is_italic() || eff.italic == Some(true),
+                bold: r.bold_value().unwrap_or(eff.bold == Some(true)),
+                italic: r.italic_value().unwrap_or(eff.italic == Some(true)),
                 underline: r.is_underline(),
                 strikethrough: r.is_strike(),
-                highlight: r.highlight().is_some(),
+                highlight: run_is_highlighted(&r),
                 code: r.style_id() == Some("SourceText"),
                 link: link_for(idx),
                 image: None,
                 image_extent_emu: None,
+                image_anchor: None,
                 footnote: None,
                 html: false,
                 chip: None,
@@ -1787,6 +2080,22 @@ fn style_fonts(path: &str) -> StyleFonts {
         Ok(out)
     }
     scan(path).unwrap_or_default()
+}
+
+/// Where the document's floating pictures sit (`docx_anchors`).
+fn anchor_placements(path: &str) -> crate::docx_anchors::Placements {
+    std::fs::File::open(path)
+        .ok()
+        .and_then(|f| zip::ZipArchive::new(f).ok())
+        .and_then(|mut zip| part_text(&mut zip, "word/document.xml"))
+        .map(|xml| crate::docx_anchors::placements(&xml))
+        .unwrap_or_default()
+}
+
+thread_local! {
+    /// The floating pictures' placements not yet given to an image run of
+    /// the document being read, per image relationship, in document order.
+    static ANCHORS: std::cell::RefCell<crate::docx_anchors::Placements> = Default::default();
 }
 
 thread_local! {

@@ -214,6 +214,71 @@ fn picture_extent(run: &Run, bytes: &[u8]) -> (u64, u64) {
     (4 * 914_400, 3 * 914_400)
 }
 
+/// The automatic graphic style `name` placing a floating picture: each
+/// axis aligned in, or offset from (`svg:x`/`svg:y` on the frame), the
+/// page, the page inside its margins, or the paragraph; over the text or
+/// behind it, never wrapping it.
+fn floating_style(name: &str, a: &crate::model::ImageAnchor) -> String {
+    use crate::model::{AnchorAlign, AnchorFrame};
+    let rel = |f: AnchorFrame| match f {
+        AnchorFrame::Page => "page",
+        AnchorFrame::Margin => "page-content",
+        AnchorFrame::Text => "paragraph",
+    };
+    let pos = |align: Option<AnchorAlign>, names: [&'static str; 4]| match align {
+        None => names[0],
+        Some(AnchorAlign::Start) => names[1],
+        Some(AnchorAlign::Center) => names[2],
+        Some(AnchorAlign::End) => names[3],
+    };
+    format!(
+        "<style:style style:name=\"{name}\" style:family=\"graphic\"><style:graphic-properties style:wrap=\"run-through\" \
+         style:run-through=\"{}\" style:horizontal-pos=\"{}\" style:horizontal-rel=\"{}\" style:vertical-pos=\"{}\" \
+         style:vertical-rel=\"{}\"/></style:style>",
+        if a.behind { "background" } else { "foreground" },
+        pos(a.h_align, ["from-left", "left", "center", "right"]),
+        rel(a.h_from),
+        pos(a.v_align, ["from-top", "top", "middle", "bottom"]),
+        rel(a.v_from),
+    )
+}
+
+/// A graphic style's placement of a floating frame (its offsets are the
+/// frame's own `svg:x`/`svg:y`).
+fn graphic_placement(e: &quick_xml::events::BytesStart<'_>) -> crate::model::ImageAnchor {
+    use crate::model::{AnchorAlign, AnchorFrame};
+    let frame = |a: &str| match attr_val(e, a).as_deref() {
+        Some("page") => AnchorFrame::Page,
+        Some("page-content") => AnchorFrame::Margin,
+        _ => AnchorFrame::Text,
+    };
+    let align = |a: &str| match attr_val(e, a).as_deref() {
+        Some("left" | "top" | "inside") => Some(AnchorAlign::Start),
+        Some("center" | "middle") => Some(AnchorAlign::Center),
+        Some("right" | "bottom" | "outside") => Some(AnchorAlign::End),
+        _ => None,
+    };
+    crate::model::ImageAnchor {
+        h_from: frame("style:horizontal-rel"),
+        h_align: align("style:horizontal-pos"),
+        v_from: frame("style:vertical-rel"),
+        v_align: align("style:vertical-pos"),
+        behind: attr_val(e, "style:run-through").as_deref() == Some("background"),
+        ..Default::default()
+    }
+}
+
+/// A signed ODF length (a frame's `svg:x`, which may be negative) in EMU.
+fn offset_emu(s: &str) -> Option<i64> {
+    let s = s.trim();
+    let (sign, magnitude) = s.strip_prefix('-').map_or((1, s), |m| (-1, m));
+    let split = magnitude.find(|c: char| c.is_ascii_alphabetic())?;
+    if magnitude[..split].trim().parse::<f64>().ok()? == 0.0 {
+        return Some(0);
+    }
+    Some(sign * length_emu(magnitude)? as i64)
+}
+
 /// An ODF length ("2.5cm", "1in", "72pt", "10mm", "6pc", "96px") in EMU.
 fn length_emu(s: &str) -> Option<u64> {
     let s = s.trim();
@@ -243,10 +308,16 @@ struct OpenTable {
     filled: bool,
     /// Each row's style attribute (empty for a row without a height).
     row_styles: Vec<String>,
+    /// Each shaded cell's style attribute, by (row, col).
+    cell_styles: std::collections::HashMap<(u32, u32), String>,
 }
 
 impl OpenTable {
-    const CELL: &'static str = "<table:table-cell office:value-type=\"string\">";
+    /// Open the cell at the current (row, col), with its fill's style.
+    fn open_cell(&self, body: &mut String) {
+        let style = self.cell_styles.get(&(self.row, self.col)).map_or("", String::as_str);
+        body.push_str(&format!("<table:table-cell office:value-type=\"string\"{style}>"));
+    }
 
     fn open_row(&self, body: &mut String) {
         let style = self.row_styles.get(self.row as usize).map_or("", String::as_str);
@@ -276,7 +347,7 @@ impl OpenTable {
                 }
                 self.open_row(body);
             }
-            body.push_str(Self::CELL);
+            self.open_cell(body);
             self.filled = false;
         }
     }
@@ -289,6 +360,74 @@ impl OpenTable {
             body.push_str("</table:table-row>");
         }
         body.push_str("</table:table>");
+    }
+}
+
+/// The list styles numbered items need for their labels
+/// (`ParaStyle::list_label`). An ODF list style labels each of its levels
+/// one way, so a run of numbered items takes one style while its levels
+/// keep their labels, and the next style where a level changes label.
+struct LabelledLists {
+    /// Each set of level labels after "LN"'s, which is all "N.".
+    sets: Vec<[Option<ListLabel>; 10]>,
+    /// Per paragraph: 0 for "LN", k for `sets[k - 1]` ("LNk").
+    style: Vec<usize>,
+    /// Per paragraph: where a list split for its label starts counting,
+    /// so the item keeps its number in the new list.
+    start: Vec<Option<u32>>,
+}
+
+fn labelled_lists(paragraphs: &[Paragraph]) -> LabelledLists {
+    let ordinals = crate::lists::ordinals(paragraphs.iter().map(|p| &p.style));
+    let mut out = LabelledLists { sets: Vec::new(), style: vec![0; paragraphs.len()], start: vec![None; paragraphs.len()] };
+    // The list being built: its first paragraph and its levels' labels,
+    // `None` within a level that has an item and no label.
+    let mut run: Option<(usize, [Option<Option<ListLabel>>; 10])> = None;
+    let close = |out: &mut LabelledLists, run: Option<(usize, [Option<Option<ListLabel>>; 10])>, end: usize| {
+        let Some((first, levels)) = run else { return };
+        let labels: [Option<ListLabel>; 10] = levels.map(Option::flatten);
+        let k = if labels.iter().all(Option::is_none) {
+            0
+        } else {
+            match out.sets.iter().position(|s| *s == labels) {
+                Some(k) => k + 1,
+                None => {
+                    out.sets.push(labels);
+                    out.sets.len()
+                }
+            }
+        };
+        out.style[first..end].iter_mut().for_each(|s| *s = k);
+    };
+    for (i, p) in paragraphs.iter().enumerate() {
+        if p.style.list != ListKind::Numbered {
+            close(&mut out, run.take(), i);
+            continue;
+        }
+        let level = usize::from(p.style.list_level.min(9));
+        let label = &p.style.list_label;
+        if let Some((_, levels)) = &run {
+            if levels[level].as_ref().is_some_and(|l| l != label) {
+                close(&mut out, run.take(), i);
+                out.start[i] = Some(ordinals[i]);
+            }
+        }
+        let (_, levels) = run.get_or_insert_with(|| (i, Default::default()));
+        levels[level].get_or_insert_with(|| label.clone());
+    }
+    close(&mut out, run.take(), paragraphs.len());
+    out
+}
+
+/// ODF's `style:num-format` for `format`.
+fn odf_number_format(format: NumberFormat) -> &'static str {
+    match format {
+        NumberFormat::Decimal => "1",
+        NumberFormat::LowerLetter => "a",
+        NumberFormat::UpperLetter => "A",
+        NumberFormat::LowerRoman => "i",
+        NumberFormat::UpperRoman => "I",
+        NumberFormat::None => "",
     }
 }
 
@@ -358,14 +497,26 @@ fn content_xml(doc: &Document) -> String {
             level + 1, bullets[level % bullets.len()], level_props(level)
         ));
     }
-    auto.push_str("</text:list-style><text:list-style style:name=\"LN\">");
-    for level in 0..10 {
-        auto.push_str(&format!(
-            "<text:list-level-style-number text:level=\"{}\" style:num-format=\"1\" style:num-suffix=\".\">{}</text:list-level-style-number>",
-            level + 1, level_props(level)
-        ));
-    }
     auto.push_str("</text:list-style>");
+    // "LN", every level "N.", and one more for each set of labels a list
+    // gives its levels (`labelled_lists`).
+    let labelled = labelled_lists(&doc.paragraphs);
+    let plain: [Option<ListLabel>; 10] = Default::default();
+    let label_sets = std::iter::once(&plain).chain(&labelled.sets);
+    for (k, labels) in label_sets.enumerate() {
+        let name = if k == 0 { "LN".to_string() } else { format!("LN{k}") };
+        auto.push_str(&format!("<text:list-style style:name=\"{name}\">"));
+        for (level, label) in labels.iter().enumerate() {
+            let label = label.clone().unwrap_or(ListLabel { suffix: ".".into(), ..Default::default() });
+            let prefix = Some(&label.prefix).filter(|p| !p.is_empty()).map(|p| format!(" style:num-prefix=\"{}\"", esc(p))).unwrap_or_default();
+            let suffix = Some(&label.suffix).filter(|p| !p.is_empty()).map(|p| format!(" style:num-suffix=\"{}\"", esc(p))).unwrap_or_default();
+            auto.push_str(&format!(
+                "<text:list-level-style-number text:level=\"{}\" style:num-format=\"{}\"{prefix}{suffix}>{}</text:list-level-style-number>",
+                level + 1, odf_number_format(label.format), level_props(level)
+            ));
+        }
+        auto.push_str("</text:list-style>");
+    }
 
     let mut body = String::new();
     // Tracked changes: one changed region per change (text:tracked-changes).
@@ -394,6 +545,7 @@ fn content_xml(doc: &Document) -> String {
     // came back at the top level). `depth` lists are open, each with an
     // open item.
     let mut open_list = ListKind::None;
+    let mut open_style = String::new();
     let mut depth = 0usize;
     // Tables: consecutive paragraphs of one table id are its cells, in
     // grid order, as the docx writer groups them (#1296).
@@ -459,9 +611,23 @@ fn content_xml(doc: &Document) -> String {
                         })
                         .collect();
                     body.push_str(&format!("<table:table table:name=\"Table{tables_written}\"{table_style}>{columns}"));
-                    let t = OpenTable { id: c.table, rows, cols, row: 0, col: 0, filled: false, row_styles };
+                    // The shaded cells, one table-cell style per colour.
+                    let mut fill_styles: std::collections::HashMap<String, String> = Default::default();
+                    let cell_styles = doc.table_fills.get(&c.table).into_iter().flatten().map(|f| {
+                        let n = fill_styles.len();
+                        let name = fill_styles.entry(f.color.clone()).or_insert_with(|| {
+                            let name = format!("Table{tables_written}.F{n}");
+                            auto.push_str(&format!(
+                                "<style:style style:name=\"{name}\" style:family=\"table-cell\"><style:table-cell-properties fo:background-color=\"#{}\"/></style:style>",
+                                esc(&f.color)
+                            ));
+                            name
+                        });
+                        ((f.row, f.col), format!(" table:style-name=\"{name}\""))
+                    }).collect();
+                    let t = OpenTable { id: c.table, rows, cols, row: 0, col: 0, filled: false, row_styles, cell_styles };
                     t.open_row(&mut body);
-                    body.push_str(OpenTable::CELL);
+                    t.open_cell(&mut body);
                     table = Some(t);
                 }
                 if let Some(t) = table.as_mut() {
@@ -473,17 +639,22 @@ fn content_xml(doc: &Document) -> String {
             t.filled = true;
         }
         let kind = p.style.list;
-        if kind != open_list {
+        let list_style = match (kind, labelled.style[pi]) {
+            (ListKind::Numbered, 0) => "LN".to_string(),
+            (ListKind::Numbered, k) => format!("LN{k}"),
+            _ => "LB".to_string(),
+        };
+        if kind != open_list || (kind == ListKind::Numbered && list_style != open_style) {
             body.push_str(&"</text:list-item></text:list>".repeat(depth));
             depth = 0;
             open_list = kind;
+            open_style = list_style.clone();
         }
         if kind != ListKind::None {
             let target = usize::from(p.style.list_level) + 1;
-            let start = p.style.list_start.map(|n| format!(" text:start-value=\"{n}\"")).unwrap_or_default();
+            let start = p.style.list_start.or(labelled.start[pi]).map(|n| format!(" text:start-value=\"{n}\"")).unwrap_or_default();
             if depth == 0 {
-                let style = if kind == ListKind::Numbered { "LN" } else { "LB" };
-                body.push_str(&format!("<text:list text:style-name=\"{style}\">"));
+                body.push_str(&format!("<text:list text:style-name=\"{list_style}\">"));
                 depth = 1;
                 if target == 1 {
                     body.push_str(&format!("<text:list-item{start}>"));
@@ -540,8 +711,22 @@ fn content_xml(doc: &Document) -> String {
                         pictures_written += 1;
                         let (w, h) = picture_extent(r, &bytes);
                         let title = if r.text.trim().is_empty() { String::new() } else { format!("<svg:title>{}</svg:title>", esc(&r.text)) };
+                        // A floating picture is anchored to its paragraph
+                        // and placed by a graphic style of its own.
+                        let anchoring = match r.style.image_anchor {
+                            Some(a) => {
+                                let name = format!("fr{pictures_written}");
+                                auto.push_str(&floating_style(&name, &a));
+                                format!(
+                                    "draw:style-name=\"{name}\" text:anchor-type=\"paragraph\" svg:x=\"{:.6}in\" svg:y=\"{:.6}in\"",
+                                    a.x_emu as f64 / EMU_PER_INCH,
+                                    a.y_emu as f64 / EMU_PER_INCH,
+                                )
+                            }
+                            None => "text:anchor-type=\"as-char\"".to_string(),
+                        };
                         inner.push_str(&format!(
-                            "<draw:frame draw:name=\"Picture {pictures_written}\" text:anchor-type=\"as-char\" \
+                            "<draw:frame draw:name=\"Picture {pictures_written}\" {anchoring} \
                              svg:width=\"{:.6}in\" svg:height=\"{:.6}in\">\
                              <draw:image xlink:href=\"{name}\" xlink:type=\"simple\" xlink:show=\"embed\" xlink:actuate=\"onLoad\"/>\
                              {title}</draw:frame>",
@@ -964,6 +1149,10 @@ struct AutoStyles {
     column: std::collections::HashMap<String, f64>,
     /// A table-row style's height.
     row: std::collections::HashMap<String, crate::model::RowHeight>,
+    /// A table-cell style's background colour, six hex digits.
+    cell_fill: std::collections::HashMap<String, String>,
+    /// A graphic style's placement of a floating frame.
+    graphic: std::collections::HashMap<String, crate::model::ImageAnchor>,
 }
 
 /// Paragraph-level values read off one automatic style. Lengths are points.
@@ -985,6 +1174,51 @@ struct AutoParaStyle {
     sets: [bool; 3],
 }
 
+/// Each `text:list-style` in `xml`: the label of each numbered level that
+/// has one other than "N." (`style:num-prefix`, `style:num-format` and
+/// `style:num-suffix`), by level, 0-based.
+fn list_style_labels(xml: &str) -> std::collections::HashMap<String, Vec<Option<ListLabel>>> {
+    let mut out: std::collections::HashMap<String, Vec<Option<ListLabel>>> = Default::default();
+    let mut reader = Reader::from_str(xml);
+    let mut current: Option<String> = None;
+    loop {
+        match reader.read_event() {
+            Ok(Event::Start(e)) | Ok(Event::Empty(e)) => match e.name().as_ref() {
+                "text:list-style" => current = attr_val(&e, "style:name"),
+                "text:list-level-style-number" => {
+                    let (Some(style), Some(level)) = (current.as_ref(), attr_val(&e, "text:level").and_then(|l| l.parse::<usize>().ok())) else { continue };
+                    if !(1..=10).contains(&level) {
+                        continue;
+                    }
+                    let format = match attr_val(&e, "style:num-format").as_deref() {
+                        Some("a") => NumberFormat::LowerLetter,
+                        Some("A") => NumberFormat::UpperLetter,
+                        Some("i") => NumberFormat::LowerRoman,
+                        Some("I") => NumberFormat::UpperRoman,
+                        Some("") | None => NumberFormat::None,
+                        _ => NumberFormat::Decimal,
+                    };
+                    let label = ListLabel {
+                        prefix: attr_val(&e, "style:num-prefix").unwrap_or_default(),
+                        format,
+                        suffix: attr_val(&e, "style:num-suffix").unwrap_or_default(),
+                    };
+                    let labels = out.entry(style.clone()).or_default();
+                    if labels.len() < level {
+                        labels.resize(level, None);
+                    }
+                    labels[level - 1] = (label != ListLabel { suffix: ".".into(), ..Default::default() }).then_some(label);
+                }
+                _ => {}
+            },
+            Ok(Event::End(e)) if e.name().as_ref() == "text:list-style" => current = None,
+            Ok(Event::Eof) | Err(_) => break,
+            _ => {}
+        }
+    }
+    out
+}
+
 /// Each `text:list-style` in `xml`: whether each of its levels is numbered,
 /// by level (1-based in the file, 0-based here). LibreOffice names the list
 /// styles it writes "WWNum1", "L2"…, so the kind can't be read off the name.
@@ -1003,8 +1237,11 @@ fn list_style_kinds(xml: &str) -> std::collections::HashMap<String, Vec<ListKind
                         if kinds.len() < level {
                             kinds.resize(level, ListKind::Bullet);
                         }
+                        // A number level with no digits is still a label
+                        // when it has text: Word's "2.1" with no number.
+                        let has_text = |a: &str| attr_val(&e, a).is_some_and(|t| !t.is_empty());
                         let numbered = name == "text:list-level-style-number"
-                            && attr_val(&e, "style:num-format").is_some_and(|f| !f.is_empty());
+                            && (has_text("style:num-format") || has_text("style:num-prefix") || has_text("style:num-suffix"));
                         kinds[level - 1] = if numbered { ListKind::Numbered } else { ListKind::Bullet };
                     }
                 }
@@ -1019,7 +1256,7 @@ fn list_style_kinds(xml: &str) -> std::collections::HashMap<String, Vec<ListKind
 }
 
 fn parse_auto_styles(xml: &str) -> AutoStyles {
-    let mut out = AutoStyles { text: Default::default(), para: Default::default(), para_parent: Default::default(), text_parent: Default::default(), para_text: Default::default(), column: Default::default(), row: Default::default() };
+    let mut out = AutoStyles { text: Default::default(), para: Default::default(), para_parent: Default::default(), text_parent: Default::default(), para_text: Default::default(), column: Default::default(), row: Default::default(), cell_fill: Default::default(), graphic: Default::default() };
     let mut reader = Reader::from_str(xml);
     let mut cur_name: Option<String> = None;
     let mut cur_family = String::new();
@@ -1041,6 +1278,17 @@ fn parse_auto_styles(xml: &str) -> AutoStyles {
                     "style:table-column-properties" => {
                         if let (Some(name), Some(w)) = (cur_name.clone(), attr_val(&e, "style:column-width").and_then(|v| parse_length_pt(&v))) {
                             out.column.insert(name, w);
+                        }
+                    }
+                    "style:graphic-properties" if cur_family == "graphic" => {
+                        if let Some(name) = cur_name.clone() {
+                            out.graphic.insert(name, graphic_placement(&e));
+                        }
+                    }
+                    "style:table-cell-properties" => {
+                        let fill = attr_val(&e, "fo:background-color").map(|c| c.trim_start_matches('#').to_uppercase());
+                        if let (Some(name), Some(color)) = (cur_name.clone(), fill.filter(|c| c.len() == 6 && c.chars().all(|ch| ch.is_ascii_hexdigit()))) {
+                            out.cell_fill.insert(name, color);
                         }
                     }
                     // A minimum row height, or a fixed one (a height
@@ -1326,6 +1574,8 @@ pub fn read(path: &str) -> Result<Document, String> {
 /// holding a picture frame).
 struct FrameReading {
     extent: Option<(u64, u64)>,
+    /// Where a frame not anchored as a character floats.
+    anchor: Option<crate::model::ImageAnchor>,
     href: Option<String>,
     alt: String,
     in_alt: bool,
@@ -1496,10 +1746,30 @@ fn read_parts(path: &str) -> Result<(Document, Vec<String>), String> {
     let auto = parse_auto_styles(&content);
     let mut list_styles = list_style_kinds(&styles);
     list_styles.extend(list_style_kinds(&content));
+    let mut list_labels = list_style_labels(&styles);
+    list_labels.extend(list_style_labels(&content));
+    // The label of a numbered item at `level` (1-based) of the list style
+    // `name`.
+    let label_of = |name: Option<&String>, level: u8| -> Option<ListLabel> {
+        list_labels.get(name?)?.get(usize::from(level.checked_sub(1)?))?.clone()
+    };
+    // A list item's kind and label at `level` (1-based): its own list
+    // style's (`item_styles`) when it overrides the list's, else the
+    // list's.
+    let item_list = |names: &[Option<String>], items: &[Option<String>], kind: ListKind, level: u8| -> (ListKind, Option<ListLabel>) {
+        let own = level.checked_sub(1).and_then(|l| items.get(usize::from(l))).cloned().flatten();
+        let kind = own
+            .as_ref()
+            .and_then(|n| list_styles.get(n))
+            .and_then(|kinds| kinds.get(usize::from(level.max(1) - 1)).copied())
+            .unwrap_or(kind);
+        let name = own.as_ref().or_else(|| names.last().and_then(Option::as_ref));
+        (kind, if kind == ListKind::Numbered { label_of(name, level) } else { None })
+    };
 
     // styles.xml's named styles, the parents of content.xml's automatic ones.
     let named = parse_auto_styles(&styles);
-    let mut doc = Document { paragraphs: Vec::new(), footnotes: Vec::new(), header: None, footer: None, page: None, base_font: read_base_font(&styles), heading_styles: read_heading_styles(&styles), comments: Vec::new(), table_columns: Default::default(), table_rows: Default::default() };
+    let mut doc = Document { paragraphs: Vec::new(), footnotes: Vec::new(), header: None, footer: None, page: None, base_font: read_base_font(&styles), heading_styles: read_heading_styles(&styles), comments: Vec::new(), table_columns: Default::default(), table_rows: Default::default(), table_fills: Default::default() };
     let mut reader = Reader::from_str(&content);
     let mut in_body = false;
     let mut para: Option<Paragraph> = None;
@@ -1516,6 +1786,9 @@ fn read_parts(path: &str) -> Result<(Document, Vec<String>), String> {
     // The list style of each open text:list: a nested list naming none
     // continues its parent's, at its own level.
     let mut list_style_names: Vec<Option<String>> = Vec::new();
+    // Per open list level: the list style its current item overrides the
+    // list's with (`text:style-override`), if any.
+    let mut item_styles: Vec<Option<String>> = Vec::new();
     // A list item's `text:start-value`, for the item's first paragraph.
     let mut pending_start: Option<u32> = None;
     // Each top-level list: where its paragraphs start and end, its style,
@@ -1592,6 +1865,13 @@ fn read_parts(path: &str) -> Result<(Document, Vec<String>), String> {
     // Each outermost table's column widths; None once a column has none.
     let mut column_widths: std::collections::BTreeMap<u32, Option<Vec<f64>>> = Default::default();
     let mut row_heights: std::collections::BTreeMap<u32, Vec<Option<crate::model::RowHeight>>> = Default::default();
+    let mut cell_fills: std::collections::BTreeMap<u32, Vec<crate::model::CellFill>> = Default::default();
+    // A shaded cell's fill, at the cell just counted.
+    let note_fill = |fills: &mut std::collections::BTreeMap<u32, Vec<crate::model::CellFill>>, t: &(u32, i64, i64, usize, bool), e: &quick_xml::events::BytesStart| {
+        if let Some(color) = attr_val(e, "table:style-name").and_then(|n| auto.cell_fill.get(&n).cloned()) {
+            fills.entry(t.0).or_default().push(crate::model::CellFill { row: t.1.max(0) as u32, col: t.2.max(0) as u32, color });
+        }
+    };
     let cell_of = |t: &Option<(u32, i64, i64, usize, bool)>| {
         t.map(|(id, r, c, _, _)| crate::model::TableCell { table: id, row: r.max(0) as u32, col: c.max(0) as u32 })
     };
@@ -1789,13 +2069,24 @@ fn read_parts(path: &str) -> Result<(Document, Vec<String>), String> {
                     if let Some(t) = table.as_mut().filter(|t| t.3 == table_depth) {
                         t.2 += 1;
                         t.4 = false;
+                        note_fill(&mut cell_fills, t, &e);
                     }
                 }
                 "draw:frame" => {
                     frame_depth += 1;
                     if frame.is_none() && para.is_some() && note.is_none() {
                         let size = |a: &str| attr_val(&e, a).as_deref().and_then(length_emu);
+                        let floating = attr_val(&e, "text:anchor-type").is_some_and(|t| matches!(t.as_str(), "paragraph" | "char" | "page"));
+                        let anchor = floating.then(|| {
+                            let offset = |a: &str| attr_val(&e, a).as_deref().and_then(offset_emu).unwrap_or(0);
+                            crate::model::ImageAnchor {
+                                x_emu: offset("svg:x"),
+                                y_emu: offset("svg:y"),
+                                ..attr_val(&e, "draw:style-name").and_then(|n| auto.graphic.get(&n).copied()).unwrap_or_default()
+                            }
+                        });
                         frame = Some(FrameReading {
+                            anchor,
                             extent: size("svg:width").zip(size("svg:height")),
                             href: None,
                             alt: String::new(),
@@ -1888,9 +2179,11 @@ fn read_parts(path: &str) -> Result<(Document, Vec<String>), String> {
                             _ => {}
                         }
                     }
-                    style.list = list_kind;
+                    let (kind, label) = item_list(&list_style_names, &item_styles, list_kind, list_level);
+                    style.list = kind;
                     style.list_level = list_level.saturating_sub(1);
                     style.list_start = pending_start.take();
+                    style.list_label = label;
                     if in_toc && !in_index_title {
                         let name = attr_val(&e, "text:style-name").unwrap_or_default();
                         let base = auto.para_parent.get(&name).cloned().unwrap_or(name);
@@ -1909,7 +2202,7 @@ fn read_parts(path: &str) -> Result<(Document, Vec<String>), String> {
                 }
                 "text:span" => {
                     let name = attr_val(&e, "text:style-name");
-                    let own = name.as_ref().and_then(|n| auto.text.get(n).cloned()).unwrap_or_default();
+                    let own = name.as_deref().map(|n| text_style(n, &auto, &named)).unwrap_or_default();
                     let mut st = inherit(span_stack.last(), own);
                     // Inline code is Writer's "Source Text", named or as
                     // the parent of an automatic style (#1205).
@@ -1974,6 +2267,11 @@ fn read_parts(path: &str) -> Result<(Document, Vec<String>), String> {
                 }
                 "text:list-item" if in_body => {
                     pending_start = attr_val(&e, "text:start-value").and_then(|v| v.parse().ok());
+                    // LibreOffice gives an item a list style of its own this
+                    // way: a Word list instance's override of one level.
+                    let at = usize::from(list_level.max(1) - 1);
+                    item_styles.resize(at + 1, None);
+                    item_styles[at] = attr_val(&e, "text:style-override");
                 }
                 _ => {}
             },
@@ -1995,6 +2293,7 @@ fn read_parts(path: &str) -> Result<(Document, Vec<String>), String> {
                 "table:table-cell" | "table:covered-table-cell" => {
                     if let Some(t) = table.as_mut().filter(|t| t.3 == table_depth) {
                         t.2 += 1;
+                        note_fill(&mut cell_fills, t, &e);
                         doc.paragraphs.push(Paragraph { style: ParaStyle { table_cell: cell_of(&table), ..Default::default() }, runs: Vec::new() });
                     }
                 }
@@ -2018,7 +2317,8 @@ fn read_parts(path: &str) -> Result<(Document, Vec<String>), String> {
                 }
                 "text:p" if note.is_some() => {}
                 "text:p" | "text:h" if in_body => {
-                    let style = ParaStyle { list: list_kind, list_level: list_level.saturating_sub(1), list_start: pending_start.take(), table_cell: cell_of(&table), ..Default::default() };
+                    let (kind, list_label) = item_list(&list_style_names, &item_styles, list_kind, list_level);
+                    let style = ParaStyle { list: kind, list_level: list_level.saturating_sub(1), list_start: pending_start.take(), list_label, table_cell: cell_of(&table), ..Default::default() };
                     if let Some(t) = table.as_mut() {
                         t.4 = true;
                     }
@@ -2080,6 +2380,7 @@ fn read_parts(path: &str) -> Result<(Document, Vec<String>), String> {
                                 style: RunStyle {
                                     image: Some(path.to_string_lossy().into_owned()),
                                     image_extent_emu: f.extent,
+                                    image_anchor: f.anchor,
                                     ..Default::default()
                                 },
                             });
@@ -2154,6 +2455,7 @@ fn read_parts(path: &str) -> Result<(Document, Vec<String>), String> {
                     }
                     list_kinds.pop();
                     list_style_names.pop();
+                    item_styles.truncate(usize::from(list_level));
                     list_kind = if list_level == 0 { ListKind::None } else { list_kinds.last().copied().unwrap_or(ListKind::Bullet) };
                 },
                 "office:text" => in_body = false,
@@ -2313,6 +2615,7 @@ fn read_parts(path: &str) -> Result<(Document, Vec<String>), String> {
     doc.ensure_non_empty();
     doc.table_columns = column_widths.into_iter().filter_map(|(t, w)| Some((t, w.filter(|w| !w.is_empty())?))).collect();
     doc.table_rows = row_heights;
+    doc.table_fills = cell_fills;
     // A column count LibreOffice recorded on a section instead of on the
     // page layout. Only consulted when the page layout said nothing, so
     // an explicit page-wide count still wins.
@@ -2331,6 +2634,21 @@ fn read_parts(path: &str) -> Result<(Document, Vec<String>), String> {
 
 /// A span's text style over the text style around it: what the span
 /// does not set, it takes from its paragraph (or outer span).
+/// A text style's look: an automatic style's or a named one's (styles.xml's
+/// "Responses", blue), over what its parents give it.
+fn text_style(name: &str, auto: &AutoStyles, named: &AutoStyles) -> RunStyle {
+    let mut chain = Vec::new();
+    let mut cur = Some(name.to_string());
+    for _ in 0..16 {
+        let Some(n) = cur else { break };
+        if let Some(st) = auto.text.get(&n).or_else(|| named.text.get(&n)) {
+            chain.push(st.clone());
+        }
+        cur = auto.text_parent.get(&n).or_else(|| named.text_parent.get(&n)).cloned();
+    }
+    chain.into_iter().rev().fold(None, |outer: Option<RunStyle>, own| Some(inherit(outer.as_ref(), own))).unwrap_or_default()
+}
+
 fn inherit(outer: Option<&RunStyle>, own: RunStyle) -> RunStyle {
     let Some(outer) = outer else { return own };
     RunStyle {
@@ -2428,6 +2746,38 @@ mod tests {
         assert!(opaque.is_empty(), "a picture we read is not an opaque part: {:?}", opaque.part_names().collect::<Vec<_>>());
     }
 
+    /// A floating picture is a frame anchored to its paragraph, placed by
+    /// a graphic style of its own, and reads back placed the same.
+    #[test]
+    fn a_floating_picture_round_trips_its_placement() {
+        use crate::model::{AnchorAlign, AnchorFrame, ImageAnchor};
+        let dir = tempfile::tempdir().unwrap();
+        let src = dir.path().join("red.png");
+        std::fs::write(&src, PNG).unwrap();
+        let placements = [
+            ImageAnchor { h_from: AnchorFrame::Margin, h_align: Some(AnchorAlign::End), v_from: AnchorFrame::Text, y_emu: -660_400, ..Default::default() },
+            ImageAnchor { h_from: AnchorFrame::Page, x_emu: 914_400, v_from: AnchorFrame::Page, v_align: Some(AnchorAlign::Center), behind: true, ..Default::default() },
+        ];
+        let mut d = Document::from_plain_text("");
+        d.paragraphs = placements
+            .iter()
+            .map(|a| Paragraph {
+                style: ParaStyle::default(),
+                runs: vec![Run::plain("text "), Run {
+                    text: "logo".into(),
+                    style: RunStyle { image: Some(src.to_string_lossy().into_owned()), image_extent_emu: Some((914_400, 457_200)), image_anchor: Some(*a), ..Default::default() },
+                }],
+            })
+            .collect();
+        let out = dir.path().join("float.odt");
+        write(&d, &out).unwrap();
+        let rt = read(out.to_str().unwrap()).unwrap();
+        let read: Vec<Option<ImageAnchor>> = rt.paragraphs.iter().flat_map(|p| &p.runs).filter(|r| r.style.image.is_some()).map(|r| r.style.image_anchor).collect();
+        assert_eq!(read, placements.map(Some));
+        assert_eq!(offset_emu("-1.5cm"), Some(-540_000));
+        assert_eq!(offset_emu("0in"), Some(0));
+    }
+
     /// Tables cross as tables (#1296): every cell in its grid position, an
     /// empty cell included, a cell of two paragraphs, run styling inside a
     /// cell, the text around the table, and a second table straight after.
@@ -2491,6 +2841,36 @@ mod tests {
         read(path.to_str().unwrap()).expect("read odt")
     }
 
+    /// A numbered item's label survives a save: each set of level labels
+    /// is a list style, and a label that changes within a list splits it
+    /// there, the item keeping its number.
+    #[test]
+    fn list_labels_survive() {
+        let label = |prefix: &str, format, suffix: &str| Some(ListLabel { prefix: prefix.into(), format, suffix: suffix.into() });
+        let mut d = Document::from_plain_text("one\na\ntwo\nthree\nfour\nbetween\n2.1");
+        for (k, level, l) in [
+            (0, 0, label("(", NumberFormat::Decimal, ")")),
+            (1, 1, label("1.", NumberFormat::LowerLetter, "")),
+            (2, 0, label("(", NumberFormat::Decimal, ")")),
+            (3, 0, label("", NumberFormat::UpperRoman, ".")),
+            (4, 0, None),
+            (6, 0, label("2.1", NumberFormat::None, "")),
+        ] {
+            d.paragraphs[k].style.list = ListKind::Numbered;
+            d.paragraphs[k].style.list_level = level;
+            d.paragraphs[k].style.list_label = l;
+        }
+        let markers = |d: &Document| {
+            let ordinals = crate::lists::ordinals(d.paragraphs.iter().map(|p| &p.style));
+            d.paragraphs.iter().zip(ordinals).map(|(p, n)| crate::lists::marker_for(&p.style, n).unwrap_or_default()).collect::<Vec<_>>()
+        };
+        assert_eq!(markers(&d), ["(1)", "1.a", "(2)", "III.", "4.", "", "2.1"]);
+        let rt = round_trip(&d);
+        assert_eq!(markers(&rt), markers(&d));
+        let labels = |d: &Document| d.paragraphs.iter().map(|p| p.style.list_label.clone()).collect::<Vec<_>>();
+        assert_eq!(labels(&rt), labels(&d));
+    }
+
     /// A table's column widths survive a save and reopen (and an ODT's
     /// own `table:table-column` widths, repeated columns included, are
     /// read), so a narrow number column stays narrow.
@@ -2524,6 +2904,22 @@ mod tests {
         let mut d = Document::from_plain_text("after");
         d.insert_table_at(0, 2, 2);
         assert!(round_trip(&d).table_rows.is_empty());
+    }
+
+    /// A table's shaded cells survive a save and reopen, one table-cell
+    /// style per colour.
+    #[test]
+    fn table_cell_fills_survive() {
+        use crate::model::CellFill;
+        let mut d = Document::from_plain_text("after");
+        let table = d.insert_table_at(0, 2, 2);
+        let want = vec![CellFill { row: 0, col: 0, color: "D9D9D9".into() }, CellFill { row: 0, col: 1, color: "D9D9D9".into() }, CellFill { row: 1, col: 1, color: "DEEAF6".into() }];
+        d.table_fills.insert(table, want.clone());
+        let rt = round_trip(&d);
+        assert_eq!(rt.table_fills.values().cloned().collect::<Vec<_>>(), [want]);
+        let mut d = Document::from_plain_text("after");
+        d.insert_table_at(0, 1, 1);
+        assert!(round_trip(&d).table_fills.is_empty());
     }
 
     /// Smart chips reopen as chips: a date is a fixed `text:date`, a link
@@ -3008,6 +3404,27 @@ mod tests {
             assert_eq!(d.footer.as_deref(), Some("OFFICIAL"));
             assert!((d.page.unwrap().margin_left_pt - left).abs() < 1e-6, "{first:?}: {:?}", d.page);
         }
+    }
+
+    /// A span named by a style of styles.xml takes its look, with what its
+    /// parent gives it: the expression-of-interest form's "Responses"
+    /// placeholders are blue, and an automatic style over it keeps that.
+    #[test]
+    fn a_named_text_style_colours_its_spans() {
+        let styles = "<office:document-styles><office:styles>\
+             <style:style style:name=\"Base\" style:family=\"text\"><style:text-properties fo:font-weight=\"bold\"/></style:style>\
+             <style:style style:name=\"Responses\" style:family=\"text\" style:parent-style-name=\"Base\"><style:text-properties fo:color=\"#114F75\"/></style:style>\
+             </office:styles></office:document-styles>";
+        let content = "<office:document-content><office:automatic-styles>\
+             <style:style style:name=\"T1\" style:family=\"text\" style:parent-style-name=\"Responses\"><style:text-properties fo:font-style=\"italic\"/></style:style>\
+             </office:automatic-styles><office:body><office:text><text:p>Title: <text:span text:style-name=\"Responses\">Project title</text:span> \
+             <text:span text:style-name=\"T1\">Deadline</text:span></text:p></office:text></office:body></office:document-content>";
+        let d = read_package(content, styles);
+        let run = |t: &str| d.paragraphs[0].runs.iter().find(|r| r.text == t).unwrap_or_else(|| panic!("{t}: {:?}", d.paragraphs[0].runs)).style.clone();
+        let named = run("Project title");
+        assert_eq!((named.color.as_deref(), named.bold), (Some("114f75"), true), "the named style and its parent");
+        let auto = run("Deadline");
+        assert_eq!((auto.color.as_deref(), auto.bold, auto.italic), (Some("114f75"), true, true), "an automatic style over it");
     }
 
     #[test]

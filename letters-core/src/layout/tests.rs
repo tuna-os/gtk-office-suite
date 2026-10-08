@@ -2,7 +2,7 @@
 // line, so an A4 page with 1in margins holds 75 chars × 46 lines.
 
 use super::*;
-use crate::model::{Alignment, ParaStyle, RowHeight, TableCell};
+use crate::model::{Alignment, CellFill, ParaStyle, RowHeight, TableCell};
 
 const LINE: f64 = 15.0;
 const LINES_PER_PAGE: usize = 46;
@@ -309,6 +309,30 @@ fn a_tall_row_splits_across_pages() {
     assert_eq!(b.first().map(String::as_str), Some(format!("line {n}").as_str()), "the next line, not a repeat or a gap");
 }
 
+/// A shaded cell carries its colour to the page (a form's grey header
+/// cells), and the shading moves with its cell when rows and columns are
+/// inserted or deleted.
+#[test]
+fn a_shaded_cell_carries_its_fill() {
+    let fills = |d: &Document| -> Vec<(u32, u32, Option<String>)> {
+        lay(d).pages[0]
+            .items
+            .iter()
+            .filter_map(|i| match i { Item::Cell { row, col, fill, .. } => Some((*row, *col, fill.clone())), _ => None })
+            .collect()
+    };
+    let mut d = doc_of(1, "after");
+    let table = d.insert_table_at(0, 2, 2);
+    d.table_fills.insert(table, vec![CellFill { row: 0, col: 1, color: "D9D9D9".into() }]);
+    let grey = Some("D9D9D9".to_string());
+    assert_eq!(fills(&d), [(0, 0, None), (0, 1, grey.clone()), (1, 0, None), (1, 1, None)]);
+    assert!(d.insert_table_rows(table, 0, 1));
+    assert!(d.insert_table_cols(table, 0, 1));
+    assert_eq!(d.table_fills[&table], [CellFill { row: 1, col: 2, color: "D9D9D9".into() }]);
+    assert!(d.delete_table_cols(table, 2, 1));
+    assert!(d.table_fills[&table].is_empty(), "deleting its column deletes its shading");
+}
+
 #[test]
 fn headers_and_footers_repeat_with_page_numbers() {
     let mut d = doc_of(60, "x");
@@ -379,6 +403,42 @@ fn an_inline_image_takes_its_extent_and_sits_on_the_baseline() {
     let Item::Line { text, height_pt, .. } = line else { unreachable!() };
     assert_eq!(text, "\u{FFFC}", "the image is one object char, not its alt text");
     assert!(*height_pt >= 72.0, "the line grows to hold the image: {height_pt}");
+}
+
+/// A floating image takes no room in its line and is drawn where its
+/// anchor puts it: right-aligned in the margins, 36pt above its paragraph.
+#[test]
+fn a_floating_image_is_placed_by_its_anchor_not_in_the_line() {
+    use crate::model::{AnchorAlign, AnchorFrame, ImageAnchor};
+    let mut d = doc_of(2, "text");
+    d.paragraphs[1].runs.push(Run {
+        text: "logo".into(),
+        style: crate::model::RunStyle {
+            image: Some("/nonexistent.png".into()),
+            image_extent_emu: Some((914_400, 914_400)),
+            image_anchor: Some(ImageAnchor {
+                h_from: AnchorFrame::Margin,
+                h_align: Some(AnchorAlign::End),
+                v_from: AnchorFrame::Text,
+                y_emu: -36 * 12_700,
+                ..Default::default()
+            }),
+            ..Default::default()
+        },
+    });
+    let t = lay(&d);
+    let images: Vec<(f64, f64, f64)> = t.pages[0]
+        .items
+        .iter()
+        .filter_map(|i| match i {
+            Item::Image { x_pt, y_pt, width_pt, .. } => Some((*x_pt, *y_pt, *width_pt)),
+            _ => None,
+        })
+        .collect();
+    let right = t.pages[0].width_pt - 72.0;
+    assert_eq!(images, vec![(right - 72.0, 72.0 + LINE - 36.0, 72.0)], "1in square at the right margin, 36pt above the second line");
+    let heights: Vec<f64> = t.pages[0].lines().map(|l| match l { Item::Line { height_pt, .. } => *height_pt, _ => 0.0 }).collect();
+    assert_eq!(heights[0], heights[1], "the line does not grow to hold it");
 }
 
 #[test]

@@ -44,3 +44,14 @@ def test_the_kinds_are_the_ones_release_md_names():
     for words in ("capability matrix", "JUnit", "independent-reader", "visual/a11y", "performance"):
         assert words in row
     assert set(evidence.KINDS) == {"capabilities", "junit", "independent-readers", "visual", "performance"}
+
+
+def test_the_workflow_does_not_swallow_a_missing_kind():
+    """The step that runs evidence.py pipes it into tee; without pipefail
+    the step took tee's status, and a bundle with gaps passed (#1209)."""
+    with open(os.path.join(REPO, ".github", "workflows", "release-evidence.yml")) as f:
+        workflow = f.read()
+    step = workflow[workflow.index("- name: Assemble the bundle"):]
+    step = step[: step.index("- uses:")]
+    assert "evidence.py" in step and "| tee" in step
+    assert "set -o pipefail" in step, "the evidence.py | tee pipe must fail when evidence.py does"

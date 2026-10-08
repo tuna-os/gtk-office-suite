@@ -188,7 +188,7 @@
     "B": "green"
   },
   "letters/real-questionnaire": {
-    "A": "red",
+    "A": "amber",
     "B": "amber"
   },
   "letters/real-questionnaire-2": {
@@ -244,8 +244,8 @@
     "B": "red"
   },
   "tables/real-air-safety-course-application-form-dhasc-fsc-fla": {
-    "A": "amber",
-    "B": "amber"
+    "A": "red",
+    "B": "red"
   },
   "tables/real-all-reservoir-panel-engineers-contact-list": {
     "A": "red",
@@ -320,8 +320,8 @@
     "B": "amber"
   },
   "tables/real-norfolk-public-review-annex-c-additional-postcod": {
-    "A": "red",
-    "B": "red"
+    "A": "amber",
+    "B": "amber"
   },
   "tables/real-otsi-annual-review-2025-2026-tables": {
     "A": "amber",
