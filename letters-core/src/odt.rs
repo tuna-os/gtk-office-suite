@@ -1215,6 +1215,31 @@ fn parse_length_pt(v: &str) -> Option<f64> {
     })
 }
 
+/// A list that continues the numbering of the one before it with its
+/// style starts where that one stopped: its first numbered item gets the
+/// start value, so headings between them (which end a list in the model)
+/// do not restart the count at 1. A Word conversion writes every numbered
+/// paragraph between headings as such a list.
+fn continue_numbering(paragraphs: &mut [Paragraph], top_lists: &[(usize, usize, Option<String>, bool)]) {
+    let mut counts: std::collections::HashMap<Option<String>, u32> = Default::default();
+    for (start, end, style, continues) in top_lists {
+        let mut count = if *continues { counts.get(style).copied().unwrap_or(0) } else { 0 };
+        let end = (*end).min(paragraphs.len());
+        let mut first = true;
+        for p in paragraphs.get_mut(*start..end).into_iter().flatten() {
+            if p.style.list != ListKind::Numbered || p.style.list_level != 0 {
+                continue;
+            }
+            if first && *continues && count > 0 && p.style.list_start.is_none() {
+                p.style.list_start = Some(count + 1);
+            }
+            first = false;
+            count = p.style.list_start.unwrap_or(count + 1);
+        }
+        counts.insert(style.clone(), count);
+    }
+}
+
 /// The master page LibreOffice gives the first page: the one the first
 /// paragraph or table's style names (`style:master-page-name`), else
 /// "Standard", else the first one declared.
@@ -1460,6 +1485,10 @@ fn read_parts(path: &str) -> Result<(Document, Vec<String>), String> {
     let mut list_style_names: Vec<Option<String>> = Vec::new();
     // A list item's `text:start-value`, for the item's first paragraph.
     let mut pending_start: Option<u32> = None;
+    // Each top-level list: where its paragraphs start and end, its style,
+    // and whether it continues the numbering of the list before it with
+    // that style (`text:continue-numbering`, `text:continue-list`).
+    let mut top_lists: Vec<(usize, usize, Option<String>, bool)> = Vec::new();
     // A `text:note` nests its body *inside* the referencing paragraph, so
     // its `text:p` children have to be kept out of the body stream: while
     // a note is open, text accumulates into the note instead. The citation
@@ -1902,6 +1931,10 @@ fn read_parts(path: &str) -> Result<(Document, Vec<String>), String> {
                             None => list_kinds.last().copied().unwrap_or(ListKind::Bullet),
                         },
                     };
+                    if list_level == 0 {
+                        let continues = attr_val(&e, "text:continue-numbering").as_deref() == Some("true") || attr_val(&e, "text:continue-list").is_some();
+                        top_lists.push((doc.paragraphs.len(), usize::MAX, name.clone(), continues));
+                    }
                     list_style_names.push(name);
                     list_kinds.push(list_kind);
                     list_level = list_level.saturating_add(1);
@@ -2081,6 +2114,11 @@ fn read_parts(path: &str) -> Result<(Document, Vec<String>), String> {
                 }
                 "text:list" => {
                     list_level = list_level.saturating_sub(1);
+                    if list_level == 0 {
+                        if let Some(top) = top_lists.last_mut() {
+                            top.1 = doc.paragraphs.len();
+                        }
+                    }
                     list_kinds.pop();
                     list_style_names.pop();
                     list_kind = if list_level == 0 { ListKind::None } else { list_kinds.last().copied().unwrap_or(ListKind::Bullet) };
@@ -2238,6 +2276,7 @@ fn read_parts(path: &str) -> Result<(Document, Vec<String>), String> {
         doc.page = master_layout.filter(|n| layouts.contains_key(n)).or(last_layout).and_then(|n| layouts.remove(&n));
     }
 
+    continue_numbering(&mut doc.paragraphs, &top_lists);
     doc.ensure_non_empty();
     doc.table_columns = column_widths.into_iter().filter_map(|(t, w)| Some((t, w.filter(|w| !w.is_empty())?))).collect();
     doc.table_rows = row_heights;
@@ -2829,6 +2868,35 @@ mod tests {
         let rt = round_trip(&d);
         assert_eq!(rt.header.as_deref(), Some("Report — {page} of {total}"));
         assert_eq!(rt.footer.as_deref(), Some("Confidential"));
+    }
+
+    /// A numbered list split by headings, each part continuing the one
+    /// before (`text:continue-numbering`, as a Word conversion writes
+    /// every run of numbered paragraphs), counts on across them: 1, 2,
+    /// heading, 3. A list that does not continue starts again at 1.
+    #[test]
+    fn a_continued_list_counts_on_across_headings() {
+        let styles = "<office:document-styles><office:styles><text:list-style style:name=\"L1\">\
+            <text:list-level-style-number text:level=\"1\" style:num-format=\"1\"/></text:list-style>\
+            </office:styles></office:document-styles>";
+        let list = |cont: &str, items: &[&str]| format!(
+            "<text:list text:style-name=\"L1\"{cont}>{}</text:list>",
+            items.iter().map(|t| format!("<text:list-item><text:p>{t}</text:p></text:list-item>")).collect::<String>()
+        );
+        let content = format!(
+            "<office:document-content><office:body><office:text>{}<text:h text:outline-level=\"2\">Heading</text:h>{}\
+             <text:h text:outline-level=\"2\">Again</text:h>{}{}</office:text></office:body></office:document-content>",
+            list("", &["one", "two"]),
+            list(" text:continue-numbering=\"true\"", &["three"]),
+            list("", &["fresh"]),
+            list(" text:continue-numbering=\"true\"", &["second"]),
+        );
+        let d = read_package(&content, styles);
+        let numbered: Vec<(String, Option<u32>)> = d.paragraphs.iter().filter(|p| p.style.list == ListKind::Numbered).map(|p| (p.text(), p.style.list_start)).collect();
+        assert_eq!(numbered, [("one".into(), None), ("two".into(), None), ("three".into(), Some(3)), ("fresh".into(), None), ("second".into(), Some(2))]);
+        let ordinals = crate::lists::ordinals(d.paragraphs.iter().map(|p| &p.style));
+        let shown: Vec<u32> = ordinals.into_iter().filter(|n| *n > 0).collect();
+        assert_eq!(shown, [1, 2, 3, 1, 2]);
     }
 
     /// A file with several master pages (a Word conversion gives each
