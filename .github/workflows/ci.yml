@@ -265,10 +265,20 @@ jobs:
           CARGO_PROFILE_TEST_DEBUG: line-tables-only
         run: cargo nextest archive --workspace --profile ci --archive-file nextest-archive.tar.zst
 
+      # Listing runs every test binary, which needs GTK's libraries: this
+      # job has them, the summary job (which reads the list) does not.
+      # `--run-ignored all` is load-bearing: see "Collect skip reasons".
+      - name: List the archive's tests, ignored ones included
+        run: |
+          cargo nextest list --archive-file nextest-archive.tar.zst --workspace-remap . \
+            --run-ignored all --message-format json > nextest-list.json
+
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: nextest-archive
-          path: nextest-archive.tar.zst
+          path: |
+            nextest-archive.tar.zst
+            nextest-list.json
           retention-days: 1
           if-no-files-found: error
 
@@ -459,8 +469,8 @@ jobs:
       # nextest omits `#[ignore]` tests from them entirely — not as
       # <skipped>, but as no <testcase> at all — so a report reads
       # `skipped="0"` on a workspace with seven ignored tests. The lister
-      # is what reports them, which is why this step re-lists, from the
-      # same archive the partitions ran.
+      # is what reports them, which is why this step reads the listing
+      # build-tests made of the same archive the partitions ran.
       #
       # `--run-ignored all` is load-bearing: without it the listing omits
       # them too and the collector would have nothing to check. It
@@ -468,8 +478,6 @@ jobs:
       - name: Collect skip reasons
         if: always()
         run: |
-          cargo nextest list --archive-file nextest-archive.tar.zst --workspace-remap . \
-            --run-ignored all --message-format json > nextest-list.json
           args=(--nextest-list nextest-list.json --out skip-reasons.json)
           for r in junit/junit-*.xml; do
             [ -f "$r" ] && args+=(--junit "$r")
