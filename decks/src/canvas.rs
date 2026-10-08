@@ -744,6 +744,10 @@ pub fn draw_object(
 
     match obj {
         SlideObject::TextBox { text, runs, body, .. } => {
+            // The shape the text sits in, under it.
+            if let Some(frame) = &body.frame {
+                draw_shape(cr, &frame.kind, &frame.style, (sx, sy, sw, sh), slide_w / 960.0);
+            }
             // The colour for runs that name none; runs read from a
             // file carry the colour their styles resolve to.
             let luminance = 0.299 * slide_bg_rgb.0 + 0.587 * slide_bg_rgb.1 + 0.114 * slide_bg_rgb.2;

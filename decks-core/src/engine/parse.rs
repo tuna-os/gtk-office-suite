@@ -662,6 +662,10 @@ pub fn read_pptx(path: &str) -> Result<Deck, String> {
             let mut in_text_element = false;
             let mut in_bg = false;
             let mut in_rpr = false;
+            // The groups (p:grpSp) the walker is inside, outermost first:
+            // a shape in one is placed in the group's child frame.
+            let mut groups: Vec<GroupFrame> = Vec::new();
+            let mut in_grp_pr = false;
             // The cNvPr id of the last shape seen, and each kept object's:
             // builds (p:timing) target shapes by it.
             let mut last_id: Option<u32> = None;
@@ -675,6 +679,13 @@ pub fn read_pptx(path: &str) -> Result<Deck, String> {
                         let name = e.name();
                         match name.as_ref() {
                             "p:bg" => in_bg = true,
+                            "p:grpSp" => groups.push(GroupFrame::default()),
+                            "p:grpSpPr" if current_shape.is_none() && current_picture.is_none() => in_grp_pr = true,
+                            "a:chOff" | "a:chExt" if in_grp_pr => {
+                                if let Some(g) = groups.last_mut() {
+                                    g.note(e);
+                                }
+                            }
                             "p:sp" => {
                                 current_shape = Some(PendingShape {
                                     is_tx_box: false,
@@ -722,6 +733,10 @@ pub fn read_pptx(path: &str) -> Result<Deck, String> {
                                 } else if let Some(pic) = current_picture.as_mut() {
                                     if x.is_some() { pic.x = x; }
                                     if y.is_some() { pic.y = y; }
+                                } else if in_grp_pr {
+                                    if let Some(g) = groups.last_mut() {
+                                        g.note(e);
+                                    }
                                 }
                             }
                             "a:ext" => {
@@ -732,6 +747,10 @@ pub fn read_pptx(path: &str) -> Result<Deck, String> {
                                 } else if let Some(pic) = current_picture.as_mut() {
                                     if w.is_some() { pic.w = w; }
                                     if h.is_some() { pic.h = h; }
+                                } else if in_grp_pr {
+                                    if let Some(g) = groups.last_mut() {
+                                        g.note(e);
+                                    }
                                 }
                             }
                             "a:prstGeom" => {
@@ -796,6 +815,11 @@ pub fn read_pptx(path: &str) -> Result<Deck, String> {
                     Ok(Event::Empty(ref e)) => {
                         let name = e.name();
                         match name.as_ref() {
+                            "a:chOff" | "a:chExt" if in_grp_pr => {
+                                if let Some(g) = groups.last_mut() {
+                                    g.note(e);
+                                }
+                            }
                             // See the master walker: `<a:p/>` is a blank line.
                             "a:p" => {
                                 if let Some(shape) = current_shape.as_mut() {
@@ -838,6 +862,10 @@ pub fn read_pptx(path: &str) -> Result<Deck, String> {
                                 } else if let Some(pic) = current_picture.as_mut() {
                                     if x.is_some() { pic.x = x; }
                                     if y.is_some() { pic.y = y; }
+                                } else if in_grp_pr {
+                                    if let Some(g) = groups.last_mut() {
+                                        g.note(e);
+                                    }
                                 }
                             }
                             "a:ext" => {
@@ -848,6 +876,10 @@ pub fn read_pptx(path: &str) -> Result<Deck, String> {
                                 } else if let Some(pic) = current_picture.as_mut() {
                                     if w.is_some() { pic.w = w; }
                                     if h.is_some() { pic.h = h; }
+                                } else if in_grp_pr {
+                                    if let Some(g) = groups.last_mut() {
+                                        g.note(e);
+                                    }
                                 }
                             }
                             "a:prstGeom" => {
@@ -902,6 +934,12 @@ pub fn read_pptx(path: &str) -> Result<Deck, String> {
                         if name.as_ref() == "p:bg" {
                             in_bg = false;
                         }
+                        if name.as_ref() == "p:grpSpPr" {
+                            in_grp_pr = false;
+                        }
+                        if name.as_ref() == "p:grpSp" {
+                            groups.pop();
+                        }
                         if name.as_ref() == "a:rPr" {
                             in_rpr = false;
                         }
@@ -937,16 +975,26 @@ pub fn read_pptx(path: &str) -> Result<Deck, String> {
                                         }
                                     }
                                 }
-                                let x = shape.x.unwrap_or(0.0) * scale.x;
-                                let y = shape.y.unwrap_or(0.0) * scale.y;
-                                let w = shape.w.unwrap_or(0.0) * scale.x;
-                                let h = shape.h.unwrap_or(0.0) * scale.y;
+                                let (x, y, w, h) = in_groups(&groups, (shape.x.unwrap_or(0.0), shape.y.unwrap_or(0.0), shape.w.unwrap_or(0.0), shape.h.unwrap_or(0.0)));
+                                let (x, y, w, h) = (x * scale.x, y * scale.y, w * scale.x, h * scale.y);
                                 
                                 let rotation = shape.rotation.unwrap_or(0.0);
 
                                 if shape.is_tx_box || (shape.has_tx_body && has_text) || role.is_some() {
                                     let (runs, mut body) = shape.resolve(text_style);
                                     body.placeholder = role;
+                                    // A shape holding text keeps its own
+                                    // paint under the text: a navy tile's
+                                    // white figures used to lose the tile.
+                                    let painted = paint.style.fill.is_some() || paint.style.gradient.is_some() || paint.style.stroke.is_some();
+                                    if painted {
+                                        let prst = shape.prst.clone().unwrap_or_else(|| "rect".to_string());
+                                        let mut kind = ShapeKind::from_prst(&prst);
+                                        if let (ShapeKind::RoundRect { radius }, Some(adj)) = (&mut kind, paint.round_adj) {
+                                            *radius = adj.clamp(0.0, 0.5);
+                                        }
+                                        body.frame = Some(super::text_body::Frame { kind, style: paint.style.clone() });
+                                    }
                                     let blank = role.is_some() && !has_text;
                                     let text = if blank { String::new() } else { text };
                                     let runs = if blank { Vec::new() } else { runs };
@@ -999,10 +1047,8 @@ pub fn read_pptx(path: &str) -> Result<Deck, String> {
                         } else if name.as_ref() == "p:pic" {
                             if let Some(pic) = current_picture.take() {
                                 if let Some(embed_id) = pic.embed_id {
-                                    let x = pic.x.unwrap_or(0.0) * scale.x;
-                                    let y = pic.y.unwrap_or(0.0) * scale.y;
-                                    let w = pic.w.unwrap_or(0.0) * scale.x;
-                                    let h = pic.h.unwrap_or(0.0) * scale.y;
+                                    let (x, y, w, h) = in_groups(&groups, (pic.x.unwrap_or(0.0), pic.y.unwrap_or(0.0), pic.w.unwrap_or(0.0), pic.h.unwrap_or(0.0)));
+                                    let (x, y, w, h) = (x * scale.x, y * scale.y, w * scale.x, h * scale.y);
                                     
                                     if let Some(obj) = resolve_and_extract_picture(
                                         &embed_id,
@@ -1634,6 +1680,50 @@ fn resolve_and_extract_picture(
         rotation,
         crop,
     })
+}
+
+/// A group shape's frame (`p:grpSpPr`'s `a:xfrm`): where it sits on the
+/// slide (`a:off`, `a:ext`) and the frame its children are placed in
+/// (`a:chOff`, `a:chExt`), in EMU.
+#[derive(Clone, Copy, Debug, Default)]
+struct GroupFrame {
+    off: Option<(f64, f64)>,
+    ext: Option<(f64, f64)>,
+    ch_off: Option<(f64, f64)>,
+    ch_ext: Option<(f64, f64)>,
+}
+
+impl GroupFrame {
+    /// Take an `a:off`, `a:ext`, `a:chOff` or `a:chExt` of the group's own.
+    fn note(&mut self, e: &BytesStart) {
+        let pair = |a: &str, b: &str| match parse_coords(e, a, b) {
+            (Some(x), Some(y)) => Some((x, y)),
+            _ => None,
+        };
+        match e.name().as_ref() {
+            "a:off" => self.off = pair("x", "y"),
+            "a:ext" => self.ext = pair("cx", "cy"),
+            "a:chOff" => self.ch_off = pair("x", "y"),
+            "a:chExt" => self.ch_ext = pair("cx", "cy"),
+            _ => {}
+        }
+    }
+
+    /// A rectangle in the group's child frame, on the slide (or in the
+    /// frame of the group around it).
+    fn place(&self, (x, y, w, h): (f64, f64, f64, f64)) -> (f64, f64, f64, f64) {
+        let (Some(off), Some(ext)) = (self.off, self.ext) else { return (x, y, w, h) };
+        let ch_off = self.ch_off.unwrap_or(off);
+        let ch_ext = self.ch_ext.unwrap_or(ext);
+        let sx = if ch_ext.0 > 0.0 { ext.0 / ch_ext.0 } else { 1.0 };
+        let sy = if ch_ext.1 > 0.0 { ext.1 / ch_ext.1 } else { 1.0 };
+        (off.0 + (x - ch_off.0) * sx, off.1 + (y - ch_off.1) * sy, w * sx, h * sy)
+    }
+}
+
+/// A rectangle given in the innermost of `groups`, on the slide.
+fn in_groups(groups: &[GroupFrame], rect: (f64, f64, f64, f64)) -> (f64, f64, f64, f64) {
+    groups.iter().rev().fold(rect, |r, g| g.place(r))
 }
 
 #[cfg(test)]
