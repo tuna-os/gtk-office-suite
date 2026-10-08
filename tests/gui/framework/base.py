@@ -1246,12 +1246,17 @@ class BaseGUITestCase(unittest.TestCase):
         """Put the pointer at device pixel (dx, dy) and wait until it is
         there. `mousemove --sync` waits for the pointer to move, so with
         the pointer already there it hung until the timeout and whatever
-        followed never happened: a second click on one spot failed."""
+        followed never happened: a second click on one spot failed. Not
+        moving at all is no better: a window opened under a pointer left
+        there by the journey before saw no motion, and a drag starting at
+        that spot did not move the object. So step off and back."""
         here = subprocess.run(["xdotool", "getmouselocation", "--shell"],
                               capture_output=True, text=True, timeout=5).stdout
-        if f"X={dx}\nY={dy}\n" not in here:
-            subprocess.run(["xdotool", "mousemove", "--sync", str(dx), str(dy)],
+        if f"X={dx}\nY={dy}\n" in here:
+            subprocess.run(["xdotool", "mousemove", "--sync", str(dx + 1), str(dy)],
                            capture_output=True, timeout=5)
+        subprocess.run(["xdotool", "mousemove", "--sync", str(dx), str(dy)],
+                       capture_output=True, timeout=5)
 
     def drag(self, x1: float, y1: float, x2: float, y2: float, button: int = 1):
         """Press-move-release from (x1, y1) to (x2, y2), window-local
