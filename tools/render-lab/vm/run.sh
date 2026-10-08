@@ -176,6 +176,9 @@ print(next((f["file"] for f in json.load(open(sys.argv[1])) if f["app"] == sys.a
     sleep 2
     qmp_key alt+o >/dev/null
     sleep 6
+    # What Open left on screen: the document, or the dialog still up.
+    qmp "$PWD/screen.ppm" >/dev/null
+    python3 -c 'import sys; from PIL import Image; Image.open(sys.argv[1]).save(sys.argv[2])' screen.ppm "$OUT/installed-$app-opened.png"
     "${SSH[@]}" "bash ~/lab/installed.sh --portal $app $ext" >>"$OUT/installed.json" \
         || echo "installed: $app file chooser check did not finish" >&2
     "${SSH[@]}" "bash ~/lab/installed.sh --close $app" || true

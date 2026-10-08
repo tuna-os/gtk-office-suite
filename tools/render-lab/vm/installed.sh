@@ -54,6 +54,7 @@ print(str(os.path.exists(p) and zipfile.is_zipfile(p) and zipfile.ZipFile(p).tes
     recent="$(flatpak run --command=gsettings "$id" get "$id" recent-files 2>/dev/null || true)"
     opened=false
     case "$recent" in *"portal-open-$app.$ext"*) opened=true ;; esac
+    echo "== recent-files after Open: $recent" >>"$HOME/lab/installed/$app-portal.log"
     python3 -c 'import json, sys
 app, saved, valid, opened = sys.argv[1:]
 print(json.dumps({"app": app, "portal_saved": saved == "true", "portal_valid": valid == "true", "portal_opened": opened == "true"}))' \
