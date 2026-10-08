@@ -405,6 +405,42 @@ fn an_inline_image_takes_its_extent_and_sits_on_the_baseline() {
     assert!(*height_pt >= 72.0, "the line grows to hold the image: {height_pt}");
 }
 
+/// A floating image takes no room in its line and is drawn where its
+/// anchor puts it: right-aligned in the margins, 36pt above its paragraph.
+#[test]
+fn a_floating_image_is_placed_by_its_anchor_not_in_the_line() {
+    use crate::model::{AnchorAlign, AnchorFrame, ImageAnchor};
+    let mut d = doc_of(2, "text");
+    d.paragraphs[1].runs.push(Run {
+        text: "logo".into(),
+        style: crate::model::RunStyle {
+            image: Some("/nonexistent.png".into()),
+            image_extent_emu: Some((914_400, 914_400)),
+            image_anchor: Some(ImageAnchor {
+                h_from: AnchorFrame::Margin,
+                h_align: Some(AnchorAlign::End),
+                v_from: AnchorFrame::Text,
+                y_emu: -36 * 12_700,
+                ..Default::default()
+            }),
+            ..Default::default()
+        },
+    });
+    let t = lay(&d);
+    let images: Vec<(f64, f64, f64)> = t.pages[0]
+        .items
+        .iter()
+        .filter_map(|i| match i {
+            Item::Image { x_pt, y_pt, width_pt, .. } => Some((*x_pt, *y_pt, *width_pt)),
+            _ => None,
+        })
+        .collect();
+    let right = t.pages[0].width_pt - 72.0;
+    assert_eq!(images, vec![(right - 72.0, 72.0 + LINE - 36.0, 72.0)], "1in square at the right margin, 36pt above the second line");
+    let heights: Vec<f64> = t.pages[0].lines().map(|l| match l { Item::Line { height_pt, .. } => *height_pt, _ => 0.0 }).collect();
+    assert_eq!(heights[0], heights[1], "the line does not grow to hold it");
+}
+
 #[test]
 fn an_image_wider_than_the_text_box_is_scaled_to_fit() {
     let run = Run {

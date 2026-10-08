@@ -263,6 +263,50 @@ fn inline_image_survives() {
     assert!(rt.to_plain_text().contains("before"));
 }
 
+/// A floating picture (the Ofsted logo of the audit-committee minutes,
+/// right-aligned in the margins and raised above its paragraph) is saved
+/// in its own paragraph, as a `wp:anchor`, and reads back placed the same.
+#[test]
+fn a_floating_image_keeps_its_paragraph_and_placement() {
+    use letters_core::model::{AnchorAlign, AnchorFrame, ImageAnchor};
+    let png: &[u8] = &[
+        0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, 0x00, 0x00, 0x00, 0x0D,
+        0x49, 0x48, 0x44, 0x52, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01,
+        0x08, 0x02, 0x00, 0x00, 0x00, 0x90, 0x77, 0x53, 0xDE, 0x00, 0x00, 0x00,
+        0x0C, 0x49, 0x44, 0x41, 0x54, 0x08, 0xD7, 0x63, 0xF8, 0xCF, 0xC0, 0x00,
+        0x00, 0x00, 0x03, 0x00, 0x01, 0x9E, 0xDD, 0x22, 0x71, 0x00, 0x00, 0x00,
+        0x00, 0x49, 0x45, 0x4E, 0x44, 0xAE, 0x42, 0x60, 0x82,
+    ];
+    let dir = tempfile::tempdir().unwrap();
+    let img_path = dir.path().join("logo.png");
+    std::fs::write(&img_path, png).unwrap();
+    let anchor = ImageAnchor {
+        h_from: AnchorFrame::Margin,
+        h_align: Some(AnchorAlign::End),
+        v_from: AnchorFrame::Text,
+        y_emu: -660_400,
+        ..Default::default()
+    };
+    let mut d = Document::from_plain_text("Minutes\nPresent:");
+    d.paragraphs[0].runs.push(Run {
+        text: "Ofsted logo".into(),
+        style: RunStyle {
+            image: Some(img_path.to_string_lossy().into_owned()),
+            image_extent_emu: Some((1_296_035, 1_097_915)),
+            image_anchor: Some(anchor),
+            ..Default::default()
+        },
+    });
+    let rt = round_trip(&d);
+    let texts: Vec<String> = rt.paragraphs.iter().map(|p| p.runs.iter().filter(|r| r.style.image.is_none()).map(|r| r.text.as_str()).collect()).collect();
+    assert_eq!(texts, ["Minutes", "Present:"], "no paragraph split off");
+    let logo = rt.paragraphs[0].runs.iter().find(|r| r.style.image.is_some()).expect("the logo stays in its paragraph");
+    assert_eq!(logo.style.image_anchor, Some(anchor));
+    assert_eq!(logo.style.image_extent_emu, Some((1_296_035, 1_097_915)));
+    assert_eq!(logo.text, "Ofsted logo", "alt text");
+    assert_eq!(std::fs::read(logo.style.image.as_ref().unwrap()).unwrap(), png);
+}
+
 /// Reopening a document reuses the image it already extracted rather than
 /// leaving another file in the temp dir on every open (#455). The file
 /// lives in the process's private media cache, not loose in /tmp.
