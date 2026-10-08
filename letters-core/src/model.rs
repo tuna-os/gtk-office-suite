@@ -371,6 +371,14 @@ pub struct Document {
     /// Page header/footer text; "{page}" substitutes the page number.
     pub header: Option<String>,
     pub footer: Option<String>,
+    /// The pictures in the header, above its text (a letterhead's logo):
+    /// image runs (`RunStyle::image`, its extent, its alt text as the
+    /// run's text, and an anchor for one that floats).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub header_pictures: Vec<Run>,
+    /// The pictures in the footer, above its text.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub footer_pictures: Vec<Run>,
     /// Page size and margins; None = application default (A4).
     pub page: Option<PageGeometry>,
     /// The body font the document's own styles name; runs without a font
@@ -489,6 +497,8 @@ impl Document {
             footnotes: vec![],
             header: None,
             footer: None,
+            header_pictures: Vec::new(),
+            footer_pictures: Vec::new(),
             page: None,
             base_font: BaseFont::default(),
             heading_styles: Vec::new(),

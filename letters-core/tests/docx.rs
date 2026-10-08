@@ -307,6 +307,48 @@ fn a_floating_image_keeps_its_paragraph_and_placement() {
     assert_eq!(std::fs::read(logo.style.image.as_ref().unwrap()).unwrap(), png);
 }
 
+/// A letterhead's logo comes back in the header, above its text with its
+/// page field, and a footer's floating picture keeps its place.
+#[test]
+fn header_and_footer_pictures_survive() {
+    use letters_core::model::{AnchorAlign, AnchorFrame, ImageAnchor};
+    let png: &[u8] = &[
+        0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, 0x00, 0x00, 0x00, 0x0D,
+        0x49, 0x48, 0x44, 0x52, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01,
+        0x08, 0x02, 0x00, 0x00, 0x00, 0x90, 0x77, 0x53, 0xDE, 0x00, 0x00, 0x00,
+        0x0C, 0x49, 0x44, 0x41, 0x54, 0x08, 0xD7, 0x63, 0xF8, 0xCF, 0xC0, 0x00,
+        0x00, 0x00, 0x03, 0x00, 0x01, 0x9E, 0xDD, 0x22, 0x71, 0x00, 0x00, 0x00,
+        0x00, 0x49, 0x45, 0x4E, 0x44, 0xAE, 0x42, 0x60, 0x82,
+    ];
+    let dir = tempfile::tempdir().unwrap();
+    let img_path = dir.path().join("logo.png");
+    std::fs::write(&img_path, png).unwrap();
+    let picture = |alt: &str, anchor| Run {
+        text: alt.into(),
+        style: RunStyle {
+            image: Some(img_path.to_string_lossy().into_owned()),
+            image_extent_emu: Some((1_304_925, 542_925)),
+            image_anchor: anchor,
+            ..Default::default()
+        },
+    };
+    let seal = ImageAnchor { h_from: AnchorFrame::Margin, h_align: Some(AnchorAlign::End), v_from: AnchorFrame::Text, ..Default::default() };
+    let mut d = Document::from_plain_text("body");
+    d.header = Some("\nOFSI, page {page}".into());
+    d.header_pictures = vec![picture("HM Treasury", None)];
+    d.footer = Some("October 2025".into());
+    d.footer_pictures = vec![picture("seal", Some(seal))];
+    let rt = round_trip(&d);
+    assert_eq!(rt.header.as_deref(), Some("\nOFSI, page {page}"), "the logo's own line, then the text");
+    assert_eq!(rt.footer.as_deref(), Some("October 2025"));
+    let logo = &rt.header_pictures[..];
+    assert_eq!(logo.len(), 1, "{:?}", rt.header_pictures);
+    assert_eq!((logo[0].text.as_str(), logo[0].style.image_extent_emu, logo[0].style.image_anchor), ("HM Treasury", Some((1_304_925, 542_925)), None));
+    assert_eq!(std::fs::read(logo[0].style.image.as_ref().unwrap()).unwrap(), png);
+    assert_eq!(rt.footer_pictures.iter().map(|r| r.style.image_anchor).collect::<Vec<_>>(), [Some(seal)]);
+    assert!(rt.paragraphs.iter().all(|p| p.runs.iter().all(|r| r.style.image.is_none())), "the pictures stay out of the body");
+}
+
 /// Reopening a document reuses the image it already extracted rather than
 /// leaving another file in the temp dir on every open (#455). The file
 /// lives in the process's private media cache, not loose in /tmp.

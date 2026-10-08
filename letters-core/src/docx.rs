@@ -290,7 +290,43 @@ fn read_on_this_thread(path: &str) -> Result<Document, String> {
     if footer.is_some() {
         read.footer = footer;
     }
+    (read.header_pictures, read.footer_pictures) = header_footer_pictures(path);
     Ok(read)
+}
+
+/// The pictures of the default header and footer (a letterhead's logo),
+/// each kept in the media cache like a body picture (#455).
+fn header_footer_pictures(path: &str) -> (Vec<Run>, Vec<Run>) {
+    let Some(mut zip) = std::fs::File::open(path).ok().and_then(|f| zip::ZipArchive::new(f).ok()) else { return Default::default() };
+    let (Some(document), Some(rels)) = (part_text(&mut zip, "word/document.xml"), part_text(&mut zip, "word/_rels/document.xml.rels")) else {
+        return Default::default();
+    };
+    let (h, f) = crate::docx_fields::default_parts(&document, &rels);
+    let mut pictures = |part: Option<String>| -> Vec<Run> {
+        let Some(part) = part else { return Vec::new() };
+        let Some(xml) = part_text(&mut zip, &part) else { return Vec::new() };
+        let (dir, file) = part.rsplit_once('/').unwrap_or(("", part.as_str()));
+        let part_rels = part_text(&mut zip, &format!("{dir}/_rels/{file}.rels")).unwrap_or_default();
+        crate::docx_anchors::pictures_in(&xml)
+            .into_iter()
+            .filter_map(|pic| {
+                let target = crate::docx_anchors::relationship_target(&part_rels, &pic.embed)?;
+                let mut bytes = Vec::new();
+                std::io::Read::read_to_end(&mut zip.by_name(&target).ok()?, &mut bytes).ok()?;
+                let path = suite_common_core::media_cache::persist(&bytes).ok()?;
+                Some(Run {
+                    text: pic.alt,
+                    style: RunStyle {
+                        image: Some(path.to_string_lossy().into_owned()),
+                        image_extent_emu: pic.extent,
+                        image_anchor: pic.anchor,
+                        ..Default::default()
+                    },
+                })
+            })
+            .collect()
+    };
+    (pictures(h), pictures(f))
 }
 
 /// A zip part's text, if it is there.
@@ -612,6 +648,8 @@ fn read_opened(path: &str, doc: rdocx::Document) -> Result<Document, String> {
         footnotes,
         header: doc.header_text(),
         footer: doc.footer_text(),
+        header_pictures: Vec::new(),
+        footer_pictures: Vec::new(),
         page: read_page_geometry(&doc),
         base_font: read_base_font(&doc),
         heading_styles: read_heading_styles(&doc),
@@ -1081,11 +1119,24 @@ pub fn write(doc: &Document, path: impl AsRef<std::path::Path>) -> Result<(), St
             let _ = out.last_paragraph_mut().expect("paragraph").add_run(&crate::docx_comments::marker(id, start));
         }
     }
-    if let Some(h) = &doc.header {
-        out.set_header(h);
-    }
-    if let Some(f) = &doc.footer {
-        out.set_footer(f);
+    // A header or footer with pictures is written whole, its pictures in
+    // its first paragraph (docx_anchors::header_footer_part).
+    for (is_header, text, pictures) in [(true, &doc.header, &doc.header_pictures), (false, &doc.footer, &doc.footer_pictures)] {
+        if pictures.is_empty() {
+            match (is_header, text) {
+                (true, Some(h)) => out.set_header(h),
+                (false, Some(f)) => out.set_footer(f),
+                _ => {}
+            }
+            continue;
+        }
+        let (xml, images) = crate::docx_anchors::header_footer_part(is_header, text.as_deref().unwrap_or(""), pictures);
+        let images: Vec<(&str, &[u8], &str)> = images.iter().map(|(r, b, n)| (r.as_str(), b.as_slice(), n.as_str())).collect();
+        if is_header {
+            out.set_raw_header_with_images(xml.into_bytes(), &images, rdocx::HdrFtrType::Default);
+        } else {
+            out.set_raw_footer_with_images(xml.into_bytes(), &images, rdocx::HdrFtrType::Default);
+        }
     }
     if let Some(pg) = &doc.page {
         out.set_page_size(rdocx::Length::pt(pg.width_pt), rdocx::Length::pt(pg.height_pt));
@@ -1113,7 +1164,7 @@ pub fn write(doc: &Document, path: impl AsRef<std::path::Path>) -> Result<(), St
     } else {
         with_part(&bytes, "word/document.xml", |xml| {
             let xml = if tabbed { tabs_as_elements(xml) } else { xml.to_string() };
-            let xml = if floating.is_empty() { xml } else { crate::docx_anchors::float(&xml, &floating) };
+            let xml = if floating.is_empty() { xml } else { crate::docx_anchors::float(&xml, &floating, 9001) };
             let xml = crate::docx_revisions::wrap(&crate::docx_chips::wrap(&xml, &chips), &revisions);
             let xml = crate::docx_comments::wrap(&xml, &doc.comments);
             if has_toc { crate::docx_toc::wrap(&xml) } else { xml }

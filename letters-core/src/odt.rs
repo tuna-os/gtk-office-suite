@@ -194,6 +194,36 @@ fn picture(src: &str) -> Option<(String, Vec<u8>, &'static str)> {
     Some((format!("Pictures/{:016x}.{ext}", h.finish()), bytes, mime))
 }
 
+/// A picture run as a frame (picture number `n`): anchored as a character,
+/// so it stays where it is in the line, or, floating, anchored to its
+/// paragraph and placed by a graphic style of its own (`{prefix}{n}`, added
+/// to `auto`). Its bytes are in Pictures/ (#1292). None when its source
+/// can't be read.
+fn picture_frame(r: &Run, n: usize, prefix: &str, auto: &mut String) -> Option<String> {
+    let (name, bytes, _) = picture(r.style.image.as_deref()?)?;
+    let (w, h) = picture_extent(r, &bytes);
+    let title = if r.text.trim().is_empty() { String::new() } else { format!("<svg:title>{}</svg:title>", esc(&r.text)) };
+    let anchoring = match r.style.image_anchor {
+        Some(a) => {
+            let style = format!("{prefix}{n}");
+            auto.push_str(&floating_style(&style, &a));
+            format!(
+                "draw:style-name=\"{style}\" text:anchor-type=\"paragraph\" svg:x=\"{:.6}in\" svg:y=\"{:.6}in\"",
+                a.x_emu as f64 / EMU_PER_INCH,
+                a.y_emu as f64 / EMU_PER_INCH,
+            )
+        }
+        None => "text:anchor-type=\"as-char\"".to_string(),
+    };
+    Some(format!(
+        "<draw:frame draw:name=\"Picture {n}\" {anchoring} svg:width=\"{:.6}in\" svg:height=\"{:.6}in\">\
+         <draw:image xlink:href=\"{name}\" xlink:type=\"simple\" xlink:show=\"embed\" xlink:actuate=\"onLoad\"/>\
+         {title}</draw:frame>",
+        w as f64 / EMU_PER_INCH,
+        h as f64 / EMU_PER_INCH,
+    ))
+}
+
 /// EMU per inch (OOXML's unit, which the model keeps image sizes in).
 const EMU_PER_INCH: f64 = 914_400.0;
 
@@ -619,34 +649,11 @@ fn content_xml(doc: &Document) -> String {
             }
             // A picture is a frame anchored as a character, so it stays
             // where it is in the line; its bytes are in Pictures/ (#1292).
-            if let Some(src) = &r.style.image {
-                match picture(src) {
-                    Some((name, bytes, _)) => {
+            if r.style.image.is_some() {
+                match picture_frame(r, pictures_written + 1, "fr", &mut auto) {
+                    Some(frame) => {
                         pictures_written += 1;
-                        let (w, h) = picture_extent(r, &bytes);
-                        let title = if r.text.trim().is_empty() { String::new() } else { format!("<svg:title>{}</svg:title>", esc(&r.text)) };
-                        // A floating picture is anchored to its paragraph
-                        // and placed by a graphic style of its own.
-                        let anchoring = match r.style.image_anchor {
-                            Some(a) => {
-                                let name = format!("fr{pictures_written}");
-                                auto.push_str(&floating_style(&name, &a));
-                                format!(
-                                    "draw:style-name=\"{name}\" text:anchor-type=\"paragraph\" svg:x=\"{:.6}in\" svg:y=\"{:.6}in\"",
-                                    a.x_emu as f64 / EMU_PER_INCH,
-                                    a.y_emu as f64 / EMU_PER_INCH,
-                                )
-                            }
-                            None => "text:anchor-type=\"as-char\"".to_string(),
-                        };
-                        inner.push_str(&format!(
-                            "<draw:frame draw:name=\"Picture {pictures_written}\" {anchoring} \
-                             svg:width=\"{:.6}in\" svg:height=\"{:.6}in\">\
-                             <draw:image xlink:href=\"{name}\" xlink:type=\"simple\" xlink:show=\"embed\" xlink:actuate=\"onLoad\"/>\
-                             {title}</draw:frame>",
-                            w as f64 / EMU_PER_INCH,
-                            h as f64 / EMU_PER_INCH,
-                        ));
+                        inner.push_str(&frame);
                     }
                     None => inner.push_str(&esc(&r.text)),
                 }
@@ -906,18 +913,27 @@ fn styles_xml(doc: &Document) -> String {
         None => "<style:page-layout-properties/>".to_string(),
     };
     let mut hf = String::new();
-    if doc.header.is_some() || doc.footer.is_some() {
+    // A header's or footer's pictures are frames at the start of its
+    // paragraph, a floating one placed by a graphic style of styles.xml's.
+    let mut graphic = String::new();
+    let mut frames = |pictures: &[Run], prefix: &str| -> String {
+        pictures.iter().enumerate().filter_map(|(k, r)| picture_frame(r, k + 1, prefix, &mut graphic)).collect()
+    };
+    let has = |text: &Option<String>, pictures: &[Run]| text.is_some() || !pictures.is_empty();
+    if has(&doc.header, &doc.header_pictures) || has(&doc.footer, &doc.footer_pictures) {
         hf.push_str("<office:master-styles><style:master-page style:name=\"Standard\" style:page-layout-name=\"pm1\">");
-        if let Some(h) = &doc.header {
+        if has(&doc.header, &doc.header_pictures) {
+            let pics = frames(&doc.header_pictures, "hfr");
             hf.push_str(&format!(
-                "<style:header><text:p>{}</text:p></style:header>",
-                page_fields(&esc(h))
+                "<style:header><text:p>{pics}{}</text:p></style:header>",
+                page_fields(&esc(doc.header.as_deref().unwrap_or("")))
             ));
         }
-        if let Some(f) = &doc.footer {
+        if has(&doc.footer, &doc.footer_pictures) {
+            let pics = frames(&doc.footer_pictures, "ffr");
             hf.push_str(&format!(
-                "<style:footer><text:p>{}</text:p></style:footer>",
-                page_fields(&esc(f))
+                "<style:footer><text:p>{pics}{}</text:p></style:footer>",
+                page_fields(&esc(doc.footer.as_deref().unwrap_or("")))
             ));
         }
         hf.push_str("</style:master-page></office:master-styles>");
@@ -931,11 +947,14 @@ fn styles_xml(doc: &Document) -> String {
          xmlns:text=\"urn:oasis:names:tc:opendocument:xmlns:text:1.0\" \
          xmlns:style=\"urn:oasis:names:tc:opendocument:xmlns:style:1.0\" \
          xmlns:fo=\"urn:oasis:names:tc:opendocument:xmlns:xsl-fo-compatible:1.0\" \
+         xmlns:draw=\"urn:oasis:names:tc:opendocument:xmlns:drawing:1.0\" \
+         xmlns:svg=\"urn:oasis:names:tc:opendocument:xmlns:svg-compatible:1.0\" \
+         xmlns:xlink=\"http://www.w3.org/1999/xlink\" \
          office:version=\"1.2\">\
          <office:styles>{contents}</office:styles>\
          <office:automatic-styles>\
          <style:page-layout style:name=\"pm1\">{layout}\
-         </style:page-layout></office:automatic-styles>{hf}\
+         </style:page-layout>{graphic}</office:automatic-styles>{hf}\
          </office:document-styles>",
         contents = CODE_STYLES.to_string()
             + &heading_styles(doc)
@@ -1000,7 +1019,8 @@ pub fn write(doc: &Document, path: impl AsRef<std::path::Path>) -> Result<(), St
     let opt = zip::write::SimpleFileOptions::default();
     // Every readable picture once, in the order the document uses them.
     let mut pictures: Vec<(String, Vec<u8>, &'static str)> = Vec::new();
-    for src in doc.paragraphs.iter().flat_map(|p| &p.runs).filter_map(|r| r.style.image.as_deref()) {
+    let runs = doc.paragraphs.iter().flat_map(|p| &p.runs).chain(&doc.header_pictures).chain(&doc.footer_pictures);
+    for src in runs.filter_map(|r| r.style.image.as_deref()) {
         if let Some(pic) = picture(src).filter(|pic| !pictures.iter().any(|seen| seen.0 == pic.0)) {
             pictures.push(pic);
         }
@@ -1615,7 +1635,7 @@ fn read_parts(path: &str) -> Result<(Document, Vec<String>), String> {
 
     // styles.xml's named styles, the parents of content.xml's automatic ones.
     let named = parse_auto_styles(&styles);
-    let mut doc = Document { paragraphs: Vec::new(), footnotes: Vec::new(), header: None, footer: None, page: None, base_font: read_base_font(&styles), heading_styles: read_heading_styles(&styles), comments: Vec::new(), table_columns: Default::default(), table_rows: Default::default(), table_fills: Default::default() };
+    let mut doc = Document { paragraphs: Vec::new(), footnotes: Vec::new(), header: None, footer: None, header_pictures: Vec::new(), footer_pictures: Vec::new(), page: None, base_font: read_base_font(&styles), heading_styles: read_heading_styles(&styles), comments: Vec::new(), table_columns: Default::default(), table_rows: Default::default(), table_fills: Default::default() };
     let mut reader = Reader::from_str(&content);
     let mut in_body = false;
     let mut para: Option<Paragraph> = None;
@@ -2341,6 +2361,9 @@ fn read_parts(path: &str) -> Result<(Document, Vec<String>), String> {
         let mut in_alt = false;
         // Inside a page number or count field: its shown value is skipped.
         let mut in_field = false;
+        // A picture of the header or footer being read: in the header or
+        // not, its size, placement, image and alt text.
+        let mut hf_frame: Option<(bool, FrameReading)> = None;
         // Returns the geometry instead of writing to `doc` so the borrow ends
         // with the call; `style:columns` needs `doc.page` mutably right after.
         let read_page_layout = |e: &quick_xml::events::BytesStart| -> Option<PageGeometry> {
@@ -2389,6 +2412,43 @@ fn read_parts(path: &str) -> Result<(Document, Vec<String>), String> {
                     }
                 }
                 Ok(Event::End(e)) if e.name().as_ref() == "style:master-page" => in_master = false,
+                Ok(Event::Start(e)) | Ok(Event::Empty(e)) if e.name().as_ref() == "draw:frame" && (in_header || in_footer) => {
+                    let size = |a: &str| attr_val(&e, a).as_deref().and_then(length_emu);
+                    let floating = attr_val(&e, "text:anchor-type").is_some_and(|t| matches!(t.as_str(), "paragraph" | "char" | "page"));
+                    let anchor = floating.then(|| {
+                        let offset = |a: &str| attr_val(&e, a).as_deref().and_then(offset_emu).unwrap_or(0);
+                        crate::model::ImageAnchor {
+                            x_emu: offset("svg:x"),
+                            y_emu: offset("svg:y"),
+                            ..attr_val(&e, "draw:style-name").and_then(|n| named.graphic.get(&n).copied()).unwrap_or_default()
+                        }
+                    });
+                    hf_frame = Some((in_header, FrameReading { extent: size("svg:width").zip(size("svg:height")), anchor, href: None, alt: String::new(), in_alt: false, depth: 0 }));
+                }
+                Ok(Event::Start(e)) | Ok(Event::Empty(e)) if e.name().as_ref() == "draw:image" => {
+                    if let Some((_, f)) = hf_frame.as_mut().filter(|(_, f)| f.href.is_none()) {
+                        f.href = attr_val(&e, "xlink:href");
+                    }
+                }
+                Ok(Event::End(e)) if e.name().as_ref() == "draw:frame" => {
+                    // A picture whose bytes are in the package, kept in the
+                    // media cache like a body picture's.
+                    if let Some((header, f)) = hf_frame.take() {
+                        let href = f.href.filter(|h| !h.contains("://"));
+                        let path = href.as_deref().and_then(|h| {
+                            let bytes = zip.part_to_bytes(h.trim_start_matches("./"), &mut budget).ok()?;
+                            suite_common_core::media_cache::persist(&bytes).ok()
+                        });
+                        if let Some(path) = path {
+                            consumed.push(href.expect("read from it").trim_start_matches("./").to_string());
+                            let run = Run {
+                                text: f.alt.trim().to_string(),
+                                style: RunStyle { image: Some(path.to_string_lossy().into_owned()), image_extent_emu: f.extent, image_anchor: f.anchor, ..Default::default() },
+                            };
+                            if header { doc.header_pictures.push(run) } else { doc.footer_pictures.push(run) }
+                        }
+                    }
+                }
                 Ok(Event::Start(e)) => match e.name().as_ref() {
                     "style:page-layout" => layout_name = attr_val(&e, "style:name").unwrap_or_default(),
                     "style:header" => in_header = in_master,
@@ -2415,7 +2475,12 @@ fn read_parts(path: &str) -> Result<(Document, Vec<String>), String> {
                     "text:page-number" | "text:page-count" => in_field = false,
                     _ => {}
                 },
-                Ok(Event::Text(_)) if in_field || in_alt => {}
+                Ok(Event::Text(t)) if in_alt => {
+                    if let Some((_, f)) = hf_frame.as_mut().filter(|(_, f)| f.alt.is_empty()) {
+                        f.alt = unescape_text(&t);
+                    }
+                }
+                Ok(Event::Text(_)) if in_field => {}
                 Ok(Event::Text(t)) => {
                     let txt = unescape_text(&t);
                     if in_header && !txt.trim().is_empty() {
@@ -2563,6 +2628,38 @@ mod tests {
         let first: Vec<&str> = rt.paragraphs[0].runs.iter().map(|r| if r.style.image.is_some() { "[pic]" } else { r.text.as_str() }).collect();
         assert_eq!(first, ["before ", "[pic]", " after"], "the picture stays where it is in the line");
         assert!(opaque.is_empty(), "a picture we read is not an opaque part: {:?}", opaque.part_names().collect::<Vec<_>>());
+    }
+
+    /// A letterhead's logo comes back in the header, before its text, and a
+    /// footer's floating picture keeps its place; the bytes are stored in
+    /// Pictures/ once with the body's.
+    #[test]
+    fn header_and_footer_pictures_round_trip() {
+        use crate::model::{AnchorAlign, AnchorFrame, ImageAnchor};
+        let dir = tempfile::tempdir().unwrap();
+        let src = dir.path().join("logo.png");
+        std::fs::write(&src, PNG).unwrap();
+        let picture = |alt: &str, anchor| Run {
+            text: alt.into(),
+            style: RunStyle { image: Some(src.to_string_lossy().into_owned()), image_extent_emu: Some((1_343_025, 933_450)), image_anchor: anchor, ..Default::default() },
+        };
+        let seal = ImageAnchor { h_from: AnchorFrame::Margin, h_align: Some(AnchorAlign::End), v_from: AnchorFrame::Text, ..Default::default() };
+        let mut d = Document::from_plain_text("body");
+        d.header = Some("Page {page}".into());
+        d.header_pictures = vec![picture("Department for Education", None)];
+        d.footer_pictures = vec![picture("seal", Some(seal))];
+        let out = dir.path().join("hf.odt");
+        write(&d, &out).unwrap();
+        let rt = read(out.to_str().unwrap()).unwrap();
+        assert_eq!(rt.header.as_deref(), Some("Page {page}"));
+        assert_eq!(rt.footer, None, "a footer of a picture alone has no text");
+        let logo = &rt.header_pictures;
+        assert_eq!(logo.len(), 1, "{:?}", rt.header_pictures);
+        assert_eq!((logo[0].text.as_str(), logo[0].style.image_anchor), ("Department for Education", None));
+        let (w, h) = logo[0].style.image_extent_emu.unwrap();
+        assert!(w.abs_diff(1_343_025) < 10 && h.abs_diff(933_450) < 10, "{:?}", (w, h));
+        assert_eq!(std::fs::read(logo[0].style.image.as_ref().unwrap()).unwrap(), PNG);
+        assert_eq!(rt.footer_pictures.iter().map(|r| r.style.image_anchor).collect::<Vec<_>>(), [Some(seal)]);
     }
 
     /// A floating picture is a frame anchored to its paragraph, placed by

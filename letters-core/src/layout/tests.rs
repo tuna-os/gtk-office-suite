@@ -333,6 +333,29 @@ fn a_shaded_cell_carries_its_fill() {
     assert!(d.table_fills[&table].is_empty(), "deleting its column deletes its shading");
 }
 
+/// A letterhead's logo is drawn at the header's top on every page, its own
+/// empty line taken by the picture's row, and a header taller than the
+/// room above the margin pushes the body down rather than under it.
+#[test]
+fn a_header_picture_is_drawn_and_pushes_the_body_down() {
+    let mut d = doc_of(60, "x");
+    d.header = Some("\nOFSI".into());
+    d.header_pictures = vec![Run {
+        text: "logo".into(),
+        style: crate::model::RunStyle { image: Some("/nonexistent.png".into()), image_extent_emu: Some((914_400, 914_400)), ..Default::default() },
+    }];
+    let t = lay(&d);
+    let opts = LayoutOptions::default();
+    for page in &t.pages {
+        let logo: Vec<(f64, f64)> = page.items.iter().filter_map(|i| match i { Item::Image { x_pt, y_pt, .. } => Some((*x_pt, *y_pt)), _ => None }).collect();
+        assert_eq!(logo, [(72.0, opts.header_distance_pt)], "page {}", page.index);
+    }
+    let header: Vec<f64> = t.pages[0].items.iter().filter_map(|i| match i { Item::Line { source: Source::Header, top_pt, .. } => Some(*top_pt), _ => None }).collect();
+    assert_eq!(header, [opts.header_distance_pt + 72.0], "the text under the logo, its empty first line taken by it");
+    let body_top = t.pages[0].lines().find_map(|l| match l { Item::Line { source: Source::Paragraph(_), top_pt, .. } => Some(*top_pt), _ => None }).unwrap();
+    assert_eq!(body_top, opts.header_distance_pt + 72.0 + LINE, "the body starts under the header, not at the 72pt margin");
+}
+
 #[test]
 fn headers_and_footers_repeat_with_page_numbers() {
     let mut d = doc_of(60, "x");
