@@ -1506,11 +1506,17 @@ fn map_paragraph(doc: &rdocx::Document, p: &rdocx::ParagraphRef<'_>, table_style
             .map(|pt| (pt * 2.0).round() as u16)
             .or_else(|| eff.sz.map(|s| s.0.min(u32::from(u16::MAX)) as u16).filter(|hp| Some(*hp) != base.size_hp));
         // "auto" is Word's automatic (default) text colour, not a colour:
-        // on the run itself it must not hide the style's either.
+        // on the run itself it must not hide the style's either. In a
+        // heading, though, the heading style's colour is drawn under every
+        // run without one, so "auto" there is the run undoing it (a black
+        // subtitle in a blue Heading 2): black, as Word and LibreOffice
+        // draw it.
+        let auto = r.color().is_some_and(|c| c.eq_ignore_ascii_case("auto"));
         let color = r
             .color()
             .filter(|c| !c.eq_ignore_ascii_case("auto"))
             .map(|c| c.trim_start_matches('#').to_uppercase())
+            .or_else(|| (auto && heading.is_some()).then(|| "000000".to_string()))
             .or_else(|| eff.color.as_deref().filter(|c| !c.eq_ignore_ascii_case("auto")).map(|c| c.to_uppercase()));
         runs.push(Run {
             text,

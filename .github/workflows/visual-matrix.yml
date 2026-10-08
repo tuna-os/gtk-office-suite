@@ -16,6 +16,8 @@ name: Visual matrix
 on:
   schedule:
     - cron: '30 4 * * *'   # nightly, after the stress campaign
+  # A release's evidence bundle runs it at the release (release-evidence.yml).
+  workflow_call:
   workflow_dispatch:
     inputs:
       update:
