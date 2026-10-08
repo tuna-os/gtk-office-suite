@@ -1519,6 +1519,21 @@ fn table_row_heights_survive() {
     assert!(round_trip(&d).table_rows.is_empty());
 }
 
+/// A table's shaded cells survive a save and reopen (`w:shd w:fill`).
+#[test]
+fn table_cell_fills_survive() {
+    use letters_core::CellFill;
+    let mut d = Document::from_plain_text("after");
+    let table = d.insert_table_at(0, 2, 2);
+    let want = vec![CellFill { row: 0, col: 0, color: "D9D9D9".into() }, CellFill { row: 1, col: 1, color: "DEEAF6".into() }];
+    d.table_fills.insert(table, want.clone());
+    let rt = round_trip(&d);
+    assert_eq!(rt.table_fills.values().cloned().collect::<Vec<_>>(), [want]);
+    let mut d = Document::from_plain_text("after");
+    d.insert_table_at(0, 1, 1);
+    assert!(round_trip(&d).table_fills.is_empty());
+}
+
 /// A table stays where the document has it, between the paragraphs around
 /// it, and the paragraph OOXML needs after a table that meets another or
 /// ends the document comes and goes with the save: a round trip neither

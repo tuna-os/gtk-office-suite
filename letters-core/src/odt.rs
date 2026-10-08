@@ -243,10 +243,16 @@ struct OpenTable {
     filled: bool,
     /// Each row's style attribute (empty for a row without a height).
     row_styles: Vec<String>,
+    /// Each shaded cell's style attribute, by (row, col).
+    cell_styles: std::collections::HashMap<(u32, u32), String>,
 }
 
 impl OpenTable {
-    const CELL: &'static str = "<table:table-cell office:value-type=\"string\">";
+    /// Open the cell at the current (row, col), with its fill's style.
+    fn open_cell(&self, body: &mut String) {
+        let style = self.cell_styles.get(&(self.row, self.col)).map_or("", String::as_str);
+        body.push_str(&format!("<table:table-cell office:value-type=\"string\"{style}>"));
+    }
 
     fn open_row(&self, body: &mut String) {
         let style = self.row_styles.get(self.row as usize).map_or("", String::as_str);
@@ -276,7 +282,7 @@ impl OpenTable {
                 }
                 self.open_row(body);
             }
-            body.push_str(Self::CELL);
+            self.open_cell(body);
             self.filled = false;
         }
     }
@@ -540,9 +546,23 @@ fn content_xml(doc: &Document) -> String {
                         })
                         .collect();
                     body.push_str(&format!("<table:table table:name=\"Table{tables_written}\"{table_style}>{columns}"));
-                    let t = OpenTable { id: c.table, rows, cols, row: 0, col: 0, filled: false, row_styles };
+                    // The shaded cells, one table-cell style per colour.
+                    let mut fill_styles: std::collections::HashMap<String, String> = Default::default();
+                    let cell_styles = doc.table_fills.get(&c.table).into_iter().flatten().map(|f| {
+                        let n = fill_styles.len();
+                        let name = fill_styles.entry(f.color.clone()).or_insert_with(|| {
+                            let name = format!("Table{tables_written}.F{n}");
+                            auto.push_str(&format!(
+                                "<style:style style:name=\"{name}\" style:family=\"table-cell\"><style:table-cell-properties fo:background-color=\"#{}\"/></style:style>",
+                                esc(&f.color)
+                            ));
+                            name
+                        });
+                        ((f.row, f.col), format!(" table:style-name=\"{name}\""))
+                    }).collect();
+                    let t = OpenTable { id: c.table, rows, cols, row: 0, col: 0, filled: false, row_styles, cell_styles };
                     t.open_row(&mut body);
-                    body.push_str(OpenTable::CELL);
+                    t.open_cell(&mut body);
                     table = Some(t);
                 }
                 if let Some(t) = table.as_mut() {
@@ -1050,6 +1070,8 @@ struct AutoStyles {
     column: std::collections::HashMap<String, f64>,
     /// A table-row style's height.
     row: std::collections::HashMap<String, crate::model::RowHeight>,
+    /// A table-cell style's background colour, six hex digits.
+    cell_fill: std::collections::HashMap<String, String>,
 }
 
 /// Paragraph-level values read off one automatic style. Lengths are points.
@@ -1153,7 +1175,7 @@ fn list_style_kinds(xml: &str) -> std::collections::HashMap<String, Vec<ListKind
 }
 
 fn parse_auto_styles(xml: &str) -> AutoStyles {
-    let mut out = AutoStyles { text: Default::default(), para: Default::default(), para_parent: Default::default(), text_parent: Default::default(), para_text: Default::default(), column: Default::default(), row: Default::default() };
+    let mut out = AutoStyles { text: Default::default(), para: Default::default(), para_parent: Default::default(), text_parent: Default::default(), para_text: Default::default(), column: Default::default(), row: Default::default(), cell_fill: Default::default() };
     let mut reader = Reader::from_str(xml);
     let mut cur_name: Option<String> = None;
     let mut cur_family = String::new();
@@ -1175,6 +1197,12 @@ fn parse_auto_styles(xml: &str) -> AutoStyles {
                     "style:table-column-properties" => {
                         if let (Some(name), Some(w)) = (cur_name.clone(), attr_val(&e, "style:column-width").and_then(|v| parse_length_pt(&v))) {
                             out.column.insert(name, w);
+                        }
+                    }
+                    "style:table-cell-properties" => {
+                        let fill = attr_val(&e, "fo:background-color").map(|c| c.trim_start_matches('#').to_uppercase());
+                        if let (Some(name), Some(color)) = (cur_name.clone(), fill.filter(|c| c.len() == 6 && c.chars().all(|ch| ch.is_ascii_hexdigit()))) {
+                            out.cell_fill.insert(name, color);
                         }
                     }
                     // A minimum row height, or a fixed one (a height
@@ -1653,7 +1681,7 @@ fn read_parts(path: &str) -> Result<(Document, Vec<String>), String> {
 
     // styles.xml's named styles, the parents of content.xml's automatic ones.
     let named = parse_auto_styles(&styles);
-    let mut doc = Document { paragraphs: Vec::new(), footnotes: Vec::new(), header: None, footer: None, page: None, base_font: read_base_font(&styles), heading_styles: read_heading_styles(&styles), comments: Vec::new(), table_columns: Default::default(), table_rows: Default::default() };
+    let mut doc = Document { paragraphs: Vec::new(), footnotes: Vec::new(), header: None, footer: None, page: None, base_font: read_base_font(&styles), heading_styles: read_heading_styles(&styles), comments: Vec::new(), table_columns: Default::default(), table_rows: Default::default(), table_fills: Default::default() };
     let mut reader = Reader::from_str(&content);
     let mut in_body = false;
     let mut para: Option<Paragraph> = None;
@@ -1749,6 +1777,13 @@ fn read_parts(path: &str) -> Result<(Document, Vec<String>), String> {
     // Each outermost table's column widths; None once a column has none.
     let mut column_widths: std::collections::BTreeMap<u32, Option<Vec<f64>>> = Default::default();
     let mut row_heights: std::collections::BTreeMap<u32, Vec<Option<crate::model::RowHeight>>> = Default::default();
+    let mut cell_fills: std::collections::BTreeMap<u32, Vec<crate::model::CellFill>> = Default::default();
+    // A shaded cell's fill, at the cell just counted.
+    let note_fill = |fills: &mut std::collections::BTreeMap<u32, Vec<crate::model::CellFill>>, t: &(u32, i64, i64, usize, bool), e: &quick_xml::events::BytesStart| {
+        if let Some(color) = attr_val(e, "table:style-name").and_then(|n| auto.cell_fill.get(&n).cloned()) {
+            fills.entry(t.0).or_default().push(crate::model::CellFill { row: t.1.max(0) as u32, col: t.2.max(0) as u32, color });
+        }
+    };
     let cell_of = |t: &Option<(u32, i64, i64, usize, bool)>| {
         t.map(|(id, r, c, _, _)| crate::model::TableCell { table: id, row: r.max(0) as u32, col: c.max(0) as u32 })
     };
@@ -1946,6 +1981,7 @@ fn read_parts(path: &str) -> Result<(Document, Vec<String>), String> {
                     if let Some(t) = table.as_mut().filter(|t| t.3 == table_depth) {
                         t.2 += 1;
                         t.4 = false;
+                        note_fill(&mut cell_fills, t, &e);
                     }
                 }
                 "draw:frame" => {
@@ -2159,6 +2195,7 @@ fn read_parts(path: &str) -> Result<(Document, Vec<String>), String> {
                 "table:table-cell" | "table:covered-table-cell" => {
                     if let Some(t) = table.as_mut().filter(|t| t.3 == table_depth) {
                         t.2 += 1;
+                        note_fill(&mut cell_fills, t, &e);
                         doc.paragraphs.push(Paragraph { style: ParaStyle { table_cell: cell_of(&table), ..Default::default() }, runs: Vec::new() });
                     }
                 }
@@ -2479,6 +2516,7 @@ fn read_parts(path: &str) -> Result<(Document, Vec<String>), String> {
     doc.ensure_non_empty();
     doc.table_columns = column_widths.into_iter().filter_map(|(t, w)| Some((t, w.filter(|w| !w.is_empty())?))).collect();
     doc.table_rows = row_heights;
+    doc.table_fills = cell_fills;
     // A column count LibreOffice recorded on a section instead of on the
     // page layout. Only consulted when the page layout said nothing, so
     // an explicit page-wide count still wins.
@@ -2720,6 +2758,22 @@ mod tests {
         let mut d = Document::from_plain_text("after");
         d.insert_table_at(0, 2, 2);
         assert!(round_trip(&d).table_rows.is_empty());
+    }
+
+    /// A table's shaded cells survive a save and reopen, one table-cell
+    /// style per colour.
+    #[test]
+    fn table_cell_fills_survive() {
+        use crate::model::CellFill;
+        let mut d = Document::from_plain_text("after");
+        let table = d.insert_table_at(0, 2, 2);
+        let want = vec![CellFill { row: 0, col: 0, color: "D9D9D9".into() }, CellFill { row: 0, col: 1, color: "D9D9D9".into() }, CellFill { row: 1, col: 1, color: "DEEAF6".into() }];
+        d.table_fills.insert(table, want.clone());
+        let rt = round_trip(&d);
+        assert_eq!(rt.table_fills.values().cloned().collect::<Vec<_>>(), [want]);
+        let mut d = Document::from_plain_text("after");
+        d.insert_table_at(0, 1, 1);
+        assert!(round_trip(&d).table_fills.is_empty());
     }
 
     /// Smart chips reopen as chips: a date is a fixed `text:date`, a link

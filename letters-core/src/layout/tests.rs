@@ -2,7 +2,7 @@
 // line, so an A4 page with 1in margins holds 75 chars × 46 lines.
 
 use super::*;
-use crate::model::{Alignment, ParaStyle, RowHeight, TableCell};
+use crate::model::{Alignment, CellFill, ParaStyle, RowHeight, TableCell};
 
 const LINE: f64 = 15.0;
 const LINES_PER_PAGE: usize = 46;
@@ -307,6 +307,30 @@ fn a_tall_row_splits_across_pages() {
     let n = a.iter().filter(|l| l.starts_with("line ")).count();
     assert!(n > 10 && n < 80, "{n} lines on the first page");
     assert_eq!(b.first().map(String::as_str), Some(format!("line {n}").as_str()), "the next line, not a repeat or a gap");
+}
+
+/// A shaded cell carries its colour to the page (a form's grey header
+/// cells), and the shading moves with its cell when rows and columns are
+/// inserted or deleted.
+#[test]
+fn a_shaded_cell_carries_its_fill() {
+    let fills = |d: &Document| -> Vec<(u32, u32, Option<String>)> {
+        lay(d).pages[0]
+            .items
+            .iter()
+            .filter_map(|i| match i { Item::Cell { row, col, fill, .. } => Some((*row, *col, fill.clone())), _ => None })
+            .collect()
+    };
+    let mut d = doc_of(1, "after");
+    let table = d.insert_table_at(0, 2, 2);
+    d.table_fills.insert(table, vec![CellFill { row: 0, col: 1, color: "D9D9D9".into() }]);
+    let grey = Some("D9D9D9".to_string());
+    assert_eq!(fills(&d), [(0, 0, None), (0, 1, grey.clone()), (1, 0, None), (1, 1, None)]);
+    assert!(d.insert_table_rows(table, 0, 1));
+    assert!(d.insert_table_cols(table, 0, 1));
+    assert_eq!(d.table_fills[&table], [CellFill { row: 1, col: 2, color: "D9D9D9".into() }]);
+    assert!(d.delete_table_cols(table, 2, 1));
+    assert!(d.table_fills[&table].is_empty(), "deleting its column deletes its shading");
 }
 
 #[test]
