@@ -121,9 +121,9 @@ impl DecksWindow {
         canvas.set_focusable(true);
         canvas.set_focus_on_click(true);
         if std::env::var_os("GTK_OFFICE_TEST_MODE").is_some() {
-            // Render lab Tier A (docs/RENDER-PARITY-ROADMAP.md): every
-            // slide as the canvas draws it, 1280 px wide (13.33 in at 96
-            // DPI, the size LibreOffice's reference PNGs come out at).
+            // Render lab Tier A (docs/RENDER-PARITY-ROADMAP.md): every shown
+            // slide as the canvas draws it, 1280 px wide (13.33 in at 96 DPI,
+            // the size LibreOffice's reference PNGs come out at).
             let ctl = controller.clone();
             let dump_canvas = canvas.clone();
             let act = gio::SimpleAction::new("test-render-dump", None);
@@ -138,8 +138,8 @@ impl DecksWindow {
                 }
                 let slides = ctl.slides.borrow();
                 let masters = ctl.masters.borrow();
-                for i in 0..slides.len() {
-                    let path = suite_common::render_dump::page_path(&dir, i);
+                for (page, i) in decks_core::engine::shown_slides(&slides).into_iter().enumerate() {
+                    let path = suite_common::render_dump::page_path(&dir, page);
                     if let Err(e) = crate::canvas::render_slide_png(&slides, &masters, i, 1280, &path) {
                         eprintln!("render-dump: slide {}: {e}", i + 1);
                     }
