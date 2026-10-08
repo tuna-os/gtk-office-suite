@@ -1807,3 +1807,44 @@ fn table_row_heights_survive_writer_both_ways() {
     let Some(rt) = through_lo_to_docx(&d, "heights") else { return };
     close(&rt, "odt → Writer → docx");
 }
+
+/// Merged cells through LibreOffice, both ways: a heading across the
+/// table and a cell down two rows keep their spans, and the text stays in
+/// its cell.
+#[test]
+fn merged_cells_survive_writer_both_ways() {
+    let Some(bin) = require_or_skip() else { return };
+    let mut d = Document::from_plain_text("after the table");
+    let table = d.insert_table_at(0, 3, 3);
+    for p in d.paragraphs.iter_mut() {
+        let Some(c) = p.style.table_cell else { continue };
+        if ((c.row, c.col) == (0, 0) || c.row > 0) && (c.row, c.col) != (2, 0) {
+            p.runs = vec![Run::plain(format!("r{}c{}", c.row, c.col))];
+        }
+    }
+    let spans = vec![
+        letters_core::CellSpan { row: 0, col: 0, rows: 1, cols: 3 },
+        letters_core::CellSpan { row: 1, col: 0, rows: 2, cols: 1 },
+    ];
+    d.table_spans.insert(table, spans.clone());
+    let texts = |d: &Document| -> Vec<(u32, u32, String)> {
+        d.paragraphs.iter().filter_map(|p| p.style.table_cell.map(|c| (c.row, c.col, p.text()))).filter(|(_, _, t)| !t.is_empty()).collect()
+    };
+    let close = |got: &Document, how: &str| {
+        let mut got_spans: Vec<_> = got.table_spans.values().flatten().copied().collect();
+        got_spans.sort_by_key(|s| (s.row, s.col));
+        assert_eq!(got_spans, spans, "{how}");
+        assert_eq!(texts(got), texts(&d), "{how}");
+    };
+
+    let dir = tempfile::tempdir().unwrap();
+    let docx_path = dir.path().join("merged.docx");
+    docx::write(&d, &docx_path).expect("write docx");
+    let _ = soffice_convert(bin, &docx_path, "odt").ok();
+    let odt_path = dir.path().join("merged.odt");
+    assert!(odt_path.exists(), "soffice did not convert docx to odt");
+    close(&letters_core::odt::read(odt_path.to_str().unwrap()).expect("read converted odt"), "docx → Writer → odt");
+
+    let Some(rt) = through_lo_to_docx(&d, "merged") else { return };
+    close(&rt, "odt → Writer → docx");
+}

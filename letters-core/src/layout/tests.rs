@@ -628,3 +628,48 @@ fn page_stack_lookups_match_testing_every_page() {
     assert_eq!(PageStack::new(Vec::new(), gap).nearest(10.0), None);
     assert!(PageStack::new(Vec::new(), gap).visible(0.0, 100.0).is_empty());
 }
+
+/// A merged cell is as wide as the columns it spans, and one down two
+/// rows makes the second tall enough for its content; the positions it
+/// covers are not drawn.
+#[test]
+fn a_merged_cell_spans_its_columns_and_rows() {
+    let mut d = doc_of(1, "after");
+    let table = d.insert_table_at(0, 3, 3);
+    for p in d.paragraphs.iter_mut() {
+        let Some(c) = p.style.table_cell else { continue };
+        p.runs = vec![Run::plain(match (c.row, c.col) {
+            (0, 0) => "heading",
+            // Five lines in one column, as MonoShaper wraps it.
+            (1, 0) => "word word word word word word word word word word word word word word word word word word word word word word word word word",
+            (0, _) | (2, 0) => "",
+            _ => "x",
+        })];
+    }
+    d.table_spans.insert(table, vec![
+        crate::model::CellSpan { row: 0, col: 0, rows: 1, cols: 3 },
+        crate::model::CellSpan { row: 1, col: 0, rows: 2, cols: 1 },
+    ]);
+    let t = lay(&d);
+    let cells: Vec<(u32, u32, f64, f64, f64)> = t.pages[0]
+        .items
+        .iter()
+        .filter_map(|i| match i { Item::Cell { row, col, y_pt, width_pt, height_pt, .. } => Some((*row, *col, *y_pt, *width_pt, *height_pt)), _ => None })
+        .collect();
+    let at = |r: u32, c: u32| cells.iter().find(|x| (x.0, x.1) == (r, c)).copied();
+    let table_w = 595.3 - 144.0;
+    // The heading spans the table; what it covers is not drawn.
+    let heading = at(0, 0).expect("the heading cell");
+    assert!((heading.3 - table_w).abs() < 1e-6, "{cells:?}");
+    assert!(at(0, 1).is_none() && at(0, 2).is_none() && at(2, 0).is_none(), "{cells:?}");
+    // The tall cell runs from row 1 to the foot of row 2, which is tall
+    // enough for its five lines; row 1 is one line.
+    let tall = at(1, 0).expect("the tall cell");
+    let (row1, row2) = (at(1, 1).expect("row 1"), at(2, 1).expect("row 2"));
+    assert!((row1.4 - (LINE + CELL_RULE_PT)).abs() < 1e-6, "row 1 is its own content's height: {cells:?}");
+    assert!((tall.2 - row1.2).abs() < 1e-6 && (tall.2 + tall.4 - (row2.2 + row2.4)).abs() < 1e-6, "{cells:?}");
+    assert!(tall.4 >= 5.0 * LINE + CELL_RULE_PT - 1e-6, "{cells:?}");
+    // Its text is all there, in its column.
+    let words: usize = t.pages[0].items.iter().filter_map(|i| match i { Item::Line { text, .. } => Some(text.matches("word").count()), _ => None }).sum();
+    assert_eq!(words, 25);
+}

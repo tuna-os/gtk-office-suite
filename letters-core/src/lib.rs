@@ -28,7 +28,7 @@ pub mod toc;
 pub mod track;
 pub mod word_count;
 
-pub use model::{Alignment, Document, ListKind, PageGeometry, Paragraph, ParagraphLayout, ParaStyle, Comment, Revision, RevisionKind, RowHeight, Run, RunStyle, StylePatch, TableCell, style_readout};
+pub use model::{Alignment, CellSpan, Document, ListKind, PageGeometry, Paragraph, ParagraphLayout, ParaStyle, Comment, Revision, RevisionKind, RowHeight, Run, RunStyle, StylePatch, TableCell, style_readout};
 pub use review::{base_direction, table_of_contents, BidiDirection, TocEntry};
 pub use session::DocumentSession;
 pub use structured::StructuredEditor;
