@@ -973,13 +973,43 @@ pub fn draw_table(
     scale: f64,
     font: &pango::FontDescription,
 ) {
-    let (cols, rows) = table.fitted(w, h);
+    let (cols, mut rows) = table.fitted(w, h);
     let (mx, my) = table.margins();
     let (pad_x, pad_y) = (mx * scale, my * scale);
     // A merged cell is drawn once, over every column and row it spans; a
     // cell it covers draws nothing of its own.
     let owners = table.owners();
     let owner = |r: usize, c: usize| owners.get(r).and_then(|o| o.get(c)).copied().unwrap_or((r, c));
+    // A cell's text, laid out to its width (`cw`) in its paint.
+    let layout_of = |r: usize, c: usize, cw: f64| -> Option<pango::Layout> {
+        let cell = table.rows.get(r)?.get(c)?;
+        let layout = pangocairo::functions::create_layout(cr);
+        layout.set_font_description(Some(font));
+        layout.set_width(((cw - 2.0 * pad_x).max(1.0) * pango::SCALE as f64) as i32);
+        layout.set_wrap(pango::WrapMode::WordChar);
+        set_styled_text(&layout, &cell.text(), &cell.runs, scale);
+        if table.cell_paint(r, c).bold {
+            let attrs = layout.attributes().unwrap_or_default();
+            attrs.insert(pango::AttrInt::new_weight(pango::Weight::Bold));
+            layout.set_attributes(Some(&attrs));
+        }
+        Some(layout)
+    };
+    // A row is as tall as the file says, or as its text needs: a height in
+    // a table is a least height, which PowerPoint and Impress grow to fit
+    // what wraps. A merged cell over several rows does not grow one.
+    for (r, row_h) in rows.iter_mut().enumerate() {
+        for c in 0..cols.len() {
+            let one_row = table.rows.get(r).and_then(|row| row.get(c)).is_some_and(|cell| cell.span().1 == 1);
+            if owner(r, c) != (r, c) || !one_row {
+                continue;
+            }
+            let cw: f64 = cols.iter().skip(c).take(table.rows[r][c].span().0).sum();
+            if let Some(layout) = layout_of(r, c, cw) {
+                *row_h = row_h.max(f64::from(layout.pixel_size().1) + 2.0 * pad_y);
+            }
+        }
+    }
     let spanned = |r: usize, c: usize| {
         let (cs, rs) = table.rows.get(r).and_then(|row| row.get(c)).map_or((1, 1), |cell| cell.span());
         let w: f64 = cols.iter().skip(c).take(cs).sum();
@@ -1003,17 +1033,7 @@ pub fn draw_table(
                 cr.rectangle(cx, cy, *cw, *rh);
                 cr.fill().unwrap();
             }
-            if let Some(cell) = table.rows.get(r).and_then(|row| row.get(c)) {
-                let layout = pangocairo::functions::create_layout(cr);
-                layout.set_font_description(Some(font));
-                layout.set_width(((cw - 2.0 * pad_x).max(1.0) * pango::SCALE as f64) as i32);
-                layout.set_wrap(pango::WrapMode::WordChar);
-                set_styled_text(&layout, &cell.text(), &cell.runs, scale);
-                if paint.bold {
-                    let attrs = layout.attributes().unwrap_or_default();
-                    attrs.insert(pango::AttrInt::new_weight(pango::Weight::Bold));
-                    layout.set_attributes(Some(&attrs));
-                }
+            if let Some(layout) = layout_of(r, c, *cw) {
                 let (tr, tg, tb) = paint.text.to_f64();
                 cr.set_source_rgb(tr, tg, tb);
                 cr.save().unwrap();
@@ -1134,6 +1154,37 @@ pub fn render_slides_pdf(
     match surface.status() {
         Ok(()) => Ok(()),
         Err(e) => Err(format!("cannot write {}: {e}", path.display())),
+    }
+}
+
+#[cfg(test)]
+mod table_tests {
+    use decks_core::engine::table::{TableCell, TableData};
+    use decks_core::engine::Run;
+
+    /// A row's height in the file is a least height: text that wraps
+    /// grows the row, and the grid's bottom rule moves down with it.
+    #[test]
+    fn a_row_grows_to_fit_the_text_that_wraps() {
+        let table = TableData {
+            col_widths: vec![60.0],
+            row_heights: vec![20.0],
+            rows: vec![vec![TableCell { runs: vec![Run::plain("several words that wrap over lines")], ..Default::default() }]],
+            style_id: Some("{5940675A-B579-460E-94D1-54222C63F5DA}".into()),
+            ..Default::default()
+        };
+        let mut surface = cairo::ImageSurface::create(cairo::Format::ARgb32, 100, 200).unwrap();
+        {
+            let cr = cairo::Context::new(&surface).unwrap();
+            let font = pango::FontDescription::from_string("Sans 8");
+            super::draw_table(&cr, &table, (10.0, 10.0, 60.0, 20.0), 1.0, &font);
+        }
+        let stride = surface.stride() as usize;
+        let data = surface.data().unwrap();
+        // The grid's left rule, at x = 10, reaches well below the file's
+        // 20 units.
+        let lowest = (0..200).rev().find(|&y| data[y * stride + 10 * 4 + 3] > 0).unwrap();
+        assert!(lowest > 45, "the rule ends at y = {lowest}");
     }
 }
 
