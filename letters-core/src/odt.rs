@@ -1201,6 +1201,43 @@ fn continue_numbering(paragraphs: &mut [Paragraph], top_lists: &[(usize, usize, 
     }
 }
 
+/// The master page LibreOffice gives the first page: the one the first
+/// paragraph or table's style names (`style:master-page-name`), else
+/// "Standard", else the first one declared.
+fn first_master_page(content: &str, styles: &str) -> Option<String> {
+    let mut named: std::collections::HashMap<String, String> = Default::default();
+    let mut masters: Vec<String> = Vec::new();
+    let mut first_style: Option<String> = None;
+    for xml in [content, styles] {
+        let mut reader = Reader::from_str(xml);
+        let mut in_text = false;
+        loop {
+            match reader.read_event() {
+                Ok(Event::Start(e)) | Ok(Event::Empty(e)) => match e.name().as_ref() {
+                    "style:style" => {
+                        if let (Some(n), Some(m)) = (attr_val(&e, "style:name"), attr_val(&e, "style:master-page-name").filter(|m| !m.is_empty())) {
+                            named.insert(n, m);
+                        }
+                    }
+                    "style:master-page" => masters.extend(attr_val(&e, "style:name")),
+                    "office:text" => in_text = true,
+                    "text:p" | "text:h" | "table:table" if in_text && first_style.is_none() => {
+                        first_style = Some(attr_val(&e, if e.name().as_ref() == "table:table" { "table:style-name" } else { "text:style-name" }).unwrap_or_default());
+                    }
+                    _ => {}
+                },
+                Ok(Event::Eof) | Err(_) => break,
+                _ => {}
+            }
+        }
+    }
+    first_style
+        .and_then(|s| named.get(&s).cloned())
+        .filter(|m| masters.contains(m))
+        .or_else(|| masters.iter().find(|m| *m == "Standard").cloned())
+        .or_else(|| masters.first().cloned())
+}
+
 /// Column layout declared on a `text:section` rather than on the page.
 ///
 /// ODF allows either, and the two live in different parts: a page-wide
@@ -2071,11 +2108,23 @@ fn read_parts(path: &str) -> Result<(Document, Vec<String>), String> {
         crate::docx_comments::restore(&mut doc, bodies);
     }
 
-    // Header/footer and page geometry from styles.xml.
+    // Header/footer and page geometry from styles.xml: the first page's
+    // master page only (a file may hold several, each with its own
+    // header, and joining them repeated the header's text).
     if !styles.is_empty() {
+        let master = first_master_page(&content, &styles);
         let mut reader = Reader::from_str(&styles);
         let mut in_header = false;
         let mut in_footer = false;
+        // The master page being read, and whether it is the first page's.
+        let mut in_master = false;
+        let mut layouts: std::collections::HashMap<String, PageGeometry> = Default::default();
+        let mut layout_name = String::new();
+        let mut master_layout: Option<String> = None;
+        let mut last_layout: Option<String> = None;
+        // Inside an alternative text (`svg:title`/`svg:desc`) of a frame,
+        // which is not the header's text.
+        let mut in_alt = false;
         // Inside a page number or count field: its shown value is skipped.
         let mut in_field = false;
         // Returns the geometry instead of writing to `doc` so the borrow ends
@@ -2102,20 +2151,35 @@ fn read_parts(path: &str) -> Result<(Document, Vec<String>), String> {
             match reader.read_event() {
                 Ok(Event::Empty(e)) if e.name().as_ref() == "style:page-layout-properties" => {
                     if let Some(page) = read_page_layout(&e) {
-                        doc.page = Some(page);
+                        last_layout = Some(layout_name.clone());
+                        layouts.insert(layout_name.clone(), page);
                     }
                 }
                 Ok(Event::Empty(e)) if e.name().as_ref() == "style:columns" => {
-                    if let Some(page) = doc.page.as_mut() {
+                    if let Some(page) = layouts.get_mut(&layout_name) {
                         page.columns = attr_val(&e, "fo:column-count")
                             .and_then(|v| v.parse::<u8>().ok()).unwrap_or(1).max(1);
                         page.column_gap_pt = attr_val(&e, "fo:column-gap")
                             .and_then(|v| parse_length_pt(&v)).unwrap_or(page.column_gap_pt);
                     }
                 }
+                Ok(Event::Start(e)) if e.name().as_ref() == "style:master-page" => {
+                    in_master = attr_val(&e, "style:name") == master;
+                    if in_master {
+                        master_layout = attr_val(&e, "style:page-layout-name");
+                    }
+                }
+                Ok(Event::Empty(e)) if e.name().as_ref() == "style:master-page" => {
+                    if attr_val(&e, "style:name") == master {
+                        master_layout = attr_val(&e, "style:page-layout-name");
+                    }
+                }
+                Ok(Event::End(e)) if e.name().as_ref() == "style:master-page" => in_master = false,
                 Ok(Event::Start(e)) => match e.name().as_ref() {
-                    "style:header" => in_header = true,
-                    "style:footer" => in_footer = true,
+                    "style:page-layout" => layout_name = attr_val(&e, "style:name").unwrap_or_default(),
+                    "style:header" => in_header = in_master,
+                    "style:footer" => in_footer = in_master,
+                    "svg:title" | "svg:desc" => in_alt = true,
                     "text:page-number" | "text:page-count" if in_header || in_footer => {
                         let placeholder = if e.name().as_ref() == "text:page-number" { "{page}" } else { "{total}" };
                         let target = if in_header { &mut doc.header } else { &mut doc.footer };
@@ -2124,7 +2188,8 @@ fn read_parts(path: &str) -> Result<(Document, Vec<String>), String> {
                     }
                     "style:page-layout-properties" => {
                         if let Some(page) = read_page_layout(&e) {
-                            doc.page = Some(page);
+                            last_layout = Some(layout_name.clone());
+                            layouts.insert(layout_name.clone(), page);
                         }
                     }
                     _ => {}
@@ -2132,10 +2197,11 @@ fn read_parts(path: &str) -> Result<(Document, Vec<String>), String> {
                 Ok(Event::End(e)) => match e.name().as_ref() {
                     "style:header" => in_header = false,
                     "style:footer" => in_footer = false,
+                    "svg:title" | "svg:desc" => in_alt = false,
                     "text:page-number" | "text:page-count" => in_field = false,
                     _ => {}
                 },
-                Ok(Event::Text(_)) if in_field => {}
+                Ok(Event::Text(_)) if in_field || in_alt => {}
                 Ok(Event::Text(t)) => {
                     let txt = unescape_text(&t);
                     if in_header && !txt.trim().is_empty() {
@@ -2145,6 +2211,7 @@ fn read_parts(path: &str) -> Result<(Document, Vec<String>), String> {
                         doc.footer.get_or_insert_with(String::new).push_str(&txt);
                     }
                 }
+                Ok(Event::GeneralRef(_)) if in_field || in_alt => {}
                 Ok(Event::GeneralRef(r)) => {
                     let txt = resolve_general_ref(&r);
                     if in_header {
@@ -2159,6 +2226,9 @@ fn read_parts(path: &str) -> Result<(Document, Vec<String>), String> {
                 _ => {}
             }
         }
+        // The first page's layout; without a master page naming one that
+        // exists, the last one read, as before.
+        doc.page = master_layout.filter(|n| layouts.contains_key(n)).or(last_layout).and_then(|n| layouts.remove(&n));
     }
 
     continue_numbering(&mut doc.paragraphs, &top_lists);
@@ -2764,6 +2834,42 @@ mod tests {
         let ordinals = crate::lists::ordinals(d.paragraphs.iter().map(|p| &p.style));
         let shown: Vec<u32> = ordinals.into_iter().filter(|n| *n > 0).collect();
         assert_eq!(shown, [1, 2, 3, 1, 2]);
+    }
+
+    /// A file with several master pages (a Word conversion gives each
+    /// section one) shows the first page's: its header, footer and page
+    /// layout, not every master's joined, and a footer text box's
+    /// alternative text is not footer text. The first paragraph's style
+    /// names the master; "Standard" is the fallback.
+    #[test]
+    fn the_first_pages_master_gives_the_header_and_page() {
+        let master = |name: &str, layout: &str, header: &str| format!(
+            "<style:master-page style:name=\"{name}\" style:page-layout-name=\"{layout}\">\
+             <style:header><text:p>{header}</text:p></style:header>\
+             <style:footer><text:p><draw:frame><draw:text-box><text:p>OFFICIAL</text:p></draw:text-box>\
+             <svg:title/><svg:desc>OFFICIAL</svg:desc></draw:frame></text:p></style:footer></style:master-page>"
+        );
+        let layout = |name: &str, left: &str| format!(
+            "<style:page-layout style:name=\"{name}\"><style:page-layout-properties fo:page-width=\"8.27in\" \
+             fo:page-height=\"11.69in\" fo:margin-left=\"{left}\"/></style:page-layout>"
+        );
+        let styles = format!(
+            "<office:document-styles><office:automatic-styles>{}{}</office:automatic-styles>\
+             <office:master-styles>{}{}</office:master-styles></office:document-styles>",
+            layout("PL0", "1in"), layout("PL1", "2in"), master("MP0", "PL0", "FIRST"), master("MP1", "PL1", "SECOND"),
+        );
+        let content = |master: &str| format!(
+            "<office:document-content><office:automatic-styles>\
+             <style:style style:name=\"P1\" style:family=\"paragraph\" style:master-page-name=\"{master}\"/>\
+             </office:automatic-styles><office:body><office:text><text:p text:style-name=\"P1\">body</text:p>\
+             </office:text></office:body></office:document-content>"
+        );
+        for (first, header, left) in [("MP0", "FIRST", 72.0), ("MP1", "SECOND", 144.0), ("", "FIRST", 72.0)] {
+            let d = read_package(&content(first), &styles);
+            assert_eq!(d.header.as_deref(), Some(header), "first page's master {first:?}");
+            assert_eq!(d.footer.as_deref(), Some("OFFICIAL"));
+            assert!((d.page.unwrap().margin_left_pt - left).abs() < 1e-6, "{first:?}: {:?}", d.page);
+        }
     }
 
     #[test]

@@ -29,6 +29,13 @@ Depends on #436–#441, #354, #1217 (recovery), #1206 (interoperability), #313/#
       GtkLabel min-width warnings in the same dialog, kept as recorded warnings. **Crashes**: the harness already
       keeps a core dump and a gdb backtrace for a journey whose app dies (gui-stress, #1192).
 - [ ] Exercise supported architectures and reconcile flathub versus development manifests and locked source archives.
+      Covered by `release-gate.yml`, to be ticked on the candidate that passes it: `source-archive` builds the
+      locked source archive (`tools/release/source_archive.sh`: the tracked files and every crate vendored, the
+      same bytes from the same revision); `offline-flatpak` builds Letters from it with no network on x86_64 and
+      aarch64, through Flathub manifests derived from the development ones (`tools/release/flathub_manifests.py`,
+      which change only the app's source and cargo's network use; `tests/test_flathub_manifests.py`); and
+      `aarch64-tests` runs the core crates' tests on aarch64. The dictionaries the Letters manifest fetched from
+      LibreOffice's `master` are pinned to a commit: their sha256 would have broken the build at the next edit.
 - [x] Record reproducible-input checksums and compare clean builds; do not equate metadata validation with binary reproducibility.
       `release-gate.yml` records the inputs' sha256 (`release-inputs.sha256`) and, separately, builds the three
       release binaries twice from clean on two runners with the commit's `SOURCE_DATE_EPOCH` and fails unless
