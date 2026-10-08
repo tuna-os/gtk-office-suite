@@ -1391,6 +1391,49 @@ fn table_column_widths_survive() {
     assert!(widths[0].iter().zip([36.0, 400.0]).all(|(a, b)| (a - b).abs() < 0.1), "{widths:?}");
 }
 
+/// A cell's empty paragraphs are lines of the cell: a form's answer box
+/// is a cell holding a label and a run of empty lines, and drawing only
+/// the label shrank every box to one line (the questionnaire, #1211).
+#[test]
+fn a_cells_empty_lines_survive() {
+    let mut d = Document::from_plain_text("after");
+    let table = d.insert_table_at(0, 1, 1);
+    let cell = |text: &str| Paragraph {
+        style: ParaStyle { table_cell: Some(TableCell { table, row: 0, col: 0 }), ..Default::default() },
+        runs: if text.is_empty() { vec![] } else { vec![Run::plain(text)] },
+    };
+    d.paragraphs.splice(0..1, [cell("Comments:"), cell(""), cell(""), cell("")]);
+    let rt = round_trip(&d);
+    let lines: Vec<String> = rt.paragraphs.iter().filter(|p| p.style.table_cell.is_some()).map(|p| p.text()).collect();
+    assert_eq!(lines, ["Comments:", "", "", ""]);
+}
+
+/// The empty paragraph Word keeps between two tables is a line of the
+/// document, drawn as one: dropped, the tables met and drew as one
+/// (the questionnaire, #1211). Only the separator Letters itself writes
+/// between adjacent tables is dropped on reading, so a round trip of
+/// either keeps the document (`tables_keep_their_place`).
+#[test]
+fn a_files_empty_line_between_tables_survives() {
+    let mut d = Document::from_plain_text("after");
+    d.insert_table_at(0, 1, 1);
+    d.insert_table_at(1, 1, 1);
+    for p in d.paragraphs.iter_mut().filter(|p| p.style.table_cell.is_some()) {
+        p.runs = vec![Run::plain("cell")];
+    }
+    // As Word writes it: a plain empty paragraph between the tables.
+    let rt = doctor_parts(&d, |parts| {
+        let body = parts.get_mut("word/document.xml").unwrap();
+        assert!(body.contains("LettersTableSeparator"), "adjacent tables get the separator: {body}");
+        *body = body.replace("<w:pStyle w:val=\"LettersTableSeparator\"/>", "");
+    });
+    let shape: Vec<String> = rt.paragraphs.iter().map(|p| match p.style.table_cell {
+        Some(tc) => format!("T{}", tc.table),
+        None => p.text(),
+    }).collect();
+    assert_eq!(shape, ["T0", "", "T1", "after"]);
+}
+
 /// A table's row heights survive a save and reopen (`w:trHeight`), a
 /// minimum as `atLeast` and a fixed height as `exact`.
 #[test]
