@@ -1848,3 +1848,32 @@ fn merged_cells_survive_writer_both_ways() {
     let Some(rt) = through_lo_to_docx(&d, "merged") else { return };
     close(&rt, "odt → Writer → docx");
 }
+
+/// Shaded table cells through LibreOffice, both ways: a form's grey
+/// header cells keep their colour.
+#[test]
+fn table_cell_fills_survive_writer_both_ways() {
+    let Some(bin) = require_or_skip() else { return };
+    let mut d = Document::from_plain_text("after the table");
+    let table = d.insert_table_at(0, 2, 2);
+    for p in d.paragraphs.iter_mut().filter(|p| p.style.table_cell.is_some()) {
+        p.runs = vec![Run::plain("cell")];
+    }
+    let want = vec![letters_core::CellFill { row: 0, col: 0, color: "D9D9D9".into() }, letters_core::CellFill { row: 1, col: 1, color: "DEEAF6".into() }];
+    d.table_fills.insert(table, want.clone());
+    let close = |got: &Document, how: &str| {
+        let fills: Vec<&Vec<letters_core::CellFill>> = got.table_fills.values().collect();
+        assert_eq!(fills, [&want], "{how}");
+    };
+
+    let dir = tempfile::tempdir().unwrap();
+    let docx_path = dir.path().join("fills.docx");
+    docx::write(&d, &docx_path).expect("write docx");
+    let _ = soffice_convert(bin, &docx_path, "odt").ok();
+    let odt_path = dir.path().join("fills.odt");
+    assert!(odt_path.exists(), "soffice did not convert docx to odt");
+    close(&letters_core::odt::read(odt_path.to_str().unwrap()).expect("read converted odt"), "docx → Writer → odt");
+
+    let Some(rt) = through_lo_to_docx(&d, "fills") else { return };
+    close(&rt, "odt → Writer → docx");
+}

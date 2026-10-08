@@ -355,6 +355,10 @@ pub struct Document {
     /// position keeps its (empty) paragraph, so the grid stays whole.
     #[serde(default, skip_serializing_if = "std::collections::BTreeMap::is_empty")]
     pub table_spans: std::collections::BTreeMap<u32, Vec<CellSpan>>,
+    /// Each table's shaded cells, by table id: a form's grey header cells
+    /// (`w:shd`, `fo:background-color`). A cell not listed is unshaded.
+    #[serde(default, skip_serializing_if = "std::collections::BTreeMap::is_empty")]
+    pub table_fills: std::collections::BTreeMap<u32, Vec<CellFill>>,
 }
 
 /// A merged table cell: the cell at `row`, `col` spans `rows` rows and
@@ -375,6 +379,14 @@ impl CellSpan {
     pub fn contains(&self, row: u32, col: u32) -> bool {
         (self.row..self.row + self.rows).contains(&row) && (self.col..self.col + self.cols).contains(&col)
     }
+}
+
+/// A table cell's background colour, as six hex digits (`D9D9D9`).
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct CellFill {
+    pub row: u32,
+    pub col: u32,
+    pub color: String,
 }
 
 /// A table row's height from the file: at least `pt` (Word's `atLeast`,
@@ -465,6 +477,7 @@ impl Document {
             table_columns: Default::default(),
             table_rows: Default::default(),
             table_spans: Default::default(),
+            table_fills: Default::default(),
         }
     }
 
@@ -734,6 +747,7 @@ impl Document {
         self.table_columns.remove(&table);
         self.table_rows.remove(&table);
         self.table_spans.remove(&table);
+        self.table_fills.remove(&table);
         if rows == 0 || cols == 0 {
             return table;
         }
@@ -839,6 +853,7 @@ impl Document {
             heights.splice(at..at, std::iter::repeat_n(None, count as usize));
         }
         self.shift_spans(table, |s| (&mut s.row, &mut s.rows), at, count as i64);
+        self.move_fills(table, |row, col| Some((if row >= at { row + count } else { row }, col)));
         self.reflow_table(table);
         true
     }
@@ -857,6 +872,7 @@ impl Document {
             runs: Vec::new(),
         })));
         self.shift_spans(table, |s| (&mut s.col, &mut s.cols), at, count as i64);
+        self.move_fills(table, |row, col| Some((row, if col >= at { col + count } else { col })));
         self.reflow_table(table);
         true
     }
@@ -876,6 +892,11 @@ impl Document {
             heights.drain((at as usize).min(len)..(end as usize).min(len));
         }
         self.shift_spans(table, |s| (&mut s.row, &mut s.rows), at, -(count as i64));
+        self.move_fills(table, |row, col| match row {
+            r if (at..end).contains(&r) => None,
+            r if r >= end => Some((r - count, col)),
+            r => Some((r, col)),
+        });
         // A document that was nothing but this table is now empty, and an
         // empty document has nowhere to put the caret.
         self.ensure_non_empty();
@@ -893,8 +914,27 @@ impl Document {
             true
         });
         self.shift_spans(table, |s| (&mut s.col, &mut s.cols), at, -(count as i64));
+        self.move_fills(table, |row, col| match col {
+            c if (at..end).contains(&c) => None,
+            c if c >= end => Some((row, c - count)),
+            c => Some((row, c)),
+        });
         self.ensure_non_empty();
         true
+    }
+
+    /// Move a table's cell fills with their cells: `to` gives a cell's new
+    /// (row, col), or `None` when the cell is deleted.
+    fn move_fills(&mut self, table: u32, mut to: impl FnMut(u32, u32) -> Option<(u32, u32)>) {
+        if let Some(fills) = self.table_fills.get_mut(&table) {
+            fills.retain_mut(|f| match to(f.row, f.col) {
+                Some((row, col)) => {
+                    (f.row, f.col) = (row, col);
+                    true
+                }
+                None => false,
+            });
+        }
     }
 
     /// Return the next cell in row-major order, useful for Tab/Shift-Tab

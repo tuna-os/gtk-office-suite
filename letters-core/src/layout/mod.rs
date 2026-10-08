@@ -263,7 +263,9 @@ pub enum Item {
     /// The short rule above a page's footnotes.
     Rule { x_pt: f64, y_pt: f64, width_pt: f64 },
     /// A table cell's border box.
-    Cell { table: u32, row: u32, col: u32, x_pt: f64, y_pt: f64, width_pt: f64, height_pt: f64 },
+    /// A table cell's box and its background colour (six hex digits), if
+    /// the file shades it.
+    Cell { table: u32, row: u32, col: u32, x_pt: f64, y_pt: f64, width_pt: f64, height_pt: f64, fill: Option<String> },
 }
 
 /// One page of the render tree.
@@ -908,6 +910,7 @@ fn layout_table(flow: &mut Flow, doc: &Document, range: std::ops::Range<usize>, 
                 row_cells.push((col, width, paras));
             }
         }
+        let fill = |col: u32| doc.table_fills.get(&first.table).and_then(|f| f.iter().find(|f| f.row == row && f.col == col)).map(|f| f.color.clone());
         // Lay the merged cells that start in this row down from its top.
         let mut start_tall = |flow: &mut Flow, tall: &mut Vec<Tall>, top: f64| {
             for (col, width, last_row, paras) in starting.drain(..) {
@@ -915,7 +918,7 @@ fn layout_table(flow: &mut Flow, doc: &Document, range: std::ops::Range<usize>, 
                 let slices = cell_slices(doc, &paras);
                 place_slices(flow, doc, &paras, &slices, cx, top);
                 let bottom = top + slices.iter().map(Slice::height).sum::<f64>() + CELL_RULE_PT;
-                tall.push(Tall { row, col, width, last_row, top, page: flow.pages.len(), column: flow.column, bottom });
+                tall.push(Tall { row, col, width, last_row, top, page: flow.pages.len(), column: flow.column, bottom, fill: fill(col) });
             }
         };
         let file_h = doc.table_rows.get(&first.table).and_then(|r| r.get(row as usize).copied().flatten()).filter(|h| h.pt.is_finite() && h.pt > 0.0);
@@ -930,7 +933,7 @@ fn layout_table(flow: &mut Flow, doc: &Document, range: std::ops::Range<usize>, 
             start_tall(flow, &mut tall, top);
             for (col, width, paras) in &row_cells {
                 let cx = x0 - CELL_PADDING_PT + col_x[*col as usize];
-                flow.push(Item::Cell { table: first.table, row, col: *col, x_pt: cx, y_pt: top, width_pt: *width, height_pt: h.pt });
+                flow.push(Item::Cell { table: first.table, row, col: *col, x_pt: cx, y_pt: top, width_pt: *width, height_pt: h.pt, fill: fill(*col) });
                 let slices = cell_slices(doc, paras);
                 place_slices(flow, doc, paras, &slices, cx, top);
             }
@@ -994,7 +997,7 @@ fn layout_table(flow: &mut Flow, doc: &Document, range: std::ops::Range<usize>, 
             }
             for (((col, width, paras), cell), (&from, &(to, _))) in row_cells.iter().zip(&slices).zip(next.iter().zip(&takes)) {
                 let cx = x0 - CELL_PADDING_PT + col_x[*col as usize];
-                flow.push(Item::Cell { table: first.table, row, col: *col, x_pt: cx, y_pt: top, width_pt: *width, height_pt: height });
+                flow.push(Item::Cell { table: first.table, row, col: *col, x_pt: cx, y_pt: top, width_pt: *width, height_pt: height, fill: fill(*col) });
                 place_slices(flow, doc, paras, &cell[from..to], cx, top);
             }
             for (n, (to, _)) in next.iter_mut().zip(&takes) {
@@ -1023,6 +1026,8 @@ struct Tall {
     page: usize,
     column: usize,
     bottom: f64,
+    /// Its shading, if the file gives it one.
+    fill: Option<String>,
 }
 
 /// Draw the box of each merged cell whose last row is `row`, now placed:
@@ -1034,7 +1039,7 @@ fn close_tall(flow: &mut Flow, tall: &mut Vec<Tall>, table: u32, row: u32, col_x
     *tall = rest;
     for t in ending.into_iter().filter(|t| (t.page, t.column) == (page, column)) {
         let cx = x0 - CELL_PADDING_PT + col_x[t.col as usize];
-        flow.push(Item::Cell { table, row: t.row, col: t.col, x_pt: cx, y_pt: t.top, width_pt: t.width, height_pt: y - t.top });
+        flow.push(Item::Cell { table, row: t.row, col: t.col, x_pt: cx, y_pt: t.top, width_pt: t.width, height_pt: y - t.top, fill: t.fill.clone() });
     }
 }
 
