@@ -895,10 +895,10 @@ pub fn draw_shape(
     (x, y, w, h): (f64, f64, f64, f64),
     scale: f64,
 ) {
-    use decks_core::engine::shape::{polygon, ShapeKind};
+    use decks_core::engine::shape::{is_elliptical, polygon, ShapeKind};
     cr.new_path();
     match kind {
-        ShapeKind::Ellipse => {
+        k if is_elliptical(k) => {
             if w <= 0.0 || h <= 0.0 {
                 return;
             }

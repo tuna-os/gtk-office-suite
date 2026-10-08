@@ -231,12 +231,113 @@ pub type Point = (f64, f64);
 /// for the curved ones (ellipse, rounded rectangle), which the canvas draws
 /// with arcs and `contains` tests analytically.
 pub fn polygon(kind: &ShapeKind, w: f64, h: f64) -> Option<Vec<Point>> {
+    if is_elliptical(kind) {
+        return None;
+    }
     match kind {
-        ShapeKind::Rect | ShapeKind::Other(_) => Some(vec![(0.0, 0.0), (w, 0.0), (w, h), (0.0, h)]),
+        ShapeKind::Other(prst) => Some(preset_polygon(prst, w, h).unwrap_or_else(|| vec![(0.0, 0.0), (w, 0.0), (w, h), (0.0, h)])),
+        ShapeKind::Rect => Some(vec![(0.0, 0.0), (w, 0.0), (w, h), (0.0, h)]),
         ShapeKind::Triangle => Some(vec![(w / 2.0, 0.0), (w, h), (0.0, h)]),
         ShapeKind::Diamond => Some(vec![(w / 2.0, 0.0), (w, h / 2.0), (w / 2.0, h), (0.0, h / 2.0)]),
         ShapeKind::RoundRect { .. } | ShapeKind::Ellipse => None,
     }
+}
+
+/// Whether `kind` is drawn as an ellipse filling its box: the ellipse, and
+/// the presets that are one under another name (a flowchart connector).
+pub fn is_elliptical(kind: &ShapeKind) -> bool {
+    match kind {
+        ShapeKind::Ellipse => true,
+        ShapeKind::Other(prst) => prst == "flowChartConnector",
+        _ => false,
+    }
+}
+
+/// The outline of DrawingML preset `prst` in a `w`×`h` box, at the
+/// preset's default adjustments (presetShapeDefinitions.xml), for the
+/// straight-edged presets real decks use; `None` for any other, which is
+/// drawn as its box. `ss` is the shorter side, as the definitions use it.
+pub fn preset_polygon(prst: &str, w: f64, h: f64) -> Option<Vec<Point>> {
+    let ss = w.min(h);
+    let (cx, cy) = (w / 2.0, h / 2.0);
+    Some(match prst {
+        "flowChartProcess" => vec![(0.0, 0.0), (w, 0.0), (w, h), (0.0, h)],
+        "flowChartDecision" => vec![(cx, 0.0), (w, cy), (cx, h), (0.0, cy)],
+        "rtTriangle" => vec![(0.0, 0.0), (w, h), (0.0, h)],
+        "upArrow" | "downArrow" => {
+            // adj1 50000: the shaft is half the width; adj2 50000: the
+            // head is half the shorter side long.
+            let (dx, head) = (w * 0.25, ss * 0.5);
+            let up = vec![(cx, 0.0), (w, head), (cx + dx, head), (cx + dx, h), (cx - dx, h), (cx - dx, head), (0.0, head)];
+            if prst == "upArrow" { up } else { up.into_iter().map(|(x, y)| (x, h - y)).collect() }
+        }
+        "rightArrow" | "leftArrow" => {
+            let (dy, head) = (h * 0.25, ss * 0.5);
+            let right = vec![(0.0, cy - dy), (w - head, cy - dy), (w - head, 0.0), (w, cy), (w - head, h), (w - head, cy + dy), (0.0, cy + dy)];
+            if prst == "rightArrow" { right } else { right.into_iter().map(|(x, y)| (w - x, y)).collect() }
+        }
+        "homePlate" => {
+            let x = w - ss * 0.5;
+            vec![(0.0, 0.0), (x, 0.0), (w, cy), (x, h), (0.0, h)]
+        }
+        "chevron" => {
+            let x = ss * 0.5;
+            vec![(0.0, 0.0), (w - x, 0.0), (w, cy), (w - x, h), (0.0, h), (x, cy)]
+        }
+        "parallelogram" => {
+            let x = ss * 0.25;
+            vec![(x, 0.0), (w, 0.0), (w - x, h), (0.0, h)]
+        }
+        "trapezoid" => {
+            let x = ss * 0.25;
+            vec![(0.0, h), (x, 0.0), (w - x, 0.0), (w, h)]
+        }
+        "hexagon" => {
+            let x = ss * 0.25;
+            vec![(0.0, cy), (x, 0.0), (w - x, 0.0), (w, cy), (w - x, h), (x, h)]
+        }
+        "octagon" => {
+            let x = ss * 0.29289;
+            vec![(x, 0.0), (w - x, 0.0), (w, x), (w, h - x), (w - x, h), (x, h), (0.0, h - x), (0.0, x)]
+        }
+        "plus" => {
+            let x = ss * 0.25;
+            vec![(x, 0.0), (w - x, 0.0), (w - x, x), (w, x), (w, h - x), (w - x, h - x), (w - x, h), (x, h), (x, h - x), (0.0, h - x), (0.0, x), (x, x)]
+        }
+        "mathPlus" => {
+            // adj1 23520: the bars' thickness; they reach 73490/100000 of
+            // each side.
+            let (dx1, dy1, t) = (w * 0.36745, h * 0.36745, ss * 0.1176);
+            let (x1, x2, x3, x4) = (cx - dx1, cx - t, cx + t, cx + dx1);
+            let (y1, y2, y3, y4) = (cy - dy1, cy - t, cy + t, cy + dy1);
+            vec![(x1, y2), (x2, y2), (x2, y1), (x3, y1), (x3, y2), (x4, y2), (x4, y3), (x3, y3), (x3, y4), (x2, y4), (x2, y3), (x1, y3)]
+        }
+        "snip2DiagRect" => {
+            // adj1 0 snips the top-left and bottom-right corners (not at
+            // all), adj2 16667 the other two.
+            let d = ss * 0.16667;
+            vec![(0.0, 0.0), (w - d, 0.0), (w, d), (w, h), (d, h), (0.0, h - d)]
+        }
+        "pentagon" | "star5" => {
+            // A regular pentagon, or star, point up, stretched to the box.
+            let outer: Vec<(f64, f64)> = (0..5).map(|k| angle_point(-90.0 + 72.0 * k as f64, 1.0)).collect();
+            let points: Vec<(f64, f64)> = if prst == "pentagon" {
+                outer.clone()
+            } else {
+                (0..10).map(|k| angle_point(-90.0 + 36.0 * k as f64, if k % 2 == 0 { 1.0 } else { 0.381966 })).collect()
+            };
+            let (x0, x1) = outer.iter().fold((f64::MAX, f64::MIN), |(a, b), p| (a.min(p.0), b.max(p.0)));
+            let (y0, y1) = outer.iter().fold((f64::MAX, f64::MIN), |(a, b), p| (a.min(p.1), b.max(p.1)));
+            points.into_iter().map(|(x, y)| ((x - x0) / (x1 - x0) * w, (y - y0) / (y1 - y0) * h)).collect()
+        }
+        _ => return None,
+    })
+}
+
+/// The point at `degrees` (clockwise from east) on a circle of radius `r`.
+fn angle_point(degrees: f64, r: f64) -> (f64, f64) {
+    let a = degrees.to_radians();
+    (r * a.cos(), r * a.sin())
 }
 
 /// Whether the point (`px`, `py`), in the shape's own box, is inside it.
@@ -245,7 +346,7 @@ pub fn contains(kind: &ShapeKind, w: f64, h: f64, px: f64, py: f64) -> bool {
         return false;
     }
     match kind {
-        ShapeKind::Ellipse => {
+        k if is_elliptical(k) => {
             let (rx, ry) = (w / 2.0, h / 2.0);
             if rx <= 0.0 || ry <= 0.0 {
                 return false;
@@ -317,6 +418,44 @@ mod tests {
         // satMod 0 is grey at the same lightness.
         let g = c.sat_mod(0);
         assert!(g.0 == g.1 && g.1 == g.2);
+    }
+
+    /// The presets real decks use draw their own outline, not their box:
+    /// every point lies in the box and the outline is not the rectangle.
+    #[test]
+    fn presets_real_decks_use_have_their_own_outline() {
+        let (w, h) = (200.0, 100.0);
+        let rect = polygon(&ShapeKind::Rect, w, h).unwrap();
+        for p in ["upArrow", "downArrow", "leftArrow", "rightArrow", "homePlate", "chevron", "parallelogram", "trapezoid", "rtTriangle", "hexagon", "octagon", "plus", "mathPlus", "snip2DiagRect", "pentagon", "star5", "flowChartDecision"] {
+            let poly = polygon(&ShapeKind::Other(p.into()), w, h).unwrap();
+            assert_ne!(poly, rect, "{p}");
+            for (x, y) in &poly {
+                assert!((-1e-9..=w + 1e-9).contains(x) && (-1e-9..=h + 1e-9).contains(y), "{p}: ({x}, {y})");
+            }
+        }
+        assert_eq!(polygon(&ShapeKind::Other("star5".into()), w, h).unwrap().len(), 10);
+        // An unknown preset is still drawn as its box.
+        assert_eq!(polygon(&ShapeKind::Other("cloud".into()), w, h).unwrap(), rect);
+    }
+
+    /// An up arrow is its point and its shaft: the shaft's foot is inside,
+    /// the box's bottom corners are not.
+    #[test]
+    fn an_up_arrow_is_its_head_and_shaft() {
+        let up = ShapeKind::Other("upArrow".into());
+        let (w, h) = (40.0, 80.0);
+        assert!(contains(&up, w, h, 20.0, 2.0), "the point");
+        assert!(contains(&up, w, h, 20.0, 78.0), "the shaft's foot");
+        assert!(!contains(&up, w, h, 1.0, 79.0) && !contains(&up, w, h, 39.0, 79.0), "beside the shaft");
+        assert!(!contains(&up, w, h, 1.0, 1.0), "beside the point");
+    }
+
+    /// A flowchart connector is a circle under another name.
+    #[test]
+    fn a_flowchart_connector_is_an_ellipse() {
+        let c = ShapeKind::Other("flowChartConnector".into());
+        assert!(is_elliptical(&c) && polygon(&c, 10.0, 10.0).is_none());
+        assert!(contains(&c, 10.0, 10.0, 5.0, 5.0) && !contains(&c, 10.0, 10.0, 0.5, 0.5));
     }
 
     #[test]
