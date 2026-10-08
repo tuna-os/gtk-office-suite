@@ -123,3 +123,17 @@ jobs:
             --lanes conformance/lanes.json --lane test \
             --collected rust-inventory.json --results rust-results.json \
             --release-critical
+      # The JUnit and the ledger's verdicts on it, kept for the release's
+      # evidence bundle (release-evidence.yml).
+      - name: Keep the release-critical evidence
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: release-critical-evidence
+          path: |
+            target/nextest/ci/junit.xml
+            gui-junit.xml
+            rust-inventory.json
+            rust-results.json
+          retention-days: 90
+          if-no-files-found: warn

@@ -241,10 +241,17 @@ struct OpenTable {
     col: u32,
     /// Whether the current cell has a paragraph yet (ODF wants one).
     filled: bool,
+    /// Each row's style attribute (empty for a row without a height).
+    row_styles: Vec<String>,
 }
 
 impl OpenTable {
     const CELL: &'static str = "<table:table-cell office:value-type=\"string\">";
+
+    fn open_row(&self, body: &mut String) {
+        let style = self.row_styles.get(self.row as usize).map_or("", String::as_str);
+        body.push_str(&format!("<table:table-row{style}>"));
+    }
 
     fn close_cell(&mut self, body: &mut String) {
         if !self.filled {
@@ -267,7 +274,7 @@ impl OpenTable {
                 if self.row == self.rows {
                     return;
                 }
-                body.push_str("<table:table-row>");
+                self.open_row(body);
             }
             body.push_str(Self::CELL);
             self.filled = false;
@@ -435,11 +442,27 @@ fn content_xml(doc: &Document) -> String {
                         }
                         None => format!("<table:table-column table:number-columns-repeated=\"{cols}\"/>"),
                     };
-                    body.push_str(&format!(
-                        "<table:table table:name=\"Table{tables_written}\"{table_style}>{columns}<table:table-row>{}",
-                        OpenTable::CELL
-                    ));
-                    table = Some(OpenTable { id: c.table, rows, cols, row: 0, col: 0, filled: false });
+                    // The file's row heights, as row styles: a minimum
+                    // height, or a fixed one.
+                    let row_styles: Vec<String> = (0..rows as usize)
+                        .map(|r| match doc.table_rows.get(&c.table).and_then(|h| h.get(r).copied().flatten()) {
+                            Some(h) => {
+                                let name = format!("Table{tables_written}.R{r}");
+                                let prop = if h.exact { "style:row-height" } else { "style:min-row-height" };
+                                auto.push_str(&format!(
+                                    "<style:style style:name=\"{name}\" style:family=\"table-row\"><style:table-row-properties {prop}=\"{:.2}pt\"/></style:style>",
+                                    h.pt
+                                ));
+                                format!(" table:style-name=\"{name}\"")
+                            }
+                            None => String::new(),
+                        })
+                        .collect();
+                    body.push_str(&format!("<table:table table:name=\"Table{tables_written}\"{table_style}>{columns}"));
+                    let t = OpenTable { id: c.table, rows, cols, row: 0, col: 0, filled: false, row_styles };
+                    t.open_row(&mut body);
+                    body.push_str(OpenTable::CELL);
+                    table = Some(t);
                 }
                 if let Some(t) = table.as_mut() {
                     t.move_to(&mut body, c.row, c.col);
@@ -939,6 +962,8 @@ struct AutoStyles {
     para_text: std::collections::HashMap<String, RunStyle>,
     /// A table-column style's width, in points.
     column: std::collections::HashMap<String, f64>,
+    /// A table-row style's height.
+    row: std::collections::HashMap<String, crate::model::RowHeight>,
 }
 
 /// Paragraph-level values read off one automatic style. Lengths are points.
@@ -994,7 +1019,7 @@ fn list_style_kinds(xml: &str) -> std::collections::HashMap<String, Vec<ListKind
 }
 
 fn parse_auto_styles(xml: &str) -> AutoStyles {
-    let mut out = AutoStyles { text: Default::default(), para: Default::default(), para_parent: Default::default(), text_parent: Default::default(), para_text: Default::default(), column: Default::default() };
+    let mut out = AutoStyles { text: Default::default(), para: Default::default(), para_parent: Default::default(), text_parent: Default::default(), para_text: Default::default(), column: Default::default(), row: Default::default() };
     let mut reader = Reader::from_str(xml);
     let mut cur_name: Option<String> = None;
     let mut cur_family = String::new();
@@ -1016,6 +1041,20 @@ fn parse_auto_styles(xml: &str) -> AutoStyles {
                     "style:table-column-properties" => {
                         if let (Some(name), Some(w)) = (cur_name.clone(), attr_val(&e, "style:column-width").and_then(|v| parse_length_pt(&v))) {
                             out.column.insert(name, w);
+                        }
+                    }
+                    // A minimum row height, or a fixed one (a height
+                    // LibreOffice marks optimal is only a minimum).
+                    "style:table-row-properties" => {
+                        let len = |a: &str| attr_val(&e, a).and_then(|v| parse_length_pt(&v)).filter(|h| *h > 0.0);
+                        let optimal = attr_val(&e, "style:use-optimal-row-height").as_deref() == Some("true");
+                        let height = match (len("style:min-row-height"), len("style:row-height")) {
+                            (Some(pt), _) => Some(crate::model::RowHeight { pt, exact: false }),
+                            (None, Some(pt)) => Some(crate::model::RowHeight { pt, exact: !optimal }),
+                            (None, None) => None,
+                        };
+                        if let (Some(name), Some(h)) = (cur_name.clone(), height) {
+                            out.row.insert(name, h);
                         }
                     }
                     "style:text-properties" => {
@@ -1174,6 +1213,31 @@ fn parse_length_pt(v: &str) -> Option<f64> {
         "in" => n * 72.0,
         _ => return None,
     })
+}
+
+/// A list that continues the numbering of the one before it with its
+/// style starts where that one stopped: its first numbered item gets the
+/// start value, so headings between them (which end a list in the model)
+/// do not restart the count at 1. A Word conversion writes every numbered
+/// paragraph between headings as such a list.
+fn continue_numbering(paragraphs: &mut [Paragraph], top_lists: &[(usize, usize, Option<String>, bool)]) {
+    let mut counts: std::collections::HashMap<Option<String>, u32> = Default::default();
+    for (start, end, style, continues) in top_lists {
+        let mut count = if *continues { counts.get(style).copied().unwrap_or(0) } else { 0 };
+        let end = (*end).min(paragraphs.len());
+        let mut first = true;
+        for p in paragraphs.get_mut(*start..end).into_iter().flatten() {
+            if p.style.list != ListKind::Numbered || p.style.list_level != 0 {
+                continue;
+            }
+            if first && *continues && count > 0 && p.style.list_start.is_none() {
+                p.style.list_start = Some(count + 1);
+            }
+            first = false;
+            count = p.style.list_start.unwrap_or(count + 1);
+        }
+        counts.insert(style.clone(), count);
+    }
 }
 
 /// The master page LibreOffice gives the first page: the one the first
@@ -1435,7 +1499,7 @@ fn read_parts(path: &str) -> Result<(Document, Vec<String>), String> {
 
     // styles.xml's named styles, the parents of content.xml's automatic ones.
     let named = parse_auto_styles(&styles);
-    let mut doc = Document { paragraphs: Vec::new(), footnotes: Vec::new(), header: None, footer: None, page: None, base_font: read_base_font(&styles), heading_styles: read_heading_styles(&styles), comments: Vec::new(), table_columns: Default::default() };
+    let mut doc = Document { paragraphs: Vec::new(), footnotes: Vec::new(), header: None, footer: None, page: None, base_font: read_base_font(&styles), heading_styles: read_heading_styles(&styles), comments: Vec::new(), table_columns: Default::default(), table_rows: Default::default() };
     let mut reader = Reader::from_str(&content);
     let mut in_body = false;
     let mut para: Option<Paragraph> = None;
@@ -1454,6 +1518,10 @@ fn read_parts(path: &str) -> Result<(Document, Vec<String>), String> {
     let mut list_style_names: Vec<Option<String>> = Vec::new();
     // A list item's `text:start-value`, for the item's first paragraph.
     let mut pending_start: Option<u32> = None;
+    // Each top-level list: where its paragraphs start and end, its style,
+    // and whether it continues the numbering of the list before it with
+    // that style (`text:continue-numbering`, `text:continue-list`).
+    let mut top_lists: Vec<(usize, usize, Option<String>, bool)> = Vec::new();
     // A `text:note` nests its body *inside* the referencing paragraph, so
     // its `text:p` children have to be kept out of the body stream: while
     // a note is open, text accumulates into the note instead. The citation
@@ -1523,6 +1591,7 @@ fn read_parts(path: &str) -> Result<(Document, Vec<String>), String> {
     let mut tables_read = 0u32;
     // Each outermost table's column widths; None once a column has none.
     let mut column_widths: std::collections::BTreeMap<u32, Option<Vec<f64>>> = Default::default();
+    let mut row_heights: std::collections::BTreeMap<u32, Vec<Option<crate::model::RowHeight>>> = Default::default();
     let cell_of = |t: &Option<(u32, i64, i64, usize, bool)>| {
         t.map(|(id, r, c, _, _)| crate::model::TableCell { table: id, row: r.max(0) as u32, col: c.max(0) as u32 })
     };
@@ -1709,6 +1778,11 @@ fn read_parts(path: &str) -> Result<(Document, Vec<String>), String> {
                     if let Some(t) = table.as_mut().filter(|t| t.3 == table_depth) {
                         t.1 += 1;
                         t.2 = -1;
+                        if let Some(h) = attr_val(&e, "table:style-name").and_then(|n| auto.row.get(&n).copied()) {
+                            let heights = row_heights.entry(t.0).or_default();
+                            heights.resize(t.1 as usize, None);
+                            heights.push(Some(h));
+                        }
                     }
                 }
                 "table:table-cell" | "table:covered-table-cell" => {
@@ -1890,6 +1964,10 @@ fn read_parts(path: &str) -> Result<(Document, Vec<String>), String> {
                             None => list_kinds.last().copied().unwrap_or(ListKind::Bullet),
                         },
                     };
+                    if list_level == 0 {
+                        let continues = attr_val(&e, "text:continue-numbering").as_deref() == Some("true") || attr_val(&e, "text:continue-list").is_some();
+                        top_lists.push((doc.paragraphs.len(), usize::MAX, name.clone(), continues));
+                    }
                     list_style_names.push(name);
                     list_kinds.push(list_kind);
                     list_level = list_level.saturating_add(1);
@@ -2069,6 +2147,11 @@ fn read_parts(path: &str) -> Result<(Document, Vec<String>), String> {
                 }
                 "text:list" => {
                     list_level = list_level.saturating_sub(1);
+                    if list_level == 0 {
+                        if let Some(top) = top_lists.last_mut() {
+                            top.1 = doc.paragraphs.len();
+                        }
+                    }
                     list_kinds.pop();
                     list_style_names.pop();
                     list_kind = if list_level == 0 { ListKind::None } else { list_kinds.last().copied().unwrap_or(ListKind::Bullet) };
@@ -2226,8 +2309,10 @@ fn read_parts(path: &str) -> Result<(Document, Vec<String>), String> {
         doc.page = master_layout.filter(|n| layouts.contains_key(n)).or(last_layout).and_then(|n| layouts.remove(&n));
     }
 
+    continue_numbering(&mut doc.paragraphs, &top_lists);
     doc.ensure_non_empty();
     doc.table_columns = column_widths.into_iter().filter_map(|(t, w)| Some((t, w.filter(|w| !w.is_empty())?))).collect();
+    doc.table_rows = row_heights;
     // A column count LibreOffice recorded on a section instead of on the
     // page layout. Only consulted when the page layout said nothing, so
     // an explicit page-wide count still wins.
@@ -2422,6 +2507,23 @@ mod tests {
         let mut d = Document::from_plain_text("after");
         d.insert_table_at(0, 1, 2);
         assert!(round_trip(&d).table_columns.is_empty());
+    }
+
+    /// A table's row heights survive a save and reopen, a minimum as a
+    /// minimum and a fixed height as fixed; rows without one stay without.
+    #[test]
+    fn table_row_heights_survive() {
+        use crate::model::RowHeight;
+        let mut d = Document::from_plain_text("after");
+        let table = d.insert_table_at(0, 3, 2);
+        let want = vec![Some(RowHeight { pt: 40.0, exact: false }), None, Some(RowHeight { pt: 18.5, exact: true })];
+        d.table_rows.insert(table, want.clone());
+        let rt = round_trip(&d);
+        let got: Vec<_> = rt.table_rows.values().cloned().collect();
+        assert_eq!(got, [want], "{:?}", rt.table_rows);
+        let mut d = Document::from_plain_text("after");
+        d.insert_table_at(0, 2, 2);
+        assert!(round_trip(&d).table_rows.is_empty());
     }
 
     /// Smart chips reopen as chips: a date is a fixed `text:date`, a link
@@ -2841,6 +2943,35 @@ mod tests {
         assert_eq!((d.base_font.family.as_deref(), d.base_font.size_hp), (Some("Palatino Linotype"), Some(24)));
         let d = read_package(content, &styles("<style:style style:name=\"Standard\" style:family=\"paragraph\"><style:text-properties style:font-name=\"Carlito\" fo:font-size=\"11pt\"/></style:style>"));
         assert_eq!((d.base_font.family.as_deref(), d.base_font.size_hp), (Some("Carlito"), Some(22)));
+    }
+
+    /// A numbered list split by headings, each part continuing the one
+    /// before (`text:continue-numbering`, as a Word conversion writes
+    /// every run of numbered paragraphs), counts on across them: 1, 2,
+    /// heading, 3. A list that does not continue starts again at 1.
+    #[test]
+    fn a_continued_list_counts_on_across_headings() {
+        let styles = "<office:document-styles><office:styles><text:list-style style:name=\"L1\">\
+            <text:list-level-style-number text:level=\"1\" style:num-format=\"1\"/></text:list-style>\
+            </office:styles></office:document-styles>";
+        let list = |cont: &str, items: &[&str]| format!(
+            "<text:list text:style-name=\"L1\"{cont}>{}</text:list>",
+            items.iter().map(|t| format!("<text:list-item><text:p>{t}</text:p></text:list-item>")).collect::<String>()
+        );
+        let content = format!(
+            "<office:document-content><office:body><office:text>{}<text:h text:outline-level=\"2\">Heading</text:h>{}\
+             <text:h text:outline-level=\"2\">Again</text:h>{}{}</office:text></office:body></office:document-content>",
+            list("", &["one", "two"]),
+            list(" text:continue-numbering=\"true\"", &["three"]),
+            list("", &["fresh"]),
+            list(" text:continue-numbering=\"true\"", &["second"]),
+        );
+        let d = read_package(&content, styles);
+        let numbered: Vec<(String, Option<u32>)> = d.paragraphs.iter().filter(|p| p.style.list == ListKind::Numbered).map(|p| (p.text(), p.style.list_start)).collect();
+        assert_eq!(numbered, [("one".into(), None), ("two".into(), None), ("three".into(), Some(3)), ("fresh".into(), None), ("second".into(), Some(2))]);
+        let ordinals = crate::lists::ordinals(d.paragraphs.iter().map(|p| &p.style));
+        let shown: Vec<u32> = ordinals.into_iter().filter(|n| *n > 0).collect();
+        assert_eq!(shown, [1, 2, 3, 1, 2]);
     }
 
     /// A file with several master pages (a Word conversion gives each

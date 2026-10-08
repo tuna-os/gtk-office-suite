@@ -1771,3 +1771,39 @@ fn table_column_widths_survive_writer_both_ways() {
     let Some(rt) = through_lo_to_docx(&d, "widths") else { return };
     close(&rt, "odt → Writer → docx");
 }
+
+/// Table row heights through LibreOffice, both ways, as for column
+/// widths: a minimum height stays a minimum and a fixed one stays fixed.
+/// A form's tall answer rows were drawn one line high without them.
+#[test]
+fn table_row_heights_survive_writer_both_ways() {
+    let Some(bin) = require_or_skip() else { return };
+    let mut d = Document::from_plain_text("after the table");
+    let table = d.insert_table_at(0, 3, 2);
+    for p in d.paragraphs.iter_mut().filter(|p| p.style.table_cell.is_some()) {
+        p.runs = vec![Run::plain("cell")];
+    }
+    let want = vec![Some(letters_core::RowHeight { pt: 40.0, exact: false }), None, Some(letters_core::RowHeight { pt: 30.0, exact: true })];
+    d.table_rows.insert(table, want.clone());
+    let close = |got: &Document, how: &str| {
+        let rows: Vec<&Vec<Option<letters_core::RowHeight>>> = got.table_rows.values().collect();
+        assert_eq!(rows.len(), 1, "{how}: {:?}", got.table_rows);
+        let same = |a: &Option<letters_core::RowHeight>, b: &Option<letters_core::RowHeight>| match (a, b) {
+            (Some(a), Some(b)) => a.exact == b.exact && (a.pt - b.pt).abs() < 1.0,
+            (a, b) => a.is_none() && b.is_none(),
+        };
+        let padded = |v: &Vec<Option<letters_core::RowHeight>>| (0..3).map(|i| v.get(i).copied().flatten()).collect::<Vec<_>>();
+        assert!(padded(rows[0]).iter().zip(&want).all(|(a, b)| same(a, b)), "{how}: {rows:?}");
+    };
+
+    let dir = tempfile::tempdir().unwrap();
+    let docx_path = dir.path().join("heights.docx");
+    docx::write(&d, &docx_path).expect("write docx");
+    let _ = soffice_convert(bin, &docx_path, "odt").ok();
+    let odt_path = dir.path().join("heights.odt");
+    assert!(odt_path.exists(), "soffice did not convert docx to odt");
+    close(&letters_core::odt::read(odt_path.to_str().unwrap()).expect("read converted odt"), "docx → Writer → odt");
+
+    let Some(rt) = through_lo_to_docx(&d, "heights") else { return };
+    close(&rt, "odt → Writer → docx");
+}
