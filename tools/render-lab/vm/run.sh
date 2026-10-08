@@ -40,7 +40,8 @@ for _ in $(seq 120); do "${SSH[@]}" true 2>/dev/null && break; sleep 5; done
 "${SSH[@]}" 'for i in $(seq 60); do ls /run/user/$(id -u)/wayland-0 >/dev/null 2>&1 && exit 0; sleep 2; done; exit 1'
 
 # QMP: `qmp <file>` screenshots the virtual monitor into <file>;
-# `qmp_key <key>` presses a key on the guest's keyboard.
+# `qmp_key <key>` presses a key on the guest's keyboard; `ctrl+a` presses
+# keys together.
 qmp() { python3 - "$1" <<'PY'
 import json, socket, sys
 s = socket.socket(socket.AF_UNIX); s.connect("qmp.sock"); f = s.makefile("rw")
@@ -52,7 +53,22 @@ qmp_key() { python3 - "$1" <<'PY'
 import json, socket, sys
 s = socket.socket(socket.AF_UNIX); s.connect("qmp.sock"); f = s.makefile("rw")
 f.readline(); f.write(json.dumps({"execute": "qmp_capabilities"}) + "\n"); f.flush(); f.readline()
-f.write(json.dumps({"execute": "send-key", "arguments": {"keys": [{"type": "qcode", "data": sys.argv[1]}]}}) + "\n"); f.flush(); print(f.readline().strip())
+keys = [{"type": "qcode", "data": k} for k in sys.argv[1].split("+")]
+f.write(json.dumps({"execute": "send-key", "arguments": {"keys": keys}}) + "\n"); f.flush(); print(f.readline().strip())
+PY
+}
+# `qmp_type <text>` types a path on the guest's keyboard (letters, digits
+# and / . - _).
+qmp_type() { python3 - "$1" <<'PY'
+import json, socket, sys, time
+codes = {"/": ["slash"], ".": ["dot"], "-": ["minus"], "_": ["shift", "minus"]}
+s = socket.socket(socket.AF_UNIX); s.connect("qmp.sock"); f = s.makefile("rw")
+f.readline(); f.write(json.dumps({"execute": "qmp_capabilities"}) + "\n"); f.flush(); f.readline()
+for c in sys.argv[1]:
+    keys = codes.get(c) or (["shift", c.lower()] if c.isupper() else [c])
+    f.write(json.dumps({"execute": "send-key", "arguments": {"keys": [{"type": "qcode", "data": k} for k in keys]}}) + "\n")
+    f.flush(); f.readline()
+    time.sleep(0.05)
 PY
 }
 
@@ -111,6 +127,7 @@ done
 # document from "the file manager" (gio open) and save it through the
 # document portal. installed.json is what installed_check.py judges.
 "${SCP[@]}" "$HERE/installed.sh" lab@127.0.0.1:lab/installed.sh
+GUEST_HOME="$("${SSH[@]}" 'echo $HOME')"
 : > "$OUT/installed.json"
 for spec in "letters docx application/vnd.openxmlformats-officedocument.wordprocessingml.document" \
             "tables xlsx application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" \
@@ -123,9 +140,51 @@ print(next((f["file"] for f in json.load(open(sys.argv[1])) if f["app"] == sys.a
         || echo "installed: $app check did not finish" >&2
     qmp "$PWD/screen.ppm" >/dev/null
     python3 -c 'import sys; from PIL import Image; Image.open(sys.argv[1]).save(sys.argv[2])' screen.ppm "$OUT/installed-$app.png"
+    # The file chooser, through the portal, answered on the keyboard as a
+    # user would: Save As to a new name in ~/Downloads, then Open another
+    # document from there. Each dialog is screenshotted with the path typed.
+    "${SSH[@]}" "cp \$HOME/lab/fixtures/$file \$HOME/Downloads/portal-open-$app.$ext; rm -f \$HOME/Downloads/portal-saved-$app.$ext
+        bash ~/lab/installed.sh --action $app save-as" || true
+    # The portal's dialog process starts on first use (the action step
+    # already waited 4s).
+    sleep 6
+    # GNOME's file chooser (Files, since GNOME 47) takes a name, not a
+    # path: a "/" in the name field leaves Save disabled. So, as a user
+    # would: replace the suggested name (it opens with only the stem
+    # selected), go to ~/Downloads in the location bar, then Save.
+    qmp_key ctrl+a >/dev/null
+    qmp_type "portal-saved-$app.$ext"
+    qmp_key ctrl+l >/dev/null
+    sleep 1
+    qmp_type "$GUEST_HOME/Downloads/"
+    qmp_key ret >/dev/null
+    sleep 2
+    qmp "$PWD/screen.ppm" >/dev/null
+    python3 -c 'import sys; from PIL import Image; Image.open(sys.argv[1]).save(sys.argv[2])' screen.ppm "$OUT/installed-$app-save-as.png"
+    qmp_key alt+s >/dev/null
+    sleep 5
+    "${SSH[@]}" "bash ~/lab/installed.sh --action $app open" || true
+    sleep 4
+    qmp_type "$GUEST_HOME/Downloads/portal-open-$app.$ext"
+    sleep 1
+    qmp "$PWD/screen.ppm" >/dev/null
+    python3 -c 'import sys; from PIL import Image; Image.open(sys.argv[1]).save(sys.argv[2])' screen.ppm "$OUT/installed-$app-open.png"
+    # In GNOME's file chooser, Return on a file's path in the location bar
+    # goes to its folder and selects it rather than opening it; Open
+    # (Alt+O) then takes the selection.
+    qmp_key ret >/dev/null
+    sleep 2
+    qmp_key alt+o >/dev/null
+    sleep 6
+    # What Open left on screen: the document, or the dialog still up.
+    qmp "$PWD/screen.ppm" >/dev/null
+    python3 -c 'import sys; from PIL import Image; Image.open(sys.argv[1]).save(sys.argv[2])' screen.ppm "$OUT/installed-$app-opened.png"
+    "${SSH[@]}" "bash ~/lab/installed.sh --portal $app $ext" >>"$OUT/installed.json" \
+        || echo "installed: $app file chooser check did not finish" >&2
     "${SSH[@]}" "bash ~/lab/installed.sh --close $app" || true
     "${SCP[@]}" "lab@127.0.0.1:lab/installed/$app-open.log" "$OUT/installed-$app.log" 2>/dev/null || true
     "${SCP[@]}" "lab@127.0.0.1:lab/installed/$app-mime.log" "$OUT/installed-$app-mime.log" 2>/dev/null || true
+    "${SCP[@]}" "lab@127.0.0.1:lab/installed/$app-portal.log" "$OUT/installed-$app-portal.log" 2>/dev/null || true
 done
 cat "$OUT/installed.json"
 

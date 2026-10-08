@@ -4,8 +4,10 @@
     installed_check.py <installed.json>
 
 Each line of installed.json is one app opened from "the file manager"
-(gio open) and saved through the document portal. Prints a Markdown table
-for the job summary and exits 1 unless every app passed every check.
+(gio open) and saved through the document portal, or the same app's file
+chooser round: Save As and Open through the portal's dialogs. Lines for
+one app are merged. Prints a Markdown table for the job summary and exits
+1 unless every app passed every check.
 """
 
 import json
@@ -22,6 +24,9 @@ CHECKS = (
     ("no_leftovers", "the save left a temporary file beside the document"),
     ("running_after_save", "the app was not running after the save"),
     ("in_recent_files", "the opened document is not in the app's recent files"),
+    ("portal_saved", "Save As through the file chooser portal did not write the named file"),
+    ("portal_valid", "the document saved through the file chooser is not a valid archive"),
+    ("portal_opened", "Open through the file chooser portal did not open the document"),
 )
 
 
@@ -39,7 +44,7 @@ def judge(lines: list) -> tuple:
         line = line.strip()
         if line:
             row = json.loads(line)
-            rows[row["app"]] = row
+            rows.setdefault(row["app"], {}).update(row)
     failures = []
     md = ["## Installed Flatpak (#1209)", "", "| check | " + " | ".join(APPS) + " |", "|---|" + "---|" * len(APPS)]
     for key, meaning in CHECKS:
