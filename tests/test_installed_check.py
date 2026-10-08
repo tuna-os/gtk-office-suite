@@ -26,11 +26,19 @@ def portal(app, **over):
     return json.dumps(r)
 
 
+def drop(app, **over):
+    """The app's drag-and-drop round, a line of its own."""
+    r = {"app": app, "dropped": True}
+    r.update(over)
+    return json.dumps(r)
+
+
 def both(app, **over):
-    """Both of an app's lines; `over` lands on whichever line has the key."""
-    gio = {k: v for k, v in over.items() if not k.startswith("portal_")}
+    """All of an app's lines; `over` lands on whichever line has the key."""
+    gio = {k: v for k, v in over.items() if not k.startswith("portal_") and k != "dropped"}
     chooser = {k: v for k, v in over.items() if k.startswith("portal_")}
-    return [row(app, **gio), portal(app, **chooser)]
+    dragged = {k: v for k, v in over.items() if k == "dropped"}
+    return [row(app, **gio), portal(app, **chooser), drop(app, **dragged)]
 
 
 def lines(*per_app):
@@ -85,3 +93,9 @@ def test_a_file_chooser_save_that_did_not_land_fails_and_says_why():
 def test_an_app_without_its_file_chooser_round_fails():
     _, failures = ic.judge(lines(both("letters"), both("tables"), [row("decks")]))
     assert "decks: Open through the file chooser portal did not open the document" in failures
+
+
+def test_a_drop_that_opened_nothing_fails():
+    md, failures = ic.judge(lines(both("letters"), both("tables", dropped=False), both("decks")))
+    assert failures == ["tables: a document dragged from Files onto the app did not open"]
+    assert "| dropped | ✅ | ❌ | ✅ |" in md

@@ -43,6 +43,28 @@ if [ "${1:-}" = --action ]; then
     } >>"$diag" 2>&1
     exit 0
 fi
+if [ "${1:-}" = --files ]; then
+    # Files (Nautilus) on a folder, the drag's source, or `--files -q` to
+    # close it again.
+    if [ "$2" = -q ]; then nautilus -q >/dev/null 2>&1 || true; exit 0; fi
+    setsid nautilus --new-window "$2" >/dev/null 2>&1 < /dev/null &
+    exit 0
+fi
+if [ "${1:-}" = --dropped ]; then
+    # A document dragged from Files onto the app opens through the same
+    # open as the file manager's, which records it in the recent files.
+    app="$2"; ext="$3"; id="org.tunaos.$app"
+    dropped=false
+    for _ in $(seq 15); do
+        recent="$(flatpak run --command=gsettings "$id" get "$id" recent-files 2>/dev/null || true)"
+        case "$recent" in *"portal-drop-$app.$ext"*) dropped=true; break ;; esac
+        sleep 1
+    done
+    echo "== recent-files after the drop: $recent" >>"$HOME/lab/installed/$app-portal.log"
+    python3 -c 'import json, sys
+print(json.dumps({"app": sys.argv[1], "dropped": sys.argv[2] == "true"}))' "$app" "$dropped"
+    exit 0
+fi
 if [ "${1:-}" = --portal ]; then
     app="$2"; ext="$3"; id="org.tunaos.$app"
     saved_doc="$HOME/Downloads/portal-saved-$app.$ext"
