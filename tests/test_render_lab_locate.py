@@ -58,6 +58,15 @@ class LocateTest(unittest.TestCase):
         self.assertLess(mad, capture.MAX_LOCATE_DIFF)
 
 
+    def test_a_half_covered_page_is_still_rejected(self):
+        import capture
+
+        covered = self.page.copy()
+        covered[covered.shape[0] // 2 :, :] = 192
+        full = self.screen(covered)
+        found, mad = capture.locate(self.template, full, (397.0, 560.5), (31, 47))
+        self.assertGreater(mad, capture.MAX_LOCATE_DIFF, f"a covered page must not pass for the page: {mad:.2f}")
+
 @unittest.skipIf(np is None, "numpy and Pillow are the render lab's")
 class WindowTest(unittest.TestCase):
     """Tier B's window fits the widest page Tier A drew (#1200: landscape

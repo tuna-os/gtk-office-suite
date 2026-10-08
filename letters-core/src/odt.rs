@@ -1475,8 +1475,10 @@ struct FrameReading {
 /// Without it, a Calibri document drew in the application's serif face.
 fn read_base_font(styles: &str) -> crate::model::BaseFont {
     let mut faces: std::collections::HashMap<String, String> = Default::default();
-    // (font name, size in points) from the default style, then Standard.
-    let mut found: [(Option<String>, Option<f64>); 2] = Default::default();
+    // (font name, size in points) from the default style, then Standard,
+    // then Word's "Normal": a Word conversion has no Standard, and every
+    // paragraph style inherits Normal's font, not the default style's.
+    let mut found: [(Option<String>, Option<f64>); 3] = Default::default();
     let mut slot: Option<usize> = None;
     let mut reader = Reader::from_str(styles);
     loop {
@@ -1491,9 +1493,12 @@ fn read_base_font(styles: &str) -> crate::model::BaseFont {
                     slot = (attr_val(&e, "style:family").as_deref() == Some("paragraph")).then_some(0);
                 }
                 "style:style" => {
-                    let standard = attr_val(&e, "style:name").as_deref() == Some("Standard")
-                        && attr_val(&e, "style:family").as_deref() == Some("paragraph");
-                    slot = standard.then_some(1);
+                    let paragraph = attr_val(&e, "style:family").as_deref() == Some("paragraph");
+                    slot = match attr_val(&e, "style:name").as_deref() {
+                        Some("Standard") if paragraph => Some(1),
+                        Some("Normal") if paragraph => Some(2),
+                        _ => None,
+                    };
                 }
                 "style:text-properties" => {
                     if let Some(i) = slot {
@@ -1512,8 +1517,10 @@ fn read_base_font(styles: &str) -> crate::model::BaseFont {
             _ => {}
         }
     }
-    let name = found[1].0.clone().or_else(|| found[0].0.clone());
-    let size = found[1].1.or(found[0].1);
+    // Normal stands in for Standard only when the file has no Standard.
+    let base = if found[1].0.is_some() || found[1].1.is_some() { 1 } else { 2 };
+    let name = found[base].0.clone().or_else(|| found[0].0.clone());
+    let size = found[base].1.or(found[0].1);
     crate::model::BaseFont {
         family: name.map(|n| faces.get(&n).cloned().unwrap_or(n)),
         size_hp: size.map(|pt| (pt * 2.0).round() as u16).filter(|hp| *hp > 0),
@@ -1547,9 +1554,10 @@ fn inherited_spacing(name: &str, auto: &AutoStyles, named: &AutoStyles) -> (Opti
 
 fn read_heading_styles(styles: &str) -> Vec<RunStyle> {
     let defs = parse_auto_styles(styles);
+    let names = heading_style_names(styles);
     let look = |n: u8| -> Option<RunStyle> {
         let mut chain = Vec::new();
-        let mut name = format!("Heading_20_{n}");
+        let mut name = names[usize::from(n) - 1].clone();
         while chain.len() < 8 {
             let own = defs.para_text.get(&name);
             let parent = defs.para_parent.get(&name).cloned();
@@ -1573,10 +1581,35 @@ fn read_heading_styles(styles: &str) -> Vec<RunStyle> {
             })
         })
     };
-    if !(1..=6).any(|n| defs.para_text.contains_key(&format!("Heading_20_{n}"))) {
+    if !names.iter().any(|n| defs.para_text.contains_key(n)) {
         return Vec::new();
     }
     (1..=6).map(|n| look(n).unwrap_or_default()).collect()
+}
+
+/// Each heading level's paragraph style: Writer's own `Heading_20_N`, else
+/// the paragraph style declaring that outline level
+/// (`style:default-outline-level`), as a Word conversion names them
+/// ("Heading2", "Heading 2").
+fn heading_style_names(styles: &str) -> [String; 6] {
+    let mut by_level: [Option<String>; 6] = Default::default();
+    let mut reader = Reader::from_str(styles);
+    loop {
+        match reader.read_event() {
+            Ok(Event::Start(e)) | Ok(Event::Empty(e)) if e.name().as_ref() == "style:style" => {
+                let level = attr_val(&e, "style:default-outline-level").and_then(|l| l.parse::<usize>().ok()).filter(|l| (1..=6).contains(l));
+                if let (Some(l), Some(name), Some("paragraph")) = (level, attr_val(&e, "style:name"), attr_val(&e, "style:family").as_deref()) {
+                    by_level[l - 1].get_or_insert(name);
+                }
+            }
+            Ok(Event::Eof) | Err(_) => break,
+            _ => {}
+        }
+    }
+    std::array::from_fn(|i| {
+        let own = format!("Heading_20_{}", i + 1);
+        if styles.contains(&format!("style:name=\"{own}\"")) { own } else { by_level[i].clone().unwrap_or(own) }
+    })
 }
 
 /// The document, and the package members its pictures were read from
@@ -3064,6 +3097,48 @@ mod tests {
         let rt = round_trip(&d);
         assert_eq!(rt.header.as_deref(), Some("Report — {page} of {total}"));
         assert_eq!(rt.footer.as_deref(), Some("Confidential"));
+    }
+
+    /// A Word conversion's heading styles are named "Heading2", not
+    /// Writer's `Heading_20_2`, and say their level with
+    /// `style:default-outline-level`; their look (Arial, bold, blue) is
+    /// the headings' as it is in LibreOffice, not the bold serif fallback.
+    #[test]
+    fn heading_styles_are_found_by_outline_level() {
+        let styles = "<office:document-styles><office:styles>\
+            <style:style style:name=\"Normal\" style:family=\"paragraph\"/>\
+            <style:style style:name=\"Heading2\" style:display-name=\"Heading 2\" style:family=\"paragraph\" \
+              style:parent-style-name=\"Normal\" style:default-outline-level=\"2\">\
+              <style:text-properties style:font-name=\"Arial\" fo:font-weight=\"bold\" fo:color=\"#2E74B5\" fo:font-size=\"18pt\"/></style:style>\
+            </office:styles></office:document-styles>";
+        let content = "<office:document-content><office:body><office:text>\
+            <text:h text:style-name=\"Heading2\" text:outline-level=\"2\">Summary</text:h>\
+            </office:text></office:body></office:document-content>";
+        let d = read_package(content, styles);
+        let h2 = &d.heading_styles[1];
+        assert!(h2.bold, "{h2:?}");
+        assert_eq!(h2.color.as_deref().map(|c| c.trim_start_matches('#').to_uppercase()), Some("2E74B5".into()), "{h2:?}");
+        assert_eq!(h2.font_size_hp, Some(36), "{h2:?}");
+        assert_eq!(h2.font_family.as_deref(), Some("Arial"), "{h2:?}");
+    }
+
+    /// A Word conversion has no "Standard" style: its paragraphs inherit
+    /// Word's "Normal" (Palatino 12pt), not the default style (Times
+    /// 10pt), so Normal gives the body font. Standard still wins where a
+    /// file has both.
+    #[test]
+    fn words_normal_style_gives_the_body_font_without_standard() {
+        let styles = |standard: &str| format!(
+            "<office:document-styles><office:styles>\
+             <style:default-style style:family=\"paragraph\"><style:text-properties style:font-name=\"Times New Roman\" fo:font-size=\"10pt\"/></style:default-style>\
+             <style:style style:name=\"Normal\" style:family=\"paragraph\"><style:text-properties style:font-name=\"Palatino Linotype\" fo:font-size=\"12pt\"/></style:style>\
+             {standard}</office:styles></office:document-styles>"
+        );
+        let content = "<office:document-content><office:body><office:text><text:p>body</text:p></office:text></office:body></office:document-content>";
+        let d = read_package(content, &styles(""));
+        assert_eq!((d.base_font.family.as_deref(), d.base_font.size_hp), (Some("Palatino Linotype"), Some(24)));
+        let d = read_package(content, &styles("<style:style style:name=\"Standard\" style:family=\"paragraph\"><style:text-properties style:font-name=\"Carlito\" fo:font-size=\"11pt\"/></style:style>"));
+        assert_eq!((d.base_font.family.as_deref(), d.base_font.size_hp), (Some("Carlito"), Some(22)));
     }
 
     /// A numbered list split by headings, each part continuing the one
