@@ -1054,6 +1054,40 @@ fn list_numbering_inherited_from_a_paragraph_style_is_read() {
     );
 }
 
+/// A list continues past a paragraph that is not in it.
+///
+/// Word counts each list instance (`numId`) on its own: minutes numbered
+/// "1", then a paragraph of discussion, then "2" are one list. This model's
+/// count ends a list at any plain paragraph, so the second item read as a
+/// second "1." (render-real `audit-and-risk-assurance-committee-minutes`).
+/// The reader restarts it at Word's number, and leaves alone the items the
+/// two counts already agree on.
+#[test]
+fn a_numbered_list_continues_past_a_plain_paragraph() {
+    let mut d = Document::from_plain_text("first\nnotes on it\nsecond\nthird\nnot numbered\nfourth");
+    for k in [0, 2, 3, 5] {
+        d.paragraphs[k].style.list = ListKind::Numbered;
+    }
+    let rt = doctor_parts(&d, |parts| {
+        // Our writer gives each run of items its own instance; Word gives
+        // the list one. Point every item at the first item's instance.
+        let body = parts.get_mut("word/document.xml").unwrap();
+        let ids: Vec<String> = body
+            .split("<w:numId w:val=\"")
+            .skip(1)
+            .map(|rest| rest.split('"').next().unwrap().to_string())
+            .collect();
+        assert_eq!(ids.len(), 4, "fixture shape changed: {body}");
+        for id in &ids[1..] {
+            *body = body.replace(&format!("<w:numId w:val=\"{id}\""), &format!("<w:numId w:val=\"{}\"", ids[0]));
+        }
+    });
+    let starts: Vec<Option<u32>> = rt.paragraphs.iter().map(|p| p.style.list_start).collect();
+    assert_eq!(starts, vec![None, None, Some(2), None, None, Some(4)]);
+    let shown = letters_core::lists::ordinals(rt.paragraphs.iter().map(|p| &p.style));
+    assert_eq!(shown, vec![1, 0, 2, 3, 0, 4]);
+}
+
 /// What a paragraph inherits from its styles is how it looks.
 ///
 /// python-docx's template (and Word's) puts 10pt after every paragraph and

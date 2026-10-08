@@ -436,6 +436,10 @@ fn read_opened(path: &str, doc: rdocx::Document) -> Result<Document, String> {
     // Per body paragraph: how many paragraphs were kept before it, which
     // is where a table that precedes it goes.
     let mut kept_before = Vec::with_capacity(body.len() + 1);
+    // Per kept paragraph: the number Word gives it, when it is a numbered
+    // list item (`WordCounter`), for the pass after the tables go in.
+    let mut word_numbers: Vec<Option<u32>> = Vec::new();
+    let mut counter = WordCounter::default();
     for (i, p) in body.iter().enumerate() {
         kept_before.push(paragraphs.len());
         let mut pending_break = false;
@@ -485,6 +489,7 @@ fn read_opened(path: &str, doc: rdocx::Document) -> Result<Document, String> {
             apply_strict_indents(&mut para.style, r);
         }
         list_indent_from_declared(&doc, p, &mut para.style);
+        word_numbers.push(counter.next(&doc, p, &para.style));
         paragraphs.push(para);
         carried_break = pending_break;
     }
@@ -583,8 +588,10 @@ fn read_opened(path: &str, doc: rdocx::Document) -> Result<Document, String> {
     // tables at one position keep their order.
     for (ti, cells) in table_paragraphs.into_iter().enumerate().rev() {
         let at = tables_at.as_ref().map_or(paragraphs.len(), |t| kept_before[t[ti].min(body.len())]);
+        word_numbers.splice(at..at, std::iter::repeat_n(None, cells.len()));
         paragraphs.splice(at..at, cells);
     }
+    number_as_word_does(&mut paragraphs, &word_numbers);
     drop_table_separators(&mut paragraphs);
 
     if paragraphs.is_empty() {
@@ -1314,6 +1321,48 @@ fn run_page_break(p: &rdocx::ParagraphRef<'_>) -> RunPageBreak {
         }
     }
     RunPageBreak { leading, trailing: break_after_text }
+}
+
+/// The numbers Word gives numbered list items, in body order.
+///
+/// Word keeps one count per list instance (`numId`) and level. A paragraph
+/// that is not in the list does not end it: the minutes that number
+/// "1.1", then a paragraph of discussion, then "1.2" are one list, which
+/// this model's own count (`lists::ordinals`) would restart at every plain
+/// paragraph. An item restarts the levels below its own, and a level's
+/// first item starts at the level's `w:start`, or at the instance's
+/// restart (`list_start`, read from its `w:startOverride`).
+#[derive(Default)]
+struct WordCounter {
+    counts: std::collections::HashMap<u32, [Option<u32>; 9]>,
+}
+
+impl WordCounter {
+    fn next(&mut self, doc: &rdocx::Document, p: &rdocx::ParagraphRef<'_>, style: &ParaStyle) -> Option<u32> {
+        if style.list != ListKind::Numbered {
+            return None;
+        }
+        let (num_id, level) = paragraph_numbering(doc, p)?;
+        let at = usize::from(style.list_level);
+        let counts = self.counts.entry(num_id).or_default();
+        counts[at + 1..].iter_mut().for_each(|c| *c = None);
+        let first = || doc.numbering_level(num_id, level).map_or(1, |l| l.start);
+        let n = style.list_start.unwrap_or_else(|| counts[at].map_or_else(first, |c| c + 1));
+        counts[at] = Some(n);
+        Some(n)
+    }
+}
+
+/// Give each numbered item Word's number (`WordCounter`) where this
+/// model's count would show another, by restarting the count there. Where
+/// the two agree nothing changes, so a save writes the list as it was.
+fn number_as_word_does(paragraphs: &mut [Paragraph], word_numbers: &[Option<u32>]) {
+    loop {
+        let ours = crate::lists::ordinals(paragraphs.iter().map(|p| &p.style));
+        let differs = word_numbers.iter().zip(&ours).position(|(w, o)| w.is_some_and(|w| w != *o));
+        let Some(k) = differs else { return };
+        paragraphs[k].style.list_start = word_numbers[k];
+    }
 }
 
 /// A paragraph's list numbering as `(num_id, level)`, wherever it is set.
