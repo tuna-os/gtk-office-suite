@@ -169,14 +169,13 @@ print(next((f["file"] for f in json.load(open(sys.argv[1])) if f["app"] == sys.a
     sleep 1
     qmp "$PWD/screen.ppm" >/dev/null
     python3 -c 'import sys; from PIL import Image; Image.open(sys.argv[1]).save(sys.argv[2])' screen.ppm "$OUT/installed-$app-open.png"
+    # In GNOME's file chooser, Return on a file's path in the location bar
+    # goes to its folder and selects it rather than opening it; Open
+    # (Alt+O) then takes the selection.
     qmp_key ret >/dev/null
-    # The location bar shows a completion under the typed path, and the
-    # first Return may only take it. Once the document is in the app's
-    # recent files it is open; until then, Return again opens it.
-    sleep 4
-    "${SSH[@]}" "flatpak run --command=gsettings org.tunaos.$app get org.tunaos.$app recent-files | grep -q portal-open-$app" \
-        || qmp_key ret >/dev/null
-    sleep 4
+    sleep 2
+    qmp_key alt+o >/dev/null
+    sleep 6
     "${SSH[@]}" "bash ~/lab/installed.sh --portal $app $ext" >>"$OUT/installed.json" \
         || echo "installed: $app file chooser check did not finish" >&2
     "${SSH[@]}" "bash ~/lab/installed.sh --close $app" || true
