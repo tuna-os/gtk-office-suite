@@ -887,13 +887,25 @@ fn layout_table(flow: &mut Flow, doc: &Document, range: std::ops::Range<usize>, 
             row_cells.push((col, paras));
         }
         // The file's row height: a minimum, or the height itself (taller
-        // content then runs past the row, as Word clips it).
-        match doc.table_rows.get(&first.table).and_then(|r| r.get(row as usize).copied().flatten()) {
-            Some(h) if h.pt.is_finite() && h.pt > 0.0 => row_h = if h.exact { h.pt } else { row_h.max(h.pt) },
-            _ => {}
-        }
-        if flow.y + row_h > flow.bottom() && !flow.column_is_empty() {
+        // content then runs past the row, as Word clips it). Whether the
+        // row starts a new page is its content's to decide: Word and
+        // LibreOffice split a row taller than the space left, and a row
+        // here does not split, so a minimum stretches it only to the foot
+        // of the page. Moving a whole tall answer box on instead left a
+        // page of blank space before it.
+        let file_h = doc.table_rows.get(&first.table).and_then(|r| r.get(row as usize).copied().flatten()).filter(|h| h.pt.is_finite() && h.pt > 0.0);
+        let content_h = match file_h {
+            Some(h) if h.exact => h.pt,
+            _ => row_h,
+        };
+        if flow.y + content_h > flow.bottom() && !flow.column_is_empty() {
             flow.next_column();
+        }
+        let room = (flow.bottom() - flow.y).max(0.0);
+        match file_h {
+            Some(h) if h.exact => row_h = h.pt,
+            Some(h) => row_h = row_h.max(h.pt.min(room)),
+            None => {}
         }
         let top = flow.y;
         let x0 = flow.column_x();

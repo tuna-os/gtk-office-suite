@@ -260,6 +260,15 @@ fn a_table_row_takes_the_files_height() {
     assert_eq!(heights(&d), [40.0, one_line, one_line, 30.0]);
     assert!(d.delete_table_rows(table, 0, 1));
     assert_eq!(heights(&d), [one_line, one_line, 30.0]);
+    // A minimum taller than the space left stretches the row to the foot
+    // of the page, where Word and LibreOffice would split it, rather than
+    // moving it to the next page.
+    let foot = 841.9 - 72.0;
+    d.table_rows.insert(table, vec![None, Some(RowHeight { pt: 2000.0, exact: false })]);
+    let t = lay(&d);
+    let rows: Vec<(f64, f64)> = t.pages[0].items.iter().filter_map(|i| match i { Item::Cell { col: 0, y_pt, height_pt, .. } => Some((*y_pt, *height_pt)), _ => None }).collect();
+    assert_eq!(rows.len(), 2, "the tall row stays on the first page: {rows:?}");
+    assert!((rows[1].0 + rows[1].1 - foot).abs() < 1e-6, "{rows:?}");
 }
 
 #[test]
