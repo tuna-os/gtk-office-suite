@@ -816,7 +816,7 @@ fn place_paragraph(flow: &mut Flow, idx: usize, para: &Paragraph, shaped: &Shape
             let baseline = top + lb.ascent_pt;
             let x0 = flow.column_x();
             if k == 0 && st.list != ListKind::None {
-                if let Some(text) = lists::marker(st.list, ordinal) {
+                if let Some(text) = lists::marker_for(st, ordinal) {
                     flow.push(Item::Marker { para: idx, text, x_pt: x0 + shaped.marker_x, baseline_pt: baseline });
                 }
             }

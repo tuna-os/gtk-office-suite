@@ -31,6 +31,31 @@ fn attr(xml: &str, at: usize, attr: &str) -> Option<String> {
     Some(unescape(&tag[v..v + tag[v..].find('"')?]))
 }
 
+/// A text box's text: its paragraphs' runs, joined by '\n'.
+fn box_text(xml: &str) -> String {
+    let mut lines: Vec<String> = Vec::new();
+    let mut i = 0;
+    while let Some(off) = xml[i..].find('<') {
+        let at = i + off;
+        let rest = &xml[at..];
+        let tag_end = at + rest.find('>').map_or(rest.len(), |e| e + 1);
+        if rest.starts_with("<w:p>") || rest.starts_with("<w:p ") {
+            lines.push(String::new());
+        } else if (rest.starts_with("<w:t>") || rest.starts_with("<w:t ")) && !xml[at..tag_end].ends_with("/>") {
+            let close = xml[tag_end..].find("</w:t>").map_or(tag_end, |c| tag_end + c);
+            if lines.is_empty() {
+                lines.push(String::new());
+            }
+            lines.last_mut().unwrap().push_str(&unescape(&xml[tag_end..close]));
+            i = close;
+            continue;
+        }
+        i = tag_end;
+    }
+    lines.retain(|l| !l.trim().is_empty());
+    lines.join("\n")
+}
+
 /// A header or footer part's text as a template: paragraphs joined by
 /// '\n', PAGE and NUMPAGES fields as "{page}" and "{total}", their cached
 /// results dropped. `None` when the part holds no such field (rdocx's own
@@ -39,6 +64,8 @@ pub fn template(part_xml: &str) -> Option<String> {
     let mut out = String::new();
     let mut found = false;
     let mut paragraphs = 0;
+    // Where the current paragraph's text starts in `out`.
+    let mut para_start = 0;
     // Inside a complex field: collecting its instruction until `separate`,
     // then skipping its result until `end`.
     let mut complex: Option<(String, bool)> = None;
@@ -50,12 +77,21 @@ pub fn template(part_xml: &str) -> Option<String> {
         let name = &rest[1..name_end];
         let tag_end = at + rest.find('>').map_or(rest.len(), |e| e + 1);
         match name {
-            // A text box floats over the header or footer: its text is not
-            // the part's (as rdocx's own reading leaves it out), and a
-            // fallback is a second copy of what precedes it.
+            // A text box floats over the header or footer. The part cannot
+            // float it, so its text becomes a line of its own ahead of the
+            // paragraph that anchors it, rather than running into that
+            // paragraph's text; a fallback is a second copy of it.
             "w:txbxContent" | "mc:Fallback" if !rest[..rest.find('>').unwrap_or(0)].ends_with('/') => {
                 let close = format!("</{name}>");
-                i = part_xml[tag_end..].find(&close).map_or(part_xml.len(), |c| tag_end + c + close.len());
+                let inner_end = part_xml[tag_end..].find(&close).map_or(part_xml.len(), |c| tag_end + c);
+                if name == "w:txbxContent" {
+                    let text = box_text(&part_xml[tag_end..inner_end]);
+                    if !text.is_empty() {
+                        out.insert_str(para_start, &format!("{text}\n"));
+                        para_start += text.len() + 1;
+                    }
+                }
+                i = (inner_end + close.len()).min(part_xml.len());
                 continue;
             }
             "w:p" => {
@@ -63,6 +99,7 @@ pub fn template(part_xml: &str) -> Option<String> {
                     out.push('\n');
                 }
                 paragraphs += 1;
+                para_start = out.len();
             }
             "w:fldSimple" => {
                 let instr = attr(part_xml, at, "w:instr").unwrap_or_default();
@@ -262,16 +299,16 @@ mod tests {
 
     /// The crime-supervisor form's footer: an "OFFICIAL" text box (and its
     /// VML fallback, a second copy) in the paragraph with the page number.
-    /// The text box floats; it is not footer text, and used to come out as
-    /// "OFFICIAL\nOFFICIAL{page}".
+    /// Its text is a line of its own, once, ahead of the page number: it
+    /// used to come out as "OFFICIAL\nOFFICIAL{page}", and then not at all.
     #[test]
-    fn text_boxes_and_fallbacks_are_not_the_parts_text() {
+    fn a_text_box_is_a_line_of_its_own_and_its_fallback_is_dropped() {
         let footer = "<w:ftr><w:p><w:r><mc:AlternateContent><mc:Choice Requires=\"wps\"><w:drawing><wp:anchor><wps:txbx>\
                       <w:txbxContent><w:p><w:r><w:t>OFFICIAL</w:t></w:r></w:p></w:txbxContent></wps:txbx></wp:anchor></w:drawing></mc:Choice>\
                       <mc:Fallback><w:pict><v:textbox><w:txbxContent><w:p><w:r><w:t>OFFICIAL</w:t></w:r></w:p></w:txbxContent></v:textbox></w:pict></mc:Fallback>\
                       </mc:AlternateContent></w:r><w:fldSimple w:instr=\" PAGE \"><w:r><w:t>2</w:t></w:r></w:fldSimple></w:p>\
                       <w:p><w:r><w:t>October 2025</w:t></w:r></w:p></w:ftr>";
-        assert_eq!(template(footer).as_deref(), Some("{page}\nOctober 2025"));
+        assert_eq!(template(footer).as_deref(), Some("OFFICIAL\n{page}\nOctober 2025"));
     }
 
     #[test]

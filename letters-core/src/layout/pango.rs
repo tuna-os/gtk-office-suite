@@ -420,6 +420,16 @@ struct LineRef {
     end: usize,
 }
 
+/// The path of a bullet at `x` on `baseline` for text of `size` points:
+/// a disc 0.31 em across, its centre 0.28 em above the baseline. A path of
+/// its own: after text, the current point is where that text was drawn
+/// from, and an arc from there is joined to it by a line.
+fn bullet_path(cr: &cairo::Context, x: f64, baseline: f64, size: f64) {
+    let r = size * 0.155;
+    cr.new_path();
+    cr.arc(x + r, baseline - size * 0.28, r, 0.0, std::f64::consts::TAU);
+}
+
 /// The built-in image loader: PNG through Cairo.
 fn load_png(path: &str) -> Option<cairo::ImageSurface> {
     let mut f = std::fs::File::open(path).ok()?;
@@ -827,11 +837,10 @@ impl Typeset {
                         // centre 0.28 em above the baseline; the "•" of a
                         // text face is smaller and varies by font. Drawn,
                         // it looks the same whatever fonts are installed.
-                        let r = size * 0.155;
                         let (r_, g, b) = run.style.color.as_deref().and_then(parse_hex).unwrap_or((0, 0, 0));
                         let _ = cr.save();
                         cr.set_source_rgb(f64::from(r_) / 65535.0, f64::from(g) / 65535.0, f64::from(b) / 65535.0);
-                        cr.arc(*x_pt + r, *baseline_pt - size * 0.28, r, 0.0, std::f64::consts::TAU);
+                        bullet_path(cr, *x_pt, *baseline_pt, size);
                         let _ = cr.fill();
                         let _ = cr.restore();
                         continue;
@@ -950,6 +959,23 @@ mod tests {
             .filter(|&x| (start.top_pt as usize..(start.top_pt + start.height_pt) as usize).any(|y| data[y * stride + x * 4] < 128))
             .count();
         assert!(dark > 20, "a leader across the gap: {dark} dark columns");
+    }
+
+    /// A bullet is a disc and nothing else: its path starts at the disc,
+    /// not with a line from wherever the text before it left the current
+    /// point. The UK NSC form's bullets each trailed a hairline back to the
+    /// line above in the PDF (an image draws the empty sliver as nothing).
+    #[test]
+    fn a_bullets_path_is_its_disc_alone() {
+        let surface = cairo::ImageSurface::create(cairo::Format::Rgb24, 100, 100).unwrap();
+        let cr = cairo::Context::new(&surface).unwrap();
+        // Where the text before it was drawn from.
+        cr.move_to(5.0, 10.0);
+        bullet_path(&cr, 40.0, 60.0, 12.0);
+        let path = cr.copy_path().unwrap();
+        let segments: Vec<cairo::PathSegment> = path.iter().collect();
+        assert!(matches!(segments.first(), Some(cairo::PathSegment::MoveTo((x, _))) if *x > 40.0), "{segments:?}");
+        assert!(!segments.iter().any(|s| matches!(s, cairo::PathSegment::LineTo(_))), "a line in the bullet's path: {segments:?}");
     }
 
     /// Space before does not ride a page break onto the next page: past
