@@ -444,9 +444,14 @@ and does the part that matters.
     Layout is the only editing surface, the toggle and its setting are gone,
     and the `GtkTextView` was kept only as the buffer's host, never shown.
     Stage 2 (2026-10-02) removed it: the tab's `PageContainer` holds the
-    buffer, and the Draft drawing and allocation code is deleted. What is
-    left is the buffer itself, which formatting, find, spelling and
-    comments still edit through the bridge.)*
+    buffer, and the Draft drawing and allocation code is deleted. Stage 3
+    (2026-10-03) made every content edit an op on the live model. Stage 4
+    so far: the header, footer, footnotes and page setup are model state,
+    and the model never reads the buffer back. An opened document goes
+    into the model as it is; reading it back out of the buffer had changed
+    21 of 61 corpus documents on open. What is left is the buffer itself,
+    which still holds the caret and selection and which find and spelling
+    read.)*
   - This is the largest single item on the roadmap and it is unavoidable.
     There is no configuration of one `GtkTextView` that produces per-page
     layout.

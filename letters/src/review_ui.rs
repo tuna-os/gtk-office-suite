@@ -113,7 +113,7 @@ pub fn register_actions(app: &adw::Application, tv: &adw::TabView, status_bar: &
             "next-change",
             Box::new(move |buf| {
                 let Some(live) = crate::live::of(buf) else { return };
-                let changes = live.borrow_mut().changes(buf);
+                let changes = live.borrow_mut().changes();
                 let caret = caret_range(buf).1;
                 let next = changes.iter().find(|(_, at)| *at > caret).or(changes.first());
                 if let Some((_, at)) = next {
@@ -200,7 +200,7 @@ pub fn changes_view(tv: &adw::TabView) -> gtk::Widget {
             }
             let Some(buf) = crate::dialogs::active_buffer(&tv) else { return };
             let Some(live) = crate::live::of(&buf) else { return };
-            let changes = live.borrow_mut().changes(&buf);
+            let changes = live.borrow_mut().changes();
             while let Some(r) = list.first_child() {
                 list.remove(&r);
             }
@@ -245,7 +245,7 @@ mod tests {
     fn tab(text: &str) -> gtk::TextBuffer {
         let buf = gtk::TextBuffer::new(None);
         crate::actions::register_formatting_tags(&buf);
-        crate::live::LiveModel::attach(&buf);
+        crate::live::LiveModel::attach(&buf, letters_core::Document::default());
         crate::bridge::load_document(&letters_core::Document::from_plain_text(text), &buf);
         buf
     }
@@ -266,7 +266,7 @@ mod tests {
             assert!(live.borrow_mut().apply_user_ops(&buf, &ops, false));
             let text = buf.text(&buf.start_iter(), &buf.end_iter(), false).to_string();
             assert_eq!(text, "one and a half two three");
-            let changes = live.borrow_mut().changes(&buf);
+            let changes = live.borrow_mut().changes();
             let kinds: Vec<_> = changes.iter().map(|(c, at)| (c.revision.kind, c.text.clone(), *at)).collect();
             assert_eq!(
                 kinds,
@@ -276,7 +276,7 @@ mod tests {
                 ]
             );
             // The buffer reads the same document back (tags carry the revisions).
-            let doc = live.borrow_mut().document(&buf).clone();
+            let doc = live.borrow_mut().document().clone();
             assert_eq!(crate::bridge::capture_with_starts(&buf).0, doc);
             // Accept the deletion at its offset; reject everything else.
             assert!(live.borrow_mut().resolve_changes(&buf, 16, 16, true));

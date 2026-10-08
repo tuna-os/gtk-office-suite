@@ -34,7 +34,7 @@ pub fn insert(buf: &gtk::TextBuffer, run: Run, replace_at: bool) -> bool {
     let Some(live) = crate::live::of(buf) else { return false };
     let mut m = live.borrow_mut();
     let caret = buf.iter_at_mark(&buf.get_insert()).offset().max(0) as usize;
-    let mut at = m.sequence_offset(buf, caret);
+    let mut at = m.sequence_offset(caret);
     let mut ops = Vec::new();
     if replace_at && at > 0 {
         ops.push(Op::Delete { at: at - 1, len: 1 });
@@ -115,7 +115,7 @@ pub fn attach(
                 list.remove(&r);
             }
             // People already mentioned come first (Docs does the same).
-            let known = crate::live::of(&buf).map(|m| chips::people(m.borrow_mut().document(&buf))).unwrap_or_default();
+            let known = crate::live::of(&buf).map(|m| chips::people(m.borrow_mut().document())).unwrap_or_default();
             let now = chips::suggestions(query, today(), &known);
             for run in &now {
                 list.append(&suggestion_row(run));
@@ -279,7 +279,7 @@ pub fn chip_at(buf: &gtk::TextBuffer, off: usize) -> Option<(Chip, String, (usiz
 fn replace(buf: &gtk::TextBuffer, range: (usize, usize), run: Run) {
     let Some(live) = crate::live::of(buf) else { return };
     let mut m = live.borrow_mut();
-    let at = m.sequence_offset(buf, range.0);
+    let at = m.sequence_offset(range.0);
     let ops = [
         Op::Delete { at, len: 1 },
         Op::Insert { at, content: vec![Paragraph { style: ParaStyle::default(), runs: vec![run] }] },
@@ -351,7 +351,7 @@ mod tests {
     fn tab(text: &str) -> gtk::TextBuffer {
         let buf = gtk::TextBuffer::new(None);
         crate::actions::register_formatting_tags(&buf);
-        crate::live::LiveModel::attach(&buf);
+        crate::live::LiveModel::attach(&buf, letters_core::Document::default());
         crate::bridge::load_document(&letters_core::Document::from_plain_text(text), &buf);
         buf
     }
@@ -367,7 +367,7 @@ mod tests {
             let text = buf.text(&buf.start_iter(), &buf.end_iter(), false).to_string();
             assert_eq!(text, "Due 3 Oct 2026 ok", "the chip's label replaces the @");
             let live = crate::live::of(&buf).unwrap();
-            let doc = live.borrow_mut().document(&buf).clone();
+            let doc = live.borrow_mut().document().clone();
             assert_eq!(letters_core::edit::doc_len(&doc), "Due ".len() + 1 + " ok".len(), "the chip is one char of the document");
             let chip = doc.paragraphs[0].runs.iter().find_map(|r| r.style.chip.clone()).unwrap();
             assert_eq!(chip, Chip { kind: ChipKind::Date, value: "2026-10-03".into() });
@@ -399,7 +399,7 @@ mod tests {
             insert(&buf, chips::date_chip(d), false);
             let view = crate::page_view::PageView::new();
             crate::page_edit::make_editable(&view, &buf);
-            let (doc, starts) = crate::live::of(&buf).unwrap().borrow_mut().snapshot(&buf);
+            let (doc, starts) = crate::live::of(&buf).unwrap().borrow_mut().snapshot();
             let typeset = letters_core::layout::pango::Typeset::new(doc, letters_core::layout::LayoutOptions::default());
             view.set_typeset(typeset, starts);
             // The chip spans buffer 4..14 ("3 Oct 2026").
@@ -426,7 +426,7 @@ mod tests {
             // Adjacent identical labels under one tag would read back as one
             // chip; the model keeps two objects and the capture must agree.
             let live = crate::live::of(&buf).unwrap();
-            assert_eq!(live.borrow_mut().document(&buf).paragraphs[0].runs.len(), 2);
+            assert_eq!(live.borrow_mut().document().paragraphs[0].runs.len(), 2);
             assert_eq!(doc.paragraphs[0].runs.len(), 2, "{:?}", doc.paragraphs[0].runs);
         });
     }

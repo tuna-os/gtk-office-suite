@@ -1265,6 +1265,42 @@ fn a_run_coloured_auto_has_no_colour_of_its_own() {
     assert_eq!(rt.paragraphs[0].runs[0].style.color, None, "{:?}", rt.paragraphs[0].runs);
 }
 
+/// A cell paragraph takes its table style's spacing beneath its own
+/// paragraph style (Word: document defaults, then table style, then
+/// paragraph style). Word's "Table Grid" sets no space after and single
+/// lines; without it, every cell took the document's 8pt after and 1.08
+/// lines and the table drew a third taller than in Word or LibreOffice.
+/// Body text keeps the document defaults.
+#[test]
+fn a_cell_paragraph_takes_its_table_styles_spacing() {
+    let mut d = Document::from_plain_text("before\nafter");
+    d.insert_table_at(1, 1, 1);
+    for p in d.paragraphs.iter_mut().filter(|p| p.style.table_cell.is_some()) {
+        p.runs = vec![letters_core::Run::plain("cell")];
+    }
+    let rt = doctor_parts(&d, |parts| {
+        let st = parts.get_mut("word/styles.xml").unwrap();
+        let a = st.find("<w:pPrDefault>").expect("fixture shape changed");
+        let b = st.find("</w:pPrDefault>").unwrap() + "</w:pPrDefault>".len();
+        st.replace_range(a..b, "<w:pPrDefault><w:pPr><w:spacing w:after=\"160\" w:line=\"259\" w:lineRule=\"auto\"/></w:pPr></w:pPrDefault>");
+        *st = st.replace("</w:styles>", "<w:style w:type=\"table\" w:styleId=\"TableGrid\"><w:name w:val=\"Table Grid\"/>\
+            <w:pPr><w:spacing w:after=\"0\" w:line=\"240\" w:lineRule=\"auto\"/></w:pPr></w:style></w:styles>");
+        let body = parts.get_mut("word/document.xml").unwrap();
+        // Direct spacing our writer gives each paragraph would hide the
+        // inheritance under test.
+        while let Some(s) = body.find("<w:spacing ") {
+            let e = body[s..].find("/>").unwrap() + s + 2;
+            body.replace_range(s..e, "");
+        }
+        let at = body.find("<w:tblPr>").expect("fixture shape changed") + "<w:tblPr>".len();
+        body.insert_str(at, "<w:tblStyle w:val=\"TableGrid\"/>");
+    });
+    let cell = rt.paragraphs.iter().find(|p| p.style.table_cell.is_some()).expect("the cell");
+    assert_eq!((cell.style.space_after_pt, cell.style.line_spacing), (0.0, 1.0), "the cell takes Table Grid's spacing");
+    let body = rt.paragraphs.iter().find(|p| p.text() == "before").unwrap();
+    assert_eq!(body.style.space_after_pt, 8.0, "body text keeps the document default");
+    assert!((body.style.line_spacing - 259.0 / 240.0).abs() < 1e-3);
+}
 
 /// A table's column widths survive a save and reopen, so a narrow number
 /// column stays narrow; a table without any gets none made up.
@@ -1277,4 +1313,44 @@ fn table_column_widths_survive() {
     let widths: Vec<Vec<f64>> = rt.table_columns.values().cloned().collect();
     assert_eq!(widths.len(), 1, "{:?}", rt.table_columns);
     assert!(widths[0].iter().zip([36.0, 400.0]).all(|(a, b)| (a - b).abs() < 0.1), "{widths:?}");
+}
+
+/// A table stays where the document has it, between the paragraphs around
+/// it, and the paragraph OOXML needs after a table that meets another or
+/// ends the document comes and goes with the save: a round trip neither
+/// adds nor loses an empty line (the reader once put every table at the
+/// end, which moved a form's tables pages away from their labels).
+#[test]
+fn tables_keep_their_place() {
+    fn text(s: &str) -> Paragraph {
+        Paragraph { style: ParaStyle::default(), runs: vec![Run { text: s.into(), style: RunStyle::default() }] }
+    }
+    fn cell(table: u32, s: &str) -> Paragraph {
+        let mut p = if s.is_empty() { Paragraph { style: ParaStyle::default(), runs: vec![] } } else { text(s) };
+        p.style.table_cell = Some(TableCell { table, row: 0, col: 0 });
+        p
+    }
+    let empty = || Paragraph { style: ParaStyle::default(), runs: vec![] };
+    let shape = |d: &Document| -> Vec<String> {
+        d.paragraphs.iter().map(|p| match p.style.table_cell {
+            Some(tc) => format!("T{}:{}", tc.table, p.text()),
+            None => p.text(),
+        }).collect()
+    };
+    let cases: Vec<Vec<Paragraph>> = vec![
+        vec![text("before"), cell(0, "a"), text("after")],
+        vec![cell(0, "a"), text("after")],
+        vec![text("before"), cell(0, "a")],
+        vec![cell(0, "a"), cell(1, "b")],
+        vec![cell(0, "a"), empty(), cell(1, "b")],
+        vec![text("x"), cell(0, "a"), empty(), text("y")],
+        vec![cell(0, "a"), empty(), empty()],
+        vec![text("before"), cell(0, "a"), text("mid"), cell(1, "b"), text("after")],
+    ];
+    for paragraphs in cases {
+        let doc = Document { paragraphs, ..Document::new() };
+        let once = round_trip(&doc);
+        assert_eq!(shape(&once), shape(&doc));
+        assert_eq!(shape(&round_trip(&once)), shape(&doc));
+    }
 }
