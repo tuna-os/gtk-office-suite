@@ -263,6 +263,50 @@ fn inline_image_survives() {
     assert!(rt.to_plain_text().contains("before"));
 }
 
+/// A floating picture (the Ofsted logo of the audit-committee minutes,
+/// right-aligned in the margins and raised above its paragraph) is saved
+/// in its own paragraph, as a `wp:anchor`, and reads back placed the same.
+#[test]
+fn a_floating_image_keeps_its_paragraph_and_placement() {
+    use letters_core::model::{AnchorAlign, AnchorFrame, ImageAnchor};
+    let png: &[u8] = &[
+        0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, 0x00, 0x00, 0x00, 0x0D,
+        0x49, 0x48, 0x44, 0x52, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01,
+        0x08, 0x02, 0x00, 0x00, 0x00, 0x90, 0x77, 0x53, 0xDE, 0x00, 0x00, 0x00,
+        0x0C, 0x49, 0x44, 0x41, 0x54, 0x08, 0xD7, 0x63, 0xF8, 0xCF, 0xC0, 0x00,
+        0x00, 0x00, 0x03, 0x00, 0x01, 0x9E, 0xDD, 0x22, 0x71, 0x00, 0x00, 0x00,
+        0x00, 0x49, 0x45, 0x4E, 0x44, 0xAE, 0x42, 0x60, 0x82,
+    ];
+    let dir = tempfile::tempdir().unwrap();
+    let img_path = dir.path().join("logo.png");
+    std::fs::write(&img_path, png).unwrap();
+    let anchor = ImageAnchor {
+        h_from: AnchorFrame::Margin,
+        h_align: Some(AnchorAlign::End),
+        v_from: AnchorFrame::Text,
+        y_emu: -660_400,
+        ..Default::default()
+    };
+    let mut d = Document::from_plain_text("Minutes\nPresent:");
+    d.paragraphs[0].runs.push(Run {
+        text: "Ofsted logo".into(),
+        style: RunStyle {
+            image: Some(img_path.to_string_lossy().into_owned()),
+            image_extent_emu: Some((1_296_035, 1_097_915)),
+            image_anchor: Some(anchor),
+            ..Default::default()
+        },
+    });
+    let rt = round_trip(&d);
+    let texts: Vec<String> = rt.paragraphs.iter().map(|p| p.runs.iter().filter(|r| r.style.image.is_none()).map(|r| r.text.as_str()).collect()).collect();
+    assert_eq!(texts, ["Minutes", "Present:"], "no paragraph split off");
+    let logo = rt.paragraphs[0].runs.iter().find(|r| r.style.image.is_some()).expect("the logo stays in its paragraph");
+    assert_eq!(logo.style.image_anchor, Some(anchor));
+    assert_eq!(logo.style.image_extent_emu, Some((1_296_035, 1_097_915)));
+    assert_eq!(logo.text, "Ofsted logo", "alt text");
+    assert_eq!(std::fs::read(logo.style.image.as_ref().unwrap()).unwrap(), png);
+}
+
 /// Reopening a document reuses the image it already extracted rather than
 /// leaving another file in the temp dir on every open (#455). The file
 /// lives in the process's private media cache, not loose in /tmp.
@@ -1054,6 +1098,205 @@ fn list_numbering_inherited_from_a_paragraph_style_is_read() {
     );
 }
 
+/// A list continues past a paragraph that is not in it.
+///
+/// Word counts each list instance (`numId`) on its own: minutes numbered
+/// "1", then a paragraph of discussion, then "2" are one list. This model's
+/// count ends a list at any plain paragraph, so the second item read as a
+/// second "1." (render-real `audit-and-risk-assurance-committee-minutes`).
+/// The reader restarts it at Word's number, and leaves alone the items the
+/// two counts already agree on.
+#[test]
+fn a_numbered_list_continues_past_a_plain_paragraph() {
+    let mut d = Document::from_plain_text("first\nnotes on it\nsecond\nthird\nnot numbered\nfourth");
+    for k in [0, 2, 3, 5] {
+        d.paragraphs[k].style.list = ListKind::Numbered;
+    }
+    let rt = doctor_parts(&d, |parts| {
+        // Our writer gives each run of items its own instance; Word gives
+        // the list one. Point every item at the first item's instance.
+        let body = parts.get_mut("word/document.xml").unwrap();
+        let ids: Vec<String> = body
+            .split("<w:numId w:val=\"")
+            .skip(1)
+            .map(|rest| rest.split('"').next().unwrap().to_string())
+            .collect();
+        assert_eq!(ids.len(), 4, "fixture shape changed: {body}");
+        for id in &ids[1..] {
+            *body = body.replace(&format!("<w:numId w:val=\"{id}\""), &format!("<w:numId w:val=\"{}\"", ids[0]));
+        }
+    });
+    let starts: Vec<Option<u32>> = rt.paragraphs.iter().map(|p| p.style.list_start).collect();
+    assert_eq!(starts, vec![None, None, Some(2), None, None, Some(4)]);
+    let shown = letters_core::lists::ordinals(rt.paragraphs.iter().map(|p| &p.style));
+    assert_eq!(shown, vec![1, 0, 2, 3, 0, 4]);
+}
+
+/// Two lists stay two lists through a save.
+///
+/// The writer put every numbered item on one list instance, which Word
+/// counts as one list: "1, 2 / a plain paragraph / 1, 2" opened in Word as
+/// "1, 2 / 3, 4", and the reader, which counts as Word does, read it back
+/// that way.
+#[test]
+fn separate_numbered_lists_keep_their_numbers_through_a_save() {
+    let mut d = Document::from_plain_text("a\nb\nbetween\nc\nd\n  nested\ne");
+    for k in [0, 1, 3, 4, 6] {
+        d.paragraphs[k].style.list = ListKind::Numbered;
+    }
+    d.paragraphs[5].style.list = ListKind::Numbered;
+    d.paragraphs[5].style.list_level = 1;
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("lists.docx");
+    docx::write(&d, &path).unwrap();
+    let rt = docx::read(path.to_str().unwrap()).unwrap();
+    let shown = |d: &Document| letters_core::lists::ordinals(d.paragraphs.iter().map(|p| &p.style));
+    assert_eq!(shown(&d), vec![1, 2, 0, 1, 2, 1, 3]);
+    assert_eq!(shown(&rt), shown(&d));
+    let starts: Vec<Option<u32>> = rt.paragraphs.iter().map(|p| p.style.list_start).collect();
+    assert_eq!(starts, vec![None; 7], "a list that starts at 1 needs no restart");
+    let labels: Vec<Option<ListLabel>> = rt.paragraphs.iter().map(|p| p.style.list_label.clone()).collect();
+    assert_eq!(labels, vec![None; 7], "a nested item is \"1.\" as Letters draws it, not Word's default \"a.\"");
+}
+
+fn labelled_lists() -> Document {
+    let label = |prefix: &str, format, suffix: &str| Some(ListLabel { prefix: prefix.into(), format, suffix: suffix.into() });
+    let mut d = Document::from_plain_text("one\na\nb\ntwo\nthree\nfour\nbetween\n2.1\n2.1 again");
+    for (k, level, l) in [
+        (0, 0, label("(", NumberFormat::Decimal, ")")),
+        (1, 1, label("1.", NumberFormat::LowerLetter, "")),
+        (2, 1, label("1.", NumberFormat::LowerLetter, "")),
+        (3, 0, label("(", NumberFormat::Decimal, ")")),
+        // The label changes within the list, and back.
+        (4, 0, label("", NumberFormat::UpperRoman, ".")),
+        (5, 0, None),
+        (7, 0, label("2.1", NumberFormat::None, "")),
+        (8, 0, label("2.1", NumberFormat::None, "")),
+    ] {
+        d.paragraphs[k].style.list = ListKind::Numbered;
+        d.paragraphs[k].style.list_level = level;
+        d.paragraphs[k].style.list_label = l;
+    }
+    d
+}
+
+fn markers(d: &Document) -> Vec<String> {
+    let ordinals = letters_core::lists::ordinals(d.paragraphs.iter().map(|p| &p.style));
+    d.paragraphs.iter().zip(ordinals).map(|(p, n)| letters_core::lists::marker_for(&p.style, n).unwrap_or_default()).collect()
+}
+
+/// A numbered item's label survives a save: "(1)", "1.a", "III.", and
+/// Word's "2.1" with no number in it.
+#[test]
+fn list_labels_survive_a_docx_save() {
+    let d = labelled_lists();
+    assert_eq!(markers(&d), ["(1)", "1.a", "1.b", "(2)", "III.", "4.", "", "2.1", "2.1"]);
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("labels.docx");
+    docx::write(&d, &path).unwrap();
+    let rt = docx::read(path.to_str().unwrap()).unwrap();
+    assert_eq!(markers(&rt), markers(&d));
+    let labels = |d: &Document| d.paragraphs.iter().map(|p| p.style.list_label.clone()).collect::<Vec<_>>();
+    assert_eq!(labels(&rt), labels(&d));
+}
+
+/// Word's level text: the levels above as they stand ("%1.%2" under
+/// item 3 is "3.1"), the item's own format, and text with no number.
+#[test]
+fn word_level_text_becomes_the_items_label() {
+    let mut d = Document::from_plain_text("top\nsub\nsub");
+    d.paragraphs[0].style.list = ListKind::Numbered;
+    d.paragraphs[0].style.list_start = Some(3);
+    for p in &mut d.paragraphs[1..] {
+        p.style.list = ListKind::Numbered;
+        p.style.list_level = 1;
+    }
+    let rt = doctor_parts(&d, |parts| {
+        let numbering = parts.get_mut("word/numbering.xml").unwrap();
+        // Level 2 of every definition: "%1.%2", lower letters.
+        let at = numbering.find("<w:lvl w:ilvl=\"1\"").expect("fixture shape changed");
+        let end = numbering[at..].find("</w:lvl>").unwrap() + at;
+        let level = numbering[at..end]
+            .replace("w:val=\"decimal\"", "w:val=\"lowerLetter\"")
+            .replace("w:val=\"%2.\"", "w:val=\"%1.%2\"");
+        assert!(level.contains("%1.%2") && level.contains("lowerLetter"), "fixture shape changed: {level}");
+        numbering.replace_range(at..end, &level);
+    });
+    assert_eq!(markers(&rt), ["3.", "3.a", "3.b"]);
+}
+
+/// White shading is no highlight.
+///
+/// Forms pasted from the web shade their text white (`w:shd w:fill=
+/// "FFFFFF"`) on a white page. The reader took any run shading for a
+/// highlight, so that text drew yellow where Word and LibreOffice draw
+/// nothing (render-real `tier-2-3-notification`).
+#[test]
+fn white_or_automatic_shading_is_not_a_highlight() {
+    let d = Document::from_plain_text("white\nauto\nyellow\nmarked\nunmarked");
+    let rt = doctor_parts(&d, |parts| {
+        let body = parts.get_mut("word/document.xml").unwrap();
+        for (text, rpr) in [
+            ("white", "<w:shd w:val=\"clear\" w:color=\"auto\" w:fill=\"FFFFFF\"/>"),
+            ("auto", "<w:shd w:val=\"clear\" w:color=\"auto\" w:fill=\"auto\"/>"),
+            ("yellow", "<w:shd w:val=\"clear\" w:color=\"auto\" w:fill=\"FFFF00\"/>"),
+            ("marked", "<w:highlight w:val=\"green\"/>"),
+            ("unmarked", "<w:highlight w:val=\"none\"/><w:shd w:val=\"clear\" w:fill=\"FFFF00\"/>"),
+        ] {
+            let run = format!("<w:r><w:t>{text}</w:t></w:r>");
+            assert!(body.contains(&run), "fixture shape changed: {body}");
+            *body = body.replace(&run, &format!("<w:r><w:rPr>{rpr}</w:rPr><w:t>{text}</w:t></w:r>"));
+        }
+    });
+    let highlighted: Vec<(String, bool)> =
+        rt.paragraphs.iter().map(|p| (p.text(), p.runs.iter().any(|r| r.style.highlight))).collect();
+    assert_eq!(
+        highlighted,
+        vec![
+            ("white".into(), false),
+            ("auto".into(), false),
+            ("yellow".into(), true),
+            ("marked".into(), true),
+            ("unmarked".into(), false),
+        ]
+    );
+}
+
+/// The paragraph mark's formatting is the mark's alone.
+///
+/// `w:pPr/w:rPr` formats the pilcrow, not the paragraph's text. rdocx's
+/// effective run properties merge it into every run, so a form whose
+/// marks were bold read every paragraph as bold (render-real
+/// `tier-2-3-notification`). A run that turns its style's bold off stays
+/// plain.
+#[test]
+fn the_paragraph_marks_formatting_is_not_the_texts() {
+    let d = Document::from_plain_text("plain text\nnot bold");
+    let rt = doctor_parts(&d, |parts| {
+        let body = parts.get_mut("word/document.xml").unwrap();
+        let run = "<w:r><w:t>plain text</w:t></w:r>";
+        assert!(body.contains(run), "fixture shape changed: {body}");
+        *body = body.replacen(
+            "<w:p>",
+            "<w:p><w:pPr><w:rPr><w:b/><w:i/><w:color w:val=\"FF0000\"/><w:sz w:val=\"40\"/></w:rPr></w:pPr>",
+            1,
+        );
+        let run = "<w:r><w:t>not bold</w:t></w:r>";
+        assert!(body.contains(run), "fixture shape changed: {body}");
+        *body = body.replace(run, "<w:r><w:rPr><w:rStyle w:val=\"Strong\"/><w:b w:val=\"0\"/></w:rPr><w:t>not bold</w:t></w:r>");
+        let styles = parts.get_mut("word/styles.xml").unwrap();
+        *styles = styles.replace(
+            "</w:styles>",
+            "<w:style w:type=\"character\" w:styleId=\"Strong\"><w:name w:val=\"Strong\"/><w:rPr><w:b/></w:rPr></w:style></w:styles>",
+        );
+    });
+    assert!(rt.paragraphs[0].text() == "plain text", "{:?}", rt.paragraphs);
+    let r = &rt.paragraphs[0].runs[0].style;
+    assert!(!r.bold && !r.italic, "{r:?}");
+    assert_eq!((r.color.as_deref(), r.font_size_hp), (None, None), "{r:?}");
+    assert!(!rt.paragraphs[1].runs[0].style.bold, "a run's w:b=0 turns its style's bold off");
+}
+
 /// What a paragraph inherits from its styles is how it looks.
 ///
 /// python-docx's template (and Word's) puts 10pt after every paragraph and
@@ -1390,6 +1633,21 @@ fn table_row_heights_survive() {
     let mut d = Document::from_plain_text("after");
     d.insert_table_at(0, 2, 2);
     assert!(round_trip(&d).table_rows.is_empty());
+}
+
+/// A table's shaded cells survive a save and reopen (`w:shd w:fill`).
+#[test]
+fn table_cell_fills_survive() {
+    use letters_core::CellFill;
+    let mut d = Document::from_plain_text("after");
+    let table = d.insert_table_at(0, 2, 2);
+    let want = vec![CellFill { row: 0, col: 0, color: "D9D9D9".into() }, CellFill { row: 1, col: 1, color: "DEEAF6".into() }];
+    d.table_fills.insert(table, want.clone());
+    let rt = round_trip(&d);
+    assert_eq!(rt.table_fills.values().cloned().collect::<Vec<_>>(), [want]);
+    let mut d = Document::from_plain_text("after");
+    d.insert_table_at(0, 1, 1);
+    assert!(round_trip(&d).table_fills.is_empty());
 }
 
 /// A table stays where the document has it, between the paragraphs around

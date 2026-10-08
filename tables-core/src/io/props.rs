@@ -400,7 +400,8 @@ pub fn read_sheet_props_from_xlsx(
     }
     let parts = resolve_sheet_parts(&mut zip, &mut budget);
     let styles_xml = zip.optional_part_to_string("xl/styles.xml", &mut budget);
-    let xf_styles = super::xlsx_styles::parse_cell_styles(&styles_xml);
+    let theme_xml = zip.optional_part_to_string("xl/theme/theme1.xml", &mut budget);
+    let xf_styles = super::xlsx_styles::parse_cell_styles_with_theme(&styles_xml, &theme_xml);
     let default_font = super::xlsx_styles::default_font(&styles_xml);
 
     for name in names {

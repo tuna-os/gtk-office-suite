@@ -228,7 +228,7 @@ class BaseGUITestCase(unittest.TestCase):
         _register_launched(self.app_name, self.process)
 
         # Wait for application node in AT-SPI tree
-        self.app = self.wait_for_app(self.app_name)
+        self.app = self.wait_for_app(self.app_name, pid=self.process.pid)
         self._activate_window()
         self.last_screenshot = None
 
@@ -275,7 +275,7 @@ class BaseGUITestCase(unittest.TestCase):
         )
         _register_launched(self.app_name, self.process)
         self._app_output = None
-        self.app = self.wait_for_app(self.app_name)
+        self.app = self.wait_for_app(self.app_name, pid=self.process.pid)
         self._activate_window()
         return self.app
 
@@ -1169,7 +1169,7 @@ class BaseGUITestCase(unittest.TestCase):
                     process.kill()
         self.addCleanup(terminate)
 
-        app = self.wait_for_app(app_name)
+        app = self.wait_for_app(app_name, pid=process.pid)
         win_id = self.wait_for_condition(
             lambda: self._window_for_pid(process.pid),
             description=f"an X window for {app_name}",
@@ -1291,11 +1291,32 @@ class BaseGUITestCase(unittest.TestCase):
             time.sleep(0.05)
         subprocess.run(["xdotool", "mouseup", str(button)], capture_output=True, timeout=20)
 
-    def wait_for_app(self, name: str, timeout: float = 15.0) -> "tree.Node":
+    def wait_for_app(self, name: str, timeout: float = 15.0, pid: int | None = None) -> "tree.Node":
+        """The application `name` in the AT-SPI registry; with `pid`, the
+        one that process registered.
+
+        By name alone this returned the first `name` the registry listed,
+        and the registry can still list the previous journey's app after
+        its process ended. A journey then read that app's nodes: the
+        Insert Link journey waited for "the last word selected" and saw
+        the previous journey's selection, so the dialog opened before its
+        own selection existed and the link went in at the caret (a display
+        matrix run at 400x800, once in a full suite; never alone).
+        """
+        def find():
+            if pid is None:
+                return tree.root.application(name)
+            for app in tree.root.children:
+                try:
+                    if app.name == name and app.get_process_id() == pid:
+                        return app
+                except Exception:  # a registry entry whose app has gone
+                    continue
+            return None
         return self.wait_for_condition(
-            lambda: tree.root.application(name),
+            find,
             timeout=timeout,
-            description=f"application '{name}' in the AT-SPI registry",
+            description=f"application '{name}'" + (f" (pid {pid})" if pid else "") + " in the AT-SPI registry",
         )
 
     def get_window_geometry(self) -> tuple[int, int, int, int]:

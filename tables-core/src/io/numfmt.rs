@@ -27,7 +27,11 @@ pub(super) fn builtin_code(id: u32) -> Option<&'static str> {
         11 => "0.00E+00",
         12 => "# ?/?",
         13 => "# ??/??",
-        14 => "mm-dd-yy",
+        // The locale's short date, which the standard writes as
+        // "mm-dd-yy" and no application draws that way: Excel (en-US) and
+        // Calc show 4/1/2026, not 04-01-26 (render-real
+        // `insolvency-service-transactions`).
+        14 => "m/d/yyyy",
         15 => "d-mmm-yy",
         16 => "d-mmm",
         17 => "mmm-yy",
@@ -370,7 +374,9 @@ mod tests {
             <xf numFmtId="165"/><xf numFmtId="14"/></cellXfs></styleSheet>"#;
         let kinds: Vec<_> =
             super::super::xlsx_styles::parse_cell_styles(styles).into_iter().map(|x| x.format.kind).collect();
-        assert_eq!(kinds, vec![General, Percent(1), Currency("$".into(), 2), Date("%m-%d-%y".into())]);
+        // Built-in 14 is the locale's short date, drawn 4/1/2026 as Excel
+        // (en-US) and Calc draw it, not the standard's literal mm-dd-yy.
+        assert_eq!(kinds, vec![General, Percent(1), Currency("$".into(), 2), Date("%-m/%-d/%Y".into())]);
     }
 
     #[test]
