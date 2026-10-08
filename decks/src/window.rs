@@ -888,7 +888,7 @@ impl DecksWindow {
                 }
             });
             app.add_action(&act);
-            crate::insert_bar::build(&toolbar, &suite_win.narrow_breakpoint);
+            crate::insert_bar::build(&toolbar, &suite_win.header_bar, &suite_win.narrow_breakpoint);
         }
 
         // "Add Text Box"

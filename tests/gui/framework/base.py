@@ -1096,11 +1096,8 @@ class BaseGUITestCase(unittest.TestCase):
         def click(x, y, button=1, check=True):
             trace("click", x=x, y=y, button=button)
             reactivate()
-            subprocess.run(
-                ["xdotool", "mousemove", "--sync", str(int(x)), str(int(y)),
-                 "click", str(button)],
-                capture_output=True, timeout=5,
-            )
+            self.move_pointer(*self.to_device(x, y))
+            subprocess.run(["xdotool", "click", str(button)], capture_output=True, timeout=5)
 
         def key_combo(combo_string):
             trace("key_combo", combo=combo_string)
@@ -1222,6 +1219,45 @@ class BaseGUITestCase(unittest.TestCase):
                 crashed.append(f"{t.name} (exit {t.process.poll()})")
         self.assertFalse(crashed, f"process(es) died: {', '.join(crashed)}")
 
+    def to_device(self, x: float, y: float) -> tuple:
+        """Screen pixels for a point in the app's logical pixels. What the
+        journeys aim at comes from the app (AT-SPI extents, `canvas_at`)
+        in logical pixels, but xdotool moves the pointer in device pixels,
+        which at the display matrix's GDK_SCALE=2 are half the size: every
+        click and drag landed up and left of its target."""
+        scale = int(self.launch_env.get("GDK_SCALE", "1") or 1)
+        return int(x * scale), int(y * scale)
+
+    def logical_screen(self) -> tuple:
+        """The screen in the app's logical pixels, which is also the
+        window: the harness's window manager sizes every window to it."""
+        width, height = (int(n) for n in os.environ.get("GUI_TEST_SCREEN_SIZE", "1920x1080").split("x"))
+        scale = int(self.launch_env.get("GDK_SCALE", "1") or 1)
+        return width // scale, height // scale
+
+    def panels_overlay(self) -> bool:
+        """Whether the window is narrow enough for side panels to slide
+        over the view rather than take width from it: suite-common's
+        medium breakpoint, 800 logical pixels (MEDIUM_WIDTH_SP)."""
+        return self.logical_screen()[0] <= 800
+
+    @staticmethod
+    def move_pointer(dx: int, dy: int):
+        """Put the pointer at device pixel (dx, dy) and wait until it is
+        there. `mousemove --sync` waits for the pointer to move, so with
+        the pointer already there it hung until the timeout and whatever
+        followed never happened: a second click on one spot failed. Not
+        moving at all is no better: a window opened under a pointer left
+        there by the journey before saw no motion, and a drag starting at
+        that spot did not move the object. So step off and back."""
+        here = subprocess.run(["xdotool", "getmouselocation", "--shell"],
+                              capture_output=True, text=True, timeout=5).stdout
+        if f"X={dx}\nY={dy}\n" in here:
+            subprocess.run(["xdotool", "mousemove", "--sync", str(dx + 1), str(dy)],
+                           capture_output=True, timeout=5)
+        subprocess.run(["xdotool", "mousemove", "--sync", str(dx), str(dy)],
+                       capture_output=True, timeout=5)
+
     def drag(self, x1: float, y1: float, x2: float, y2: float, button: int = 1):
         """Press-move-release from (x1, y1) to (x2, y2), window-local
         coordinates — same xdotool-backed approach as the click/keyCombo/
@@ -1240,18 +1276,16 @@ class BaseGUITestCase(unittest.TestCase):
             })
         subprocess.run(["xdotool", "windowactivate", "--sync", win_id],
                         capture_output=True, timeout=2)
-        subprocess.run(
-            ["xdotool", "mousemove", "--sync", str(int(x1)), str(int(y1))],
-            capture_output=True, timeout=20,
-        )
+        self.move_pointer(*self.to_device(x1, y1))
         subprocess.run(["xdotool", "mousedown", str(button)], capture_output=True, timeout=20)
         # A couple of intermediate points so GTK's GestureDrag sees real
         # motion, not a single jump — matches how a human drag arrives.
         for frac in (0.34, 0.67, 1.0):
             mx = x1 + (x2 - x1) * frac
             my = y1 + (y2 - y1) * frac
+            dmx, dmy = self.to_device(mx, my)
             subprocess.run(
-                ["xdotool", "mousemove", "--sync", str(int(mx)), str(int(my))],
+                ["xdotool", "mousemove", "--sync", str(dmx), str(dmy)],
                 capture_output=True, timeout=20,
             )
             time.sleep(0.05)

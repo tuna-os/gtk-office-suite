@@ -178,27 +178,6 @@ impl SpellCheckHandle {
         }).unwrap_or(true)
     }
 
-    /// Replace the last-found word with a new word.
-    pub fn replace_last(&self, buffer: &gtk::TextBuffer, replacement: &str) {
-        let ins = buffer.cursor_position();
-        let mut start = buffer.iter_at_offset(ins);
-        let mut end = start;
-        while start.backward_char() {
-            let c = start.char();
-            if !c.is_ascii_alphabetic() && c != '\'' { start.forward_char(); break; }
-        }
-        while end.forward_char() {
-            let c = end.char();
-            if !c.is_ascii_alphabetic() && c != '\'' { break; }
-        }
-        if start.offset() < end.offset() {
-            buffer.begin_user_action();
-            buffer.delete(&mut start, &mut end);
-            buffer.insert(&mut start, replacement);
-            buffer.end_user_action();
-        }
-    }
-
     pub fn set_current_word(&self, _word: &str) {
         if let Ok(_s) = self.checker.try_borrow_mut() {
             // No-op placeholder — word is captured in closures

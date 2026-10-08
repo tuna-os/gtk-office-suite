@@ -29,7 +29,7 @@ mod imp {
     pub struct PageView {
         pub typeset: RefCell<Option<Typeset>>,
         /// Buffer offset where each laid-out paragraph's text starts
-        /// (`bridge::capture_with_starts`, taken with the typeset).
+        /// (the live model's, taken with the typeset).
         pub starts: RefCell<Vec<usize>>,
         /// The buffer this view edits, once editable.
         pub buffer: RefCell<Option<gtk::TextBuffer>>,
@@ -284,7 +284,7 @@ impl PageView {
     }
 
     /// Show `typeset`'s pages. `starts` maps its paragraphs to the buffer
-    /// (`bridge::capture_with_starts`).
+    /// (`LiveModel::snapshot`).
     pub fn set_typeset(&self, typeset: Typeset, starts: Vec<usize>) {
         self.imp().typeset.replace(Some(typeset));
         self.imp().starts.replace(starts);

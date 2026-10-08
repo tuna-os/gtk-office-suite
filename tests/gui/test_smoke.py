@@ -848,7 +848,7 @@ class TablesKeyboardOnlySmoke(KeyboardOnlyMixin, BaseGUITestCase):
 
 class DarkModeKeptMixin:
     """The style chosen with Toggle Dark Mode survives a relaunch (#1305):
-    the toggle saves it as the app's `dark-mode` setting and startup
+    the toggle saves it as the app's `style` setting and startup
     restores it. Neither happened, so every restart came back light. The
     style is read off the screen (the header bar's brightness), which is
     what the user sees, and the setting from the journey's keyfile."""
@@ -877,16 +877,25 @@ class DarkModeKeptMixin:
     def test_the_toggled_style_survives_a_relaunch(self):
         import subprocess
         aid = f"org.tunaos.{self.app_name}"
-        self.wait_until(self._header_brightness, lambda b: b > 128, description="the window to open in light style")
+        # The window opens in the system's style, which the display
+        # matrix's dark configs set to dark; the toggle chooses the other
+        # one, and that choice must outlast a relaunch either way. A light
+        # choice on a dark system used to be saved as "not dark", which
+        # the next start read as "follow the system": back to dark.
+        system_dark = os.environ.get("GUI_TEST_COLOR_SCHEME") == "prefer-dark"
+        styles = {False: ("light", lambda b: b > 128), True: ("dark", lambda b: b < 128)}
+        first, opened = styles[system_dark]
+        chosen, looks_chosen = styles[not system_dark]
+        self.wait_until(self._header_brightness, opened, description=f"the window to open in {first} style")
         subprocess.run(["gapplication", "action", aid, "toggle-dark-mode"], check=True)
-        self.wait_until(self._header_brightness, lambda b: b < 128, description="Toggle Dark Mode to darken the window")
-        self.wait_until(self._saved, lambda s: "dark-mode=true" in s, description="the choice to be saved")
+        self.wait_until(self._header_brightness, looks_chosen, description=f"Toggle Dark Mode to make the window {chosen}")
+        self.wait_until(self._saved, lambda s: f"style='{chosen}'" in s, description="the choice to be saved")
         self.relaunch_app()
-        self.wait_until(lambda: self.process.poll() is None and self._header_brightness(), lambda b: b and b < 128,
-                        description="the relaunched window to open dark")
+        self.wait_until(lambda: self.process.poll() is None and self._header_brightness(), lambda b: b and looks_chosen(b),
+                        description=f"the relaunched window to open {chosen}")
         subprocess.run(["gapplication", "action", aid, "toggle-dark-mode"], check=True)
-        self.wait_until(self._header_brightness, lambda b: b > 128, description="toggling back to light")
-        self.wait_until(self._saved, lambda s: "dark-mode=false" in s, description="light to be saved")
+        self.wait_until(self._header_brightness, opened, description=f"toggling back to {first}")
+        self.wait_until(self._saved, lambda s: f"style='{first}'" in s, description=f"{first} to be saved")
 
 
 class LettersDarkModeKeptSmoke(DarkModeKeptMixin, BaseGUITestCase):
@@ -4234,11 +4243,21 @@ class TablesAccessibleGeometrySmoke(BaseGUITestCase):
         """Toggle the Format panel, which takes its width from the view.
         (The window itself can't be resized here: the harness's window
         manager, matchbox, sizes every window to the screen and undoes an
-        external resize.)"""
+        external resize.) In a narrow window the panel slides over the
+        grid instead, by design, so there the grid keeps its size and the
+        nodes are checked against an unchanged view."""
+        import pyatspi
         grid = self.app.child(name="Spreadsheet grid")
         size = lambda: (grid.queryComponent().getExtents(2).width, grid.queryComponent().getExtents(2).height)
         before = size()
-        self.app.child(name="Format", roleName="toggle button").do_action(0)
+        toggle = self.app.child(name="Format", roleName="toggle button")
+        was = toggle.getState().contains(pyatspi.STATE_PRESSED)
+        toggle.do_action(0)
+        if self.panels_overlay():
+            self.wait_until(lambda: toggle.getState().contains(pyatspi.STATE_PRESSED), lambda p: p != was,
+                            description="the Format panel to toggle")
+            self.assertEqual(size(), before, "an overlaid panel must not squeeze the grid")
+            return
         self.wait_until(size, lambda s: s != before, description=f"the grid to resize from {before}")
 
     def test_cell_nodes_follow_scroll_and_resize(self):
@@ -4344,11 +4363,21 @@ class DecksAccessibleGeometrySmoke(BaseGUITestCase):
         """Toggle the Format panel, which takes its width from the view.
         (The window itself can't be resized here: the harness's window
         manager, matchbox, sizes every window to the screen and undoes an
-        external resize.)"""
+        external resize.) In a narrow window the panel slides over the
+        canvas instead, by design, so there the canvas keeps its size and the
+        nodes are checked against an unchanged view."""
+        import pyatspi
         grid = self._canvas()
         size = lambda: (grid.queryComponent().getExtents(2).width, grid.queryComponent().getExtents(2).height)
         before = size()
-        self.app.child(name="Format", roleName="toggle button").do_action(0)
+        toggle = self.app.child(name="Format", roleName="toggle button")
+        was = toggle.getState().contains(pyatspi.STATE_PRESSED)
+        toggle.do_action(0)
+        if self.panels_overlay():
+            self.wait_until(lambda: toggle.getState().contains(pyatspi.STATE_PRESSED), lambda p: p != was,
+                            description="the Format panel to toggle")
+            self.assertEqual(size(), before, "an overlaid panel must not squeeze the canvas")
+            return
         self.wait_until(size, lambda s: s != before, description=f"the canvas to resize from {before}")
 
     def test_object_nodes_follow_resizes(self):
@@ -6536,6 +6565,17 @@ class DecksAdvertisedActionsSmoke(DecksCanvasGeometry, BaseGUITestCase):
         self.wait_until(lambda: self.app.child(name=name), lambda t: t is not None,
                         description=f"the inspector's {name} tab").do_action(0)
 
+    def _close_inspector(self):
+        """Put the inspector away, as a person would before clicking the
+        slide: in a narrow window it is an overlay over the canvas, and a
+        click aimed at the slide landed on the inspector instead."""
+        import pyatspi
+        toggle = self.app.child(name="Format", roleName="toggle button")
+        if toggle.getState().contains(pyatspi.STATE_PRESSED):
+            toggle.do_action(0)
+        self.wait_until(lambda: toggle.getState().contains(pyatspi.STATE_PRESSED), lambda p: not p,
+                        description="the inspector to close")
+
     def _button(self, name, role="push button"):
         return self.wait_until(lambda: self.app.child(name=name, roleName=role),
                                lambda b: b is not None and b.showing, description=f"the {name} control")
@@ -6562,11 +6602,20 @@ class DecksAdvertisedActionsSmoke(DecksCanvasGeometry, BaseGUITestCase):
 
         # Select the shape by clicking it (the first shape is 200x150 at
         # 200,200), which also gives the canvas the keyboard, then Delete.
+        self._close_inspector()
         to_window = self._slide_to_window()
         x, y = to_window(300.0, 275.0)
         self._activate_window()
-        rawinput.click(int(x), int(y))
-        self.wait_until(lambda: self.trigger_snapshot(self.AID)["selected"], lambda s: s == 0,
+
+        def click_and_read():
+            # The inspector slides away after its toggle reports it closed,
+            # and nothing over AT-SPI says when it is gone; a click while
+            # it is still over the slide lands on it. Clicking the shape
+            # again once it is selected changes nothing, so click until
+            # the click reaches the slide.
+            rawinput.click(int(x), int(y))
+            return self.trigger_snapshot(self.AID)["selected"]
+        self.wait_until(click_and_read, lambda s: s == 0, interval=0.5,
                         description="the click to select the shape")
         rawinput.keyCombo("Delete")
         self._wait_objects(lambda o: [x["kind"] for x in o] == ["TextBox"], "Delete to remove the selected shape")
@@ -7229,7 +7278,12 @@ class LettersInsertLinkSmoke(BaseGUITestCase):
         self.new_letters_document()
         rawinput.typeText("see gnome")
         self.wait_until(self._runs, lambda r: r == [("see gnome", None)], description="the typed text")
+        page = self.wait_for_node(name="Print Layout", roleName="text")
         rawinput.keyCombo("<Shift><Control>Left")
+        # The selection arrives over X and the action over D-Bus, which
+        # keep no order between them: the dialog sometimes opened before
+        # the word was selected, and the link went in as new text.
+        self.wait_for_condition(lambda: page.queryText().getNSelections() > 0 or None, description="the last word selected")
         self.gapplication_action(aid, "insertlink")
         self.wait_for_node(name="Link address", roleName="text")
         rawinput.typeText("https://gnome.org")
@@ -7448,8 +7502,14 @@ class LettersDistractionFreeSmoke(BaseGUITestCase):
         # 400px); x=30 was on the white page below about 1000px, so the
         # bars hid but this never saw it. y=72 is in the toolbar while the
         # bars are shown.
-        pixel = Image.open(path).convert("RGB").getpixel((16, 72))
-        return all(abs(c - 192) < 12 for c in pixel)
+        # The gutter's own colour is read lower down, where it always
+        # is: it is light grey in light style and dark grey in dark, so a
+        # fixed grey never matched in the display matrix's dark configs.
+        shot = Image.open(path).convert("RGB")
+        pixel, gutter = shot.getpixel((16, 72)), shot.getpixel((16, 300))
+        # Hidden, the two match exactly; shown, the toolbar is 54 brighter
+        # in light style but only 15 in dark (48 against 33).
+        return all(abs(a - b) < 6 for a, b in zip(pixel, gutter))
 
     def test_bars_hide_while_typing_and_return_on_pointer_motion(self):
         from dogtail import rawinput
@@ -7830,8 +7890,13 @@ class LettersPrintLayoutEditingSmoke(BaseGUITestCase):
         zoom = lambda: self.trigger_snapshot("org.tunaos.letters")["view"]["zoom"]
         before = zoom()
         (x, y), (w, h) = page_view.position, page_view.size
+        # The view's extents are its whole scrolled size, wider than a
+        # narrow window: its middle was off the window's right edge at
+        # 400px. Aim inside the part that is on screen.
+        sw, sh = self.logical_screen()
         self._activate_window()
-        subprocess.run(["xdotool", "mousemove", "--sync", str(x + w // 2), str(y + h // 3),
+        px, py = self.to_device(min(x + w // 2, sw // 2), min(y + h // 3, sh // 2))
+        subprocess.run(["xdotool", "mousemove", "--sync", str(px), str(py),
                         "keydown", "ctrl", "click", "4", "keyup", "ctrl"],
                        capture_output=True, timeout=5)
         self.wait_until(zoom, lambda z: z > before, description=f"the zoom to grow past {before}")

@@ -5,6 +5,16 @@
       <default>false</default>
       <summary>Dark mode</summary>
     </key>
+    <key name="style" type="s">
+      <choices>
+        <choice value="default"/>
+        <choice value="light"/>
+        <choice value="dark"/>
+      </choices>
+      <default>"default"</default>
+      <summary>Style</summary>
+      <description>The style Toggle Dark Mode chose: "light" or "dark", kept whatever the system prefers, or "default" to follow the system.</description>
+    </key>
     <key name="window-width" type="i">
       <default>960</default>
       <summary>Window width</summary>

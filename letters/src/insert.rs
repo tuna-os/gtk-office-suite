@@ -19,7 +19,7 @@ fn replace_selection(buf: &gtk::TextBuffer, content: Vec<Paragraph>) -> bool {
     let Some(live) = crate::live::of(buf) else { return false };
     let (from, to) = selection(buf);
     let mut m = live.borrow_mut();
-    let (s, e) = (m.sequence_offset(buf, from), m.sequence_offset(buf, to));
+    let (s, e) = (m.sequence_offset(from), m.sequence_offset(to));
     let mut ops = Vec::new();
     if e > s {
         ops.push(Op::Delete { at: s, len: e - s });
@@ -34,7 +34,7 @@ fn replace_selection(buf: &gtk::TextBuffer, content: Vec<Paragraph>) -> bool {
     if !m.apply_user_ops(buf, &ops, false) {
         return false;
     }
-    if let Some(off) = m.buffer_offset(buf, end) {
+    if let Some(off) = m.buffer_offset(end) {
         drop(m);
         buf.place_cursor(&buf.iter_at_offset(off as i32));
     }
@@ -54,8 +54,8 @@ pub(crate) fn paste_text(buf: &gtk::TextBuffer, text: &str) -> bool {
     let Some(live) = crate::live::of(buf) else { return false };
     let (from, to) = selection(buf);
     let mut m = live.borrow_mut();
-    let (s, e) = (m.sequence_offset(buf, from), m.sequence_offset(buf, to));
-    let mut scratch = m.document(buf).clone();
+    let (s, e) = (m.sequence_offset(from), m.sequence_offset(to));
+    let mut scratch = m.document().clone();
     let mut ops = Vec::new();
     if e > s {
         let del = Op::Delete { at: s, len: e - s };
@@ -71,7 +71,7 @@ pub(crate) fn paste_text(buf: &gtk::TextBuffer, text: &str) -> bool {
     if ops.is_empty() || !m.apply_user_ops(buf, &ops, false) {
         return false;
     }
-    if let Some(off) = m.buffer_offset(buf, s + text.chars().count()) {
+    if let Some(off) = m.buffer_offset(s + text.chars().count()) {
         drop(m);
         buf.place_cursor(&buf.iter_at_offset(off as i32));
     }
@@ -101,31 +101,7 @@ pub(crate) fn insert_fragment(buf: &gtk::TextBuffer, frag: &Fragment) {
             .map(|line| Paragraph { style: Default::default(), runs: vec![Run::plain(line)] })
             .collect(),
     };
-    if replace_selection(buf, paras) {
-        return;
-    }
-    match frag {
-        Fragment::Text(paras) => {
-            for (i, p) in paras.iter().enumerate() {
-                if i > 0 {
-                    buf.insert_at_cursor("\n");
-                }
-                for run in &p.runs {
-                    let tags = crate::bridge::run_tags(buf, &run.style);
-                    let tags: Vec<&str> = tags.iter().map(String::as_str).collect();
-                    let mut iter = buf.iter_at_mark(&buf.get_insert());
-                    if tags.is_empty() {
-                        buf.insert(&mut iter, &run.text);
-                    } else {
-                        buf.insert_with_tags_by_name(&mut iter, &run.text, &tags);
-                    }
-                }
-            }
-        }
-        Fragment::Grid(_) => {
-            buf.insert_at_cursor(&frag.to_plain());
-        }
-    }
+    replace_selection(buf, paras);
 }
 
 /// Insert the image at `path` at the cursor, replacing the selection. The
@@ -146,8 +122,8 @@ pub(crate) fn insert_footnote(buf: &gtk::TextBuffer, text: &str) -> bool {
     let Some(live) = crate::live::of(buf) else { return false };
     let (_, end) = selection(buf);
     let mut m = live.borrow_mut();
-    let at = m.sequence_offset(buf, end);
-    let mut notes = m.document(buf).footnotes.clone();
+    let at = m.sequence_offset(end);
+    let mut notes = m.document().footnotes.clone();
     notes.push(text.to_string());
     let mut mark = Run::plain("");
     mark.style.footnote = Some(notes.len() - 1);
@@ -155,7 +131,7 @@ pub(crate) fn insert_footnote(buf: &gtk::TextBuffer, text: &str) -> bool {
     if !m.apply_user_ops(buf, &ops, false) {
         return false;
     }
-    if let Some(off) = m.buffer_offset(buf, at + 1) {
+    if let Some(off) = m.buffer_offset(at + 1) {
         drop(m);
         buf.place_cursor(&buf.iter_at_offset(off as i32));
     }
@@ -170,16 +146,14 @@ mod tests {
     fn live_buffer(text: &str) -> gtk::TextBuffer {
         let buf = gtk::TextBuffer::new(None);
         crate::actions::register_formatting_tags(&buf);
-        crate::bridge::render_to_buffer(&letters_core::Document::from_plain_text(text), &buf);
-        let live = crate::live::LiveModel::attach(&buf);
-        let _ = live.borrow_mut().document(&buf);
+        crate::live::LiveModel::attach(&buf, letters_core::Document::from_plain_text(text));
         buf
     }
 
-    fn reads(buf: &gtk::TextBuffer) -> (usize, usize) {
+    fn reads(buf: &gtk::TextBuffer) -> usize {
         let live = crate::live::of(buf).unwrap();
         let m = live.borrow();
-        (m.local_reads, m.full_reads)
+        m.foreign_edits
     }
 
     fn text(buf: &gtk::TextBuffer) -> String {
@@ -187,7 +161,7 @@ mod tests {
     }
 
     fn doc(buf: &gtk::TextBuffer) -> letters_core::Document {
-        crate::live::of(buf).unwrap().borrow_mut().document(buf).clone()
+        crate::live::of(buf).unwrap().borrow_mut().document().clone()
     }
 
     /// A pasted fragment replaces the selection, keeps its formatting and

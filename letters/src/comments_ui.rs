@@ -41,7 +41,7 @@ fn target(buf: &gtk::TextBuffer) -> Option<(usize, usize)> {
 pub fn add(buf: &gtk::TextBuffer, a: usize, b: usize, text: &str) -> Option<u32> {
     let live = crate::live::of(buf)?;
     let mut live = live.borrow_mut();
-    let (sa, sb) = (live.sequence_offset(buf, a), live.sequence_offset(buf, b));
+    let (sa, sb) = (live.sequence_offset(a), live.sequence_offset(b));
     let mut id = None;
     live.edit_with(buf, |doc| {
         let (ops, new) = comments::add(doc, sa, sb, &crate::review_ui::author(), &letters_core::track::now(), text).unwrap_or_default();
@@ -96,7 +96,7 @@ fn ask(tv: &adw::TabView) {
 fn thread_at_caret(buf: &gtk::TextBuffer) -> Option<Thread> {
     let caret = buf.iter_at_mark(&buf.get_insert()).offset().max(0) as usize;
     let live = crate::live::of(buf)?;
-    let threads = live.borrow_mut().comment_threads(buf);
+    let threads = live.borrow_mut().comment_threads();
     threads.into_iter().find(|(_, r)| r.is_some_and(|(a, b)| a <= caret && caret <= b)).map(|(t, _)| t)
 }
 
@@ -114,7 +114,7 @@ pub fn register_actions(app: &adw::Application, tv: &adw::TabView) {
         Box::new(|tv| {
             let Some(buf) = crate::dialogs::active_buffer(tv) else { return };
             let Some(live) = crate::live::of(&buf) else { return };
-            let threads = live.borrow_mut().comment_threads(&buf);
+            let threads = live.borrow_mut().comment_threads();
             let starts: Vec<usize> = threads.iter().filter(|(t, _)| !t.comment.resolved).filter_map(|(_, r)| r.map(|r| r.0)).collect();
             let caret = buf.iter_at_mark(&buf.get_insert()).offset().max(0) as usize;
             if let Some(at) = starts.iter().find(|s| **s > caret).or(starts.first()) {
@@ -256,7 +256,7 @@ pub fn comments_view(tv: &adw::TabView) -> gtk::Widget {
             }
             let Some(buf) = crate::dialogs::active_buffer(&tv) else { return };
             let Some(live) = crate::live::of(&buf) else { return };
-            let threads = live.borrow_mut().comment_threads(&buf);
+            let threads = live.borrow_mut().comment_threads();
             if shown.borrow().as_ref().map(|(t, _)| t) != Some(&threads) {
                 while let Some(r) = list.first_child() {
                     list.remove(&r);
@@ -334,40 +334,39 @@ mod tests {
     fn tab(text: &str) -> gtk::TextBuffer {
         let buf = gtk::TextBuffer::new(None);
         crate::actions::register_formatting_tags(&buf);
-        crate::live::LiveModel::attach(&buf);
+        crate::live::LiveModel::attach(&buf, letters_core::Document::default());
         crate::bridge::load_document(&letters_core::Document::from_plain_text(text), &buf);
         buf
     }
 
-    /// A comment is a tag in the buffer and a thread in the model, both
-    /// read back the same; replying, resolving and deleting are one undo
-    /// step each, and survive a whole-buffer re-read.
+    /// A comment is a thread in the model, its anchor on the commented
+    /// text; replying, resolving and deleting are one undo step each.
     #[test]
     fn comments_are_marks_both_views_agree_on() {
         gtk_test(|| {
             let buf = tab("one two three");
             let id = add(&buf, 4, 7, "Which two?").expect("added");
             let live = crate::live::of(&buf).unwrap();
-            let threads = live.borrow_mut().comment_threads(&buf);
+            let threads = live.borrow_mut().comment_threads();
             assert_eq!(threads.len(), 1);
             assert_eq!((threads[0].0.anchor.as_ref().unwrap().text.as_str(), threads[0].1), ("two", Some((4, 7))));
-            // Typing inside the comment is in it; the buffer agrees.
-            buf.insert(&mut buf.iter_at_offset(5), "w");
-            let doc = live.borrow_mut().document(&buf).clone();
-            assert_eq!(crate::bridge::capture_with_starts(&buf).0, doc);
+            // Typing inside the comment is in it.
+            buf.place_cursor(&buf.iter_at_offset(5));
+            crate::page_edit::type_text(&buf, "w");
+            let doc = live.borrow_mut().document().clone();
             assert_eq!(comments::thread(&doc, id).unwrap().anchor.unwrap().text, "twwo");
             edit(&buf, |d| comments::reply(d, id, "Ada", "2026-09-26T10:00:00Z", "The second").unwrap().0);
             edit(&buf, |d| comments::set_resolved(d, id, true));
-            let doc = live.borrow_mut().document(&buf).clone();
+            let doc = live.borrow_mut().document().clone();
             let t = comments::thread(&doc, id).unwrap();
             assert!(t.comment.resolved && t.replies.len() == 1);
             crate::live::undo(&buf, false);
             crate::live::undo(&buf, false);
-            let doc = live.borrow_mut().document(&buf).clone();
+            let doc = live.borrow_mut().document().clone();
             let t = comments::thread(&doc, id).unwrap();
             assert!(!t.comment.resolved && t.replies.is_empty(), "undone: {t:?}");
             edit(&buf, |d| comments::delete(d, id));
-            let doc = live.borrow_mut().document(&buf).clone();
+            let doc = live.borrow_mut().document().clone();
             assert!(doc.comments.is_empty() && doc.paragraphs[0].runs.iter().all(|r| r.style.comments.is_empty()));
             assert_eq!(buf.text(&buf.start_iter(), &buf.end_iter(), false), "one twwo three");
         });
