@@ -33,8 +33,10 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 # python-pptx has no Ubuntu package; Playwright ships its own Chromium.
+# scikit-image scores against Office as BetterOffice's report does
+# (office_bench.py), so it is pinned to the version that report names.
 RUN pip3 install --no-cache-dir --break-system-packages \
-      python-pptx==1.0.2 playwright==1.47.0 \
+      python-pptx==1.0.2 playwright==1.47.0 scikit-image==0.25.2 \
     && playwright install --with-deps chromium
 
 ENV RENDER_LAB=1

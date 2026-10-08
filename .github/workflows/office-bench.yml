@@ -1,0 +1,96 @@
+name: Render against Microsoft Office
+
+# Ours beside BetterOffice and LibreOffice, all scored against Microsoft
+# Office's own pages (Word/PowerPoint 16.112 exports at 150 DPI) from
+# BetterOffice's public corpus; see tools/render-lab/office_bench.py and
+# docs/research/07-ai-office-projects.md. BetterOffice's and LibreOffice's
+# scores come from BetterOffice's latest published report; ours are
+# rendered here. Per format the summary says whether BetterOffice still
+# comes closer to Office than we do more often than not ("reference": its
+# code is worth reading) or not ("drop").
+#
+# Weekly and on demand. It measures; it does not gate.
+
+on:
+  schedule:
+    - cron: '20 4 * * 1'
+  workflow_dispatch:
+
+concurrency:
+  group: office-bench-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  bench:
+    name: Against Office (${{ matrix.format }})
+    runs-on: ubuntu-24.04
+    timeout-minutes: 180
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - format: docx
+            app: letters
+          - format: pptx
+            app: decks
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4
+
+      - name: Build render-lab image
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7
+        with:
+          context: tools/render-lab
+          file: tools/render-lab/Containerfile
+          load: true
+          tags: render-lab
+          build-args: BASE=ghcr.io/${{ github.repository }}/gui-test:main
+          cache-from: type=gha,scope=render-lab
+
+      - name: Cache cargo
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
+        with:
+          path: |
+            ~/.cache/render-lab-cargo
+            target
+          key: render-lab-cargo-${{ matrix.app }}-${{ hashFiles('Cargo.lock') }}
+          restore-keys: |
+            render-lab-cargo-${{ matrix.app }}-
+            render-lab-cargo-
+
+      - name: Cache the corpus
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
+        with:
+          path: .cache/office-bench
+          key: office-bench-${{ matrix.format }}-${{ github.run_id }}
+          restore-keys: |
+            office-bench-${{ matrix.format }}-
+
+      - name: Render and score
+        run: |
+          mkdir -p "$HOME/.cache/render-lab-cargo"
+          docker run --rm -i \
+            -v "$PWD:/workspace" -v "$HOME/.cache/render-lab-cargo:/cargo-home" \
+            -e CARGO_HOME=/cargo-home -e PATH=/usr/local/cargo/bin:/usr/local/bin:/usr/bin:/bin \
+            -w /workspace render-lab bash -c "
+              cargo build --bin ${{ matrix.app }} &&
+              python3 tools/render-lab/office_bench.py office-bench-out \
+                --format ${{ matrix.format }} --cache .cache/office-bench"
+
+      - name: Job summary
+        if: always()
+        run: head -n 12 office-bench-out/bench.md >> "$GITHUB_STEP_SUMMARY" || true
+
+      - name: Upload report
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: office-bench-${{ matrix.format }}
+          path: |
+            office-bench-out/bench.json
+            office-bench-out/bench.md
+          retention-days: 30
