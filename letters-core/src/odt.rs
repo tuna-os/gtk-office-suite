@@ -2077,7 +2077,7 @@ fn read_parts(path: &str) -> Result<(Document, Vec<String>), String> {
                 }
                 "text:span" => {
                     let name = attr_val(&e, "text:style-name");
-                    let own = name.as_ref().and_then(|n| auto.text.get(n).cloned()).unwrap_or_default();
+                    let own = name.as_deref().map(|n| text_style(n, &auto, &named)).unwrap_or_default();
                     let mut st = inherit(span_stack.last(), own);
                     // Inline code is Writer's "Source Text", named or as
                     // the parent of an automatic style (#1205).
@@ -2578,6 +2578,21 @@ fn read_parts(path: &str) -> Result<(Document, Vec<String>), String> {
 
 /// A span's text style over the text style around it: what the span
 /// does not set, it takes from its paragraph (or outer span).
+/// A text style's look: an automatic style's or a named one's (styles.xml's
+/// "Responses", blue), over what its parents give it.
+fn text_style(name: &str, auto: &AutoStyles, named: &AutoStyles) -> RunStyle {
+    let mut chain = Vec::new();
+    let mut cur = Some(name.to_string());
+    for _ in 0..16 {
+        let Some(n) = cur else { break };
+        if let Some(st) = auto.text.get(&n).or_else(|| named.text.get(&n)) {
+            chain.push(st.clone());
+        }
+        cur = auto.text_parent.get(&n).or_else(|| named.text_parent.get(&n)).cloned();
+    }
+    chain.into_iter().rev().fold(None, |outer: Option<RunStyle>, own| Some(inherit(outer.as_ref(), own))).unwrap_or_default()
+}
+
 fn inherit(outer: Option<&RunStyle>, own: RunStyle) -> RunStyle {
     let Some(outer) = outer else { return own };
     RunStyle {
@@ -3348,6 +3363,27 @@ mod tests {
             assert_eq!(d.footer.as_deref(), Some("OFFICIAL"));
             assert!((d.page.unwrap().margin_left_pt - left).abs() < 1e-6, "{first:?}: {:?}", d.page);
         }
+    }
+
+    /// A span named by a style of styles.xml takes its look, with what its
+    /// parent gives it: the expression-of-interest form's "Responses"
+    /// placeholders are blue, and an automatic style over it keeps that.
+    #[test]
+    fn a_named_text_style_colours_its_spans() {
+        let styles = "<office:document-styles><office:styles>\
+             <style:style style:name=\"Base\" style:family=\"text\"><style:text-properties fo:font-weight=\"bold\"/></style:style>\
+             <style:style style:name=\"Responses\" style:family=\"text\" style:parent-style-name=\"Base\"><style:text-properties fo:color=\"#114F75\"/></style:style>\
+             </office:styles></office:document-styles>";
+        let content = "<office:document-content><office:automatic-styles>\
+             <style:style style:name=\"T1\" style:family=\"text\" style:parent-style-name=\"Responses\"><style:text-properties fo:font-style=\"italic\"/></style:style>\
+             </office:automatic-styles><office:body><office:text><text:p>Title: <text:span text:style-name=\"Responses\">Project title</text:span> \
+             <text:span text:style-name=\"T1\">Deadline</text:span></text:p></office:text></office:body></office:document-content>";
+        let d = read_package(content, styles);
+        let run = |t: &str| d.paragraphs[0].runs.iter().find(|r| r.text == t).unwrap_or_else(|| panic!("{t}: {:?}", d.paragraphs[0].runs)).style.clone();
+        let named = run("Project title");
+        assert_eq!((named.color.as_deref(), named.bold), (Some("114f75"), true), "the named style and its parent");
+        let auto = run("Deadline");
+        assert_eq!((auto.color.as_deref(), auto.bold, auto.italic), (Some("114f75"), true, true), "an automatic style over it");
     }
 
     #[test]
