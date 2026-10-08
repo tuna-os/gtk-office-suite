@@ -530,6 +530,7 @@ mod tests {
             insets: Some(Insets { left: 9.6, top: 4.8, right: 9.6, bottom: 4.8 }),
             autofit: None,
             placeholder: None,
+            frame: None,
         };
         let mut w = TextStyles::new("T");
         let inner: Vec<String> = ["t", "a", "b", "c"].iter().map(|s| s.to_string()).collect();

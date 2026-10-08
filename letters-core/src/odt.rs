@@ -308,15 +308,32 @@ struct OpenTable {
     filled: bool,
     /// Each row's style attribute (empty for a row without a height).
     row_styles: Vec<String>,
+    /// The table's merged cells.
+    spans: Vec<CellSpan>,
     /// Each shaded cell's style attribute, by (row, col).
     cell_styles: std::collections::HashMap<(u32, u32), String>,
 }
 
 impl OpenTable {
-    /// Open the cell at the current (row, col), with its fill's style.
-    fn open_cell(&self, body: &mut String) {
+    /// Whether the current cell is one a merged cell covers.
+    fn covered(&self) -> bool {
+        self.spans.iter().any(|s| s.contains(self.row, self.col) && (s.row, s.col) != (self.row, self.col))
+    }
+
+    /// Open the current cell: a merged cell says how far it spans, and a
+    /// position one covers is a `table:covered-table-cell`.
+    fn open_cell(&mut self, body: &mut String) {
+        self.filled = false;
+        if self.covered() {
+            body.push_str("<table:covered-table-cell>");
+            return;
+        }
+        let span = self.spans.iter().find(|s| (s.row, s.col) == (self.row, self.col));
+        let attrs = span.map_or(String::new(), |s| {
+            format!(" table:number-columns-spanned=\"{}\" table:number-rows-spanned=\"{}\"", s.cols, s.rows)
+        });
         let style = self.cell_styles.get(&(self.row, self.col)).map_or("", String::as_str);
-        body.push_str(&format!("<table:table-cell office:value-type=\"string\"{style}>"));
+        body.push_str(&format!("<table:table-cell office:value-type=\"string\"{style}{attrs}>"));
     }
 
     fn open_row(&self, body: &mut String) {
@@ -325,6 +342,10 @@ impl OpenTable {
     }
 
     fn close_cell(&mut self, body: &mut String) {
+        if self.covered() {
+            body.push_str("</table:covered-table-cell>");
+            return;
+        }
         if !self.filled {
             body.push_str("<text:p/>");
         }
@@ -348,7 +369,6 @@ impl OpenTable {
                 self.open_row(body);
             }
             self.open_cell(body);
-            self.filled = false;
         }
     }
 
@@ -625,7 +645,8 @@ fn content_xml(doc: &Document) -> String {
                         });
                         ((f.row, f.col), format!(" table:style-name=\"{name}\""))
                     }).collect();
-                    let t = OpenTable { id: c.table, rows, cols, row: 0, col: 0, filled: false, row_styles, cell_styles };
+                    let spans = doc.table_spans.get(&c.table).cloned().unwrap_or_default();
+                    let mut t = OpenTable { id: c.table, rows, cols, row: 0, col: 0, filled: false, row_styles, cell_styles, spans };
                     t.open_row(&mut body);
                     t.open_cell(&mut body);
                     table = Some(t);
@@ -1174,6 +1195,20 @@ struct AutoParaStyle {
     sets: [bool; 3],
 }
 
+/// Note the merged cell `e` opens at the current cell of `table` (id,
+/// row, column, …), if it spans more than one row or column. A covered
+/// cell spans nothing.
+fn note_span(spans: &mut std::collections::BTreeMap<u32, Vec<CellSpan>>, e: &quick_xml::events::BytesStart, table: &(u32, i64, i64, usize, bool)) {
+    if e.name().as_ref() != "table:table-cell" {
+        return;
+    }
+    let n = |a: &str| attr_val(e, a).and_then(|v| v.parse::<u32>().ok()).unwrap_or(1).clamp(1, 1024);
+    let (cols, rows) = (n("table:number-columns-spanned"), n("table:number-rows-spanned"));
+    if (cols > 1 || rows > 1) && table.1 >= 0 && table.2 >= 0 {
+        spans.entry(table.0).or_default().push(CellSpan { row: table.1 as u32, col: table.2 as u32, rows, cols });
+    }
+}
+
 /// Each `text:list-style` in `xml`: the label of each numbered level that
 /// has one other than "N." (`style:num-prefix`, `style:num-format` and
 /// `style:num-suffix`), by level, 0-based.
@@ -1668,6 +1703,35 @@ fn inherited_spacing(name: &str, auto: &AutoStyles, named: &AutoStyles) -> (Opti
     (before, after, line)
 }
 
+/// How a paragraph style's text looks: its own text properties, then what
+/// it leaves unset from the named styles it is based on, as Writer draws a
+/// form's "Coloured Box Headline" (bold, 14pt, based on Normal). The base
+/// paragraph style (Standard, Word's Normal, or one based on nothing) is
+/// the document's base font (`read_base_font`), not its runs'.
+fn para_text_style(name: &str, auto: &AutoStyles, named: &AutoStyles) -> RunStyle {
+    let mut cur = auto.para_parent.get(name).or_else(|| named.para_parent.get(name)).cloned();
+    let base = cur.is_none() || matches!(name, "Standard" | "Normal");
+    let own = auto.para_text.get(name).or_else(|| named.para_text.get(name).filter(|_| !base));
+    let mut style = own.cloned().unwrap_or_default();
+    let mut depth = 0;
+    while let Some(n) = cur {
+        let parent = auto.para_parent.get(&n).or_else(|| named.para_parent.get(&n)).cloned();
+        if depth >= 8 || parent.is_none() || matches!(n.as_str(), "Standard" | "Normal") {
+            break;
+        }
+        if let Some(own) = auto.para_text.get(&n).or_else(|| named.para_text.get(&n)) {
+            style.bold |= own.bold;
+            style.italic |= own.italic;
+            style.font_size_hp = style.font_size_hp.or(own.font_size_hp);
+            style.color = style.color.clone().or_else(|| own.color.clone());
+            style.font_family = style.font_family.clone().or_else(|| own.font_family.clone());
+        }
+        cur = parent;
+        depth += 1;
+    }
+    style
+}
+
 fn read_heading_styles(styles: &str) -> Vec<RunStyle> {
     let defs = parse_auto_styles(styles);
     let names = heading_style_names(styles);
@@ -1769,7 +1833,7 @@ fn read_parts(path: &str) -> Result<(Document, Vec<String>), String> {
 
     // styles.xml's named styles, the parents of content.xml's automatic ones.
     let named = parse_auto_styles(&styles);
-    let mut doc = Document { paragraphs: Vec::new(), footnotes: Vec::new(), header: None, footer: None, page: None, base_font: read_base_font(&styles), heading_styles: read_heading_styles(&styles), comments: Vec::new(), table_columns: Default::default(), table_rows: Default::default(), table_fills: Default::default() };
+    let mut doc = Document { paragraphs: Vec::new(), footnotes: Vec::new(), header: None, footer: None, page: None, base_font: read_base_font(&styles), heading_styles: read_heading_styles(&styles), comments: Vec::new(), table_columns: Default::default(), table_rows: Default::default(), table_spans: Default::default(), table_fills: Default::default() };
     let mut reader = Reader::from_str(&content);
     let mut in_body = false;
     let mut para: Option<Paragraph> = None;
@@ -1865,6 +1929,9 @@ fn read_parts(path: &str) -> Result<(Document, Vec<String>), String> {
     // Each outermost table's column widths; None once a column has none.
     let mut column_widths: std::collections::BTreeMap<u32, Option<Vec<f64>>> = Default::default();
     let mut row_heights: std::collections::BTreeMap<u32, Vec<Option<crate::model::RowHeight>>> = Default::default();
+    // Each table's merged cells (`table:number-columns-spanned`,
+    // `table:number-rows-spanned`).
+    let mut cell_spans: std::collections::BTreeMap<u32, Vec<CellSpan>> = Default::default();
     let mut cell_fills: std::collections::BTreeMap<u32, Vec<crate::model::CellFill>> = Default::default();
     // A shaded cell's fill, at the cell just counted.
     let note_fill = |fills: &mut std::collections::BTreeMap<u32, Vec<crate::model::CellFill>>, t: &(u32, i64, i64, usize, bool), e: &quick_xml::events::BytesStart| {
@@ -2069,6 +2136,7 @@ fn read_parts(path: &str) -> Result<(Document, Vec<String>), String> {
                     if let Some(t) = table.as_mut().filter(|t| t.3 == table_depth) {
                         t.2 += 1;
                         t.4 = false;
+                        note_span(&mut cell_spans, &e, t);
                         note_fill(&mut cell_fills, t, &e);
                     }
                 }
@@ -2196,7 +2264,14 @@ fn read_parts(path: &str) -> Result<(Document, Vec<String>), String> {
                     // The paragraph style's own text properties are how
                     // its text looks where no span says otherwise: a title
                     // written straight into a bold, 12pt paragraph.
-                    let text_base = attr_val(&e, "text:style-name").and_then(|n| auto.para_text.get(&n).cloned()).unwrap_or_default();
+                    let text_base = match attr_val(&e, "text:style-name") {
+                        // A heading looks as its level's style says
+                        // (`heading_styles`); only its own automatic
+                        // style's text properties are its runs'.
+                        Some(n) if para.as_ref().is_some_and(|p| p.style.heading.is_some()) => auto.para_text.get(&n).cloned().unwrap_or_default(),
+                        Some(n) => para_text_style(&n, &auto, &named),
+                        None => RunStyle::default(),
+                    };
                     span_stack.push(text_base);
                     paragraph_bases += 1;
                 }
@@ -2293,6 +2368,7 @@ fn read_parts(path: &str) -> Result<(Document, Vec<String>), String> {
                 "table:table-cell" | "table:covered-table-cell" => {
                     if let Some(t) = table.as_mut().filter(|t| t.3 == table_depth) {
                         t.2 += 1;
+                        note_span(&mut cell_spans, &e, t);
                         note_fill(&mut cell_fills, t, &e);
                         doc.paragraphs.push(Paragraph { style: ParaStyle { table_cell: cell_of(&table), ..Default::default() }, runs: Vec::new() });
                     }
@@ -2615,6 +2691,7 @@ fn read_parts(path: &str) -> Result<(Document, Vec<String>), String> {
     doc.ensure_non_empty();
     doc.table_columns = column_widths.into_iter().filter_map(|(t, w)| Some((t, w.filter(|w| !w.is_empty())?))).collect();
     doc.table_rows = row_heights;
+    doc.table_spans = cell_spans;
     doc.table_fills = cell_fills;
     // A column count LibreOffice recorded on a section instead of on the
     // page layout. Only consulted when the page layout said nothing, so
@@ -2839,6 +2916,30 @@ mod tests {
         let path = dir.path().join("t.odt");
         write(doc, path.to_str().unwrap()).expect("write odt");
         read(path.to_str().unwrap()).expect("read odt")
+    }
+
+    /// Merged cells survive a save: `table:number-columns-spanned` and
+    /// `-rows-spanned` on the cell, and a `table:covered-table-cell` at
+    /// each position it covers.
+    #[test]
+    fn merged_cells_survive() {
+        let mut d = Document::from_plain_text("after");
+        let table = d.insert_table_at(0, 3, 3);
+        for p in d.paragraphs.iter_mut() {
+            if let Some(c) = p.style.table_cell {
+                if (c.row, c.col) == (0, 0) || c.row > 0 && c.col > 0 || (c.row, c.col) == (1, 0) {
+                    p.runs = vec![Run::plain(format!("r{}c{}", c.row, c.col))];
+                }
+            }
+        }
+        let spans = vec![CellSpan { row: 0, col: 0, rows: 1, cols: 3 }, CellSpan { row: 1, col: 0, rows: 2, cols: 1 }];
+        d.table_spans.insert(table, spans.clone());
+        let rt = round_trip(&d);
+        assert_eq!(rt.table_spans.values().collect::<Vec<_>>(), [&spans]);
+        let texts = |d: &Document| -> Vec<(u32, u32, String)> {
+            d.paragraphs.iter().filter_map(|p| p.style.table_cell.map(|c| (c.row, c.col, p.text()))).filter(|(_, _, t)| !t.is_empty()).collect()
+        };
+        assert_eq!(texts(&rt), texts(&d));
     }
 
     /// A numbered item's label survives a save: each set of level labels
@@ -3425,6 +3526,32 @@ mod tests {
         assert_eq!((named.color.as_deref(), named.bold), (Some("114f75"), true), "the named style and its parent");
         let auto = run("Deadline");
         assert_eq!((auto.color.as_deref(), auto.bold, auto.italic), (Some("114f75"), true, true), "an automatic style over it");
+    }
+
+    /// A paragraph named after a style in styles.xml takes its text
+    /// properties and the ones its parents set: the form's "Coloured Box
+    /// Headline" is bold and 14pt. Normal, the base, is the document's base
+    /// font, not its runs'; a heading keeps its level's look.
+    #[test]
+    fn a_named_paragraph_style_styles_its_text() {
+        let styles = "<office:document-styles><office:styles>\
+             <style:style style:name=\"Normal\" style:family=\"paragraph\"><style:text-properties fo:font-size=\"10pt\" fo:color=\"#222222\"/></style:style>\
+             <style:style style:name=\"Box\" style:family=\"paragraph\" style:parent-style-name=\"Normal\"><style:text-properties fo:color=\"#114F75\"/></style:style>\
+             <style:style style:name=\"BoxHeadline\" style:family=\"paragraph\" style:parent-style-name=\"Box\"><style:text-properties fo:font-weight=\"bold\" fo:font-size=\"14pt\"/></style:style>\
+             <style:style style:name=\"H\" style:family=\"paragraph\" style:parent-style-name=\"Box\"><style:text-properties fo:font-weight=\"bold\"/></style:style>\
+             </office:styles></office:document-styles>";
+        let content = "<office:document-content><office:body><office:text>\
+             <text:p text:style-name=\"BoxHeadline\">Important</text:p>\
+             <text:p text:style-name=\"Normal\">Body</text:p>\
+             <text:h text:style-name=\"H\" text:outline-level=\"2\">Heading</text:h>\
+             </office:text></office:body></office:document-content>";
+        let d = read_package(content, styles);
+        let first = |i: usize| d.paragraphs[i].runs[0].style.clone();
+        let head = first(0);
+        assert_eq!((head.bold, head.font_size_hp, head.color.as_deref()), (true, Some(28), Some("114f75")), "its own and its parent's");
+        let body = first(1);
+        assert_eq!((body.bold, body.font_size_hp, body.color.as_deref()), (false, None, None), "the base style is the base font");
+        assert_eq!(first(2).color, None, "a heading looks as its level says");
     }
 
     #[test]

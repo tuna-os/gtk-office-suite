@@ -342,6 +342,7 @@ impl SpText {
             insets: self.insets,
             autofit: self.autofit,
             placeholder: None,
+            frame: None,
         }
     }
 }

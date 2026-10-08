@@ -554,6 +554,40 @@ fn shapes_xml(
     let mut pages = String::new();
         for obj in shapes {
             match obj {
+                // A box with a shape of its own is that shape holding the
+                // text, as Impress writes one: a custom shape painted by a
+                // graphic style.
+                SlideObject::TextBox { text, x, y, w, h, rotation, runs, body } if body.frame.is_some() => {
+                    use crate::engine::shape::ShapeKind;
+                    let frame = body.frame.as_ref().expect("matched on it");
+                    let inner: Vec<String> = if runs.is_empty() {
+                        text.split('\n').map(esc).collect()
+                    } else {
+                        crate::engine::text_body::paragraphs(runs)
+                            .iter()
+                            .map(|p| p.iter().map(|r| run_span(r, style_of(&r.style), prefix)).collect())
+                            .collect()
+                    };
+                    let paras = if body.is_plain() {
+                        inner.iter().map(|l| format!("<text:p>{l}</text:p>")).collect()
+                    } else {
+                        graphics.text.paragraphs(body, &inner)
+                    };
+                    let gs = graphics.name_of(&frame.style);
+                    let ty = match &frame.kind {
+                        ShapeKind::Rect => "rectangle".to_string(),
+                        ShapeKind::RoundRect { .. } => "round-rectangle".to_string(),
+                        ShapeKind::Ellipse => "ellipse".to_string(),
+                        ShapeKind::Triangle => "isosceles-triangle".to_string(),
+                        ShapeKind::Diamond => "diamond".to_string(),
+                        other => format!("ooxml-{}", other.prst()),
+                    };
+                    pages.push_str(&format!(
+                        "<draw:custom-shape draw:style-name=\"{gs}\" {}>{paras}\
+                         <draw:enhanced-geometry draw:type=\"{ty}\"/></draw:custom-shape>",
+                        geometry(*x, *y, *w, *h, *rotation)
+                    ));
+                }
                 SlideObject::TextBox { text, x, y, w, h, rotation, runs, body } if !body.is_plain() => {
                     // Paragraph styles, lists and the frame's anchor and
                     // padding (odp_text.rs).
@@ -608,15 +642,30 @@ fn shapes_xml(
                     let cols = table.rows.first().map_or(0, |r| r.len());
                     let mut t = format!("<draw:frame {}><table:table>", geometry(*x, *y, *w, *h, *rotation));
                     t.push_str(&"<table:table-column/>".repeat(cols));
-                    for row in &table.rows {
+                    let owners = table.owners();
+                    for (r, row) in table.rows.iter().enumerate() {
                         t.push_str("<table:table-row>");
-                        for cell in row {
+                        for (c, cell) in row.iter().enumerate() {
+                            // A cell a merged one covers is ODF's covered
+                            // cell; the merged one says how far it spans.
+                            if owners.get(r).and_then(|o| o.get(c)).is_some_and(|o| *o != (r, c)) {
+                                t.push_str("<table:covered-table-cell/>");
+                                continue;
+                            }
                             let inner: String = if cell.runs.is_empty() {
                                 "<text:p/>".to_string()
                             } else {
                                 styled_paragraphs(&cell.runs, style_of, prefix)
                             };
-                            t.push_str(&format!("<table:table-cell>{inner}</table:table-cell>"));
+                            let (cs, rs) = cell.span();
+                            let mut span = String::new();
+                            if cs > 1 {
+                                span.push_str(&format!(" table:number-columns-spanned=\"{cs}\""));
+                            }
+                            if rs > 1 {
+                                span.push_str(&format!(" table:number-rows-spanned=\"{rs}\""));
+                            }
+                            t.push_str(&format!("<table:table-cell{span}>{inner}</table:table-cell>"));
                         }
                         t.push_str("</table:table-row>");
                     }
@@ -1512,7 +1561,7 @@ fn parse_pages(
     let mut paras: Vec<crate::engine::ParaStyle> = Vec::new();
     let body_of = |frame_style: &Option<String>, paras: &mut Vec<crate::engine::ParaStyle>| {
         let (anchor, insets) = text_defs.frame(frame_style.as_deref(), scale);
-        crate::engine::TextBody { paras: std::mem::take(paras), anchor, insets, autofit: None, placeholder: None }
+        crate::engine::TextBody { paras: std::mem::take(paras), anchor, insets, autofit: None, placeholder: None, frame: None }
     };
 
     // `svg:x`/`svg:y` place an unrotated shape; a rotated one carries
@@ -1839,7 +1888,19 @@ fn parse_pages(
                                     s.notes = text;
                                 }
                             } else if !text.is_empty() {
-                                s.objects.push(SlideObject::TextBox { text, x, y, w, h, rotation, runs, body: body_of(&frame_style, &mut paras) });
+                                let mut body = body_of(&frame_style, &mut paras);
+                                // The shape the text sits in, when it is
+                                // painted (a text box Impress converted is a
+                                // custom shape painted with nothing).
+                                body.frame = frame_style
+                                    .as_deref()
+                                    .and_then(|n| graphics.style(n, scale.0))
+                                    .filter(|st| st.fill.is_some() || st.gradient.is_some() || st.stroke.is_some())
+                                    .map(|style| crate::engine::text_body::Frame {
+                                        kind: crate::odp_graphics::kind_of("draw:custom-shape", shape_type.as_deref(), None),
+                                        style,
+                                    });
+                                s.objects.push(SlideObject::TextBox { text, x, y, w, h, rotation, runs, body });
                             } else if let Some(style) = frame_style.as_deref().and_then(|n| graphics.style(n, scale.0)) {
                                 let kind = crate::odp_graphics::kind_of("draw:custom-shape", shape_type.as_deref(), None);
                                 s.objects.push(SlideObject::Shape { kind, x, y, w, h, rotation, style });
