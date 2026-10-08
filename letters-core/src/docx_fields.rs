@@ -50,6 +50,14 @@ pub fn template(part_xml: &str) -> Option<String> {
         let name = &rest[1..name_end];
         let tag_end = at + rest.find('>').map_or(rest.len(), |e| e + 1);
         match name {
+            // A text box floats over the header or footer: its text is not
+            // the part's (as rdocx's own reading leaves it out), and a
+            // fallback is a second copy of what precedes it.
+            "w:txbxContent" | "mc:Fallback" if !rest[..rest.find('>').unwrap_or(0)].ends_with('/') => {
+                let close = format!("</{name}>");
+                i = part_xml[tag_end..].find(&close).map_or(part_xml.len(), |c| tag_end + c + close.len());
+                continue;
+            }
             "w:p" => {
                 if paragraphs > 0 {
                     out.push('\n');
@@ -176,6 +184,20 @@ mod tests {
         let other = "<w:hdr><w:p><w:r><w:fldChar w:fldCharType=\"begin\"/></w:r><w:r><w:instrText>DATE</w:instrText></w:r>\
                      <w:r><w:fldChar w:fldCharType=\"separate\"/></w:r><w:r><w:t>today</w:t></w:r><w:r><w:fldChar w:fldCharType=\"end\"/></w:r></w:p></w:hdr>";
         assert_eq!(template(other), None);
+    }
+
+    /// The crime-supervisor form's footer: an "OFFICIAL" text box (and its
+    /// VML fallback, a second copy) in the paragraph with the page number.
+    /// The text box floats; it is not footer text, and used to come out as
+    /// "OFFICIAL\nOFFICIAL{page}".
+    #[test]
+    fn text_boxes_and_fallbacks_are_not_the_parts_text() {
+        let footer = "<w:ftr><w:p><w:r><mc:AlternateContent><mc:Choice Requires=\"wps\"><w:drawing><wp:anchor><wps:txbx>\
+                      <w:txbxContent><w:p><w:r><w:t>OFFICIAL</w:t></w:r></w:p></w:txbxContent></wps:txbx></wp:anchor></w:drawing></mc:Choice>\
+                      <mc:Fallback><w:pict><v:textbox><w:txbxContent><w:p><w:r><w:t>OFFICIAL</w:t></w:r></w:p></w:txbxContent></v:textbox></w:pict></mc:Fallback>\
+                      </mc:AlternateContent></w:r><w:fldSimple w:instr=\" PAGE \"><w:r><w:t>2</w:t></w:r></w:fldSimple></w:p>\
+                      <w:p><w:r><w:t>October 2025</w:t></w:r></w:p></w:ftr>";
+        assert_eq!(template(footer).as_deref(), Some("{page}\nOctober 2025"));
     }
 
     #[test]
