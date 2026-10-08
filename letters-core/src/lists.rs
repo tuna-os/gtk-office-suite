@@ -6,7 +6,7 @@
 // document text. The editor buffer, the page layout and exporters all ask
 // here, so a numbered item cannot be "3." on screen and "1." in print.
 
-use crate::model::{ListKind, ParaStyle};
+use crate::model::{ListKind, ListLabel, NumberFormat, ParaStyle};
 
 /// Indent per nesting level, in points. Word's built-in "List Bullet N"
 /// styles and LibreOffice's rendering of them step 0.25in per level.
@@ -30,13 +30,19 @@ pub fn text_indent_pt(level: u8) -> f64 {
 /// Numbering runs per nesting level. A deeper item does not interrupt the
 /// count of the level above it (1. / • / 2.), a shallower item restarts
 /// every deeper level, and anything that is not a list item ends the list.
-/// `list_start` restarts the count at that item.
+/// `list_start` restarts the count at that item. A table cell's list is
+/// its own: each cell counts from the start.
 pub fn ordinals<'a>(styles: impl IntoIterator<Item = &'a ParaStyle>) -> Vec<u32> {
     let mut counters = [0u32; MAX_LEVEL as usize + 1];
+    let mut cell = None;
     styles
         .into_iter()
         .map(|style| {
-            if style.list == ListKind::None || style.table_cell.is_some() {
+            if style.table_cell != cell {
+                counters = [0; MAX_LEVEL as usize + 1];
+                cell = style.table_cell;
+            }
+            if style.list == ListKind::None {
                 counters = [0; MAX_LEVEL as usize + 1];
                 return 0;
             }
@@ -67,6 +73,55 @@ pub fn marker(kind: ListKind, ordinal: u32) -> Option<String> {
     }
 }
 
+/// The marker of the item styled `style`: as `marker`, but a numbered
+/// item shows its own label (`ParaStyle::list_label`) when it has one.
+pub fn marker_for(style: &ParaStyle, ordinal: u32) -> Option<String> {
+    match (&style.list, &style.list_label) {
+        (ListKind::Numbered, Some(label)) => Some(label_text(label, ordinal)),
+        (kind, _) => marker(*kind, ordinal),
+    }
+}
+
+/// `label` around `n`.
+pub fn label_text(label: &ListLabel, n: u32) -> String {
+    format!("{}{}{}", label.prefix, format_number(label.format, n), label.suffix)
+}
+
+/// `n` in `format`: 1, a, A, i, I, or nothing. Letters go on as Word and
+/// LibreOffice count them: z, aa, bb.
+pub fn format_number(format: NumberFormat, n: u32) -> String {
+    match format {
+        NumberFormat::Decimal => n.to_string(),
+        NumberFormat::LowerLetter | NumberFormat::UpperLetter if n > 0 => {
+            let letter = char::from(b'a' + ((n - 1) % 26) as u8);
+            let s = letter.to_string().repeat(((n - 1) / 26 + 1) as usize);
+            if format == NumberFormat::UpperLetter { s.to_uppercase() } else { s }
+        }
+        NumberFormat::LowerRoman | NumberFormat::UpperRoman if n > 0 => {
+            let s = roman(n);
+            if format == NumberFormat::LowerRoman { s.to_lowercase() } else { s }
+        }
+        NumberFormat::None => String::new(),
+        // Letters and roman numerals have no zero.
+        _ => n.to_string(),
+    }
+}
+
+fn roman(mut n: u32) -> String {
+    const DIGITS: [(u32, &str); 13] = [
+        (1000, "M"), (900, "CM"), (500, "D"), (400, "CD"), (100, "C"), (90, "XC"),
+        (50, "L"), (40, "XL"), (10, "X"), (9, "IX"), (5, "V"), (4, "IV"), (1, "I"),
+    ];
+    let mut s = String::new();
+    for (value, digits) in DIGITS {
+        while n >= value {
+            s.push_str(digits);
+            n -= value;
+        }
+    }
+    s
+}
+
 /// The bullet glyph. U+2022, as Word's and LibreOffice's default bullets.
 pub const BULLET: char = '\u{2022}';
 
@@ -84,6 +139,20 @@ mod tests {
             style: ParaStyle { list: kind, list_level: level, ..Default::default() },
             runs: vec![crate::model::Run::plain("x")],
         }
+    }
+
+    #[test]
+    fn a_label_wraps_the_number_in_its_format() {
+        let label = |prefix: &str, format, suffix: &str| ListLabel { prefix: prefix.into(), format, suffix: suffix.into() };
+        assert_eq!(label_text(&label("3.", NumberFormat::Decimal, ""), 2), "3.2");
+        assert_eq!(label_text(&label("(", NumberFormat::LowerLetter, ")"), 28), "(bb)");
+        assert_eq!(label_text(&label("", NumberFormat::UpperRoman, "."), 14), "XIV.");
+        assert_eq!(label_text(&label("", NumberFormat::LowerRoman, ""), 9), "ix");
+        assert_eq!(label_text(&label("2.1", NumberFormat::None, ""), 3), "2.1");
+        let mut style = ParaStyle { list: ListKind::Numbered, ..Default::default() };
+        assert_eq!(marker_for(&style, 4).as_deref(), Some("4."));
+        style.list_label = Some(label("", NumberFormat::UpperLetter, ")"));
+        assert_eq!(marker_for(&style, 4).as_deref(), Some("D)"));
     }
 
     #[test]
@@ -106,6 +175,18 @@ mod tests {
         let n = ListKind::Numbered;
         let paras = [item(n, 0), item(n, 0), item(ListKind::None, 0), item(n, 0)];
         assert_eq!(ords(&paras), vec![1, 2, 0, 1]);
+    }
+
+    #[test]
+    fn a_cell_counts_its_own_list() {
+        let n = ListKind::Numbered;
+        let in_cell = |col| {
+            let mut p = item(n, 0);
+            p.style.table_cell = Some(crate::model::TableCell { table: 0, row: 0, col });
+            p
+        };
+        let paras = [item(n, 0), in_cell(0), in_cell(0), in_cell(1), item(n, 0)];
+        assert_eq!(ords(&paras), vec![1, 1, 2, 1, 1]);
     }
 
     #[test]
