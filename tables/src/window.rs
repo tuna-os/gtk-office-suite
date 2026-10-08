@@ -1657,6 +1657,9 @@ impl TablesWindow {
                                 // collapsing to a single "Sheet1".
                                 match load_workbook(&path_str) {
                                     Ok((engine, sheets)) => {
+                                        // The sheet the file was left on,
+                                        // never a hidden one (`opening_sheet`).
+                                        let opening = tables_core::io::opening_sheet(&path_str);
                                         let names = sheets
                                             .iter()
                                             .map(|sheet| sheet.name.clone())
@@ -1674,11 +1677,12 @@ impl TablesWindow {
                                                 .collect();
                                             attach_xlsx_sidecars(&path_str, &ss.sheets);
                                             ss.active_sheet = 0;
+                                            let _ = ss.switch_sheet(opening.min(names.len().saturating_sub(1)));
                                         }
                                         // Update sheet switcher
                                         sm.splice(0, sm.n_items(), &[]);
                                         for name in &names { sm.append(name); }
-                                        sd.set_selected(0);
+                                        sd.set_selected(opening.min(names.len().saturating_sub(1)) as u32);
                                         fx.set_text("");
                                         st.set_visible_child_name("editor");
                                         let name = std::path::Path::new(&path_str)
@@ -2187,6 +2191,8 @@ impl TablesWindow {
         // Format dispatch lives in tables_core::io::load_workbook so every
         // open route (CLI, dialog, drag-and-drop) supports the same formats.
         let (engine, sheets) = load_workbook(path)?;
+        // The sheet the file was left on, never a hidden one.
+        let opening = tables_core::io::opening_sheet(path).min(sheets.len().saturating_sub(1));
         let names = sheets
             .iter()
             .map(|sheet| sheet.name.clone())
@@ -2200,12 +2206,13 @@ impl TablesWindow {
                 .collect();
             attach_xlsx_sidecars(path, &state.sheets);
             state.active_sheet = 0;
+            let _ = state.switch_sheet(opening);
         }
         self.sheet_model.splice(0, self.sheet_model.n_items(), &[]);
         for name in names {
             self.sheet_model.append(&name);
         }
-        self.sheet_switcher.set_selected(0);
+        self.sheet_switcher.set_selected(opening as u32);
         self.fx_entry.set_text("");
         self.stack.set_visible_child_name("editor");
         let name = std::path::Path::new(path)

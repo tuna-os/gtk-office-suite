@@ -34,7 +34,7 @@ pub use xlsx_styles::{parse_cell_styles, XfStyle};
 pub use condrules::read_cond_rules_from_xlsx;
 pub use load::{load_file_into_engine, load_ods_workbook, load_workbook, load_xls_workbook,
     load_xlsx_workbook, load_xlsx_workbook_with_report};
-pub use props::{read_sheet_props_from_ods, read_sheet_props_from_xlsx, SheetXlsxProps};
+pub use props::{opening_sheet, read_sheet_props_from_ods, read_sheet_props_from_xlsx, SheetXlsxProps};
 pub use save::{
     save_sheets_to_xlsx, save_sheets_to_xlsx_bytes, save_sheets_to_xlsx_with_engine,
     save_sheets_to_xlsx_with_opaque,
