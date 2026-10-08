@@ -6,7 +6,7 @@
 // flattened (see read()). Fidelity is measured by tests/docx.rs and the
 // LO-authored corpus in tests/lo_parity.rs.
 
-use crate::model::{Alignment, Document, ListKind, PageGeometry, Paragraph, ParaStyle, Run, RunStyle};
+use crate::model::{Alignment, Document, ListKind, ListLabel, NumberFormat, PageGeometry, Paragraph, ParaStyle, Run, RunStyle};
 use rdocx_oxml::shared::ST_Jc;
 
 /// The body-paragraph properties rdocx does not hand back, in twips.
@@ -489,7 +489,7 @@ fn read_opened(path: &str, doc: rdocx::Document) -> Result<Document, String> {
             apply_strict_indents(&mut para.style, r);
         }
         list_indent_from_declared(&doc, p, &mut para.style);
-        word_numbers.push(counter.next(&doc, p, &para.style));
+        word_numbers.push(counter.number(&doc, p, &mut para.style));
         paragraphs.push(para);
         carried_break = pending_break;
     }
@@ -853,15 +853,29 @@ pub fn write(doc: &Document, path: impl AsRef<std::path::Path>) -> Result<(), St
             // are plain paragraphs on that numId, which is the XML the
             // builder would have written anyway.
             (ListKind::Bullet | ListKind::Numbered, Some(num_id)) => out.add_paragraph("").numbering(num_id, level),
-            (kind, None) => {
-                let _ = if kind == ListKind::Bullet {
-                    out.add_bullet_list_item("", level)
-                } else {
-                    out.add_numbered_list_item("", level)
-                };
-                list_ids[usize::from(kind == ListKind::Numbered)] =
-                    out.paragraphs().last().and_then(|p| p.numbering()).map(|(num_id, _)| num_id);
+            (ListKind::Bullet, None) => {
+                let _ = out.add_bullet_list_item("", level);
+                list_ids[0] = out.paragraphs().last().and_then(|p| p.numbering()).map(|(num_id, _)| num_id);
                 out.last_paragraph_mut().expect("the list item just added")
+            }
+            // Every level "N.", as Letters draws a numbered item with no
+            // label of its own: rdocx's own definition letters the second
+            // level and numbers the third in roman, which Word and
+            // LibreOffice showed and the reader read back as labels.
+            (ListKind::Numbered, None) => {
+                let levels = vec![rdocx::ListLevel::decimal(); 9];
+                let id = out.add_numbering_definition(&levels).and_then(|d| out.add_numbering_instance(d, &[]));
+                match id {
+                    Ok(id) => {
+                        list_ids[1] = Some(id);
+                        out.add_paragraph("").numbering(id, level)
+                    }
+                    Err(_) => {
+                        let _ = out.add_numbered_list_item("", level);
+                        list_ids[1] = out.paragraphs().last().and_then(|p| p.numbering()).map(|(num_id, _)| num_id);
+                        out.last_paragraph_mut().expect("the list item just added")
+                    }
+                }
             }
         };
         if let Some(level) = para.style.heading {
@@ -947,16 +961,31 @@ pub fn write(doc: &Document, path: impl AsRef<std::path::Path>) -> Result<(), St
         // instance of the numbered list's definition, with a start
         // override at its level, which the items after it continue.
         if let (ListKind::Numbered, Some(mut num_id)) = (para.style.list, list_ids[1]) {
+            // So does an item labelled otherwise than its level of the
+            // instance: the new instance's override replaces the level, and
+            // keeps the labels the instance gave its other levels.
             let number = ordinals[i - 1];
-            if word.next(num_id, level) != number {
+            let label = &para.style.list_label;
+            if word.next(num_id, level) != number || word.label(num_id, level) != label.as_ref() {
                 let definition = out.numbering_instance(num_id).map(|n| n.definition_id);
-                let override_ = rdocx::NumberingLevelOverride {
-                    level, start: Some(number), replacement: None, paragraph_style_link: None, has_unmodeled_properties: false,
-                };
-                if let Some(Ok(id)) = definition.map(|d| out.add_numbering_instance(d, &[override_])) {
+                let mut labels = word.labels.get(&num_id).cloned().unwrap_or_default();
+                labels[level.min(8) as usize] = label.clone();
+                let overrides: Vec<rdocx::NumberingLevelOverride> = (0..9u32)
+                    .filter(|&l| l == level || labels[l as usize].is_some())
+                    .map(|l| rdocx::NumberingLevelOverride {
+                        level: l,
+                        start: (l == level).then_some(number),
+                        replacement: (labels[l as usize].is_some() || word.label(num_id, l).is_some())
+                            .then(|| word_level(labels[l as usize].as_ref(), l, (l == level).then_some(number))),
+                        paragraph_style_link: None,
+                        has_unmodeled_properties: false,
+                    })
+                    .collect();
+                if let Some(Ok(id)) = definition.map(|d| out.add_numbering_instance(d, &overrides)) {
                     out.last_paragraph_mut().expect("the list item").set_numbering(id, level);
                     list_ids[1] = Some(id);
                     word.restart(id, level, number);
+                    word.labels.insert(id, labels);
                     num_id = id;
                 }
             }
@@ -1333,15 +1362,44 @@ fn run_page_break(p: &rdocx::ParagraphRef<'_>) -> RunPageBreak {
     RunPageBreak { leading, trailing: break_after_text }
 }
 
+/// A numbering level labelled `label` ("N." for `None`), Word's level
+/// text: the prefix, the level's own placeholder, the suffix.
+fn word_level(label: Option<&ListLabel>, level: u32, start: Option<u32>) -> rdocx::ListLevel {
+    let plain = ListLabel { suffix: ".".into(), ..Default::default() };
+    let label = label.unwrap_or(&plain);
+    let format = match label.format {
+        NumberFormat::Decimal => rdocx::ListNumberFormat::Decimal,
+        NumberFormat::LowerLetter => rdocx::ListNumberFormat::LowerLetter,
+        NumberFormat::UpperLetter => rdocx::ListNumberFormat::UpperLetter,
+        NumberFormat::LowerRoman => rdocx::ListNumberFormat::LowerRoman,
+        NumberFormat::UpperRoman => rdocx::ListNumberFormat::UpperRoman,
+        NumberFormat::None => rdocx::ListNumberFormat::None,
+    };
+    // A "%" of the label's own would read as a placeholder.
+    let literal = |t: &str| t.replace('%', "");
+    let own = if label.format == NumberFormat::None { String::new() } else { format!("%{}", level + 1) };
+    let level = rdocx::ListLevel::new(format).level_text(format!("{}{own}{}", literal(&label.prefix), literal(&label.suffix)));
+    match start {
+        Some(n) => level.start(n),
+        None => level,
+    }
+}
+
 /// The numbers Word will give the numbered items written so far: per list
 /// instance and level, the last number shown and where a level starts.
 #[derive(Default)]
 struct WordNumbers {
     counts: std::collections::HashMap<u32, [Option<u32>; 9]>,
     starts: std::collections::HashMap<(u32, u32), u32>,
+    /// The levels an instance labels otherwise than "N." (`word_level`).
+    labels: std::collections::HashMap<u32, [Option<ListLabel>; 9]>,
 }
 
 impl WordNumbers {
+    fn label(&self, num_id: u32, level: u32) -> Option<&ListLabel> {
+        self.labels.get(&num_id)?[level.min(8) as usize].as_ref()
+    }
+
     /// The number Word gives the next item at `level` of `num_id`.
     fn next(&self, num_id: u32, level: u32) -> u32 {
         let last = self.counts.get(&num_id).and_then(|c| c[level.min(8) as usize]);
@@ -1377,7 +1435,9 @@ struct WordCounter {
 }
 
 impl WordCounter {
-    fn next(&mut self, doc: &rdocx::Document, p: &rdocx::ParagraphRef<'_>, style: &ParaStyle) -> Option<u32> {
+    /// Count the item `p`, styled `style`, and give it its label
+    /// (`list_label`); Word's number for it, when it is a numbered item.
+    fn number(&mut self, doc: &rdocx::Document, p: &rdocx::ParagraphRef<'_>, style: &mut ParaStyle) -> Option<u32> {
         if style.list != ListKind::Numbered {
             return None;
         }
@@ -1385,11 +1445,82 @@ impl WordCounter {
         let at = usize::from(style.list_level);
         let counts = self.counts.entry(num_id).or_default();
         counts[at + 1..].iter_mut().for_each(|c| *c = None);
-        let first = || doc.numbering_level(num_id, level).map_or(1, |l| l.start);
-        let n = style.list_start.unwrap_or_else(|| counts[at].map_or_else(first, |c| c + 1));
+        let first = |l: u32| numbering_level(doc, num_id, l).map_or(1, |l| l.0);
+        let n = style.list_start.unwrap_or_else(|| counts[at].map_or_else(|| first(level), |c| c + 1));
         counts[at] = Some(n);
+        // The levels above this one, as Word shows them in "%1.%2": the
+        // number each is at, or its first number before any item.
+        let shown = |k: u32| counts.get(k as usize).copied().flatten().unwrap_or_else(|| first(k));
+        let format = |k: u32| numbering_level(doc, num_id, k).map_or(NumberFormat::Decimal, |l| l.1);
+        let text = numbering_level(doc, num_id, level).and_then(|l| l.2);
+        style.list_label = text.and_then(|t| word_label(&t, level, format(level), |k| (shown(k), format(k))));
         Some(n)
     }
+}
+
+/// Level `level` of list instance `num_id`: its first number, format and
+/// level text. The instance's own replacement of the level (a
+/// `w:lvlOverride` holding a `w:lvl`) wins over its definition's.
+fn numbering_level(doc: &rdocx::Document, num_id: u32, level: u32) -> Option<(u32, NumberFormat, Option<String>)> {
+    let replaced = doc.numbering_instance(num_id).and_then(|n| {
+        n.level_overrides.into_iter().find(|o| o.level == level).and_then(|o| o.replacement)
+    });
+    if let Some(l) = replaced {
+        let format = match l.format {
+            rdocx::ListNumberFormat::LowerLetter => NumberFormat::LowerLetter,
+            rdocx::ListNumberFormat::UpperLetter => NumberFormat::UpperLetter,
+            rdocx::ListNumberFormat::LowerRoman => NumberFormat::LowerRoman,
+            rdocx::ListNumberFormat::UpperRoman => NumberFormat::UpperRoman,
+            rdocx::ListNumberFormat::None => NumberFormat::None,
+            _ => NumberFormat::Decimal,
+        };
+        return Some((l.start.unwrap_or(1), format, l.level_text_value().map(str::to_string)));
+    }
+    let l = doc.numbering_level(num_id, level)?;
+    Some((l.start, number_format(l.format_name), l.level_text.map(str::to_string)))
+}
+
+/// A numbering format name (`w:numFmt`) as this model draws it; the many
+/// it has no digits for are drawn as decimals, LibreOffice's fallback.
+fn number_format(name: &str) -> NumberFormat {
+    match name {
+        "lowerLetter" => NumberFormat::LowerLetter,
+        "upperLetter" => NumberFormat::UpperLetter,
+        "lowerRoman" => NumberFormat::LowerRoman,
+        "upperRoman" => NumberFormat::UpperRoman,
+        "none" => NumberFormat::None,
+        _ => NumberFormat::Decimal,
+    }
+}
+
+/// The label of an item at `level` whose level text (`w:lvlText`) is
+/// `text`: the text before the item's own placeholder is its prefix and
+/// the text after its suffix, each with the placeholders of the levels
+/// above as `above` gives them (`%1` is level 0). With no placeholder of
+/// its own, as "2.1", the text is all prefix and no number shows. `None`
+/// for "N.", the label every numbered item has without one.
+fn word_label(text: &str, level: u32, format: NumberFormat, above: impl Fn(u32) -> (u32, NumberFormat)) -> Option<ListLabel> {
+    let own = format!("%{}", level + 1);
+    let fill = |part: &str| {
+        let mut out = String::new();
+        let mut chars = part.chars().peekable();
+        while let Some(c) = chars.next() {
+            match (c, chars.peek().and_then(|d| d.to_digit(10))) {
+                ('%', Some(d @ 1..=9)) => {
+                    chars.next();
+                    let (n, f) = above(d - 1);
+                    out.push_str(&crate::lists::format_number(f, n));
+                }
+                _ => out.push(c),
+            }
+        }
+        out
+    };
+    let label = match text.find(&own) {
+        Some(at) => ListLabel { prefix: fill(&text[..at]), format, suffix: fill(&text[at + own.len()..]) },
+        None => ListLabel { prefix: fill(text), format: NumberFormat::None, suffix: String::new() },
+    };
+    (label != ListLabel { prefix: String::new(), format: NumberFormat::Decimal, suffix: ".".into() }).then_some(label)
 }
 
 /// Give each numbered item Word's number (`WordCounter`) where this
@@ -1538,7 +1669,9 @@ fn map_paragraph(doc: &rdocx::Document, p: &rdocx::ParagraphRef<'_>, table_style
     let keep_with_next = p.keep_with_next_value().or(styled.keep_next).unwrap_or(false);
     let numbering = paragraph_numbering(doc, p);
     let (list, list_level) = match numbering {
-        Some((num_id, level)) => (match doc.numbering_is_bullet(num_id) {
+        // The item's own level says bullet or number: a numbered list's
+        // second level is often bulleted, and the reverse.
+        Some((num_id, level)) => (match doc.numbering_level(num_id, level).map(|l| l.format_name == "bullet").or_else(|| doc.numbering_is_bullet(num_id)) {
             Some(false) => ListKind::Numbered,
             // Unknown num_id defaults to bullet — the safer visual guess.
             _ => ListKind::Bullet,

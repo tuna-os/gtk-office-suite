@@ -1807,3 +1807,51 @@ fn table_row_heights_survive_writer_both_ways() {
     let Some(rt) = through_lo_to_docx(&d, "heights") else { return };
     close(&rt, "odt → Writer → docx");
 }
+
+/// A numbered item's label through LibreOffice, both ways: "(1)", "1.a",
+/// a roman "IV." after a change of label within the list, and Word's
+/// "2.1" with no number in it. Each item shows what it showed before.
+#[test]
+fn list_labels_survive_writer_both_ways() {
+    let Some(bin) = require_or_skip() else { return };
+    let label = |prefix: &str, format, suffix: &str| Some(ListLabel { prefix: prefix.into(), format, suffix: suffix.into() });
+    let mut d = Document::from_plain_text("one\nsub\ntwo\nthree\nfour\nbetween\nliteral");
+    for (k, level, l) in [
+        (0, 0, label("(", NumberFormat::Decimal, ")")),
+        (1, 1, label("1.", NumberFormat::LowerLetter, "")),
+        (2, 0, label("(", NumberFormat::Decimal, ")")),
+        (3, 0, None),
+        (4, 0, label("", NumberFormat::UpperRoman, ".")),
+        (6, 0, label("2.1", NumberFormat::None, "")),
+    ] {
+        d.paragraphs[k].style.list = ListKind::Numbered;
+        d.paragraphs[k].style.list_level = level;
+        d.paragraphs[k].style.list_label = l;
+    }
+    let markers = |d: &Document| {
+        let ordinals = letters_core::lists::ordinals(d.paragraphs.iter().map(|p| &p.style));
+        d.paragraphs
+            .iter()
+            .zip(ordinals)
+            .filter(|(p, _)| !p.text().is_empty())
+            .map(|(p, n)| (p.text(), letters_core::lists::marker_for(&p.style, n).unwrap_or_default()))
+            .collect::<Vec<_>>()
+    };
+    let want = markers(&d);
+    assert_eq!(
+        want.iter().map(|(_, m)| m.as_str()).collect::<Vec<_>>(),
+        ["(1)", "1.a", "(2)", "3.", "IV.", "", "2.1"]
+    );
+
+    let dir = tempfile::tempdir().unwrap();
+    let docx_path = dir.path().join("labels.docx");
+    docx::write(&d, &docx_path).expect("write docx");
+    let _ = soffice_convert(bin, &docx_path, "odt").ok();
+    let odt_path = dir.path().join("labels.odt");
+    assert!(odt_path.exists(), "soffice did not convert docx to odt");
+    let got = letters_core::odt::read(odt_path.to_str().unwrap()).expect("read converted odt");
+    assert_eq!(markers(&got), want, "docx → Writer → odt");
+
+    let Some(rt) = through_lo_to_docx(&d, "labels") else { return };
+    assert_eq!(markers(&rt), want, "odt → Writer → docx");
+}

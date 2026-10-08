@@ -292,6 +292,74 @@ impl OpenTable {
     }
 }
 
+/// The list styles numbered items need for their labels
+/// (`ParaStyle::list_label`). An ODF list style labels each of its levels
+/// one way, so a run of numbered items takes one style while its levels
+/// keep their labels, and the next style where a level changes label.
+struct LabelledLists {
+    /// Each set of level labels after "LN"'s, which is all "N.".
+    sets: Vec<[Option<ListLabel>; 10]>,
+    /// Per paragraph: 0 for "LN", k for `sets[k - 1]` ("LNk").
+    style: Vec<usize>,
+    /// Per paragraph: where a list split for its label starts counting,
+    /// so the item keeps its number in the new list.
+    start: Vec<Option<u32>>,
+}
+
+fn labelled_lists(paragraphs: &[Paragraph]) -> LabelledLists {
+    let ordinals = crate::lists::ordinals(paragraphs.iter().map(|p| &p.style));
+    let mut out = LabelledLists { sets: Vec::new(), style: vec![0; paragraphs.len()], start: vec![None; paragraphs.len()] };
+    // The list being built: its first paragraph and its levels' labels,
+    // `None` within a level that has an item and no label.
+    let mut run: Option<(usize, [Option<Option<ListLabel>>; 10])> = None;
+    let close = |out: &mut LabelledLists, run: Option<(usize, [Option<Option<ListLabel>>; 10])>, end: usize| {
+        let Some((first, levels)) = run else { return };
+        let labels: [Option<ListLabel>; 10] = levels.map(Option::flatten);
+        let k = if labels.iter().all(Option::is_none) {
+            0
+        } else {
+            match out.sets.iter().position(|s| *s == labels) {
+                Some(k) => k + 1,
+                None => {
+                    out.sets.push(labels);
+                    out.sets.len()
+                }
+            }
+        };
+        out.style[first..end].iter_mut().for_each(|s| *s = k);
+    };
+    for (i, p) in paragraphs.iter().enumerate() {
+        if p.style.list != ListKind::Numbered {
+            close(&mut out, run.take(), i);
+            continue;
+        }
+        let level = usize::from(p.style.list_level.min(9));
+        let label = &p.style.list_label;
+        if let Some((_, levels)) = &run {
+            if levels[level].as_ref().is_some_and(|l| l != label) {
+                close(&mut out, run.take(), i);
+                out.start[i] = Some(ordinals[i]);
+            }
+        }
+        let (_, levels) = run.get_or_insert_with(|| (i, Default::default()));
+        levels[level].get_or_insert_with(|| label.clone());
+    }
+    close(&mut out, run.take(), paragraphs.len());
+    out
+}
+
+/// ODF's `style:num-format` for `format`.
+fn odf_number_format(format: NumberFormat) -> &'static str {
+    match format {
+        NumberFormat::Decimal => "1",
+        NumberFormat::LowerLetter => "a",
+        NumberFormat::UpperLetter => "A",
+        NumberFormat::LowerRoman => "i",
+        NumberFormat::UpperRoman => "I",
+        NumberFormat::None => "",
+    }
+}
+
 fn content_xml(doc: &Document) -> String {
     let run_styles = collect_run_styles(doc);
     let mut pictures_written = 0usize;
@@ -358,14 +426,26 @@ fn content_xml(doc: &Document) -> String {
             level + 1, bullets[level % bullets.len()], level_props(level)
         ));
     }
-    auto.push_str("</text:list-style><text:list-style style:name=\"LN\">");
-    for level in 0..10 {
-        auto.push_str(&format!(
-            "<text:list-level-style-number text:level=\"{}\" style:num-format=\"1\" style:num-suffix=\".\">{}</text:list-level-style-number>",
-            level + 1, level_props(level)
-        ));
-    }
     auto.push_str("</text:list-style>");
+    // "LN", every level "N.", and one more for each set of labels a list
+    // gives its levels (`labelled_lists`).
+    let labelled = labelled_lists(&doc.paragraphs);
+    let plain: [Option<ListLabel>; 10] = Default::default();
+    let label_sets = std::iter::once(&plain).chain(&labelled.sets);
+    for (k, labels) in label_sets.enumerate() {
+        let name = if k == 0 { "LN".to_string() } else { format!("LN{k}") };
+        auto.push_str(&format!("<text:list-style style:name=\"{name}\">"));
+        for (level, label) in labels.iter().enumerate() {
+            let label = label.clone().unwrap_or(ListLabel { suffix: ".".into(), ..Default::default() });
+            let prefix = Some(&label.prefix).filter(|p| !p.is_empty()).map(|p| format!(" style:num-prefix=\"{}\"", esc(p))).unwrap_or_default();
+            let suffix = Some(&label.suffix).filter(|p| !p.is_empty()).map(|p| format!(" style:num-suffix=\"{}\"", esc(p))).unwrap_or_default();
+            auto.push_str(&format!(
+                "<text:list-level-style-number text:level=\"{}\" style:num-format=\"{}\"{prefix}{suffix}>{}</text:list-level-style-number>",
+                level + 1, odf_number_format(label.format), level_props(level)
+            ));
+        }
+        auto.push_str("</text:list-style>");
+    }
 
     let mut body = String::new();
     // Tracked changes: one changed region per change (text:tracked-changes).
@@ -394,6 +474,7 @@ fn content_xml(doc: &Document) -> String {
     // came back at the top level). `depth` lists are open, each with an
     // open item.
     let mut open_list = ListKind::None;
+    let mut open_style = String::new();
     let mut depth = 0usize;
     // Tables: consecutive paragraphs of one table id are its cells, in
     // grid order, as the docx writer groups them (#1296).
@@ -473,17 +554,22 @@ fn content_xml(doc: &Document) -> String {
             t.filled = true;
         }
         let kind = p.style.list;
-        if kind != open_list {
+        let list_style = match (kind, labelled.style[pi]) {
+            (ListKind::Numbered, 0) => "LN".to_string(),
+            (ListKind::Numbered, k) => format!("LN{k}"),
+            _ => "LB".to_string(),
+        };
+        if kind != open_list || (kind == ListKind::Numbered && list_style != open_style) {
             body.push_str(&"</text:list-item></text:list>".repeat(depth));
             depth = 0;
             open_list = kind;
+            open_style = list_style.clone();
         }
         if kind != ListKind::None {
             let target = usize::from(p.style.list_level) + 1;
-            let start = p.style.list_start.map(|n| format!(" text:start-value=\"{n}\"")).unwrap_or_default();
+            let start = p.style.list_start.or(labelled.start[pi]).map(|n| format!(" text:start-value=\"{n}\"")).unwrap_or_default();
             if depth == 0 {
-                let style = if kind == ListKind::Numbered { "LN" } else { "LB" };
-                body.push_str(&format!("<text:list text:style-name=\"{style}\">"));
+                body.push_str(&format!("<text:list text:style-name=\"{list_style}\">"));
                 depth = 1;
                 if target == 1 {
                     body.push_str(&format!("<text:list-item{start}>"));
@@ -985,6 +1071,51 @@ struct AutoParaStyle {
     sets: [bool; 3],
 }
 
+/// Each `text:list-style` in `xml`: the label of each numbered level that
+/// has one other than "N." (`style:num-prefix`, `style:num-format` and
+/// `style:num-suffix`), by level, 0-based.
+fn list_style_labels(xml: &str) -> std::collections::HashMap<String, Vec<Option<ListLabel>>> {
+    let mut out: std::collections::HashMap<String, Vec<Option<ListLabel>>> = Default::default();
+    let mut reader = Reader::from_str(xml);
+    let mut current: Option<String> = None;
+    loop {
+        match reader.read_event() {
+            Ok(Event::Start(e)) | Ok(Event::Empty(e)) => match e.name().as_ref() {
+                "text:list-style" => current = attr_val(&e, "style:name"),
+                "text:list-level-style-number" => {
+                    let (Some(style), Some(level)) = (current.as_ref(), attr_val(&e, "text:level").and_then(|l| l.parse::<usize>().ok())) else { continue };
+                    if !(1..=10).contains(&level) {
+                        continue;
+                    }
+                    let format = match attr_val(&e, "style:num-format").as_deref() {
+                        Some("a") => NumberFormat::LowerLetter,
+                        Some("A") => NumberFormat::UpperLetter,
+                        Some("i") => NumberFormat::LowerRoman,
+                        Some("I") => NumberFormat::UpperRoman,
+                        Some("") | None => NumberFormat::None,
+                        _ => NumberFormat::Decimal,
+                    };
+                    let label = ListLabel {
+                        prefix: attr_val(&e, "style:num-prefix").unwrap_or_default(),
+                        format,
+                        suffix: attr_val(&e, "style:num-suffix").unwrap_or_default(),
+                    };
+                    let labels = out.entry(style.clone()).or_default();
+                    if labels.len() < level {
+                        labels.resize(level, None);
+                    }
+                    labels[level - 1] = (label != ListLabel { suffix: ".".into(), ..Default::default() }).then_some(label);
+                }
+                _ => {}
+            },
+            Ok(Event::End(e)) if e.name().as_ref() == "text:list-style" => current = None,
+            Ok(Event::Eof) | Err(_) => break,
+            _ => {}
+        }
+    }
+    out
+}
+
 /// Each `text:list-style` in `xml`: whether each of its levels is numbered,
 /// by level (1-based in the file, 0-based here). LibreOffice names the list
 /// styles it writes "WWNum1", "L2"…, so the kind can't be read off the name.
@@ -1003,8 +1134,11 @@ fn list_style_kinds(xml: &str) -> std::collections::HashMap<String, Vec<ListKind
                         if kinds.len() < level {
                             kinds.resize(level, ListKind::Bullet);
                         }
+                        // A number level with no digits is still a label
+                        // when it has text: Word's "2.1" with no number.
+                        let has_text = |a: &str| attr_val(&e, a).is_some_and(|t| !t.is_empty());
                         let numbered = name == "text:list-level-style-number"
-                            && attr_val(&e, "style:num-format").is_some_and(|f| !f.is_empty());
+                            && (has_text("style:num-format") || has_text("style:num-prefix") || has_text("style:num-suffix"));
                         kinds[level - 1] = if numbered { ListKind::Numbered } else { ListKind::Bullet };
                     }
                 }
@@ -1463,6 +1597,26 @@ fn read_parts(path: &str) -> Result<(Document, Vec<String>), String> {
     let auto = parse_auto_styles(&content);
     let mut list_styles = list_style_kinds(&styles);
     list_styles.extend(list_style_kinds(&content));
+    let mut list_labels = list_style_labels(&styles);
+    list_labels.extend(list_style_labels(&content));
+    // The label of a numbered item at `level` (1-based) of the list style
+    // `name`.
+    let label_of = |name: Option<&String>, level: u8| -> Option<ListLabel> {
+        list_labels.get(name?)?.get(usize::from(level.checked_sub(1)?))?.clone()
+    };
+    // A list item's kind and label at `level` (1-based): its own list
+    // style's (`item_styles`) when it overrides the list's, else the
+    // list's.
+    let item_list = |names: &[Option<String>], items: &[Option<String>], kind: ListKind, level: u8| -> (ListKind, Option<ListLabel>) {
+        let own = level.checked_sub(1).and_then(|l| items.get(usize::from(l))).cloned().flatten();
+        let kind = own
+            .as_ref()
+            .and_then(|n| list_styles.get(n))
+            .and_then(|kinds| kinds.get(usize::from(level.max(1) - 1)).copied())
+            .unwrap_or(kind);
+        let name = own.as_ref().or_else(|| names.last().and_then(Option::as_ref));
+        (kind, if kind == ListKind::Numbered { label_of(name, level) } else { None })
+    };
 
     // styles.xml's named styles, the parents of content.xml's automatic ones.
     let named = parse_auto_styles(&styles);
@@ -1483,6 +1637,9 @@ fn read_parts(path: &str) -> Result<(Document, Vec<String>), String> {
     // The list style of each open text:list: a nested list naming none
     // continues its parent's, at its own level.
     let mut list_style_names: Vec<Option<String>> = Vec::new();
+    // Per open list level: the list style its current item overrides the
+    // list's with (`text:style-override`), if any.
+    let mut item_styles: Vec<Option<String>> = Vec::new();
     // A list item's `text:start-value`, for the item's first paragraph.
     let mut pending_start: Option<u32> = None;
     // Each top-level list: where its paragraphs start and end, its style,
@@ -1855,9 +2012,11 @@ fn read_parts(path: &str) -> Result<(Document, Vec<String>), String> {
                             _ => {}
                         }
                     }
-                    style.list = list_kind;
+                    let (kind, label) = item_list(&list_style_names, &item_styles, list_kind, list_level);
+                    style.list = kind;
                     style.list_level = list_level.saturating_sub(1);
                     style.list_start = pending_start.take();
+                    style.list_label = label;
                     if in_toc && !in_index_title {
                         let name = attr_val(&e, "text:style-name").unwrap_or_default();
                         let base = auto.para_parent.get(&name).cloned().unwrap_or(name);
@@ -1941,6 +2100,11 @@ fn read_parts(path: &str) -> Result<(Document, Vec<String>), String> {
                 }
                 "text:list-item" if in_body => {
                     pending_start = attr_val(&e, "text:start-value").and_then(|v| v.parse().ok());
+                    // LibreOffice gives an item a list style of its own this
+                    // way: a Word list instance's override of one level.
+                    let at = usize::from(list_level.max(1) - 1);
+                    item_styles.resize(at + 1, None);
+                    item_styles[at] = attr_val(&e, "text:style-override");
                 }
                 _ => {}
             },
@@ -1985,7 +2149,8 @@ fn read_parts(path: &str) -> Result<(Document, Vec<String>), String> {
                 }
                 "text:p" if note.is_some() => {}
                 "text:p" | "text:h" if in_body => {
-                    let style = ParaStyle { list: list_kind, list_level: list_level.saturating_sub(1), list_start: pending_start.take(), table_cell: cell_of(&table), ..Default::default() };
+                    let (kind, list_label) = item_list(&list_style_names, &item_styles, list_kind, list_level);
+                    let style = ParaStyle { list: kind, list_level: list_level.saturating_sub(1), list_start: pending_start.take(), list_label, table_cell: cell_of(&table), ..Default::default() };
                     if let Some(t) = table.as_mut() {
                         t.4 = true;
                     }
@@ -2121,6 +2286,7 @@ fn read_parts(path: &str) -> Result<(Document, Vec<String>), String> {
                     }
                     list_kinds.pop();
                     list_style_names.pop();
+                    item_styles.truncate(usize::from(list_level));
                     list_kind = if list_level == 0 { ListKind::None } else { list_kinds.last().copied().unwrap_or(ListKind::Bullet) };
                 },
                 "office:text" => in_body = false,
@@ -2456,6 +2622,36 @@ mod tests {
         let path = dir.path().join("t.odt");
         write(doc, path.to_str().unwrap()).expect("write odt");
         read(path.to_str().unwrap()).expect("read odt")
+    }
+
+    /// A numbered item's label survives a save: each set of level labels
+    /// is a list style, and a label that changes within a list splits it
+    /// there, the item keeping its number.
+    #[test]
+    fn list_labels_survive() {
+        let label = |prefix: &str, format, suffix: &str| Some(ListLabel { prefix: prefix.into(), format, suffix: suffix.into() });
+        let mut d = Document::from_plain_text("one\na\ntwo\nthree\nfour\nbetween\n2.1");
+        for (k, level, l) in [
+            (0, 0, label("(", NumberFormat::Decimal, ")")),
+            (1, 1, label("1.", NumberFormat::LowerLetter, "")),
+            (2, 0, label("(", NumberFormat::Decimal, ")")),
+            (3, 0, label("", NumberFormat::UpperRoman, ".")),
+            (4, 0, None),
+            (6, 0, label("2.1", NumberFormat::None, "")),
+        ] {
+            d.paragraphs[k].style.list = ListKind::Numbered;
+            d.paragraphs[k].style.list_level = level;
+            d.paragraphs[k].style.list_label = l;
+        }
+        let markers = |d: &Document| {
+            let ordinals = crate::lists::ordinals(d.paragraphs.iter().map(|p| &p.style));
+            d.paragraphs.iter().zip(ordinals).map(|(p, n)| crate::lists::marker_for(&p.style, n).unwrap_or_default()).collect::<Vec<_>>()
+        };
+        assert_eq!(markers(&d), ["(1)", "1.a", "(2)", "III.", "4.", "", "2.1"]);
+        let rt = round_trip(&d);
+        assert_eq!(markers(&rt), markers(&d));
+        let labels = |d: &Document| d.paragraphs.iter().map(|p| p.style.list_label.clone()).collect::<Vec<_>>();
+        assert_eq!(labels(&rt), labels(&d));
     }
 
     /// A table's column widths survive a save and reopen (and an ODT's

@@ -1064,7 +1064,7 @@ fn render_paragraphs(buf: &gtk::TextBuffer, insert: &mut gtk::TextIter, paras: &
             buf.insert(&mut insert, "\n");
         }
         let para_start = insert.offset();
-        if let Some(marker) = letters_core::lists::marker(para.style.list, ordinals[i]) {
+        if let Some(marker) = letters_core::lists::marker_for(&para.style, ordinals[i]) {
             buf.insert(&mut insert, &format!("{marker}\t"));
         }
         text_starts.push(insert.offset().max(0) as usize);

@@ -1111,6 +1111,74 @@ fn separate_numbered_lists_keep_their_numbers_through_a_save() {
     assert_eq!(shown(&rt), shown(&d));
     let starts: Vec<Option<u32>> = rt.paragraphs.iter().map(|p| p.style.list_start).collect();
     assert_eq!(starts, vec![None; 7], "a list that starts at 1 needs no restart");
+    let labels: Vec<Option<ListLabel>> = rt.paragraphs.iter().map(|p| p.style.list_label.clone()).collect();
+    assert_eq!(labels, vec![None; 7], "a nested item is \"1.\" as Letters draws it, not Word's default \"a.\"");
+}
+
+fn labelled_lists() -> Document {
+    let label = |prefix: &str, format, suffix: &str| Some(ListLabel { prefix: prefix.into(), format, suffix: suffix.into() });
+    let mut d = Document::from_plain_text("one\na\nb\ntwo\nthree\nfour\nbetween\n2.1\n2.1 again");
+    for (k, level, l) in [
+        (0, 0, label("(", NumberFormat::Decimal, ")")),
+        (1, 1, label("1.", NumberFormat::LowerLetter, "")),
+        (2, 1, label("1.", NumberFormat::LowerLetter, "")),
+        (3, 0, label("(", NumberFormat::Decimal, ")")),
+        // The label changes within the list, and back.
+        (4, 0, label("", NumberFormat::UpperRoman, ".")),
+        (5, 0, None),
+        (7, 0, label("2.1", NumberFormat::None, "")),
+        (8, 0, label("2.1", NumberFormat::None, "")),
+    ] {
+        d.paragraphs[k].style.list = ListKind::Numbered;
+        d.paragraphs[k].style.list_level = level;
+        d.paragraphs[k].style.list_label = l;
+    }
+    d
+}
+
+fn markers(d: &Document) -> Vec<String> {
+    let ordinals = letters_core::lists::ordinals(d.paragraphs.iter().map(|p| &p.style));
+    d.paragraphs.iter().zip(ordinals).map(|(p, n)| letters_core::lists::marker_for(&p.style, n).unwrap_or_default()).collect()
+}
+
+/// A numbered item's label survives a save: "(1)", "1.a", "III.", and
+/// Word's "2.1" with no number in it.
+#[test]
+fn list_labels_survive_a_docx_save() {
+    let d = labelled_lists();
+    assert_eq!(markers(&d), ["(1)", "1.a", "1.b", "(2)", "III.", "4.", "", "2.1", "2.1"]);
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("labels.docx");
+    docx::write(&d, &path).unwrap();
+    let rt = docx::read(path.to_str().unwrap()).unwrap();
+    assert_eq!(markers(&rt), markers(&d));
+    let labels = |d: &Document| d.paragraphs.iter().map(|p| p.style.list_label.clone()).collect::<Vec<_>>();
+    assert_eq!(labels(&rt), labels(&d));
+}
+
+/// Word's level text: the levels above as they stand ("%1.%2" under
+/// item 3 is "3.1"), the item's own format, and text with no number.
+#[test]
+fn word_level_text_becomes_the_items_label() {
+    let mut d = Document::from_plain_text("top\nsub\nsub");
+    d.paragraphs[0].style.list = ListKind::Numbered;
+    d.paragraphs[0].style.list_start = Some(3);
+    for p in &mut d.paragraphs[1..] {
+        p.style.list = ListKind::Numbered;
+        p.style.list_level = 1;
+    }
+    let rt = doctor_parts(&d, |parts| {
+        let numbering = parts.get_mut("word/numbering.xml").unwrap();
+        // Level 2 of every definition: "%1.%2", lower letters.
+        let at = numbering.find("<w:lvl w:ilvl=\"1\"").expect("fixture shape changed");
+        let end = numbering[at..].find("</w:lvl>").unwrap() + at;
+        let level = numbering[at..end]
+            .replace("w:val=\"decimal\"", "w:val=\"lowerLetter\"")
+            .replace("w:val=\"%2.\"", "w:val=\"%1.%2\"");
+        assert!(level.contains("%1.%2") && level.contains("lowerLetter"), "fixture shape changed: {level}");
+        numbering.replace_range(at..end, &level);
+    });
+    assert_eq!(markers(&rt), ["3.", "3.a", "3.b"]);
 }
 
 /// What a paragraph inherits from its styles is how it looks.
