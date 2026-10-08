@@ -916,23 +916,37 @@ fn styles_xml(doc: &Document) -> String {
     // A header's or footer's pictures are frames at the start of its
     // paragraph, a floating one placed by a graphic style of styles.xml's.
     let mut graphic = String::new();
+    let mut para_styles = String::new();
     let mut frames = |pictures: &[Run], prefix: &str| -> String {
         pictures.iter().enumerate().filter_map(|(k, r)| picture_frame(r, k + 1, prefix, &mut graphic)).collect()
     };
     let has = |text: &Option<String>, pictures: &[Run]| text.is_some() || !pictures.is_empty();
     if has(&doc.header, &doc.header_pictures) || has(&doc.footer, &doc.footer_pictures) {
         hf.push_str("<office:master-styles><style:master-page style:name=\"Standard\" style:page-layout-name=\"pm1\">");
+        // An aligned header's or footer's paragraph names a style of its own.
+        let aligned = |name: &str, a: Alignment, styles: &mut String| -> String {
+            let align = match a {
+                Alignment::Left => return String::new(),
+                Alignment::Center => "center",
+                Alignment::Right => "end",
+                Alignment::Justify => "justify",
+            };
+            styles.push_str(&format!("<style:style style:name=\"{name}\" style:family=\"paragraph\"><style:paragraph-properties fo:text-align=\"{align}\"/></style:style>"));
+            format!(" text:style-name=\"{name}\"")
+        };
+        let header_style = aligned("LettersHeader", doc.header_alignment, &mut para_styles);
+        let footer_style = aligned("LettersFooter", doc.footer_alignment, &mut para_styles);
         if has(&doc.header, &doc.header_pictures) {
             let pics = frames(&doc.header_pictures, "hfr");
             hf.push_str(&format!(
-                "<style:header><text:p>{pics}{}</text:p></style:header>",
+                "<style:header><text:p{header_style}>{pics}{}</text:p></style:header>",
                 page_fields(&esc(doc.header.as_deref().unwrap_or("")))
             ));
         }
         if has(&doc.footer, &doc.footer_pictures) {
             let pics = frames(&doc.footer_pictures, "ffr");
             hf.push_str(&format!(
-                "<style:footer><text:p>{pics}{}</text:p></style:footer>",
+                "<style:footer><text:p{footer_style}>{pics}{}</text:p></style:footer>",
                 page_fields(&esc(doc.footer.as_deref().unwrap_or("")))
             ));
         }
@@ -954,7 +968,7 @@ fn styles_xml(doc: &Document) -> String {
          <office:styles>{contents}</office:styles>\
          <office:automatic-styles>\
          <style:page-layout style:name=\"pm1\">{layout}\
-         </style:page-layout>{graphic}</office:automatic-styles>{hf}\
+         </style:page-layout>{graphic}{para_styles}</office:automatic-styles>{hf}\
          </office:document-styles>",
         contents = CODE_STYLES.to_string()
             + &heading_styles(doc)
@@ -1635,7 +1649,7 @@ fn read_parts(path: &str) -> Result<(Document, Vec<String>), String> {
 
     // styles.xml's named styles, the parents of content.xml's automatic ones.
     let named = parse_auto_styles(&styles);
-    let mut doc = Document { paragraphs: Vec::new(), footnotes: Vec::new(), header: None, footer: None, header_pictures: Vec::new(), footer_pictures: Vec::new(), page: None, base_font: read_base_font(&styles), heading_styles: read_heading_styles(&styles), comments: Vec::new(), table_columns: Default::default(), table_rows: Default::default(), table_fills: Default::default() };
+    let mut doc = Document { paragraphs: Vec::new(), footnotes: Vec::new(), header: None, footer: None, header_pictures: Vec::new(), footer_pictures: Vec::new(), header_alignment: Default::default(), footer_alignment: Default::default(), page: None, base_font: read_base_font(&styles), heading_styles: read_heading_styles(&styles), comments: Vec::new(), table_columns: Default::default(), table_rows: Default::default(), table_fills: Default::default() };
     let mut reader = Reader::from_str(&content);
     let mut in_body = false;
     let mut para: Option<Paragraph> = None;
@@ -2364,6 +2378,23 @@ fn read_parts(path: &str) -> Result<(Document, Vec<String>), String> {
         // A picture of the header or footer being read: in the header or
         // not, its size, placement, image and alt text.
         let mut hf_frame: Option<(bool, FrameReading)> = None;
+        // The style of the header's or footer's paragraph being read: the
+        // first one with text gives the part its alignment.
+        let mut hf_para_style: Option<String> = None;
+        // Inside a text box of the header or footer: its own paragraphs'
+        // styles are not the part's.
+        let mut hf_box_depth = 0usize;
+        let para_alignment = |name: &str| -> Alignment {
+            let mut cur = Some(name.to_string());
+            for _ in 0..8 {
+                let Some(n) = cur else { break };
+                if let Some(a) = named.para.get(&n).map(|st| st.alignment).filter(|a| *a != Alignment::Left) {
+                    return a;
+                }
+                cur = named.para_parent.get(&n).cloned();
+            }
+            Alignment::Left
+        };
         // Returns the geometry instead of writing to `doc` so the borrow ends
         // with the call; `style:columns` needs `doc.page` mutably right after.
         let read_page_layout = |e: &quick_xml::events::BytesStart| -> Option<PageGeometry> {
@@ -2453,10 +2484,16 @@ fn read_parts(path: &str) -> Result<(Document, Vec<String>), String> {
                     "style:page-layout" => layout_name = attr_val(&e, "style:name").unwrap_or_default(),
                     "style:header" => in_header = in_master,
                     "style:footer" => in_footer = in_master,
+                    "text:p" | "text:h" if (in_header || in_footer) && hf_box_depth == 0 => hf_para_style = attr_val(&e, "text:style-name"),
+                    "draw:text-box" if in_header || in_footer => hf_box_depth += 1,
                     "svg:title" | "svg:desc" => in_alt = true,
                     "text:page-number" | "text:page-count" if in_header || in_footer => {
                         let placeholder = if e.name().as_ref() == "text:page-number" { "{page}" } else { "{total}" };
-                        let target = if in_header { &mut doc.header } else { &mut doc.footer };
+                        let align = hf_para_style.as_deref().map_or(Alignment::Left, para_alignment);
+                        let (target, alignment) = if in_header { (&mut doc.header, &mut doc.header_alignment) } else { (&mut doc.footer, &mut doc.footer_alignment) };
+                        if target.is_none() {
+                            *alignment = align;
+                        }
                         target.get_or_insert_with(String::new).push_str(placeholder);
                         in_field = true;
                     }
@@ -2469,6 +2506,7 @@ fn read_parts(path: &str) -> Result<(Document, Vec<String>), String> {
                     _ => {}
                 },
                 Ok(Event::End(e)) => match e.name().as_ref() {
+                    "draw:text-box" => hf_box_depth = hf_box_depth.saturating_sub(1),
                     "style:header" => in_header = false,
                     "style:footer" => in_footer = false,
                     "svg:title" | "svg:desc" => in_alt = false,
@@ -2483,10 +2521,17 @@ fn read_parts(path: &str) -> Result<(Document, Vec<String>), String> {
                 Ok(Event::Text(_)) if in_field => {}
                 Ok(Event::Text(t)) => {
                     let txt = unescape_text(&t);
+                    let align = hf_para_style.as_deref().map_or(Alignment::Left, para_alignment);
                     if in_header && !txt.trim().is_empty() {
+                        if doc.header.is_none() {
+                            doc.header_alignment = align;
+                        }
                         doc.header.get_or_insert_with(String::new).push_str(&txt);
                     }
                     if in_footer && !txt.trim().is_empty() {
+                        if doc.footer.is_none() {
+                            doc.footer_alignment = align;
+                        }
                         doc.footer.get_or_insert_with(String::new).push_str(&txt);
                     }
                 }
@@ -2660,6 +2705,19 @@ mod tests {
         assert!(w.abs_diff(1_343_025) < 10 && h.abs_diff(933_450) < 10, "{:?}", (w, h));
         assert_eq!(std::fs::read(logo[0].style.image.as_ref().unwrap()).unwrap(), PNG);
         assert_eq!(rt.footer_pictures.iter().map(|r| r.style.image_anchor).collect::<Vec<_>>(), [Some(seal)]);
+    }
+
+    /// A header's and footer's alignment survive a save and reopen.
+    #[test]
+    fn header_and_footer_alignment_round_trip() {
+        let mut d = Document::from_plain_text("body");
+        d.header = Some("FINANCE BILL".into());
+        d.header_alignment = Alignment::Right;
+        d.footer = Some("Page {page}".into());
+        d.footer_alignment = Alignment::Center;
+        let rt = round_trip(&d);
+        assert_eq!((rt.header.as_deref(), rt.header_alignment), (Some("FINANCE BILL"), Alignment::Right));
+        assert_eq!((rt.footer.as_deref(), rt.footer_alignment), (Some("Page {page}"), Alignment::Center));
     }
 
     /// A floating picture is a frame anchored to its paragraph, placed by

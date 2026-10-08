@@ -356,6 +356,25 @@ fn a_header_picture_is_drawn_and_pushes_the_body_down() {
     assert_eq!(body_top, opts.header_distance_pt + 72.0 + LINE, "the body starts under the header, not at the 72pt margin");
 }
 
+/// A header at the right ends at the right margin, a footer centred sits
+/// mid-page.
+#[test]
+fn an_aligned_header_and_footer_sit_where_the_document_puts_them() {
+    let mut d = doc_of(1, "x");
+    d.header = Some("FINANCE BILL".into());
+    d.header_alignment = Alignment::Right;
+    d.footer = Some("OFFICIAL".into());
+    d.footer_alignment = Alignment::Center;
+    let t = lay(&d);
+    let page = &t.pages[0];
+    let line = |src: Source| page.items.iter().find_map(|i| match i { Item::Line { source, x_pt, text, .. } if *source == src => Some((*x_pt, text.chars().count())), _ => None }).unwrap();
+    let right = page.width_pt - 72.0;
+    let (hx, hn) = line(Source::Header);
+    assert!((hx + hn as f64 * 6.0 - right).abs() < 1e-6, "ends at the right margin: {hx}");
+    let (fx, fn_) = line(Source::Footer);
+    assert!((fx + fn_ as f64 * 3.0 - page.width_pt / 2.0).abs() < 1e-6, "centred: {fx}");
+}
+
 #[test]
 fn headers_and_footers_repeat_with_page_numbers() {
     let mut d = doc_of(60, "x");

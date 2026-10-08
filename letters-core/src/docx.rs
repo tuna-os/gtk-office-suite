@@ -290,24 +290,29 @@ fn read_on_this_thread(path: &str) -> Result<Document, String> {
     if footer.is_some() {
         read.footer = footer;
     }
-    (read.header_pictures, read.footer_pictures) = header_footer_pictures(path);
+    let [(header_pictures, header_alignment), (footer_pictures, footer_alignment)] = header_footer_extras(path);
+    (read.header_pictures, read.header_alignment) = (header_pictures, header_alignment);
+    (read.footer_pictures, read.footer_alignment) = (footer_pictures, footer_alignment);
     Ok(read)
 }
 
 /// The pictures of the default header and footer (a letterhead's logo),
-/// each kept in the media cache like a body picture (#455).
-fn header_footer_pictures(path: &str) -> (Vec<Run>, Vec<Run>) {
-    let Some(mut zip) = std::fs::File::open(path).ok().and_then(|f| zip::ZipArchive::new(f).ok()) else { return Default::default() };
+/// each kept in the media cache like a body picture (#455), and how each
+/// part's text is aligned.
+fn header_footer_extras(path: &str) -> [(Vec<Run>, Alignment); 2] {
+    let none = || [(Vec::new(), Alignment::Left), (Vec::new(), Alignment::Left)];
+    let Some(mut zip) = std::fs::File::open(path).ok().and_then(|f| zip::ZipArchive::new(f).ok()) else { return none() };
     let (Some(document), Some(rels)) = (part_text(&mut zip, "word/document.xml"), part_text(&mut zip, "word/_rels/document.xml.rels")) else {
-        return Default::default();
+        return none();
     };
+    let styles = part_text(&mut zip, "word/styles.xml").unwrap_or_default();
     let (h, f) = crate::docx_fields::default_parts(&document, &rels);
-    let mut pictures = |part: Option<String>| -> Vec<Run> {
-        let Some(part) = part else { return Vec::new() };
-        let Some(xml) = part_text(&mut zip, &part) else { return Vec::new() };
+    let mut extras = |part: Option<String>| -> (Vec<Run>, Alignment) {
+        let Some(part) = part else { return (Vec::new(), Alignment::Left) };
+        let Some(xml) = part_text(&mut zip, &part) else { return (Vec::new(), Alignment::Left) };
         let (dir, file) = part.rsplit_once('/').unwrap_or(("", part.as_str()));
         let part_rels = part_text(&mut zip, &format!("{dir}/_rels/{file}.rels")).unwrap_or_default();
-        crate::docx_anchors::pictures_in(&xml)
+        let pictures = crate::docx_anchors::pictures_in(&xml)
             .into_iter()
             .filter_map(|pic| {
                 let target = crate::docx_anchors::relationship_target(&part_rels, &pic.embed)?;
@@ -324,9 +329,10 @@ fn header_footer_pictures(path: &str) -> (Vec<Run>, Vec<Run>) {
                     },
                 })
             })
-            .collect()
+            .collect();
+        (pictures, crate::docx_fields::alignment(&xml, &styles))
     };
-    (pictures(h), pictures(f))
+    [extras(h), extras(f)]
 }
 
 /// A zip part's text, if it is there.
@@ -650,6 +656,8 @@ fn read_opened(path: &str, doc: rdocx::Document) -> Result<Document, String> {
         footer: doc.footer_text(),
         header_pictures: Vec::new(),
         footer_pictures: Vec::new(),
+        header_alignment: Alignment::Left,
+        footer_alignment: Alignment::Left,
         page: read_page_geometry(&doc),
         base_font: read_base_font(&doc),
         heading_styles: read_heading_styles(&doc),
@@ -1119,10 +1127,13 @@ pub fn write(doc: &Document, path: impl AsRef<std::path::Path>) -> Result<(), St
             let _ = out.last_paragraph_mut().expect("paragraph").add_run(&crate::docx_comments::marker(id, start));
         }
     }
-    // A header or footer with pictures is written whole, its pictures in
-    // its first paragraph (docx_anchors::header_footer_part).
-    for (is_header, text, pictures) in [(true, &doc.header, &doc.header_pictures), (false, &doc.footer, &doc.footer_pictures)] {
-        if pictures.is_empty() {
+    // A header or footer with pictures, or aligned, is written whole, its
+    // pictures in its first paragraph (docx_anchors::header_footer_part).
+    for (is_header, text, pictures, alignment) in [
+        (true, &doc.header, &doc.header_pictures, doc.header_alignment),
+        (false, &doc.footer, &doc.footer_pictures, doc.footer_alignment),
+    ] {
+        if pictures.is_empty() && alignment == Alignment::Left {
             match (is_header, text) {
                 (true, Some(h)) => out.set_header(h),
                 (false, Some(f)) => out.set_footer(f),
@@ -1130,7 +1141,10 @@ pub fn write(doc: &Document, path: impl AsRef<std::path::Path>) -> Result<(), St
             }
             continue;
         }
-        let (xml, images) = crate::docx_anchors::header_footer_part(is_header, text.as_deref().unwrap_or(""), pictures);
+        if text.is_none() && pictures.is_empty() {
+            continue;
+        }
+        let (xml, images) = crate::docx_anchors::header_footer_part(is_header, text.as_deref().unwrap_or(""), pictures, alignment);
         let images: Vec<(&str, &[u8], &str)> = images.iter().map(|(r, b, n)| (r.as_str(), b.as_slice(), n.as_str())).collect();
         if is_header {
             out.set_raw_header_with_images(xml.into_bytes(), &images, rdocx::HdrFtrType::Default);

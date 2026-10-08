@@ -186,11 +186,12 @@ pub fn float(document_xml: &str, floating: &[(String, String, ImageAnchor)], fir
 }
 
 /// A header or footer part (`w:hdr` or `w:ftr`) holding `pictures` and
-/// then `text`, a paragraph a line: the pictures go in the first line's
+/// then `text`, a paragraph a line, each aligned as `alignment` says (left,
+/// Word's default, unsaid): the pictures go in the first line's
 /// paragraph, where the reader finds them. Returns the part and its images
 /// as (relationship id, bytes, file name); a picture whose file cannot be
 /// read is left out.
-pub fn header_footer_part(is_header: bool, text: &str, pictures: &[crate::model::Run]) -> (String, Vec<(String, Vec<u8>, String)>) {
+pub fn header_footer_part(is_header: bool, text: &str, pictures: &[crate::model::Run], alignment: crate::model::Alignment) -> (String, Vec<(String, Vec<u8>, String)>) {
     let mut images = Vec::new();
     let mut floating = Vec::new();
     let mut drawings = String::new();
@@ -217,8 +218,15 @@ pub fn header_footer_part(is_header: bool, text: &str, pictures: &[crate::model:
         images.push((rel, bytes, name));
     }
     let mut body = String::new();
+    let jc = match alignment {
+        crate::model::Alignment::Left => String::new(),
+        crate::model::Alignment::Center => "<w:pPr><w:jc w:val=\"center\"/></w:pPr>".to_string(),
+        crate::model::Alignment::Right => "<w:pPr><w:jc w:val=\"right\"/></w:pPr>".to_string(),
+        crate::model::Alignment::Justify => "<w:pPr><w:jc w:val=\"both\"/></w:pPr>".to_string(),
+    };
     for (k, line) in text.split('\n').enumerate() {
         body.push_str("<w:p>");
+        body.push_str(&jc);
         if k == 0 {
             body.push_str(&drawings);
         }

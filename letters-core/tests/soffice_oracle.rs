@@ -1941,3 +1941,28 @@ fn header_and_footer_pictures_survive_writer_both_ways() {
     let Some(rt) = through_lo_to_docx(&d, "hf") else { return };
     close(&rt, "odt → Writer → docx");
 }
+
+/// A header at the right and a footer centred survive Writer both ways:
+/// our docx converted to odt, and our odt converted to docx.
+#[test]
+fn header_and_footer_alignment_survive_writer_both_ways() {
+    let Some(bin) = require_or_skip() else { return };
+    let mut d = Document::from_plain_text("body text");
+    d.header = Some("FINANCE BILL".into());
+    d.header_alignment = Alignment::Right;
+    d.footer = Some("OFFICIAL".into());
+    d.footer_alignment = Alignment::Center;
+    let close = |got: &Document, how: &str| {
+        assert_eq!((got.header.as_deref(), got.header_alignment), (Some("FINANCE BILL"), Alignment::Right), "{how}");
+        assert_eq!((got.footer.as_deref(), got.footer_alignment), (Some("OFFICIAL"), Alignment::Center), "{how}");
+    };
+    let dir = tempfile::tempdir().unwrap();
+    let docx_path = dir.path().join("align.docx");
+    docx::write(&d, &docx_path).expect("write docx");
+    let _ = soffice_convert(bin, &docx_path, "odt").ok();
+    let odt_path = dir.path().join("align.odt");
+    assert!(odt_path.exists(), "soffice did not convert docx to odt");
+    close(&letters_core::odt::read(odt_path.to_str().unwrap()).expect("read converted odt"), "docx → Writer → odt");
+    let Some(rt) = through_lo_to_docx(&d, "align") else { return };
+    close(&rt, "odt → Writer → docx");
+}

@@ -211,7 +211,7 @@ pub fn parse(md: &str) -> Document {
     }
     if let Some(p) = current.take() { paragraphs.push(p); }
 
-    let mut doc = Document { paragraphs, footnotes: vec![], header: None, footer: None, header_pictures: Vec::new(), footer_pictures: Vec::new(), page: None, base_font: Default::default(), heading_styles: Vec::new(), comments: Vec::new(), table_columns: Default::default(), table_rows: Default::default(), table_fills: Default::default() };
+    let mut doc = Document { paragraphs, footnotes: vec![], header: None, footer: None, header_pictures: Vec::new(), footer_pictures: Vec::new(), header_alignment: Default::default(), footer_alignment: Default::default(), page: None, base_font: Default::default(), heading_styles: Vec::new(), comments: Vec::new(), table_columns: Default::default(), table_rows: Default::default(), table_fills: Default::default() };
     if doc.paragraphs.is_empty() {
         doc = Document::new();
     }

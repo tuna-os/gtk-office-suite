@@ -349,6 +349,24 @@ fn header_and_footer_pictures_survive() {
     assert!(rt.paragraphs.iter().all(|p| p.runs.iter().all(|r| r.style.image.is_none())), "the pictures stay out of the body");
 }
 
+/// A header's and footer's alignment survive a save and reopen: a bill's
+/// "FINANCE BILL" at the right, its classification centred, with a page
+/// field.
+#[test]
+fn header_and_footer_alignment_survive() {
+    let mut d = Document::from_plain_text("body");
+    d.header = Some("FINANCE BILL".into());
+    d.header_alignment = Alignment::Right;
+    d.footer = Some("OFFICIAL, page {page}".into());
+    d.footer_alignment = Alignment::Center;
+    let rt = round_trip(&d);
+    assert_eq!((rt.header.as_deref(), rt.header_alignment), (Some("FINANCE BILL"), Alignment::Right));
+    assert_eq!((rt.footer.as_deref(), rt.footer_alignment), (Some("OFFICIAL, page {page}"), Alignment::Center));
+    let mut d = Document::from_plain_text("body");
+    d.header = Some("Report".into());
+    assert_eq!(round_trip(&d).header_alignment, Alignment::Left);
+}
+
 /// Reopening a document reuses the image it already extracted rather than
 /// leaving another file in the temp dir on every open (#455). The file
 /// lives in the process's private media cache, not loose in /tmp.

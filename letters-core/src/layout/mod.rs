@@ -567,8 +567,8 @@ pub fn layout(doc: &Document, opts: &LayoutOptions, shaper: &mut dyn Shaper) -> 
     // down, and a tall footer pushes its foot up, as Word and LibreOffice
     // lay a page out: a letterhead's logo is not drawn over the text.
     let width = (geometry.width_pt - geometry.margin_left_pt - geometry.margin_right_pt).max(1.0);
-    let header_h = header_footer_height(&doc.header_pictures, doc.header.as_deref(), width, opts, shaper);
-    let footer_h = header_footer_height(&doc.footer_pictures, doc.footer.as_deref(), width, opts, shaper);
+    let header_h = header_footer_height(&doc.header_pictures, doc.header.as_deref(), doc.header_alignment, width, opts, shaper);
+    let footer_h = header_footer_height(&doc.footer_pictures, doc.footer.as_deref(), doc.footer_alignment, width, opts, shaper);
     if header_h > 0.0 {
         geometry.margin_top_pt = geometry.margin_top_pt.max(opts.header_distance_pt + header_h);
     }
@@ -1353,10 +1353,13 @@ impl<'o> Flow<'o> {
             }
         }
         for page in &mut self.pages {
-            for (source, template, pictures) in [(Source::Header, &doc.header, &doc.header_pictures), (Source::Footer, &doc.footer, &doc.footer_pictures)] {
+            for (source, template, pictures, alignment) in [
+                (Source::Header, &doc.header, &doc.header_pictures, doc.header_alignment),
+                (Source::Footer, &doc.footer, &doc.footer_pictures, doc.footer_alignment),
+            ] {
                 let row_h = picture_row_height(pictures, width);
                 let text_h = template.as_deref().filter(|t| !t.is_empty()).map_or(0.0, |t| {
-                    header_footer_lines(&page_field_text(t, page.index + 1, total), pictures, width, opts, shaper).iter().map(LineBox::natural_height).sum()
+                    header_footer_lines(&page_field_text(t, page.index + 1, total), alignment, pictures, width, opts, shaper).iter().map(LineBox::natural_height).sum()
                 });
                 let top = match source {
                     Source::Header => opts.header_distance_pt,
@@ -1365,7 +1368,7 @@ impl<'o> Flow<'o> {
                 place_header_footer_pictures(page, pictures, left, width, top, height);
                 let Some(template) = template.as_deref().filter(|t| !t.is_empty()) else { continue };
                 let text = page_field_text(template, page.index + 1, total);
-                let lines = header_footer_lines(&text, pictures, width, opts, shaper);
+                let lines = header_footer_lines(&text, alignment, pictures, width, opts, shaper);
                 // Under the pictures' row.
                 let mut y = top + row_h;
                 let chars: Vec<char> = text.chars().collect();
@@ -1391,15 +1394,15 @@ impl<'o> Flow<'o> {
     }
 }
 
-/// A header's or footer's text broken into lines across `width`.
-fn shape_header_footer(text: &str, width: f64, opts: &LayoutOptions, shaper: &mut dyn Shaper) -> Vec<LineBox> {
+/// A header's or footer's text broken into lines across `width`, aligned
+/// as the document has it.
+fn shape_header_footer(text: &str, alignment: crate::model::Alignment, width: f64, opts: &LayoutOptions, shaper: &mut dyn Shaper) -> Vec<LineBox> {
     shaper.shape(&ShapeRequest {
         runs: &[Run::plain(text)],
         heading: None,
         code: false,
         look: Look::Body,
-        // Left, as a Word or LibreOffice header paragraph is by default.
-        alignment: crate::model::Alignment::Left,
+        alignment,
         width_pt: width,
         first_line_indent_pt: 0.0,
         tab_stops_pt: Vec::new(),
@@ -1416,9 +1419,9 @@ fn picture_row_height(pictures: &[Run], width: f64) -> f64 {
 
 /// How tall a header or footer is: its pictures' row and its text, laid
 /// out for page 1.
-fn header_footer_height(pictures: &[Run], template: Option<&str>, width: f64, opts: &LayoutOptions, shaper: &mut dyn Shaper) -> f64 {
+fn header_footer_height(pictures: &[Run], template: Option<&str>, alignment: crate::model::Alignment, width: f64, opts: &LayoutOptions, shaper: &mut dyn Shaper) -> f64 {
     let text = template.filter(|t| !t.is_empty()).map_or(0.0, |t| {
-        header_footer_lines(&page_field_text(t, 1, 1), pictures, width, opts, shaper).iter().map(LineBox::natural_height).sum()
+        header_footer_lines(&page_field_text(t, 1, 1), alignment, pictures, width, opts, shaper).iter().map(LineBox::natural_height).sum()
     });
     picture_row_height(pictures, width) + text
 }
@@ -1426,8 +1429,8 @@ fn header_footer_height(pictures: &[Run], template: Option<&str>, width: f64, op
 /// The lines of a header's or footer's text under its pictures. The
 /// paragraph a letterhead's logo sits in reads as an empty first line;
 /// the pictures' row is that line.
-fn header_footer_lines(text: &str, pictures: &[Run], width: f64, opts: &LayoutOptions, shaper: &mut dyn Shaper) -> Vec<LineBox> {
-    let mut lines = shape_header_footer(text, width, opts, shaper);
+fn header_footer_lines(text: &str, alignment: crate::model::Alignment, pictures: &[Run], width: f64, opts: &LayoutOptions, shaper: &mut dyn Shaper) -> Vec<LineBox> {
+    let mut lines = shape_header_footer(text, alignment, width, opts, shaper);
     if picture_row_height(pictures, width) > 0.0 && lines.len() > 1 && lines[0].start == lines[0].end {
         lines.remove(0);
     }
