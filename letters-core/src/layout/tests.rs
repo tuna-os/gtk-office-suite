@@ -260,15 +260,53 @@ fn a_table_row_takes_the_files_height() {
     assert_eq!(heights(&d), [40.0, one_line, one_line, 30.0]);
     assert!(d.delete_table_rows(table, 0, 1));
     assert_eq!(heights(&d), [one_line, one_line, 30.0]);
-    // A minimum taller than the space left stretches the row to the foot
-    // of the page, where Word and LibreOffice would split it, rather than
-    // moving it to the next page.
+    // A minimum taller than the space left splits the row at the foot of
+    // the page, as Word and LibreOffice do, rather than moving it on.
     let foot = 841.9 - 72.0;
     d.table_rows.insert(table, vec![None, Some(RowHeight { pt: 2000.0, exact: false })]);
     let t = lay(&d);
     let rows: Vec<(f64, f64)> = t.pages[0].items.iter().filter_map(|i| match i { Item::Cell { col: 0, y_pt, height_pt, .. } => Some((*y_pt, *height_pt)), _ => None }).collect();
     assert_eq!(rows.len(), 2, "the tall row stays on the first page: {rows:?}");
     assert!((rows[1].0 + rows[1].1 - foot).abs() < 1e-6, "{rows:?}");
+}
+
+/// A row taller than the space left splits at the foot of the page, as
+/// Word and LibreOffice split it: the lines that fit stay, the rest
+/// continue at the top of the next page in the same cell, and nothing is
+/// drawn into the bottom margin. Moved whole, a tall answer box left a
+/// page of blank space, and one taller than a page ran off it.
+#[test]
+fn a_tall_row_splits_across_pages() {
+    let mut d = doc_of(1, "after");
+    let table = d.insert_table_at(0, 2, 1);
+    for p in d.paragraphs.iter_mut() {
+        if p.style.table_cell == Some(TableCell { table, row: 0, col: 0 }) {
+            p.runs = vec![Run::plain("first")];
+        }
+    }
+    let at = d.paragraphs.iter().position(|p| p.style.table_cell == Some(TableCell { table, row: 1, col: 0 })).unwrap();
+    let lines: Vec<Paragraph> = (0..80).map(|n| Paragraph {
+        style: ParaStyle { table_cell: Some(TableCell { table, row: 1, col: 0 }), ..Default::default() },
+        runs: vec![Run::plain(&format!("line {n}"))],
+    }).collect();
+    d.paragraphs.splice(at..=at, lines);
+    let t = lay(&d);
+    let foot = 841.9 - 72.0;
+    let cells = |page: usize| -> Vec<(u32, f64, f64)> {
+        t.pages[page].items.iter().filter_map(|i| match i { Item::Cell { row, y_pt, height_pt, .. } => Some((*row, *y_pt, *height_pt)), _ => None }).collect()
+    };
+    let first = cells(0);
+    assert_eq!(first.iter().map(|c| c.0).collect::<Vec<_>>(), [0, 1], "the tall row starts on the first page: {first:?}");
+    assert!((first[1].1 + first[1].2 - foot).abs() < 1e-6, "its first piece runs to the foot: {first:?}");
+    let second = cells(1);
+    assert_eq!(second.first().map(|c| (c.0, c.1)), Some((1, 72.0)), "and continues at the top of the next: {second:?}");
+    let texts = |page: usize| -> Vec<String> {
+        t.pages[page].items.iter().filter_map(|i| match i { Item::Line { text, top_pt, height_pt, .. } => { assert!(top_pt + height_pt <= foot + 1e-6, "{text} in the margin"); Some(text.clone()) } _ => None }).collect()
+    };
+    let (a, b) = (texts(0), texts(1));
+    let n = a.iter().filter(|l| l.starts_with("line ")).count();
+    assert!(n > 10 && n < 80, "{n} lines on the first page");
+    assert_eq!(b.first().map(String::as_str), Some(format!("line {n}").as_str()), "the next line, not a repeat or a gap");
 }
 
 #[test]

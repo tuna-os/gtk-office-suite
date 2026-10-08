@@ -870,9 +870,7 @@ fn layout_table(flow: &mut Flow, doc: &Document, range: std::ops::Range<usize>, 
     for row in 0..rows {
         // Shape each cell of the row (a cell may hold several paragraphs).
         let mut row_cells: Vec<(u32, Vec<CellParagraph>)> = Vec::new();
-        let mut row_h: f64 = 0.0;
         for col in 0..cols {
-            let mut h = 0.0;
             let mut paras = Vec::new();
             for &(i, _) in cells.iter().filter(|(_, c)| c.row == row && c.col == col) {
                 let p = &doc.paragraphs[i];
@@ -881,54 +879,128 @@ fn layout_table(flow: &mut Flow, doc: &Document, range: std::ops::Range<usize>, 
                     + p.style.space_before_pt.max(0.0)
                     + p.style.space_after_pt.max(0.0);
                 paras.push((i, s, ph));
-                h += ph;
             }
-            row_h = row_h.max(h + CELL_RULE_PT);
             row_cells.push((col, paras));
         }
-        // The file's row height: a minimum, or the height itself (taller
-        // content then runs past the row, as Word clips it). Whether the
-        // row starts a new page is its content's to decide: Word and
-        // LibreOffice split a row taller than the space left, and a row
-        // here does not split, so a minimum stretches it only to the foot
-        // of the page. Moving a whole tall answer box on instead left a
-        // page of blank space before it.
         let file_h = doc.table_rows.get(&first.table).and_then(|r| r.get(row as usize).copied().flatten()).filter(|h| h.pt.is_finite() && h.pt > 0.0);
-        let content_h = match file_h {
-            Some(h) if h.exact => h.pt,
-            _ => row_h,
-        };
-        if flow.y + content_h > flow.bottom() && !flow.column_is_empty() {
+        // A fixed height: the row is that tall whatever it holds (taller
+        // content runs past it, as Word clips it), and moves whole.
+        if let Some(h) = file_h.filter(|h| h.exact) {
+            if flow.y + h.pt > flow.bottom() && !flow.column_is_empty() {
+                flow.next_column();
+            }
+            let top = flow.y;
+            let x0 = flow.column_x();
+            for (col, paras) in &row_cells {
+                let cx = x0 - CELL_PADDING_PT + col_x[*col as usize];
+                flow.push(Item::Cell { table: first.table, row, col: *col, x_pt: cx, y_pt: top, width_pt: widths[*col as usize], height_pt: h.pt });
+                let slices = cell_slices(doc, paras);
+                place_slices(flow, doc, paras, &slices, cx, top);
+            }
+            flow.y = top + h.pt;
+            continue;
+        }
+        // Otherwise the row splits across pages, as Word and LibreOffice
+        // split it: each piece takes the lines of every cell that fit
+        // above the foot of the page, and the rest continue at the top of
+        // the next. A minimum height (an answer box) is made up by the
+        // last piece. Moved whole, a tall row left a page of blank space
+        // before it and a row taller than a page ran off its foot.
+        let slices: Vec<Vec<Slice>> = row_cells.iter().map(|(_, paras)| cell_slices(doc, paras)).collect();
+        let mut next = vec![0usize; slices.len()];
+        let mut min_left = file_h.map_or(0.0, |h| h.pt);
+        loop {
+            let room = flow.bottom() - flow.y - CELL_RULE_PT;
+            // How many of each cell's remaining slices fit in `room`.
+            let fit = |cell: &[Slice], from: usize| -> (usize, f64) {
+                let mut h = 0.0;
+                let mut n = from;
+                while n < cell.len() && h + cell[n].height() <= room + 1e-6 {
+                    h += cell[n].height();
+                    n += 1;
+                }
+                (n, h)
+            };
+            let takes: Vec<(usize, f64)> = slices.iter().zip(&next).map(|(c, &from)| fit(c, from)).collect();
+            let done = takes.iter().zip(&slices).all(|((n, _), c)| *n == c.len());
+            let placed_any = takes.iter().zip(&next).any(|((n, _), from)| n > from);
+            if !done && !placed_any && !flow.column_is_empty() {
+                flow.next_column();
+                continue;
+            }
+            // A line taller than a whole page goes where it is anyway.
+            let takes: Vec<(usize, f64)> = if !done && !placed_any {
+                slices.iter().zip(&next).map(|(c, &from)| if from < c.len() { (from + 1, c[from].height()) } else { (from, 0.0) }).collect()
+            } else {
+                takes
+            };
+            let done = takes.iter().zip(&slices).all(|((n, _), c)| *n == c.len());
+            let content = takes.iter().map(|(_, h)| *h).fold(0.0, f64::max) + CELL_RULE_PT;
+            let height = if done {
+                content.max(min_left.min((flow.bottom() - flow.y).max(content)))
+            } else {
+                (flow.bottom() - flow.y).max(content)
+            };
+            let top = flow.y;
+            let x0 = flow.column_x();
+            for (((col, paras), cell), (&from, &(to, _))) in row_cells.iter().zip(&slices).zip(next.iter().zip(&takes)) {
+                let cx = x0 - CELL_PADDING_PT + col_x[*col as usize];
+                flow.push(Item::Cell { table: first.table, row, col: *col, x_pt: cx, y_pt: top, width_pt: widths[*col as usize], height_pt: height });
+                place_slices(flow, doc, paras, &cell[from..to], cx, top);
+            }
+            for (n, (to, _)) in next.iter_mut().zip(&takes) {
+                *n = *to;
+            }
+            min_left -= height;
+            flow.y = top + height;
+            if done && min_left <= 0.5 {
+                break;
+            }
             flow.next_column();
         }
-        let room = (flow.bottom() - flow.y).max(0.0);
-        match file_h {
-            Some(h) if h.exact => row_h = h.pt,
-            Some(h) => row_h = row_h.max(h.pt.min(room)),
-            None => {}
+    }
+}
+
+/// One step down a cell: a paragraph's space before or after, or one of
+/// its lines.
+#[derive(Clone, Copy)]
+enum Slice {
+    Gap(f64),
+    /// The cell's paragraph (by position in the cell), its line, height.
+    Line(usize, usize, f64),
+}
+
+impl Slice {
+    fn height(&self) -> f64 {
+        match *self {
+            Slice::Gap(h) | Slice::Line(_, _, h) => h,
         }
-        let top = flow.y;
-        let x0 = flow.column_x();
-        for (col, paras) in row_cells {
-            // The table hangs one cell padding into the left margin, so
-            // cell text lines up with the body text (Word's and
-            // LibreOffice's default table indent).
-            let cx = x0 - CELL_PADDING_PT + col_x[col as usize];
-            flow.push(Item::Cell { table: first.table, row, col, x_pt: cx, y_pt: top, width_pt: widths[col as usize], height_pt: row_h });
-            let mut y = top;
-            for (i, s, _) in paras {
-                let p = &doc.paragraphs[i];
-                y += p.style.space_before_pt.max(0.0);
-                let text: Vec<char> = layout_text(&p.runs).chars().collect();
-                for (k, lb) in s.lines.iter().enumerate() {
-                    let h = lb.natural_height() * spacing(p);
-                    emit_line(flow, i, p, &text, k, lb, cx + CELL_PADDING_PT + s.box_x, s.box_w, y, h);
-                    y += h;
-                }
-                y += p.style.space_after_pt.max(0.0);
-            }
+    }
+}
+
+/// A cell's content as the steps it is laid down in.
+fn cell_slices(doc: &Document, paras: &[CellParagraph]) -> Vec<Slice> {
+    let mut out = Vec::new();
+    for (k, (i, s, _)) in paras.iter().enumerate() {
+        let p = &doc.paragraphs[*i];
+        out.push(Slice::Gap(p.style.space_before_pt.max(0.0)));
+        out.extend(s.lines.iter().enumerate().map(|(l, lb)| Slice::Line(k, l, lb.natural_height() * spacing(p))));
+        out.push(Slice::Gap(p.style.space_after_pt.max(0.0)));
+    }
+    out
+}
+
+/// Draw a run of a cell's slices from `top` down, in the cell at `cx`.
+fn place_slices(flow: &mut Flow, doc: &Document, paras: &[CellParagraph], slices: &[Slice], cx: f64, top: f64) {
+    let mut y = top;
+    for slice in slices {
+        if let Slice::Line(k, l, h) = *slice {
+            let (i, s, _) = &paras[k];
+            let p = &doc.paragraphs[*i];
+            let text: Vec<char> = layout_text(&p.runs).chars().collect();
+            emit_line(flow, *i, p, &text, l, &s.lines[l], cx + CELL_PADDING_PT + s.box_x, s.box_w, y, h);
         }
-        flow.y = top + row_h;
+        y += slice.height();
     }
 }
 
