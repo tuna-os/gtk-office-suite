@@ -1836,3 +1836,58 @@ fn table_cell_fills_survive_writer_both_ways() {
     let Some(rt) = through_lo_to_docx(&d, "fills") else { return };
     close(&rt, "odt → Writer → docx");
 }
+
+/// A floating picture keeps its placement through Writer both ways: our
+/// docx converted to odt, and our odt converted to docx. The Ofsted logo
+/// of the audit-committee minutes (right-aligned in the margins, raised
+/// above its paragraph) and a picture behind the text, an inch in from the
+/// page's edge and centred down it.
+#[test]
+fn floating_pictures_keep_their_placement_through_writer_both_ways() {
+    use letters_core::model::{AnchorAlign, AnchorFrame, ImageAnchor};
+    let Some(bin) = require_or_skip() else { return };
+    let dir = tempfile::tempdir().unwrap();
+    let png: &[u8] = &[
+        0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00, 0x00, 0x00, 0x0d, 0x49, 0x48, 0x44, 0x52,
+        0x00, 0x00, 0x00, 0x03, 0x00, 0x00, 0x00, 0x02, 0x08, 0x02, 0x00, 0x00, 0x00, 0x12, 0x16, 0xf1,
+        0x4d, 0x00, 0x00, 0x00, 0x15, 0x49, 0x44, 0x41, 0x54, 0x78, 0x9c, 0x63, 0x3c, 0x21, 0x27, 0xc7,
+        0xc0, 0xc0, 0xc0, 0xc0, 0xc0, 0xc0, 0xc4, 0x00, 0x03, 0x00, 0x13, 0x2e, 0x01, 0x08, 0x6a, 0xc0,
+        0x65, 0x61, 0x00, 0x00, 0x00, 0x00, 0x49, 0x45, 0x4e, 0x44, 0xae, 0x42, 0x60, 0x82,
+    ];
+    let png_path = dir.path().join("logo.png");
+    std::fs::write(&png_path, png).unwrap();
+    let want = [
+        ImageAnchor { h_from: AnchorFrame::Margin, h_align: Some(AnchorAlign::End), v_from: AnchorFrame::Text, y_emu: -660_400, ..Default::default() },
+        ImageAnchor { h_from: AnchorFrame::Page, x_emu: 914_400, v_from: AnchorFrame::Page, v_align: Some(AnchorAlign::Center), behind: true, ..Default::default() },
+    ];
+    let mut d = Document::from_plain_text("");
+    d.paragraphs = want
+        .iter()
+        .map(|a| Paragraph {
+            style: ParaStyle::default(),
+            runs: vec![Run::plain("Minutes "), Run {
+                text: "logo".into(),
+                style: RunStyle { image: Some(png_path.to_string_lossy().into()), image_extent_emu: Some((914_400, 457_200)), image_anchor: Some(*a), ..Default::default() },
+            }],
+        })
+        .collect();
+    let close = |got: &Document, how: &str| {
+        let read: Vec<ImageAnchor> = got.paragraphs.iter().flat_map(|p| &p.runs).filter_map(|r| r.style.image_anchor).collect();
+        assert_eq!(read.len(), want.len(), "{how}: {:?}", got.paragraphs);
+        for (r, w) in read.iter().zip(&want) {
+            // Writer stores lengths in hundredths of a millimetre.
+            assert!(r.x_emu.abs_diff(w.x_emu) <= 360 && r.y_emu.abs_diff(w.y_emu) <= 360, "{how}: {r:?} for {w:?}");
+            assert_eq!(ImageAnchor { x_emu: w.x_emu, y_emu: w.y_emu, ..*r }, *w, "{how}");
+        }
+    };
+
+    let docx_path = dir.path().join("float.docx");
+    docx::write(&d, &docx_path).expect("write docx");
+    let _ = soffice_convert(bin, &docx_path, "odt").ok();
+    let odt_path = dir.path().join("float.odt");
+    assert!(odt_path.exists(), "soffice did not convert docx to odt");
+    close(&letters_core::odt::read(odt_path.to_str().unwrap()).expect("read converted odt"), "docx → Writer → odt");
+
+    let Some(rt) = through_lo_to_docx(&d, "float") else { return };
+    close(&rt, "odt → Writer → docx");
+}
