@@ -604,6 +604,7 @@ fn read_opened(path: &str, doc: rdocx::Document) -> Result<Document, String> {
     // Table ids are the tables' order, as the cells above are tagged.
     let table_columns = tables.iter().enumerate().filter_map(|(ti, t)| Some((ti as u32, column_widths(t)?))).collect();
     let table_rows = tables.iter().enumerate().filter_map(|(ti, t)| Some((ti as u32, row_heights(t)?))).collect();
+    let table_fills = tables.iter().enumerate().filter_map(|(ti, t)| Some((ti as u32, cell_fills(t)?))).collect();
 
     Ok(Document {
         paragraphs,
@@ -616,7 +617,25 @@ fn read_opened(path: &str, doc: rdocx::Document) -> Result<Document, String> {
         comments: Vec::new(),
         table_columns,
         table_rows,
+        table_fills,
     })
+}
+
+/// A table's shaded cells (`w:shd w:fill`), when any cell is; "auto" is
+/// no fill.
+fn cell_fills(table: &rdocx::TableRef<'_>) -> Option<Vec<crate::model::CellFill>> {
+    let mut fills = Vec::new();
+    for ri in 0..table.row_count() {
+        let Some(row) = table.row(ri) else { continue };
+        for ci in 0..row.cell_count() {
+            let Some(fill) = row.cell(ci).and_then(|c| c.shading_fill().map(str::to_string)) else { continue };
+            let color = fill.trim_start_matches('#').to_uppercase();
+            if color.len() == 6 && color.chars().all(|c| c.is_ascii_hexdigit()) {
+                fills.push(crate::model::CellFill { row: ri as u32, col: ci as u32, color });
+            }
+        }
+    }
+    (!fills.is_empty()).then_some(fills)
 }
 
 /// A table's row heights, when any row gives one (`w:trHeight`).
@@ -760,6 +779,11 @@ pub fn write(doc: &Document, path: impl AsRef<std::path::Path>) -> Result<(), St
             if let Some(widths) = doc.table_columns.get(&tc0.table).filter(|w| w.len() == cols) {
                 for (c, w) in widths.iter().enumerate() {
                     tbl.set_column_width(c, rdocx::Length::pt(*w));
+                }
+            }
+            for fill in doc.table_fills.get(&tc0.table).into_iter().flatten() {
+                if let Some(mut cell) = tbl.cell(fill.row as usize, fill.col as usize) {
+                    cell.set_shading(&fill.color);
                 }
             }
             if let Some(heights) = doc.table_rows.get(&tc0.table) {

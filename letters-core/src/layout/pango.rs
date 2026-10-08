@@ -868,7 +868,15 @@ impl Typeset {
                     let _ = cr.stroke();
                     let _ = cr.restore();
                 }
-                Item::Cell { x_pt, y_pt, width_pt, height_pt, .. } => {
+                Item::Cell { x_pt, y_pt, width_pt, height_pt, fill, .. } => {
+                    // The cell's shading first, under its rule and text.
+                    if let Some((r, g, b)) = fill.as_deref().and_then(parse_hex) {
+                        let _ = cr.save();
+                        cr.set_source_rgb(f64::from(r) / 65535.0, f64::from(g) / 65535.0, f64::from(b) / 65535.0);
+                        cr.rectangle(*x_pt, *y_pt, *width_pt, *height_pt);
+                        let _ = cr.fill();
+                        let _ = cr.restore();
+                    }
                     // A 0.5 pt rule, at least one device pixel, on whole
                     // pixels: on screen a hairline between two pixel rows
                     // was drawn as two grey rows, which blurred into the
