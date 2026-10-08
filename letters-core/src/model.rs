@@ -28,6 +28,11 @@ pub struct RunStyle {
     /// inch, OOXML's unit); None = the image's own size.
     #[serde(default)]
     pub image_extent_emu: Option<(u64, u64)>,
+    /// A floating image's place on the page; None = inline in the text.
+    /// A floating image takes no room in its line: it is drawn where its
+    /// anchor puts it, over the text (Word's "in front of text").
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub image_anchor: Option<ImageAnchor>,
     /// Font family name (e.g. "Liberation Serif"); None = document default.
     #[serde(default)]
     pub font_family: Option<String>,
@@ -100,6 +105,45 @@ pub struct Revision {
     pub under: Option<Box<Revision>>,
 }
 
+/// Where a floating image sits: on each axis an offset from, or an
+/// alignment within, a frame (Word's `wp:anchor`, ODF's `svg:x`/`svg:y`
+/// with `style:horizontal-rel`/`vertical-rel`).
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ImageAnchor {
+    pub h_from: AnchorFrame,
+    /// Offset of the image's left edge from the frame's, in EMU.
+    pub x_emu: i64,
+    /// Aligned within the frame instead of offset.
+    pub h_align: Option<AnchorAlign>,
+    pub v_from: AnchorFrame,
+    /// Offset of the image's top edge from the frame's, in EMU.
+    pub y_emu: i64,
+    pub v_align: Option<AnchorAlign>,
+    /// Drawn behind the text rather than in front of it.
+    pub behind: bool,
+}
+
+/// The box a floating image is placed in.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub enum AnchorFrame {
+    /// The whole page.
+    Page,
+    /// The page inside its margins.
+    Margin,
+    /// The anchoring paragraph: its column horizontally, its top
+    /// vertically.
+    #[default]
+    Text,
+}
+
+/// Start, centre or end of a frame (left/top, centre, right/bottom).
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub enum AnchorAlign {
+    Start,
+    Center,
+    End,
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub enum VertAlign {
     Superscript,
@@ -155,6 +199,33 @@ pub enum ListKind {
     Numbered,
 }
 
+/// How a numbered item shows its number: `prefix`, the number in
+/// `format`, then `suffix`. An item numbered "3.1" under a heading that
+/// Word or LibreOffice numbers 3 has the prefix "3.": the label is what
+/// the file showed, and the model counts only the item's own level.
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ListLabel {
+    #[serde(default)]
+    pub prefix: String,
+    #[serde(default)]
+    pub format: NumberFormat,
+    #[serde(default)]
+    pub suffix: String,
+}
+
+/// The digits of a list number. `None` shows no number, only the label's
+/// text (Word's level text "2.1" with no placeholder).
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub enum NumberFormat {
+    #[default]
+    Decimal,
+    LowerLetter,
+    UpperLetter,
+    LowerRoman,
+    UpperRoman,
+    None,
+}
+
 /// Paragraph-level formatting.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct ParaStyle {
@@ -168,6 +239,10 @@ pub struct ParaStyle {
     /// Optional first number for a numbered list item (restart support).
     #[serde(default)]
     pub list_start: Option<u32>,
+    /// A numbered item's label when it is not "N.": Word's "3.%2" and
+    /// "(%1)", ODF's num-prefix and num-suffix. `None` is "N.".
+    #[serde(default)]
+    pub list_label: Option<ListLabel>,
     /// Line spacing multiplier (1.0, 1.15, 1.5, 2.0).
     pub line_spacing: f32,
     /// Paragraph layout values in points. Tabs are absolute stops from the
@@ -227,7 +302,7 @@ pub struct TableCell {
 
 impl Default for ParaStyle {
     fn default() -> Self {
-        Self { heading: None, alignment: Alignment::Left, list: ListKind::None, list_level: 0, list_start: None, line_spacing: 1.0, space_before_pt: 0.0, space_after_pt: 0.0, left_indent_pt: 0.0, right_indent_pt: 0.0, first_line_indent_pt: 0.0, tab_stops_pt: Vec::new(), code_block: None, block_quote: false, html_block: false, page_break_before: false, named_style: None, table_cell: None, keep_with_next: false, toc: None }
+        Self { heading: None, alignment: Alignment::Left, list: ListKind::None, list_level: 0, list_start: None, list_label: None, line_spacing: 1.0, space_before_pt: 0.0, space_after_pt: 0.0, left_indent_pt: 0.0, right_indent_pt: 0.0, first_line_indent_pt: 0.0, tab_stops_pt: Vec::new(), code_block: None, block_quote: false, html_block: false, page_break_before: false, named_style: None, table_cell: None, keep_with_next: false, toc: None }
     }
 }
 
