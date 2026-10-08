@@ -656,6 +656,7 @@ fn read_opened(path: &str, doc: rdocx::Document) -> Result<Document, String> {
     let table_columns = tables.iter().enumerate().filter_map(|(ti, t)| Some((ti as u32, column_widths(t)?))).collect();
     let table_rows = tables.iter().enumerate().filter_map(|(ti, t)| Some((ti as u32, row_heights(t)?))).collect();
     let table_fills = tables.iter().enumerate().filter_map(|(ti, t)| Some((ti as u32, cell_fills(t)?))).collect();
+    let table_padding = tables.iter().enumerate().filter_map(|(ti, t)| Some((ti as u32, cell_padding(t)?))).collect();
 
     Ok(Document {
         paragraphs,
@@ -670,6 +671,7 @@ fn read_opened(path: &str, doc: rdocx::Document) -> Result<Document, String> {
         table_rows,
         table_spans,
         table_fills,
+        table_padding,
     })
 }
 
@@ -694,6 +696,21 @@ fn cell_fills(table: &rdocx::TableRef<'_>) -> Option<Vec<crate::model::CellFill>
         }
     }
     (!fills.is_empty()).then_some(fills)
+}
+
+/// A table's cell padding, when it is not Word's default: its cell margins
+/// (`w:tblCellMar`), with its first cell's own (`w:tcMar`) over them.
+fn cell_padding(table: &rdocx::TableRef<'_>) -> Option<crate::model::CellPadding> {
+    let mut pad = crate::model::CellPadding::default();
+    let first = table.row(0).and_then(|r| r.cell(0).and_then(|c| c.margins()));
+    for m in [table.cell_margins(), first].into_iter().flatten() {
+        let pt = |l: Option<rdocx::Length>| l.map(|l| l.to_pt()).filter(|v| v.is_finite() && *v >= 0.0);
+        pad.top_pt = pt(m.top).unwrap_or(pad.top_pt);
+        pad.bottom_pt = pt(m.bottom).unwrap_or(pad.bottom_pt);
+        pad.left_pt = pt(m.left).unwrap_or(pad.left_pt);
+        pad.right_pt = pt(m.right).unwrap_or(pad.right_pt);
+    }
+    (pad != crate::model::CellPadding::default()).then_some(pad)
 }
 
 /// A table's row heights, when any row gives one (`w:trHeight`).
@@ -868,6 +885,9 @@ pub fn write(doc: &Document, path: impl AsRef<std::path::Path>) -> Result<(), St
                 for (c, w) in widths.iter().enumerate() {
                     tbl.set_column_width(c, rdocx::Length::pt(*w));
                 }
+            }
+            if let Some(pad) = doc.table_padding.get(&tc0.table) {
+                tbl.set_cell_margins(rdocx::Length::pt(pad.top_pt), rdocx::Length::pt(pad.right_pt), rdocx::Length::pt(pad.bottom_pt), rdocx::Length::pt(pad.left_pt));
             }
             for fill in doc.table_fills.get(&tc0.table).into_iter().flatten() {
                 if let Some(mut cell) = tbl.cell(fill.row as usize, fill.col as usize) {

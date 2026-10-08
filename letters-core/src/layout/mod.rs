@@ -939,6 +939,9 @@ fn layout_table(flow: &mut Flow, doc: &Document, range: std::ops::Range<usize>, 
         }
     };
     let span_w = |col: u32, n: u32| -> f64 { widths[col as usize..(col + n) as usize].iter().sum() };
+    // The room inside each cell around its text. The table sits out to
+    // the left by its left padding, so cell text lines up with the margin.
+    let pad = doc.table_padding.get(&first.table).copied().unwrap_or_default();
     let opts = flow.opts.clone();
     flow.y += std::mem::take(&mut flow.pending_after);
 
@@ -951,7 +954,7 @@ fn layout_table(flow: &mut Flow, doc: &Document, range: std::ops::Range<usize>, 
         for col in 0..cols {
             let Some((ncols, nrows)) = cell_at(row, col) else { continue };
             let width = span_w(col, ncols);
-            let inner_w = (width - 2.0 * CELL_PADDING_PT).max(1.0);
+            let inner_w = (width - pad.left_pt - pad.right_pt).max(1.0);
             let mut paras = Vec::new();
             for &(i, _) in cells.iter().filter(|(_, c)| c.row == row && c.col == col) {
                 let p = &doc.paragraphs[i];
@@ -971,9 +974,9 @@ fn layout_table(flow: &mut Flow, doc: &Document, range: std::ops::Range<usize>, 
         // Lay the merged cells that start in this row down from its top.
         let mut start_tall = |flow: &mut Flow, tall: &mut Vec<Tall>, top: f64| {
             for (col, width, last_row, paras) in starting.drain(..) {
-                let cx = flow.column_x() - CELL_PADDING_PT + col_x[col as usize];
-                let slices = cell_slices(doc, &paras);
-                place_slices(flow, doc, &paras, &slices, cx, top);
+                let cx = flow.column_x() - pad.left_pt + col_x[col as usize];
+                let slices = cell_slices(doc, &paras, &pad);
+                place_slices(flow, doc, &paras, &slices, cx + pad.left_pt, top);
                 let bottom = top + slices.iter().map(Slice::height).sum::<f64>() + CELL_RULE_PT;
                 tall.push(Tall { row, col, width, last_row, top, page: flow.pages.len(), column: flow.column, bottom, fill: fill(col) });
             }
@@ -989,13 +992,13 @@ fn layout_table(flow: &mut Flow, doc: &Document, range: std::ops::Range<usize>, 
             let x0 = flow.column_x();
             start_tall(flow, &mut tall, top);
             for (col, width, paras) in &row_cells {
-                let cx = x0 - CELL_PADDING_PT + col_x[*col as usize];
+                let cx = x0 - pad.left_pt + col_x[*col as usize];
                 flow.push(Item::Cell { table: first.table, row, col: *col, x_pt: cx, y_pt: top, width_pt: *width, height_pt: h.pt, fill: fill(*col) });
-                let slices = cell_slices(doc, paras);
-                place_slices(flow, doc, paras, &slices, cx, top);
+                let slices = cell_slices(doc, paras, &pad);
+                place_slices(flow, doc, paras, &slices, cx + pad.left_pt, top);
             }
             flow.y = top + h.pt;
-            close_tall(flow, &mut tall, first.table, row, &col_x);
+            close_tall(flow, &mut tall, first.table, row, &col_x, pad.left_pt);
             continue;
         }
         // Otherwise the row splits across pages, as Word and LibreOffice
@@ -1004,7 +1007,7 @@ fn layout_table(flow: &mut Flow, doc: &Document, range: std::ops::Range<usize>, 
         // the next. A minimum height (an answer box) is made up by the
         // last piece. Moved whole, a tall row left a page of blank space
         // before it and a row taller than a page ran off its foot.
-        let slices: Vec<Vec<Slice>> = row_cells.iter().map(|(_, _, paras)| cell_slices(doc, paras)).collect();
+        let slices: Vec<Vec<Slice>> = row_cells.iter().map(|(_, _, paras)| cell_slices(doc, paras, &pad)).collect();
         let mut next = vec![0usize; slices.len()];
         // A merged cell that ends here needs the row to reach the end of
         // its content, when the two are in the same column of one page.
@@ -1053,9 +1056,9 @@ fn layout_table(flow: &mut Flow, doc: &Document, range: std::ops::Range<usize>, 
                 start_tall(flow, &mut tall, top);
             }
             for (((col, width, paras), cell), (&from, &(to, _))) in row_cells.iter().zip(&slices).zip(next.iter().zip(&takes)) {
-                let cx = x0 - CELL_PADDING_PT + col_x[*col as usize];
+                let cx = x0 - pad.left_pt + col_x[*col as usize];
                 flow.push(Item::Cell { table: first.table, row, col: *col, x_pt: cx, y_pt: top, width_pt: *width, height_pt: height, fill: fill(*col) });
-                place_slices(flow, doc, paras, &cell[from..to], cx, top);
+                place_slices(flow, doc, paras, &cell[from..to], cx + pad.left_pt, top);
             }
             for (n, (to, _)) in next.iter_mut().zip(&takes) {
                 *n = *to;
@@ -1067,7 +1070,7 @@ fn layout_table(flow: &mut Flow, doc: &Document, range: std::ops::Range<usize>, 
             }
             flow.next_column();
         }
-        close_tall(flow, &mut tall, first.table, row, &col_x);
+        close_tall(flow, &mut tall, first.table, row, &col_x, pad.left_pt);
     }
 }
 
@@ -1090,12 +1093,12 @@ struct Tall {
 /// Draw the box of each merged cell whose last row is `row`, now placed:
 /// from its first row's top to here, when both are in this column of this
 /// page. One that crossed a page keeps its content and loses its box.
-fn close_tall(flow: &mut Flow, tall: &mut Vec<Tall>, table: u32, row: u32, col_x: &[f64]) {
+fn close_tall(flow: &mut Flow, tall: &mut Vec<Tall>, table: u32, row: u32, col_x: &[f64], left_pad: f64) {
     let (page, column, y, x0) = (flow.pages.len(), flow.column, flow.y, flow.column_x());
     let (ending, rest): (Vec<Tall>, Vec<Tall>) = std::mem::take(tall).into_iter().partition(|t| t.last_row == row);
     *tall = rest;
     for t in ending.into_iter().filter(|t| (t.page, t.column) == (page, column)) {
-        let cx = x0 - CELL_PADDING_PT + col_x[t.col as usize];
+        let cx = x0 - left_pad + col_x[t.col as usize];
         flow.push(Item::Cell { table, row: t.row, col: t.col, x_pt: cx, y_pt: t.top, width_pt: t.width, height_pt: y - t.top, fill: t.fill.clone() });
     }
 }
@@ -1117,27 +1120,30 @@ impl Slice {
     }
 }
 
-/// A cell's content as the steps it is laid down in.
-fn cell_slices(doc: &Document, paras: &[CellParagraph]) -> Vec<Slice> {
-    let mut out = Vec::new();
+/// A cell's content as the steps it is laid down in, inside the cell's
+/// top and bottom padding.
+fn cell_slices(doc: &Document, paras: &[CellParagraph], pad: &crate::model::CellPadding) -> Vec<Slice> {
+    let mut out = vec![Slice::Gap(pad.top_pt)];
     for (k, (i, s, _)) in paras.iter().enumerate() {
         let p = &doc.paragraphs[*i];
         out.push(Slice::Gap(p.style.space_before_pt.max(0.0)));
         out.extend(s.lines.iter().enumerate().map(|(l, lb)| Slice::Line(k, l, lb.natural_height() * spacing(p))));
         out.push(Slice::Gap(p.style.space_after_pt.max(0.0)));
     }
+    out.push(Slice::Gap(pad.bottom_pt));
     out
 }
 
-/// Draw a run of a cell's slices from `top` down, in the cell at `cx`.
-fn place_slices(flow: &mut Flow, doc: &Document, paras: &[CellParagraph], slices: &[Slice], cx: f64, top: f64) {
+/// Draw a run of a cell's slices from `top` down, its text's left edge at
+/// `text_x` (the cell's, inside its padding).
+fn place_slices(flow: &mut Flow, doc: &Document, paras: &[CellParagraph], slices: &[Slice], text_x: f64, top: f64) {
     let mut y = top;
     for slice in slices {
         if let Slice::Line(k, l, h) = *slice {
             let (i, s, _) = &paras[k];
             let p = &doc.paragraphs[*i];
             let text: Vec<char> = layout_text(&p.runs).chars().collect();
-            emit_line(flow, *i, p, &text, l, &s.lines[l], cx + CELL_PADDING_PT + s.box_x, s.box_w, y, h);
+            emit_line(flow, *i, p, &text, l, &s.lines[l], text_x + s.box_x, s.box_w, y, h);
         }
         y += slice.height();
     }

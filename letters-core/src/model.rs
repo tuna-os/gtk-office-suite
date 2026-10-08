@@ -434,6 +434,27 @@ pub struct Document {
     /// (`w:shd`, `fo:background-color`). A cell not listed is unshaded.
     #[serde(default, skip_serializing_if = "std::collections::BTreeMap::is_empty")]
     pub table_fills: std::collections::BTreeMap<u32, Vec<CellFill>>,
+    /// Each table's cell padding, by table id (Word's cell margins, ODF's
+    /// `fo:padding`). A table not listed has Word's default.
+    #[serde(default, skip_serializing_if = "std::collections::BTreeMap::is_empty")]
+    pub table_padding: std::collections::BTreeMap<u32, CellPadding>,
+}
+
+/// The room between a table cell's edges and its text, in points.
+#[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
+pub struct CellPadding {
+    pub top_pt: f64,
+    pub bottom_pt: f64,
+    pub left_pt: f64,
+    pub right_pt: f64,
+}
+
+impl Default for CellPadding {
+    /// Word's and LibreOffice's default for a table: 0.08in left and right
+    /// (`layout::CELL_PADDING_PT`), none above or below.
+    fn default() -> Self {
+        Self { top_pt: 0.0, bottom_pt: 0.0, left_pt: 5.4, right_pt: 5.4 }
+    }
 }
 
 /// A merged table cell: the cell at `row`, `col` spans `rows` rows and
@@ -553,6 +574,7 @@ impl Document {
             table_rows: Default::default(),
             table_spans: Default::default(),
             table_fills: Default::default(),
+            table_padding: Default::default(),
         }
     }
 
@@ -823,6 +845,7 @@ impl Document {
         self.table_rows.remove(&table);
         self.table_spans.remove(&table);
         self.table_fills.remove(&table);
+        self.table_padding.remove(&table);
         if rows == 0 || cols == 0 {
             return table;
         }

@@ -1694,6 +1694,22 @@ fn table_cell_fills_survive() {
     assert!(round_trip(&d).table_fills.is_empty());
 }
 
+/// A table's cell padding survives a save and reopen (`w:tblCellMar`); a
+/// table with Word's default has none of its own.
+#[test]
+fn table_cell_padding_survives() {
+    use letters_core::CellPadding;
+    let mut d = Document::from_plain_text("after");
+    let table = d.insert_table_at(0, 2, 2);
+    let want = CellPadding { top_pt: 4.0, bottom_pt: 4.0, left_pt: 4.0, right_pt: 4.0 };
+    d.table_padding.insert(table, want);
+    let rt = round_trip(&d);
+    assert_eq!(rt.table_padding.values().copied().collect::<Vec<_>>(), [want]);
+    let mut d = Document::from_plain_text("after");
+    d.insert_table_at(0, 1, 1);
+    assert!(round_trip(&d).table_padding.is_empty());
+}
+
 /// A table stays where the document has it, between the paragraphs around
 /// it, and the paragraph OOXML needs after a table that meets another or
 /// ends the document comes and goes with the save: a round trip neither

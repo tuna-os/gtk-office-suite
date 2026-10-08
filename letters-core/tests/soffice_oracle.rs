@@ -1980,3 +1980,39 @@ fn floating_pictures_keep_their_placement_through_writer_both_ways() {
     let Some(rt) = through_lo_to_docx(&d, "float") else { return };
     close(&rt, "odt → Writer → docx");
 }
+
+/// A table's cell padding survives Writer both ways: our docx converted to
+/// odt (`w:tblCellMar` to `fo:padding`), and our odt converted to docx.
+/// The questionnaire's cells are 4pt in from every edge; the expression of
+/// interest form's 0.0784in (5.65pt) all round.
+#[test]
+fn table_cell_padding_survives_writer_both_ways() {
+    let Some(bin) = require_or_skip() else { return };
+    let mut d = Document::from_plain_text("after the table");
+    let table = d.insert_table_at(0, 2, 2);
+    for p in d.paragraphs.iter_mut().filter(|p| p.style.table_cell.is_some()) {
+        p.runs = vec![Run::plain("cell")];
+    }
+    let want = letters_core::CellPadding { top_pt: 4.0, bottom_pt: 4.0, left_pt: 5.65, right_pt: 5.65 };
+    d.table_padding.insert(table, want);
+    let close = |got: &Document, how: &str| {
+        let pads: Vec<&letters_core::CellPadding> = got.table_padding.values().collect();
+        assert_eq!(pads.len(), 1, "{how}: {:?}", got.table_padding);
+        let p = pads[0];
+        // Writer keeps lengths in hundredths of a millimetre, Word in twips.
+        for (g, w) in [(p.top_pt, want.top_pt), (p.bottom_pt, want.bottom_pt), (p.left_pt, want.left_pt), (p.right_pt, want.right_pt)] {
+            assert!((g - w).abs() < 0.1, "{how}: {p:?} for {want:?}");
+        }
+    };
+
+    let dir = tempfile::tempdir().unwrap();
+    let docx_path = dir.path().join("pad.docx");
+    docx::write(&d, &docx_path).expect("write docx");
+    let _ = soffice_convert(bin, &docx_path, "odt").ok();
+    let odt_path = dir.path().join("pad.odt");
+    assert!(odt_path.exists(), "soffice did not convert docx to odt");
+    close(&letters_core::odt::read(odt_path.to_str().unwrap()).expect("read converted odt"), "docx → Writer → odt");
+
+    let Some(rt) = through_lo_to_docx(&d, "pad") else { return };
+    close(&rt, "odt → Writer → docx");
+}
