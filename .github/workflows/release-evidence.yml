@@ -111,6 +111,10 @@ jobs:
           path: artifacts
       - name: Assemble the bundle
         run: |
+          # evidence.py exits 1 for a bundle with a kind missing; without
+          # pipefail the pipe into tee hid that, and v2.1.0's bundle went
+          # out with no JUnit and no independent-reader results.
+          set -o pipefail
           mkdir -p gathered/junit gathered/visual
           cp -r artifacts/release-readers-evidence/. gathered/
           cp -r artifacts/release-critical-evidence/. gathered/junit/ 2>/dev/null || true
