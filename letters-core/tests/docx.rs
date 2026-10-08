@@ -1088,6 +1088,31 @@ fn a_numbered_list_continues_past_a_plain_paragraph() {
     assert_eq!(shown, vec![1, 0, 2, 3, 0, 4]);
 }
 
+/// Two lists stay two lists through a save.
+///
+/// The writer put every numbered item on one list instance, which Word
+/// counts as one list: "1, 2 / a plain paragraph / 1, 2" opened in Word as
+/// "1, 2 / 3, 4", and the reader, which counts as Word does, read it back
+/// that way.
+#[test]
+fn separate_numbered_lists_keep_their_numbers_through_a_save() {
+    let mut d = Document::from_plain_text("a\nb\nbetween\nc\nd\n  nested\ne");
+    for k in [0, 1, 3, 4, 6] {
+        d.paragraphs[k].style.list = ListKind::Numbered;
+    }
+    d.paragraphs[5].style.list = ListKind::Numbered;
+    d.paragraphs[5].style.list_level = 1;
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("lists.docx");
+    docx::write(&d, &path).unwrap();
+    let rt = docx::read(path.to_str().unwrap()).unwrap();
+    let shown = |d: &Document| letters_core::lists::ordinals(d.paragraphs.iter().map(|p| &p.style));
+    assert_eq!(shown(&d), vec![1, 2, 0, 1, 2, 1, 3]);
+    assert_eq!(shown(&rt), shown(&d));
+    let starts: Vec<Option<u32>> = rt.paragraphs.iter().map(|p| p.style.list_start).collect();
+    assert_eq!(starts, vec![None; 7], "a list that starts at 1 needs no restart");
+}
+
 /// What a paragraph inherits from its styles is how it looks.
 ///
 /// python-docx's template (and Word's) puts 10pt after every paragraph and

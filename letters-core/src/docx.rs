@@ -754,6 +754,9 @@ pub fn write(doc: &Document, path: impl AsRef<std::path::Path>) -> Result<(), St
     let mut has_toc = false;
     // The numIds of the bullet and numbered list definitions, once made.
     let mut list_ids: [Option<u32>; 2] = [None, None];
+    // What each numbered item shows, and what Word would show it as.
+    let ordinals = crate::lists::ordinals(paras.iter().map(|p| &p.style));
+    let mut word = WordNumbers::default();
     let mut i = 0;
     while i < paras.len() {
         // Consecutive paragraphs sharing a table id become one rdocx table.
@@ -938,19 +941,26 @@ pub fn write(doc: &Document, path: impl AsRef<std::path::Path>) -> Result<(), St
             Alignment::Justify => p.alignment(rdocx::Alignment::Justify),
         };
         let _ = p; // release the builder borrow before append_hyperlink
-        // A numbered item that restarts the count (#1205): its own instance
-        // of the numbered list's definition, with a start override at its
-        // level, which the items after it continue. Without it a list
-        // restarted at 5 counted on from the previous one.
-        if let (ListKind::Numbered, Some(start), Some(num_id)) = (para.style.list, para.style.list_start, list_ids[1]) {
-            let definition = out.numbering_instance(num_id).map(|n| n.definition_id);
-            let override_ = rdocx::NumberingLevelOverride {
-                level, start: Some(start), replacement: None, paragraph_style_link: None, has_unmodeled_properties: false,
-            };
-            if let Some(Ok(id)) = definition.map(|d| out.add_numbering_instance(d, &[override_])) {
-                out.last_paragraph_mut().expect("the list item").set_numbering(id, level);
-                list_ids[1] = Some(id);
+        // A numbered item Word would number otherwise: a restart (#1205),
+        // or the first item of a list after a paragraph that ended the one
+        // before, which Word would count on from it. It gets its own
+        // instance of the numbered list's definition, with a start
+        // override at its level, which the items after it continue.
+        if let (ListKind::Numbered, Some(mut num_id)) = (para.style.list, list_ids[1]) {
+            let number = ordinals[i - 1];
+            if word.next(num_id, level) != number {
+                let definition = out.numbering_instance(num_id).map(|n| n.definition_id);
+                let override_ = rdocx::NumberingLevelOverride {
+                    level, start: Some(number), replacement: None, paragraph_style_link: None, has_unmodeled_properties: false,
+                };
+                if let Some(Ok(id)) = definition.map(|d| out.add_numbering_instance(d, &[override_])) {
+                    out.last_paragraph_mut().expect("the list item").set_numbering(id, level);
+                    list_ids[1] = Some(id);
+                    word.restart(id, level, number);
+                    num_id = id;
+                }
             }
+            word.count(num_id, level, number);
         }
         // A table of contents is Word's TOC field around its entries.
         let toc_edge = |k: usize| paras.get(k).is_none_or(|q| q.style.toc.is_none());
@@ -1323,6 +1333,35 @@ fn run_page_break(p: &rdocx::ParagraphRef<'_>) -> RunPageBreak {
     RunPageBreak { leading, trailing: break_after_text }
 }
 
+/// The numbers Word will give the numbered items written so far: per list
+/// instance and level, the last number shown and where a level starts.
+#[derive(Default)]
+struct WordNumbers {
+    counts: std::collections::HashMap<u32, [Option<u32>; 9]>,
+    starts: std::collections::HashMap<(u32, u32), u32>,
+}
+
+impl WordNumbers {
+    /// The number Word gives the next item at `level` of `num_id`.
+    fn next(&self, num_id: u32, level: u32) -> u32 {
+        let last = self.counts.get(&num_id).and_then(|c| c[level.min(8) as usize]);
+        last.map_or_else(|| self.starts.get(&(num_id, level)).copied().unwrap_or(1), |n| n + 1)
+    }
+
+    fn restart(&mut self, num_id: u32, level: u32, start: u32) {
+        self.starts.insert((num_id, level), start);
+    }
+
+    /// Count an item numbered `n` at `level`, which restarts the levels
+    /// below it.
+    fn count(&mut self, num_id: u32, level: u32, n: u32) {
+        let counts = self.counts.entry(num_id).or_default();
+        let at = level.min(8) as usize;
+        counts[at] = Some(n);
+        counts[at + 1..].iter_mut().for_each(|c| *c = None);
+    }
+}
+
 /// The numbers Word gives numbered list items, in body order.
 ///
 /// Word keeps one count per list instance (`numId`) and level. A paragraph
@@ -1357,6 +1396,15 @@ impl WordCounter {
 /// model's count would show another, by restarting the count there. Where
 /// the two agree nothing changes, so a save writes the list as it was.
 fn number_as_word_does(paragraphs: &mut [Paragraph], word_numbers: &[Option<u32>]) {
+    // A restart this model's count makes anyway is no restart: the first
+    // item of a list, which a save gives its own instance starting at 1.
+    for k in 0..paragraphs.len() {
+        let Some(start) = paragraphs[k].style.list_start else { continue };
+        paragraphs[k].style.list_start = None;
+        if crate::lists::ordinals(paragraphs[..=k].iter().map(|p| &p.style))[k] != start {
+            paragraphs[k].style.list_start = Some(start);
+        }
+    }
     loop {
         let ours = crate::lists::ordinals(paragraphs.iter().map(|p| &p.style));
         let differs = word_numbers.iter().zip(&ours).position(|(w, o)| w.is_some_and(|w| w != *o));
