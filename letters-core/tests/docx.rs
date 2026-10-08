@@ -1158,6 +1158,50 @@ fn list_numbering_inherited_from_a_paragraph_style_is_read() {
     );
 }
 
+/// Merged cells survive a save: a heading across the table, a cell down
+/// two rows, and one across two columns and down two rows.
+///
+/// The reader put every cell at its place in the row, not in the grid: the
+/// cells after a merged one moved left, and a heading across the table
+/// was squeezed into its first column (render-real `crime-supervisor`).
+#[test]
+fn merged_cells_survive_a_docx_save() {
+    let mut d = Document::from_plain_text("after");
+    let table = d.insert_table_at(0, 4, 3);
+    for p in d.paragraphs.iter_mut() {
+        if let Some(c) = p.style.table_cell {
+            p.runs = vec![Run::plain(format!("r{}c{}", c.row, c.col))];
+        }
+    }
+    let spans = vec![
+        CellSpan { row: 0, col: 0, rows: 1, cols: 3 },
+        CellSpan { row: 1, col: 0, rows: 2, cols: 1 },
+        CellSpan { row: 1, col: 1, rows: 2, cols: 2 },
+    ];
+    // Covered positions hold nothing.
+    for p in d.paragraphs.iter_mut() {
+        if let Some(c) = p.style.table_cell {
+            if spans.iter().any(|s| s.contains(c.row, c.col) && (s.row, s.col) != (c.row, c.col)) {
+                p.runs.clear();
+            }
+        }
+    }
+    d.table_spans.insert(table, spans.clone());
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("merged.docx");
+    docx::write(&d, &path).unwrap();
+    let rt = docx::read(path.to_str().unwrap()).unwrap();
+    assert_eq!(rt.table_spans.values().collect::<Vec<_>>(), [&spans], "the reader numbers tables by their order");
+    let texts = |d: &Document| -> Vec<(u32, u32, String)> {
+        d.paragraphs.iter().filter_map(|p| p.style.table_cell.map(|c| (c.row, c.col, p.text()))).filter(|(_, _, t)| !t.is_empty()).collect()
+    };
+    assert_eq!(texts(&rt), texts(&d));
+    assert_eq!(texts(&rt), [(0, 0, "r0c0".into()), (1, 0, "r1c0".into()), (1, 1, "r1c1".into()), (3, 0, "r3c0".into()), (3, 1, "r3c1".into()), (3, 2, "r3c2".into())]);
+    // The grid stays whole: a paragraph at every position.
+    let positions: std::collections::BTreeSet<(u32, u32)> = rt.paragraphs.iter().filter_map(|p| p.style.table_cell.map(|c| (c.row, c.col))).collect();
+    assert_eq!(positions.len(), 12);
+}
+
 /// A list continues past a paragraph that is not in it.
 ///
 /// Word counts each list instance (`numId`) on its own: minutes numbered

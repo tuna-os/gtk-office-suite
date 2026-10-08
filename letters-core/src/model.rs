@@ -444,10 +444,35 @@ pub struct Document {
     /// row that sizes to its content), as the file gave them.
     #[serde(default, skip_serializing_if = "std::collections::BTreeMap::is_empty")]
     pub table_rows: std::collections::BTreeMap<u32, Vec<Option<RowHeight>>>,
+    /// Each table's merged cells, by table id: a cell that spans more than
+    /// one row or column, and the grid positions it covers. A covered
+    /// position keeps its (empty) paragraph, so the grid stays whole.
+    #[serde(default, skip_serializing_if = "std::collections::BTreeMap::is_empty")]
+    pub table_spans: std::collections::BTreeMap<u32, Vec<CellSpan>>,
     /// Each table's shaded cells, by table id: a form's grey header cells
     /// (`w:shd`, `fo:background-color`). A cell not listed is unshaded.
     #[serde(default, skip_serializing_if = "std::collections::BTreeMap::is_empty")]
     pub table_fills: std::collections::BTreeMap<u32, Vec<CellFill>>,
+}
+
+/// A merged table cell: the cell at `row`, `col` spans `rows` rows and
+/// `cols` columns (each at least 1, one of them more), as Word's
+/// `w:gridSpan` and `w:vMerge` and ODF's `table:number-columns-spanned`
+/// and `table:number-rows-spanned` merge them.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct CellSpan {
+    pub row: u32,
+    pub col: u32,
+    pub rows: u32,
+    pub cols: u32,
+}
+
+impl CellSpan {
+    /// Whether the span covers grid position `row`, `col`, its own
+    /// included.
+    pub fn contains(&self, row: u32, col: u32) -> bool {
+        (self.row..self.row + self.rows).contains(&row) && (self.col..self.col + self.cols).contains(&col)
+    }
 }
 
 /// A table cell's background colour, as six hex digits (`D9D9D9`).
@@ -549,6 +574,7 @@ impl Document {
             comments: Vec::new(),
             table_columns: Default::default(),
             table_rows: Default::default(),
+            table_spans: Default::default(),
             table_fills: Default::default(),
         }
     }
@@ -818,6 +844,7 @@ impl Document {
         // A new table has no file widths, even under the id of a deleted one.
         self.table_columns.remove(&table);
         self.table_rows.remove(&table);
+        self.table_spans.remove(&table);
         self.table_fills.remove(&table);
         if rows == 0 || cols == 0 {
             return table;
@@ -859,6 +886,44 @@ impl Document {
         self.paragraphs = rest;
     }
 
+    /// Move `table`'s merged cells for `count` rows or columns inserted at
+    /// `at` (`count` < 0: deleted from `at`). `axis` picks a span's start
+    /// and extent along the rows or the columns. A span the change falls
+    /// inside grows or shrinks; one that no longer spans anything is gone.
+    fn shift_spans(&mut self, table: u32, axis: fn(&mut CellSpan) -> (&mut u32, &mut u32), at: u32, count: i64) {
+        let Some(spans) = self.table_spans.get_mut(&table) else { return };
+        for span in spans.iter_mut() {
+            let (start, len) = axis(span);
+            let (s, e) = (i64::from(*start), i64::from(*start) + i64::from(*len));
+            let (s, e) = if count >= 0 {
+                let at = i64::from(at);
+                match () {
+                    _ if at <= s => (s + count, e + count),
+                    _ if at < e => (s, e + count),
+                    _ => (s, e),
+                }
+            } else {
+                // Rows or columns `at..end` go; what of the span is left
+                // closes up around them.
+                let (from, to) = (i64::from(at), i64::from(at) - count);
+                let gone = (e.min(to) - s.max(from)).max(0);
+                let new_s = if s >= to { s + count } else { s.min(from) };
+                (new_s, new_s + (e - s - gone))
+            };
+            *start = s.max(0) as u32;
+            *len = (e - s).max(0) as u32;
+        }
+        spans.retain(|s| s.rows >= 1 && s.cols >= 1 && (s.rows > 1 || s.cols > 1));
+        if spans.is_empty() {
+            self.table_spans.remove(&table);
+        }
+    }
+
+    /// The merged cell of `table` covering grid position `row`, `col`.
+    pub fn span_at(&self, table: u32, row: u32, col: u32) -> Option<CellSpan> {
+        self.table_spans.get(&table)?.iter().copied().find(|s| s.contains(row, col))
+    }
+
     pub fn table_dimensions(&self, table: u32) -> Option<(u32, u32)> {
         let cells = self.paragraphs.iter().filter_map(|p| p.style.table_cell)
             .filter(|c| c.table == table).collect::<Vec<_>>();
@@ -885,6 +950,7 @@ impl Document {
             let at = (at as usize).min(heights.len());
             heights.splice(at..at, std::iter::repeat_n(None, count as usize));
         }
+        self.shift_spans(table, |s| (&mut s.row, &mut s.rows), at, count as i64);
         self.move_fills(table, |row, col| Some((if row >= at { row + count } else { row }, col)));
         self.reflow_table(table);
         true
@@ -903,6 +969,7 @@ impl Document {
             style: ParaStyle { table_cell: Some(TableCell { table, row, col: at + col }), ..Default::default() },
             runs: Vec::new(),
         })));
+        self.shift_spans(table, |s| (&mut s.col, &mut s.cols), at, count as i64);
         self.move_fills(table, |row, col| Some((row, if col >= at { col + count } else { col })));
         self.reflow_table(table);
         true
@@ -922,6 +989,7 @@ impl Document {
             let len = heights.len();
             heights.drain((at as usize).min(len)..(end as usize).min(len));
         }
+        self.shift_spans(table, |s| (&mut s.row, &mut s.rows), at, -(count as i64));
         self.move_fills(table, |row, col| match row {
             r if (at..end).contains(&r) => None,
             r if r >= end => Some((r - count, col)),
@@ -943,6 +1011,7 @@ impl Document {
             if cell.col >= end { cell.col -= count; p.style.table_cell = Some(cell); }
             true
         });
+        self.shift_spans(table, |s| (&mut s.col, &mut s.cols), at, -(count as i64));
         self.move_fills(table, |row, col| match col {
             c if (at..end).contains(&c) => None,
             c if c >= end => Some((row, c - count)),
@@ -1153,6 +1222,30 @@ mod structured_editing_tests {
         assert_eq!(doc.paragraphs[0].style.list_start, Some(4));
         assert_eq!(doc.paragraphs[1].style.list_level, 1);
         assert_eq!(doc.paragraphs[2].style.list_level, 0);
+    }
+
+    #[test]
+    fn merged_cells_move_and_resize_with_rows_and_columns() {
+        let mut doc = Document::from_plain_text("after");
+        let t = doc.insert_table_at(0, 4, 4);
+        let span = |row, col, rows, cols| CellSpan { row, col, rows, cols };
+        doc.table_spans.insert(t, vec![span(0, 0, 1, 4), span(1, 1, 2, 2)]);
+        // A row inside the tall cell makes it taller; one above moves it.
+        assert!(doc.insert_table_rows(t, 2, 1));
+        assert_eq!(doc.table_spans[&t], [span(0, 0, 1, 4), span(1, 1, 3, 2)]);
+        assert!(doc.insert_table_rows(t, 0, 1));
+        assert_eq!(doc.table_spans[&t], [span(1, 0, 1, 4), span(2, 1, 3, 2)]);
+        // A column inside both widens them.
+        assert!(doc.insert_table_cols(t, 2, 1));
+        assert_eq!(doc.table_spans[&t], [span(1, 0, 1, 5), span(2, 1, 3, 3)]);
+        // Deleting the tall cell's first row leaves the rest of it, from
+        // where the row was.
+        assert!(doc.delete_table_rows(t, 2, 1));
+        assert_eq!(doc.table_spans[&t], [span(1, 0, 1, 5), span(2, 1, 2, 3)]);
+        // Columns down to one: the heading spans nothing and is gone.
+        assert!(doc.delete_table_cols(t, 1, 4));
+        assert!(!doc.table_spans.contains_key(&t), "{:?}", doc.table_spans);
+        assert_eq!(doc.span_at(t, 2, 0), None);
     }
 
     #[test]
