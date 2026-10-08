@@ -1240,8 +1240,10 @@ struct FrameReading {
 /// Without it, a Calibri document drew in the application's serif face.
 fn read_base_font(styles: &str) -> crate::model::BaseFont {
     let mut faces: std::collections::HashMap<String, String> = Default::default();
-    // (font name, size in points) from the default style, then Standard.
-    let mut found: [(Option<String>, Option<f64>); 2] = Default::default();
+    // (font name, size in points) from the default style, then Standard,
+    // then Word's "Normal": a Word conversion has no Standard, and every
+    // paragraph style inherits Normal's font, not the default style's.
+    let mut found: [(Option<String>, Option<f64>); 3] = Default::default();
     let mut slot: Option<usize> = None;
     let mut reader = Reader::from_str(styles);
     loop {
@@ -1256,9 +1258,12 @@ fn read_base_font(styles: &str) -> crate::model::BaseFont {
                     slot = (attr_val(&e, "style:family").as_deref() == Some("paragraph")).then_some(0);
                 }
                 "style:style" => {
-                    let standard = attr_val(&e, "style:name").as_deref() == Some("Standard")
-                        && attr_val(&e, "style:family").as_deref() == Some("paragraph");
-                    slot = standard.then_some(1);
+                    let paragraph = attr_val(&e, "style:family").as_deref() == Some("paragraph");
+                    slot = match attr_val(&e, "style:name").as_deref() {
+                        Some("Standard") if paragraph => Some(1),
+                        Some("Normal") if paragraph => Some(2),
+                        _ => None,
+                    };
                 }
                 "style:text-properties" => {
                     if let Some(i) = slot {
@@ -1277,8 +1282,10 @@ fn read_base_font(styles: &str) -> crate::model::BaseFont {
             _ => {}
         }
     }
-    let name = found[1].0.clone().or_else(|| found[0].0.clone());
-    let size = found[1].1.or(found[0].1);
+    // Normal stands in for Standard only when the file has no Standard.
+    let base = if found[1].0.is_some() || found[1].1.is_some() { 1 } else { 2 };
+    let name = found[base].0.clone().or_else(|| found[0].0.clone());
+    let size = found[base].1.or(found[0].1);
     crate::model::BaseFont {
         family: name.map(|n| faces.get(&n).cloned().unwrap_or(n)),
         size_hp: size.map(|pt| (pt * 2.0).round() as u16).filter(|hp| *hp > 0),
@@ -2745,6 +2752,25 @@ mod tests {
         assert_eq!(h2.color.as_deref().map(|c| c.trim_start_matches('#').to_uppercase()), Some("2E74B5".into()), "{h2:?}");
         assert_eq!(h2.font_size_hp, Some(36), "{h2:?}");
         assert_eq!(h2.font_family.as_deref(), Some("Arial"), "{h2:?}");
+    }
+
+    /// A Word conversion has no "Standard" style: its paragraphs inherit
+    /// Word's "Normal" (Palatino 12pt), not the default style (Times
+    /// 10pt), so Normal gives the body font. Standard still wins where a
+    /// file has both.
+    #[test]
+    fn words_normal_style_gives_the_body_font_without_standard() {
+        let styles = |standard: &str| format!(
+            "<office:document-styles><office:styles>\
+             <style:default-style style:family=\"paragraph\"><style:text-properties style:font-name=\"Times New Roman\" fo:font-size=\"10pt\"/></style:default-style>\
+             <style:style style:name=\"Normal\" style:family=\"paragraph\"><style:text-properties style:font-name=\"Palatino Linotype\" fo:font-size=\"12pt\"/></style:style>\
+             {standard}</office:styles></office:document-styles>"
+        );
+        let content = "<office:document-content><office:body><office:text><text:p>body</text:p></office:text></office:body></office:document-content>";
+        let d = read_package(content, &styles(""));
+        assert_eq!((d.base_font.family.as_deref(), d.base_font.size_hp), (Some("Palatino Linotype"), Some(24)));
+        let d = read_package(content, &styles("<style:style style:name=\"Standard\" style:family=\"paragraph\"><style:text-properties style:font-name=\"Carlito\" fo:font-size=\"11pt\"/></style:style>"));
+        assert_eq!((d.base_font.family.as_deref(), d.base_font.size_hp), (Some("Carlito"), Some(22)));
     }
 
     #[test]
