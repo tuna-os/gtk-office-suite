@@ -797,7 +797,9 @@ impl Typeset {
                         }
                     }
                 }
-                Item::Line { source: Source::Header | Source::Footer, text, box_x_pt, box_width_pt, top_pt, .. } => {
+                // The line's own text from its own left edge (`x_pt`, which
+                // carries the header's alignment), laid out left.
+                Item::Line { source: Source::Header | Source::Footer, text, x_pt, box_width_pt, top_pt, .. } => {
                     let runs = [crate::model::Run::plain(text.clone())];
                     let req = ShapeRequest {
                         runs: &runs,
@@ -812,7 +814,7 @@ impl Typeset {
                         defaults: &self.opts,
                     };
                     let layout = self.shaper.layout(&req);
-                    cr.move_to(*box_x_pt, *top_pt);
+                    cr.move_to(*x_pt, *top_pt);
                     pangocairo::functions::show_layout(cr, &layout);
                 }
                 Item::Marker { para, text, x_pt, baseline_pt } => {

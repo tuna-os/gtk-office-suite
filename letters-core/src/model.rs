@@ -182,6 +182,10 @@ impl StylePatch {
     }
 }
 
+fn is_left(a: &Alignment) -> bool {
+    *a == Alignment::Left
+}
+
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub enum Alignment {
     #[default]
@@ -402,6 +406,21 @@ pub struct Document {
     /// Page header/footer text; "{page}" substitutes the page number.
     pub header: Option<String>,
     pub footer: Option<String>,
+    /// The pictures in the header, above its text (a letterhead's logo):
+    /// image runs (`RunStyle::image`, its extent, its alt text as the
+    /// run's text, and an anchor for one that floats).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub header_pictures: Vec<Run>,
+    /// The pictures in the footer, above its text.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub footer_pictures: Vec<Run>,
+    /// How the header's text is aligned (its first paragraph with text):
+    /// a bill's "FINANCE BILL" at the right, a classification centred.
+    #[serde(default, skip_serializing_if = "is_left")]
+    pub header_alignment: Alignment,
+    /// How the footer's text is aligned.
+    #[serde(default, skip_serializing_if = "is_left")]
+    pub footer_alignment: Alignment,
     /// Page size and margins; None = application default (A4).
     pub page: Option<PageGeometry>,
     /// The body font the document's own styles name; runs without a font
@@ -545,6 +564,10 @@ impl Document {
             footnotes: vec![],
             header: None,
             footer: None,
+            header_pictures: Vec::new(),
+            footer_pictures: Vec::new(),
+            header_alignment: Alignment::Left,
+            footer_alignment: Alignment::Left,
             page: None,
             base_font: BaseFont::default(),
             heading_styles: Vec::new(),
