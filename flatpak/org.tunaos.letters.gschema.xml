@@ -4,7 +4,17 @@
     <key name="dark-mode" type="b">
       <default>false</default>
       <summary>Dark mode</summary>
-      <description>Whether dark mode is enabled</description>
+      <description>Whether dark mode is enabled. Superseded by style, which can also keep light on a dark system; read when style is "default", as older versions saved only this.</description>
+    </key>
+    <key name="style" type="s">
+      <choices>
+        <choice value="default"/>
+        <choice value="light"/>
+        <choice value="dark"/>
+      </choices>
+      <default>"default"</default>
+      <summary>Style</summary>
+      <description>The style Toggle Dark Mode chose: "light" or "dark", kept whatever the system prefers, or "default" to follow the system.</description>
     </key>
     <key name="window-width" type="i">
       <default>960</default>

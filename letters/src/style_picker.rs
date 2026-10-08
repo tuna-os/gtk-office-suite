@@ -131,8 +131,18 @@ pub fn build(tv: &adw::TabView) -> gtk::MenuButton {
     for name in STYLES {
         list.append(&preview_row(name, &opts));
     }
+    // Scrolled, so the popover can shrink to the screen: unscrolled, the
+    // rows were its minimum height, and on a short screen (540 logical
+    // pixels, a 1080p display at 2x) GTK could not place it and the
+    // picker did not open at all.
+    let scroller = gtk::ScrolledWindow::builder()
+        .hscrollbar_policy(gtk::PolicyType::Never)
+        .propagate_natural_height(true)
+        .max_content_height(600)
+        .child(&list)
+        .build();
     let popover = gtk::Popover::new();
-    popover.set_child(Some(&list));
+    popover.set_child(Some(&scroller));
     button.set_popover(Some(&popover));
     {
         let tv = tv.clone();

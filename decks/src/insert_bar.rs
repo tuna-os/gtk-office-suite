@@ -203,7 +203,11 @@ fn chart_menu() -> gtk::MenuButton {
 /// header bar, five labelled buttons pushed the document's title off
 /// centre and left the toolbar row below nearly empty
 /// (docs/design/hig-audit-2026-10.md D1).
-pub fn build(toolbar: &gtk::Box, narrow: &adw::Breakpoint) {
+///
+/// The narrow window's Insert menu goes in the header bar instead: the
+/// narrow breakpoint hides the whole toolbar, and the menu in it left a
+/// 400px window with no way to insert anything.
+pub fn build(toolbar: &gtk::Box, header: &adw::HeaderBar, narrow: &adw::Breakpoint) {
     // Present stays the toolbar's last button.
     let present = toolbar.last_child();
     toolbar.append(&gtk::Separator::new(gtk::Orientation::Vertical));
@@ -216,7 +220,7 @@ pub fn build(toolbar: &gtk::Box, narrow: &adw::Breakpoint) {
     toolbar.append(&bar);
 
     let compact = compact_menu();
-    toolbar.append(&compact);
+    header.pack_start(&compact);
     if let Some(present) = present {
         toolbar.reorder_child_after(&present, toolbar.last_child().as_ref());
     }
