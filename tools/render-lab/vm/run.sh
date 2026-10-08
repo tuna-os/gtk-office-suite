@@ -148,15 +148,20 @@ print(next((f["file"] for f in json.load(open(sys.argv[1])) if f["app"] == sys.a
     # The portal's dialog process starts on first use (the action step
     # already waited 4s).
     sleep 6
-    # The name field opens on the document's name with its stem selected,
-    # so a typed path kept the extension after it ("….docx.docx") and the
-    # save went nowhere. Select it all first, as a user replacing it would.
+    # GNOME's file chooser (Files, since GNOME 47) takes a name, not a
+    # path: a "/" in the name field leaves Save disabled. So, as a user
+    # would: replace the suggested name (it opens with only the stem
+    # selected), go to ~/Downloads in the location bar, then Save.
     qmp_key ctrl+a >/dev/null
-    qmp_type "$GUEST_HOME/Downloads/portal-saved-$app.$ext"
+    qmp_type "portal-saved-$app.$ext"
+    qmp_key ctrl+l >/dev/null
     sleep 1
+    qmp_type "$GUEST_HOME/Downloads/"
+    qmp_key ret >/dev/null
+    sleep 2
     qmp "$PWD/screen.ppm" >/dev/null
     python3 -c 'import sys; from PIL import Image; Image.open(sys.argv[1]).save(sys.argv[2])' screen.ppm "$OUT/installed-$app-save-as.png"
-    qmp_key ret >/dev/null
+    qmp_key alt+s >/dev/null
     sleep 5
     "${SSH[@]}" "bash ~/lab/installed.sh --action $app open" || true
     sleep 4
