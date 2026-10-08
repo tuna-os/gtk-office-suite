@@ -611,6 +611,7 @@ fn read_opened(path: &str, doc: rdocx::Document) -> Result<Document, String> {
     // Table ids are the tables' order, as the cells above are tagged.
     let table_columns = tables.iter().enumerate().filter_map(|(ti, t)| Some((ti as u32, column_widths(t)?))).collect();
     let table_rows = tables.iter().enumerate().filter_map(|(ti, t)| Some((ti as u32, row_heights(t)?))).collect();
+    let table_fills = tables.iter().enumerate().filter_map(|(ti, t)| Some((ti as u32, cell_fills(t)?))).collect();
 
     Ok(Document {
         paragraphs,
@@ -623,7 +624,25 @@ fn read_opened(path: &str, doc: rdocx::Document) -> Result<Document, String> {
         comments: Vec::new(),
         table_columns,
         table_rows,
+        table_fills,
     })
+}
+
+/// A table's shaded cells (`w:shd w:fill`), when any cell is; "auto" is
+/// no fill.
+fn cell_fills(table: &rdocx::TableRef<'_>) -> Option<Vec<crate::model::CellFill>> {
+    let mut fills = Vec::new();
+    for ri in 0..table.row_count() {
+        let Some(row) = table.row(ri) else { continue };
+        for ci in 0..row.cell_count() {
+            let Some(fill) = row.cell(ci).and_then(|c| c.shading_fill().map(str::to_string)) else { continue };
+            let color = fill.trim_start_matches('#').to_uppercase();
+            if color.len() == 6 && color.chars().all(|c| c.is_ascii_hexdigit()) {
+                fills.push(crate::model::CellFill { row: ri as u32, col: ci as u32, color });
+            }
+        }
+    }
+    (!fills.is_empty()).then_some(fills)
 }
 
 /// A table's row heights, when any row gives one (`w:trHeight`).
@@ -770,6 +789,11 @@ pub fn write(doc: &Document, path: impl AsRef<std::path::Path>) -> Result<(), St
             if let Some(widths) = doc.table_columns.get(&tc0.table).filter(|w| w.len() == cols) {
                 for (c, w) in widths.iter().enumerate() {
                     tbl.set_column_width(c, rdocx::Length::pt(*w));
+                }
+            }
+            for fill in doc.table_fills.get(&tc0.table).into_iter().flatten() {
+                if let Some(mut cell) = tbl.cell(fill.row as usize, fill.col as usize) {
+                    cell.set_shading(&fill.color);
                 }
             }
             if let Some(heights) = doc.table_rows.get(&tc0.table) {
@@ -1411,6 +1435,18 @@ fn number_as_word_does(paragraphs: &mut [Paragraph], word_numbers: &[Option<u32>
     }
 }
 
+/// Whether a run reads as highlighted: a named Word highlight other than
+/// "none", or a shading fill that shows. Forms pasted from the web shade
+/// whole paragraphs white (`w:shd w:fill="FFFFFF"`) on a white page; read
+/// as a highlight, that text drew yellow where Word and LibreOffice draw
+/// nothing.
+fn run_is_highlighted(r: &rdocx::RunRef<'_>) -> bool {
+    if let Some(name) = r.highlight_color() {
+        return name != "none";
+    }
+    r.shading_fill().is_some_and(|fill| !fill.eq_ignore_ascii_case("auto") && !fill.eq_ignore_ascii_case("FFFFFF"))
+}
+
 /// A paragraph's list numbering as `(num_id, level)`, wherever it is set.
 ///
 /// Word's built-in list styles ("List Bullet", "List Number 2", …) carry
@@ -1615,7 +1651,11 @@ fn map_paragraph(doc: &rdocx::Document, p: &rdocx::ParagraphRef<'_>, table_style
             // file's heading style is not copied onto every run.
             rdocx_oxml::properties::CT_RPr::default()
         } else {
-            doc.effective_run_properties(p, &r)
+            // The styles' properties, not rdocx's effective ones: those
+            // also merge in the paragraph mark's (`w:pPr/w:rPr`), which
+            // formats the pilcrow alone. A form whose marks were bold drew
+            // every paragraph bold where Word and LibreOffice draw it plain.
+            doc.resolve_run_properties(p.style_id(), r.style_id())
         };
         let family = r.font_name().map(|f| f.to_string()).or_else(|| {
             heading.is_none().then(|| style_family(p.style_id())).flatten().filter(|f| Some(f) != base.family.as_ref())
@@ -1640,11 +1680,11 @@ fn map_paragraph(doc: &rdocx::Document, p: &rdocx::ParagraphRef<'_>, table_style
         runs.push(Run {
             text,
             style: RunStyle {
-                bold: r.is_bold() || eff.bold == Some(true),
-                italic: r.is_italic() || eff.italic == Some(true),
+                bold: r.bold_value().unwrap_or(eff.bold == Some(true)),
+                italic: r.italic_value().unwrap_or(eff.italic == Some(true)),
                 underline: r.is_underline(),
                 strikethrough: r.is_strike(),
-                highlight: r.highlight().is_some(),
+                highlight: run_is_highlighted(&r),
                 code: r.style_id() == Some("SourceText"),
                 link: link_for(idx),
                 image: None,
