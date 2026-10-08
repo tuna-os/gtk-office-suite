@@ -7278,7 +7278,12 @@ class LettersInsertLinkSmoke(BaseGUITestCase):
         self.new_letters_document()
         rawinput.typeText("see gnome")
         self.wait_until(self._runs, lambda r: r == [("see gnome", None)], description="the typed text")
+        page = self.wait_for_node(name="Print Layout", roleName="text")
         rawinput.keyCombo("<Shift><Control>Left")
+        # The selection arrives over X and the action over D-Bus, which
+        # keep no order between them: the dialog sometimes opened before
+        # the word was selected, and the link went in as new text.
+        self.wait_for_condition(lambda: page.queryText().getNSelections() > 0 or None, description="the last word selected")
         self.gapplication_action(aid, "insertlink")
         self.wait_for_node(name="Link address", roleName="text")
         rawinput.typeText("https://gnome.org")
