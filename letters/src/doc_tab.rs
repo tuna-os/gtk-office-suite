@@ -15,7 +15,7 @@ use libadwaita as adw;
 use std::cell::RefCell;
 use std::rc::Rc;
 
-use crate::actions::{connect_markdown_macros, register_formatting_tags};
+use crate::actions::register_formatting_tags;
 use crate::page_container::PageContainer;
 use crate::insert::insert_fragment;
 
@@ -84,19 +84,18 @@ pub(crate) fn report_open_failure(parent: Option<&adw::ApplicationWindow>, path:
 
 /// Show a freshly loaded document's page setup in its page view.
 ///
-/// `capture_from_buffer` reads header, footer and page geometry off the
-/// buffer, so saving is already correct without this — but until the
-/// container is told, the page renders at default geometry with empty
+/// Saving writes the model's header, footer and page geometry, so it is
+/// correct without this — but until the container is told, the page renders at default geometry with empty
 /// header/footer areas, so a document that has them looks like it does not
 /// (#438). Every open route needs this, which is why it is a function rather
 /// than a few lines inlined at one of them.
 pub(crate) fn apply_page_setup_from_buffer(container: &PageContainer, buf: &gtk::TextBuffer) {
-    let (header, footer) = crate::bridge::buffer_header_footer(buf);
-    container.set_header_text(&header.unwrap_or_default());
-    container.set_footer_text(&footer.unwrap_or_default());
+    let doc = crate::bridge::document_of(buf);
+    container.set_header_text(doc.header.as_deref().unwrap_or_default());
+    container.set_footer_text(doc.footer.as_deref().unwrap_or_default());
     // Geometry is optional: a markdown file has none, and a document without
     // it should keep the container's defaults rather than be forced to zero.
-    if let Some(page) = crate::bridge::buffer_page_geometry(buf) {
+    if let Some(page) = doc.page {
         container.set_page_size(page.width_pt, page.height_pt);
         container.set_margins(
             page.margin_top_pt,
@@ -145,10 +144,7 @@ pub(crate) fn typeset_for(container: &PageContainer, buf: &gtk::TextBuffer) -> l
 /// `typeset_for`, plus where each laid-out paragraph starts in the buffer,
 /// which the page view needs to edit it.
 fn typeset_with_starts(container: &PageContainer, buf: &gtk::TextBuffer) -> (letters_core::layout::pango::Typeset, Vec<usize>) {
-    let (doc, starts) = match crate::live::of(buf) {
-        Some(m) => m.borrow_mut().snapshot(buf),
-        None => crate::bridge::capture_with_starts(buf),
-    };
+    let (doc, starts) = crate::live::of(buf).map(|m| m.borrow().snapshot()).unwrap_or_default();
     let mut typeset = letters_core::layout::pango::Typeset::new(doc, layout_options(container));
     typeset.set_image_loader(crate::page_view::load_image);
     (typeset, starts)
@@ -291,16 +287,14 @@ pub(crate) fn make_doc_widget(settings: Option<&gio::Settings>) -> (PageContaine
     register_formatting_tags(&buffer);
     // A new document's body font is the one Preferences names (#1428); it
     // is the document's own, so the page shows it and every save writes it.
-    // An opened file replaces it with its own as it loads. The key used to
-    // style only the Draft editor, which is no longer shown.
+    // An opened file replaces it with its own as it loads.
+    let mut doc = letters_core::Document::from_plain_text("");
     if let Some(base) = settings.and_then(|s| preferred_base_font(&s.string("font"))) {
-        crate::bridge::set_base_font(&buffer, base);
+        doc.base_font = base;
     }
-    // The tab's document: the live model is the source of truth, the
-    // buffer what formatting actions edit, and its history the tab's undo
-    // (live.rs).
-    let live = crate::live::LiveModel::attach(&buffer);
-    connect_markdown_macros(&buffer);
+    // The tab's document: the live model is the source of truth and its
+    // history the tab's undo; the buffer shows it (live.rs).
+    let live = crate::live::LiveModel::attach(&buffer, doc);
     // Transparent scrolled windows, so PageContainer's backdrop shows
     // around the pages.
     let css_provider = gtk::CssProvider::new();
@@ -313,19 +307,6 @@ pub(crate) fn make_doc_widget(settings: Option<&gio::Settings>) -> (PageContaine
     let spell_enabled = settings.map(|s| s.boolean("spell-check-enabled")).unwrap_or(true);
     if spell_enabled {
         crate::spell::SpellChecker::new(&buffer).start();
-    }
-    // Restore line spacing from GSettings
-    if let Some(s) = settings {
-        let ls = s.double("line-spacing");
-        let tag_name = if ls >= 1.8 { "line-spacing-2.0" }
-            else if ls >= 1.4 { "line-spacing-1.5" }
-            else if ls >= 1.1 { "line-spacing-1.15" }
-            else { "line-spacing-1.0" };
-        if let Some(tag) = buffer.tag_table().lookup(tag_name) {
-            let start = buffer.start_iter();
-            let end = buffer.end_iter();
-            buffer.apply_tag(&tag, &start, &end);
-        }
     }
     crate::review_ui::apply_to(&buffer, crate::review_ui::tracking());
 
@@ -394,7 +375,7 @@ pub(crate) fn make_doc_widget(settings: Option<&gio::Settings>) -> (PageContaine
             let id = glib::idle_add_local(move || {
                 match pc.page_view().filter(|v| v.page_count() > 0) {
                     Some(view) => {
-                        let (doc, starts) = live.borrow_mut().snapshot(&buf);
+                        let (doc, starts) = live.borrow_mut().snapshot();
                         view.update_document(doc, layout_options(&pc), starts);
                     }
                     None => refresh_print_layout(&pc, &buf),
@@ -514,7 +495,7 @@ mod tests {
             let mut doc = letters_core::model::Document::from_plain_text("body");
             doc.header = Some("Quarterly Report".into());
             doc.footer = Some("Page {page}".into());
-            crate::bridge::render_to_buffer(&doc, &buf);
+            crate::bridge::load_document(&doc, &buf);
 
             apply_page_setup_from_buffer(&container, &buf);
             assert_eq!(container.header_text(), "Quarterly Report");
@@ -529,7 +510,7 @@ mod tests {
             let buf = gtk::TextBuffer::new(None);
             let mut doc = letters_core::model::Document::from_plain_text("body");
             doc.page = Some(geometry());
-            crate::bridge::render_to_buffer(&doc, &buf);
+            crate::bridge::load_document(&doc, &buf);
 
             apply_page_setup_from_buffer(&container, &buf);
             assert_eq!(container.page_size(), (612.0, 792.0), "page size must follow the document");

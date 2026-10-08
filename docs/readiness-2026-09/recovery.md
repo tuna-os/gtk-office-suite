@@ -76,13 +76,15 @@ AutosaveSlot used to store bytes and metadata in separate atomic writes. Each wr
       byte path a snapshot actually uses, with the negative controls that a
       careless fix would trip (a default sheet must not come back carrying
       "explicit" defaults, and sheet two must not inherit sheet one's layout).
-      **Letters checks out.** Its snapshot is the whole `Document` as JSON
-      with nothing `serde(skip)`, and the four fields that do not live in the
-      `GtkTextBuffer` — header, footer, page geometry, footnotes — ride on
-      sidecar data attached to the buffer: `capture_from_buffer` reads them
-      and `render_to_buffer` reinstalls them through `set_buffer_sidecars`,
-      so the recovery path closes the loop. Round-trip tests already cover
-      header, footer and page geometry.
+      **Letters checks out, since #1202 stage 4.** Its snapshot is the
+      whole `Document` as JSON with nothing `serde(skip)`, taken from the
+      tab's live model. It used to be taken from a read of the
+      `GtkTextBuffer` (`capture_from_buffer`), which the header, footer,
+      page geometry and footnotes survived through sidecar data, but which
+      lost what the buffer cannot hold: a table cell's own spacing and
+      alignment, a line break inside a paragraph, a cell of two paragraphs.
+      Opening a document went through the same read, so those were already
+      gone before any snapshot: 21 of 61 corpus documents changed on open.
       **Decks is now covered by `decks-core/tests/snapshot_fidelity.rs`.**
       Notes, backgrounds, object geometry, run styles, slide order, shape
       rotation, slide masters and embedded pictures all survive both

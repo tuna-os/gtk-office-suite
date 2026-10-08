@@ -49,7 +49,7 @@ Nine crates. Line counts are indicative of weight, not targets.
 | `suite-common` | yes | no | Command palette, shortcuts dialog, file dialogs, toasts, GTK test helpers |
 | `suite-export` | no | yes | PDF export |
 | `letters-core` | no | no | Document model, DOCX/ODT/Markdown I/O, structured editing, sessions |
-| `letters` | yes | no | Window, tabs, page view, GtkTextBuffer bridge, ruler, styles |
+| `letters` | yes | no | Window, tabs, page view, live model, its GtkTextBuffer projection, ruler, styles |
 | `tables-core` | no | yes | Sheet model, IronCalc engine wrapper, XLSX/ODS/CSV I/O, workbook controller |
 | `tables` | yes | no | Window, Cairo grid, charts, dialogs |
 | `decks-core` | no | no | Deck model, PPTX/ODP I/O, object commands, decks controller |
@@ -122,7 +122,7 @@ in v2.1.0 all lived in files this size.
 |----------|--------|-----------|
 | Formula engine | IronCalc (not Formualizer) | MIT/Apache 2.0 license, 83 functions, simpler API |
 | Grid rendering | Cairo DrawingArea (not GtkColumnView) | Full cell-level control, freeze/merge support |
-| Rich text | Own page view on the shared layout tree (ADR 0010); GtkTextBuffer + TextTags behind it (not WebKit) | Per-page layout, native GTK, no JS dependency, lighter Flatpak |
+| Rich text | Own page view on the shared layout tree (ADR 0010), editing a live model; a GtkTextBuffer projection behind it for the caret, find and spelling (not WebKit) | Per-page layout, native GTK, no JS dependency, lighter Flatpak |
 | File I/O | calamine + rust_xlsxwriter (Tables), pulldown-cmark + rdocx (Letters), zip + quick-xml (Decks) | Most mature Rust libraries per format |
 | Document format | Markdown (Letters canonical) | Simple text storage, renders via pulldown-cmark |
 | Undo architecture | Generic `Command<T>` trait in `suite-common-core` | Matches LO's SfxUndoAction, reusable across all apps, and GTK-free so it is testable headlessly |

@@ -162,7 +162,7 @@ pub fn build(tv: &adw::TabView) -> gtk::MenuButton {
         popover.connect_show(move |_| {
             let Some(buf) = crate::dialogs::active_buffer(&tv) else { return };
             if let Some(live) = crate::live::of(&buf) {
-                *opts.borrow_mut() = LayoutOptions::default().for_document(live.borrow_mut().document(&buf));
+                *opts.borrow_mut() = LayoutOptions::default().for_document(live.borrow_mut().document());
             }
             let current = STYLES.iter().position(|s| *s == label.text());
             list.select_row(current.and_then(|i| list.row_at_index(i as i32)).as_ref());
@@ -179,7 +179,7 @@ pub fn build(tv: &adw::TabView) -> gtk::MenuButton {
     crate::dialogs::watch_active_buffer(tv, move |buf, _| {
         let Some(live) = crate::live::of(buf) else { return };
         let off = buf.iter_at_mark(&buf.get_insert()).offset().max(0) as usize;
-        let style = live.borrow_mut().paragraph_style_at(buf, off);
+        let style = live.borrow_mut().paragraph_style_at(off);
         label.set_text(&style.map(|s| style_name(&s)).unwrap_or_else(|| "Normal".into()));
     });
     button
@@ -228,19 +228,15 @@ mod tests {
         gtk_test(|| {
             let buf = gtk::TextBuffer::new(None);
             crate::actions::register_formatting_tags(&buf);
-            let live = crate::live::LiveModel::attach(&buf);
+            let live = crate::live::LiveModel::attach(&buf, letters_core::Document::default());
             crate::bridge::load_document(&letters_core::Document::from_plain_text("one\ntwo\nthree"), &buf);
             // A selection from "one" into "two" restyles both paragraphs.
             buf.select_range(&buf.iter_at_offset(1), &buf.iter_at_offset(5));
             assert!(apply(&buf, "Heading 2"));
-            let styles = |buf: &gtk::TextBuffer| -> Vec<Option<u8>> {
-                live.borrow_mut().document(buf).paragraphs.iter().map(|p| p.style.heading).collect()
-            };
-            assert_eq!(styles(&buf), [Some(2), Some(2), None]);
-            // The buffer has it, and reads back the same document.
-            assert_eq!(crate::bridge::capture_with_starts(&buf).0.paragraphs[1].style.heading, Some(2));
+            let styles = || -> Vec<Option<u8>> { live.borrow().document().paragraphs.iter().map(|p| p.style.heading).collect() };
+            assert_eq!(styles(), [Some(2), Some(2), None]);
             crate::live::undo(&buf, false);
-            assert_eq!(styles(&buf), [None, None, None]);
+            assert_eq!(styles(), [None, None, None]);
         });
     }
 }

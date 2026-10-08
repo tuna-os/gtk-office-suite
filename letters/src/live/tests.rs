@@ -5,33 +5,39 @@ use suite_common::gtk_test::run as gtk_test;
 fn tab(doc: &Document) -> (gtk::TextBuffer, Rc<RefCell<LiveModel>>) {
     let buf = gtk::TextBuffer::new(None);
     crate::actions::register_formatting_tags(&buf);
-    let live = LiveModel::attach(&buf);
-    crate::bridge::load_document(doc, &buf);
+    let live = LiveModel::attach(&buf, doc.clone());
     (buf, live)
 }
 
-/// Table ids renumbered by order of appearance. An id only groups a
-/// table's cells: a capture numbers tables as it meets them, while the
-/// model keeps the id a table was made with, so after a table is inserted
-/// and undone the two can name the same tables differently.
-fn tables_in_order(mut doc: Document) -> Document {
-    let mut seen: Vec<u32> = Vec::new();
-    for p in &mut doc.paragraphs {
-        if let Some(cell) = p.style.table_cell.as_mut() {
-            let n = seen.iter().position(|&t| t == cell.table).unwrap_or_else(|| { seen.push(cell.table); seen.len() - 1 });
-            cell.table = n as u32;
-        }
+/// The buffer's text and, for each char, the names of its tags.
+fn shown(buf: &gtk::TextBuffer) -> (String, Vec<Vec<String>>) {
+    let mut tags = Vec::new();
+    let mut it = buf.start_iter();
+    while !it.is_end() {
+        let mut names: Vec<String> = it.tags().iter().filter_map(|t| t.name().map(|n| n.to_string())).collect();
+        names.retain(|n| !PRESENTATION_TAGS.contains(&n.as_str()));
+        names.sort();
+        tags.push(names);
+        it.forward_char();
     }
-    doc
+    (text(buf), tags)
 }
 
-/// The model must be exactly what a whole-buffer capture gives (table ids
-/// aside, see `tables_in_order`).
+/// The projection is exact: the buffer, and where each paragraph starts in
+/// it, are what rendering the model's document from scratch gives, and
+/// nothing but the model has edited the buffer.
 fn check(buf: &gtk::TextBuffer, live: &Rc<RefCell<LiveModel>>, what: &str) {
-    let (doc, starts) = live.borrow_mut().snapshot(buf);
-    let (want, want_starts) = crate::bridge::capture_with_starts(buf);
-    assert_eq!(tables_in_order(doc), tables_in_order(want), "after {what}");
+    let (doc, starts) = live.borrow().snapshot();
+    let fresh = gtk::TextBuffer::new(Some(&buf.tag_table()));
+    let want_starts = crate::bridge::render_to_buffer(&doc, &fresh);
+    let (got, want) = (shown(buf), shown(&fresh));
+    assert_eq!(got.0, want.0, "the buffer's text after {what}");
+    if let Some(i) = got.1.iter().zip(&want.1).position(|(a, b)| a != b) {
+        let around: String = got.0.chars().skip(i.saturating_sub(10)).take(20).collect();
+        panic!("tags at char {i} ({around:?}) after {what}: {:?}, rendering gives {:?}", got.1[i], want.1[i]);
+    }
     assert_eq!(starts, want_starts, "starts after {what}");
+    assert_eq!(live.borrow().foreign_edits, 0, "the buffer was edited behind the model's back by {what}");
 }
 
 fn text(buf: &gtk::TextBuffer) -> String {
@@ -43,19 +49,15 @@ fn at(buf: &gtk::TextBuffer, needle: &str) -> i32 {
     t[..t.find(needle).unwrap()].chars().count() as i32
 }
 
-/// A 1x1 image as the editor inserts one (its source rides on the paintable).
-fn image() -> gtk::gdk::Texture {
-    let tex = gtk::gdk::MemoryTexture::new(1, 1, gtk::gdk::MemoryFormat::R8g8b8a8, &glib::Bytes::from_static(&[255, 0, 0, 255]), 4);
-    let dir = std::env::temp_dir().join("letters-live-test");
-    let _ = std::fs::create_dir_all(&dir);
-    let path = dir.join("dot.png");
-    let _ = tex.save_to_png(&path);
-    let tex = gtk::gdk::Texture::from_filename(&path).unwrap();
-    unsafe {
-        tex.set_data("letters-image-src", path.to_string_lossy().into_owned());
-        tex.set_data("letters-image-alt", String::from("a dot"));
-    }
-    tex
+/// Type `text` at buffer offset `off`, as the page view does.
+fn type_at(buf: &gtk::TextBuffer, off: i32, text: &str) {
+    buf.place_cursor(&buf.iter_at_offset(off));
+    crate::page_edit::type_text(buf, text);
+}
+
+/// Select buffer offsets `a..b`.
+fn select(buf: &gtk::TextBuffer, a: i32, b: i32) {
+    buf.select_range(&buf.iter_at_offset(a), &buf.iter_at_offset(b));
 }
 
 fn sample() -> Document {
@@ -67,50 +69,75 @@ fn sample() -> Document {
     d
 }
 
-/// Typing, Enter, Backspace across a break, formatting and list markers
-/// are followed by reading back only the lines they touched: the model is
-/// the captured document after each, and the whole buffer is never read.
+/// Nothing but the model edits the buffer: an edit made to it directly is
+/// counted, and the document does not have it. (The model used to follow
+/// such edits by reading the buffer back.)
 #[test]
-fn breaks_and_formatting_are_followed_locally() {
+fn an_edit_behind_the_models_back_is_counted_not_followed() {
     gtk_test(|| {
         let (buf, live) = tab(&sample());
-        check(&buf, &live, "load");
-        let full = live.borrow().full_reads;
-
-        let mut it = buf.iter_at_offset(at(&buf, "item"));
-        buf.insert(&mut it, "numbered ");
-        check(&buf, &live, "typing in a list item");
-        let mut it = buf.iter_at_offset(at(&buf, "text here"));
-        buf.insert(&mut it, "\n");
-        check(&buf, &live, "Enter in a paragraph");
+        check(&buf, &live, "loading");
         let mut end = buf.end_iter();
-        buf.insert(&mut end, "\n");
-        check(&buf, &live, "Enter at the end");
-        let (mut s, mut e) = (buf.iter_at_offset(at(&buf, "text here") - 1), buf.iter_at_offset(at(&buf, "text here")));
-        buf.delete(&mut s, &mut e);
-        check(&buf, &live, "Backspace joining two paragraphs");
-        let (s, e) = (buf.iter_at_offset(at(&buf, "Title")), buf.iter_at_offset(at(&buf, "body") + 4));
-        buf.apply_tag_by_name("bold", &s, &e);
-        check(&buf, &live, "bold across several paragraphs");
-        let (s, e) = (buf.iter_at_offset(at(&buf, "Title")), buf.iter_at_offset(at(&buf, "Title") + 3));
-        buf.remove_tag_by_name("bold", &s, &e);
-        check(&buf, &live, "bold removed");
-        let (s, e) = (buf.iter_at_offset(at(&buf, "body")), buf.iter_at_offset(at(&buf, "body") + 4));
-        buf.apply_tag_by_name("align-center", &s, &e);
-        check(&buf, &live, "a paragraph tag");
-        let mut it = buf.iter_at_offset(at(&buf, "body"));
-        buf.insert(&mut it, "- ");
-        check(&buf, &live, "typing a list marker");
-        assert_eq!(live.borrow().full_reads, full, "none of that read the whole buffer");
-        assert!(live.borrow().local_reads >= 8);
+        buf.insert(&mut end, "stray");
+        assert_eq!(live.borrow().foreign_edits, 1);
+        assert_eq!(live.borrow().document(), &sample(), "the model did not follow the buffer");
     });
 }
 
-/// Seeded random edits anywhere — typing (with Enter and pipes), deleting
-/// across breaks and markers, formatting — in a document with a list and a
-/// table. After each, the model equals a whole-buffer capture.
+/// What the buffer could never hold, a document opened in a tab still has:
+/// a table cell's own spacing and alignment, a line break inside a
+/// paragraph, a cell of two paragraphs, and text that reads like a list
+/// marker. Opening used to read the document back out of the buffer, so
+/// 21 of 61 real and fixture documents changed on open, and seven of them
+/// gained or lost paragraphs (a table cell among them).
 #[test]
-fn random_edits_never_leave_the_live_model_behind() {
+fn a_document_opens_as_it_is() {
+    use letters_core::{Alignment, Paragraph, Run};
+    gtk_test(|| {
+        let mut d = Document::from_plain_text("1. not a list item\nfirst line\nafter the table");
+        d.paragraphs[1].runs = vec![Run::plain("first line\nsecond line")];
+        let table = d.insert_table_at(2, 2, 2);
+        let cell = |d: &Document, row: u32, col: u32| d.paragraphs.iter().position(|p| p.style.table_cell == Some(letters_core::TableCell { table, row, col })).unwrap();
+        let c = cell(&d, 0, 0);
+        d.paragraphs[c].runs = vec![Run::plain("centred")];
+        d.paragraphs[c].style.alignment = Alignment::Center;
+        d.paragraphs[c].style.space_after_pt = 10.0;
+        d.paragraphs[c].style.line_spacing = 1.15;
+        let c = cell(&d, 1, 0);
+        d.paragraphs[c].runs = vec![Run::plain("one")];
+        let mut second = d.paragraphs[c].clone();
+        second.runs = vec![Run::plain("two")];
+        d.paragraphs.insert(c + 1, second);
+        let c = cell(&d, 1, 1);
+        d.paragraphs[c].runs = vec![Run::plain("last cell")];
+
+        let buf = gtk::TextBuffer::new(None);
+        crate::actions::register_formatting_tags(&buf);
+        crate::bridge::load_document(&d, &buf);
+        let live = crate::live::of(&buf).unwrap();
+        assert_eq!(live.borrow().document(), &d, "the opened document changed");
+        check(&buf, &live, "opening");
+
+        // Typing in the cell's second paragraph lands there.
+        type_at(&buf, at(&buf, "two") + 3, "!");
+        let doc = live.borrow().document().clone();
+        let texts: Vec<String> = doc.paragraphs.iter().map(Paragraph::text).collect();
+        assert!(texts.contains(&"two!".to_string()), "{texts:?}");
+        assert!(texts.contains(&"last cell".to_string()), "{texts:?}");
+        check(&buf, &live, "typing in a cell's second paragraph");
+        // And after the soft line break.
+        type_at(&buf, at(&buf, "second line"), ">");
+        assert_eq!(live.borrow().document().paragraphs[1].text(), "first line\n>second line");
+        check(&buf, &live, "typing after a line break");
+    });
+}
+
+/// Seeded random edits anywhere, made the way the page view makes them —
+/// typing (with Enter), deleting a selection, bold, italic and alignment —
+/// in a document with a list and a table. After each, the buffer is
+/// exactly a fresh rendering of the model.
+#[test]
+fn random_edits_keep_the_buffer_an_exact_projection() {
     gtk_test(|| {
         for seed in [0x2545_f491_4f6c_dd1du64, 0x9e37_79b9_7f4a_7c15, 0xdead_beef_cafe_f00d, 7, 12345] {
             let mut d = Document::from_plain_text("intro text\nitem one\nitem two\nclosing words");
@@ -118,7 +145,6 @@ fn random_edits_never_leave_the_live_model_behind() {
             d.paragraphs[2].style.list = letters_core::ListKind::Bullet;
             d.insert_table_at(3, 1, 2);
             let (buf, live) = tab(&d);
-            let reads = live.borrow().full_reads;
             let mut state = seed;
             let mut next = |n: u64| {
                 state ^= state << 13;
@@ -128,34 +154,20 @@ fn random_edits_never_leave_the_live_model_behind() {
             };
             for step in 0..300 {
                 let len = buf.char_count().max(0) as u64;
-                match next(13) {
-                    12 => {
-                        // An inline image, as Insert Image puts one.
-                        let tex = image();
-                        let mut it = buf.iter_at_offset(next(len + 1) as i32);
-                        buf.insert_paintable(&mut it, &tex);
+                let a = next(len + 1) as i32;
+                match next(10) {
+                    0..=4 => type_at(&buf, a, ["a", "bc", " ", "xyz", "\n", "|"][next(6) as usize]),
+                    5..=6 => {
+                        select(&buf, a, (a + next(4) as i32).min(len as i32));
+                        crate::insert::delete_selection(&buf);
                     }
-                    0..=4 => {
-                        let t = ["a", "bc", " ", "xyz", "\n", "|"][next(6) as usize];
-                        let mut it = buf.iter_at_offset(next(len + 1) as i32);
-                        buf.insert(&mut it, t);
-                    }
-                    5..=7 => {
-                        let a = next(len + 1) as i32;
-                        let b = (a + next(4) as i32).min(len as i32);
-                        let (mut s, mut e) = (buf.iter_at_offset(a), buf.iter_at_offset(b));
-                        buf.delete(&mut s, &mut e);
-                    }
-                    8 | 9 => {
-                        let a = next(len + 1) as i32;
-                        let (s, e) = (buf.iter_at_offset(a), buf.iter_at_offset((a + 5).min(len as i32)));
-                        let tag = ["italic", "bold", "h2", "align-right"][next(4) as usize];
-                        buf.apply_tag_by_name(tag, &s, &e);
+                    7 | 8 => {
+                        select(&buf, a, (a + 5).min(len as i32));
+                        crate::actions::toggle_tag_in(&buf, ["italic", "bold"][next(2) as usize]);
                     }
                     _ => {
-                        let a = next(len + 1) as i32;
-                        let (s, e) = (buf.iter_at_offset(a), buf.iter_at_offset((a + 4).min(len as i32)));
-                        buf.remove_tag_by_name(["italic", "bold"][next(2) as usize], &s, &e);
+                        buf.place_cursor(&buf.iter_at_offset(a));
+                        crate::actions::align_in(&buf, ["align-right", "align-center", "align-left"][next(3) as usize]);
                     }
                 }
                 if next(3) == 0 {
@@ -163,7 +175,6 @@ fn random_edits_never_leave_the_live_model_behind() {
                 }
             }
             check(&buf, &live, &format!("seed {seed} end"));
-            assert_eq!(live.borrow().full_reads, reads, "seed {seed}: no edit read the whole buffer, tables and images included");
         }
     });
 }
@@ -176,35 +187,20 @@ fn undo_and_redo_run_on_the_model_and_the_buffer_follows() {
     gtk_test(|| {
         let original = sample();
         let (buf, live) = tab(&original);
-        let loaded = crate::bridge::capture_from_buffer(&buf);
-        // Edits as user actions, as the buffer receives them.
-        let action = |f: &dyn Fn()| {
-            buf.begin_user_action();
-            f();
-            buf.end_user_action();
-        };
         let base = at(&buf, "body");
         for (i, c) in "Hello".chars().enumerate() {
-            action(&|| {
-                let mut it = buf.iter_at_offset(base + i as i32);
-                buf.insert(&mut it, &c.to_string());
-            });
+            type_at(&buf, base + i as i32, &c.to_string());
         }
-        action(&|| {
-            let mut it = buf.iter_at_offset(at(&buf, "Title") + 5);
-            buf.insert(&mut it, "\n");
-        });
-        action(&|| {
-            let (s, e) = (buf.iter_at_offset(at(&buf, "Title")), buf.iter_at_offset(at(&buf, "Title") + 5));
-            buf.apply_tag_by_name("italic", &s, &e);
-        });
-        // A structured edit: a table inserted by re-rendering.
+        type_at(&buf, at(&buf, "Title") + 5, "\n");
+        select(&buf, at(&buf, "Title"), at(&buf, "Title") + 5);
+        crate::actions::toggle_tag_in(&buf, "italic");
+        // A structured edit: a table.
         buf.place_cursor(&buf.iter_at_offset(at(&buf, "Hellobody")));
         crate::bridge::apply_structured_edit(&buf, |ed| {
             ed.insert_table(2, 2);
         });
         check(&buf, &live, "the edits");
-        let edited = crate::bridge::capture_from_buffer(&buf);
+        let edited = live.borrow().document().clone();
 
         let mut steps = 0;
         while live.borrow().can_undo() {
@@ -214,22 +210,17 @@ fn undo_and_redo_run_on_the_model_and_the_buffer_follows() {
         }
         assert_eq!(steps, 4, "table, italic, Enter, and 'Hello' as one typed word");
         assert!(!live.borrow().can_undo() && live.borrow().can_redo());
-        let now = crate::bridge::capture_from_buffer(&buf);
-        for (x, y) in now.paragraphs.iter().zip(&loaded.paragraphs) {
-            assert_eq!(x, y, "paragraph differs after undo");
-        }
-        assert_eq!(now, loaded, "undone to the loaded document");
+        assert_eq!(live.borrow().document(), &original, "undone to the loaded document");
         while live.borrow().can_redo() {
             undo(&buf, true);
             check(&buf, &live, "redo");
         }
-        assert_eq!(crate::bridge::capture_from_buffer(&buf), edited, "redone to the edited document");
+        assert_eq!(live.borrow().document(), &edited, "redone to the edited document");
     });
 }
 
-/// Deleting the empty line between two tables leaves two tables (#1299):
-/// the editor's reading and the model agree, and neither runs the second
-/// table's header into the first one's body.
+/// Deleting the empty line between two tables leaves two tables (#1299),
+/// and neither runs the second table's header into the first one's body.
 #[test]
 fn deleting_the_line_between_two_tables_keeps_them_two() {
     gtk_test(|| {
@@ -239,19 +230,17 @@ fn deleting_the_line_between_two_tables_keeps_them_two() {
         let (buf, live) = tab(&d);
         check(&buf, &live, "loading");
         let tables = |doc: &Document| doc.paragraphs.iter().filter_map(|p| p.style.table_cell.map(|c| c.table)).collect::<std::collections::BTreeSet<_>>().len();
-        assert_eq!(tables(&crate::bridge::capture_from_buffer(&buf)), 2, "two tables to begin with");
+        assert_eq!(tables(live.borrow().document()), 2, "two tables to begin with");
         // The empty line between them: the line after the first table's
         // last row.
         let t = text(&buf);
         let gap = t.find("|\n\n|").expect("an empty line between the tables") + 2;
         let at = t[..gap].chars().count() as i32;
-        let (mut s, mut e) = (buf.iter_at_offset(at), buf.iter_at_offset(at + 1));
-        buf.delete(&mut s, &mut e);
-        assert!(!text(&buf).contains("|\n\n|"), "the empty line is gone");
+        select(&buf, at, at + 1);
+        crate::insert::delete_selection(&buf);
         check(&buf, &live, "deleting the empty line");
-        let read = crate::bridge::capture_from_buffer(&buf);
-        assert_eq!(tables(&read), 2, "still two tables: {:?}", read.paragraphs.iter().map(|p| p.text()).collect::<Vec<_>>());
-        assert!(read.paragraphs.iter().all(|p| p.style.table_cell.is_some() || !p.text().contains('|')), "a delimiter came back as prose");
+        let doc = live.borrow().document().clone();
+        assert_eq!(tables(&doc), 2, "still two tables: {:?}", doc.paragraphs.iter().map(|p| p.text()).collect::<Vec<_>>());
     });
 }
 
@@ -260,52 +249,32 @@ fn deleting_the_line_between_two_tables_keeps_them_two() {
 fn model_first_edits_reach_the_buffer() {
     gtk_test(|| {
         let (buf, live) = tab(&sample());
-        let seq = live.borrow_mut().sequence_offset(&buf, at(&buf, "body") as usize);
+        let seq = live.borrow_mut().sequence_offset(at(&buf, "body") as usize);
         let op = {
-            let mut m = live.borrow_mut();
-            letters_core::edit::typing(m.document(&buf), seq, "new ").unwrap()
+            let m = live.borrow();
+            letters_core::edit::typing(m.document(), seq, "new ").unwrap()
         };
         assert!(live.borrow_mut().apply_user_ops(&buf, &[op], false));
         assert!(text(&buf).contains("new body"), "{}", text(&buf));
         check(&buf, &live, "a model-first insert");
         // Enter in a list item continues the list, in the model and on screen.
-        let seq = live.borrow_mut().sequence_offset(&buf, (at(&buf, "first item") + 10) as usize);
+        let seq = live.borrow_mut().sequence_offset((at(&buf, "first item") + 10) as usize);
         let op = {
-            let mut m = live.borrow_mut();
-            letters_core::edit::typing(m.document(&buf), seq, "\n").unwrap()
+            let m = live.borrow();
+            letters_core::edit::typing(m.document(), seq, "\n").unwrap()
         };
         assert!(live.borrow_mut().apply_user_ops(&buf, &[op], false));
         check(&buf, &live, "a model-first Enter in a list");
         assert!(text(&buf).contains("first item\n2.\t\n3.\tsecond"), "{:?}", text(&buf));
         undo(&buf, false);
         undo(&buf, false);
-        assert_eq!(crate::bridge::capture_from_buffer(&buf), {
-            let (b2, _) = tab(&sample());
-            crate::bridge::capture_from_buffer(&b2)
-        });
-    });
-}
-
-#[test]
-fn opening_a_document_reads_it_once_not_edit_by_edit() {
-    // Following each insert and tag of the load re-read the touched lines
-    // thousands of times: a 290-paragraph form took a minute to open.
-    gtk_test(|| {
-        let text: Vec<String> = (0..300).map(|i| format!("Paragraph {i} of an opened document.")).collect();
-        let buf = gtk::TextBuffer::new(None);
-        crate::actions::register_formatting_tags(&buf);
-        let live = LiveModel::attach(&buf);
-        let reads = live.borrow().full_reads;
-        crate::bridge::load_document(&Document::from_plain_text(&text.join("\n")), &buf);
-        assert_eq!(live.borrow().local_reads, 0, "the load was not followed edit by edit");
-        assert_eq!(live.borrow().full_reads, reads + 1, "the loaded document was read once");
-        check(&buf, &live, "opening");
-        assert!(!crate::live::is_busy(&buf), "the model takes edits again after the load");
+        assert_eq!(live.borrow().document(), &sample());
+        check(&buf, &live, "undoing both");
     });
 }
 
 /// CI performance gate: one keystroke on a 200-paragraph document — the
-/// buffer edit, the live model following it, and the Print Layout
+/// model edit, its projection into the buffer, and the Print Layout
 /// relayout — within a fixed budget, re-shaping one paragraph only.
 #[test]
 fn a_keystroke_on_200_paragraphs_relays_out_within_budget() {
@@ -316,55 +285,50 @@ fn a_keystroke_on_200_paragraphs_relays_out_within_budget() {
             .map(|i| format!("Paragraph {i}: the quick brown fox jumps over the lazy dog, twice over at least."))
             .collect();
         let (buf, live) = tab(&Document::from_plain_text(&text.join("\n")));
-        let (doc, _) = live.borrow_mut().snapshot(&buf);
-        let mut typeset = Typeset::new(doc, LayoutOptions::default());
+        let (doc, _) = live.borrow().snapshot();
+        let mut typeset = Typeset::new(doc.clone(), LayoutOptions::default());
 
         let full = {
             let start = Instant::now();
-            let (doc, _) = crate::bridge::capture_with_starts(&buf);
             let _ = Typeset::new(doc, LayoutOptions::default());
             start.elapsed()
         };
         let base = at(&buf, "Paragraph 100:") + 4;
-        let reads_before = live.borrow().full_reads;
         let mut samples = Vec::new();
         for k in 0..21 {
             let start = Instant::now();
-            let mut it = buf.iter_at_offset(base + k);
-            buf.insert(&mut it, "x");
-            let (doc, _) = live.borrow_mut().snapshot(&buf);
+            type_at(&buf, base + k, "x");
+            let (doc, _) = live.borrow().snapshot();
             let shaped = typeset.update(doc, LayoutOptions::default());
             samples.push(start.elapsed());
             assert_eq!(shaped, 1, "only the edited paragraph is shaped again");
         }
         samples.sort_unstable();
         let (median, p95) = (samples[10], samples[19]);
-        eprintln!("keystroke relayout on 200 paragraphs: p95 {p95:?}, median {median:?}; full capture + layout {full:?}");
-        let full_reads = live.borrow().full_reads;
-        assert_eq!(full_reads, reads_before, "typing never read the whole buffer");
+        eprintln!("keystroke relayout on 200 paragraphs: p95 {p95:?}, median {median:?}; full layout {full:?}");
         // Generous for an unoptimised build on a shared CI runner.
         const BUDGET: Duration = Duration::from_millis(100);
         assert!(p95 <= BUDGET, "keystroke p95 {p95:?} over {BUDGET:?}");
         assert!(median < full, "a keystroke must cost less than laying out from scratch ({median:?} vs {full:?})");
+        check(&buf, &live, "typing");
     });
 }
 
 /// Table commands (insert a table, rows and columns, delete them), list
-/// commands and page breaks run on the model as ops: no whole-buffer read,
-/// the buffer matches, and each is one undo step.
+/// commands and page breaks run on the model as ops: the buffer matches,
+/// and each is one undo step.
 #[test]
 fn structured_commands_are_model_ops() {
     use letters_core::ListKind;
     gtk_test(|| {
         let (buf, live) = tab(&sample());
-        let reads = live.borrow().full_reads;
         buf.place_cursor(&buf.iter_at_offset(at(&buf, "body")));
         crate::bridge::apply_structured_edit(&buf, |ed| {
             ed.insert_table(2, 2);
         });
         check(&buf, &live, "insert table");
         // The caret is in the new table's first cell: type there.
-        buf.insert_at_cursor("A1");
+        crate::page_edit::type_text(&buf, "A1");
         check(&buf, &live, "typing in the new cell");
         for (what, cmd) in [
             ("row below", 0),
@@ -391,7 +355,6 @@ fn structured_commands_are_model_ops() {
             ed.toggle_page_break_at_cursor();
         });
         check(&buf, &live, "a page break");
-        assert_eq!(live.borrow().full_reads, reads, "no command read the whole buffer");
         // Undo all of it, one command at a time.
         let mut steps = 0;
         while live.borrow().can_undo() {
@@ -400,36 +363,18 @@ fn structured_commands_are_model_ops() {
             steps += 1;
         }
         assert_eq!(steps, 8, "each command and the typed word is one step");
-
-        let (fresh, _) = tab(&sample());
-        assert_eq!(crate::bridge::capture_from_buffer(&buf), crate::bridge::capture_from_buffer(&fresh));
+        assert_eq!(live.borrow().document(), &sample());
     });
 }
 
-/// Markdown shortcuts: "**bold**" and a space makes bold text, typed into
-/// the buffer or in Print Layout, and the model has it. (They never fired
-/// before: the pattern's end was taken from an absent selection.)
+/// Markdown shortcuts: "_it_" and a space typed in Print Layout makes
+/// italic text, and the model has it.
 #[test]
-fn markdown_shortcuts_work_in_both_views() {
+fn markdown_shortcuts_make_formatting() {
     gtk_test(|| {
         let ctx = glib::MainContext::default();
         let settle = || while ctx.iteration(false) {};
-        // Typed into the buffer.
-        let (buf, live) = tab(&Document::from_plain_text("x"));
-        crate::actions::connect_markdown_macros(&buf);
-        let mut end = buf.end_iter();
-        buf.insert(&mut end, " **bold**");
-        let mut end = buf.end_iter();
-        buf.insert(&mut end, " ");
-        settle();
-        check(&buf, &live, "a buffer shortcut");
-        let doc = live.borrow_mut().snapshot(&buf).0;
-        assert!(doc.paragraphs[0].runs.iter().any(|r| r.text == "bold" && r.style.bold), "{:?}", doc.paragraphs[0].runs);
-        assert_eq!(doc.paragraphs[0].text(), "x bold ");
-
-        // Print Layout: typed as model ops through the page view.
         let (buf, live) = tab(&Document::from_plain_text("y"));
-        crate::actions::connect_markdown_macros(&buf);
         let view = crate::page_view::PageView::new();
         crate::page_edit::make_editable(&view, &buf);
         buf.place_cursor(&buf.end_iter());
@@ -438,7 +383,7 @@ fn markdown_shortcuts_work_in_both_views() {
         }
         settle();
         check(&buf, &live, "a Print Layout shortcut");
-        let doc = live.borrow_mut().snapshot(&buf).0;
+        let doc = live.borrow().snapshot().0;
         assert!(doc.paragraphs[0].runs.iter().any(|r| r.text == "it" && r.style.italic), "{:?}", doc.paragraphs[0].runs);
     });
 }
@@ -515,8 +460,7 @@ fn unrelated_edits_and_commands_leave_every_other_field_alone() {
             .chain((1..=54).map(|i| 0x51_7cc1_b727_220a_u64.wrapping_mul(i)));
         for seed in seeds {
             let (buf, live) = tab(&original);
-            let loaded = crate::bridge::capture_from_buffer(&buf);
-            assert_eq!(loaded.paragraphs, original.paragraphs, "the document does not load as itself");
+            assert_eq!(live.borrow().document(), &original, "the document does not load as itself");
             let zone_start = at(&buf, "EDIT ZONE");
             let mut state = seed;
             let mut next = |n: u64| {
@@ -547,7 +491,7 @@ fn unrelated_edits_and_commands_leave_every_other_field_alone() {
                         // together).
                         let a = in_zone(next(span + 1));
                         let b = (a + 1 + next(4) as i32).min(end);
-                        let (mut s, mut e) = (buf.iter_at_offset(a), buf.iter_at_offset(b));
+                        let (s, e) = (buf.iter_at_offset(a), buf.iter_at_offset(b));
                         let is_table_line = |l: i32| {
                             let Some(l0) = buf.iter_at_line(l) else { return false };
                             let mut l1 = l0;
@@ -579,7 +523,8 @@ fn unrelated_edits_and_commands_leave_every_other_field_alone() {
                         if joins || (first..=last).any(is_table_line) {
                             continue;
                         }
-                        buf.delete(&mut s, &mut e);
+                        buf.select_range(&s, &e);
+                        crate::insert::delete_selection(&buf);
                         ops.push(format!("delete {a}..{b}"));
                     }
                     4..=6 => {
@@ -608,7 +553,7 @@ fn unrelated_edits_and_commands_leave_every_other_field_alone() {
                     }
                 }
             }
-            let got = crate::bridge::capture_from_buffer(&buf);
+            let got = live.borrow().document().clone();
             let what = format!("seed {seed:#x} after {ops:?}");
             assert_eq!(got.paragraphs[..zone], original.paragraphs[..zone], "a paragraph outside the edits changed: {what}");
             assert_eq!(got.footnotes, original.footnotes, "footnotes: {what}");
@@ -710,7 +655,7 @@ fn review_anchors_hold_across_unicode_edits_and_one_history_undoes_them() {
                     6..=8 => { undo(&buf, false); ops.push("undo".into()); }
                     _ => { undo(&buf, true); ops.push("redo".into()); }
                 }
-                let (doc, _) = live.borrow_mut().snapshot(&buf);
+                let (doc, _) = live.borrow_mut().snapshot();
                 let what = format!("seed {seed:#x} step {step} after {ops:?}");
                 assert_eq!(covered(&doc, &|s| s.comments.contains(&1)), "COMMENTED", "the comment moved: {what}");
                 assert_eq!(covered(&doc, &|s| s.revision.is_some()), "INSERTED", "the tracked insertion moved: {what}");
@@ -721,7 +666,7 @@ fn review_anchors_hold_across_unicode_edits_and_one_history_undoes_them() {
                 undo(&buf, false);
                 undos += 1;
             }
-            let (back, _) = live.borrow_mut().snapshot(&buf);
+            let (back, _) = live.borrow_mut().snapshot();
             assert_eq!(back.paragraphs, original.paragraphs, "seed {seed:#x}: undoing everything did not restore the document after {ops:?}");
             check(&buf, &live, &format!("seed {seed:#x} after undoing everything"));
         }

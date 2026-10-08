@@ -113,8 +113,8 @@ pub fn show_header_footer_dialog(pc: &PageContainer, buf: &gtk::TextBuffer) {
 /// The document's header and footer, empty when it has none: what the
 /// dialog offers to edit.
 fn header_footer_of(buf: &gtk::TextBuffer) -> (String, String) {
-    let (header, footer) = crate::bridge::buffer_header_footer(buf);
-    (header.unwrap_or_default(), footer.unwrap_or_default())
+    let doc = crate::bridge::document_of(buf);
+    (doc.header.unwrap_or_default(), doc.footer.unwrap_or_default())
 }
 
 /// Set the document's header and footer, as the dialog's Apply does: one
@@ -124,11 +124,7 @@ fn header_footer_of(buf: &gtk::TextBuffer) -> (String, String) {
 /// both emit a header block for `Some("")`, which would put an empty header
 /// into every saved file.
 pub(crate) fn apply_header_footer(buf: &gtk::TextBuffer, header: &str, footer: &str) {
-    let Some(live) = crate::live::of(buf) else {
-        crate::bridge::set_buffer_header_footer(buf, header, footer);
-        buf.set_modified(true);
-        return;
-    };
+    let Some(live) = crate::live::of(buf) else { return };
     let present = |text: &str| (!text.is_empty()).then(|| text.to_string());
     let (header, footer) = (present(header), present(footer));
     live.borrow_mut().edit_with(buf, |doc| {
@@ -380,11 +376,11 @@ pub(crate) fn replace_ranges(buf: &gtk::TextBuffer, ranges: &[(usize, usize)], r
     let mut m = live.borrow_mut();
     let mut ops = Vec::new();
     for &(from, to) in ranges.iter().rev() {
-        let (s, e) = (m.sequence_offset(buf, from), m.sequence_offset(buf, to));
+        let (s, e) = (m.sequence_offset(from), m.sequence_offset(to));
         if e <= s {
             continue;
         }
-        let style = letters_core::edit::slice(m.document(buf), s, e)
+        let style = letters_core::edit::slice(m.document(), s, e)
             .and_then(|paras| paras.into_iter().flat_map(|p| p.runs).find(|r| !r.text.is_empty()))
             .map(|r| r.style)
             .unwrap_or_default();
@@ -456,23 +452,21 @@ mod tests {
         gtk_test(|| {
             let (_pc, buf) = crate::doc_tab::make_doc_widget(None);
             let live = crate::live::of(&buf).unwrap();
-            let mut it = buf.end_iter();
-            buf.begin_user_action();
-            buf.insert(&mut it, "typed");
-            buf.end_user_action();
+            buf.place_cursor(&buf.end_iter());
+            crate::page_edit::type_text(&buf, "typed");
 
             apply_header_footer(&buf, "Report", "Page {page}");
-            let d = live.borrow_mut().document(&buf).clone();
+            let d = live.borrow_mut().document().clone();
             assert_eq!((d.header.as_deref(), d.footer.as_deref()), (Some("Report"), Some("Page {page}")));
 
             crate::live::undo(&buf, false);
-            let d = live.borrow_mut().document(&buf).clone();
+            let d = live.borrow_mut().document().clone();
             assert_eq!((d.header, d.footer), (None, None), "Undo left the header in place");
             assert_eq!(d.paragraphs[0].text(), "typed", "Undo took back the typing instead");
             assert_eq!(header_footer_of(&buf), (String::new(), String::new()), "the dialog would offer the undone header");
 
             crate::live::undo(&buf, true);
-            let d = live.borrow_mut().document(&buf).clone();
+            let d = live.borrow_mut().document().clone();
             assert_eq!(d.header.as_deref(), Some("Report"));
             assert_eq!(header_footer_of(&buf).0, "Report");
         });
@@ -489,11 +483,11 @@ mod tests {
             let live = crate::live::of(&buf).unwrap();
             let mut doc = letters_core::Document::from_plain_text("body");
             doc.page = Some(letters_core::model::PageGeometry { columns: 2, ..Default::default() });
-            crate::live::load(&buf, || crate::bridge::load_document(&doc, &buf));
+            crate::bridge::load_document(&doc, &buf);
             let letter = letters_core::model::PageGeometry { width_pt: 792.0, height_pt: 612.0, margin_left_pt: 36.0, ..Default::default() };
 
             assert!(apply_page_geometry(&buf, letter));
-            let page = live.borrow_mut().document(&buf).page.expect("the document has a page");
+            let page = live.borrow_mut().document().page.expect("the document has a page");
             assert_eq!((page.width_pt, page.height_pt, page.margin_left_pt), (792.0, 612.0, 36.0));
             assert_eq!(page.columns, 2, "the document's columns are kept");
             assert_eq!(crate::bridge::capture_from_buffer(&buf).page, Some(page), "a save writes it");
@@ -501,7 +495,7 @@ mod tests {
             assert_eq!(typeset.tree().pages[0].width_pt, 792.0, "the page view lays it out");
 
             crate::live::undo(&buf, false);
-            assert_eq!(live.borrow_mut().document(&buf).page, doc.page, "Undo put the old page back");
+            assert_eq!(live.borrow_mut().document().page, doc.page, "Undo put the old page back");
             assert!(!apply_page_geometry(&buf, letters_core::model::PageGeometry { columns: 2, ..Default::default() }), "the same page is no edit");
         });
     }

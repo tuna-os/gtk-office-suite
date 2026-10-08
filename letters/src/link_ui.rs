@@ -20,7 +20,7 @@ use letters_core::{Paragraph, RunStyle};
 pub(crate) fn set_link(buf: &gtk::TextBuffer, from: usize, to: usize, url: Option<&str>) -> bool {
     let Some(live) = crate::live::of(buf) else { return false };
     let mut m = live.borrow_mut();
-    let (s, e) = (m.sequence_offset(buf, from), m.sequence_offset(buf, to));
+    let (s, e) = (m.sequence_offset(from), m.sequence_offset(to));
     if e > s {
         let value = RunStyle { link: url.map(str::to_string), ..Default::default() };
         let applied = m.apply_user_ops(buf, &[Op::Mark { start: s, end: e, key: MarkKey::Link, value }], false);
@@ -46,8 +46,8 @@ pub(crate) fn set_link(buf: &gtk::TextBuffer, from: usize, to: usize, url: Optio
 fn link_at(buf: &gtk::TextBuffer, from: usize, to: usize) -> Option<String> {
     let live = crate::live::of(buf)?;
     let mut m = live.borrow_mut();
-    let (s, e) = (m.sequence_offset(buf, from), m.sequence_offset(buf, to));
-    let paras = letters_core::edit::slice(m.document(buf), s, e.max(s + 1))?;
+    let (s, e) = (m.sequence_offset(from), m.sequence_offset(to));
+    let paras = letters_core::edit::slice(m.document(), s, e.max(s + 1))?;
     paras.into_iter().flat_map(|p| p.runs).find(|r| !r.text.is_empty()).and_then(|r| r.style.link)
 }
 
@@ -100,22 +100,20 @@ mod tests {
     fn live_buffer(text: &str) -> gtk::TextBuffer {
         let buf = gtk::TextBuffer::new(None);
         crate::actions::register_formatting_tags(&buf);
-        crate::bridge::render_to_buffer(&letters_core::Document::from_plain_text(text), &buf);
-        let live = crate::live::LiveModel::attach(&buf);
-        let _ = live.borrow_mut().document(&buf);
+        crate::live::LiveModel::attach(&buf, letters_core::Document::from_plain_text(text));
         buf
     }
 
     fn runs(buf: &gtk::TextBuffer) -> Vec<(String, Option<String>)> {
         let live = crate::live::of(buf).unwrap();
-        let mut m = live.borrow_mut();
-        m.document(buf).paragraphs[0].runs.iter().map(|r| (r.text.clone(), r.style.link.clone())).collect()
+        let m = live.borrow();
+        m.document().paragraphs[0].runs.iter().map(|r| (r.text.clone(), r.style.link.clone())).collect()
     }
 
-    fn reads(buf: &gtk::TextBuffer) -> (usize, usize) {
+    fn reads(buf: &gtk::TextBuffer) -> usize {
         let live = crate::live::of(buf).unwrap();
         let m = live.borrow();
-        (m.local_reads, m.full_reads)
+        m.foreign_edits
     }
 
     #[test]

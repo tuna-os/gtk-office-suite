@@ -412,7 +412,7 @@ impl LettersWindow {
                 let Some(buf) = active_buffer(&tv) else { return };
                 let Some(pc) = tv.selected_page().as_ref().and_then(page_container) else { return };
                 let current = crate::live::of(&buf)
-                    .and_then(|m| m.borrow_mut().document(&buf).page)
+                    .and_then(|m| m.borrow_mut().document().page)
                     .unwrap_or_else(|| crate::doc_tab::layout_options(&pc).page);
                 let page = suite_common::page_setup::Page {
                     width_pt: current.width_pt,
@@ -502,9 +502,8 @@ impl LettersWindow {
             let tv = tab_view.clone();
             let a = gtk::gio::SimpleAction::new("cycle-line-spacing", None);
             a.connect_activate(move |_, _| {
-                if let Some(spacing) = active_buffer(&tv).and_then(|buf| crate::actions::cycle_line_spacing_in(&buf)) {
-                    let s = gtk4::gio::Settings::new("org.tunaos.letters");
-                    let _ = s.set_double("line-spacing", f64::from(spacing));
+                if let Some(buf) = active_buffer(&tv) {
+                    crate::actions::cycle_line_spacing_in(&buf);
                 }
             });
             app.add_action(&a);
@@ -534,7 +533,7 @@ impl LettersWindow {
             act.connect_activate(move |_, _| {
                 let Ok(path) = std::env::var("GTK_OFFICE_SNAPSHOT_PATH") else { return };
                 let Some(buf) = active_buffer(&tv) else { return };
-                let doc = crate::bridge::capture_from_buffer(&buf);
+                let doc = crate::bridge::document_of(&buf);
                 let Ok(mut json) = serde_json::to_value(&doc) else { return };
                 // The view: zoom, the laid-out pages' sizes in points and
                 // the scroll, which say where the page view is (#1283).
@@ -976,10 +975,11 @@ impl LettersWindow {
     /// through a function already carrying seven is how a constructor turns
     /// into a pile.
     ///
-    /// One tick covers every open tab. Serializes through
-    /// capture_from_buffer (the same model the bridge uses for a real save)
-    /// to JSON — snapshotting doesn't need a real file format, just a
-    /// lossless round-trip back into a buffer on recovery.
+    /// One tick covers every open tab. Serializes each tab's live model
+    /// (what a real save writes) to JSON — snapshotting doesn't need a real
+    /// file format, just a lossless round trip back into a tab on recovery.
+    /// It used to serialize a read of the buffer, which loses what the
+    /// buffer cannot hold (#1202).
     fn register_autosave(
         tv: &adw::TabView,
         app: &adw::Application,
@@ -1018,7 +1018,7 @@ fn autosave_all_tabs(tv: &adw::TabView, notices: &suite_common::autosave_notice:
         let (Some(td), Some(buf)) = (tab_data_get(&child), crate::page_container::buffer_of(&child)) else {
             continue;
         };
-        let doc = crate::bridge::capture_from_buffer(&buf);
+        let doc = crate::bridge::document_of(&buf);
         let Ok(bytes) = serde_json::to_vec(&doc) else { continue };
         let td = td.0.borrow();
         let meta = suite_common::autosave::SnapshotMeta {

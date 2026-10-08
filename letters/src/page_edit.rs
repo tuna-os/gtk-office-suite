@@ -146,59 +146,53 @@ pub(crate) fn type_text(buf: &gtk::TextBuffer, text: &str) {
 fn insert_text(buf: &gtk::TextBuffer, text: &str) {
     // Model first (ADR 0010 stage 3c-3): the text is an op on the live
     // model, styled by the marks' expand rules, and the buffer follows.
-    if let Some(m) = crate::live::of(buf) {
-        let mut m = m.borrow_mut();
-        let (s, e) = selection_offsets(buf);
-        let caret = s as i32;
-        let (s, e) = (m.sequence_offset(buf, s), m.sequence_offset(buf, e));
-        let doc = m.document(buf).clone();
-        let mut ops = Vec::new();
-        let mut scratch = doc.clone();
-        if e > s {
-            let del = letters_core::edit::Op::Delete { at: s, len: e - s };
-            if letters_core::edit::apply(&mut scratch, &del).is_err() {
-                return;
-            }
-            ops.push(del);
+    let Some(m) = crate::live::of(buf) else { return };
+    let mut m = m.borrow_mut();
+    let (s, e) = selection_offsets(buf);
+    let caret = s as i32;
+    let (s, e) = (m.sequence_offset(s), m.sequence_offset(e));
+    let doc = m.document().clone();
+    let mut ops = Vec::new();
+    let mut scratch = doc.clone();
+    if e > s {
+        let del = letters_core::edit::Op::Delete { at: s, len: e - s };
+        if letters_core::edit::apply(&mut scratch, &del).is_err() {
+            return;
         }
-        let Some(mut typed) = typed_ops(&scratch, s, text) else { return };
-        // Formatting picked with nothing selected types with this text,
-        // in the same op: one undo step, merged with the word being typed.
-        if let Some(pending) = crate::actions::take_pending(buf).filter(|p| e == s && p.at == caret) {
-            for op in &mut typed {
-                if let letters_core::edit::Op::Insert { content, .. } = op {
-                    for run in content.iter_mut().flat_map(|p| p.runs.iter_mut()) {
-                        for (name, on) in &pending.marks {
-                            if let Some(flag) = crate::actions::style_flag(&mut run.style, name) {
-                                *flag = *on;
-                            }
+        ops.push(del);
+    }
+    let Some(mut typed) = typed_ops(&scratch, s, text) else { return };
+    // Formatting picked with nothing selected types with this text,
+    // in the same op: one undo step, merged with the word being typed.
+    if let Some(pending) = crate::actions::take_pending(buf).filter(|p| e == s && p.at == caret) {
+        for op in &mut typed {
+            if let letters_core::edit::Op::Insert { content, .. } = op {
+                for run in content.iter_mut().flat_map(|p| p.runs.iter_mut()) {
+                    for (name, on) in &pending.marks {
+                        if let Some(flag) = crate::actions::style_flag(&mut run.style, name) {
+                            *flag = *on;
                         }
                     }
                 }
             }
         }
-        ops.extend(typed);
-        let word = text.chars().count() == 1 && !text.chars().any(char::is_whitespace) && e == s;
-        m.apply_user_ops(buf, &ops, word);
-        drop(m);
-        // Now, not on the next idle: a Ctrl+Z that arrives first would
-        // find Undo still disabled and be dropped.
-        crate::live::sync_actions(buf);
-        // Markdown shortcuts: "**bold**" and a space.
-        if text == " " {
-            let at = buf.iter_at_mark(&buf.get_insert());
-            let mut before = at;
-            before.backward_char();
-            crate::actions::markdown_macro_at(buf, &before);
-        }
-        // "@" at the start of a word: the smart chip popover.
-        crate::chips_ui::typed(buf, text);
-        return;
     }
-    buf.begin_user_action();
-    buf.delete_selection(true, true);
-    buf.insert_interactive_at_cursor(text, true);
-    buf.end_user_action();
+    ops.extend(typed);
+    let word = text.chars().count() == 1 && !text.chars().any(char::is_whitespace) && e == s;
+    m.apply_user_ops(buf, &ops, word);
+    drop(m);
+    // Now, not on the next idle: a Ctrl+Z that arrives first would
+    // find Undo still disabled and be dropped.
+    crate::live::sync_actions(buf);
+    // Markdown shortcuts: "**bold**" and a space.
+    if text == " " {
+        let at = buf.iter_at_mark(&buf.get_insert());
+        let mut before = at;
+        before.backward_char();
+        crate::actions::markdown_macro_at(buf, &before);
+    }
+    // "@" at the start of a word: the smart chip popover.
+    crate::chips_ui::typed(buf, text);
 }
 
 /// The selection (or caret) as buffer offsets, in order.
@@ -228,11 +222,11 @@ fn typed_ops(doc: &letters_core::Document, at: usize, text: &str) -> Option<Vec<
 fn delete_ops(buf: &gtk::TextBuffer, m: &mut crate::live::LiveModel, forward: bool) -> Option<letters_core::edit::Op> {
     use letters_core::edit::{doc_len, Op};
     let (s, e) = selection_offsets(buf);
-    let (s, e) = (m.sequence_offset(buf, s), m.sequence_offset(buf, e));
+    let (s, e) = (m.sequence_offset(s), m.sequence_offset(e));
     if e > s {
         return Some(Op::Delete { at: s, len: e - s });
     }
-    let len = doc_len(m.document(buf));
+    let len = doc_len(m.document());
     match forward {
         false if s > 0 => Some(Op::Delete { at: s - 1, len: 1 }),
         true if s < len => Some(Op::Delete { at: s, len: 1 }),
@@ -322,54 +316,36 @@ fn handle_key(view: &PageView, buf: &gtk::TextBuffer, key: gdk::Key, state: gdk:
             true
         }
         gdk::Key::BackSpace | gdk::Key::Delete | gdk::Key::KP_Delete => {
-            if let Some(m) = crate::live::of(buf) {
-                let mut m = m.borrow_mut();
-                // An op the model refuses (joining a table's cells) does
-                // nothing, as in a word processor.
-                let forward = key != gdk::Key::BackSpace;
-                let (s, e) = selection_offsets(buf);
-                if let Some(op) = delete_ops(buf, &mut m, forward) {
-                    let tracking = m.tracking.is_some();
-                    let (before, after) = (buf.char_count(), buf.iter_at_mark(&buf.get_insert()).offset());
-                    if m.apply_user_ops(buf, &[op], false) && tracking && buf.char_count() == before {
-                        // Tracked: the text stays, marked deleted. Step
-                        // over it as Word does: Delete leaves the caret
-                        // after it, Backspace before it.
-                        let to = match (forward, e > s) {
-                            (_, true) if forward => e as i32,
-                            (_, true) => s as i32,
-                            (true, false) => after + 1,
-                            (false, false) => after - 1,
-                        };
-                        buf.place_cursor(&buf.iter_at_offset(to.max(0)));
-                    }
-                }
-                drop(m);
-                crate::live::sync_actions(buf);
-                return true;
-            }
-            buf.begin_user_action();
-            if !buf.delete_selection(true, true) {
-                let mut it = cursor;
-                if key == gdk::Key::BackSpace {
-                    buf.backspace(&mut it, true, true);
-                } else {
-                    let mut end = cursor;
-                    if end.forward_cursor_position() {
-                        buf.delete_interactive(&mut it, &mut end, true);
-                    }
+            let Some(m) = crate::live::of(buf) else { return true };
+            let mut m = m.borrow_mut();
+            // An op the model refuses (joining a table's cells) does
+            // nothing, as in a word processor.
+            let forward = key != gdk::Key::BackSpace;
+            let (s, e) = selection_offsets(buf);
+            if let Some(op) = delete_ops(buf, &mut m, forward) {
+                let tracking = m.tracking.is_some();
+                let (before, after) = (buf.char_count(), cursor.offset());
+                if m.apply_user_ops(buf, &[op], false) && tracking && buf.char_count() == before {
+                    // Tracked: the text stays, marked deleted. Step over
+                    // it as Word does: Delete leaves the caret after it,
+                    // Backspace before it.
+                    let to = match (forward, e > s) {
+                        (_, true) if forward => e as i32,
+                        (_, true) => s as i32,
+                        (true, false) => after + 1,
+                        (false, false) => after - 1,
+                    };
+                    buf.place_cursor(&buf.iter_at_offset(to.max(0)));
                 }
             }
-            buf.end_user_action();
+            drop(m);
+            crate::live::sync_actions(buf);
             true
         }
         gdk::Key::Return | gdk::Key::KP_Enter if !ctrl => {
-            // With a live model, Enter is a paragraph split op (a list item
-            // continues its list; an empty one ends it). Without, the
-            // buffer's list continuation.
-            if crate::live::of(buf).is_some() || shift || !crate::bridge::enter_in_list(buf) {
-                insert_text(buf, "\n");
-            }
+            // A paragraph split op: a list item continues its list; an
+            // empty one ends it.
+            insert_text(buf, "\n");
             true
         }
         gdk::Key::Tab if !ctrl => {
@@ -384,9 +360,15 @@ fn handle_key(view: &PageView, buf: &gtk::TextBuffer, key: gdk::Key, state: gdk:
             let clipboard = view.clipboard();
             match key {
                 gdk::Key::c => buf.copy_clipboard(&clipboard),
-                gdk::Key::x => buf.cut_clipboard(&clipboard, true),
+                // Cut: a copy, then a model edit deleting the selection.
+                gdk::Key::x => {
+                    if crate::doc_tab::copy_selection(view.upcast_ref(), buf) {
+                        crate::insert::delete_selection(buf);
+                        crate::live::sync_actions(buf);
+                    }
+                }
                 // Another application's text: typed in as a model edit.
-                _ if crate::live::of(buf).is_some() => {
+                _ => {
                     let buf = buf.clone();
                     clipboard.read_text_async(None::<&gtk::gio::Cancellable>, move |text| {
                         if let Ok(Some(text)) = text {
@@ -395,7 +377,6 @@ fn handle_key(view: &PageView, buf: &gtk::TextBuffer, key: gdk::Key, state: gdk:
                         }
                     });
                 }
-                _ => buf.paste_clipboard(&clipboard, None, true),
             }
             true
         }
@@ -434,10 +415,10 @@ mod tests {
     fn editable(text: &str) -> (PageView, gtk::TextBuffer) {
         let buf = gtk::TextBuffer::new(None);
         crate::actions::register_formatting_tags(&buf);
-        crate::bridge::render_to_buffer(&letters_core::Document::from_plain_text(text), &buf);
+        let live = crate::live::LiveModel::attach(&buf, letters_core::Document::from_plain_text(text));
         let view = PageView::new();
         make_editable(&view, &buf);
-        let (doc, starts) = crate::bridge::capture_with_starts(&buf);
+        let (doc, starts) = live.borrow().snapshot();
         view.set_typeset(Typeset::new(doc, Default::default()), starts);
         (view, buf)
     }
@@ -566,7 +547,6 @@ mod tests {
             let undo = app.lookup_action("undo").unwrap();
 
             let (view, buf) = editable("hello");
-            crate::live::LiveModel::attach(&buf);
             buf.place_cursor(&buf.end_iter());
             assert!(handle_key(&view, &buf, gdk::Key::BackSpace, gdk::ModifierType::empty()));
             assert!(undo.is_enabled(), "deleting left Undo disabled");
@@ -581,8 +561,8 @@ mod tests {
     /// Runs of the live model's first paragraph as (text, bold).
     fn bold_runs(buf: &gtk::TextBuffer) -> Vec<(String, bool)> {
         let m = crate::live::of(buf).unwrap();
-        let mut m = m.borrow_mut();
-        m.document(buf).paragraphs[0].runs.iter().map(|r| (r.text.clone(), r.style.bold)).collect()
+        let m = m.borrow();
+        m.document().paragraphs[0].runs.iter().map(|r| (r.text.clone(), r.style.bold)).collect()
     }
 
     /// Replace All is one model edit (#1202 stage 3): every match goes,
@@ -592,10 +572,10 @@ mod tests {
     fn replace_all_is_one_model_edit_that_keeps_each_matchs_style() {
         gtk_test(|| {
             let (_view, buf) = editable("one fish two fish");
-            let live = crate::live::LiveModel::attach(&buf);
+            let live = crate::live::of(&buf).unwrap();
             buf.select_range(&buf.iter_at_offset(13), &buf.iter_at_offset(17)); // the second "fish"
             crate::actions::toggle_tag_in(&buf, "bold");
-            let before = { let m = live.borrow(); (m.local_reads, m.full_reads) };
+            let before = { let m = live.borrow(); m.foreign_edits };
 
             assert!(crate::dialogs::replace_ranges(&buf, &[(4, 8), (13, 17)], "cat"));
             assert_eq!(
@@ -603,7 +583,7 @@ mod tests {
                 vec![("one cat two ".into(), false), ("cat".into(), true)],
                 "every match replaced, the bold one bold",
             );
-            assert_eq!({ let m = live.borrow(); (m.local_reads, m.full_reads) }, before, "read back from the buffer");
+            assert_eq!({ let m = live.borrow(); m.foreign_edits }, before, "read back from the buffer");
 
             crate::live::undo(&buf, false);
             assert_eq!(
@@ -625,11 +605,11 @@ mod tests {
     fn formatting_a_selection_is_a_model_op_that_keeps_the_selection() {
         gtk_test(|| {
             let (_view, buf) = editable("plain text");
-            let live = crate::live::LiveModel::attach(&buf);
-            let _ = live.borrow_mut().document(&buf);
+            let live = crate::live::of(&buf).unwrap();
+            let _ = live.borrow_mut().document();
             let reads = |l: &std::rc::Rc<std::cell::RefCell<crate::live::LiveModel>>| {
                 let m = l.borrow();
-                (m.local_reads, m.full_reads)
+                m.foreign_edits
             };
             let before = reads(&live);
 
@@ -660,13 +640,13 @@ mod tests {
     fn line_spacing_and_tab_stops_are_the_caret_paragraph_as_model_ops() {
         gtk_test(|| {
             let (_view, buf) = editable("one\ntwo\nthree");
-            let live = crate::live::LiveModel::attach(&buf);
+            let live = crate::live::of(&buf).unwrap();
             let styles = |buf: &gtk::TextBuffer| -> Vec<(f32, Vec<f64>)> {
                 let live = crate::live::of(buf).unwrap();
-                let mut m = live.borrow_mut();
-                m.document(buf).paragraphs.iter().map(|p| (p.style.line_spacing, p.style.tab_stops_pt.clone())).collect()
+                let m = live.borrow();
+                m.document().paragraphs.iter().map(|p| (p.style.line_spacing, p.style.tab_stops_pt.clone())).collect()
             };
-            let before = { let m = live.borrow(); (m.local_reads, m.full_reads) };
+            let before = { let m = live.borrow(); m.foreign_edits };
 
             // The caret at the end of "two".
             buf.place_cursor(&buf.iter_at_offset(7));
@@ -674,7 +654,7 @@ mod tests {
             assert_eq!(crate::actions::cycle_line_spacing_in(&buf), Some(1.5));
             assert!(crate::actions::set_tab_stops_in(&buf, &[36.0, 72.0]));
             assert_eq!(styles(&buf), vec![(1.0, vec![]), (1.5, vec![36.0, 72.0]), (1.0, vec![])]);
-            assert_eq!({ let m = live.borrow(); (m.local_reads, m.full_reads) }, before, "the model read the buffer back instead of taking an op");
+            assert_eq!({ let m = live.borrow(); m.foreign_edits }, before, "the model read the buffer back instead of taking an op");
             assert_eq!(buf.iter_at_mark(&buf.get_insert()).offset(), 7, "the caret stays put");
 
             // A selection: every paragraph it touches, from the first one's.
@@ -694,23 +674,23 @@ mod tests {
     fn a_markdown_shortcut_is_one_model_edit_that_keeps_formatting_and_caret() {
         gtk_test(|| {
             let (_view, buf) = editable("x **hi** y");
-            let live = crate::live::LiveModel::attach(&buf);
+            let live = crate::live::of(&buf).unwrap();
             buf.select_range(&buf.iter_at_offset(2), &buf.iter_at_offset(8));
             crate::actions::toggle_tag_in(&buf, "italic");
             buf.place_cursor(&buf.iter_at_offset(9));
-            let before = { let m = live.borrow(); (m.local_reads, m.full_reads) };
+            let before = { let m = live.borrow(); m.foreign_edits };
 
             crate::actions::markdown_macro_at(&buf, &buf.iter_at_offset(8));
             let runs = |buf: &gtk::TextBuffer| -> Vec<(String, bool, bool)> {
                 let m = crate::live::of(buf).unwrap();
-                let mut m = m.borrow_mut();
-                m.document(buf).paragraphs[0].runs.iter().map(|r| (r.text.clone(), r.style.bold, r.style.italic)).collect()
+                let m = m.borrow();
+                m.document().paragraphs[0].runs.iter().map(|r| (r.text.clone(), r.style.bold, r.style.italic)).collect()
             };
             assert_eq!(
                 runs(&buf),
                 vec![("x ".into(), false, false), ("hi".into(), true, true), (" y".into(), false, false)]
             );
-            assert_eq!({ let m = live.borrow(); (m.local_reads, m.full_reads) }, before, "the model read the buffer back instead of taking an op");
+            assert_eq!({ let m = live.borrow(); m.foreign_edits }, before, "the model read the buffer back instead of taking an op");
             assert_eq!(buf.iter_at_mark(&buf.get_insert()).offset(), 5, "the caret is after the typed space");
 
             crate::live::undo(&buf, false);
@@ -725,20 +705,20 @@ mod tests {
     fn alignment_is_the_caret_or_selection_paragraphs_as_a_model_op() {
         gtk_test(|| {
             let (_view, buf) = editable("one\ntwo\nthree");
-            let live = crate::live::LiveModel::attach(&buf);
+            let live = crate::live::of(&buf).unwrap();
             let align = |buf: &gtk::TextBuffer| -> Vec<letters_core::Alignment> {
                 let live = crate::live::of(buf).unwrap();
-                let mut m = live.borrow_mut();
-                m.document(buf).paragraphs.iter().map(|p| p.style.alignment).collect()
+                let m = live.borrow();
+                m.document().paragraphs.iter().map(|p| p.style.alignment).collect()
             };
             use letters_core::Alignment::{Center, Left, Right};
-            let before = { let m = live.borrow(); (m.local_reads, m.full_reads) };
+            let before = { let m = live.borrow(); m.foreign_edits };
 
             buf.place_cursor(&buf.iter_at_offset(5)); // in "two"
             crate::actions::align_in(&buf, "align-center");
             assert_eq!(align(&buf), [Left, Center, Left]);
             assert_eq!(buf.iter_at_mark(&buf.get_insert()).offset(), 5, "the caret stays put");
-            assert_eq!({ let m = live.borrow(); (m.local_reads, m.full_reads) }, before, "read back from the buffer");
+            assert_eq!({ let m = live.borrow(); m.foreign_edits }, before, "read back from the buffer");
 
             buf.select_range(&buf.iter_at_offset(1), &buf.iter_at_offset(6)); // "one" into "two"
             crate::actions::align_in(&buf, "align-right");
@@ -755,7 +735,6 @@ mod tests {
     fn formatting_picked_with_no_selection_applies_to_the_next_typing() {
         gtk_test(|| {
             let (_view, buf) = editable("plain");
-            crate::live::LiveModel::attach(&buf);
             buf.place_cursor(&buf.end_iter());
 
             crate::actions::toggle_tag_in(&buf, "bold");
