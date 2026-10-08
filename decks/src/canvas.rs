@@ -976,10 +976,26 @@ pub fn draw_table(
     let (cols, rows) = table.fitted(w, h);
     let (mx, my) = table.margins();
     let (pad_x, pad_y) = (mx * scale, my * scale);
+    // A merged cell is drawn once, over every column and row it spans; a
+    // cell it covers draws nothing of its own.
+    let owners = table.owners();
+    let owner = |r: usize, c: usize| owners.get(r).and_then(|o| o.get(c)).copied().unwrap_or((r, c));
+    let spanned = |r: usize, c: usize| {
+        let (cs, rs) = table.rows.get(r).and_then(|row| row.get(c)).map_or((1, 1), |cell| cell.span());
+        let w: f64 = cols.iter().skip(c).take(cs).sum();
+        let h: f64 = rows.iter().skip(r).take(rs).sum();
+        (w, h)
+    };
     let mut cy = y;
-    for (r, rh) in rows.iter().enumerate() {
+    for (r, row_h) in rows.iter().enumerate() {
         let mut cx = x;
-        for (c, cw) in cols.iter().enumerate() {
+        for (c, col_w) in cols.iter().enumerate() {
+            if owner(r, c) != (r, c) {
+                cx += col_w;
+                continue;
+            }
+            let (cw, rh) = spanned(r, c);
+            let (cw, rh) = (&cw, &rh);
             let paint = table.cell_paint(r, c);
             if let Some(fill) = paint.fill {
                 let (fr, fg, fb) = fill.to_f64();
@@ -1007,24 +1023,27 @@ pub fn draw_table(
                 pangocairo::functions::show_layout(cr, &layout);
                 cr.restore().unwrap();
             }
-            cx += cw;
+            cx += col_w;
         }
-        cy += rh;
+        cy += row_h;
     }
-    // "Medium Style 2" separates cells with white 1 pt rules.
+    // "Medium Style 2" separates cells with white 1 pt rules: between two
+    // grid positions only where they are different cells.
     cr.set_source_rgb(1.0, 1.0, 1.0);
     cr.set_line_width((1.0 * 960.0 / 720.0 * scale).max(1.0));
-    let mut cx = x;
-    for cw in &cols[..cols.len().saturating_sub(1)] {
-        cx += cw;
-        cr.move_to(cx, y);
-        cr.line_to(cx, y + h);
-    }
-    let mut cy = y;
-    for rh in &rows[..rows.len().saturating_sub(1)] {
-        cy += rh;
-        cr.move_to(x, cy);
-        cr.line_to(x + w, cy);
+    let col_x: Vec<f64> = std::iter::once(x).chain(cols.iter().scan(x, |at, cw| { *at += cw; Some(*at) })).collect();
+    let row_y: Vec<f64> = std::iter::once(y).chain(rows.iter().scan(y, |at, rh| { *at += rh; Some(*at) })).collect();
+    for r in 0..rows.len() {
+        for c in 0..cols.len() {
+            if c + 1 < cols.len() && owner(r, c) != owner(r, c + 1) {
+                cr.move_to(col_x[c + 1], row_y[r]);
+                cr.line_to(col_x[c + 1], row_y[r + 1]);
+            }
+            if r + 1 < rows.len() && owner(r, c) != owner(r + 1, c) {
+                cr.move_to(col_x[c], row_y[r + 1]);
+                cr.line_to(col_x[c + 1], row_y[r + 1]);
+            }
+        }
     }
     cr.stroke().unwrap();
 }

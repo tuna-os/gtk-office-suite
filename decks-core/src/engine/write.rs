@@ -668,13 +668,34 @@ fn write_table<W: std::io::Write>(
         writer.write_event(Event::Empty(col))?;
     }
     writer.write_event(Event::End(BytesEnd::new("a:tblGrid")))?;
+    let owners = table.owners();
     for (r, h) in rows.iter().enumerate() {
         let mut tr = BytesStart::new("a:tr");
         tr.push_attribute(("h", emu_y(*h).as_str()));
         writer.write_event(Event::Start(tr))?;
         for c in 0..cols.len() {
             let cell = table.rows.get(r).and_then(|row| row.get(c)).cloned().unwrap_or_default();
-            writer.write_event(Event::Start(BytesStart::new("a:tc")))?;
+            // A merged cell's span, and each cell it covers marked by the
+            // way it is covered: from the left, or from above.
+            let mut tc = BytesStart::new("a:tc");
+            let owner = owners.get(r).and_then(|o| o.get(c)).copied().unwrap_or((r, c));
+            if owner == (r, c) {
+                let (cs, rs) = cell.span();
+                if cs > 1 {
+                    tc.push_attribute(("gridSpan", cs.to_string().as_str()));
+                }
+                if rs > 1 {
+                    tc.push_attribute(("rowSpan", rs.to_string().as_str()));
+                }
+            } else {
+                if owner.1 < c {
+                    tc.push_attribute(("hMerge", "1"));
+                }
+                if owner.0 < r {
+                    tc.push_attribute(("vMerge", "1"));
+                }
+            }
+            writer.write_event(Event::Start(tc))?;
             writer.write_event(Event::Start(BytesStart::new("a:txBody")))?;
             writer.write_event(Event::Empty(BytesStart::new("a:bodyPr")))?;
             writer.write_event(Event::Empty(BytesStart::new("a:lstStyle")))?;

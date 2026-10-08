@@ -2010,3 +2010,30 @@ fn text_and_run_styling_survive_a_conversion_between_the_two_formats() {
     let to_odp = convert(&as_pptx, "odp").expect("Impress could not convert our pptx to odp");
     check(&odp::read(to_odp.to_str().unwrap()).expect("read Impress's odp"), "pptx -> Impress -> odp");
 }
+
+/// A merged table cell survives Impress rewriting our pptx: the title still
+/// spans the row, and the cells it covers are still covered.
+#[test]
+fn a_merged_table_cell_survives_impress() {
+    if !require_or_skip() {
+        return;
+    }
+    use decks_core::engine::table::{TableCell, TableData};
+    let cell = |t: &str| TableCell { runs: vec![letters_core::model::Run::plain(t)], ..Default::default() };
+    let rows = vec![
+        vec![TableCell { col_span: 2, ..cell("Title") }, TableCell { covered: true, ..Default::default() }],
+        vec![cell("a"), cell("b")],
+    ];
+    let table = TableData { col_widths: vec![200.0, 200.0], row_heights: vec![40.0, 40.0], rows, first_row: true, ..Default::default() };
+    let mut deck = Deck::new();
+    deck.slides[0].objects = vec![SlideObject::Table { x: 100.0, y: 100.0, w: 400.0, h: 80.0, rotation: 0.0, table }];
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("spans.pptx");
+    write_pptx(path.to_str().unwrap(), &deck).expect("write");
+    let back = convert(&path, "pptx").expect("Impress rewrites our pptx");
+    let read = decks_core::read_deck(back.to_str().unwrap()).expect("read Impress's file");
+    let t = read.slides[0].objects.iter().find_map(|o| match o { SlideObject::Table { table, .. } => Some(table.clone()), _ => None }).expect("a table");
+    assert_eq!(t.rows[0][0].span(), (2, 1), "{:?}", t.rows[0]);
+    assert!(t.rows[0][1].covered, "{:?}", t.rows[0]);
+    assert_eq!(t.rows[0][0].text(), "Title");
+}

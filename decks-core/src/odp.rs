@@ -642,15 +642,30 @@ fn shapes_xml(
                     let cols = table.rows.first().map_or(0, |r| r.len());
                     let mut t = format!("<draw:frame {}><table:table>", geometry(*x, *y, *w, *h, *rotation));
                     t.push_str(&"<table:table-column/>".repeat(cols));
-                    for row in &table.rows {
+                    let owners = table.owners();
+                    for (r, row) in table.rows.iter().enumerate() {
                         t.push_str("<table:table-row>");
-                        for cell in row {
+                        for (c, cell) in row.iter().enumerate() {
+                            // A cell a merged one covers is ODF's covered
+                            // cell; the merged one says how far it spans.
+                            if owners.get(r).and_then(|o| o.get(c)).is_some_and(|o| *o != (r, c)) {
+                                t.push_str("<table:covered-table-cell/>");
+                                continue;
+                            }
                             let inner: String = if cell.runs.is_empty() {
                                 "<text:p/>".to_string()
                             } else {
                                 styled_paragraphs(&cell.runs, style_of, prefix)
                             };
-                            t.push_str(&format!("<table:table-cell>{inner}</table:table-cell>"));
+                            let (cs, rs) = cell.span();
+                            let mut span = String::new();
+                            if cs > 1 {
+                                span.push_str(&format!(" table:number-columns-spanned=\"{cs}\""));
+                            }
+                            if rs > 1 {
+                                span.push_str(&format!(" table:number-rows-spanned=\"{rs}\""));
+                            }
+                            t.push_str(&format!("<table:table-cell{span}>{inner}</table:table-cell>"));
                         }
                         t.push_str("</table:table-row>");
                     }
