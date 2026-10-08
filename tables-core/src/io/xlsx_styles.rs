@@ -82,7 +82,7 @@ fn flag(font: &str, name: &str) -> bool {
 }
 
 /// Colours of the default Office theme, by theme index (`<color theme="n">`):
-/// lt1, dk1, lt2, dk2, then the six accents. Tints are not applied.
+/// lt1, dk1, lt2, dk2, then the six accents.
 const THEME: [Rgb; 10] = [
     Rgb(0xFF, 0xFF, 0xFF),
     Rgb(0x00, 0x00, 0x00),
@@ -96,13 +96,83 @@ const THEME: [Rgb; 10] = [
     Rgb(0x70, 0xAD, 0x47),
 ];
 
+thread_local! {
+    /// The palette of the workbook whose styles are being read
+    /// (`parse_cell_styles_with_theme`): its own theme's, else Office's.
+    static PALETTE: std::cell::Cell<[Rgb; 10]> = const { std::cell::Cell::new(THEME) };
+}
+
+/// A workbook's theme colours (`xl/theme/theme1.xml`'s `a:clrScheme`) by
+/// theme index: lt1, dk1, lt2, dk2, then accent1–6. The scheme lists them
+/// dk1, lt1, dk2, lt2, …; a cell's `theme="0"` is lt1. Office's where the
+/// scheme is missing or a colour can't be read.
+pub fn theme_palette(theme_xml: &str) -> [Rgb; 10] {
+    let mut out = THEME;
+    let Some(scheme) = theme_xml.split("<a:clrScheme").nth(1).and_then(|s| s.split("</a:clrScheme>").next()) else {
+        return out;
+    };
+    let read = |name: &str| -> Option<Rgb> {
+        let body = scheme.split(&format!("<a:{name}>")).nth(1)?.split(&format!("</a:{name}>")).next()?;
+        let attrs = |tag: &str| body.split(tag).nth(1).map(|t| format!(" {}", t.split('>').next().unwrap_or("")));
+        if let Some(a) = attrs("<a:srgbClr") {
+            return Rgb::from_hex(xml_attr(&a, "val")?);
+        }
+        // A system colour carries the value it last had.
+        Rgb::from_hex(xml_attr(&attrs("<a:sysClr")?, "lastClr")?)
+    };
+    let names = ["lt1", "dk1", "lt2", "dk2", "accent1", "accent2", "accent3", "accent4", "accent5", "accent6"];
+    for (slot, name) in out.iter_mut().zip(names) {
+        if let Some(c) = read(name) {
+            *slot = c;
+        }
+    }
+    out
+}
+
+/// `c` with a SpreadsheetML tint: toward white by `tint` when positive,
+/// toward black when negative, on the colour's HSL lightness.
+fn tinted(c: Rgb, tint: f64) -> Rgb {
+    if tint == 0.0 || !tint.is_finite() {
+        return c;
+    }
+    let (r, g, b) = (c.0 as f64 / 255.0, c.1 as f64 / 255.0, c.2 as f64 / 255.0);
+    let (max, min) = (r.max(g).max(b), r.min(g).min(b));
+    let l = (max + min) / 2.0;
+    let d = max - min;
+    let (h, s) = if d == 0.0 {
+        (0.0, 0.0)
+    } else {
+        let s = if l > 0.5 { d / (2.0 - max - min) } else { d / (max + min) };
+        let h = if max == r { (g - b) / d + if g < b { 6.0 } else { 0.0 } } else if max == g { (b - r) / d + 2.0 } else { (r - g) / d + 4.0 };
+        (h / 6.0, s)
+    };
+    let l = if tint < 0.0 { l * (1.0 + tint) } else { l * (1.0 - tint) + tint };
+    let hue = |p: f64, q: f64, mut t: f64| {
+        if t < 0.0 { t += 1.0 }
+        if t > 1.0 { t -= 1.0 }
+        if t < 1.0 / 6.0 { p + (q - p) * 6.0 * t } else if t < 0.5 { q } else if t < 2.0 / 3.0 { p + (q - p) * (2.0 / 3.0 - t) * 6.0 } else { p }
+    };
+    let (r, g, b) = if s == 0.0 {
+        (l, l, l)
+    } else {
+        let q = if l < 0.5 { l * (1.0 + s) } else { l + s - l * s };
+        let p = 2.0 * l - q;
+        (hue(p, q, h + 1.0 / 3.0), hue(p, q, h), hue(p, q, h - 1.0 / 3.0))
+    };
+    let byte = |v: f64| (v * 255.0).round().clamp(0.0, 255.0) as u8;
+    Rgb(byte(r), byte(g), byte(b))
+}
+
 fn color(attrs: &str) -> Option<Rgb> {
     let attrs = format!(" {attrs}");
-    if let Some(rgb) = xml_attr(&attrs, "rgb") {
-        return Rgb::from_hex(rgb);
-    }
-    let theme: usize = xml_attr(&attrs, "theme")?.parse().ok()?;
-    THEME.get(theme).copied()
+    let base = if let Some(rgb) = xml_attr(&attrs, "rgb") {
+        Rgb::from_hex(rgb)?
+    } else {
+        let theme: usize = xml_attr(&attrs, "theme")?.parse().ok()?;
+        PALETTE.with(|p| p.get()).get(theme).copied()?
+    };
+    let tint = xml_attr(&attrs, "tint").and_then(|t| t.parse::<f64>().ok()).unwrap_or(0.0);
+    Some(tinted(base, tint))
 }
 
 fn parse_font(body: &str) -> Font {
@@ -173,6 +243,18 @@ pub fn default_font(styles_xml: &str) -> Option<(String, f64)> {
 }
 
 /// Every cell style (`cellXfs` order) in styles.xml.
+/// `parse_cell_styles`, with theme colours from the workbook's own theme
+/// (`theme_palette`). A fill Excel names as "accent 1, lighter 60%" drew in
+/// Office's blue-and-orange theme whatever the workbook's theme was, and
+/// untinted: a teal header drew orange (render-real
+/// `july-2026-fiscal-risks-and-sustainability-charts`).
+pub fn parse_cell_styles_with_theme(styles_xml: &str, theme_xml: &str) -> Vec<XfStyle> {
+    PALETTE.with(|p| p.set(theme_palette(theme_xml)));
+    let out = parse_cell_styles(styles_xml);
+    PALETTE.with(|p| p.set(THEME));
+    out
+}
+
 pub fn parse_cell_styles(styles_xml: &str) -> Vec<XfStyle> {
     let custom: std::collections::HashMap<u32, String> = elements(block(styles_xml, "numFmts"), "numFmt")
         .into_iter()
@@ -317,5 +399,35 @@ mod tests {
         assert_eq!(mixed.bottom, BorderStyle::Solid, "a hairline draws thin");
         let (r, g, b) = mixed.color;
         assert_eq!(((r * 255.0).round(), (g * 255.0).round(), (b * 255.0).round()), (0.0, 112.0, 192.0));
+    }
+
+    /// A workbook's theme names its own colours: theme 5 (accent2) is the
+    /// teal its scheme says, not Office's orange; a tint lightens or
+    /// darkens it; with no theme, Office's.
+    #[test]
+    fn theme_colours_come_from_the_workbooks_theme() {
+        let theme = r#"<a:theme><a:themeElements><a:clrScheme name="Custom 55">
+            <a:dk1><a:sysClr val="windowText" lastClr="000000"/></a:dk1><a:lt1><a:sysClr val="window" lastClr="FFFFFF"/></a:lt1>
+            <a:dk2><a:srgbClr val="CCE3E0"/></a:dk2><a:lt2><a:srgbClr val="FFFFFF"/></a:lt2>
+            <a:accent1><a:srgbClr val="CCE3E0"/></a:accent1><a:accent2><a:srgbClr val="99C7C2"/></a:accent2>
+            <a:accent3><a:srgbClr val="66AAA3"/></a:accent3><a:accent4><a:srgbClr val="338E85"/></a:accent4>
+            <a:accent5><a:srgbClr val="006F62"/></a:accent5><a:accent6><a:srgbClr val="FFFFFF"/></a:accent6>
+            </a:clrScheme></a:themeElements></a:theme>"#;
+        let palette = theme_palette(theme);
+        assert_eq!(palette[0], Rgb(0xFF, 0xFF, 0xFF), "theme 0 is lt1");
+        assert_eq!(palette[1], Rgb(0, 0, 0), "theme 1 is dk1");
+        assert_eq!(palette[5], Rgb(0x99, 0xC7, 0xC2), "theme 5 is accent2");
+        let styles = r#"<styleSheet><fills count="4"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill>
+            <fill><patternFill patternType="solid"><fgColor theme="5"/></patternFill></fill>
+            <fill><patternFill patternType="solid"><fgColor theme="5" tint="0.5"/></patternFill></fill></fills>
+            <cellXfs count="3"><xf fillId="0"/><xf fillId="2" applyFill="1"/><xf fillId="3" applyFill="1"/></cellXfs></styleSheet>"#;
+        let themed = parse_cell_styles_with_theme(styles, theme);
+        assert_eq!(themed[1].style.fill, Some(Rgb(0x99, 0xC7, 0xC2)));
+        let lighter = themed[2].style.fill.expect("a tinted fill");
+        assert!(lighter.0 > 0x99 && lighter.1 > 0xC7 && lighter.2 > 0xC2, "half-way to white: {lighter:?}");
+        // The palette is the workbook's only while its styles are read.
+        assert_eq!(parse_cell_styles(styles)[1].style.fill, Some(Rgb(0xED, 0x7D, 0x31)));
+        assert_eq!(tinted(Rgb(0x80, 0x80, 0x80), -1.0), Rgb(0, 0, 0));
+        assert_eq!(tinted(Rgb(0x80, 0x80, 0x80), 1.0), Rgb(0xFF, 0xFF, 0xFF));
     }
 }

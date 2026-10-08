@@ -254,11 +254,27 @@ fn draw_cell_text(cr: &Context, sheet: &SheetModel, r: usize, c: usize, rect: (f
     if sheet.aligns_right(r, c) && !style.wrap && layout.is_ellipsized() {
         layout = cell_layout(cr, sheet, r, c, "###", cw);
     }
+    // Text that doesn't fit is cut at the cell's edge, as Calc and Excel
+    // cut it, not ended with "…": the ellipsis took the place of the last
+    // characters too, so a postcode a hair too wide showed as "NR10 3…"
+    // where Calc shows "NR10 3AQ" (render-real `norfolk-public-review`).
+    // Laid out unbounded and placed by its alignment; the clip below cuts it.
+    let mut placed = None;
+    if !style.wrap && layout.is_ellipsized() {
+        layout.set_ellipsize(EllipsizeMode::None);
+        layout.set_width(-1);
+        let text_w = layout.size().0 as f64 / pango::SCALE as f64;
+        placed = Some(match sheet.resolved_h_align(r, c) {
+            HAlign::Center => cx + (cw - text_w) / 2.0,
+            HAlign::Right => cx + cw - CELL_PAD_RIGHT - text_w,
+            _ => cx + CELL_PAD_LEFT + style.indent as f64 * INDENT_PX,
+        });
+    }
     // The layout's exact logical height, not rounded up to whole pixels.
     let text_h = layout.size().1 as f64 / pango::SCALE as f64;
     let y = cell_text_top(style.v_align, cy, rh, text_h);
     let indent = style.indent as f64 * INDENT_PX;
-    let x = if sheet.resolved_h_align(r, c) == HAlign::Right { cx + CELL_PAD_LEFT } else { cx + CELL_PAD_LEFT + indent };
+    let x = placed.unwrap_or(if sheet.resolved_h_align(r, c) == HAlign::Right { cx + CELL_PAD_LEFT } else { cx + CELL_PAD_LEFT + indent });
     cr.save().unwrap();
     cr.rectangle(cx + 1.0, cy + 1.0, (cw - 2.0).max(1.0), (rh - 2.0).max(1.0));
     cr.clip();
@@ -745,6 +761,29 @@ mod tests {
         assert!((top - 100.1).abs() < 1e-9, "{top}");
         assert_eq!(cell_text_top(VAlign::Top, 100.0, 20.0, 17.9), 100.0 + CELL_PAD_V);
         assert!((cell_text_top(VAlign::Center, 100.0, 20.0, 18.0) - 101.0).abs() < 1e-9);
+    }
+
+    /// Text too wide for its cell is cut at the cell's edge, as Calc and
+    /// Excel cut it, not ended with "…": the letters run on to the edge.
+    #[test]
+    fn text_too_wide_for_its_cell_is_cut_at_the_edge_not_ellipsized() {
+        let mut sheet = SheetModel::new("S", 4, 4, 0);
+        *sheet.cell_mut(0, 0) = "WWWWWWWWWWWW".into();
+        let (w, h) = (60, 24);
+        let surface = gtk4::cairo::ImageSurface::create(gtk4::cairo::Format::Rgb24, w, h).unwrap();
+        {
+            let cr = Context::new(&surface).unwrap();
+            cr.set_source_rgb(1.0, 1.0, 1.0);
+            cr.paint().unwrap();
+            draw_cell_text(&cr, &sheet, 0, 0, (0.0, 0.0, w as f64, h as f64), (0.0, 0.0, 0.0));
+        }
+        let stride = surface.stride() as usize;
+        let data = surface.take_data().unwrap();
+        let dark = |x: usize, y: usize| data[y * stride + x * 4] < 128;
+        // The last columns inside the clip: a W's strokes reach well above
+        // the baseline there, where an ellipsis would leave only dots.
+        let inked_rows = (0..h as usize).filter(|&y| (w as usize - 6..w as usize - 2).any(|x| dark(x, y))).count();
+        assert!(inked_rows >= 6, "the text stops short of the edge: {inked_rows} rows inked at the right");
     }
 
     fn export_state() -> Rc<RefCell<crate::window::AppState>> {
