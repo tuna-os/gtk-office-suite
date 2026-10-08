@@ -375,9 +375,10 @@ fn read_layout(
     master_bg: Option<&str>,
     scale: SlideScale,
     theme: &Theme,
+    pictures: &mut dyn FnMut(&str) -> Option<String>,
 ) -> crate::layouts::Layout {
     use crate::layouts::{Layout, LayoutKind, LayoutPlaceholder};
-    let (bg, shapes) = master_shapes(xml, scale, theme);
+    let (bg, shapes) = master_shapes(xml, scale, theme, pictures);
     let kind = {
         let mut reader = Reader::from_str(xml);
         let mut kind = LayoutKind::Custom;
@@ -415,7 +416,7 @@ fn read_layout(
 
 /// A part's own background, if it states one.
 fn parse_layout_background(xml: &str, scale: SlideScale, theme: &Theme) -> Option<String> {
-    master_shapes(xml, scale, theme).0
+    master_shapes(xml, scale, theme, &mut |_| None).0
 }
 
 pub fn read_pptx(path: &str) -> Result<Deck, String> {
@@ -1177,7 +1178,10 @@ pub fn read_pptx(path: &str) -> Result<Deck, String> {
                     .next()
                     .map(|tp| read_part(&mut archive, &mut budget, &tp))
                     .and_then(|tx| parse_theme_font(&tx));
-                let (master_bg, shapes) = master_shapes(&master_xml, scale, &theme);
+                let (master_bg, shapes) = match master_path.as_deref() {
+                    Some(mp) => master_shapes(&master_xml, scale, &theme, &mut |id| part_picture(&mut archive, &mut budget, mp, &master_rels, id)),
+                    None => master_shapes(&master_xml, scale, &theme, &mut |_| None),
+                };
                 // The master's layouts in its own order; a layout its master
                 // doesn't list (or with no master at all) still belongs.
                 let mut layout_paths = targets(&master_rels, "slideLayout");
@@ -1188,7 +1192,9 @@ pub fn read_pptx(path: &str) -> Result<Deck, String> {
                 let mut layouts = Vec::new();
                 for lp in &layout_paths {
                     let xml = if lp == layout_path { layout_xml.clone() } else { read_part(&mut archive, &mut budget, lp) };
-                    layouts.push(read_layout(&xml, lp, &master_phs, master_bg.as_deref(), scale, &theme));
+                    let rels = rels_of(&mut archive, &mut budget, lp);
+                    let mut pictures = |id: &str| part_picture(&mut archive, &mut budget, lp, &rels, id);
+                    layouts.push(read_layout(&xml, lp, &master_phs, master_bg.as_deref(), scale, &theme, &mut pictures));
                 }
                 // What this writer wrote for a master with no layouts: one
                 // empty blank layout. It is no layout.
@@ -1407,7 +1413,38 @@ pub fn parse_master_shapes_scaled(
     xml: &str,
     scale: SlideScale,
 ) -> (Option<String>, Vec<SlideObject>) {
-    master_shapes(xml, scale, &Theme::default())
+    master_shapes(xml, scale, &Theme::default(), &mut |_| None)
+}
+
+/// The target of relationship `id` in a part's relationships.
+fn rel_target(rels_xml: &str, id: &str) -> Option<String> {
+    let mut reader = Reader::from_str(rels_xml);
+    loop {
+        match reader.read_event() {
+            Ok(Event::Start(e)) | Ok(Event::Empty(e)) if e.name().as_ref() == "Relationship" => {
+                let attr = |k: &str| {
+                    e.attributes()
+                        .flatten()
+                        .find(|a| a.key.as_ref() == k)
+                        .and_then(|a| a.normalized_value(quick_xml::XmlVersion::Implicit1_0).ok().map(|v| v.into_owned()))
+                };
+                if attr("Id").as_deref() == Some(id) {
+                    return attr("Target");
+                }
+            }
+            Ok(Event::Eof) | Err(_) => return None,
+            _ => {}
+        }
+    }
+}
+
+/// A picture of the part `part` (relationships `rels_xml`) by its
+/// relationship id, read into the media cache: its file's path.
+fn part_picture(archive: &mut zip::ZipArchive<File>, budget: &mut ZipBudget, part: &str, rels_xml: &str, id: &str) -> Option<String> {
+    let dir = Path::new(part).parent().map(|d| d.to_string_lossy().into_owned()).unwrap_or_default();
+    let target = part_path(&dir, &rel_target(rels_xml, id)?);
+    let bytes = archive.part_to_bytes(&target, budget).ok()?;
+    suite_common_core::media_cache::persist(&bytes).ok().map(|p| p.to_string_lossy().into_owned())
 }
 
 /// A master's or layout's background and decorations. A shape without text
@@ -1415,7 +1452,12 @@ pub fn parse_master_shapes_scaled(
 /// against `theme`), as on a slide: they used to come back as plain
 /// rectangles and circles, so a themed master lost its decorations on
 /// every save and reopen.
-fn master_shapes(xml: &str, scale: SlideScale, theme: &Theme) -> (Option<String>, Vec<SlideObject>) {
+fn master_shapes(
+    xml: &str,
+    scale: SlideScale,
+    theme: &Theme,
+    pictures: &mut dyn FnMut(&str) -> Option<String>,
+) -> (Option<String>, Vec<SlideObject>) {
     if xml.is_empty() {
         return (None, Vec::new());
     }
@@ -1442,6 +1484,10 @@ fn master_shapes(xml: &str, scale: SlideScale, theme: &Theme) -> (Option<String>
         /// Which `p:sp` of the part this is, in document order: its index
         /// into `sp_styles`.
         sp_index: usize,
+        /// A picture (`p:pic`) rather than a shape, and its image's
+        /// relationship.
+        picture: bool,
+        embed: Option<String>,
     }
     let paints = sp_styles(xml, theme, scale.x);
     let mut sp_count = 0usize;
@@ -1477,8 +1523,31 @@ fn master_shapes(xml: &str, scale: SlideScale, theme: &Theme) -> (Option<String>
                         pending_breaks: 0,
                         cur_style: RunStyle::default(),
                         sp_index: sp_count,
+                        picture: false,
+                        embed: None,
                     });
                     sp_count += 1;
+                }
+                "p:pic" => {
+                    cur = Some(Pending {
+                        x: 0.0,
+                        y: 0.0,
+                        w: 0.0,
+                        h: 0.0,
+                        prst: None,
+                        has_ph: false,
+                        runs: Vec::new(),
+                        pending_breaks: 0,
+                        cur_style: RunStyle::default(),
+                        sp_index: usize::MAX,
+                        picture: true,
+                        embed: None,
+                    });
+                }
+                "a:blip" => {
+                    if let Some(p) = cur.as_mut().filter(|p| p.picture) {
+                        p.embed = parse_blip_embed(e);
+                    }
                 }
                 "p:ph" => {
                     if let Some(p) = cur.as_mut() {
@@ -1545,6 +1614,15 @@ fn master_shapes(xml: &str, scale: SlideScale, theme: &Theme) -> (Option<String>
                 _ => {}
             },
             Event::End(ref e) => match e.name().as_ref() {
+                "p:pic" => {
+                    // A master's or layout's picture (a logo, a band of
+                    // colour), where it stands among its shapes.
+                    if let Some(p) = cur.take() {
+                        if let Some(path) = p.embed.as_deref().filter(|_| !p.has_ph && p.w > 0.0 && p.h > 0.0).and_then(&mut *pictures) {
+                            shapes.push(SlideObject::Image { path, x: p.x, y: p.y, w: p.w, h: p.h, rotation: 0.0, crop: Default::default() });
+                        }
+                    }
+                }
                 "p:bg" => in_bg = false,
                 "a:t" => in_text = false,
                 "a:rPr" => in_rpr = false,

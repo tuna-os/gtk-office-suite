@@ -607,8 +607,9 @@ pub fn draw_slide_base(
                     pangocairo::functions::show_layout(cr, &layout);
                 }
                 // A styled shape (an odp master's, a theme's decoration)
-                // carries its own paint: drawn as on a slide.
-                SlideObject::Shape { .. } => {
+                // carries its own paint, and a picture (a logo, a band of
+                // colour) is itself: drawn as on a slide.
+                SlideObject::Shape { .. } | SlideObject::Image { .. } => {
                     draw_object(cr, obj, (ox, oy, slide_w, slide_h), slide_bg_rgb, Some(master));
                 }
                 _ => {}
