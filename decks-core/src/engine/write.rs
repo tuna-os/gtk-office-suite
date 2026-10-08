@@ -656,7 +656,8 @@ fn write_table<W: std::io::Write>(
     }
     writer.write_event(Event::Start(tbl_pr))?;
     writer.write_event(Event::Start(BytesStart::new("a:tableStyleId")))?;
-    writer.write_event(Event::Text(BytesText::new("{5C22544A-7EE6-4342-B048-85BDC9FD1C3A}")))?;
+    let style_id = table.style_id.as_deref().unwrap_or(super::table::DEFAULT_STYLE_ID);
+    writer.write_event(Event::Text(BytesText::new(style_id)))?;
     writer.write_event(Event::End(BytesEnd::new("a:tableStyleId")))?;
     writer.write_event(Event::End(BytesEnd::new("a:tblPr")))?;
 
