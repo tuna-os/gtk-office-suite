@@ -495,10 +495,9 @@ jobs:
     if: ${{ !cancelled() && needs.flatpak.result == 'success' }}
     runs-on: ubuntu-24.04
     timeout-minutes: 120
-    # Not gating yet: Tier C has not had a green run. Remove this line once
-    # it has run green on main for a week. Its failures stay visible in the
-    # run list and the report either way.
-    continue-on-error: true
+    # Gating: Tier C ran green on main every night for a week (2026-10-03
+    # to 2026-10-09, runs 37112609169 onward, #1199), so a failure here
+    # fails the run instead of only showing in the report.
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 

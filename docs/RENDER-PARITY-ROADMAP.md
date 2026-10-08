@@ -330,7 +330,7 @@ development from CI output alone, without anyone looking at screenshots.
 | **Ratchet** (`compare.py --baseline tools/render-lab/baseline.json`) | every PR, gating | fails if any fixture's verdict gets worse (**regressed**), or gets better or is new without the baseline being updated in the same PR (**stale**). Every gain is locked in by the PR that made it. |
 | **One issue per non-green fixture** (`sync_issues.py`) | every push to main and nightly | labels `render-parity`, `app:<app>`, and `blocked` when the fixture needs a Phase 1 architecture item. The acceptance criterion is "CI reports this fixture green". Deduplicated by a hidden marker; closes itself when the fixture turns green on main. |
 | Real-document ratchet (`render-real.yml`, `baseline-real.json`) | nightly, manual dispatch, PRs touching the corpus | the same verdicts over about 30 published documents per app; on main one `render-real` issue per document that is not green, closing when it turns green. Each cause is reduced to a single-feature fixture to fix it. |
-| Tier C VM report | nightly + manual dispatch | shipped Flatpak on a real GNOME Wayland session. Non-gating until it has run green for a week. |
+| Tier C VM report | nightly + manual dispatch | shipped Flatpak on a real GNOME Wayland session. Gating since it ran green on main for a week (2026-10-03 to 2026-10-09, #1199). |
 
 The baseline stores verdicts only (green/amber/red/missing), not raw
 metrics, so it is stable across runs and diffs cleanly in review.
@@ -388,15 +388,17 @@ The first baseline was Tier A 1 green / 31 amber / 10 red.
       screenshots the Broadway page, located by geom.json and verified
       against the app's own render. Tiers A and B agree to within about
       1 grey level; see "Broadway notes" (#888).
-- [ ] Tier C VM harness (`tools/render-lab/vm/`). Boots a GNOME image
+- [x] Tier C VM harness (`tools/render-lab/vm/`). Boots a GNOME image
       under QEMU/KVM, installs the CI Flatpak bundle, opens each fixture
       and takes a `screendump` over QMP. It needs `/dev/kvm`, which the
       2026-09-24 dev box lacks, so it is built and validated on a GitHub
-      runner.
+      runner. Green every night on main from 2026-10-03 (run 37112609169)
+      for a week, and gating since (#1199).
 - [x] `render-parity.yml`: Tier A+B on every PR, ratchet, sticky PR
       comment, report artifact, issue sync on main, nightly Tier C (#888).
       Each app runs as its own parallel job, and every run publishes
-      `baseline.proposed.json` (#946, #955). Tier C has not had a green run.
+      `baseline.proposed.json` (#946, #955). Tier C gates since its green
+      week (#1199).
 - [x] Commit the first `baseline.json`, and let the issue sync open the
       first backlog: 41 `render-parity` issues (#888).
 - [ ] Close or consolidate the 60+ duplicate strategist issues so the
