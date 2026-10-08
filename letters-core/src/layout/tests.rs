@@ -287,7 +287,7 @@ fn a_tall_row_splits_across_pages() {
     let at = d.paragraphs.iter().position(|p| p.style.table_cell == Some(TableCell { table, row: 1, col: 0 })).unwrap();
     let lines: Vec<Paragraph> = (0..80).map(|n| Paragraph {
         style: ParaStyle { table_cell: Some(TableCell { table, row: 1, col: 0 }), ..Default::default() },
-        runs: vec![Run::plain(&format!("line {n}"))],
+        runs: vec![Run::plain(format!("line {n}"))],
     }).collect();
     d.paragraphs.splice(at..=at, lines);
     let t = lay(&d);
