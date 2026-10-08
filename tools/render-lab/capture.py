@@ -63,7 +63,12 @@ VIEW_SETTINGS = {"tables": "show-gridlines=false\n"}
 SOLID_CSD_BORDER = 5  # px per side, GTK 4.14 on X11 without compositing
 # Tier B's crop must match the app's own render (A-1.png from the same
 # process) this closely, in mean absolute grey levels, or it is rejected.
-MAX_LOCATE_DIFF = 4.0
+# The same page drawn on screen and into the dump differs only in how the
+# glyphs are rasterised: nothing with the Liberation fonts (0.03), but up
+# to 4.9 for a fallback font standing in for a document's Palatino or Arial
+# (explanatory-note, #1211). A page that is cut off, covered or not drawn
+# is far above this (test_render_lab_locate).
+MAX_LOCATE_DIFF = 6.0
 
 
 def schemas_dir():
