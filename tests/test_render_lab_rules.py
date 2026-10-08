@@ -178,8 +178,14 @@ class OpeningSheetPageTest(unittest.TestCase):
     it, not against page 1 (#1512)."""
 
     # Our opening sheet's words, and each printed page's.
-    OURS = ["total", "2024", "2025", "north", "south"]
-    PAGES = {1: ["cover", "contents"], 2: ["notes", "2024"], 3: ["total", "2024", "2025", "north", "east"]}
+    # Page 1 is guidance prose: it shares more words with the sheet than
+    # page 3 does, but they are a small part of it.
+    OURS = ["total", "2024", "2025", "north", "south", "the", "of", "and", "costs"]
+    PAGES = {
+        1: ["the", "of", "and", "costs", "total", "you", "must", "read", "these", "rules", "before", "claiming", "any", "support"],
+        2: ["notes", "2024", "learner", "details"],
+        3: ["total", "2024", "2025", "north", "east"],
+    }
 
     def score(self, app, words_by_page, pages=None):
         import tempfile
@@ -224,6 +230,13 @@ class OpeningSheetPageTest(unittest.TestCase):
         # 90-minute timeout; the pick is a quick read per page.
         m = self.score("tables", {1: 0.1, 2: 0.2, 3: 0.95})
         self.assertEqual(m["scored"], [3])
+
+    def test_a_sheet_printed_over_several_pages_starts_at_its_first(self):
+        # A long sheet prints over pages 2 and 3, both held by our capture,
+        # which starts at the sheet's top.
+        pages = {1: ["cover", "contents"], 2: ["total", "2024"], 3: ["2025", "north"]}
+        m = self.score("tables", {1: 0.1, 2: 0.6, 3: 0.3}, pages=pages)
+        self.assertEqual(m["lo_page"], 2)
 
     def test_a_tie_or_no_shared_words_keeps_the_first_page(self):
         m = self.score("tables", {1: 0.1, 2: 0.2, 3: 0.95}, pages={1: ["a"], 2: ["b"], 3: ["c"]})
