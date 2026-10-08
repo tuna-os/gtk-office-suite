@@ -631,20 +631,36 @@ fn content_xml(doc: &Document) -> String {
                         })
                         .collect();
                     body.push_str(&format!("<table:table table:name=\"Table{tables_written}\"{table_style}>{columns}"));
-                    // The shaded cells, one table-cell style per colour.
+                    // The shaded cells, one table-cell style per colour,
+                    // and the table's cell padding in every cell's style.
+                    let padding = doc.table_padding.get(&c.table).map_or(String::new(), |p| {
+                        format!(
+                            " fo:padding-top=\"{:.4}pt\" fo:padding-bottom=\"{:.4}pt\" fo:padding-left=\"{:.4}pt\" fo:padding-right=\"{:.4}pt\"",
+                            p.top_pt, p.bottom_pt, p.left_pt, p.right_pt
+                        )
+                    });
                     let mut fill_styles: std::collections::HashMap<String, String> = Default::default();
-                    let cell_styles = doc.table_fills.get(&c.table).into_iter().flatten().map(|f| {
+                    let mut cell_styles: std::collections::HashMap<(u32, u32), String> = doc.table_fills.get(&c.table).into_iter().flatten().map(|f| {
                         let n = fill_styles.len();
                         let name = fill_styles.entry(f.color.clone()).or_insert_with(|| {
                             let name = format!("Table{tables_written}.F{n}");
                             auto.push_str(&format!(
-                                "<style:style style:name=\"{name}\" style:family=\"table-cell\"><style:table-cell-properties fo:background-color=\"#{}\"/></style:style>",
+                                "<style:style style:name=\"{name}\" style:family=\"table-cell\"><style:table-cell-properties fo:background-color=\"#{}\"{padding}/></style:style>",
                                 esc(&f.color)
                             ));
                             name
                         });
                         ((f.row, f.col), format!(" table:style-name=\"{name}\""))
                     }).collect();
+                    if !padding.is_empty() {
+                        let name = format!("Table{tables_written}.P");
+                        auto.push_str(&format!("<style:style style:name=\"{name}\" style:family=\"table-cell\"><style:table-cell-properties{padding}/></style:style>"));
+                        for r in 0..rows {
+                            for col in 0..cols {
+                                cell_styles.entry((r, col)).or_insert_with(|| format!(" table:style-name=\"{name}\""));
+                            }
+                        }
+                    }
                     let spans = doc.table_spans.get(&c.table).cloned().unwrap_or_default();
                     let mut t = OpenTable { id: c.table, rows, cols, row: 0, col: 0, filled: false, row_styles, cell_styles, spans };
                     t.open_row(&mut body);
@@ -1174,6 +1190,8 @@ struct AutoStyles {
     cell_fill: std::collections::HashMap<String, String>,
     /// A graphic style's placement of a floating frame.
     graphic: std::collections::HashMap<String, crate::model::ImageAnchor>,
+    /// A table-cell style's padding, when it gives one.
+    cell_padding: std::collections::HashMap<String, crate::model::CellPadding>,
 }
 
 /// Paragraph-level values read off one automatic style. Lengths are points.
@@ -1291,7 +1309,7 @@ fn list_style_kinds(xml: &str) -> std::collections::HashMap<String, Vec<ListKind
 }
 
 fn parse_auto_styles(xml: &str) -> AutoStyles {
-    let mut out = AutoStyles { text: Default::default(), para: Default::default(), para_parent: Default::default(), text_parent: Default::default(), para_text: Default::default(), column: Default::default(), row: Default::default(), cell_fill: Default::default(), graphic: Default::default() };
+    let mut out = AutoStyles { text: Default::default(), para: Default::default(), para_parent: Default::default(), text_parent: Default::default(), para_text: Default::default(), column: Default::default(), row: Default::default(), cell_fill: Default::default(), graphic: Default::default(), cell_padding: Default::default() };
     let mut reader = Reader::from_str(xml);
     let mut cur_name: Option<String> = None;
     let mut cur_family = String::new();
@@ -1321,6 +1339,15 @@ fn parse_auto_styles(xml: &str) -> AutoStyles {
                         }
                     }
                     "style:table-cell-properties" => {
+                        // fo:padding for every side, a side's own over it;
+                        // a side neither names has none (ODF's default).
+                        let side = |a: &str| attr_val(&e, a).and_then(|v| parse_length_pt(&v)).filter(|v| v.is_finite() && *v >= 0.0);
+                        let all = side("fo:padding");
+                        let sides = ["fo:padding-top", "fo:padding-bottom", "fo:padding-left", "fo:padding-right"].map(|a| side(a).or(all));
+                        if let (Some(name), true) = (cur_name.clone(), sides.iter().any(Option::is_some)) {
+                            let [top_pt, bottom_pt, left_pt, right_pt] = sides.map(|v| v.unwrap_or(0.0));
+                            out.cell_padding.insert(name, crate::model::CellPadding { top_pt, bottom_pt, left_pt, right_pt });
+                        }
                         let fill = attr_val(&e, "fo:background-color").map(|c| c.trim_start_matches('#').to_uppercase());
                         if let (Some(name), Some(color)) = (cur_name.clone(), fill.filter(|c| c.len() == 6 && c.chars().all(|ch| ch.is_ascii_hexdigit()))) {
                             out.cell_fill.insert(name, color);
@@ -1804,7 +1831,7 @@ fn read_parts(path: &str) -> Result<(Document, Vec<String>), String> {
 
     // styles.xml's named styles, the parents of content.xml's automatic ones.
     let named = parse_auto_styles(&styles);
-    let mut doc = Document { paragraphs: Vec::new(), footnotes: Vec::new(), header: None, footer: None, page: None, base_font: read_base_font(&styles), heading_styles: read_heading_styles(&styles), comments: Vec::new(), table_columns: Default::default(), table_rows: Default::default(), table_spans: Default::default(), table_fills: Default::default() };
+    let mut doc = Document { paragraphs: Vec::new(), footnotes: Vec::new(), header: None, footer: None, page: None, base_font: read_base_font(&styles), heading_styles: read_heading_styles(&styles), comments: Vec::new(), table_columns: Default::default(), table_rows: Default::default(), table_spans: Default::default(), table_fills: Default::default(), table_padding: Default::default() };
     let mut reader = Reader::from_str(&content);
     let mut in_body = false;
     let mut para: Option<Paragraph> = None;
@@ -1905,6 +1932,8 @@ fn read_parts(path: &str) -> Result<(Document, Vec<String>), String> {
     let mut cell_spans: std::collections::BTreeMap<u32, Vec<CellSpan>> = Default::default();
     let mut cell_fills: std::collections::BTreeMap<u32, Vec<crate::model::CellFill>> = Default::default();
     // A shaded cell's fill, at the cell just counted.
+    // Each table's cell padding: its first cell's.
+    let mut cell_padding: std::collections::BTreeMap<u32, crate::model::CellPadding> = Default::default();
     let note_fill = |fills: &mut std::collections::BTreeMap<u32, Vec<crate::model::CellFill>>, t: &(u32, i64, i64, usize, bool), e: &quick_xml::events::BytesStart| {
         if let Some(color) = attr_val(e, "table:style-name").and_then(|n| auto.cell_fill.get(&n).cloned()) {
             fills.entry(t.0).or_default().push(crate::model::CellFill { row: t.1.max(0) as u32, col: t.2.max(0) as u32, color });
@@ -2109,6 +2138,11 @@ fn read_parts(path: &str) -> Result<(Document, Vec<String>), String> {
                         t.4 = false;
                         note_span(&mut cell_spans, &e, t);
                         note_fill(&mut cell_fills, t, &e);
+                        if (t.1, t.2) == (0, 0) {
+                            if let Some(pad) = attr_val(&e, "table:style-name").and_then(|n| auto.cell_padding.get(&n).copied()) {
+                                cell_padding.insert(t.0, pad);
+                            }
+                        }
                     }
                 }
                 "draw:frame" => {
@@ -2334,6 +2368,11 @@ fn read_parts(path: &str) -> Result<(Document, Vec<String>), String> {
                         t.2 += 1;
                         note_span(&mut cell_spans, &e, t);
                         note_fill(&mut cell_fills, t, &e);
+                        if (t.1, t.2) == (0, 0) {
+                            if let Some(pad) = attr_val(&e, "table:style-name").and_then(|n| auto.cell_padding.get(&n).copied()) {
+                                cell_padding.insert(t.0, pad);
+                            }
+                        }
                         doc.paragraphs.push(Paragraph { style: ParaStyle { table_cell: cell_of(&table), ..Default::default() }, runs: Vec::new() });
                     }
                 }
@@ -2657,6 +2696,7 @@ fn read_parts(path: &str) -> Result<(Document, Vec<String>), String> {
     doc.table_rows = row_heights;
     doc.table_spans = cell_spans;
     doc.table_fills = cell_fills;
+    doc.table_padding = cell_padding;
     // A column count LibreOffice recorded on a section instead of on the
     // page layout. Only consulted when the page layout said nothing, so
     // an explicit page-wide count still wins.
@@ -2985,6 +3025,24 @@ mod tests {
         let mut d = Document::from_plain_text("after");
         d.insert_table_at(0, 1, 1);
         assert!(round_trip(&d).table_fills.is_empty());
+    }
+
+    /// A table's cell padding survives a save and reopen, in every cell's
+    /// style, a shaded cell's included.
+    #[test]
+    fn table_cell_padding_survives() {
+        use crate::model::{CellFill, CellPadding};
+        let mut d = Document::from_plain_text("after");
+        let table = d.insert_table_at(0, 2, 2);
+        let want = CellPadding { top_pt: 5.65, bottom_pt: 5.65, left_pt: 5.65, right_pt: 4.0 };
+        d.table_padding.insert(table, want);
+        d.table_fills.insert(table, vec![CellFill { row: 0, col: 0, color: "D9D9D9".into() }]);
+        let rt = round_trip(&d);
+        assert_eq!(rt.table_padding.values().copied().collect::<Vec<_>>(), [want]);
+        assert_eq!(rt.table_fills.values().flatten().count(), 1);
+        let mut d = Document::from_plain_text("after");
+        d.insert_table_at(0, 1, 1);
+        assert!(round_trip(&d).table_padding.is_empty());
     }
 
     /// Smart chips reopen as chips: a date is a fixed `text:date`, a link
