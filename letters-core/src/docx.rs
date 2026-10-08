@@ -603,6 +603,7 @@ fn read_opened(path: &str, doc: rdocx::Document) -> Result<Document, String> {
     let footnotes: Vec<String> = doc.footnotes().into_iter().map(|(_, t)| t).collect();
     // Table ids are the tables' order, as the cells above are tagged.
     let table_columns = tables.iter().enumerate().filter_map(|(ti, t)| Some((ti as u32, column_widths(t)?))).collect();
+    let table_rows = tables.iter().enumerate().filter_map(|(ti, t)| Some((ti as u32, row_heights(t)?))).collect();
 
     Ok(Document {
         paragraphs,
@@ -614,7 +615,20 @@ fn read_opened(path: &str, doc: rdocx::Document) -> Result<Document, String> {
         heading_styles: read_heading_styles(&doc),
         comments: Vec::new(),
         table_columns,
+        table_rows,
     })
+}
+
+/// A table's row heights, when any row gives one (`w:trHeight`).
+fn row_heights(table: &rdocx::TableRef<'_>) -> Option<Vec<Option<crate::model::RowHeight>>> {
+    let heights: Vec<Option<crate::model::RowHeight>> = (0..table.row_count())
+        .map(|r| match table.row(r)?.height()? {
+            rdocx::RowHeight::AtLeast(h) => Some(crate::model::RowHeight { pt: h.to_pt(), exact: false }),
+            rdocx::RowHeight::Exact(h) => Some(crate::model::RowHeight { pt: h.to_pt(), exact: true }),
+        })
+        .map(|h| h.filter(|h| h.pt > 0.0))
+        .collect();
+    heights.iter().any(Option::is_some).then_some(heights)
 }
 
 /// A table's column widths in points: its first row's cell widths, when
@@ -746,6 +760,16 @@ pub fn write(doc: &Document, path: impl AsRef<std::path::Path>) -> Result<(), St
             if let Some(widths) = doc.table_columns.get(&tc0.table).filter(|w| w.len() == cols) {
                 for (c, w) in widths.iter().enumerate() {
                     tbl.set_column_width(c, rdocx::Length::pt(*w));
+                }
+            }
+            if let Some(heights) = doc.table_rows.get(&tc0.table) {
+                for (r, h) in heights.iter().enumerate().take(rows) {
+                    let (Some(h), Some(mut row)) = (h, tbl.row(r)) else { continue };
+                    if h.exact {
+                        row.set_height_exact(rdocx::Length::pt(h.pt));
+                    } else {
+                        row.set_height(rdocx::Length::pt(h.pt));
+                    }
                 }
             }
             let mut filled = std::collections::HashSet::new();
@@ -1504,11 +1528,17 @@ fn map_paragraph(doc: &rdocx::Document, p: &rdocx::ParagraphRef<'_>, table_style
             .map(|pt| (pt * 2.0).round() as u16)
             .or_else(|| eff.sz.map(|s| s.0.min(u32::from(u16::MAX)) as u16).filter(|hp| Some(*hp) != base.size_hp));
         // "auto" is Word's automatic (default) text colour, not a colour:
-        // on the run itself it must not hide the style's either.
+        // on the run itself it must not hide the style's either. In a
+        // heading, though, the heading style's colour is drawn under every
+        // run without one, so "auto" there is the run undoing it (a black
+        // subtitle in a blue Heading 2): black, as Word and LibreOffice
+        // draw it.
+        let auto = r.color().is_some_and(|c| c.eq_ignore_ascii_case("auto"));
         let color = r
             .color()
             .filter(|c| !c.eq_ignore_ascii_case("auto"))
             .map(|c| c.trim_start_matches('#').to_uppercase())
+            .or_else(|| (auto && heading.is_some()).then(|| "000000".to_string()))
             .or_else(|| eff.color.as_deref().filter(|c| !c.eq_ignore_ascii_case("auto")).map(|c| c.to_uppercase()));
         runs.push(Run {
             text,

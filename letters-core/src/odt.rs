@@ -241,10 +241,17 @@ struct OpenTable {
     col: u32,
     /// Whether the current cell has a paragraph yet (ODF wants one).
     filled: bool,
+    /// Each row's style attribute (empty for a row without a height).
+    row_styles: Vec<String>,
 }
 
 impl OpenTable {
     const CELL: &'static str = "<table:table-cell office:value-type=\"string\">";
+
+    fn open_row(&self, body: &mut String) {
+        let style = self.row_styles.get(self.row as usize).map_or("", String::as_str);
+        body.push_str(&format!("<table:table-row{style}>"));
+    }
 
     fn close_cell(&mut self, body: &mut String) {
         if !self.filled {
@@ -267,7 +274,7 @@ impl OpenTable {
                 if self.row == self.rows {
                     return;
                 }
-                body.push_str("<table:table-row>");
+                self.open_row(body);
             }
             body.push_str(Self::CELL);
             self.filled = false;
@@ -435,11 +442,27 @@ fn content_xml(doc: &Document) -> String {
                         }
                         None => format!("<table:table-column table:number-columns-repeated=\"{cols}\"/>"),
                     };
-                    body.push_str(&format!(
-                        "<table:table table:name=\"Table{tables_written}\"{table_style}>{columns}<table:table-row>{}",
-                        OpenTable::CELL
-                    ));
-                    table = Some(OpenTable { id: c.table, rows, cols, row: 0, col: 0, filled: false });
+                    // The file's row heights, as row styles: a minimum
+                    // height, or a fixed one.
+                    let row_styles: Vec<String> = (0..rows as usize)
+                        .map(|r| match doc.table_rows.get(&c.table).and_then(|h| h.get(r).copied().flatten()) {
+                            Some(h) => {
+                                let name = format!("Table{tables_written}.R{r}");
+                                let prop = if h.exact { "style:row-height" } else { "style:min-row-height" };
+                                auto.push_str(&format!(
+                                    "<style:style style:name=\"{name}\" style:family=\"table-row\"><style:table-row-properties {prop}=\"{:.2}pt\"/></style:style>",
+                                    h.pt
+                                ));
+                                format!(" table:style-name=\"{name}\"")
+                            }
+                            None => String::new(),
+                        })
+                        .collect();
+                    body.push_str(&format!("<table:table table:name=\"Table{tables_written}\"{table_style}>{columns}"));
+                    let t = OpenTable { id: c.table, rows, cols, row: 0, col: 0, filled: false, row_styles };
+                    t.open_row(&mut body);
+                    body.push_str(OpenTable::CELL);
+                    table = Some(t);
                 }
                 if let Some(t) = table.as_mut() {
                     t.move_to(&mut body, c.row, c.col);
@@ -939,6 +962,8 @@ struct AutoStyles {
     para_text: std::collections::HashMap<String, RunStyle>,
     /// A table-column style's width, in points.
     column: std::collections::HashMap<String, f64>,
+    /// A table-row style's height.
+    row: std::collections::HashMap<String, crate::model::RowHeight>,
 }
 
 /// Paragraph-level values read off one automatic style. Lengths are points.
@@ -994,7 +1019,7 @@ fn list_style_kinds(xml: &str) -> std::collections::HashMap<String, Vec<ListKind
 }
 
 fn parse_auto_styles(xml: &str) -> AutoStyles {
-    let mut out = AutoStyles { text: Default::default(), para: Default::default(), para_parent: Default::default(), text_parent: Default::default(), para_text: Default::default(), column: Default::default() };
+    let mut out = AutoStyles { text: Default::default(), para: Default::default(), para_parent: Default::default(), text_parent: Default::default(), para_text: Default::default(), column: Default::default(), row: Default::default() };
     let mut reader = Reader::from_str(xml);
     let mut cur_name: Option<String> = None;
     let mut cur_family = String::new();
@@ -1016,6 +1041,20 @@ fn parse_auto_styles(xml: &str) -> AutoStyles {
                     "style:table-column-properties" => {
                         if let (Some(name), Some(w)) = (cur_name.clone(), attr_val(&e, "style:column-width").and_then(|v| parse_length_pt(&v))) {
                             out.column.insert(name, w);
+                        }
+                    }
+                    // A minimum row height, or a fixed one (a height
+                    // LibreOffice marks optimal is only a minimum).
+                    "style:table-row-properties" => {
+                        let len = |a: &str| attr_val(&e, a).and_then(|v| parse_length_pt(&v)).filter(|h| *h > 0.0);
+                        let optimal = attr_val(&e, "style:use-optimal-row-height").as_deref() == Some("true");
+                        let height = match (len("style:min-row-height"), len("style:row-height")) {
+                            (Some(pt), _) => Some(crate::model::RowHeight { pt, exact: false }),
+                            (None, Some(pt)) => Some(crate::model::RowHeight { pt, exact: !optimal }),
+                            (None, None) => None,
+                        };
+                        if let (Some(name), Some(h)) = (cur_name.clone(), height) {
+                            out.row.insert(name, h);
                         }
                     }
                     "style:text-properties" => {
@@ -1174,6 +1213,43 @@ fn parse_length_pt(v: &str) -> Option<f64> {
         "in" => n * 72.0,
         _ => return None,
     })
+}
+
+/// The master page LibreOffice gives the first page: the one the first
+/// paragraph or table's style names (`style:master-page-name`), else
+/// "Standard", else the first one declared.
+fn first_master_page(content: &str, styles: &str) -> Option<String> {
+    let mut named: std::collections::HashMap<String, String> = Default::default();
+    let mut masters: Vec<String> = Vec::new();
+    let mut first_style: Option<String> = None;
+    for xml in [content, styles] {
+        let mut reader = Reader::from_str(xml);
+        let mut in_text = false;
+        loop {
+            match reader.read_event() {
+                Ok(Event::Start(e)) | Ok(Event::Empty(e)) => match e.name().as_ref() {
+                    "style:style" => {
+                        if let (Some(n), Some(m)) = (attr_val(&e, "style:name"), attr_val(&e, "style:master-page-name").filter(|m| !m.is_empty())) {
+                            named.insert(n, m);
+                        }
+                    }
+                    "style:master-page" => masters.extend(attr_val(&e, "style:name")),
+                    "office:text" => in_text = true,
+                    "text:p" | "text:h" | "table:table" if in_text && first_style.is_none() => {
+                        first_style = Some(attr_val(&e, if e.name().as_ref() == "table:table" { "table:style-name" } else { "text:style-name" }).unwrap_or_default());
+                    }
+                    _ => {}
+                },
+                Ok(Event::Eof) | Err(_) => break,
+                _ => {}
+            }
+        }
+    }
+    first_style
+        .and_then(|s| named.get(&s).cloned())
+        .filter(|m| masters.contains(m))
+        .or_else(|| masters.iter().find(|m| *m == "Standard").cloned())
+        .or_else(|| masters.first().cloned())
 }
 
 /// Column layout declared on a `text:section` rather than on the page.
@@ -1365,7 +1441,7 @@ fn read_parts(path: &str) -> Result<(Document, Vec<String>), String> {
 
     // styles.xml's named styles, the parents of content.xml's automatic ones.
     let named = parse_auto_styles(&styles);
-    let mut doc = Document { paragraphs: Vec::new(), footnotes: Vec::new(), header: None, footer: None, page: None, base_font: read_base_font(&styles), heading_styles: read_heading_styles(&styles), comments: Vec::new(), table_columns: Default::default() };
+    let mut doc = Document { paragraphs: Vec::new(), footnotes: Vec::new(), header: None, footer: None, page: None, base_font: read_base_font(&styles), heading_styles: read_heading_styles(&styles), comments: Vec::new(), table_columns: Default::default(), table_rows: Default::default() };
     let mut reader = Reader::from_str(&content);
     let mut in_body = false;
     let mut para: Option<Paragraph> = None;
@@ -1453,6 +1529,7 @@ fn read_parts(path: &str) -> Result<(Document, Vec<String>), String> {
     let mut tables_read = 0u32;
     // Each outermost table's column widths; None once a column has none.
     let mut column_widths: std::collections::BTreeMap<u32, Option<Vec<f64>>> = Default::default();
+    let mut row_heights: std::collections::BTreeMap<u32, Vec<Option<crate::model::RowHeight>>> = Default::default();
     let cell_of = |t: &Option<(u32, i64, i64, usize, bool)>| {
         t.map(|(id, r, c, _, _)| crate::model::TableCell { table: id, row: r.max(0) as u32, col: c.max(0) as u32 })
     };
@@ -1639,6 +1716,11 @@ fn read_parts(path: &str) -> Result<(Document, Vec<String>), String> {
                     if let Some(t) = table.as_mut().filter(|t| t.3 == table_depth) {
                         t.1 += 1;
                         t.2 = -1;
+                        if let Some(h) = attr_val(&e, "table:style-name").and_then(|n| auto.row.get(&n).copied()) {
+                            let heights = row_heights.entry(t.0).or_default();
+                            heights.resize(t.1 as usize, None);
+                            heights.push(Some(h));
+                        }
                     }
                 }
                 "table:table-cell" | "table:covered-table-cell" => {
@@ -2033,11 +2115,23 @@ fn read_parts(path: &str) -> Result<(Document, Vec<String>), String> {
         crate::docx_comments::restore(&mut doc, bodies);
     }
 
-    // Header/footer and page geometry from styles.xml.
+    // Header/footer and page geometry from styles.xml: the first page's
+    // master page only (a file may hold several, each with its own
+    // header, and joining them repeated the header's text).
     if !styles.is_empty() {
+        let master = first_master_page(&content, &styles);
         let mut reader = Reader::from_str(&styles);
         let mut in_header = false;
         let mut in_footer = false;
+        // The master page being read, and whether it is the first page's.
+        let mut in_master = false;
+        let mut layouts: std::collections::HashMap<String, PageGeometry> = Default::default();
+        let mut layout_name = String::new();
+        let mut master_layout: Option<String> = None;
+        let mut last_layout: Option<String> = None;
+        // Inside an alternative text (`svg:title`/`svg:desc`) of a frame,
+        // which is not the header's text.
+        let mut in_alt = false;
         // Inside a page number or count field: its shown value is skipped.
         let mut in_field = false;
         // Returns the geometry instead of writing to `doc` so the borrow ends
@@ -2064,20 +2158,35 @@ fn read_parts(path: &str) -> Result<(Document, Vec<String>), String> {
             match reader.read_event() {
                 Ok(Event::Empty(e)) if e.name().as_ref() == "style:page-layout-properties" => {
                     if let Some(page) = read_page_layout(&e) {
-                        doc.page = Some(page);
+                        last_layout = Some(layout_name.clone());
+                        layouts.insert(layout_name.clone(), page);
                     }
                 }
                 Ok(Event::Empty(e)) if e.name().as_ref() == "style:columns" => {
-                    if let Some(page) = doc.page.as_mut() {
+                    if let Some(page) = layouts.get_mut(&layout_name) {
                         page.columns = attr_val(&e, "fo:column-count")
                             .and_then(|v| v.parse::<u8>().ok()).unwrap_or(1).max(1);
                         page.column_gap_pt = attr_val(&e, "fo:column-gap")
                             .and_then(|v| parse_length_pt(&v)).unwrap_or(page.column_gap_pt);
                     }
                 }
+                Ok(Event::Start(e)) if e.name().as_ref() == "style:master-page" => {
+                    in_master = attr_val(&e, "style:name") == master;
+                    if in_master {
+                        master_layout = attr_val(&e, "style:page-layout-name");
+                    }
+                }
+                Ok(Event::Empty(e)) if e.name().as_ref() == "style:master-page" => {
+                    if attr_val(&e, "style:name") == master {
+                        master_layout = attr_val(&e, "style:page-layout-name");
+                    }
+                }
+                Ok(Event::End(e)) if e.name().as_ref() == "style:master-page" => in_master = false,
                 Ok(Event::Start(e)) => match e.name().as_ref() {
-                    "style:header" => in_header = true,
-                    "style:footer" => in_footer = true,
+                    "style:page-layout" => layout_name = attr_val(&e, "style:name").unwrap_or_default(),
+                    "style:header" => in_header = in_master,
+                    "style:footer" => in_footer = in_master,
+                    "svg:title" | "svg:desc" => in_alt = true,
                     "text:page-number" | "text:page-count" if in_header || in_footer => {
                         let placeholder = if e.name().as_ref() == "text:page-number" { "{page}" } else { "{total}" };
                         let target = if in_header { &mut doc.header } else { &mut doc.footer };
@@ -2086,7 +2195,8 @@ fn read_parts(path: &str) -> Result<(Document, Vec<String>), String> {
                     }
                     "style:page-layout-properties" => {
                         if let Some(page) = read_page_layout(&e) {
-                            doc.page = Some(page);
+                            last_layout = Some(layout_name.clone());
+                            layouts.insert(layout_name.clone(), page);
                         }
                     }
                     _ => {}
@@ -2094,10 +2204,11 @@ fn read_parts(path: &str) -> Result<(Document, Vec<String>), String> {
                 Ok(Event::End(e)) => match e.name().as_ref() {
                     "style:header" => in_header = false,
                     "style:footer" => in_footer = false,
+                    "svg:title" | "svg:desc" => in_alt = false,
                     "text:page-number" | "text:page-count" => in_field = false,
                     _ => {}
                 },
-                Ok(Event::Text(_)) if in_field => {}
+                Ok(Event::Text(_)) if in_field || in_alt => {}
                 Ok(Event::Text(t)) => {
                     let txt = unescape_text(&t);
                     if in_header && !txt.trim().is_empty() {
@@ -2107,6 +2218,7 @@ fn read_parts(path: &str) -> Result<(Document, Vec<String>), String> {
                         doc.footer.get_or_insert_with(String::new).push_str(&txt);
                     }
                 }
+                Ok(Event::GeneralRef(_)) if in_field || in_alt => {}
                 Ok(Event::GeneralRef(r)) => {
                     let txt = resolve_general_ref(&r);
                     if in_header {
@@ -2121,10 +2233,14 @@ fn read_parts(path: &str) -> Result<(Document, Vec<String>), String> {
                 _ => {}
             }
         }
+        // The first page's layout; without a master page naming one that
+        // exists, the last one read, as before.
+        doc.page = master_layout.filter(|n| layouts.contains_key(n)).or(last_layout).and_then(|n| layouts.remove(&n));
     }
 
     doc.ensure_non_empty();
     doc.table_columns = column_widths.into_iter().filter_map(|(t, w)| Some((t, w.filter(|w| !w.is_empty())?))).collect();
+    doc.table_rows = row_heights;
     // A column count LibreOffice recorded on a section instead of on the
     // page layout. Only consulted when the page layout said nothing, so
     // an explicit page-wide count still wins.
@@ -2319,6 +2435,23 @@ mod tests {
         let mut d = Document::from_plain_text("after");
         d.insert_table_at(0, 1, 2);
         assert!(round_trip(&d).table_columns.is_empty());
+    }
+
+    /// A table's row heights survive a save and reopen, a minimum as a
+    /// minimum and a fixed height as fixed; rows without one stay without.
+    #[test]
+    fn table_row_heights_survive() {
+        use crate::model::RowHeight;
+        let mut d = Document::from_plain_text("after");
+        let table = d.insert_table_at(0, 3, 2);
+        let want = vec![Some(RowHeight { pt: 40.0, exact: false }), None, Some(RowHeight { pt: 18.5, exact: true })];
+        d.table_rows.insert(table, want.clone());
+        let rt = round_trip(&d);
+        let got: Vec<_> = rt.table_rows.values().cloned().collect();
+        assert_eq!(got, [want], "{:?}", rt.table_rows);
+        let mut d = Document::from_plain_text("after");
+        d.insert_table_at(0, 2, 2);
+        assert!(round_trip(&d).table_rows.is_empty());
     }
 
     /// Smart chips reopen as chips: a date is a fixed `text:date`, a link
@@ -2696,6 +2829,42 @@ mod tests {
         let rt = round_trip(&d);
         assert_eq!(rt.header.as_deref(), Some("Report — {page} of {total}"));
         assert_eq!(rt.footer.as_deref(), Some("Confidential"));
+    }
+
+    /// A file with several master pages (a Word conversion gives each
+    /// section one) shows the first page's: its header, footer and page
+    /// layout, not every master's joined, and a footer text box's
+    /// alternative text is not footer text. The first paragraph's style
+    /// names the master; "Standard" is the fallback.
+    #[test]
+    fn the_first_pages_master_gives_the_header_and_page() {
+        let master = |name: &str, layout: &str, header: &str| format!(
+            "<style:master-page style:name=\"{name}\" style:page-layout-name=\"{layout}\">\
+             <style:header><text:p>{header}</text:p></style:header>\
+             <style:footer><text:p><draw:frame><draw:text-box><text:p>OFFICIAL</text:p></draw:text-box>\
+             <svg:title/><svg:desc>OFFICIAL</svg:desc></draw:frame></text:p></style:footer></style:master-page>"
+        );
+        let layout = |name: &str, left: &str| format!(
+            "<style:page-layout style:name=\"{name}\"><style:page-layout-properties fo:page-width=\"8.27in\" \
+             fo:page-height=\"11.69in\" fo:margin-left=\"{left}\"/></style:page-layout>"
+        );
+        let styles = format!(
+            "<office:document-styles><office:automatic-styles>{}{}</office:automatic-styles>\
+             <office:master-styles>{}{}</office:master-styles></office:document-styles>",
+            layout("PL0", "1in"), layout("PL1", "2in"), master("MP0", "PL0", "FIRST"), master("MP1", "PL1", "SECOND"),
+        );
+        let content = |master: &str| format!(
+            "<office:document-content><office:automatic-styles>\
+             <style:style style:name=\"P1\" style:family=\"paragraph\" style:master-page-name=\"{master}\"/>\
+             </office:automatic-styles><office:body><office:text><text:p text:style-name=\"P1\">body</text:p>\
+             </office:text></office:body></office:document-content>"
+        );
+        for (first, header, left) in [("MP0", "FIRST", 72.0), ("MP1", "SECOND", 144.0), ("", "FIRST", 72.0)] {
+            let d = read_package(&content(first), &styles);
+            assert_eq!(d.header.as_deref(), Some(header), "first page's master {first:?}");
+            assert_eq!(d.footer.as_deref(), Some("OFFICIAL"));
+            assert!((d.page.unwrap().margin_left_pt - left).abs() < 1e-6, "{first:?}: {:?}", d.page);
+        }
     }
 
     #[test]

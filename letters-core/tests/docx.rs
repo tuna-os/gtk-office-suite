@@ -1265,6 +1265,23 @@ fn a_run_coloured_auto_has_no_colour_of_its_own() {
     assert_eq!(rt.paragraphs[0].runs[0].style.color, None, "{:?}", rt.paragraphs[0].runs);
 }
 
+/// In a heading, though, "auto" undoes the heading style's colour: a
+/// subtitle set as a blue Heading 2 with its runs in automatic colour is
+/// black in Word and LibreOffice (the questionnaire in the real corpus,
+/// #1211), so the run reads as black, not as no colour.
+#[test]
+fn a_heading_run_coloured_auto_is_black() {
+    let mut d = Document::from_plain_text("subtitle");
+    d.paragraphs[0].style.heading = Some(2);
+    let rt = doctor_parts(&d, |parts| {
+        let body = parts.get_mut("word/document.xml").unwrap();
+        let at = body.find("<w:r>").expect("a run");
+        body.replace_range(at..at + 5, "<w:r><w:rPr><w:color w:val=\"auto\"/></w:rPr>");
+    });
+    assert_eq!(rt.paragraphs[0].style.heading, Some(2));
+    assert_eq!(rt.paragraphs[0].runs[0].style.color.as_deref(), Some("000000"), "{:?}", rt.paragraphs[0].runs);
+}
+
 /// A cell paragraph takes its table style's spacing beneath its own
 /// paragraph style (Word: document defaults, then table style, then
 /// paragraph style). Word's "Table Grid" sets no space after and single
@@ -1356,6 +1373,23 @@ fn a_files_empty_line_between_tables_survives() {
         None => p.text(),
     }).collect();
     assert_eq!(shape, ["T0", "", "T1", "after"]);
+}
+
+/// A table's row heights survive a save and reopen (`w:trHeight`), a
+/// minimum as `atLeast` and a fixed height as `exact`.
+#[test]
+fn table_row_heights_survive() {
+    use letters_core::RowHeight;
+    let mut d = Document::from_plain_text("after");
+    let table = d.insert_table_at(0, 3, 2);
+    let want = vec![Some(RowHeight { pt: 40.0, exact: false }), None, Some(RowHeight { pt: 18.5, exact: true })];
+    d.table_rows.insert(table, want.clone());
+    let rt = round_trip(&d);
+    let got: Vec<_> = rt.table_rows.values().cloned().collect();
+    assert_eq!(got, [want], "{:?}", rt.table_rows);
+    let mut d = Document::from_plain_text("after");
+    d.insert_table_at(0, 2, 2);
+    assert!(round_trip(&d).table_rows.is_empty());
 }
 
 /// A table stays where the document has it, between the paragraphs around
