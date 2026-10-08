@@ -438,6 +438,11 @@ fn read_opened(path: &str, doc: rdocx::Document) -> Result<Document, String> {
     let mut kept_before = Vec::with_capacity(body.len() + 1);
     for (i, p) in body.iter().enumerate() {
         kept_before.push(paragraphs.len());
+        // The paragraph the writer puts after a table that meets another
+        // or ends the document is OOXML's, not the document's.
+        if p.style_id() == Some(SEPARATOR_STYLE) && p.text().is_empty() {
+            continue;
+        }
         let mut pending_break = false;
         // Decorative rules (LibreOffice's HorizontalLine style) carry no text.
         if p.style_id() == Some("HorizontalLine") && p.text().is_empty() {
@@ -541,7 +546,8 @@ fn read_opened(path: &str, doc: rdocx::Document) -> Result<Document, String> {
                         rdocx::CellItemRef::Paragraph(cp) => {
                             let raw_cell = raw_cells.as_ref().and_then(|s| s.get(cell_index));
                             cell_index += 1;
-                            if cp.text().is_empty() { continue; }
+                            // An empty paragraph is a line of the cell:
+                            // a form's answer box is a cell of them.
                             let mut para = map_paragraph(&doc, &cp, table.style_id());
                             if let Some(r) = raw_cell {
                                 apply_strict_indents(&mut para.style, r);
@@ -585,7 +591,6 @@ fn read_opened(path: &str, doc: rdocx::Document) -> Result<Document, String> {
         let at = tables_at.as_ref().map_or(paragraphs.len(), |t| kept_before[t[ti].min(body.len())]);
         paragraphs.splice(at..at, cells);
     }
-    drop_table_separators(&mut paragraphs);
 
     if paragraphs.is_empty() {
         let mut d = Document::new();
@@ -634,28 +639,17 @@ fn column_widths(table: &rdocx::TableRef<'_>) -> Option<Vec<f64>> {
     widths.filter(|w| !w.is_empty() && w.iter().all(|x| *x > 0.0))
 }
 
-/// OOXML needs a paragraph after a table that ends the document or a cell,
-/// and between two tables (Word merges adjacent ones). Those carry nothing,
-/// so a table followed only by empty paragraphs, up to the next table or
-/// the end, loses the first of them. The writer adds one in exactly that
-/// case (`needs_separator`), so a save and reopen keeps the document.
-fn drop_table_separators(paragraphs: &mut Vec<Paragraph>) {
-    let table_of = |p: &Paragraph| p.style.table_cell.map(|t| t.table);
-    let mut k = 0;
-    while k < paragraphs.len() {
-        let last_cell = table_of(&paragraphs[k]).is_some()
-            && paragraphs.get(k + 1).map(table_of) != Some(table_of(&paragraphs[k]));
-        if last_cell && needs_separator(&paragraphs[k + 1..]) && k + 1 < paragraphs.len() {
-            paragraphs.remove(k + 1);
-        }
-        k += 1;
-    }
-}
+/// The style of the paragraph OOXML needs after a table that ends the
+/// document or meets another, which the model does not have: the writer
+/// adds it, 1pt high so Word draws the tables as Letters does, and the
+/// reader drops it. An empty paragraph the document has after a table is
+/// a line of the document, and both keep it.
+const SEPARATOR_STYLE: &str = "LettersTableSeparator";
 
-/// Whether the paragraphs after a table, up to the next table or the end,
-/// are all empty: the case where a separator paragraph follows the table.
+/// Whether a table followed by `after` needs the separator: nothing
+/// follows it, or another table does.
 fn needs_separator(after: &[Paragraph]) -> bool {
-    after.iter().take_while(|p| p.style.table_cell.is_none()).all(|p| p.runs.is_empty())
+    after.first().is_none_or(|p| p.style.table_cell.is_some())
 }
 
 /// Read a DOCX and retain package members this reader does not interpret.
@@ -825,9 +819,13 @@ pub fn write(doc: &Document, path: impl AsRef<std::path::Path>) -> Result<(), St
             // OOXML requires a paragraph in every cell, which a cell left
             // empty keeps from its creation, and one after a table that
             // ends the document or meets another; the reader drops it
-            // again (`drop_table_separators`).
+            // again (`SEPARATOR_STYLE`).
             if needs_separator(&paras[i..]) {
-                out.add_paragraph("");
+                out.add_paragraph("")
+                    .style(SEPARATOR_STYLE)
+                    .space_before(rdocx::Length::pt(0.0))
+                    .space_after(rdocx::Length::pt(0.0))
+                    .line_spacing(1.0);
             }
             continue;
         }
