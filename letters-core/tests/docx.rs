@@ -1098,6 +1098,78 @@ fn merged_cells_survive_a_docx_save() {
     assert_eq!(positions.len(), 12);
 }
 
+/// White shading is no highlight.
+///
+/// Forms pasted from the web shade their text white (`w:shd w:fill=
+/// "FFFFFF"`) on a white page. The reader took any run shading for a
+/// highlight, so that text drew yellow where Word and LibreOffice draw
+/// nothing (render-real `tier-2-3-notification`).
+#[test]
+fn white_or_automatic_shading_is_not_a_highlight() {
+    let d = Document::from_plain_text("white\nauto\nyellow\nmarked\nunmarked");
+    let rt = doctor_parts(&d, |parts| {
+        let body = parts.get_mut("word/document.xml").unwrap();
+        for (text, rpr) in [
+            ("white", "<w:shd w:val=\"clear\" w:color=\"auto\" w:fill=\"FFFFFF\"/>"),
+            ("auto", "<w:shd w:val=\"clear\" w:color=\"auto\" w:fill=\"auto\"/>"),
+            ("yellow", "<w:shd w:val=\"clear\" w:color=\"auto\" w:fill=\"FFFF00\"/>"),
+            ("marked", "<w:highlight w:val=\"green\"/>"),
+            ("unmarked", "<w:highlight w:val=\"none\"/><w:shd w:val=\"clear\" w:fill=\"FFFF00\"/>"),
+        ] {
+            let run = format!("<w:r><w:t>{text}</w:t></w:r>");
+            assert!(body.contains(&run), "fixture shape changed: {body}");
+            *body = body.replace(&run, &format!("<w:r><w:rPr>{rpr}</w:rPr><w:t>{text}</w:t></w:r>"));
+        }
+    });
+    let highlighted: Vec<(String, bool)> =
+        rt.paragraphs.iter().map(|p| (p.text(), p.runs.iter().any(|r| r.style.highlight))).collect();
+    assert_eq!(
+        highlighted,
+        vec![
+            ("white".into(), false),
+            ("auto".into(), false),
+            ("yellow".into(), true),
+            ("marked".into(), true),
+            ("unmarked".into(), false),
+        ]
+    );
+}
+
+/// The paragraph mark's formatting is the mark's alone.
+///
+/// `w:pPr/w:rPr` formats the pilcrow, not the paragraph's text. rdocx's
+/// effective run properties merge it into every run, so a form whose
+/// marks were bold read every paragraph as bold (render-real
+/// `tier-2-3-notification`). A run that turns its style's bold off stays
+/// plain.
+#[test]
+fn the_paragraph_marks_formatting_is_not_the_texts() {
+    let d = Document::from_plain_text("plain text\nnot bold");
+    let rt = doctor_parts(&d, |parts| {
+        let body = parts.get_mut("word/document.xml").unwrap();
+        let run = "<w:r><w:t>plain text</w:t></w:r>";
+        assert!(body.contains(run), "fixture shape changed: {body}");
+        *body = body.replacen(
+            "<w:p>",
+            "<w:p><w:pPr><w:rPr><w:b/><w:i/><w:color w:val=\"FF0000\"/><w:sz w:val=\"40\"/></w:rPr></w:pPr>",
+            1,
+        );
+        let run = "<w:r><w:t>not bold</w:t></w:r>";
+        assert!(body.contains(run), "fixture shape changed: {body}");
+        *body = body.replace(run, "<w:r><w:rPr><w:rStyle w:val=\"Strong\"/><w:b w:val=\"0\"/></w:rPr><w:t>not bold</w:t></w:r>");
+        let styles = parts.get_mut("word/styles.xml").unwrap();
+        *styles = styles.replace(
+            "</w:styles>",
+            "<w:style w:type=\"character\" w:styleId=\"Strong\"><w:name w:val=\"Strong\"/><w:rPr><w:b/></w:rPr></w:style></w:styles>",
+        );
+    });
+    assert!(rt.paragraphs[0].text() == "plain text", "{:?}", rt.paragraphs);
+    let r = &rt.paragraphs[0].runs[0].style;
+    assert!(!r.bold && !r.italic, "{r:?}");
+    assert_eq!((r.color.as_deref(), r.font_size_hp), (None, None), "{r:?}");
+    assert!(!rt.paragraphs[1].runs[0].style.bold, "a run's w:b=0 turns its style's bold off");
+}
+
 /// What a paragraph inherits from its styles is how it looks.
 ///
 /// python-docx's template (and Word's) puts 10pt after every paragraph and
