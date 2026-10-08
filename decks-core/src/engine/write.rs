@@ -403,11 +403,18 @@ fn write_text_box<W: std::io::Write>(
     writer.write_event(Event::Start(BytesStart::new("p:spPr")))?;
     write_xfrm(writer, at)?;
 
-    let mut prst_geom = BytesStart::new("a:prstGeom");
-    prst_geom.push_attribute(("prst", "rect"));
-    writer.write_event(Event::Start(prst_geom))?;
-    writer.write_event(Event::Empty(BytesStart::new("a:avLst")))?;
-    writer.write_event(Event::End(BytesEnd::new("a:prstGeom")))?;
+    // A box with a shape of its own is that shape, painted; a bare one a
+    // plain rectangle.
+    match &body.frame {
+        Some(frame) => write_geometry_and_paint(writer, &frame.kind, &frame.style)?,
+        None => {
+            let mut prst_geom = BytesStart::new("a:prstGeom");
+            prst_geom.push_attribute(("prst", "rect"));
+            writer.write_event(Event::Start(prst_geom))?;
+            writer.write_event(Event::Empty(BytesStart::new("a:avLst")))?;
+            writer.write_event(Event::End(BytesEnd::new("a:prstGeom")))?;
+        }
+    }
 
     writer.write_event(Event::End(BytesEnd::new("p:spPr")))?;
 
@@ -512,7 +519,6 @@ fn write_shape<W: std::io::Write>(
     kind: &super::shape::ShapeKind,
     style: &super::shape::ShapeStyle,
 ) -> Result<(), quick_xml::Error> {
-    use super::shape::ShapeKind;
     writer.write_event(Event::Start(BytesStart::new("p:sp")))?;
     writer.write_event(Event::Start(BytesStart::new("p:nvSpPr")))?;
     let mut c_nv_pr = BytesStart::new("p:cNvPr");
@@ -525,6 +531,19 @@ fn write_shape<W: std::io::Write>(
 
     writer.write_event(Event::Start(BytesStart::new("p:spPr")))?;
     write_xfrm(writer, at)?;
+    write_geometry_and_paint(writer, kind, style)?;
+    writer.write_event(Event::End(BytesEnd::new("p:spPr")))?;
+    writer.write_event(Event::End(BytesEnd::new("p:sp")))?;
+    Ok(())
+}
+
+/// A shape's preset geometry, fill and outline, inside its `p:spPr`.
+fn write_geometry_and_paint<W: std::io::Write>(
+    writer: &mut Writer<W>,
+    kind: &super::shape::ShapeKind,
+    style: &super::shape::ShapeStyle,
+) -> Result<(), quick_xml::Error> {
+    use super::shape::ShapeKind;
     let mut prst_geom = BytesStart::new("a:prstGeom");
     prst_geom.push_attribute(("prst", kind.prst()));
     writer.write_event(Event::Start(prst_geom))?;
@@ -584,8 +603,6 @@ fn write_shape<W: std::io::Write>(
             writer.write_event(Event::End(BytesEnd::new("a:ln")))?;
         }
     }
-    writer.write_event(Event::End(BytesEnd::new("p:spPr")))?;
-    writer.write_event(Event::End(BytesEnd::new("p:sp")))?;
     Ok(())
 }
 
