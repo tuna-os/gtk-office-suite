@@ -252,6 +252,45 @@ fn write_para_pr<W: std::io::Write>(writer: &mut Writer<W>, st: &ParaStyle, plac
 
 /// The `a:p` paragraphs of a text body: styled runs when present (shared
 /// Run/RunStyle with Letters), else one default-styled run of `text`.
+/// One `a:r`: `text` in the look `style` gives it.
+fn write_run<W: std::io::Write>(writer: &mut Writer<W>, style: &RunStyle, text: &str) -> Result<(), quick_xml::Error> {
+    writer.write_event(Event::Start(BytesStart::new("a:r")))?;
+    let mut r_pr = BytesStart::new("a:rPr");
+    r_pr.push_attribute(("lang", "en-US"));
+    let sz = (file_size(style.font_size_hp.unwrap_or(36) as f64) * 50.0).round() as u32;
+    r_pr.push_attribute(("sz", sz.to_string().as_str()));
+    if style.bold { r_pr.push_attribute(("b", "1")); }
+    if style.italic { r_pr.push_attribute(("i", "1")); }
+    if style.underline { r_pr.push_attribute(("u", "sng")); }
+    if style.strikethrough { r_pr.push_attribute(("strike", "sngStrike")); }
+    let family = style.font_family.as_deref().map(str::trim).filter(|f| !f.is_empty());
+    if style.color.is_some() || family.is_some() {
+        writer.write_event(Event::Start(r_pr))?;
+        // CT_TextCharacterProperties order: the fill, then a:latin.
+        if let Some(color) = &style.color {
+            writer.write_event(Event::Start(BytesStart::new("a:solidFill")))?;
+            let mut clr = BytesStart::new("a:srgbClr");
+            clr.push_attribute(("val", color.to_uppercase().as_str()));
+            writer.write_event(Event::Empty(clr))?;
+            writer.write_event(Event::End(BytesEnd::new("a:solidFill")))?;
+        }
+        if let Some(family) = family {
+            let mut latin = BytesStart::new("a:latin");
+            latin.push_attribute(("typeface", family));
+            writer.write_event(Event::Empty(latin))?;
+        }
+        writer.write_event(Event::End(BytesEnd::new("a:rPr")))?;
+    } else {
+        writer.write_event(Event::Empty(r_pr))?;
+    }
+    writer.write_event(Event::Start(BytesStart::new("a:t")))?;
+    let escaped = quick_xml::escape::escape(text);
+    writer.write_event(Event::Text(BytesText::new(&escaped)))?;
+    writer.write_event(Event::End(BytesEnd::new("a:t")))?;
+    writer.write_event(Event::End(BytesEnd::new("a:r")))?;
+    Ok(())
+}
+
 fn write_paragraphs<W: std::io::Write>(
     writer: &mut Writer<W>,
     text: &str,
@@ -292,40 +331,16 @@ fn write_paragraphs<W: std::io::Write>(
         if piece.is_empty() {
             continue;
         }
-        writer.write_event(Event::Start(BytesStart::new("a:r")))?;
-        let mut r_pr = BytesStart::new("a:rPr");
-        r_pr.push_attribute(("lang", "en-US"));
-        let sz = (file_size(run.style.font_size_hp.unwrap_or(36) as f64) * 50.0).round() as u32;
-        r_pr.push_attribute(("sz", sz.to_string().as_str()));
-        if run.style.bold { r_pr.push_attribute(("b", "1")); }
-        if run.style.italic { r_pr.push_attribute(("i", "1")); }
-        if run.style.underline { r_pr.push_attribute(("u", "sng")); }
-        if run.style.strikethrough { r_pr.push_attribute(("strike", "sngStrike")); }
-        let family = run.style.font_family.as_deref().map(str::trim).filter(|f| !f.is_empty());
-        if run.style.color.is_some() || family.is_some() {
-            writer.write_event(Event::Start(r_pr))?;
-            // CT_TextCharacterProperties order: the fill, then a:latin.
-            if let Some(color) = &run.style.color {
-                writer.write_event(Event::Start(BytesStart::new("a:solidFill")))?;
-                let mut clr = BytesStart::new("a:srgbClr");
-                clr.push_attribute(("val", color.to_uppercase().as_str()));
-                writer.write_event(Event::Empty(clr))?;
-                writer.write_event(Event::End(BytesEnd::new("a:solidFill")))?;
+        // A line break inside the paragraph (U+2028) is an `a:br` between
+        // runs of the same look.
+        for (k, line) in piece.split(crate::odp::LINE_BREAK).enumerate() {
+            if k > 0 {
+                writer.write_event(Event::Empty(BytesStart::new("a:br")))?;
             }
-            if let Some(family) = family {
-                let mut latin = BytesStart::new("a:latin");
-                latin.push_attribute(("typeface", family));
-                writer.write_event(Event::Empty(latin))?;
+            if !line.is_empty() {
+                write_run(writer, &run.style, line)?;
             }
-            writer.write_event(Event::End(BytesEnd::new("a:rPr")))?;
-        } else {
-            writer.write_event(Event::Empty(r_pr))?;
         }
-        writer.write_event(Event::Start(BytesStart::new("a:t")))?;
-        let escaped = quick_xml::escape::escape(piece.as_str());
-        writer.write_event(Event::Text(BytesText::new(&escaped)))?;
-        writer.write_event(Event::End(BytesEnd::new("a:t")))?;
-        writer.write_event(Event::End(BytesEnd::new("a:r")))?;
     }
     writer.write_event(Event::End(BytesEnd::new("a:p")))?;
     Ok(())

@@ -216,15 +216,18 @@ fn master_style_prefix(master_idx: usize) -> String {
 }
 
 fn run_span(run: &Run, style_idx: usize, prefix: &str) -> String {
+    // A line break inside a paragraph (U+2028) is ODF's text:line-break.
+    let text = esc(&run.text).replace(LINE_BREAK, "<text:line-break/>");
     if run.style == RunStyle::default() {
-        esc(&run.text)
+        text
     } else {
-        format!(
-            "<text:span text:style-name=\"{prefix}{style_idx}\">{}</text:span>",
-            esc(&run.text)
-        )
+        format!("<text:span text:style-name=\"{prefix}{style_idx}\">{text}</text:span>")
     }
 }
+
+/// A line break inside a paragraph, as run text holds it (`a:br`,
+/// `text:line-break`): U+2028, which Pango breaks the line at.
+pub(crate) const LINE_BREAK: char = '\u{2028}';
 
 /// A styled text box's runs as `text:p` elements, one per paragraph.
 ///
@@ -1641,6 +1644,18 @@ fn parse_pages(
                 _ => {}
             },
             Ok(Event::Empty(ref e)) => match e.name().as_ref() {
+                // A line break inside the paragraph, on the run before it.
+                "text:line-break" if in_text => {
+                    if let Some((lines, runs)) = textbox.as_mut() {
+                        if let Some(last) = lines.last_mut() {
+                            last.push(LINE_BREAK);
+                        }
+                        match runs.last_mut() {
+                            Some(r) => r.text.push(LINE_BREAK),
+                            None => runs.push(Run { text: LINE_BREAK.to_string(), style: span_style.clone().unwrap_or_default() }),
+                        }
+                    }
+                }
                 // An empty paragraph, `<text:p/>`: how Impress writes a
                 // blank line. It is a paragraph all the same.
                 "text:p" => {
