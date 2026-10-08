@@ -24,7 +24,7 @@ use super::model::*;
 use super::notes::{extract_notes_text, parse_run_style};
 use super::placeholders::{inherited_rect, parse_placeholders, PhKey, Placeholder};
 use super::shape::ShapeKind;
-use super::shape_xml::{frame_charts, frame_tables, sp_styles, theme as read_theme, Theme};
+use super::shape_xml::{frame_charts, frame_tables, sp_geometries, sp_styles, theme as read_theme, Theme};
 use super::text_xml::{sp_texts, Inherited};
 
 use std::fs::File;
@@ -610,6 +610,7 @@ pub fn read_pptx(path: &str) -> Result<Deck, String> {
         let mut objects = Vec::new();
         let mut object_ids: Vec<Option<u32>> = Vec::new();
         let sp_paint = sp_styles(&slide_xml, &theme, scale.x);
+        let sp_geom = sp_geometries(&slide_xml);
         let mut sp_index = 0usize;
         // Tables live in p:graphicFrame, which the walker used to skip.
         let mut tables = frame_tables(&slide_xml, &theme);
@@ -948,6 +949,7 @@ pub fn read_pptx(path: &str) -> Result<Deck, String> {
                             // shape_xml pass over the same part (Nth p:sp).
                             let paint = sp_paint.get(sp_index).cloned().unwrap_or_default();
                             let text_style = sp_text.get(sp_index);
+                            let geometry = sp_geom.get(sp_index).cloned().flatten();
                             sp_index += 1;
                             if let Some(mut shape) = current_shape.take() {
                                 let text = text_of(&shape.runs);
@@ -975,6 +977,27 @@ pub fn read_pptx(path: &str) -> Result<Deck, String> {
                                         }
                                     }
                                 }
+                                // Its kind: its own paths (a custom geometry,
+                                // a path of no size in the shape's EMU), or
+                                // its preset with the corner the paint read.
+                                let (raw_w, raw_h) = (shape.w.unwrap_or(0.0), shape.h.unwrap_or(0.0));
+                                let kind_of = |prst: Option<String>| match geometry.clone() {
+                                    Some(mut paths) => {
+                                        for p in &mut paths {
+                                            if p.w <= 0.0 || p.h <= 0.0 {
+                                                (p.w, p.h) = (raw_w.max(1.0), raw_h.max(1.0));
+                                            }
+                                        }
+                                        ShapeKind::Freeform(paths)
+                                    }
+                                    None => {
+                                        let mut kind = ShapeKind::from_prst(&prst.unwrap_or_else(|| "rect".to_string()));
+                                        if let (ShapeKind::RoundRect { radius }, Some(adj)) = (&mut kind, paint.round_adj) {
+                                            *radius = adj.clamp(0.0, 0.5);
+                                        }
+                                        kind
+                                    }
+                                };
                                 let (x, y, w, h) = in_groups(&groups, (shape.x.unwrap_or(0.0), shape.y.unwrap_or(0.0), shape.w.unwrap_or(0.0), shape.h.unwrap_or(0.0)));
                                 let (x, y, w, h) = (x * scale.x, y * scale.y, w * scale.x, h * scale.y);
                                 
@@ -988,12 +1011,7 @@ pub fn read_pptx(path: &str) -> Result<Deck, String> {
                                     // white figures used to lose the tile.
                                     let painted = paint.style.fill.is_some() || paint.style.gradient.is_some() || paint.style.stroke.is_some();
                                     if painted {
-                                        let prst = shape.prst.clone().unwrap_or_else(|| "rect".to_string());
-                                        let mut kind = ShapeKind::from_prst(&prst);
-                                        if let (ShapeKind::RoundRect { radius }, Some(adj)) = (&mut kind, paint.round_adj) {
-                                            *radius = adj.clamp(0.0, 0.5);
-                                        }
-                                        body.frame = Some(super::text_body::Frame { kind, style: paint.style.clone() });
+                                        body.frame = Some(super::text_body::Frame { kind: kind_of(shape.prst.clone()), style: paint.style.clone() });
                                     }
                                     let blank = role.is_some() && !has_text;
                                     let text = if blank { String::new() } else { text };
@@ -1004,11 +1022,7 @@ pub fn read_pptx(path: &str) -> Result<Deck, String> {
                                     // preset and paint. It used to become a
                                     // plain Rect or a Circle of the width's
                                     // diameter, painted in the app's colours.
-                                    let prst = shape.prst.unwrap_or_else(|| "rect".to_string());
-                                    let mut kind = ShapeKind::from_prst(&prst);
-                                    if let (ShapeKind::RoundRect { radius }, Some(adj)) = (&mut kind, paint.round_adj) {
-                                        *radius = adj.clamp(0.0, 0.5);
-                                    }
+                                    let kind = kind_of(shape.prst.clone());
                                     objects.push(SlideObject::Shape { kind, x, y, w, h, rotation, style: paint.style });
                                 }
                             }

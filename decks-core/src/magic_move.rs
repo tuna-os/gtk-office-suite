@@ -41,6 +41,7 @@ fn kind_key(k: &ShapeKind) -> &str {
         ShapeKind::Triangle => "triangle",
         ShapeKind::Diamond => "diamond",
         ShapeKind::Other(p) => p,
+        ShapeKind::Freeform(_) => "freeform",
     }
 }
 

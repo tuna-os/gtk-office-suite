@@ -143,6 +143,7 @@ impl ObjectAccessible {
                     ShapeKind::Triangle => "Triangle".to_string(),
                     ShapeKind::Diamond => "Diamond".to_string(),
                     ShapeKind::Other(prst) => format!("Shape ({prst})"),
+                    ShapeKind::Freeform(_) => "Freeform".to_string(),
                 };
                 (name, (*x, *y, *w, *h))
             }

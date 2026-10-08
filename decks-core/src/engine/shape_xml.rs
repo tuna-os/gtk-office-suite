@@ -644,9 +644,76 @@ pub(crate) fn sp_styles(xml: &str, theme: &Theme, scale: f64) -> Vec<SpStyle> {
     out
 }
 
+/// Each p:sp's custom geometry (`a:custGeom`), in document order like
+/// `sp_styles`: its paths, or `None` for a preset or a geometry we cannot
+/// draw.
+pub(crate) fn sp_geometries(xml: &str) -> Vec<Option<Vec<super::freeform::FreePath>>> {
+    let root = parse_tree(xml);
+    let mut sps = Vec::new();
+    root.find_all("p:sp", &mut sps);
+    sps.into_iter().map(|sp| sp.child("p:spPr").and_then(|p| p.child("a:custGeom")).and_then(cust_geom)).collect()
+}
+
+/// The paths of one `a:custGeom`: each `a:path` in `a:pathLst`. A
+/// coordinate given by a guide's name rather than a number makes the
+/// geometry one we cannot draw, and `None`; so does one with no path. A
+/// path of no size (`w`, `h` 0 or absent) is in the shape's own EMU, which
+/// the caller knows: it is left 0.
+pub(super) fn cust_geom(geom: &Node) -> Option<Vec<super::freeform::FreePath>> {
+    use super::freeform::{FreePath, PathCmd};
+    let num = |n: &Node, k: &str| n.attr(k).and_then(|v| v.parse::<f64>().ok());
+    let mut paths = Vec::new();
+    for path in geom.child("a:pathLst")?.children_named("a:path") {
+        let mut cmds = Vec::new();
+        for c in &path.children {
+            let pts: Option<Vec<(f64, f64)>> = c.children_named("a:pt").map(|p| Some((num(p, "x")?, num(p, "y")?))).collect();
+            let cmd = match (c.name.as_str(), pts?.as_slice()) {
+                ("a:moveTo", [a]) => PathCmd::Move(a.0, a.1),
+                ("a:lnTo", [a]) => PathCmd::Line(a.0, a.1),
+                ("a:cubicBezTo", [a, b, d]) => PathCmd::Cubic(a.0, a.1, b.0, b.1, d.0, d.1),
+                ("a:quadBezTo", [a, b]) => PathCmd::Quad(a.0, a.1, b.0, b.1),
+                ("a:arcTo", []) => PathCmd::Arc {
+                    wr: num(c, "wR")?,
+                    hr: num(c, "hR")?,
+                    start: num(c, "stAng")? / 60_000.0,
+                    swing: num(c, "swAng")? / 60_000.0,
+                },
+                ("a:close", []) => PathCmd::Close,
+                _ => return None,
+            };
+            cmds.push(cmd);
+        }
+        if !cmds.is_empty() {
+            paths.push(FreePath {
+                w: num(path, "w").unwrap_or(0.0),
+                h: num(path, "h").unwrap_or(0.0),
+                cmds,
+                fill: path.attr("fill") != Some("none"),
+                stroke: !matches!(path.attr("stroke"), Some("0" | "false")),
+            });
+        }
+    }
+    (!paths.is_empty()).then_some(paths)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_custom_geometry_reads_as_its_paths_and_back() {
+        use super::super::freeform::{tests::wedge, to_cust_geom};
+        let xml = format!("<p:spTree><p:sp><p:spPr>{}</p:spPr></p:sp><p:sp><p:spPr><a:prstGeom prst=\"rect\"/></p:spPr></p:sp></p:spTree>", to_cust_geom(&wedge()));
+        assert_eq!(sp_geometries(&xml), [Some(wedge()), None]);
+    }
+
+    /// A coordinate named by a guide is not one we can place: the shape is
+    /// left to its box rather than drawn wrong.
+    #[test]
+    fn a_guide_coordinate_is_not_drawn() {
+        let xml = r#"<p:sp><p:spPr><a:custGeom><a:pathLst><a:path w="10" h="10"><a:moveTo><a:pt x="l" y="t"/></a:moveTo><a:lnTo><a:pt x="10" y="10"/></a:lnTo></a:path></a:pathLst></a:custGeom></p:spPr></p:sp>"#;
+        assert_eq!(sp_geometries(xml), [None]);
+    }
 
     /// The 2007 Office theme python-pptx ships: fill style 3 is a gradient.
     const THEME_2007: &str = r#"<a:theme xmlns:a="a"><a:themeElements><a:clrScheme name="Office">
