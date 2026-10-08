@@ -22,7 +22,7 @@ struct Scenario {
 fn slide(title: &str, objects: Vec<SlideObject>) -> Slide {
     Slide {
         title: title.to_string(),
-        background: "#ffffff".into(),
+        background: "#ffffff".into(), background_image: None,
         objects,
         notes: String::new(),
         master_idx: Some(0),
