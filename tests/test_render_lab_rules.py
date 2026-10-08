@@ -170,5 +170,53 @@ class MagnifierFallbackTest(unittest.TestCase):
         self.assertEqual(lost, 0)
 
 
+
+@unittest.skipIf(np is None, "numpy and Pillow are the render lab's")
+class OpeningSheetPageTest(unittest.TestCase):
+    """Tables opens a workbook's active sheet; LibreOffice prints from the
+    first. The opening sheet is scored against the printed page that shows
+    it, not against page 1 (#1512)."""
+
+    def score(self, app, words_by_page):
+        import tempfile
+        from unittest import mock
+
+        import compare
+
+        d = tempfile.mkdtemp()
+        for n in words_by_page:
+            open(os.path.join(d, f"lo-{n}.png"), "w").close()
+        open(os.path.join(d, "A-1.png"), "w").close()
+
+        def page(app, lo, ours, ref_words):
+            n = compare.page_no(lo)
+            return {"ink": 1.0, "words": words_by_page[n], "lost_lines": 0, "disp_pt": 0.0, "colors": 1.0, "ssim": 0.9, "ref_words": 10}
+
+        # `align` hands back the paths: `ref.size` is all score_fixture
+        # asks of a picture.
+        with mock.patch.object(compare, "align", lambda app, lo, ours: (_Sized(lo), ours, 1.0)), mock.patch.object(
+            compare, "ocr_words", lambda ref, tables: []
+        ), mock.patch.object(compare, "compare_page", page):
+            return compare.score_fixture(app, d, "A", {})
+
+    def test_the_sheet_is_scored_against_the_page_that_shows_it(self):
+        m = self.score("tables", {1: 0.1, 2: 0.2, 3: 0.95})
+        self.assertEqual(m["lo_page"], 3)
+        self.assertAlmostEqual(m["words"], 0.95)
+        self.assertEqual(m["verdict"], "green")
+
+    def test_a_document_is_still_scored_page_by_page(self):
+        m = self.score("letters", {1: 0.1, 2: 0.2, 3: 0.95})
+        self.assertNotIn("lo_page", m)
+        self.assertFalse(m["page_count_match"])
+
+
+class _Sized(str):
+    """A page path standing in for its picture: score_fixture keys its OCR
+    cache on the picture's size."""
+
+    size = (1, 1)
+
+
 if __name__ == "__main__":
     unittest.main()

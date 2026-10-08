@@ -74,6 +74,8 @@ GREEN_SCALE = 0.10  # Tables: our grid within ±10% of LibreOffice's size
 # too often an OCR split ("8pt text" read as one token) to judge.
 LOST_LINE_MIN_WORDS = 3
 METRICS = ("ink", "words", "disp_pt", "colors", "ssim", "scale")
+# How many of LibreOffice's printed pages a Tables sheet is matched against.
+SHEET_CANDIDATES = 10
 TIER_AGREE = 3.0  # grey levels; measured 0.0-0.3 when the tiers agree
 
 
@@ -644,6 +646,26 @@ def score_fixture(app, d, tier, ref_words_cache):
     # it (#1200): every Tables document red in A, amber in B, from the same
     # picture.
     partial = tier == "B" or app == "tables"
+    lo_page = None
+    if app == "tables" and len(ours_pages) == 1 and len(lo_pages) > 1:
+        # Tables opens the workbook's active sheet (as Excel and Calc do),
+        # but LibreOffice prints every sheet from the first: a workbook
+        # that opens on its third sheet was scored against its cover page
+        # (#1512). Score the opening sheet against the printed page that
+        # shows it: the one, among the first pages, that shares the most
+        # words with it (then the most structure).
+        best = None
+        for lo in lo_pages[:SHEET_CANDIDATES]:
+            ref, ours, scale = align(app, lo, ours_pages[0])
+            key = (lo, ref.size)
+            if key not in ref_words_cache:
+                ref_words_cache[key] = ocr_words(ref, True)
+            got = dict(compare_page(app, ref, ours, ref_words_cache[key]), scale=scale)
+            rank = (got.get("words") or 0.0, got.get("ssim") or 0.0)
+            if best is None or rank > best[0]:
+                best = (rank, lo, got)
+        lo_page = page_no(best[1])
+        lo_pages = [best[1]]
     if partial:
         lo_pages = lo_pages[: len(ours_pages)]
     per_page = []
@@ -662,6 +684,8 @@ def score_fixture(app, d, tier, ref_words_cache):
     m["lost_lines"] = sum(lost) if lost else None
     m["pages_lo"], m["pages_ours"] = len(lo_pages), len(ours_pages)
     m["page_count_match"] = partial or len(lo_pages) == len(ours_pages)
+    if lo_page is not None:
+        m["lo_page"] = lo_page
     m["verdict"] = verdict(m)
     return m
 
