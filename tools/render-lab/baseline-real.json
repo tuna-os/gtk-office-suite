@@ -77,7 +77,7 @@
   },
   "decks/real-2025-10-29-presentation-quarterly-progress-updat": {
     "A": "amber",
-    "B": "amber"
+    "B": "green"
   },
   "decks/real-2025-11-13-presentation-hrc-dayforce-hr-to-pay-m": {
     "A": "amber",
@@ -93,11 +93,11 @@
   },
   "decks/real-dashboard-public-opinion-survey-pulse-check-janu": {
     "A": "amber",
-    "B": "red"
+    "B": "amber"
   },
   "decks/real-human-resources-policies-and-delegations-leaders": {
     "A": "amber",
-    "B": "red"
+    "B": "amber"
   },
   "decks/real-infographic-for-the-adults-people-and-nature-sur": {
     "A": "amber",
