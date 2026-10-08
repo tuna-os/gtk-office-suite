@@ -40,7 +40,8 @@ for _ in $(seq 120); do "${SSH[@]}" true 2>/dev/null && break; sleep 5; done
 "${SSH[@]}" 'for i in $(seq 60); do ls /run/user/$(id -u)/wayland-0 >/dev/null 2>&1 && exit 0; sleep 2; done; exit 1'
 
 # QMP: `qmp <file>` screenshots the virtual monitor into <file>;
-# `qmp_key <key>` presses a key on the guest's keyboard.
+# `qmp_key <key>` presses a key on the guest's keyboard; `ctrl+a` presses
+# keys together.
 qmp() { python3 - "$1" <<'PY'
 import json, socket, sys
 s = socket.socket(socket.AF_UNIX); s.connect("qmp.sock"); f = s.makefile("rw")
@@ -52,7 +53,8 @@ qmp_key() { python3 - "$1" <<'PY'
 import json, socket, sys
 s = socket.socket(socket.AF_UNIX); s.connect("qmp.sock"); f = s.makefile("rw")
 f.readline(); f.write(json.dumps({"execute": "qmp_capabilities"}) + "\n"); f.flush(); f.readline()
-f.write(json.dumps({"execute": "send-key", "arguments": {"keys": [{"type": "qcode", "data": sys.argv[1]}]}}) + "\n"); f.flush(); print(f.readline().strip())
+keys = [{"type": "qcode", "data": k} for k in sys.argv[1].split("+")]
+f.write(json.dumps({"execute": "send-key", "arguments": {"keys": keys}}) + "\n"); f.flush(); print(f.readline().strip())
 PY
 }
 # `qmp_type <text>` types a path on the guest's keyboard (letters, digits
@@ -146,6 +148,10 @@ print(next((f["file"] for f in json.load(open(sys.argv[1])) if f["app"] == sys.a
     # The portal's dialog process starts on first use (the action step
     # already waited 4s).
     sleep 6
+    # The name field opens on the document's name with its stem selected,
+    # so a typed path kept the extension after it ("….docx.docx") and the
+    # save went nowhere. Select it all first, as a user replacing it would.
+    qmp_key ctrl+a >/dev/null
     qmp_type "$GUEST_HOME/Downloads/portal-saved-$app.$ext"
     sleep 1
     qmp "$PWD/screen.ppm" >/dev/null
@@ -159,7 +165,13 @@ print(next((f["file"] for f in json.load(open(sys.argv[1])) if f["app"] == sys.a
     qmp "$PWD/screen.ppm" >/dev/null
     python3 -c 'import sys; from PIL import Image; Image.open(sys.argv[1]).save(sys.argv[2])' screen.ppm "$OUT/installed-$app-open.png"
     qmp_key ret >/dev/null
-    sleep 8
+    # The location bar shows a completion under the typed path, and the
+    # first Return may only take it. Once the document is in the app's
+    # recent files it is open; until then, Return again opens it.
+    sleep 4
+    "${SSH[@]}" "flatpak run --command=gsettings org.tunaos.$app get org.tunaos.$app recent-files | grep -q portal-open-$app" \
+        || qmp_key ret >/dev/null
+    sleep 4
     "${SSH[@]}" "bash ~/lab/installed.sh --portal $app $ext" >>"$OUT/installed.json" \
         || echo "installed: $app file chooser check did not finish" >&2
     "${SSH[@]}" "bash ~/lab/installed.sh --close $app" || true
