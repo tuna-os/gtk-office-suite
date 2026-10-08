@@ -7,6 +7,7 @@ on:
       - 'flathub/**'
       - 'po/**'
       - 'scripts/release_gate.py'
+      - 'tools/release/**'
       - 'docs/RELEASE.md'
       - 'Cargo.lock'
       - '.github/workflows/release-gate.yml'
@@ -131,3 +132,79 @@ jobs:
           name: reproducible-build-${{ github.sha }}
           path: repro/
           retention-days: 90
+
+  # The locked source archive a release's offline builds start from
+  # (tools/release/source_archive.sh): the tracked files and every crate
+  # Cargo.lock names, vendored. Reproducible, so its sha256 names it.
+  source-archive:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: dtolnay/rust-toolchain@89b12181fb390509a0842a86cc55eeb8eb928c1d # stable
+        with:
+          toolchain: stable
+      - name: Build the archive
+        run: tools/release/source_archive.sh HEAD source-archive | tee -a "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: source-archive
+          path: source-archive
+          retention-days: 30
+
+  # What Flathub builds: no network, from the locked archive, on each
+  # architecture the apps publish for (x86_64 and aarch64, as
+  # publish-flatpak.yml builds them). The manifests are derived from the
+  # development ones (tools/release/flathub_manifests.py), so this is the
+  # development build, offline.
+  offline-flatpak:
+    needs: source-archive
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: x86_64
+            runner: ubuntu-24.04
+          - arch: aarch64
+            runner: ubuntu-24.04-arm
+    runs-on: ${{ matrix.runner }}
+    container:
+      image: ghcr.io/flathub-infra/flatpak-github-actions:gnome-50
+      options: --privileged
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
+        with:
+          name: source-archive
+          path: source-archive
+      - name: Derive the offline manifests
+        run: |
+          archive="$(ls "$PWD"/source-archive/*.tar.gz)"
+          sha="$(cut -d' ' -f1 "$archive.sha256")"
+          python3 tools/release/flathub_manifests.py "$archive" "$sha" flathub-build
+      - name: Build Letters offline
+        uses: flatpak/flatpak-github-actions/flatpak-builder@79327416609af08178ad73b352877e51450790b3 # v6.8
+        with:
+          manifest-path: flathub-build/org.tunaos.letters.json
+          cache: false
+          upload-artifact: false
+          bundle: org.tunaos.letters-offline-${{ matrix.arch }}.flatpak
+          arch: ${{ matrix.arch }}
+
+  # The core crates' tests on aarch64 itself, not just a build for it: the
+  # readers, writers and layout run where the published aarch64 bundle runs.
+  aarch64-tests:
+    runs-on: ubuntu-24.04-arm
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - name: Install GTK4 + libadwaita dev libraries
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq libgtk-4-dev libadwaita-1-dev
+      - uses: dtolnay/rust-toolchain@89b12181fb390509a0842a86cc55eeb8eb928c1d # stable
+        with:
+          toolchain: stable
+      - uses: taiki-e/install-action@bb0282cdd6e41599bc8dfa5fc712ebe9e27cfd8c # nextest
+        with:
+          tool: nextest
+      - name: Core crates' tests on aarch64
+        run: cargo nextest run --locked --no-fail-fast -p letters-core -p tables-core -p decks-core
