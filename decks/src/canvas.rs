@@ -1124,7 +1124,8 @@ pub fn render_slides_pdf(
     // Model units are 1/96in; PDF points are 1/72in.
     const MODEL_W: f64 = 960.0;
     const MODEL_H: f64 = 540.0;
-    for index in 0..slides.len() {
+    // A hidden slide is left out, as Impress and PowerPoint leave it out.
+    for index in decks_core::engine::shown_slides(slides) {
         // A slide of another aspect keeps its own page size; today every
         // slide shares the model's size, but the call is per-page anyway.
         surface.set_size(page_w, page_h).map_err(|e| e.to_string())?;
@@ -1166,7 +1167,7 @@ mod font_tests {
         };
         let slide = Slide {
             title: String::new(),
-            background: "#ffffff".into(), background_image: None,
+            background: "#ffffff".into(), background_image: None, hidden: false,
             objects: vec![sq(400.0, 100.0, Color(220, 0, 0)), sq(400.0, 300.0, Color(0, 0, 220))],
             notes: String::new(),
             master_idx: None,
@@ -1238,6 +1239,21 @@ mod font_tests {
         // the PDF (pdftoppm) and looking, not here: Cairo may subset fonts.
     }
 
+    /// A hidden slide gets no page, as Impress prints none for it.
+    #[test]
+    fn the_pdf_export_leaves_out_a_hidden_slide() {
+        let mut hidden = slide(Some(0));
+        hidden.hidden = true;
+        let slides = [slide(Some(0)), hidden, slide(Some(0))];
+        let dir = std::env::temp_dir().join(format!("decks-export-pdf-hidden-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("out.pdf");
+        render_slides_pdf(&slides, &[master("Sans")], &path).expect("export");
+        let text = String::from_utf8_lossy(&std::fs::read(&path).unwrap()).into_owned();
+        let page_objects = text.matches("/Type /Page").count() - text.matches("/Type /Pages").count();
+        assert_eq!(page_objects, 2, "the hidden slide has no page");
+    }
+
     #[test]
     fn exporting_no_slides_is_an_error_not_an_empty_pdf() {
         let dir = std::env::temp_dir().join(format!("decks-export-pdf-empty-{}", std::process::id()));
@@ -1260,7 +1276,7 @@ mod font_tests {
     fn slide(master_idx: Option<usize>) -> Slide {
         Slide {
             title: "S".into(),
-            background: "#ffffff".into(), background_image: None,
+            background: "#ffffff".into(), background_image: None, hidden: false,
             objects: vec![],
             notes: String::new(),
             master_idx,
@@ -1450,6 +1466,7 @@ mod font_tests {
             title: String::new(),
             background: "#ffffff".into(),
             background_image: Some(src.to_string_lossy().into_owned()),
+            hidden: false,
             objects: Vec::new(),
             notes: String::new(),
             master_idx: None,

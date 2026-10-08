@@ -250,7 +250,7 @@ mod tests {
     fn slide(objects: Vec<SlideObject>) -> Slide {
         Slide {
             title: "s".into(),
-            background: "#ffffff".into(), background_image: None,
+            background: "#ffffff".into(), background_image: None, hidden: false,
             objects,
             notes: String::new(),
             master_idx: Some(0),

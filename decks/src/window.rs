@@ -52,7 +52,7 @@ impl DecksWindow {
         let controller = Rc::new(DecksController::new(
             vec![Slide {
                 title: "Slide 1".into(),
-                background: "#ffffff".into(), background_image: None,
+                background: "#ffffff".into(), background_image: None, hidden: false,
                 objects: vec![],
                 notes: String::new(),
                 master_idx: Some(0),
@@ -767,7 +767,7 @@ impl DecksWindow {
                 let idx = ss.borrow().len();
                 let new_slide = Slide {
                     title: format!("Slide {}", idx + 1),
-                    background: "#ffffff".into(), background_image: None,
+                    background: "#ffffff".into(), background_image: None, hidden: false,
                     objects: vec![],
                     notes: String::new(),
             master_idx: Some(0),
@@ -1111,7 +1111,7 @@ impl DecksWindow {
                     let mut slides = ss.borrow_mut();
                     *slides = vec![Slide {
                         title: "Slide 1".into(),
-                        background: "#ffffff".into(), background_image: None,
+                        background: "#ffffff".into(), background_image: None, hidden: false,
                         objects: vec![],
                         notes: String::new(),
                         master_idx: Some(0),

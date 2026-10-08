@@ -65,8 +65,8 @@ impl PresenterState {
     pub fn stop(&mut self) { self.started_at = None; }
 
     pub fn next(&mut self, deck: &Deck) -> bool {
-        if self.current_index + 1 >= deck.slides.len() { return false; }
-        self.current_index += 1;
+        let Some(to) = next_shown(deck, self.current_index) else { return false };
+        self.current_index = to;
         true
     }
 
@@ -90,8 +90,8 @@ impl PresenterState {
             self.build_step += 1;
             return Some(Advance::Build(self.build_step - 1));
         }
-        if self.current_index + 1 >= deck.slides.len() { return None; }
-        self.current_index += 1;
+        let to = next_shown(deck, self.current_index)?;
+        self.current_index = to;
         self.build_step = 0;
         Some(Advance::Slide(self.current_index))
     }
@@ -103,32 +103,44 @@ impl PresenterState {
             self.build_step -= 1;
             return true;
         }
-        if self.current_index == 0 { return false; }
-        self.current_index -= 1;
+        let Some(to) = previous_shown(deck, self.current_index) else { return false };
+        self.current_index = to;
         self.build_step = deck.slides.get(self.current_index).map_or(0, crate::builds::steps);
         true
     }
 
-    pub fn previous(&mut self) -> bool {
-        if self.current_index == 0 { return false; }
-        self.current_index -= 1;
+    pub fn previous(&mut self, deck: &Deck) -> bool {
+        let Some(to) = previous_shown(deck, self.current_index) else { return false };
+        self.current_index = to;
         true
     }
 
     pub fn snapshot_at(&self, deck: &Deck, now: Instant) -> Option<PresenterSnapshot> {
         let current = deck.slides.get(self.current_index)?;
-        let next = deck.slides.get(self.current_index + 1);
+        let next_index = next_shown(deck, self.current_index);
+        let next = next_index.and_then(|i| deck.slides.get(i));
         let elapsed = self.started_at.map(|start| now.saturating_duration_since(start)).unwrap_or_default();
         Some(PresenterSnapshot {
             current_index: self.current_index,
             current_title: current.title.clone(),
             current_notes: current.notes.clone(),
-            next_index: next.map(|_| self.current_index + 1),
+            next_index,
             next_title: next.map(|slide| slide.title.clone()),
             elapsed,
             display: self.display.clone(),
         })
     }
+}
+
+/// The shown slide after `index`, stepping over hidden ones
+/// (`engine::shown_slides`).
+fn next_shown(deck: &Deck, index: usize) -> Option<usize> {
+    crate::engine::shown_slides(&deck.slides).into_iter().find(|&i| i > index)
+}
+
+/// The shown slide before `index`, stepping over hidden ones.
+fn previous_shown(deck: &Deck, index: usize) -> Option<usize> {
+    crate::engine::shown_slides(&deck.slides).into_iter().rev().find(|&i| i < index)
 }
 
 /// The presenter's clock: `m:ss`, or `h:mm:ss` from an hour on.
@@ -265,8 +277,8 @@ mod tests {
     fn deck() -> Deck {
         Deck {
             slides: vec![
-                Slide { title: "Opening".into(), background: "#fff".into(), background_image: None, objects: vec![], notes: "Welcome".into(), master_idx: Some(0), transition: Default::default(), builds: Vec::new(), ids: Default::default(), layout: None },
-                Slide { title: "Details".into(), background: "#fff".into(), background_image: None, objects: vec![], notes: "Explain this".into(), master_idx: Some(0), transition: Default::default(), builds: Vec::new(), ids: Default::default(), layout: None },
+                Slide { title: "Opening".into(), background: "#fff".into(), background_image: None, hidden: false, objects: vec![], notes: "Welcome".into(), master_idx: Some(0), transition: Default::default(), builds: Vec::new(), ids: Default::default(), layout: None },
+                Slide { title: "Details".into(), background: "#fff".into(), background_image: None, hidden: false, objects: vec![], notes: "Explain this".into(), master_idx: Some(0), transition: Default::default(), builds: Vec::new(), ids: Default::default(), layout: None },
             ],
             masters: vec![],
         }
@@ -340,10 +352,32 @@ mod tests {
     fn navigation_stays_within_deck() {
         let deck = deck();
         let mut state = PresenterState::new();
-        assert!(!state.previous());
+        assert!(!state.previous(&deck));
         assert!(state.next(&deck));
         assert!(!state.next(&deck));
-        assert!(state.previous());
+        assert!(state.previous(&deck));
+        assert_eq!(state.current_index(), 0);
+    }
+
+    /// A show steps over a hidden slide both ways, and the presenter's
+    /// "next" names the slide that will actually come.
+    #[test]
+    fn a_show_steps_over_a_hidden_slide() {
+        let mut deck = deck();
+        let mut third = deck.slides[1].clone();
+        third.title = "Close".into();
+        deck.slides.push(third);
+        deck.slides[1].hidden = true;
+        let mut state = PresenterState::new();
+        let view = state.snapshot_at(&deck, Instant::now()).unwrap();
+        assert_eq!((view.next_index, view.next_title.as_deref()), (Some(2), Some("Close")));
+        assert_eq!(state.advance(&deck), Some(Advance::Slide(2)));
+        assert_eq!(state.advance(&deck), None, "the end of the show");
+        assert!(state.back(&deck));
+        assert_eq!(state.current_index(), 0);
+        assert!(state.next(&deck));
+        assert_eq!(state.current_index(), 2);
+        assert!(state.previous(&deck));
         assert_eq!(state.current_index(), 0);
     }
 

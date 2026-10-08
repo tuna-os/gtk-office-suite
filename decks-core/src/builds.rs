@@ -167,7 +167,7 @@ mod tests {
     fn slide(builds: Vec<Build>) -> Slide {
         Slide {
             title: String::new(),
-            background: "#ffffff".into(), background_image: None,
+            background: "#ffffff".into(), background_image: None, hidden: false,
             objects: vec![sq(0.0), sq(100.0), sq(200.0)],
             notes: String::new(),
             master_idx: None,

@@ -1354,6 +1354,9 @@ pub fn write_pptx_bytes(deck: &Deck) -> Result<Vec<u8>, String> {
             sld.push_attribute(("xmlns:a", "http://schemas.openxmlformats.org/drawingml/2006/main"));
             sld.push_attribute(("xmlns:r", "http://schemas.openxmlformats.org/officeDocument/2006/relationships"));
             sld.push_attribute(("xmlns:p", "http://schemas.openxmlformats.org/presentationml/2006/main"));
+            if slide.hidden {
+                sld.push_attribute(("show", "0"));
+            }
             writer.write_event(Event::Start(sld)).map_err(|e| e.to_string())?;
 
             // The slide's name, which is what `Slide::title` is. The master
@@ -1620,7 +1623,7 @@ mod emu_rounding_tests {
         Deck {
             slides: vec![Slide {
                 title: String::new(),
-                background: String::new(), background_image: None,
+                background: String::new(), background_image: None, hidden: false,
                 notes: String::new(),
                 master_idx: None,
                 objects: vec![SlideObject::TextBox {

@@ -289,6 +289,7 @@ impl Replica {
         put(&meta, "title", &s.title);
         put(&meta, "bg", &s.background);
         put(&meta, "bgimg", &json(&s.background_image));
+        put(&meta, "hidden", &json(&s.hidden));
         put(&meta, "notes", &s.notes);
         put(&meta, "master", &json(&s.master_idx));
         put(&meta, "tr", &json(&s.transition));
@@ -416,6 +417,7 @@ impl Replica {
                 title: string_at(&meta, "title").unwrap_or_default(),
                 background: string_at(&meta, "bg").unwrap_or_default(),
                 background_image: string_at(&meta, "bgimg").and_then(|t| serde_json::from_str(&t).ok()).unwrap_or(None),
+                hidden: string_at(&meta, "hidden").and_then(|t| serde_json::from_str(&t).ok()).unwrap_or(false),
                 objects: Vec::new(),
                 notes: string_at(&meta, "notes").unwrap_or_default(),
                 master_idx: string_at(&meta, "master").and_then(|t| serde_json::from_str(&t).ok()).unwrap_or(None),

@@ -91,7 +91,7 @@ fn impress_survives_multi_slide_deck() {
     for i in 2..=5 {
         deck.slides.push(decks_core::engine::Slide {
             title: format!("Slide {}", i),
-            background: "#ffffff".into(), background_image: None,
+            background: "#ffffff".into(), background_image: None, hidden: false,
             objects: vec![SlideObject::TextBox {
                 text: format!("content {}", i),
                 x: 80.0, y: 120.0, w: 300.0, h: 50.0,
@@ -143,7 +143,7 @@ fn through_impress(deck: &Deck, stem: &str) -> Option<Deck> {
 fn text_slide(title: &str, text: &str, notes: &str) -> Slide {
     Slide {
         title: title.into(),
-        background: "#ffffff".into(), background_image: None,
+        background: "#ffffff".into(), background_image: None, hidden: false,
         objects: vec![SlideObject::TextBox {
             text: text.into(),
             x: 100.0, y: 100.0, w: 500.0, h: 60.0,
@@ -249,7 +249,7 @@ fn shape_kinds_survive_impress_rewrite() {
     let mut deck = Deck::new();
     deck.slides = vec![Slide {
         title: "shapes".into(),
-        background: "#ffffff".into(), background_image: None,
+        background: "#ffffff".into(), background_image: None, hidden: false,
         objects: vec![
             SlideObject::Rect { x: 100.0, y: 100.0, w: 200.0, h: 100.0, rotation: 0.0 },
             SlideObject::Circle { x: 500.0, y: 300.0, r: 80.0, rotation: 0.0 },
@@ -273,7 +273,7 @@ fn positions_approx_survive_impress_rewrite() {
     let mut deck = Deck::new();
     deck.slides = vec![Slide {
         title: "pos".into(),
-        background: "#ffffff".into(), background_image: None,
+        background: "#ffffff".into(), background_image: None, hidden: false,
         objects: vec![SlideObject::Rect { x: 240.0, y: 180.0, w: 320.0, h: 120.0, rotation: 0.0 }],
         notes: String::new(),
         master_idx: Some(0),
@@ -317,7 +317,7 @@ fn empty_slide_survives_impress_rewrite() {
         text_slide("one", "content", ""),
         Slide {
             title: "empty".into(),
-            background: "#ffffff".into(), background_image: None,
+            background: "#ffffff".into(), background_image: None, hidden: false,
             objects: vec![],
             notes: String::new(),
             master_idx: Some(0),
@@ -338,7 +338,7 @@ fn bold_run_survives_impress_rewrite() {
     let mut deck = Deck::new();
     deck.slides = vec![Slide {
         title: "styled".into(),
-        background: "#ffffff".into(), background_image: None,
+        background: "#ffffff".into(), background_image: None, hidden: false,
         objects: vec![SlideObject::TextBox {
             text: "plain bolded".into(),
             x: 100.0, y: 100.0, w: 500.0, h: 60.0,
@@ -424,7 +424,7 @@ fn styled_run_slide(runs: Vec<Run>) -> Slide {
     let text = runs.iter().map(|r| r.text.as_str()).collect::<String>();
     Slide {
         title: "styled".into(),
-        background: "#ffffff".into(), background_image: None,
+        background: "#ffffff".into(), background_image: None, hidden: false,
         objects: vec![SlideObject::TextBox {
             text,
             x: 100.0, y: 100.0, w: 600.0, h: 80.0,
@@ -524,7 +524,7 @@ fn image_object_survives_impress_rewrite() {
     let mut deck = Deck::new();
     deck.slides = vec![Slide {
         title: "img".into(),
-        background: "#ffffff".into(), background_image: None,
+        background: "#ffffff".into(), background_image: None, hidden: false,
         objects: vec![SlideObject::Image {
             path: png_path.to_string_lossy().to_string(),
             x: 100.0, y: 100.0, w: 200.0, h: 150.0,
@@ -619,7 +619,7 @@ fn odp_geometry_survives_impress_rewrite() {
     let mut deck = Deck::new();
     deck.slides = vec![Slide {
         title: "g".into(),
-        background: "#ffffff".into(), background_image: None,
+        background: "#ffffff".into(), background_image: None, hidden: false,
         objects: vec![SlideObject::Rect { x: 240.0, y: 180.0, w: 320.0, h: 120.0, rotation: 0.0 }],
         notes: String::new(),
         master_idx: Some(0),
@@ -675,7 +675,7 @@ fn odp_bold_run_survives_impress_rewrite() {
     let mut deck = Deck::new();
     deck.slides = vec![Slide {
         title: "styled".into(),
-        background: "#ffffff".into(), background_image: None,
+        background: "#ffffff".into(), background_image: None, hidden: false,
         objects: vec![SlideObject::TextBox {
             text: "plain bolded".into(),
             x: 100.0, y: 100.0, w: 500.0, h: 60.0,
@@ -1078,7 +1078,7 @@ fn impress_runs_in_one_paragraph_come_back_as_one_line() {
     let mut deck = Deck::new();
     deck.slides = vec![Slide {
         title: "T".into(),
-        background: String::new(), background_image: None,
+        background: String::new(), background_image: None, hidden: false,
         notes: String::new(),
         master_idx: None,
         objects: vec![SlideObject::TextBox {
@@ -1136,7 +1136,7 @@ fn a_styled_multiline_box_keeps_its_break_and_its_styling_through_impress() {
     let mut deck = Deck::new();
     deck.slides = vec![Slide {
         title: "T".into(),
-        background: String::new(), background_image: None,
+        background: String::new(), background_image: None, hidden: false,
         notes: String::new(),
         master_idx: None,
         objects: vec![SlideObject::TextBox {
@@ -1271,7 +1271,7 @@ fn geometry_survives_a_conversion_between_the_two_formats() {
     let mut deck = Deck::new();
     deck.slides = vec![Slide {
         title: "T".into(),
-        background: String::new(), background_image: None,
+        background: String::new(), background_image: None, hidden: false,
         notes: String::new(),
         master_idx: None,
         objects: vec![SlideObject::Rect {
@@ -2009,4 +2009,32 @@ fn text_and_run_styling_survive_a_conversion_between_the_two_formats() {
     write_pptx(as_pptx.to_str().unwrap(), &deck).expect("write pptx");
     let to_odp = convert(&as_pptx, "odp").expect("Impress could not convert our pptx to odp");
     check(&odp::read(to_odp.to_str().unwrap()).expect("read Impress's odp"), "pptx -> Impress -> odp");
+}
+
+/// A hidden slide stays hidden through Impress: our pptx and our odp,
+/// each converted to the other format, still hide the middle slide.
+#[test]
+fn a_hidden_slide_stays_hidden_through_impress() {
+    if !require_or_skip() {
+        return;
+    }
+    let mut deck = Deck::new();
+    let proto = deck.slides[0].clone();
+    deck.slides = (1..=3)
+        .map(|k| {
+            let mut s = proto.clone();
+            s.title = format!("S{k}");
+            s.hidden = k == 2;
+            s
+        })
+        .collect();
+    for (ext, to) in [("pptx", "odp"), ("odp", "pptx")] {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join(format!("hidden.{ext}"));
+        decks_core::write_deck(path.to_str().unwrap(), &deck).expect("write");
+        let back = convert(&path, to).unwrap_or_else(|e| panic!("Impress converts our {ext}: {e}"));
+        let read = decks_core::read_deck(back.to_str().unwrap()).expect("read Impress's file");
+        let got: Vec<bool> = read.slides.iter().map(|s| s.hidden).collect();
+        assert_eq!(got, [false, true, false], "{ext} → {to}");
+    }
 }

@@ -354,7 +354,7 @@ mod tests {
     fn slide(title: &str, n: usize) -> Slide {
         Slide {
             title: title.into(),
-            background: "#ffffff".into(), background_image: None,
+            background: "#ffffff".into(), background_image: None, hidden: false,
             objects: (0..n).map(|i| SlideObject::Rect { x: i as f64 * 10.0, y: 0.0, w: 5.0, h: 5.0, rotation: 0.0 }).collect(),
             notes: String::new(),
             master_idx: None,

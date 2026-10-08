@@ -1090,6 +1090,7 @@ pub fn read_pptx(path: &str) -> Result<Deck, String> {
                 .and_then(|p| archive.part_to_bytes(&p, &mut budget).ok())
                 .and_then(|bytes| suite_common_core::media_cache::persist(&bytes).ok())
                 .map(|p| p.to_string_lossy().into_owned()),
+            hidden: slide_is_hidden(&slide_xml),
             objects,
             notes,
             master_idx: Some(0),
@@ -1214,7 +1215,7 @@ pub fn read_pptx(path: &str) -> Result<Deck, String> {
     if slides.is_empty() {
         slides.push(Slide {
             title: "Slide 1".into(),
-            background: "#ffffff".into(), background_image: None,
+            background: "#ffffff".into(), background_image: None, hidden: false,
             objects: vec![],
             notes: String::new(),
             master_idx: Some(0),
@@ -1647,6 +1648,15 @@ fn resolve_and_extract_picture(
         rotation,
         crop,
     })
+}
+
+/// Whether a slide part is hidden: `show="0"` (or `false`) on its `p:sld`,
+/// which PowerPoint writes for "Hide Slide".
+fn slide_is_hidden(slide_xml: &str) -> bool {
+    let Some(at) = slide_xml.find("<p:sld") else { return false };
+    let Some(len) = slide_xml[at..].find('>') else { return false };
+    let tag = &slide_xml[at..at + len];
+    tag.contains(" show=\"0\"") || tag.contains(" show=\"false\"")
 }
 
 #[cfg(test)]

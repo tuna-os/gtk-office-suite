@@ -359,7 +359,7 @@ mod tests {
         let (red, blue) = (Color(220, 0, 0), Color(0, 0, 220));
         let slide = |objects| Slide {
             title: String::new(),
-            background: "#ffffff".into(), background_image: None,
+            background: "#ffffff".into(), background_image: None, hidden: false,
             objects,
             notes: String::new(),
             master_idx: None,

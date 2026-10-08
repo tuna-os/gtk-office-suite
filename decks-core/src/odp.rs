@@ -1226,7 +1226,8 @@ fn drawing_page_props(slide: &Slide, i: usize) -> Option<String> {
         String::new()
     };
     let trans = transition_attrs(slide.transition).unwrap_or_default();
-    (!fill.is_empty() || !trans.is_empty()).then(|| format!("{fill}{trans}"))
+    let visibility = if slide.hidden { " presentation:visibility=\"hidden\"" } else { "" };
+    (!fill.is_empty() || !trans.is_empty() || slide.hidden).then(|| format!("{fill}{trans}{visibility}"))
 }
 
 /// The name of the fill image slide `i`'s background picture is.
@@ -1273,6 +1274,26 @@ fn fill_images(xml: &str, page_image: &mut std::collections::HashMap<String, Str
                     if let (Some(name), Some(href)) = (attr(&e, "draw:name"), attr(&e, "xlink:href")) {
                         images.insert(name, href);
                     }
+                }
+                _ => {}
+            },
+            Ok(Event::Eof) | Err(_) => break,
+            _ => {}
+        }
+    }
+}
+
+/// The drawing-page styles in a part that hide their slide
+/// (`presentation:visibility="hidden"`, Impress's "Hide Slide").
+fn hidden_pages(xml: &str, hidden: &mut std::collections::HashSet<String>) {
+    let mut reader = Reader::from_str(xml);
+    let mut cur: Option<String> = None;
+    loop {
+        match reader.read_event() {
+            Ok(Event::Start(e)) | Ok(Event::Empty(e)) => match e.name().as_ref() {
+                "style:style" => cur = attr(&e, "style:name"),
+                "style:drawing-page-properties" if attr(&e, "presentation:visibility").as_deref() == Some("hidden") => {
+                    hidden.extend(cur.clone());
                 }
                 _ => {}
             },
@@ -1600,7 +1621,7 @@ fn parse_pages(
                         title: attr(e, "draw:name")
                             .or_else(|| attr(e, "style:name").map(|n| decode_style_name(&n)))
                             .unwrap_or_default(),
-                        background: bg, background_image: None,
+                        background: bg, background_image: None, hidden: false,
                         objects: vec![],
                         notes: String::new(),
                         master_idx: Some(0),
@@ -2055,8 +2076,11 @@ pub fn read(path: &str) -> Result<Deck, String> {
     let (mut page_image, mut images) = (Default::default(), Default::default());
     fill_images(&content, &mut page_image, &mut images);
     fill_images(&styles, &mut page_image, &mut images);
+    let mut hidden = std::collections::HashSet::new();
+    hidden_pages(&content, &mut hidden);
     for (i, page) in slide_pages.into_iter().enumerate() {
         let mut slide = page.slide;
+        slide.hidden = page.style.as_ref().is_some_and(|n| hidden.contains(n));
         slide.background_image = page
             .style
             .as_ref()
@@ -2092,7 +2116,7 @@ pub fn read(path: &str) -> Result<Deck, String> {
     if deck.slides.is_empty() {
         deck.slides.push(Slide {
             title: "Slide 1".into(),
-            background: "#ffffff".into(), background_image: None,
+            background: "#ffffff".into(), background_image: None, hidden: false,
             objects: vec![],
             notes: String::new(),
             master_idx: Some(0),
@@ -2137,7 +2161,7 @@ mod tests {
     fn text_slide(title: &str, text: &str, notes: &str) -> Slide {
         Slide {
             title: title.into(),
-            background: "#ffffff".into(), background_image: None,
+            background: "#ffffff".into(), background_image: None, hidden: false,
             objects: vec![SlideObject::TextBox {
                 text: text.into(),
                 x: 100.0,
@@ -2353,7 +2377,7 @@ mod tests {
             }],
             slides: vec![Slide {
                 title: "one".into(),
-                background: String::new(), background_image: None,
+                background: String::new(), background_image: None, hidden: false,
                 objects: vec![],
                 notes: String::new(),
                 master_idx: Some(0),
@@ -2400,7 +2424,7 @@ mod tests {
             }],
             slides: vec![Slide {
                 title: "p".into(),
-                background: String::new(), background_image: None,
+                background: String::new(), background_image: None, hidden: false,
                 objects: vec![SlideObject::Image {
                     path: path.to_string(),
                     x: 10.0,
@@ -2593,7 +2617,7 @@ mod tests {
         let mut deck = Deck::new();
         deck.slides = vec![Slide {
             title: "g".into(),
-            background: "#ffffff".into(), background_image: None,
+            background: "#ffffff".into(), background_image: None, hidden: false,
             objects: vec![
                 SlideObject::Rect { x: 240.0, y: 180.0, w: 320.0, h: 120.0, rotation: 0.0 },
                 SlideObject::Circle { x: 500.0, y: 300.0, r: 80.0, rotation: 0.0 },
@@ -2630,7 +2654,7 @@ mod tests {
         let mut deck = Deck::new();
         deck.slides = vec![Slide {
             title: "s".into(),
-            background: "#ffffff".into(), background_image: None,
+            background: "#ffffff".into(), background_image: None, hidden: false,
             objects: vec![SlideObject::TextBox {
                 text: "plain bold".into(),
                 x: 10.0,
@@ -2805,7 +2829,7 @@ mod tests {
         Deck {
             slides: vec![Slide {
                 title: String::new(),
-                background: String::new(), background_image: None,
+                background: String::new(), background_image: None, hidden: false,
                 notes: String::new(),
                 master_idx: None,
                 objects: vec![SlideObject::TextBox {
