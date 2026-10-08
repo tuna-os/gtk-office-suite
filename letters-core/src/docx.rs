@@ -290,7 +290,49 @@ fn read_on_this_thread(path: &str) -> Result<Document, String> {
     if footer.is_some() {
         read.footer = footer;
     }
+    let [(header_pictures, header_alignment), (footer_pictures, footer_alignment)] = header_footer_extras(path);
+    (read.header_pictures, read.header_alignment) = (header_pictures, header_alignment);
+    (read.footer_pictures, read.footer_alignment) = (footer_pictures, footer_alignment);
     Ok(read)
+}
+
+/// The pictures of the default header and footer (a letterhead's logo),
+/// each kept in the media cache like a body picture (#455), and how each
+/// part's text is aligned.
+fn header_footer_extras(path: &str) -> [(Vec<Run>, Alignment); 2] {
+    let none = || [(Vec::new(), Alignment::Left), (Vec::new(), Alignment::Left)];
+    let Some(mut zip) = std::fs::File::open(path).ok().and_then(|f| zip::ZipArchive::new(f).ok()) else { return none() };
+    let (Some(document), Some(rels)) = (part_text(&mut zip, "word/document.xml"), part_text(&mut zip, "word/_rels/document.xml.rels")) else {
+        return none();
+    };
+    let styles = part_text(&mut zip, "word/styles.xml").unwrap_or_default();
+    let (h, f) = crate::docx_fields::default_parts(&document, &rels);
+    let mut extras = |part: Option<String>| -> (Vec<Run>, Alignment) {
+        let Some(part) = part else { return (Vec::new(), Alignment::Left) };
+        let Some(xml) = part_text(&mut zip, &part) else { return (Vec::new(), Alignment::Left) };
+        let (dir, file) = part.rsplit_once('/').unwrap_or(("", part.as_str()));
+        let part_rels = part_text(&mut zip, &format!("{dir}/_rels/{file}.rels")).unwrap_or_default();
+        let pictures = crate::docx_anchors::pictures_in(&xml)
+            .into_iter()
+            .filter_map(|pic| {
+                let target = crate::docx_anchors::relationship_target(&part_rels, &pic.embed)?;
+                let mut bytes = Vec::new();
+                std::io::Read::read_to_end(&mut zip.by_name(&target).ok()?, &mut bytes).ok()?;
+                let path = suite_common_core::media_cache::persist(&bytes).ok()?;
+                Some(Run {
+                    text: pic.alt,
+                    style: RunStyle {
+                        image: Some(path.to_string_lossy().into_owned()),
+                        image_extent_emu: pic.extent,
+                        image_anchor: pic.anchor,
+                        ..Default::default()
+                    },
+                })
+            })
+            .collect();
+        (pictures, crate::docx_fields::alignment(&xml, &styles))
+    };
+    [extras(h), extras(f)]
 }
 
 /// A zip part's text, if it is there.
@@ -532,17 +574,56 @@ fn read_opened(path: &str, doc: rdocx::Document) -> Result<Document, String> {
     }
     let raw_cells = (raw_cells.len() == cell_paragraphs).then_some(raw_cells);
     let mut cell_index = 0usize;
+    let mut table_spans: std::collections::BTreeMap<u32, Vec<crate::model::CellSpan>> = Default::default();
     for (ti, table) in tables.iter().enumerate() {
         let mut paragraphs: Vec<Paragraph> = Vec::new();
+        let spans = table_spans.entry(ti as u32).or_default();
+        // Per grid column: the vertical merge open there (`w:vMerge`
+        // restart), as an index into `spans`.
+        let mut open: std::collections::HashMap<u32, usize> = Default::default();
         for ri in 0..table.row_count() {
             let Some(row) = table.row(ri) else { continue };
+            // A cell's column is its place in the grid: the columns of the
+            // cells before it, each `w:gridSpan` wide. Counting cells put
+            // everything after a merged cell in the wrong column.
+            let mut grid_col = 0u32;
             for ci in 0..row.cell_count() {
                 let Some(cell) = row.cell(ci) else { continue };
+                let col = grid_col;
+                let width = cell.grid_span().unwrap_or(1).max(1);
+                grid_col += width;
+                match cell.v_merge() {
+                    Some(rdocx::VMerge::Continue) => {
+                        if let Some(span) = open.get(&col).and_then(|&k| spans.get_mut(k)) {
+                            span.rows += 1;
+                        }
+                    }
+                    Some(rdocx::VMerge::Restart) => {
+                        open.insert(col, spans.len());
+                        spans.push(crate::model::CellSpan { row: ri as u32, col, rows: 1, cols: width });
+                    }
+                    None => {
+                        open.remove(&col);
+                        if width > 1 {
+                            spans.push(crate::model::CellSpan { row: ri as u32, col, rows: 1, cols: width });
+                        }
+                    }
+                }
+                // The grid positions a merged cell covers keep a paragraph.
+                for covered in col + 1..col + width {
+                    paragraphs.push(Paragraph {
+                        style: ParaStyle {
+                            table_cell: Some(crate::model::TableCell { table: ti as u32, row: ri as u32, col: covered }),
+                            ..Default::default()
+                        },
+                        runs: vec![],
+                    });
+                }
                 let mut wrote_any = false;
                 let mut keep = |para: Paragraph| {
                     let mut para = para;
                     para.style.table_cell = Some(crate::model::TableCell {
-                        table: ti as u32, row: ri as u32, col: ci as u32,
+                        table: ti as u32, row: ri as u32, col,
                     });
                     paragraphs.push(para);
                     wrote_any = true;
@@ -580,7 +661,7 @@ fn read_opened(path: &str, doc: rdocx::Document) -> Result<Document, String> {
                     paragraphs.push(Paragraph {
                         style: ParaStyle {
                             table_cell: Some(crate::model::TableCell {
-                                table: ti as u32, row: ri as u32, col: ci as u32,
+                                table: ti as u32, row: ri as u32, col,
                             }),
                             ..Default::default()
                         },
@@ -589,8 +670,12 @@ fn read_opened(path: &str, doc: rdocx::Document) -> Result<Document, String> {
                 }
             }
         }
+        // Row-major within each row, as every reader of the grid expects.
+        paragraphs.sort_by_key(|p| p.style.table_cell.map(|c| (c.row, c.col)));
+        spans.retain(|s| s.rows > 1 || s.cols > 1);
         table_paragraphs.push(paragraphs);
     }
+    table_spans.retain(|_, spans| !spans.is_empty());
     // In reverse, so each insertion leaves the earlier positions valid;
     // tables at one position keep their order.
     for (ti, cells) in table_paragraphs.into_iter().enumerate().rev() {
@@ -619,12 +704,17 @@ fn read_opened(path: &str, doc: rdocx::Document) -> Result<Document, String> {
         footnotes,
         header: doc.header_text(),
         footer: doc.footer_text(),
+        header_pictures: Vec::new(),
+        footer_pictures: Vec::new(),
+        header_alignment: Alignment::Left,
+        footer_alignment: Alignment::Left,
         page: read_page_geometry(&doc),
         base_font: read_base_font(&doc),
         heading_styles: read_heading_styles(&doc),
         comments: Vec::new(),
         table_columns,
         table_rows,
+        table_spans,
         table_fills,
     })
 }
@@ -635,11 +725,17 @@ fn cell_fills(table: &rdocx::TableRef<'_>) -> Option<Vec<crate::model::CellFill>
     let mut fills = Vec::new();
     for ri in 0..table.row_count() {
         let Some(row) = table.row(ri) else { continue };
+        // At the cell's grid column, as the cells are read: the columns of
+        // the cells before it, each `w:gridSpan` wide.
+        let mut col = 0u32;
         for ci in 0..row.cell_count() {
-            let Some(fill) = row.cell(ci).and_then(|c| c.shading_fill().map(str::to_string)) else { continue };
+            let Some(cell) = row.cell(ci) else { continue };
+            let at = col;
+            col += cell.grid_span().unwrap_or(1).max(1);
+            let Some(fill) = cell.shading_fill().map(str::to_string) else { continue };
             let color = fill.trim_start_matches('#').to_uppercase();
             if color.len() == 6 && color.chars().all(|c| c.is_ascii_hexdigit()) {
-                fills.push(crate::model::CellFill { row: ri as u32, col: ci as u32, color });
+                fills.push(crate::model::CellFill { row: ri as u32, col: at, color });
             }
         }
     }
@@ -742,6 +838,28 @@ fn read_page_geometry(doc: &rdocx::Document) -> Option<PageGeometry> {
     })
 }
 
+/// The text of a paragraph marking a table cell that a merged cell
+/// covers, which `without_covered_cells` takes out of the saved XML.
+const COVERED_CELL: &str = "\u{E00A}letters:covered-cell\u{E00A}";
+
+/// `xml` without the table cells marked `COVERED_CELL`: the grid
+/// positions a merged cell spans in its own row, which OOXML has no
+/// cell for. The writer flattens nested tables, so a marked cell's
+/// `w:tc` is the nearest one around the marker.
+fn without_covered_cells(xml: &str) -> String {
+    let mut out = xml.to_string();
+    while let Some(at) = out.find(COVERED_CELL) {
+        let start = [out[..at].rfind("<w:tc>"), out[..at].rfind("<w:tc ")].into_iter().flatten().max();
+        let end = out[at..].find("</w:tc>").map(|e| at + e + "</w:tc>".len());
+        match (start, end) {
+            (Some(s), Some(e)) => out.replace_range(s..e, ""),
+            // Not in a cell after all: drop the marker alone.
+            _ => out.replace_range(at..at + COVERED_CELL.len(), ""),
+        }
+    }
+    out
+}
+
 /// Write a Document to a .docx file.
 pub fn write(doc: &Document, path: impl AsRef<std::path::Path>) -> Result<(), String> {
     let mut out = rdocx::Document::new();
@@ -769,6 +887,8 @@ pub fn write(doc: &Document, path: impl AsRef<std::path::Path>) -> Result<(), St
     // (rdocx's default page: Letter with 1in margins).
     let text_width_pt = doc.page.map_or(468.0, |g| g.width_pt - g.margin_left_pt - g.margin_right_pt);
     let mut has_toc = false;
+    // Whether a merged cell covers a grid position (`COVERED_CELL`).
+    let mut has_covered = false;
     // The numIds of the bullet and numbered list definitions, once made.
     let mut list_ids: [Option<u32>; 2] = [None, None];
     // What each numbered item shows, and what Word would show it as.
@@ -851,6 +971,28 @@ pub fn write(doc: &Document, path: impl AsRef<std::path::Path>) -> Result<(), St
                         if run.style.strikethrough { r = r.strike(true); }
                         if run.style.highlight { r = r.highlight("yellow"); }
                         if run.style.code { r = r.style("SourceText"); }
+                    }
+                }
+            }
+            // Merged cells: the first spans its columns (`w:gridSpan`) and
+            // starts a vertical merge (`w:vMerge`) the rows below continue.
+            // The grid positions it covers in its own row are no cells in
+            // OOXML: they are marked here and taken out below.
+            for span in doc.table_spans.get(&tc0.table).into_iter().flatten() {
+                for r in span.row..span.row + span.rows {
+                    if let Some(mut cell) = tbl.cell(r as usize, span.col as usize) {
+                        if span.cols > 1 {
+                            cell.set_grid_span(span.cols);
+                        }
+                        if span.rows > 1 {
+                            if r == span.row { cell.set_v_merge_restart() } else { cell.set_v_merge_continue() }
+                        }
+                    }
+                    for c in span.col + 1..span.col + span.cols {
+                        if let Some(mut cell) = tbl.cell(r as usize, c as usize) {
+                            cell.add_paragraph(COVERED_CELL);
+                            has_covered = true;
+                        }
                     }
                 }
             }
@@ -1127,11 +1269,30 @@ pub fn write(doc: &Document, path: impl AsRef<std::path::Path>) -> Result<(), St
             let _ = out.last_paragraph_mut().expect("paragraph").add_run(&crate::docx_comments::marker(id, start));
         }
     }
-    if let Some(h) = &doc.header {
-        out.set_header(h);
-    }
-    if let Some(f) = &doc.footer {
-        out.set_footer(f);
+    // A header or footer with pictures, or aligned, is written whole, its
+    // pictures in its first paragraph (docx_anchors::header_footer_part).
+    for (is_header, text, pictures, alignment) in [
+        (true, &doc.header, &doc.header_pictures, doc.header_alignment),
+        (false, &doc.footer, &doc.footer_pictures, doc.footer_alignment),
+    ] {
+        if pictures.is_empty() && alignment == Alignment::Left {
+            match (is_header, text) {
+                (true, Some(h)) => out.set_header(h),
+                (false, Some(f)) => out.set_footer(f),
+                _ => {}
+            }
+            continue;
+        }
+        if text.is_none() && pictures.is_empty() {
+            continue;
+        }
+        let (xml, images) = crate::docx_anchors::header_footer_part(is_header, text.as_deref().unwrap_or(""), pictures, alignment);
+        let images: Vec<(&str, &[u8], &str)> = images.iter().map(|(r, b, n)| (r.as_str(), b.as_slice(), n.as_str())).collect();
+        if is_header {
+            out.set_raw_header_with_images(xml.into_bytes(), &images, rdocx::HdrFtrType::Default);
+        } else {
+            out.set_raw_footer_with_images(xml.into_bytes(), &images, rdocx::HdrFtrType::Default);
+        }
     }
     if let Some(pg) = &doc.page {
         out.set_page_size(rdocx::Length::pt(pg.width_pt), rdocx::Length::pt(pg.height_pt));
@@ -1154,12 +1315,13 @@ pub fn write(doc: &Document, path: impl AsRef<std::path::Path>) -> Result<(), St
     let bytes = with_letters_styles(&bytes, &doc.base_font, &doc.heading_styles)
         .map_err(|e| format!("Cannot save {}: {}", path.as_ref().display(), e))?;
     let tabbed = paras.iter().flat_map(|p| &p.runs).any(|r| r.text.contains('\t'));
-    let bytes = if chips.is_empty() && revisions.is_empty() && doc.comments.is_empty() && !has_toc && !tabbed && floating.is_empty() {
+    let bytes = if chips.is_empty() && revisions.is_empty() && doc.comments.is_empty() && !has_toc && !tabbed && !has_covered && floating.is_empty() {
         bytes
     } else {
         with_part(&bytes, "word/document.xml", |xml| {
             let xml = if tabbed { tabs_as_elements(xml) } else { xml.to_string() };
-            let xml = if floating.is_empty() { xml } else { crate::docx_anchors::float(&xml, &floating) };
+            let xml = if has_covered { without_covered_cells(&xml) } else { xml };
+            let xml = if floating.is_empty() { xml } else { crate::docx_anchors::float(&xml, &floating, 9001) };
             let xml = crate::docx_revisions::wrap(&crate::docx_chips::wrap(&xml, &chips), &revisions);
             let xml = crate::docx_comments::wrap(&xml, &doc.comments);
             if has_toc { crate::docx_toc::wrap(&xml) } else { xml }

@@ -403,11 +403,18 @@ fn write_text_box<W: std::io::Write>(
     writer.write_event(Event::Start(BytesStart::new("p:spPr")))?;
     write_xfrm(writer, at)?;
 
-    let mut prst_geom = BytesStart::new("a:prstGeom");
-    prst_geom.push_attribute(("prst", "rect"));
-    writer.write_event(Event::Start(prst_geom))?;
-    writer.write_event(Event::Empty(BytesStart::new("a:avLst")))?;
-    writer.write_event(Event::End(BytesEnd::new("a:prstGeom")))?;
+    // A box with a shape of its own is that shape, painted; a bare one a
+    // plain rectangle.
+    match &body.frame {
+        Some(frame) => write_geometry_and_paint(writer, &frame.kind, &frame.style)?,
+        None => {
+            let mut prst_geom = BytesStart::new("a:prstGeom");
+            prst_geom.push_attribute(("prst", "rect"));
+            writer.write_event(Event::Start(prst_geom))?;
+            writer.write_event(Event::Empty(BytesStart::new("a:avLst")))?;
+            writer.write_event(Event::End(BytesEnd::new("a:prstGeom")))?;
+        }
+    }
 
     writer.write_event(Event::End(BytesEnd::new("p:spPr")))?;
 
@@ -512,7 +519,6 @@ fn write_shape<W: std::io::Write>(
     kind: &super::shape::ShapeKind,
     style: &super::shape::ShapeStyle,
 ) -> Result<(), quick_xml::Error> {
-    use super::shape::ShapeKind;
     writer.write_event(Event::Start(BytesStart::new("p:sp")))?;
     writer.write_event(Event::Start(BytesStart::new("p:nvSpPr")))?;
     let mut c_nv_pr = BytesStart::new("p:cNvPr");
@@ -525,6 +531,19 @@ fn write_shape<W: std::io::Write>(
 
     writer.write_event(Event::Start(BytesStart::new("p:spPr")))?;
     write_xfrm(writer, at)?;
+    write_geometry_and_paint(writer, kind, style)?;
+    writer.write_event(Event::End(BytesEnd::new("p:spPr")))?;
+    writer.write_event(Event::End(BytesEnd::new("p:sp")))?;
+    Ok(())
+}
+
+/// A shape's preset geometry, fill and outline, inside its `p:spPr`.
+fn write_geometry_and_paint<W: std::io::Write>(
+    writer: &mut Writer<W>,
+    kind: &super::shape::ShapeKind,
+    style: &super::shape::ShapeStyle,
+) -> Result<(), quick_xml::Error> {
+    use super::shape::ShapeKind;
     let mut prst_geom = BytesStart::new("a:prstGeom");
     prst_geom.push_attribute(("prst", kind.prst()));
     writer.write_event(Event::Start(prst_geom))?;
@@ -584,8 +603,6 @@ fn write_shape<W: std::io::Write>(
             writer.write_event(Event::End(BytesEnd::new("a:ln")))?;
         }
     }
-    writer.write_event(Event::End(BytesEnd::new("p:spPr")))?;
-    writer.write_event(Event::End(BytesEnd::new("p:sp")))?;
     Ok(())
 }
 
@@ -651,13 +668,34 @@ fn write_table<W: std::io::Write>(
         writer.write_event(Event::Empty(col))?;
     }
     writer.write_event(Event::End(BytesEnd::new("a:tblGrid")))?;
+    let owners = table.owners();
     for (r, h) in rows.iter().enumerate() {
         let mut tr = BytesStart::new("a:tr");
         tr.push_attribute(("h", emu_y(*h).as_str()));
         writer.write_event(Event::Start(tr))?;
         for c in 0..cols.len() {
             let cell = table.rows.get(r).and_then(|row| row.get(c)).cloned().unwrap_or_default();
-            writer.write_event(Event::Start(BytesStart::new("a:tc")))?;
+            // A merged cell's span, and each cell it covers marked by the
+            // way it is covered: from the left, or from above.
+            let mut tc = BytesStart::new("a:tc");
+            let owner = owners.get(r).and_then(|o| o.get(c)).copied().unwrap_or((r, c));
+            if owner == (r, c) {
+                let (cs, rs) = cell.span();
+                if cs > 1 {
+                    tc.push_attribute(("gridSpan", cs.to_string().as_str()));
+                }
+                if rs > 1 {
+                    tc.push_attribute(("rowSpan", rs.to_string().as_str()));
+                }
+            } else {
+                if owner.1 < c {
+                    tc.push_attribute(("hMerge", "1"));
+                }
+                if owner.0 < r {
+                    tc.push_attribute(("vMerge", "1"));
+                }
+            }
+            writer.write_event(Event::Start(tc))?;
             writer.write_event(Event::Start(BytesStart::new("a:txBody")))?;
             writer.write_event(Event::Empty(BytesStart::new("a:bodyPr")))?;
             writer.write_event(Event::Empty(BytesStart::new("a:lstStyle")))?;
@@ -866,9 +904,28 @@ fn write_background<W: std::io::Write>(
 /// master, and the master reader parses `p:sp` only, so writing one would
 /// be a part nothing reads. Text, rects and circles are what it reads, and
 /// they are what this writes.
+/// A master's or layout's pictures as they are written: each is the part's
+/// relationship `rId{first_rel + k}` to `../media/imageN.png`, its file
+/// added to the package's media (`images`).
+struct PartPictures<'a> {
+    first_rel: usize,
+    targets: Vec<String>,
+    images: &'a mut Vec<String>,
+}
+
+impl PartPictures<'_> {
+    /// The relationship id for a picture of the file at `path`.
+    fn add(&mut self, path: &str) -> String {
+        self.images.push(path.to_string());
+        self.targets.push(format!("../media/image{}.png", self.images.len()));
+        format!("rId{}", self.first_rel + self.targets.len() - 1)
+    }
+}
+
 fn write_master_shapes<W: std::io::Write>(
     writer: &mut Writer<W>,
     shapes: &[SlideObject],
+    pictures: &mut PartPictures<'_>,
 ) -> Result<(), quick_xml::Error> {
     for (j, obj) in shapes.iter().enumerate() {
         let id = 2 + j;
@@ -907,7 +964,11 @@ fn write_master_shapes<W: std::io::Write>(
                 Placement { x: *x, y: *y, w: *w, h: *h, rotation: *rotation },
                 table,
             )?,
-            SlideObject::Image { .. } | SlideObject::Chart { .. } => {}
+            SlideObject::Image { path, x, y, w, h, rotation, crop } => {
+                let rel = pictures.add(path);
+                write_image(writer, id, j + 1, &rel, Placement { x: *x, y: *y, w: *w, h: *h, rotation: *rotation }, crop)?
+            }
+            SlideObject::Chart { .. } => {}
         }
     }
     Ok(())
@@ -1020,7 +1081,7 @@ fn layout_part_of(parts: &[(usize, Option<usize>)], k: usize, layout: Option<usi
 
 /// `ppt/slideMasters/slideMasterN.xml` — the decorations and the colour map.
 /// Its layouts are `layouts` (their part numbers), as `rId1..`.
-fn master_part_xml(master: &MasterSlide, layouts: &[usize]) -> Result<Vec<u8>, String> {
+fn master_part_xml(master: &MasterSlide, layouts: &[usize], pictures: &mut PartPictures<'_>) -> Result<Vec<u8>, String> {
     let mut out = Vec::new();
     {
         let mut writer = Writer::new(std::io::Cursor::new(&mut out));
@@ -1038,7 +1099,7 @@ fn master_part_xml(master: &MasterSlide, layouts: &[usize]) -> Result<Vec<u8>, S
         write_background(&mut writer, &master.background).map_err(|e| e.to_string())?;
         writer.write_event(Event::Start(BytesStart::new("p:spTree"))).map_err(|e| e.to_string())?;
         write_group_prelude(&mut writer).map_err(|e| e.to_string())?;
-        write_master_shapes(&mut writer, &master.shapes).map_err(|e| e.to_string())?;
+        write_master_shapes(&mut writer, &master.shapes, pictures).map_err(|e| e.to_string())?;
         writer.write_event(Event::End(BytesEnd::new("p:spTree"))).map_err(|e| e.to_string())?;
         writer.write_event(Event::End(BytesEnd::new("p:cSld"))).map_err(|e| e.to_string())?;
         writer.write_event(Event::End(BytesEnd::new("p:sldMaster"))).map_err(|e| e.to_string())?;
@@ -1066,7 +1127,7 @@ fn master_part_xml(master: &MasterSlide, layouts: &[usize]) -> Result<Vec<u8>, S
 /// that consults the layout first still sees them. A layout of the model
 /// (decks_core::layouts) is written as itself: its kind, name, own
 /// background and decorations, and a placeholder per place.
-fn layout_part_xml(master: &MasterSlide, layout: Option<&crate::layouts::Layout>) -> Result<Vec<u8>, String> {
+fn layout_part_xml(master: &MasterSlide, layout: Option<&crate::layouts::Layout>, pictures: &mut PartPictures<'_>) -> Result<Vec<u8>, String> {
     let mut out = Vec::new();
     {
         let mut writer = Writer::new(std::io::Cursor::new(&mut out));
@@ -1094,7 +1155,7 @@ fn layout_part_xml(master: &MasterSlide, layout: Option<&crate::layouts::Layout>
         writer.write_event(Event::Start(BytesStart::new("p:spTree"))).map_err(|e| e.to_string())?;
         write_group_prelude(&mut writer).map_err(|e| e.to_string())?;
         if let Some(l) = layout {
-            write_master_shapes(&mut writer, &l.shapes).map_err(|e| e.to_string())?;
+            write_master_shapes(&mut writer, &l.shapes, pictures).map_err(|e| e.to_string())?;
             let mut bodies = 0u32;
             for (j, p) in l.placeholders.iter().enumerate() {
                 let idx = placeholder_idx(p.role, bodies);
@@ -1187,12 +1248,6 @@ fn rels_part(rels: &[(&str, &str)]) -> String {
     }
     out.push_str("</Relationships>");
     out
-}
-
-/// A relationships part with one relationship, which is all a layout needs
-/// to point back at its master.
-fn one_rel(kind: &str, target: &str) -> String {
-    rels_part(&[(kind, target)])
 }
 
 pub fn write_pptx(path: &str, deck: &Deck) -> Result<(), String> {
@@ -1559,7 +1614,9 @@ pub fn write_pptx_bytes(deck: &Deck) -> Result<Vec<u8>, String> {
         zip.start_file(format!("ppt/slideMasters/slideMaster{n}.xml"), options)
             .map_err(|e| e.to_string())?;
         let mine: Vec<usize> = parts.iter().enumerate().filter(|(_, p)| p.0 == k).map(|(i, _)| i + 1).collect();
-        zip.write_all(&master_part_xml(master, &mine)?).map_err(|e| e.to_string())?;
+        // Its pictures' relationships follow its layouts' and its theme's.
+        let mut pictures = PartPictures { first_rel: mine.len() + 2, targets: Vec::new(), images: &mut images_to_add };
+        zip.write_all(&master_part_xml(master, &mine, &mut pictures)?).map_err(|e| e.to_string())?;
         zip.start_file(format!("ppt/slideMasters/_rels/slideMaster{n}.xml.rels"), options)
             .map_err(|e| e.to_string())?;
         // Layouts first: master_part_xml names them rId1.. in order.
@@ -1567,6 +1624,7 @@ pub fn write_pptx_bytes(deck: &Deck) -> Result<Vec<u8>, String> {
         let theme_target = format!("../theme/theme{n}.xml");
         let mut rels: Vec<(&str, &str)> = targets.iter().map(|t| ("slideLayout", t.as_str())).collect();
         rels.push(("theme", &theme_target));
+        rels.extend(pictures.targets.iter().map(|t| ("image", t.as_str())));
         zip.write_all(rels_part(&rels).as_bytes()).map_err(|e| e.to_string())?;
 
         zip.start_file(format!("ppt/theme/theme{n}.xml"), options).map_err(|e| e.to_string())?;
@@ -1576,13 +1634,14 @@ pub fn write_pptx_bytes(deck: &Deck) -> Result<Vec<u8>, String> {
             let layout = parts[m - 1].1.and_then(|j| master.layouts.get(j));
             zip.start_file(format!("ppt/slideLayouts/slideLayout{m}.xml"), options)
                 .map_err(|e| e.to_string())?;
-            zip.write_all(&layout_part_xml(master, layout)?).map_err(|e| e.to_string())?;
+            let mut pictures = PartPictures { first_rel: 2, targets: Vec::new(), images: &mut images_to_add };
+            zip.write_all(&layout_part_xml(master, layout, &mut pictures)?).map_err(|e| e.to_string())?;
             zip.start_file(format!("ppt/slideLayouts/_rels/slideLayout{m}.xml.rels"), options)
                 .map_err(|e| e.to_string())?;
-            zip.write_all(
-                one_rel("slideMaster", &format!("../slideMasters/slideMaster{n}.xml")).as_bytes(),
-            )
-            .map_err(|e| e.to_string())?;
+            let master_target = format!("../slideMasters/slideMaster{n}.xml");
+            let mut rels = vec![("slideMaster", master_target.as_str())];
+            rels.extend(pictures.targets.iter().map(|t| ("image", t.as_str())));
+            zip.write_all(rels_part(&rels).as_bytes()).map_err(|e| e.to_string())?;
         }
     }
 

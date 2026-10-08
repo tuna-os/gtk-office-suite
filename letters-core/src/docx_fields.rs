@@ -201,6 +201,64 @@ pub fn default_parts(document_xml: &str, rels_xml: &str) -> (Option<String>, Opt
     (reference("w:headerReference"), reference("w:footerReference"))
 }
 
+/// How a header or footer part's text is aligned: its first paragraph
+/// with text (a text box's is not the part's), by its own `w:jc` or its
+/// paragraph style's (`styles_xml`, through the styles it is based on).
+pub fn alignment(part_xml: &str, styles_xml: &str) -> crate::model::Alignment {
+    use crate::model::Alignment;
+    let jc = |v: &str| match v {
+        "center" => Some(Alignment::Center),
+        "right" | "end" => Some(Alignment::Right),
+        "both" | "distribute" => Some(Alignment::Justify),
+        "left" | "start" => Some(Alignment::Left),
+        _ => None,
+    };
+    // The text boxes and fallbacks out, as `template` leaves them out.
+    let mut xml = String::with_capacity(part_xml.len());
+    let mut rest = part_xml;
+    while let Some(at) = ["<w:txbxContent>", "<mc:Fallback>"].iter().filter_map(|t| rest.find(t).map(|a| (a, *t))).min() {
+        let (at, open) = at;
+        xml.push_str(&rest[..at]);
+        let close = format!("</{}", &open[1..]);
+        rest = rest[at..].find(&close).map_or("", |c| &rest[at + c..]);
+    }
+    xml.push_str(rest);
+    let mut from = 0;
+    while let Some(off) = xml[from..].find("<w:p") {
+        let at = from + off;
+        from = at + 4;
+        if !matches!(xml.as_bytes().get(at + 4), Some(b' ' | b'>')) {
+            continue;
+        }
+        let end = xml[at..].find("</w:p>").map_or(xml.len(), |e| at + e);
+        let para = &xml[at..end];
+        let has_text = para.match_indices("<w:t").any(|(t, _)| {
+            let tag_end = para[t..].find('>').map_or(para.len(), |e| t + e + 1);
+            matches!(para.as_bytes().get(t + 4), Some(b' ' | b'>')) && para[tag_end..].find('<').is_some_and(|c| !para[tag_end..tag_end + c].trim().is_empty())
+        });
+        if !has_text {
+            continue;
+        }
+        let ppr = para.find("<w:pPr>").map_or("", |p| &para[p..p + para[p..].find("</w:pPr>").unwrap_or(0)]);
+        if let Some(a) = ppr.find("<w:jc ").and_then(|j| attr(ppr, j, "w:val")).and_then(|v| jc(&v)) {
+            return a;
+        }
+        let mut style = ppr.find("<w:pStyle ").and_then(|p| attr(ppr, p, "w:val"));
+        for _ in 0..8 {
+            let Some(id) = style.take() else { break };
+            let Some(s_at) = styles_xml.find(&format!("w:styleId=\"{id}\"")) else { break };
+            let s_end = styles_xml[s_at..].find("</w:style>").map_or(styles_xml.len(), |e| s_at + e);
+            let def = &styles_xml[s_at..s_end];
+            if let Some(a) = def.find("<w:jc ").and_then(|j| attr(def, j, "w:val")).and_then(|v| jc(&v)) {
+                return a;
+            }
+            style = def.find("<w:basedOn ").and_then(|b| attr(def, b, "w:val"));
+        }
+        return Alignment::Left;
+    }
+    Alignment::Left
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -221,6 +279,22 @@ mod tests {
         let other = "<w:hdr><w:p><w:r><w:fldChar w:fldCharType=\"begin\"/></w:r><w:r><w:instrText>DATE</w:instrText></w:r>\
                      <w:r><w:fldChar w:fldCharType=\"separate\"/></w:r><w:r><w:t>today</w:t></w:r><w:r><w:fldChar w:fldCharType=\"end\"/></w:r></w:p></w:hdr>";
         assert_eq!(template(other), None);
+    }
+
+    /// A header's alignment is its first text paragraph's, by its own
+    /// `w:jc` or its style's; an empty paragraph or a text box's text
+    /// before it is not that paragraph.
+    #[test]
+    fn a_parts_alignment_is_its_first_text_paragraphs() {
+        use crate::model::Alignment;
+        let styles = r#"<w:styles><w:style w:type="paragraph" w:styleId="Footer"><w:basedOn w:val="Base"/></w:style>
+            <w:style w:type="paragraph" w:styleId="Base"><w:pPr><w:jc w:val="center"/></w:pPr></w:style></w:styles>"#;
+        let own = r#"<w:hdr><w:p/><w:p><w:r><mc:AlternateContent><mc:Choice><w:drawing><w:txbxContent><w:p><w:pPr><w:jc w:val="left"/></w:pPr><w:r><w:t>OFFICIAL</w:t></w:r></w:p></w:txbxContent></w:drawing></mc:Choice></mc:AlternateContent></w:r></w:p>
+            <w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>FINANCE BILL</w:t></w:r></w:p></w:hdr>"#;
+        assert_eq!(alignment(own, styles), Alignment::Right);
+        let styled = r#"<w:ftr><w:p><w:pPr><w:pStyle w:val="Footer"/></w:pPr><w:r><w:t>OFFICIAL</w:t></w:r></w:p></w:ftr>"#;
+        assert_eq!(alignment(styled, styles), Alignment::Center, "through the style it is based on");
+        assert_eq!(alignment("<w:hdr><w:p><w:r><w:t>Report</w:t></w:r></w:p></w:hdr>", styles), Alignment::Left);
     }
 
     /// The crime-supervisor form's footer: an "OFFICIAL" text box (and its

@@ -270,6 +270,19 @@ pub struct TextBody {
     pub autofit: Option<Autofit>,
     /// The layout placeholder the box fills (decks_core::layouts), if any.
     pub placeholder: Option<crate::layouts::Placeholder>,
+    /// The shape the text sits in, drawn under it: a filled or outlined
+    /// box holding text (PowerPoint's shape with text, a navy tile with
+    /// white figures). `None` is a bare text box.
+    #[cfg_attr(feature = "serde", serde(default, skip_serializing_if = "Option::is_none"))]
+    pub frame: Option<Frame>,
+}
+
+/// A text box's own shape: its preset and how it is painted.
+#[derive(Clone, Debug, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub struct Frame {
+    pub kind: super::shape::ShapeKind,
+    pub style: super::shape::ShapeStyle,
 }
 
 impl TextBody {

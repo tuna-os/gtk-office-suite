@@ -1,7 +1,7 @@
 {
   "decks/real-2022-2023-annual-report-on-delegated-authorities": {
     "A": "amber",
-    "B": "red"
+    "B": "amber"
   },
   "decks/real-2024-06-12-measures-to-improve-hr-and-pay": {
     "A": "amber",
@@ -9,7 +9,7 @@
   },
   "decks/real-2024-06-12-reporting-on-the-implementation-of-be": {
     "A": "amber",
-    "B": "red"
+    "B": "amber"
   },
   "decks/real-2024-06-25-engagement-strategy": {
     "A": "amber",
@@ -17,7 +17,7 @@
   },
   "decks/real-2024-07-update-backlog-reduction-leveraging-arti": {
     "A": "amber",
-    "B": "amber"
+    "B": "green"
   },
   "decks/real-2024-09-05-update-backlog-reduction-leveraging-a": {
     "A": "amber",
@@ -25,10 +25,10 @@
   },
   "decks/real-2024-10-29-presentation-oerb-terms-of-reference": {
     "A": "amber",
-    "B": "amber"
+    "B": "green"
   },
   "decks/real-2024-11-20-presentation-pay-centre-impact-assess": {
-    "A": "red",
+    "A": "amber",
     "B": "amber"
   },
   "decks/real-2024-11-presentation-pay-centre-innovation": {
@@ -37,11 +37,11 @@
   },
   "decks/real-2024-2025-annual-report-on-delegated-authorities": {
     "A": "amber",
-    "B": "red"
+    "B": "amber"
   },
   "decks/real-2025-01-15-future-delivery-structure-of-the-tran": {
     "A": "amber",
-    "B": "amber"
+    "B": "green"
   },
   "decks/real-2025-01-15-presentation-pcm-draft-hcm-data-moder": {
     "A": "amber",
@@ -49,7 +49,7 @@
   },
   "decks/real-2025-01-24-presentation-overview-of-ethical-revi": {
     "A": "amber",
-    "B": "amber"
+    "B": "green"
   },
   "decks/real-2025-02-03-dashboard-overpayment-project-2018": {
     "A": "red",
@@ -73,7 +73,7 @@
   },
   "decks/real-2025-08-presentation-aiva-progress-dashboard": {
     "A": "amber",
-    "B": "amber"
+    "B": "green"
   },
   "decks/real-2025-10-29-presentation-quarterly-progress-updat": {
     "A": "amber",
@@ -81,7 +81,7 @@
   },
   "decks/real-2025-11-13-presentation-hrc-dayforce-hr-to-pay-m": {
     "A": "amber",
-    "B": "amber"
+    "B": "green"
   },
   "decks/real-2026-01-15-presentation-pmc-vanguard-organizatio": {
     "A": "amber",
@@ -93,11 +93,11 @@
   },
   "decks/real-dashboard-public-opinion-survey-pulse-check-janu": {
     "A": "amber",
-    "B": "red"
+    "B": "amber"
   },
   "decks/real-human-resources-policies-and-delegations-leaders": {
     "A": "amber",
-    "B": "red"
+    "B": "amber"
   },
   "decks/real-infographic-for-the-adults-people-and-nature-sur": {
     "A": "amber",
@@ -109,7 +109,7 @@
   },
   "decks/real-staffing-support-division-annual-questionnaire-r": {
     "A": "amber",
-    "B": "red"
+    "B": "amber"
   },
   "decks/real-supporting-every-young-person-to-achieve-and-thr": {
     "A": "amber",
