@@ -1418,6 +1418,18 @@ fn run_page_break(p: &rdocx::ParagraphRef<'_>) -> RunPageBreak {
     RunPageBreak { leading, trailing: break_after_text }
 }
 
+/// Whether a run reads as highlighted: a named Word highlight other than
+/// "none", or a shading fill that shows. Forms pasted from the web shade
+/// whole paragraphs white (`w:shd w:fill="FFFFFF"`) on a white page; read
+/// as a highlight, that text drew yellow where Word and LibreOffice draw
+/// nothing.
+fn run_is_highlighted(r: &rdocx::RunRef<'_>) -> bool {
+    if let Some(name) = r.highlight_color() {
+        return name != "none";
+    }
+    r.shading_fill().is_some_and(|fill| !fill.eq_ignore_ascii_case("auto") && !fill.eq_ignore_ascii_case("FFFFFF"))
+}
+
 /// A paragraph's list numbering as `(num_id, level)`, wherever it is set.
 ///
 /// Word's built-in list styles ("List Bullet", "List Number 2", …) carry
@@ -1631,7 +1643,11 @@ fn map_paragraph(doc: &rdocx::Document, p: &rdocx::ParagraphRef<'_>, table_style
             // file's heading style is not copied onto every run.
             rdocx_oxml::properties::CT_RPr::default()
         } else {
-            doc.effective_run_properties(p, &r)
+            // The styles' properties, not rdocx's effective ones: those
+            // also merge in the paragraph mark's (`w:pPr/w:rPr`), which
+            // formats the pilcrow alone. A form whose marks were bold drew
+            // every paragraph bold where Word and LibreOffice draw it plain.
+            doc.resolve_run_properties(p.style_id(), r.style_id())
         };
         let family = r.font_name().map(|f| f.to_string()).or_else(|| {
             heading.is_none().then(|| style_family(p.style_id())).flatten().filter(|f| Some(f) != base.family.as_ref())
@@ -1656,11 +1672,11 @@ fn map_paragraph(doc: &rdocx::Document, p: &rdocx::ParagraphRef<'_>, table_style
         runs.push(Run {
             text,
             style: RunStyle {
-                bold: r.is_bold() || eff.bold == Some(true),
-                italic: r.is_italic() || eff.italic == Some(true),
+                bold: r.bold_value().unwrap_or(eff.bold == Some(true)),
+                italic: r.italic_value().unwrap_or(eff.italic == Some(true)),
                 underline: r.is_underline(),
                 strikethrough: r.is_strike(),
-                highlight: r.highlight().is_some(),
+                highlight: run_is_highlighted(&r),
                 code: r.style_id() == Some("SourceText"),
                 link: link_for(idx),
                 image: None,
