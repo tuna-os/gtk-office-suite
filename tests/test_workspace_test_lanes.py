@@ -1,7 +1,8 @@
 """Every job that runs the workspace's tests installs what they need.
 
-The workspace suite runs in two jobs: `ci.yml`'s `test` (nextest, every pull
-request) and `nightly.yml`'s `coverage` (llvm-cov, every night). Each
+The workspace suite runs in two jobs: `ci.yml`'s `nextest` (every pull
+request, in partitions from one archive of the workspace's tests) and
+`nightly.yml`'s `coverage` (llvm-cov, every night). Each
 installs its system packages with its own `apt-get install` line, and
 nothing compared the two. When the Decks PDF-export tests began shelling out
 to poppler (`pdfinfo`, `pdftotext`, `pdftoppm`) the PR job gained
@@ -27,11 +28,12 @@ import yaml
 
 REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 WORKFLOWS = os.path.join(REPO_ROOT, ".github", "workflows")
-REFERENCE = ("ci.yml", "test")
+REFERENCE = ("ci.yml", "nextest")
 
-# A command that runs the workspace's own tests, whatever the runner.
+# A command that runs the workspace's own tests, whatever the runner: with
+# --workspace, or from a nextest archive of the workspace's tests.
 WORKSPACE_SUITE = re.compile(
-    r"cargo\s+(?:nextest\s+run|llvm-cov|test)\b[^\n]*--workspace"
+    r"cargo\s+(?:nextest\s+run|llvm-cov|test)\b[^\n]*(?:--workspace|--archive-file)"
 )
 APT_INSTALL = re.compile(r"apt-get\s+install([^\n]*)")
 

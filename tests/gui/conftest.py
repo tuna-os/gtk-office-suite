@@ -66,3 +66,20 @@ if _SLEEP_SCALE != 1.0:
     time.sleep = _scaled_sleep
     print(f"GUI_TEST_SLEEP_SCALE={_SLEEP_SCALE}: fixed waits scaled "
           "(diagnostic; not a gate configuration)")
+
+
+# ── Sharding: split the journeys across CI jobs (framework/sharding.py) ──
+from framework import sharding as _sharding
+
+
+def pytest_collection_modifyitems(config, items):
+    spec = _sharding.shard_spec(os.environ.get("GUI_TEST_SHARD", ""))
+    if spec is None:
+        return
+    keep = _sharding.shard_items(items, *spec)
+    kept = set(map(id, keep))
+    deselected = [item for item in items if id(item) not in kept]
+    if deselected:
+        config.hook.pytest_deselected(items=deselected)
+    items[:] = keep
+    print(f"GUI_TEST_SHARD={spec[0]}/{spec[1]}: {len(keep)} of {len(keep) + len(deselected)} journeys")

@@ -7,6 +7,7 @@
 #   tools/render-lab/run.sh --app decks --tier A # narrower
 #   RENDER_LAB_OUT=/tmp/x tools/render-lab/run.sh
 #   RENDER_LAB_CORPUS=real tools/render-lab/run.sh --app letters
+#   RENDER_LAB_CORPUS=real tools/render-lab/run.sh --app letters --shard 2/6
 #
 # RENDER_LAB_CORPUS=real runs the published real documents of
 # tools/render-lab/real_corpus (#1200) instead of the single-feature
@@ -41,11 +42,14 @@ fi
 APP_ARGS=()
 TIER_ARGS=()
 UPDATE_ARGS=()
+SHARD_ARGS=()
 while [ $# -gt 0 ]; do
     case "$1" in
         --app) APP_ARGS=(--app "$2"); shift 2 ;;
         --tier) TIER_ARGS+=(--tier "$2"); shift 2 ;;
         --update-baseline) UPDATE_ARGS=(--update-baseline); shift ;;
+        # K/N: this run's share of the real corpus (CI splits each app).
+        --shard) SHARD_ARGS=(--shard "$2"); shift 2 ;;
         *) echo "unknown argument: $1" >&2; exit 2 ;;
     esac
 done
@@ -60,7 +64,7 @@ esac
 mkdir -p "$OUT"
 echo "== fixtures"
 if [ -n "$REAL" ]; then
-    python3 "$LAB/fetch_real_corpus.py" "$OUT/fixtures" "${APP_ARGS[@]}" \
+    python3 "$LAB/fetch_real_corpus.py" "$OUT/fixtures" "${APP_ARGS[@]}" "${SHARD_ARGS[@]}" \
         --cache "${RENDER_LAB_CORPUS_CACHE:-$REPO/.cache/render-lab-corpus}"
 else
     python3 "$LAB/fixtures.py" "$OUT/fixtures"

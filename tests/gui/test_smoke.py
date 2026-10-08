@@ -7996,6 +7996,9 @@ class LettersSettingsIsolationSmoke(_SettingsIsolationProbe, BaseGUITestCase):
 class LettersSettingsIsolationFollowerSmoke(_SettingsIsolationProbe, BaseGUITestCase):
     """Second half: the journey after one that changed a setting."""
 
+    # Run after the first half, in the same job, when CI shards the suite.
+    shard_with = "LettersSettingsIsolationSmoke"
+
     def test_a_later_journey_does_not_inherit_the_change(self):
         self.assertEqual(
             self._read(), "true",
