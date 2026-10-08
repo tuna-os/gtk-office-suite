@@ -527,12 +527,19 @@ pub(crate) fn frame_tables(xml: &str, theme: &Theme) -> Vec<FrameTable> {
                 .map(|tr| {
                     row_heights.push(tr.attr("h").and_then(|v| v.parse::<f64>().ok()).unwrap_or(0.0));
                     tr.children_named("a:tc")
-                        .map(|tc| TableCell {
-                            runs: tc.child("a:txBody").map(runs_of).unwrap_or_default(),
-                            fill: tc
-                                .child("a:tcPr")
-                                .and_then(|p| p.child("a:solidFill"))
-                                .and_then(|f| first_color(f, theme, None)),
+                        .map(|tc| {
+                            let span = |k: &str| tc.attr(k).and_then(|v| v.parse::<u32>().ok()).unwrap_or(1).clamp(1, 1000);
+                            let set = |k: &str| matches!(tc.attr(k), Some("1" | "true"));
+                            TableCell {
+                                runs: tc.child("a:txBody").map(runs_of).unwrap_or_default(),
+                                fill: tc
+                                    .child("a:tcPr")
+                                    .and_then(|p| p.child("a:solidFill"))
+                                    .and_then(|f| first_color(f, theme, None)),
+                                col_span: span("gridSpan"),
+                                row_span: span("rowSpan"),
+                                covered: set("hMerge") || set("vMerge"),
+                            }
                         })
                         .collect()
                 })
