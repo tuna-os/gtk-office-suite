@@ -26,7 +26,7 @@ keywords = ["pdf", "typst", "export"]
 # any .rs file), so the vulnerable path is compiled in but not
 # currently exercised by suite_export::compile_pdf's generated Typst
 # source — revisit this note if citation support is ever added.
-typst-as-lib = { version = "0.16", features = ["typst-kit-fonts", "typst-kit-embed-fonts"] }
+typst-as-lib = { version = "0.17", features = ["typst-kit-fonts", "typst-kit-embed-fonts"] }
 typst-pdf = "0.15"
 suite-common-core = { path = "../suite-common-core" }
 
