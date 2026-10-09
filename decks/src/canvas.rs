@@ -810,14 +810,18 @@ pub fn draw_object(
                 // What PowerPoint and Impress draw: the part of the source
                 // the crop leaves, stretched to the picture's box.
                 let (cx, cy, cw, ch) = crop.source_rect(img_surf.width() as f64, img_surf.height() as f64);
-                cr.save().unwrap();
-                cr.rectangle(sx, sy, sw, sh);
-                cr.clip();
-                cr.translate(sx, sy);
-                cr.scale(sw / cw, sh / ch);
-                cr.set_source_surface(&img_surf, -cx, -cy).unwrap();
-                cr.paint().unwrap();
-                cr.restore().unwrap();
+                // A picture with no area, or cropped to none, draws nothing:
+                // its scale would be 0 or infinite, which Cairo refuses.
+                if [sw, sh, cw, ch].iter().all(|v| v.is_finite() && *v > 0.0) {
+                    cr.save().unwrap();
+                    cr.rectangle(sx, sy, sw, sh);
+                    cr.clip();
+                    cr.translate(sx, sy);
+                    cr.scale(sw / cw, sh / ch);
+                    cr.set_source_surface(&img_surf, -cx, -cy).unwrap();
+                    cr.paint().unwrap();
+                    cr.restore().unwrap();
+                }
             } else {
                 cr.set_source_rgb(0.92, 0.92, 0.92);
                 cr.rectangle(sx, sy, sw, sh);

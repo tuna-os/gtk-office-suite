@@ -126,3 +126,49 @@ LibreOffice agrees.
 - **`lo-probe` metrics fixtures.** One-font documents that measure LibreOffice's line pitch, to settle font-metric questions.
 - **Bounded vertical registration.** Align pages within about half a line before scoring.
 - **Pagination corpus with Word reference data.** GenOffice `apps/docs/tests/pagination-corpus` has 23 Word files with page counts from Word 16.106 and LibreOffice 24.2. This is the Word reference we lack, but check the files' provenance before copying them in.
+
+## Measured against Microsoft Office (2026-10-09)
+
+`tools/render-lab/office_bench.py` renders the corpus documents in our apps
+and scores them against Office the way BetterOffice's report does. The
+BetterOffice and LibreOffice scores come from BetterOffice's published report
+for commit `a0204b228b30`. The weekly `office-bench` workflow repeats the
+comparison, so the "reference or drop" verdict below follows both projects
+over time.
+
+**How it was scored**
+- The score is mean penalised SSIM, so a missing or extra page counts as 0.
+- Our pages are resized to Office's 150 DPI before scoring. The resize alone
+  caps our score at 0.97 (docx) and 0.98 (pptx). Our gaps are much larger
+  than that.
+
+| | ours | BetterOffice | LibreOffice | closer to Office: ours / BetterOffice | BetterOffice as reference |
+|---|---|---|---|---|---|
+| docx (63) | 0.681, page count right on 35/56 | 0.838, 63/63 | 0.769, 44/63 | 3 / 53 | **reference** |
+| pptx (103) | 0.793, page count right on 101/101 | 0.917, 103/103 | 0.903, 101/103 | 0 / 101 | **reference** |
+
+BetterOffice comes closer to Office than we do on almost every document, so
+its code stays a reference for both formats. We also lose to LibreOffice on
+41 of 56 documents (docx) and 100 of 101 (pptx), so LibreOffice is not a
+ceiling to stop at either.
+
+**Our largest docx losses**
+- Pagination: 21 of 56 documents come out with the wrong page count, for
+  example 17 pages against Office's 31 in `southeast-university-thesis`.
+- Forms and administrative one-pagers that we spill onto a second page.
+
+**Our largest pptx losses**
+- `pptarena-031` draws blank.
+- Decks heavy in pictures and shapes.
+
+**Failures the run found**
+- Fixed in this change:
+  - Letters aborted on a paragraph indented into the margin, because GTK
+    refuses a negative left margin (3 documents).
+  - Decks aborted on a picture with no area (2 decks).
+- Not fixed yet; these are in rdocx (3 documents fail to open):
+  - lengths written as decimals (`w:w="100.0"`, `w:hanging="342.9999"`),
+    which rdocx parses as integers;
+  - drawing IDs repeated in one document.
+
+  Word and LibreOffice accept both.
