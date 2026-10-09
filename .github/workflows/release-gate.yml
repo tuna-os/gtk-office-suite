@@ -62,7 +62,7 @@ jobs:
           mkdir -p release-evidence
           find flatpak flathub po -type f -print0 | sort -z | xargs -0 sha256sum > release-evidence/release-inputs.sha256
           sha256sum Cargo.lock scripts/release_gate.py docs/RELEASE.md >> release-evidence/release-inputs.sha256
-      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
           name: release-contract-${{ github.sha }}
           path: release-evidence/release-inputs.sha256
@@ -101,7 +101,7 @@ jobs:
           mkdir -p repro
           (cd target/release && sha256sum letters tables decks) > "repro/${{ matrix.run }}.sha256"
           cat "repro/${{ matrix.run }}.sha256"
-      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
           name: reproducible-build-${{ matrix.run }}
           path: repro/${{ matrix.run }}.sha256
@@ -127,7 +127,7 @@ jobs:
             exit 1
           fi
           { echo '```'; cat repro/first.sha256; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
-      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
           name: reproducible-build-${{ github.sha }}
           path: repro/
@@ -145,7 +145,7 @@ jobs:
           toolchain: stable
       - name: Build the archive
         run: tools/release/source_archive.sh HEAD source-archive | tee -a "$GITHUB_STEP_SUMMARY"
-      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
           name: source-archive
           path: source-archive

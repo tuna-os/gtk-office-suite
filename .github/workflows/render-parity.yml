@@ -89,7 +89,7 @@ jobs:
 
       - name: Upload captures
         if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
           name: render-lab-${{ matrix.app }}
           path: |
@@ -192,7 +192,7 @@ jobs:
       - name: Upload report
         if: always()
         id: upload
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
           name: render-parity-report
           path: |
@@ -286,7 +286,7 @@ jobs:
 
       - name: Upload export captures
         if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
           name: export-lab-${{ matrix.app }}
           path: |
@@ -377,7 +377,7 @@ jobs:
       - name: Upload export report
         if: always()
         id: upload
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
           name: export-parity-report
           path: |
@@ -438,7 +438,7 @@ jobs:
           manifest-path: flatpak/org.tunaos.${{ matrix.app }}.json
           cache-key: render-lab-flatpak-${{ matrix.app }}-${{ github.sha }}
           upload-artifact: false
-      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
           name: bundle-${{ matrix.app }}
           path: ${{ matrix.app }}.flatpak
@@ -479,7 +479,7 @@ jobs:
           manifest-path: flatpak/org.tunaos.${{ matrix.app }}.json
           cache-key: render-lab-flatpak-prior-${{ matrix.app }}-${{ steps.tag.outputs.tag }}
           upload-artifact: false
-      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
           name: prior-bundle-${{ matrix.app }}
           path: |
@@ -570,7 +570,7 @@ jobs:
 
       - name: Upload VM report
         if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
           name: render-parity-vm-report
           path: |
