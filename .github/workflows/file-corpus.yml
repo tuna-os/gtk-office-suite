@@ -34,7 +34,7 @@ jobs:
             xvfb dbus at-spi2-core matchbox-window-manager xdotool x11-utils gsettings-desktop-schemas \
             python3-dogtail python3-pytest python3-pil python3-requests
           python3 -m pip install --break-system-packages mss
-      - uses: dtolnay/rust-toolchain@89b12181fb390509a0842a86cc55eeb8eb928c1d # stable
+      - uses: dtolnay/rust-toolchain@686976e191b89faba57d3206551f0f330d8cb249 # stable
         with:
           toolchain: stable
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2
