@@ -96,6 +96,7 @@ jobs:
             tests/test_ci_test_list.py \
             tests/test_render_lab_rules.py \
             tests/test_render_lab_locate.py \
+            tests/test_office_bench.py \
             tests/test_installed_check.py \
             tests/test_core_shell_split.py \
             tests/test_release_evidence.py \
@@ -172,6 +173,7 @@ jobs:
             tests/test_ci_test_list.py \
             tests/test_render_lab_rules.py \
             tests/test_render_lab_locate.py \
+            tests/test_office_bench.py \
             tests/test_installed_check.py \
             tests/test_core_shell_split.py \
             tests/test_release_evidence.py \

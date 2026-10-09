@@ -9,7 +9,9 @@ name: Render against Microsoft Office
 # comes closer to Office than we do more often than not ("reference": its
 # code is worth reading) or not ("drop").
 #
-# Weekly and on demand. It measures; it does not gate.
+# Weekly and on demand. It measures; it does not gate. scikit-image
+# (pinned to the version BetterOffice's report names) is installed here,
+# not in the shared render-lab image.
 
 on:
   schedule:
@@ -77,6 +79,7 @@ jobs:
             -v "$PWD:/workspace" -v "$HOME/.cache/render-lab-cargo:/cargo-home" \
             -e CARGO_HOME=/cargo-home -e PATH=/usr/local/cargo/bin:/usr/local/bin:/usr/bin:/bin \
             -w /workspace render-lab bash -c "
+              pip3 install --no-cache-dir --break-system-packages --user scikit-image==0.25.2 &&
               cargo build --bin ${{ matrix.app }} &&
               python3 tools/render-lab/office_bench.py office-bench-out \
                 --format ${{ matrix.format }} --cache .cache/office-bench"
