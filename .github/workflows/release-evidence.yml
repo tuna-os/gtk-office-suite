@@ -85,7 +85,7 @@ jobs:
             cargo test --release -p "$crate" --test performance_budgets -- --nocapture \
               2>&1 | tee "evidence/performance/$crate.txt"
           done
-      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         if: always()
         with:
           name: release-readers-evidence
@@ -122,7 +122,7 @@ jobs:
           python3 tools/release/evidence.py "$(git rev-list -n 1 "$TAG")" "$TAG" gathered "evidence-$TAG" \
             | tee -a "$GITHUB_STEP_SUMMARY"
           tar czf "evidence-$TAG.tar.gz" "evidence-$TAG"
-      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
           name: release-evidence
           path: evidence-${{ env.TAG }}.tar.gz
