@@ -903,6 +903,21 @@ pub fn draw_shape(
     use decks_core::engine::shape::{is_elliptical, polygon, ShapeKind};
     cr.new_path();
     match kind {
+        ShapeKind::Freeform(paths) => {
+            // Its filled paths filled, then its outlined paths outlined: a
+            // chart's axis line is outlined and not filled.
+            for p in paths.iter().filter(|p| p.fill) {
+                trace_freeform(cr, p, (x, y, w, h));
+            }
+            paint_path(cr, style, (x, y, w, h), scale, true, false);
+            cr.new_path();
+            for p in paths.iter().filter(|p| p.stroke) {
+                trace_freeform(cr, p, (x, y, w, h));
+            }
+            paint_path(cr, style, (x, y, w, h), scale, false, true);
+            cr.new_path();
+            return;
+        }
         k if is_elliptical(k) => {
             if w <= 0.0 || h <= 0.0 {
                 return;
@@ -934,33 +949,95 @@ pub fn draw_shape(
             cr.close_path();
         }
     }
-    if let Some(grad) = &style.gradient {
-        // Colours run along `angle` (clockwise from left-to-right) across
-        // the box: the line through its centre, from the box's projection
-        // at one end to the other.
-        let a = grad.angle.to_radians();
-        let (dx, dy) = (a.cos(), a.sin());
-        let half = (w * dx.abs() + h * dy.abs()) / 2.0;
-        let (cx, cy) = (x + w / 2.0, y + h / 2.0);
-        let pattern = cairo::LinearGradient::new(cx - dx * half, cy - dy * half, cx + dx * half, cy + dy * half);
-        for stop in &grad.stops {
-            let (r, g, b) = stop.color.to_f64();
-            pattern.add_color_stop_rgb(stop.pos, r, g, b);
-        }
-        cr.set_source(&pattern).unwrap();
-        cr.fill_preserve().unwrap();
-    } else if let Some(fill) = style.fill {
-        let (r, g, b) = fill.to_f64();
-        cr.set_source_rgb(r, g, b);
-        cr.fill_preserve().unwrap();
-    }
-    if let Some(stroke) = style.stroke {
-        let (r, g, b) = stroke.color.to_f64();
-        cr.set_source_rgb(r, g, b);
-        cr.set_line_width((stroke.width * scale).max(0.5));
-        cr.stroke_preserve().unwrap();
-    }
+    paint_path(cr, style, (x, y, w, h), scale, true, true);
     cr.new_path();
+}
+
+/// Fill (with `fill`) and outline (with `stroke`) the current path in a
+/// shape's style; the box `(x, y, w, h)` is what a gradient spans.
+fn paint_path(
+    cr: &cairo::Context,
+    style: &decks_core::engine::shape::ShapeStyle,
+    (x, y, w, h): (f64, f64, f64, f64),
+    scale: f64,
+    fill: bool,
+    stroke: bool,
+) {
+    if fill {
+        if let Some(grad) = &style.gradient {
+            // Colours run along `angle` (clockwise from left-to-right) across
+            // the box: the line through its centre, from the box's projection
+            // at one end to the other.
+            let a = grad.angle.to_radians();
+            let (dx, dy) = (a.cos(), a.sin());
+            let half = (w * dx.abs() + h * dy.abs()) / 2.0;
+            let (cx, cy) = (x + w / 2.0, y + h / 2.0);
+            let pattern = cairo::LinearGradient::new(cx - dx * half, cy - dy * half, cx + dx * half, cy + dy * half);
+            for stop in &grad.stops {
+                let (r, g, b) = stop.color.to_f64();
+                pattern.add_color_stop_rgb(stop.pos, r, g, b);
+            }
+            cr.set_source(&pattern).unwrap();
+            cr.fill_preserve().unwrap();
+        } else if let Some(fill) = style.fill {
+            let (r, g, b) = fill.to_f64();
+            cr.set_source_rgb(r, g, b);
+            cr.fill_preserve().unwrap();
+        }
+    }
+    if stroke {
+        if let Some(stroke) = style.stroke {
+            let (r, g, b) = stroke.color.to_f64();
+            cr.set_source_rgb(r, g, b);
+            cr.set_line_width((stroke.width * scale).max(0.5));
+            cr.stroke_preserve().unwrap();
+        }
+    }
+}
+
+/// Add a freeform path to the current path, its own `w`×`h` space
+/// stretched to the box `(x, y, w, h)`. An arc and a quadratic curve are
+/// drawn as the cubic Béziers they are.
+fn trace_freeform(cr: &cairo::Context, path: &decks_core::engine::freeform::FreePath, (x, y, w, h): (f64, f64, f64, f64)) {
+    use decks_core::engine::freeform::{arc_as_cubics, PathCmd};
+    let (sx, sy) = (w / path.w.max(1e-9), h / path.h.max(1e-9));
+    let at = |px: f64, py: f64| (x + px * sx, y + py * sy);
+    let mut cur = (0.0, 0.0);
+    for c in &path.cmds {
+        match *c {
+            PathCmd::Move(px, py) => {
+                cr.new_sub_path();
+                let (a, b) = at(px, py);
+                cr.move_to(a, b);
+                cur = (px, py);
+            }
+            PathCmd::Line(px, py) => {
+                let (a, b) = at(px, py);
+                cr.line_to(a, b);
+                cur = (px, py);
+            }
+            PathCmd::Cubic(x1, y1, x2, y2, px, py) => {
+                let ((a1, b1), (a2, b2), (a, b)) = (at(x1, y1), at(x2, y2), at(px, py));
+                cr.curve_to(a1, b1, a2, b2, a, b);
+                cur = (px, py);
+            }
+            PathCmd::Quad(qx, qy, px, py) => {
+                let c1 = (cur.0 + 2.0 / 3.0 * (qx - cur.0), cur.1 + 2.0 / 3.0 * (qy - cur.1));
+                let c2 = (px + 2.0 / 3.0 * (qx - px), py + 2.0 / 3.0 * (qy - py));
+                let ((a1, b1), (a2, b2), (a, b)) = (at(c1.0, c1.1), at(c2.0, c2.1), at(px, py));
+                cr.curve_to(a1, b1, a2, b2, a, b);
+                cur = (px, py);
+            }
+            PathCmd::Arc { wr, hr, start, swing } => {
+                for [c1, c2, e] in arc_as_cubics(cur, wr, hr, start, swing) {
+                    let ((a1, b1), (a2, b2), (a, b)) = (at(c1.0, c1.1), at(c2.0, c2.1), at(e.0, e.1));
+                    cr.curve_to(a1, b1, a2, b2, a, b);
+                    cur = e;
+                }
+            }
+            PathCmd::Close => cr.close_path(),
+        }
+    }
 }
 
 /// Draw a table in the box `(x, y, w, h)` (canvas pixels): each cell's
@@ -1117,6 +1194,36 @@ pub fn render_slides_pdf(
     match surface.status() {
         Ok(()) => Ok(()),
         Err(e) => Err(format!("cannot write {}: {e}", path.display())),
+    }
+}
+
+#[cfg(test)]
+mod freeform_tests {
+    use decks_core::engine::freeform::{FreePath, PathCmd};
+    use decks_core::engine::shape::{Color, ShapeKind, ShapeStyle};
+
+    /// A freeform is drawn as its paths: a quarter-circle wedge fills the
+    /// quarter its arc closes, and leaves the rest of its box empty.
+    #[test]
+    fn a_freeform_draws_its_paths_not_its_box() {
+        let wedge = FreePath {
+            w: 100.0,
+            h: 100.0,
+            cmds: vec![PathCmd::Move(0.0, 0.0), PathCmd::Line(100.0, 0.0), PathCmd::Arc { wr: 100.0, hr: 100.0, start: 0.0, swing: 90.0 }, PathCmd::Close],
+            fill: true,
+            stroke: true,
+        };
+        let mut surface = cairo::ImageSurface::create(cairo::Format::ARgb32, 100, 100).unwrap();
+        {
+            let cr = cairo::Context::new(&surface).unwrap();
+            let style = ShapeStyle { fill: Some(Color(255, 0, 0)), gradient: None, stroke: None };
+            super::draw_shape(&cr, &ShapeKind::Freeform(vec![wedge]), &style, (0.0, 0.0, 100.0, 100.0), 1.0);
+        }
+        let stride = surface.stride() as usize;
+        let data = surface.data().unwrap();
+        let alpha = |x: usize, y: usize| data[y * stride + x * 4 + 3];
+        assert_eq!(alpha(20, 20), 255, "inside the wedge");
+        assert_eq!(alpha(95, 95), 0, "outside the arc, inside the box");
     }
 }
 

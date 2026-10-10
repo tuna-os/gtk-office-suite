@@ -131,6 +131,9 @@ pub enum ShapeKind {
     Triangle,
     Diamond,
     Other(String),
+    /// A custom geometry (`a:custGeom`): its own paths, stretched to the
+    /// box.
+    Freeform(Vec<super::freeform::FreePath>),
 }
 
 impl ShapeKind {
@@ -154,6 +157,8 @@ impl ShapeKind {
             ShapeKind::Triangle => "triangle",
             ShapeKind::Diamond => "diamond",
             ShapeKind::Other(name) => name,
+            // Written as its paths, not a preset (`freeform::to_cust_geom`).
+            ShapeKind::Freeform(_) => "rect",
         }
     }
 }
@@ -240,6 +245,8 @@ pub fn polygon(kind: &ShapeKind, w: f64, h: f64) -> Option<Vec<Point>> {
         ShapeKind::Triangle => Some(vec![(w / 2.0, 0.0), (w, h), (0.0, h)]),
         ShapeKind::Diamond => Some(vec![(w / 2.0, 0.0), (w, h / 2.0), (w / 2.0, h), (0.0, h / 2.0)]),
         ShapeKind::RoundRect { .. } | ShapeKind::Ellipse => None,
+        // Its paths are drawn (`freeform`); it is picked by its box.
+        ShapeKind::Freeform(_) => Some(vec![(0.0, 0.0), (w, 0.0), (w, h), (0.0, h)]),
     }
 }
 

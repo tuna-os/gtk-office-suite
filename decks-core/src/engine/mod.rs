@@ -18,6 +18,7 @@ mod model;
 mod notes;
 mod parse;
 mod placeholders;
+pub mod freeform;
 pub mod shape;
 pub mod table;
 pub mod chart;

@@ -2037,3 +2037,43 @@ fn a_merged_table_cell_survives_impress() {
     assert!(t.rows[0][1].covered, "{:?}", t.rows[0]);
     assert_eq!(t.rows[0][0].text(), "Title");
 }
+
+/// A freeform survives Impress rewriting it in either format: it comes
+/// back with its own paths, not as its box.
+#[test]
+fn a_freeform_survives_impress_in_both_formats() {
+    if !require_or_skip() {
+        return;
+    }
+    use decks_core::engine::freeform::{FreePath, PathCmd};
+    use decks_core::engine::shape::{Color, ShapeKind, ShapeStyle};
+    let wedge = FreePath {
+        w: 1000.0,
+        h: 1000.0,
+        cmds: vec![PathCmd::Move(500.0, 500.0), PathCmd::Line(1000.0, 500.0), PathCmd::Arc { wr: 500.0, hr: 500.0, start: 0.0, swing: 90.0 }, PathCmd::Close],
+        fill: true,
+        stroke: true,
+    };
+    let mut deck = Deck::new();
+    deck.slides[0].objects = vec![SlideObject::Shape {
+        kind: ShapeKind::Freeform(vec![wedge]),
+        x: 100.0,
+        y: 100.0,
+        w: 200.0,
+        h: 200.0,
+        rotation: 0.0,
+        style: ShapeStyle { fill: Some(Color(0x44, 0x72, 0xC4)), gradient: None, stroke: None },
+    }];
+    for ext in ["pptx", "odp"] {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join(format!("freeform.{ext}"));
+        decks_core::write_deck(path.to_str().unwrap(), &deck).expect("write");
+        let back = convert(&path, ext).unwrap_or_else(|e| panic!("Impress rewrites our {ext}: {e}"));
+        let read = decks_core::read_deck(back.to_str().unwrap()).expect("read Impress's file");
+        let kinds: Vec<_> = read.slides[0].objects.iter().filter_map(|o| match o { SlideObject::Shape { kind, .. } => Some(kind.clone()), _ => None }).collect();
+        assert!(
+            matches!(kinds.as_slice(), [ShapeKind::Freeform(p)] if p.len() == 1 && p[0].cmds.len() >= 3),
+            "{ext}: {kinds:?}"
+        );
+    }
+}

@@ -119,7 +119,7 @@ fn kind_index(k: &ShapeKind) -> Option<u32> {
         ShapeKind::Ellipse => 2,
         ShapeKind::Triangle => 3,
         ShapeKind::Diamond => 4,
-        ShapeKind::Other(_) => return None,
+        ShapeKind::Other(_) | ShapeKind::Freeform(_) => return None,
     })
 }
 
