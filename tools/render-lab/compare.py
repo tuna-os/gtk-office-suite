@@ -50,6 +50,7 @@ import re
 import shutil
 import subprocess
 import sys
+from collections import Counter
 
 import numpy as np
 from PIL import Image, ImageOps
@@ -74,6 +75,11 @@ GREEN_SCALE = 0.10  # Tables: our grid within ±10% of LibreOffice's size
 # too often an OCR split ("8pt text" read as one token) to judge.
 LOST_LINE_MIN_WORDS = 3
 METRICS = ("ink", "words", "disp_pt", "colors", "ssim", "scale")
+# How many of LibreOffice's printed pages a Tables sheet is matched against.
+SHEET_CANDIDATES = 10
+# The share of a printed page's words our opening sheet must hold for the
+# page to be the sheet's own.
+SHEET_CONTAINED = 0.5
 TIER_AGREE = 3.0  # grey levels; measured 0.0-0.3 when the tiers agree
 
 
@@ -631,6 +637,42 @@ def mean(vals):
     return float(np.mean(vals)) if vals else None
 
 
+def page_bag(path):
+    """A page's words as a multiset, from one quick OCR pass: enough to tell
+    which page shows a sheet, not to score it (None without tesseract)."""
+    if not shutil.which("tesseract"):
+        return None
+    return Counter(text for text, *_ in ocr_pass(load(path).convert("L"), 2, "6"))
+
+
+def pick_sheet_page(lo_pages, ours_path):
+    """The printed page, among `lo_pages`, that starts our opening sheet:
+    the first whose words are mostly (SHEET_CONTAINED) ours. A sheet too
+    long for one page prints over several, each held by our capture, and
+    the capture starts at the sheet's top. Failing that, the page with the
+    best overlap for both sizes (2 * shared / (ours + page)): a raw count
+    of shared words picks a page of guidance prose, which shares common
+    words with any sheet. The first page without OCR. Picking costs one
+    quick read per page: scoring every candidate in full (two OCR scales and
+    a closer look at each unmatched word) ran the Tables job past its
+    timeout."""
+    ours = page_bag(ours_path)
+    if not ours:
+        return lo_pages[0]
+    n_ours = sum(ours.values())
+    best, best_f1 = lo_pages[0], -1.0
+    for lo in lo_pages:
+        bag = page_bag(lo) or Counter()
+        n_lo = sum(bag.values())
+        shared = sum((ours & bag).values())
+        if n_lo and shared / n_lo >= SHEET_CONTAINED:
+            return lo
+        f1 = 2 * shared / (n_ours + n_lo)
+        if f1 > best_f1:
+            best, best_f1 = lo, f1
+    return best
+
+
 def score_fixture(app, d, tier, ref_words_cache):
     lo_pages = sorted(glob.glob(os.path.join(d, "lo-[0-9]*.png")), key=page_no)
     ours_pages = sorted(glob.glob(os.path.join(d, f"{tier}-[0-9]*.png")), key=page_no)
@@ -644,6 +686,17 @@ def score_fixture(app, d, tier, ref_words_cache):
     # it (#1200): every Tables document red in A, amber in B, from the same
     # picture.
     partial = tier == "B" or app == "tables"
+    lo_page = None
+    if app == "tables" and len(ours_pages) == 1 and len(lo_pages) > 1:
+        # Tables opens the workbook's active sheet (as Excel and Calc do),
+        # but LibreOffice prints every sheet from the first: a workbook
+        # that opens on its third sheet was scored against its cover page
+        # (#1512). Score the opening sheet against the printed page that
+        # shows it: the one, among the first pages, that shares the most
+        # words with it (then the most structure).
+        best = pick_sheet_page(lo_pages[:SHEET_CANDIDATES], ours_pages[0])
+        lo_page = page_no(best)
+        lo_pages = [best]
     if partial:
         lo_pages = lo_pages[: len(ours_pages)]
     per_page = []
@@ -662,6 +715,8 @@ def score_fixture(app, d, tier, ref_words_cache):
     m["lost_lines"] = sum(lost) if lost else None
     m["pages_lo"], m["pages_ours"] = len(lo_pages), len(ours_pages)
     m["page_count_match"] = partial or len(lo_pages) == len(ours_pages)
+    if lo_page is not None:
+        m["lo_page"] = lo_page
     m["verdict"] = verdict(m)
     return m
 

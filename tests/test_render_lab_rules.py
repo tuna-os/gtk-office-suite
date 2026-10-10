@@ -170,5 +170,90 @@ class MagnifierFallbackTest(unittest.TestCase):
         self.assertEqual(lost, 0)
 
 
+
+@unittest.skipIf(np is None, "numpy and Pillow are the render lab's")
+class OpeningSheetPageTest(unittest.TestCase):
+    """Tables opens a workbook's active sheet; LibreOffice prints from the
+    first. The opening sheet is scored against the printed page that shows
+    it, not against page 1 (#1512)."""
+
+    # Our opening sheet's words, and each printed page's.
+    # Page 1 is guidance prose: it shares more words with the sheet than
+    # page 3 does, but they are a small part of it.
+    OURS = ["total", "2024", "2025", "north", "south", "the", "of", "and", "costs"]
+    PAGES = {
+        1: ["the", "of", "and", "costs", "total", "you", "must", "read", "these", "rules", "before", "claiming", "any", "support"],
+        2: ["notes", "2024", "learner", "details"],
+        3: ["total", "2024", "2025", "north", "east"],
+    }
+
+    def score(self, app, words_by_page, pages=None):
+        import tempfile
+        from collections import Counter
+        from unittest import mock
+
+        import compare
+
+        pages = pages if pages is not None else self.PAGES
+        d = tempfile.mkdtemp()
+        for n in words_by_page:
+            open(os.path.join(d, f"lo-{n}.png"), "w").close()
+        open(os.path.join(d, "A-1.png"), "w").close()
+        scored = []
+
+        def page(app, lo, ours, ref_words):
+            n = compare.page_no(lo)
+            scored.append(n)
+            return {"ink": 1.0, "words": words_by_page[n], "lost_lines": 0, "disp_pt": 0.0, "colors": 1.0, "ssim": 0.9, "ref_words": 10}
+
+        def bag(path):
+            name = os.path.basename(path)
+            return Counter(self.OURS if name.startswith("A-") else pages[compare.page_no(path)])
+
+        # `align` hands back the paths: `ref.size` is all score_fixture
+        # asks of a picture.
+        with mock.patch.object(compare, "align", lambda app, lo, ours: (_Sized(lo), ours, 1.0)), mock.patch.object(
+            compare, "ocr_words", lambda ref, tables: []
+        ), mock.patch.object(compare, "compare_page", page), mock.patch.object(compare, "page_bag", bag):
+            m = compare.score_fixture(app, d, "A", {})
+        m["scored"] = scored
+        return m
+
+    def test_the_sheet_is_scored_against_the_page_that_shows_it(self):
+        m = self.score("tables", {1: 0.1, 2: 0.2, 3: 0.95})
+        self.assertEqual(m["lo_page"], 3)
+        self.assertAlmostEqual(m["words"], 0.95)
+        self.assertEqual(m["verdict"], "green")
+
+    def test_only_the_chosen_page_is_scored_in_full(self):
+        # Scoring every candidate in full ran the Tables job past its
+        # 90-minute timeout; the pick is a quick read per page.
+        m = self.score("tables", {1: 0.1, 2: 0.2, 3: 0.95})
+        self.assertEqual(m["scored"], [3])
+
+    def test_a_sheet_printed_over_several_pages_starts_at_its_first(self):
+        # A long sheet prints over pages 2 and 3, both held by our capture,
+        # which starts at the sheet's top.
+        pages = {1: ["cover", "contents"], 2: ["total", "2024"], 3: ["2025", "north"]}
+        m = self.score("tables", {1: 0.1, 2: 0.6, 3: 0.3}, pages=pages)
+        self.assertEqual(m["lo_page"], 2)
+
+    def test_a_tie_or_no_shared_words_keeps_the_first_page(self):
+        m = self.score("tables", {1: 0.1, 2: 0.2, 3: 0.95}, pages={1: ["a"], 2: ["b"], 3: ["c"]})
+        self.assertEqual(m["lo_page"], 1)
+
+    def test_a_document_is_still_scored_page_by_page(self):
+        m = self.score("letters", {1: 0.1, 2: 0.2, 3: 0.95})
+        self.assertNotIn("lo_page", m)
+        self.assertFalse(m["page_count_match"])
+
+
+class _Sized(str):
+    """A page path standing in for its picture: score_fixture keys its OCR
+    cache on the picture's size."""
+
+    size = (1, 1)
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -30,6 +30,15 @@ fn data_to_string(cell: &Data) -> String {
     }
 }
 
+/// Put a file's cell into the engine: its text as text (never parsed as a
+/// number, boolean or formula), anything else as its value.
+fn put_data(engine: &mut TablesEngine, row: usize, col: usize, cell: &Data) {
+    match cell {
+        Data::String(s) if !s.is_empty() => engine.put_cell_literal_text(row, col, s),
+        other => engine.put_cell_text(row, col, &data_to_string(other)),
+    }
+}
+
 /// Grid size needed to hold `range` *at its own coordinates*, as (rows, cols).
 ///
 /// `height()`/`width()` describe how big the range is, not where it sits. A
@@ -54,7 +63,7 @@ fn load_range_into_engine(
     let (row0, col0) = range.start().unwrap_or((0, 0));
     for (r, row) in range.rows().enumerate() {
         for (c, cell) in row.iter().enumerate() {
-            engine.put_cell_text(row0 as usize + r, col0 as usize + c, &data_to_string(cell));
+            put_data(engine, row0 as usize + r, col0 as usize + c, cell);
         }
     }
     engine.evaluate();
@@ -80,11 +89,10 @@ fn load_xlsx_ranges_into_engine(
                 .map(String::as_str)
                 .unwrap_or("");
             if formula.is_empty() {
-                let value = values
-                    .get_value((row as u32, col as u32))
-                    .map(data_to_string)
-                    .unwrap_or_default();
-                engine.put_cell_text(row, col, &value);
+                match values.get_value((row as u32, col as u32)) {
+                    Some(cell) => put_data(engine, row, col, cell),
+                    None => engine.put_cell_text(row, col, ""),
+                }
             } else {
                 let input = if formula.starts_with('=') {
                     formula.to_string()
@@ -621,6 +629,35 @@ mod tests {
         assert_eq!(engine.cell(0, 0), "hello");
         assert_eq!(engine.cell(0, 1), "42"); // Float(42.0) → "42"
         assert_eq!(engine.cell(1, 0), "true");
+    }
+
+    /// A file's text cell stays text, whatever it looks like: a code
+    /// column of text digits ("1041") read as numbers and showed as
+    /// "1,041", and a text "TRUE" or "=x" would have become a boolean or a
+    /// formula. A number stays a number.
+    #[test]
+    fn text_that_looks_like_a_number_stays_text() {
+        use calamine::Range;
+        let range = Range::from_sparse(vec![
+            Cell::new((0, 0), Data::String("1041".into())),
+            Cell::new((0, 1), Data::String("TRUE".into())),
+            Cell::new((0, 2), Data::String("=A1+1".into())),
+            Cell::new((0, 3), Data::Float(1041.0)),
+            Cell::new((0, 4), Data::String("plain".into())),
+        ]);
+        let (mut engine, _) = build_named_workbook(vec![("S".into(), range)]).unwrap();
+        engine.set_active_sheet(0).unwrap();
+        assert_eq!(engine.cell(0, 0), "1041");
+        assert_eq!(engine.cell(0, 1), "TRUE");
+        assert_eq!(engine.cell(0, 2), "=A1+1");
+        assert!(engine.formula_at(0, 0, 2).is_none(), "a text cell is no formula");
+        assert_eq!(engine.cell(0, 4), "plain");
+        // Text digits sort and count as text; the number as a number.
+        engine.put_cell_text(1, 0, "=ISTEXT(A1)");
+        engine.put_cell_text(1, 3, "=ISNUMBER(D1)");
+        engine.evaluate();
+        assert_eq!(engine.cell(1, 0), "true", "ISTEXT(A1)");
+        assert_eq!(engine.cell(1, 3), "true", "ISNUMBER(D1)");
     }
 
     /// Two sheets must produce two independently accessible SheetModels with

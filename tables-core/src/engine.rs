@@ -250,6 +250,16 @@ impl TablesEngine {
             .set_user_input(self.active_sheet as u32, r, c, val.to_string());
     }
 
+    /// Put a file's text cell at (row, col) as text, never parsed: a text
+    /// "1041", "TRUE" or "=x" stays text, as the file says, with the quote
+    /// prefix only where plain input would read it as something else.
+    /// Through `put_cell_text` a code column of text digits became numbers
+    /// and showed as "1,041" (render-real `bics-sectoral-consumption`).
+    pub fn put_cell_literal_text(&mut self, row: usize, col: usize, val: &str) {
+        let (r, c) = (row as i32 + 1, col as i32 + 1);
+        let _ = self.model.update_cell_with_text(self.active_sheet as u32, r, c, val);
+    }
+
     /// The formula of workbook-level name `name`, if it's defined.
     pub fn defined_name(&self, name: &str) -> Option<String> {
         self.model
