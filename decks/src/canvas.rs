@@ -1028,25 +1028,43 @@ pub fn draw_table(
         }
         cy += row_h;
     }
-    // "Medium Style 2" separates cells with white 1 pt rules: between two
-    // grid positions only where they are different cells.
-    cr.set_source_rgb(1.0, 1.0, 1.0);
-    cr.set_line_width((1.0 * 960.0 / 720.0 * scale).max(1.0));
+    // The style's rules ("Medium Style 2": white 1 pt rules inside),
+    // between two grid positions only where they are different cells.
+    let Some(rules) = table.rules() else { return };
+    let (lr, lg, lb) = rules.color.to_f64();
+    cr.set_source_rgb(lr, lg, lb);
+    let width = |pt: f64| (pt * 960.0 / 720.0 * scale).max(1.0);
+    cr.set_line_width(width(rules.width_pt));
     let col_x: Vec<f64> = std::iter::once(x).chain(cols.iter().scan(x, |at, cw| { *at += cw; Some(*at) })).collect();
     let row_y: Vec<f64> = std::iter::once(y).chain(rows.iter().scan(y, |at, rh| { *at += rh; Some(*at) })).collect();
+    let (right, bottom) = (col_x[cols.len()], row_y[rows.len()]);
     for r in 0..rows.len() {
         for c in 0..cols.len() {
-            if c + 1 < cols.len() && owner(r, c) != owner(r, c + 1) {
+            if rules.inside_v && c + 1 < cols.len() && owner(r, c) != owner(r, c + 1) {
                 cr.move_to(col_x[c + 1], row_y[r]);
                 cr.line_to(col_x[c + 1], row_y[r + 1]);
             }
-            if r + 1 < rows.len() && owner(r, c) != owner(r + 1, c) {
+            if rules.inside_h && r + 1 < rows.len() && owner(r, c) != owner(r + 1, c) {
                 cr.move_to(col_x[c], row_y[r + 1]);
                 cr.line_to(col_x[c + 1], row_y[r + 1]);
             }
         }
     }
+    if rules.outer {
+        cr.rectangle(x, y, right - x, bottom - y);
+    } else if rules.top_bottom {
+        cr.move_to(x, y);
+        cr.line_to(right, y);
+        cr.move_to(x, bottom);
+        cr.line_to(right, bottom);
+    }
     cr.stroke().unwrap();
+    if let (Some(pt), Some(&under)) = (rules.header, row_y.get(1)) {
+        cr.set_line_width(width(pt));
+        cr.move_to(x, under);
+        cr.line_to(right, under);
+        cr.stroke().unwrap();
+    }
 }
 
 /// Render slide `index` exactly as the editor canvas draws it, cropped to
