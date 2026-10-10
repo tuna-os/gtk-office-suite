@@ -1,0 +1,56 @@
+name: Cloud files in the sandbox (RFC-0003)
+
+# RFC-0003 spike 1: can the Flatpak open a document at a GVfs location,
+# and which permission does it need? Builds the Tables Flatpak, serves a
+# WebDAV directory on the host, mounts it with the host's GVfs, and reads
+# a file from inside the sandbox under each candidate permission set
+# (tools/cloud-spike/sandbox.sh). The results go to the job summary.
+# An experiment rather than a gate: it runs on demand and when the
+# manifests or the spike tools change.
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - 'flatpak/**'
+      - 'tools/cloud-spike/**'
+      - '.github/workflows/cloud-sandbox.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  sandbox:
+    runs-on: ubuntu-24.04
+    container:
+      image: ghcr.io/flathub-infra/flatpak-github-actions:gnome-50
+      options: --privileged
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Build the Tables Flatpak
+        uses: flatpak/flatpak-github-actions/flatpak-builder@v6
+        with:
+          bundle: tables.flatpak
+          manifest-path: flatpak/org.tunaos.tables.json
+          cache-key: flatpak-tables-sandbox-${{ github.sha }}
+          upload-artifact: false
+
+      - name: Install GVfs and WsgiDAV on the host
+        run: |
+          dnf install -y -q gvfs gvfs-fuse python3-pip dbus-daemon curl procps-ng >/dev/null
+          pip3 install -q wsgidav cheroot
+
+      - name: Install the bundle
+        run: flatpak install -y --user --noninteractive tables.flatpak
+
+      - name: Read a GVfs location from inside the sandbox
+        run: |
+          tools/cloud-spike/sandbox.sh org.tunaos.tables | tee sandbox.txt
+          {
+            echo '### GVfs from inside the Flatpak'
+            echo
+            echo '```'
+            grep -E '^(RESULT|host FUSE|sandbox reader)' sandbox.txt
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
