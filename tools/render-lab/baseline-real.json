@@ -9,7 +9,7 @@
   },
   "decks/real-2024-06-12-reporting-on-the-implementation-of-be": {
     "A": "amber",
-    "B": "amber"
+    "B": "green"
   },
   "decks/real-2024-06-25-engagement-strategy": {
     "A": "amber",
@@ -69,15 +69,15 @@
   },
   "decks/real-2025-07-30-presentation-recommendation-to-discon": {
     "A": "amber",
-    "B": "amber"
+    "B": "green"
   },
   "decks/real-2025-08-presentation-aiva-progress-dashboard": {
     "A": "amber",
     "B": "green"
   },
   "decks/real-2025-10-29-presentation-quarterly-progress-updat": {
-    "A": "amber",
-    "B": "amber"
+    "A": "green",
+    "B": "green"
   },
   "decks/real-2025-11-13-presentation-hrc-dayforce-hr-to-pay-m": {
     "A": "amber",

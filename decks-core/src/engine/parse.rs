@@ -280,6 +280,15 @@ struct PendingShape {
 impl PendingShape {
     /// Record one `a:t`'s text as a run, breaking the line first if a
     /// paragraph closed since the last one.
+    /// A line break inside the paragraph (`a:br`): on the run before it,
+    /// or a run of its own at the paragraph's start.
+    fn line_break(&mut self) {
+        match self.runs.last_mut().filter(|_| self.pending_breaks == 0) {
+            Some(r) => r.text.push(crate::odp::LINE_BREAK),
+            None => self.push_run(crate::odp::LINE_BREAK.to_string()),
+        }
+    }
+
     fn push_run(&mut self, text: String) {
         let cur = self.paras_seen.saturating_sub(1);
         if self.runs.is_empty() {
@@ -680,6 +689,13 @@ pub fn read_pptx(path: &str) -> Result<Deck, String> {
                         let name = e.name();
                         match name.as_ref() {
                             "p:bg" => in_bg = true,
+                            // A break with properties of its own is an
+                            // element, not an empty one.
+                            "a:br" => {
+                                if let Some(shape) = current_shape.as_mut() {
+                                    shape.line_break();
+                                }
+                            }
                             "p:grpSp" => groups.push(GroupFrame::default()),
                             "p:grpSpPr" if current_shape.is_none() && current_picture.is_none() => in_grp_pr = true,
                             "a:chOff" | "a:chExt" if in_grp_pr => {
@@ -816,6 +832,11 @@ pub fn read_pptx(path: &str) -> Result<Deck, String> {
                     Ok(Event::Empty(ref e)) => {
                         let name = e.name();
                         match name.as_ref() {
+                            "a:br" => {
+                                if let Some(shape) = current_shape.as_mut() {
+                                    shape.line_break();
+                                }
+                            }
                             "a:chOff" | "a:chExt" if in_grp_pr => {
                                 if let Some(g) = groups.last_mut() {
                                     g.note(e);
