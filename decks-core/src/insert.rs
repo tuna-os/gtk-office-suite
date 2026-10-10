@@ -78,6 +78,7 @@ pub fn table(rows: usize, cols: usize) -> SlideObject {
             band_row: true,
             accent: None,
             cell_margins: None,
+            style_id: None,
         },
     }
 }
