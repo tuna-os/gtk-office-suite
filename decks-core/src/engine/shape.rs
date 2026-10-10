@@ -118,8 +118,9 @@ fn hsl_to_rgb(h: f64, s: f64, l: f64) -> Color {
 
 /// A DrawingML preset geometry (`<a:prstGeom prst="…">`). The ones drawn
 /// with their true outline have their own variant; any other preset is
-/// kept by name, so it is written back unchanged, and drawn as its bounding
-/// rectangle until it gets an outline of its own.
+/// kept by name, so it is written back unchanged, and drawn with its
+/// outline from `preset_polygon` or BetterOffice's presets (`outline`), or
+/// as its bounding rectangle when neither has one.
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum ShapeKind {
@@ -235,12 +236,116 @@ pub fn polygon(kind: &ShapeKind, w: f64, h: f64) -> Option<Vec<Point>> {
         return None;
     }
     match kind {
-        ShapeKind::Other(prst) => Some(preset_polygon(prst, w, h).unwrap_or_else(|| vec![(0.0, 0.0), (w, 0.0), (w, h), (0.0, h)])),
+        ShapeKind::Other(prst) => Some(
+            preset_polygon(prst, w, h)
+                .or_else(|| borrowed_outline(prst, w, h).filter(|layers| layers.len() == 1 && layers[0].len() == 1).map(|mut layers| layers.remove(0).remove(0)))
+                .unwrap_or_else(|| vec![(0.0, 0.0), (w, 0.0), (w, h), (0.0, h)]),
+        ),
         ShapeKind::Rect => Some(vec![(0.0, 0.0), (w, 0.0), (w, h), (0.0, h)]),
         ShapeKind::Triangle => Some(vec![(w / 2.0, 0.0), (w, h), (0.0, h)]),
         ShapeKind::Diamond => Some(vec![(w / 2.0, 0.0), (w, h / 2.0), (w / 2.0, h), (0.0, h / 2.0)]),
         ShapeKind::RoundRect { .. } | ShapeKind::Ellipse => None,
     }
+}
+
+/// The outline of `kind` in a `w`×`h` box as layers, each one or more
+/// closed subpaths filled by winding (a donut's hole is wound against its
+/// ring, so it stays open) and painted over the one before (a cube's faces),
+/// for the kinds `polygon` draws; `None` for the curved kinds, as there.
+pub fn outline(kind: &ShapeKind, w: f64, h: f64) -> Option<Vec<Vec<Vec<Point>>>> {
+    if let ShapeKind::Other(prst) = kind {
+        if !is_elliptical(kind) && preset_polygon(prst, w, h).is_none() {
+            if let Some(layers) = borrowed_outline(prst, w, h) {
+                return Some(layers);
+            }
+        }
+    }
+    polygon(kind, w, h).map(|poly| vec![vec![poly]])
+}
+
+/// Presets BetterOffice draws, but not as Office and LibreOffice do: these
+/// stay their box rather than take a wrong outline.
+const BORROWED_WRONG: [&str; 3] = ["upDownArrow", "flowChartManualInput", "flowChartOffpageConnector"];
+
+/// Segments a curve is flattened into: under a pixel off the true curve
+/// for any shape on a slide.
+const CURVE_STEPS: usize = 16;
+
+/// The outline of preset `prst` from BetterOffice's DrawingML crate
+/// (Apache-2.0, see `THIRD-PARTY-NOTICES.md`), at the preset's default
+/// adjustments, for the presets our own `preset_polygon` doesn't draw:
+/// its filled layers, with curves flattened, scaled to the box. `None` when
+/// it has no filled outline for `prst` either.
+fn borrowed_outline(prst: &str, w: f64, h: f64) -> Option<Vec<Vec<Vec<Point>>>> {
+    use ooxml_drawingml::PresetPathFill;
+    if !(w > 0.0 && h > 0.0) || BORROWED_WRONG.contains(&prst) {
+        return None;
+    }
+    let adjustments = ooxml_drawingml::preset_geometry_default_adjustments(prst);
+    let aspect = w / h;
+    let layers: Vec<Vec<ooxml_drawingml::GeometryPathCommand>> = match ooxml_drawingml::preset_geometry_layers(prst, &adjustments, aspect) {
+        Some(layers) => layers.into_iter().filter(|layer| layer.fill != PresetPathFill::None).map(|layer| layer.commands).collect(),
+        None => vec![ooxml_drawingml::preset_geometry_to_path(prst, &adjustments, aspect)?],
+    };
+    let layers: Vec<Vec<Vec<Point>>> = layers.into_iter().map(|commands| flatten(commands, w, h)).filter(|layer| !layer.is_empty()).collect();
+    (!layers.is_empty()).then_some(layers)
+}
+
+/// `commands`, in the unit square, as closed polygons in a `w`×`h` box.
+fn flatten(commands: Vec<ooxml_drawingml::GeometryPathCommand>, w: f64, h: f64) -> Vec<Vec<Point>> {
+    use ooxml_drawingml::GeometryPathCommand as C;
+    let mut subpaths: Vec<Vec<Point>> = Vec::new();
+    let mut current: Vec<Point> = Vec::new();
+    let mut at = (0.0, 0.0);
+    for command in commands {
+        match command {
+            C::Move { x, y } => {
+                if current.len() > 2 {
+                    subpaths.push(std::mem::take(&mut current));
+                }
+                current.clear();
+                at = (x, y);
+                current.push(at);
+            }
+            C::Line { x, y } => {
+                at = (x, y);
+                current.push(at);
+            }
+            C::Quad { cpx, cpy, x, y } => {
+                let (x0, y0) = at;
+                for i in 1..=CURVE_STEPS {
+                    let t = i as f64 / CURVE_STEPS as f64;
+                    let u = 1.0 - t;
+                    current.push((u * u * x0 + 2.0 * u * t * cpx + t * t * x, u * u * y0 + 2.0 * u * t * cpy + t * t * y));
+                }
+                at = (x, y);
+            }
+            C::Cubic { cp1x, cp1y, cp2x, cp2y, x, y } => {
+                let (x0, y0) = at;
+                for i in 1..=CURVE_STEPS {
+                    let t = i as f64 / CURVE_STEPS as f64;
+                    let u = 1.0 - t;
+                    let (a, b, c, d) = (u * u * u, 3.0 * u * u * t, 3.0 * u * t * t, t * t * t);
+                    current.push((a * x0 + b * cp1x + c * cp2x + d * x, a * y0 + b * cp1y + c * cp2y + d * y));
+                }
+                at = (x, y);
+            }
+            C::Close => {
+                if current.len() > 2 {
+                    subpaths.push(std::mem::take(&mut current));
+                }
+                current.clear();
+            }
+        }
+    }
+    if current.len() > 2 {
+        subpaths.push(current);
+    }
+    subpaths
+        .into_iter()
+        .map(|poly| poly.into_iter().filter(|(x, y)| x.is_finite() && y.is_finite()).map(|(x, y)| (x * w, y * h)).collect::<Vec<_>>())
+        .filter(|poly| poly.len() > 2)
+        .collect()
 }
 
 /// Whether `kind` is drawn as an ellipse filling its box: the ellipse, and
@@ -361,18 +466,22 @@ pub fn contains(kind: &ShapeKind, w: f64, h: f64, px: f64, py: f64) -> bool {
             (px - cx).powi(2) + (py - cy).powi(2) <= r * r + 1e-9
         }
         _ => {
-            let poly = polygon(kind, w, h).unwrap_or_default();
-            // Even-odd ray cast.
-            let mut inside = false;
-            let n = poly.len();
-            for i in 0..n {
-                let (x1, y1) = poly[i];
-                let (x2, y2) = poly[(i + 1) % n];
-                if (y1 > py) != (y2 > py) && px < (x2 - x1) * (py - y1) / (y2 - y1) + x1 {
-                    inside = !inside;
+            // In any layer, by its subpaths' winding number, as the canvas
+            // fills them (for a simple polygon, the same as even-odd).
+            outline(kind, w, h).unwrap_or_default().iter().any(|layer| {
+                let mut winding = 0;
+                for poly in layer {
+                    let n = poly.len();
+                    for i in 0..n {
+                        let (x1, y1) = poly[i];
+                        let (x2, y2) = poly[(i + 1) % n];
+                        if (y1 > py) != (y2 > py) && px < (x2 - x1) * (py - y1) / (y2 - y1) + x1 {
+                            winding += if y2 > y1 { 1 } else { -1 };
+                        }
+                    }
                 }
-            }
-            inside
+                winding != 0
+            })
         }
     }
 }
@@ -436,6 +545,40 @@ mod tests {
         assert_eq!(polygon(&ShapeKind::Other("star5".into()), w, h).unwrap().len(), 10);
         // An unknown preset is still drawn as its box.
         assert_eq!(polygon(&ShapeKind::Other("cloud".into()), w, h).unwrap(), rect);
+    }
+
+    /// The presets only BetterOffice draws have their own outline too,
+    /// inside their box, and a donut keeps its hole.
+    #[test]
+    fn borrowed_presets_have_their_own_outline() {
+        let (w, h) = (200.0, 100.0);
+        let rect = vec![vec![(0.0, 0.0), (w, 0.0), (w, h), (0.0, h)]];
+        for p in ["star4", "star6", "star8", "star12", "star24", "heptagon", "decagon", "dodecagon", "leftRightArrow", "bentArrow", "corner", "foldedCorner", "noSmoking", "donut", "cube", "ribbon", "ellipseRibbon", "flowChartTerminator", "wedgeRoundRectCallout", "wedgeEllipseCallout", "cloudCallout", "mathMultiply"] {
+            let layers = outline(&ShapeKind::Other(p.into()), w, h).unwrap_or_else(|| panic!("{p}: no outline"));
+            assert_ne!(layers, vec![rect.clone()], "{p}");
+            for (x, y) in layers.iter().flatten().flatten() {
+                // Callouts reach outside their box with their tail.
+                if !p.contains("Callout") {
+                    assert!((-1e-6..=w + 1e-6).contains(x) && (-1e-6..=h + 1e-6).contains(y), "{p}: ({x}, {y})");
+                }
+            }
+        }
+        let donut = ShapeKind::Other("donut".into());
+        assert_eq!(outline(&donut, w, h).unwrap(), vec![outline(&donut, w, h).unwrap()[0].clone()]);
+        assert_eq!(outline(&donut, w, h).unwrap()[0].len(), 2);
+        assert!(contains(&donut, w, h, 10.0, 50.0), "the ring");
+        assert!(!contains(&donut, w, h, 100.0, 50.0), "the hole");
+        // Our own outlines still come first.
+        assert_eq!(outline(&ShapeKind::Other("chevron".into()), w, h).unwrap(), vec![vec![polygon(&ShapeKind::Other("chevron".into()), w, h).unwrap()]]);
+        // A ribbon crosses itself; the crossing is filled, not a hole.
+        let ribbon = ShapeKind::Other("ribbon".into());
+        assert!(contains(&ribbon, w, h, 100.0, 60.0), "the front");
+        // A cube is its faces, one layer each.
+        assert_eq!(outline(&ShapeKind::Other("cube".into()), w, h).unwrap().len(), 3);
+        // The presets BetterOffice gets wrong stay their box.
+        for p in BORROWED_WRONG {
+            assert_eq!(outline(&ShapeKind::Other(p.into()), w, h).unwrap(), vec![rect.clone()], "{p}");
+        }
     }
 
     /// An up arrow is its point and its shaft: the shaft's foot is inside,

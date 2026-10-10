@@ -810,14 +810,18 @@ pub fn draw_object(
                 // What PowerPoint and Impress draw: the part of the source
                 // the crop leaves, stretched to the picture's box.
                 let (cx, cy, cw, ch) = crop.source_rect(img_surf.width() as f64, img_surf.height() as f64);
-                cr.save().unwrap();
-                cr.rectangle(sx, sy, sw, sh);
-                cr.clip();
-                cr.translate(sx, sy);
-                cr.scale(sw / cw, sh / ch);
-                cr.set_source_surface(&img_surf, -cx, -cy).unwrap();
-                cr.paint().unwrap();
-                cr.restore().unwrap();
+                // A picture with no area, or cropped to none, draws nothing:
+                // its scale would be 0 or infinite, which Cairo refuses.
+                if [sw, sh, cw, ch].iter().all(|v| v.is_finite() && *v > 0.0) {
+                    cr.save().unwrap();
+                    cr.rectangle(sx, sy, sw, sh);
+                    cr.clip();
+                    cr.translate(sx, sy);
+                    cr.scale(sw / cw, sh / ch);
+                    cr.set_source_surface(&img_surf, -cx, -cy).unwrap();
+                    cr.paint().unwrap();
+                    cr.restore().unwrap();
+                }
             } else {
                 cr.set_source_rgb(0.92, 0.92, 0.92);
                 cr.rectangle(sx, sy, sw, sh);
@@ -900,7 +904,7 @@ pub fn draw_shape(
     (x, y, w, h): (f64, f64, f64, f64),
     scale: f64,
 ) {
-    use decks_core::engine::shape::{is_elliptical, polygon, ShapeKind};
+    use decks_core::engine::shape::{is_elliptical, outline, ShapeKind};
     cr.new_path();
     match kind {
         k if is_elliptical(k) => {
@@ -924,16 +928,30 @@ pub fn draw_shape(
             cr.close_path();
         }
         _ => {
-            for (i, (px, py)) in polygon(kind, w, h).unwrap_or_default().into_iter().enumerate() {
-                if i == 0 {
-                    cr.move_to(x + px, y + py);
-                } else {
-                    cr.line_to(x + px, y + py);
+            // Each layer painted over the one before (a cube's faces); a hole
+            // in a layer (a donut's) is a subpath wound against it.
+            for layer in outline(kind, w, h).unwrap_or_default() {
+                for poly in layer {
+                    for (i, (px, py)) in poly.into_iter().enumerate() {
+                        if i == 0 {
+                            cr.move_to(x + px, y + py);
+                        } else {
+                            cr.line_to(x + px, y + py);
+                        }
+                    }
+                    cr.close_path();
                 }
+                paint_path(cr, style, (x, y, w, h), scale);
             }
-            cr.close_path();
+            return;
         }
     }
+    paint_path(cr, style, (x, y, w, h), scale);
+}
+
+/// Fill and stroke the current path in `style` over the box `(x, y, w, h)`,
+/// then clear it.
+fn paint_path(cr: &cairo::Context, style: &decks_core::engine::shape::ShapeStyle, (x, y, w, h): (f64, f64, f64, f64), scale: f64) {
     if let Some(grad) = &style.gradient {
         // Colours run along `angle` (clockwise from left-to-right) across
         // the box: the line through its centre, from the box's projection

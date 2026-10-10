@@ -238,6 +238,16 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ac07cdecf99051d9a5238b80f35af32cdeba5b336e55d957b318b50137e18da5"
 
 [[package]]
+name = "betteroffice-drawingml"
+version = "0.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c08e5d5536bd72e63472c3bad08a4c8fd859f6b6a0c94503204f3b0ab688ed8e"
+dependencies = [
+ "indexmap",
+ "serde",
+]
+
+[[package]]
 name = "biblatex"
 version = "0.12.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -861,6 +871,7 @@ dependencies = [
 name = "decks-core"
 version = "0.1.0"
 dependencies = [
+ "betteroffice-drawingml",
  "letters-core",
  "loro",
  "proptest",

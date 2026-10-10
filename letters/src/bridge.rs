@@ -843,7 +843,9 @@ fn para_tag(buf: &gtk::TextBuffer, style: &letters_core::ParaStyle) -> Option<St
         }
         if style.list == letters_core::ListKind::None {
             if style.left_indent_pt != 0.0 {
-                tag.set_left_margin(EDITOR_LEFT_MARGIN_PX + px(style.left_indent_pt));
+                // A negative indent (into the page margin) is real in Word
+                // documents, but GTK refuses a negative margin and aborts.
+                tag.set_left_margin((EDITOR_LEFT_MARGIN_PX + px(style.left_indent_pt)).max(0));
             }
             if style.first_line_indent_pt != 0.0 {
                 tag.set_indent(px(style.first_line_indent_pt));
