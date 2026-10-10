@@ -1409,6 +1409,9 @@ pub fn write_pptx_bytes(deck: &Deck) -> Result<Vec<u8>, String> {
             sld.push_attribute(("xmlns:a", "http://schemas.openxmlformats.org/drawingml/2006/main"));
             sld.push_attribute(("xmlns:r", "http://schemas.openxmlformats.org/officeDocument/2006/relationships"));
             sld.push_attribute(("xmlns:p", "http://schemas.openxmlformats.org/presentationml/2006/main"));
+            if slide.hidden {
+                sld.push_attribute(("show", "0"));
+            }
             writer.write_event(Event::Start(sld)).map_err(|e| e.to_string())?;
 
             // The slide's name, which is what `Slide::title` is. The master
@@ -1430,7 +1433,19 @@ pub fn write_pptx_bytes(deck: &Deck) -> Result<Vec<u8>, String> {
             // Slide background (only when it differs from the default
             // white — Impress preserves an explicit p:bg).
             let bg = slide.background.trim_start_matches('#');
-            if !bg.eq_ignore_ascii_case("ffffff") && bg.len() == 6 {
+            if let Some(path) = &slide.background_image {
+                // A picture stretched over the slide, as PowerPoint
+                // writes one.
+                let img_idx = images_to_add.len() + 1;
+                images_to_add.push(path.clone());
+                let rel_id = format!("rId{}", slide_rels.len() + 1);
+                slide_rels.push((rel_id.clone(), IMAGE_REL, format!("../media/image{}.png", img_idx)));
+                let xml = format!(
+                    "<p:bg><p:bgPr><a:blipFill dpi=\"0\" rotWithShape=\"1\"><a:blip r:embed=\"{rel_id}\"/><a:srcRect/>\
+                     <a:stretch><a:fillRect/></a:stretch></a:blipFill><a:effectLst/></p:bgPr></p:bg>"
+                );
+                writer.get_mut().write_all(xml.as_bytes()).map_err(|e| e.to_string())?;
+            } else if !bg.eq_ignore_ascii_case("ffffff") && bg.len() == 6 {
                 writer.write_event(Event::Start(BytesStart::new("p:bg"))).map_err(|e| e.to_string())?;
                 writer.write_event(Event::Start(BytesStart::new("p:bgPr"))).map_err(|e| e.to_string())?;
                 writer.write_event(Event::Start(BytesStart::new("a:solidFill"))).map_err(|e| e.to_string())?;
@@ -1667,7 +1682,7 @@ mod emu_rounding_tests {
         Deck {
             slides: vec![Slide {
                 title: String::new(),
-                background: String::new(),
+                background: String::new(), background_image: None, hidden: false,
                 notes: String::new(),
                 master_idx: None,
                 objects: vec![SlideObject::TextBox {

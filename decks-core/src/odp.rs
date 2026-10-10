@@ -769,10 +769,18 @@ fn content_xml(deck: &Deck, media: &mut Vec<Media>) -> Result<String, String> {
     }
 
     let mut auto = declare_run_styles(&styles, SLIDE_STYLE_PREFIX);
+    // Each slide's background picture, which its drawing-page style fills
+    // the page with through a fill image of styles.xml's.
+    for (i, slide) in deck.slides.iter().enumerate() {
+        if let Some(path) = &slide.background_image {
+            let bytes = std::fs::read(path).map_err(|e| format!("Cannot open image {path}: {e}"))?;
+            media.push(Media { zip_path: background_picture_path(i, path), media_type: media_type_for(path).1.to_string(), bytes });
+        }
+    }
     // Per-slide drawing-page styles carry the background fill and the
     // transition.
     for (i, slide) in deck.slides.iter().enumerate() {
-        if let Some(props) = drawing_page_props(slide) {
+        if let Some(props) = drawing_page_props(slide, i) {
             auto.push_str(&format!(
                 "<style:style style:name=\"dp{}\" style:family=\"drawing-page\">\
                  <style:drawing-page-properties{props}/></style:style>",
@@ -786,7 +794,7 @@ fn content_xml(deck: &Deck, media: &mut Vec<Media>) -> Result<String, String> {
     let mut pages = String::new();
     let mut graphics = GraphicStyles::new("gr", deck);
     for (si, slide) in deck.slides.iter().enumerate() {
-        let dp_attr = if drawing_page_props(slide).is_some() {
+        let dp_attr = if drawing_page_props(slide, si).is_some() {
             format!(" draw:style-name=\"dp{}\"", si + 1)
         } else {
             String::new()
@@ -1035,6 +1043,7 @@ fn styles_xml(deck: &Deck, media: &mut Vec<Media>) -> Result<String, String> {
         f = esc(font)
     );
     let gradients = crate::odp_graphics::gradient_defs(&crate::odp_graphics::deck_gradients(deck));
+    let fill_images = background_fill_images(deck);
     let default_style = format!(
         "<style:default-style style:family=\"graphic\">\
          <style:text-properties style:font-name=\"{}\"/></style:default-style>",
@@ -1055,7 +1064,7 @@ fn styles_xml(deck: &Deck, media: &mut Vec<Media>) -> Result<String, String> {
          xmlns:xlink=\"http://www.w3.org/1999/xlink\" \
          office:version=\"1.2\">\
          {font_decls}\
-         <office:styles>{default_style}{gradients}{page_layouts}</office:styles>\
+         <office:styles>{default_style}{gradients}{fill_images}{page_layouts}</office:styles>\
          <office:automatic-styles>{auto}</office:automatic-styles>\
          <office:master-styles>{pages}</office:master-styles>\
          </office:document-styles>"
@@ -1254,15 +1263,93 @@ fn transition_of(smil_type: Option<&str>, decks: Option<&str>) -> Transition {
 
 /// A slide's drawing-page style properties, or `None` when it needs no
 /// style (white background, no transition).
-fn drawing_page_props(slide: &Slide) -> Option<String> {
+fn drawing_page_props(slide: &Slide, i: usize) -> Option<String> {
     let bg = slide.background.trim_start_matches('#');
-    let fill = if bg.len() == 6 && !bg.eq_ignore_ascii_case("ffffff") {
+    // A picture over the slide: the fill image styles.xml declares for it
+    // (`background_fill_images`), stretched.
+    let fill = if slide.background_image.is_some() {
+        format!(" draw:fill=\"bitmap\" draw:fill-image-name=\"{}\" style:repeat=\"stretch\"", background_fill_name(i))
+    } else if bg.len() == 6 && !bg.eq_ignore_ascii_case("ffffff") {
         format!(" draw:fill=\"solid\" draw:fill-color=\"#{}\"", bg.to_lowercase())
     } else {
         String::new()
     };
     let trans = transition_attrs(slide.transition).unwrap_or_default();
-    (!fill.is_empty() || !trans.is_empty()).then(|| format!("{fill}{trans}"))
+    let visibility = if slide.hidden { " presentation:visibility=\"hidden\"" } else { "" };
+    (!fill.is_empty() || !trans.is_empty() || slide.hidden).then(|| format!("{fill}{trans}{visibility}"))
+}
+
+/// The name of the fill image slide `i`'s background picture is.
+fn background_fill_name(i: usize) -> String {
+    format!("DecksBackground{}", i + 1)
+}
+
+/// Where slide `i`'s background picture is kept in the package.
+fn background_picture_path(i: usize, path: &str) -> String {
+    format!("Pictures/background{}.{}", i + 1, media_type_for(path).0)
+}
+
+/// `styles.xml`'s fill images, one per slide with a background picture.
+fn background_fill_images(deck: &Deck) -> String {
+    deck.slides
+        .iter()
+        .enumerate()
+        .filter_map(|(i, s)| {
+            let path = s.background_image.as_deref()?;
+            Some(format!(
+                "<draw:fill-image draw:name=\"{}\" xlink:href=\"{}\" xlink:type=\"simple\" xlink:show=\"embed\" xlink:actuate=\"onLoad\"/>",
+                background_fill_name(i),
+                background_picture_path(i, path)
+            ))
+        })
+        .collect()
+}
+
+/// Each drawing-page style's fill image name, and each fill image's
+/// picture, in a part: how a slide's background picture is found.
+fn fill_images(xml: &str, page_image: &mut std::collections::HashMap<String, String>, images: &mut std::collections::HashMap<String, String>) {
+    let mut reader = Reader::from_str(xml);
+    let mut cur: Option<String> = None;
+    loop {
+        match reader.read_event() {
+            Ok(Event::Start(e)) | Ok(Event::Empty(e)) => match e.name().as_ref() {
+                "style:style" => cur = attr(&e, "style:name"),
+                "style:drawing-page-properties" if attr(&e, "draw:fill").as_deref() == Some("bitmap") => {
+                    if let (Some(style), Some(image)) = (cur.clone(), attr(&e, "draw:fill-image-name")) {
+                        page_image.insert(style, image);
+                    }
+                }
+                "draw:fill-image" => {
+                    if let (Some(name), Some(href)) = (attr(&e, "draw:name"), attr(&e, "xlink:href")) {
+                        images.insert(name, href);
+                    }
+                }
+                _ => {}
+            },
+            Ok(Event::Eof) | Err(_) => break,
+            _ => {}
+        }
+    }
+}
+
+/// The drawing-page styles in a part that hide their slide
+/// (`presentation:visibility="hidden"`, Impress's "Hide Slide").
+fn hidden_pages(xml: &str, hidden: &mut std::collections::HashSet<String>) {
+    let mut reader = Reader::from_str(xml);
+    let mut cur: Option<String> = None;
+    loop {
+        match reader.read_event() {
+            Ok(Event::Start(e)) | Ok(Event::Empty(e)) => match e.name().as_ref() {
+                "style:style" => cur = attr(&e, "style:name"),
+                "style:drawing-page-properties" if attr(&e, "presentation:visibility").as_deref() == Some("hidden") => {
+                    hidden.extend(cur.clone());
+                }
+                _ => {}
+            },
+            Ok(Event::Eof) | Err(_) => break,
+            _ => {}
+        }
+    }
 }
 
 /// Collect the named text styles and drawing-page backgrounds a part
@@ -1583,7 +1670,7 @@ fn parse_pages(
                         title: attr(e, "draw:name")
                             .or_else(|| attr(e, "style:name").map(|n| decode_style_name(&n)))
                             .unwrap_or_default(),
-                        background: bg,
+                        background: bg, background_image: None, hidden: false,
                         objects: vec![],
                         notes: String::new(),
                         master_idx: Some(0),
@@ -2045,8 +2132,22 @@ pub fn read(path: &str) -> Result<Deck, String> {
         let mut resolve = |href: &str| extract_picture(href, &mut zip, &mut budget);
         parse_pages(&content, "draw:page", &page_bg, &text_styles, &text_defs, &graphic_defs, scale, &mut resolve, &charts)?
     };
+    // Background pictures: a page style filled with a bitmap names a fill
+    // image, which names the picture.
+    let (mut page_image, mut images) = (Default::default(), Default::default());
+    fill_images(&content, &mut page_image, &mut images);
+    fill_images(&styles, &mut page_image, &mut images);
+    let mut hidden = std::collections::HashSet::new();
+    hidden_pages(&content, &mut hidden);
     for (i, page) in slide_pages.into_iter().enumerate() {
         let mut slide = page.slide;
+        slide.hidden = page.style.as_ref().is_some_and(|n| hidden.contains(n));
+        slide.background_image = page
+            .style
+            .as_ref()
+            .and_then(|n| page_image.get(n))
+            .and_then(|img| images.get(img))
+            .and_then(|href| extract_picture(href.trim_start_matches("./"), &mut zip, &mut budget));
         if let Some(t) = page.style.as_ref().and_then(|n| page_transition.get(n)) {
             slide.transition = *t;
         }
@@ -2076,7 +2177,7 @@ pub fn read(path: &str) -> Result<Deck, String> {
     if deck.slides.is_empty() {
         deck.slides.push(Slide {
             title: "Slide 1".into(),
-            background: "#ffffff".into(),
+            background: "#ffffff".into(), background_image: None, hidden: false,
             objects: vec![],
             notes: String::new(),
             master_idx: Some(0),
@@ -2121,7 +2222,7 @@ mod tests {
     fn text_slide(title: &str, text: &str, notes: &str) -> Slide {
         Slide {
             title: title.into(),
-            background: "#ffffff".into(),
+            background: "#ffffff".into(), background_image: None, hidden: false,
             objects: vec![SlideObject::TextBox {
                 text: text.into(),
                 x: 100.0,
@@ -2337,7 +2438,7 @@ mod tests {
             }],
             slides: vec![Slide {
                 title: "one".into(),
-                background: String::new(),
+                background: String::new(), background_image: None, hidden: false,
                 objects: vec![],
                 notes: String::new(),
                 master_idx: Some(0),
@@ -2384,7 +2485,7 @@ mod tests {
             }],
             slides: vec![Slide {
                 title: "p".into(),
-                background: String::new(),
+                background: String::new(), background_image: None, hidden: false,
                 objects: vec![SlideObject::Image {
                     path: path.to_string(),
                     x: 10.0,
@@ -2577,7 +2678,7 @@ mod tests {
         let mut deck = Deck::new();
         deck.slides = vec![Slide {
             title: "g".into(),
-            background: "#ffffff".into(),
+            background: "#ffffff".into(), background_image: None, hidden: false,
             objects: vec![
                 SlideObject::Rect { x: 240.0, y: 180.0, w: 320.0, h: 120.0, rotation: 0.0 },
                 SlideObject::Circle { x: 500.0, y: 300.0, r: 80.0, rotation: 0.0 },
@@ -2614,7 +2715,7 @@ mod tests {
         let mut deck = Deck::new();
         deck.slides = vec![Slide {
             title: "s".into(),
-            background: "#ffffff".into(),
+            background: "#ffffff".into(), background_image: None, hidden: false,
             objects: vec![SlideObject::TextBox {
                 text: "plain bold".into(),
                 x: 10.0,
@@ -2789,7 +2890,7 @@ mod tests {
         Deck {
             slides: vec![Slide {
                 title: String::new(),
-                background: String::new(),
+                background: String::new(), background_image: None, hidden: false,
                 notes: String::new(),
                 master_idx: None,
                 objects: vec![SlideObject::TextBox {

@@ -48,7 +48,7 @@ fn build_deck(slides: &[Vec<String>]) -> Deck {
         .iter()
         .map(|texts| Slide {
             title: "Slide".into(),
-            background: "#ffffff".into(),
+            background: "#ffffff".into(), background_image: None, hidden: false,
             objects: texts
                 .iter()
                 .map(|t| SlideObject::TextBox {

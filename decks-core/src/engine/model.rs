@@ -27,10 +27,24 @@ pub fn slide_page_size_pt() -> (f64, f64) {
     )
 }
 
+/// The slides a show or an export shows, in order: all but the hidden
+/// ones, as PowerPoint and Impress do. A deck whose every slide is hidden
+/// shows them all rather than nothing.
+pub fn shown_slides(slides: &[Slide]) -> Vec<usize> {
+    let shown: Vec<usize> = (0..slides.len()).filter(|&i| !slides[i].hidden).collect();
+    if shown.is_empty() { (0..slides.len()).collect() } else { shown }
+}
+
 #[derive(Clone, Debug)]
 pub struct Slide {
     pub title: String,
     pub background: String,
+    /// A picture the slide's background is filled with (a file in the media
+    /// cache), stretched over the whole slide, drawn over `background`.
+    pub background_image: Option<String>,
+    /// Skipped when the deck is shown or exported, as PowerPoint's and
+    /// Impress's "Hide Slide" does; it stays in the deck to be edited.
+    pub hidden: bool,
     pub objects: Vec<SlideObject>,
     pub notes: String,
     pub master_idx: Option<usize>,
@@ -278,7 +292,7 @@ impl Deck {
         Self {
             slides: vec![Slide {
                 title: "Slide 1".into(),
-                background: "#ffffff".into(),
+                background: "#ffffff".into(), background_image: None, hidden: false,
                 objects: vec![],
                 notes: String::new(),
                 master_idx: Some(0),

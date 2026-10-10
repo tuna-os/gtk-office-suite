@@ -80,9 +80,9 @@ pub fn handout_boxes(per_page: usize, (sw, sh): (f64, f64)) -> Vec<(f64, f64, f6
     out
 }
 
-/// The deck as a PDF at `path`: a page per slide, or with `per_page` (2, 4
-/// or 6) handouts with that many slides to an A4 page, each framed and
-/// numbered.
+/// The deck as a PDF at `path`: a page per shown slide, or with `per_page`
+/// (2, 4 or 6) handouts with that many slides to an A4 page, each framed
+/// and numbered.
 pub fn export_pdf(deck: &Deck, path: &Path, per_page: Option<usize>) -> Result<(), String> {
     let slide = page_pt(deck);
     let (pw, ph) = if per_page.is_some() { HANDOUT_PT } else { slide };
@@ -90,14 +90,14 @@ pub fn export_pdf(deck: &Deck, path: &Path, per_page: Option<usize>) -> Result<(
     let cr = cairo::Context::new(&surface).map_err(|e| e.to_string())?;
     match per_page {
         None => {
-            for i in 0..deck.slides.len() {
+            for i in decks_core::engine::shown_slides(&deck.slides) {
                 draw_into(&cr, deck, i, (0.0, 0.0, pw, ph))?;
                 cr.show_page().map_err(|e| e.to_string())?;
             }
         }
         Some(n) => {
             let boxes = handout_boxes(n, slide);
-            for (page, chunk) in (0..deck.slides.len()).collect::<Vec<_>>().chunks(boxes.len()).enumerate() {
+            for (page, chunk) in decks_core::engine::shown_slides(&deck.slides).chunks(boxes.len()).enumerate() {
                 let _ = page;
                 for (i, (x, y, w, h)) in chunk.iter().zip(&boxes) {
                     draw_into(&cr, deck, *i, (*x, *y, *w, *h))?;
@@ -230,6 +230,27 @@ mod tests {
             let text = tool("pdftotext", &["-f", &page, "-l", &page, p, "-"]).unwrap();
             assert!(text.contains(&format!("Slide {k}")), "page {k}: {text:?}");
         }
+    }
+
+    /// A hidden slide is left out of the PDF, as Impress and PowerPoint
+    /// leave it out; a deck of nothing but hidden slides still exports.
+    #[test]
+    fn a_hidden_slide_is_not_exported() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("deck.pdf");
+        let mut d = deck(3);
+        d.slides[1].hidden = true;
+        export_pdf(&d, &path, None).unwrap();
+        let p = path.to_str().unwrap();
+        let Some(info) = tool("pdfinfo", &[p]) else { return };
+        assert!(info.contains("Pages:           2"), "{info}");
+        let text = tool("pdftotext", &[p, "-"]).unwrap();
+        assert!(text.contains("Slide 1") && text.contains("Slide 3") && !text.contains("Slide 2"), "{text:?}");
+        for s in &mut d.slides {
+            s.hidden = true;
+        }
+        export_pdf(&d, &path, None).unwrap();
+        assert!(tool("pdfinfo", &[p]).unwrap().contains("Pages:           3"));
     }
 
     #[test]

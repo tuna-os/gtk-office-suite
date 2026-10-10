@@ -29,11 +29,11 @@
   },
   "decks/real-2024-11-20-presentation-pay-centre-impact-assess": {
     "A": "amber",
-    "B": "red"
+    "B": "amber"
   },
   "decks/real-2024-11-presentation-pay-centre-innovation": {
     "A": "amber",
-    "B": "red"
+    "B": "green"
   },
   "decks/real-2024-2025-annual-report-on-delegated-authorities": {
     "A": "amber",
@@ -112,7 +112,7 @@
     "B": "amber"
   },
   "decks/real-supporting-every-young-person-to-achieve-and-thr": {
-    "A": "red",
+    "A": "amber",
     "B": "red"
   },
   "decks/real-the-children-s-people-and-nature-survey-2022-inf": {

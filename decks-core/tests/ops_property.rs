@@ -50,7 +50,7 @@ fn rect(x: f64) -> SlideObject {
 fn slide(title: &str, xs: &[f64]) -> Slide {
     Slide {
         title: title.into(),
-        background: "#ffffff".into(),
+        background: "#ffffff".into(), background_image: None, hidden: false,
         objects: xs.iter().map(|x| rect(*x)).collect(),
         notes: String::new(),
         master_idx: None,

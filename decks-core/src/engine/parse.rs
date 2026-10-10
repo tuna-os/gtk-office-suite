@@ -647,6 +647,8 @@ pub fn read_pptx(path: &str) -> Result<Deck, String> {
 
         // Parse slide XML using quick-xml event reader
         let mut background = String::from("#ffffff");
+        // A picture the background is filled with (`p:bg`'s `a:blipFill`).
+        let mut background_blip: Option<String> = None;
         {
             // Text inside `a:t` is significant: a run ending in a space
             // ("Plain " + "Bold") is one word boundary, and trimming it
@@ -784,6 +786,8 @@ pub fn read_pptx(path: &str) -> Result<Deck, String> {
                                     if let Some(embed) = parse_blip_embed(e) {
                                         pic.embed_id = Some(embed);
                                     }
+                                } else if in_bg {
+                                    background_blip = parse_blip_embed(e);
                                 }
                             }
                             "a:srcRect" => {
@@ -908,6 +912,8 @@ pub fn read_pptx(path: &str) -> Result<Deck, String> {
                                     if let Some(embed) = parse_blip_embed(e) {
                                         pic.embed_id = Some(embed);
                                     }
+                                } else if in_bg {
+                                    background_blip = parse_blip_embed(e);
                                 }
                             }
                             "a:srcRect" => {
@@ -1124,6 +1130,14 @@ pub fn read_pptx(path: &str) -> Result<Deck, String> {
                 .filter(|n| !n.is_empty())
                 .unwrap_or_else(|| format!("Slide {}", slide_index + 1)),
             background,
+            background_image: background_blip
+                .as_deref()
+                .and_then(|id| slide_image_rels.get(id))
+                .map(|t| format!("ppt/{}", t.trim_start_matches("../")))
+                .and_then(|p| archive.part_to_bytes(&p, &mut budget).ok())
+                .and_then(|bytes| suite_common_core::media_cache::persist(&bytes).ok())
+                .map(|p| p.to_string_lossy().into_owned()),
+            hidden: slide_is_hidden(&slide_xml),
             objects,
             notes,
             master_idx: Some(0),
@@ -1253,7 +1267,7 @@ pub fn read_pptx(path: &str) -> Result<Deck, String> {
     if slides.is_empty() {
         slides.push(Slide {
             title: "Slide 1".into(),
-            background: "#ffffff".into(),
+            background: "#ffffff".into(), background_image: None, hidden: false,
             objects: vec![],
             notes: String::new(),
             master_idx: Some(0),
@@ -1758,6 +1772,15 @@ fn resolve_and_extract_picture(
         rotation,
         crop,
     })
+}
+
+/// Whether a slide part is hidden: `show="0"` (or `false`) on its `p:sld`,
+/// which PowerPoint writes for "Hide Slide".
+fn slide_is_hidden(slide_xml: &str) -> bool {
+    let Some(at) = slide_xml.find("<p:sld") else { return false };
+    let Some(len) = slide_xml[at..].find('>') else { return false };
+    let tag = &slide_xml[at..at + len];
+    tag.contains(" show=\"0\"") || tag.contains(" show=\"false\"")
 }
 
 /// A group shape's frame (`p:grpSpPr`'s `a:xfrm`): where it sits on the
