@@ -14,6 +14,31 @@ thread_local! {
         RefCell::new(HashMap::new());
 }
 
+/// A picture's mean colour, 0..1 per channel, from a coarse sample.
+fn mean_rgb(surf: &cairo::ImageSurface) -> Option<(f64, f64, f64)> {
+    let (w, h, stride) = (surf.width() as usize, surf.height() as usize, surf.stride() as usize);
+    if w == 0 || h == 0 || surf.format() != cairo::Format::ARgb32 && surf.format() != cairo::Format::Rgb24 {
+        return None;
+    }
+    let mut copy = cairo::ImageSurface::create(cairo::Format::ARgb32, w as i32, h as i32).ok()?;
+    {
+        let cr = cairo::Context::new(&copy).ok()?;
+        cr.set_source_surface(surf, 0.0, 0.0).ok()?;
+        cr.paint().ok()?;
+    }
+    let data = copy.data().ok()?;
+    let (mut sum, mut n) = ((0.0, 0.0, 0.0), 0.0);
+    for y in (0..h).step_by((h / 32).max(1)) {
+        for x in (0..w).step_by((w / 32).max(1)) {
+            let px = &data[y * stride + x * 4..y * stride + x * 4 + 4];
+            // BGRA in memory on little-endian.
+            sum = (sum.0 + f64::from(px[2]), sum.1 + f64::from(px[1]), sum.2 + f64::from(px[0]));
+            n += 1.0;
+        }
+    }
+    (n > 0.0).then(|| (sum.0 / n / 255.0, sum.1 / n / 255.0, sum.2 / n / 255.0))
+}
+
 pub fn load_image(path: &str) -> Option<cairo::ImageSurface> {
     let cached = IMAGE_CACHE.with(|cache| cache.borrow().get(path).cloned());
     if let Some(surf) = cached { return Some(surf); }
@@ -572,6 +597,27 @@ pub fn draw_slide_base(
     } else { cr.set_source_rgb(1.0, 1.0, 1.0); }
     cr.rectangle(ox, oy, slide_w, slide_h);
     cr.fill().unwrap();
+
+    // A picture the background is filled with, stretched over the slide
+    // (PowerPoint's `a:blipFill` with `a:stretch`, Impress's stretched
+    // fill image), over the background colour.
+    if let Some(surf) = slides.get(current_slide).and_then(|s| s.background_image.as_deref()).and_then(load_image) {
+        let (iw, ih) = (f64::from(surf.width()).max(1.0), f64::from(surf.height()).max(1.0));
+        cr.save().unwrap();
+        cr.rectangle(ox, oy, slide_w, slide_h);
+        cr.clip();
+        cr.translate(ox, oy);
+        cr.scale(slide_w / iw, slide_h / ih);
+        cr.set_source_surface(&surf, 0.0, 0.0).unwrap();
+        // Its edge pixels reach the slide's edge: scaled up, the picture
+        // would otherwise fade into what lies beyond it.
+        cr.source().set_extend(cairo::Extend::Pad);
+        cr.paint().unwrap();
+        cr.restore().unwrap();
+        // The text-colour contrast check reads the picture as dark or
+        // light by its mean.
+        slide_bg_rgb = mean_rgb(&surf).unwrap_or(slide_bg_rgb);
+    }
 
     if chrome == Chrome::Editor || chrome == Chrome::Preview {
         // Border
@@ -1144,7 +1190,7 @@ mod font_tests {
         };
         let slide = Slide {
             title: String::new(),
-            background: "#ffffff".into(),
+            background: "#ffffff".into(), background_image: None,
             objects: vec![sq(400.0, 100.0, Color(220, 0, 0)), sq(400.0, 300.0, Color(0, 0, 220))],
             notes: String::new(),
             master_idx: None,
@@ -1238,7 +1284,7 @@ mod font_tests {
     fn slide(master_idx: Option<usize>) -> Slide {
         Slide {
             title: "S".into(),
-            background: "#ffffff".into(),
+            background: "#ffffff".into(), background_image: None,
             objects: vec![],
             notes: String::new(),
             master_idx,
@@ -1409,6 +1455,47 @@ mod font_tests {
     /// A box with no runs is plain text, not a styled box that happens to
     /// have no styles: whatever a previous layout left behind must not
     /// survive into it.
+    /// A slide filled with a picture is drawn with it over the whole slide:
+    /// the title slides of the CCRM and pay centre decks are a navy picture
+    /// under white text, and drew white on white.
+    #[test]
+    fn a_background_picture_fills_the_slide() {
+        let dir = tempfile::tempdir().unwrap();
+        let src = dir.path().join("bg.png");
+        {
+            let pic = cairo::ImageSurface::create(cairo::Format::Rgb24, 4, 4).unwrap();
+            let cr = cairo::Context::new(&pic).unwrap();
+            cr.set_source_rgb(9.0 / 255.0, 59.0 / 255.0, 92.0 / 255.0);
+            cr.paint().unwrap();
+            drop(cr);
+            pic.write_to_png(&mut std::fs::File::create(&src).unwrap()).unwrap();
+        }
+        let slide = Slide {
+            title: String::new(),
+            background: "#ffffff".into(),
+            background_image: Some(src.to_string_lossy().into_owned()),
+            objects: Vec::new(),
+            notes: String::new(),
+            master_idx: None,
+            transition: Default::default(),
+            builds: Vec::new(),
+            ids: Default::default(),
+            layout: None,
+        };
+        let (w, h) = (960, 540);
+        let surface = cairo::ImageSurface::create(cairo::Format::ARgb32, w, h).unwrap();
+        {
+            let cr = cairo::Context::new(&surface).unwrap();
+            draw_slide_objects(&cr, w as f64, h as f64, &[slide], 0, &[], Chrome::Show, &[]);
+        }
+        let stride = surface.stride() as usize;
+        let data = surface.take_data().unwrap();
+        for (x, y) in [(20usize, 20usize), (480, 270), (940, 520)] {
+            let px = &data[y * stride + x * 4..y * stride + x * 4 + 3];
+            assert!(px[2].abs_diff(9) < 4 && px[1].abs_diff(59) < 4 && px[0].abs_diff(92) < 4, "({x}, {y}) is {px:?}, not navy");
+        }
+    }
+
     #[test]
     fn a_box_without_runs_is_drawn_as_plain_text() {
         let l = layout();

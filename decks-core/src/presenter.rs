@@ -265,8 +265,8 @@ mod tests {
     fn deck() -> Deck {
         Deck {
             slides: vec![
-                Slide { title: "Opening".into(), background: "#fff".into(), objects: vec![], notes: "Welcome".into(), master_idx: Some(0), transition: Default::default(), builds: Vec::new(), ids: Default::default(), layout: None },
-                Slide { title: "Details".into(), background: "#fff".into(), objects: vec![], notes: "Explain this".into(), master_idx: Some(0), transition: Default::default(), builds: Vec::new(), ids: Default::default(), layout: None },
+                Slide { title: "Opening".into(), background: "#fff".into(), background_image: None, objects: vec![], notes: "Welcome".into(), master_idx: Some(0), transition: Default::default(), builds: Vec::new(), ids: Default::default(), layout: None },
+                Slide { title: "Details".into(), background: "#fff".into(), background_image: None, objects: vec![], notes: "Explain this".into(), master_idx: Some(0), transition: Default::default(), builds: Vec::new(), ids: Default::default(), layout: None },
             ],
             masters: vec![],
         }
