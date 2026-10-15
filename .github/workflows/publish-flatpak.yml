@@ -65,7 +65,7 @@ jobs:
     # and the index token must not run whatever the shared branch holds at
     # publish time (#286, #1007). Renovate proposes digest bumps; review the
     # tuna-os/.github diff before merging one.
-    uses: tuna-os/.github/.github/workflows/publish-flatpak.yml@de11cba07c162d91884692197283dc834b474455 # main
+    uses: tuna-os/.github/.github/workflows/publish-flatpak.yml@eb7ce09bbc1b32937de3ad3a6be37a14a5e4fba2 # main
     with:
       app-id: org.tunaos.${{ matrix.app }}
       manifest-path: flatpak/org.tunaos.${{ matrix.app }}.json
