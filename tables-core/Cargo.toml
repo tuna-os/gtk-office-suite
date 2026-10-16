@@ -19,7 +19,7 @@ calamine = "0.36"
 rust_xlsxwriter = "0.99"
 regex = "1"
 chrono = "0.4"
-zip = "8.0"
+zip = "9.0"
 # RFC-0001 Phase 2 (feature `collab`, off by default): the workbook as a
 # Loro document. None of these is built without the feature.
 loro = { version = "1.16", optional = true }
