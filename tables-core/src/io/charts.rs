@@ -1185,7 +1185,7 @@ mod chart_tests {
         // An independent reader (not Tables' importer) sees every field.
         let bytes = std::fs::read(&path).unwrap();
         let mut zip = zip::ZipArchive::new(std::io::Cursor::new(&bytes)).unwrap();
-        let names: Vec<String> = zip.file_names().map(str::to_string).collect();
+        let names: Vec<String> = zip.file_names().map(|n| n.unwrap().into_owned()).collect();
         let mut read = |want: &str| {
             use std::io::Read;
             let name = names.iter().find(|n| n.contains(want)).unwrap_or_else(|| panic!("no part like {want}"));

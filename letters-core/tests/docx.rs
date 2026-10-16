@@ -654,7 +654,7 @@ fn page_numbers_are_saved_as_fields() {
     let mut footers = String::new();
     for i in 0..zip.len() {
         let mut part = zip.by_index(i).unwrap();
-        if part.name().starts_with("word/footer") {
+        if part.name().unwrap().starts_with("word/footer") {
             std::io::Read::read_to_string(&mut part, &mut footers).unwrap();
         }
     }
@@ -837,7 +837,7 @@ fn strict_ooxml_indents_are_read() {
         let mut zout = zip::ZipWriter::new(std::fs::File::create(&strict).unwrap());
         for i in 0..zin.len() {
             let mut f = zin.by_index(i).unwrap();
-            let name = f.name().to_string();
+            let name = f.name().unwrap().into_owned();
             let mut buf = Vec::new();
             std::io::Read::read_to_end(&mut f, &mut buf).unwrap();
             if name == "word/document.xml" {
@@ -898,7 +898,7 @@ fn strict_ooxml_indents_inside_table_cells_are_read() {
         let mut zout = zip::ZipWriter::new(std::fs::File::create(&strict).unwrap());
         for i in 0..zin.len() {
             let mut f = zin.by_index(i).unwrap();
-            let name = f.name().to_string();
+            let name = f.name().unwrap().into_owned();
             let mut buf = Vec::new();
             std::io::Read::read_to_end(&mut f, &mut buf).unwrap();
             if name == "word/document.xml" {
@@ -1022,7 +1022,7 @@ fn a_cleared_or_non_stop_tab_entry_is_not_read_as_a_stop() {
         let mut zout = zip::ZipWriter::new(std::fs::File::create(&doctored).unwrap());
         for i in 0..zin.len() {
             let mut f = zin.by_index(i).unwrap();
-            let name = f.name().to_string();
+            let name = f.name().unwrap().into_owned();
             let mut buf = Vec::new();
             std::io::Read::read_to_end(&mut f, &mut buf).unwrap();
             if name == "word/document.xml" {
@@ -1086,7 +1086,7 @@ fn doctor_document_xml(d: &Document, edit: impl Fn(String) -> String) -> Documen
         let mut zout = zip::ZipWriter::new(std::fs::File::create(&out).unwrap());
         for i in 0..zin.len() {
             let mut f = zin.by_index(i).unwrap();
-            let name = f.name().to_string();
+            let name = f.name().unwrap().into_owned();
             let mut buf = Vec::new();
             std::io::Read::read_to_end(&mut f, &mut buf).unwrap();
             if name == "word/document.xml" {
@@ -1205,7 +1205,7 @@ fn doctor_parts(d: &Document, edit: impl FnOnce(&mut std::collections::BTreeMap<
         let mut f = zin.by_index(i).unwrap();
         let mut buf = Vec::new();
         std::io::Read::read_to_end(&mut f, &mut buf).unwrap();
-        parts.push((f.name().to_string(), buf));
+        parts.push((f.name().unwrap().into_owned(), buf));
     }
     let mut xml: std::collections::BTreeMap<String, String> = parts
         .iter()
@@ -2053,7 +2053,7 @@ fn single_section_docx_writes_one_section_properties() {
     docx::write(&d, &path).expect("write docx");
     assert_eq!(package_part(&path, "word/document.xml").matches("<w:sectPr").count(), 1);
     let zip = zip::ZipArchive::new(std::fs::File::open(&path).unwrap()).unwrap();
-    assert!(!zip.file_names().any(|n| n.contains("lettersSection")));
+    assert!(!zip.file_names().any(|n| n.unwrap().contains("lettersSection")));
     let rt = docx::read(path.to_str().unwrap()).expect("read docx");
     assert!(rt.sections.is_empty());
     assert!(rt.page.unwrap().approx_eq(&d.page.unwrap()));

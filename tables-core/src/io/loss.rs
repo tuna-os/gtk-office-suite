@@ -208,7 +208,10 @@ fn source_drops(path: &str, report: &mut CompatibilityReport) {
         inspection_failed(report, path, detail);
         return;
     }
-    let names: BTreeSet<String> = zip.file_names().map(str::to_string).collect();
+    let names = match zip.file_names().map(|n| n.map(|n| n.into_owned())).collect::<Result<BTreeSet<String>, _>>() {
+        Ok(names) => names,
+        Err(e) => return inspection_failed(report, path, format!("a member name cannot be read: {e}")),
+    };
     if let Err(detail) = inspect_package(&mut zip, &names, ods, &mut budget, report) {
         inspection_failed(report, path, detail);
     }

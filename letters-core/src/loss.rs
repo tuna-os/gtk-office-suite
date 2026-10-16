@@ -289,7 +289,7 @@ pub fn content_a_save_drops(path: &std::path::Path) -> CompatibilityReport {
     if ZipBudget::default().check_entry_count(zip.len()).is_err() {
         return report;
     }
-    let names: BTreeSet<String> = zip.file_names().map(str::to_string).collect();
+    let Ok(names) = zip.file_names().map(|n| n.map(|n| n.into_owned())).collect::<Result<BTreeSet<String>, _>>() else { return report };
     let flattened = "kept as text in the outer cell, without the inner table's rows and columns";
     let any = |prefix: &str| names.iter().find(|n| n.starts_with(prefix)).map(|n| n.to_string());
     if names.contains("[Content_Types].xml") {

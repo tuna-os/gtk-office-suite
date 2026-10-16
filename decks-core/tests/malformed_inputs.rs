@@ -450,7 +450,7 @@ fn pptx_with_slide(slide: &str) -> Vec<u8> {
         let mut writer = zip::ZipWriter::new(Cursor::new(&mut buffer));
         for i in 0..source.len() {
             let mut entry = source.by_index(i).unwrap();
-            let name = entry.name().to_string();
+            let name = entry.name().unwrap().into_owned();
             let mut bytes = Vec::new();
             entry.read_to_end(&mut bytes).unwrap();
             if name == "ppt/slides/slide1.xml" {

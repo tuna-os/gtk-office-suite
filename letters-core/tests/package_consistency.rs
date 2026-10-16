@@ -48,7 +48,7 @@ fn read_members(path: &Path) -> Vec<(String, Vec<u8>)> {
         if entry.is_dir() {
             continue;
         }
-        let name = entry.name().to_string();
+        let name = entry.name().unwrap().into_owned();
         let mut bytes = Vec::new();
         entry.read_to_end(&mut bytes).unwrap();
         members.push((name, bytes));

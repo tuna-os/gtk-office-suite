@@ -981,7 +981,7 @@ fn with_part(package: &[u8], name: &str, f: impl Fn(&str) -> String) -> Result<V
     let options = zip::write::SimpleFileOptions::default().compression_method(zip::CompressionMethod::Deflated);
     for i in 0..zin.len() {
         let mut part = zin.by_index(i).map_err(|e| e.to_string())?;
-        let part_name = part.name().to_string();
+        let part_name = part.name().map_err(|e| e.to_string())?.into_owned();
         let mut data = Vec::new();
         std::io::Read::read_to_end(&mut part, &mut data).map_err(|e| e.to_string())?;
         if part_name == name {
@@ -1673,7 +1673,7 @@ fn with_sections(package: &[u8], sections: &[crate::model::DocSection]) -> Resul
     let options = zip::write::SimpleFileOptions::default().compression_method(zip::CompressionMethod::Deflated);
     for i in 0..zin.len() {
         let mut part = zin.by_index(i).map_err(|e| e.to_string())?;
-        let name = part.name().to_string();
+        let name = part.name().map_err(|e| e.to_string())?.into_owned();
         let data = match name.as_str() {
             DOCUMENT => xml.as_bytes().to_vec(),
             RELS => rels.as_bytes().to_vec(),
@@ -2448,7 +2448,7 @@ fn with_letters_styles(package: &[u8], base: &crate::model::BaseFont, heading_st
     let options = zip::write::SimpleFileOptions::default().compression_method(zip::CompressionMethod::Deflated);
     for i in 0..zin.len() {
         let mut f = zin.by_index(i).map_err(|e| e.to_string())?;
-        let name = f.name().to_string();
+        let name = f.name().map_err(|e| e.to_string())?.into_owned();
         let mut data = Vec::new();
         std::io::Read::read_to_end(&mut f, &mut data).map_err(|e| e.to_string())?;
         if name == "word/styles.xml" {
@@ -3500,7 +3500,7 @@ mod tests {
         let mut writer = zip::ZipWriter::new(std::fs::File::create(&path).unwrap());
         for i in 0..source.len() {
             let mut entry = source.by_index(i).unwrap();
-            let entry_name = entry.name().to_string();
+            let entry_name = entry.name().unwrap().into_owned();
             let mut bytes = Vec::new();
             entry.read_to_end(&mut bytes).unwrap();
             if entry_name == "word/document.xml" {

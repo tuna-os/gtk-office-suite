@@ -25,7 +25,7 @@ fn replace(path: &std::path::Path, name: &str, content: &str) -> std::path::Path
     let mut w = zip::ZipWriter::new(std::fs::File::create(&out).unwrap());
     for i in 0..zip.len() {
         let mut entry = zip.by_index(i).unwrap();
-        let entry_name = entry.name().to_string();
+        let entry_name = entry.name().unwrap().into_owned();
         let mut bytes = Vec::new();
         entry.read_to_end(&mut bytes).unwrap();
         if entry_name == name {

@@ -161,7 +161,7 @@ fn an_objects_replacement_picture_is_not_a_second_object() {
     decks_core::write_deck(path.to_str().unwrap(), &d).unwrap();
     // Rewrite the package with the frame holding a replacement too.
     let mut zip = zip::ZipArchive::new(std::fs::File::open(&path).unwrap()).unwrap();
-    let names: Vec<String> = zip.file_names().map(str::to_string).collect();
+    let names: Vec<String> = zip.file_names().map(|n| n.unwrap().into_owned()).collect();
     let out_path = dir.path().join("with-replacement.odp");
     let mut out = zip::ZipWriter::new(std::fs::File::create(&out_path).unwrap());
     let opt = zip::write::SimpleFileOptions::default();

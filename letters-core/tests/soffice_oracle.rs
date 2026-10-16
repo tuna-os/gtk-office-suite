@@ -627,7 +627,7 @@ fn inline_image_survives_lo_docx_pass() {
     // Structural: the media part survived the LO rewrite.
     let f = std::fs::File::open(&rewritten).unwrap();
     let z = zip::ZipArchive::new(f).unwrap();
-    let has_media = z.file_names().any(|n| n.starts_with("word/media/"));
+    let has_media = z.file_names().any(|n| n.unwrap().starts_with("word/media/"));
     assert!(has_media, "embedded image lost through LO");
     // And our reader sees an image run.
     let rt = docx::read(rewritten.to_str().unwrap()).expect("read");
@@ -1587,7 +1587,7 @@ fn we_read_a_picture_writer_places_in_an_odt() {
     let op = dir.path().join("pic.odt");
     assert!(op.exists(), "soffice did not convert the flat odt");
     let zip = zip::ZipArchive::new(std::fs::File::open(&op).unwrap()).unwrap();
-    assert!(zip.file_names().any(|n| n.starts_with("Pictures/")), "Writer stored no picture");
+    assert!(zip.file_names().any(|n| n.unwrap().starts_with("Pictures/")), "Writer stored no picture");
     let rt = letters_core::odt::read(op.to_str().unwrap()).expect("read Writer's odt");
     let text = norm(&rt.to_plain_text());
     assert!(text.contains("before the picture") && text.contains("after the picture"), "{text:?}");

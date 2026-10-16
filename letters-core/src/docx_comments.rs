@@ -162,7 +162,7 @@ pub fn add_parts(package: &[u8], comments: &[Comment]) -> Result<Vec<u8>, String
     let new_parts = [("word/comments.xml", comments_xml(comments)), ("word/commentsExtended.xml", comments_extended_xml(comments))];
     for i in 0..zin.len() {
         let mut part = zin.by_index(i).map_err(|e| e.to_string())?;
-        let name = part.name().to_string();
+        let name = part.name().map_err(|e| e.to_string())?.into_owned();
         if new_parts.iter().any(|(n, _)| *n == name) {
             continue;
         }

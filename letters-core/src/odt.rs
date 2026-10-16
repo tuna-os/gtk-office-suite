@@ -3857,7 +3857,7 @@ mod tests {
         write(&d, &out).unwrap();
 
         let mut zip = zip::ZipArchive::new(std::fs::File::open(&out).unwrap()).unwrap();
-        let members: Vec<String> = zip.file_names().filter(|n| n.starts_with("Pictures/")).map(str::to_string).collect();
+        let members: Vec<String> = zip.file_names().map(|n| n.unwrap().into_owned()).filter(|n| n.starts_with("Pictures/")).collect();
         assert_eq!(members.len(), 1, "one picture used three times is stored once: {members:?}");
         let mut manifest = String::new();
         std::io::Read::read_to_string(&mut zip.by_name("META-INF/manifest.xml").unwrap(), &mut manifest).unwrap();
@@ -4353,7 +4353,7 @@ mod tests {
         let mut out = zip::ZipWriter::new(std::fs::File::create(&theirs).unwrap());
         for i in 0..zin.len() {
             let mut f = zin.by_index(i).unwrap();
-            let name = f.name().to_string();
+            let name = f.name().unwrap().into_owned();
             let mut data = String::new();
             std::io::Read::read_to_string(&mut f, &mut data).unwrap();
             if name == "content.xml" {

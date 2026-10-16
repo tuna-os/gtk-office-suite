@@ -133,7 +133,7 @@ impl OpaquePackage {
         let mut parts = BTreeMap::new();
         for index in 0..archive.len() {
             let mut entry = archive.by_index(index).map_err(|e| format!("read package entry: {e}"))?;
-            let name = entry.name().to_string();
+            let name = entry.name().map_err(|e| format!("read package entry name: {e}"))?.into_owned();
             if entry.is_dir() || recognized.iter().any(|known| *known == name) {
                 continue;
             }
@@ -167,7 +167,7 @@ impl OpaquePackage {
         let input = File::open(path).map_err(|e| format!("open generated package: {e}"))?;
         let mut source = ZipArchive::new(input).map_err(|e| format!("read generated package: {e}"))?;
         let existing: BTreeSet<String> = (0..source.len())
-            .filter_map(|i| source.by_index(i).ok().map(|entry| entry.name().to_string()))
+            .filter_map(|i| source.by_index(i).ok().and_then(|entry| entry.name().ok().map(|n| n.into_owned())))
             .collect();
         let mut buffer = Vec::new();
         {
@@ -176,7 +176,7 @@ impl OpaquePackage {
             for index in 0..source.len() {
                 let mut entry = source.by_index(index).map_err(|e| format!("read generated entry: {e}"))?;
                 if entry.is_dir() { continue; }
-                let name = entry.name().to_string();
+                let name = entry.name().map_err(|e| format!("read generated entry name: {e}"))?.into_owned();
                 let mut bytes = Vec::new();
                 entry.read_to_end(&mut bytes).map_err(|e| format!("read generated {name}: {e}"))?;
                 writer.start_file(&name, options).map_err(|e| format!("write generated {name}: {e}"))?;

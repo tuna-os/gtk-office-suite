@@ -432,7 +432,7 @@ fn saved_xml_carries_what_both_readers_keep() {
     let (engine, sheets) = workbook();
     let bytes = save_sheets_to_xlsx_bytes(&sheets, Some(&engine)).expect("save");
     let mut zip = zip::ZipArchive::new(std::io::Cursor::new(&bytes)).expect("zip");
-    let names: Vec<String> = zip.file_names().map(str::to_string).collect();
+    let names: Vec<String> = zip.file_names().map(|n| n.unwrap().into_owned()).collect();
     let chart: String = {
         let mut found = None;
         for name in names.iter().filter(|n| n.starts_with("xl/charts/")) {

@@ -2048,8 +2048,9 @@ fn read_chart_objects(
 ) -> std::collections::HashMap<String, crate::engine::chart::ChartData> {
     let names: Vec<String> = zip
         .file_names()
+        .filter_map(Result::ok)
         .filter(|n| n.ends_with("/content.xml") && n.matches('/').count() == 1)
-        .map(str::to_string)
+        .map(|n| n.into_owned())
         .collect();
     let mut out = std::collections::HashMap::new();
     for name in names {
@@ -2635,7 +2636,7 @@ mod tests {
         let bytes = write_bytes(&deck_with_picture(src.to_str().unwrap())).unwrap();
 
         let mut zip = zip::ZipArchive::new(std::io::Cursor::new(bytes)).unwrap();
-        let names: Vec<String> = zip.file_names().map(str::to_string).collect();
+        let names: Vec<String> = zip.file_names().map(|n| n.unwrap().into_owned()).collect();
         assert!(
             names.iter().any(|n| n == "Pictures/image1.png"),
             "the picture is not in the archive: {names:?}",
@@ -2700,8 +2701,8 @@ mod tests {
         });
         let bytes = write_bytes(&deck).unwrap();
         let zip = zip::ZipArchive::new(std::io::Cursor::new(bytes)).unwrap();
-        let pictures: Vec<&str> =
-            zip.file_names().filter(|n| n.starts_with("Pictures/")).collect();
+        let pictures: Vec<String> =
+            zip.file_names().map(|n| n.unwrap().into_owned()).filter(|n| n.starts_with("Pictures/")).collect();
         assert_eq!(pictures.len(), 2, "expected two picture parts, got {pictures:?}");
     }
 

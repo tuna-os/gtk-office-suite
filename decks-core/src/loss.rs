@@ -142,7 +142,11 @@ fn inspect_source(path: &str, odp: bool, budget: &mut ZipBudget, report: &mut Co
     let file = std::fs::File::open(path).map_err(|e| format!("open source: {e}"))?;
     let mut zip = zip::ZipArchive::new(file).map_err(|e| format!("read source package: {e}"))?;
     budget.check_entry_count(zip.len())?;
-    let names: BTreeSet<String> = zip.file_names().map(str::to_string).collect();
+    let names = zip
+        .file_names()
+        .map(|n| n.map(|n| n.into_owned()))
+        .collect::<Result<BTreeSet<String>, _>>()
+        .map_err(|e| format!("read source member name: {e}"))?;
     if odp {
         odp_drops(&mut zip, &names, budget, report)
     } else {

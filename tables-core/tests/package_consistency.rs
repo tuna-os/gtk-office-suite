@@ -57,7 +57,7 @@ fn carried_safe_parts_survive_a_tables_save() {
             if entry.is_dir() {
                 continue;
             }
-            let name = entry.name().to_string();
+            let name = entry.name().unwrap().into_owned();
             let mut bytes = Vec::new();
             entry.read_to_end(&mut bytes).unwrap();
             let (name, bytes) = if name == "[Content_Types].xml" {

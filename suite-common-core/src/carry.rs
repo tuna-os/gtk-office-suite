@@ -94,7 +94,9 @@ fn tags<'a>(xml: &'a str, element: &str) -> Vec<&'a str> {
 }
 
 fn read_names<R: Read + std::io::Seek>(zip: &ZipArchive<R>) -> BTreeSet<String> {
-    zip.file_names().filter(|n| !n.ends_with('/')).map(str::to_string).collect()
+    // zip 9 names are fallible only in form: a name that isn't UTF-8 is
+    // read as CP437, which every byte decodes.
+    zip.file_names().filter_map(Result::ok).filter(|n| !n.ends_with('/')).map(|n| n.into_owned()).collect()
 }
 
 /// The content type `[Content_Types].xml` gives part `name`.
@@ -240,7 +242,7 @@ impl Carried {
                 if entry.is_dir() {
                     continue;
                 }
-                let name = entry.name().to_string();
+                let name = entry.name().map_err(|e| format!("read saved entry name: {e}"))?.into_owned();
                 let mut bytes = Vec::new();
                 entry.read_to_end(&mut bytes).map_err(|e| format!("read saved {name}: {e}"))?;
                 let bytes = match (family, name.as_str()) {
@@ -485,7 +487,7 @@ mod tests {
         assert_eq!(problems(&out), Vec::<String>::new());
         let mut zip = ZipArchive::new(File::open(&out).unwrap()).unwrap();
         let first = zip.by_index(0).unwrap();
-        assert_eq!((first.name(), first.compression()), ("mimetype", zip::CompressionMethod::Stored), "mimetype stays first, stored");
+        assert_eq!((first.name().unwrap(), first.compression()), ("mimetype".into(), zip::CompressionMethod::Stored), "mimetype stays first, stored");
     }
 
     #[test]
