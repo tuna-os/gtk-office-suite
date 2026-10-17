@@ -3339,9 +3339,9 @@ dependencies = [
 
 [[package]]
 name = "oxml-core"
-version = "0.14.1"
+version = "0.14.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a65f36ead41c64ad440ef672552c12465aa366b8d78e032f7eb4e27d45285657"
+checksum = "1f64cbeb9d2efb809599a40c522b5b77e6d3e2949534ef23c1254906fd38e473"
 dependencies = [
  "quick-xml 0.41.0",
  "thiserror 2.0.18",
@@ -3349,9 +3349,9 @@ dependencies = [
 
 [[package]]
 name = "oxml-drawing"
-version = "0.14.1"
+version = "0.14.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9bfa13648a17e145d56b84c0363939208abed055a4eac9ef7f660d5deed99db9"
+checksum = "187dc3c61ffcda918b5bbb014598509f8ae446709ba30652a1dd3d08dae0dc03"
 dependencies = [
  "oxml-core",
  "quick-xml 0.41.0",
@@ -4207,9 +4207,9 @@ dependencies = [
 
 [[package]]
 name = "rdocx-oxml"
-version = "0.16.1"
+version = "0.16.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4976a1a7a003ddef91ad00891f9178514f9e2ca6d9dc98900ba37e3dfe44640b"
+checksum = "017c7d6ecea8da310a61a97c635141b2f6cff5135faba35e06d9d60bc42bd7db"
 dependencies = [
  "itoa",
  "oxml-core",
