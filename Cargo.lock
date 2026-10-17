@@ -3326,9 +3326,9 @@ checksum = "04744f49eae99ab78e0d5c0b603ab218f515ea8cfe5a456d7629ad883a3b6e7d"
 
 [[package]]
 name = "oxml-chart"
-version = "0.14.1"
+version = "0.14.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5d014d31f5e37014849fa3d6d470d3bb41e3eee43e69859e5460c4368fe8a21f"
+checksum = "2eae8e95943c01cf185d1b202aac313f617f3f59d3bc33fa0e556a2bd835fb3d"
 dependencies = [
  "oxml-core",
  "oxml-drawing",
@@ -3339,9 +3339,9 @@ dependencies = [
 
 [[package]]
 name = "oxml-core"
-version = "0.14.1"
+version = "0.14.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a65f36ead41c64ad440ef672552c12465aa366b8d78e032f7eb4e27d45285657"
+checksum = "1f64cbeb9d2efb809599a40c522b5b77e6d3e2949534ef23c1254906fd38e473"
 dependencies = [
  "quick-xml 0.41.0",
  "thiserror 2.0.18",
@@ -3349,9 +3349,9 @@ dependencies = [
 
 [[package]]
 name = "oxml-drawing"
-version = "0.14.1"
+version = "0.14.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9bfa13648a17e145d56b84c0363939208abed055a4eac9ef7f660d5deed99db9"
+checksum = "187dc3c61ffcda918b5bbb014598509f8ae446709ba30652a1dd3d08dae0dc03"
 dependencies = [
  "oxml-core",
  "quick-xml 0.41.0",
@@ -3359,9 +3359,9 @@ dependencies = [
 
 [[package]]
 name = "oxml-layout"
-version = "0.14.1"
+version = "0.14.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f0b4088c46029c45f9ece0790c1831f294f778ffd3df237ac95953ed1acecfc0"
+checksum = "50aa25e6cb6d55bd488ddd983481a4e6c00c8d87146d2a73cfc61f949ff6f778"
 dependencies = [
  "fontdb",
  "harfrust",
@@ -3375,26 +3375,26 @@ dependencies = [
 
 [[package]]
 name = "oxml-media"
-version = "0.14.1"
+version = "0.14.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "bf586868235eeb766e25e0bf4b0feb633846e27cfc8f826b06a2691ac4cf3608"
+checksum = "e876854a75340b3f26dfca0e96223f067567265af44813001cb01e035c74780f"
 
 [[package]]
 name = "oxml-opc"
-version = "0.14.1"
+version = "0.14.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e047a128f571ab8ff8560a8888d66c1b6924527024d7cf99f1d5322796389ad7"
+checksum = "0f16e35f4e133e804223c8e6b7bb5a8da958bfcc65647995ac0309ed376783f6"
 dependencies = [
  "quick-xml 0.41.0",
  "thiserror 2.0.18",
- "zip 8.6.0",
+ "zip 9.0.4",
 ]
 
 [[package]]
 name = "oxml-pdf"
-version = "0.14.1"
+version = "0.14.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "bec2508845c9368484b8c7682bbf31f716e0ffafabbc90a5d1bcfbff04783447"
+checksum = "c99b4f0c870fb7c9130e69b9fe3ac03a62b26f08fb7aa6bd1c5f3a6b3987586b"
 dependencies = [
  "jpeg-encoder",
  "miniz_oxide 0.9.1",
@@ -3410,9 +3410,9 @@ dependencies = [
 
 [[package]]
 name = "oxml-sml"
-version = "0.14.1"
+version = "0.14.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ce47cc37646a51c39095f1add4c2180b65d5c89b1da5a470061adb4bb8c0055a"
+checksum = "928de6eb42bedc1de627a5b32265612f80ff70688bdebd8f10848c775686aa84"
 dependencies = [
  "oxml-opc",
  "quick-xml 0.41.0",
@@ -4156,9 +4156,9 @@ dependencies = [
 
 [[package]]
 name = "rdocx"
-version = "0.16.1"
+version = "0.16.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "100e4d53a11439aed05487f6f9bf69bf810b34f3de7e80b5a55dac898f03b5df"
+checksum = "5bfe2eb1107ef1293cde0824ec8dde8fc60cacfd40a7281c712e76dbaf8a479d"
 dependencies = [
  "base64 0.23.1",
  "encoding_rs",
@@ -4181,35 +4181,36 @@ dependencies = [
  "sha2",
  "thiserror 2.0.18",
  "ttf-parser",
- "zip 8.6.0",
+ "zip 9.0.4",
 ]
 
 [[package]]
 name = "rdocx-html"
-version = "0.16.1"
+version = "0.16.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "99c2e261a7f7704efa18113978b9c9ec5b2b6888b6f941b04d3dda81984e4bd4"
+checksum = "5bd9221e8a859517e9eab6aa4d78b895bf226ef297345f563d95f82009318344"
 dependencies = [
  "rdocx-oxml",
 ]
 
 [[package]]
 name = "rdocx-layout"
-version = "0.16.1"
+version = "0.16.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ca35374d80e2516324c4ef325453a63d9d0eaa3bfe0c6d97c3d9227fa160627e"
+checksum = "e9aef6278d57ecb146327f910b5859bc12c6ba416cf84511df0e7547ecf3ce1f"
 dependencies = [
  "oxml-chart",
  "oxml-drawing",
  "oxml-layout",
  "rdocx-oxml",
+ "ttf-parser",
 ]
 
 [[package]]
 name = "rdocx-oxml"
-version = "0.16.1"
+version = "0.16.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4976a1a7a003ddef91ad00891f9178514f9e2ca6d9dc98900ba37e3dfe44640b"
+checksum = "017c7d6ecea8da310a61a97c635141b2f6cff5135faba35e06d9d60bc42bd7db"
 dependencies = [
  "itoa",
  "oxml-core",
