@@ -950,8 +950,9 @@ fn content_xml(doc: &Document) -> String {
                 inner.push_str(&chip_xml(chip, &r.text, r.style.link.as_deref()));
                 continue;
             }
-            // A tab is an element in ODF: a raw one is only whitespace.
-            let mut run_xml = esc(&r.text).replace('\t', "<text:tab/>");
+            // A tab and a line break are elements in ODF: raw, they are
+            // only whitespace.
+            let mut run_xml = esc(&r.text).replace('\t', "<text:tab/>").replace('\n', "<text:line-break/>");
             let plain = RunStyle { revision: None, comments: Vec::new(), ..r.style.clone() };
             if plain != RunStyle::default() {
                 let ti = run_styles.iter().position(|s| *s == plain).unwrap() + 1;
@@ -1527,6 +1528,9 @@ struct AutoStyles {
     para_parent: std::collections::HashMap<String, String>,
     /// Automatic text style → its parent, as for paragraphs.
     text_parent: std::collections::HashMap<String, String>,
+    /// Paragraph styles that say whether their paragraphs keep their
+    /// spacing beside another of their style (`style:contextual-spacing`).
+    contextual: std::collections::HashMap<String, bool>,
     /// A text style's font declaration (`style:font-name`), which Writer
     /// names a span's face by: a header's or footer's line takes it.
     text_font_name: std::collections::HashMap<String, String>,
@@ -1728,7 +1732,7 @@ fn list_style_indents(xml: &str) -> std::collections::HashMap<String, Vec<Option
 const DEFAULT_PARA: &str = "\u{0}default-paragraph";
 
 fn parse_auto_styles(xml: &str) -> AutoStyles {
-    let mut out = AutoStyles { text: Default::default(), para: Default::default(), para_parent: Default::default(), text_parent: Default::default(), text_font_name: Default::default(), graphic_padding: Default::default(), graphic_sides: Default::default(), table_relative: Default::default(), para_text: Default::default(), column: Default::default(), row: Default::default(), cell_fill: Default::default(), cell_ruled: Default::default(), cell_open: Default::default(), cell_valign: Default::default(), graphic: Default::default(), master: Default::default(), cell_padding: Default::default(), row_whole: Default::default() };
+    let mut out = AutoStyles { text: Default::default(), para: Default::default(), para_parent: Default::default(), text_parent: Default::default(), contextual: Default::default(), text_font_name: Default::default(), graphic_padding: Default::default(), graphic_sides: Default::default(), table_relative: Default::default(), para_text: Default::default(), column: Default::default(), row: Default::default(), cell_fill: Default::default(), cell_ruled: Default::default(), cell_open: Default::default(), cell_valign: Default::default(), graphic: Default::default(), master: Default::default(), cell_padding: Default::default(), row_whole: Default::default() };
     let mut reader = Reader::from_str(xml);
     let mut cur_name: Option<String> = None;
     let mut cur_family = String::new();
@@ -1915,7 +1919,12 @@ fn parse_auto_styles(xml: &str) -> AutoStyles {
                                 }
                                 out.para_text.insert(name, st);
                             } else {
+                                // A span's too: the statistical release's
+                                // Verdana is named only so.
                                 if let Some(fname) = attr_val(&e, "style:font-name").filter(|_| !st.code) {
+                                    if st.font_family.is_none() {
+                                        st.font_family = Some(fname.clone());
+                                    }
                                     out.text_font_name.insert(name.clone(), fname);
                                 }
                                 out.text.insert(name, st);
@@ -1924,6 +1933,9 @@ fn parse_auto_styles(xml: &str) -> AutoStyles {
                     }
                     "style:paragraph-properties" => {
                         if let (Some(name), "paragraph") = (cur_name.clone(), cur_family.as_str()) {
+                            if let Some(v) = attr_val(&e, "style:contextual-spacing") {
+                                out.contextual.insert(name.clone(), v == "true");
+                            }
                             let align = match attr_val(&e, "fo:text-align").as_deref() {
                                 Some("center") => Alignment::Center,
                                 Some("end") | Some("right") => Alignment::Right,
@@ -2893,6 +2905,9 @@ fn read_parts(path: &str) -> Result<(Document, Vec<String>), String> {
     let mut span_stack: Vec<RunStyle> = Vec::new();
     // Body paragraphs open, each with its text base on `span_stack`.
     let mut paragraph_bases = 0usize;
+    // Each body paragraph's named style and contextual spacing, by index.
+    let mut para_ctx: Option<(String, bool)> = None;
+    let mut spacing_ctx: std::collections::HashMap<usize, (String, bool)> = Default::default();
     let mut link_stack: Vec<String> = Vec::new();
     let mut list_kind = ListKind::None;
     let mut list_level: u8 = 0;
@@ -3323,6 +3338,7 @@ fn read_parts(path: &str) -> Result<(Document, Vec<String>), String> {
                             switches.push((doc.paragraphs.len(), m));
                         }
                     }
+                    para_ctx = attr_val(&e, "text:style-name").map(|n| contextual_spacing(&n, &auto, &named));
                     let mut style = ParaStyle::default();
                     if e.name().as_ref() == "text:h" {
                         let lvl = attr_val(&e, "text:outline-level")
@@ -3593,6 +3609,11 @@ fn read_parts(path: &str) -> Result<(Document, Vec<String>), String> {
                 "text:tab" if para.is_some() => {
                     push_text(&mut para, &span_stack, &link_stack, &rev_stack, "\t");
                 }
+                // A line break within the paragraph (Shift+Enter): the
+                // statistical release's two-line title.
+                "text:line-break" if para.is_some() => {
+                    push_text(&mut para, &span_stack, &link_stack, &rev_stack, "\n");
+                }
                 "text:p" if note.is_some() => {}
                 "text:p" | "text:h" if in_body => {
                     if table.is_none() && para.is_none() && frame_depth == 0 {
@@ -3716,6 +3737,9 @@ fn read_parts(path: &str) -> Result<(Document, Vec<String>), String> {
                         if let Some(t) = table.as_mut() {
                             p.style.table_cell = cell_of(&Some(*t));
                             t.4 = true;
+                        }
+                        if let Some(c) = para_ctx.take() {
+                            spacing_ctx.insert(doc.paragraphs.len(), c);
                         }
                         doc.paragraphs.push(p);
                     }
@@ -4289,6 +4313,22 @@ fn read_parts(path: &str) -> Result<(Document, Vec<String>), String> {
     }
 
     continue_numbering(&mut doc.paragraphs, &top_lists);
+    // Contextual spacing: no space between two paragraphs of one style
+    // in one text (the body or a cell) where the style asks for it, as
+    // the DOCX reader does. The form's list items, each ending in a line
+    // break, stand one blank line apart, not that and Normal's space.
+    for k in 1..doc.paragraphs.len() {
+        let (Some((a, a_on)), Some((b, b_on))) = (spacing_ctx.get(&(k - 1)), spacing_ctx.get(&k)) else { continue };
+        if a != b || doc.paragraphs[k - 1].style.table_cell != doc.paragraphs[k].style.table_cell {
+            continue;
+        }
+        if *a_on {
+            doc.paragraphs[k - 1].style.space_after_pt = 0.0;
+        }
+        if *b_on {
+            doc.paragraphs[k].style.space_before_pt = 0.0;
+        }
+    }
     // A regular weight matters only where the paragraph is drawn bold (a
     // heading, the Title); LibreOffice writes "normal" on body text too.
     for p in &mut doc.paragraphs {
@@ -4321,6 +4361,27 @@ fn read_parts(path: &str) -> Result<(Document, Vec<String>), String> {
     }
 
     Ok((doc, consumed))
+}
+
+/// A paragraph's named style, and whether its spacing gives way beside a
+/// paragraph of the same style (`style:contextual-spacing`, the nearest
+/// style in its chain that says): an automatic style is its parent's.
+fn contextual_spacing(name: &str, auto: &AutoStyles, named: &AutoStyles) -> (String, bool) {
+    let is_auto = |n: &str| auto.para.contains_key(n) || auto.para_parent.contains_key(n) || auto.para_text.contains_key(n);
+    let mut style = None;
+    let mut on = None;
+    let mut cur = Some(name.to_string());
+    for _ in 0..16 {
+        let Some(n) = cur else { break };
+        if style.is_none() && !is_auto(&n) {
+            style = Some(n.clone());
+        }
+        if on.is_none() {
+            on = auto.contextual.get(&n).or_else(|| named.contextual.get(&n)).copied();
+        }
+        cur = auto.para_parent.get(&n).or_else(|| named.para_parent.get(&n)).cloned();
+    }
+    (style.unwrap_or_else(|| name.to_string()), on.unwrap_or(false))
 }
 
 /// A span's text style over the text style around it: what the span
@@ -5699,6 +5760,60 @@ mod tests {
         ];
         let rt = round_trip(&d);
         assert_eq!(rt.paragraphs[0].runs, d.paragraphs[0].runs);
+    }
+
+    /// A span's face named only by its font declaration
+    /// (`style:font-name`), as Writer saves a Word file's: the statistical
+    /// release's Verdana body came out in the paragraph's Arial.
+    #[test]
+    fn a_spans_face_named_by_its_declaration_is_read() {
+        let content = "<office:document-content><office:automatic-styles>\
+             <style:style style:name=\"T1\" style:parent-style-name=\"DefaultParagraphFont\" style:family=\"text\"><style:text-properties style:font-name=\"Verdana\" style:font-name-complex=\"Arial\" fo:font-weight=\"bold\"/></style:style>\
+             </office:automatic-styles><office:body><office:text>\
+             <text:p text:style-name=\"Normal\"><text:span text:style-name=\"T1\">Impact</text:span></text:p>\
+             </office:text></office:body></office:document-content>";
+        let styles = "<office:document-styles><office:styles>\
+             <style:style style:name=\"Normal\" style:family=\"paragraph\"><style:text-properties style:font-name=\"Arial\"/></style:style>\
+             <style:style style:name=\"DefaultParagraphFont\" style:family=\"text\"/>\
+             </office:styles></office:document-styles>";
+        let run = &read_package(content, styles).paragraphs[0].runs[0];
+        assert_eq!((run.text.as_str(), run.style.font_family.as_deref(), run.style.bold), ("Impact", Some("Verdana"), true));
+    }
+
+    /// Contextual spacing: two paragraphs of one style that asks for it
+    /// (`style:contextual-spacing`) have no space between them, though
+    /// each names its own automatic style; a paragraph of another style
+    /// keeps its own. The screening committee form's list items stood a
+    /// blank line and Normal's 12pt apart.
+    #[test]
+    fn contextual_spacing_drops_the_space_between_paragraphs_of_one_style() {
+        let styles = "<office:document-styles><office:styles>\
+             <style:style style:name=\"Normal\" style:family=\"paragraph\"><style:paragraph-properties fo:margin-bottom=\"12pt\"/></style:style>\
+             <style:style style:name=\"ListParagraph\" style:family=\"paragraph\" style:parent-style-name=\"Normal\"><style:paragraph-properties style:contextual-spacing=\"true\"/></style:style>\
+             </office:styles></office:document-styles>";
+        let content = "<office:document-content><office:automatic-styles>\
+             <style:style style:name=\"P1\" style:parent-style-name=\"ListParagraph\" style:family=\"paragraph\"><style:paragraph-properties fo:margin-left=\"36pt\"/></style:style>\
+             <style:style style:name=\"P2\" style:parent-style-name=\"ListParagraph\" style:family=\"paragraph\"><style:paragraph-properties fo:margin-left=\"36pt\"/></style:style>\
+             </office:automatic-styles><office:body><office:text>\
+             <text:p text:style-name=\"P1\">one</text:p><text:p text:style-name=\"P2\">two</text:p><text:p text:style-name=\"Normal\">after</text:p>\
+             </office:text></office:body></office:document-content>";
+        let d = read_package(content, styles);
+        let after: Vec<f64> = d.paragraphs.iter().map(|p| p.style.space_after_pt).collect();
+        assert_eq!(after, [0.0, 12.0, 12.0], "only between the two list paragraphs");
+    }
+
+    /// A line break within a paragraph (`text:line-break`, Shift+Enter)
+    /// is read and written: the statistical release's title is two lines,
+    /// and ran together as one.
+    #[test]
+    fn a_line_break_within_a_paragraph_survives() {
+        let content = "<office:document-content><office:body><office:text>\
+             <text:p>Statistical Release<text:line-break/>October<text:s/>2020</text:p>\
+             </office:text></office:body></office:document-content>";
+        let d = read_package(content, "<office:document-styles/>");
+        assert_eq!(d.paragraphs.len(), 1);
+        assert_eq!(d.paragraphs[0].runs[0].text, "Statistical Release\nOctober 2020");
+        assert_eq!(round_trip(&d).paragraphs[0].runs, d.paragraphs[0].runs);
     }
 
     #[test]

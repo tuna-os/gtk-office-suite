@@ -2673,3 +2673,29 @@ fn the_first_pages_own_header_survives_writer_both_ways() {
     let Some(rt) = through_lo_to_docx(&d, "first") else { return };
     close(&rt, "odt → Writer → docx");
 }
+
+/// A line break within a paragraph, and a span's face, through Writer
+/// both ways: the statistical release's two-line Verdana title. Writer
+/// keeps the break as `text:line-break` in an odt and `w:br` in a docx,
+/// and names a span's face by its font declaration in an odt.
+#[test]
+fn a_line_break_and_a_spans_face_survive_writer_both_ways() {
+    let Some(bin) = require_or_skip() else { return };
+    let mut d = Document::from_plain_text("");
+    d.paragraphs[0].runs = vec![Run { text: "Statistical Release\nOctober 2020".into(), style: RunStyle { font_family: Some("Verdana".into()), ..Default::default() } }];
+    let close = |got: &Document, how: &str| {
+        let text: String = got.paragraphs.iter().flat_map(|p| &p.runs).map(|r| r.text.as_str()).collect();
+        assert_eq!(text.trim_end(), "Statistical Release\nOctober 2020", "{how}: the break");
+        let run = got.paragraphs.iter().flat_map(|p| &p.runs).find(|r| r.text.contains("October")).expect("the title");
+        assert_eq!(run.style.font_family.as_deref(), Some("Verdana"), "{how}: the face");
+    };
+    let dir = tempfile::tempdir().unwrap();
+    let docx_path = dir.path().join("brk.docx");
+    docx::write(&d, &docx_path).expect("write docx");
+    let _ = soffice_convert(bin, &docx_path, "odt").ok();
+    let odt_path = dir.path().join("brk.odt");
+    assert!(odt_path.exists(), "soffice did not convert docx to odt");
+    close(&letters_core::odt::read(odt_path.to_str().unwrap()).expect("read converted odt"), "docx → Writer → odt");
+    let Some(rt) = through_lo_to_docx(&d, "brk") else { return };
+    close(&rt, "odt → Writer → docx");
+}

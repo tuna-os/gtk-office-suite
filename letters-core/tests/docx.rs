@@ -2272,3 +2272,13 @@ fn word_section_breaks_read_as_sections() {
     assert_eq!(rt.next_section_id, 3);
     assert_eq!(letters_core::sections::header(&rt, 2), (Some("Second part"), false));
 }
+
+/// A line break within a paragraph is written as Word's `w:br` and read
+/// back as one: a raw newline was whitespace, and the two lines ran
+/// together.
+#[test]
+fn a_line_break_within_a_paragraph_survives() {
+    let mut d = Document::from_plain_text("");
+    d.paragraphs[0].runs = vec![Run::plain("Statistical Release\nOctober 2020")];
+    assert_eq!(round_trip(&d).paragraphs[0].runs, d.paragraphs[0].runs);
+}

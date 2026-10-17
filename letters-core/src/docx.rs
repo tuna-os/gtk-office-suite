@@ -1010,6 +1010,20 @@ fn pbdr_xml(borders: &ParaBorders) -> String {
 }
 
 /// A run's text as written: bracketed as a tracked change if it is one.
+/// A run of `text` whose line breaks (Shift+Enter, `\n`) are Word's
+/// `w:br`: raw, a newline is whitespace every reader collapses.
+fn broken_run<'a>(p: &'a mut rdocx::Paragraph<'_>, text: &str) -> rdocx::Run<'a> {
+    let mut pieces = text.split('\n');
+    let mut r = p.add_run(pieces.next().unwrap_or_default());
+    for piece in pieces {
+        r.add_break(rdocx::BreakKind::Line);
+        if !piece.is_empty() {
+            r.add_text(piece);
+        }
+    }
+    r
+}
+
 fn bracketed(revisions: &mut Vec<crate::model::Revision>, run: &Run) -> String {
     match &run.style.revision {
         Some(rev) => {
@@ -2075,7 +2089,7 @@ pub fn write(doc: &Document, path: impl AsRef<std::path::Path>) -> Result<(), St
                             let _ = cp.add_run(&crate::docx_comments::marker(id, start));
                         }
                         let Some(run) = run else { break };
-                        let mut r = cp.add_run(&run.text);
+                        let mut r = broken_run(&mut cp, &run.text);
                         if run.style.bold { r = r.bold(true); } else if run.style.regular { r = r.bold(false); }
                         if run.style.italic { r = r.italic(true); }
                         if run.style.caps { r = r.all_caps(true); }
@@ -2380,7 +2394,7 @@ pub fn write(doc: &Document, path: impl AsRef<std::path::Path>) -> Result<(), St
             }
             let mut p = out.last_paragraph_mut().expect("paragraph just added");
             let text = bracketed(&mut revisions, run);
-            let mut r = p.add_run(&text);
+            let mut r = broken_run(&mut p, &text);
             if run.style.bold { r = r.bold(true); } else if run.style.regular { r = r.bold(false); }
             if run.style.italic { r = r.italic(true); }
             if run.style.caps { r = r.all_caps(true); }
