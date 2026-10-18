@@ -933,7 +933,7 @@ dependencies = [
  "quick-xml 0.42.0",
  "suite-common",
  "tempfile",
- "zip 9.0.4",
+ "zip 9.0.5",
 ]
 
 [[package]]
@@ -951,7 +951,7 @@ dependencies = [
  "suite-common-core",
  "tempfile",
  "unicode-segmentation",
- "zip 9.0.4",
+ "zip 9.0.5",
 ]
 
 [[package]]
@@ -2699,7 +2699,7 @@ dependencies = [
  "serde_json",
  "suite-common-core",
  "tempfile",
- "zip 9.0.4",
+ "zip 9.0.5",
 ]
 
 [[package]]
@@ -3387,7 +3387,7 @@ checksum = "0f16e35f4e133e804223c8e6b7bb5a8da958bfcc65647995ac0309ed376783f6"
 dependencies = [
  "quick-xml 0.41.0",
  "thiserror 2.0.18",
- "zip 9.0.4",
+ "zip 9.0.5",
 ]
 
 [[package]]
@@ -4181,7 +4181,7 @@ dependencies = [
  "sha2",
  "thiserror 2.0.18",
  "ttf-parser",
- "zip 9.0.4",
+ "zip 9.0.5",
 ]
 
 [[package]]
@@ -4872,7 +4872,7 @@ dependencies = [
  "serde",
  "serde_json",
  "tempfile",
- "zip 9.0.4",
+ "zip 9.0.5",
 ]
 
 [[package]]
@@ -5025,7 +5025,7 @@ dependencies = [
  "suite-common-core",
  "suite-export",
  "tempfile",
- "zip 9.0.4",
+ "zip 9.0.5",
 ]
 
 [[package]]
@@ -6567,9 +6567,9 @@ dependencies = [
 
 [[package]]
 name = "zip"
-version = "9.0.4"
+version = "9.0.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a954114b47a54df49f83d2722814e86b23d4bb1b54a1b90fb7d92b41619ddc22"
+checksum = "6e04976da629d3b04204ba8105b396a193af8ad2583b2c79bfb3ab8af580a11e"
 dependencies = [
  "aes",
  "bzip2",
