@@ -7,3 +7,7 @@ exclude = ["tools/crdt-spike"]
 
 [workspace.dependencies]
 gettext-rs = { version = "0.8", features = ["gettext-system"] }
+
+[patch.crates-io]
+# Upstream fix for quick-xml RUSTSEC-2026-0194/0195 is merged but unreleased.
+citationberg = { git = "https://github.com/typst/citationberg", rev = "06a591e2f237d25e1dfdedac3f3d1494c496c52d" }
