@@ -654,8 +654,17 @@ pub async fn native_lease_expiry_frees_the_wopi_lock(rig: &Rig) -> R {
 
 /// The owner removes the editor (natively). The editor's WOPI token is still in
 /// the host's registry, so any refusal comes from the Matrix store behind it.
-/// Observed and asserted: nothing published after the removal reaches the
-/// token, and the token can neither lock nor save.
+///
+/// What the code does (observed against Synapse 1.163.2 and asserted): the host
+/// keeps the token, but the Matrix store behind it refuses every request, reads
+/// included. `MatrixStore::room_for` tries to re-join the room it was kicked
+/// from, Synapse answers `403 M_FORBIDDEN` ("You are not invited to this room"),
+/// and the host maps `StoreError::Forbidden` to HTTP 403. So the token does not
+/// merely get no new content: it gets nothing, not even the versions it could
+/// read before. The refusal is the Matrix binding's and the room's, not the
+/// host's: the WOPI host has no notion of membership and never learns of the
+/// removal. Anything still in the member's own device is outside this check
+/// (spec section 11).
 pub async fn removed_members_wopi_token_gets_no_new_content_and_no_write(rig: &Rig) -> R {
     let doc = &rig.doc;
     let ed = rig.raw(Who::Editor);
@@ -682,22 +691,18 @@ pub async fn removed_members_wopi_token_gets_no_new_content_and_no_write(rig: &R
     ];
     for (what, r) in &probes {
         println!("removed member's token, {what}: HTTP {} {:?}", r.status, r.text());
-        ensure!(r.status != 401, "{what}: 401 means the host forgot the token; this check is about the store refusing");
+        ensure!(
+            r.status == 403 && r.text().contains("M_FORBIDDEN"),
+            "{what}: a removed member's token must be refused by the Matrix store with 403 M_FORBIDDEN \
+             (401 would mean the host forgot the token), got HTTP {} {:?}",
+            r.status,
+            r.text()
+        );
         ensure!(
             !r.body.windows(secret.len()).any(|w| w == secret),
             "{what}: the removed member received content published after the removal"
         );
         ensure!(r.item_version.as_deref() != Some(after.id.as_str()), "{what}: served the version published after the removal");
-        if r.status == 200 {
-            if let Ok(j) = r.json() {
-                ensure!(field(&j, "Version") != after.id, "{what}: reports the version published after the removal as the head");
-            }
-        }
-    }
-    for (what, r) in &probes {
-        if matches!(*what, "LOCK" | "PutFile with no lock" | "PutFile with a lock") {
-            ensure!(r.status != 200, "{what}: a removed member's write succeeded");
-        }
     }
     // The members who stayed are unaffected.
     let got = rig.raw(Who::Viewer).get_file(None).await?;
@@ -707,7 +712,10 @@ pub async fn removed_members_wopi_token_gets_no_new_content_and_no_write(rig: &R
         .sim(Who::Editor)
         .publish_version(doc, vec![after.id.clone()], new_file(b"x"), None)
         .await;
-    ensure!(through_wopi.is_err(), "a removed member saved through WopiClientStore: {through_wopi:?}");
+    ensure!(
+        matches!(through_wopi, Err(StoreError::Forbidden(_))),
+        "a removed member saving through WopiClientStore must be Forbidden: {through_wopi:?}"
+    );
     let mut want = vec![rig.first.clone(), after.id.clone()];
     want.sort();
     let ids = rig.version_ids(&**rig.native(Who::Owner)).await?;
