@@ -49,6 +49,9 @@ jobs:
           workspaces: tools/collab-spike
           save-if: true
 
+      - name: Output directory
+        run: mkdir -p "$GITHUB_WORKSPACE/measurements"
+
       - name: Versions
         run: |
           rustc --version
@@ -64,7 +67,6 @@ jobs:
           DCP_MEASURE_OUT: ${{ github.workspace }}/measurements/relaxed-journeys.jsonl
         run: |
           set -euo pipefail
-          mkdir -p "$GITHUB_WORKSPACE/measurements"
           eval "$(scripts/synapse-up.sh relaxed)"
           trap 'docker logs "$DCP_SYNAPSE_CONTAINER" > "$GITHUB_WORKSPACE/measurements/synapse-relaxed-journeys.log" 2>&1 || true; scripts/synapse-down.sh relaxed' EXIT
           cargo test -p dcp-matrix -- --nocapture 2>&1 | tee "$GITHUB_WORKSPACE/measurements/journeys.log"

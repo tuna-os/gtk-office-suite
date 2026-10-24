@@ -9,7 +9,7 @@ mod common;
 
 use common::*;
 use dcp_core::*;
-use dcp_matrix::state;
+use dcp_matrix::{state, MatrixStore};
 use serde_json::json;
 use sha2::{Digest, Sha256};
 

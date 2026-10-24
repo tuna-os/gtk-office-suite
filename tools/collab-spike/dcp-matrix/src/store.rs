@@ -95,6 +95,8 @@ struct Inner {
     sync_task: std::sync::Mutex<Option<tokio::task::JoinHandle<()>>>,
     sync_ticks: watch::Sender<u64>,
     init_warnings: std::sync::Mutex<Vec<String>>,
+    /// `(origin_server_ts of our newest own event, local instant we learned it)`.
+    clock_sample: std::sync::Mutex<Option<(u64, Instant)>>,
 }
 
 impl Drop for Inner {
@@ -151,6 +153,7 @@ impl MatrixStore {
             sync_task: std::sync::Mutex::new(None),
             sync_ticks: ticks,
             init_warnings: std::sync::Mutex::new(Vec::new()),
+            clock_sample: std::sync::Mutex::new(None),
             cfg,
         });
         let store = MatrixStore { inner };
@@ -345,6 +348,9 @@ impl MatrixStore {
             .map_err(|e| to_store(e, "read event"))?;
         let v: Value = serde_json::from_str(resp.event.json().get()).map_err(|e| StoreError::Transport(e.to_string()))?;
         let ts = v["origin_server_ts"].as_u64().ok_or_else(|| StoreError::Transport("event without origin_server_ts".into()))?;
+        if let Ok(mut c) = self.inner.clock_sample.lock() {
+            *c = Some((ts, Instant::now()));
+        }
         Ok((ts, v["sender"].as_str().unwrap_or_default().to_owned()))
     }
 
@@ -835,6 +841,13 @@ impl DocumentStore for MatrixStore {
 
     async fn now_ms(&self, doc: &DocId) -> Result<u64> {
         match self.inner.cfg.clock {
+            ClockSource::Calibrated => {
+                let sample = self.inner.clock_sample.lock().ok().and_then(|c| *c);
+                match sample {
+                    Some((ts, at)) => Ok(ts + at.elapsed().as_millis() as u64),
+                    None => synapse::server_date_ms(&self.inner.http, &self.inner.cfg.homeserver).await,
+                }
+            }
             ClockSource::ServerDate => synapse::server_date_ms(&self.inner.http, &self.inner.cfg.homeserver).await,
             ClockSource::ProbeEvent => {
                 let room = self.room_for(doc).await?;

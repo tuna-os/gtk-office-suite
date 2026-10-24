@@ -10,6 +10,11 @@ use std::time::Duration;
 /// server has just accepted. Both honest options are offered and measured.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum ClockSource {
+    /// `origin_server_ts` of the newest event this device wrote, advanced by the
+    /// local monotonic clock since (ms resolution, no extra request, no extra
+    /// rate-limit slot). Falls back to [`ClockSource::ServerDate`] until this
+    /// device has written something, so a pure reader gets 1 s resolution.
+    Calibrated,
     /// The `Date` header of a cheap homeserver request (1 s resolution, costs no
     /// rate-limit slot, works for read-only members).
     ServerDate,
@@ -67,7 +72,7 @@ impl MatrixConfig {
             background_sync: true,
             sync_timeout: Duration::from_secs(10),
             enforce_encrypted_pl: true,
-            clock: ClockSource::ServerDate,
+            clock: ClockSource::Calibrated,
             room_version: None,
             store_dir: None,
         }

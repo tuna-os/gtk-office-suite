@@ -560,7 +560,7 @@ async fn m07_lease_race() {
         let (fa, fb) = (alice.lease(&doc).await.unwrap().unwrap(), bob.lease(&doc).await.unwrap().unwrap());
         let winner = fa.body.holder.as_ref().unwrap().session.clone();
         let believers = [ra.0, rb.0].iter().filter(|b| **b).count();
-        let bump = |k: &str| tally[k] = json!(tally[k].as_u64().unwrap() + 1);
+        let mut bump = |k: &str| tally[k] = json!(tally[k].as_u64().unwrap() + 1);
         match believers {
             2 => bump("both_believe_at_first_read_back"),
             1 => bump("exactly_one_believes"),
@@ -773,44 +773,52 @@ async fn m09_offline_then_online() {
 }
 
 // ---------------------------------------------------------------------------
-// 10. Clock: Date header vs origin_server_ts.
+// 10. Clock: Date header and calibrated clock against origin_server_ts.
 // ---------------------------------------------------------------------------
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 #[ignore = "measurement"]
 async fn m10_clock_sources() {
     let Some(syn) = require_synapse!() else { return };
-    let date = syn.user_with("alice", |c| c.events_per_sec = 0.0).await;
-    let doc = date.create_document(&meta("Clock"), Some(file(b"v1"))).await.unwrap();
-    let probe = {
-        let reg = syn.register("probe").await;
-        let s = syn.connect_as(&reg, |c| {
-            c.clock = dcp_matrix::ClockSource::ProbeEvent;
-            c.events_per_sec = 0.0;
-        })
-        .await;
-        date.grant(&doc, &s.principal(), Role::Editor).await.unwrap();
-        s
+    let owner = syn.user_with("alice", |c| c.events_per_sec = 0.0).await; // Calibrated (default)
+    let doc = owner.create_document(&meta("Clock"), Some(file(b"v1"))).await.unwrap();
+    let mk = |kind: dcp_matrix::ClockSource, prefix: &'static str| {
+        let syn = syn.clone();
+        async move { syn.user_with(prefix, move |c| { c.clock = kind; c.events_per_sec = 0.0; }).await }
     };
+    let date = mk(dcp_matrix::ClockSource::ServerDate, "date").await;
+    let probe = mk(dcp_matrix::ClockSource::ProbeEvent, "probe").await;
+    for s in [&date, &probe] {
+        owner.grant(&doc, &s.principal(), Role::Editor).await.unwrap();
+    }
     let n = if is_default(&syn) { 5 } else { 20 };
-    let mut date_vs_probe = Vec::new();
-    let mut date_cost = Vec::new();
-    let mut probe_cost = Vec::new();
+    let (mut date_err, mut cal_err) = (Vec::new(), Vec::new());
+    let (mut date_cost, mut probe_cost, mut cal_cost) = (Vec::new(), Vec::new(), Vec::new());
     for _ in 0..n {
+        let t = Instant::now();
+        let p = probe.now_ms(&doc).await.unwrap();
+        probe_cost.push(ms(t.elapsed()));
         let t = Instant::now();
         let d = date.now_ms(&doc).await.unwrap();
         date_cost.push(ms(t.elapsed()));
         let t = Instant::now();
-        let p = probe.now_ms(&doc).await.unwrap();
-        probe_cost.push(ms(t.elapsed()));
-        date_vs_probe.push(d as f64 - p as f64);
+        let c = owner.now_ms(&doc).await.unwrap();
+        cal_cost.push(ms(t.elapsed()));
+        date_err.push(d as f64 - p as f64);
+        cal_err.push(c as f64 - p as f64);
         sleep_ms(137).await;
     }
+    // Staleness: the owner's calibration is from its last write; sample again after 20 s idle.
+    sleep_ms(20_000).await;
+    let p = probe.now_ms(&doc).await.unwrap();
+    let c = owner.now_ms(&doc).await.unwrap();
     let local = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_millis() as i64;
-    let server = date.now_ms(&doc).await.unwrap() as i64;
     record(&syn, "clock_sources", json!({
-        "date_header_minus_probe_origin_server_ts_ms": summarize(date_vs_probe),
-        "date_header_call_ms": summarize(date_cost), "probe_event_call_ms": summarize(probe_cost),
-        "local_clock_minus_server_date_ms": local - server,
+        "reference": "ProbeEvent: origin_server_ts of an event written for the purpose; the other two are read a few ms after it, so a small positive bias is expected",
+        "date_header_minus_reference_ms": summarize(date_err),
+        "calibrated_minus_reference_ms": summarize(cal_err),
+        "calibrated_minus_reference_after_20s_idle_ms": c as f64 - p as f64,
+        "date_header_call_ms": summarize(date_cost), "probe_event_call_ms": summarize(probe_cost), "calibrated_call_ms": summarize(cal_cost),
+        "local_clock_minus_server_ms": local - p as i64,
     }));
 }
