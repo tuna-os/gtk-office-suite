@@ -166,11 +166,12 @@ pub async fn server_event(syn: &Synapse, as_: &MatrixStore, doc: &str, event_id:
 /// Can `device`'s store decrypt this server-side encrypted event with the keys
 /// it holds (no network involved beyond what the SDK does for key backup)?
 pub async fn can_decrypt(device: &MatrixStore, doc: &str, encrypted_event: &serde_json::Value) -> bool {
+    use dcp_matrix::matrix_sdk::ruma::events::room::encrypted::OriginalSyncRoomEncryptedEvent;
     use dcp_matrix::matrix_sdk::ruma::{serde::Raw, RoomId};
     let rid = RoomId::parse(doc).unwrap();
     let room = device.client().get_room(&rid).expect("device has the room in its store");
-    let raw = Raw::from_json(serde_json::value::to_raw_value(encrypted_event).unwrap());
-    let ev = room.decrypt_event(&raw.cast(), None).await.expect("decrypt_event call");
+    let raw: Raw<OriginalSyncRoomEncryptedEvent> = Raw::from_json(serde_json::value::to_raw_value(encrypted_event).unwrap());
+    let ev = room.decrypt_event(&raw, None).await.expect("decrypt_event call");
     !ev.kind.is_utd()
 }
 

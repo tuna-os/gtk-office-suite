@@ -28,6 +28,7 @@ use matrix_sdk::ruma::api::client::room::{create_room, get_room_event};
 use matrix_sdk::ruma::api::client::state::get_state_events;
 use matrix_sdk::ruma::events::room::member::MembershipState;
 use matrix_sdk::ruma::events::room::{EncryptedFile, MediaSource};
+use matrix_sdk::ruma::events::AnyInitialStateEvent;
 use matrix_sdk::ruma::serde::Raw;
 use matrix_sdk::ruma::{assign, EventId, OwnedMxcUri, RoomId, RoomVersionId, UInt, UserId};
 use matrix_sdk::store::RoomLoadSettings;
@@ -117,7 +118,7 @@ impl MatrixStore {
     /// this device's keys) and set up cross-signing, which matrix-sdk needs
     /// before it will share room history with a newly invited member.
     pub async fn connect(cfg: MatrixConfig, creds: &Credentials) -> Result<MatrixStore> {
-        let user = UserId::parse(&creds.user_id).map_err(|e| StoreError::Invalid(format!("user id: {e}")))?;
+        let user_id = UserId::parse(&creds.user_id).map_err(|e| StoreError::Invalid(format!("user id: {e}")))?;
         // matrix-sdk retries 429 and network errors forever by default; the
         // binding's send queue does that itself so that it can count them.
         #[allow(unused_mut)]
@@ -130,7 +131,7 @@ impl MatrixStore {
         }
         let client = builder.build().await.map_err(|e| StoreError::Transport(format!("client build: {e}")))?;
         let session = MatrixSession {
-            meta: SessionMeta { user_id: user, device_id: creds.device_id.as_str().into() },
+            meta: SessionMeta { user_id: user_id.clone(), device_id: creds.device_id.as_str().into() },
             tokens: SessionTokens { access_token: creds.access_token.clone(), refresh_token: None },
         };
         client
@@ -178,8 +179,15 @@ impl MatrixStore {
                 .map_err(|e| to_store(e, "first sync"))?;
         }
 
-        if let Err(e) = client.encryption().bootstrap_cross_signing_if_needed(None).await {
-            store.warn(format!("cross-signing bootstrap failed: {e}"));
+        match client.encryption().bootstrap_cross_signing_if_needed(None).await {
+            Err(e) => store.warn(format!("cross-signing bootstrap failed: {e}")),
+            // matrix-sdk shares history on invite only once it knows its own
+            // identity, which needs one more /keys/query after the upload.
+            Ok(()) => {
+                if let Err(e) = client.encryption().request_user_identity(&user_id).await {
+                    store.warn(format!("own identity query failed: {e}"));
+                }
+            }
         }
         Ok(store)
     }
@@ -643,19 +651,12 @@ impl DocumentStore for MatrixStore {
 
     async fn create_document(&self, meta: &Meta, first: Option<NewFile>) -> Result<DocId> {
         let meta_json = serde_json::to_value(meta).map_err(|e| StoreError::Invalid(e.to_string()))?;
-        let raw = |v: Value| -> Result<Raw<Value>> {
-            Ok(Raw::from_json(
-                serde_json::value::to_raw_value(&v).map_err(|e| StoreError::Invalid(e.to_string()))?,
-            ))
-        };
-        let initial_state = vec![
-            raw(json!({"type": "m.room.encryption", "state_key": "", "content": {
+        let initial_state: Vec<Raw<AnyInitialStateEvent>> = vec![
+            raw_json(json!({"type": "m.room.encryption", "state_key": "", "content": {
                 "algorithm": "m.megolm.v1.aes-sha2", "rotation_period_ms": 604_800_000u64, "rotation_period_msgs": 100
-            }}))?
-            .cast(),
-            raw(json!({"type": "m.room.history_visibility", "state_key": "", "content": {"history_visibility": "shared"}}))?
-                .cast(),
-            raw(json!({"type": state::META, "state_key": "", "content": meta_json}))?.cast(),
+            }}))?,
+            raw_json(json!({"type": "m.room.history_visibility", "state_key": "", "content": {"history_visibility": "shared"}}))?,
+            raw_json(json!({"type": state::META, "state_key": "", "content": meta_json}))?,
         ];
         let room_version = match &self.inner.cfg.room_version {
             Some(v) => Some(
@@ -667,9 +668,9 @@ impl DocumentStore for MatrixStore {
         let request = assign!(create_room::v3::Request::new(), {
             name: Some(meta.title.clone()),
             preset: Some(create_room::v3::RoomPreset::PrivateChat),
-            creation_content: Some(raw(json!({"type": state::ROOM_TYPE, "m.federate": false}))?.cast()),
+            creation_content: Some(raw_json(json!({"type": state::ROOM_TYPE, "m.federate": false}))?),
             initial_state: initial_state,
-            power_level_content_override: Some(raw(self.power_level_override())?.cast()),
+            power_level_content_override: Some(raw_json(self.power_level_override())?),
             room_version: room_version,
         });
         let client = &self.inner.client;
@@ -876,4 +877,9 @@ fn base64_len(data: &str) -> Result<usize> {
         .decode(data)
         .map(|b| b.len())
         .map_err(|e| StoreError::Invalid(format!("payload.data is not base64: {e}")))
+}
+
+/// A typed `Raw` straight from JSON (there is no `Value`-to-event cast).
+fn raw_json<T>(v: Value) -> Result<Raw<T>> {
+    Ok(Raw::from_json(serde_json::value::to_raw_value(&v).map_err(|e| StoreError::Invalid(e.to_string()))?))
 }

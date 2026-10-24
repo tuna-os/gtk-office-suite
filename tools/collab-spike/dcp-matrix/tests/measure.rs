@@ -17,6 +17,7 @@ use common::proxy::Proxy;
 use common::*;
 use dcp_core::*;
 use dcp_matrix::matrix_sdk::config::SyncSettings;
+use dcp_matrix::matrix_sdk::ruma::events::AnyMessageLikeEventContent;
 use dcp_matrix::matrix_sdk::ruma::{serde::Raw, RoomId};
 use dcp_matrix::state;
 use dcp_matrix::synapse::Registered;
@@ -710,8 +711,8 @@ async fn m09_offline_then_online() {
     proxy.cut();
     for i in 0..3u64 {
         let content = serde_json::to_value(update(100 + i, 200)).unwrap();
-        let raw: Raw<Value> = Raw::from_json(serde_json::value::to_raw_value(&content).unwrap());
-        sq.send_raw(raw.cast(), state::UPDATE.to_owned()).await.expect("enqueue locally");
+        let raw: Raw<AnyMessageLikeEventContent> = Raw::from_json(serde_json::value::to_raw_value(&content).unwrap());
+        sq.send_raw(raw, state::UPDATE.to_owned()).await.expect("enqueue locally");
     }
     let mut log: Vec<String> = Vec::new();
     let t0 = Instant::now();
