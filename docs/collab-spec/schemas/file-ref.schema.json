@@ -1,0 +1,114 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://tunaos.org/dcp/1/file-ref.schema.json",
+  "title": "DCP file reference",
+  "type": "object",
+  "required": [
+    "mime",
+    "size",
+    "sha256",
+    "locator"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "mime": {
+      "type": "string",
+      "minLength": 3
+    },
+    "size": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "locator": {
+      "type": "object",
+      "required": [
+        "type"
+      ],
+      "properties": {
+        "type": {
+          "enum": [
+            "matrix-encrypted-media",
+            "matrix-media",
+            "webdav",
+            "url"
+          ]
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "const": "matrix-encrypted-media"
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "file"
+            ],
+            "properties": {
+              "file": {
+                "type": "object",
+                "required": [
+                  "url",
+                  "key",
+                  "iv",
+                  "hashes",
+                  "v"
+                ]
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "const": "matrix-media"
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "url"
+            ],
+            "properties": {
+              "url": {
+                "type": "string",
+                "pattern": "^mxc://"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "enum": [
+                  "webdav",
+                  "url"
+                ]
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "href"
+            ],
+            "properties": {
+              "href": {
+                "type": "string",
+                "pattern": "^https://"
+              }
+            }
+          }
+        }
+      ]
+    }
+  }
+}

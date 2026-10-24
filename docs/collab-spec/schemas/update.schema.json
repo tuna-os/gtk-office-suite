@@ -1,0 +1,80 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://tunaos.org/dcp/1/update.schema.json",
+  "title": "DCP update",
+  "type": "object",
+  "required": [
+    "dcp",
+    "algorithm",
+    "doc_model",
+    "base_version",
+    "seq",
+    "payload"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "dcp": {
+      "const": 1
+    },
+    "algorithm": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9._-]*/[0-9]+$"
+    },
+    "doc_model": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9._-]*/[0-9]+$"
+    },
+    "base_version": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 512
+    },
+    "seq": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "payload": {
+      "oneOf": [
+        {
+          "type": "object",
+          "required": [
+            "encoding",
+            "data",
+            "size"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "encoding": {
+              "const": "base64"
+            },
+            "data": {
+              "type": "string",
+              "maxLength": 48000
+            },
+            "size": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 34000
+            }
+          }
+        },
+        {
+          "type": "object",
+          "required": [
+            "encoding",
+            "file"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "encoding": {
+              "const": "file"
+            },
+            "file": {
+              "$ref": "file-ref.schema.json"
+            }
+          }
+        }
+      ]
+    }
+  }
+}

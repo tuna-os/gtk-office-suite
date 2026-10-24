@@ -1,0 +1,374 @@
+name: collab-spike
+
+# RFC-0004 spikes: the Document Collaboration Protocol bindings and the shared
+# conformance suite, and the two bindings run against each other. Not part of
+# the product CI; the crates are a standalone workspace in tools/collab-spike.
+#
+#   check      cargo check --workspace --all-targets (compiles everything)
+#   core       dcp-core, dcp-conformance (its mutation tests), the schemas
+#   matrix     MatrixStore on a real Synapse, relaxed and default rate limits
+#   wopi-sim   WopiHost / WopiClientStore over the in-memory store (no Collabora)
+#   interop    dcp-interop: MatrixStore and WopiHost<MatrixStore> against each
+#              other on a real Synapse (conformance journeys on both stacks,
+#              cross-binding checks, negative controls)
+#   collabora  real Collabora Online editing a document WopiHost serves: over
+#              the in-memory store (dcp-wopi's collabora_e2e) and over a Matrix
+#              room on a real Synapse (dcp-interop's collabora_over_matrix).
+#              Runs on workflow_dispatch, nightly, on a push whose head commit
+#              message contains "[collabora]" (a workflow can only be dispatched
+#              once it exists on the default branch, so on a spike branch this
+#              switch is how it runs), and on a pull request that touches
+#              tools/collab-spike/dcp-wopi/**.
+#
+# Results and what is not verified: docs/rfc/0004-spike-{a,d,interop}-results.md
+#
+# A test that needs Synapse or Collabora FAILS when the service is missing; only
+# DCP_SKIP_SYNAPSE=1 / DCP_SKIP_COLLABORA=1 skip it, and the test says so.
+on:
+  push:
+    branches: [spike/collab]
+    paths:
+      - 'tools/collab-spike/**'
+      - 'docs/collab-spec/**'
+      - '.github/workflows/collab-spike.yml'
+  pull_request:
+    paths:
+      - 'tools/collab-spike/**'
+      - 'docs/collab-spec/**'
+      - '.github/workflows/collab-spike.yml'
+  schedule:
+    - cron: '23 3 * * *'
+  workflow_dispatch:
+    inputs:
+      measure:
+        description: 'Also run the spike-A measurements (about two hours)'
+        type: boolean
+        default: false
+
+# A newer push to the same ref supersedes the queued or running one.
+concurrency:
+  group: collab-spike-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+  CARGO_PROFILE_DEV_DEBUG: line-tables-only
+  CARGO_PROFILE_TEST_DEBUG: line-tables-only
+  CARGO_INCREMENTAL: 0
+  # Surfaced into the results document.
+  SYNAPSE_IMAGE: docker.io/matrixdotorg/synapse:latest
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    name: cargo check --workspace --all-targets
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    defaults:
+      run:
+        working-directory: tools/collab-spike
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - name: Install Rust stable
+        uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable
+        with:
+          toolchain: stable
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2
+        with:
+          workspaces: tools/collab-spike
+          shared-key: collab-spike-check
+      # --locked: the committed Cargo.lock must be the one the workspace resolves to.
+      - name: cargo check --workspace --all-targets --locked
+        run: cargo check --workspace --all-targets --locked
+
+  core:
+    name: dcp-core, dcp-conformance, schemas
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    defaults:
+      run:
+        working-directory: tools/collab-spike
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - name: Install Rust stable
+        uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable
+        with:
+          toolchain: stable
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2
+        with:
+          workspaces: tools/collab-spike
+          shared-key: collab-spike-core
+      # dcp-conformance's tests/mutation.rs is part of this: each deliberately
+      # broken store must be caught by the journey it breaks.
+      - name: cargo test -p dcp-core -p dcp-conformance
+        run: cargo test -p dcp-core -p dcp-conformance --locked -- --nocapture --test-threads=2
+      - name: validate.py (the Rust negatives are kept in step with it)
+        working-directory: .
+        run: |
+          python3 -m venv "$RUNNER_TEMP/v"
+          "$RUNNER_TEMP/v/bin/pip" install --quiet jsonschema
+          "$RUNNER_TEMP/v/bin/python" docs/collab-spec/validate.py
+
+  matrix:
+    name: dcp-matrix against Synapse (relaxed + default rate limits)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 150
+    defaults:
+      run:
+        working-directory: tools/collab-spike
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - name: Install Rust stable
+        uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable
+        with:
+          toolchain: stable
+
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2
+        with:
+          workspaces: tools/collab-spike
+          shared-key: collab-spike-matrix
+
+      - name: Output directory
+        run: mkdir -p "$GITHUB_WORKSPACE/measurements"
+
+      - name: Versions
+        run: |
+          rustc --version
+          cargo --version
+          docker --version
+
+      - name: Build tests
+        run: cargo test -p dcp-matrix --no-run --locked
+
+      - name: Unit tests, journeys and conformance (Synapse, relaxed rate limits)
+        env:
+          DCP_MEASURE_OUT: ${{ github.workspace }}/measurements/relaxed-journeys.jsonl
+        run: |
+          set -euo pipefail
+          eval "$(scripts/synapse-up.sh relaxed)"
+          trap 'docker logs "$DCP_SYNAPSE_CONTAINER" > "$GITHUB_WORKSPACE/measurements/synapse-relaxed-journeys.log" 2>&1 || true; scripts/synapse-down.sh relaxed' EXIT
+          cargo test -p dcp-matrix --locked --no-fail-fast -- --nocapture 2>&1 | tee "$GITHUB_WORKSPACE/measurements/journeys.log"
+
+      - name: Journeys and conformance under Synapse's default rate limits
+        if: ${{ !cancelled() }}
+        env:
+          DCP_MEASURE_OUT: ${{ github.workspace }}/measurements/default-journeys.jsonl
+        run: |
+          set -euo pipefail
+          eval "$(scripts/synapse-up.sh default)"
+          trap 'docker logs "$DCP_SYNAPSE_CONTAINER" > "$GITHUB_WORKSPACE/measurements/synapse-default-journeys.log" 2>&1 || true; scripts/synapse-down.sh default' EXIT
+          cargo test -p dcp-matrix --locked --no-fail-fast --test journeys --test conformance -- --nocapture 2>&1 | tee "$GITHUB_WORKSPACE/measurements/journeys-default.log"
+
+      - name: Measurements (relaxed rate limits)
+        if: ${{ !cancelled() && github.event_name == 'workflow_dispatch' && inputs.measure }}
+        env:
+          DCP_MEASURE_OUT: ${{ github.workspace }}/measurements/relaxed.jsonl
+        run: |
+          set -euo pipefail
+          eval "$(scripts/synapse-up.sh relaxed)"
+          trap 'docker logs "$DCP_SYNAPSE_CONTAINER" > "$GITHUB_WORKSPACE/measurements/synapse-relaxed.log" 2>&1 || true; scripts/synapse-down.sh relaxed' EXIT
+          cargo test -p dcp-matrix --locked --test measure -- --ignored --test-threads=1 --nocapture 2>&1 | tee "$GITHUB_WORKSPACE/measurements/measure-relaxed.log"
+
+      - name: Measurements (Synapse default rate limits)
+        if: ${{ !cancelled() && github.event_name == 'workflow_dispatch' && inputs.measure }}
+        env:
+          DCP_MEASURE_OUT: ${{ github.workspace }}/measurements/default.jsonl
+        run: |
+          set -euo pipefail
+          eval "$(scripts/synapse-up.sh default)"
+          trap 'docker logs "$DCP_SYNAPSE_CONTAINER" > "$GITHUB_WORKSPACE/measurements/synapse-default.log" 2>&1 || true; scripts/synapse-down.sh default' EXIT
+          cargo test -p dcp-matrix --locked --test measure -- --ignored --test-threads=1 --nocapture 2>&1 | tee "$GITHUB_WORKSPACE/measurements/measure-default.log"
+
+      - name: Upload measurements
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        with:
+          name: matrix-measurements
+          path: measurements/
+          if-no-files-found: warn
+
+  wopi-sim:
+    name: WopiHost over MemoryStore (simulator, no Collabora)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    defaults:
+      run:
+        working-directory: tools/collab-spike
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - name: Install Rust stable
+        uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable
+        with:
+          toolchain: stable
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2
+        with:
+          workspaces: tools/collab-spike
+          shared-key: collab-spike-wopi
+      - name: Build everything in dcp-wopi (including the Collabora test)
+        run: cargo test -p dcp-wopi --all-targets --no-run --locked
+      - name: Simulator tests (WopiHost, WopiClientStore, conformance over WOPI)
+        # collabora_e2e is excluded here: it needs a real Collabora and fails
+        # without one. The `collabora` job runs it.
+        run: cargo test -p dcp-wopi --locked --lib --test host_semantics --test client_store --test conformance_over_wopi -- --nocapture
+
+      - name: The Collabora test fails loudly when Collabora is missing
+        # No Collabora runs in this job. A test that needs one must fail, not
+        # pass: the step passes only if cargo test fails AND says why.
+        env:
+          DCP_COLLABORA_URL: http://127.0.0.1:9
+          DCP_COLLABORA_WAIT_SECS: '2'
+        run: |
+          if cargo test -p dcp-wopi --locked --test collabora_e2e -- --nocapture > "$RUNNER_TEMP/missing.log" 2>&1; then
+            cat "$RUNNER_TEMP/missing.log"
+            echo "::error::collabora_e2e passed with no Collabora running"
+            exit 1
+          fi
+          grep -q "Collabora Online is not reachable" "$RUNNER_TEMP/missing.log"
+      - name: DCP_SKIP_COLLABORA=1 skips explicitly and says so
+        env:
+          DCP_SKIP_COLLABORA: '1'
+        run: |
+          cargo test -p dcp-wopi --locked --test collabora_e2e -- --nocapture 2>&1 | tee "$RUNNER_TEMP/skip.log"
+          test "$(grep -c 'SKIPPED collabora_e2e' "$RUNNER_TEMP/skip.log")" -eq 4
+
+  interop:
+    name: dcp-interop (MatrixStore and WopiHost over MatrixStore, one Synapse)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    defaults:
+      run:
+        working-directory: tools/collab-spike
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - name: Install Rust stable
+        uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable
+        with:
+          toolchain: stable
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2
+        with:
+          workspaces: tools/collab-spike
+          shared-key: collab-spike-interop
+      - name: Output directory
+        run: mkdir -p "$GITHUB_WORKSPACE/interop-logs"
+      # collabora_over_matrix is built here (so a compile error shows up in this
+      # job) but only run by the `collabora` job: it needs a Collabora.
+      - name: Build tests
+        run: cargo test -p dcp-interop --no-run --locked
+
+      # A test that needs Synapse must fail without one, and skip only when
+      # told to, saying so. Checked here, before any Synapse is running.
+      - name: Fails loudly without a Synapse
+        run: |
+          if env -u DCP_SYNAPSE_URL -u DCP_SKIP_SYNAPSE cargo test -p dcp-interop --locked --test conformance -- --nocapture > "$RUNNER_TEMP/nosyn.log" 2>&1; then
+            cat "$RUNNER_TEMP/nosyn.log"
+            echo "::error::dcp-interop passed with no Synapse"
+            exit 1
+          fi
+          grep -q "DCP_SYNAPSE_URL is not set" "$RUNNER_TEMP/nosyn.log"
+      - name: DCP_SKIP_SYNAPSE=1 skips explicitly and says so
+        env:
+          DCP_SKIP_SYNAPSE: '1'
+        run: |
+          env -u DCP_SYNAPSE_URL cargo test -p dcp-interop --locked -- --nocapture 2>&1 | tee "$RUNNER_TEMP/synskip.log"
+          grep -q "SKIPPED (DCP_SKIP_SYNAPSE=1)" "$RUNNER_TEMP/synskip.log"
+
+      - name: Conformance, cross-binding checks and negative controls (Synapse, relaxed)
+        run: |
+          set -euo pipefail
+          eval "$(scripts/synapse-up.sh relaxed)"
+          trap 'docker logs "$DCP_SYNAPSE_CONTAINER" > "$GITHUB_WORKSPACE/interop-logs/synapse.log" 2>&1 || true; scripts/synapse-down.sh relaxed' EXIT
+          cargo test -p dcp-interop --locked --no-fail-fast --test conformance --test cross_binding --test negative_control -- --nocapture 2>&1 | tee "$GITHUB_WORKSPACE/interop-logs/interop.log"
+
+      - name: Upload logs
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        with:
+          name: interop-logs
+          path: interop-logs/
+          if-no-files-found: warn
+
+  changes:
+    name: does this pull request touch dcp-wopi?
+    runs-on: ubuntu-24.04
+    outputs:
+      wopi: ${{ steps.f.outputs.wopi }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          fetch-depth: 0
+      - id: f
+        env:
+          EVENT: ${{ github.event_name }}
+          BASE_REF: ${{ github.base_ref }}
+        run: |
+          wopi=false
+          if [ "$EVENT" = pull_request ] && git diff --name-only "origin/$BASE_REF...HEAD" | grep -q '^tools/collab-spike/dcp-wopi/'; then
+            wopi=true
+          fi
+          echo "wopi=$wopi" >> "$GITHUB_OUTPUT"
+
+  collabora:
+    name: real Collabora Online round trip
+    needs: changes
+    if: ${{ github.event_name == 'workflow_dispatch' || github.event_name == 'schedule' || needs.changes.outputs.wopi == 'true' || contains(github.event.head_commit.message, '[collabora]') }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    defaults:
+      run:
+        working-directory: tools/collab-spike
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - name: Install Rust stable
+        uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable
+        with:
+          toolchain: stable
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2
+        with:
+          workspaces: tools/collab-spike
+          shared-key: collab-spike-collabora
+      - name: Build the Collabora tests
+        run: |
+          cargo test -p dcp-wopi --test collabora_e2e --no-run --locked
+          cargo test -p dcp-interop --test collabora_over_matrix --no-run --locked
+      - name: Start Collabora Online
+        run: |
+          docker pull collabora/code:latest
+          docker image inspect collabora/code:latest --format 'image {{.Id}} created {{.Created}}'
+          ./scripts/collabora-up.sh
+      - name: Real Collabora round trip over the in-memory store
+        env:
+          DCP_WOPI_HOST_PORT: '18080'
+          DCP_WOPI_LOG: '1'
+          DCP_WOPI_LOG_FILE: ${{ runner.temp }}/wopi-request-log.txt
+        run: cargo test -p dcp-wopi --locked --test collabora_e2e -- --nocapture --test-threads=1
+      # Collabora in front of WopiHost<MatrixStore>: the host stores in a room
+      # on a real Synapse. One test at a time: they share the WOPI host port.
+      - name: Real Collabora over a Matrix room (Synapse + Collabora + WopiHost over MatrixStore)
+        env:
+          DCP_WOPI_HOST_PORT: '18080'
+          DCP_WOPI_LOG: '1'
+          DCP_WOPI_LOG_FILE: ${{ runner.temp }}/wopi-matrix-request-log.txt
+        run: |
+          set -euo pipefail
+          eval "$(scripts/synapse-up.sh relaxed)"
+          trap 'docker logs "$DCP_SYNAPSE_CONTAINER" > "$RUNNER_TEMP/synapse.log" 2>&1 || true; scripts/synapse-down.sh relaxed' EXIT
+          free -m
+          cargo test -p dcp-interop --locked --test collabora_over_matrix -- --nocapture --test-threads=1 2>&1 | tee "$RUNNER_TEMP/collabora-over-matrix.log"
+      - name: Collabora container log
+        if: always()
+        run: docker logs dcp-collabora > "$RUNNER_TEMP/collabora.log" 2>&1 || true
+      - name: Upload logs
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        with:
+          name: collabora-spike-logs
+          path: |
+            ${{ runner.temp }}/wopi-request-log.txt
+            ${{ runner.temp }}/wopi-matrix-request-log.txt
+            ${{ runner.temp }}/collabora-over-matrix.log
+            ${{ runner.temp }}/synapse.log
+            ${{ runner.temp }}/collabora.log
+          if-no-files-found: warn

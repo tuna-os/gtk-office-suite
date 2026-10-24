@@ -1,0 +1,81 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://tunaos.org/dcp/1/meta.schema.json",
+  "title": "DCP document metadata",
+  "type": "object",
+  "required": [
+    "dcp",
+    "title",
+    "mime",
+    "levels"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "dcp": {
+      "const": 1
+    },
+    "title": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 255
+    },
+    "mime": {
+      "type": "string",
+      "minLength": 3
+    },
+    "levels": {
+      "type": "array",
+      "items": {
+        "enum": [
+          "L0",
+          "L1",
+          "L2",
+          "L3"
+        ]
+      },
+      "uniqueItems": true,
+      "contains": {
+        "const": "L1"
+      }
+    },
+    "algorithms": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "pattern": "^[a-z0-9][a-z0-9._-]*/[0-9]+$"
+      },
+      "uniqueItems": true
+    },
+    "editor_services": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 512
+      },
+      "uniqueItems": true
+    }
+  },
+  "if": {
+    "properties": {
+      "levels": {
+        "contains": {
+          "const": "L2"
+        }
+      }
+    },
+    "required": [
+      "levels"
+    ]
+  },
+  "then": {
+    "required": [
+      "algorithms"
+    ],
+    "properties": {
+      "algorithms": {
+        "minItems": 1
+      }
+    }
+  }
+}

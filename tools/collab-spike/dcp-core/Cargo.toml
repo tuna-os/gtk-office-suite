@@ -1,0 +1,22 @@
+[package]
+name = "dcp-core"
+description = "DCP draft-0 types, the DocumentStore trait, the rule logic and an in-memory reference store."
+version.workspace = true
+edition.workspace = true
+publish.workspace = true
+license.workspace = true
+
+[dependencies]
+async-trait.workspace = true
+base64.workspace = true
+hex.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+sha2.workspace = true
+thiserror.workspace = true
+parking_lot = "0.12"
+# The schemas are local, so no HTTP retriever is wanted (and reqwest is heavy).
+jsonschema = { version = "0.30", default-features = false }
+
+[dev-dependencies]
+tokio.workspace = true

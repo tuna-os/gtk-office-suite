@@ -1,0 +1,74 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://tunaos.org/dcp/1/version.schema.json",
+  "title": "DCP version",
+  "type": "object",
+  "required": [
+    "dcp",
+    "parents",
+    "file",
+    "created_by"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "dcp": {
+      "const": 1
+    },
+    "parents": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 512
+      },
+      "uniqueItems": true,
+      "maxItems": 8
+    },
+    "file": {
+      "$ref": "file-ref.schema.json"
+    },
+    "created_by": {
+      "type": "object",
+      "required": [
+        "principal",
+        "device"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "principal": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 512
+        },
+        "device": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        }
+      }
+    },
+    "message": {
+      "type": "string",
+      "maxLength": 1000
+    },
+    "covers": {
+      "type": "object",
+      "required": [
+        "algorithm",
+        "through"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "algorithm": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._-]*/[0-9]+$"
+        },
+        "through": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 512
+        }
+      }
+    }
+  }
+}

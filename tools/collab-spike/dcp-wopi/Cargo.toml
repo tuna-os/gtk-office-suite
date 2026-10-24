@@ -1,0 +1,27 @@
+[package]
+name = "dcp-wopi"
+description = "Spike D: a WOPI host over any DocumentStore, and a WOPI client simulator that is itself a DocumentStore."
+version.workspace = true
+edition.workspace = true
+publish.workspace = true
+license.workspace = true
+
+[dependencies]
+dcp-core = { path = "../dcp-core" }
+async-trait.workspace = true
+hex.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+sha2.workspace = true
+tokio = { workspace = true, features = ["net", "rt-multi-thread"] }
+axum = { version = "0.8", default-features = false, features = ["http1", "tokio", "query", "json"] }
+reqwest = { version = "0.12", default-features = false, features = ["json"] }
+time = { version = "0.3", features = ["formatting", "parsing", "macros"] }
+zip = { version = "2", default-features = false, features = ["deflate"] }
+getrandom = "0.3"
+parking_lot = "0.12"
+
+[dev-dependencies]
+dcp-conformance = { path = "../dcp-conformance" }
+tokio-tungstenite = "0.26"
+futures-util = { version = "0.3", default-features = false, features = ["sink", "std"] }

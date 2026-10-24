@@ -1,0 +1,29 @@
+[package]
+name = "dcp-interop"
+description = "RFC-0004 spike: the Matrix and WOPI bindings run against each other on a real Synapse."
+version.workspace = true
+edition.workspace = true
+publish.workspace = true
+license.workspace = true
+
+# Everything here needs a Synapse (DCP_SYNAPSE_URL); a test fails without one
+# unless DCP_SKIP_SYNAPSE=1, in which case it prints SKIPPED.
+
+[dependencies]
+dcp-core = { path = "../dcp-core" }
+dcp-conformance = { path = "../dcp-conformance" }
+dcp-matrix = { path = "../dcp-matrix" }
+dcp-wopi = { path = "../dcp-wopi" }
+async-trait.workspace = true
+serde_json = { workspace = true, features = ["raw_value"] }
+tokio = { workspace = true, features = ["net", "io-util", "rt-multi-thread", "macros", "time", "sync"] }
+# The version dcp-wopi uses; plain HTTP is all the raw WOPI client needs.
+reqwest = { version = "0.12", default-features = false, features = ["json"] }
+
+# The Collabora-over-Matrix test drives Collabora with the same code as
+# dcp-wopi's collabora_e2e (tests/shared/collabora_driver.rs).
+[dev-dependencies]
+tokio-tungstenite = "0.26"
+futures-util = { version = "0.3", default-features = false, features = ["sink", "std"] }
+parking_lot = "0.12"
+zip = { version = "2", default-features = false, features = ["deflate"] }
