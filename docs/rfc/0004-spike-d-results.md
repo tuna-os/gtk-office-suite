@@ -93,6 +93,12 @@ DCP_WOPI_HOST_PORT=18080 DCP_WOPI_LOG=1 \
   cargo test -p dcp-wopi --test collabora_e2e -- --nocapture --test-threads=1
 ```
 
+The same job was re-run on commit `c564cad` (which adds only the
+`DCP_COLLABORA_WAIT_SECS` switch and this document): run
+[40070090805](https://github.com/tuna-os/gtk-office-suite/actions/runs/40070090805),
+both jobs green, the same four Collabora tests passed (a new lock string,
+`cool-lock7C380847`, so a distinct execution).
+
 `storage.wopi.locking.refresh` is set to 10 s so that a lock refresh is
 observable in a short test; Collabora's default is 900 s (`Storage.hpp`).
 
