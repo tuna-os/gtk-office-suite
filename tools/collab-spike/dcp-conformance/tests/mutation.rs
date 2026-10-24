@@ -6,7 +6,7 @@
 use std::sync::Arc;
 
 use async_trait::async_trait;
-use dcp_conformance::wrappers::{Defect, Defective};
+use dcp_conformance::wrappers::{CorruptingStore, Corruption, Defect, Defective, Target};
 use dcp_conformance::{
     journey_names, run_all, run_one, run_selected, Capabilities, Failure, Fixture, MemoryFactory,
     Outcome, StoreFactory,
@@ -268,5 +268,22 @@ async fn a_defect_does_not_fail_unrelated_journeys() {
         "lease_expiry_releases",
     ] {
         assert_eq!(run_one(&f, name).await.outcome, Outcome::Passed, "{name}");
+    }
+}
+
+#[tokio::test]
+async fn store_that_serves_damaged_files_fails_the_corruption_journey() {
+    // Journey 3 reads through the reader pipeline, which verifies size and
+    // sha256: a store whose files do not match its own references is caught,
+    // whatever the damage.
+    for corruption in Corruption::ALL {
+        let f = Mutant::new("serves damaged files", move |fx| {
+            fx.editor = Arc::new(CorruptingStore::new(
+                fx.editor.clone(),
+                corruption,
+                Target::Every,
+            ));
+        });
+        assert_caught(&f, "corrupt_file_rejected").await;
     }
 }
