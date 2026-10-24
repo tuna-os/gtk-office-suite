@@ -148,4 +148,20 @@ pub struct Stamped<T> {
     pub ts_ms: u64,
     pub sender: String,
     pub body: T,
+    /// The device the binding says sent it, when it can say (a Matrix
+    /// encrypted event carries the sending device; WOPI has none). Updates are
+    /// sequenced per `(principal, device)` (spec 4.4), so the update stream
+    /// needs it; `None` makes the principal's updates one stream.
+    pub device: Option<String>,
+}
+
+impl<T> Stamped<T> {
+    pub fn new(id: impl Into<String>, ts_ms: u64, sender: impl Into<String>, body: T) -> Self {
+        Stamped { id: id.into(), ts_ms, sender: sender.into(), body, device: None }
+    }
+
+    pub fn with_device(mut self, device: impl Into<String>) -> Self {
+        self.device = Some(device.into());
+        self
+    }
 }
