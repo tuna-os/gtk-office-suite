@@ -114,7 +114,7 @@ async fn m00_environment() {
 #[ignore = "measurement"]
 async fn m01_publish_to_visible_latency() {
     let Some(syn) = require_synapse!() else { return };
-    let alice = syn.user("alice").await;
+    let alice = syn.user_with("alice", |c| c.events_per_sec = 0.0).await;
     let reg_b = syn.register("bob").await;
     let bob = syn.connect_as(&reg_b, |c| c.background_sync = false).await;
     let doc = alice.create_document(&meta("Latency"), Some(file(b"v1"))).await.unwrap();
@@ -181,29 +181,40 @@ async fn m01_publish_to_visible_latency() {
         }
     }
 
-    let n_updates = if is_default(&syn) { 8 } else { 30 };
+    // Raw event latency: queue + encrypt + PUT, no preflight and no timestamp read-back,
+    // spaced out so neither the client limiter nor Synapse's limit shapes it.
+    let n_raw = if is_default(&syn) { 4 } else { 30 };
     let mut from_start = Vec::new();
     let mut from_ack = Vec::new();
     let mut key_late = 0;
-    for i in 0..(n_updates + 2) {
+    for i in 0..(n_raw + 2) {
+        sleep_ms(300).await;
         let t0 = Instant::now();
-        let sent = alice.publish_update(&doc, update(i as u64, 400)).await.unwrap();
+        let id = alice.send_queued(&doc, state::UPDATE, serde_json::to_value(update(i as u64, 400)).unwrap()).await.unwrap();
         let t_ack = Instant::now();
-        let (vis, late) = wait_visible(&mut rx, &mut seen, &sent.id).await;
+        let (vis, late) = wait_visible(&mut rx, &mut seen, &id).await;
         if i >= 2 {
             from_start.push(ms(vis.duration_since(t0)));
             from_ack.push(rel(vis) - rel(t_ack));
             key_late += late as u32;
         }
-        if is_default(&syn) {
-            sleep_ms(400).await;
-        }
     }
-    // Versions include two media requests and the SDK's verify-download before the event.
-    let n_versions = if is_default(&syn) { 3 } else { 10 };
+    // The full publish path: role check, queued PUT, timestamp read-back.
+    let n_full = if is_default(&syn) { 2 } else { 15 };
+    let mut full_start = Vec::new();
+    for i in 0..n_full {
+        sleep_ms(300).await;
+        let t0 = Instant::now();
+        let sent = alice.publish_update(&doc, update(1000 + i as u64, 400)).await.unwrap();
+        let (vis, _) = wait_visible(&mut rx, &mut seen, &sent.id).await;
+        full_start.push(ms(vis.duration_since(t0)));
+    }
+    // Versions add an upload, a verify-download and the version event.
+    let n_versions = if is_default(&syn) { 1 } else { 10 };
     let mut v_start = Vec::new();
     let mut v_ack = Vec::new();
     for i in 0..n_versions {
+        sleep_ms(300).await;
         let t0 = Instant::now();
         let sent = alice.publish_version(&doc, vec![], file(&noise(20_000, 100 + i as u64)), None).await.unwrap();
         let t_ack = Instant::now();
@@ -214,7 +225,8 @@ async fn m01_publish_to_visible_latency() {
     obs.abort();
     record(&syn, "latency_publish_to_visible_ms", json!({
         "method": "second user's single /sync long-poll loop (timeout 30 s); visible = event decrypted in a sync response or by a fetch after its key arrived",
-        "updates_400B": { "from_call_start": summarize(from_start), "from_call_return": summarize(from_ack), "key_arrived_after_event": key_late },
+        "raw_update_400B_send_queued": { "from_call_start": summarize(from_start), "from_call_return": summarize(from_ack), "key_arrived_after_event": key_late },
+        "publish_update_400B_full_path": { "from_call_start": summarize(full_start) },
         "versions_20KB_file": { "from_call_start": summarize(v_start), "from_call_return": summarize(v_ack) },
     }));
 }
@@ -627,6 +639,12 @@ async fn removal_trial(syn: &Synapse, variant: &str, trial: usize) -> Value {
             let r = ms(t.elapsed());
             (ed.send_queued(&doc, state::UPDATE, upd).await.unwrap(), false, r)
         }
+        "owner_kick_no_wait_then_editor_send_queued_no_preflight" => {
+            let room = alice.client().get_room(&RoomId::parse(&doc).unwrap()).unwrap();
+            room.kick_user(&dcp_matrix::matrix_sdk::ruma::UserId::parse(bob.principal()).unwrap(), None).await.unwrap();
+            let r = ms(t.elapsed());
+            (ed.send_queued(&doc, state::UPDATE, upd).await.unwrap(), false, r)
+        }
         "owner_revoke_then_editor_publishes_guard_off" | "owner_revoke_then_editor_publishes_guard_on" => {
             alice.revoke(&doc, &bob.principal()).await.unwrap();
             let r = ms(t.elapsed());
@@ -658,6 +676,7 @@ async fn m08_member_removal() {
         "owner_kick_then_owner_publishes_with_preflight",
         "owner_kick_then_owner_send_queued_no_preflight",
         "owner_revoke_then_editor_send_queued_no_preflight",
+        "owner_kick_no_wait_then_editor_send_queued_no_preflight",
         "owner_revoke_then_editor_publishes_guard_off",
         "owner_revoke_then_editor_publishes_guard_on",
     ];
@@ -863,34 +882,74 @@ async fn m10_clock_sources() {
 // 11. Late-joiner matrix: when does history sharing on invite work?
 // ---------------------------------------------------------------------------
 
+/// What the late joiner saw after being granted `variant`.
+async fn late_trial(syn: &Synapse, variant: &str) -> Value {
+    let alice_unlimited = variant.contains("unlimited");
+    let alice = syn.user_with("alice", |c| {
+        if alice_unlimited {
+            c.events_per_sec = 0.0;
+        }
+    })
+    .await;
+    let late = syn.user_with("late", |c| c.utd_wait = Duration::from_secs(10)).await;
+    let doc = alice.create_document(&meta("Late"), Some(file(b"v1"))).await.unwrap();
+    let role = if variant.starts_with("viewer") { Role::Viewer } else { Role::Editor };
+    match variant {
+        v if v.contains("pl_before_invite") => {
+            let snap = alice.snapshot(&doc).await.unwrap();
+            let mut pl = snap.power_levels_content.clone();
+            pl["users"][late.principal()] = json!(50);
+            alice.send_state_unchecked(&doc, "m.room.power_levels", "", pl).await.unwrap();
+            alice.grant(&doc, &late.principal(), Role::Editor).await.unwrap();
+        }
+        v if v.contains("lease_after_invite") => {
+            alice.grant(&doc, &late.principal(), role).await.unwrap();
+            let base = alice.versions(&doc).await.unwrap().remove(0).id;
+            alice.write_lease(&doc, held(&alice, "s", &base)).await.unwrap();
+        }
+        v if v.contains("read_after_3s") => {
+            alice.grant(&doc, &late.principal(), role).await.unwrap();
+            sleep_ms(3000).await;
+        }
+        _ => alice.grant(&doc, &late.principal(), role).await.unwrap(),
+    }
+    let rep = late.read_report(&doc).await.unwrap();
+    let rid = RoomId::parse(&doc).unwrap();
+    let pending = late.client().get_pending_key_bundle_details_for_room(&rid).await;
+    json!({
+        "variant": variant,
+        "v1_visible": rep.versions.len(), "undecryptable": rep.undecryptable,
+        "bundle_still_pending_on_late_device": match pending { Ok(Some(_)) => "yes", Ok(None) => "no", Err(_) => "error" },
+    })
+}
+
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 #[ignore = "measurement"]
 async fn m11_late_joiner_matrix() {
     let Some(syn) = require_synapse!() else { return };
+    // The SDK says why it did or did not share history, at info/warn level.
+    let _ = tracing_subscriber::fmt()
+        .with_env_filter("matrix_sdk::room::shared_room_history=debug,matrix_sdk::encryption::tasks=debug,matrix_sdk_crypto::store=info")
+        .with_test_writer()
+        .try_init();
     let trials = if is_default(&syn) { 1 } else { 3 };
+    let variants = [
+        "viewer_limited", "viewer_unlimited", "editor_limited", "editor_unlimited",
+        "editor_unlimited_pl_before_invite", "viewer_unlimited_lease_after_invite",
+        "editor_unlimited_read_after_3s",
+    ];
     let mut rows = Vec::new();
-    for (role, owner_reads_first, pause_ms) in [
-        (Role::Viewer, false, 0u64), (Role::Viewer, true, 0), (Role::Editor, false, 0), (Role::Editor, true, 0),
-        (Role::Editor, false, 2000),
-    ] {
-        let mut visible = 0;
-        let mut utd_total = 0;
+    let mut summary = Vec::new();
+    for v in variants {
+        let mut ok = 0;
         for _ in 0..trials {
-            let alice = syn.user_with("alice", |c| c.events_per_sec = 0.0).await;
-            let late = syn.user_with("late", |c| c.utd_wait = Duration::from_secs(10)).await;
-            let doc = alice.create_document(&meta("Late"), Some(file(b"v1"))).await.unwrap();
-            if owner_reads_first {
-                alice.versions(&doc).await.unwrap();
-            }
-            sleep_ms(pause_ms).await;
-            alice.grant(&doc, &late.principal(), role).await.unwrap();
-            let rep = late.read_report(&doc).await.unwrap();
-            visible += rep.versions.len();
-            utd_total += rep.undecryptable;
+            let r = late_trial(&syn, v).await;
+            ok += r["v1_visible"].as_u64().unwrap_or(0);
+            rows.push(r);
         }
-        rows.push(json!({"role": format!("{role:?}"), "owner_read_before_grant": owner_reads_first, "pause_before_grant_ms": pause_ms, "trials": trials, "v1_visible_in": visible, "undecryptable_total": utd_total}));
+        summary.push(json!({"variant": v, "trials": trials, "v1_visible_in": ok}));
     }
-    record(&syn, "late_joiner_matrix", json!({ "rows": rows }));
+    record(&syn, "late_joiner_matrix", json!({ "summary": summary, "rows": rows }));
 }
 
 // ---------------------------------------------------------------------------
