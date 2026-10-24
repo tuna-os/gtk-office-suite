@@ -271,3 +271,22 @@ async fn a_plain_room_is_not_a_document() {
     assert!(matches!(e, StoreError::NotFound(_)), "{e:?}");
     let _ = json!({});
 }
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn renewing_a_lease_with_identical_content_still_produces_a_newer_record() {
+    let Some(syn) = require_synapse!() else { return };
+    let alice = syn.user("alice").await;
+    let doc = alice.create_document(&meta("Renew"), Some(file(b"v1"))).await.unwrap();
+    let base = alice.versions(&doc).await.unwrap().remove(0).id;
+    let l = Lease { dcp: 0, state: LeaseState::Held, holder: Some(Holder { principal: alice.principal(), session: "s".into() }), token: Some("t".into()), base_version: Some(base), duration_ms: Some(60_000) };
+    let first = alice.write_lease(&doc, l.clone()).await.unwrap();
+    sleep_ms(1100).await;
+    let second = alice.write_lease(&doc, l.clone()).await.unwrap();
+    assert_ne!(first.id, second.id, "a renewal must be a new event, not the old one handed back");
+    assert!(second.ts_ms > first.ts_ms);
+    let read = alice.lease(&doc).await.unwrap().unwrap();
+    assert_eq!(read.id, second.id);
+    assert_eq!(read.body.holder, l.holder);
+    assert_eq!(read.body.token, l.token);
+    assert!(read.body.duration_ms.unwrap().abs_diff(60_000) <= 1);
+}

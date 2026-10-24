@@ -453,7 +453,7 @@ async fn m05_room_growth() {
         };
         rows.push(json!({
             "updates_in_room": sent,
-            "bob_full_history_read_ms": read_ms, "bob_updates_returned": rep.updates.len(), "bob_undecryptable": rep.undecryptable,
+            "bob_full_history_read_ms": read_ms, "bob_updates_returned": rep.updates.len(), "bob_versions_returned": rep.versions.len(), "bob_undecryptable": rep.undecryptable,
             "history_pages_of_100": (sent + 1).div_ceil(100),
             "new_device_initial_sync_bytes_timeline_limit_10": sync_bytes_10, "new_device_initial_sync_ms_limit_10": sync_ms_10,
             "new_device_initial_sync_bytes_timeline_limit_100": sync_bytes_100, "new_device_initial_sync_ms_limit_100": sync_ms_100,
@@ -584,61 +584,97 @@ async fn m07_lease_race() {
 // 8. Member removal: does the removed device read the next version?
 // ---------------------------------------------------------------------------
 
+/// One trial: owner, a to-be-removed viewer, an editor and (for the control)
+/// the owner/editor who stays. Returns what the removed device could do.
+async fn removal_trial(syn: &Synapse, variant: &str, trial: usize) -> Value {
+    let alice = syn.user_with("alice", |c| c.events_per_sec = 0.0).await;
+    let bob = syn.user("bob").await;
+    let guard_off = variant.ends_with("guard_off");
+    let ed = syn.user_with("ed", |c| {
+        c.events_per_sec = 0.0;
+        c.guard_stale_members = !guard_off;
+    })
+    .await;
+    let doc = alice.create_document(&meta("Removal"), Some(file(&noise(1500, 71)))).await.unwrap();
+    alice.grant(&doc, &bob.principal(), Role::Viewer).await.unwrap();
+    alice.grant(&doc, &ed.principal(), Role::Editor).await.unwrap();
+    let v1 = alice.versions(&doc).await.unwrap().remove(0);
+    bob.versions(&doc).await.unwrap();
+    ed.versions(&doc).await.unwrap();
+
+    let t = Instant::now();
+    let upd = serde_json::to_value(update(7, 300)).unwrap();
+    let (new_id, publisher_is_owner, revoke_ms): (String, bool, f64) = match variant {
+        "owner_revoke_then_owner_publishes" => {
+            alice.revoke(&doc, &bob.principal()).await.unwrap();
+            let r = ms(t.elapsed());
+            (alice.publish_update(&doc, update(7, 300)).await.unwrap().id, true, r)
+        }
+        "owner_kick_then_owner_publishes_with_preflight" => {
+            let room = alice.client().get_room(&RoomId::parse(&doc).unwrap()).unwrap();
+            room.kick_user(&dcp_matrix::matrix_sdk::ruma::UserId::parse(bob.principal()).unwrap(), None).await.unwrap();
+            let r = ms(t.elapsed());
+            (alice.publish_update(&doc, update(7, 300)).await.unwrap().id, true, r)
+        }
+        "owner_kick_then_owner_send_queued_no_preflight" => {
+            let room = alice.client().get_room(&RoomId::parse(&doc).unwrap()).unwrap();
+            room.kick_user(&dcp_matrix::matrix_sdk::ruma::UserId::parse(bob.principal()).unwrap(), None).await.unwrap();
+            let r = ms(t.elapsed());
+            (alice.send_queued(&doc, state::UPDATE, upd).await.unwrap(), true, r)
+        }
+        "owner_revoke_then_editor_send_queued_no_preflight" => {
+            alice.revoke(&doc, &bob.principal()).await.unwrap();
+            let r = ms(t.elapsed());
+            (ed.send_queued(&doc, state::UPDATE, upd).await.unwrap(), false, r)
+        }
+        "owner_revoke_then_editor_publishes_guard_off" | "owner_revoke_then_editor_publishes_guard_on" => {
+            alice.revoke(&doc, &bob.principal()).await.unwrap();
+            let r = ms(t.elapsed());
+            (ed.publish_update(&doc, update(7, 300)).await.unwrap().id, false, r)
+        }
+        other => panic!("unknown variant {other}"),
+    };
+    let enc = server_event(syn, &alice, &doc, &new_id).await.unwrap();
+    let s_old = session_id_of(&alice, &doc, &v1.id).await;
+    let s_new = session_id_of(&alice, &doc, &new_id).await;
+    json!({
+        "variant": variant, "trial": trial, "remove_call_ms": revoke_ms,
+        "removed_device_decrypts_event_sent_after_removal": can_decrypt(&bob, &doc, &enc).await,
+        "control_remaining_member_decrypts": can_decrypt(if publisher_is_owner { &ed } else { &alice }, &doc, &enc).await,
+        "megolm_session_rotated": s_old != s_new,
+        "removed_device_decrypts_event_sent_before": can_decrypt(&bob, &doc, &server_event(syn, &alice, &doc, &v1.id).await.unwrap()).await,
+        "http_status_removed_user_fetching_new_event": server_event(syn, &bob, &doc, &new_id).await.err(),
+        "removed_store_versions_call": match bob.versions(&doc).await { Ok(v) => format!("Ok({} versions)", v.len()), Err(e) => format!("Err({e:?})").chars().take(90).collect() },
+    })
+}
+
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 #[ignore = "measurement"]
 async fn m08_member_removal() {
     let Some(syn) = require_synapse!() else { return };
-    let trials = if is_default(&syn) { 1 } else { 3 };
+    let trials = if is_default(&syn) { 2 } else { 10 };
+    let variants = [
+        "owner_revoke_then_owner_publishes",
+        "owner_kick_then_owner_publishes_with_preflight",
+        "owner_kick_then_owner_send_queued_no_preflight",
+        "owner_revoke_then_editor_send_queued_no_preflight",
+        "owner_revoke_then_editor_publishes_guard_off",
+        "owner_revoke_then_editor_publishes_guard_on",
+    ];
     let mut rows = Vec::new();
-    for variant in ["revoke_waits_for_local_view", "naive_kick_then_publish_immediately"] {
-        for trial in 0..trials {
-            let alice = syn.user_with("alice", |c| c.events_per_sec = 0.0).await;
-            let bob = syn.user("bob").await;
-            let carol = syn.user("carol").await;
-            let doc = alice.create_document(&meta("Removal"), Some(file(&noise(1500, 71)))).await.unwrap();
-            alice.grant(&doc, &bob.principal(), Role::Editor).await.unwrap();
-            alice.grant(&doc, &carol.principal(), Role::Viewer).await.unwrap();
-            let v1 = alice.versions(&doc).await.unwrap().remove(0);
-            bob.versions(&doc).await.unwrap();
-            carol.versions(&doc).await.unwrap();
-
-            let t = Instant::now();
-            if variant == "revoke_waits_for_local_view" {
-                alice.revoke(&doc, &bob.principal()).await.unwrap();
-            } else {
-                let room = alice.client().get_room(&RoomId::parse(&doc).unwrap()).unwrap();
-                room.kick_user(&dcp_matrix::matrix_sdk::ruma::UserId::parse(bob.principal()).unwrap(), None).await.unwrap();
+    let mut summary = Vec::new();
+    for v in variants {
+        let mut leaks = 0;
+        for t in 0..trials {
+            let r = removal_trial(&syn, v, t).await;
+            if r["removed_device_decrypts_event_sent_after_removal"] == true {
+                leaks += 1;
             }
-            let revoke_ms = ms(t.elapsed());
-            let t = Instant::now();
-            let v2 = alice.publish_version(&doc, vec![v1.id.clone()], file(&noise(1500, 72)), None).await.unwrap();
-            let publish_after_ms = ms(t.elapsed());
-            let u = alice.publish_update(&doc, update(0, 300)).await.unwrap();
-
-            let enc2 = server_event(&syn, &alice, &doc, &v2.id).await.unwrap();
-            let enc_u = server_event(&syn, &alice, &doc, &u.id).await.unwrap();
-            let enc1 = server_event(&syn, &alice, &doc, &v1.id).await.unwrap();
-            let bob_http_v2 = server_event(&syn, &bob, &doc, &v2.id).await.err();
-            let bob_http_v1 = server_event(&syn, &bob, &doc, &v1.id).await.err();
-            let s1 = session_id_of(&alice, &doc, &v1.id).await;
-            let s2 = session_id_of(&alice, &doc, &v2.id).await;
-            let su = session_id_of(&alice, &doc, &u.id).await;
-            rows.push(json!({
-                "variant": variant, "trial": trial,
-                "revoke_call_ms": revoke_ms, "publish_version_after_revoke_ms": publish_after_ms,
-                "removed_device_decrypts_v1_sent_before": can_decrypt(&bob, &doc, &enc1).await,
-                "removed_device_decrypts_v2_sent_after": can_decrypt(&bob, &doc, &enc2).await,
-                "removed_device_decrypts_update_sent_after": can_decrypt(&bob, &doc, &enc_u).await,
-                "control_remaining_member_decrypts_v2": can_decrypt(&carol, &doc, &enc2).await,
-                "megolm_session_rotated_between_v1_and_v2": s1 != s2,
-                "update_uses_v2_session": su == s2,
-                "http_status_removed_user_fetching_v2": bob_http_v2,
-                "http_status_removed_user_fetching_v1_sent_while_member": bob_http_v1,
-                "removed_store_versions_call": format!("{:?}", bob.versions(&doc).await.map(|v| v.len()).map_err(|e| e)),
-            }));
+            rows.push(r);
         }
+        summary.push(json!({"variant": v, "trials": trials, "removed_device_could_decrypt": leaks}));
     }
-    record(&syn, "member_removal", json!({ "rows": rows }));
+    record(&syn, "member_removal", json!({ "summary": summary, "rows": rows }));
 }
 
 // ---------------------------------------------------------------------------
@@ -820,5 +856,72 @@ async fn m10_clock_sources() {
         "calibrated_minus_reference_after_20s_idle_ms": c as f64 - p as f64,
         "date_header_call_ms": summarize(date_cost), "probe_event_call_ms": summarize(probe_cost), "calibrated_call_ms": summarize(cal_cost),
         "local_clock_minus_server_ms": local - p as i64,
+    }));
+}
+
+// ---------------------------------------------------------------------------
+// 11. Late-joiner matrix: when does history sharing on invite work?
+// ---------------------------------------------------------------------------
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+#[ignore = "measurement"]
+async fn m11_late_joiner_matrix() {
+    let Some(syn) = require_synapse!() else { return };
+    let trials = if is_default(&syn) { 1 } else { 3 };
+    let mut rows = Vec::new();
+    for (role, owner_reads_first, pause_ms) in [
+        (Role::Viewer, false, 0u64), (Role::Viewer, true, 0), (Role::Editor, false, 0), (Role::Editor, true, 0),
+        (Role::Editor, false, 2000),
+    ] {
+        let mut visible = 0;
+        let mut utd_total = 0;
+        for _ in 0..trials {
+            let alice = syn.user_with("alice", |c| c.events_per_sec = 0.0).await;
+            let late = syn.user_with("late", |c| c.utd_wait = Duration::from_secs(10)).await;
+            let doc = alice.create_document(&meta("Late"), Some(file(b"v1"))).await.unwrap();
+            if owner_reads_first {
+                alice.versions(&doc).await.unwrap();
+            }
+            sleep_ms(pause_ms).await;
+            alice.grant(&doc, &late.principal(), role).await.unwrap();
+            let rep = late.read_report(&doc).await.unwrap();
+            visible += rep.versions.len();
+            utd_total += rep.undecryptable;
+        }
+        rows.push(json!({"role": format!("{role:?}"), "owner_read_before_grant": owner_reads_first, "pause_before_grant_ms": pause_ms, "trials": trials, "v1_visible_in": visible, "undecryptable_total": utd_total}));
+    }
+    record(&syn, "late_joiner_matrix", json!({ "rows": rows }));
+}
+
+// ---------------------------------------------------------------------------
+// 12. Identical state content from one sender is not a new event.
+// ---------------------------------------------------------------------------
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+#[ignore = "measurement"]
+async fn m12_state_event_dedup() {
+    let Some(syn) = require_synapse!() else { return };
+    let alice = syn.user_with("alice", |c| c.events_per_sec = 0.0).await;
+    let bob = syn.user_with("bob", |c| c.events_per_sec = 0.0).await;
+    let doc = alice.create_document(&meta("Dedup"), Some(file(b"v1"))).await.unwrap();
+    alice.grant(&doc, &bob.principal(), Role::Editor).await.unwrap();
+    let base = alice.versions(&doc).await.unwrap().remove(0).id;
+    let l = held(&alice, "s", &base);
+    let content = serde_json::to_value(&l).unwrap();
+    let a = alice.send_state_unchecked(&doc, state::LEASE, "", content.clone()).await.unwrap();
+    sleep_ms(1100).await;
+    let b = alice.send_state_unchecked(&doc, state::LEASE, "", content.clone()).await.unwrap();
+    let c = bob.send_state_unchecked(&doc, state::LEASE, "", content.clone()).await.unwrap();
+    let d = alice.send_state_unchecked(&doc, state::LEASE, "", content).await.unwrap();
+    // The binding's own renewal path (duration differs by 1 ms).
+    let w1 = alice.write_lease(&doc, l.clone()).await.unwrap();
+    sleep_ms(1100).await;
+    let w2 = alice.write_lease(&doc, l.clone()).await.unwrap();
+    record(&syn, "state_event_dedup", json!({
+        "same_sender_same_content_twice_returns_same_event_id": a == b,
+        "other_sender_same_content_is_a_new_event": c != b,
+        "same_sender_again_after_other_sender_is_a_new_event": d != c,
+        "binding_renewal_new_event_and_later_ts": w1.id != w2.id && w2.ts_ms > w1.ts_ms,
+        "binding_renewal_durations_ms": [w1.body.duration_ms, w2.body.duration_ms],
     }));
 }

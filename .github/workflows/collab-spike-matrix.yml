@@ -69,7 +69,7 @@ jobs:
           set -euo pipefail
           eval "$(scripts/synapse-up.sh relaxed)"
           trap 'docker logs "$DCP_SYNAPSE_CONTAINER" > "$GITHUB_WORKSPACE/measurements/synapse-relaxed-journeys.log" 2>&1 || true; scripts/synapse-down.sh relaxed' EXIT
-          cargo test -p dcp-matrix -- --nocapture 2>&1 | tee "$GITHUB_WORKSPACE/measurements/journeys.log"
+          cargo test -p dcp-matrix --no-fail-fast -- --nocapture 2>&1 | tee "$GITHUB_WORKSPACE/measurements/journeys.log"
 
       - name: Measurements (relaxed rate limits)
         if: ${{ !cancelled() }}
@@ -91,7 +91,7 @@ jobs:
           trap 'docker logs "$DCP_SYNAPSE_CONTAINER" > "$GITHUB_WORKSPACE/measurements/synapse-default.log" 2>&1 || true; scripts/synapse-down.sh default' EXIT
           cargo test -p dcp-matrix --test measure -- --ignored --test-threads=1 --nocapture 2>&1 | tee "$GITHUB_WORKSPACE/measurements/measure-default.log"
 
-      - name: Journeys under Synapse's default rate limits
+      - name: Journeys and conformance under Synapse's default rate limits
         if: ${{ !cancelled() }}
         env:
           DCP_MEASURE_OUT: ${{ github.workspace }}/measurements/default-journeys.jsonl
@@ -99,7 +99,7 @@ jobs:
           set -euo pipefail
           eval "$(scripts/synapse-up.sh default)"
           trap 'scripts/synapse-down.sh default' EXIT
-          cargo test -p dcp-matrix --test journeys -- --nocapture 2>&1 | tee "$GITHUB_WORKSPACE/measurements/journeys-default.log"
+          cargo test -p dcp-matrix --no-fail-fast --test journeys --test conformance -- --nocapture 2>&1 | tee "$GITHUB_WORKSPACE/measurements/journeys-default.log"
 
       - name: Upload measurements
         if: always()

@@ -51,6 +51,11 @@ pub struct MatrixConfig {
     /// in an encrypted room; see the results doc.
     pub enforce_encrypted_pl: bool,
     pub clock: ClockSource,
+    /// Before encrypting a version or update, make sure this device's member
+    /// list no longer contains anyone the homeserver says has left. Without it
+    /// a kick made elsewhere reaches matrix-sdk only with the next /sync, and
+    /// anything sent in between is encrypted for the removed device too.
+    pub guard_stale_members: bool,
     /// Room version for new documents; `None` takes the server default.
     pub room_version: Option<String>,
     /// Keep the SDK's state and crypto store in this directory (needs the
@@ -73,6 +78,7 @@ impl MatrixConfig {
             sync_timeout: Duration::from_secs(10),
             enforce_encrypted_pl: true,
             clock: ClockSource::Calibrated,
+            guard_stale_members: true,
             room_version: None,
             store_dir: None,
         }

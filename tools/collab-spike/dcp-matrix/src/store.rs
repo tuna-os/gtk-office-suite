@@ -32,7 +32,7 @@ use matrix_sdk::ruma::events::AnyInitialStateEvent;
 use matrix_sdk::ruma::serde::Raw;
 use matrix_sdk::ruma::{assign, EventId, OwnedMxcUri, RoomId, RoomVersionId, UInt, UserId};
 use matrix_sdk::store::RoomLoadSettings;
-use matrix_sdk::{reqwest, Client, Room, RoomState, SessionMeta, SessionTokens};
+use matrix_sdk::{reqwest, Client, Room, RoomMemberships, RoomState, SessionMeta, SessionTokens};
 use serde_json::{json, Value};
 use sha2::{Digest, Sha256};
 use tokio::sync::{watch, Mutex};
@@ -300,6 +300,10 @@ impl MatrixStore {
             }
         }
         let client = &self.inner.client;
+        if !self.inner.cfg.background_sync {
+            // The invitation and, with it, the history key bundle only arrive by sync.
+            let _ = client.sync_once(SyncSettings::new().timeout(Duration::ZERO)).await;
+        }
         self.retry_rl(|| client.join_room_by_id(&rid))
             .await
             .map_err(|e| to_store(e, &format!("join {doc}")))
@@ -352,6 +356,35 @@ impl MatrixStore {
             *c = Some((ts, Instant::now()));
         }
         Ok((ts, v["sender"].as_str().unwrap_or_default().to_owned()))
+    }
+
+    /// Refuse to encrypt while this device still counts a member the homeserver
+    /// says is gone (see `MatrixConfig::guard_stale_members`).
+    async fn ensure_members_current(&self, room: &Room, snap: &Snapshot) -> Result<()> {
+        if !self.inner.cfg.guard_stale_members {
+            return Ok(());
+        }
+        let departed = |local: Vec<String>| -> Vec<String> {
+            local
+                .into_iter()
+                .filter(|u| !matches!(snap.membership.get(u).map(String::as_str), Some("join") | Some("invite")))
+                .collect()
+        };
+        let local_view = || async {
+            room.members_no_sync(RoomMemberships::ACTIVE)
+                .await
+                .map(|ms| ms.into_iter().map(|m| m.user_id().to_string()).collect::<Vec<_>>())
+                .unwrap_or_default()
+        };
+        if departed(local_view().await).is_empty() {
+            return Ok(());
+        }
+        let ok = self.poll_until(Duration::from_secs(15), || async { departed(local_view().await).is_empty() }).await;
+        if ok {
+            Ok(())
+        } else {
+            Err(StoreError::Transport("this device still lists a removed member; refusing to encrypt for them".into()))
+        }
     }
 
     fn require_editor(&self, snap: &Snapshot, what: &str) -> Result<()> {
@@ -425,6 +458,9 @@ impl MatrixStore {
             let (items, utd) = self.read_timeline(room).await?;
             if utd == 0 || Instant::now() >= end {
                 return Ok((items, utd));
+            }
+            if !self.inner.cfg.background_sync {
+                let _ = self.inner.client.sync_once(SyncSettings::new().timeout(Duration::ZERO)).await;
             }
             tokio::time::sleep(Duration::from_millis(250)).await;
         }
@@ -791,7 +827,12 @@ impl DocumentStore for MatrixStore {
         Ok(self.read_report(doc).await?.versions)
     }
 
-    async fn fetch_file(&self, _doc: &DocId, version: &Stamped<Version>) -> Result<Vec<u8>> {
+    async fn fetch_file(&self, doc: &DocId, version: &Stamped<Version>) -> Result<Vec<u8>> {
+        // Matrix media is not access-controlled per room: anyone holding the mxc
+        // URI and the key can download. The real protection is that a removed
+        // device never receives the keys to the event that carries them. This
+        // check is the binding refusing on a principal's behalf, nothing more.
+        self.room_for(doc).await?;
         let source = match &version.body.file.locator {
             Locator::MatrixEncryptedMedia { file } => {
                 let f: EncryptedFile = serde_json::from_value(file.clone())
@@ -819,6 +860,7 @@ impl DocumentStore for MatrixStore {
         let room = self.room_for(doc).await?;
         let snap = self.snapshot_of(&room).await?;
         self.require_editor(&snap, "publish version")?;
+        self.ensure_members_current(&room, &snap).await?;
         self.publish_version_in(&room, parents, file, message).await
     }
 
@@ -830,6 +872,16 @@ impl DocumentStore for MatrixStore {
         let room = self.room_for(doc).await?;
         let snap = self.snapshot_of(&room).await?;
         self.require_editor(&snap, "write lease")?;
+        // Synapse does not persist a state event whose content equals the
+        // sender's current one for that key: it answers with the existing event
+        // ID and the old timestamp. A renewal that changes nothing would never
+        // extend the lease. Differ by one millisecond of duration, alternating.
+        let mut lease = lease;
+        if snap.lease.as_ref().is_some_and(|l| l.sender == self.inner.user_id && l.body == lease) {
+            if let Some(d) = lease.duration_ms.as_mut() {
+                *d = if *d > 1000 { *d - 1 } else { *d + 1 };
+            }
+        }
         let content = serde_json::to_value(&lease).map_err(|e| StoreError::Invalid(e.to_string()))?;
         let q = self.queue_for(&room).await;
         let id = q
@@ -875,6 +927,7 @@ impl DocumentStore for MatrixStore {
         let room = self.room_for(doc).await?;
         let snap = self.snapshot_of(&room).await?;
         self.require_editor(&snap, "publish update")?;
+        self.ensure_members_current(&room, &snap).await?;
         let (id, ts) = self.publish_timeline(&room, state::UPDATE, &update).await?;
         Ok(Stamped::new(id, ts, self.inner.user_id.clone(), update).with_device(self.inner.device_id.clone()))
     }
